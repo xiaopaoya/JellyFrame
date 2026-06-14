@@ -76,8 +76,10 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M2 脚本支持只负责执行 JavaScript 并报告结果或异常。它还没有暴露 `window`、`document`、
-DOM mutation API、事件、计时器或表单属性。
+M3 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
+`getElementById`、`createElement`、`createTextNode`、`appendChild`、`removeChild`、
+attribute 和 `textContent` 修改 native DOM。它还没有暴露 JavaScript event listener、
+计时器、表单属性或自动 `<script>` 加载。
 
 通过 CTest 运行回归测试：
 
@@ -99,6 +101,7 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_pipeline_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
+.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
 .\build\Release\wearweb_microbench.exe 80 1000
@@ -120,8 +123,7 @@ ctest --test-dir build -C Debug --output-on-failure
 - `wearweb_pseudo_browser`：运行当前完整管线并写出 BMP 或 PPM framebuffer
   图像。它是桌面验收工具，不是嵌入式 UI。它的内置 fallback 字体刻意保持极小；需要可读的
   UTF-8/中文文本验证时，请使用 Win32 browser 壳。在启用 scripting 的构建中，
-  `--script` 会在渲染前执行一个外部 JavaScript 文件，并打印字符串化后的结果或异常；
-  DOM binding 会在后续里程碑中实现。
+  `--script` 会在绑定解析后的 DOM 后、渲染前执行一个外部 JavaScript 文件，并打印字符串化后的结果或异常。
 - `wearweb_win32_browser`：仅在 Windows 构建中可用。它打开一个 Win32/GDI
   交互窗口，使用同一套核心管线渲染，通过平台文本回调注入 GDI 文本绘制，并把鼠标和滚轮输入转发给平台无关
   input controller。它只用于桌面观察；核心仍保持窗口系统和操作系统无关。

@@ -9,9 +9,23 @@
 #include <vector>
 
 namespace wearweb {
+
+struct ScriptRuntimeAccess {
+    static Node& adopt_detached_node(JerryScriptRuntime& runtime, std::unique_ptr<Node> node) {
+        return runtime.adopt_detached_node(std::move(node));
+    }
+
+    static std::unique_ptr<Node> release_detached_node(JerryScriptRuntime& runtime, Node& node) {
+        return runtime.release_detached_node(node);
+    }
+};
+
 namespace {
 
 bool g_runtime_active = false;
+
+const jerry_object_native_info_t kNodeNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kRuntimeNativeInfo = {nullptr, 0, 0};
 
 class JerryValue {
 public:
@@ -59,6 +73,15 @@ private:
     bool owns_ = true;
 };
 
+std::string ascii_lowercase(std::string value) {
+    for (char& ch : value) {
+        if (ch >= 'A' && ch <= 'Z') {
+            ch = static_cast<char>(ch - 'A' + 'a');
+        }
+    }
+    return value;
+}
+
 std::string jerry_string_to_std_string(jerry_value_t value) {
     const jerry_size_t size = jerry_string_size(value, JERRY_ENCODING_UTF8);
     if (size == 0) {
@@ -76,6 +99,10 @@ std::string value_to_string(jerry_value_t value) {
         return "<unprintable JavaScript value>";
     }
     return jerry_string_to_std_string(string_value.get());
+}
+
+JerryValue string_to_value(const std::string& value) {
+    return JerryValue(jerry_string_sz(value.c_str()));
 }
 
 JerryValue evaluate_script(std::string_view source, std::string_view source_name) {
@@ -100,6 +127,268 @@ JerryValue evaluate_script(std::string_view source, std::string_view source_name
     return JerryValue(jerry_run(parsed.get()));
 }
 
+Node* native_node(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    return static_cast<Node*>(jerry_object_get_native_ptr(object, &kNodeNativeInfo));
+}
+
+JerryScriptRuntime* native_runtime(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    return static_cast<JerryScriptRuntime*>(jerry_object_get_native_ptr(object, &kRuntimeNativeInfo));
+}
+
+Node* find_by_id(Node& node, const std::string& id) {
+    if (node.type == NodeType::Element && node.attribute("id") == id) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        if (Node* found = find_by_id(*child, id)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+bool is_ancestor_of(const Node& possible_ancestor, const Node& node) {
+    for (const Node* current = node.parent; current != nullptr; current = current->parent) {
+        if (current == &possible_ancestor) {
+            return true;
+        }
+    }
+    return false;
+}
+
+jerry_value_t throw_type_error(const char* message) {
+    return jerry_throw_sz(JERRY_ERROR_TYPE, message);
+}
+
+jerry_value_t node_get_text_content(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr) {
+        return throw_type_error("textContent getter called on non-node object");
+    }
+    return jerry_string_sz(node->text_content().c_str());
+}
+
+jerry_value_t node_set_text_content(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr) {
+        return throw_type_error("textContent setter called on non-node object");
+    }
+    node->set_text_content(args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    return jerry_undefined();
+}
+
+jerry_value_t node_append_child(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count);
+jerry_value_t node_remove_child(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count);
+jerry_value_t element_set_attribute(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count);
+jerry_value_t element_get_attribute(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count);
+jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
+                                         const jerry_value_t args_p[],
+                                         const jerry_length_t args_count);
+jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count);
+jerry_value_t document_create_text_node(const jerry_call_info_t* call_info_p,
+                                        const jerry_value_t args_p[],
+                                        const jerry_length_t args_count);
+
+void set_property(jerry_value_t object, const char* name, jerry_value_t value) {
+    JerryValue result(jerry_object_set_sz(object, name, value));
+    (void) result;
+}
+
+void set_method(jerry_value_t object, const char* name, jerry_external_handler_t handler) {
+    JerryValue function(jerry_function_external(handler));
+    set_property(object, name, function.get());
+}
+
+void define_text_content_accessor(jerry_value_t object) {
+    jerry_property_descriptor_t descriptor = jerry_property_descriptor();
+    descriptor.flags = JERRY_PROP_IS_GET_DEFINED | JERRY_PROP_IS_SET_DEFINED |
+        JERRY_PROP_IS_CONFIGURABLE_DEFINED | JERRY_PROP_IS_CONFIGURABLE;
+    descriptor.getter = jerry_function_external(node_get_text_content);
+    descriptor.setter = jerry_function_external(node_set_text_content);
+
+    JerryValue name(jerry_string_sz("textContent"));
+    JerryValue result(jerry_object_define_own_prop(object, name.get(), &descriptor));
+    (void) result;
+    jerry_property_descriptor_free(&descriptor);
+}
+
+jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool document_methods) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+
+    define_text_content_accessor(object.get());
+    set_method(object.get(), "appendChild", node_append_child);
+    set_method(object.get(), "removeChild", node_remove_child);
+    set_method(object.get(), "setAttribute", element_set_attribute);
+    set_method(object.get(), "getAttribute", element_get_attribute);
+
+    if (node.type == NodeType::Element) {
+        set_property(object.get(), "tagName", string_to_value(node.tag_name).get());
+        set_property(object.get(), "nodeType", JerryValue(jerry_number(1)).get());
+    } else {
+        set_property(object.get(), "nodeType", JerryValue(jerry_number(3)).get());
+    }
+
+    if (document_methods) {
+        set_method(object.get(), "getElementById", document_get_element_by_id);
+        set_method(object.get(), "createElement", document_create_element);
+        set_method(object.get(), "createTextNode", document_create_text_node);
+    }
+
+    return object.release();
+}
+
+Node& append_or_move_child(JerryScriptRuntime& runtime, Node& parent, Node& child) {
+    if (&parent == &child || is_ancestor_of(child, parent)) {
+        throw std::runtime_error("appendChild would create a cycle");
+    }
+
+    if (child.parent != nullptr) {
+        Node* old_parent = child.parent;
+        auto detached = old_parent->detach_child(child);
+        if (!detached) {
+            throw std::runtime_error("appendChild could not detach existing child");
+        }
+        return parent.append_child(std::move(detached));
+    }
+
+    if (auto detached = ScriptRuntimeAccess::release_detached_node(runtime, child)) {
+        return parent.append_child(std::move(detached));
+    }
+
+    throw std::runtime_error("appendChild received a node outside this runtime");
+}
+
+jerry_value_t node_append_child(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* parent = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    Node* child = args_count > 0 ? native_node(args_p[0]) : nullptr;
+    if (parent == nullptr || runtime == nullptr || child == nullptr) {
+        return throw_type_error("appendChild requires a node child");
+    }
+
+    try {
+        Node& appended = append_or_move_child(*runtime, *parent, *child);
+        return make_node_wrapper(*runtime, appended, false);
+    } catch (const std::exception& error) {
+        return jerry_throw_sz(JERRY_ERROR_TYPE, error.what());
+    }
+}
+
+jerry_value_t node_remove_child(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* parent = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    Node* child = args_count > 0 ? native_node(args_p[0]) : nullptr;
+    if (parent == nullptr || runtime == nullptr || child == nullptr) {
+        return throw_type_error("removeChild requires a node child");
+    }
+    if (child->parent != parent) {
+        return jerry_throw_sz(JERRY_ERROR_TYPE, "removeChild child is not attached to this parent");
+    }
+
+    auto detached = parent->detach_child(*child);
+    if (!detached) {
+        return jerry_throw_sz(JERRY_ERROR_TYPE, "removeChild failed");
+    }
+    Node& adopted = ScriptRuntimeAccess::adopt_detached_node(*runtime, std::move(detached));
+    return make_node_wrapper(*runtime, adopted, false);
+}
+
+jerry_value_t element_set_attribute(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
+        return throw_type_error("setAttribute requires an element and attribute name");
+    }
+
+    node->set_attribute(ascii_lowercase(value_to_string(args_p[0])),
+                        args_count > 1 ? value_to_string(args_p[1]) : std::string());
+    return jerry_undefined();
+}
+
+jerry_value_t element_get_attribute(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
+        return throw_type_error("getAttribute requires an element and attribute name");
+    }
+
+    const auto it = node->attributes.find(ascii_lowercase(value_to_string(args_p[0])));
+    if (it == node->attributes.end()) {
+        return jerry_null();
+    }
+    return jerry_string_sz(it->second.c_str());
+}
+
+jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
+                                         const jerry_value_t args_p[],
+                                         const jerry_length_t args_count) {
+    Node* document = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr || args_count < 1) {
+        return throw_type_error("getElementById requires an id");
+    }
+
+    Node* found = find_by_id(*document, value_to_string(args_p[0]));
+    if (found == nullptr) {
+        return jerry_null();
+    }
+    return make_node_wrapper(*runtime, *found, false);
+}
+
+jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr || args_count < 1) {
+        return throw_type_error("createElement requires a tag name");
+    }
+
+    Node& node = ScriptRuntimeAccess::adopt_detached_node(
+        *runtime, make_element(ascii_lowercase(value_to_string(args_p[0]))));
+    return make_node_wrapper(*runtime, node, false);
+}
+
+jerry_value_t document_create_text_node(const jerry_call_info_t* call_info_p,
+                                        const jerry_value_t args_p[],
+                                        const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr) {
+        return throw_type_error("createTextNode requires a document");
+    }
+
+    Node& node = ScriptRuntimeAccess::adopt_detached_node(
+        *runtime, make_text(args_count > 0 ? value_to_string(args_p[0]) : std::string()));
+    return make_node_wrapper(*runtime, node, false);
+}
+
 } // namespace
 
 JerryScriptRuntime::JerryScriptRuntime() {
@@ -120,6 +409,20 @@ JerryScriptRuntime::~JerryScriptRuntime() {
     }
 }
 
+void JerryScriptRuntime::bind_document(Node& document) {
+    detached_nodes_.clear();
+
+    JerryValue global(jerry_current_realm());
+    JerryValue document_object(make_node_wrapper(*this, document, true));
+    JerryValue window_object(jerry_object());
+    jerry_object_set_native_ptr(window_object.get(), &kRuntimeNativeInfo, this);
+
+    set_property(window_object.get(), "document", document_object.get());
+    set_property(window_object.get(), "window", window_object.get());
+    set_property(global.get(), "document", document_object.get());
+    set_property(global.get(), "window", window_object.get());
+}
+
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {
     ScriptEvaluationResult output;
 
@@ -137,6 +440,24 @@ ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::st
     output.ok = true;
     output.value = value_to_string(result.get());
     return output;
+}
+
+Node& JerryScriptRuntime::adopt_detached_node(std::unique_ptr<Node> node) {
+    detached_nodes_.push_back(std::move(node));
+    return *detached_nodes_.back();
+}
+
+std::unique_ptr<Node> JerryScriptRuntime::release_detached_node(Node& node) {
+    for (auto it = detached_nodes_.begin(); it != detached_nodes_.end(); ++it) {
+        if (it->get() != &node) {
+            continue;
+        }
+
+        std::unique_ptr<Node> released = std::move(*it);
+        detached_nodes_.erase(it);
+        return released;
+    }
+    return nullptr;
 }
 
 } // namespace wearweb

@@ -14,10 +14,23 @@ embedded app UI without inheriting the full browser API surface.
 - Repeated initialize/shutdown in one process, one active runtime at a time.
 - `wearweb_pseudo_browser --script file.js` for desktop acceptance.
 
+## M3 Support
+
+- Global `window` and `document` objects when a host binds a native DOM tree.
+- `document.getElementById(id)`.
+- `document.createElement(tag)`.
+- `document.createTextNode(text)`.
+- `node.appendChild(child)` with detached-node ownership transfer.
+- `node.removeChild(child)` while keeping the returned wrapper usable.
+- `element.setAttribute(name, value)`.
+- `element.getAttribute(name)`.
+- `node.textContent` getter/setter.
+- `wearweb_pseudo_browser --script file.js` binds the parsed page DOM before
+  script execution, so script mutations affect the rendered output.
+
 ## Not Supported Yet
 
-- `window` and `document`.
-- DOM wrappers, selectors and mutations from JavaScript.
+- DOM selectors beyond `getElementById`.
 - JavaScript event listeners.
 - Form-control JavaScript properties.
 - Timers, promises/job pumping beyond what JerryScript itself performs inside

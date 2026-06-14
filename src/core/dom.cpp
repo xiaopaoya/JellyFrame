@@ -29,14 +29,22 @@ Node& Node::append_child(std::unique_ptr<Node> child) {
     return *children.back();
 }
 
-bool Node::remove_child(const Node& child) {
+std::unique_ptr<Node> Node::detach_child(const Node& child) {
     for (auto it = children.begin(); it != children.end(); ++it) {
         if (it->get() != &child) {
             continue;
         }
-        (*it)->parent = nullptr;
+        std::unique_ptr<Node> detached = std::move(*it);
+        detached->parent = nullptr;
         children.erase(it);
         mark_dirty(*this, DomDirtyTree | DomDirtyLayout);
+        return detached;
+    }
+    return nullptr;
+}
+
+bool Node::remove_child(const Node& child) {
+    if (auto detached = detach_child(child)) {
         return true;
     }
     return false;

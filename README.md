@@ -80,9 +80,11 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M2 scripting support evaluates JavaScript and reports the result or exception.
-It does not expose `window`, `document`, DOM mutation APIs, events, timers or
-form properties yet.
+M3 scripting support evaluates JavaScript, exposes a tiny `window`/`document`
+bridge and lets scripts mutate the native DOM through `getElementById`,
+`createElement`, `createTextNode`, `appendChild`, `removeChild`, attributes and
+`textContent`. It does not expose JavaScript event listeners, timers, form
+properties or automatic `<script>` loading yet.
 
 Run the regression suite through CTest:
 
@@ -104,6 +106,7 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_pipeline_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
+.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
 .\build\Release\wearweb_microbench.exe 80 1000
@@ -127,9 +130,8 @@ ctest --test-dir build -C Debug --output-on-failure
   framebuffer image. It is a desktop validation shell, not an embedded UI. Its
   built-in fallback font is intentionally tiny; use the Win32 browser shell for
   readable UTF-8/Chinese text validation. In scripting builds, `--script`
-  evaluates one external JavaScript file before rendering and prints the
-  stringified result or exception; DOM bindings are intentionally not available
-  until the next milestones.
+  evaluates one external JavaScript file after binding the parsed DOM and before
+  rendering, then prints the stringified result or exception.
 - `wearweb_win32_browser` is available on Windows builds. It opens an
   interactive Win32/GDI window, renders through the same core pipeline, injects a
   GDI text painter through the platform text callback and forwards mouse/wheel

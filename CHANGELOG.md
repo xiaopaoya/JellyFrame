@@ -31,11 +31,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added optional `wearweb_script` JerryScript runtime shell, gated behind
   `WEARWEB_BUILD_SCRIPTING=OFF` by default so `wearweb_core` remains independent
   from JerryScript headers and libraries.
-- Added `wearweb_pseudo_browser --script` support for scripting builds. M2
-  evaluates one external JavaScript file and reports the result or exception;
-  DOM bindings are not exposed yet.
+- Added initial `wearweb_pseudo_browser --script` support for scripting builds:
+  it evaluates one external JavaScript file and reports the result or exception.
 - Added `examples/script_cases/runtime_probe.*` as the first scripting
   acceptance page.
+- Added M3 minimal DOM bindings for JerryScript: `window`, `document`,
+  `getElementById`, `createElement`, `createTextNode`, `appendChild`,
+  `removeChild`, `setAttribute`, `getAttribute` and `textContent`.
+- Added `examples/script_cases/dom_mutation_probe.*` to validate script-driven
+  DOM mutation through the pseudo browser.
 - Added a single aggregate `wearweb_core_tests` executable for platform-neutral
   regression coverage, replacing the many standalone test executables in normal
   builds.

@@ -13,10 +13,23 @@ API 表面。
 - 同一进程内可重复初始化/清理；当前实现同一时间只允许一个 runtime 存活。
 - `wearweb_pseudo_browser --script file.js` 用于桌面验收。
 
+## M3 支持范围
+
+- 宿主绑定 native DOM tree 后，提供全局 `window` 和 `document` 对象。
+- `document.getElementById(id)`。
+- `document.createElement(tag)`。
+- `document.createTextNode(text)`。
+- `node.appendChild(child)`，并处理 detached node 的所有权转移。
+- `node.removeChild(child)`，返回的 wrapper 仍可继续使用。
+- `element.setAttribute(name, value)`。
+- `element.getAttribute(name)`。
+- `node.textContent` getter/setter。
+- `wearweb_pseudo_browser --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
+  因此脚本 mutation 会影响最终渲染输出。
+
 ## 暂不支持
 
-- `window` 和 `document`。
-- JavaScript 侧 DOM wrapper、选择器和 DOM mutation。
+- `getElementById` 之外的 DOM selector。
 - JavaScript event listener。
 - 表单控件的 JavaScript 属性。
 - 计时器，以及超出单次求值范围的 promise/job pump。

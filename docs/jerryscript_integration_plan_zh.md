@@ -25,6 +25,9 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
 
 - 由 `WEARWEB_BUILD_SCRIPTING=ON` 控制的 M2 runtime shell：初始化、清理、`eval`、
   source name、结果字符串化和异常报告。
+- M3 最小 DOM binding：`window`、`document`、`getElementById`、`createElement`、
+  `createTextNode`、`appendChild`、`removeChild`、`setAttribute`、`getAttribute`
+  和 `textContent`。
 - DOM tree 构建和容错 HTML 解析。
 - DOM mutation 原语：插入/删除子节点、设置/删除属性、更新 text content。
 - tree、attribute、text、style、layout dirty flags。
@@ -94,6 +97,10 @@ DOM + style + layout + layer + renderer
 - 同一进程内可以反复初始化和清理 runtime。
 
 ### M3：最小 DOM 对象
+
+状态：已面向宿主驱动的同步脚本实现。JavaScript 创建的 detached node 先由 runtime 持有；
+`appendChild` 会把所有权转移到 native DOM tree；`removeChild` 会把所有权移回 runtime，
+因此返回的 wrapper 仍可继续使用。
 
 暴露：
 
@@ -203,5 +210,5 @@ HTML：
 
 ## 推荐下一步
 
-先实现 M2：增加一个很小的 runtime target 和测试，暂时不接 DOM binding。等生命周期和
-`jerry_value_t` 所有权 wrapper 稳定后，再逐个加入 M3 的 DOM wrapper。
+继续 M4：把 native event dispatch 桥接到 JavaScript listener。listener storage 必须显式，
+所有保留的 `jerry_value_t` callback 都要有释放路径，并在事件回调后合并 dirty flags 再触发重绘。

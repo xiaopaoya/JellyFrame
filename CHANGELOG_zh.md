@@ -24,9 +24,13 @@ WearWeb Engine 的重要变更记录在这里。
   demo 目标。
 - 添加可选 `wearweb_script` JerryScript runtime shell。该能力默认由
   `WEARWEB_BUILD_SCRIPTING=OFF` 关闭，保证 `wearweb_core` 不依赖 JerryScript 头文件或库。
-- 为 scripting 构建添加 `wearweb_pseudo_browser --script`。M2 只执行一个外部 JavaScript
-  文件并报告结果或异常；尚未暴露 DOM binding。
+- 为 scripting 构建添加初始 `wearweb_pseudo_browser --script`：执行一个外部 JavaScript
+  文件并报告结果或异常。
 - 添加 `examples/script_cases/runtime_probe.*`，作为第一个脚本 runtime 验收页面。
+- 添加 JerryScript M3 最小 DOM binding：`window`、`document`、`getElementById`、
+  `createElement`、`createTextNode`、`appendChild`、`removeChild`、`setAttribute`、
+  `getAttribute` 和 `textContent`。
+- 添加 `examples/script_cases/dom_mutation_probe.*`，用于通过伪浏览器验证脚本驱动的 DOM mutation。
 - 添加单一聚合测试程序 `wearweb_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
   executable。
 - 添加 `JERRYSCRIPT_ROOT` CMake 支持，便于使用 `third_party/jerryscript` 这样的官方 JerryScript

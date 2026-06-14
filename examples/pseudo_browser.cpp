@@ -155,6 +155,7 @@ int main(int argc, char** argv) {
         if (!options.script_path.empty()) {
 #if defined(WEARWEB_ENABLE_SCRIPTING)
             JerryScriptRuntime runtime;
+            runtime.bind_document(*document);
             const ScriptEvaluationResult script_result = runtime.eval(read_file_limited(options.script_path), options.script_path);
             script_ok = script_result.ok;
             script_output = script_result.ok ? script_result.value : script_result.error;

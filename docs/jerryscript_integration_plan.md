@@ -31,6 +31,9 @@ Ready:
 
 - M2 runtime shell behind `WEARWEB_BUILD_SCRIPTING=ON`: initialization,
   shutdown, `eval`, source names, result stringification and exception reporting.
+- M3 minimal DOM bindings: `window`, `document`, `getElementById`,
+  `createElement`, `createTextNode`, `appendChild`, `removeChild`,
+  `setAttribute`, `getAttribute` and `textContent`.
 - DOM tree construction and tolerant HTML parsing.
 - DOM mutation primitives: append/remove child, set/remove attribute, text
   content updates.
@@ -106,6 +109,11 @@ Validation:
 - Runtime can initialize and shut down repeatedly in one process.
 
 ### M3: Minimal DOM Objects
+
+Status: implemented for synchronous host-driven scripts. Detached nodes created
+by JavaScript are owned by the runtime until `appendChild` transfers them into
+the native DOM tree; `removeChild` moves ownership back to the runtime so the
+returned wrapper remains usable.
 
 Expose:
 
@@ -216,6 +224,6 @@ Expected behavior:
 
 ## Recommended Next Step
 
-Implement M2 with a small runtime target and tests. Keep it independent from DOM
-bindings at first. Once the lifecycle and `jerry_value_t` ownership wrappers are
-solid, add M3 DOM wrappers one property at a time.
+Continue with M4: bridge native event dispatch to JavaScript listeners. Keep the
+listener storage explicit, release all retained `jerry_value_t` callbacks and
+coalesce dirty flags after event callbacks before rerendering.
