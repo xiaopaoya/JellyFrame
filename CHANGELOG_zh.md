@@ -36,6 +36,9 @@ WearWeb Engine 的重要变更记录在这里。
 - 为 Win32 browser shell 添加 scripting 支持，使桌面 native input 可以派发到 JavaScript listener，
   并在 DOM mutation 后重绘。
 - 添加 `examples/script_cases/event_probe.*`，用于交互式事件桥验收。
+- 添加 M5 JavaScript 表单控件属性：`value`、`checked`、`selectedIndex` 和 `select.value`。
+- 在 `examples/app_cases` 下添加天气、时钟、计时器和计算器应用式验收示例。
+- 添加中英文嵌入式应用子集文档，说明 M6 前能构建什么，以及哪些浏览器假设被刻意排除。
 - 添加单一聚合测试程序 `wearweb_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
   executable。
 - 添加 `JERRYSCRIPT_ROOT` CMake 支持，便于使用 `third_party/jerryscript` 这样的官方 JerryScript
@@ -59,6 +62,8 @@ WearWeb Engine 的重要变更记录在这里。
 - Win32 壳会把字符输入和 Backspace 转发到核心控件模型，并在同一份 DOM 上重绘，使桌面验证能反映实时控件变化。
 - 将事件 listener 存储从 hash table 改为紧凑的按类型分组 listener 数组，降低嵌入式常见页面的 listener
   额外开销，同时保持公开事件 API 不变。
+- 在布局阶段为表单控件提供 intrinsic 内容行高，使 select 和空 input 即使没有作者指定高度也保持可读。
+- 仅在真实表单控件 wrapper 上安装脚本表单访问器，减少普通 DOM 节点的属性设置开销。
 
 ### 说明
 

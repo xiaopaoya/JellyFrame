@@ -1,6 +1,7 @@
 #include "script/jerryscript_runtime.h"
 
 #include "core/dom.h"
+#include "core/form_control.h"
 #include "core/html_parser.h"
 
 #include <iostream>
@@ -174,6 +175,52 @@ void javascript_event_prevent_default_and_remove_listener_work() {
     check(button->text_content() == "1", "removed listener no longer mutates DOM");
 }
 
+void javascript_form_properties_mutate_control_state() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body>"
+        "<input id='name' value='old'>"
+        "<input id='ok' type='checkbox'>"
+        "<select id='mode'><option value='a'>Alpha</option><option value='b'>Beta</option></select>"
+        "</body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var name = document.getElementById('name');"
+        "var ok = document.getElementById('ok');"
+        "var mode = document.getElementById('mode');"
+        "name.value = 'Ada';"
+        "ok.checked = true;"
+        "mode.selectedIndex = 1;"
+        "name.value + ':' + ok.checked + ':' + mode.value + ':' + mode.selectedIndex");
+
+    check(result.ok, "form property script succeeds");
+    check(result.value == "Ada:true:b:1", "form properties stringify expected state");
+}
+
+void javascript_input_event_reads_live_value() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><input id='name'><p id='status'></p></body>");
+    Node* input = find_first_by_tag(*document, "input");
+    check(input != nullptr, "input exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var name = document.getElementById('name');"
+        "var status = document.getElementById('status');"
+        "name.addEventListener('input', function () { status.textContent = this.value; });"
+        "'ready'");
+    check(result.ok, "input listener registration succeeds");
+
+    check(append_text_to_control(*input, "42"), "native text input updates control state");
+    Event event("input", true, false);
+    dispatch_event(*input, event);
+
+    check(document->text_content().find("42") != std::string::npos, "JS input listener reads value");
+}
+
 } // namespace
 
 int main() {
@@ -186,6 +233,8 @@ int main() {
         remove_child_keeps_wrapper_usable();
         javascript_click_listener_mutates_dom();
         javascript_event_prevent_default_and_remove_listener_work();
+        javascript_form_properties_mutate_control_state();
+        javascript_input_event_reads_live_value();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

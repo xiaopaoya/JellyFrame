@@ -1,0 +1,52 @@
+body {
+  margin: 0;
+  padding: 16px;
+  background: #f6f2ec;
+  color: #2f2922;
+  font-family: system-ui, sans-serif;
+}
+
+.app {
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+h1 {
+  margin: 0 0 12px;
+  color: #5b371c;
+  font-size: 26px;
+  text-align: center;
+}
+
+.display {
+  margin: 0 0 12px;
+  padding: 16px;
+  background: #fffaf2;
+  border: 1px solid #d4bfa2;
+  text-align: center;
+}
+
+.display strong {
+  display: block;
+  font-size: 36px;
+  color: #794617;
+}
+
+.display span {
+  display: block;
+  margin-top: 6px;
+  color: #705f4e;
+}
+
+button {
+  margin: 0 6px 10px 0;
+  padding: 9px 12px;
+  border: 1px solid #a86424;
+  background: #a86424;
+  color: #ffffff;
+}
+
+p {
+  margin: 6px 0;
+  color: #685a4b;
+}

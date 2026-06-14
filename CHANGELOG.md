@@ -47,6 +47,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   dispatch into JavaScript listeners and rerender dirty DOM mutations.
 - Added `examples/script_cases/event_probe.*` for interactive event bridge
   validation.
+- Added M5 JavaScript form-control properties for app UI: `value`, `checked`,
+  `selectedIndex` and `select.value`.
+- Added app-style acceptance examples for weather, clock, timer and calculator
+  under `examples/app_cases`.
+- Added bilingual embedded app subset documentation describing what can be
+  built before M6 and which browser assumptions are intentionally absent.
 - Added a single aggregate `wearweb_core_tests` executable for platform-neutral
   regression coverage, replacing the many standalone test executables in normal
   builds.
@@ -80,6 +86,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Replaced hash-table event listener storage with compact per-type listener
   groups, reducing ordinary embedded-page listener overhead while preserving the
   public event API.
+- Gave form controls an intrinsic content line height in layout so selects and
+  empty inputs remain readable without author-specified heights.
+- Limited script form accessors to actual form controls, reducing wrapper
+  property setup on ordinary DOM nodes.
 
 ### Notes
 

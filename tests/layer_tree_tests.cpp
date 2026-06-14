@@ -209,9 +209,17 @@ void select_does_not_paint_option_list_inline() {
 
     LayerTreeBuilder layer_tree_builder;
     DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool painted_selected_option = false;
     for (const DisplayCommand& command : flattened) {
-        check(command.type != DisplayCommandType::Text, "select options are not painted as document text");
+        if (command.type != DisplayCommandType::Text) {
+            continue;
+        }
+        check(command.text != "Beta", "select does not paint the collapsed option list");
+        if (command.text == "Alpha") {
+            painted_selected_option = true;
+        }
     }
+    check(painted_selected_option, "select paints the selected option text");
 }
 
 } // namespace

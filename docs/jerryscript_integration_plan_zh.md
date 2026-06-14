@@ -30,6 +30,8 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
   和 `textContent`。
 - M4 事件桥：`addEventListener`、`removeEventListener`、event object、default prevention
   和 propagation control，并复用现有 C++ event dispatch 路径。
+- M5 表单控件属性：`value`、`checked`、`selectedIndex`，以及面向宿主驱动控件的
+  JavaScript 可观察 `input` / `change` 事件。
 - DOM tree 构建和容错 HTML 解析。
 - DOM mutation 原语：插入/删除子节点、设置/删除属性、更新 text content。
 - tree、attribute、text、style、layout dirty flags。
@@ -40,11 +42,10 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
 
 尚未具备：
 
-- JavaScript runtime 对象生命周期模型。
-- native-to-JS event listener 存储。
-- DOM node 的 JS wrapper。
-- 最小任务队列和重绘调度器。
-- 表单状态和 DOM 属性的 JS property accessor。
+- 最小任务队列和 timer 调度器。
+- HTML 中的自动脚本加载。
+- wrapper 缓存；当前 wrapper 是短生命周期的 native DOM node 视图。
+- 明确子集之外更宽的 DOM 属性/attribute alias。
 
 ## 架构
 
@@ -70,7 +71,8 @@ DOM + style + layout + layer + renderer
 
 ## 绑定原则
 
-- 运行时存活期间，一个 native `Node*` 对应一个 JS wrapper。
+- JS wrapper 是 DOM node 的轻量 native 视图。当前实现按需创建短生命周期 wrapper；
+  wrapper cache 是未来的内存/性能权衡，不属于当前契约。
 - JS wrapper 不拥有 DOM node；DOM tree 拥有 node。
 - wrapper finalizer 释放 JerryScript reference，但不删除 DOM node。
 - native event listener 显式持有 `jerry_value_t` reference，在移除 listener 或销毁 runtime 时释放。
@@ -142,12 +144,16 @@ DOM + style + layout + layer + renderer
 
 ### M5：表单控件属性
 
+状态：已面向宿主驱动控件实现。表单状态保存在平台无关核心中，并通过轻量 property accessor
+暴露给 JavaScript。native input dispatch 可以同步触发 JS listener 可观察的 `input` 和 `change` 事件。
+
 暴露：
 
 - `input.value`
 - `textarea.value`
 - `checkbox.checked`
 - `radio.checked`
+- `select.value`
 - `select.selectedIndex`
 
 验证：
@@ -216,5 +222,5 @@ HTML：
 
 ## 推荐下一步
 
-继续 M5：暴露表单控件 JavaScript 属性（`value`、`checked`、`selectedIndex`），并让现有平台无关
-input controller 派发 JS 可观察的 `input` / `change` 事件。
+继续 M6：加入宿主驱动的任务队列，以及 `setTimeout` / `clearTimeout` 和
+`setInterval` / `clearInterval`，随后合并 dirty DOM mutation，使 timer 密集的小型嵌入式应用也能可预测重绘。

@@ -39,10 +39,23 @@ API 表面。
   过程中修改 DOM。
 - scripting 构建中的 Win32 browser shell 支持 `--script file.js`，并在脚本事件回调弄脏 DOM 后重绘。
 
+## M5 支持范围
+
+- 相关表单控件节点上的属性：
+  - `input.value`
+  - `textarea.value`
+  - `checkbox.checked`
+  - `radio.checked`
+  - `select.value`
+  - `select.selectedIndex`
+- 原生文本输入、Backspace、checkbox/radio/select 激活和 range 拖动会更新 JavaScript 可见的控件状态。
+- 原生输入派发会通过现有 C++ 事件流触发 JavaScript 可观察的 `input` 和 `change` 事件。
+- JavaScript 修改表单状态后会标记 DOM dirty，宿主可以据此重绘轻量原生风格控件。
+- scripting pseudo browser 和 Win32 壳可以运行 `examples/app_cases` 中的小型应用式示例。
+
 ## 暂不支持
 
 - `getElementById` 之外的 DOM selector。
-- 表单控件的 JavaScript 属性。
 - 计时器，以及超出单次求值范围的 promise/job pump。
 - HTML 中的 inline `<script>` 和脚本加载流程。
 - 网络、模块、dynamic import、storage、canvas 和 Web Components。

@@ -43,5 +43,11 @@ bool append_text_to_control(Node& node, std::string_view text);
 bool backspace_control(Node& node);
 bool activate_form_control(Node& node);
 bool set_range_value_from_local_x(Node& node, int local_x, int width);
+std::string form_control_value(const Node& node);
+bool set_form_control_value(Node& node, std::string value);
+bool form_control_checked(const Node& node);
+bool set_form_control_checked(Node& node, bool checked);
+int form_control_selected_index(const Node& node);
+bool set_form_control_selected_index(Node& node, int selected_index);
 
 } // namespace wearweb

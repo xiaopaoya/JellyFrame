@@ -1,8 +1,11 @@
 #include "script/jerryscript_runtime.h"
 
+#include "core/form_control.h"
+
 #include <jerryscript.h>
 
 #include <cstring>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -326,6 +329,67 @@ jerry_value_t node_set_text_content(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t node_get_value(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t[],
+                             const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || !is_form_control(*node)) {
+        return jerry_undefined();
+    }
+    return jerry_string_sz(form_control_value(*node).c_str());
+}
+
+jerry_value_t node_set_value(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t args_p[],
+                             const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || !is_form_control(*node)) {
+        return jerry_undefined();
+    }
+    set_form_control_value(*node, args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_checked(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t[],
+                               const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && form_control_checked(*node));
+}
+
+jerry_value_t node_set_checked(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr) {
+        set_form_control_checked(*node, args_count > 0 && jerry_value_to_boolean(args_p[0]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_selected_index(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t[],
+                                      const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_number(node != nullptr ? form_control_selected_index(*node) : -1);
+}
+
+jerry_value_t node_set_selected_index(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || args_count == 0) {
+        return jerry_undefined();
+    }
+    const std::string text = value_to_string(args_p[0]);
+    char* end = nullptr;
+    const long parsed = std::strtol(text.c_str(), &end, 10);
+    if (end != text.c_str()) {
+        set_form_control_selected_index(*node, static_cast<int>(parsed));
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t node_append_child(const jerry_call_info_t* call_info_p,
                                 const jerry_value_t args_p[],
                                 const jerry_length_t args_count);
@@ -372,14 +436,17 @@ void set_method(jerry_value_t object, const char* name, jerry_external_handler_t
     set_property(object, name, function.get());
 }
 
-void define_text_content_accessor(jerry_value_t object) {
+void define_accessor(jerry_value_t object,
+                     const char* property,
+                     jerry_external_handler_t getter,
+                     jerry_external_handler_t setter) {
     jerry_property_descriptor_t descriptor = jerry_property_descriptor();
     descriptor.flags = JERRY_PROP_IS_GET_DEFINED | JERRY_PROP_IS_SET_DEFINED |
         JERRY_PROP_IS_CONFIGURABLE_DEFINED | JERRY_PROP_IS_CONFIGURABLE;
-    descriptor.getter = jerry_function_external(node_get_text_content);
-    descriptor.setter = jerry_function_external(node_set_text_content);
+    descriptor.getter = jerry_function_external(getter);
+    descriptor.setter = jerry_function_external(setter);
 
-    JerryValue name(jerry_string_sz("textContent"));
+    JerryValue name(jerry_string_sz(property));
     JerryValue result(jerry_object_define_own_prop(object, name.get(), &descriptor));
     (void) result;
     jerry_property_descriptor_free(&descriptor);
@@ -390,7 +457,12 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
 
-    define_text_content_accessor(object.get());
+    define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
+    if (is_form_control(node)) {
+        define_accessor(object.get(), "value", node_get_value, node_set_value);
+        define_accessor(object.get(), "checked", node_get_checked, node_set_checked);
+        define_accessor(object.get(), "selectedIndex", node_get_selected_index, node_set_selected_index);
+    }
     set_method(object.get(), "appendChild", node_append_child);
     set_method(object.get(), "removeChild", node_remove_child);
     set_method(object.get(), "setAttribute", element_set_attribute);

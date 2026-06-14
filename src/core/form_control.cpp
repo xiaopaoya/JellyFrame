@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
+#include <utility>
 
 namespace wearweb {
 namespace {
@@ -84,6 +85,27 @@ std::string option_text(const Node& option) {
     return text;
 }
 
+std::string option_value(const Node& option) {
+    const std::string& value = option.attribute("value");
+    return value.empty() ? option_text(option) : value;
+}
+
+int option_index_by_value(const Node& node, const std::string& value, int& current_index) {
+    if (node.type == NodeType::Element && node.tag_name == "option") {
+        if (option_value(node) == value) {
+            return current_index;
+        }
+        ++current_index;
+    }
+    for (const auto& child : node.children) {
+        const int found = option_index_by_value(*child, value, current_index);
+        if (found >= 0) {
+            return found;
+        }
+    }
+    return -1;
+}
+
 FormControlState make_initial_state(const Node& node) {
     FormControlState state;
     state.kind = form_control_kind(node);
@@ -114,7 +136,9 @@ FormControlState make_initial_state(const Node& node) {
         if (state.selected_index < 0 && current_index > 0) {
             state.selected_index = 0;
         }
-        state.value = form_control_display_text(node);
+        int option_index = 0;
+        const Node* option = option_at(node, state.selected_index, option_index);
+        state.value = option != nullptr ? option_value(*option) : std::string{};
         break;
     }
     case FormControlKind::Text:
@@ -295,6 +319,94 @@ bool set_range_value_from_local_x(Node& node, int local_x, int width) {
     }
     state.value = next;
     state.dirty = true;
+    return true;
+}
+
+std::string form_control_value(const Node& node) {
+    if (!is_form_control(node)) {
+        return {};
+    }
+    if (form_control_kind(node) == FormControlKind::Select) {
+        const int selected = form_control_selected_index(node);
+        int current_index = 0;
+        const Node* option = option_at(node, selected, current_index);
+        return option != nullptr ? option_value(*option) : std::string{};
+    }
+    return ensure_form_control_state(node).value;
+}
+
+bool set_form_control_value(Node& node, std::string value) {
+    if (!is_form_control(node)) {
+        return false;
+    }
+    if (form_control_kind(node) == FormControlKind::Select) {
+        int current_index = 0;
+        const int index = option_index_by_value(node, value, current_index);
+        if (index >= 0) {
+            return set_form_control_selected_index(node, index);
+        }
+    }
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.value == value) {
+        return false;
+    }
+    state.value = std::move(value);
+    state.dirty = true;
+    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    return true;
+}
+
+bool form_control_checked(const Node& node) {
+    const FormControlKind kind = form_control_kind(node);
+    if (kind != FormControlKind::Checkbox && kind != FormControlKind::Radio) {
+        return false;
+    }
+    return ensure_form_control_state(node).checked;
+}
+
+bool set_form_control_checked(Node& node, bool checked) {
+    const FormControlKind kind = form_control_kind(node);
+    if (kind != FormControlKind::Checkbox && kind != FormControlKind::Radio) {
+        return false;
+    }
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.checked == checked) {
+        return false;
+    }
+    state.checked = checked;
+    state.dirty = true;
+    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    return true;
+}
+
+int form_control_selected_index(const Node& node) {
+    if (form_control_kind(node) != FormControlKind::Select) {
+        return -1;
+    }
+    return ensure_form_control_state(node).selected_index;
+}
+
+bool set_form_control_selected_index(Node& node, int selected_index) {
+    if (form_control_kind(node) != FormControlKind::Select) {
+        return false;
+    }
+    const int option_count = count_options(node);
+    if (option_count <= 0) {
+        selected_index = -1;
+    } else {
+        selected_index = std::max(0, std::min(selected_index, option_count - 1));
+    }
+
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.selected_index == selected_index) {
+        return false;
+    }
+    state.selected_index = selected_index;
+    int current_index = 0;
+    const Node* option = option_at(node, selected_index, current_index);
+    state.value = option != nullptr ? option_value(*option) : std::string{};
+    state.dirty = true;
+    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
     return true;
 }
 

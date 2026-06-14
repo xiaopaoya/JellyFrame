@@ -43,10 +43,27 @@ embedded app UI without inheriting the full browser API surface.
 - The Win32 browser shell accepts `--script file.js` in scripting builds and
   rerenders when script event callbacks dirty the DOM.
 
+## M5 Support
+
+- Form-control properties on relevant nodes:
+  - `input.value`
+  - `textarea.value`
+  - `checkbox.checked`
+  - `radio.checked`
+  - `select.value`
+  - `select.selectedIndex`
+- Native text input, Backspace, checkbox/radio/select activation and range
+  movement update JavaScript-visible control state.
+- Native input dispatch fires JS-observable `input` and `change` events through
+  the existing C++ event flow.
+- JavaScript changes to form state mark the DOM dirty so the host can rerender
+  lightweight native-style controls.
+- The scripting pseudo browser and Win32 shell can run small app-style examples
+  from `examples/app_cases`.
+
 ## Not Supported Yet
 
 - DOM selectors beyond `getElementById`.
-- Form-control JavaScript properties.
 - Timers, promises/job pumping beyond what JerryScript itself performs inside
   one evaluation.
 - Inline `<script>` and script loading from HTML.

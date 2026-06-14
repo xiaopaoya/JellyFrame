@@ -1,5 +1,7 @@
 #include "core/layout.h"
 
+#include "core/form_control.h"
+
 #include <algorithm>
 
 namespace wearweb {
@@ -193,7 +195,11 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
         }
     }
 
-    const int content_height = std::max(box.style.min_height, box.style.height >= 0 ? box.style.height : children_height);
+    const int intrinsic_control_height = box.node != nullptr && is_form_control(*box.node)
+        ? (box.style.line_height > 0 ? box.style.line_height : text_line_height(box.style.font_size))
+        : 0;
+    const int content_height = std::max(box.style.min_height,
+        box.style.height >= 0 ? box.style.height : std::max(children_height, intrinsic_control_height));
     const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
     const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};

@@ -18,6 +18,7 @@ WearWeb Engine 是一个面向低功耗可穿戴设备的深度裁剪 C++ HTML/C
 - 平台无关 pointer/wheel input controller
 - 轻量平台无关表单控件状态，覆盖 text input、textarea、checkbox、radio、range 和 select
 - 可选 JerryScript runtime shell，用于脚本求值，并保持在 `wearweb_core` 之外
+- 可选 JerryScript DOM/事件/表单桥接，用于小型宿主驱动应用
 - 可选平台文本绘制回调，用于桌面验证
 - Windows-only 交互式浏览器壳，用于观察和测试
 - 控制台 demo
@@ -76,10 +77,11 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M4 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
+M5 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
 `getElementById`、`createElement`、`createTextNode`、`appendChild`、`removeChild`、
 attribute 和 `textContent` 修改 native DOM。它还会把 `addEventListener` / `removeEventListener`
-桥接到现有 C++ 事件流。它还没有暴露计时器、表单属性或自动 `<script>` 加载。
+桥接到现有 C++ 事件流，并暴露轻量表单控件属性（`value`、`checked`、`selectedIndex`）。
+它还没有暴露计时器或自动 `<script>` 加载。
 
 通过 CTest 运行回归测试：
 
@@ -103,8 +105,10 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css output.bmp 360 260 --script examples\script_cases\event_probe.js
+.\build\Debug\wearweb_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css output.bmp 360 360 --script examples\app_cases\weather.js
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
+.\build\Debug\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
 .\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
 .\build\Release\wearweb_microbench.exe 80 1000
 .\build\Debug\wearweb_core_tests.exe
@@ -140,6 +144,8 @@ ctest --test-dir build -C Debug --output-on-failure
 - `wearweb_core_tests`：唯一的平台无关回归测试程序。它覆盖 tokenizer/parser、DOM mutation、
   CSS parser、事件、hit testing、输入、render tree、layer tree 和 CPU framebuffer 行为。
   启用 scripting 的构建中，它还会包含 JerryScript runtime 测试。
+- `examples/app_cases`：包含天气、时钟、计时器和计算器四个小型应用式验收页面。
+  支持的开发子集和 M6 前评估见 `docs/embedded_app_subset_zh.md`。
 
 ## 文档维护
 

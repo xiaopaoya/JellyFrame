@@ -37,6 +37,8 @@ Ready:
 - M4 event bridge: `addEventListener`, `removeEventListener`, event objects,
   default prevention and propagation control routed through the existing C++
   event dispatch path.
+- M5 form-control properties: `value`, `checked`, `selectedIndex` and
+  JS-observable `input` / `change` events for host-driven controls.
 - DOM tree construction and tolerant HTML parsing.
 - DOM mutation primitives: append/remove child, set/remove attribute, text
   content updates.
@@ -48,11 +50,10 @@ Ready:
 
 Not ready:
 
-- JavaScript runtime object lifetime model.
-- Native-to-JS event listener storage.
-- JavaScript wrappers for DOM nodes.
-- Minimal task queue and redraw scheduler.
-- JavaScript property accessors for form state and DOM attributes.
+- Minimal task queue and timer scheduler.
+- Automatic script loading from HTML.
+- Wrapper caching; current wrappers are short-lived native views over DOM nodes.
+- Broader DOM attribute/property aliases beyond the explicitly supported subset.
 
 ## Architecture
 
@@ -78,7 +79,9 @@ The runtime should be optional at build time:
 
 ## Binding Principles
 
-- One native `Node*` maps to one JS wrapper while the runtime is alive.
+- JS wrappers are lightweight native views over DOM nodes. The current
+  implementation creates short-lived wrappers on demand; a wrapper cache is a
+  future memory/performance tradeoff, not part of the present contract.
 - JS wrappers never own DOM nodes; the DOM tree owns nodes.
 - Wrapper finalizers release JerryScript references but do not delete DOM nodes.
 - Native event listeners keep explicit `jerry_value_t` references and free them
@@ -158,12 +161,18 @@ Validation:
 
 ### M5: Form-Control Properties
 
+Status: implemented for host-driven controls. Form state lives in the
+platform-neutral core and is visible to JavaScript through lightweight property
+accessors. Native input dispatch can fire `input` and `change` events that JS
+listeners observe synchronously.
+
 Expose:
 
 - `input.value`
 - `textarea.value`
 - `checkbox.checked`
 - `radio.checked`
+- `select.value`
 - `select.selectedIndex`
 
 Validation:
@@ -232,6 +241,6 @@ Expected behavior:
 
 ## Recommended Next Step
 
-Continue with M5: expose form-control JavaScript properties (`value`, `checked`,
-`selectedIndex`) and fire JS-observable `input` / `change` events from the
-existing platform-neutral input controller.
+Continue with M6: add a host-pumped task queue plus `setTimeout` /
+`clearTimeout` and `setInterval` / `clearInterval`, then coalesce dirty DOM
+mutations so timer-heavy embedded apps redraw predictably.
