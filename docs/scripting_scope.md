@@ -1,0 +1,36 @@
+# Scripting Scope
+
+WearWeb scripting is intentionally staged. The engine should become useful for
+embedded app UI without inheriting the full browser API surface.
+
+## M2 Support
+
+- Optional `wearweb_script` target behind `WEARWEB_BUILD_SCRIPTING=ON`.
+- `JERRYSCRIPT_ROOT` can point at an official JerryScript checkout, for example
+  `third_party/jerryscript`.
+- JerryScript lifecycle owned by `JerryScriptRuntime`.
+- `eval(source, source_name)` for classic JavaScript source text.
+- Stringified success result and stringified exception result.
+- Repeated initialize/shutdown in one process, one active runtime at a time.
+- `wearweb_pseudo_browser --script file.js` for desktop acceptance.
+
+## Not Supported Yet
+
+- `window` and `document`.
+- DOM wrappers, selectors and mutations from JavaScript.
+- JavaScript event listeners.
+- Form-control JavaScript properties.
+- Timers, promises/job pumping beyond what JerryScript itself performs inside
+  one evaluation.
+- Inline `<script>` and script loading from HTML.
+- Networking, modules, dynamic import, storage, canvas and Web Components.
+
+## Embedded Policy
+
+The scripting bridge must stay optional, explicit and bounded:
+
+- Core HTML/CSS/rendering must build without JerryScript.
+- Native wrappers must not own DOM nodes.
+- Every retained `jerry_value_t` must have a clear release path.
+- Script-driven redraws should consume dirty flags and coalesce work.
+- APIs are added only when the C++ core can honor their behavior predictably.

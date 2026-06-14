@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 using namespace wearweb;
 
@@ -207,6 +208,57 @@ void embedded_styles_and_common_lengths_apply() {
     check(paragraph_style.text_indent == 34, "em text-indent parsed against font size");
 }
 
+bool linked_stylesheet_callback(std::string_view href, std::string& output, void*) {
+    if (href == "style1.css") {
+        output = "h1 { color: #123456; }";
+        return true;
+    }
+    return false;
+}
+
+void linked_stylesheets_merge_into_author_css() {
+    HtmlParser html_parser;
+    auto document = html_parser.parse(
+        "<html><head><link rel='preconnect' href='ignored.css'>"
+        "<link rel='stylesheet' href='style1.css'></head><body><h1>Title</h1></body></html>");
+    CssParser css_parser;
+    StyleResolver resolver(css_parser.parse(
+        combine_author_css("", *document, linked_stylesheet_callback, nullptr)));
+
+    Node* heading = find_first_by_tag(*document, "h1");
+    check(heading != nullptr, "heading exists");
+    const Style style = resolver.resolve(*heading);
+    check(style.color.r == 0x12 && style.color.g == 0x34 && style.color.b == 0x56,
+          "linked stylesheet applies");
+}
+
+void html5_semantic_defaults_are_visible() {
+    auto mark = make_element("mark");
+    auto blockquote = make_element("blockquote");
+    auto progress = make_element("progress");
+    StyleResolver resolver(Stylesheet{});
+
+    const Style mark_style = resolver.resolve(*mark);
+    const Style quote_style = resolver.resolve(*blockquote);
+    const Style progress_style = resolver.resolve(*progress);
+
+    check(mark_style.background_color.a == 255, "mark has visible background");
+    check(quote_style.display == Display::Block && quote_style.border_width.left > 0,
+          "blockquote has block fallback");
+    check(progress_style.display == Display::InlineBlock && progress_style.width > 0 && progress_style.height > 0,
+          "progress has visible fallback box");
+}
+
+void border_none_removes_default_control_border() {
+    auto button = make_element("button");
+    StyleResolver resolver(parse("button { border: none; }"));
+
+    const Style style = resolver.resolve(*button);
+    check(style.border_width.top == 0 && style.border_width.right == 0 &&
+              style.border_width.bottom == 0 && style.border_width.left == 0,
+          "border none removes default control border");
+}
+
 } // namespace
 
 int main() {
@@ -222,6 +274,9 @@ int main() {
         matches_descendant_and_attribute_selectors();
         controls_have_usable_default_boxes();
         embedded_styles_and_common_lengths_apply();
+        linked_stylesheets_merge_into_author_css();
+        html5_semantic_defaults_are_visible();
+        border_none_removes_default_control_border();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

@@ -8,13 +8,18 @@ portable document UI engine that can later host JavaScript through JerryScript.
 
 - Minimal HTML tokenizer/parser
 - DOM tree
+- DOM mutation primitives with dirty invalidation for future JavaScript bindings
 - Tiny CSS parser
 - Basic cascade for tag, class, id and inline style
-- Vertical block layout
+- Vertical block layout with simplified inline flow and wrapping
 - Sparse layer tree with flattening to a platform-neutral display list
 - CPU software rasterizer/compositor with BMP/PPM output for validation
 - Core hit testing and DOM-style event dispatch
 - Platform-neutral pointer/wheel input controller
+- Lightweight platform-neutral form-control state for text inputs, textareas,
+  checkboxes, radios, ranges and selects
+- Optional JerryScript runtime shell for script evaluation, kept outside
+  `wearweb_core`
 - Optional platform text-paint callback for desktop validation
 - Windows-only interactive browser shell for observation and testing
 - Console demo
@@ -51,6 +56,7 @@ Default CMake options build examples, tests and benchmarks:
 - `WEARWEB_BUILD_EXAMPLES=ON`
 - `WEARWEB_BUILD_TESTS=ON`
 - `WEARWEB_BUILD_BENCHMARKS=ON`
+- `WEARWEB_BUILD_SCRIPTING=OFF`
 
 For an embedded or library-only build:
 
@@ -58,6 +64,25 @@ For an embedded or library-only build:
 cmake -S . -B build-core -DWEARWEB_BUILD_EXAMPLES=OFF -DWEARWEB_BUILD_TESTS=OFF -DWEARWEB_BUILD_BENCHMARKS=OFF
 cmake --build build-core --config Release
 ```
+
+Optional JerryScript runtime support is built as a separate `wearweb_script`
+target. It is disabled by default so embedded/core builds never pull in
+JerryScript headers or libraries accidentally:
+
+```powershell
+git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
+python third_party\jerryscript\tools\build.py --clean
+
+cmake -S . -B build-script `
+  -DWEARWEB_BUILD_SCRIPTING=ON `
+  -DJERRYSCRIPT_ROOT="%CD%\third_party\jerryscript" `
+  -DJERRYSCRIPT_LIBRARIES="%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-core.lib;%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-port.lib"
+cmake --build build-script --config Release
+```
+
+M2 scripting support evaluates JavaScript and reports the result or exception.
+It does not expose `window`, `document`, DOM mutation APIs, events, timers or
+form properties yet.
 
 Run the regression suite through CTest:
 
@@ -78,16 +103,11 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_layer_tree_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pipeline_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
+.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
+.\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
 .\build\Release\wearweb_microbench.exe 80 1000
-.\build\Debug\wearweb_tokenizer_tests.exe
-.\build\Debug\wearweb_css_parser_tests.exe
-.\build\Debug\wearweb_event_tests.exe
-.\build\Debug\wearweb_hit_test_tests.exe
-.\build\Debug\wearweb_input_tests.exe
-.\build\Debug\wearweb_render_tree_tests.exe
-.\build\Debug\wearweb_layer_tree_tests.exe
-.\build\Debug\wearweb_software_renderer_tests.exe
+.\build\Debug\wearweb_core_tests.exe
 ```
 
 - `wearweb_demo` runs the current layout/layer/display-list slice.
@@ -104,24 +124,29 @@ ctest --test-dir build -C Debug --output-on-failure
 - `wearweb_pipeline_dump` prints end-to-end DOM/render/layout/layer/display-list
   counts and a display-list preview.
 - `wearweb_pseudo_browser` runs the current full pipeline and writes a BMP or PPM
-  framebuffer image. It is a desktop validation shell, not an embedded UI.
+  framebuffer image. It is a desktop validation shell, not an embedded UI. Its
+  built-in fallback font is intentionally tiny; use the Win32 browser shell for
+  readable UTF-8/Chinese text validation. In scripting builds, `--script`
+  evaluates one external JavaScript file before rendering and prints the
+  stringified result or exception; DOM bindings are intentionally not available
+  until the next milestones.
 - `wearweb_win32_browser` is available on Windows builds. It opens an
   interactive Win32/GDI window, renders through the same core pipeline, injects a
   GDI text painter through the platform text callback and forwards mouse/wheel
   input into the platform-neutral input controller. It is for desktop
   observation only; the core remains windowing- and OS-independent.
+- `wearweb_win32_browser --capture` renders through the same Win32/GDI text path
+  and writes a BMP or PPM file without opening an interactive window.
+- The inspection tools and Win32 shell merge author CSS from the explicit CSS
+  file, embedded `<style>` elements and local `<link rel="stylesheet">` files.
+  Linked CSS loading lives in example code; the core exposes only a callback and
+  stays platform-neutral.
 - `wearweb_microbench` runs parser/render/layout/layer/flatten microbenchmarks.
   Use a Release build for meaningful numbers.
-- `wearweb_tokenizer_tests` runs the current tokenizer and parser regression
-  checks.
-- `wearweb_css_parser_tests` runs CSS parser and fallback-style regression
-  checks.
-- `wearweb_event_tests`, `wearweb_hit_test_tests` and `wearweb_input_tests`
-  cover DOM-style event dispatch, layer-aware hit testing and pointer/wheel
-  input synthesis.
-- `wearweb_render_tree_tests`, `wearweb_layer_tree_tests` and
-  `wearweb_software_renderer_tests` cover render, layer and CPU framebuffer
-  behavior.
+- `wearweb_core_tests` is the single platform-neutral regression executable. It
+  covers tokenizer/parser, DOM mutation, CSS parser, events, hit testing, input,
+  render tree, layer tree and CPU framebuffer behavior. In scripting builds it
+  also includes the JerryScript runtime tests.
 
 ## Documentation
 

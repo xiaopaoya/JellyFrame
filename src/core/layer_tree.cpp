@@ -1,6 +1,10 @@
 #include "core/layer_tree.h"
 
+#include "core/form_control.h"
+
 #include <algorithm>
+#include <cerrno>
+#include <cstdlib>
 #include <utility>
 
 namespace wearweb {
@@ -12,6 +16,31 @@ bool has_border(const EdgeSizes& border) {
 
 bool is_visible_background(Color color) {
     return color.a != 0;
+}
+
+Rect union_rect(Rect left, Rect right) {
+    if (left.width <= 0 || left.height <= 0) {
+        return right;
+    }
+    if (right.width <= 0 || right.height <= 0) {
+        return left;
+    }
+    const int x1 = std::min(left.x, right.x);
+    const int y1 = std::min(left.y, right.y);
+    const int x2 = std::max(left.x + left.width, right.x + right.width);
+    const int y2 = std::max(left.y + left.height, right.y + right.height);
+    return Rect{x1, y1, x2 - x1, y2 - y1};
+}
+
+Rect paint_rect_for(const LayoutBox& box) {
+    if (box.style.display != Display::Inline || box.children.empty()) {
+        return box.rect;
+    }
+    Rect rect{};
+    for (const auto& child : box.children) {
+        rect = union_rect(rect, child->rect);
+    }
+    return rect.width > 0 && rect.height > 0 ? rect : box.rect;
 }
 
 bool has_overflow_clip(const Style& style) {
@@ -54,24 +83,180 @@ void push_border_rects(DisplayList& display_list, Rect rect, const EdgeSizes& bo
     push_fill_rect(display_list, Rect{rect.x + rect.width - border.right, rect.y, border.right, rect.height}, color);
 }
 
+void push_text(DisplayList& display_list, Rect rect, Color color, const std::string& text, int font_size) {
+    if (rect.width <= 0 || rect.height <= 0 || text.empty() || color.a == 0) {
+        return;
+    }
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = rect;
+    command.color = color;
+    command.color2 = color;
+    command.text = text;
+    command.font_size = font_size;
+    display_list.push_back(std::move(command));
+}
+
+bool parse_float_attribute(const Node& node, const char* name, float& output) {
+    const std::string& value = node.attribute(name);
+    if (value.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(value.c_str(), &end);
+    if (end == value.c_str() || errno == ERANGE) {
+        return false;
+    }
+    output = parsed;
+    return true;
+}
+
+void paint_meter_bar(const LayoutBox& box, DisplayList& display_list) {
+    if (box.node == nullptr || box.node->type != NodeType::Element) {
+        return;
+    }
+    const bool is_progress = box.node->tag_name == "progress";
+    const bool is_meter = box.node->tag_name == "meter";
+    if (!is_progress && !is_meter) {
+        return;
+    }
+
+    float min_value = 0.0F;
+    float max_value = 1.0F;
+    float value = 0.0F;
+    if (is_progress) {
+        max_value = 1.0F;
+        parse_float_attribute(*box.node, "max", max_value);
+        if (!parse_float_attribute(*box.node, "value", value)) {
+            value = 0.0F;
+        }
+    } else {
+        parse_float_attribute(*box.node, "min", min_value);
+        parse_float_attribute(*box.node, "max", max_value);
+        if (!parse_float_attribute(*box.node, "value", value)) {
+            value = min_value;
+        }
+    }
+    if (max_value <= min_value) {
+        return;
+    }
+
+    const float ratio = std::max(0.0F, std::min(1.0F, (value - min_value) / (max_value - min_value)));
+    Rect inner{
+        box.rect.x + box.style.border_width.left + 1,
+        box.rect.y + box.style.border_width.top + 1,
+        std::max(0, box.rect.width - box.style.border_width.left - box.style.border_width.right - 2),
+        std::max(0, box.rect.height - box.style.border_width.top - box.style.border_width.bottom - 2),
+    };
+    inner.width = static_cast<int>(static_cast<float>(inner.width) * ratio + 0.5F);
+    const Color fill = is_progress ? Color{37, 99, 235, 255} : Color{22, 163, 74, 255};
+    push_fill_rect(display_list, inner, fill, std::max(0, box.style.border_radius - 1));
+}
+
+int range_state_value(const FormControlState& state) {
+    char* end = nullptr;
+    const long parsed = std::strtol(state.value.c_str(), &end, 10);
+    if (end == state.value.c_str()) {
+        return state.min;
+    }
+    return static_cast<int>(parsed);
+}
+
+void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
+    if (box.node == nullptr || box.node->type != NodeType::Element || !is_form_control(*box.node)) {
+        return;
+    }
+    const FormControlState& state = ensure_form_control_state(*box.node);
+    const Rect inner{
+        box.rect.x + box.style.border_width.left + box.style.padding.left,
+        box.rect.y + box.style.border_width.top + box.style.padding.top,
+        std::max(0, box.rect.width - box.style.border_width.left - box.style.border_width.right -
+                    box.style.padding.left - box.style.padding.right),
+        std::max(0, box.rect.height - box.style.border_width.top - box.style.border_width.bottom -
+                    box.style.padding.top - box.style.padding.bottom),
+    };
+
+    if (state.kind == FormControlKind::Checkbox || state.kind == FormControlKind::Radio) {
+        if (state.checked) {
+            const Rect mark{
+                box.rect.x + std::max(3, box.rect.width / 4),
+                box.rect.y + std::max(3, box.rect.height / 4),
+                std::max(4, box.rect.width / 2),
+                std::max(4, box.rect.height / 2),
+            };
+            push_fill_rect(display_list, mark, Color{37, 99, 235, 255}, state.kind == FormControlKind::Radio ? 99 : 1);
+        }
+        return;
+    }
+
+    if (state.kind == FormControlKind::Range) {
+        const int track_height = 4;
+        const Rect track{
+            inner.x,
+            inner.y + std::max(0, (inner.height - track_height) / 2),
+            inner.width,
+            track_height,
+        };
+        push_fill_rect(display_list, track, Color{203, 213, 225, 255}, 2);
+        const int denom = std::max(1, state.max - state.min);
+        const int value = std::max(state.min, std::min(range_state_value(state), state.max));
+        const int fill_width = (inner.width * (value - state.min) + denom / 2) / denom;
+        push_fill_rect(display_list, Rect{track.x, track.y, fill_width, track.height}, Color{37, 99, 235, 255}, 2);
+        const int thumb_size = std::max(10, std::min(18, box.rect.height - 2));
+        const int thumb_x = inner.x + fill_width - thumb_size / 2;
+        push_fill_rect(display_list,
+                       Rect{thumb_x, box.rect.y + std::max(0, (box.rect.height - thumb_size) / 2),
+                            thumb_size, thumb_size},
+                       Color{37, 99, 235, 255},
+                       thumb_size / 2);
+        return;
+    }
+
+    if (state.kind == FormControlKind::Text || state.kind == FormControlKind::TextArea ||
+        state.kind == FormControlKind::Date || state.kind == FormControlKind::Time ||
+        state.kind == FormControlKind::Color || state.kind == FormControlKind::File ||
+        state.kind == FormControlKind::Select) {
+        std::string text = form_control_display_text(*box.node);
+        Color text_color = box.style.color;
+        if (text.empty()) {
+            text = box.node->attribute("placeholder");
+            text_color = Color{100, 116, 139, 255};
+        }
+        if (state.kind == FormControlKind::File && text.empty()) {
+            text = "Choose file";
+        }
+        const int arrow_width = state.kind == FormControlKind::Select ? 14 : 0;
+        push_text(display_list,
+                  Rect{inner.x + 2, inner.y, std::max(0, inner.width - arrow_width - 4), inner.height},
+                  text_color,
+                  text,
+                  box.style.font_size);
+        if (state.kind == FormControlKind::Select) {
+            push_text(display_list,
+                      Rect{inner.x + std::max(0, inner.width - 12), inner.y, 12, inner.height},
+                      Color{15, 23, 42, 255},
+                      "v",
+                      box.style.font_size);
+        }
+    }
+}
+
 void paint_box_self(const LayoutBox& box, DisplayList& display_list) {
+    const Rect paint_rect = paint_rect_for(box);
     if (is_visible_background(box.style.background_color)) {
-        push_fill_rect(display_list, box.rect, box.style.background_color, box.style.border_radius);
+        push_fill_rect(display_list, paint_rect, box.style.background_color, box.style.border_radius);
     }
 
     if (has_border(box.style.border_width)) {
-        push_border_rects(display_list, box.rect, box.style.border_width, box.style.border_color);
+        push_border_rects(display_list, paint_rect, box.style.border_width, box.style.border_color);
     }
 
+    paint_meter_bar(box, display_list);
+    paint_form_control(box, display_list);
+
     if (box.node != nullptr && box.node->type == NodeType::Text) {
-        DisplayCommand command;
-        command.type = DisplayCommandType::Text;
-        command.rect = box.rect;
-        command.color = box.style.color;
-        command.color2 = box.style.color;
-        command.text = box.node->text;
-        command.font_size = box.style.font_size;
-        display_list.push_back(std::move(command));
+        push_text(display_list, box.rect, box.style.color, box.node->text, box.style.font_size);
     }
 }
 

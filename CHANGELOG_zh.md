@@ -4,6 +4,59 @@ WearWeb Engine 的重要变更记录在这里。
 
 项目使用轻量语义化版本规则。详见 `docs/versioning_zh.md`。
 
+## Unreleased
+
+### 新增
+
+- 通过 callback 形式的 `document_style` API 添加平台无关的外链 stylesheet
+  收集能力。核心代码仍不执行文件或网络 I/O；示例工具和 Win32 壳只在桌面验证时提供本地文件加载。
+- 为常用 HTML5 语义/内容元素添加可用默认样式：`a`、`mark`、`blockquote`、
+  `summary`、`details`、`address`、`hgroup`、`progress` 和 `meter`。
+- 为 `progress` 和 `meter` 添加简单的软件绘制 value bar。
+- 为 `wearweb_win32_browser` 添加 `--capture`，可通过 Win32/GDI 文本路径渲染页面并写出
+  BMP/PPM 图片，便于视觉检查。
+- 添加轻量、平台无关的表单控件状态层，覆盖嵌入式应用常用的 text input、textarea、
+  checkbox、radio、range 和 select。
+- 添加核心 UTF-8 文本输入、简单按键处理和有状态控件激活 API。
+- 添加面向 JerryScript bridge 的 DOM mutation 原语：子节点插入/删除、属性修改、`textContent`
+  更新，以及 tree/attribute/text/style/layout dirty flags。
+- 添加双语 JerryScript 接入规划文档，覆盖 runtime 生命周期、binding 所有权、里程碑、风险和第一个交互式
+  demo 目标。
+- 添加可选 `wearweb_script` JerryScript runtime shell。该能力默认由
+  `WEARWEB_BUILD_SCRIPTING=OFF` 关闭，保证 `wearweb_core` 不依赖 JerryScript 头文件或库。
+- 为 scripting 构建添加 `wearweb_pseudo_browser --script`。M2 只执行一个外部 JavaScript
+  文件并报告结果或异常；尚未暴露 DOM binding。
+- 添加 `examples/script_cases/runtime_probe.*`，作为第一个脚本 runtime 验收页面。
+- 添加单一聚合测试程序 `wearweb_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
+  executable。
+- 添加 `JERRYSCRIPT_ROOT` CMake 支持，便于使用 `third_party/jerryscript` 这样的官方 JerryScript
+  本地源码树。
+- 添加外链 stylesheet 合并、语义 fallback 样式、inline 高亮绘制、DOM mutation invalidation
+  和表单控件 fallback 行为的回归测试。启用 scripting 的构建还会加入 JerryScript runtime
+  生命周期和异常路径测试。
+
+### 改进
+
+- 改进 inline layout，使文本、链接、高亮和 inline 控件按可用宽度横向流动并换行，不再把每个 inline
+  节点都垂直堆叠。
+- 在简化 layout engine 中保留父级 `text-align` 对 inline text run 的影响。
+- 将 inline 背景/边框绘制收缩到子文本范围，避免 `mark` 等 inline 元素填满整行。
+- 将常见 replaced controls/media 节点作为叶子 render object 处理，避免 `select` options
+  和不支持的媒体 fallback 文本溢出到页面布局中。
+- 改进默认表单控件尺寸并支持 `border: none`，让按钮保持按内容收缩，同时让未显式设置宽度的
+  input/select 更可用。
+- 在 display list 中绘制轻量原生控件外观，包括 range track/thumb、checkbox/radio
+  勾选标记、select 箭头以及文本控件 value/placeholder 内容。
+- Win32 壳会把字符输入和 Backspace 转发到核心控件模型，并在同一份 DOM 上重绘，使桌面验证能反映实时控件变化。
+
+### 说明
+
+- `wearweb_pseudo_browser` 在没有注入平台 `TextPainter` 时仍使用极小内置 bitmap
+  字体，因此 BMP smoke-test 输出中的非 ASCII 文本会显示为 fallback glyph。Win32 browser
+  shell 使用 GDI 文本绘制，可用于可读的 UTF-8/中文验证。
+- 示例/Win32 helper 会相对于命令行传入的 CSS 路径解析本地 linked stylesheet。缺失的外链文件会被保守忽略，
+  符合当前引擎的合理降级策略。
+
 ## 0.2.0-dev - 2026-06-15
 
 ### 新增

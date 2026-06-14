@@ -681,6 +681,11 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.border_color = parsed;
         return true;
     } else if (property == "border") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "none" || lowered == "0" || lowered == "0px") {
+            style.border_width = EdgeSizes{};
+            return true;
+        }
         int width = 0;
         Color color;
         bool has_width = false;
@@ -947,10 +952,11 @@ Style default_style_for(const Node& node) {
         return style;
     }
 
-    static constexpr std::array<std::string_view, 29> block_tags = {
+    static constexpr std::array<std::string_view, 34> block_tags = {
         "document", "html", "body", "div", "p", "section", "article", "header", "footer", "main",
-        "nav", "aside", "form", "fieldset", "dialog", "h1", "h2", "h3", "h4", "h5", "h6",
-        "ul", "ol", "li", "table", "tr", "td", "th", "app-root"
+        "nav", "aside", "form", "fieldset", "dialog", "details", "summary", "blockquote", "address",
+        "hgroup", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "tr", "td",
+        "th", "app-root"
     };
     static constexpr std::array<std::string_view, 8> hidden_tags = {
         "head", "script", "style", "meta", "link", "title", "template", "noscript"
@@ -973,6 +979,28 @@ Style default_style_for(const Node& node) {
         style.margin.bottom = 6;
     } else if (node.tag_name == "p") {
         style.margin.bottom = 6;
+    } else if (node.tag_name == "a") {
+        style.color = Color{37, 99, 235, 255};
+        style.color_specified = true;
+    } else if (node.tag_name == "mark") {
+        style.background_color = Color{254, 240, 138, 255};
+        style.color = Color{0, 0, 0, 255};
+        style.color_specified = true;
+    } else if (node.tag_name == "blockquote") {
+        style.margin = EdgeSizes{8, 0, 8, 0};
+        style.padding.left = 12;
+        style.border_width.left = 4;
+        style.border_color = Color{203, 213, 225, 255};
+    } else if (node.tag_name == "summary") {
+        style.margin.bottom = 6;
+    } else if (node.tag_name == "progress" || node.tag_name == "meter") {
+        style.display = Display::InlineBlock;
+        style.width = 160;
+        style.height = 12;
+        style.border_width = EdgeSizes{1, 1, 1, 1};
+        style.border_color = Color{148, 163, 184, 255};
+        style.border_radius = 3;
+        style.background_color = Color{226, 232, 240, 255};
     } else if (node.tag_name == "button") {
         style.display = Display::InlineBlock;
         style.padding = EdgeSizes{4, 8, 4, 8};
@@ -985,7 +1013,20 @@ Style default_style_for(const Node& node) {
         style.border_width = EdgeSizes{1, 1, 1, 1};
         style.border_color = Color{107, 114, 128, 255};
         style.background_color = Color{255, 255, 255, 255};
-        style.min_width = 80;
+        style.min_width = 140;
+        if (node.tag_name == "input" && (node.attribute("type") == "checkbox" || node.attribute("type") == "radio")) {
+            style.width = 18;
+            style.height = 18;
+            style.min_width = 18;
+            style.padding = EdgeSizes{};
+        } else if (node.tag_name == "input" && node.attribute("type") == "color") {
+            style.width = 44;
+            style.height = 24;
+            style.min_width = 44;
+        } else if (node.tag_name == "input" && node.attribute("type") == "range") {
+            style.width = 140;
+            style.min_width = 120;
+        }
     } else if (node.tag_name == "img" || node.tag_name == "picture") {
         style.display = Display::InlineBlock;
     } else if (node.tag_name == "dialog") {

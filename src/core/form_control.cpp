@@ -1,0 +1,301 @@
+#include "core/form_control.h"
+
+#include <algorithm>
+#include <cerrno>
+#include <cstdlib>
+
+namespace wearweb {
+namespace {
+
+bool has_attribute(const Node& node, const std::string& name) {
+    return node.attributes.find(name) != node.attributes.end();
+}
+
+int parse_int_attribute(const Node& node, const std::string& name, int fallback) {
+    const std::string& value = node.attribute(name);
+    if (value.empty()) {
+        return fallback;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const long parsed = std::strtol(value.c_str(), &end, 10);
+    if (end == value.c_str() || errno == ERANGE) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
+}
+
+void append_descendant_text(const Node& node, std::string& output) {
+    if (node.type == NodeType::Text) {
+        output += node.text;
+        return;
+    }
+    for (const auto& child : node.children) {
+        append_descendant_text(*child, output);
+    }
+}
+
+const Node* option_at(const Node& node, int wanted_index, int& current_index) {
+    if (node.type == NodeType::Element && node.tag_name == "option") {
+        if (current_index == wanted_index) {
+            return &node;
+        }
+        ++current_index;
+    }
+    for (const auto& child : node.children) {
+        const Node* found = option_at(*child, wanted_index, current_index);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+int count_options(const Node& node) {
+    int count = 0;
+    if (node.type == NodeType::Element && node.tag_name == "option") {
+        ++count;
+    }
+    for (const auto& child : node.children) {
+        count += count_options(*child);
+    }
+    return count;
+}
+
+int first_selected_option_index(const Node& node, int& current_index) {
+    if (node.type == NodeType::Element && node.tag_name == "option") {
+        if (has_attribute(node, "selected")) {
+            return current_index;
+        }
+        ++current_index;
+    }
+    for (const auto& child : node.children) {
+        const int found = first_selected_option_index(*child, current_index);
+        if (found >= 0) {
+            return found;
+        }
+    }
+    return -1;
+}
+
+std::string option_text(const Node& option) {
+    std::string text;
+    append_descendant_text(option, text);
+    return text;
+}
+
+FormControlState make_initial_state(const Node& node) {
+    FormControlState state;
+    state.kind = form_control_kind(node);
+    switch (state.kind) {
+    case FormControlKind::Checkbox:
+    case FormControlKind::Radio:
+        state.checked = has_attribute(node, "checked");
+        state.value = node.attribute("value").empty() ? "on" : node.attribute("value");
+        break;
+    case FormControlKind::Range:
+        state.min = parse_int_attribute(node, "min", 0);
+        state.max = parse_int_attribute(node, "max", 100);
+        state.step = std::max(1, parse_int_attribute(node, "step", 1));
+        if (state.max < state.min) {
+            state.max = state.min;
+        }
+        state.value = node.attribute("value");
+        if (state.value.empty()) {
+            state.value = std::to_string(state.min + (state.max - state.min) / 2);
+        }
+        break;
+    case FormControlKind::TextArea:
+        append_descendant_text(node, state.value);
+        break;
+    case FormControlKind::Select: {
+        int current_index = 0;
+        state.selected_index = first_selected_option_index(node, current_index);
+        if (state.selected_index < 0 && current_index > 0) {
+            state.selected_index = 0;
+        }
+        state.value = form_control_display_text(node);
+        break;
+    }
+    case FormControlKind::Text:
+    case FormControlKind::Date:
+    case FormControlKind::Time:
+    case FormControlKind::Color:
+    case FormControlKind::File:
+        state.value = node.attribute("value");
+        break;
+    case FormControlKind::Button:
+    case FormControlKind::None:
+        break;
+    }
+    return state;
+}
+
+int state_int_value(const FormControlState& state) {
+    char* end = nullptr;
+    const long parsed = std::strtol(state.value.c_str(), &end, 10);
+    if (end == state.value.c_str()) {
+        return state.min;
+    }
+    return static_cast<int>(parsed);
+}
+
+} // namespace
+
+FormControlKind form_control_kind(const Node& node) {
+    if (node.type != NodeType::Element) {
+        return FormControlKind::None;
+    }
+    if (node.tag_name == "button") {
+        return FormControlKind::Button;
+    }
+    if (node.tag_name == "textarea") {
+        return FormControlKind::TextArea;
+    }
+    if (node.tag_name == "select") {
+        return FormControlKind::Select;
+    }
+    if (node.tag_name != "input") {
+        return FormControlKind::None;
+    }
+    const std::string& type = node.attribute("type");
+    if (type == "checkbox") {
+        return FormControlKind::Checkbox;
+    }
+    if (type == "radio") {
+        return FormControlKind::Radio;
+    }
+    if (type == "range") {
+        return FormControlKind::Range;
+    }
+    if (type == "date" || type == "datetime-local") {
+        return FormControlKind::Date;
+    }
+    if (type == "time") {
+        return FormControlKind::Time;
+    }
+    if (type == "color") {
+        return FormControlKind::Color;
+    }
+    if (type == "file") {
+        return FormControlKind::File;
+    }
+    return FormControlKind::Text;
+}
+
+bool is_form_control(const Node& node) {
+    return form_control_kind(node) != FormControlKind::None;
+}
+
+bool is_text_entry_control(const Node& node) {
+    const FormControlKind kind = form_control_kind(node);
+    return kind == FormControlKind::Text || kind == FormControlKind::TextArea ||
+        kind == FormControlKind::Date || kind == FormControlKind::Time || kind == FormControlKind::Color;
+}
+
+FormControlState& ensure_form_control_state(const Node& node) {
+    if (!node.form_control_state) {
+        node.form_control_state = std::make_unique<FormControlState>(make_initial_state(node));
+    }
+    return *node.form_control_state;
+}
+
+const FormControlState* form_control_state_if_created(const Node& node) {
+    return node.form_control_state.get();
+}
+
+std::string form_control_display_text(const Node& node) {
+    if (node.form_control_state && node.form_control_state->kind != FormControlKind::Select) {
+        return node.form_control_state->value;
+    }
+    const FormControlKind kind = form_control_kind(node);
+    if (kind == FormControlKind::Select) {
+        int selected = 0;
+        if (node.form_control_state) {
+            selected = node.form_control_state->selected_index;
+        } else {
+            int current_index = 0;
+            selected = first_selected_option_index(node, current_index);
+            if (selected < 0) {
+                selected = 0;
+            }
+        }
+        int current_index = 0;
+        const Node* option = option_at(node, selected, current_index);
+        return option != nullptr ? option_text(*option) : std::string{};
+    }
+    if (kind == FormControlKind::TextArea) {
+        std::string text;
+        append_descendant_text(node, text);
+        return text;
+    }
+    return node.attribute("value");
+}
+
+bool append_text_to_control(Node& node, std::string_view text) {
+    if (!is_text_entry_control(node) || text.empty()) {
+        return false;
+    }
+    FormControlState& state = ensure_form_control_state(node);
+    state.value.append(text.data(), text.size());
+    state.dirty = true;
+    return true;
+}
+
+bool backspace_control(Node& node) {
+    if (!is_text_entry_control(node)) {
+        return false;
+    }
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.value.empty()) {
+        return false;
+    }
+    state.value.pop_back();
+    state.dirty = true;
+    return true;
+}
+
+bool activate_form_control(Node& node) {
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.kind == FormControlKind::Checkbox) {
+        state.checked = !state.checked;
+        state.dirty = true;
+        return true;
+    }
+    if (state.kind == FormControlKind::Radio) {
+        state.checked = true;
+        state.dirty = true;
+        return true;
+    }
+    if (state.kind == FormControlKind::Select) {
+        const int option_count = count_options(node);
+        if (option_count <= 0) {
+            return false;
+        }
+        state.selected_index = (state.selected_index + 1) % option_count;
+        state.value = form_control_display_text(node);
+        state.dirty = true;
+        return true;
+    }
+    return false;
+}
+
+bool set_range_value_from_local_x(Node& node, int local_x, int width) {
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.kind != FormControlKind::Range || width <= 0 || state.max <= state.min) {
+        return false;
+    }
+    const int clamped_x = std::max(0, std::min(local_x, width));
+    const int raw = state.min + ((state.max - state.min) * clamped_x + width / 2) / width;
+    const int stepped = state.min + ((raw - state.min + state.step / 2) / state.step) * state.step;
+    const int value = std::max(state.min, std::min(stepped, state.max));
+    const std::string next = std::to_string(value);
+    if (state.value == next) {
+        return false;
+    }
+    state.value = next;
+    state.dirty = true;
+    return true;
+}
+
+} // namespace wearweb

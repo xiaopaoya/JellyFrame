@@ -3,6 +3,8 @@
 #include "core/html_parser.h"
 #include "core/render_tree.h"
 
+#include "example_css_io.h"
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -125,11 +127,11 @@ int main(int argc, char** argv) {
 
     try {
         const std::string html = read_file_limited(argv[1]);
-        const std::string css = read_file_limited(argv[2]);
         HtmlParser html_parser;
         CssParser css_parser;
         auto document = html_parser.parse(html);
-        StyleResolver resolver(css_parser.parse(combine_author_css(css, *document)));
+        StyleResolver resolver(css_parser.parse(
+            wearweb_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes)));
         RenderTreeBuilder builder(resolver);
         auto render_tree = builder.build(*document);
         dump_render_tree(*render_tree);

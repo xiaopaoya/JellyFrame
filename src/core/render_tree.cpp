@@ -38,6 +38,15 @@ bool creates_render_object(const Node& node, const Style& style) {
     return true;
 }
 
+bool is_replaced_control(const Node& node) {
+    if (node.type != NodeType::Element) {
+        return false;
+    }
+    return node.tag_name == "input" || node.tag_name == "select" || node.tag_name == "textarea" ||
+        node.tag_name == "img" || node.tag_name == "picture" || node.tag_name == "video" ||
+        node.tag_name == "audio" || node.tag_name == "iframe";
+}
+
 } // namespace
 
 RenderTreeBuilder::RenderTreeBuilder(const StyleResolver& style_resolver)
@@ -75,10 +84,12 @@ std::unique_ptr<RenderObject> RenderTreeBuilder::build_object(const Node& node, 
     object->node = &node;
     object->style = style;
 
-    for (const auto& child : node.children) {
-        auto child_object = build_object(*child, &object->style);
-        if (child_object != nullptr) {
-            object->children.push_back(std::move(child_object));
+    if (!is_replaced_control(node)) {
+        for (const auto& child : node.children) {
+            auto child_object = build_object(*child, &object->style);
+            if (child_object != nullptr) {
+                object->children.push_back(std::move(child_object));
+            }
         }
     }
 

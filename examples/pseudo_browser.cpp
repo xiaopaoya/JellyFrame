@@ -7,6 +7,12 @@
 #include "core/software_renderer.h"
 #include "core/style.h"
 
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+#include "script/jerryscript_runtime.h"
+#endif
+
+#include "example_css_io.h"
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -74,41 +80,110 @@ int parse_int_arg(const char* value, int fallback) {
     }
 }
 
+struct BrowserOptions {
+    std::string html_path;
+    std::string css_path;
+    std::string output_path;
+    std::string script_path;
+    int viewport_width = 360;
+    int viewport_height = 240;
+};
+
+bool is_script_flag(const std::string& value) {
+    return value == "--script" || value == "-s";
+}
+
+BrowserOptions parse_options(int argc, char** argv) {
+    if (argc < 4) {
+        throw std::runtime_error(
+            "usage: wearweb_pseudo_browser page.html style.css output.ppm [viewport_width] [viewport_height] "
+            "[--script script.js]");
+    }
+
+    BrowserOptions options;
+    options.html_path = argv[1];
+    options.css_path = argv[2];
+    options.output_path = argv[3];
+
+    bool width_set = false;
+    bool height_set = false;
+    for (int i = 4; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (is_script_flag(arg)) {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--script requires a script file path");
+            }
+            options.script_path = argv[++i];
+            continue;
+        }
+
+        if (!width_set) {
+            options.viewport_width = parse_int_arg(argv[i], options.viewport_width);
+            width_set = true;
+            continue;
+        }
+        if (!height_set) {
+            options.viewport_height = parse_int_arg(argv[i], options.viewport_height);
+            height_set = true;
+            continue;
+        }
+        if (options.script_path.empty()) {
+            options.script_path = arg;
+            continue;
+        }
+
+        throw std::runtime_error("too many positional arguments");
+    }
+
+    return options;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
-    if (argc < 4) {
-        std::cerr << "usage: wearweb_pseudo_browser page.html style.css output.ppm [viewport_width] [viewport_height]\n";
-        return 1;
-    }
-
     try {
-        const int viewport_width = argc >= 5 ? parse_int_arg(argv[4], 360) : 360;
-        const int viewport_height = argc >= 6 ? parse_int_arg(argv[5], 240) : 240;
-        const std::string html = read_file_limited(argv[1]);
-        const std::string css = read_file_limited(argv[2]);
+        const BrowserOptions options = parse_options(argc, argv);
+        const std::string html = read_file_limited(options.html_path);
 
         HtmlParser html_parser;
         CssParser css_parser;
         auto document = html_parser.parse(html);
-        Stylesheet stylesheet = css_parser.parse(combine_author_css(css, *document));
+
+        bool script_ran = false;
+        bool script_ok = false;
+        std::string script_output;
+        if (!options.script_path.empty()) {
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+            JerryScriptRuntime runtime;
+            const ScriptEvaluationResult script_result = runtime.eval(read_file_limited(options.script_path), options.script_path);
+            script_ok = script_result.ok;
+            script_output = script_result.ok ? script_result.value : script_result.error;
+            script_ran = true;
+#else
+            throw std::runtime_error("this build was compiled without WEARWEB_BUILD_SCRIPTING=ON");
+#endif
+        }
+
+        Stylesheet stylesheet = css_parser.parse(
+            wearweb_example::read_author_css_for_document(options.css_path, *document, kMaxInputBytes));
         StyleResolver resolver(std::move(stylesheet));
 
         RenderTreeBuilder render_tree_builder(resolver);
         auto render_tree = render_tree_builder.build(*document);
         LayoutEngine layout_engine(resolver);
-        auto layout_tree = layout_engine.layout(*render_tree, viewport_width);
+        auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
         LayerTreeBuilder layer_tree_builder;
         auto layer_tree = layer_tree_builder.build(*layout_tree);
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
 
         SoftwareCompositor compositor;
-        FrameBuffer frame_buffer = compositor.render(*layer_tree, viewport_width, viewport_height, Color{255, 255, 255, 255});
-        write_image(frame_buffer, argv[3]);
+        FrameBuffer frame_buffer = compositor.render(
+            *layer_tree, options.viewport_width, options.viewport_height, Color{255, 255, 255, 255});
+        write_image(frame_buffer, options.output_path);
 
         std::cout << "WearWeb pseudo browser\n";
-        std::cout << "  output=" << argv[3] << '\n';
-        std::cout << "  viewport=" << viewport_width << "x" << viewport_height << '\n';
+        std::cout << "  output=" << options.output_path << '\n';
+        std::cout << "  viewport=" << options.viewport_width << "x" << options.viewport_height << '\n';
         std::cout << "  dom_nodes=" << count_dom_nodes(*document) << '\n';
         std::cout << "  render_objects=" << count_render_objects(*render_tree) << '\n';
         std::cout << "  layout_boxes=" << count_layout_boxes(*layout_tree) << '\n';
@@ -116,6 +191,11 @@ int main(int argc, char** argv) {
         std::cout << "  display_commands=" << display_list.size() << '\n';
         std::cout << "  non_background_pixels="
                   << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
+        if (script_ran) {
+            std::cout << "  script=" << options.script_path << '\n';
+            std::cout << "  script_ok=" << (script_ok ? "true" : "false") << '\n';
+            std::cout << "  script_result=" << script_output << '\n';
+        }
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';
         return 1;

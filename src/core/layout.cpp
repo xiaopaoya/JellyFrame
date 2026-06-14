@@ -40,6 +40,23 @@ int text_line_height(int font_size) {
     return font_size + std::max(6, font_size / 3);
 }
 
+bool participates_in_inline_flow(const LayoutBox& box) {
+    return (box.node != nullptr && box.node->type == NodeType::Text) ||
+        box.style.display == Display::Inline || box.style.display == Display::InlineBlock;
+}
+
+bool has_only_inline_children(const LayoutBox& box) {
+    if (box.children.empty()) {
+        return false;
+    }
+    for (const auto& child : box.children) {
+        if (!participates_in_inline_flow(*child)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void shift_box(LayoutBox& box, int dx, int dy) {
     box.rect.x += dx;
     box.rect.y += dy;
@@ -99,7 +116,7 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
     }
     const int measured_border_box_width = content_width + horizontal_edges(box.style.padding) +
         horizontal_edges(box.style.border_width);
-    const int border_box_width = std::max(box.style.min_width,
+    int border_box_width = std::max(box.style.min_width,
         box.style.width >= 0 && box.style.box_sizing_border_box ? box.style.width : measured_border_box_width);
     const int auto_space = std::max(0, width - border_box_width - margin_left - margin_right);
     int border_box_x = x + margin_left;
@@ -135,6 +152,8 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
     int max_child_width = 0;
     const int children_height = box.style.display == Display::Flex
         ? layout_flex_box(box, content_x, cursor_y, content_width)
+        : has_only_inline_children(box)
+        ? layout_inline_children(box, content_x, cursor_y, content_width)
         : [&] {
             int height = 0;
             for (auto& child : box.children) {
@@ -147,7 +166,19 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
             return height;
         }();
     if (box.style.width < 0 && (box.style.display == Display::Inline || box.style.display == Display::InlineBlock)) {
+        if (!box.children.empty()) {
+            int min_child_x = box.children.front()->rect.x - box.children.front()->style.margin.left;
+            int max_child_x = box.children.front()->rect.x + box.children.front()->rect.width +
+                box.children.front()->style.margin.right;
+            for (const auto& child : box.children) {
+                min_child_x = std::min(min_child_x, child->rect.x - child->style.margin.left);
+                max_child_x = std::max(max_child_x, child->rect.x + child->rect.width + child->style.margin.right);
+            }
+            max_child_width = std::max(0, max_child_x - min_child_x);
+        }
         content_width = std::min(available_content_width, max_child_width);
+        border_box_width = std::max(box.style.min_width,
+            content_width + horizontal_edges(box.style.padding) + horizontal_edges(box.style.border_width));
         if (!box.children.empty()) {
             int min_child_x = box.children.front()->rect.x - box.children.front()->style.margin.left;
             for (const auto& child : box.children) {
@@ -167,6 +198,59 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
     const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};
     return total_height;
+}
+
+int LayoutEngine::layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const {
+    int cursor_x = content_x + std::max(0, std::min(box.style.text_indent, content_width));
+    int line_y = content_y;
+    int line_height = 0;
+    int line_start_x = cursor_x;
+    std::size_t line_start_index = 0;
+
+    const auto finish_line = [&](std::size_t line_end_index, int used_width) {
+        if (line_end_index <= line_start_index || used_width <= 0) {
+            return;
+        }
+        int dx = 0;
+        const int line_capacity = std::max(0, content_x + content_width - line_start_x);
+        if (box.style.text_align == TextAlign::Center) {
+            dx = std::max(0, (line_capacity - used_width) / 2);
+        } else if (box.style.text_align == TextAlign::End) {
+            dx = std::max(0, line_capacity - used_width);
+        }
+        if (dx == 0) {
+            return;
+        }
+        for (std::size_t index = line_start_index; index < line_end_index; ++index) {
+            shift_box(*box.children[index], dx, 0);
+        }
+    };
+
+    for (std::size_t index = 0; index < box.children.size(); ++index) {
+        auto& child = box.children[index];
+        layout_box(*child, 0, 0, content_width);
+        const int child_outer_width = child->style.margin.left + child->rect.width + child->style.margin.right;
+        const int child_outer_height = child->style.margin.top + child->rect.height + child->style.margin.bottom;
+        const int remaining_width = std::max(0, content_x + content_width - cursor_x);
+
+        if (cursor_x > line_start_x && child_outer_width > remaining_width) {
+            finish_line(index, cursor_x - line_start_x);
+            line_y += std::max(1, line_height);
+            line_height = 0;
+            cursor_x = content_x;
+            line_start_x = cursor_x;
+            line_start_index = index;
+        }
+
+        const int target_x = cursor_x + child->style.margin.left;
+        const int target_y = line_y + child->style.margin.top;
+        shift_box(*child, target_x - child->rect.x, target_y - child->rect.y);
+        cursor_x += child_outer_width;
+        line_height = std::max(line_height, child_outer_height);
+    }
+
+    finish_line(box.children.size(), cursor_x - line_start_x);
+    return line_y - content_y + std::max(0, line_height);
 }
 
 int LayoutEngine::layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const {

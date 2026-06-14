@@ -12,6 +12,8 @@
 #include "core/software_renderer.h"
 #include "core/style.h"
 
+#include "example_css_io.h"
+
 #include <windows.h>
 #include <windowsx.h>
 
@@ -69,6 +71,16 @@ std::wstring utf8_to_wide(const std::string& text) {
     MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()),
                         wide.data(), required);
     return wide;
+}
+
+std::string wide_char_to_utf8(wchar_t ch) {
+    const int required = WideCharToMultiByte(CP_UTF8, 0, &ch, 1, nullptr, 0, nullptr, nullptr);
+    if (required <= 0) {
+        return {};
+    }
+    std::string utf8(static_cast<std::size_t>(required), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, &ch, 1, utf8.data(), required, nullptr, nullptr);
+    return utf8;
 }
 
 std::string describe_node(const Node* node) {
@@ -246,6 +258,37 @@ std::uint32_t color_to_bgrx(Color pixel) {
            static_cast<std::uint32_t>(pixel.b);
 }
 
+int parse_int_arg(const char* value, int fallback) {
+    try {
+        return std::max(1, std::stoi(value));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+FrameBuffer render_page_with_gdi_text(const std::string& html_path,
+                                      const std::string& css_path,
+                                      int viewport_width,
+                                      int min_viewport_height) {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(read_file_limited(html_path));
+    Stylesheet stylesheet = css_parser.parse(
+        wearweb_example::read_author_css_for_document(css_path, *document, kMaxInputBytes));
+    StyleResolver resolver(std::move(stylesheet));
+
+    RenderTreeBuilder render_builder(resolver);
+    auto render_tree = render_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, viewport_width);
+    LayerTreeBuilder layer_builder;
+    auto layer_tree = layer_builder.build(*layout_tree);
+
+    const int output_height = std::max(min_viewport_height, layout_tree->rect.height);
+    SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
+    return compositor.render(*layer_tree, viewport_width, output_height, Color{255, 255, 255, 255});
+}
+
 class BrowserApp {
 public:
     BrowserApp(std::string html_path, std::string css_path)
@@ -352,6 +395,12 @@ private:
         case WM_MOUSEWHEEL:
             handle_wheel(wparam, lparam);
             return 0;
+        case WM_CHAR:
+            handle_char(wparam);
+            return 0;
+        case WM_KEYDOWN:
+            handle_key_down(wparam);
+            return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -372,7 +421,8 @@ private:
             HtmlParser html_parser;
             CssParser css_parser;
             document_ = html_parser.parse(read_file_limited(html_path_));
-            Stylesheet stylesheet = css_parser.parse(combine_author_css(read_file_limited(css_path_), *document_));
+            Stylesheet stylesheet = css_parser.parse(
+                wearweb_example::read_author_css_for_document(css_path_, *document_, kMaxInputBytes));
             style_resolver_ = std::make_unique<StyleResolver>(std::move(stylesheet));
 
             document_->add_event_listener("click", [this](Event& event) {
@@ -380,26 +430,34 @@ private:
                 set_title("clicked " + describe_node(event.target()));
             });
 
-            RenderTreeBuilder render_builder(*style_resolver_);
-            render_tree_ = render_builder.build(*document_);
-            LayoutEngine layout_engine(*style_resolver_);
-            layout_tree_ = layout_engine.layout(*render_tree_, viewport_width_);
-            LayerTreeBuilder layer_builder;
-            layer_tree_ = layer_builder.build(*layout_tree_);
-
-            scroll_y_ = clamp_scroll_y(scroll_y_);
-            const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
-            SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
-            frame_buffer_ = compositor.render(*layer_tree_,
-                                              viewport_width_,
-                                              content_height,
-                                              Color{255, 255, 255, 255});
-            input_ = std::make_unique<InputController>(*layer_tree_);
-            update_blit_pixels();
+            render_current(nullptr);
         } catch (const std::exception& error) {
             std::cerr << "rebuild failed: " << error.what() << '\n';
             set_title(std::string("error: ") + error.what());
         }
+    }
+
+    void render_current(const Node* focused_node) {
+        if (document_ == nullptr || style_resolver_ == nullptr) {
+            return;
+        }
+        RenderTreeBuilder render_builder(*style_resolver_);
+        render_tree_ = render_builder.build(*document_);
+        LayoutEngine layout_engine(*style_resolver_);
+        layout_tree_ = layout_engine.layout(*render_tree_, viewport_width_);
+        LayerTreeBuilder layer_builder;
+        layer_tree_ = layer_builder.build(*layout_tree_);
+
+        scroll_y_ = clamp_scroll_y(scroll_y_);
+        const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
+        frame_buffer_ = compositor.render(*layer_tree_,
+                                          viewport_width_,
+                                          content_height,
+                                          Color{255, 255, 255, 255});
+        input_ = std::make_unique<InputController>(*layer_tree_);
+        input_->set_focused_node(focused_node);
+        update_blit_pixels();
     }
 
     int max_scroll_y() const {
@@ -506,6 +564,8 @@ private:
         input.buttons = buttons_from_keys(wparam) & ~1;
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_up(input);
+        render_current(input_->focused_node());
+        InvalidateRect(hwnd_, nullptr, FALSE);
         set_title("up " + describe_node(target));
     }
 
@@ -527,6 +587,38 @@ private:
         set_title("wheel " + describe_node(target) + " scrollY=" + std::to_string(scroll_y_));
     }
 
+    void handle_char(WPARAM wparam) {
+        if (!input_ || wparam < 0x20 || wparam == 0x7f) {
+            return;
+        }
+        const Node* focus = input_->focused_node();
+        if (input_->text_input(wide_char_to_utf8(static_cast<wchar_t>(wparam)))) {
+            render_current(focus);
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+
+    void handle_key_down(WPARAM wparam) {
+        if (!input_) {
+            return;
+        }
+        KeyInput key;
+        if (wparam == VK_BACK) {
+            key.code = KeyCode::Backspace;
+        } else if (wparam == VK_RETURN) {
+            key.code = KeyCode::Enter;
+        } else if (wparam == VK_SPACE) {
+            key.code = KeyCode::Space;
+        } else {
+            return;
+        }
+        const Node* focus = input_->focused_node();
+        if (input_->key_down(key)) {
+            render_current(focus);
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+
     void set_title(const std::string& status) {
         SetWindowTextW(hwnd_, utf8_to_wide("WearWeb Win32 Browser - " + status).c_str());
     }
@@ -535,6 +627,28 @@ private:
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc >= 3 && std::string(argv[1]) == "--capture") {
+        const std::string output_path = argv[2];
+        const std::string html_path = argc >= 4 ? argv[3] : "examples/modern_cases/app_shell.html";
+        const std::string css_path = argc >= 5 ? argv[4] : "examples/modern_cases/app_shell.css";
+        const int viewport_width = argc >= 6 ? parse_int_arg(argv[5], 390) : 390;
+        const int min_height = argc >= 7 ? parse_int_arg(argv[6], 640) : 640;
+        try {
+            FrameBuffer frame_buffer = render_page_with_gdi_text(html_path, css_path, viewport_width, min_height);
+            write_image(frame_buffer, output_path);
+            std::cout << "WearWeb Win32 browser capture\n"
+                      << "  output=" << output_path << '\n'
+                      << "  viewport_width=" << viewport_width << '\n'
+                      << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
+                      << "  non_background_pixels="
+                      << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
+            return 0;
+        } catch (const std::exception& error) {
+            std::cerr << "capture failed: " << error.what() << '\n';
+            return 1;
+        }
+    }
+
     const std::string html_path = argc >= 2 ? argv[1] : "examples/modern_cases/app_shell.html";
     const std::string css_path = argc >= 3 ? argv[2] : "examples/modern_cases/app_shell.css";
 

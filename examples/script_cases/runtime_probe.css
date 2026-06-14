@@ -1,0 +1,48 @@
+body {
+  margin: 0;
+  padding: 18px;
+  background: #f3f6f8;
+  color: #1d2a32;
+  font-family: system-ui, sans-serif;
+}
+
+.panel {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #b8c6cf;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #47606d;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0 0 10px;
+  color: #163847;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+p {
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.status {
+  margin: 12px 0;
+  padding: 10px;
+  background: #e9f5ef;
+  border: 1px solid #9cc9ad;
+}
+
+button {
+  padding: 8px 12px;
+  background: #1d6f8f;
+  color: #ffffff;
+  border: 1px solid #15546d;
+}

@@ -4,6 +4,8 @@
 #include "core/hit_test.h"
 #include "core/layer_tree.h"
 
+#include <string>
+
 namespace wearweb {
 
 enum class PointerButton {
@@ -36,6 +38,18 @@ struct WheelInput {
     InputModifiers modifiers;
 };
 
+enum class KeyCode {
+    Unknown,
+    Backspace,
+    Enter,
+    Space,
+};
+
+struct KeyInput {
+    KeyCode code = KeyCode::Unknown;
+    InputModifiers modifiers;
+};
+
 class InputController {
 public:
     explicit InputController(const LayerNode& layer_tree);
@@ -43,11 +57,14 @@ public:
     const Node* hovered_node() const;
     const Node* active_node() const;
     const Node* focused_node() const;
+    void set_focused_node(const Node* node);
 
     const Node* pointer_move(const PointerInput& input);
     const Node* pointer_down(const PointerInput& input);
     const Node* pointer_up(const PointerInput& input);
     const Node* wheel(const WheelInput& input);
+    bool text_input(const std::string& utf8_text);
+    bool key_down(const KeyInput& input);
     void clear_pointer_state();
 
 private:
@@ -56,11 +73,14 @@ private:
     const Node* hovered_node_ = nullptr;
     const Node* active_node_ = nullptr;
     const Node* focused_node_ = nullptr;
+    const LayoutBox* active_box_ = nullptr;
 
+    HitTestResult hit(int x, int y) const;
     const Node* hit_node(int x, int y) const;
     MouseEvent make_mouse_event(const char* type, const PointerInput& input) const;
     WheelEvent make_wheel_event(const WheelInput& input) const;
     void dispatch_mouse_event(const Node* target, MouseEvent& event) const;
+    void dispatch_simple_event(const Node* target, const char* type) const;
     void update_hover(const Node* next_hover, const PointerInput& input);
 };
 

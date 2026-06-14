@@ -1,4 +1,5 @@
 #include "core/css_parser.h"
+#include "core/form_control.h"
 #include "core/html_parser.h"
 #include "core/input.h"
 #include "core/layer_tree.h"
@@ -73,6 +74,35 @@ Node* find_by_id(Node& node, const std::string& id) {
         }
     }
     return nullptr;
+}
+
+const LayoutBox* find_box_by_id(const LayoutBox& box, const std::string& id) {
+    if (box.node != nullptr && box.node->attribute("id") == id) {
+        return &box;
+    }
+    for (const auto& child : box.children) {
+        const LayoutBox* found = find_box_by_id(*child, id);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+Pipeline build_form_pipeline(const char* html, const char* css = "") {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(html);
+    Stylesheet stylesheet = css_parser.parse(css);
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 240);
+    LayerTreeBuilder layer_tree_builder;
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    return Pipeline(std::move(document), std::move(stylesheet), std::move(resolver),
+                    std::move(render_tree), std::move(layout_tree), std::move(layer_tree));
 }
 
 void pointer_hover_down_up_and_click() {
@@ -163,6 +193,100 @@ void wheel_dispatches_to_hit_target() {
     check(observed_delta == -120, "wheel delta preserved");
 }
 
+void text_input_updates_focused_control_value() {
+    auto pipeline = build_form_pipeline("<body><input id='name' value='A'></body>",
+                                        "input { width: 120px; height: 24px; }");
+    Node* input_node = find_by_id(*pipeline.document, "name");
+    const LayoutBox* input_box = find_box_by_id(*pipeline.layout_tree, "name");
+    check(input_node != nullptr && input_box != nullptr, "text input exists");
+
+    int input_events = 0;
+    input_node->add_event_listener("input", [&](Event&) { ++input_events; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = input_box->rect.x + 2;
+    pointer.y = input_box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+
+    check(input.text_input("B"), "text input accepted");
+    check(form_control_display_text(*input_node) == "AB", "text input value updated");
+    KeyInput key;
+    key.code = KeyCode::Backspace;
+    check(input.key_down(key), "backspace accepted");
+    check(form_control_display_text(*input_node) == "A", "backspace updates value");
+    check(input_events == 2, "text input events dispatched");
+}
+
+void checkbox_click_toggles_checked_state() {
+    auto pipeline = build_form_pipeline("<body><input id='agree' type='checkbox'></body>");
+    Node* checkbox = find_by_id(*pipeline.document, "agree");
+    const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "agree");
+    check(checkbox != nullptr && box != nullptr, "checkbox exists");
+
+    int changes = 0;
+    checkbox->add_event_listener("change", [&](Event&) { ++changes; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = box->rect.x + 2;
+    pointer.y = box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+
+    check(ensure_form_control_state(*checkbox).checked, "checkbox checked after click");
+    check(changes == 1, "checkbox change event dispatched");
+}
+
+void range_drag_updates_value() {
+    auto pipeline = build_form_pipeline("<body><input id='volume' type='range' min='0' max='100' value='0'></body>");
+    Node* range = find_by_id(*pipeline.document, "volume");
+    const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "volume");
+    check(range != nullptr && box != nullptr, "range exists");
+
+    int input_events = 0;
+    range->add_event_listener("input", [&](Event&) { ++input_events; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = box->rect.x + box->rect.width - 1;
+    pointer.y = box->rect.y + box->rect.height / 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+
+    const int value = std::stoi(ensure_form_control_state(*range).value);
+    check(value >= 95, "range value updates from pointer");
+    check(input_events == 1, "range input event dispatched");
+}
+
+void select_click_cycles_selected_option() {
+    auto pipeline = build_form_pipeline(
+        "<body><select id='choice'><option>One</option><option>Two</option></select></body>");
+    Node* select = find_by_id(*pipeline.document, "choice");
+    const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "choice");
+    check(select != nullptr && box != nullptr, "select exists");
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = box->rect.x + 2;
+    pointer.y = box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+
+    check(form_control_display_text(*select) == "Two", "select cycles selected option");
+}
+
 } // namespace
 
 int main() {
@@ -170,6 +294,10 @@ int main() {
         pointer_hover_down_up_and_click();
         click_requires_same_active_target();
         wheel_dispatches_to_hit_target();
+        text_input_updates_focused_control_value();
+        checkbox_click_toggles_checked_state();
+        range_drag_updates_value();
+        select_click_cycles_selected_option();
     } catch (const std::exception& error) {
         std::cerr << "input test failed: " << error.what() << '\n';
         return 1;

@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 using namespace wearweb;
 
@@ -117,6 +118,102 @@ void z_index_orders_child_layers() {
     }
 }
 
+void progress_and_meter_emit_value_fill() {
+    auto pipeline = build_pipeline("<body><progress value='70' max='100'></progress><meter min='0' max='10' value='8'></meter></body>",
+                                   "");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    int colored_bar_count = 0;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect &&
+            ((command.color.r == 37 && command.color.g == 99 && command.color.b == 235) ||
+             (command.color.r == 22 && command.color.g == 163 && command.color.b == 74))) {
+            ++colored_bar_count;
+        }
+    }
+    check(colored_bar_count == 2, "progress and meter emit filled bars");
+}
+
+void inline_mark_background_shrinks_to_text() {
+    auto pipeline = build_pipeline("<body><p>Use <mark>mark</mark> text</p></body>", "");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_compact_mark = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect &&
+            command.color.r == 254 && command.color.g == 240 && command.color.b == 138 &&
+            command.rect.width > 0 && command.rect.width < 120) {
+            found_compact_mark = true;
+        }
+    }
+    check(found_compact_mark, "mark background shrinks to text bounds");
+}
+
+void inline_run_flows_horizontally() {
+    auto pipeline = build_pipeline("<body><p>A <mark>B</mark> C</p></body>", "");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    std::vector<DisplayCommand> text_commands;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::Text) {
+            text_commands.push_back(command);
+        }
+    }
+
+    check(text_commands.size() >= 3, "inline text commands exist");
+    check(text_commands[0].rect.y == text_commands[1].rect.y &&
+              text_commands[1].rect.y == text_commands[2].rect.y,
+          "inline run stays on one line");
+    check(text_commands[0].rect.x < text_commands[1].rect.x &&
+              text_commands[1].rect.x < text_commands[2].rect.x,
+          "inline run advances horizontally");
+}
+
+void centered_inline_text_aligns_in_parent() {
+    auto pipeline = build_pipeline("<body><h1>Centered</h1></body>", "h1 { text-align: center; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::Text && command.text == "Centered") {
+            check(command.rect.x > 40, "centered heading text is shifted from the left edge");
+            return;
+        }
+    }
+    check(false, "centered heading text command exists");
+}
+
+void button_inline_block_shrink_wraps_text() {
+    auto pipeline = build_pipeline("<body><button>Submit</button></body>",
+                                   "button { padding: 8px 24px; border: none; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect &&
+            command.color.r == 243 && command.color.g == 244 && command.color.b == 246) {
+            check(command.rect.width > 60 && command.rect.width < 160,
+                  "button shrink-wraps instead of filling the line");
+            return;
+        }
+    }
+    check(false, "button background command exists");
+}
+
+void select_does_not_paint_option_list_inline() {
+    auto pipeline = build_pipeline(
+        "<body><select><option>Alpha</option><option>Beta</option></select></body>", "");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        check(command.type != DisplayCommandType::Text, "select options are not painted as document text");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -124,6 +221,12 @@ int main() {
         overflow_hidden_creates_clip_layer();
         opacity_layer_flattens_alpha();
         z_index_orders_child_layers();
+        progress_and_meter_emit_value_fill();
+        inline_mark_background_shrinks_to_text();
+        inline_run_flows_horizontally();
+        centered_inline_text_aligns_in_parent();
+        button_inline_block_shrink_wraps_text();
+        select_does_not_paint_option_list_inline();
     } catch (const std::exception& error) {
         std::cerr << "layer tree test failed: " << error.what() << '\n';
         return 1;

@@ -8,13 +8,16 @@ WearWeb Engine 是一个面向低功耗可穿戴设备的深度裁剪 C++ HTML/C
 
 - 最小 HTML tokenizer/parser
 - DOM 树
+- DOM mutation 原语，并带有面向未来 JavaScript 绑定的 dirty invalidation
 - 轻量 CSS parser
 - 支持标签、class、id 和 inline style 的基础级联
-- 垂直 block layout
+- 垂直 block layout，并带有简化 inline flow 与换行
 - 稀疏 layer tree，并可 flatten 为平台无关 display list
 - CPU software rasterizer/compositor，可输出 BMP/PPM 用于验证
 - 核心 hit testing 和类 DOM event dispatch
 - 平台无关 pointer/wheel input controller
+- 轻量平台无关表单控件状态，覆盖 text input、textarea、checkbox、radio、range 和 select
+- 可选 JerryScript runtime shell，用于脚本求值，并保持在 `wearweb_core` 之外
 - 可选平台文本绘制回调，用于桌面验证
 - Windows-only 交互式浏览器壳，用于观察和测试
 - 控制台 demo
@@ -50,6 +53,7 @@ cmake --build build
 - `WEARWEB_BUILD_EXAMPLES=ON`
 - `WEARWEB_BUILD_TESTS=ON`
 - `WEARWEB_BUILD_BENCHMARKS=ON`
+- `WEARWEB_BUILD_SCRIPTING=OFF`
 
 面向嵌入式或只构建核心库时：
 
@@ -57,6 +61,23 @@ cmake --build build
 cmake -S . -B build-core -DWEARWEB_BUILD_EXAMPLES=OFF -DWEARWEB_BUILD_TESTS=OFF -DWEARWEB_BUILD_BENCHMARKS=OFF
 cmake --build build-core --config Release
 ```
+
+可选 JerryScript runtime 会构建为独立的 `wearweb_script` target。它默认关闭，
+因此嵌入式/核心构建不会意外引入 JerryScript 头文件或库：
+
+```powershell
+git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
+python third_party\jerryscript\tools\build.py --clean
+
+cmake -S . -B build-script `
+  -DWEARWEB_BUILD_SCRIPTING=ON `
+  -DJERRYSCRIPT_ROOT="%CD%\third_party\jerryscript" `
+  -DJERRYSCRIPT_LIBRARIES="%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-core.lib;%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-port.lib"
+cmake --build build-script --config Release
+```
+
+M2 脚本支持只负责执行 JavaScript 并报告结果或异常。它还没有暴露 `window`、`document`、
+DOM mutation API、事件、计时器或表单属性。
 
 通过 CTest 运行回归测试：
 
@@ -77,16 +98,11 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_layer_tree_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pipeline_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
+.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
+.\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
 .\build\Release\wearweb_microbench.exe 80 1000
-.\build\Debug\wearweb_tokenizer_tests.exe
-.\build\Debug\wearweb_css_parser_tests.exe
-.\build\Debug\wearweb_event_tests.exe
-.\build\Debug\wearweb_hit_test_tests.exe
-.\build\Debug\wearweb_input_tests.exe
-.\build\Debug\wearweb_render_tree_tests.exe
-.\build\Debug\wearweb_layer_tree_tests.exe
-.\build\Debug\wearweb_software_renderer_tests.exe
+.\build\Debug\wearweb_core_tests.exe
 ```
 
 - `wearweb_demo`：运行当前 layout/layer/display-list 切片。
@@ -102,17 +118,22 @@ ctest --test-dir build -C Debug --output-on-failure
 - `wearweb_pipeline_dump`：输出端到端 DOM/render/layout/layer/display-list
   计数和 display-list 预览。
 - `wearweb_pseudo_browser`：运行当前完整管线并写出 BMP 或 PPM framebuffer
-  图像。它是桌面验收工具，不是嵌入式 UI。
+  图像。它是桌面验收工具，不是嵌入式 UI。它的内置 fallback 字体刻意保持极小；需要可读的
+  UTF-8/中文文本验证时，请使用 Win32 browser 壳。在启用 scripting 的构建中，
+  `--script` 会在渲染前执行一个外部 JavaScript 文件，并打印字符串化后的结果或异常；
+  DOM binding 会在后续里程碑中实现。
 - `wearweb_win32_browser`：仅在 Windows 构建中可用。它打开一个 Win32/GDI
   交互窗口，使用同一套核心管线渲染，通过平台文本回调注入 GDI 文本绘制，并把鼠标和滚轮输入转发给平台无关
   input controller。它只用于桌面观察；核心仍保持窗口系统和操作系统无关。
+- `wearweb_win32_browser --capture`：通过同一条 Win32/GDI 文本路径渲染页面，并在不打开交互窗口的情况下写出
+  BMP 或 PPM 文件。
+- 检查工具和 Win32 壳会合并显式 CSS 文件、内嵌 `<style>` 元素和本地
+  `<link rel="stylesheet">` 文件中的 author CSS。linked CSS 加载只存在于示例代码；核心只暴露
+  callback，并保持平台无关。
 - `wearweb_microbench`：运行 parser/render/layout/layer/flatten 微基准。有效性能数据应使用 Release build。
-- `wearweb_tokenizer_tests`：运行当前 tokenizer 和 parser 回归检查。
-- `wearweb_css_parser_tests`：运行 CSS parser 和 fallback style 回归检查。
-- `wearweb_event_tests`、`wearweb_hit_test_tests` 和 `wearweb_input_tests`：
-  覆盖类 DOM event dispatch、基于 layer 的 hit testing 和 pointer/wheel input synthesis。
-- `wearweb_render_tree_tests`、`wearweb_layer_tree_tests` 和
-  `wearweb_software_renderer_tests`：覆盖 render、layer 和 CPU framebuffer 行为。
+- `wearweb_core_tests`：唯一的平台无关回归测试程序。它覆盖 tokenizer/parser、DOM mutation、
+  CSS parser、事件、hit testing、输入、render tree、layer tree 和 CPU framebuffer 行为。
+  启用 scripting 的构建中，它还会包含 JerryScript runtime 测试。
 
 ## 文档维护
 

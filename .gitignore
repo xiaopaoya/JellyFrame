@@ -6,3 +6,5 @@ out/
 *.suo
 *.pdb
 *.ilk
+jerryscript-master.zip
+third_party/jerryscript/

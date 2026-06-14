@@ -14,8 +14,8 @@ std::unique_ptr<Node> HtmlParser::parse(const std::string& source, const HtmlPar
     HtmlTokenizer tokenizer;
     HtmlTreeBuilder tree_builder(*root, options);
     tokenizer.tokenize_to_sink(source, tree_builder);
+    clear_dirty_flags(*root);
     return root;
 }
 
 } // namespace wearweb
-

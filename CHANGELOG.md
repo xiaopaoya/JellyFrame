@@ -4,6 +4,79 @@ All notable changes to WearWeb Engine are tracked here.
 
 The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
+## Unreleased
+
+### Added
+
+- Added platform-neutral linked stylesheet collection through a callback-based
+  `document_style` API. Core code still performs no file or network I/O; example
+  tools and the Win32 shell provide local-file loading for validation.
+- Added usable default styling for common HTML5 semantic/content elements:
+  `a`, `mark`, `blockquote`, `summary`, `details`, `address`, `hgroup`,
+  `progress` and `meter`.
+- Added simple software painting for `progress` and `meter` value bars.
+- Added `wearweb_win32_browser --capture` to render a page through the Win32/GDI
+  text path and write a BMP/PPM image for visual inspection.
+- Added a lightweight platform-neutral form-control state layer for common
+  embedded-app controls: text inputs, textareas, checkboxes, radios, ranges and
+  selects.
+- Added core input APIs for UTF-8 text input, simple key handling and stateful
+  control activation.
+- Added DOM mutation primitives for the JerryScript bridge: child insertion and
+  removal, attribute changes, `textContent` updates and dirty flags for
+  tree/attribute/text/style/layout invalidation.
+- Added bilingual JerryScript integration planning documents covering runtime
+  lifecycle, binding ownership, milestones, risks and the first interactive demo
+  target.
+- Added optional `wearweb_script` JerryScript runtime shell, gated behind
+  `WEARWEB_BUILD_SCRIPTING=OFF` by default so `wearweb_core` remains independent
+  from JerryScript headers and libraries.
+- Added `wearweb_pseudo_browser --script` support for scripting builds. M2
+  evaluates one external JavaScript file and reports the result or exception;
+  DOM bindings are not exposed yet.
+- Added `examples/script_cases/runtime_probe.*` as the first scripting
+  acceptance page.
+- Added a single aggregate `wearweb_core_tests` executable for platform-neutral
+  regression coverage, replacing the many standalone test executables in normal
+  builds.
+- Added `JERRYSCRIPT_ROOT` CMake support for local official JerryScript source
+  trees such as `third_party/jerryscript`.
+- Added regression coverage for linked stylesheet merging, semantic fallback
+  styles, inline highlight painting, DOM mutation invalidation and form-control
+  fallback behavior. Scripting builds also add JerryScript runtime lifecycle and
+  exception-path coverage.
+
+### Improved
+
+- Improved inline layout so runs of text, links, highlights and inline controls
+  flow horizontally and wrap by available width instead of stacking every inline
+  node vertically.
+- Preserved parent `text-align` for inline text runs in the simplified layout
+  engine.
+- Shrunk inline background/border painting to child text bounds so `mark` and
+  similar inline elements do not fill an entire line.
+- Treated common replaced controls/media nodes as leaf render objects so
+  `select` options and unsupported media fallback text do not spill into the
+  page layout.
+- Improved default form-control sizing and support for `border: none`, keeping
+  buttons shrink-wrapped while making unstylized inputs/selects more usable.
+- Painted native-lite control affordances in the display list, including range
+  tracks/thumbs, checked checkbox/radio marks, select arrows and text
+  value/placeholder content.
+- Forwarded Win32 character and Backspace input into the core control model and
+  rerendered the existing DOM so desktop validation reflects live control
+  changes.
+
+### Notes
+
+- `wearweb_pseudo_browser` still uses the tiny built-in bitmap font when no
+  platform `TextPainter` is injected, so non-ASCII text appears as fallback
+  glyphs in BMP smoke-test output. The Win32 browser shell uses GDI text
+  painting for readable UTF-8/Chinese validation.
+- Local linked stylesheets are resolved by the example/Win32 helper relative to
+  the CSS path passed on the command line. Missing linked files are ignored
+  conservatively, matching the engine's graceful-degradation policy.
+
 ## 0.2.0-dev - 2026-06-15
 
 ### Added
