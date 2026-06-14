@@ -9,6 +9,8 @@ canvas 手绘模型。
 现在可行：
 
 - 天气或仪表盘应用：数据由宿主提供，页面使用 select、button 和文本更新。
+- 卡片/仪表盘布局：可以使用已支持的响应式 grid 子集、gap 和 aspect-ratio
+  媒体占位。
 - 计算器类工具：按钮、输入框状态和同步事件处理已经足够。
 - 设置面板：可以使用 text input、textarea、checkbox、radio、range 和 select。
 - 静态或半静态信息页：可以拥有现代但克制的视觉层次。
@@ -19,7 +21,8 @@ canvas 手绘模型。
 暂不适合：
 
 - 假设完整浏览器加载、网络、存储、canvas、Web Components、模块系统或大型选择器 API 的应用。
-- 依赖完整 flex/grid、复杂 CSSOM、DOM Range、layout observer 或异步浏览器任务语义的大型现代网页。
+- 依赖完整 flex/grid、container query、复杂 CSSOM、DOM Range、layout observer
+  或异步浏览器任务语义的大型现代网页。
 
 ## 推荐写法
 
@@ -34,7 +37,13 @@ CSS：
 
 - 使用简单 selector：tag、class、id、descendant、child 和简单 attribute selector。
 - 使用 block、inline-block、简化 inline flow、基础 flex、margin、padding、border、颜色、字号、行高和文本对齐。
-- 可以做现代配色、留白和层次，但不要依赖完整浏览器 grid/flexbox 行为。
+- 在适合卡片 UI 时使用响应式 grid 子集：`display:grid`、
+  `repeat(auto-fit, minmax(<length>, 1fr))`、`gap`、
+  `grid-auto-rows: minmax(<length>, auto)`，以及 `grid-column`/`grid-row:
+  span N`。
+- 使用 `aspect-ratio` 创建媒体占位和视觉面板。
+- 可以做现代配色、留白和层次，但不要依赖完整浏览器 grid/flexbox 行为、
+  container query、subgrid 或 dense packing。
 - 控件样式保持简单。引擎会绘制轻量原生控件外观，并在复杂效果被丢弃时保留可用性。
 
 JavaScript：

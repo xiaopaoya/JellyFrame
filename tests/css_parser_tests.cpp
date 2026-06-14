@@ -259,6 +259,33 @@ void border_none_removes_default_control_border() {
           "border none removes default control border");
 }
 
+void grid_and_aspect_ratio_properties_apply() {
+    auto grid = make_element("div");
+    grid->attributes["class"] = "grid";
+    auto card = make_element("section");
+    card->attributes["class"] = "wide";
+    auto media = make_element("div");
+    media->attributes["class"] = "media";
+
+    StyleResolver resolver(parse(
+        ".grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));"
+        "grid-auto-rows: minmax(140px, auto); gap: 1.2rem; }"
+        ".wide { grid-column: span 2; grid-row: span 3; }"
+        ".media { aspect-ratio: auto 1.5 / 1; }"));
+
+    const Style grid_style = resolver.resolve(*grid);
+    const Style card_style = resolver.resolve(*card);
+    const Style media_style = resolver.resolve(*media);
+
+    check(grid_style.display == Display::Grid, "grid display parsed");
+    check(grid_style.grid_min_track_width == 220, "grid min track parsed");
+    check(grid_style.grid_auto_row_min == 140, "grid auto row min parsed");
+    check(grid_style.column_gap == 19 && grid_style.row_gap == 19, "rem gap parsed");
+    check(card_style.grid_column_span == 2 && card_style.grid_row_span == 3, "grid span parsed");
+    check(media_style.aspect_ratio_width == 1500 && media_style.aspect_ratio_height == 1000,
+          "aspect ratio parsed");
+}
+
 } // namespace
 
 int main() {
@@ -277,6 +304,7 @@ int main() {
         linked_stylesheets_merge_into_author_css();
         html5_semantic_defaults_are_visible();
         border_none_removes_default_control_border();
+        grid_and_aspect_ratio_properties_apply();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

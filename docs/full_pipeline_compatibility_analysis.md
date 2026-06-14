@@ -123,16 +123,20 @@ Assessment:
 
 ## Known Non-Fatal Gaps
 
-- No real text shaping, wrapping or font fallback.
-- No input editing/event dispatch yet.
-- No flex/grid layout algorithms; they fall back to block-like layout.
+- No real text shaping, bidi or full font fallback.
+- Platform-neutral input dispatch exists, but browser-like loading, network and
+  framework-facing DOM APIs remain intentionally small.
+- Flex/grid are still subsets: useful flex rows and responsive grid cards work,
+  while full CSS algorithms, subgrid, explicit placement and dense packing are
+  deferred.
 - No retained layout or dirty rectangle invalidation.
-- No raster clipping, rounded-corner clipping or shadow blur.
+- Rounded fills and cheap shadows exist, but no true shadow blur or advanced
+  filter pipeline.
 
 ## Next Functional Priorities
 
-1. Text wrapping and basic inline formatting.
-2. Input focus/editing model.
-3. Framebuffer renderer for fill rectangles and text.
-4. Dirty layer invalidation and rectangle repaint.
-5. Rule indexing for faster style resolution on large pages.
+1. Inline/local classic script loading ergonomics.
+2. Dirty layer invalidation and rectangle repaint.
+3. Arena allocation and compact DOM/layout object storage.
+4. Text shaping/font fallback strategy for non-Latin production devices.
+5. Selector/module additions only when embedded apps prove they need them.

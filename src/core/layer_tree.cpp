@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <utility>
 
 namespace wearweb {
@@ -110,6 +112,115 @@ bool parse_float_attribute(const Node& node, const char* name, float& output) {
     }
     output = parsed;
     return true;
+}
+
+bool parse_shadow_length_token(const char*& cursor, int& output) {
+    while (*cursor != '\0' && std::isspace(static_cast<unsigned char>(*cursor)) != 0) {
+        ++cursor;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(cursor, &end);
+    if (end == cursor || errno == ERANGE) {
+        return false;
+    }
+    cursor = end;
+    if (std::strncmp(cursor, "px", 2) == 0) {
+        cursor += 2;
+    }
+    output = static_cast<int>(parsed >= 0.0F ? parsed + 0.5F : parsed - 0.5F);
+    return true;
+}
+
+void skip_shadow_non_length_token(const char*& cursor) {
+    while (*cursor != '\0' && std::isspace(static_cast<unsigned char>(*cursor)) != 0) {
+        ++cursor;
+    }
+    if (*cursor == '\0' || *cursor == ',') {
+        return;
+    }
+    if (std::isalpha(static_cast<unsigned char>(*cursor)) != 0 || *cursor == '#') {
+        while (*cursor != '\0' && !std::isspace(static_cast<unsigned char>(*cursor)) && *cursor != '(' && *cursor != ',') {
+            ++cursor;
+        }
+        if (*cursor == '(') {
+            int depth = 1;
+            ++cursor;
+            while (*cursor != '\0' && depth > 0) {
+                if (*cursor == '(') {
+                    ++depth;
+                } else if (*cursor == ')') {
+                    --depth;
+                }
+                ++cursor;
+            }
+        }
+        return;
+    }
+    ++cursor;
+}
+
+bool parse_shadow_lengths(const std::string& shadow, int& offset_x, int& offset_y, int& blur) {
+    const char* cursor = shadow.c_str();
+    int lengths[3] = {0, 0, 0};
+    int count = 0;
+    while (*cursor != '\0' && *cursor != ',' && count < 3) {
+        const char* before = cursor;
+        int value = 0;
+        if (parse_shadow_length_token(cursor, value)) {
+            lengths[count++] = value;
+        } else {
+            cursor = before;
+            skip_shadow_non_length_token(cursor);
+        }
+    }
+    if (count < 2) {
+        return false;
+    }
+    offset_x = lengths[0];
+    offset_y = lengths[1];
+    blur = count >= 3 ? lengths[2] : 0;
+    return true;
+}
+
+Color approximate_shadow_color(const std::string& shadow) {
+    const std::size_t rgba = shadow.find("rgba(");
+    if (rgba == std::string::npos) {
+        return Color{0, 0, 0, 32};
+    }
+    const std::size_t close = shadow.find(')', rgba + 5);
+    if (close == std::string::npos) {
+        return Color{0, 0, 0, 32};
+    }
+    const std::string body = shadow.substr(rgba + 5, close - rgba - 5);
+    const std::size_t comma = body.rfind(',');
+    if (comma == std::string::npos) {
+        return Color{0, 0, 0, 32};
+    }
+    char* end = nullptr;
+    const float alpha = std::strtof(body.c_str() + comma + 1, &end);
+    const int out_alpha = static_cast<int>(std::max(0.0F, std::min(1.0F, alpha)) * 255.0F + 0.5F);
+    return Color{0, 0, 0, static_cast<std::uint8_t>(std::max(8, std::min(64, out_alpha)))};
+}
+
+void paint_approximate_box_shadow(const LayoutBox& box, DisplayList& display_list) {
+    if (!has_shadow(box.style)) {
+        return;
+    }
+    int offset_x = 0;
+    int offset_y = 0;
+    int blur = 0;
+    if (!parse_shadow_lengths(box.style.box_shadow, offset_x, offset_y, blur)) {
+        return;
+    }
+    const int spread = std::max(1, blur / 3);
+    const Rect shadow_rect{
+        box.rect.x + offset_x - spread,
+        box.rect.y + offset_y - spread,
+        box.rect.width + spread * 2,
+        box.rect.height + spread * 2,
+    };
+    push_fill_rect(display_list, shadow_rect, approximate_shadow_color(box.style.box_shadow), box.style.border_radius);
 }
 
 void paint_meter_bar(const LayoutBox& box, DisplayList& display_list) {
@@ -244,6 +355,7 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
 
 void paint_box_self(const LayoutBox& box, DisplayList& display_list) {
     const Rect paint_rect = paint_rect_for(box);
+    paint_approximate_box_shadow(box, display_list);
     if (is_visible_background(box.style.background_color)) {
         push_fill_rect(display_list, paint_rect, box.style.background_color, box.style.border_radius);
     }

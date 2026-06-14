@@ -51,8 +51,9 @@ DOM + computed style
   stay out of the render tree through default style.
 - Text nodes inherit text color and font size from the parent render object.
 - `inline-block` is represented as `RenderInline` for now.
-- `flex` and `grid` are represented as block-like render objects for layout
-  fallback, while preserving their display value in computed style.
+- `flex` and `grid` keep block-like render object shape while preserving their
+  display value in computed style. Layout then applies small dedicated
+  algorithms for common flex rows and responsive grid cards.
 - Layout consumes the render tree instead of walking the DOM directly.
 
 ## Deliberately Deferred
@@ -64,7 +65,19 @@ DOM + computed style
 - Full CSS stacking-context semantics.
 - Paint invalidation and retained display lists.
 - Fragmentation and multi-column layout.
-- True flex/grid layout algorithms.
+- Full CSS flex/grid layout algorithms, including named grid lines, explicit
+  placement, dense packing, baseline alignment and full track sizing.
+
+## Implemented Layout Subset
+
+- Responsive grid cards using `display:grid`,
+  `grid-template-columns: repeat(auto-fit, minmax(<length>, 1fr))`, `gap`,
+  `grid-auto-rows: minmax(<length>, auto)` and `grid-column`/`grid-row:
+  span N`.
+- `aspect-ratio` participates in intrinsic content height for empty media/card
+  boxes.
+- Simplified flex rows can use `column-gap` in addition to the existing
+  justification behavior.
 
 ## Usability Policy
 

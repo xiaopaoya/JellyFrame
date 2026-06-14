@@ -64,6 +64,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   builds.
 - Added `JERRYSCRIPT_ROOT` CMake support for local official JerryScript source
   trees such as `third_party/jerryscript`.
+- Added a responsive grid-card layout subset for embedded apps:
+  `display:grid`, `repeat(auto-fit, minmax(<length>, 1fr))`, `gap`,
+  `grid-auto-rows: minmax(<length>, auto)` and `grid-column`/`grid-row:
+  span N`.
+- Added `aspect-ratio` sizing for visual/media boxes.
+- Added cheap approximate `box-shadow` painting as rounded translucent fills.
 - Added regression coverage for linked stylesheet merging, semantic fallback
   styles, inline highlight painting, DOM mutation invalidation and form-control
   fallback behavior. Scripting builds also add JerryScript runtime lifecycle and
@@ -98,6 +104,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   property setup on ordinary DOM nodes.
 - Updated the clock and timer app cases to use M6 `setInterval` instead of
   manual-only refresh.
+- Improved simplified flex row layout to honor `column-gap`.
 
 ### Notes
 
@@ -108,6 +115,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Local linked stylesheets are resolved by the example/Win32 helper relative to
   the CSS path passed on the command line. Missing linked files are ignored
   conservatively, matching the engine's graceful-degradation policy.
+- `@container` and `object-fit` remain deferred. Container queries need bounded
+  style/layout feedback handling; object-fit should wait for real image decode.
 
 ## 0.2.0-dev - 2026-06-15
 

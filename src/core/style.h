@@ -56,6 +56,8 @@ struct Style {
     int min_width = -1;
     int min_height = -1;
     int max_width = -1;
+    int aspect_ratio_width = 0;
+    int aspect_ratio_height = 0;
     int font_size = 14;
     bool font_size_specified = false;
     int line_height = -1;
@@ -70,6 +72,12 @@ struct Style {
     int z_index = 0;
     bool z_index_auto = true;
     bool box_sizing_border_box = false;
+    int column_gap = 0;
+    int row_gap = 0;
+    int grid_min_track_width = -1;
+    int grid_auto_row_min = 0;
+    int grid_column_span = 1;
+    int grid_row_span = 1;
     TextAlign text_align = TextAlign::Start;
     bool text_align_specified = false;
     JustifyContent justify_content = JustifyContent::Start;

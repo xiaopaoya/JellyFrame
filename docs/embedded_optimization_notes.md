@@ -30,6 +30,9 @@ small wearable devices.
 - Opaque rectangle fill uses direct row fills in the software rasterizer.
 - Offscreen compositing clips source/destination rectangles before iterating
   pixels.
+- The responsive grid subset is computed with bounded integer auto-placement,
+  clamped spans and compact per-row occupancy bit masks rather than a full
+  track-sizing engine.
 
 ## Memory Guidance
 
@@ -68,17 +71,17 @@ Command:
 .\build\Release\wearweb_microbench.exe 80 1000
 ```
 
-Result on this Windows build machine after M6 host-pumped timers and the current
-form/control layout changes:
+Result on this Windows build machine after the responsive grid/aspect-ratio
+layout subset:
 
 ```text
-html_parse avg_us=949.728
-css_parse avg_us=36.025
-render_tree avg_us=1058.55
-layout avg_us=224.273
-layer_tree avg_us=109.392
-flatten_layers avg_us=24.534
-full_pipeline avg_us=2163.95
+html_parse avg_us=990.255
+css_parse avg_us=35.898
+render_tree avg_us=1054.36
+layout avg_us=259.59
+layer_tree avg_us=117.187
+flatten_layers avg_us=24.529
+full_pipeline avg_us=2228.91
 ```
 
 Interpretation:
@@ -96,6 +99,8 @@ Interpretation:
   backends at a small layout cost.
 - Embedded `<style>` collection and broader length/property support improve
   common static pages with a small style/render cost.
+- Responsive grid cards and `aspect-ratio` add measurable layout work but keep
+  the cost bounded and buy a large amount of embedded-app UI expressiveness.
 - Full pipeline time is still dominated by HTML parse and style/render work.
 - The next performance upgrade should be arena allocation and computed-style
   sharing for repeated class patterns.

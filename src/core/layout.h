@@ -29,6 +29,7 @@ private:
 
     int layout_box(LayoutBox& box, int x, int y, int width) const;
     int layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
+    int layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
     int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const;
     void build_layout_tree(const RenderObject& object, LayoutBox& box) const;
 };

@@ -31,6 +31,8 @@ std::string trim(std::string_view value) {
 
 constexpr int kRootFontSizePx = 16;
 
+std::string lowercase(std::string value);
+
 bool parse_length_px(const std::string& raw_value, int& output, int em_base = kRootFontSizePx) {
     const std::string value = trim(raw_value);
     if (value.empty()) {
@@ -115,6 +117,115 @@ bool parse_integer(const std::string& raw_value, int& output) {
     }
     output = static_cast<int>(parsed);
     return true;
+}
+
+bool parse_positive_ratio_number(const std::string& raw_value, int& output) {
+    float parsed = 0.0F;
+    if (!parse_float(raw_value, parsed) || parsed <= 0.0F) {
+        return false;
+    }
+    output = std::max(1, std::min(1000000, static_cast<int>(parsed * 1000.0F + 0.5F)));
+    return true;
+}
+
+bool parse_aspect_ratio(const std::string& raw_value, int& width, int& height) {
+    std::string value = lowercase(trim(raw_value));
+    if (value.rfind("auto", 0) == 0) {
+        value = trim(std::string_view(value).substr(4));
+    }
+    const std::size_t slash = value.find('/');
+    if (slash == std::string::npos) {
+        int single = 0;
+        if (!parse_positive_ratio_number(value, single)) {
+            return false;
+        }
+        width = single;
+        height = 1000;
+        return true;
+    }
+
+    int parsed_width = 0;
+    int parsed_height = 0;
+    if (!parse_positive_ratio_number(value.substr(0, slash), parsed_width) ||
+        !parse_positive_ratio_number(value.substr(slash + 1), parsed_height)) {
+        return false;
+    }
+    width = parsed_width;
+    height = parsed_height;
+    return true;
+}
+
+bool parse_span_value(const std::string& raw_value, int& span) {
+    std::istringstream stream(lowercase(trim(raw_value)));
+    std::string first;
+    if (!(stream >> first)) {
+        return false;
+    }
+    if (first == "span") {
+        int parsed = 0;
+        if (!(stream >> parsed) || parsed <= 0) {
+            return false;
+        }
+        span = std::min(parsed, 16);
+        return true;
+    }
+    int parsed = 0;
+    if (parse_integer(first, parsed) && parsed > 0) {
+        span = 1;
+        return true;
+    }
+    return false;
+}
+
+bool parse_grid_template_columns_min(const std::string& raw_value, int& min_track, int em_base) {
+    const std::string value = lowercase(trim(raw_value));
+    const std::size_t minmax = value.find("minmax(");
+    if (minmax != std::string::npos) {
+        const std::size_t begin = minmax + 7;
+        const std::size_t comma = value.find(',', begin);
+        if (comma == std::string::npos) {
+            return false;
+        }
+        int px = 0;
+        if (!parse_length_px(value.substr(begin, comma - begin), px, em_base)) {
+            return false;
+        }
+        min_track = std::max(1, px);
+        return true;
+    }
+    if (value == "1fr") {
+        min_track = 1;
+        return true;
+    }
+    int px = 0;
+    if (parse_length_px(value, px, em_base)) {
+        min_track = std::max(1, px);
+        return true;
+    }
+    return false;
+}
+
+bool parse_grid_auto_rows_min(const std::string& raw_value, int& min_row, int em_base) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value.rfind("minmax(", 0) == 0) {
+        const std::size_t begin = 7;
+        const std::size_t comma = value.find(',', begin);
+        if (comma == std::string::npos) {
+            return false;
+        }
+        int px = 0;
+        if (!parse_length_px(value.substr(begin, comma - begin), px, em_base)) {
+            return false;
+        }
+        min_row = std::max(0, px);
+        return true;
+    }
+    int px = 0;
+    if (parse_length_px(value, px, em_base)) {
+        min_row = std::max(0, px);
+        return true;
+    }
+    return false;
 }
 
 bool parse_box_edge_px(const std::string& value, EdgeSizes& output, int em_base = kRootFontSizePx) {
@@ -496,6 +607,7 @@ enum class CascadeProperty : std::size_t {
     MinWidth,
     MinHeight,
     MaxWidth,
+    AspectRatio,
     FontSize,
     LineHeight,
     TextIndent,
@@ -509,6 +621,13 @@ enum class CascadeProperty : std::size_t {
     JustifyContent,
     AlignItems,
     BoxSizing,
+    Gap,
+    ColumnGap,
+    RowGap,
+    GridTemplateColumns,
+    GridAutoRows,
+    GridColumn,
+    GridRow,
     Count,
 };
 
@@ -563,6 +682,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "max-width") {
         return &cascade_slot(slots, CascadeProperty::MaxWidth);
     }
+    if (property == "aspect-ratio") {
+        return &cascade_slot(slots, CascadeProperty::AspectRatio);
+    }
     if (property == "font-size") {
         return &cascade_slot(slots, CascadeProperty::FontSize);
     }
@@ -601,6 +723,27 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "box-sizing") {
         return &cascade_slot(slots, CascadeProperty::BoxSizing);
+    }
+    if (property == "gap") {
+        return &cascade_slot(slots, CascadeProperty::Gap);
+    }
+    if (property == "column-gap") {
+        return &cascade_slot(slots, CascadeProperty::ColumnGap);
+    }
+    if (property == "row-gap") {
+        return &cascade_slot(slots, CascadeProperty::RowGap);
+    }
+    if (property == "grid-template-columns") {
+        return &cascade_slot(slots, CascadeProperty::GridTemplateColumns);
+    }
+    if (property == "grid-auto-rows") {
+        return &cascade_slot(slots, CascadeProperty::GridAutoRows);
+    }
+    if (property == "grid-column") {
+        return &cascade_slot(slots, CascadeProperty::GridColumn);
+    }
+    if (property == "grid-row") {
+        return &cascade_slot(slots, CascadeProperty::GridRow);
     }
     return nullptr;
 }
@@ -758,6 +901,15 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.max_width = px;
         return true;
+    } else if (property == "aspect-ratio") {
+        int ratio_width = 0;
+        int ratio_height = 0;
+        if (!parse_aspect_ratio(value, ratio_width, ratio_height)) {
+            return false;
+        }
+        style.aspect_ratio_width = ratio_width;
+        style.aspect_ratio_height = ratio_height;
+        return true;
     } else if (property == "font-size") {
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
@@ -883,6 +1035,56 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         } else {
             return false;
         }
+        return true;
+    } else if (property == "gap") {
+        EdgeSizes parsed;
+        if (!parse_box_edge_px(value, parsed, style.font_size)) {
+            return false;
+        }
+        style.row_gap = std::max(0, parsed.top);
+        style.column_gap = std::max(0, parsed.right);
+        return true;
+    } else if (property == "column-gap") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        style.column_gap = std::max(0, px);
+        return true;
+    } else if (property == "row-gap") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        style.row_gap = std::max(0, px);
+        return true;
+    } else if (property == "grid-template-columns") {
+        int min_track = 0;
+        if (!parse_grid_template_columns_min(value, min_track, style.font_size)) {
+            return false;
+        }
+        style.grid_min_track_width = min_track;
+        return true;
+    } else if (property == "grid-auto-rows") {
+        int min_row = 0;
+        if (!parse_grid_auto_rows_min(value, min_row, style.font_size)) {
+            return false;
+        }
+        style.grid_auto_row_min = min_row;
+        return true;
+    } else if (property == "grid-column") {
+        int span = 1;
+        if (!parse_span_value(value, span)) {
+            return false;
+        }
+        style.grid_column_span = span;
+        return true;
+    } else if (property == "grid-row") {
+        int span = 1;
+        if (!parse_span_value(value, span)) {
+            return false;
+        }
+        style.grid_row_span = span;
         return true;
     }
     return false;

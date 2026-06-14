@@ -22,6 +22,8 @@
 - 平台文本绘制通过可选回调注入；核心 renderer 保留可移植 bitmap fallback，不链接 Win32/GDI。
 - software rasterizer 对不透明矩形使用直接行填充。
 - offscreen compositing 在像素循环前裁剪 source/destination rectangles。
+- 响应式 grid 子集使用有界整数 auto-placement、clamped span 和紧凑的逐行
+  occupancy bit mask，而不是完整 track-sizing engine。
 
 ## 内存建议
 
@@ -54,16 +56,16 @@
 .\build\Release\wearweb_microbench.exe 80 1000
 ```
 
-加入 M6 宿主泵动 timer 和当前表单/控件布局改动后，本 Windows 构建机结果：
+加入响应式 grid/aspect-ratio layout 子集后，本 Windows 构建机结果：
 
 ```text
-html_parse avg_us=949.728
-css_parse avg_us=36.025
-render_tree avg_us=1058.55
-layout avg_us=224.273
-layer_tree avg_us=109.392
-flatten_layers avg_us=24.534
-full_pipeline avg_us=2163.95
+html_parse avg_us=990.255
+css_parse avg_us=35.898
+render_tree avg_us=1054.36
+layout avg_us=259.59
+layer_tree avg_us=117.187
+flatten_layers avg_us=24.529
+full_pipeline avg_us=2228.91
 ```
 
 解读：
@@ -76,5 +78,7 @@ full_pipeline avg_us=2163.95
 - 更宽的 fallback CSS 和继承文本属性增加了 style/render 工作，但避免了常见现代页面上的灾难性视觉失败。
 - wrapped text 额外行高余量避免原生文本后端裁剪，代价是少量 layout 成本。
 - 收集内嵌 `<style>` 以及更宽的长度/属性支持改善了常见静态页面，代价是少量 style/render 成本。
+- 响应式 grid card 和 `aspect-ratio` 增加了可测量的 layout 工作，但成本有界，
+  换来了明显更强的嵌入式应用 UI 表达能力。
 - 当前 full pipeline 仍主要由 HTML parse 和 style/render 工作主导。
 - 下一项性能升级应是 arena allocation 和针对重复 class pattern 的 computed-style sharing。

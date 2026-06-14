@@ -77,6 +77,12 @@ exist as fallbacks.
 
 - `display`: block, inline, inline-block, flex, grid, none.
 - `margin`, `padding`, `border-width`, `border-color`, `border-radius`.
-- `width`, `height`, `min-width`, `min-height`.
+- `width`, `height`, `min-width`, `min-height`, `max-width`.
 - `color`, `background-color`.
-- `box-shadow` and `overflow` stored for later rendering support.
+- `font-size`, `line-height`, `text-align`, `text-indent`.
+- `box-sizing`, `overflow`, `opacity`, `position`, `z-index`, `transform`.
+- Embedded-app layout fields: `aspect-ratio`, `gap`, `column-gap`,
+  `row-gap`, simplified grid minimum track sizing, `grid-auto-rows` minimum
+  sizing and `grid-column`/`grid-row` spans.
+- `box-shadow` is stored and painted as a cheap rounded translucent rectangle;
+  blur is approximated, not rasterized.

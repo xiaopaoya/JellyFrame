@@ -46,6 +46,12 @@ WearWeb Engine 的重要变更记录在这里。
   executable。
 - 添加 `JERRYSCRIPT_ROOT` CMake 支持，便于使用 `third_party/jerryscript` 这样的官方 JerryScript
   本地源码树。
+- 添加面向嵌入式应用的响应式 grid card layout 子集：`display:grid`、
+  `repeat(auto-fit, minmax(<length>, 1fr))`、`gap`、
+  `grid-auto-rows: minmax(<length>, auto)`，以及 `grid-column`/`grid-row:
+  span N`。
+- 添加 `aspect-ratio` 尺寸计算，用于视觉/媒体盒子。
+- 添加便宜近似 `box-shadow` 绘制：输出圆角半透明填充，不做真实 blur。
 - 添加外链 stylesheet 合并、语义 fallback 样式、inline 高亮绘制、DOM mutation invalidation
   和表单控件 fallback 行为的回归测试。启用 scripting 的构建还会加入 JerryScript runtime
   生命周期和异常路径测试。
@@ -68,6 +74,7 @@ WearWeb Engine 的重要变更记录在这里。
 - 在布局阶段为表单控件提供 intrinsic 内容行高，使 select 和空 input 即使没有作者指定高度也保持可读。
 - 仅在真实表单控件 wrapper 上安装脚本表单访问器，减少普通 DOM 节点的属性设置开销。
 - 将 clock 和 timer 应用示例升级为使用 M6 `setInterval`，不再只依赖手动刷新。
+- 改进简化 flex row layout，使其支持 `column-gap`。
 
 ### 说明
 
@@ -76,6 +83,8 @@ WearWeb Engine 的重要变更记录在这里。
   shell 使用 GDI 文本绘制，可用于可读的 UTF-8/中文验证。
 - 示例/Win32 helper 会相对于命令行传入的 CSS 路径解析本地 linked stylesheet。缺失的外链文件会被保守忽略，
   符合当前引擎的合理降级策略。
+- `@container` 和 `object-fit` 仍延后。Container query 需要有界的 style/layout
+  反馈处理；`object-fit` 应等待真实 image decode 能力。
 
 ## 0.2.0-dev - 2026-06-15
 

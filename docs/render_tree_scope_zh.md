@@ -50,8 +50,8 @@ DOM + computed style
   通过默认样式排除在 render tree 外。
 - Text nodes 继承父 render object 的文字颜色和字号。
 - `inline-block` 暂时表示为 `RenderInline`。
-- `flex` 和 `grid` 暂时表示为 block-like render objects，用于 layout fallback，
-  但 computed style 中保留原 display value。
+- `flex` 和 `grid` 保持 block-like render object 形态，但 computed style 中保留
+  原 display value。Layout 随后会对常见 flex row 和响应式 grid card 应用小型专用算法。
 - Layout 消费 render tree，不再直接遍历 DOM。
 
 ## 明确延后
@@ -63,7 +63,17 @@ DOM + computed style
 - 完整 CSS stacking-context 语义。
 - Paint invalidation 和 retained display lists。
 - Fragmentation 和 multi-column layout。
-- 真正的 flex/grid layout algorithms。
+- 完整 CSS flex/grid layout algorithms，包括 named grid lines、显式 placement、
+  dense packing、baseline alignment 和完整 track sizing。
+
+## 已实现 Layout 子集
+
+- 响应式 grid card：支持 `display:grid`、
+  `grid-template-columns: repeat(auto-fit, minmax(<length>, 1fr))`、`gap`、
+  `grid-auto-rows: minmax(<length>, auto)`，以及 `grid-column`/`grid-row:
+  span N`。
+- `aspect-ratio` 会参与空媒体框/card 的 intrinsic content height 计算。
+- 简化 flex row 可以使用 `column-gap`，并保留现有 justification 行为。
 
 ## 可用性策略
 

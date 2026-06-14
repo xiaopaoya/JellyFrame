@@ -3,6 +3,8 @@
 #include "core/form_control.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <vector>
 
 namespace wearweb {
 namespace {
@@ -41,6 +43,12 @@ int vertical_edges(const EdgeSizes& edges) {
 int text_line_height(int font_size) {
     return font_size + std::max(6, font_size / 3);
 }
+
+bool has_aspect_ratio(const Style& style) {
+    return style.aspect_ratio_width > 0 && style.aspect_ratio_height > 0;
+}
+
+constexpr int kMaxGridColumns = 32;
 
 bool participates_in_inline_flow(const LayoutBox& box) {
     return (box.node != nullptr && box.node->type == NodeType::Text) ||
@@ -154,6 +162,8 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
     int max_child_width = 0;
     const int children_height = box.style.display == Display::Flex
         ? layout_flex_box(box, content_x, cursor_y, content_width)
+        : box.style.display == Display::Grid
+        ? layout_grid_box(box, content_x, cursor_y, content_width)
         : has_only_inline_children(box)
         ? layout_inline_children(box, content_x, cursor_y, content_width)
         : [&] {
@@ -198,8 +208,12 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
     const int intrinsic_control_height = box.node != nullptr && is_form_control(*box.node)
         ? (box.style.line_height > 0 ? box.style.line_height : text_line_height(box.style.font_size))
         : 0;
+    const int aspect_ratio_height = has_aspect_ratio(box.style) && content_width > 0
+        ? std::max(1, (content_width * box.style.aspect_ratio_height + box.style.aspect_ratio_width / 2) /
+                         box.style.aspect_ratio_width)
+        : 0;
     const int content_height = std::max(box.style.min_height,
-        box.style.height >= 0 ? box.style.height : std::max(children_height, intrinsic_control_height));
+        box.style.height >= 0 ? box.style.height : std::max({children_height, intrinsic_control_height, aspect_ratio_height}));
     const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
     const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};
@@ -271,6 +285,9 @@ int LayoutEngine::layout_flex_box(LayoutBox& box, int content_x, int content_y, 
         total_child_width += child->rect.width + child->style.margin.left + child->style.margin.right;
         max_child_height = std::max(max_child_height, child->rect.height + child->style.margin.top + child->style.margin.bottom);
     }
+    if (box.children.size() > 1) {
+        total_child_width += box.style.column_gap * static_cast<int>(box.children.size() - 1);
+    }
 
     int gap = 0;
     int cursor_x = content_x;
@@ -295,10 +312,123 @@ int LayoutEngine::layout_flex_box(LayoutBox& box, int content_x, int content_y, 
         const int dx = cursor_x + child->style.margin.left - child->rect.x;
         const int dy = target_y + child->style.margin.top - child->rect.y;
         shift_box(*child, dx, dy);
-        cursor_x += child->rect.width + child->style.margin.left + child->style.margin.right + gap;
+        cursor_x += child->rect.width + child->style.margin.left + child->style.margin.right + gap + box.style.column_gap;
     }
 
     return container_height;
+}
+
+int LayoutEngine::layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width) const {
+    if (box.children.empty()) {
+        return 0;
+    }
+
+    const int column_gap = std::max(0, box.style.column_gap);
+    const int row_gap = std::max(0, box.style.row_gap);
+    const int min_track = std::max(1, box.style.grid_min_track_width > 0 ? box.style.grid_min_track_width : content_width);
+    int column_count = std::max(1, (content_width + column_gap) / (min_track + column_gap));
+    column_count = std::min(column_count, static_cast<int>(box.children.size()));
+    column_count = std::min(column_count, kMaxGridColumns);
+    const int total_gap_width = column_gap * std::max(0, column_count - 1);
+    const int column_width = std::max(1, (content_width - total_gap_width) / column_count);
+
+    struct Placement {
+        LayoutBox* child = nullptr;
+        int row = 0;
+        int column = 0;
+        int column_span = 1;
+        int row_span = 1;
+    };
+
+    std::vector<std::uint64_t> occupied;
+    std::vector<int> row_heights;
+    std::vector<Placement> placements;
+    placements.reserve(box.children.size());
+
+    const auto ensure_rows = [&](int rows) {
+        while (static_cast<int>(occupied.size()) < rows) {
+            occupied.push_back(0);
+            row_heights.push_back(std::max(0, box.style.grid_auto_row_min));
+        }
+    };
+
+    const auto can_place = [&](int row, int column, int column_span, int row_span) {
+        if (column + column_span > column_count) {
+            return false;
+        }
+        const std::uint64_t mask = ((std::uint64_t{1} << column_span) - 1U) << column;
+        for (int r = row; r < row + row_span; ++r) {
+            if (r < static_cast<int>(occupied.size()) &&
+                (occupied[static_cast<std::size_t>(r)] & mask) != 0) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    for (auto& child : box.children) {
+        const int column_span = std::max(1, std::min(child->style.grid_column_span, column_count));
+        const int row_span = std::max(1, child->style.grid_row_span);
+        int placed_row = 0;
+        int placed_column = 0;
+        bool placed = false;
+        while (!placed) {
+            ensure_rows(placed_row + row_span);
+            for (int column = 0; column <= column_count - column_span; ++column) {
+                if (can_place(placed_row, column, column_span, row_span)) {
+                    placed_column = column;
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                ++placed_row;
+            }
+        }
+
+        ensure_rows(placed_row + row_span);
+        const std::uint64_t mask = ((std::uint64_t{1} << column_span) - 1U) << placed_column;
+        for (int r = placed_row; r < placed_row + row_span; ++r) {
+            occupied[static_cast<std::size_t>(r)] |= mask;
+        }
+
+        const int item_width = column_width * column_span + column_gap * (column_span - 1);
+        const int child_height = layout_box(*child, 0, 0, item_width);
+        const int min_allocated_height = box.style.grid_auto_row_min * row_span + row_gap * (row_span - 1);
+        const int allocated_height = std::max(child_height, min_allocated_height);
+        const int per_row_height = std::max(1, (allocated_height - row_gap * (row_span - 1) + row_span - 1) / row_span);
+        for (int r = placed_row; r < placed_row + row_span; ++r) {
+            row_heights[static_cast<std::size_t>(r)] =
+                std::max(row_heights[static_cast<std::size_t>(r)], per_row_height);
+        }
+
+        placements.push_back(Placement{child.get(), placed_row, placed_column, column_span, row_span});
+    }
+
+    std::vector<int> row_offsets(row_heights.size(), 0);
+    int total_height = 0;
+    for (std::size_t row = 0; row < row_heights.size(); ++row) {
+        row_offsets[row] = total_height;
+        total_height += row_heights[row];
+        if (row + 1 < row_heights.size()) {
+            total_height += row_gap;
+        }
+    }
+
+    for (const Placement& placement : placements) {
+        int allocated_height = 0;
+        for (int r = 0; r < placement.row_span; ++r) {
+            allocated_height += row_heights[static_cast<std::size_t>(placement.row + r)];
+        }
+        allocated_height += row_gap * (placement.row_span - 1);
+        const int target_x = content_x + placement.column * (column_width + column_gap);
+        const int target_y = content_y + row_offsets[static_cast<std::size_t>(placement.row)];
+        shift_box(*placement.child, target_x - placement.child->rect.x, target_y - placement.child->rect.y);
+        placement.child->rect.width = column_width * placement.column_span + column_gap * (placement.column_span - 1);
+        placement.child->rect.height = std::max(placement.child->rect.height, allocated_height);
+    }
+
+    return total_height;
 }
 
 } // namespace wearweb

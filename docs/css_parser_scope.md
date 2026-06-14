@@ -39,6 +39,10 @@ layout behavior.
 - Top-level error recovery for malformed declarations and malformed rules.
 - `@layer` block flattening.
 - Plain `@media` blocks only when the prelude is empty, `all` or `screen`.
+- UI-oriented declarations for the embedded app subset, including
+  `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `grid-template-columns`
+  with a `minmax()` minimum track, `grid-auto-rows` with a minimum track, and
+  `grid-column`/`grid-row: span N`.
 
 ## Phase 1: Lazy Handling
 
@@ -60,6 +64,9 @@ layout behavior.
 - CSS nesting semantics.
 - Shadow DOM selectors.
 - Animation/keyframe model.
+- Full grid value grammar, named lines, explicit placement and dense packing.
+- Container query evaluation. This is intentionally deferred until layout/style
+  feedback can be bounded without cycles.
 
 ## Current Parser Limits
 
@@ -68,4 +75,3 @@ layout behavior.
 - `max_nesting_depth`: 8
 - `flatten_layer_blocks`: true
 - `parse_plain_media_blocks`: true
-

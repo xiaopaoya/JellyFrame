@@ -40,14 +40,16 @@ rect/text commands or later map selected layers to hardware surfaces.
 - `opacity` below 1 creates a composited layer and is applied during flattening.
 - `transform` creates a composited layer, but transform math is deferred.
 - `position` and explicit `z-index` create stacking layers.
-- `box-shadow` and rounded overflow clips create layer boundaries so later
-  painting can upgrade them without changing tree shape.
+- `box-shadow` and rounded overflow clips create layer boundaries. Current
+  painting emits a cheap rounded translucent shadow fill; real blur can later
+  replace it without changing tree shape.
 
 ## Degradation Policy
 
 - Unsupported transform values do not crash or move boxes incorrectly; they only
   mark a compositing boundary for now.
 - Rounded clipping is detected but approximated by rectangular clipping.
+- `box-shadow` blur is approximated as rectangle expansion and translucent fill.
 - `z-index` ordering is layer-local and useful for positioned children, but true
   CSS stacking-context rules are not complete yet.
 - The layer tree can always be flattened to the simple `DisplayList`, preserving

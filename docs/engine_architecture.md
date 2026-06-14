@@ -85,7 +85,8 @@ source order, then runs selector matching and cascade comparison.
 - Selector support is limited but useful: compound, descendant, child,
   attribute and `:root`.
 - Unsupported modern selectors are skipped before CSSOM insertion when possible.
-- Render/layout remain block-like for flex/grid until those algorithms exist.
+- Render objects keep a compact block/inline/text shape; layout adds small
+  dedicated paths for common flex rows and responsive grid-card patterns.
 - Layer tree supports sparse clipping, opacity boundaries, positioned stacking
   hints and conservative compositing boundaries.
 - Display list uses rectangles, gradients and text only.

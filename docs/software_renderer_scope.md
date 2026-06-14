@@ -34,8 +34,8 @@ DOM + CSSOM
 
 - Straight-alpha `FrameBuffer` with integer RGBA pixels.
 - Source-over alpha compositing.
-- Rectangle fills, stroke rectangles and simple vertical linear-gradient
-  command support.
+- Rectangle fills, stroke rectangles, cheap approximate `box-shadow` fills and
+  simple vertical linear-gradient command support.
 - Rounded rectangle clipping for filled backgrounds.
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.
@@ -46,7 +46,7 @@ DOM + CSSOM
 
 - No GPU surfaces.
 - No blend modes beyond normal source-over.
-- No filters, backdrop filters or shadows.
+- No filters, backdrop filters or real blur shadows.
 - No real text shaping, bidi or font fallback stack.
 - No image decode.
 - No subpixel layout or antialiased geometry.
@@ -59,5 +59,6 @@ problems. It is not yet a pixel-compatible browser renderer.
 
 Recent fixes added UTF-8 text output on Windows, conservative text overhang
 padding, basic multiline text drawing, `box-sizing:border-box`, common
-`rgb()/rgba()` colors, four-value box edges and minimal flex centering/row
-layout.
+`rgb()/rgba()` colors, four-value box edges, minimal flex centering/row layout,
+responsive grid-card layout, `aspect-ratio` sizing and cheap rounded
+`box-shadow` approximations.

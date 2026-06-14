@@ -31,7 +31,8 @@ DOM + CSSOM
 
 - 使用 integer RGBA pixels 的 straight-alpha `FrameBuffer`。
 - Source-over alpha compositing。
-- Rectangle fills、stroke rectangles，以及简单垂直 linear-gradient command。
+- Rectangle fills、stroke rectangles、便宜近似 `box-shadow` 填充，以及简单垂直
+  linear-gradient command。
 - 背景填充的 rounded rectangle clipping。
 - Windows 下通过 GDI CPU mask 绘制文本。
 - 非 Windows 构建保留内置 tiny ASCII fallback text drawing。
@@ -42,7 +43,7 @@ DOM + CSSOM
 
 - 不使用 GPU surfaces。
 - 不支持 normal source-over 以外的 blend modes。
-- 不支持 filters、backdrop filters 或 shadows。
+- 不支持 filters、backdrop filters 或真实 blur shadow。
 - 不做完整 text shaping、bidi 或 font fallback stack。
 - 不做 image decode。
 - 不做 subpixel layout 或 antialiased geometry。
@@ -54,4 +55,5 @@ DOM + CSSOM
 
 近期修复包括 Windows UTF-8 文本输出、保守文本 overhang padding、基础多行文本绘制、
 `box-sizing:border-box`、常见 `rgb()/rgba()` 颜色、四值 box edges，以及最小 flex
-居中/横向布局。
+居中/横向布局、响应式 grid card layout、`aspect-ratio` 尺寸计算和便宜圆角
+`box-shadow` 近似。

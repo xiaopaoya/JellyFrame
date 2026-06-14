@@ -12,6 +12,8 @@ Feasible now:
 
 - Weather or dashboard apps with host-provided data, select controls, buttons
   and text updates.
+- Card/dashboard layouts that use the supported responsive grid subset,
+  gaps and aspect-ratio media placeholders.
 - Calculator-style tools with buttons, input value state and synchronous event
   handlers.
 - Settings panels using text inputs, textareas, checkboxes, radios, ranges and
@@ -27,8 +29,9 @@ Not suitable yet:
 
 - Apps that assume browser loading, network, storage, canvas, Web Components,
   modules or selector-heavy frameworks.
-- Large arbitrary modern sites that depend on full flex/grid, complex CSSOM,
-  DOM ranges, layout observers or asynchronous browser task semantics.
+- Large arbitrary modern sites that depend on full flex/grid, container
+  queries, complex CSSOM, DOM ranges, layout observers or asynchronous browser
+  task semantics.
 
 ## Supported Authoring Style
 
@@ -47,8 +50,13 @@ CSS:
   selectors.
 - Use block and inline-block layout, simplified inline flow, basic flex support,
   margins, padding, borders, colors, font size, line height and text alignment.
+- Use the responsive grid-card subset when it fits the UI:
+  `display:grid`, `repeat(auto-fit, minmax(<length>, 1fr))`, `gap`,
+  `grid-auto-rows: minmax(<length>, auto)`, and `grid-column`/`grid-row:
+  span N`.
+- Use `aspect-ratio` for media placeholders and visual panels.
 - Use modern colors, spacing and hierarchy, but avoid layouts that require full
-  browser grid/flexbox behavior.
+  browser grid/flexbox behavior, container queries, subgrid or dense packing.
 - Keep control styling simple. The engine paints lightweight native-like
   control affordances and preserves usability when fancy effects are dropped.
 

@@ -71,6 +71,19 @@ const LayerNode* find_layer_with_reason(const LayerNode& layer, LayerReason reas
     return nullptr;
 }
 
+const LayoutBox* find_layout_by_class(const LayoutBox& box, const std::string& class_name) {
+    if (box.node != nullptr && box.node->type == NodeType::Element && box.node->has_class(class_name)) {
+        return &box;
+    }
+    for (const auto& child : box.children) {
+        const LayoutBox* found = find_layout_by_class(*child, class_name);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 void overflow_hidden_creates_clip_layer() {
     auto pipeline = build_pipeline("<body><section class='clip'><p>Visible</p></section></body>",
                                    ".clip { overflow: hidden; height: 20px; background: #ffffff; }");
@@ -222,6 +235,48 @@ void select_does_not_paint_option_list_inline() {
     check(painted_selected_option, "select paints the selected option text");
 }
 
+void grid_auto_fit_gap_span_and_aspect_ratio_layout() {
+    auto pipeline = build_pipeline(
+        "<body><div class='grid'>"
+        "<section class='card a'>A</section>"
+        "<section class='card b'>B</section>"
+        "<section class='card wide'>Wide</section>"
+        "<section class='media'></section>"
+        "</div></body>",
+        ".grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));"
+        "grid-auto-rows: minmax(40px, auto); gap: 10px; }"
+        ".card { padding: 4px; background: #ffffff; }"
+        ".wide { grid-column: span 2; }"
+        ".media { aspect-ratio: 16 / 9; background: #e2e8f0; }");
+
+    const LayoutBox* first = find_layout_by_class(*pipeline.layout_tree, "a");
+    const LayoutBox* second = find_layout_by_class(*pipeline.layout_tree, "b");
+    const LayoutBox* wide = find_layout_by_class(*pipeline.layout_tree, "wide");
+    const LayoutBox* media = find_layout_by_class(*pipeline.layout_tree, "media");
+    check(first != nullptr && second != nullptr && wide != nullptr && media != nullptr, "grid fixture boxes exist");
+    check(second->rect.x > first->rect.x, "grid places items into columns");
+    check(second->rect.x - first->rect.x >= first->rect.width + 8, "grid gap separates columns");
+    check(wide->rect.width > first->rect.width * 2, "grid-column span increases item width");
+    check(media->rect.height > 0 && media->rect.width > media->rect.height, "aspect ratio creates wide media box");
+}
+
+void box_shadow_emits_cheap_translucent_fill() {
+    auto pipeline = build_pipeline(
+        "<body><section class='card'>Shadow</section><section class='card color-first'>Shadow</section></body>",
+        ".card { background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }"
+        ".color-first { box-shadow: rgba(0,0,0,0.12) 0 2px 8px; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    int found_shadows = 0;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect && command.color.a > 0 && command.color.a < 80) {
+            ++found_shadows;
+        }
+    }
+    check(found_shadows >= 2, "box-shadow emits approximate translucent fills");
+}
+
 } // namespace
 
 int main() {
@@ -235,6 +290,8 @@ int main() {
         centered_inline_text_aligns_in_parent();
         button_inline_block_shrink_wraps_text();
         select_does_not_paint_option_list_inline();
+        grid_auto_fit_gap_span_and_aspect_ratio_layout();
+        box_shadow_emits_cheap_translucent_fill();
     } catch (const std::exception& error) {
         std::cerr << "layer tree test failed: " << error.what() << '\n';
         return 1;

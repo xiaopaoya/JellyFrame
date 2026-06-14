@@ -72,6 +72,11 @@ CssStyleSheet
 
 - `display`：block、inline、inline-block、flex、grid、none。
 - `margin`、`padding`、`border-width`、`border-color`、`border-radius`。
-- `width`、`height`、`min-width`、`min-height`。
+- `width`、`height`、`min-width`、`min-height`、`max-width`。
 - `color`、`background-color`。
-- `box-shadow` 和 `overflow` 已存储，供后续 renderer 支持。
+- `font-size`、`line-height`、`text-align`、`text-indent`。
+- `box-sizing`、`overflow`、`opacity`、`position`、`z-index`、`transform`。
+- 面向嵌入式应用的 layout 字段：`aspect-ratio`、`gap`、`column-gap`、
+  `row-gap`、简化 grid 最小轨道尺寸、`grid-auto-rows` 最小尺寸，以及
+  `grid-column`/`grid-row` span。
+- `box-shadow` 已存储，并绘制为便宜的圆角半透明矩形；blur 只做近似，不做真实栅格模糊。

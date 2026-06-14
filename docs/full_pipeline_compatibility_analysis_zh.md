@@ -117,16 +117,18 @@ WearWeb 结果：
 
 ## 非致命缺口
 
-- 尚无真实 text shaping、wrapping 和 font fallback。
-- 尚无 input editing/event dispatch。
-- 尚无 flex/grid layout algorithms；当前降级为 block-like layout。
+- 尚无真实 text shaping、bidi 和完整 font fallback。
+- 平台无关 input dispatch 已存在，但浏览器式加载、网络和面向框架的 DOM API
+  仍刻意保持很小。
+- Flex/grid 仍是子集：常用 flex row 和响应式 grid card 可用，完整 CSS 算法、
+  subgrid、显式 placement 和 dense packing 延后。
 - 尚无 retained layout 或 dirty rectangle invalidation。
-- 尚无 raster clipping、rounded-corner clipping 和 shadow blur。
+- 已有圆角填充和便宜阴影，但没有真实 shadow blur 或高级 filter pipeline。
 
 ## 下一步功能优先级
 
-1. 文本换行和基础 inline formatting。
-2. Input focus/editing model。
-3. 支持 fill rectangles 和 text 的 framebuffer renderer。
-4. Dirty layer invalidation 和 rectangle repaint。
-5. 面向大型页面的 style rule indexing。
+1. Inline/local classic script loading ergonomics。
+2. Dirty layer invalidation 和 rectangle repaint。
+3. Arena allocation 和紧凑 DOM/layout object storage。
+4. 面向非拉丁生产设备的 text shaping/font fallback 策略。
+5. 只有当嵌入式应用证明需要时，再增加 selector/module 能力。
