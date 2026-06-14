@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Wearable App Shell</title>
+  <style>
+    app-root { display: block; }
+  </style>
+</head>
+<body>
+  <app-root data-route="/today">
+    <header class="topbar">
+      <button id="menu" popovertarget="nav-menu">Menu</button>
+      <h1>Today</h1>
+    </header>
+    <nav id="nav-menu" popover>
+      <a href="/today">Today</a>
+      <a href="/health">Health</a>
+    </nav>
+    <section class="cards">
+      <article class="card metric-card" data-kind="heart">
+        <h2>Heart rate</h2>
+        <p><strong>72</strong> bpm</p>
+      </article>
+      <article class="card metric-card" data-kind="sleep">
+        <h2>Sleep</h2>
+        <p><strong>7.4</strong> hours</p>
+      </article>
+    </section>
+    <dialog id="sync-dialog">
+      <form method="dialog">
+        <p>Sync complete</p>
+        <button>OK</button>
+      </form>
+    </dialog>
+  </app-root>
+</body>
+</html>
+

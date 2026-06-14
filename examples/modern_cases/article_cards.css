@@ -1,0 +1,31 @@
+.feed {
+  display: block;
+  padding: 12px;
+  background: #f1f5f9;
+}
+
+.story, article.featured {
+  display: block;
+  margin: 8px;
+  padding: 12px;
+  background: #ffffff;
+  color: #1f2937;
+}
+
+.story img {
+  display: block;
+  width: 240px;
+  height: 120px;
+}
+
+@media (max-width: 480px) {
+  .story {
+    margin: 4px;
+    border-radius: 8px;
+  }
+}
+
+.story:where(.featured) {
+  box-shadow: 0 12px 36px rgb(15 23 42 / 20%);
+}
+

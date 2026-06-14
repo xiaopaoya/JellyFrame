@@ -1,0 +1,55 @@
+@layer reset, base, components, enhancements;
+
+@layer base {
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #f8fafc;
+    color: #111827;
+    color: oklch(18% 0.02 260);
+    font-size: 16px;
+  }
+}
+
+@layer components {
+  .search-shell {
+    display: grid;
+    min-height: 100dvh;
+    padding: 16px;
+  }
+
+  #search.search-box {
+    display: block;
+    width: 320px;
+    padding: 12px;
+    background: #ffffff;
+    border-radius: 999px;
+    box-shadow: 0 10px 40px rgb(15 23 42 / 18%);
+  }
+
+  .search-input {
+    display: block;
+    width: 280px;
+    padding: 8px;
+    color: #111827;
+    background: #ffffff;
+  }
+
+  button.primary, .search-button {
+    display: inline-block;
+    padding: 8px;
+    color: white;
+    background: #2563eb;
+  }
+}
+
+@supports (backdrop-filter: blur(12px)) {
+  #search.search-box {
+    background: color-mix(in srgb, white 75%, transparent);
+    backdrop-filter: blur(12px);
+  }
+}
+
+.search-box:has(input:focus) {
+  box-shadow: 0 0 0 4px color-mix(in srgb, #2563eb 25%, transparent);
+}
+

@@ -1,0 +1,43 @@
+:root {
+  --panel: #ffffff;
+  --accent: #16a34a;
+}
+
+app-root {
+  display: block;
+  color: #0f172a;
+  background: #e2e8f0;
+  padding: 8px;
+}
+
+.topbar {
+  display: flex;
+  padding: 8px;
+  background: var(--panel);
+}
+
+.card.metric-card {
+  display: block;
+  margin: 8px;
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 16px;
+}
+
+@container (inline-size > 320px) {
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}
+
+.card:is(:hover, :focus-within) {
+  outline: 2px solid var(--accent);
+}
+
+dialog[open] {
+  display: block;
+  background: #ffffff;
+}
+

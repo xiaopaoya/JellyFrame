@@ -1,0 +1,68 @@
+# CSS Parser 裁剪范围
+
+最后对照 CSS Syntax Module Level 3 和浏览器 parser 源码结构的时间：
+2026-06-13。
+
+- CSS Syntax Module Level 3: https://www.w3.org/TR/css-syntax-3/
+- CSS Syntax editor draft: https://drafts.csswg.org/css-syntax/
+- Blink CSS parser sources:
+  https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/css/parser/
+- WebKit CSS parser sources:
+  https://github.com/WebKit/WebKit/tree/main/Source/WebCore/css/parser
+
+WearWeb 应该能解析现代 CSS 而不发生灾难性失败，但不应该假装已经实现完整现代
+cascade。Parser 接受常见语法，在 at-rule 和 declaration 边界恢复错误，并让不
+支持的样式降级为统一 fallback，而不是把局部现代增强和旧布局行为混在一起。
+
+## 视觉一致性策略
+
+- 优先选择稳定 baseline styling，而不是局部现代 styling。
+- 保留 declaration 顺序，让传统 fallback 生效：
+  `color: #333; color: oklch(...);`。
+- 不支持的 value 不能覆盖之前已经支持的 value。
+- 不支持的增强 block 在 evaluator 存在前整体跳过。
+- 坏规则不能破坏后续规则。
+
+## 第一阶段：直接实现
+
+- Comments。
+- Qualified style rules。
+- 按顶层逗号拆分 selector lists。
+- Declaration blocks。
+- 有序 declarations，包括重复属性。
+- 解析阶段识别 `!important`。
+- 在 selector 和 declaration 中处理 strings、escapes、functions 和 bracketed
+  component values。
+- 对 malformed declarations 和 malformed rules 做顶层错误恢复。
+- 展开 `@layer` block。
+- 只在 prelude 为空、`all` 或 `screen` 时解析普通 `@media` block。
+
+## 第一阶段：懒处理
+
+- `@supports`、带条件的 `@media`、`@container`、`@scope`：整体跳过 block。
+- `@font-face`、`@keyframes`、`@page`、`@property`：识别 balanced block
+  边界，但暂不暴露给 style resolution。
+- 未知 at-rules：跳过 statement 或 balanced block。
+- 暂时整体跳过 `:has()`、`:is()`、`:where()`、`::part()`、`::slotted()` 等
+  不支持 selector 的完整规则。
+
+## 明确尚未实现
+
+- 完整 CSS token stream objects。
+- 完整 selector parser。
+- Cascade layers 和 layer ordering。
+- Media query evaluation。
+- Feature query evaluation。
+- Custom property dependency graph。
+- CSS nesting semantics。
+- Shadow DOM selectors。
+- Animation/keyframe model。
+
+## 当前 parser 限制
+
+- `max_rules`：4096
+- `max_declarations_per_rule`：256
+- `max_nesting_depth`：8
+- `flatten_layer_blocks`：true
+- `parse_plain_media_blocks`：true
+

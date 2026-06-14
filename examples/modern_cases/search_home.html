@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Modern Search</title>
+  <link rel="modulepreload" href="/app.js">
+  <script type="module">
+    if (location.search.includes("q=")) {
+      console.log("<form> stays raw inside module script");
+    }
+  </script>
+</head>
+<body>
+  <main id="app" class="search-shell">
+    <form id="search" class="search-box elevated" action="/search" method="get" role="search">
+      <label class="visually-hidden" for="q">Search</label>
+      <input id="q" class="search-input" name="q" type="search" placeholder="Search the web" autocomplete="off" autofocus>
+      <button class="search-button primary" type="submit">Search</button>
+    </form>
+    <template id="suggestion-template">
+      <button class="suggestion" type="button"><span></span></button>
+    </template>
+  </main>
+</body>
+</html>
+

@@ -1,0 +1,193 @@
+#include "core/layout.h"
+
+#include <algorithm>
+
+namespace wearweb {
+namespace {
+
+int estimate_text_width(const std::string& text, int font_size) {
+    int width = 0;
+    for (std::size_t index = 0; index < text.size();) {
+        const unsigned char ch = static_cast<unsigned char>(text[index]);
+        if (ch < 0x80) {
+            width += std::max(1, (font_size * 2) / 3);
+            ++index;
+        } else {
+            width += font_size;
+            if ((ch & 0xe0U) == 0xc0U) {
+                index += 2;
+            } else if ((ch & 0xf0U) == 0xe0U) {
+                index += 3;
+            } else if ((ch & 0xf8U) == 0xf0U) {
+                index += 4;
+            } else {
+                ++index;
+            }
+        }
+    }
+    return width + std::max(6, font_size / 2);
+}
+
+int horizontal_edges(const EdgeSizes& edges) {
+    return edges.left + edges.right;
+}
+
+int vertical_edges(const EdgeSizes& edges) {
+    return edges.top + edges.bottom;
+}
+
+void shift_box(LayoutBox& box, int dx, int dy) {
+    box.rect.x += dx;
+    box.rect.y += dy;
+    for (auto& child : box.children) {
+        shift_box(*child, dx, dy);
+    }
+}
+
+} // namespace
+
+LayoutEngine::LayoutEngine(const StyleResolver& style_resolver)
+    : style_resolver_(style_resolver) {}
+
+std::unique_ptr<LayoutBox> LayoutEngine::layout(const Node& root, int viewport_width) const {
+    RenderTreeBuilder render_tree_builder(style_resolver_);
+    auto render_tree = render_tree_builder.build(root);
+    return layout(*render_tree, viewport_width);
+}
+
+std::unique_ptr<LayoutBox> LayoutEngine::layout(const RenderObject& render_tree, int viewport_width) const {
+    auto root_box = std::make_unique<LayoutBox>();
+    root_box->node = render_tree.node;
+    root_box->style = render_tree.style;
+    build_layout_tree(render_tree, *root_box);
+    root_box->rect.height = layout_box(*root_box, 0, 0, viewport_width);
+    return root_box;
+}
+
+void LayoutEngine::build_layout_tree(const RenderObject& object, LayoutBox& box) const {
+    for (const auto& child : object.children) {
+        auto child_box = std::make_unique<LayoutBox>();
+        child_box->node = child->node;
+        child_box->style = child->style;
+        build_layout_tree(*child, *child_box);
+        box.children.push_back(std::move(child_box));
+    }
+}
+
+int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
+    const int border_box_x = x + box.style.margin.left;
+    const int border_box_y = y + box.style.margin.top;
+    const int content_x = border_box_x + box.style.border_width.left + box.style.padding.left;
+    int cursor_y = border_box_y + box.style.border_width.top + box.style.padding.top;
+    const int available_content_width = box.style.width >= 0
+        ? (box.style.box_sizing_border_box
+              ? std::max(0, box.style.width - horizontal_edges(box.style.border_width) -
+                                horizontal_edges(box.style.padding))
+              : box.style.width)
+        : std::max(0, width - horizontal_edges(box.style.margin) -
+                         horizontal_edges(box.style.border_width) - horizontal_edges(box.style.padding));
+    int content_width = available_content_width;
+
+    if (box.node != nullptr && box.node->type == NodeType::Text) {
+        const int raw_text_width = estimate_text_width(box.node->text, box.style.font_size);
+        const int text_width = std::max(box.style.min_width, std::min(content_width, raw_text_width));
+        const int line_height = box.style.font_size + 4;
+        const int line_count = content_width > 0
+            ? std::max(1, (raw_text_width + content_width - 1) / content_width)
+            : 1;
+        const int text_height = std::max(box.style.min_height,
+            box.style.height >= 0 ? box.style.height : line_height * line_count);
+        int text_x = border_box_x;
+        if (box.style.text_align == TextAlign::Center) {
+            text_x += std::max(0, (content_width - text_width) / 2);
+        } else if (box.style.text_align == TextAlign::End) {
+            text_x += std::max(0, content_width - text_width);
+        }
+        box.rect = Rect{text_x, border_box_y, text_width, text_height};
+        return text_height;
+    }
+
+    int max_child_width = 0;
+    const int children_height = box.style.display == Display::Flex
+        ? layout_flex_box(box, content_x, cursor_y, content_width)
+        : [&] {
+            int height = 0;
+            for (auto& child : box.children) {
+                const int child_height = layout_box(*child, content_x, cursor_y, content_width);
+                cursor_y += child_height;
+                height += child_height;
+                max_child_width = std::max(max_child_width,
+                    child->rect.width + child->style.margin.left + child->style.margin.right);
+            }
+            return height;
+        }();
+    if (box.style.width < 0 && (box.style.display == Display::Inline || box.style.display == Display::InlineBlock)) {
+        content_width = std::min(available_content_width, max_child_width);
+        if (!box.children.empty()) {
+            int min_child_x = box.children.front()->rect.x - box.children.front()->style.margin.left;
+            for (const auto& child : box.children) {
+                min_child_x = std::min(min_child_x, child->rect.x - child->style.margin.left);
+            }
+            const int dx = content_x - min_child_x;
+            if (dx != 0) {
+                for (auto& child : box.children) {
+                    shift_box(*child, dx, 0);
+                }
+            }
+        }
+    }
+
+    const int content_height = std::max(box.style.min_height, box.style.height >= 0 ? box.style.height : children_height);
+    const int measured_border_box_width = content_width + horizontal_edges(box.style.padding) +
+        horizontal_edges(box.style.border_width);
+    const int border_box_width = std::max(box.style.min_width,
+        box.style.width >= 0 && box.style.box_sizing_border_box ? box.style.width : measured_border_box_width);
+    const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
+    const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
+    box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};
+    return total_height;
+}
+
+int LayoutEngine::layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const {
+    if (box.children.empty()) {
+        return 0;
+    }
+
+    int total_child_width = 0;
+    int max_child_height = 0;
+    for (auto& child : box.children) {
+        layout_box(*child, 0, 0, content_width);
+        total_child_width += child->rect.width + child->style.margin.left + child->style.margin.right;
+        max_child_height = std::max(max_child_height, child->rect.height + child->style.margin.top + child->style.margin.bottom);
+    }
+
+    int gap = 0;
+    int cursor_x = content_x;
+    if (box.style.justify_content == JustifyContent::Center) {
+        cursor_x += std::max(0, (content_width - total_child_width) / 2);
+    } else if (box.style.justify_content == JustifyContent::SpaceAround) {
+        gap = box.children.empty() ? 0 : std::max(0, (content_width - total_child_width) / static_cast<int>(box.children.size()));
+        cursor_x += gap / 2;
+    } else if (box.style.justify_content == JustifyContent::SpaceBetween && box.children.size() > 1) {
+        gap = std::max(0, (content_width - total_child_width) / static_cast<int>(box.children.size() - 1));
+    }
+
+    const int container_height = std::max(box.style.min_height, box.style.height >= 0 ? box.style.height : max_child_height);
+    for (auto& child : box.children) {
+        int target_y = content_y;
+        if (box.style.align_items == AlignItems::Center) {
+            target_y += std::max(0, (container_height - child->rect.height) / 2);
+        } else if (box.style.align_items == AlignItems::End) {
+            target_y += std::max(0, container_height - child->rect.height);
+        }
+
+        const int dx = cursor_x + child->style.margin.left - child->rect.x;
+        const int dy = target_y + child->style.margin.top - child->rect.y;
+        shift_box(*child, dx, dy);
+        cursor_x += child->rect.width + child->style.margin.left + child->style.margin.right + gap;
+    }
+
+    return container_height;
+}
+
+} // namespace wearweb
