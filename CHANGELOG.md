@@ -40,6 +40,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `removeChild`, `setAttribute`, `getAttribute` and `textContent`.
 - Added `examples/script_cases/dom_mutation_probe.*` to validate script-driven
   DOM mutation through the pseudo browser.
+- Added M4 JavaScript event bindings for `addEventListener`,
+  `removeEventListener`, event objects, default prevention and propagation
+  control.
+- Added scripting support to the Win32 browser shell so desktop native input can
+  dispatch into JavaScript listeners and rerender dirty DOM mutations.
+- Added `examples/script_cases/event_probe.*` for interactive event bridge
+  validation.
 - Added a single aggregate `wearweb_core_tests` executable for platform-neutral
   regression coverage, replacing the many standalone test executables in normal
   builds.
@@ -70,6 +77,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Forwarded Win32 character and Backspace input into the core control model and
   rerendered the existing DOM so desktop validation reflects live control
   changes.
+- Replaced hash-table event listener storage with compact per-type listener
+  groups, reducing ordinary embedded-page listener overhead while preserving the
+  public event API.
 
 ### Notes
 

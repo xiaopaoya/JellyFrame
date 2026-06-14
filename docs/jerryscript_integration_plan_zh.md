@@ -28,6 +28,8 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
 - M3 最小 DOM binding：`window`、`document`、`getElementById`、`createElement`、
   `createTextNode`、`appendChild`、`removeChild`、`setAttribute`、`getAttribute`
   和 `textContent`。
+- M4 事件桥：`addEventListener`、`removeEventListener`、event object、default prevention
+  和 propagation control，并复用现有 C++ event dispatch 路径。
 - DOM tree 构建和容错 HTML 解析。
 - DOM mutation 原语：插入/删除子节点、设置/删除属性、更新 text content。
 - tree、attribute、text、style、layout dirty flags。
@@ -122,6 +124,10 @@ DOM + style + layout + layer + renderer
 
 ### M4：事件桥
 
+状态：已支持由 C++ 事件系统派发的同步 callback。JavaScript listener reference 由
+`JerryScriptRuntime` 持有；runtime 关闭时会先从 native `EventTarget` 移除 listener，
+再在 `jerry_cleanup` 前释放对应 `jerry_value_t`。
+
 暴露：
 
 - `addEventListener(type, callback)`
@@ -210,5 +216,5 @@ HTML：
 
 ## 推荐下一步
 
-继续 M4：把 native event dispatch 桥接到 JavaScript listener。listener storage 必须显式，
-所有保留的 `jerry_value_t` callback 都要有释放路径，并在事件回调后合并 dirty flags 再触发重绘。
+继续 M5：暴露表单控件 JavaScript 属性（`value`、`checked`、`selectedIndex`），并让现有平台无关
+input controller 派发 JS 可观察的 `input` / `change` 事件。

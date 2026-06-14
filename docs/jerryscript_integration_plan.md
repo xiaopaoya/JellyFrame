@@ -34,6 +34,9 @@ Ready:
 - M3 minimal DOM bindings: `window`, `document`, `getElementById`,
   `createElement`, `createTextNode`, `appendChild`, `removeChild`,
   `setAttribute`, `getAttribute` and `textContent`.
+- M4 event bridge: `addEventListener`, `removeEventListener`, event objects,
+  default prevention and propagation control routed through the existing C++
+  event dispatch path.
 - DOM tree construction and tolerant HTML parsing.
 - DOM mutation primitives: append/remove child, set/remove attribute, text
   content updates.
@@ -135,6 +138,11 @@ Validation:
 
 ### M4: Event Bridge
 
+Status: implemented for synchronous callbacks dispatched by the C++ event
+system. JavaScript listener references are retained by `JerryScriptRuntime`,
+removed from native `EventTarget`s on runtime shutdown and released before
+`jerry_cleanup`.
+
 Expose:
 
 - `addEventListener(type, callback)`
@@ -224,6 +232,6 @@ Expected behavior:
 
 ## Recommended Next Step
 
-Continue with M4: bridge native event dispatch to JavaScript listeners. Keep the
-listener storage explicit, release all retained `jerry_value_t` callbacks and
-coalesce dirty flags after event callbacks before rerendering.
+Continue with M5: expose form-control JavaScript properties (`value`, `checked`,
+`selectedIndex`) and fire JS-observable `input` / `change` events from the
+existing platform-neutral input controller.

@@ -114,6 +114,66 @@ void remove_child_keeps_wrapper_usable() {
     check(paragraph == nullptr, "removed paragraph detached from DOM");
 }
 
+void javascript_click_listener_mutates_dom() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "button exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "button.addEventListener('click', function (event) {"
+        "  this.textContent = event.type + ':' + event.clientX + ',' + event.clientY;"
+        "});"
+        "'listener-ready'");
+
+    check(result.ok, "event listener registration succeeds");
+
+    MouseEvent event("click", 12, 34);
+    dispatch_event(*button, event);
+
+    check(button->text_content() == "click:12,34", "JS event listener mutates DOM");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "JS event mutation marks layout dirty");
+}
+
+void javascript_event_prevent_default_and_remove_listener_work() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "button exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var count = 0;"
+        "function onClick(event) {"
+        "  count += 1;"
+        "  event.preventDefault();"
+        "  button.textContent = String(count);"
+        "}"
+        "button.addEventListener('click', onClick);"
+        "button.removeEventListener('click', function () {});"
+        "'ready'");
+
+    check(result.ok, "preventDefault listener registration succeeds");
+
+    MouseEvent first("click", 1, 1);
+    check(!dispatch_event(*button, first), "JS preventDefault affects dispatch result");
+    check(button->text_content() == "1", "listener ran once");
+
+    const ScriptEvaluationResult removed = runtime.eval(
+        "button.removeEventListener('click', onClick);"
+        "'removed'");
+    check(removed.ok, "removeEventListener succeeds");
+
+    MouseEvent second("click", 2, 2);
+    check(dispatch_event(*button, second), "removed listener no longer prevents default");
+    check(button->text_content() == "1", "removed listener no longer mutates DOM");
+}
+
 } // namespace
 
 int main() {
@@ -124,6 +184,8 @@ int main() {
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();
         remove_child_keeps_wrapper_usable();
+        javascript_click_listener_mutates_dom();
+        javascript_event_prevent_default_and_remove_listener_work();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

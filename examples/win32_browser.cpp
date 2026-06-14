@@ -12,6 +12,10 @@
 #include "core/software_renderer.h"
 #include "core/style.h"
 
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+#include "script/jerryscript_runtime.h"
+#endif
+
 #include "example_css_io.h"
 
 #include <windows.h>
@@ -291,8 +295,10 @@ FrameBuffer render_page_with_gdi_text(const std::string& html_path,
 
 class BrowserApp {
 public:
-    BrowserApp(std::string html_path, std::string css_path)
-        : html_path_(std::move(html_path)), css_path_(std::move(css_path)) {}
+    BrowserApp(std::string html_path, std::string css_path, std::string script_path)
+        : html_path_(std::move(html_path)),
+          css_path_(std::move(css_path)),
+          script_path_(std::move(script_path)) {}
 
     bool initialize(HINSTANCE instance, int show_command) {
         WNDCLASSW window_class{};
@@ -337,10 +343,14 @@ private:
     HWND hwnd_ = nullptr;
     std::string html_path_;
     std::string css_path_;
+    std::string script_path_;
     int viewport_width_ = 1;
     int viewport_height_ = 1;
     int scroll_y_ = 0;
 
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+    std::unique_ptr<JerryScriptRuntime> script_runtime_;
+#endif
     std::unique_ptr<Node> document_;
     std::unique_ptr<StyleResolver> style_resolver_;
     std::unique_ptr<RenderObject> render_tree_;
@@ -418,6 +428,9 @@ private:
 
     void rebuild() {
         try {
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+            script_runtime_.reset();
+#endif
             HtmlParser html_parser;
             CssParser css_parser;
             document_ = html_parser.parse(read_file_limited(html_path_));
@@ -430,6 +443,17 @@ private:
                 set_title("clicked " + describe_node(event.target()));
             });
 
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+            if (!script_path_.empty()) {
+                script_runtime_ = std::make_unique<JerryScriptRuntime>();
+                script_runtime_->bind_document(*document_);
+                const ScriptEvaluationResult result = script_runtime_->eval(read_file_limited(script_path_), script_path_);
+                if (!result.ok) {
+                    std::cerr << "script failed: " << result.error << '\n';
+                    set_title("script error: " + result.error);
+                }
+            }
+#endif
             render_current(nullptr);
         } catch (const std::exception& error) {
             std::cerr << "rebuild failed: " << error.what() << '\n';
@@ -458,6 +482,7 @@ private:
         input_ = std::make_unique<InputController>(*layer_tree_);
         input_->set_focused_node(focused_node);
         update_blit_pixels();
+        clear_dirty_flags(*document_);
     }
 
     int max_scroll_y() const {
@@ -536,6 +561,7 @@ private:
         input.buttons = buttons_from_keys(wparam);
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_move(input);
+        rerender_if_dirty(input_->focused_node());
         set_title("hover " + describe_node(target));
     }
 
@@ -550,6 +576,7 @@ private:
         input.buttons = buttons_from_keys(wparam) | 1;
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_down(input);
+        rerender_if_dirty(input_->focused_node());
         set_title("active " + describe_node(target));
     }
 
@@ -582,6 +609,7 @@ private:
         input.delta_y = GET_WHEEL_DELTA_WPARAM(wparam);
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->wheel(input);
+        rerender_if_dirty(input_->focused_node());
         const int scroll_delta = -input.delta_y;
         scroll_by(scroll_delta);
         set_title("wheel " + describe_node(target) + " scrollY=" + std::to_string(scroll_y_));
@@ -619,6 +647,14 @@ private:
         }
     }
 
+    void rerender_if_dirty(const Node* focused_node) {
+        if (document_ == nullptr || subtree_dirty_flags(*document_) == DomDirtyNone) {
+            return;
+        }
+        render_current(focused_node);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+
     void set_title(const std::string& status) {
         SetWindowTextW(hwnd_, utf8_to_wide("WearWeb Win32 Browser - " + status).c_str());
     }
@@ -649,10 +685,32 @@ int main(int argc, char** argv) {
         }
     }
 
-    const std::string html_path = argc >= 2 ? argv[1] : "examples/modern_cases/app_shell.html";
-    const std::string css_path = argc >= 3 ? argv[2] : "examples/modern_cases/app_shell.css";
+    std::string script_path;
+    std::vector<std::string> positional;
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--script" || arg == "-s") {
+            if (i + 1 >= argc) {
+                std::cerr << "--script requires a script file path\n";
+                return 1;
+            }
+            script_path = argv[++i];
+            continue;
+        }
+        positional.push_back(arg);
+    }
 
-    BrowserApp app(html_path, css_path);
+#if !defined(WEARWEB_ENABLE_SCRIPTING)
+    if (!script_path.empty()) {
+        std::cerr << "this build was compiled without WEARWEB_BUILD_SCRIPTING=ON\n";
+        return 1;
+    }
+#endif
+
+    const std::string html_path = !positional.empty() ? positional[0] : "examples/modern_cases/app_shell.html";
+    const std::string css_path = positional.size() >= 2 ? positional[1] : "examples/modern_cases/app_shell.css";
+
+    BrowserApp app(html_path, css_path, script_path);
     HINSTANCE instance = GetModuleHandleW(nullptr);
     if (!app.initialize(instance, SW_SHOWNORMAL)) {
         std::cerr << "failed to create Win32 browser window\n";

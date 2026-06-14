@@ -80,11 +80,12 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M3 scripting support evaluates JavaScript, exposes a tiny `window`/`document`
+M4 scripting support evaluates JavaScript, exposes a tiny `window`/`document`
 bridge and lets scripts mutate the native DOM through `getElementById`,
 `createElement`, `createTextNode`, `appendChild`, `removeChild`, attributes and
-`textContent`. It does not expose JavaScript event listeners, timers, form
-properties or automatic `<script>` loading yet.
+`textContent`. It also bridges `addEventListener` / `removeEventListener` into
+the existing C++ event flow. It does not expose timers, form properties or
+automatic `<script>` loading yet.
 
 Run the regression suite through CTest:
 
@@ -107,7 +108,9 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
+.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css output.bmp 360 260 --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
+.\build\Debug\wearweb_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
 .\build\Release\wearweb_microbench.exe 80 1000
 .\build\Debug\wearweb_core_tests.exe
@@ -136,7 +139,9 @@ ctest --test-dir build -C Debug --output-on-failure
   interactive Win32/GDI window, renders through the same core pipeline, injects a
   GDI text painter through the platform text callback and forwards mouse/wheel
   input into the platform-neutral input controller. It is for desktop
-  observation only; the core remains windowing- and OS-independent.
+  observation only; the core remains windowing- and OS-independent. In scripting
+  builds, `--script` keeps a JerryScript runtime alive so JavaScript event
+  listeners can react to native input and dirty DOM mutations can rerender.
 - `wearweb_win32_browser --capture` renders through the same Win32/GDI text path
   and writes a BMP or PPM file without opening an interactive window.
 - The inspection tools and Win32 shell merge author CSS from the explicit CSS

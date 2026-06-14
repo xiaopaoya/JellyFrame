@@ -76,10 +76,10 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M3 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
+M4 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
 `getElementById`、`createElement`、`createTextNode`、`appendChild`、`removeChild`、
-attribute 和 `textContent` 修改 native DOM。它还没有暴露 JavaScript event listener、
-计时器、表单属性或自动 `<script>` 加载。
+attribute 和 `textContent` 修改 native DOM。它还会把 `addEventListener` / `removeEventListener`
+桥接到现有 C++ 事件流。它还没有暴露计时器、表单属性或自动 `<script>` 加载。
 
 通过 CTest 运行回归测试：
 
@@ -102,7 +102,9 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
+.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css output.bmp 360 260 --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
+.\build\Debug\wearweb_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
 .\build\Release\wearweb_microbench.exe 80 1000
 .\build\Debug\wearweb_core_tests.exe
@@ -126,7 +128,9 @@ ctest --test-dir build -C Debug --output-on-failure
   `--script` 会在绑定解析后的 DOM 后、渲染前执行一个外部 JavaScript 文件，并打印字符串化后的结果或异常。
 - `wearweb_win32_browser`：仅在 Windows 构建中可用。它打开一个 Win32/GDI
   交互窗口，使用同一套核心管线渲染，通过平台文本回调注入 GDI 文本绘制，并把鼠标和滚轮输入转发给平台无关
-  input controller。它只用于桌面观察；核心仍保持窗口系统和操作系统无关。
+  input controller。它只用于桌面观察；核心仍保持窗口系统和操作系统无关。在 scripting 构建中，
+  `--script` 会保持 JerryScript runtime 存活，使 JavaScript event listener 可以响应 native input，
+  并在 DOM mutation 后重绘。
 - `wearweb_win32_browser --capture`：通过同一条 Win32/GDI 文本路径渲染页面，并在不打开交互窗口的情况下写出
   BMP 或 PPM 文件。
 - 检查工具和 Win32 壳会合并显式 CSS 文件、内嵌 `<style>` 元素和本地

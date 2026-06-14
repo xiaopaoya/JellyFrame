@@ -28,10 +28,24 @@ embedded app UI without inheriting the full browser API surface.
 - `wearweb_pseudo_browser --script file.js` binds the parsed page DOM before
   script execution, so script mutations affect the rendered output.
 
+## M4 Support
+
+- `node.addEventListener(type, callback, options)`.
+- `node.removeEventListener(type, callback)`.
+- Listener options: boolean capture, plus object `{ capture, once }`.
+- Event object fields: `type`, `target`, `currentTarget`, `eventPhase`,
+  `bubbles`, `cancelable`, `defaultPrevented`, mouse coordinates/buttons,
+  modifier keys and wheel deltas when applicable.
+- Event object methods: `preventDefault`, `stopPropagation` and
+  `stopImmediatePropagation`.
+- JavaScript listeners run through the existing C++ capture/target/bubble event
+  flow and can mutate the DOM during native input dispatch.
+- The Win32 browser shell accepts `--script file.js` in scripting builds and
+  rerenders when script event callbacks dirty the DOM.
+
 ## Not Supported Yet
 
 - DOM selectors beyond `getElementById`.
-- JavaScript event listeners.
 - Form-control JavaScript properties.
 - Timers, promises/job pumping beyond what JerryScript itself performs inside
   one evaluation.

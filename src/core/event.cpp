@@ -3,7 +3,6 @@
 #include "core/dom.h"
 
 #include <algorithm>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -108,8 +107,32 @@ struct EventTarget::ListenerStore {
         bool removed = false;
     };
 
-    std::unordered_map<std::string, std::vector<Listener>> by_type;
+    struct ListenerGroup {
+        std::string type;
+        std::vector<Listener> listeners;
+    };
+
+    std::vector<ListenerGroup> groups;
     ListenerId next_listener_id = 1;
+
+    std::vector<Listener>& listeners_for_type(const std::string& type) {
+        for (ListenerGroup& group : groups) {
+            if (group.type == type) {
+                return group.listeners;
+            }
+        }
+        groups.push_back(ListenerGroup{type, {}});
+        return groups.back().listeners;
+    }
+
+    std::vector<Listener>* find_listeners(const std::string& type) {
+        for (ListenerGroup& group : groups) {
+            if (group.type == type) {
+                return &group.listeners;
+            }
+        }
+        return nullptr;
+    }
 };
 
 EventTarget::EventTarget() = default;
@@ -129,7 +152,7 @@ EventTarget::ListenerId EventTarget::add_event_listener(std::string type,
     listener.id = listeners_->next_listener_id++;
     listener.callback = std::move(callback);
     listener.options = options;
-    listeners_->by_type[std::move(type)].push_back(std::move(listener));
+    listeners_->listeners_for_type(type).push_back(std::move(listener));
     return listener.id;
 }
 
@@ -137,8 +160,8 @@ bool EventTarget::remove_event_listener(ListenerId id) {
     if (!listeners_) {
         return false;
     }
-    for (auto& entry : listeners_->by_type) {
-        for (ListenerStore::Listener& listener : entry.second) {
+    for (EventTarget::ListenerStore::ListenerGroup& group : listeners_->groups) {
+        for (ListenerStore::Listener& listener : group.listeners) {
             if (listener.id == id && !listener.removed) {
                 listener.removed = true;
                 return true;
@@ -153,13 +176,12 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         return;
     }
 
-    const auto it = listeners_->by_type.find(event.type());
-    if (it == listeners_->by_type.end()) {
+    auto* listeners = listeners_->find_listeners(event.type());
+    if (listeners == nullptr) {
         return;
     }
 
-    auto& listeners = it->second;
-    for (ListenerStore::Listener& listener : listeners) {
+    for (ListenerStore::Listener& listener : *listeners) {
         if (listener.removed || listener.options.capture != capture_phase) {
             continue;
         }
@@ -172,9 +194,9 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         }
     }
 
-    listeners.erase(std::remove_if(listeners.begin(), listeners.end(), [](const ListenerStore::Listener& listener) {
+    listeners->erase(std::remove_if(listeners->begin(), listeners->end(), [](const ListenerStore::Listener& listener) {
         return listener.removed;
-    }), listeners.end());
+    }), listeners->end());
 }
 
 bool dispatch_event(const Node& target, Event& event) {

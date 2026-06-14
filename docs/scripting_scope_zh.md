@@ -27,10 +27,21 @@ API 表面。
 - `wearweb_pseudo_browser --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
   因此脚本 mutation 会影响最终渲染输出。
 
+## M4 支持范围
+
+- `node.addEventListener(type, callback, options)`。
+- `node.removeEventListener(type, callback)`。
+- listener options：boolean capture，以及对象形式 `{ capture, once }`。
+- Event object 字段：`type`、`target`、`currentTarget`、`eventPhase`、`bubbles`、
+  `cancelable`、`defaultPrevented`，以及适用时的鼠标坐标/按键、modifier keys 和滚轮 delta。
+- Event object 方法：`preventDefault`、`stopPropagation` 和 `stopImmediatePropagation`。
+- JavaScript listener 复用现有 C++ capture/target/bubble 事件流，并可在 native input dispatch
+  过程中修改 DOM。
+- scripting 构建中的 Win32 browser shell 支持 `--script file.js`，并在脚本事件回调弄脏 DOM 后重绘。
+
 ## 暂不支持
 
 - `getElementById` 之外的 DOM selector。
-- JavaScript event listener。
 - 表单控件的 JavaScript 属性。
 - 计时器，以及超出单次求值范围的 promise/job pump。
 - HTML 中的 inline `<script>` 和脚本加载流程。

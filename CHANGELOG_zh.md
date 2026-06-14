@@ -31,6 +31,11 @@ WearWeb Engine 的重要变更记录在这里。
   `createElement`、`createTextNode`、`appendChild`、`removeChild`、`setAttribute`、
   `getAttribute` 和 `textContent`。
 - 添加 `examples/script_cases/dom_mutation_probe.*`，用于通过伪浏览器验证脚本驱动的 DOM mutation。
+- 添加 M4 JavaScript 事件 binding：`addEventListener`、`removeEventListener`、event object、
+  default prevention 和 propagation control。
+- 为 Win32 browser shell 添加 scripting 支持，使桌面 native input 可以派发到 JavaScript listener，
+  并在 DOM mutation 后重绘。
+- 添加 `examples/script_cases/event_probe.*`，用于交互式事件桥验收。
 - 添加单一聚合测试程序 `wearweb_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
   executable。
 - 添加 `JERRYSCRIPT_ROOT` CMake 支持，便于使用 `third_party/jerryscript` 这样的官方 JerryScript
@@ -52,6 +57,8 @@ WearWeb Engine 的重要变更记录在这里。
 - 在 display list 中绘制轻量原生控件外观，包括 range track/thumb、checkbox/radio
   勾选标记、select 箭头以及文本控件 value/placeholder 内容。
 - Win32 壳会把字符输入和 Backspace 转发到核心控件模型，并在同一份 DOM 上重绘，使桌面验证能反映实时控件变化。
+- 将事件 listener 存储从 hash table 改为紧凑的按类型分组 listener 数组，降低嵌入式常见页面的 listener
+  额外开销，同时保持公开事件 API 不变。
 
 ### 说明
 

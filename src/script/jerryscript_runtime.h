@@ -2,6 +2,7 @@
 
 #include "core/dom.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -10,6 +11,7 @@
 namespace wearweb {
 
 struct ScriptRuntimeAccess;
+struct ScriptEventListener;
 
 struct ScriptEvaluationResult {
     bool ok = false;
@@ -33,9 +35,16 @@ private:
 
     bool initialized_ = false;
     std::vector<std::unique_ptr<Node>> detached_nodes_;
+    std::vector<std::unique_ptr<ScriptEventListener>> event_listeners_;
 
     Node& adopt_detached_node(std::unique_ptr<Node> node);
     std::unique_ptr<Node> release_detached_node(Node& node);
+    void add_script_event_listener(Node& node,
+                                   std::string type,
+                                   std::uint32_t callback_value,
+                                   EventListenerOptions options);
+    void remove_script_event_listener(Node& node, std::string type, std::uint32_t callback_value);
+    void clear_script_event_listeners();
 };
 
 } // namespace wearweb
