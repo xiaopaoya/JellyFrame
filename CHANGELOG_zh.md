@@ -55,6 +55,12 @@ WearWeb Engine 的重要变更记录在这里。
 - 添加面向开发者的能力矩阵文档，覆盖 HTML/CSS/DOM/script/rendering 功能的支持、
   降级、懒处理和延后状态。
 - 添加 `margin-*`、`padding-*` 和 `border-*-width` 物理单边 CSS longhands。
+- 添加 M7 classic document script loading：scripting 构建会收集并执行 inline
+  `<script>`，本地外部 `<script src>` 通过壳层 callback 加载。
+- 添加 `document_script` helper，用于平台无关的脚本收集。
+- 添加第一版宿主抽象草案和 `src/core/host.h`，覆盖 resource、clock、frame sink
+  和 budget structs。
+- 添加 `examples/script_cases/inline_loading_probe.*`，用于验证自动 document script loading。
 - 添加外链 stylesheet 合并、语义 fallback 样式、inline 高亮绘制、DOM mutation invalidation
   和表单控件 fallback 行为的回归测试。启用 scripting 的构建还会加入 JerryScript runtime
   生命周期和异常路径测试。
@@ -80,6 +86,8 @@ WearWeb Engine 的重要变更记录在这里。
 - 改进简化 flex row layout，使其支持 `column-gap`。
 - 改进 dirty rerender 路径：根节点 dirty 检查为 O(1)，dirty 清理跳过干净分支，
   同值 `textContent` 不触发 invalidation，Win32 壳在 clean input callback 后不再重建管线。
+- 更新 scripting 和路线图文档，将 M7 script loading 标为可用，并把下一项主要工作转向
+  host presentation 和 dirty rectangles。
 
 ### 说明
 

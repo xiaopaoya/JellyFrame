@@ -1,5 +1,6 @@
 #include "script/jerryscript_runtime.h"
 
+#include "core/document_script.h"
 #include "core/dom.h"
 #include "core/form_control.h"
 #include "core/html_parser.h"
@@ -7,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace wearweb;
 
@@ -53,6 +55,33 @@ void runtime_can_restart() {
         const ScriptEvaluationResult result = runtime.eval("'run-' + " + std::to_string(i));
         check(result.ok, "runtime restart eval succeeds");
     }
+}
+
+void inline_document_script_mutates_dom() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><button id='count'>0</button>"
+        "<script>"
+        "var n = 0;"
+        "document.getElementById('count').addEventListener('click', function () {"
+        "  n += 1;"
+        "  document.getElementById('count').textContent = String(n);"
+        "});"
+        "</script></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "button exists");
+
+    const std::vector<DocumentScript> scripts = collect_classic_scripts(*document);
+    check(scripts.size() == 1, "inline document script collected");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(scripts[0].source, scripts[0].name);
+    check(result.ok, "inline document script evaluates");
+
+    MouseEvent click("click", 1, 1);
+    dispatch_event(*button, click);
+    check(button->text_content() == "1", "inline script listener mutates DOM after click");
 }
 
 void document_get_element_by_id_updates_text_content() {
@@ -294,6 +323,7 @@ int main() {
         expression_returns_value();
         exception_returns_error_text();
         runtime_can_restart();
+        inline_document_script_mutates_dom();
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();
         remove_child_keeps_wrapper_usable();

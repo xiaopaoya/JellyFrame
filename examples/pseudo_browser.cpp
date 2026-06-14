@@ -1,4 +1,5 @@
 #include "core/css_parser.h"
+#include "core/document_script.h"
 #include "core/document_style.h"
 #include "core/html_parser.h"
 #include "core/layer_tree.h"
@@ -15,12 +16,14 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace wearweb;
 
@@ -168,17 +171,44 @@ int main(int argc, char** argv) {
         bool script_ok = false;
         std::string script_output;
         std::size_t timer_callbacks = 0;
+        std::size_t document_script_count = 0;
 #if defined(WEARWEB_ENABLE_SCRIPTING)
         std::unique_ptr<JerryScriptRuntime> runtime;
 #endif
-        if (!options.script_path.empty()) {
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+        wearweb_example::ScriptLoadContext script_context;
+        const std::filesystem::path html_path(options.html_path);
+        script_context.base_dir = html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
+        script_context.max_input_bytes = kMaxInputBytes;
+        std::vector<DocumentScript> document_scripts =
+            collect_classic_scripts(*document, wearweb_example::load_linked_script, &script_context);
+        document_script_count = document_scripts.size();
+#endif
+        if (!options.script_path.empty()
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+            || !document_scripts.empty()
+#endif
+        ) {
 #if defined(WEARWEB_ENABLE_SCRIPTING)
             runtime = std::make_unique<JerryScriptRuntime>();
             runtime->set_host_time_ms(0);
             runtime->bind_document(*document);
-            const ScriptEvaluationResult script_result = runtime->eval(read_file_limited(options.script_path), options.script_path);
-            script_ok = script_result.ok;
-            script_output = script_result.ok ? script_result.value : script_result.error;
+            script_ok = true;
+            for (const DocumentScript& script : document_scripts) {
+                const ScriptEvaluationResult script_result = runtime->eval(script.source, script.name);
+                if (!script_result.ok) {
+                    script_ok = false;
+                    script_output = script_result.error;
+                    break;
+                }
+                script_output = script_result.value;
+            }
+            if (script_ok && !options.script_path.empty()) {
+                const ScriptEvaluationResult script_result =
+                    runtime->eval(read_file_limited(options.script_path), options.script_path);
+                script_ok = script_result.ok;
+                script_output = script_result.ok ? script_result.value : script_result.error;
+            }
             script_ran = true;
             for (int now_ms = 16; now_ms <= options.pump_timers_ms; now_ms += 16) {
                 timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(now_ms), 32);
@@ -220,6 +250,7 @@ int main(int argc, char** argv) {
                   << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
         if (script_ran) {
             std::cout << "  script=" << options.script_path << '\n';
+            std::cout << "  document_scripts=" << document_script_count << '\n';
             std::cout << "  script_ok=" << (script_ok ? "true" : "false") << '\n';
             std::cout << "  script_result=" << script_output << '\n';
             std::cout << "  timer_callbacks=" << timer_callbacks << '\n';

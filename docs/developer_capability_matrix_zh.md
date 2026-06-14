@@ -233,7 +233,7 @@ JerryScript 源码树时可用。
 
 | API | 状态 | 行为 |
 | --- | --- | --- |
-| Classic script 执行 | 壳层限定 | 伪浏览器/Win32 壳可执行一个外部脚本。自动 script loading 仍有限。 |
+| Classic document scripts | 子集 | scripting 构建中，伪浏览器/Win32 壳会执行 inline classic `<script>`，并通过宿主 callback 加载本地外部 `<script src>`。 |
 | `window` / `document` | 子集 | 暴露下列方法。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
 | `document.createElement` | 可用 | 创建 runtime 持有的 detached element。 |
@@ -246,7 +246,7 @@ JerryScript 源码树时可用。
 | 表单属性 | 子集 | 相关控件上的 `value`、`checked`、`selectedIndex`。 |
 | Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |
 | Promise/microtask | 延后 | 不要依赖浏览器 task 语义。 |
-| Modules/import | 延后 | 无 module loader。 |
+| Modules/import | 延后 | `type="module"`、dynamic import 和 module loading 会跳过。 |
 | `querySelector` | 延后 | 现阶段使用 ID。 |
 | `innerHTML` | 延后 | 使用 DOM creation APIs。 |
 | Fetch/network/storage | 延后 | 数据由宿主提供。 |

@@ -21,6 +21,8 @@ portable document UI engine that can later host JavaScript through JerryScript.
 - Optional JerryScript runtime shell for script evaluation, kept outside
   `wearweb_core`
 - Optional JerryScript DOM/event/form bridge for small host-driven apps
+- Automatic classic document script loading in scripting builds, with local
+  external scripts supplied by shell callbacks
 - Optional platform text-paint callback for desktop validation
 - Windows-only interactive browser shell for observation and testing
 - Console demo
@@ -167,6 +169,8 @@ ctest --test-dir build -C Debug --output-on-failure
   the supported authoring subset and the M7 readiness decision.
 - `docs/developer_capability_matrix.md` is the developer-facing can-do/cannot-do
   contract. Check it before relying on an HTML/CSS/DOM/script feature.
+- `docs/host_abstraction.md` sketches the thin host boundary for resources,
+  time, framebuffer presentation, text and embedded budgets.
 - `docs/memory_management.md` summarizes current embedded memory behavior,
   remaining risks and the next allocator/container optimizations.
 

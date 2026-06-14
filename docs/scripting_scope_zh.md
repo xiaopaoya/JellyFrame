@@ -63,11 +63,20 @@ API 表面。
 - pseudo browser 支持 `--pump-timers ms`，用于非交互验收。
 - Win32 browser shell 通过桌面 `WM_TIMER` 泵动 timer，并在 callback 弄脏 DOM 后重绘。
 
+## M7 支持范围
+
+- scripting 构建会从解析后的文档中收集 classic inline `<script>`，并按 DOM 顺序执行。
+- 本地外部 classic script（`<script src="...">`）通过壳层提供的 callback 加载。
+  核心仍不执行文件或网络 I/O。
+- `type="module"` 和其他非 classic script 类型会跳过。
+- `wearweb_pseudo_browser` 和 `wearweb_win32_browser` 会自动执行文档脚本；
+  命令行 `--script file.js` 仍作为额外桌面验收脚本保留。
+- 网络加载、ES modules、dynamic import 和完整 HTML loading algorithm 继续排除。
+
 ## 暂不支持
 
 - `getElementById` 之外的 DOM selector。
 - 超出单次求值范围的 promise/job pump。
-- HTML 中的 inline `<script>` 和脚本加载流程。
 - 网络、模块、dynamic import、storage、canvas 和 Web Components。
 
 ## 嵌入式策略

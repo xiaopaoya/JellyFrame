@@ -113,9 +113,10 @@ Run one interactively through the Win32 shell:
 .\build-script\Release\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
 ```
 
-## M7 Readiness Decision
+## Post-M7 Status
 
-The core is ready to enter M7. The remaining high-impact app gap is not timers
-anymore; it is script loading ergonomics. M7 should support inline classic
-`<script>` plus a shell-provided local script loader callback while keeping
-network loading and modules outside the embedded core.
+M7 script loading is available in scripting builds: inline classic `<script>`
+and local external classic scripts can run through shell-provided callbacks.
+The next high-impact app/runtime gap is the host boundary: dirty rectangle
+presentation, embedded framebuffer policy, platform text backends and
+button/crown/touch navigation.

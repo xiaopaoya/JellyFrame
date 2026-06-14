@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/document_script.h"
 #include "core/document_style.h"
 
 #include <cstddef>
@@ -39,6 +40,11 @@ struct StylesheetLoadContext {
     std::size_t max_input_bytes = 512 * 1024;
 };
 
+struct ScriptLoadContext {
+    std::filesystem::path base_dir;
+    std::size_t max_input_bytes = 512 * 1024;
+};
+
 inline bool is_local_stylesheet_href(std::string_view href) {
     return !href.empty() &&
         href.find(':') == std::string_view::npos &&
@@ -51,6 +57,22 @@ inline bool load_linked_stylesheet(std::string_view href, std::string& output, v
     }
     const auto* context = static_cast<const StylesheetLoadContext*>(raw_context);
     const std::filesystem::path path = context->base_dir / std::filesystem::path(std::string(href));
+    output = read_file_limited(path, context->max_input_bytes);
+    return !output.empty();
+}
+
+inline bool is_local_script_src(std::string_view src) {
+    return !src.empty() &&
+        src.find(':') == std::string_view::npos &&
+        src.rfind("//", 0) != 0;
+}
+
+inline bool load_linked_script(std::string_view src, std::string& output, void* raw_context) {
+    if (!is_local_script_src(src) || raw_context == nullptr) {
+        return false;
+    }
+    const auto* context = static_cast<const ScriptLoadContext*>(raw_context);
+    const std::filesystem::path path = context->base_dir / std::filesystem::path(std::string(src));
     output = read_file_limited(path, context->max_input_bytes);
     return !output.empty();
 }

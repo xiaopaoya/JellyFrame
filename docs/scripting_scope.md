@@ -75,12 +75,24 @@ embedded app UI without inheriting the full browser API surface.
 - The Win32 browser shell pumps timers through a desktop `WM_TIMER` and rerenders
   if callbacks dirty the DOM.
 
+## M7 Support
+
+- Classic inline `<script>` elements are collected from the parsed document and
+  evaluated in DOM order in scripting builds.
+- Local external classic scripts (`<script src="...">`) are loaded through a
+  shell-provided callback. Core code still performs no file or network I/O.
+- `type="module"` and other non-classic script types are skipped.
+- `wearweb_pseudo_browser` and `wearweb_win32_browser` execute document scripts
+  automatically; command-line `--script file.js` remains available as an extra
+  desktop validation script.
+- Network loading, ES modules, dynamic import and the full HTML loading
+  algorithm remain intentionally out of scope.
+
 ## Not Supported Yet
 
 - DOM selectors beyond `getElementById`.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
-- Inline `<script>` and script loading from HTML.
 - Networking, modules, dynamic import, storage, canvas and Web Components.
 
 ## Embedded Policy

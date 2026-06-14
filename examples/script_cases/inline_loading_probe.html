@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Inline script loading probe</title>
+    <link rel="stylesheet" href="inline_loading_probe.css">
+  </head>
+  <body>
+    <main class="panel">
+      <h1>Script loading</h1>
+      <button id="count">0</button>
+      <p id="status">waiting</p>
+    </main>
+    <script src="inline_loading_probe.js"></script>
+    <script>
+      document.getElementById("count").addEventListener("click", function () {
+        window.bump();
+      });
+    </script>
+  </body>
+</html>

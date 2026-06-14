@@ -74,6 +74,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   degraded, lazy and deferred HTML/CSS/DOM/script/rendering features.
 - Added physical edge CSS longhands for `margin-*`, `padding-*` and
   `border-*-width`.
+- Added M7 classic document script loading: scripting builds collect and execute
+  inline `<script>` and local external `<script src>` through shell callbacks.
+- Added `document_script` helpers for platform-neutral script collection.
+- Added a first host abstraction draft and `src/core/host.h` with resource,
+  clock, frame sink and budget structs.
+- Added `examples/script_cases/inline_loading_probe.*` for automatic document
+  script loading validation.
 - Added regression coverage for linked stylesheet merging, semantic fallback
   styles, inline highlight painting, DOM mutation invalidation and form-control
   fallback behavior. Scripting builds also add JerryScript runtime lifecycle and
@@ -112,6 +119,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Improved dirty rerender paths: root dirty checks are O(1), dirty clearing
   skips clean branches, unchanged `textContent` avoids invalidation and the
   Win32 shell no longer rebuilds the pipeline after clean input callbacks.
+- Updated scripting and roadmap documentation to treat M7 script loading as
+  available and shift the next major work toward host presentation and dirty
+  rectangles.
 
 ### Notes
 

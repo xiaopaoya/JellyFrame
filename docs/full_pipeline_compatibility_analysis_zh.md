@@ -127,8 +127,8 @@ WearWeb 结果：
 
 ## 下一步功能优先级
 
-1. Inline/local classic script loading ergonomics。
-2. Dirty layer invalidation 和 rectangle repaint。
+1. Dirty layer invalidation 和 rectangle repaint。
+2. Host frame sink 和可部署 embedded framebuffer backend。
 3. Arena allocation 和紧凑 DOM/layout object storage。
 4. 面向非拉丁生产设备的 text shaping/font fallback 策略。
 5. 只有当嵌入式应用证明需要时，再增加 selector/module 能力。

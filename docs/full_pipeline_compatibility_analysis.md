@@ -135,8 +135,8 @@ Assessment:
 
 ## Next Functional Priorities
 
-1. Inline/local classic script loading ergonomics.
-2. Dirty layer invalidation and rectangle repaint.
+1. Dirty layer invalidation and rectangle repaint.
+2. Host frame sink and deployable embedded framebuffer backend.
 3. Arena allocation and compact DOM/layout object storage.
 4. Text shaping/font fallback strategy for non-Latin production devices.
 5. Selector/module additions only when embedded apps prove they need them.

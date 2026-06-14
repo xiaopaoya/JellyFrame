@@ -3,6 +3,7 @@
 #endif
 
 #include "core/css_parser.h"
+#include "core/document_script.h"
 #include "core/document_style.h"
 #include "core/html_parser.h"
 #include "core/input.h"
@@ -23,6 +24,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -453,14 +455,30 @@ private:
             });
 
 #if defined(WEARWEB_ENABLE_SCRIPTING)
-            if (!script_path_.empty()) {
+            wearweb_example::ScriptLoadContext script_context;
+            const std::filesystem::path html_path(html_path_);
+            script_context.base_dir = html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
+            script_context.max_input_bytes = kMaxInputBytes;
+            std::vector<DocumentScript> document_scripts =
+                collect_classic_scripts(*document_, wearweb_example::load_linked_script, &script_context);
+            if (!document_scripts.empty() || !script_path_.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>();
                 script_runtime_->set_host_time_ms(GetTickCount64());
                 script_runtime_->bind_document(*document_);
-                const ScriptEvaluationResult result = script_runtime_->eval(read_file_limited(script_path_), script_path_);
-                if (!result.ok) {
-                    std::cerr << "script failed: " << result.error << '\n';
-                    set_title("script error: " + result.error);
+                for (const DocumentScript& script : document_scripts) {
+                    const ScriptEvaluationResult result = script_runtime_->eval(script.source, script.name);
+                    if (!result.ok) {
+                        std::cerr << "document script failed: " << result.error << '\n';
+                        set_title("script error: " + result.error);
+                        break;
+                    }
+                }
+                if (!script_path_.empty()) {
+                    const ScriptEvaluationResult result = script_runtime_->eval(read_file_limited(script_path_), script_path_);
+                    if (!result.ok) {
+                        std::cerr << "script failed: " << result.error << '\n';
+                        set_title("script error: " + result.error);
+                    }
                 }
                 SetTimer(hwnd_, kScriptTimerId, kScriptTimerPeriodMs, nullptr);
             }

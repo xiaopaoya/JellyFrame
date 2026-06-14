@@ -19,6 +19,7 @@ WearWeb Engine 是一个面向低功耗可穿戴设备的深度裁剪 C++ HTML/C
 - 轻量平台无关表单控件状态，覆盖 text input、textarea、checkbox、radio、range 和 select
 - 可选 JerryScript runtime shell，用于脚本求值，并保持在 `wearweb_core` 之外
 - 可选 JerryScript DOM/事件/表单桥接，用于小型宿主驱动应用
+- scripting 构建中自动加载 classic document scripts，外部本地脚本由壳层 callback 提供
 - 可选平台文本绘制回调，用于桌面验证
 - Windows-only 交互式浏览器壳，用于观察和测试
 - 控制台 demo
@@ -151,6 +152,8 @@ ctest --test-dir build -C Debug --output-on-failure
   支持的开发子集和 M7 前评估见 `docs/embedded_app_subset_zh.md`。
 - `docs/developer_capability_matrix_zh.md`：面向开发者的 can do/cannot do
   契约。依赖某个 HTML/CSS/DOM/script 功能前，优先查这里。
+- `docs/host_abstraction_zh.md`：描述资源、时间、framebuffer 提交、文本和嵌入式 budgets
+  的薄宿主边界。
 - `docs/memory_management_zh.md`：总结当前嵌入式内存行为、剩余风险和下一步 allocator/container 优化。
 
 ## 文档维护

@@ -239,7 +239,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 
 | API | Status | Behavior |
 | --- | --- | --- |
-| Classic script evaluation | Shell-only | Pseudo/Win32 shell can evaluate one external script. Automatic script loading is still limited. |
+| Classic document scripts | Subset | In scripting builds, pseudo/Win32 shells execute inline classic `<script>` and local external `<script src>` through host callbacks. |
 | `window` / `document` | Subset | Bound objects expose the methods below. |
 | `document.getElementById` | Works | Returns wrapper or `null`. |
 | `document.createElement` | Works | Creates detached element owned by runtime. |
@@ -252,7 +252,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Form properties | Subset | `value`, `checked`, `selectedIndex` on relevant controls. |
 | Timers | Works | Host-pumped `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`; callback budget controlled by host. |
 | Promise/microtask queue | Deferred | Do not rely on browser task semantics. |
-| Modules/import | Deferred | No module loader. |
+| Modules/import | Deferred | `type="module"`, dynamic import and module loading are skipped. |
 | `querySelector` | Deferred | Use IDs for now. |
 | `innerHTML` | Deferred | Use DOM creation APIs. |
 | Fetch/network/storage | Deferred | Host must provide data. |

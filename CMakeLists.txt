@@ -27,6 +27,7 @@ endif()
 
 add_library(wearweb_core
     src/core/css_parser.cpp
+    src/core/document_script.cpp
     src/core/document_style.cpp
     src/core/dom.cpp
     src/core/event.cpp
@@ -116,6 +117,7 @@ if(WEARWEB_BUILD_TESTS)
     set(WEARWEB_CORE_TEST_SOURCES
         tests/tokenizer_tests.cpp
         tests/dom_mutation_tests.cpp
+        tests/document_script_tests.cpp
         tests/css_parser_tests.cpp
         tests/event_tests.cpp
         tests/hit_test_tests.cpp

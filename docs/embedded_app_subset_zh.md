@@ -93,7 +93,8 @@ CSS 描述视觉，JavaScript 修改具名节点。
 .\build-script\Release\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
 ```
 
-## 是否可以进入 M7
+## M7 后状态
 
-可以进入 M7。当前高收益缺口已经不再是 timer，而是脚本加载的人体工学。
-M7 应支持 inline classic `<script>` 和壳层提供的本地脚本加载 callback，同时继续把网络加载和模块系统留在嵌入式核心之外。
+启用 scripting 的构建已经支持 M7 script loading：inline classic `<script>` 和本地外部 classic
+script 可以通过壳层 callback 执行。下一块高收益缺口转为宿主边界：dirty rectangle presentation、
+嵌入式 framebuffer 策略、平台文本后端，以及按键/表冠/触摸导航。

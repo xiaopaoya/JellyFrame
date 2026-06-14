@@ -2,6 +2,7 @@
 
 int tokenizer_tests_main();
 int dom_mutation_tests_main();
+int document_script_tests_main();
 int css_parser_tests_main();
 int event_tests_main();
 int hit_test_tests_main();
@@ -33,6 +34,7 @@ int main() {
     int failed = 0;
     failed += run_test("tokenizer", tokenizer_tests_main);
     failed += run_test("dom_mutation", dom_mutation_tests_main);
+    failed += run_test("document_script", document_script_tests_main);
     failed += run_test("css_parser", css_parser_tests_main);
     failed += run_test("event", event_tests_main);
     failed += run_test("hit_test", hit_test_tests_main);

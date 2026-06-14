@@ -52,7 +52,6 @@ Ready:
 
 Not ready:
 
-- Automatic script loading from HTML.
 - Wrapper caching; current wrappers are short-lived native views over DOM nodes.
 - Broader DOM attribute/property aliases beyond the explicitly supported subset.
 
@@ -203,10 +202,12 @@ Validation:
 
 ### M7: Script Loading
 
-Support:
+Implemented support:
 
 - inline classic `<script>`
 - optional shell-provided local script loader callback
+- automatic document script execution in `wearweb_pseudo_browser` and
+  `wearweb_win32_browser`
 
 Avoid for now:
 
@@ -248,6 +249,7 @@ Expected behavior:
 
 ## Recommended Next Step
 
-Continue with M7: support inline classic `<script>` and a shell-provided local
-script loader callback while keeping network loading, modules and dynamic import
-out of the embedded core.
+M7 is complete enough for small app demos. Continue with the host abstraction
+path: dirty rectangle invalidation, framebuffer presentation boundary and
+embedded text/backend examples, while keeping network loading, modules and
+dynamic import out of the embedded core.

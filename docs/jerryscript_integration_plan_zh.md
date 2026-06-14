@@ -183,10 +183,11 @@ DOM + style + layout + layer + renderer
 
 ### M7：脚本加载
 
-支持：
+已实现支持：
 
 - inline classic `<script>`
 - 可选的壳层本地脚本加载 callback
+- `wearweb_pseudo_browser` 和 `wearweb_win32_browser` 自动执行 document scripts
 
 暂不支持：
 
@@ -228,5 +229,6 @@ HTML：
 
 ## 推荐下一步
 
-继续 M7：支持 inline classic `<script>` 和壳层提供的本地脚本加载 callback，同时继续把网络加载、
-modules 和 dynamic import 排除在嵌入式核心之外。
+M7 已足以支持小型 app demo。下一步转向宿主抽象路径：dirty rectangle invalidation、
+framebuffer presentation boundary 和嵌入式文本/backend 示例，同时继续把网络加载、modules
+和 dynamic import 排除在嵌入式核心之外。
