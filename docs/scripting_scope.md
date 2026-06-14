@@ -61,11 +61,25 @@ embedded app UI without inheriting the full browser API surface.
 - The scripting pseudo browser and Win32 shell can run small app-style examples
   from `examples/app_cases`.
 
+## M6 Support
+
+- `setTimeout(callback, ms)` and `clearTimeout(id)`.
+- `setInterval(callback, ms)` and `clearInterval(id)`.
+- Timer callbacks must be functions. String-eval timers and extra callback
+  arguments are intentionally not supported.
+- Timers are host-pumped through `JerryScriptRuntime::pump_timers(now_ms,
+  max_callbacks)`, so embedded ports provide their own clock source and frame
+  budget.
+- The pseudo browser accepts `--pump-timers ms` for non-interactive acceptance
+  tests.
+- The Win32 browser shell pumps timers through a desktop `WM_TIMER` and rerenders
+  if callbacks dirty the DOM.
+
 ## Not Supported Yet
 
 - DOM selectors beyond `getElementById`.
-- Timers, promises/job pumping beyond what JerryScript itself performs inside
-  one evaluation.
+- Promises/job pumping beyond what JerryScript itself performs inside one
+  evaluation.
 - Inline `<script>` and script loading from HTML.
 - Networking, modules, dynamic import, storage, canvas and Web Components.
 

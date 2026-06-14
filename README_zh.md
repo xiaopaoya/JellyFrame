@@ -77,11 +77,12 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M5 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
+M6 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
 `getElementById`、`createElement`、`createTextNode`、`appendChild`、`removeChild`、
 attribute 和 `textContent` 修改 native DOM。它还会把 `addEventListener` / `removeEventListener`
 桥接到现有 C++ 事件流，并暴露轻量表单控件属性（`value`、`checked`、`selectedIndex`）。
-它还没有暴露计时器或自动 `<script>` 加载。
+宿主泵动 timer 暴露 `setTimeout`、`clearTimeout`、`setInterval` 和 `clearInterval`。
+自动 `<script>` 加载仍未支持。
 
 通过 CTest 运行回归测试：
 
@@ -106,6 +107,7 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css output.bmp 360 260 --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css output.bmp 360 360 --script examples\app_cases\weather.js
+.\build\Debug\wearweb_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css output.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
@@ -130,6 +132,7 @@ ctest --test-dir build -C Debug --output-on-failure
   图像。它是桌面验收工具，不是嵌入式 UI。它的内置 fallback 字体刻意保持极小；需要可读的
   UTF-8/中文文本验证时，请使用 Win32 browser 壳。在启用 scripting 的构建中，
   `--script` 会在绑定解析后的 DOM 后、渲染前执行一个外部 JavaScript 文件，并打印字符串化后的结果或异常。
+  `--pump-timers ms` 会在渲染前推进宿主泵动 timer，便于无窗口 smoke test。
 - `wearweb_win32_browser`：仅在 Windows 构建中可用。它打开一个 Win32/GDI
   交互窗口，使用同一套核心管线渲染，通过平台文本回调注入 GDI 文本绘制，并把鼠标和滚轮输入转发给平台无关
   input controller。它只用于桌面观察；核心仍保持窗口系统和操作系统无关。在 scripting 构建中，
@@ -145,7 +148,8 @@ ctest --test-dir build -C Debug --output-on-failure
   CSS parser、事件、hit testing、输入、render tree、layer tree 和 CPU framebuffer 行为。
   启用 scripting 的构建中，它还会包含 JerryScript runtime 测试。
 - `examples/app_cases`：包含天气、时钟、计时器和计算器四个小型应用式验收页面。
-  支持的开发子集和 M6 前评估见 `docs/embedded_app_subset_zh.md`。
+  支持的开发子集和 M7 前评估见 `docs/embedded_app_subset_zh.md`。
+- `docs/memory_management_zh.md`：总结当前嵌入式内存行为、剩余风险和下一步 allocator/container 优化。
 
 ## 文档维护
 

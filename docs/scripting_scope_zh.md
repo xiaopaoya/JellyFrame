@@ -53,10 +53,20 @@ API 表面。
 - JavaScript 修改表单状态后会标记 DOM dirty，宿主可以据此重绘轻量原生风格控件。
 - scripting pseudo browser 和 Win32 壳可以运行 `examples/app_cases` 中的小型应用式示例。
 
+## M6 支持范围
+
+- `setTimeout(callback, ms)` 和 `clearTimeout(id)`。
+- `setInterval(callback, ms)` 和 `clearInterval(id)`。
+- Timer callback 必须是函数。字符串 eval timer 和额外 callback 参数被刻意排除。
+- Timer 通过 `JerryScriptRuntime::pump_timers(now_ms, max_callbacks)` 由宿主泵动，
+  因此嵌入式移植层可以提供自己的时钟源和单帧预算。
+- pseudo browser 支持 `--pump-timers ms`，用于非交互验收。
+- Win32 browser shell 通过桌面 `WM_TIMER` 泵动 timer，并在 callback 弄脏 DOM 后重绘。
+
 ## 暂不支持
 
 - `getElementById` 之外的 DOM selector。
-- 计时器，以及超出单次求值范围的 promise/job pump。
+- 超出单次求值范围的 promise/job pump。
 - HTML 中的 inline `<script>` 和脚本加载流程。
 - 网络、模块、dynamic import、storage、canvas 和 Web Components。
 

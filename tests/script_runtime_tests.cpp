@@ -221,6 +221,72 @@ void javascript_input_event_reads_live_value() {
     check(document->text_content().find("42") != std::string::npos, "JS input listener reads value");
 }
 
+void javascript_timeout_runs_when_host_pumps_time() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>wait</p></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.set_host_time_ms(100);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var status = document.getElementById('status');"
+        "var done = 0;"
+        "setTimeout(function () { done = 1; status.textContent = 'done'; }, 50);"
+        "'ready'");
+    check(result.ok, "timeout registration succeeds");
+    check(runtime.has_pending_timers(), "timeout is pending");
+    check(runtime.next_timer_due_ms() == 150, "timeout due time is host-relative");
+
+    check(runtime.pump_timers(149) == 0, "timeout does not run early");
+    check(document->text_content().find("wait") != std::string::npos, "DOM unchanged before timeout");
+    check(runtime.pump_timers(150) == 1, "timeout runs when due");
+    check(!runtime.has_pending_timers(), "one-shot timeout is cleared after running");
+    check(document->text_content().find("done") != std::string::npos, "timeout callback mutates DOM");
+    check(runtime.eval("done").value == "1", "timeout callback updates JS state");
+}
+
+void javascript_clear_timeout_cancels_callback() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>safe</p></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var status = document.getElementById('status');"
+        "var id = setTimeout(function () { status.textContent = 'bad'; }, 1);"
+        "clearTimeout(id);"
+        "'cancelled'");
+    check(result.ok, "clearTimeout script succeeds");
+    check(!runtime.has_pending_timers(), "cleared timeout is removed from pending timers");
+    check(runtime.pump_timers(10) == 0, "cleared timeout does not run");
+    check(document->text_content().find("safe") != std::string::npos, "cleared timeout leaves DOM unchanged");
+}
+
+void javascript_interval_repeats_and_can_clear_itself() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>0</p></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var status = document.getElementById('status');"
+        "var count = 0;"
+        "var id = setInterval(function () {"
+        "  count += 1;"
+        "  status.textContent = String(count);"
+        "  if (count == 2) clearInterval(id);"
+        "}, 10);"
+        "'interval-ready'");
+    check(result.ok, "setInterval script succeeds");
+
+    check(runtime.pump_timers(10) == 1, "interval first tick runs");
+    check(runtime.pump_timers(20) == 1, "interval second tick runs");
+    check(runtime.pump_timers(30) == 0, "cleared interval no longer runs");
+    check(!runtime.has_pending_timers(), "cleared interval is no longer pending");
+    check(document->text_content().find("2") != std::string::npos, "interval callback updates DOM twice");
+    check(runtime.eval("count").value == "2", "interval callback updates JS state twice");
+}
+
 } // namespace
 
 int main() {
@@ -235,6 +301,9 @@ int main() {
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_form_properties_mutate_control_state();
         javascript_input_event_reads_live_value();
+        javascript_timeout_runs_when_host_pumps_time();
+        javascript_clear_timeout_cancels_callback();
+        javascript_interval_repeats_and_can_clear_itself();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

@@ -18,6 +18,7 @@
 - 不支持的现代 CSS 在 block/rule 边界跳过，避免恢复循环。
 - Style cascade slots 使用固定数组，不为每个节点创建级联 hash map。
 - DOM event listener storage 惰性分配，没有 listener 的节点不携带空 listener table。
+- 脚本 timer 由宿主泵动，带 callback budget，并有明确的 JerryScript reference 释放路径。
 - 平台文本绘制通过可选回调注入；核心 renderer 保留可移植 bitmap fallback，不链接 Win32/GDI。
 - software rasterizer 对不透明矩形使用直接行填充。
 - offscreen compositing 在像素循环前裁剪 source/destination rectangles。
@@ -26,8 +27,10 @@
 
 - 如果目标栈很小，应替换递归析构/遍历。
 - 当对象生命周期绑定到 document 后，为 DOM/render/layout objects 添加 arena allocation。
+- 面向极小堆目标前，把每节点 attribute hash map 替换成紧凑 small-vector attributes。
 - 面向真实大型样式表前，按 id/class/tag 建 CSS rule index。
 - 在小 RAM 系统上限制 layer/display-list 输出，或按 dirty region 分块生成。
+- 当前所有权和分配审视见 `docs/memory_management_zh.md`。
 
 ## CPU/指令集建议
 
@@ -51,16 +54,16 @@
 .\build\Release\wearweb_microbench.exe 80 1000
 ```
 
-加入 event/input、listener 惰性存储、平台文本回调抽取和 software renderer 热路径清理后，本 Windows 构建机结果：
+加入 M6 宿主泵动 timer 和当前表单/控件布局改动后，本 Windows 构建机结果：
 
 ```text
-html_parse avg_us=971.673
-css_parse avg_us=35.7
-render_tree avg_us=1045.13
-layout avg_us=211.992
-layer_tree avg_us=92.671
-flatten_layers avg_us=24.476
-full_pipeline avg_us=2126.63
+html_parse avg_us=949.728
+css_parse avg_us=36.025
+render_tree avg_us=1058.55
+layout avg_us=224.273
+layer_tree avg_us=109.392
+flatten_layers avg_us=24.534
+full_pipeline avg_us=2163.95
 ```
 
 解读：

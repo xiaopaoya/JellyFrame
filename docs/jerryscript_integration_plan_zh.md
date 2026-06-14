@@ -32,6 +32,8 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
   和 propagation control，并复用现有 C++ event dispatch 路径。
 - M5 表单控件属性：`value`、`checked`、`selectedIndex`，以及面向宿主驱动控件的
   JavaScript 可观察 `input` / `change` 事件。
+- M6 宿主泵动 timer：`setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`，
+  并通过 `pump_timers` 控制 callback budget。
 - DOM tree 构建和容错 HTML 解析。
 - DOM mutation 原语：插入/删除子节点、设置/删除属性、更新 text content。
 - tree、attribute、text、style、layout dirty flags。
@@ -42,7 +44,6 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
 
 尚未具备：
 
-- 最小任务队列和 timer 调度器。
 - HTML 中的自动脚本加载。
 - wrapper 缓存；当前 wrapper 是短生命周期的 native DOM node 视图。
 - 明确子集之外更宽的 DOM 属性/attribute alias。
@@ -164,11 +165,16 @@ DOM + style + layout + layer + renderer
 
 ### M6：任务队列和计时器
 
+状态：已实现为宿主泵动 timer。runtime 保存被保留的 callback reference，并暴露
+`pump_timers(now_ms, max_callbacks)`，使嵌入式宿主可以用自己的 tick 源和固定单帧预算驱动 callback。
+
 暴露：
 
 - `setTimeout(callback, ms)`
 - `clearTimeout(id)`
-- 由宿主壳驱动的小型任务队列
+- `setInterval(callback, ms)`
+- `clearInterval(id)`
+- 由宿主壳驱动的小型 timer queue
 
 验证：
 
@@ -222,5 +228,5 @@ HTML：
 
 ## 推荐下一步
 
-继续 M6：加入宿主驱动的任务队列，以及 `setTimeout` / `clearTimeout` 和
-`setInterval` / `clearInterval`，随后合并 dirty DOM mutation，使 timer 密集的小型嵌入式应用也能可预测重绘。
+继续 M7：支持 inline classic `<script>` 和壳层提供的本地脚本加载 callback，同时继续把网络加载、
+modules 和 dynamic import 排除在嵌入式核心之外。

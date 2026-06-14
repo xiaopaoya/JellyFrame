@@ -81,13 +81,14 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M5 scripting support evaluates JavaScript, exposes a tiny `window`/`document`
+M6 scripting support evaluates JavaScript, exposes a tiny `window`/`document`
 bridge and lets scripts mutate the native DOM through `getElementById`,
 `createElement`, `createTextNode`, `appendChild`, `removeChild`, attributes and
 `textContent`. It also bridges `addEventListener` / `removeEventListener` into
 the existing C++ event flow and exposes lightweight form-control properties
-(`value`, `checked`, `selectedIndex`). It does not expose timers or automatic
-`<script>` loading yet.
+(`value`, `checked`, `selectedIndex`). Host-pumped timers expose `setTimeout`,
+`clearTimeout`, `setInterval` and `clearInterval`. Automatic `<script>` loading
+is not supported yet.
 
 Run the regression suite through CTest:
 
@@ -112,6 +113,7 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css output.bmp 360 260 --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css output.bmp 360 360 --script examples\app_cases\weather.js
+.\build\Debug\wearweb_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css output.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
 .\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
@@ -139,6 +141,8 @@ ctest --test-dir build -C Debug --output-on-failure
   readable UTF-8/Chinese text validation. In scripting builds, `--script`
   evaluates one external JavaScript file after binding the parsed DOM and before
   rendering, then prints the stringified result or exception.
+  `--pump-timers ms` advances host-pumped timers before rendering so timer-driven
+  app examples can be smoke-tested without a window.
 - `wearweb_win32_browser` is available on Windows builds. It opens an
   interactive Win32/GDI window, renders through the same core pipeline, injects a
   GDI text painter through the platform text callback and forwards mouse/wheel
@@ -160,7 +164,9 @@ ctest --test-dir build -C Debug --output-on-failure
   also includes the JerryScript runtime tests.
 - `examples/app_cases` contains small app-style acceptance pages for weather,
   clock, timer and calculator scenarios. See `docs/embedded_app_subset.md` for
-  the supported authoring subset and the M6 readiness decision.
+  the supported authoring subset and the M7 readiness decision.
+- `docs/memory_management.md` summarizes current embedded memory behavior,
+  remaining risks and the next allocator/container optimizations.
 
 ## Documentation
 

@@ -13,8 +13,11 @@
 
 #include "example_css_io.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -87,10 +90,15 @@ struct BrowserOptions {
     std::string script_path;
     int viewport_width = 360;
     int viewport_height = 240;
+    int pump_timers_ms = 0;
 };
 
 bool is_script_flag(const std::string& value) {
     return value == "--script" || value == "-s";
+}
+
+bool is_pump_timers_flag(const std::string& value) {
+    return value == "--pump-timers";
 }
 
 BrowserOptions parse_options(int argc, char** argv) {
@@ -114,6 +122,13 @@ BrowserOptions parse_options(int argc, char** argv) {
                 throw std::runtime_error("--script requires a script file path");
             }
             options.script_path = argv[++i];
+            continue;
+        }
+        if (is_pump_timers_flag(arg)) {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--pump-timers requires a duration in milliseconds");
+            }
+            options.pump_timers_ms = std::max(0, parse_int_arg(argv[++i], 0));
             continue;
         }
 
@@ -152,14 +167,25 @@ int main(int argc, char** argv) {
         bool script_ran = false;
         bool script_ok = false;
         std::string script_output;
+        std::size_t timer_callbacks = 0;
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+        std::unique_ptr<JerryScriptRuntime> runtime;
+#endif
         if (!options.script_path.empty()) {
 #if defined(WEARWEB_ENABLE_SCRIPTING)
-            JerryScriptRuntime runtime;
-            runtime.bind_document(*document);
-            const ScriptEvaluationResult script_result = runtime.eval(read_file_limited(options.script_path), options.script_path);
+            runtime = std::make_unique<JerryScriptRuntime>();
+            runtime->set_host_time_ms(0);
+            runtime->bind_document(*document);
+            const ScriptEvaluationResult script_result = runtime->eval(read_file_limited(options.script_path), options.script_path);
             script_ok = script_result.ok;
             script_output = script_result.ok ? script_result.value : script_result.error;
             script_ran = true;
+            for (int now_ms = 16; now_ms <= options.pump_timers_ms; now_ms += 16) {
+                timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(now_ms), 32);
+            }
+            if (options.pump_timers_ms > 0 && options.pump_timers_ms % 16 != 0) {
+                timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(options.pump_timers_ms), 32);
+            }
 #else
             throw std::runtime_error("this build was compiled without WEARWEB_BUILD_SCRIPTING=ON");
 #endif
@@ -196,6 +222,7 @@ int main(int argc, char** argv) {
             std::cout << "  script=" << options.script_path << '\n';
             std::cout << "  script_ok=" << (script_ok ? "true" : "false") << '\n';
             std::cout << "  script_result=" << script_output << '\n';
+            std::cout << "  timer_callbacks=" << timer_callbacks << '\n';
         }
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';

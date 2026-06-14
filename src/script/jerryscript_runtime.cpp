@@ -4,8 +4,11 @@
 
 #include <jerryscript.h>
 
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -19,6 +22,15 @@ struct ScriptEventListener {
     std::string type;
     EventTarget::ListenerId listener_id = 0;
     jerry_value_t callback = 0;
+    bool active = false;
+};
+
+struct ScriptTimer {
+    std::uint32_t id = 0;
+    std::uint64_t due_ms = 0;
+    std::uint32_t delay_ms = 0;
+    jerry_value_t callback = 0;
+    bool repeat = false;
     bool active = false;
 };
 
@@ -44,6 +56,17 @@ struct ScriptRuntimeAccess {
                                              std::string type,
                                              jerry_value_t callback) {
         runtime.remove_script_event_listener(node, std::move(type), callback);
+    }
+
+    static std::uint32_t add_timer(JerryScriptRuntime& runtime,
+                                   jerry_value_t callback,
+                                   std::uint32_t delay_ms,
+                                   bool repeat) {
+        return runtime.add_timer(callback, delay_ms, repeat);
+    }
+
+    static void clear_timer(JerryScriptRuntime& runtime, std::uint32_t id) {
+        runtime.clear_timer(id);
     }
 };
 
@@ -211,6 +234,32 @@ bool object_bool_property(jerry_value_t object, const char* name) {
     return !jerry_value_is_exception(value.get()) && jerry_value_to_boolean(value.get());
 }
 
+std::uint32_t delay_from_value(jerry_value_t value) {
+    JerryValue number_value(jerry_value_to_number(value));
+    if (jerry_value_is_exception(number_value.get())) {
+        return 0;
+    }
+    const double number = jerry_value_as_number(number_value.get());
+    if (!std::isfinite(number) || number <= 0.0) {
+        return 0;
+    }
+    constexpr double kMaxDelay = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
+    return static_cast<std::uint32_t>(std::min(number, kMaxDelay));
+}
+
+std::uint32_t timer_id_from_value(jerry_value_t value) {
+    JerryValue number_value(jerry_value_to_number(value));
+    if (jerry_value_is_exception(number_value.get())) {
+        return 0;
+    }
+    const double number = jerry_value_as_number(number_value.get());
+    if (!std::isfinite(number) || number <= 0.0) {
+        return 0;
+    }
+    constexpr double kMaxId = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
+    return static_cast<std::uint32_t>(std::min(number, kMaxId));
+}
+
 EventListenerOptions listener_options_from_value(jerry_value_t value) {
     EventListenerOptions options;
     if (jerry_value_is_boolean(value)) {
@@ -254,6 +303,40 @@ jerry_value_t event_stop_immediate_propagation(const jerry_call_info_t* call_inf
         return throw_type_error("stopImmediatePropagation called on non-event object");
     }
     event->stop_immediate_propagation();
+    return jerry_undefined();
+}
+
+jerry_value_t script_set_timeout(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr || args_count < 1 || !jerry_value_is_function(args_p[0])) {
+        return throw_type_error("setTimeout requires a function callback");
+    }
+    const std::uint32_t delay_ms = args_count > 1 ? delay_from_value(args_p[1]) : 0;
+    const std::uint32_t id = ScriptRuntimeAccess::add_timer(*runtime, args_p[0], delay_ms, false);
+    return jerry_number(id);
+}
+
+jerry_value_t script_set_interval(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr || args_count < 1 || !jerry_value_is_function(args_p[0])) {
+        return throw_type_error("setInterval requires a function callback");
+    }
+    const std::uint32_t delay_ms = args_count > 1 ? delay_from_value(args_p[1]) : 0;
+    const std::uint32_t id = ScriptRuntimeAccess::add_timer(*runtime, args_p[0], delay_ms, true);
+    return jerry_number(id);
+}
+
+jerry_value_t script_clear_timer(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime != nullptr && args_count > 0) {
+        ScriptRuntimeAccess::clear_timer(*runtime, timer_id_from_value(args_p[0]));
+    }
     return jerry_undefined();
 }
 
@@ -433,6 +516,15 @@ void set_bool_property(jerry_value_t object, const char* name, bool value) {
 
 void set_method(jerry_value_t object, const char* name, jerry_external_handler_t handler) {
     JerryValue function(jerry_function_external(handler));
+    set_property(object, name, function.get());
+}
+
+void set_runtime_method(jerry_value_t object,
+                        const char* name,
+                        jerry_external_handler_t handler,
+                        JerryScriptRuntime& runtime) {
+    JerryValue function(jerry_function_external(handler));
+    jerry_object_set_native_ptr(function.get(), &kRuntimeNativeInfo, &runtime);
     set_property(object, name, function.get());
 }
 
@@ -662,6 +754,7 @@ JerryScriptRuntime::JerryScriptRuntime() {
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
         clear_script_event_listeners();
+        clear_timers();
         jerry_cleanup();
         initialized_ = false;
         g_runtime_active = false;
@@ -670,9 +763,11 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 
 void JerryScriptRuntime::bind_document(Node& document) {
     clear_script_event_listeners();
+    clear_timers();
     detached_nodes_.clear();
 
     JerryValue global(jerry_current_realm());
+    jerry_object_set_native_ptr(global.get(), &kRuntimeNativeInfo, this);
     JerryValue document_object(make_node_wrapper(*this, document, true));
     JerryValue window_object(jerry_object());
     jerry_object_set_native_ptr(window_object.get(), &kRuntimeNativeInfo, this);
@@ -681,6 +776,14 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_property(window_object.get(), "window", window_object.get());
     set_property(global.get(), "document", document_object.get());
     set_property(global.get(), "window", window_object.get());
+    set_runtime_method(window_object.get(), "setTimeout", script_set_timeout, *this);
+    set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
+    set_runtime_method(window_object.get(), "setInterval", script_set_interval, *this);
+    set_runtime_method(window_object.get(), "clearInterval", script_clear_timer, *this);
+    set_runtime_method(global.get(), "setTimeout", script_set_timeout, *this);
+    set_runtime_method(global.get(), "clearTimeout", script_clear_timer, *this);
+    set_runtime_method(global.get(), "setInterval", script_set_interval, *this);
+    set_runtime_method(global.get(), "clearInterval", script_clear_timer, *this);
 }
 
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {
@@ -700,6 +803,63 @@ ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::st
     output.ok = true;
     output.value = value_to_string(result.get());
     return output;
+}
+
+void JerryScriptRuntime::set_host_time_ms(std::uint64_t now_ms) {
+    current_time_ms_ = now_ms;
+}
+
+std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t max_callbacks) {
+    current_time_ms_ = now_ms;
+    std::size_t callbacks = 0;
+    const std::size_t initial_count = timers_.size();
+    for (std::size_t index = 0; index < initial_count && callbacks < max_callbacks; ++index) {
+        ScriptTimer& timer = *timers_[index];
+        if (!timer.active || timer.due_ms > now_ms || timer.callback == 0) {
+            continue;
+        }
+
+        JerryValue callback(jerry_value_copy(timer.callback));
+        if (timer.repeat) {
+            const std::uint32_t next_delay = std::max<std::uint32_t>(1, timer.delay_ms);
+            timer.due_ms = now_ms + next_delay;
+        } else {
+            timer.active = false;
+            jerry_value_free(timer.callback);
+            timer.callback = 0;
+        }
+
+        JerryValue result(jerry_call(callback.get(), jerry_undefined(), nullptr, 0));
+        if (jerry_value_is_exception(result.get())) {
+            JerryValue exception_value(jerry_exception_value(result.release(), true));
+            (void) exception_value;
+        }
+        ++callbacks;
+    }
+
+    timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
+        return !timer->active;
+    }), timers_.end());
+    return callbacks;
+}
+
+bool JerryScriptRuntime::has_pending_timers() const {
+    for (const auto& timer : timers_) {
+        if (timer->active) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::uint64_t JerryScriptRuntime::next_timer_due_ms() const {
+    std::uint64_t due = std::numeric_limits<std::uint64_t>::max();
+    for (const auto& timer : timers_) {
+        if (timer->active) {
+            due = std::min(due, timer->due_ms);
+        }
+    }
+    return due == std::numeric_limits<std::uint64_t>::max() ? 0 : due;
 }
 
 Node& JerryScriptRuntime::adopt_detached_node(std::unique_ptr<Node> node) {
@@ -785,6 +945,52 @@ void JerryScriptRuntime::clear_script_event_listeners() {
         listener->listener_id = 0;
     }
     event_listeners_.clear();
+}
+
+std::uint32_t JerryScriptRuntime::add_timer(std::uint32_t callback_value,
+                                            std::uint32_t delay_ms,
+                                            bool repeat) {
+    auto timer = std::make_unique<ScriptTimer>();
+    timer->id = next_timer_id_++;
+    if (next_timer_id_ == 0) {
+        next_timer_id_ = 1;
+    }
+    timer->due_ms = current_time_ms_ + delay_ms;
+    timer->delay_ms = delay_ms;
+    timer->callback = jerry_value_copy(callback_value);
+    timer->repeat = repeat;
+    timer->active = true;
+    const std::uint32_t id = timer->id;
+    timers_.push_back(std::move(timer));
+    return id;
+}
+
+void JerryScriptRuntime::clear_timer(std::uint32_t id) {
+    if (id == 0) {
+        return;
+    }
+    for (const auto& timer : timers_) {
+        if (!timer->active || timer->id != id) {
+            continue;
+        }
+        timer->active = false;
+        if (timer->callback != 0) {
+            jerry_value_free(timer->callback);
+            timer->callback = 0;
+        }
+        return;
+    }
+}
+
+void JerryScriptRuntime::clear_timers() {
+    for (const auto& timer : timers_) {
+        timer->active = false;
+        if (timer->callback != 0) {
+            jerry_value_free(timer->callback);
+            timer->callback = 0;
+        }
+    }
+    timers_.clear();
 }
 
 } // namespace wearweb

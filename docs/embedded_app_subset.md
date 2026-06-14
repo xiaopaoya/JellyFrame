@@ -6,7 +6,7 @@ the current core is enough to build useful local apps such as weather panels,
 settings screens and calculators without forcing developers into a canvas-only
 model.
 
-## Practical Status Before M6
+## Practical Status After M6
 
 Feasible now:
 
@@ -19,13 +19,9 @@ Feasible now:
 - Static or mostly-static information screens with modern but restrained visual
   styling.
 
-Partially feasible now:
-
-- Clock apps can render a time value and refresh from a host-triggered action.
-  Automatic ticking needs M6 timers or a native host tick that calls into the
-  runtime.
-- Timer/stopwatch apps can keep state and respond to buttons, but autonomous
-  elapsed-time updates need M6 `setTimeout` / `setInterval` support.
+- Clock apps can update automatically when the host pumps timers.
+- Timer/stopwatch apps can run from `setInterval`, with the host deciding tick
+  precision and callback budget.
 
 Not suitable yet:
 
@@ -66,7 +62,8 @@ JavaScript:
   bubble dispatch, `click`, `input`, `change`, mouse and wheel fields.
 - Supported form properties: `value`, `checked` and `selectedIndex` on relevant
   controls.
-- Keep application logic synchronous until M6 task queue support lands.
+- Keep application logic mostly synchronous. Timers are available, but promise
+  job pumping and browser loading tasks are still outside the subset.
 
 ## Developer Cost
 
@@ -78,7 +75,6 @@ The main difference from ordinary browser development is that authors must avoid
 implicit browser services:
 
 - no automatic `<script>` loading yet;
-- no timers before M6;
 - no selector APIs beyond `getElementById`;
 - no network, storage or module loader;
 - no framework assumptions about a complete DOM.
@@ -91,8 +87,8 @@ authors to draw all UI manually on a canvas.
 The `examples/app_cases` directory contains four acceptance-style apps:
 
 - `weather.*`: select-driven weather panel with unit toggle.
-- `clock.*`: manually refreshed clock display, documenting the timer gap.
-- `timer.*`: stateful timer UI with manual tick before M6 timers.
+- `clock.*`: clock display refreshed through M6 `setInterval`.
+- `timer.*`: stateful timer UI using M6 `setInterval`.
 - `calculator.*`: button-driven calculator using `input.value` and event
   listeners.
 
@@ -100,6 +96,7 @@ Run one through the scripting pseudo browser:
 
 ```powershell
 .\build-script\Release\wearweb_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css weather.bmp 360 360 --script examples\app_cases\weather.js
+.\build-script\Release\wearweb_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css clock.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
 ```
 
 Run one interactively through the Win32 shell:
@@ -108,10 +105,9 @@ Run one interactively through the Win32 shell:
 .\build-script\Release\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
 ```
 
-## M6 Readiness Decision
+## M7 Readiness Decision
 
-The core is ready to enter M6. The blocking gap for app-like behavior is no
-longer static rendering or basic input; it is the absence of a host-pumped task
-queue and timers. M6 should add `setTimeout`, `clearTimeout`, `setInterval`,
-`clearInterval` and redraw coalescing while keeping scheduling explicit and
-host-driven.
+The core is ready to enter M7. The remaining high-impact app gap is not timers
+anymore; it is script loading ergonomics. M7 should support inline classic
+`<script>` plus a shell-provided local script loader callback while keeping
+network loading and modules outside the embedded core.

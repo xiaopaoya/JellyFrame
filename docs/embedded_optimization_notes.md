@@ -23,6 +23,8 @@ small wearable devices.
 - Style cascade slots use a fixed array instead of a per-node hash map.
 - DOM event listener storage is allocated lazily, so nodes without listeners do
   not carry an empty listener table.
+- Script timers are host-pumped with a callback budget and explicit JerryScript
+  reference release paths.
 - Platform text painting is injected through an optional callback; the core
   renderer keeps a portable bitmap fallback and does not link Win32/GDI.
 - Opaque rectangle fill uses direct row fills in the software rasterizer.
@@ -34,9 +36,13 @@ small wearable devices.
 - Replace recursive destructors/traversals if target stack is very small.
 - Add arena allocation for DOM/render/layout objects once object lifetimes are
   tied to a document.
+- Replace small per-node attribute hash maps with compact small-vector
+  attributes before targeting tiny heaps.
 - Index CSS rules by id/class/tag before loading real-world large stylesheets.
 - Keep layer/display-list output bounded or tile it by dirty region on small RAM
   systems.
+- See `docs/memory_management.md` for the current ownership and allocation
+  review.
 
 ## CPU/Instruction-Set Guidance
 
@@ -62,18 +68,17 @@ Command:
 .\build\Release\wearweb_microbench.exe 80 1000
 ```
 
-Result on this Windows build machine after event/input integration, lazy event
-listener storage, platform text callback extraction and software renderer hot
-path cleanup:
+Result on this Windows build machine after M6 host-pumped timers and the current
+form/control layout changes:
 
 ```text
-html_parse avg_us=971.673
-css_parse avg_us=35.7
-render_tree avg_us=1045.13
-layout avg_us=211.992
-layer_tree avg_us=92.671
-flatten_layers avg_us=24.476
-full_pipeline avg_us=2126.63
+html_parse avg_us=949.728
+css_parse avg_us=36.025
+render_tree avg_us=1058.55
+layout avg_us=224.273
+layer_tree avg_us=109.392
+flatten_layers avg_us=24.534
+full_pipeline avg_us=2163.95
 ```
 
 Interpretation:

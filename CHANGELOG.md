@@ -52,7 +52,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added app-style acceptance examples for weather, clock, timer and calculator
   under `examples/app_cases`.
 - Added bilingual embedded app subset documentation describing what can be
-  built before M6 and which browser assumptions are intentionally absent.
+  built after M6 and which browser assumptions are intentionally absent.
+- Added M6 host-pumped timers: `setTimeout`, `clearTimeout`, `setInterval` and
+  `clearInterval`.
+- Added `wearweb_pseudo_browser --pump-timers ms` for timer-driven script smoke
+  tests without an interactive window.
+- Added bilingual memory management review documents covering current ownership,
+  embedded risks and allocator/container priorities.
 - Added a single aggregate `wearweb_core_tests` executable for platform-neutral
   regression coverage, replacing the many standalone test executables in normal
   builds.
@@ -90,6 +96,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   empty inputs remain readable without author-specified heights.
 - Limited script form accessors to actual form controls, reducing wrapper
   property setup on ordinary DOM nodes.
+- Updated the clock and timer app cases to use M6 `setInterval` instead of
+  manual-only refresh.
 
 ### Notes
 

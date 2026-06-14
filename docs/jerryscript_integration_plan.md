@@ -39,6 +39,8 @@ Ready:
   event dispatch path.
 - M5 form-control properties: `value`, `checked`, `selectedIndex` and
   JS-observable `input` / `change` events for host-driven controls.
+- M6 host-pumped timers: `setTimeout`, `clearTimeout`, `setInterval`,
+  `clearInterval` and callback budgets through `pump_timers`.
 - DOM tree construction and tolerant HTML parsing.
 - DOM mutation primitives: append/remove child, set/remove attribute, text
   content updates.
@@ -50,7 +52,6 @@ Ready:
 
 Not ready:
 
-- Minimal task queue and timer scheduler.
 - Automatic script loading from HTML.
 - Wrapper caching; current wrappers are short-lived native views over DOM nodes.
 - Broader DOM attribute/property aliases beyond the explicitly supported subset.
@@ -183,11 +184,17 @@ Validation:
 
 ### M6: Task Queue and Timers
 
+Status: implemented as host-pumped timers. The runtime stores retained callback
+references and exposes `pump_timers(now_ms, max_callbacks)` so embedded hosts can
+drive callbacks from their own tick source with a fixed per-frame budget.
+
 Expose:
 
 - `setTimeout(callback, ms)`
 - `clearTimeout(id)`
-- a small task queue pumped by the host shell
+- `setInterval(callback, ms)`
+- `clearInterval(id)`
+- a small timer queue pumped by the host shell
 
 Validation:
 
@@ -241,6 +248,6 @@ Expected behavior:
 
 ## Recommended Next Step
 
-Continue with M6: add a host-pumped task queue plus `setTimeout` /
-`clearTimeout` and `setInterval` / `clearInterval`, then coalesce dirty DOM
-mutations so timer-heavy embedded apps redraw predictably.
+Continue with M7: support inline classic `<script>` and a shell-provided local
+script loader callback while keeping network loading, modules and dynamic import
+out of the embedded core.

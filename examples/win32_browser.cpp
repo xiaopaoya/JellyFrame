@@ -38,6 +38,8 @@ namespace {
 
 constexpr std::size_t kMaxInputBytes = 1024 * 1024;
 constexpr wchar_t kWindowClassName[] = L"WearWebWin32Browser";
+constexpr UINT_PTR kScriptTimerId = 1;
+constexpr UINT kScriptTimerPeriodMs = 16;
 
 std::string read_file_limited(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
@@ -411,7 +413,13 @@ private:
         case WM_KEYDOWN:
             handle_key_down(wparam);
             return 0;
+        case WM_TIMER:
+            handle_timer(wparam);
+            return 0;
         case WM_DESTROY:
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+            KillTimer(hwnd_, kScriptTimerId);
+#endif
             PostQuitMessage(0);
             return 0;
         default:
@@ -429,6 +437,7 @@ private:
     void rebuild() {
         try {
 #if defined(WEARWEB_ENABLE_SCRIPTING)
+            KillTimer(hwnd_, kScriptTimerId);
             script_runtime_.reset();
 #endif
             HtmlParser html_parser;
@@ -446,12 +455,14 @@ private:
 #if defined(WEARWEB_ENABLE_SCRIPTING)
             if (!script_path_.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>();
+                script_runtime_->set_host_time_ms(GetTickCount64());
                 script_runtime_->bind_document(*document_);
                 const ScriptEvaluationResult result = script_runtime_->eval(read_file_limited(script_path_), script_path_);
                 if (!result.ok) {
                     std::cerr << "script failed: " << result.error << '\n';
                     set_title("script error: " + result.error);
                 }
+                SetTimer(hwnd_, kScriptTimerId, kScriptTimerPeriodMs, nullptr);
             }
 #endif
             render_current(nullptr);
@@ -645,6 +656,21 @@ private:
             render_current(focus);
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
+    }
+
+    void handle_timer(WPARAM timer_id) {
+        if (timer_id != kScriptTimerId) {
+            return;
+        }
+#if defined(WEARWEB_ENABLE_SCRIPTING)
+        if (script_runtime_ == nullptr) {
+            return;
+        }
+        const std::size_t callbacks = script_runtime_->pump_timers(GetTickCount64(), 8);
+        if (callbacks != 0) {
+            rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
+        }
+#endif
     }
 
     void rerender_if_dirty(const Node* focused_node) {
