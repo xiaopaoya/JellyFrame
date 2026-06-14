@@ -1,4 +1,5 @@
 #include "core/css_parser.h"
+#include "core/document_style.h"
 #include "core/html_parser.h"
 #include "core/render_tree.h"
 
@@ -128,7 +129,7 @@ int main(int argc, char** argv) {
         HtmlParser html_parser;
         CssParser css_parser;
         auto document = html_parser.parse(html);
-        StyleResolver resolver(css_parser.parse(css));
+        StyleResolver resolver(css_parser.parse(combine_author_css(css, *document)));
         RenderTreeBuilder builder(resolver);
         auto render_tree = builder.build(*document);
         dump_render_tree(*render_tree);
@@ -138,4 +139,3 @@ int main(int argc, char** argv) {
     }
     return 0;
 }
-

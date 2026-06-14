@@ -1,5 +1,7 @@
 #include "core/css_parser.h"
+#include "core/document_style.h"
 #include "core/dom.h"
+#include "core/html_parser.h"
 #include "core/style.h"
 
 #include <iostream>
@@ -158,6 +160,53 @@ void controls_have_usable_default_boxes() {
     check(button_style.padding.left > 0, "button default padding");
 }
 
+Node* find_first_by_tag(Node& node, const std::string& tag_name) {
+    if (node.type == NodeType::Element && node.tag_name == tag_name) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        Node* found = find_first_by_tag(*child, tag_name);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+void embedded_styles_and_common_lengths_apply() {
+    HtmlParser html_parser;
+    auto document = html_parser.parse(
+        "<html><head><style>"
+        "body{background:#f5f7fa;color:#333;line-height:1.6;padding:2rem;}"
+        ".container{max-width:800px;margin:0 auto;background:#fff;padding:3rem;}"
+        "h1{color:#2c3e50;text-align:center;margin-bottom:1.5rem;}"
+        ".intro{font-size:1.05rem;text-indent:2em;}"
+        "</style></head><body><div class='container'><h1>Title</h1><p class='intro'>Text</p></div></body></html>");
+    CssParser css_parser;
+    StyleResolver resolver(css_parser.parse(combine_author_css("", *document)));
+
+    Node* body = find_first_by_tag(*document, "body");
+    Node* container = find_first_by_tag(*document, "div");
+    Node* heading = find_first_by_tag(*document, "h1");
+    Node* paragraph = find_first_by_tag(*document, "p");
+    check(body != nullptr && container != nullptr && heading != nullptr && paragraph != nullptr, "fixture nodes exist");
+
+    const Style body_style = resolver.resolve(*body);
+    const Style container_style = resolver.resolve(*container);
+    const Style heading_style = resolver.resolve(*heading);
+    const Style paragraph_style = resolver.resolve(*paragraph);
+
+    check(body_style.background_color.r == 0xf5 && body_style.background_color.g == 0xf7, "embedded body background");
+    check(body_style.padding.top == 32, "rem padding parsed");
+    check(container_style.background_color.r == 255, "container background");
+    check(container_style.max_width == 800, "max-width parsed");
+    check(container_style.margin_left_auto && container_style.margin_right_auto, "auto margins parsed");
+    check(heading_style.color.r == 0x2c && heading_style.color.g == 0x3e, "heading color parsed");
+    check(heading_style.text_align == TextAlign::Center, "heading text-align parsed");
+    check(paragraph_style.font_size == 17, "fractional rem font-size parsed");
+    check(paragraph_style.text_indent == 34, "em text-indent parsed against font size");
+}
+
 } // namespace
 
 int main() {
@@ -172,6 +221,7 @@ int main() {
         cascade_uses_specificity_and_importance();
         matches_descendant_and_attribute_selectors();
         controls_have_usable_default_boxes();
+        embedded_styles_and_common_lengths_apply();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

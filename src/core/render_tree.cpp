@@ -15,6 +15,12 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     if (!style.text_align_specified) {
         style.text_align = parent_style.text_align;
     }
+    if (!style.line_height_specified) {
+        style.line_height = parent_style.line_height;
+    }
+    if (!style.text_indent_specified) {
+        style.text_indent = parent_style.text_indent;
+    }
     return style;
 }
 

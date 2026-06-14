@@ -1,12 +1,5 @@
 #include "core/software_renderer.h"
 
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
-
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -116,6 +109,13 @@ void fill_rect(FrameBuffer& target, Rect rect, Color color, int border_radius = 
     if (empty_rect(clipped) || color.a == 0) {
         return;
     }
+    if (color.a == 255 && border_radius <= 0) {
+        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+            Color* row = target.pixels.data() + static_cast<std::size_t>(y * target.width + clipped.x);
+            std::fill(row, row + clipped.width, color);
+        }
+        return;
+    }
     for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
         for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
             if (!inside_rounded_rect(rect, border_radius, x, y)) {
@@ -198,110 +198,19 @@ std::array<std::uint8_t, 7> glyph_rows(char raw_ch) {
     }
 }
 
-#ifdef _WIN32
-std::wstring utf8_to_wide(const std::string& text) {
-    if (text.empty()) {
-        return {};
-    }
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
-                                             static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0) {
-        return {};
-    }
-    std::wstring wide(static_cast<std::size_t>(required), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()),
-                        wide.data(), required);
-    return wide;
-}
-
-bool draw_text_with_gdi(FrameBuffer& target, Rect rect, Color color, const std::string& text, int font_size) {
-    const std::wstring wide = utf8_to_wide(text);
-    if (wide.empty() || rect.width <= 0 || rect.height <= 0 || color.a == 0) {
-        return false;
-    }
-
-    const int bitmap_width = rect.width + std::max(4, rect.height / 8);
-    BITMAPINFO info{};
-    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth = bitmap_width;
-    info.bmiHeader.biHeight = -rect.height;
-    info.bmiHeader.biPlanes = 1;
-    info.bmiHeader.biBitCount = 32;
-    info.bmiHeader.biCompression = BI_RGB;
-
-    void* bits = nullptr;
-    HDC screen_dc = GetDC(nullptr);
-    HDC memory_dc = CreateCompatibleDC(screen_dc);
-    HBITMAP bitmap = CreateDIBSection(screen_dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
-    ReleaseDC(nullptr, screen_dc);
-    if (memory_dc == nullptr || bitmap == nullptr || bits == nullptr) {
-        if (bitmap != nullptr) {
-            DeleteObject(bitmap);
-        }
-        if (memory_dc != nullptr) {
-            DeleteDC(memory_dc);
-        }
-        return false;
-    }
-
-    HGDIOBJ old_bitmap = SelectObject(memory_dc, bitmap);
-    RECT bounds{0, 0, bitmap_width, rect.height};
-    HBRUSH black = CreateSolidBrush(RGB(0, 0, 0));
-    FillRect(memory_dc, &bounds, black);
-    DeleteObject(black);
-
-    const int font_height = -std::max(8, font_size);
-    HFONT font = CreateFontW(font_height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                             ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-                             L"Microsoft YaHei UI");
-    HGDIOBJ old_font = font != nullptr ? SelectObject(memory_dc, font) : nullptr;
-    SetBkMode(memory_dc, TRANSPARENT);
-    SetTextColor(memory_dc, RGB(255, 255, 255));
-    const UINT flags = rect.height > 24
-        ? (DT_LEFT | DT_WORDBREAK | DT_NOPREFIX)
-        : (DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-    DrawTextW(memory_dc, wide.c_str(), static_cast<int>(wide.size()), &bounds, flags);
-
-    const auto* pixels = static_cast<const std::uint32_t*>(bits);
-    for (int y = 0; y < rect.height; ++y) {
-        for (int x = 0; x < rect.width; ++x) {
-            const std::uint32_t pixel = pixels[static_cast<std::size_t>(y * bitmap_width + x)];
-            const int blue = static_cast<int>(pixel & 0xffU);
-            const int green = static_cast<int>((pixel >> 8U) & 0xffU);
-            const int red = static_cast<int>((pixel >> 16U) & 0xffU);
-            const int coverage = std::max(red, std::max(green, blue));
-            if (coverage == 0) {
-                continue;
-            }
-            Color source = color;
-            source.a = clamp_u8((static_cast<int>(source.a) * coverage + 127) / 255);
-            blend_pixel(target, rect.x + x, rect.y + y, source);
-        }
-    }
-
-    if (old_font != nullptr) {
-        SelectObject(memory_dc, old_font);
-    }
-    if (font != nullptr) {
-        DeleteObject(font);
-    }
-    SelectObject(memory_dc, old_bitmap);
-    DeleteObject(bitmap);
-    DeleteDC(memory_dc);
-    return true;
-}
-#endif
-
-void draw_text(FrameBuffer& target, Rect rect, Color color, const std::string& text, int font_size) {
+void draw_text(FrameBuffer& target,
+               Rect rect,
+               Color color,
+               const std::string& text,
+               int font_size,
+               TextPainter text_painter) {
     if (color.a == 0 || empty_rect(rect)) {
         return;
     }
-#ifdef _WIN32
-    if (draw_text_with_gdi(target, rect, color, text, font_size)) {
+    if (text_painter.paint != nullptr &&
+        text_painter.paint(target, rect, color, text, font_size, text_painter.context)) {
         return;
     }
-#endif
     const int scale = font_size >= 22 ? 2 : 1;
     const int glyph_width = 5 * scale;
     const int advance = 6 * scale;
@@ -326,9 +235,19 @@ void draw_text(FrameBuffer& target, Rect rect, Color color, const std::string& t
 }
 
 void composite_buffer(FrameBuffer& target, const FrameBuffer& source, int dst_x, int dst_y, float opacity) {
-    for (int y = 0; y < source.height; ++y) {
-        for (int x = 0; x < source.width; ++x) {
-            blend_pixel(target, dst_x + x, dst_y + y, with_opacity(source.pixel(x, y), opacity));
+    const Rect target_bounds = target_rect(target);
+    Rect copy_rect = intersect_rect(Rect{dst_x, dst_y, source.width, source.height}, target_bounds);
+    if (empty_rect(copy_rect)) {
+        return;
+    }
+    const int src_x = copy_rect.x - dst_x;
+    const int src_y = copy_rect.y - dst_y;
+    for (int y = 0; y < copy_rect.height; ++y) {
+        for (int x = 0; x < copy_rect.width; ++x) {
+            blend_pixel(target,
+                        copy_rect.x + x,
+                        copy_rect.y + y,
+                        with_opacity(source.pixel(src_x + x, src_y + y), opacity));
         }
     }
 }
@@ -342,7 +261,8 @@ FrameBuffer::FrameBuffer(int width_in, int height_in, Color clear_color) {
 void FrameBuffer::resize(int new_width, int new_height, Color clear_color) {
     width = std::max(0, new_width);
     height = std::max(0, new_height);
-    pixels.assign(static_cast<std::size_t>(width * height), clear_color);
+    const std::size_t pixel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    pixels.assign(pixel_count, clear_color);
 }
 
 void FrameBuffer::clear(Color clear_color) {
@@ -360,6 +280,9 @@ Color& FrameBuffer::pixel(int x, int y) {
 const Color& FrameBuffer::pixel(int x, int y) const {
     return pixels[static_cast<std::size_t>(y * width + x)];
 }
+
+SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter)
+    : text_painter_(text_painter) {}
 
 void SoftwareRasterizer::rasterize(const DisplayList& display_list,
                                    FrameBuffer& target,
@@ -398,10 +321,13 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         fill_rect(target, Rect{rect.x + rect.width - 1, rect.y, 1, rect.height}, command.color);
         break;
     case DisplayCommandType::Text:
-        draw_text(target, rect, command.color, command.text, command.font_size);
+        draw_text(target, rect, command.color, command.text, command.font_size, text_painter_);
         break;
     }
 }
+
+SoftwareCompositor::SoftwareCompositor(TextPainter text_painter)
+    : rasterizer_(text_painter) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,
                                        int viewport_width,

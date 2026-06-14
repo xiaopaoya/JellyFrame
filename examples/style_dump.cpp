@@ -1,4 +1,5 @@
 #include "core/css_parser.h"
+#include "core/document_style.h"
 #include "core/dom.h"
 #include "core/html_parser.h"
 #include "core/style.h"
@@ -124,7 +125,7 @@ int main(int argc, char** argv) {
         HtmlParser html_parser;
         CssParser css_parser;
         auto document = html_parser.parse(html);
-        StyleResolver resolver(css_parser.parse(css));
+        StyleResolver resolver(css_parser.parse(combine_author_css(css, *document)));
         dump_styles(*document, resolver);
     } catch (const std::exception& error) {
         std::cerr << "style dump failed: " << error.what() << '\n';
@@ -133,4 +134,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-

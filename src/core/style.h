@@ -45,6 +45,8 @@ struct Style {
     bool color_specified = false;
     Color background_color{0, 0, 0, 0};
     EdgeSizes margin;
+    bool margin_left_auto = false;
+    bool margin_right_auto = false;
     EdgeSizes padding;
     EdgeSizes border_width;
     Color border_color{0, 0, 0, 255};
@@ -53,8 +55,13 @@ struct Style {
     int height = -1;
     int min_width = -1;
     int min_height = -1;
+    int max_width = -1;
     int font_size = 14;
     bool font_size_specified = false;
+    int line_height = -1;
+    bool line_height_specified = false;
+    int text_indent = 0;
+    bool text_indent_specified = false;
     std::string box_shadow;
     std::string overflow;
     float opacity = 1.0F;

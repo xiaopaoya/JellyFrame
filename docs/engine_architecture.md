@@ -16,6 +16,12 @@ CSS bytes/string
   -> CssStyleSheet / CssRule
   -> indexed rule set inside StyleResolver
 
+Platform-neutral input
+  -> HitTester
+  -> InputController
+  -> Event / MouseEvent / WheelEvent
+  -> EventTarget dispatch on DOM nodes
+
 DOM + StyleResolver
   -> RenderTreeBuilder
   -> RenderObject tree
@@ -42,7 +48,14 @@ DOM + StyleResolver
 - `DisplayList`: simple rectangle/text command list for framebuffer-oriented
   backends.
 - `SoftwareRasterizer` / `SoftwareCompositor`: CPU validation renderer using
-  source-over alpha compositing and BMP/PPM output.
+  source-over alpha compositing, optional platform text painting and BMP/PPM
+  output.
+- `HitTester`: maps viewport coordinates to DOM event targets through layout and
+  layer geometry.
+- `InputController`: turns platform-neutral pointer/wheel input into mouse-like
+  events, hover/active/focus state and click synthesis.
+- `EventTarget`: stores C++ listeners and dispatches DOM-style capture, target
+  and bubble phases.
 
 ## Rule Indexing
 
@@ -76,8 +89,11 @@ source order, then runs selector matching and cascade comparison.
 - Layer tree supports sparse clipping, opacity boundaries, positioned stacking
   hints and conservative compositing boundaries.
 - Display list uses rectangles, gradients and text only.
-- Text output uses Windows GDI in the desktop pseudo browser, with a tiny ASCII
-  fallback for non-Windows builds.
+- Text output uses a platform-neutral bitmap fallback in core. Desktop shells
+  can inject native text drawing through `TextPainter`; the Win32 browser uses
+  that hook for GDI text.
+- Event dispatch is platform-neutral and currently uses C++ callbacks, not
+  JavaScript functions.
 
 ## Next Professionalization Steps
 

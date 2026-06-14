@@ -13,6 +13,10 @@ portable document UI engine that can later host JavaScript through JerryScript.
 - Vertical block layout
 - Sparse layer tree with flattening to a platform-neutral display list
 - CPU software rasterizer/compositor with BMP/PPM output for validation
+- Core hit testing and DOM-style event dispatch
+- Platform-neutral pointer/wheel input controller
+- Optional platform text-paint callback for desktop validation
+- Windows-only interactive browser shell for observation and testing
 - Console demo
 
 ## Intended architecture
@@ -74,9 +78,13 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_layer_tree_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pipeline_dump.exe path\to\page.html path\to\style.css
 .\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
+.\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
 .\build\Release\wearweb_microbench.exe 80 1000
 .\build\Debug\wearweb_tokenizer_tests.exe
 .\build\Debug\wearweb_css_parser_tests.exe
+.\build\Debug\wearweb_event_tests.exe
+.\build\Debug\wearweb_hit_test_tests.exe
+.\build\Debug\wearweb_input_tests.exe
 .\build\Debug\wearweb_render_tree_tests.exe
 .\build\Debug\wearweb_layer_tree_tests.exe
 .\build\Debug\wearweb_software_renderer_tests.exe
@@ -97,12 +105,20 @@ ctest --test-dir build -C Debug --output-on-failure
   counts and a display-list preview.
 - `wearweb_pseudo_browser` runs the current full pipeline and writes a BMP or PPM
   framebuffer image. It is a desktop validation shell, not an embedded UI.
+- `wearweb_win32_browser` is available on Windows builds. It opens an
+  interactive Win32/GDI window, renders through the same core pipeline, injects a
+  GDI text painter through the platform text callback and forwards mouse/wheel
+  input into the platform-neutral input controller. It is for desktop
+  observation only; the core remains windowing- and OS-independent.
 - `wearweb_microbench` runs parser/render/layout/layer/flatten microbenchmarks.
   Use a Release build for meaningful numbers.
 - `wearweb_tokenizer_tests` runs the current tokenizer and parser regression
   checks.
 - `wearweb_css_parser_tests` runs CSS parser and fallback-style regression
   checks.
+- `wearweb_event_tests`, `wearweb_hit_test_tests` and `wearweb_input_tests`
+  cover DOM-style event dispatch, layer-aware hit testing and pointer/wheel
+  input synthesis.
 - `wearweb_render_tree_tests`, `wearweb_layer_tree_tests` and
   `wearweb_software_renderer_tests` cover render, layer and CPU framebuffer
   behavior.
@@ -118,7 +134,7 @@ languages.
 
 ## Versioning and changelog
 
-- Current version: `VERSION`
+- Current version: `0.2.0-dev` (`VERSION`)
 - English changelog: `CHANGELOG.md`
 - Chinese changelog: `CHANGELOG_zh.md`
 - Versioning policy: `docs/versioning.md` and `docs/versioning_zh.md`

@@ -36,6 +36,10 @@ int vertical_edges(const EdgeSizes& edges) {
     return edges.top + edges.bottom;
 }
 
+int text_line_height(int font_size) {
+    return font_size + std::max(6, font_size / 3);
+}
+
 void shift_box(LayoutBox& box, int dx, int dy) {
     box.rect.x += dx;
     box.rect.y += dy;
@@ -75,33 +79,54 @@ void LayoutEngine::build_layout_tree(const RenderObject& object, LayoutBox& box)
 }
 
 int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
-    const int border_box_x = x + box.style.margin.left;
+    const int margin_left = box.style.margin_left_auto ? 0 : box.style.margin.left;
+    const int margin_right = box.style.margin_right_auto ? 0 : box.style.margin.right;
     const int border_box_y = y + box.style.margin.top;
-    const int content_x = border_box_x + box.style.border_width.left + box.style.padding.left;
-    int cursor_y = border_box_y + box.style.border_width.top + box.style.padding.top;
     const int available_content_width = box.style.width >= 0
         ? (box.style.box_sizing_border_box
               ? std::max(0, box.style.width - horizontal_edges(box.style.border_width) -
                                 horizontal_edges(box.style.padding))
               : box.style.width)
-        : std::max(0, width - horizontal_edges(box.style.margin) -
+        : std::max(0, width - margin_left - margin_right -
                          horizontal_edges(box.style.border_width) - horizontal_edges(box.style.padding));
     int content_width = available_content_width;
+    if (box.style.max_width >= 0) {
+        const int max_content_width = box.style.box_sizing_border_box
+            ? std::max(0, box.style.max_width - horizontal_edges(box.style.border_width) -
+                              horizontal_edges(box.style.padding))
+            : box.style.max_width;
+        content_width = std::min(content_width, max_content_width);
+    }
+    const int measured_border_box_width = content_width + horizontal_edges(box.style.padding) +
+        horizontal_edges(box.style.border_width);
+    const int border_box_width = std::max(box.style.min_width,
+        box.style.width >= 0 && box.style.box_sizing_border_box ? box.style.width : measured_border_box_width);
+    const int auto_space = std::max(0, width - border_box_width - margin_left - margin_right);
+    int border_box_x = x + margin_left;
+    if (box.style.margin_left_auto && box.style.margin_right_auto) {
+        border_box_x = x + auto_space / 2;
+    } else if (box.style.margin_left_auto) {
+        border_box_x = x + auto_space;
+    }
+    const int content_x = border_box_x + box.style.border_width.left + box.style.padding.left;
+    int cursor_y = border_box_y + box.style.border_width.top + box.style.padding.top;
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
         const int raw_text_width = estimate_text_width(box.node->text, box.style.font_size);
-        const int text_width = std::max(box.style.min_width, std::min(content_width, raw_text_width));
-        const int line_height = box.style.font_size + 4;
-        const int line_count = content_width > 0
-            ? std::max(1, (raw_text_width + content_width - 1) / content_width)
+        const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
+        const int usable_text_width = std::max(0, content_width - text_indent);
+        const int text_width = std::max(box.style.min_width, std::min(usable_text_width, raw_text_width));
+        const int line_height = box.style.line_height > 0 ? box.style.line_height : text_line_height(box.style.font_size);
+        const int line_count = usable_text_width > 0
+            ? std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width)
             : 1;
         const int text_height = std::max(box.style.min_height,
             box.style.height >= 0 ? box.style.height : line_height * line_count);
-        int text_x = border_box_x;
+        int text_x = border_box_x + text_indent;
         if (box.style.text_align == TextAlign::Center) {
-            text_x += std::max(0, (content_width - text_width) / 2);
+            text_x += std::max(0, (usable_text_width - text_width) / 2);
         } else if (box.style.text_align == TextAlign::End) {
-            text_x += std::max(0, content_width - text_width);
+            text_x += std::max(0, usable_text_width - text_width);
         }
         box.rect = Rect{text_x, border_box_y, text_width, text_height};
         return text_height;
@@ -138,10 +163,6 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
     }
 
     const int content_height = std::max(box.style.min_height, box.style.height >= 0 ? box.style.height : children_height);
-    const int measured_border_box_width = content_width + horizontal_edges(box.style.padding) +
-        horizontal_edges(box.style.border_width);
-    const int border_box_width = std::max(box.style.min_width,
-        box.style.width >= 0 && box.style.box_sizing_border_box ? box.style.width : measured_border_box_width);
     const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
     const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};

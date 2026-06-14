@@ -24,14 +24,33 @@ struct FrameBuffer {
     const Color& pixel(int x, int y) const;
 };
 
+using TextPaintCallback = bool (*)(FrameBuffer& target,
+                                   Rect rect,
+                                   Color color,
+                                   const std::string& text,
+                                   int font_size,
+                                   void* context);
+
+struct TextPainter {
+    TextPaintCallback paint = nullptr;
+    void* context = nullptr;
+};
+
 class SoftwareRasterizer {
 public:
+    explicit SoftwareRasterizer(TextPainter text_painter = {});
+
     void rasterize(const DisplayList& display_list, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
     void rasterize(const DisplayCommand& command, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
+
+private:
+    TextPainter text_painter_;
 };
 
 class SoftwareCompositor {
 public:
+    explicit SoftwareCompositor(TextPainter text_painter = {});
+
     FrameBuffer render(const LayerNode& root, int viewport_width, int viewport_height, Color background) const;
 
 private:

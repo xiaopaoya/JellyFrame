@@ -18,6 +18,19 @@ void check(bool condition, const char* message) {
     }
 }
 
+const LayoutBox* find_first_text_box(const LayoutBox& box) {
+    if (box.node != nullptr && box.node->type == NodeType::Text) {
+        return &box;
+    }
+    for (const auto& child : box.children) {
+        const LayoutBox* found = find_first_text_box(*child);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 void fill_rect_rasterizes_pixels() {
     FrameBuffer frame_buffer(8, 8, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -83,6 +96,21 @@ void compositor_renders_pipeline_non_empty() {
     check(count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) > 0, "pipeline renders non-background pixels");
 }
 
+void wrapped_text_layout_keeps_descent_padding() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><p>Long wearable interface text wraps onto several compact display lines.</p></body>");
+    StyleResolver resolver(css_parser.parse("p { font-size: 18px; width: 90px; margin: 0; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 120);
+
+    const LayoutBox* text_box = find_first_text_box(*layout_tree);
+    check(text_box != nullptr, "text layout box exists");
+    check(text_box->rect.height > 44, "wrapped text keeps descent padding");
+}
+
 } // namespace
 
 int main() {
@@ -91,6 +119,7 @@ int main() {
         source_over_alpha_composites();
         clipping_limits_rasterization();
         compositor_renders_pipeline_non_empty();
+        wrapped_text_layout_keeps_descent_padding();
     } catch (const std::exception& error) {
         std::cerr << "software renderer test failed: " << error.what() << '\n';
         return 1;

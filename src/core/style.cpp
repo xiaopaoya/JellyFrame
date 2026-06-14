@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cerrno>
+#include <cstring>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -28,36 +29,49 @@ std::string trim(std::string_view value) {
     return std::string(value.substr(begin, end - begin));
 }
 
-bool parse_px(const std::string& raw_value, int& output) {
+constexpr int kRootFontSizePx = 16;
+
+bool parse_length_px(const std::string& raw_value, int& output, int em_base = kRootFontSizePx) {
     const std::string value = trim(raw_value);
     if (value.empty()) {
         return false;
     }
-    std::size_t index = 0;
-    if (value[index] == '-' || value[index] == '+') {
-        ++index;
-    }
-    const std::size_t digits_begin = index;
-    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
-        ++index;
-    }
-    if (digits_begin == index) {
+
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(value.c_str(), &end);
+    if (end == value.c_str() || errno == ERANGE) {
         return false;
     }
-    int parsed = std::atoi(value.c_str());
-    if (index < value.size() && value.compare(index, 2, "px") == 0) {
-        index += 2;
-    } else if (index < value.size() && value.compare(index, 2, "vh") == 0) {
-        parsed = parsed * 240 / 100;
-        index += 2;
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
     }
-    while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) != 0) {
-        ++index;
-    }
-    if (index != value.size()) {
+
+    float pixels = parsed;
+    if (end == nullptr || *end == '\0') {
+        pixels = parsed;
+    } else if (std::strncmp(end, "px", 2) == 0) {
+        pixels = parsed;
+        end += 2;
+    } else if (std::strncmp(end, "rem", 3) == 0) {
+        pixels = parsed * static_cast<float>(kRootFontSizePx);
+        end += 3;
+    } else if (std::strncmp(end, "em", 2) == 0) {
+        pixels = parsed * static_cast<float>(em_base);
+        end += 2;
+    } else if (std::strncmp(end, "vh", 2) == 0) {
+        pixels = parsed * 240.0F / 100.0F;
+        end += 2;
+    } else {
         return false;
     }
-    output = parsed;
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || *end != '\0') {
+        return false;
+    }
+    output = static_cast<int>(pixels >= 0.0F ? pixels + 0.5F : pixels - 0.5F);
     return true;
 }
 
@@ -103,13 +117,13 @@ bool parse_integer(const std::string& raw_value, int& output) {
     return true;
 }
 
-bool parse_box_edge_px(const std::string& value, EdgeSizes& output) {
+bool parse_box_edge_px(const std::string& value, EdgeSizes& output, int em_base = kRootFontSizePx) {
     std::istringstream stream(value);
     std::array<int, 4> values{0, 0, 0, 0};
     int count = 0;
     std::string token;
     while (stream >> token && count < 4) {
-        if (!parse_px(token, values[static_cast<std::size_t>(count)])) {
+        if (!parse_length_px(token, values[static_cast<std::size_t>(count)], em_base)) {
             return false;
         }
         ++count;
@@ -125,6 +139,50 @@ bool parse_box_edge_px(const std::string& value, EdgeSizes& output) {
         output = EdgeSizes{values[0], values[1], values[2], values[1]};
     } else {
         output = EdgeSizes{values[0], values[1], values[2], values[3]};
+    }
+    return true;
+}
+
+bool parse_margin_edge_px(const std::string& value, EdgeSizes& output, bool& left_auto, bool& right_auto, int em_base) {
+    std::istringstream stream(value);
+    std::array<int, 4> values{0, 0, 0, 0};
+    std::array<bool, 4> auto_values{false, false, false, false};
+    int count = 0;
+    std::string token;
+    while (stream >> token && count < 4) {
+        if (token == "auto") {
+            auto_values[static_cast<std::size_t>(count)] = true;
+        } else if (!parse_length_px(token, values[static_cast<std::size_t>(count)], em_base)) {
+            return false;
+        }
+        ++count;
+    }
+    if (count == 0 || (stream >> token)) {
+        return false;
+    }
+
+    if (count == 1) {
+        output = EdgeSizes{values[0], values[0], values[0], values[0]};
+        left_auto = auto_values[0];
+        right_auto = auto_values[0];
+    } else if (count == 2) {
+        output = EdgeSizes{values[0], values[1], values[0], values[1]};
+        left_auto = auto_values[1];
+        right_auto = auto_values[1];
+    } else if (count == 3) {
+        output = EdgeSizes{values[0], values[1], values[2], values[1]};
+        left_auto = auto_values[1];
+        right_auto = auto_values[1];
+    } else {
+        output = EdgeSizes{values[0], values[1], values[2], values[3]};
+        left_auto = auto_values[3];
+        right_auto = auto_values[1];
+    }
+    if (left_auto) {
+        output.left = 0;
+    }
+    if (right_auto) {
+        output.right = 0;
     }
     return true;
 }
@@ -437,7 +495,10 @@ enum class CascadeProperty : std::size_t {
     Height,
     MinWidth,
     MinHeight,
+    MaxWidth,
     FontSize,
+    LineHeight,
+    TextIndent,
     BoxShadow,
     Overflow,
     Opacity,
@@ -499,8 +560,17 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "min-height") {
         return &cascade_slot(slots, CascadeProperty::MinHeight);
     }
+    if (property == "max-width") {
+        return &cascade_slot(slots, CascadeProperty::MaxWidth);
+    }
     if (property == "font-size") {
         return &cascade_slot(slots, CascadeProperty::FontSize);
+    }
+    if (property == "line-height") {
+        return &cascade_slot(slots, CascadeProperty::LineHeight);
+    }
+    if (property == "text-indent") {
+        return &cascade_slot(slots, CascadeProperty::TextIndent);
     }
     if (property == "box-shadow") {
         return &cascade_slot(slots, CascadeProperty::BoxShadow);
@@ -598,11 +668,11 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.background_color = parsed;
         return true;
     } else if (property == "margin") {
-        return parse_box_edge_px(value, style.margin);
+        return parse_margin_edge_px(value, style.margin, style.margin_left_auto, style.margin_right_auto, style.font_size);
     } else if (property == "padding") {
-        return parse_box_edge_px(value, style.padding);
+        return parse_box_edge_px(value, style.padding, style.font_size);
     } else if (property == "border-width") {
-        return parse_box_edge_px(value, style.border_width);
+        return parse_box_edge_px(value, style.border_width, style.font_size);
     } else if (property == "border-color") {
         Color parsed;
         if (!parse_color(value, parsed)) {
@@ -625,7 +695,7 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
                 ++index;
             }
             const std::string token = value.substr(begin, index - begin);
-            if (!token.empty() && !has_width && parse_px(token, width)) {
+            if (!token.empty() && !has_width && parse_length_px(token, width, style.font_size)) {
                 has_width = true;
             } else if (!token.empty() && !has_color && parse_color(token, color)) {
                 has_color = true;
@@ -643,46 +713,73 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         return true;
     } else if (property == "border-radius") {
         int px = 0;
-        if (!parse_px(value, px)) {
+        if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.border_radius = px;
         return true;
     } else if (property == "width") {
         int px = 0;
-        if (!parse_px(value, px)) {
+        if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.width = px;
         return true;
     } else if (property == "height") {
         int px = 0;
-        if (!parse_px(value, px)) {
+        if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.height = px;
         return true;
     } else if (property == "min-width") {
         int px = 0;
-        if (!parse_px(value, px)) {
+        if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.min_width = px;
         return true;
     } else if (property == "min-height") {
         int px = 0;
-        if (!parse_px(value, px)) {
+        if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.min_height = px;
         return true;
+    } else if (property == "max-width") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        style.max_width = px;
+        return true;
     } else if (property == "font-size") {
         int px = 0;
-        if (!parse_px(value, px)) {
+        if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.font_size = px;
         style.font_size_specified = true;
+        return true;
+    } else if (property == "line-height") {
+        float multiplier = 0.0F;
+        int px = 0;
+        if (parse_float(value, multiplier)) {
+            style.line_height = std::max(1, static_cast<int>(static_cast<float>(style.font_size) * multiplier + 0.5F));
+        } else if (parse_length_px(value, px, style.font_size)) {
+            style.line_height = std::max(1, px);
+        } else {
+            return false;
+        }
+        style.line_height_specified = true;
+        return true;
+    } else if (property == "text-indent") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        style.text_indent = px;
+        style.text_indent_specified = true;
         return true;
     } else if (property == "box-shadow") {
         style.box_shadow = trim(value);

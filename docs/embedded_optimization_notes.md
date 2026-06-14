@@ -21,6 +21,13 @@ small wearable devices.
 - Unsupported modern CSS is skipped at block/rule boundaries, avoiding recovery
   loops.
 - Style cascade slots use a fixed array instead of a per-node hash map.
+- DOM event listener storage is allocated lazily, so nodes without listeners do
+  not carry an empty listener table.
+- Platform text painting is injected through an optional callback; the core
+  renderer keeps a portable bitmap fallback and does not link Win32/GDI.
+- Opaque rectangle fill uses direct row fills in the software rasterizer.
+- Offscreen compositing clips source/destination rectangles before iterating
+  pixels.
 
 ## Memory Guidance
 
@@ -55,17 +62,18 @@ Command:
 .\build\Release\wearweb_microbench.exe 80 1000
 ```
 
-Result on this Windows build machine after software renderer integration,
-text fixes and broader CSS fallback support:
+Result on this Windows build machine after event/input integration, lazy event
+listener storage, platform text callback extraction and software renderer hot
+path cleanup:
 
 ```text
-html_parse avg_us=854.436
-css_parse avg_us=35.76
-render_tree avg_us=940.971
-layout avg_us=211.725
-layer_tree avg_us=82.919
-flatten_layers avg_us=24.454
-full_pipeline avg_us=1976.64
+html_parse avg_us=971.673
+css_parse avg_us=35.7
+render_tree avg_us=1045.13
+layout avg_us=211.992
+layer_tree avg_us=92.671
+flatten_layers avg_us=24.476
+full_pipeline avg_us=2126.63
 ```
 
 Interpretation:
@@ -73,10 +81,16 @@ Interpretation:
 - Debug numbers are not useful for performance decisions.
 - Rule indexing reduced render-tree/style-resolution cost substantially.
 - Fixed cascade slots removed per-node cascade hash-map setup.
+- Lazy event listener storage prevents event support from increasing the common
+  no-listener DOM node footprint.
 - Layer tree adds a small explicit cost, but keeps paint organization ready for
   clipping, ordering and later dirty-layer repaint.
 - Broader fallback CSS and inherited text properties increased style/render
   work, but avoid catastrophic visual failures on common modern pages.
+- Extra wrapped-text line-height padding avoids clipping with native text
+  backends at a small layout cost.
+- Embedded `<style>` collection and broader length/property support improve
+  common static pages with a small style/render cost.
 - Full pipeline time is still dominated by HTML parse and style/render work.
 - The next performance upgrade should be arena allocation and computed-style
   sharing for repeated class patterns.

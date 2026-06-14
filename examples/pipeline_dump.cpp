@@ -1,4 +1,5 @@
 #include "core/css_parser.h"
+#include "core/document_style.h"
 #include "core/html_parser.h"
 #include "core/layer_tree.h"
 #include "core/layout.h"
@@ -106,7 +107,7 @@ int main(int argc, char** argv) {
         HtmlParser html_parser;
         CssParser css_parser;
         auto document = html_parser.parse(html);
-        Stylesheet stylesheet = css_parser.parse(css);
+        Stylesheet stylesheet = css_parser.parse(combine_author_css(css, *document));
         StyleResolver resolver(std::move(stylesheet));
 
         RenderTreeBuilder render_tree_builder(resolver);

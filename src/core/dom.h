@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/event.h"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -12,7 +14,7 @@ enum class NodeType {
     Text,
 };
 
-struct Node {
+struct Node : public EventTarget {
     explicit Node(NodeType node_type);
 
     NodeType type;
@@ -31,4 +33,3 @@ std::unique_ptr<Node> make_element(std::string tag_name);
 std::unique_ptr<Node> make_text(std::string text);
 
 } // namespace wearweb
-
