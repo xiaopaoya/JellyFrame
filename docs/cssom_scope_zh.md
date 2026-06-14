@@ -71,7 +71,8 @@ CssStyleSheet
 ## 当前面向 UI 的 computed fields
 
 - `display`：block、inline、inline-block、flex、grid、none。
-- `margin`、`padding`、`border-width`、`border-color`、`border-radius`。
+- `margin`、`padding`、`border-width` 及其物理单边 longhands，
+  以及 `border-color`、`border-radius`。
 - `width`、`height`、`min-width`、`min-height`、`max-width`。
 - `color`、`background-color`。
 - `font-size`、`line-height`、`text-align`、`text-indent`。

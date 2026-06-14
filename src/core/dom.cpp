@@ -90,6 +90,13 @@ void Node::set_text_content(std::string value) {
         set_text(std::move(value));
         return;
     }
+    if (value.empty() && children.empty()) {
+        return;
+    }
+    if (children.size() == 1 && children.front()->type == NodeType::Text &&
+        children.front()->text == value) {
+        return;
+    }
     children.clear();
     if (!value.empty()) {
         auto child = make_text(std::move(value));
@@ -152,22 +159,23 @@ void mark_dirty(Node& node, DomDirtyFlags flags) {
 }
 
 DomDirtyFlags subtree_dirty_flags(const Node& node) {
-    DomDirtyFlags flags = node.dirty_flags;
-    for (const auto& child : node.children) {
-        flags |= subtree_dirty_flags(*child);
-    }
-    return flags;
+    return node.dirty_flags;
 }
 
 void clear_dirty_flags(Node& node) {
+    if (node.dirty_flags == DomDirtyNone) {
+        return;
+    }
     node.dirty_flags = DomDirtyNone;
     for (const auto& child : node.children) {
-        clear_dirty_flags(*child);
+        if (child->dirty_flags != DomDirtyNone) {
+            clear_dirty_flags(*child);
+        }
     }
 }
 
 DomDirtyFlags take_dirty_flags(Node& node) {
-    const DomDirtyFlags flags = subtree_dirty_flags(node);
+    const DomDirtyFlags flags = node.dirty_flags;
     clear_dirty_flags(node);
     return flags;
 }

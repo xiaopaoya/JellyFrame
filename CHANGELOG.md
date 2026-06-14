@@ -70,6 +70,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   span N`.
 - Added `aspect-ratio` sizing for visual/media boxes.
 - Added cheap approximate `box-shadow` painting as rounded translucent fills.
+- Added developer-facing capability matrix documentation covering supported,
+  degraded, lazy and deferred HTML/CSS/DOM/script/rendering features.
+- Added physical edge CSS longhands for `margin-*`, `padding-*` and
+  `border-*-width`.
 - Added regression coverage for linked stylesheet merging, semantic fallback
   styles, inline highlight painting, DOM mutation invalidation and form-control
   fallback behavior. Scripting builds also add JerryScript runtime lifecycle and
@@ -105,6 +109,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Updated the clock and timer app cases to use M6 `setInterval` instead of
   manual-only refresh.
 - Improved simplified flex row layout to honor `column-gap`.
+- Improved dirty rerender paths: root dirty checks are O(1), dirty clearing
+  skips clean branches, unchanged `textContent` avoids invalidation and the
+  Win32 shell no longer rebuilds the pipeline after clean input callbacks.
 
 ### Notes
 

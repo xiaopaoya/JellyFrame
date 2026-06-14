@@ -76,7 +76,8 @@ exist as fallbacks.
 ## Current UI-Oriented Computed Fields
 
 - `display`: block, inline, inline-block, flex, grid, none.
-- `margin`, `padding`, `border-width`, `border-color`, `border-radius`.
+- `margin`, `padding`, `border-width` and their physical edge longhands,
+  plus `border-color`, `border-radius`.
 - `width`, `height`, `min-width`, `min-height`, `max-width`.
 - `color`, `background-color`.
 - `font-size`, `line-height`, `text-align`, `text-indent`.

@@ -52,6 +52,9 @@ WearWeb Engine 的重要变更记录在这里。
   span N`。
 - 添加 `aspect-ratio` 尺寸计算，用于视觉/媒体盒子。
 - 添加便宜近似 `box-shadow` 绘制：输出圆角半透明填充，不做真实 blur。
+- 添加面向开发者的能力矩阵文档，覆盖 HTML/CSS/DOM/script/rendering 功能的支持、
+  降级、懒处理和延后状态。
+- 添加 `margin-*`、`padding-*` 和 `border-*-width` 物理单边 CSS longhands。
 - 添加外链 stylesheet 合并、语义 fallback 样式、inline 高亮绘制、DOM mutation invalidation
   和表单控件 fallback 行为的回归测试。启用 scripting 的构建还会加入 JerryScript runtime
   生命周期和异常路径测试。
@@ -75,6 +78,8 @@ WearWeb Engine 的重要变更记录在这里。
 - 仅在真实表单控件 wrapper 上安装脚本表单访问器，减少普通 DOM 节点的属性设置开销。
 - 将 clock 和 timer 应用示例升级为使用 M6 `setInterval`，不再只依赖手动刷新。
 - 改进简化 flex row layout，使其支持 `column-gap`。
+- 改进 dirty rerender 路径：根节点 dirty 检查为 O(1)，dirty 清理跳过干净分支，
+  同值 `textContent` 不触发 invalidation，Win32 壳在 clean input callback 后不再重建管线。
 
 ### 说明
 

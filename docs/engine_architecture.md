@@ -101,6 +101,7 @@ source order, then runs selector matching and cascade comparison.
 1. Move selector parsing into a dedicated `selector.*` module.
 2. Add arena allocation for DOM/render/layout trees.
 3. Add style sharing or computed-style cache for repeated class patterns.
-4. Add dirty tree flags for incremental style/layout.
+4. Reuse render/layout/layer subtrees from existing dirty flags instead of
+   rebuilding the full pipeline after every mutation.
 5. Add dirty layer invalidation and rectangle flush.
 6. Add a deployable embedded framebuffer backend.

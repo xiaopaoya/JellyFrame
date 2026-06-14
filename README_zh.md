@@ -149,6 +149,8 @@ ctest --test-dir build -C Debug --output-on-failure
   启用 scripting 的构建中，它还会包含 JerryScript runtime 测试。
 - `examples/app_cases`：包含天气、时钟、计时器和计算器四个小型应用式验收页面。
   支持的开发子集和 M7 前评估见 `docs/embedded_app_subset_zh.md`。
+- `docs/developer_capability_matrix_zh.md`：面向开发者的 can do/cannot do
+  契约。依赖某个 HTML/CSS/DOM/script 功能前，优先查这里。
 - `docs/memory_management_zh.md`：总结当前嵌入式内存行为、剩余风险和下一步 allocator/container 优化。
 
 ## 文档维护

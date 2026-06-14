@@ -298,6 +298,20 @@ bool parse_margin_edge_px(const std::string& value, EdgeSizes& output, bool& lef
     return true;
 }
 
+bool parse_margin_side_px(const std::string& raw_value, int& output, bool& is_auto, int em_base) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "auto") {
+        output = 0;
+        is_auto = true;
+        return true;
+    }
+    if (!parse_length_px(value, output, em_base)) {
+        return false;
+    }
+    is_auto = false;
+    return true;
+}
+
 std::string lowercase(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
         return static_cast<char>(std::tolower(ch));
@@ -597,8 +611,20 @@ enum class CascadeProperty : std::size_t {
     Color,
     Background,
     Margin,
+    MarginTop,
+    MarginRight,
+    MarginBottom,
+    MarginLeft,
     Padding,
+    PaddingTop,
+    PaddingRight,
+    PaddingBottom,
+    PaddingLeft,
     BorderWidth,
+    BorderTopWidth,
+    BorderRightWidth,
+    BorderBottomWidth,
+    BorderLeftWidth,
     BorderColor,
     Border,
     BorderRadius,
@@ -649,14 +675,41 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "background" || property == "background-color") {
         return &cascade_slot(slots, CascadeProperty::Background);
     }
-    if (property == "margin") {
-        return &cascade_slot(slots, CascadeProperty::Margin);
+    if (property == "margin-top") {
+        return &cascade_slot(slots, CascadeProperty::MarginTop);
     }
-    if (property == "padding") {
-        return &cascade_slot(slots, CascadeProperty::Padding);
+    if (property == "margin-right") {
+        return &cascade_slot(slots, CascadeProperty::MarginRight);
     }
-    if (property == "border-width") {
-        return &cascade_slot(slots, CascadeProperty::BorderWidth);
+    if (property == "margin-bottom") {
+        return &cascade_slot(slots, CascadeProperty::MarginBottom);
+    }
+    if (property == "margin-left") {
+        return &cascade_slot(slots, CascadeProperty::MarginLeft);
+    }
+    if (property == "padding-top") {
+        return &cascade_slot(slots, CascadeProperty::PaddingTop);
+    }
+    if (property == "padding-right") {
+        return &cascade_slot(slots, CascadeProperty::PaddingRight);
+    }
+    if (property == "padding-bottom") {
+        return &cascade_slot(slots, CascadeProperty::PaddingBottom);
+    }
+    if (property == "padding-left") {
+        return &cascade_slot(slots, CascadeProperty::PaddingLeft);
+    }
+    if (property == "border-top-width") {
+        return &cascade_slot(slots, CascadeProperty::BorderTopWidth);
+    }
+    if (property == "border-right-width") {
+        return &cascade_slot(slots, CascadeProperty::BorderRightWidth);
+    }
+    if (property == "border-bottom-width") {
+        return &cascade_slot(slots, CascadeProperty::BorderBottomWidth);
+    }
+    if (property == "border-left-width") {
+        return &cascade_slot(slots, CascadeProperty::BorderLeftWidth);
     }
     if (property == "border-color") {
         return &cascade_slot(slots, CascadeProperty::BorderColor);
@@ -812,10 +865,61 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         return true;
     } else if (property == "margin") {
         return parse_margin_edge_px(value, style.margin, style.margin_left_auto, style.margin_right_auto, style.font_size);
+    } else if (property == "margin-top" || property == "margin-right" ||
+               property == "margin-bottom" || property == "margin-left") {
+        int px = 0;
+        bool is_auto = false;
+        if (!parse_margin_side_px(value, px, is_auto, style.font_size)) {
+            return false;
+        }
+        if (property == "margin-top") {
+            style.margin.top = px;
+        } else if (property == "margin-right") {
+            style.margin.right = px;
+            style.margin_right_auto = is_auto;
+        } else if (property == "margin-bottom") {
+            style.margin.bottom = px;
+        } else {
+            style.margin.left = px;
+            style.margin_left_auto = is_auto;
+        }
+        return true;
     } else if (property == "padding") {
         return parse_box_edge_px(value, style.padding, style.font_size);
+    } else if (property == "padding-top" || property == "padding-right" ||
+               property == "padding-bottom" || property == "padding-left") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        if (property == "padding-top") {
+            style.padding.top = px;
+        } else if (property == "padding-right") {
+            style.padding.right = px;
+        } else if (property == "padding-bottom") {
+            style.padding.bottom = px;
+        } else {
+            style.padding.left = px;
+        }
+        return true;
     } else if (property == "border-width") {
         return parse_box_edge_px(value, style.border_width, style.font_size);
+    } else if (property == "border-top-width" || property == "border-right-width" ||
+               property == "border-bottom-width" || property == "border-left-width") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        if (property == "border-top-width") {
+            style.border_width.top = px;
+        } else if (property == "border-right-width") {
+            style.border_width.right = px;
+        } else if (property == "border-bottom-width") {
+            style.border_width.bottom = px;
+        } else {
+            style.border_width.left = px;
+        }
+        return true;
     } else if (property == "border-color") {
         Color parsed;
         if (!parse_color(value, parsed)) {
@@ -1100,6 +1204,166 @@ void mark_slot(CascadeSlot& slot,
     slot.source_order = source_order;
 }
 
+int& edge_value(EdgeSizes& edges, CascadeProperty property) {
+    switch (property) {
+    case CascadeProperty::MarginTop:
+    case CascadeProperty::PaddingTop:
+    case CascadeProperty::BorderTopWidth:
+        return edges.top;
+    case CascadeProperty::MarginRight:
+    case CascadeProperty::PaddingRight:
+    case CascadeProperty::BorderRightWidth:
+        return edges.right;
+    case CascadeProperty::MarginBottom:
+    case CascadeProperty::PaddingBottom:
+    case CascadeProperty::BorderBottomWidth:
+        return edges.bottom;
+    default:
+        return edges.left;
+    }
+}
+
+void apply_edge_value(CascadeSlots& slots,
+                      CascadeProperty property,
+                      EdgeSizes& target,
+                      int value,
+                      const CssDeclaration& declaration,
+                      const CssSpecificity& specificity,
+                      std::size_t source_order) {
+    CascadeSlot& slot = cascade_slot(slots, property);
+    if (!declaration_wins(slot, declaration, specificity, source_order)) {
+        return;
+    }
+    edge_value(target, property) = value;
+    mark_slot(slot, declaration, specificity, source_order);
+}
+
+void apply_margin_edge_value(Style& style,
+                             CascadeSlots& slots,
+                             CascadeProperty property,
+                             int value,
+                             bool is_auto,
+                             const CssDeclaration& declaration,
+                             const CssSpecificity& specificity,
+                             std::size_t source_order) {
+    CascadeSlot& slot = cascade_slot(slots, property);
+    if (!declaration_wins(slot, declaration, specificity, source_order)) {
+        return;
+    }
+    edge_value(style.margin, property) = value;
+    if (property == CascadeProperty::MarginLeft) {
+        style.margin_left_auto = is_auto;
+    } else if (property == CascadeProperty::MarginRight) {
+        style.margin_right_auto = is_auto;
+    }
+    mark_slot(slot, declaration, specificity, source_order);
+}
+
+bool apply_edge_shorthand(Style& style,
+                          CascadeSlots& slots,
+                          const CssDeclaration& declaration,
+                          const CssSpecificity& specificity,
+                          std::size_t source_order) {
+    if (declaration.property == "margin") {
+        EdgeSizes parsed;
+        bool left_auto = false;
+        bool right_auto = false;
+        if (!parse_margin_edge_px(declaration.value, parsed, left_auto, right_auto, style.font_size)) {
+            return true;
+        }
+        apply_margin_edge_value(style, slots, CascadeProperty::MarginTop, parsed.top, false,
+                                declaration, specificity, source_order);
+        apply_margin_edge_value(style, slots, CascadeProperty::MarginRight, parsed.right, right_auto,
+                                declaration, specificity, source_order);
+        apply_margin_edge_value(style, slots, CascadeProperty::MarginBottom, parsed.bottom, false,
+                                declaration, specificity, source_order);
+        apply_margin_edge_value(style, slots, CascadeProperty::MarginLeft, parsed.left, left_auto,
+                                declaration, specificity, source_order);
+        return true;
+    }
+    if (declaration.property == "padding") {
+        EdgeSizes parsed;
+        if (!parse_box_edge_px(declaration.value, parsed, style.font_size)) {
+            return true;
+        }
+        apply_edge_value(slots, CascadeProperty::PaddingTop, style.padding, parsed.top,
+                         declaration, specificity, source_order);
+        apply_edge_value(slots, CascadeProperty::PaddingRight, style.padding, parsed.right,
+                         declaration, specificity, source_order);
+        apply_edge_value(slots, CascadeProperty::PaddingBottom, style.padding, parsed.bottom,
+                         declaration, specificity, source_order);
+        apply_edge_value(slots, CascadeProperty::PaddingLeft, style.padding, parsed.left,
+                         declaration, specificity, source_order);
+        return true;
+    }
+    if (declaration.property == "border-width") {
+        EdgeSizes parsed;
+        if (!parse_box_edge_px(declaration.value, parsed, style.font_size)) {
+            return true;
+        }
+        apply_edge_value(slots, CascadeProperty::BorderTopWidth, style.border_width, parsed.top,
+                         declaration, specificity, source_order);
+        apply_edge_value(slots, CascadeProperty::BorderRightWidth, style.border_width, parsed.right,
+                         declaration, specificity, source_order);
+        apply_edge_value(slots, CascadeProperty::BorderBottomWidth, style.border_width, parsed.bottom,
+                         declaration, specificity, source_order);
+        apply_edge_value(slots, CascadeProperty::BorderLeftWidth, style.border_width, parsed.left,
+                         declaration, specificity, source_order);
+        return true;
+    }
+    if (declaration.property == "border") {
+        const std::string lowered = lowercase(trim(declaration.value));
+        int width = 0;
+        Color color;
+        bool has_width = false;
+        bool has_color = false;
+        if (lowered == "none" || lowered == "0" || lowered == "0px") {
+            has_width = true;
+        } else {
+            std::size_t index = 0;
+            while (index < declaration.value.size()) {
+                while (index < declaration.value.size() &&
+                       std::isspace(static_cast<unsigned char>(declaration.value[index])) != 0) {
+                    ++index;
+                }
+                const std::size_t begin = index;
+                while (index < declaration.value.size() &&
+                       std::isspace(static_cast<unsigned char>(declaration.value[index])) == 0) {
+                    ++index;
+                }
+                const std::string token = declaration.value.substr(begin, index - begin);
+                if (!token.empty() && !has_width && parse_length_px(token, width, style.font_size)) {
+                    has_width = true;
+                } else if (!token.empty() && !has_color && parse_color(token, color)) {
+                    has_color = true;
+                }
+            }
+        }
+        if (!has_width && !has_color) {
+            return true;
+        }
+        if (has_width) {
+            apply_edge_value(slots, CascadeProperty::BorderTopWidth, style.border_width, width,
+                             declaration, specificity, source_order);
+            apply_edge_value(slots, CascadeProperty::BorderRightWidth, style.border_width, width,
+                             declaration, specificity, source_order);
+            apply_edge_value(slots, CascadeProperty::BorderBottomWidth, style.border_width, width,
+                             declaration, specificity, source_order);
+            apply_edge_value(slots, CascadeProperty::BorderLeftWidth, style.border_width, width,
+                             declaration, specificity, source_order);
+        }
+        if (has_color) {
+            CascadeSlot& slot = cascade_slot(slots, CascadeProperty::BorderColor);
+            if (declaration_wins(slot, declaration, specificity, source_order)) {
+                style.border_color = color;
+                mark_slot(slot, declaration, specificity, source_order);
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 void apply_cascaded_declaration(Style& style,
                                 CascadeSlot& slot,
                                 const CssDeclaration& declaration,
@@ -1119,6 +1383,9 @@ void apply_declarations(Style& style,
                         const CssSpecificity& specificity,
                         std::size_t source_order) {
     for (const CssDeclaration& declaration : declarations) {
+        if (apply_edge_shorthand(style, slots, declaration, specificity, source_order)) {
+            continue;
+        }
         CascadeSlot* slot = cascade_slot_for_property(slots, declaration.property);
         if (slot != nullptr) {
             apply_cascaded_declaration(style, *slot, declaration, specificity, source_order);

@@ -40,6 +40,7 @@ layout behavior.
 - `@layer` block flattening.
 - Plain `@media` blocks only when the prelude is empty, `all` or `screen`.
 - UI-oriented declarations for the embedded app subset, including
+  physical `margin-*`/`padding-*`/`border-*-width` longhands,
   `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `grid-template-columns`
   with a `minmax()` minimum track, `grid-auto-rows` with a minimum track, and
   `grid-column`/`grid-row: span N`.

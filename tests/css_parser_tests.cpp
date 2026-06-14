@@ -286,6 +286,26 @@ void grid_and_aspect_ratio_properties_apply() {
           "aspect ratio parsed");
 }
 
+void physical_edge_longhands_apply_per_side() {
+    auto element = make_element("section");
+    element->attributes["id"] = "panel";
+    element->attributes["class"] = "card";
+
+    StyleResolver resolver(parse(
+        "#panel { margin-top: 18px; border-bottom-width: 5px; }"
+        ".card { margin: 4px; padding: 2px; border: 1px solid #111111; }"
+        ".card { margin-left: auto; padding-left: 12px; border-left-width: 3px; }"));
+
+    const Style style = resolver.resolve(*element);
+    check(style.margin.top == 18, "higher-specificity margin-top survives shorthand");
+    check(style.margin.right == 4, "margin shorthand right applies");
+    check(style.margin_left_auto, "margin-left auto applies");
+    check(style.padding.top == 2 && style.padding.left == 12, "padding longhand applies");
+    check(style.border_width.top == 1 && style.border_width.left == 3, "border width longhand applies");
+    check(style.border_width.bottom == 5, "higher-specificity border-bottom-width survives shorthand");
+    check(style.border_color.r == 0x11, "border shorthand color applies");
+}
+
 } // namespace
 
 int main() {
@@ -305,6 +325,7 @@ int main() {
         html5_semantic_defaults_are_visible();
         border_none_removes_default_control_border();
         grid_and_aspect_ratio_properties_apply();
+        physical_edge_longhands_apply_per_side();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

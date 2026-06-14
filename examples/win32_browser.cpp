@@ -602,8 +602,7 @@ private:
         input.buttons = buttons_from_keys(wparam) & ~1;
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_up(input);
-        render_current(input_->focused_node());
-        InvalidateRect(hwnd_, nullptr, FALSE);
+        rerender_if_dirty(input_->focused_node());
         set_title("up " + describe_node(target));
     }
 
@@ -632,8 +631,7 @@ private:
         }
         const Node* focus = input_->focused_node();
         if (input_->text_input(wide_char_to_utf8(static_cast<wchar_t>(wparam)))) {
-            render_current(focus);
-            InvalidateRect(hwnd_, nullptr, FALSE);
+            rerender_if_dirty(focus);
         }
     }
 
@@ -653,8 +651,7 @@ private:
         }
         const Node* focus = input_->focused_node();
         if (input_->key_down(key)) {
-            render_current(focus);
-            InvalidateRect(hwnd_, nullptr, FALSE);
+            rerender_if_dirty(focus);
         }
     }
 

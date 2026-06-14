@@ -165,6 +165,8 @@ ctest --test-dir build -C Debug --output-on-failure
 - `examples/app_cases` contains small app-style acceptance pages for weather,
   clock, timer and calculator scenarios. See `docs/embedded_app_subset.md` for
   the supported authoring subset and the M7 readiness decision.
+- `docs/developer_capability_matrix.md` is the developer-facing can-do/cannot-do
+  contract. Check it before relying on an HTML/CSS/DOM/script feature.
 - `docs/memory_management.md` summarizes current embedded memory behavior,
   remaining risks and the next allocator/container optimizations.
 

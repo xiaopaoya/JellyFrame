@@ -23,6 +23,9 @@ small wearable devices.
 - Style cascade slots use a fixed array instead of a per-node hash map.
 - DOM event listener storage is allocated lazily, so nodes without listeners do
   not carry an empty listener table.
+- DOM dirty bits propagate to ancestors, so root dirty checks are O(1), clean
+  subtrees are skipped during dirty clearing, and unchanged `textContent`
+  assignments do not trigger rerenders.
 - Script timers are host-pumped with a callback budget and explicit JerryScript
   reference release paths.
 - Platform text painting is injected through an optional callback; the core

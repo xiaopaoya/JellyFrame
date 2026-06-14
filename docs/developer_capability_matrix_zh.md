@@ -1,0 +1,321 @@
+# 开发者能力矩阵
+
+日期：2026-06-15
+
+这份文档是 WearWeb 面向应用开发者的实际能力契约。开发者在使用某个 HTML
+标签、CSS 属性、DOM/JS API、事件或渲染能力前，应能通过这里判断：它现在能不能工作、
+会如何降级、是否只是被解析保存、是否会被懒处理或直接跳过。
+
+WearWeb 不是通用浏览器。它是一个为可穿戴/嵌入式 UI 准备的小型
+HTML/CSS/DOM/script runtime，目标是保留“像写小网页一样写应用”的开发模型，同时裁剪
+网络、完整浏览器加载、GPU、复杂字体、完整 CSS layout 等高成本能力。
+
+## 状态说明
+
+- **可用**：已经实现，属于当前建议使用范围。
+- **子集**：能用，但只应依赖这里写明的子集。
+- **已保存**：会被解析或保存在内部结构里，但视觉/行为未完整执行。
+- **懒处理**：整体跳过或简化，不应破坏后续解析和渲染。
+- **延后**：刻意不支持；不要依赖。
+- **壳层限定**：只存在于桌面例程或 Win32 验证壳，不属于平台无关核心。
+
+## 最适合的项目
+
+适合：
+
+- 天气、时钟、计时器、计算器、设置页。
+- 卡片式小仪表盘、本地配置界面、表单型设备 UI。
+- 想用 HTML/CSS/JS 编写嵌入式应用，而不是用 canvas 手绘全部 UI 的项目。
+- 使用 `wearweb_pseudo_browser` 或 `wearweb_win32_browser` 做桌面验收。
+
+暂不适合：
+
+- 任意现代网站。
+- 假设完整 DOM、selector API、浏览器 loader、网络、存储、模块、canvas 或 Web Components
+  的前端框架。
+- 像素级兼容浏览器渲染。
+- 依赖完整 flex/grid、container query、图片解码、字体加载、复杂文字 shaping 的大页面。
+
+## 核心边界
+
+| 能力 | 状态 | 行为 |
+| --- | --- | --- |
+| 平台无关核心 | 可用 | 核心不做文件、网络、窗口、硬件 I/O。 |
+| 伪浏览器 | 壳层限定 | 运行完整管线并写出 BMP/PPM。默认使用极小内置字体；未注入平台文本绘制时中文会显示为 fallback glyph。 |
+| Win32 browser 壳 | 壳层限定 | 打开桌面窗口，使用 GDI 文本，转发鼠标/滚轮/键盘输入，支持截图输出和可选 scripting 构建。 |
+| 嵌入式后端 | 延后 | 最终显示、触摸、按键、刷新策略应由目标平台接入。 |
+| 外链 CSS 加载 | 壳层限定 | 示例工具可读取本地 `<link rel="stylesheet">`；核心只提供 callback 辅助。 |
+| 网络 | 延后 | 无 HTTP、fetch、XHR、WebSocket 或远程资源加载。 |
+| 存储 | 延后 | 无 cookie、localStorage、IndexedDB 或核心文件系统 API。 |
+
+## HTML 解析
+
+| 功能 | 状态 | 行为 |
+| --- | --- | --- |
+| UTF-8 输入 | 可用 | 解析按字节/字符串处理。最终文字显示质量取决于文本后端。 |
+| 开始/结束标签 | 可用 | 常用标签会生成 DOM 元素。 |
+| 属性 | 可用 | 支持常见引号形式和未加引号形式。HTML 路径会规范化属性名。 |
+| 文本节点 | 可用 | 文本会保留并参与布局。 |
+| 注释 | 可用 | tokenizer 可处理，视觉树忽略。 |
+| Doctype | 可用/懒处理 | 接受但不进入 quirks mode。 |
+| 字符引用 | 子集 | 常见 entity 会解码；未知情况按字面或 fallback 处理。 |
+| `script`/`style` raw text | 子集 | 足够支持样式/脚本收集。 |
+| 自动合成 `html`/`body` | 可用 | 缺失外层结构会被修复。 |
+| void elements | 可用 | 常见 void 标签不要求闭合。 |
+| 隐式闭合 | 子集 | 容忍常见段落/列表/table-ish 情况；不追求完整 HTML tree builder 兼容。 |
+| 错误恢复 | 子集 | 有明确资源上限，应避免死循环和崩溃。 |
+| Quirks mode | 延后 | 完全抛弃。WearWeb 只面向现代作者写法。 |
+| `template` | 懒处理 | 默认样式隐藏；template 内容语义未实现。 |
+| 自定义元素 | 子集 | 未知标签可成为普通元素并被样式化；无生命周期回调。 |
+
+## DOM 模型
+
+| 功能/API | 状态 | 行为 |
+| --- | --- | --- |
+| `Node` tree | 可用 | Element/Text 两类节点，带 parent/children 所有权。 |
+| `tag_name`、`text`、`attributes` | 可用 | C++ 内部模型直接保存。 |
+| `append_child` | 可用 | 挂载/移动子节点，并标记 tree/layout dirty。 |
+| `detach_child` / `remove_child` | 可用 | 移除子节点所有权，并标记 tree/layout dirty。 |
+| `set_attribute` / `remove_attribute` | 可用 | 更新属性，必要时重置表单状态，并标记 attributes/style/layout dirty。 |
+| `set_text` / `set_text_content` | 可用 | 内容变化时标记 text/layout dirty；同值设置不会制造脏标记。 |
+| `text_content()` | 可用 | 拼接后代文本。 |
+| `attribute()` | 可用 | 缺失属性返回空字符串。 |
+| `has_class()` | 可用 | 按空白分隔 class token。 |
+| Dirty flags | 可用 | dirty 位向祖先传播，因此根节点 dirty 检查为 O(1)；清理时跳过干净子树。 |
+| DOM Range/Selection | 延后 | 暂无 Range、Selection。 |
+| MutationObserver | 延后 | 使用宿主 dirty flags 观察变化。 |
+| Shadow DOM | 延后 | 无 shadow root、slot、part、scoped tree。 |
+| 完整浏览器 `document` | 延后 | 只有 scripting 绑定里的小型子集。 |
+
+## CSS Syntax 与 CSSOM
+
+| 功能 | 状态 | 行为 |
+| --- | --- | --- |
+| 注释 | 可用 | 解析时移除。 |
+| 普通规则 | 可用 | `selector { declarations }`。 |
+| selector list | 可用 | 顶层逗号拆分。 |
+| declaration 顺序 | 可用 | 保留重复属性，用于 fallback。 |
+| `!important` | 可用 | 参与 cascade。 |
+| 函数/字符串/括号组件 | 可用 | 平衡跳过，避免坏值破坏后续规则。 |
+| 错误恢复 | 可用 | 在 declaration/rule 边界恢复。 |
+| `@layer` | 懒处理 | block 被展开；不建模 layer ordering。 |
+| `@media screen/all/空` | 子集 | 普通 screen/all block 会解析；条件 media query 跳过。 |
+| `@supports` | 懒处理 | 整个 block 跳过。 |
+| `@container` | 延后/懒处理 | 整个 block 跳过。不要把必需 UI 放在里面。 |
+| `@font-face` | 懒处理 | 平衡跳过；不加载字体。 |
+| `@keyframes` | 懒处理 | 平衡跳过；无 animation model。 |
+| 未知 at-rule | 懒处理 | 跳过 statement 或平衡 block。 |
+| CSS custom properties | 已保存/懒处理 | declaration 可保留用于诊断，但不解析 `var()` 依赖图。 |
+| CSS nesting | 延后 | 不要依赖嵌套 selector。 |
+| Cascade origins | 子集 | author + inline + 小型内置默认样式；无 user/animation origin。 |
+| Rule indexing | 可用 | 按最右侧 id/class/tag/universal 建桶。 |
+
+## Selectors
+
+| Selector | 状态 | 行为 |
+| --- | --- | --- |
+| Type selector | 可用 | `button`、`section`。 |
+| Class selector | 可用 | `.card`。 |
+| ID selector | 可用 | `#search`。 |
+| 简单 compound | 可用 | `button.primary.large`。 |
+| Descendant combinator | 可用 | `.panel button`。 |
+| Child combinator | 可用 | `main > section`。 |
+| 简单 attribute selector | 子集 | 支持存在性和简单等值类匹配。 |
+| `:root` | 可用 | 支持。 |
+| 动态 pseudo-class | 延后 | `:hover`、`:focus`、`:active`、`:disabled` 暂不驱动样式。 |
+| `:is()`、`:where()`、`:has()` | 懒处理 | 含不支持 selector 函数的规则会被跳过。 |
+| Pseudo-elements | 延后 | 无 `::before`、`::after`、marker、selection 样式。 |
+| Sibling combinators | 延后 | `+` 和 `~` 不支持/会跳过。 |
+| Shadow selectors | 延后 | `::part`、`::slotted` 跳过。 |
+
+## CSS 属性
+
+只应把下表支持的值用于必需 UI。不支持的值不会覆盖之前已经支持的 fallback。
+
+| 属性 | 状态 | 支持值/降级 |
+| --- | --- | --- |
+| `display` | 子集 | `block`、`inline`、`inline-block`、`flex`、`inline-flex`、`grid`、`inline-grid`、`none`。inline flex/grid 映射为同一简化布局模式。 |
+| `color` | 子集 | 基础命名色、hex、`rgb()`、`rgba()`。`oklch()` 等不覆盖 fallback。 |
+| `background-color` | 子集 | 与 `color` 相同的颜色解析。 |
+| `background` | 子集 | 提取常见颜色背景；图片忽略。 |
+| `margin` | 可用 | 1-4 个长度值，支持水平 `auto`。 |
+| `margin-top/right/bottom/left` | 可用 | 物理 longhand。`margin-left/right:auto` 可用于当前水平居中路径。 |
+| `padding` | 可用 | 1-4 个长度值。 |
+| `padding-top/right/bottom/left` | 可用 | 物理 longhand。 |
+| `border` | 子集 | 支持 `none`，从简单 shorthand 中提取 width 和 color；style 关键词只作为可忽略文本。 |
+| `border-width` | 可用 | 1-4 个长度值。 |
+| `border-top/right/bottom/left-width` | 可用 | 物理边框宽度 longhand。 |
+| `border-color` | 子集 | 单色应用到所有边。 |
+| `border-radius` | 子集 | 单个长度 radius。支持圆角填充；复杂四角 radius 不支持。 |
+| `width` / `height` | 可用 | 支持单位的长度值。 |
+| `min-width` / `min-height` | 可用 | 长度值。 |
+| `max-width` | 可用 | 长度值；block layout 使用。 |
+| `aspect-ratio` | 可用 | 正数或 `w / h`，包括 `auto w / h`。用于 intrinsic box height。 |
+| `font-size` | 可用 | 长度值。 |
+| `line-height` | 可用 | 无单位倍率或长度。 |
+| `text-align` | 可用 | `left`、`right`、`start`、`end`、`center`。 |
+| `text-indent` | 可用 | 长度值。 |
+| `box-sizing` | 可用 | `content-box`、`border-box`。 |
+| `overflow` | 子集 | `visible`、`hidden`、`clip`、`auto`、`scroll`；会形成裁剪 layer，但原生滚动容器不完整。 |
+| `opacity` | 子集 | 0..1；软件合成中创建 composited layer。 |
+| `position` | 已保存/子集 | `relative`、`absolute`、`fixed`、`sticky` 创建 stacking/layer hint；完整 positioned layout 未实现。 |
+| `z-index` | 子集 | 整数或 `auto`；目前是 layer-local ordering。 |
+| `transform` | 已保存/懒处理 | 非 `none` 创建合成边界；矩阵变换延后。 |
+| `justify-content` | 子集 | `start`、`flex-start`、`normal`、`center`、`space-around`、`space-between`，用于简化 flex row。 |
+| `align-items` | 子集 | `stretch`、`normal`、`start`、`flex-start`、`center`、`end`、`flex-end`，用于简化 flex row。 |
+| `gap` | 可用 | 1-2 个长度值，用于 grid 和简化 flex。 |
+| `row-gap` / `column-gap` | 可用 | 长度值。 |
+| `grid-template-columns` | 子集 | 从 `repeat(auto-fit, minmax(<length>, 1fr))`、`minmax(<length>, 1fr)`、单个长度或 `1fr` 中提取最小轨道。 |
+| `grid-auto-rows` | 子集 | 长度或 `minmax(<length>, auto)` 最小行高。 |
+| `grid-column` / `grid-row` | 子集 | `span N`，内部有界钳制。无显式 line placement。 |
+| `box-shadow` | 子集 | 第一条 shadow 近似为圆角半透明填充。不做真实 blur 和多重阴影。 |
+| `object-fit` | 延后 | 等待图片解码/replaced element 能力。 |
+| `font-family` / `font-weight` | 延后 | 实际字体由文本后端决定。Win32 壳使用 Microsoft YaHei UI。 |
+| animation/transition | 延后 | 声明会跳过或保存，但不产生动画行为。 |
+| filter/backdrop-filter | 延后 | 不绘制。 |
+
+当前长度单位包括 `px`、无单位 px-like 数字、`rem`、`em` 和简化 `vh`。
+百分比、`calc()`、完整 viewport math 还不是通用布局单位。
+
+## Layout
+
+| 功能 | 状态 | 行为 |
+| --- | --- | --- |
+| Block layout | 可用 | 垂直盒模型，支持 margin、padding、border、max-width、水平 auto margin。 |
+| Inline text flow | 子集 | 文本和 inline 控件横向流动，并按可用宽度换行。 |
+| Inline 背景/边框 | 子集 | 尽量收缩到文本/内容范围。 |
+| `inline-block` | 子集 | 表示为 inline-like render object，并具备可用盒行为。 |
+| Flex row | 子集 | 单行简化 row，支持基础 justify、align 和 column gap。无 wrapping 和完整 flex sizing。 |
+| Grid cards | 子集 | 响应式 auto-fit/minmax 卡片 grid、gap、最小 auto rows 和 span。无显式 placement、named lines、subgrid、dense packing。 |
+| Aspect ratio | 可用 | 没有显式高度/内容高度时提供 intrinsic height。 |
+| Replaced elements | 子集 | 常见控件/媒体作为 leaf boxes，有 fallback 尺寸；真实 image/video layout 延后。 |
+| 文本测量 | 近似 | 核心 fallback 很小且偏 ASCII。Win32 壳使用 GDI 文本。 |
+| Bidi/text shaping | 延后 | 生产级非拉丁文本需要平台 text painter 或后续 shaping 策略。 |
+| Fragmentation/multicolumn | 延后 | 未实现。 |
+
+## 表单控件
+
+| 元素/功能 | 状态 | 行为 |
+| --- | --- | --- |
+| `button` | 可用 | 轻量原生风格绘制，默认近似按内容收缩，支持 click。 |
+| `input type=text` 和默认 input | 可用 | 有 value 状态，宿主可输入 UTF-8 文本，支持 Backspace。 |
+| `textarea` | 子集 | value-like 状态和基础绘制；完整多行编辑有限。 |
+| `input type=checkbox` | 可用 | checked 状态、点击激活、input/change 事件。 |
+| `input type=radio` | 子集 | checked 状态和绘制；同 name 互斥组仍有限。 |
+| `input type=range` | 可用 | track/thumb 绘制，拖动更新 value。 |
+| `select` / `option` | 子集 | 绘制当前选中项；验证壳点击会循环选项。无 popup UI。 |
+| `progress` / `meter` | 可用 | 根据属性绘制 value bar。 |
+| 日期/颜色/文件控件 | 延后 | 暂用 text/select/range fallback。 |
+| 表单验证 | 延后 | 无 constraint validation UI 或 form submit。 |
+| IME | 壳层相关 | 核心接收 UTF-8 文本；平台壳负责输入法集成。 |
+
+## 事件与输入
+
+| 功能 | 状态 | 行为 |
+| --- | --- | --- |
+| `EventTarget` | 可用 | 按类型紧凑存储 listener。 |
+| 捕获/目标/冒泡 | 可用 | 类 DOM 事件流。 |
+| `preventDefault` | 可用 | event object 记录取消状态。 |
+| `stopPropagation` / `stopImmediatePropagation` | 可用 | 已实现。 |
+| `MouseEvent` | 可用 | `clientX`、`clientY`、`button`、`buttons`、modifier 字段。 |
+| `WheelEvent` | 可用 | `deltaX`、`deltaY`、`deltaMode`、modifier 字段。 |
+| Hit testing | 可用 | 基于 layer/layout geometry，考虑裁剪和 z-order hint。 |
+| Pointer move/down/up | 可用 | 平台无关 input controller 派发 mouse-like events。 |
+| Click synthesis | 可用 | 同一目标 down/up 合成 click。 |
+| Focus tracking | 子集 | input controller 保存 focused node；CSS `:focus` 样式未实现。 |
+| Touch events | 延后 | 目前宿主可把触摸映射为 pointer-like input。 |
+| Keyboard events | 延后 | 核心只处理控件所需的简单 key action；DOM keyboard event object 不完整。 |
+
+## JavaScript / JerryScript 绑定
+
+JavaScript 只在 `WEARWEB_BUILD_SCRIPTING=ON` 且通过 `JERRYSCRIPT_ROOT` 配置本地
+JerryScript 源码树时可用。
+
+| API | 状态 | 行为 |
+| --- | --- | --- |
+| Classic script 执行 | 壳层限定 | 伪浏览器/Win32 壳可执行一个外部脚本。自动 script loading 仍有限。 |
+| `window` / `document` | 子集 | 暴露下列方法。 |
+| `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
+| `document.createElement` | 可用 | 创建 runtime 持有的 detached element。 |
+| `document.createTextNode` | 可用 | 创建 detached text node。 |
+| `appendChild` / `removeChild` | 可用 | 移动节点、防止环、标记 dirty。 |
+| `setAttribute` / `getAttribute` | 可用 | 绑定层会 lowercase 属性名。 |
+| `textContent` | 可用 | getter/setter；同值设置不会触发 dirty。 |
+| `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
+| Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |
+| 表单属性 | 子集 | 相关控件上的 `value`、`checked`、`selectedIndex`。 |
+| Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |
+| Promise/microtask | 延后 | 不要依赖浏览器 task 语义。 |
+| Modules/import | 延后 | 无 module loader。 |
+| `querySelector` | 延后 | 现阶段使用 ID。 |
+| `innerHTML` | 延后 | 使用 DOM creation APIs。 |
+| Fetch/network/storage | 延后 | 数据由宿主提供。 |
+
+## 渲染与像素输出
+
+| 功能 | 状态 | 行为 |
+| --- | --- | --- |
+| Display list | 可用 | 矩形、边框、渐变、文本命令。 |
+| CPU framebuffer | 可用 | 软件 rasterizer/compositor 可输出 BMP/PPM。 |
+| Source-over alpha | 可用 | straight-alpha 合成。 |
+| Opacity layer | 可用 | opacity/composited layer 使用离屏合成。 |
+| 圆角填充 | 子集 | 背景/阴影支持 rounded rectangle fill clipping。 |
+| 边框绘制 | 可用 | 边框拆成 fill rectangles。 |
+| Linear gradient | 子集 | 简单垂直渐变命令。 |
+| 文本 | 子集 | 核心 fallback 是极小 ASCII 字体。Win32 壳注入 GDI 文本，可验证 UTF-8/中文。 |
+| 中文文本 | 壳层相关 | 用 Win32 壳或未来平台 text painter。伪浏览器 fallback 会显示替代 glyph。 |
+| 图片 | 延后 | 无 image decode。`img`/媒体节点只有可用盒和 fallback。 |
+| Canvas/SVG | 延后 | 无 canvas API 或 SVG renderer。 |
+| 真实 shadow blur | 延后 | `box-shadow` blur 只近似。 |
+| Filter/blend modes | 延后 | 仅 normal source-over。 |
+| GPU compositing | 延后 | 当前 CPU-only；layer model 为未来硬件后端留接口。 |
+
+## Dirty 与重绘
+
+| 机制 | 状态 | 行为 |
+| --- | --- | --- |
+| Dirty propagation | 可用 | mutation 会把 dirty bits OR 到当前节点和祖先。 |
+| Dirty check | 可用 | 因为祖先保存聚合 dirty bits，根节点检查为 O(1)。 |
+| Dirty clear | 可用 | 清理时跳过干净分支。 |
+| 宿主合并重绘 | 子集 | Win32 壳会在 input/script callback 后只对 dirty DOM 重绘。 |
+| 增量 style/layout | 延后 | 目前一旦 dirty，仍重建 render/layout/layer tree。 |
+| Dirty rectangle repaint | 延后 | layer 结构为此预留，但 framebuffer 仍是全帧重绘。 |
+
+实际含义：脚本中多次 DOM mutation 应尽量放在同一次事件或 timer callback 内。宿主会观察到一次
+dirty 并重绘一次，但这次重绘仍是简化管线的全量 pass。
+
+## 推荐写法
+
+- 交互节点优先使用稳定 `id`。
+- 使用简单 selector 和 class-based styling。
+- 仪表盘/卡片 UI 使用已支持的 grid-card 子集。
+- 使用 `button`、`input`、`select`、`textarea`、`progress`、`meter`，不要手写 canvas 控件。
+- 对现代 CSS 值写 fallback，例如：`color: #334155; color: oklch(...);`。
+- 不要把必需 UI 放进 `@container`、`@supports`、复杂 media query 或不支持 selector 函数里。
+- 脚本保持同步、小型；数据由宿主提供。
+- 中文/UTF-8 可读性验收使用 Win32 壳。
+- 页面保持小而有界；parser limit 是设计目标，不是 bug。
+
+## 当前硬限制
+
+- CSS parser：`max_rules` 4096，`max_declarations_per_rule` 256，
+  `max_nesting_depth` 8。
+- 诊断/示例工具会限制输入文件，通常为 512 KiB 或 1 MiB，取决于工具。
+- Grid 自动列数内部有界，以保证嵌入式内存可预测。
+- 当前 JerryScript 构建假设同一进程内只有一个 active runtime。
+
+## 什么时候应该新增功能
+
+适合新增：
+
+- 嵌入式应用作者常用。
+- 可用整数或有界算法计算。
+- 能一致降级。
+- 不要求网络、GPU、字体加载或大型浏览器服务。
+
+应延后：
+
+- 会引入 style/layout 反馈循环，例如 `@container`。
+- 需要大型外部子系统，例如 image decode、font shaping、canvas。
+- 依赖完整浏览器 task/loading 模型。
+- 会造成“半现代半老旧”的不一致视觉结果。

@@ -75,6 +75,16 @@ void attributes_and_text_mark_specific_dirty_bits() {
     check((flags & DomDirtyAttributes) != 0U, "remove attribute marks attribute dirty");
 }
 
+void unchanged_text_content_stays_clean() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p>Same</p></body>");
+    Node* paragraph = find_first_by_tag(*document, "p");
+    check(paragraph != nullptr, "paragraph exists");
+
+    paragraph->set_text_content("Same");
+    check(subtree_dirty_flags(*document) == DomDirtyNone, "same textContent does not dirty document");
+}
+
 } // namespace
 
 int main() {
@@ -82,6 +92,7 @@ int main() {
         parser_returns_clean_document();
         append_and_remove_mark_tree_dirty();
         attributes_and_text_mark_specific_dirty_bits();
+        unchanged_text_content_stays_clean();
     } catch (const std::exception& error) {
         std::cerr << "dom mutation test failed: " << error.what() << '\n';
         return 1;
