@@ -2,7 +2,7 @@
 
 Date: 2026-06-14
 
-WearWeb is structured after the broad shape used by Blink, WebKit and Gecko, but
+JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
 with smaller data structures and explicit feature cuts for wearable targets.
 
 ```text
@@ -60,7 +60,7 @@ DOM + StyleResolver
 ## Rule Indexing
 
 Modern engines build rule sets so style resolution does not scan every rule for
-every element. WearWeb now keeps rule buckets by the rightmost simple selector:
+every element. JellyFrame now keeps rule buckets by the rightmost simple selector:
 
 - id bucket
 - class bucket
@@ -87,6 +87,9 @@ source order, then runs selector matching and cascade comparison.
 - Unsupported modern selectors are skipped before CSSOM insertion when possible.
 - Render objects keep a compact block/inline/text shape; layout adds small
   dedicated paths for common flex rows and responsive grid-card patterns.
+- Render, layout and layer tree builders expose heap and `MonotonicArena`
+  allocation paths; embedded benchmarks use the arena path to reduce small heap
+  churn.
 - Layer tree supports sparse clipping, opacity boundaries, positioned stacking
   hints and conservative compositing boundaries.
 - Display list uses rectangles, gradients and text only.
@@ -99,7 +102,8 @@ source order, then runs selector matching and cascade comparison.
 ## Next Professionalization Steps
 
 1. Move selector parsing into a dedicated `selector.*` module.
-2. Add arena allocation for DOM/render/layout trees.
+2. Evaluate DOM node allocation policy and whether a document arena is worth the
+   parser/tree-builder complexity.
 3. Add style sharing or computed-style cache for repeated class patterns.
 4. Reuse render/layout/layer subtrees from existing dirty flags instead of
    rebuilding the full pipeline after every mutation.

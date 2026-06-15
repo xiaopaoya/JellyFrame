@@ -9,7 +9,7 @@
 #include <sstream>
 #include <string>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -81,31 +81,37 @@ int main(int argc, char** argv) {
     print_result("render_tree", iterations, average_microseconds(iterations, [&] {
         StyleResolver resolver(stylesheet);
         RenderTreeBuilder builder(resolver);
-        auto render_tree = builder.build(*document);
+        MonotonicArena arena;
+        auto render_tree = builder.build(*document, arena);
         (void)render_tree;
     }));
 
     StyleResolver resolver(stylesheet);
     RenderTreeBuilder builder(resolver);
-    auto render_tree = builder.build(*document);
+    MonotonicArena render_tree_arena;
+    auto render_tree = builder.build(*document, render_tree_arena);
 
     print_result("layout", iterations, average_microseconds(iterations, [&] {
         LayoutEngine layout_engine(resolver);
-        auto layout_tree = layout_engine.layout(*render_tree, 360);
+        MonotonicArena layout_arena;
+        auto layout_tree = layout_engine.layout(*render_tree, 360, layout_arena);
         (void)layout_tree;
     }));
 
     LayoutEngine layout_engine(resolver);
-    auto layout_tree = layout_engine.layout(*render_tree, 360);
+    MonotonicArena layout_arena;
+    auto layout_tree = layout_engine.layout(*render_tree, 360, layout_arena);
 
     print_result("layer_tree", iterations, average_microseconds(iterations, [&] {
         LayerTreeBuilder layer_tree_builder;
-        auto layer_tree = layer_tree_builder.build(*layout_tree);
+        MonotonicArena layer_arena;
+        auto layer_tree = layer_tree_builder.build(*layout_tree, layer_arena);
         (void)layer_tree;
     }));
 
     LayerTreeBuilder layer_tree_builder;
-    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    MonotonicArena layer_arena;
+    auto layer_tree = layer_tree_builder.build(*layout_tree, layer_arena);
 
     print_result("flatten_layers", iterations, average_microseconds(iterations, [&] {
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
@@ -117,11 +123,14 @@ int main(int argc, char** argv) {
         auto local_stylesheet = css_parser.parse(css);
         StyleResolver local_resolver(local_stylesheet);
         RenderTreeBuilder local_builder(local_resolver);
-        auto local_render_tree = local_builder.build(*local_document);
+        MonotonicArena local_render_tree_arena;
+        auto local_render_tree = local_builder.build(*local_document, local_render_tree_arena);
         LayoutEngine local_layout(local_resolver);
-        auto local_layout_tree = local_layout.layout(*local_render_tree, 360);
+        MonotonicArena local_layout_arena;
+        auto local_layout_tree = local_layout.layout(*local_render_tree, 360, local_layout_arena);
         LayerTreeBuilder local_layer_tree_builder;
-        auto local_layer_tree = local_layer_tree_builder.build(*local_layout_tree);
+        MonotonicArena local_layer_arena;
+        auto local_layer_tree = local_layer_tree_builder.build(*local_layout_tree, local_layer_arena);
         DisplayList display_list = local_layer_tree_builder.flatten(*local_layer_tree);
         (void)display_list;
     }));

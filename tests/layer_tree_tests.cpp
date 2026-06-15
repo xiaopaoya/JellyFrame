@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -24,16 +24,16 @@ struct BuiltPipeline {
     std::unique_ptr<Node> document;
     Stylesheet stylesheet;
     StyleResolver resolver;
-    std::unique_ptr<RenderObject> render_tree;
-    std::unique_ptr<LayoutBox> layout_tree;
-    std::unique_ptr<LayerNode> layer_tree;
+    RenderObjectPtr render_tree;
+    LayoutBoxPtr layout_tree;
+    LayerNodePtr layer_tree;
 
     BuiltPipeline(std::unique_ptr<Node> document_in,
                   Stylesheet stylesheet_in,
                   StyleResolver resolver_in,
-                  std::unique_ptr<RenderObject> render_tree_in,
-                  std::unique_ptr<LayoutBox> layout_tree_in,
-                  std::unique_ptr<LayerNode> layer_tree_in)
+                  RenderObjectPtr render_tree_in,
+                  LayoutBoxPtr layout_tree_in,
+                  LayerNodePtr layer_tree_in)
         : document(std::move(document_in)),
           stylesheet(std::move(stylesheet_in)),
           resolver(std::move(resolver_in)),
@@ -260,6 +260,35 @@ void grid_auto_fit_gap_span_and_aspect_ratio_layout() {
     check(media->rect.height > 0 && media->rect.width > media->rect.height, "aspect ratio creates wide media box");
 }
 
+void layer_builder_respects_layer_and_display_command_budgets() {
+    auto pipeline = build_pipeline(
+        "<body><div class='a'>A</div><div class='b'>B</div><div class='c'>C</div></body>",
+        "div { position: relative; z-index: 1; background: #ffffff; border: 1px solid #000000; }");
+
+    LayerTreeBuilder tight_layer_builder(LayerTreeBuilderOptions{2, 4});
+    auto tight_layer_tree = tight_layer_builder.build(*pipeline.layout_tree);
+    DisplayList flattened = tight_layer_builder.flatten(*tight_layer_tree);
+
+    check(count_layers(*tight_layer_tree) <= 2, "layer budget caps own layers");
+    check(flattened.size() <= 4, "display command budget caps flattened output");
+}
+
+void layer_tree_can_use_monotonic_arena() {
+    auto pipeline = build_pipeline(
+        "<body><section class='clip'><p>A</p></section><section class='fade'>B</section></body>",
+        ".clip { overflow: hidden; height: 20px; } .fade { opacity: .5; background: #000000; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    MonotonicArena arena(512);
+    auto layer_tree = layer_tree_builder.build(*pipeline.layout_tree, arena);
+
+    check(layer_tree != nullptr, "arena layer tree root exists");
+    check(arena.used_bytes() > 0, "arena layer tree consumes arena storage");
+    check(count_layers(*layer_tree) >= 2, "arena layer tree contains child layers");
+    check(find_layer_with_reason(*layer_tree, LayerReasonOverflowClip) != nullptr,
+          "arena layer tree keeps clip reason");
+}
+
 void box_shadow_emits_cheap_translucent_fill() {
     auto pipeline = build_pipeline(
         "<body><section class='card'>Shadow</section><section class='card color-first'>Shadow</section></body>",
@@ -311,7 +340,7 @@ void list_markers_and_generated_counters_emit_text() {
 
 void fixed_grid_places_description_list_in_columns() {
     auto pipeline = build_pipeline(
-        "<body><dl><dt>Name</dt><dd>WearWeb</dd><dt>Mode</dt><dd>Embedded</dd></dl></body>",
+        "<body><dl><dt>Name</dt><dd>JellyFrame</dd><dt>Mode</dt><dd>Embedded</dd></dl></body>",
         "dl { display: grid; grid-template-columns: 80px 1fr; gap: 4px; } dd { margin: 0; }");
 
     const LayoutBox* term = nullptr;
@@ -329,7 +358,7 @@ void fixed_grid_places_description_list_in_columns() {
         }
     };
     find_text_parent(*pipeline.layout_tree, "Name", term, find_text_parent);
-    find_text_parent(*pipeline.layout_tree, "WearWeb", description, find_text_parent);
+    find_text_parent(*pipeline.layout_tree, "JellyFrame", description, find_text_parent);
     check(term != nullptr && description != nullptr, "description list text boxes exist");
     check(description->rect.x > term->rect.x + 70, "fixed grid places dd in second column");
 }
@@ -407,6 +436,8 @@ int main() {
         unbreakable_symbol_stays_single_line();
         grid_item_auto_width_reflows_centered_text();
         flex_wrap_places_items_on_new_lines();
+        layer_builder_respects_layer_and_display_command_budgets();
+        layer_tree_can_use_monotonic_arena();
     } catch (const std::exception& error) {
         std::cerr << "layer tree test failed: " << error.what() << '\n';
         return 1;

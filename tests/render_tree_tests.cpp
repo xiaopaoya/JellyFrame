@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -103,6 +103,40 @@ void hidden_attribute_skips_rendering() {
     check(text != nullptr && text->node != nullptr && text->node->text == "Shown", "hidden text skipped");
 }
 
+void render_tree_respects_object_budget() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><p>A</p><p>B</p><p>C</p></main></body>");
+    StyleResolver resolver(css_parser.parse(""));
+    RenderTreeBuilder builder(resolver, RenderTreeOptions{4});
+    auto render_tree = builder.build(*document);
+
+    int count = 0;
+    const auto count_objects = [&](const RenderObject& root, const auto& self) -> void {
+        ++count;
+        for (const auto& child : root.children) {
+            self(*child, self);
+        }
+    };
+    count_objects(*render_tree, count_objects);
+    check(count == 4, "render tree is capped by object budget");
+}
+
+void render_tree_can_use_monotonic_arena() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><p>A</p><p>B</p></main></body>");
+    StyleResolver resolver(css_parser.parse("p { color: #2563eb; }"));
+    RenderTreeBuilder builder(resolver);
+    MonotonicArena arena(256);
+    auto render_tree = builder.build(*document, arena);
+
+    check(render_tree != nullptr, "arena render tree root exists");
+    check(arena.used_bytes() > 0, "arena render tree consumes arena storage");
+    check(find_first_by_tag(*render_tree, "main") != nullptr, "arena render tree contains element");
+    check(find_first_text(*render_tree) != nullptr, "arena render tree contains text");
+}
+
 } // namespace
 
 int main() {
@@ -111,6 +145,8 @@ int main() {
         render_tree_carries_computed_style_and_text_inheritance();
         closed_dialog_is_not_rendered_by_default();
         hidden_attribute_skips_rendering();
+        render_tree_respects_object_budget();
+        render_tree_can_use_monotonic_arena();
     } catch (const std::exception& error) {
         std::cerr << "render tree test failed: " << error.what() << '\n';
         return 1;

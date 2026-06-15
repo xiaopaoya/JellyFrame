@@ -17,6 +17,9 @@
 - 边框被输出为 fill rectangles。
 - 不支持的现代 CSS 在 block/rule 边界跳过，避免恢复循环。
 - Style cascade slots 使用固定数组，不为每个节点创建级联 hash map。
+- Style resolution 在 `StyleResolver` 内缓存有界的 id/class/tag 候选规则集合；最终选择器匹配仍逐节点执行，
+  因此 descendant、child 和 attribute selector 语义保持正确。
+- DOM attributes 使用紧凑顺序 `AttributeList`，不再为每个节点维护 attribute hash map。
 - DOM event listener storage 惰性分配，没有 listener 的节点不携带空 listener table。
 - DOM dirty bits 会向祖先传播，因此根节点 dirty 检查为 O(1)，dirty 清理会跳过干净子树，
   且同值 `textContent` 赋值不会触发重绘。
@@ -28,13 +31,16 @@
   它不分配、不持有，也不自行 flush 设备内存。
 - 响应式 grid 子集使用有界整数 auto-placement、clamped span 和紧凑的逐行
   occupancy bit mask，而不是完整 track-sizing engine。
+- `MonotonicArena` 已可用于文档生命周期分配。Render tree、layout tree 和 layer tree builder
+  都提供 arena-backed 路径，并已接入嵌入式 benchmark。
 
 ## 内存建议
 
 - 如果目标栈很小，应替换递归析构/遍历。
-- 当对象生命周期绑定到 document 后，为 DOM/render/layout objects 添加 arena allocation。
-- 面向极小堆目标前，把每节点 attribute hash map 替换成紧凑 small-vector attributes。
-- 面向真实大型样式表前，按 id/class/tag 建 CSS rule index。
+- 评估 DOM nodes 是否应进入 document arena。
+- 继续使用 `AttributeList`，除非测量证明需要微型 id/class 索引；紧凑 UI 节点不维护 hash buckets 更省内存。
+- CSS rules 已按 id/class/tag/universal bucket 建索引，并复用有界候选规则缓存；完整 computed-style
+  sharing 仍延后到继承和 mutation invalidation 能保持简单之后。
 - 在小 RAM 系统上限制 layer/display-list 输出，或按 dirty region 分块生成。
 - 当前所有权和分配审视见 `docs/memory_management_zh.md`。
 
@@ -59,7 +65,7 @@
 命令：
 
 ```powershell
-.\build\Release\wearweb_microbench.exe 80 1000
+.\build\Release\jellyframe_microbench.exe 80 1000
 ```
 
 加入响应式 grid/aspect-ratio layout 子集后，本 Windows 构建机结果：
@@ -87,4 +93,4 @@ full_pipeline avg_us=2228.91
 - 响应式 grid card 和 `aspect-ratio` 增加了可测量的 layout 工作，但成本有界，
   换来了明显更强的嵌入式应用 UI 表达能力。
 - 当前 full pipeline 仍主要由 HTML parse 和 style/render 工作主导。
-- 下一项性能升级应是 arena allocation 和针对重复 class pattern 的 computed-style sharing。
+- 下一项性能升级应转向重复 class pattern 的 computed-style sharing，以及更严格的离屏 framebuffer 预算。

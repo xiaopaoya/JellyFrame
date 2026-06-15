@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 
+#include "core/budget.h"
 #include "core/css_parser.h"
 #include "core/dirty_region.h"
 #include "core/document_script.h"
@@ -14,7 +15,7 @@
 #include "core/software_renderer.h"
 #include "core/style.h"
 
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
 #include "script/jerryscript_runtime.h"
 #endif
 
@@ -35,14 +36,21 @@
 #include <utility>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
 constexpr std::size_t kMaxInputBytes = 1024 * 1024;
-constexpr wchar_t kWindowClassName[] = L"WearWebWin32Browser";
+constexpr wchar_t kWindowClassName[] = L"JellyFrameWin32Browser";
 constexpr UINT_PTR kScriptTimerId = 1;
 constexpr UINT kScriptTimerPeriodMs = 16;
+
+HostBudgets desktop_browser_budgets() {
+    HostBudgets budgets;
+    budgets.max_resource_bytes = kMaxInputBytes;
+    budgets.max_framebuffer_pixels = 2400 * 2400;
+    return budgets;
+}
 
 std::string read_file_limited(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
@@ -378,16 +386,20 @@ FrameBuffer render_page_with_gdi_text(const std::string& html_path,
                                       int min_viewport_height) {
     HtmlParser html_parser;
     CssParser css_parser;
-    auto document = html_parser.parse(read_file_limited(html_path));
+    const HostBudgets budgets = desktop_browser_budgets();
+    auto document = html_parser.parse(read_file_limited(html_path), html_parser_options_from_budgets(budgets));
     Stylesheet stylesheet = css_parser.parse(
-        wearweb_example::read_author_css_for_document(css_path, *document, kMaxInputBytes));
+        jellyframe_example::read_author_css_for_document(css_path, *document, kMaxInputBytes),
+        css_parser_options_from_budgets(budgets));
     StyleResolver resolver(std::move(stylesheet));
 
-    RenderTreeBuilder render_builder(resolver);
+    RenderTreeBuilder render_builder(resolver, render_tree_options_from_budgets(budgets));
     auto render_tree = render_builder.build(*document);
-    LayoutEngine layout_engine(resolver, TextMeasureProvider{measure_text_with_gdi, nullptr});
+    LayoutEngine layout_engine(resolver,
+                               TextMeasureProvider{measure_text_with_gdi, nullptr},
+                               layout_engine_options_from_budgets(budgets));
     auto layout_tree = layout_engine.layout(*render_tree, viewport_width);
-    LayerTreeBuilder layer_builder;
+    LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets));
     auto layer_tree = layer_builder.build(*layout_tree);
 
     const int output_height = std::max(min_viewport_height, layout_tree->rect.height);
@@ -413,7 +425,7 @@ public:
 
         hwnd_ = CreateWindowExW(0,
                                 kWindowClassName,
-                                L"WearWeb Win32 Browser",
+                                L"JellyFrame Win32 Browser",
                                 WS_OVERLAPPEDWINDOW,
                                 CW_USEDEFAULT,
                                 CW_USEDEFAULT,
@@ -449,15 +461,16 @@ private:
     int viewport_width_ = 1;
     int viewport_height_ = 1;
     int scroll_y_ = 0;
+    HostBudgets budgets_ = desktop_browser_budgets();
 
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
     std::unique_ptr<JerryScriptRuntime> script_runtime_;
 #endif
     std::unique_ptr<Node> document_;
     std::unique_ptr<StyleResolver> style_resolver_;
-    std::unique_ptr<RenderObject> render_tree_;
-    std::unique_ptr<LayoutBox> layout_tree_;
-    std::unique_ptr<LayerNode> layer_tree_;
+    RenderObjectPtr render_tree_;
+    LayoutBoxPtr layout_tree_;
+    LayerNodePtr layer_tree_;
     std::unique_ptr<InputController> input_;
     FrameBuffer frame_buffer_;
     Color page_background_{255, 255, 255, 255};
@@ -518,7 +531,7 @@ private:
             handle_timer(wparam);
             return 0;
         case WM_DESTROY:
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
             KillTimer(hwnd_, kScriptTimerId);
 #endif
             PostQuitMessage(0);
@@ -537,15 +550,16 @@ private:
 
     void rebuild() {
         try {
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
             KillTimer(hwnd_, kScriptTimerId);
             script_runtime_.reset();
 #endif
             HtmlParser html_parser;
             CssParser css_parser;
-            document_ = html_parser.parse(read_file_limited(html_path_));
+            document_ = html_parser.parse(read_file_limited(html_path_), html_parser_options_from_budgets(budgets_));
             Stylesheet stylesheet = css_parser.parse(
-                wearweb_example::read_author_css_for_document(css_path_, *document_, kMaxInputBytes));
+                jellyframe_example::read_author_css_for_document(css_path_, *document_, kMaxInputBytes),
+                css_parser_options_from_budgets(budgets_));
             style_resolver_ = std::make_unique<StyleResolver>(std::move(stylesheet));
             page_background_ = page_background_color(*document_, *style_resolver_);
 
@@ -554,15 +568,15 @@ private:
                 set_title("clicked " + describe_node(event.target()));
             });
 
-#if defined(WEARWEB_ENABLE_SCRIPTING)
-            wearweb_example::ScriptLoadContext script_context;
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+            jellyframe_example::ScriptLoadContext script_context;
             const std::filesystem::path html_path(html_path_);
             script_context.base_dir = html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
             script_context.max_input_bytes = kMaxInputBytes;
             std::vector<DocumentScript> document_scripts =
-                collect_classic_scripts(*document_, wearweb_example::load_linked_script, &script_context);
+                collect_classic_scripts(*document_, jellyframe_example::load_linked_script, &script_context);
             if (!document_scripts.empty() || !script_path_.empty()) {
-                script_runtime_ = std::make_unique<JerryScriptRuntime>();
+                script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
                 script_runtime_->set_host_time_ms(GetTickCount64());
                 script_runtime_->bind_document(*document_);
                 for (const DocumentScript& script : document_scripts) {
@@ -594,17 +608,49 @@ private:
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
         }
-        std::unique_ptr<LayoutBox> previous_layout = std::move(layout_tree_);
-        RenderTreeBuilder render_builder(*style_resolver_);
+        const DomDirtyFlags dirty_flags = document_->dirty_flags;
+        const bool can_reuse_layout =
+            dirty_flags != DomDirtyNone && !dirty_requires_render_or_layout(dirty_flags) &&
+            render_tree_ != nullptr && layout_tree_ != nullptr &&
+            frame_buffer_.width == viewport_width_;
+        LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets_));
+        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
+        if (can_reuse_layout) {
+            const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+            if (frame_buffer_.height == content_height) {
+                auto next_layer_tree = layer_builder.build(*layout_tree_);
+                std::vector<Rect> dirty_rects = compute_dirty_rects(
+                    *document_,
+                    layout_tree_.get(),
+                    layout_tree_.get(),
+                    dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
+                layer_tree_ = std::move(next_layer_tree);
+                if (!dirty_rects.empty()) {
+                    compositor.render_into(*layer_tree_,
+                                           frame_buffer_,
+                                           page_background_,
+                                           dirty_rects.data(),
+                                           dirty_rects.size());
+                }
+                input_ = std::make_unique<InputController>(*layer_tree_);
+                input_->set_focused_node(focused_node);
+                update_blit_pixels();
+                clear_dirty_flags(*document_);
+                return;
+            }
+        }
+
+        LayoutBoxPtr previous_layout = std::move(layout_tree_);
+        RenderTreeBuilder render_builder(*style_resolver_, render_tree_options_from_budgets(budgets_));
         auto next_render_tree = render_builder.build(*document_);
-        LayoutEngine layout_engine(*style_resolver_, TextMeasureProvider{measure_text_with_gdi, nullptr});
+        LayoutEngine layout_engine(*style_resolver_,
+                                   TextMeasureProvider{measure_text_with_gdi, nullptr},
+                                   layout_engine_options_from_budgets(budgets_));
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_);
-        LayerTreeBuilder layer_builder;
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
 
         const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);
         scroll_y_ = std::max(0, std::min(scroll_y_, std::max(0, content_height - viewport_height_)));
-        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
         std::vector<Rect> dirty_rects;
         const bool can_repaint_incrementally =
             previous_layout != nullptr &&
@@ -614,7 +660,8 @@ private:
             dirty_rects = compute_dirty_rects(*document_,
                                               previous_layout.get(),
                                               next_layout_tree.get(),
-                                              DirtyRegionOptions{Rect{0, 0, viewport_width_, content_height}, 8, 3});
+                                              dirty_region_options_from_budgets(
+                                                  budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
         }
 
         render_tree_ = std::move(next_render_tree);
@@ -846,7 +893,7 @@ private:
         if (timer_id != kScriptTimerId) {
             return;
         }
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr) {
             return;
         }
@@ -866,7 +913,7 @@ private:
     }
 
     void set_title(const std::string& status) {
-        SetWindowTextW(hwnd_, utf8_to_wide("WearWeb Win32 Browser - " + status).c_str());
+        SetWindowTextW(hwnd_, utf8_to_wide("JellyFrame Win32 Browser - " + status).c_str());
     }
 };
 
@@ -882,7 +929,7 @@ int main(int argc, char** argv) {
         try {
             FrameBuffer frame_buffer = render_page_with_gdi_text(html_path, css_path, viewport_width, min_height);
             write_image(frame_buffer, output_path);
-            std::cout << "WearWeb Win32 browser capture\n"
+            std::cout << "JellyFrame Win32 browser capture\n"
                       << "  output=" << output_path << '\n'
                       << "  viewport_width=" << viewport_width << '\n'
                       << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
@@ -910,9 +957,9 @@ int main(int argc, char** argv) {
         positional.push_back(arg);
     }
 
-#if !defined(WEARWEB_ENABLE_SCRIPTING)
+#if !defined(JELLYFRAME_ENABLE_SCRIPTING)
     if (!script_path.empty()) {
-        std::cerr << "this build was compiled without WEARWEB_BUILD_SCRIPTING=ON\n";
+        std::cerr << "this build was compiled without JELLYFRAME_BUILD_SCRIPTING=ON\n";
         return 1;
     }
 #endif

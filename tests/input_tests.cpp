@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -27,16 +27,16 @@ struct Pipeline {
     std::unique_ptr<Node> document;
     Stylesheet stylesheet;
     StyleResolver resolver;
-    std::unique_ptr<RenderObject> render_tree;
-    std::unique_ptr<LayoutBox> layout_tree;
-    std::unique_ptr<LayerNode> layer_tree;
+    RenderObjectPtr render_tree;
+    LayoutBoxPtr layout_tree;
+    LayerNodePtr layer_tree;
 
     Pipeline(std::unique_ptr<Node> document_in,
              Stylesheet stylesheet_in,
              StyleResolver resolver_in,
-             std::unique_ptr<RenderObject> render_tree_in,
-             std::unique_ptr<LayoutBox> layout_tree_in,
-             std::unique_ptr<LayerNode> layer_tree_in)
+             RenderObjectPtr render_tree_in,
+             LayoutBoxPtr layout_tree_in,
+             LayerNodePtr layer_tree_in)
         : document(std::move(document_in)),
           stylesheet(std::move(stylesheet_in)),
           resolver(std::move(resolver_in)),
@@ -223,15 +223,17 @@ void text_input_updates_focused_control_value() {
 
     check(input.text_input("B"), "text input accepted");
     check(form_control_display_text(*input_node) == "AB", "text input value updated");
-    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
-          "text input marks document dirty for rerender");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyPaint) != 0U,
+          "text input marks document dirty for repaint");
+    check(!dirty_requires_render_or_layout(subtree_dirty_flags(*pipeline.document)),
+          "text input can reuse render/layout");
     clear_dirty_flags(*pipeline.document);
     KeyInput key;
     key.code = KeyCode::Backspace;
     check(input.key_down(key), "backspace accepted");
     check(form_control_display_text(*input_node) == "A", "backspace updates value");
-    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
-          "backspace marks document dirty for rerender");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyPaint) != 0U,
+          "backspace marks document dirty for repaint");
     check(input_events == 2, "text input events dispatched");
 }
 
@@ -265,8 +267,8 @@ void datalist_completion_updates_text_control() {
     check(input.key_down(key), "tab completes from datalist");
     check(form_control_display_text(*input_node) == "CSS Grid", "datalist completion selects matching option");
     check(changes == 1, "datalist completion dispatches change");
-    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
-          "datalist completion marks document dirty");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyPaint) != 0U,
+          "datalist completion marks document dirty for repaint");
 }
 
 void checkbox_click_toggles_checked_state() {
@@ -360,8 +362,8 @@ void select_arrow_keys_work_through_optgroups() {
     key.code = KeyCode::ArrowUp;
     check(input.key_down(key), "arrow up selects previous option");
     check(form_control_display_text(*select) == "Two", "select arrow up crosses optgroup");
-    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
-          "select keyboard change marks document dirty");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyPaint) != 0U,
+          "select keyboard change marks document dirty for repaint");
 }
 
 void disabled_control_ignores_pointer_and_text_input() {

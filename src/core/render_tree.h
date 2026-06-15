@@ -1,12 +1,23 @@
 #pragma once
 
+#include "core/arena.h"
 #include "core/dom.h"
 #include "core/style.h"
 
+#include <cstddef>
 #include <memory>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
+
+struct RenderObject;
+
+struct RenderObjectDeleter {
+    bool arena_owned = false;
+    void operator()(RenderObject* object) const;
+};
+
+using RenderObjectPtr = std::unique_ptr<RenderObject, RenderObjectDeleter>;
 
 enum class RenderObjectType {
     View,
@@ -19,21 +30,31 @@ struct RenderObject {
     RenderObjectType type = RenderObjectType::Block;
     const Node* node = nullptr;
     Style style;
-    std::vector<std::unique_ptr<RenderObject>> children;
+    std::vector<RenderObjectPtr> children;
+};
+
+struct RenderTreeOptions {
+    std::size_t max_render_objects = 4096;
 };
 
 class RenderTreeBuilder {
 public:
-    explicit RenderTreeBuilder(const StyleResolver& style_resolver);
+    explicit RenderTreeBuilder(const StyleResolver& style_resolver, RenderTreeOptions options = {});
 
-    std::unique_ptr<RenderObject> build(const Node& document) const;
+    RenderObjectPtr build(const Node& document) const;
+    RenderObjectPtr build(const Node& document, MonotonicArena& arena) const;
 
 private:
     const StyleResolver& style_resolver_;
+    RenderTreeOptions options_;
 
-    std::unique_ptr<RenderObject> build_object(const Node& node, const Style* parent_style) const;
+    RenderObjectPtr build_with_arena(const Node& document, MonotonicArena* arena) const;
+    RenderObjectPtr build_object(const Node& node,
+                                 const Style* parent_style,
+                                 std::size_t& render_object_count,
+                                 MonotonicArena* arena) const;
+    RenderObjectPtr make_render_object(MonotonicArena* arena) const;
     RenderObjectType render_type_for(const Node& node, const Style& style) const;
 };
 
-} // namespace wearweb
-
+} // namespace jellyframe

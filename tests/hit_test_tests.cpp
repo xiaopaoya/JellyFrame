@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <utility>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -24,16 +24,16 @@ struct Pipeline {
     std::unique_ptr<Node> document;
     Stylesheet stylesheet;
     StyleResolver resolver;
-    std::unique_ptr<RenderObject> render_tree;
-    std::unique_ptr<LayoutBox> layout_tree;
-    std::unique_ptr<LayerNode> layer_tree;
+    RenderObjectPtr render_tree;
+    LayoutBoxPtr layout_tree;
+    LayerNodePtr layer_tree;
 
     Pipeline(std::unique_ptr<Node> document_in,
              Stylesheet stylesheet_in,
              StyleResolver resolver_in,
-             std::unique_ptr<RenderObject> render_tree_in,
-             std::unique_ptr<LayoutBox> layout_tree_in,
-             std::unique_ptr<LayerNode> layer_tree_in)
+             RenderObjectPtr render_tree_in,
+             LayoutBoxPtr layout_tree_in,
+             LayerNodePtr layer_tree_in)
         : document(std::move(document_in)),
           stylesheet(std::move(stylesheet_in)),
           resolver(std::move(resolver_in)),

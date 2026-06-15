@@ -9,7 +9,7 @@
 #include <string>
 #include <string_view>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -374,6 +374,55 @@ void modern_length_functions_and_flex_wrap_apply() {
     check(card_style.max_width == 320, "min max-width parsed with percentage fallback");
 }
 
+void style_candidate_cache_preserves_selector_context() {
+    auto root = make_element("main");
+    auto sidebar = make_element("section");
+    sidebar->attributes["class"] = "sidebar";
+    auto plain = make_element("section");
+    auto first = make_element("button");
+    first->attributes["class"] = "action";
+    auto second = make_element("button");
+    second->attributes["class"] = "action";
+    Node& first_node = sidebar->append_child(std::move(first));
+    Node& second_node = plain->append_child(std::move(second));
+    root->append_child(std::move(sidebar));
+    root->append_child(std::move(plain));
+
+    StyleResolver resolver(parse(
+        ".action { color: #111111; }"
+        ".sidebar .action { color: #2563eb; }"));
+
+    const Style first_style = resolver.resolve(first_node);
+    const Style second_style = resolver.resolve(second_node);
+    const Style first_style_again = resolver.resolve(first_node);
+
+    check(first_style.color.b == 0xeb, "cached candidates keep descendant match");
+    check(second_style.color.r == 0x11 && second_style.color.b == 0x11,
+          "cached candidates do not leak ancestor match");
+    check(first_style_again.color.b == 0xeb, "repeated resolve keeps descendant style");
+}
+
+void style_candidate_cache_respects_tiny_budget_and_inline_style() {
+    auto primary = make_element("button");
+    primary->attributes["class"] = "primary";
+    auto danger = make_element("button");
+    danger->attributes["class"] = "danger";
+    danger->attributes["style"] = "color: #ff0000";
+
+    StyleResolver resolver(parse(
+        ".primary { color: #2563eb; }"
+        ".danger { color: #111111; }"),
+        StyleResolverOptions{1});
+
+    const Style primary_style = resolver.resolve(*primary);
+    const Style danger_style = resolver.resolve(*danger);
+    const Style primary_style_again = resolver.resolve(*primary);
+
+    check(primary_style.color.b == 0xeb, "tiny style cache resolves first class");
+    check(danger_style.color.r == 0xff && danger_style.color.g == 0, "inline style survives tiny cache");
+    check(primary_style_again.color.b == 0xeb, "tiny style cache rebuilds evicted class");
+}
+
 } // namespace
 
 int main() {
@@ -398,6 +447,8 @@ int main() {
         fixed_two_column_grid_template_applies();
         repeated_fixed_grid_template_applies();
         modern_length_functions_and_flex_wrap_apply();
+        style_candidate_cache_preserves_selector_context();
+        style_candidate_cache_respects_tiny_budget_and_inline_style();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

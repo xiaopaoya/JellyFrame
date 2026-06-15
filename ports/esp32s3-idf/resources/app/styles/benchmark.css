@@ -1,0 +1,6 @@
+.shell { display: grid; padding: 8px; gap: 4px; }
+#search.search-box { display: block; width: 220px; padding: 8px; background: #ffffff; border: 1px solid #cbd5e1; }
+.search-input { display: block; width: 180px; padding: 6px; background: #ffffff; color: #111827; }
+button.primary { display: inline-block; padding: 6px; background: #2563eb; color: white; }
+.card.metric-card { display: block; margin: 4px; padding: 8px; background: #ffffff; border-radius: 8px; overflow: hidden; }
+.card strong { color: #059669; }

@@ -1,6 +1,6 @@
 # 变更记录
 
-WearWeb Engine 的重要变更记录在这里。
+JellyFrame Engine 的重要变更记录在这里。
 
 项目使用轻量语义化版本规则。详见 `docs/versioning_zh.md`。
 
@@ -8,28 +8,51 @@ WearWeb Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 项目正式更名为 `JellyFrame`；`WearWeb` 现在仅作为早期代号出现在文档中。
 - 添加平台无关的 `TextMeasureProvider`，让 layout 能使用宿主文本 metrics，同时继续把字体 API
-  留在 `wearweb_core` 之外。
+  留在 `jellyframe_core` 之外。
 - 为 display command 添加最小文本绘制语义：水平对齐，以及单行/可换行文本。
 - 在已有 GDI 文本绘制之外，为 Win32 壳添加 GDI 文本测量注入，使 UTF-8/中文桌面验证更接近真实效果。
 - 添加双语文本后端文档，描述测量/绘制契约和 fallback 限制。
-- 为 `wearweb_capability_check` 添加字体覆盖能力：可输出源码中用到的非 ASCII 字符，并用 UTF-8
+- 为 `jellyframe_capability_check` 添加字体覆盖能力：可输出源码中用到的非 ASCII 字符，并用 UTF-8
   字体覆盖文件检查缺字。
 - 在 `InputController` 上添加适合按键/表冠设备的焦点导航：
   `focus_next()`、`focus_previous()` 和 `activate_focused()`。
 - 添加双语嵌入式 HAL API 文档，面向开发板 port，并包含 ESP32-S3 映射建议。
+- 添加双语移植工作指导文档，明确 ESP32-S3/RTOS/LVGL port 的阶段任务、实现方式、
+  验收标准，以及需要核心先补能力的边界。
+- 添加 `ports/virtual_board` 桌面 virtual board 基准，并把 ESP32-S3/QEMU 实验包整理为
+  `ports/esp32s3-idf` bring-up 工程。
+- 为 ESP32-S3 添加有界静态资源包 hook，用于本地 HTML/CSS/classic-script 资源，包含生成式
+  C++ table 和 P2 smoke 资源。
+- 添加双语 ESP32-S3 QEMU PSRAM 梯度测试文档，记录 4M/8M/16M/32M 容量下的管线耗时和选型建议。
 - 添加平台无关的静态 bitmap font backend，提供面向生成式嵌入字体包的测量和绘制 callbacks。
-- 添加 `wearweb_font_pack_gen` 桌面 BDF 子集生成器，可输出供嵌入式构建使用的 C++
+- 添加 `jellyframe_font_pack_gen` 桌面 BDF 子集生成器，可输出供嵌入式构建使用的 C++
   `BitmapFont` header。
-- 添加 `wearweb_embedded_host_demo` 平台无关静态资源示例，串起 HTML/CSS 解析、bitmap
+- 添加 `jellyframe_embedded_host_demo` 平台无关静态资源示例，串起 HTML/CSS 解析、bitmap
   文本、焦点激活和 RGB565 framebuffer 提交，且不依赖 Win32、文件或硬件 I/O。
 - 添加第一版宿主设备能力 structs，供开发板 port 描述显示、输入、内存、budgets 和可选宿主服务。
+- 添加 `core/budget.h` helpers，把 `HostBudgets` 映射到 HTML/CSS parser、render/layout/layer/
+  display-list、dirty-rectangle 和 JerryScript timer/listener 限制。
+- 将 DOM attribute 存储从每节点 `std::unordered_map` 改为紧凑顺序 `AttributeList`，降低小型嵌入式 UI
+  的 per-node heap 开销，同时保留现有 map-like 调用形态。
+- 添加核心 `MonotonicArena` 内存工具，支持块式线性分配、反序析构和整 arena reset，为后续
+  DOM/render/layout/layer 生命周期对象集中分配做准备。
+- 为 render tree 添加 arena-backed 构建入口，并在 microbench、virtual board 和 ESP32-S3
+  benchmark 中使用该路径验证文档生命周期分配模式。
+- 为 layout tree 添加 arena-backed 构建入口，将嵌入式取向 benchmark 切到该路径，并补充核心回归测试。
+- 为 layer tree 添加 arena-backed 构建入口，将嵌入式取向 benchmark 切到该路径，并补充 layer-tree
+  回归测试。
+- 为 `StyleResolver` 添加有界候选规则缓存，用于重复 id/class/tag 模式，同时保留逐节点选择器匹配和
+  cascade 语义。
+- 为表单控件 value/checked/selection 变化添加 paint-only DOM dirty 状态，使 Win32 壳能对常见控件交互复用
+  render/layout，并只重绘有界 dirty rectangles。
 - 通过 callback 形式的 `document_style` API 添加平台无关的外链 stylesheet
   收集能力。核心代码仍不执行文件或网络 I/O；示例工具和 Win32 壳只在桌面验证时提供本地文件加载。
 - 为常用 HTML5 语义/内容元素添加可用默认样式：`a`、`mark`、`blockquote`、
   `summary`、`details`、`address`、`hgroup`、`progress` 和 `meter`。
 - 为 `progress` 和 `meter` 添加简单的软件绘制 value bar。
-- 为 `wearweb_win32_browser` 添加 `--capture`，可通过 Win32/GDI 文本路径渲染页面并写出
+- 为 `jellyframe_win32_browser` 添加 `--capture`，可通过 Win32/GDI 文本路径渲染页面并写出
   BMP/PPM 图片，便于视觉检查。
 - 添加轻量、平台无关的表单控件状态层，覆盖嵌入式应用常用的 text input、textarea、
   checkbox、radio、range 和 select。
@@ -38,9 +61,9 @@ WearWeb Engine 的重要变更记录在这里。
   更新，以及 tree/attribute/text/style/layout dirty flags。
 - 添加双语 JerryScript 接入规划文档，覆盖 runtime 生命周期、binding 所有权、里程碑、风险和第一个交互式
   demo 目标。
-- 添加可选 `wearweb_script` JerryScript runtime shell。该能力默认由
-  `WEARWEB_BUILD_SCRIPTING=OFF` 关闭，保证 `wearweb_core` 不依赖 JerryScript 头文件或库。
-- 为 scripting 构建添加初始 `wearweb_pseudo_browser --script`：执行一个外部 JavaScript
+- 添加可选 `jellyframe_script` JerryScript runtime shell。该能力默认由
+  `JELLYFRAME_BUILD_SCRIPTING=OFF` 关闭，保证 `jellyframe_core` 不依赖 JerryScript 头文件或库。
+- 为 scripting 构建添加初始 `jellyframe_pseudo_browser --script`：执行一个外部 JavaScript
   文件并报告结果或异常。
 - 添加 `examples/script_cases/runtime_probe.*`，作为第一个脚本 runtime 验收页面。
 - 添加 JerryScript M3 最小 DOM binding：`window`、`document`、`getElementById`、
@@ -56,9 +79,9 @@ WearWeb Engine 的重要变更记录在这里。
 - 在 `examples/app_cases` 下添加天气、时钟、计时器和计算器应用式验收示例。
 - 添加中英文嵌入式应用子集文档，说明 M6 后能构建什么，以及哪些浏览器假设被刻意排除。
 - 添加 M6 宿主泵动 timer：`setTimeout`、`clearTimeout`、`setInterval` 和 `clearInterval`。
-- 添加 `wearweb_pseudo_browser --pump-timers ms`，用于无交互窗口的 timer 脚本 smoke test。
+- 添加 `jellyframe_pseudo_browser --pump-timers ms`，用于无交互窗口的 timer 脚本 smoke test。
 - 添加中英文内存管理审视文档，覆盖当前所有权、嵌入式风险和 allocator/container 优化优先级。
-- 添加单一聚合测试程序 `wearweb_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
+- 添加单一聚合测试程序 `jellyframe_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
   executable。
 - 添加 `JERRYSCRIPT_ROOT` CMake 支持，便于使用 `third_party/jerryscript` 这样的官方 JerryScript
   本地源码树。
@@ -93,7 +116,7 @@ WearWeb Engine 的重要变更记录在这里。
   `matches`/`closest`、基于已有属性的 `dataset` 快照、可写的小型 `element.style` 对象，
   以及 boolean `hidden`/`disabled` reflection。
 - 添加 mouse-like `pointerdown`/`pointerup` 和 `touchstart`/`touchend` 事件派发，用于可穿戴按下反馈。
-- 添加 `wearweb_capability_check` 桌面 HTML/CSS/JS 扫描器，用于报告受支持子集、降级特性和不支持 API。
+- 添加 `jellyframe_capability_check` 桌面 HTML/CSS/JS 扫描器，用于报告受支持子集、降级特性和不支持 API。
 - 添加保守的现代长度函数支持：当参数能归约为受支持长度时，解析 `min()`、`max()`、`clamp()`
   和简单 `calc(A +/- B)`。
 - 添加简化 `flex-wrap` 行换行，用于常见卡片/盒子布局。
@@ -135,7 +158,7 @@ WearWeb Engine 的重要变更记录在这里。
 - 改进交互控件键盘行为：`datalist` 输入支持 Tab/Enter 选择第一个匹配候选，
   `select` 支持上下方向键跨 `optgroup` 切换 option。
 - 为 Win32 验证壳添加 `<a href="#id">` hash anchor 滚动。
-- 更新 `wearweb_pseudo_browser`，让它通过 `HostFrameSink` 提交帧，同时保留 BMP/PPM 验收输出。
+- 更新 `jellyframe_pseudo_browser`，让它通过 `HostFrameSink` 提交帧，同时保留 BMP/PPM 验收输出。
 - 更新 Win32 browser shell，使其在非结构性 DOM 变化后复用 framebuffer，并只重绘计算出的
   dirty rectangles。
 - 添加嵌入式 framebuffer 后端文档，并更新 host/roadmap 文档，将平台文本和可穿戴导航列为下一优先级。
@@ -143,7 +166,7 @@ WearWeb Engine 的重要变更记录在这里。
 
 ### 说明
 
-- `wearweb_pseudo_browser` 在没有注入平台 `TextPainter` 时仍使用极小内置 bitmap
+- `jellyframe_pseudo_browser` 在没有注入平台 `TextPainter` 时仍使用极小内置 bitmap
   字体，因此 BMP smoke-test 输出中的非 ASCII 文本会显示为 fallback glyph。Win32 browser
   shell 使用 GDI 文本测量和绘制，可用于可读的 UTF-8/中文验证。
 - 示例/Win32 helper 会相对于命令行传入的 CSS 路径解析本地 linked stylesheet。缺失的外链文件会被保守忽略，
@@ -157,12 +180,12 @@ WearWeb Engine 的重要变更记录在这里。
 
 - 添加 CPU framebuffer 渲染：`FrameBuffer`、`SoftwareRasterizer` 和 `SoftwareCompositor`。
 - 添加 source-over alpha compositing、opacity layer 离屏合成以及 BMP/PPM 图像输出辅助函数。
-- 添加 `wearweb_pseudo_browser`，用于完整管线 framebuffer 验证。
+- 添加 `jellyframe_pseudo_browser`，用于完整管线 framebuffer 验证。
 - 添加核心 `Event`、`MouseEvent`、`WheelEvent` 和 `EventTarget`。
 - 添加类 DOM 的捕获、目标、冒泡事件派发，支持 `preventDefault`、传播停止和一次性 listener。
 - 添加基于 layout/layer geometry 的 hit testing，覆盖 z-index 顺序、overflow clipping 和文本节点目标归一化。
 - 添加平台无关 `InputController`，支持 pointer move/down/up、click synthesis、wheel dispatch 和 hover/active/focus 状态。
-- 添加 Windows-only `wearweb_win32_browser`。它使用核心管线渲染，用 GDI blit framebuffer，通过平台文本回调注入原生文本绘制，并将鼠标/滚轮输入转发给 `InputController`。
+- 添加 Windows-only `jellyframe_win32_browser`。它使用核心管线渲染，用 GDI blit framebuffer，通过平台文本回调注入原生文本绘制，并将鼠标/滚轮输入转发给 `InputController`。
 - Win32 browser shell 增加 viewport scrolling。滚轮事件仍先派发给核心 input controller，然后壳执行桌面默认滚动行为。
 - 添加 `document_style` helper，用于收集 HTML 内嵌 `<style>` 文本并合并为 author CSS。
 - 添加常见静态页面 CSS 的轻量支持：小数长度、`rem`/`em`、`max-width`、水平 `margin: auto`、`line-height` 和 `text-indent`。
@@ -180,23 +203,23 @@ WearWeb Engine 的重要变更记录在这里。
 
 ### 说明
 
-- `wearweb_core` 保持平台无关。Windows 库只由 Windows 专用例程链接。
+- `jellyframe_core` 保持平台无关。Windows 库只由 Windows 专用例程链接。
 - core 文本 fallback 刻意保持极小和可移植；Win32 browser 使用原生 GDI 文本进行 UTF-8/中文验证。
 
 ## 0.1.0-dev - 2026-06-13
 
 ### 新增
 
-- 创建初始 C++17/CMake 工程和 `wearweb_core` 核心库。
+- 创建初始 C++17/CMake 工程和 `jellyframe_core` 核心库。
 - 添加容错 HTML tokenizer/parser，支持 start/end tag、attribute、doctype、comment、text、raw-text 和 character reference。
 - 添加韧性 DOM construction，支持合成 `html/body`、常见隐式闭合、void elements、不匹配 end tag 容错和 parser 资源上限。
-- 添加 `wearweb_dom_dump`，用于输出 tokenizer 结果和 ASCII DOM 树。
+- 添加 `jellyframe_dom_dump`，用于输出 tokenizer 结果和 ASCII DOM 树。
 - 添加容错 CSS parser，支持 comment、balanced block recovery、有序 declarations、selector-list splitting、`@layer` flattening 和不支持增强 block 的保守恢复。
 - 添加轻量 CSSOM rule metadata、specificity、source order 和 cascade ordering。
 - 添加 selector matching：tag、class、id、descendant、child、简单 attribute selector 和 `:root`。
 - 添加常见 controls 和 UI 节点默认样式，使 form、input、button、dialog、media 等节点至少保留可用框体。
 - 添加 render tree、box-model layout、稀疏 layer tree 和 display-list generation。
-- 添加管线检查工具：`wearweb_style_dump`、`wearweb_render_tree_dump`、`wearweb_layer_tree_dump` 和 `wearweb_pipeline_dump`。
+- 添加管线检查工具：`jellyframe_style_dump`、`jellyframe_render_tree_dump`、`jellyframe_layer_tree_dump` 和 `jellyframe_pipeline_dump`。
 - 添加现代 HTML/CSS 兼容性样例和双语分析文档。
 - 添加微基准、CTest 注册以及 examples/tests/benchmarks 的 CMake 选项。
 - 添加双语文档维护约定、路线图、版本规则、架构说明和各阶段裁剪范围文档。

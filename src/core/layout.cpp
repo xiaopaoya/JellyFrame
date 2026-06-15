@@ -7,7 +7,7 @@
 #include <numeric>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 int horizontal_edges(const EdgeSizes& edges) {
@@ -99,32 +99,72 @@ void shift_box(LayoutBox& box, int dx, int dy) {
 
 } // namespace
 
-LayoutEngine::LayoutEngine(const StyleResolver& style_resolver, TextMeasureProvider text_measure)
-    : style_resolver_(style_resolver), text_measure_(text_measure) {}
+void LayoutBoxDeleter::operator()(LayoutBox* box) const {
+    if (!arena_owned) {
+        delete box;
+    }
+}
 
-std::unique_ptr<LayoutBox> LayoutEngine::layout(const Node& root, int viewport_width) const {
+LayoutEngine::LayoutEngine(const StyleResolver& style_resolver,
+                           TextMeasureProvider text_measure,
+                           LayoutEngineOptions options)
+    : style_resolver_(style_resolver), text_measure_(text_measure), options_(options) {}
+
+LayoutBoxPtr LayoutEngine::layout(const Node& root, int viewport_width) const {
     RenderTreeBuilder render_tree_builder(style_resolver_);
     auto render_tree = render_tree_builder.build(root);
     return layout(*render_tree, viewport_width);
 }
 
-std::unique_ptr<LayoutBox> LayoutEngine::layout(const RenderObject& render_tree, int viewport_width) const {
-    auto root_box = std::make_unique<LayoutBox>();
+LayoutBoxPtr LayoutEngine::layout(const Node& root, int viewport_width, MonotonicArena& arena) const {
+    RenderTreeBuilder render_tree_builder(style_resolver_);
+    auto render_tree = render_tree_builder.build(root, arena);
+    return layout(*render_tree, viewport_width, arena);
+}
+
+LayoutBoxPtr LayoutEngine::layout(const RenderObject& render_tree, int viewport_width) const {
+    return build_with_arena(render_tree, viewport_width, nullptr);
+}
+
+LayoutBoxPtr LayoutEngine::layout(const RenderObject& render_tree, int viewport_width, MonotonicArena& arena) const {
+    return build_with_arena(render_tree, viewport_width, &arena);
+}
+
+LayoutBoxPtr LayoutEngine::build_with_arena(const RenderObject& render_tree,
+                                            int viewport_width,
+                                            MonotonicArena* arena) const {
+    auto root_box = make_layout_box(arena);
     root_box->node = render_tree.node;
     root_box->style = render_tree.style;
-    build_layout_tree(render_tree, *root_box);
+    std::size_t layout_box_count = 1;
+    build_layout_tree(render_tree, *root_box, layout_box_count, arena);
     root_box->rect.height = layout_box(*root_box, 0, 0, viewport_width);
     return root_box;
 }
 
-void LayoutEngine::build_layout_tree(const RenderObject& object, LayoutBox& box) const {
+void LayoutEngine::build_layout_tree(const RenderObject& object,
+                                     LayoutBox& box,
+                                     std::size_t& layout_box_count,
+                                     MonotonicArena* arena) const {
+    const std::size_t max_layout_boxes = std::max<std::size_t>(1, options_.max_layout_boxes);
     for (const auto& child : object.children) {
-        auto child_box = std::make_unique<LayoutBox>();
+        if (layout_box_count >= max_layout_boxes) {
+            return;
+        }
+        auto child_box = make_layout_box(arena);
+        ++layout_box_count;
         child_box->node = child->node;
         child_box->style = child->style;
-        build_layout_tree(*child, *child_box);
+        build_layout_tree(*child, *child_box, layout_box_count, arena);
         box.children.push_back(std::move(child_box));
     }
+}
+
+LayoutBoxPtr LayoutEngine::make_layout_box(MonotonicArena* arena) const {
+    if (arena == nullptr) {
+        return LayoutBoxPtr(new LayoutBox, LayoutBoxDeleter{false});
+    }
+    return LayoutBoxPtr(&arena->create<LayoutBox>(), LayoutBoxDeleter{true});
 }
 
 int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
@@ -536,4 +576,4 @@ int LayoutEngine::layout_grid_box(LayoutBox& box, int content_x, int content_y, 
     return total_height;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

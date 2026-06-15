@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 std::string trim(std::string_view value) {
@@ -2083,8 +2083,9 @@ const CssStyleSheet::RuleList& CssStyleSheet::rules() const {
     return rules_;
 }
 
-StyleResolver::StyleResolver(Stylesheet stylesheet)
-    : stylesheet_(std::move(stylesheet)) {
+StyleResolver::StyleResolver(Stylesheet stylesheet, StyleResolverOptions options)
+    : stylesheet_(std::move(stylesheet)),
+      options_(options) {
     build_rule_index();
 }
 
@@ -2102,9 +2103,29 @@ void StyleResolver::build_rule_index() {
     }
 }
 
-Style StyleResolver::resolve(const Node& node) const {
-    Style style = default_style_for(node);
-    CascadeSlots slots;
+const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node& node) const {
+    std::string key;
+    if (node.type == NodeType::Element) {
+        key.reserve(node.tag_name.size() + node.attribute("id").size() + node.attribute("class").size() + 8);
+        key.append(node.tag_name);
+        key.push_back('\n');
+        key.append(node.attribute("id"));
+        key.push_back('\n');
+        key.append(node.attribute("class"));
+    } else {
+        key = "#text";
+    }
+
+    const auto cached = candidate_cache_.find(key);
+    if (cached != candidate_cache_.end()) {
+        return cached->second;
+    }
+
+    if (options_.max_candidate_cache_entries == 0 ||
+        candidate_cache_.size() >= options_.max_candidate_cache_entries) {
+        candidate_cache_.clear();
+    }
+
     std::vector<const CssRule*> candidates;
     candidates.reserve(16);
     const auto already_added = [&](const CssRule* candidate) {
@@ -2150,7 +2171,15 @@ Style StyleResolver::resolve(const Node& node) const {
         return left->source_order < right->source_order;
     });
 
-    for (const CssRule* rule : candidates) {
+    auto inserted = candidate_cache_.emplace(std::move(key), std::move(candidates));
+    return inserted.first->second;
+}
+
+Style StyleResolver::resolve(const Node& node) const {
+    Style style = default_style_for(node);
+    CascadeSlots slots;
+
+    for (const CssRule* rule : candidate_rules_for(node)) {
         if (matches_rule(node, *rule)) {
             apply_declarations(style, slots, rule->declarations, rule->specificity,
                                rule->source_order, rule->pseudo_before);
@@ -2167,4 +2196,4 @@ Style StyleResolver::resolve(const Node& node) const {
     return style;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

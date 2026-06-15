@@ -1,8 +1,9 @@
 #include "core/render_tree.h"
 
-#include <memory>
+#include <algorithm>
+#include <utility>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 Style inherit_text_style(Style style, const Style& parent_style) {
@@ -55,17 +56,33 @@ bool is_replaced_control(const Node& node) {
 
 } // namespace
 
-RenderTreeBuilder::RenderTreeBuilder(const StyleResolver& style_resolver)
-    : style_resolver_(style_resolver) {}
+void RenderObjectDeleter::operator()(RenderObject* object) const {
+    if (!arena_owned) {
+        delete object;
+    }
+}
 
-std::unique_ptr<RenderObject> RenderTreeBuilder::build(const Node& document) const {
-    auto view = std::make_unique<RenderObject>();
+RenderTreeBuilder::RenderTreeBuilder(const StyleResolver& style_resolver, RenderTreeOptions options)
+    : style_resolver_(style_resolver),
+      options_(options) {}
+
+RenderObjectPtr RenderTreeBuilder::build(const Node& document) const {
+    return build_with_arena(document, nullptr);
+}
+
+RenderObjectPtr RenderTreeBuilder::build(const Node& document, MonotonicArena& arena) const {
+    return build_with_arena(document, &arena);
+}
+
+RenderObjectPtr RenderTreeBuilder::build_with_arena(const Node& document, MonotonicArena* arena) const {
+    auto view = make_render_object(arena);
     view->type = RenderObjectType::View;
     view->node = &document;
     view->style = style_resolver_.resolve(document);
 
+    std::size_t render_object_count = 1;
     for (const auto& child : document.children) {
-        auto object = build_object(*child, &view->style);
+        auto object = build_object(*child, &view->style, render_object_count, arena);
         if (object != nullptr) {
             view->children.push_back(std::move(object));
         }
@@ -73,7 +90,15 @@ std::unique_ptr<RenderObject> RenderTreeBuilder::build(const Node& document) con
     return view;
 }
 
-std::unique_ptr<RenderObject> RenderTreeBuilder::build_object(const Node& node, const Style* parent_style) const {
+RenderObjectPtr RenderTreeBuilder::build_object(const Node& node,
+                                                const Style* parent_style,
+                                                std::size_t& render_object_count,
+                                                MonotonicArena* arena) const {
+    const std::size_t max_render_objects = std::max<std::size_t>(1, options_.max_render_objects);
+    if (render_object_count >= max_render_objects) {
+        return nullptr;
+    }
+
     Style style = style_resolver_.resolve(node);
     if (parent_style != nullptr) {
         style = node.type == NodeType::Text
@@ -85,14 +110,15 @@ std::unique_ptr<RenderObject> RenderTreeBuilder::build_object(const Node& node, 
         return nullptr;
     }
 
-    auto object = std::make_unique<RenderObject>();
+    auto object = make_render_object(arena);
+    ++render_object_count;
     object->type = render_type_for(node, style);
     object->node = &node;
     object->style = style;
 
     if (!is_replaced_control(node)) {
         for (const auto& child : node.children) {
-            auto child_object = build_object(*child, &object->style);
+            auto child_object = build_object(*child, &object->style, render_object_count, arena);
             if (child_object != nullptr) {
                 object->children.push_back(std::move(child_object));
             }
@@ -100,6 +126,13 @@ std::unique_ptr<RenderObject> RenderTreeBuilder::build_object(const Node& node, 
     }
 
     return object;
+}
+
+RenderObjectPtr RenderTreeBuilder::make_render_object(MonotonicArena* arena) const {
+    if (arena == nullptr) {
+        return RenderObjectPtr(new RenderObject, RenderObjectDeleter{false});
+    }
+    return RenderObjectPtr(&arena->create<RenderObject>(), RenderObjectDeleter{true});
 }
 
 RenderObjectType RenderTreeBuilder::render_type_for(const Node& node, const Style& style) const {
@@ -112,4 +145,4 @@ RenderObjectType RenderTreeBuilder::render_type_for(const Node& node, const Styl
     return RenderObjectType::Block;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

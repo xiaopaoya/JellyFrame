@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 enum class Display {
     Block,
@@ -184,20 +184,27 @@ using Stylesheet = CssStyleSheet;
 std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector);
 CssRuleIndexKey build_css_rule_index_key(const std::vector<CssSelectorPart>& selector_parts);
 
+struct StyleResolverOptions {
+    std::size_t max_candidate_cache_entries = 128;
+};
+
 class StyleResolver {
 public:
-    explicit StyleResolver(Stylesheet stylesheet);
+    explicit StyleResolver(Stylesheet stylesheet, StyleResolverOptions options = {});
 
     Style resolve(const Node& node) const;
 
 private:
     Stylesheet stylesheet_;
+    StyleResolverOptions options_;
     std::unordered_map<std::string, std::vector<const CssRule*>> id_rules_;
     std::unordered_map<std::string, std::vector<const CssRule*>> class_rules_;
     std::unordered_map<std::string, std::vector<const CssRule*>> tag_rules_;
     std::vector<const CssRule*> universal_rules_;
+    mutable std::unordered_map<std::string, std::vector<const CssRule*>> candidate_cache_;
 
     void build_rule_index();
+    const std::vector<const CssRule*>& candidate_rules_for(const Node& node) const;
 };
 
-} // namespace wearweb
+} // namespace jellyframe

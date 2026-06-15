@@ -4,7 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -32,6 +32,24 @@ void parser_returns_clean_document() {
     auto document = parser.parse("<body><p>Hello</p></body>");
 
     check(subtree_dirty_flags(*document) == DomDirtyNone, "parsed document starts clean");
+}
+
+void compact_attribute_list_behaves_like_small_map() {
+    auto element = make_element("button");
+    const auto first_insert = element->attributes.emplace("id", "save");
+    const auto duplicate_insert = element->attributes.emplace("id", "cancel");
+    element->attributes["class"] = "primary";
+
+    check(first_insert.second, "first attribute insert succeeds");
+    check(!duplicate_insert.second, "duplicate attribute insert keeps first value");
+    check(element->attribute("id") == "save", "duplicate attribute does not overwrite");
+    check(element->attribute("class") == "primary", "operator[] stores attribute value");
+    check(element->attributes.size() == 2, "attribute list size is compact");
+
+    const auto class_it = element->attributes.find("class");
+    check(class_it != element->attributes.end(), "attribute find locates class");
+    element->attributes.erase(class_it);
+    check(element->attributes.find("class") == element->attributes.end(), "attribute erase removes entry");
 }
 
 void append_and_remove_mark_tree_dirty() {
@@ -90,6 +108,7 @@ void unchanged_text_content_stays_clean() {
 int main() {
     try {
         parser_returns_clean_document();
+        compact_attribute_list_behaves_like_small_map();
         append_and_remove_mark_tree_dirty();
         attributes_and_text_mark_specific_dirty_bits();
         unchanged_text_content_stays_clean();

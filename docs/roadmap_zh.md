@@ -20,7 +20,7 @@
   backend 和 BDF pack 生成器已可用；仍需要 LVGL/vendor adapters
 - 指针/触摸输入路由：已有 pointer/wheel 核心；button/crown focus navigation 已有第一版 core API；
   仍需要开发板 adapter
-- 平台无关开发板 bring-up 形态：已通过 `wearweb_embedded_host_demo` 提供静态资源/RGB565
+- 平台无关开发板 bring-up 形态：已通过 `jellyframe_embedded_host_demo` 提供静态资源/RGB565
   demo
 
 ## 里程碑 3：App runtime
@@ -29,20 +29,22 @@
 - DOM mutation APIs：已可用
 - Timer/event loop：已有宿主泵动 timer
 - Classic document script loading：已在 scripting 示例壳中可用
-- Fetch/resource abstraction
+- Resource abstraction：壳层已有 callback 形式的本地 stylesheet/classic script 加载；网络/fetch
+  仍明确不属于核心
 - Device capability APIs：第一版 `HostDeviceCapabilities` 契约已可用；更深的自动适配延后
+- 集中式 host budgets：已贯穿 parser、render、layout、layer、display-list、dirty-region 和 scripting 限制
 
 ## 里程碑 4：可穿戴 UI 能力
 
 - 小屏 viewport model
-- 适配表冠、按键、触摸的 focus/navigation model
+- 适配表冠、按键、触摸的 focus/navigation model：核心已有第一版焦点遍历和激活 API
 - 低功耗动画调度
 - App 打包格式
 
 ## 推荐下一步顺序
 
-1. 基于 `wearweb_embedded_host_demo` 完成具体开发板、LVGL 或显示驱动示例。
+1. 基于 `jellyframe_embedded_host_demo` 完成具体开发板、LVGL 或显示驱动示例。
 2. 在静态 bitmap backend 之外补充 LVGL/vendor text backend adapters。
-3. Resource 和 device capability APIs。
-4. 面向 parser、style、script 和 framebuffer memory 的集中 budgets。
-5. 面向无法保留完整 target buffer 的屏幕补充 tiled framebuffer presentation。
+3. 评估 DOM node arena allocation；候选规则缓存已经可用，完整 computed-style sharing 仍需要继承和失效设计。
+4. 面向无法保留完整 target buffer 的屏幕补充 tiled framebuffer presentation。
+5. 补齐本地嵌入式资源包工具和 app packaging。

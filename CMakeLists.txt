@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(WearWebEngine LANGUAGES CXX)
+project(JellyFrameEngine LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(WEARWEB_BUILD_EXAMPLES "Build WearWeb example and dump tools" ON)
-option(WEARWEB_BUILD_TESTS "Build WearWeb regression tests" ON)
-option(WEARWEB_BUILD_BENCHMARKS "Build WearWeb microbenchmarks" ON)
-option(WEARWEB_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
+option(JELLYFRAME_BUILD_EXAMPLES "Build JellyFrame example and dump tools" ON)
+option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
+option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
+option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
 
 set(JERRYSCRIPT_ROOT "" CACHE PATH "JerryScript source or install root")
 set(JERRYSCRIPT_INCLUDE_DIR "" CACHE PATH "JerryScript include directory")
@@ -25,7 +25,8 @@ if(JERRYSCRIPT_ROOT AND NOT JERRYSCRIPT_INCLUDE_DIR)
     endif()
 endif()
 
-add_library(wearweb_core
+add_library(jellyframe_core
+    src/core/arena.cpp
     src/core/bitmap_font.cpp
     src/core/css_parser.cpp
     src/core/dirty_region.cpp
@@ -48,81 +49,83 @@ add_library(wearweb_core
     src/core/text_backend.cpp
 )
 
-target_include_directories(wearweb_core
+target_include_directories(jellyframe_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_compile_features(wearweb_core PUBLIC cxx_std_17)
+target_compile_features(jellyframe_core PUBLIC cxx_std_17)
 
 if(MSVC)
-    target_compile_options(wearweb_core PRIVATE /W4)
+    target_compile_options(jellyframe_core PRIVATE /W4)
 else()
-    target_compile_options(wearweb_core PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(jellyframe_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-if(WEARWEB_BUILD_SCRIPTING)
+if(JELLYFRAME_BUILD_SCRIPTING)
     if(NOT JERRYSCRIPT_INCLUDE_DIR OR NOT JERRYSCRIPT_LIBRARIES)
         message(FATAL_ERROR
-            "WEARWEB_BUILD_SCRIPTING requires JERRYSCRIPT_INCLUDE_DIR and JERRYSCRIPT_LIBRARIES")
+            "JELLYFRAME_BUILD_SCRIPTING requires JERRYSCRIPT_INCLUDE_DIR and JERRYSCRIPT_LIBRARIES")
     endif()
 
-    add_library(wearweb_script
+    add_library(jellyframe_script
         src/script/jerryscript_runtime.cpp
     )
-    target_link_libraries(wearweb_script PUBLIC wearweb_core ${JERRYSCRIPT_LIBRARIES})
-    target_include_directories(wearweb_script
+    target_link_libraries(jellyframe_script PUBLIC jellyframe_core ${JERRYSCRIPT_LIBRARIES})
+    target_include_directories(jellyframe_script
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${JERRYSCRIPT_INCLUDE_DIR}
     )
-    target_compile_features(wearweb_script PUBLIC cxx_std_17)
-    target_compile_definitions(wearweb_script PUBLIC WEARWEB_ENABLE_SCRIPTING=1)
+    target_compile_features(jellyframe_script PUBLIC cxx_std_17)
+    target_compile_definitions(jellyframe_script PUBLIC JELLYFRAME_ENABLE_SCRIPTING=1)
 
     if(MSVC)
-        target_compile_options(wearweb_script PRIVATE /W4)
+        target_compile_options(jellyframe_script PRIVATE /W4)
     else()
-        target_compile_options(wearweb_script PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(jellyframe_script PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
 
-function(add_wearweb_tool target)
+function(add_jellyframe_tool target)
     add_executable(${target} ${ARGN})
-    target_link_libraries(${target} PRIVATE wearweb_core)
+    target_link_libraries(${target} PRIVATE jellyframe_core)
 endfunction()
 
-if(WEARWEB_BUILD_EXAMPLES)
-    add_wearweb_tool(wearweb_demo examples/basic_demo.cpp)
-    add_wearweb_tool(wearweb_dom_dump examples/dom_dump.cpp)
-    add_wearweb_tool(wearweb_cssom_dump examples/cssom_dump.cpp)
-    add_wearweb_tool(wearweb_style_dump examples/style_dump.cpp)
-    add_wearweb_tool(wearweb_render_tree_dump examples/render_tree_dump.cpp)
-    add_wearweb_tool(wearweb_layer_tree_dump examples/layer_tree_dump.cpp)
-    add_wearweb_tool(wearweb_pipeline_dump examples/pipeline_dump.cpp)
-    add_wearweb_tool(wearweb_pseudo_browser examples/pseudo_browser.cpp)
-    add_wearweb_tool(wearweb_capability_check examples/capability_check.cpp)
-    add_wearweb_tool(wearweb_font_pack_gen examples/font_pack_gen.cpp)
-    add_wearweb_tool(wearweb_embedded_host_demo examples/embedded_host_demo.cpp)
-    if(WEARWEB_BUILD_SCRIPTING)
-        target_link_libraries(wearweb_pseudo_browser PRIVATE wearweb_script)
+if(JELLYFRAME_BUILD_EXAMPLES)
+    add_jellyframe_tool(jellyframe_demo examples/basic_demo.cpp)
+    add_jellyframe_tool(jellyframe_dom_dump examples/dom_dump.cpp)
+    add_jellyframe_tool(jellyframe_cssom_dump examples/cssom_dump.cpp)
+    add_jellyframe_tool(jellyframe_style_dump examples/style_dump.cpp)
+    add_jellyframe_tool(jellyframe_render_tree_dump examples/render_tree_dump.cpp)
+    add_jellyframe_tool(jellyframe_layer_tree_dump examples/layer_tree_dump.cpp)
+    add_jellyframe_tool(jellyframe_pipeline_dump examples/pipeline_dump.cpp)
+    add_jellyframe_tool(jellyframe_pseudo_browser examples/pseudo_browser.cpp)
+    add_jellyframe_tool(jellyframe_capability_check examples/capability_check.cpp)
+    add_jellyframe_tool(jellyframe_font_pack_gen examples/font_pack_gen.cpp)
+    add_jellyframe_tool(jellyframe_embedded_host_demo examples/embedded_host_demo.cpp)
+    if(JELLYFRAME_BUILD_SCRIPTING)
+        target_link_libraries(jellyframe_pseudo_browser PRIVATE jellyframe_script)
     endif()
     if(WIN32)
-        add_wearweb_tool(wearweb_win32_browser examples/win32_browser.cpp)
-        target_link_libraries(wearweb_win32_browser PRIVATE gdi32 user32)
-        if(WEARWEB_BUILD_SCRIPTING)
-            target_link_libraries(wearweb_win32_browser PRIVATE wearweb_script)
+        add_jellyframe_tool(jellyframe_win32_browser examples/win32_browser.cpp)
+        target_link_libraries(jellyframe_win32_browser PRIVATE gdi32 user32)
+        if(JELLYFRAME_BUILD_SCRIPTING)
+            target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_script)
         endif()
     endif()
 endif()
 
-if(WEARWEB_BUILD_BENCHMARKS)
-    add_wearweb_tool(wearweb_microbench benchmarks/microbench.cpp)
+if(JELLYFRAME_BUILD_BENCHMARKS)
+    add_jellyframe_tool(jellyframe_microbench benchmarks/microbench.cpp)
+    add_jellyframe_tool(jellyframe_virtual_bench ports/virtual_board/virtual_bench.cpp)
 endif()
 
-if(WEARWEB_BUILD_TESTS)
+if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
-    set(WEARWEB_CORE_TEST_SOURCES
+    set(JELLYFRAME_CORE_TEST_SOURCES
         tests/tokenizer_tests.cpp
+        tests/arena_tests.cpp
         tests/dom_mutation_tests.cpp
         tests/document_script_tests.cpp
         tests/dirty_region_tests.cpp
@@ -132,27 +135,28 @@ if(WEARWEB_BUILD_TESTS)
         tests/hit_test_tests.cpp
         tests/host_tests.cpp
         tests/input_tests.cpp
+        tests/layout_tests.cpp
         tests/render_tree_tests.cpp
         tests/layer_tree_tests.cpp
         tests/software_renderer_tests.cpp
     )
-    if(WEARWEB_BUILD_SCRIPTING)
-        list(APPEND WEARWEB_CORE_TEST_SOURCES tests/script_runtime_tests.cpp)
+    if(JELLYFRAME_BUILD_SCRIPTING)
+        list(APPEND JELLYFRAME_CORE_TEST_SOURCES tests/script_runtime_tests.cpp)
     endif()
 
-    foreach(test_source IN LISTS WEARWEB_CORE_TEST_SOURCES)
+    foreach(test_source IN LISTS JELLYFRAME_CORE_TEST_SOURCES)
         get_filename_component(test_name ${test_source} NAME_WE)
         set_source_files_properties(${test_source}
             PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
     endforeach()
 
-    add_wearweb_tool(wearweb_core_tests
+    add_jellyframe_tool(jellyframe_core_tests
         tests/core_tests.cpp
-        ${WEARWEB_CORE_TEST_SOURCES}
+        ${JELLYFRAME_CORE_TEST_SOURCES}
     )
-    if(WEARWEB_BUILD_SCRIPTING)
-        target_link_libraries(wearweb_core_tests PRIVATE wearweb_script)
+    if(JELLYFRAME_BUILD_SCRIPTING)
+        target_link_libraries(jellyframe_core_tests PRIVATE jellyframe_script)
     endif()
 
-    add_test(NAME wearweb_core_tests COMMAND wearweb_core_tests)
+    add_test(NAME jellyframe_core_tests COMMAND jellyframe_core_tests)
 endif()

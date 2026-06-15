@@ -1,8 +1,11 @@
-# WearWeb Engine
+# JellyFrame Engine
 
-WearWeb Engine is a deeply trimmed C++ HTML/CSS runtime intended for low-power
+JellyFrame Engine is a deeply trimmed C++ HTML/CSS runtime intended for low-power
 wearable devices. The first milestone is not a full browser. It is a small,
 portable document UI engine that can later host JavaScript through JerryScript.
+
+The project was developed under the early codename `WearWeb`; current code,
+targets and documentation use `JellyFrame`.
 
 ## Current slice
 
@@ -21,7 +24,7 @@ portable document UI engine that can later host JavaScript through JerryScript.
 - Lightweight platform-neutral form-control state for text inputs, textareas,
   checkboxes, radios, ranges and selects
 - Optional JerryScript runtime shell for script evaluation, kept outside
-  `wearweb_core`
+  `jellyframe_core`
 - Optional JerryScript DOM/event/form bridge for small host-driven apps
 - Embedded-app DOM helpers such as `dataset`, `children`, `parentElement`,
   simple `matches`/`closest`, small `element.style`, `hidden` and `disabled`
@@ -56,24 +59,24 @@ and operating system services.
 ```powershell
 cmake -S . -B build
 cmake --build build
-.\build\Debug\wearweb_demo.exe
+.\build\Debug\jellyframe_demo.exe
 ```
 
 Default CMake options build examples, tests and benchmarks:
 
-- `WEARWEB_BUILD_EXAMPLES=ON`
-- `WEARWEB_BUILD_TESTS=ON`
-- `WEARWEB_BUILD_BENCHMARKS=ON`
-- `WEARWEB_BUILD_SCRIPTING=OFF`
+- `JELLYFRAME_BUILD_EXAMPLES=ON`
+- `JELLYFRAME_BUILD_TESTS=ON`
+- `JELLYFRAME_BUILD_BENCHMARKS=ON`
+- `JELLYFRAME_BUILD_SCRIPTING=OFF`
 
 For an embedded or library-only build:
 
 ```powershell
-cmake -S . -B build-core -DWEARWEB_BUILD_EXAMPLES=OFF -DWEARWEB_BUILD_TESTS=OFF -DWEARWEB_BUILD_BENCHMARKS=OFF
+cmake -S . -B build-core -DJELLYFRAME_BUILD_EXAMPLES=OFF -DJELLYFRAME_BUILD_TESTS=OFF -DJELLYFRAME_BUILD_BENCHMARKS=OFF
 cmake --build build-core --config Release
 ```
 
-Optional JerryScript runtime support is built as a separate `wearweb_script`
+Optional JerryScript runtime support is built as a separate `jellyframe_script`
 target. It is disabled by default so embedded/core builds never pull in
 JerryScript headers or libraries accidentally:
 
@@ -82,7 +85,7 @@ git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third
 python third_party\jerryscript\tools\build.py --clean
 
 cmake -S . -B build-script `
-  -DWEARWEB_BUILD_SCRIPTING=ON `
+  -DJELLYFRAME_BUILD_SCRIPTING=ON `
   -DJERRYSCRIPT_ROOT="%CD%\third_party\jerryscript" `
   -DJERRYSCRIPT_LIBRARIES="%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-core.lib;%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-port.lib"
 cmake --build build-script --config Release
@@ -107,58 +110,62 @@ ctest --test-dir build -C Debug --output-on-failure
 ## Examples
 
 ```powershell
-.\build\Debug\wearweb_demo.exe
-.\build\Debug\wearweb_dom_dump.exe
-.\build\Debug\wearweb_dom_dump.exe path\to\page.html
-.\build\Debug\wearweb_cssom_dump.exe
-.\build\Debug\wearweb_cssom_dump.exe path\to\style.css
-.\build\Debug\wearweb_style_dump.exe path\to\page.html path\to\style.css
-.\build\Debug\wearweb_render_tree_dump.exe path\to\page.html path\to\style.css
-.\build\Debug\wearweb_layer_tree_dump.exe path\to\page.html path\to\style.css
-.\build\Debug\wearweb_pipeline_dump.exe path\to\page.html path\to\style.css
-.\build\Debug\wearweb_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
-.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
-.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
-.\build\Debug\wearweb_pseudo_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css output.bmp 360 260 --script examples\script_cases\event_probe.js
-.\build\Debug\wearweb_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css output.bmp 360 360 --script examples\app_cases\weather.js
-.\build\Debug\wearweb_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css output.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
-.\build\Debug\wearweb_win32_browser.exe path\to\page.html path\to\style.css
-.\build\Debug\wearweb_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
-.\build\Debug\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
-.\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
-.\build\Debug\wearweb_capability_check.exe path\to\page.html path\to\style.css path\to\app.js
-.\build\Debug\wearweb_capability_check.exe --emit-used-chars used_chars.txt path\to\page.html path\to\style.css path\to\app.js
-.\build\Debug\wearweb_font_pack_gen.exe --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
-.\build\Debug\wearweb_embedded_host_demo.exe
-.\build\Release\wearweb_microbench.exe 80 1000
-.\build\Debug\wearweb_core_tests.exe
+.\build\Debug\jellyframe_demo.exe
+.\build\Debug\jellyframe_dom_dump.exe
+.\build\Debug\jellyframe_dom_dump.exe path\to\page.html
+.\build\Debug\jellyframe_cssom_dump.exe
+.\build\Debug\jellyframe_cssom_dump.exe path\to\style.css
+.\build\Debug\jellyframe_style_dump.exe path\to\page.html path\to\style.css
+.\build\Debug\jellyframe_render_tree_dump.exe path\to\page.html path\to\style.css
+.\build\Debug\jellyframe_layer_tree_dump.exe path\to\page.html path\to\style.css
+.\build\Debug\jellyframe_pipeline_dump.exe path\to\page.html path\to\style.css
+.\build\Debug\jellyframe_pseudo_browser.exe path\to\page.html path\to\style.css output.bmp 360 240
+.\build\Debug\jellyframe_pseudo_browser.exe examples\script_cases\runtime_probe.html examples\script_cases\runtime_probe.css output.bmp 360 240 --script examples\script_cases\runtime_probe.js
+.\build\Debug\jellyframe_pseudo_browser.exe examples\script_cases\dom_mutation_probe.html examples\script_cases\dom_mutation_probe.css output.bmp 360 260 --script examples\script_cases\dom_mutation_probe.js
+.\build\Debug\jellyframe_pseudo_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css output.bmp 360 260 --script examples\script_cases\event_probe.js
+.\build\Debug\jellyframe_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css output.bmp 360 360 --script examples\app_cases\weather.js
+.\build\Debug\jellyframe_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css output.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
+.\build\Debug\jellyframe_win32_browser.exe path\to\page.html path\to\style.css
+.\build\Debug\jellyframe_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
+.\build\Debug\jellyframe_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
+.\build\Debug\jellyframe_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
+.\build\Debug\jellyframe_capability_check.exe path\to\page.html path\to\style.css path\to\app.js
+.\build\Debug\jellyframe_capability_check.exe --emit-used-chars used_chars.txt path\to\page.html path\to\style.css path\to\app.js
+.\build\Debug\jellyframe_font_pack_gen.exe --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+.\build\Debug\jellyframe_embedded_host_demo.exe
+.\build\Release\jellyframe_virtual_bench.exe 300 300 60 200 80 0.85 40
+.\build\Release\jellyframe_microbench.exe 80 1000
+.\build\Debug\jellyframe_core_tests.exe
 ```
 
-- `wearweb_demo` runs the current layout/layer/display-list slice.
-- `wearweb_dom_dump` prints tokenizer output and an ASCII DOM tree. It caps file
+- `jellyframe_demo` runs the current layout/layer/display-list slice.
+- `jellyframe_dom_dump` prints tokenizer output and an ASCII DOM tree. It caps file
   input at 512 KiB so the tool remains usable on low-end targets.
-- `wearweb_cssom_dump` prints parsed CSSOM style rules, specificity and
+- `jellyframe_cssom_dump` prints parsed CSSOM style rules, specificity and
   declarations. It also caps file input at 512 KiB.
-- `wearweb_style_dump` prints computed styles for functional UI nodes such as
+- `jellyframe_style_dump` prints computed styles for functional UI nodes such as
   forms, inputs, buttons, dialogs and cards.
-- `wearweb_render_tree_dump` prints the render tree generated from DOM and
+- `jellyframe_render_tree_dump` prints the render tree generated from DOM and
   computed style.
-- `wearweb_layer_tree_dump` prints layer boundaries, reasons, clips and flattened
+- `jellyframe_layer_tree_dump` prints layer boundaries, reasons, clips and flattened
   display-list counts.
-- `wearweb_pipeline_dump` prints end-to-end DOM/render/layout/layer/display-list
+- `jellyframe_pipeline_dump` prints end-to-end DOM/render/layout/layer/display-list
   counts and a display-list preview.
-- `wearweb_capability_check` scans HTML/CSS/JS files and reports supported
+- `jellyframe_capability_check` scans HTML/CSS/JS files and reports supported
   subsets, degraded features and unsupported APIs before deploying to a small
   target. It can also emit non-ASCII characters used by a page and verify them
   against a UTF-8 font coverage file with `--emit-used-chars` and
   `--font-coverage`.
-- `wearweb_font_pack_gen` subsets a BDF bitmap font into a C++ `BitmapFont`
+- `jellyframe_font_pack_gen` subsets a BDF bitmap font into a C++ `BitmapFont`
   header that can be compiled into an embedded text backend.
-- `wearweb_embedded_host_demo` is a platform-neutral bring-up demo. It uses
+- `jellyframe_embedded_host_demo` is a platform-neutral bring-up demo. It uses
   static HTML/CSS, the bitmap text backend, focus activation and an RGB565
   framebuffer sink without Win32, files or hardware I/O, so board ports can
   mirror its structure.
-- `wearweb_pseudo_browser` runs the current full pipeline and writes a BMP or PPM
+- `jellyframe_virtual_bench` is a desktop virtual-board benchmark. It runs the
+  real core pipeline, converts to RGB565 and estimates flush cost from a
+  configurable panel bus profile for ESP32-S3/QEMU trend comparison.
+- `jellyframe_pseudo_browser` runs the current full pipeline and writes a BMP or PPM
   framebuffer image. It is a desktop validation shell, not an embedded UI. Its
   built-in fallback font is intentionally tiny; use the Win32 browser shell for
   readable UTF-8/Chinese text validation. In scripting builds, `--script`
@@ -166,22 +173,22 @@ ctest --test-dir build -C Debug --output-on-failure
   rendering, then prints the stringified result or exception.
   `--pump-timers ms` advances host-pumped timers before rendering so timer-driven
   app examples can be smoke-tested without a window.
-- `wearweb_win32_browser` is available on Windows builds. It opens an
+- `jellyframe_win32_browser` is available on Windows builds. It opens an
   interactive Win32/GDI window, renders through the same core pipeline, injects a
   GDI text measurement and painter callbacks and forwards mouse/wheel input into
   the platform-neutral input controller. It is for desktop
   observation only; the core remains windowing- and OS-independent. In scripting
   builds, `--script` keeps a JerryScript runtime alive so JavaScript event
   listeners can react to native input and dirty DOM mutations can rerender.
-- `wearweb_win32_browser --capture` renders through the same Win32/GDI text path
+- `jellyframe_win32_browser --capture` renders through the same Win32/GDI text path
   and writes a BMP or PPM file without opening an interactive window.
 - The inspection tools and Win32 shell merge author CSS from the explicit CSS
   file, embedded `<style>` elements and local `<link rel="stylesheet">` files.
   Linked CSS loading lives in example code; the core exposes only a callback and
   stays platform-neutral.
-- `wearweb_microbench` runs parser/render/layout/layer/flatten microbenchmarks.
+- `jellyframe_microbench` runs parser/render/layout/layer/flatten microbenchmarks.
   Use a Release build for meaningful numbers.
-- `wearweb_core_tests` is the single platform-neutral regression executable. It
+- `jellyframe_core_tests` is the single platform-neutral regression executable. It
   covers tokenizer/parser, DOM mutation, CSS parser, events, hit testing, input,
   render tree, layer tree and CPU framebuffer behavior. In scripting builds it
   also includes the JerryScript runtime tests.
@@ -194,6 +201,11 @@ ctest --test-dir build -C Debug --output-on-failure
   time, framebuffer presentation, text and embedded budgets.
 - `docs/embedded_hal_api.md` lists the hardware-side APIs a board port should
   implement, including ESP32-S3 mapping notes.
+- `docs/porting_work_guide.md` is the board-port work guide, covering porting
+  phases, implementation requirements, acceptance checks and boundaries that
+  require core work first.
+- `docs/esp32s3_qemu_benchmark.md` records ESP32-S3 QEMU PSRAM gradient
+  measurements and memory-capacity recommendations.
 - `docs/text_backend.md` describes the host text measurement/painting contract
   and current fallback limits.
 - `docs/memory_management.md` summarizes current embedded memory behavior,

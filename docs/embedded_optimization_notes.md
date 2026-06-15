@@ -21,6 +21,11 @@ small wearable devices.
 - Unsupported modern CSS is skipped at block/rule boundaries, avoiding recovery
   loops.
 - Style cascade slots use a fixed array instead of a per-node hash map.
+- Style resolution caches bounded id/class/tag candidate rule sets inside
+  `StyleResolver`; final selector matching still runs per node, so descendant,
+  child and attribute selector semantics remain correct.
+- DOM attributes use compact sequential `AttributeList` storage instead of a
+  per-node hash map.
 - DOM event listener storage is allocated lazily, so nodes without listeners do
   not carry an empty listener table.
 - DOM dirty bits propagate to ancestors, so root dirty checks are O(1), clean
@@ -39,15 +44,19 @@ small wearable devices.
 - The responsive grid subset is computed with bounded integer auto-placement,
   clamped spans and compact per-row occupancy bit masks rather than a full
   track-sizing engine.
+- `MonotonicArena` is available for document-lifetime allocation. Render,
+  layout and layer tree builders expose arena-backed paths for embedded
+  benchmarks.
 
 ## Memory Guidance
 
 - Replace recursive destructors/traversals if target stack is very small.
-- Add arena allocation for DOM/render/layout objects once object lifetimes are
-  tied to a document.
-- Replace small per-node attribute hash maps with compact small-vector
-  attributes before targeting tiny heaps.
-- Index CSS rules by id/class/tag before loading real-world large stylesheets.
+- Evaluate whether DOM nodes should move to a document arena.
+- Keep `AttributeList` unless measurements show a need for tiny id/class
+  indexes; compact UI nodes are smaller without hash buckets.
+- CSS rules are already indexed by id/class/tag/universal buckets and reuse a
+  bounded candidate cache; full computed-style sharing remains deferred until
+  inheritance and mutation invalidation can be kept simple.
 - Keep layer/display-list output bounded or tile it by dirty region on small RAM
   systems.
 - See `docs/memory_management.md` for the current ownership and allocation
@@ -76,7 +85,7 @@ small wearable devices.
 Command:
 
 ```powershell
-.\build\Release\wearweb_microbench.exe 80 1000
+.\build\Release\jellyframe_microbench.exe 80 1000
 ```
 
 Result on this Windows build machine after the responsive grid/aspect-ratio
@@ -110,5 +119,5 @@ Interpretation:
 - Responsive grid cards and `aspect-ratio` add measurable layout work but keep
   the cost bounded and buy a large amount of embedded-app UI expressiveness.
 - Full pipeline time is still dominated by HTML parse and style/render work.
-- The next performance upgrade should be arena allocation and computed-style
-  sharing for repeated class patterns.
+- The next performance upgrade should target computed-style sharing for
+  repeated class patterns and tighter offscreen framebuffer budgeting.

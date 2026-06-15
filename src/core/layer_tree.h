@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/arena.h"
 #include "core/geometry.h"
 #include "core/layout.h"
 
@@ -7,7 +8,16 @@
 #include <memory>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
+
+struct LayerNode;
+
+struct LayerNodeDeleter {
+    bool arena_owned = false;
+    void operator()(LayerNode* layer) const;
+};
+
+using LayerNodePtr = std::unique_ptr<LayerNode, LayerNodeDeleter>;
 
 enum class LayerType {
     Root,
@@ -42,20 +52,41 @@ struct LayerNode {
     int z_index = 0;
     std::size_t source_order = 0;
     DisplayList display_list;
-    std::vector<std::unique_ptr<LayerNode>> children;
+    std::vector<LayerNodePtr> children;
+};
+
+struct LayerTreeBuilderOptions {
+    std::size_t max_layers = 1024;
+    std::size_t max_display_commands = 8192;
 };
 
 class LayerTreeBuilder {
 public:
-    std::unique_ptr<LayerNode> build(const LayoutBox& root) const;
+    explicit LayerTreeBuilder(LayerTreeBuilderOptions options = {});
+
+    LayerNodePtr build(const LayoutBox& root) const;
+    LayerNodePtr build(const LayoutBox& root, MonotonicArena& arena) const;
     DisplayList flatten(const LayerNode& root) const;
 
 private:
-    void build_children(const LayoutBox& box, LayerNode& layer, std::size_t& next_source_order) const;
-    void build_box(const LayoutBox& box, LayerNode& parent_layer, std::size_t& next_source_order) const;
+    LayerTreeBuilderOptions options_;
+
+    LayerNodePtr build_with_arena(const LayoutBox& root, MonotonicArena* arena) const;
+    void trim_display_list(DisplayList& display_list) const;
+    void build_children(const LayoutBox& box,
+                        LayerNode& layer,
+                        std::size_t& next_source_order,
+                        std::size_t& layer_count,
+                        MonotonicArena* arena) const;
+    void build_box(const LayoutBox& box,
+                   LayerNode& parent_layer,
+                   std::size_t& next_source_order,
+                   std::size_t& layer_count,
+                   MonotonicArena* arena) const;
+    LayerNodePtr make_layer_node(MonotonicArena* arena) const;
 };
 
 std::size_t count_layers(const LayerNode& layer);
 std::size_t count_layer_display_commands(const LayerNode& layer);
 
-} // namespace wearweb
+} // namespace jellyframe

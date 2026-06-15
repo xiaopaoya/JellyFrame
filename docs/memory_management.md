@@ -1,6 +1,6 @@
 # Memory Management Review
 
-WearWeb currently favors explicit ownership and small, predictable containers.
+JellyFrame currently favors explicit ownership and small, predictable containers.
 That is the right baseline for embedded targets, but several allocations are
 still desktop-convenient rather than MCU-tight.
 
@@ -14,17 +14,26 @@ still desktop-convenient rather than MCU-tight.
   listener table.
 - Form-control state is lazy: ordinary elements do not carry control state.
 - Parser and example file inputs are bounded.
+- `HostBudgets` now maps into HTML parser, CSS parser, render tree, layout tree,
+  layer tree, flattened display-list, dirty-rectangle, JerryScript timer and
+  script event-listener limits.
 - Timer callbacks are retained explicitly as JerryScript references and released
   on `clearTimeout`, `clearInterval`, document rebinding and runtime shutdown.
 - The M6 timer queue is host-pumped with a callback budget, so a burst of due
   timers cannot monopolize a frame indefinitely.
+- `MonotonicArena` is now available as a core memory utility. It supports block
+  based linear allocation, reverse-order destruction and full arena reset.
+  Render, layout and layer trees now have arena-backed build paths, used by
+  microbench, virtual board and ESP32-S3 benchmarks; DOM nodes still use the
+  original ownership model.
 
 ## Embedded Risks
 
-- DOM attributes use `std::unordered_map`, which is simple but heavy for small
-  elements. Most embedded UI nodes have only a few attributes.
-- DOM/render/layout/layer trees allocate many small objects independently. This
-  is clear and safe, but can fragment small heaps.
+- DOM attributes now use a compact sequential `AttributeList` instead of a
+  per-node `std::unordered_map`. Most embedded UI nodes have only a few
+  attributes, so linear scans are more memory-predictable than hash buckets.
+- DOM nodes still allocate many small objects independently. This is clear and
+  safe, but can fragment small heaps.
 - Several tree operations are recursive. Very small stacks may need iterative
   traversal for parsing, dirty-flag scans and teardown.
 - Framebuffer memory is linear in viewport size. A 390x640 RGBA buffer is about
@@ -33,31 +42,38 @@ still desktop-convenient rather than MCU-tight.
   `embedded_framebuffer` to convert dirty rectangles into a host-owned RGB565,
   grayscale or monochrome buffer.
 - Offscreen compositing can allocate temporary framebuffers for opacity or
-  transformed layers.
+  transformed layers; this path still needs a strict host budget.
 - Text strings are stored as `std::string`; future text shaping or large pages
   will need stricter string lifetime and deduplication policy.
+- `StyleResolver` keeps a bounded candidate-rule cache. It trades a small,
+  configurable amount of resolver-owned memory for fewer repeated bucket merges
+  on class-heavy UI trees, while still recalculating cascade results per node.
 - Script wrappers are short-lived and allocated on demand. This avoids stale
   ownership, but repeated hot-path wrapper creation may cost memory churn.
 
 ## Recommended Next Optimizations
 
-1. Replace per-node attribute hash maps with a small-vector attribute list, then
-   optionally add a tiny indexed lookup for `id` and `class`.
-2. Add optional arena allocation for document-lifetime objects: DOM nodes,
-   render objects, layout boxes and layer nodes.
-3. Keep a hard framebuffer policy for embedded targets: one primary framebuffer,
+1. Evaluate whether DOM nodes should move to a document arena. This is higher
+   risk than render/layout/layer because parsing, mutation and scripting all
+   observe node ownership.
+2. Keep a hard framebuffer policy for embedded targets: one primary framebuffer,
    optional dirty rectangles, one host-owned converted display buffer when
    needed and tightly bounded offscreen buffers.
-4. Convert recursive tree walks to iterative walks when a target stack budget is
+3. Convert recursive tree walks to iterative walks when a target stack budget is
    known to be small.
-5. Add host-configurable budgets for maximum DOM nodes, CSS rules, display
-   commands, timers and retained JS event listeners.
+4. Plumb budgets into remaining expensive paths: offscreen compositing,
+   resource aggregation and future image/font decoders.
+5. Consider full computed-style sharing only after the candidate-rule cache is
+   measured on real apps; full sharing must account for inherited values and
+   mutation invalidation.
 6. Consider wrapper caching only after measuring script-heavy apps; it saves
    repeated wrapper creation but retains more JerryScript objects.
 
 ## Current Decision
 
-The project is safe enough to continue M6/M7 development, but it is not yet
-heap-optimal for tiny MCUs. The biggest future win is a document arena plus
-small-vector attributes; both preserve readability while removing many small
-heap allocations.
+The project is now safer for bounded embedded bring-up because major pipeline
+stages consume `HostBudgets`, and DOM attributes no longer use per-node hash
+maps. It is still not heap-optimal for tiny MCUs. Render, layout and layer
+trees now have arena-backed build paths; the biggest remaining allocation
+question is whether DOM nodes should move to a document arena without hurting
+mutation/script readability.

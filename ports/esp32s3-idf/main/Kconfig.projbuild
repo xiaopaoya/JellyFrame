@@ -1,0 +1,35 @@
+menu "JellyFrame ESP32-S3 benchmark"
+
+config JELLYFRAME_BENCH_CARD_COUNT
+    int "Synthetic card count"
+    default 40
+    range 1 400
+    help
+        Number of synthetic card nodes generated for parser, style and layout
+        benchmarks.
+
+config JELLYFRAME_BENCH_ITERATIONS
+    int "Benchmark iterations"
+    default 20
+    range 1 5000
+    help
+        Number of iterations used for each measured stage.
+
+config JELLYFRAME_BENCH_VIEWPORT_WIDTH
+    int "Viewport width"
+    default 300
+    range 64 800
+
+config JELLYFRAME_BENCH_VIEWPORT_HEIGHT
+    int "Viewport height"
+    default 300
+    range 64 800
+
+config JELLYFRAME_BENCH_PRESENT_RGB565
+    bool "Benchmark RGB565 framebuffer presentation"
+    default y
+    help
+        Converts the rendered RGBA framebuffer into a host-owned RGB565 buffer
+        through the embedded framebuffer HAL adapter.
+
+endmenu

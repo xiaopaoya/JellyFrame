@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to WearWeb Engine are tracked here.
+All notable changes to JellyFrame Engine are tracked here.
 
 The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
@@ -8,29 +8,61 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Renamed the project to `JellyFrame`; `WearWeb` is now documented only as the
+  early codename.
 - Added platform-neutral `TextMeasureProvider` so layout can use host text
-  metrics while keeping font APIs outside `wearweb_core`.
+  metrics while keeping font APIs outside `jellyframe_core`.
 - Added minimal text paint semantics to display commands: horizontal alignment
   and single-line versus wrapped text.
 - Added Win32/GDI text measurement injection alongside the existing GDI text
   painter for more faithful UTF-8/Chinese desktop validation.
 - Added bilingual text backend documentation covering measurement/painting
   contracts and fallback limits.
-- Added font coverage support to `wearweb_capability_check`: it can emit
+- Added font coverage support to `jellyframe_capability_check`: it can emit
   non-ASCII used characters and verify them against a UTF-8 font coverage file.
 - Added button/crown-friendly focus navigation on `InputController`:
   `focus_next()`, `focus_previous()` and `activate_focused()`.
 - Added bilingual embedded HAL API documentation for board ports, including
   ESP32-S3 mapping notes.
+- Added bilingual porting work guides for ESP32-S3/RTOS/LVGL ports, covering
+  phased tasks, implementation requirements, acceptance checks and boundaries
+  that require core work first.
+- Added a `ports/virtual_board` desktop virtual-board benchmark and normalized
+  the ESP32-S3/QEMU experiment into a `ports/esp32s3-idf` bring-up project.
+- Added a bounded ESP32-S3 static resource bundle hook for local HTML/CSS and
+  classic-script assets, including a generated C++ table and P2 smoke resources.
+- Added bilingual ESP32-S3 QEMU PSRAM gradient benchmark documentation with
+  4M/8M/16M/32M timing data and memory-capacity recommendations.
 - Added a platform-neutral static bitmap font backend with measurement and
   painting callbacks for generated embedded font packs.
-- Added `wearweb_font_pack_gen`, a desktop BDF subset generator that emits C++
+- Added `jellyframe_font_pack_gen`, a desktop BDF subset generator that emits C++
   `BitmapFont` headers for embedded builds.
-- Added `wearweb_embedded_host_demo`, a platform-neutral static-resource demo
+- Added `jellyframe_embedded_host_demo`, a platform-neutral static-resource demo
   that wires HTML/CSS parsing, bitmap text, focus activation and RGB565
   framebuffer presentation without Win32, files or hardware I/O.
 - Added first host device capability structs for board ports, covering display,
   input, memory, budgets and optional host services.
+- Added `core/budget.h` helpers that map `HostBudgets` into HTML/CSS parser,
+  render/layout/layer/display-list, dirty-rectangle and JerryScript
+  timer/listener limits.
+- Replaced per-node DOM attribute `std::unordered_map` storage with a compact
+  sequential `AttributeList`, reducing heap overhead for small embedded UI nodes
+  while keeping the existing map-like call shape.
+- Added a core `MonotonicArena` memory utility with block based linear
+  allocation, reverse-order destruction and full arena reset as the base for
+  future DOM/render/layout/layer lifetime allocation.
+- Added an arena-backed render tree build path and exercised it from microbench,
+  virtual board and ESP32-S3 benchmarks to validate document-lifetime
+  allocation.
+- Added an arena-backed layout tree build path, switched embedded-oriented
+  benchmarks to it and covered it with core regression tests.
+- Added an arena-backed layer tree build path, switched embedded-oriented
+  benchmarks to it and covered it with layer-tree regression tests.
+- Added a bounded `StyleResolver` candidate-rule cache for repeated id/class/tag
+  patterns while preserving per-node selector matching and cascade semantics.
+- Added paint-only DOM dirty state for form-control value/checked/selection
+  changes, enabling the Win32 shell to reuse render/layout and repaint bounded
+  dirty rectangles for common control interaction.
 - Added platform-neutral linked stylesheet collection through a callback-based
   `document_style` API. Core code still performs no file or network I/O; example
   tools and the Win32 shell provide local-file loading for validation.
@@ -38,7 +70,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `a`, `mark`, `blockquote`, `summary`, `details`, `address`, `hgroup`,
   `progress` and `meter`.
 - Added simple software painting for `progress` and `meter` value bars.
-- Added `wearweb_win32_browser --capture` to render a page through the Win32/GDI
+- Added `jellyframe_win32_browser --capture` to render a page through the Win32/GDI
   text path and write a BMP/PPM image for visual inspection.
 - Added a lightweight platform-neutral form-control state layer for common
   embedded-app controls: text inputs, textareas, checkboxes, radios, ranges and
@@ -51,10 +83,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added bilingual JerryScript integration planning documents covering runtime
   lifecycle, binding ownership, milestones, risks and the first interactive demo
   target.
-- Added optional `wearweb_script` JerryScript runtime shell, gated behind
-  `WEARWEB_BUILD_SCRIPTING=OFF` by default so `wearweb_core` remains independent
+- Added optional `jellyframe_script` JerryScript runtime shell, gated behind
+  `JELLYFRAME_BUILD_SCRIPTING=OFF` by default so `jellyframe_core` remains independent
   from JerryScript headers and libraries.
-- Added initial `wearweb_pseudo_browser --script` support for scripting builds:
+- Added initial `jellyframe_pseudo_browser --script` support for scripting builds:
   it evaluates one external JavaScript file and reports the result or exception.
 - Added `examples/script_cases/runtime_probe.*` as the first scripting
   acceptance page.
@@ -78,11 +110,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   built after M6 and which browser assumptions are intentionally absent.
 - Added M6 host-pumped timers: `setTimeout`, `clearTimeout`, `setInterval` and
   `clearInterval`.
-- Added `wearweb_pseudo_browser --pump-timers ms` for timer-driven script smoke
+- Added `jellyframe_pseudo_browser --pump-timers ms` for timer-driven script smoke
   tests without an interactive window.
 - Added bilingual memory management review documents covering current ownership,
   embedded risks and allocator/container priorities.
-- Added a single aggregate `wearweb_core_tests` executable for platform-neutral
+- Added a single aggregate `jellyframe_core_tests` executable for platform-neutral
   regression coverage, replacing the many standalone test executables in normal
   builds.
 - Added `JERRYSCRIPT_ROOT` CMake support for local official JerryScript source
@@ -127,7 +159,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   reflection.
 - Added mouse-like `pointerdown`/`pointerup` and `touchstart`/`touchend` event
   dispatch for wearable press feedback.
-- Added `wearweb_capability_check`, a desktop HTML/CSS/JS scanner for supported
+- Added `jellyframe_capability_check`, a desktop HTML/CSS/JS scanner for supported
   subsets, degraded features and unsupported browser APIs.
 - Added conservative modern length function support for `min()`, `max()`,
   `clamp()` and simple `calc(A +/- B)` when arguments resolve to supported
@@ -195,7 +227,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   can move through options across `optgroup` boundaries with Up/Down.
 - Added Win32-shell hash anchor scrolling for `<a href="#id">` validation
   pages.
-- Updated `wearweb_pseudo_browser` to present through `HostFrameSink` while
+- Updated `jellyframe_pseudo_browser` to present through `HostFrameSink` while
   preserving BMP/PPM validation output.
 - Updated the Win32 browser shell to reuse its framebuffer and repaint only
   computed dirty rectangles after non-structural DOM changes.
@@ -206,7 +238,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Notes
 
-- `wearweb_pseudo_browser` still uses the tiny built-in bitmap font when no
+- `jellyframe_pseudo_browser` still uses the tiny built-in bitmap font when no
   platform `TextPainter` is injected, so non-ASCII text appears as fallback
   glyphs in BMP smoke-test output. The Win32 browser shell uses GDI text
   measurement and painting for readable UTF-8/Chinese validation.
@@ -224,7 +256,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `SoftwareCompositor`.
 - Added source-over alpha compositing, opacity-layer offscreen compositing and
   BMP/PPM image output helpers.
-- Added `wearweb_pseudo_browser` for full-pipeline framebuffer validation.
+- Added `jellyframe_pseudo_browser` for full-pipeline framebuffer validation.
 - Added core `Event`, `MouseEvent`, `WheelEvent` and `EventTarget` support.
 - Added DOM-style capture, target and bubble event dispatch with
   `preventDefault`, propagation stopping and one-shot listeners.
@@ -232,7 +264,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   ordering, overflow clipping and text-node normalization to element targets.
 - Added platform-neutral `InputController` for pointer move/down/up, click
   synthesis, wheel dispatch and hover/active/focus tracking.
-- Added Windows-only `wearweb_win32_browser`, an interactive validation shell
+- Added Windows-only `jellyframe_win32_browser`, an interactive validation shell
   that renders through the core pipeline, blits the framebuffer with GDI,
   injects native text painting and forwards mouse/wheel input into
   `InputController`.
@@ -265,7 +297,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Notes
 
-- `wearweb_core` remains platform-neutral. Windows libraries are linked only by
+- `jellyframe_core` remains platform-neutral. Windows libraries are linked only by
   Windows-specific example tools.
 - The core text fallback is intentionally tiny and portable; the Win32 browser
   uses native GDI text for readable UTF-8/Chinese validation.
@@ -274,13 +306,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
-- Created the initial C++17 CMake project and `wearweb_core` library.
+- Created the initial C++17 CMake project and `jellyframe_core` library.
 - Added tolerant HTML tokenizer/parser support with start/end tags, attributes,
   doctype, comments, text, raw-text and character references.
 - Added resilient DOM construction with synthesized `html/body`, common implied
   end tags, void elements, unmatched-end-tag tolerance and parser resource
   limits.
-- Added `wearweb_dom_dump` for tokenizer output and ASCII DOM visualization.
+- Added `jellyframe_dom_dump` for tokenizer output and ASCII DOM visualization.
 - Added a tolerant CSS parser with comments, balanced block recovery, ordered
   declarations, selector-list splitting, `@layer` flattening and conservative
   recovery for unsupported enhancement blocks.
@@ -292,9 +324,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   inputs, buttons, dialogs and media nodes.
 - Added render tree, box-model layout, sparse layer tree and display-list
   generation.
-- Added pipeline inspection tools: `wearweb_style_dump`,
-  `wearweb_render_tree_dump`, `wearweb_layer_tree_dump` and
-  `wearweb_pipeline_dump`.
+- Added pipeline inspection tools: `jellyframe_style_dump`,
+  `jellyframe_render_tree_dump`, `jellyframe_layer_tree_dump` and
+  `jellyframe_pipeline_dump`.
 - Added modern HTML/CSS compatibility samples and bilingual analysis documents.
 - Added microbenchmarks, CTest registration and CMake options for examples,
   tests and benchmarks.

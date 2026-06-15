@@ -1,4 +1,5 @@
 #include "core/bitmap_font.h"
+#include "core/budget.h"
 #include "core/css_parser.h"
 #include "core/embedded_framebuffer.h"
 #include "core/form_control.h"
@@ -16,12 +17,28 @@
 #include <string>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
 constexpr int kViewportWidth = 128;
 constexpr int kViewportHeight = 96;
+
+HostBudgets embedded_demo_budgets() {
+    HostBudgets budgets;
+    budgets.max_dom_nodes = 64;
+    budgets.max_css_rules = 32;
+    budgets.max_render_objects = 64;
+    budgets.max_layout_boxes = 64;
+    budgets.max_layers = 16;
+    budgets.max_display_commands = 128;
+    budgets.max_dirty_rects = 4;
+    budgets.max_timers = 4;
+    budgets.max_event_listeners = 16;
+    budgets.max_resource_bytes = 8 * 1024;
+    budgets.max_framebuffer_pixels = kViewportWidth * kViewportHeight;
+    return budgets;
+}
 
 constexpr char kHtml[] =
     "<body>"
@@ -84,24 +101,26 @@ Node* find_by_id(Node& node, const std::string& id) {
 struct Pipeline {
     std::unique_ptr<Node> document;
     std::unique_ptr<StyleResolver> resolver;
-    std::unique_ptr<RenderObject> render_tree;
-    std::unique_ptr<LayoutBox> layout_tree;
-    std::unique_ptr<LayerNode> layer_tree;
+    RenderObjectPtr render_tree;
+    LayoutBoxPtr layout_tree;
+    LayerNodePtr layer_tree;
 };
 
-Pipeline build_pipeline(BitmapFontContext& font_context) {
+Pipeline build_pipeline(BitmapFontContext& font_context, const HostBudgets& budgets) {
     HtmlParser html_parser;
     CssParser css_parser;
     Pipeline pipeline;
-    pipeline.document = html_parser.parse(kHtml);
-    pipeline.resolver = std::make_unique<StyleResolver>(css_parser.parse(kCss));
+    pipeline.document = html_parser.parse(kHtml, html_parser_options_from_budgets(budgets));
+    pipeline.resolver = std::make_unique<StyleResolver>(
+        css_parser.parse(kCss, css_parser_options_from_budgets(budgets)));
 
-    RenderTreeBuilder render_tree_builder(*pipeline.resolver);
+    RenderTreeBuilder render_tree_builder(*pipeline.resolver, render_tree_options_from_budgets(budgets));
     pipeline.render_tree = render_tree_builder.build(*pipeline.document);
     LayoutEngine layout_engine(*pipeline.resolver,
-                               TextMeasureProvider{bitmap_font_measure_callback, &font_context});
+                               TextMeasureProvider{bitmap_font_measure_callback, &font_context},
+                               layout_engine_options_from_budgets(budgets));
     pipeline.layout_tree = layout_engine.layout(*pipeline.render_tree, kViewportWidth);
-    LayerTreeBuilder layer_tree_builder;
+    LayerTreeBuilder layer_tree_builder(layer_tree_options_from_budgets(budgets));
     pipeline.layer_tree = layer_tree_builder.build(*pipeline.layout_tree);
     return pipeline;
 }
@@ -120,7 +139,8 @@ std::vector<std::uint8_t> make_rgb565_buffer() {
 
 int main() {
     BitmapFontContext font_context{&kFont, 2};
-    Pipeline pipeline = build_pipeline(font_context);
+    const HostBudgets budgets = embedded_demo_budgets();
+    Pipeline pipeline = build_pipeline(font_context, budgets);
 
     Node* button = find_by_id(*pipeline.document, "button");
     Node* checkbox = find_by_id(*pipeline.document, "check");
@@ -162,7 +182,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "WearWeb embedded host demo\n";
+    std::cout << "JellyFrame embedded host demo\n";
     std::cout << "  viewport=" << kViewportWidth << "x" << kViewportHeight << '\n';
     std::cout << "  rgb565_bytes=" << rgb565.size() << '\n';
     std::cout << "  flush_count=" << flush_probe_state.count << '\n';

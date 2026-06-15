@@ -5,7 +5,7 @@
 #include <sstream>
 #include <utility>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 const std::string kEmpty;
@@ -16,6 +16,48 @@ bool attribute_affects_form_control_state(const std::string& name) {
 }
 
 } // namespace
+
+AttributeList::iterator AttributeList::find(const std::string& name) {
+    for (auto it = entries_.begin(); it != entries_.end(); ++it) {
+        if (it->first == name) {
+            return it;
+        }
+    }
+    return entries_.end();
+}
+
+AttributeList::const_iterator AttributeList::find(const std::string& name) const {
+    for (auto it = entries_.begin(); it != entries_.end(); ++it) {
+        if (it->first == name) {
+            return it;
+        }
+    }
+    return entries_.end();
+}
+
+std::pair<AttributeList::iterator, bool> AttributeList::emplace(std::string name, std::string value) {
+    auto existing = find(name);
+    if (existing != entries_.end()) {
+        return {existing, false};
+    }
+    entries_.emplace_back(std::move(name), std::move(value));
+    auto inserted = entries_.end();
+    --inserted;
+    return {inserted, true};
+}
+
+AttributeList::iterator AttributeList::erase(iterator it) {
+    return entries_.erase(it);
+}
+
+std::string& AttributeList::operator[](std::string name) {
+    auto existing = find(name);
+    if (existing != entries_.end()) {
+        return existing->second;
+    }
+    entries_.emplace_back(std::move(name), std::string{});
+    return entries_.back().second;
+}
 
 Node::Node(NodeType node_type)
     : type(node_type) {}
@@ -163,6 +205,10 @@ DomDirtyFlags subtree_dirty_flags(const Node& node) {
     return node.dirty_flags;
 }
 
+bool dirty_requires_render_or_layout(DomDirtyFlags flags) {
+    return (flags & (DomDirtyTree | DomDirtyAttributes | DomDirtyText | DomDirtyStyle | DomDirtyLayout)) != 0U;
+}
+
 void clear_dirty_flags(Node& node) {
     if (node.dirty_flags == DomDirtyNone) {
         return;
@@ -182,4 +228,4 @@ DomDirtyFlags take_dirty_flags(Node& node) {
     return flags;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

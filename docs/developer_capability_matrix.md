@@ -2,12 +2,12 @@
 
 Date: 2026-06-15
 
-This document is the practical contract for application authors using WearWeb.
+This document is the practical contract for application authors using JellyFrame.
 It describes what the engine can do today, what it deliberately degrades, and
 what should not be relied on yet. The target reader is a developer building a
 small embedded UI or a desktop validation page for a future wearable device.
 
-WearWeb is not a general browser. It is a small HTML/CSS/DOM/script runtime
+JellyFrame is not a general browser. It is a small HTML/CSS/DOM/script runtime
 that keeps the common application model while cutting browser services that are
 expensive, hard to bound, or not useful on constrained devices.
 
@@ -22,16 +22,16 @@ expensive, hard to bound, or not useful on constrained devices.
 
 ## Best Fit
 
-WearWeb works best for:
+JellyFrame works best for:
 
 - Weather, clock, timer, calculator and settings apps.
 - Small dashboards with cards, text, form controls and host-provided data.
 - Local embedded applications that want HTML/CSS/JS authoring instead of canvas
   drawing.
-- Desktop validation through `wearweb_pseudo_browser` or
-  `wearweb_win32_browser`.
+- Desktop validation through `jellyframe_pseudo_browser` or
+  `jellyframe_win32_browser`.
 
-WearWeb is not ready for:
+JellyFrame is not ready for:
 
 - Arbitrary modern websites.
 - Frameworks that assume a complete DOM, selector API, browser loader, network,
@@ -68,7 +68,7 @@ WearWeb is not ready for:
 | Void elements | Works | Common void tags do not require closing tags. |
 | Implied end tags | Subset | Common paragraph/list/table-ish cases are tolerated; full HTML tree-builder compatibility is not a goal. |
 | Malformed markup | Subset | Parser recovers with limits; it should not loop forever or crash. |
-| Quirks mode | Deferred | Always ignored. WearWeb targets modern authored pages. |
+| Quirks mode | Deferred | Always ignored. JellyFrame targets modern authored pages. |
 | Template contents | Lazy | `template` is hidden by default style; template DOM semantics are not implemented. |
 | Custom elements | Subset | Unknown tags create elements and can be styled as ordinary boxes; lifecycle callbacks are absent. |
 
@@ -107,8 +107,8 @@ WearWeb is not ready for:
 | `@supports` | Lazy | Whole block skipped. |
 | `@container` | Deferred/Lazy | Whole block skipped. Avoid it for required UI. |
 | `@font-face` | Lazy | Balanced block skipped; no font loading. |
-| Font coverage check | Tool-only | `wearweb_capability_check --emit-used-chars` collects non-ASCII source characters; `--font-coverage` reports missing codepoints before embedding. |
-| Bitmap font pack generation | Tool-only | `wearweb_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds. |
+| Font coverage check | Tool-only | `jellyframe_capability_check --emit-used-chars` collects non-ASCII source characters; `--font-coverage` reports missing codepoints before embedding. |
+| Bitmap font pack generation | Tool-only | `jellyframe_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds. |
 | `@keyframes` | Lazy | Balanced block skipped; no animation model. |
 | Unknown at-rules | Lazy | Statement or balanced block skipped. |
 | CSS custom properties | Stored/Lazy | Declarations may survive for diagnostics, but `var()` dependency resolution is not implemented. |
@@ -245,7 +245,7 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 
 ## JavaScript / JerryScript Binding
 
-JavaScript support exists only when built with `WEARWEB_BUILD_SCRIPTING=ON` and a
+JavaScript support exists only when built with `JELLYFRAME_BUILD_SCRIPTING=ON` and a
 local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 
 | API | Status | Behavior |
@@ -272,7 +272,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `querySelector` | Deferred | Use IDs for now. |
 | `innerHTML` | Deferred | Use DOM creation APIs. |
 | Fetch/network/storage | Deferred | Host must provide data. |
-| Capability checker | Tool-only | `wearweb_capability_check` scans HTML/CSS/JS on desktop and reports supported subsets, degraded features and unsupported APIs. It can also emit non-ASCII used characters and verify font coverage. |
+| Capability checker | Tool-only | `jellyframe_capability_check` scans HTML/CSS/JS on desktop and reports supported subsets, degraded features and unsupported APIs. It can also emit non-ASCII used characters and verify font coverage. |
 
 ## Rendering And Pixels
 
@@ -302,15 +302,18 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Dirty check | Works | Root check is O(1) because ancestor propagation keeps aggregate bits. |
 | Dirty clear | Works | Skips clean branches. |
 | Host coalescing | Subset | Win32 shell rerenders only after dirty input/script callbacks. |
-| Incremental style/layout | Deferred | Current rerender still rebuilds render/layout/layer trees once dirty. |
-| Dirty rectangle repaint | Subset | `dirty_region` computes bounded repaint rects for direct text/attribute/form-control changes by comparing old and new layout boxes. Tree mutations conservatively repaint the viewport. |
+| Incremental style/layout | Subset | Paint-only form-control state changes can reuse render/layout in the Win32 validation shell and rebuild only layer/display commands. Text, style and tree changes still rebuild render/layout. |
+| Dirty rectangle repaint | Subset | `dirty_region` computes bounded repaint rects for direct text/attribute/form-control paint changes by comparing old and new layout boxes, or by reusing the same layout for paint-only changes. Tree mutations conservatively repaint the viewport. |
 | Host frame sink | Subset | `present_frame` exposes `FrameBuffer` through `HostFrameSink` with optional dirty rects. `embedded_framebuffer` supplies portable pixel conversion; real display I/O remains host-owned. |
 | Host device capabilities | Draft | `HostDeviceCapabilities` records display, input, memory, budget and service flags for board ports. Current core code treats it as a contract/documented policy input; deeper automatic adaptation is deferred. |
+| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count and JerryScript timer/listener limits. Render, layout and layer trees now have arena-backed build paths; DOM arenas and offscreen framebuffer budgets remain future work. |
 
 Practical implication: repeated script mutations should be batched in one event
-or timer callback. The host will see one dirty document and rerender once, but
-the rerender is still a simplified pipeline pass, but the framebuffer stage can
-now repaint bounded dirty rectangles for non-structural changes.
+or timer callback. The host will see one dirty document and rerender once.
+Paint-only form-control changes can avoid render/layout rebuilds in the Win32
+validation shell; other changes still run a simplified pipeline pass, while the
+framebuffer stage can repaint bounded dirty rectangles for non-structural
+changes.
 
 ## Recommended Authoring Rules
 
@@ -332,6 +335,8 @@ now repaint bounded dirty rectangles for non-structural changes.
 
 - CSS parser: `max_rules` 4096, `max_declarations_per_rule` 256,
   `max_nesting_depth` 8.
+- Default host budgets cap DOM nodes, render objects, layout boxes, layers,
+  display commands, dirty rects, timers, listeners and framebuffer pixels.
 - Diagnostic/example input files are capped by the tool, usually 512 KiB or
   1 MiB depending on the shell.
 - Grid auto columns are bounded internally for embedded memory predictability.

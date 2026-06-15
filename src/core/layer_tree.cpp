@@ -10,7 +10,7 @@
 #include <cstring>
 #include <utility>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 bool has_border(const EdgeSizes& border) {
@@ -609,7 +609,15 @@ Color with_opacity(Color color, float opacity) {
     return color;
 }
 
-void append_flattened_command(DisplayList& output, const DisplayCommand& command, Rect clip, bool has_clip, float opacity) {
+void append_flattened_command(DisplayList& output,
+                              const DisplayCommand& command,
+                              Rect clip,
+                              bool has_clip,
+                              float opacity,
+                              std::size_t max_display_commands) {
+    if (output.size() >= max_display_commands) {
+        return;
+    }
     DisplayCommand flattened = command;
     if (has_clip) {
         flattened.rect = intersect_rect(flattened.rect, clip);
@@ -625,7 +633,15 @@ void append_flattened_command(DisplayList& output, const DisplayCommand& command
     output.push_back(std::move(flattened));
 }
 
-void flatten_layer(const LayerNode& layer, DisplayList& output, Rect clip, bool has_clip, float opacity) {
+void flatten_layer(const LayerNode& layer,
+                   DisplayList& output,
+                   Rect clip,
+                   bool has_clip,
+                   float opacity,
+                   std::size_t max_display_commands) {
+    if (output.size() >= max_display_commands) {
+        return;
+    }
     if (layer.has_clip) {
         clip = has_clip ? intersect_rect(clip, layer.clip_rect) : layer.clip_rect;
         has_clip = true;
@@ -636,16 +652,22 @@ void flatten_layer(const LayerNode& layer, DisplayList& output, Rect clip, bool 
 
     const float layer_opacity = opacity * layer.opacity;
     for (const DisplayCommand& command : layer.display_list) {
-        append_flattened_command(output, command, clip, has_clip, layer_opacity);
+        append_flattened_command(output, command, clip, has_clip, layer_opacity, max_display_commands);
+        if (output.size() >= max_display_commands) {
+            return;
+        }
     }
     for (const auto& child : layer.children) {
-        flatten_layer(*child, output, clip, has_clip, layer_opacity);
+        flatten_layer(*child, output, clip, has_clip, layer_opacity, max_display_commands);
+        if (output.size() >= max_display_commands) {
+            return;
+        }
     }
 }
 
 void sort_layer_children(LayerNode& layer) {
     std::stable_sort(layer.children.begin(), layer.children.end(),
-        [](const std::unique_ptr<LayerNode>& left, const std::unique_ptr<LayerNode>& right) {
+        [](const LayerNodePtr& left, const LayerNodePtr& right) {
             if (left->z_index != right->z_index) {
                 return left->z_index < right->z_index;
             }
@@ -658,9 +680,27 @@ void sort_layer_children(LayerNode& layer) {
 
 } // namespace
 
-std::unique_ptr<LayerNode> LayerTreeBuilder::build(const LayoutBox& root) const {
+void LayerNodeDeleter::operator()(LayerNode* layer) const {
+    if (!arena_owned) {
+        delete layer;
+    }
+}
+
+LayerTreeBuilder::LayerTreeBuilder(LayerTreeBuilderOptions options)
+    : options_(options) {}
+
+LayerNodePtr LayerTreeBuilder::build(const LayoutBox& root) const {
+    return build_with_arena(root, nullptr);
+}
+
+LayerNodePtr LayerTreeBuilder::build(const LayoutBox& root, MonotonicArena& arena) const {
+    return build_with_arena(root, &arena);
+}
+
+LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, MonotonicArena* arena) const {
     std::size_t next_source_order = 0;
-    auto root_layer = std::make_unique<LayerNode>();
+    std::size_t layer_count = 1;
+    auto root_layer = make_layer_node(arena);
     root_layer->type = LayerType::Root;
     root_layer->reasons = layer_reasons_for(root, true);
     root_layer->box = &root;
@@ -672,28 +712,47 @@ std::unique_ptr<LayerNode> LayerTreeBuilder::build(const LayoutBox& root) const 
     root_layer->source_order = next_source_order++;
 
     paint_box_self(root, root_layer->display_list);
-    build_children(root, *root_layer, next_source_order);
+    trim_display_list(root_layer->display_list);
+    build_children(root, *root_layer, next_source_order, layer_count, arena);
     sort_layer_children(*root_layer);
     return root_layer;
 }
 
 DisplayList LayerTreeBuilder::flatten(const LayerNode& root) const {
     DisplayList output;
-    output.reserve(count_layer_display_commands(root));
-    flatten_layer(root, output, Rect{}, false, 1.0F);
+    const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
+    output.reserve(std::min(count_layer_display_commands(root), max_display_commands));
+    flatten_layer(root, output, Rect{}, false, 1.0F, max_display_commands);
     return output;
 }
 
-void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, std::size_t& next_source_order) const {
-    for (const auto& child : box.children) {
-        build_box(*child, layer, next_source_order);
+void LayerTreeBuilder::trim_display_list(DisplayList& display_list) const {
+    const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
+    if (display_list.size() > max_display_commands) {
+        display_list.resize(max_display_commands);
     }
 }
 
-void LayerTreeBuilder::build_box(const LayoutBox& box, LayerNode& parent_layer, std::size_t& next_source_order) const {
+void LayerTreeBuilder::build_children(const LayoutBox& box,
+                                      LayerNode& layer,
+                                      std::size_t& next_source_order,
+                                      std::size_t& layer_count,
+                                      MonotonicArena* arena) const {
+    for (const auto& child : box.children) {
+        build_box(*child, layer, next_source_order, layer_count, arena);
+    }
+}
+
+void LayerTreeBuilder::build_box(const LayoutBox& box,
+                                 LayerNode& parent_layer,
+                                 std::size_t& next_source_order,
+                                 std::size_t& layer_count,
+                                 MonotonicArena* arena) const {
     const LayerReasons reasons = layer_reasons_for(box, false);
-    if (needs_own_layer(reasons)) {
-        auto child_layer = std::make_unique<LayerNode>();
+    const std::size_t max_layers = std::max<std::size_t>(1, options_.max_layers);
+    if (needs_own_layer(reasons) && layer_count < max_layers) {
+        auto child_layer = make_layer_node(arena);
+        ++layer_count;
         child_layer->type = layer_type_for(reasons);
         child_layer->reasons = reasons;
         child_layer->box = &box;
@@ -704,13 +763,22 @@ void LayerTreeBuilder::build_box(const LayoutBox& box, LayerNode& parent_layer, 
         child_layer->z_index = box.style.z_index_auto ? 0 : box.style.z_index;
         child_layer->source_order = next_source_order++;
         paint_box_self(box, child_layer->display_list);
-        build_children(box, *child_layer, next_source_order);
+        trim_display_list(child_layer->display_list);
+        build_children(box, *child_layer, next_source_order, layer_count, arena);
         parent_layer.children.push_back(std::move(child_layer));
         return;
     }
 
     paint_box_self(box, parent_layer.display_list);
-    build_children(box, parent_layer, next_source_order);
+    trim_display_list(parent_layer.display_list);
+    build_children(box, parent_layer, next_source_order, layer_count, arena);
+}
+
+LayerNodePtr LayerTreeBuilder::make_layer_node(MonotonicArena* arena) const {
+    if (arena == nullptr) {
+        return LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    }
+    return LayerNodePtr(&arena->create<LayerNode>(), LayerNodeDeleter{true});
 }
 
 std::size_t count_layers(const LayerNode& layer) {
@@ -729,4 +797,4 @@ std::size_t count_layer_display_commands(const LayerNode& layer) {
     return count;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

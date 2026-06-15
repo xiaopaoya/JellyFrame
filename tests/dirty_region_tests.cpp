@@ -1,6 +1,7 @@
 #include "core/css_parser.h"
 #include "core/dirty_region.h"
 #include "core/dom.h"
+#include "core/form_control.h"
 #include "core/html_parser.h"
 #include "core/layout.h"
 #include "core/render_tree.h"
@@ -10,7 +11,7 @@
 #include <stdexcept>
 #include <utility>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -24,14 +25,14 @@ struct LayoutFixture {
     std::unique_ptr<Node> document;
     Stylesheet stylesheet;
     StyleResolver resolver;
-    std::unique_ptr<RenderObject> render_tree;
-    std::unique_ptr<LayoutBox> layout_tree;
+    RenderObjectPtr render_tree;
+    LayoutBoxPtr layout_tree;
 
     LayoutFixture(std::unique_ptr<Node> document_in,
                   Stylesheet stylesheet_in,
                   StyleResolver resolver_in,
-                  std::unique_ptr<RenderObject> render_tree_in,
-                  std::unique_ptr<LayoutBox> layout_tree_in)
+                  RenderObjectPtr render_tree_in,
+                  LayoutBoxPtr layout_tree_in)
         : document(std::move(document_in)),
           stylesheet(std::move(stylesheet_in)),
           resolver(std::move(resolver_in)),
@@ -124,12 +125,37 @@ void tree_dirty_falls_back_to_full_viewport() {
           "tree dirty falls back to full viewport");
 }
 
+void paint_dirty_reuses_layout_and_generates_local_rect() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(
+        html_parser.parse("<body><input id='name' value='A'><p>Stable</p></body>"),
+        "input { width: 120px; height: 24px; margin: 0; } p { margin: 0; }",
+        240);
+    clear_dirty_flags(*fixture.document);
+    Node* input = first_element(*fixture.document, "input");
+    check(input != nullptr, "input exists");
+    check(append_text_to_control(*input, "B"), "control value changes");
+    check((subtree_dirty_flags(*fixture.document) & DomDirtyPaint) != 0U, "control change is paint dirty");
+    check(!dirty_requires_render_or_layout(subtree_dirty_flags(*fixture.document)),
+          "paint dirty does not require render/layout");
+
+    const std::vector<Rect> rects =
+        compute_dirty_rects(*fixture.document,
+                            fixture.layout_tree.get(),
+                            fixture.layout_tree.get(),
+                            DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
+
+    check(!rects.empty(), "paint dirty produces rect");
+    check(rects.front().width < 240 || rects.front().height < 200, "paint dirty is not full viewport");
+}
+
 } // namespace
 
 int main() {
     try {
         text_dirty_generates_local_rect();
         tree_dirty_falls_back_to_full_viewport();
+        paint_dirty_reuses_layout_and_generates_local_rect();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

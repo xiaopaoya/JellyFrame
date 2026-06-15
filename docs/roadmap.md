@@ -25,7 +25,7 @@ planned.
 - Pointer/touch input routing: pointer/wheel core exists; button/crown focus
   navigation has a first core API; board adapters are still needed
 - Platform-neutral board bring-up shape: first static-resource/RGB565 demo is
-  available through `wearweb_embedded_host_demo`
+  available through `jellyframe_embedded_host_demo`
 
 ## Milestone 3: App runtime
 
@@ -33,23 +33,28 @@ planned.
 - DOM mutation APIs: available
 - Timer/event loop: host-pumped timers available
 - Classic document script loading: available in scripting example shells
-- Fetch/resource abstraction
+- Resource abstraction: callback-based local stylesheet/classic script loading is
+  available to shells; network/fetch remains deliberately absent
 - Device capability APIs: first `HostDeviceCapabilities` contract available;
   deeper automatic adaptation is deferred
+- Centralized host budgets: wired into parser, render, layout, layer,
+  display-list, dirty-region and scripting limits
 
 ## Milestone 4: Wearable UI features
 
 - Small-screen viewport model
-- Focus/navigation model for crown/buttons/touch
+- Focus/navigation model for crown/buttons/touch: first core focus traversal and
+  activation API is available
 - Power-aware animation scheduling
 - App packaging format
 
 ## Recommended Next Order
 
 1. Concrete board/LVGL/display-driver examples based on
-   `wearweb_embedded_host_demo`.
+   `jellyframe_embedded_host_demo`.
 2. LVGL/vendor text backend adapters beyond the static bitmap backend.
-3. Resource and device capability APIs.
-4. Centralized budgets for parser, style, script and framebuffer memory.
-5. Tiled framebuffer presentation for displays that cannot keep a full target
+3. Evaluate DOM node arena allocation; candidate-rule caching is available, but
+   full computed-style sharing still needs inheritance and invalidation design.
+4. Tiled framebuffer presentation for displays that cannot keep a full target
    buffer.
+5. Resource bundle tooling and app packaging for local embedded assets.

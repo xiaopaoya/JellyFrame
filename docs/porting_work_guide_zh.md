@@ -1,0 +1,338 @@
+# JellyFrame 移植工作指导
+
+日期：2026-06-16
+
+本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及哪些事情必须先回到核心侧补能力。
+
+当前核心已经足够支持第一版“静态资源 + 软件渲染 + RGB565 局部提交 + 触摸/按键输入 + bitmap 字体 + 可选 JerryScript”的开发板 bring-up。尚未具备无完整 framebuffer 的 tiled renderer、生产级复杂文字 shaping、图片解码和网络资源栈。
+
+项目早期代号为 `WearWeb`。旧 ESP32-S3/QEMU 实验包仍使用该代号；合并进主线时必须统一为 `JellyFrame`、`jellyframe`、`JELLYFRAME` 和 `namespace jellyframe`。
+
+## 当前可确定的核心契约
+
+这些接口已经存在，可作为移植开发的稳定入口：
+
+- `src/core/host.h`：设备能力、资源请求、时钟、frame sink、预算。
+- `src/core/budget.h`：把 `HostBudgets` 映射到 parser、render/layout/layer、dirty rect 和 scripting 限制。
+- `src/core/embedded_framebuffer.h`：把核心 RGBA framebuffer 转换到宿主持有的 RGB565、灰度、单色等目标 buffer。
+- `src/core/input.h`：触摸、指针、滚轮、按键、文本输入、焦点导航和激活。
+- `src/core/text_backend.h`、`src/core/bitmap_font.h`：宿主文本测量与 bitmap 字体绘制。
+- `src/core/document_style.h`、`src/core/document_script.h`：外链 CSS 和 classic script 的宿主加载 callback。
+- `src/script/jerryscript_runtime.h`：可选 JerryScript runtime、DOM/event/form/timer bridge。
+
+第一版开发板 port 不应直接调用 Win32、文件系统或桌面壳代码。参考结构是 `jellyframe_embedded_host_demo`，它已经证明核心可在无窗口、无文件、无网络、无 Win32 的情况下串起静态 HTML/CSS、bitmap 字体、输入和 RGB565 提交。
+
+## 移植阶段
+
+### P0：导入与命名整理
+
+目标：把实验性移植文件变成主线可维护目录，不破坏现有核心构建。
+
+任务要求：
+
+- 新建或整理 `ports/esp32s3-idf/`，保留为独立 ESP-IDF app。
+- 新建或整理 `ports/virtual_board/`，保留为桌面性能估算工具。
+- 不要把实验包里的根 `CMakeLists.txt` 覆盖主线根 CMake。
+- 把旧名全部改为：
+  - `WearWeb` -> `JellyFrame`
+  - `wearweb` -> `jellyframe`
+  - `WEARWEB` -> `JELLYFRAME`
+  - `namespace wearweb` -> `namespace jellyframe`
+- ESP-IDF component 名称改为 `jellyframe_core`。
+- 日志 tag、Kconfig menu、README 和 benchmark 输出使用 JellyFrame。
+
+实现方式：
+
+- ESP-IDF app 目录只包含 port 代码、Kconfig、sdkconfig defaults 和 component CMake。
+- component CMake 引用主线 `src/core/*.cpp`，源码清单必须跟根 CMake 当前的 `jellyframe_core` 保持一致。
+- JerryScript 不进入 P0/P1 的 ESP32-S3 component；先证明非脚本管线稳定。
+
+验收：
+
+- 桌面主线仍能配置、构建和测试。
+- ESP-IDF app 能执行 `idf.py set-target esp32s3 && idf.py build`。
+- `rg -n "WearWeb|wearweb|WEARWEB" ports docs README* CHANGELOG*` 只允许在历史说明中出现。
+
+### P1：设备能力与预算
+
+目标：开发板明确告诉核心“这个设备能承受什么”，避免无限分配或不可控退化。
+
+任务要求：
+
+- 在 port 层填充 `HostDeviceCapabilities`。
+- 根据实际屏幕、PSRAM、堆大小和最大连续块设置 `HostBudgets`。
+- 所有 parser/layout/layer/dirty/script 入口都通过 `src/core/budget.h` 派生 options。
+- 当资源或 framebuffer 超预算时，必须降级或跳过，不允许崩溃。
+
+ESP32-S3 初始建议：
+
+```cpp
+jellyframe::HostBudgets budgets;
+budgets.max_dom_nodes = 1024;
+budgets.max_dom_depth = 48;
+budgets.max_attributes_per_element = 24;
+budgets.max_css_rules = 512;
+budgets.max_css_declarations_per_rule = 96;
+budgets.max_render_objects = 1024;
+budgets.max_layout_boxes = 1024;
+budgets.max_layers = 128;
+budgets.max_display_commands = 2048;
+budgets.max_dirty_rects = 8;
+budgets.max_timers = 24;
+budgets.max_event_listeners = 192;
+budgets.max_resource_bytes = 128 * 1024;
+budgets.max_framebuffer_pixels = width * height;
+```
+
+4 MB PSRAM 可以跑 300x300 合成基准，但只适合 bring-up 和简单 UI。8 MB 是实际产品的保守基线；如果计划启用 JerryScript、中文字库、多个页面或资源缓存，优先选 16 MB。
+
+验收：
+
+- 低预算配置能正常截断或降级。
+- 资源过大、DOM 过深、CSS 过多、dirty rect 过多时不死循环、不越界、不崩溃。
+- 串口输出记录预算值、最大 heap watermark、最大单次可分配块。
+
+### P2：资源包加载
+
+目标：让 HTML/CSS/JS 从 flash、partition、LittleFS/FATFS 或静态数组进入核心。
+
+任务要求：
+
+- 支持 `HostResourceKind::Stylesheet` 和 `HostResourceKind::ClassicScript`。
+- 相对路径解析由宿主完成，核心不假设文件系统。
+- 每次读取遵守 `max_resource_bytes`。
+- 缺失 CSS/script 必须可恢复：CSS 缺失则按默认样式渲染，script 缺失则继续静态页面。
+- release 产品建议使用编译期资源 bundle；文件系统只作为开发调试选项。
+
+实现方式：
+
+- 当前 ESP32-S3 bring-up：`ports/esp32s3-idf/tools/generate_resource_bundle.py`
+  会从 `ports/esp32s3-idf/resources/app` 生成
+  `ResourceEntry { url, kind, bytes, size }` 只读表。
+- 若使用分区或文件系统，读取到有界 `std::string` 后交给现有 document style/script loader。
+
+验收：
+
+- 静态资源、内联 `<style>`、本地 `<link rel="stylesheet">`、classic `<script>` 均能通过宿主 callback 加载。
+- 资源缺失不会阻塞首帧。
+- capability checker 可以在桌面扫描同一组资源。
+
+### P3：显示与 framebuffer
+
+目标：在开发板上把核心输出提交到真实屏幕。
+
+当前核心能力：
+
+- 核心渲染使用逻辑 RGBA8888 `FrameBuffer`。
+- `embedded_framebuffer` 可把 dirty rect 转换为宿主持有的 RGB565、BGR565、RGB332、Gray8 或 1-bit target buffer。
+- `flush(Rect)` 由宿主调用屏幕驱动。
+
+任务要求：
+
+- 优先实现 RGB565 target buffer。
+- 保留一个持久 `FrameBuffer`，用于 dirty repaint。
+- 如内存允许，再保留一个持久 RGB565 target buffer，避免每帧临时分配。
+- `flush` 只提交 dirty rectangle，不做整屏无条件刷新。
+- 若屏幕驱动 API 要求紧凑行缓冲，而 dirty rect 不是整行，宿主应在栈或静态 scratch buffer 中逐行打包。
+
+实现方式：
+
+```cpp
+jellyframe::EmbeddedFrameBufferTarget target {
+    width,
+    height,
+    jellyframe::EmbeddedPixelFormat::Rgb565,
+    reinterpret_cast<std::uint8_t*>(rgb565_pixels),
+    rgb565_size_bytes,
+    width * sizeof(std::uint16_t),
+};
+
+jellyframe::EmbeddedFrameBufferSink sink { target, flush_dirty_rect, panel_context };
+jellyframe::HostFrameSink frame_sink = jellyframe::embedded_frame_sink(sink);
+jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
+```
+
+验收：
+
+- 纯色背景、边框、文本、按钮、range/select/checkbox 的静态绘制正确。
+- dirty rect 面积明显小于整屏时，实际屏幕提交面积也随之减少。
+- 旋转、睡眠唤醒、重复 repaint 不产生花屏。
+
+当前不能直接满足的场景：
+
+- 如果设备无法容纳完整 RGBA framebuffer，不能硬接。必须先回核心实现 tiled rendering 或 scanline/tile compositor。
+- 如果硬件只支持极小 DMA buffer，宿主可以压缩 RGB565 target，但核心仍需要源 RGBA framebuffer。真正无源 framebuffer 需要新核心工作。
+
+### P4：文本与中文字库
+
+目标：确保开发者写中文 UI 时能预测字体覆盖、测量和绘制结果。
+
+任务要求：
+
+- 生产路径使用离线生成的 bitmap font pack。
+- 测量和绘制必须使用同一份 glyph metrics。
+- 字体回调内部避免堆分配。
+- 缺字必须有可见 fallback，不允许破坏布局。
+- 桌面构建前必须运行能力检查，输出使用字符并检查覆盖。
+
+实现方式：
+
+1. 用 `jellyframe_capability_check --emit-used-chars` 收集 HTML/CSS/JS 中的非 ASCII 字符。
+2. 从授权字体生成 BDF 或等价 bitmap glyph 数据。
+3. 用 `jellyframe_font_pack_gen` 生成 C++ `BitmapFont` header。
+4. 在 port 中把 `bitmap_font_measure_callback` 接入 `LayoutEngine`，把 `bitmap_font_paint_callback` 接入 `SoftwareCompositor`。
+
+验收：
+
+- 中文、数字、符号在按钮、标题、列表和输入控件中不裁切。
+- 加粗至少能通过选中粗体 glyph 或近似加粗策略表现。
+- 字体缺字报告能在桌面构建阶段失败或警告。
+
+暂不建议：
+
+- 在 ESP32-S3 第一版上运行完整矢量字体 rasterizer。
+- 在核心里加入字体文件加载器。
+- 为第一版实现复杂 shaping。阿拉伯文、印地文字等复杂文字应明确列为后续能力。
+
+### P5：输入与交互
+
+目标：把真实硬件输入转换为平台无关 DOM/input 事件。
+
+任务要求：
+
+- 触摸屏：映射为 `pointer_down`、`pointer_move`、`pointer_up`。
+- 表冠：根据产品交互选择映射为 `wheel` 或 `focus_next/focus_previous`。
+- OK/确认键：映射为 `activate_focused`。
+- Back 键：由宿主处理页面导航；在文本框内可映射为 `KeyCode::Backspace`。
+- 软键盘/IME：通过 `text_input(utf8)` 发送 UTF-8。
+- 每个硬件事件处理时间必须有上限；不得在 ISR 中直接跑布局或脚本。
+
+实现方式：
+
+- ISR 或驱动回调只入队轻量事件。
+- UI task 每 tick 取有限个事件，调用 `InputController`。
+- 输入导致 DOM dirty 后，再进入有限重建/重绘路径。
+
+验收：
+
+- button、checkbox、radio、range、select、text input 可用。
+- 事件委托场景可用：`addEventListener` 绑定父节点后点击子控件能冒泡。
+- `disabled` 控件不能被激活；`hidden` 元素不可见且不参与交互。
+- 快速连续触摸或表冠旋转不会造成事件队列无限增长。
+
+### P6：运行循环与增量更新
+
+目标：形成稳定、可测的嵌入式 UI frame loop。
+
+任务要求：
+
+- 首帧执行完整 pipeline：HTML/CSS -> DOM -> style -> render tree -> layout -> layer -> framebuffer。
+- 非结构性变化优先走 dirty rect repaint。
+- 结构性 DOM 变化可以保守全 viewport 重建。
+- 每帧限制 timer callback、输入事件和重绘区域数量。
+- 低功耗息屏时停止或降低 repaint/timer pumping。
+
+推荐循环：
+
+```text
+load resources once
+build first document and style
+render first frame
+present dirty/full frame
+
+loop:
+  poll bounded hardware events
+  dispatch input through InputController
+  pump bounded timers if scripting is enabled
+  if tree/style/layout dirty:
+      rebuild conservative pipeline
+  else if paint dirty:
+      compute dirty rects
+  repaint dirty/full regions
+  present through HostFrameSink
+  sleep until next tick or hardware event
+```
+
+验收：
+
+- 静态 UI 首帧可显示。
+- 控件状态变化不强制每次清空整屏。
+- timer 驱动时钟/计时器示例不会越跑越慢。
+- 所有队列都有上限。
+
+### P7：JerryScript 接入
+
+目标：在非脚本管线稳定后启用小型 JavaScript app。
+
+前置条件：
+
+- P1-P6 已通过。
+- 字体和 framebuffer 路径稳定。
+- 资源加载可加载 classic script。
+- timer pumping 有每 tick callback 上限。
+- 出错日志能打印 script exception。
+
+任务要求：
+
+- JerryScript 作为可选 component，不进入 `jellyframe_core`。
+- heap、timer、listener 数量必须按 `HostBudgets` 限制。
+- script 执行不得发生在 ISR 或显示驱动 callback 中。
+- 页面脚本仅承诺 classic script 子集，不承诺 ES modules、fetch、Web APIs、CSSOM 动态全量能力。
+
+验收：
+
+- `calculator`、`timer`、`clock` 这类小型应用能在开发板上响应触摸/按钮。
+- `setTimeout`/`setInterval` 可由宿主泵动。
+- DOM mutation 后能触发重绘。
+- 脚本异常不会崩溃 UI task。
+
+### P8：诊断、基准和发布准入
+
+目标：让每个开发板 port 有可复现的性能和内存数据。
+
+任务要求：
+
+- 输出每阶段耗时：parse、style/render tree、layout、layer、flatten、render、present。
+- 输出 heap free、minimum heap、largest free block、PSRAM free。
+- 输出 dirty rect count、dirty area、flush count、flush bytes。
+- 提供 QEMU 或 virtual board benchmark，但最终必须补真实硬件数据。
+- release build 可关闭详细诊断。
+
+已有 QEMU 实验结论：
+
+- ESP-IDF `v5.3.1` + QEMU `esp_develop_9.2.2_20260417` 可跑 ESP32-S3 PSRAM 基准。
+- Octal PSRAM 下 4M、8M、16M、32M 均完成 300x300、40 cards、20 iterations。
+- 4 MB 是最低可行 bring-up；8 MB 是较合理基线；16 MB 更适合启用 JerryScript、中文字库和资源缓存。
+- QEMU timing 只用于趋势和容量验证，不替代真实芯片 FPS/延迟。
+
+发布准入：
+
+- 主线桌面测试通过。
+- port 的 ESP-IDF build 通过。
+- 至少一个静态页面、一个控件页面、一个 timer/script 页面在目标板或 QEMU 上通过。
+- 文档记录硬件型号、PSRAM、屏幕接口、分辨率、字体包大小、资源大小、平均帧耗时和最大 heap watermark。
+
+## 当前前置工作判断
+
+第一版 ESP32-S3 bring-up 不再需要等待核心新增接口。需要做的是把实验包按 JellyFrame 主线标准合并，并补齐显示驱动、输入驱动、字体资源和真实硬件数据。
+
+以下能力如果被产品目标强制要求，则必须先规划核心侧开发：
+
+- 无完整 RGBA framebuffer 的 tiled renderer。
+- 图片解码和 `object-fit` 的真实图像绘制。
+- 更细粒度 layer/display-command invalidation。
+- 复杂文字 shaping。
+- 网络资源加载和安全模型。
+- 更少堆碎片的 arena allocator 与 small-vector attributes。
+
+## 建议合并顺序
+
+1. 合并 `ports/virtual_board`，改名为 JellyFrame，作为桌面性能估算工具。
+2. 合并 `ports/esp32s3-idf`，改名为 JellyFrame，先只构建非脚本核心。
+3. 把 QEMU 报告迁移到 `docs/esp32s3_qemu_benchmark_zh.md` 和英文对应文档。
+4. 在 ESP-IDF app 中接入 `HostBudgets` 和 `budget.h` options。
+5. 接入真实屏幕 `flush(Rect)`。
+6. 接入触摸/按键/表冠事件队列。
+7. 接入 bitmap font pack。
+8. 跑真实硬件基准并更新文档。
+9. 再启用 JerryScript component。
