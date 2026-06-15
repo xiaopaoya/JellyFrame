@@ -3,7 +3,7 @@ var summary = document.getElementById("summary");
 var app = document.getElementById("app");
 
 title.textContent = "DOM updated by JS";
-summary.textContent = "WearWeb M3 can now expose a tiny document object and mutate the native DOM tree.";
+summary.textContent = "JellyFrame M3 can now expose a tiny document object and mutate the native DOM tree.";
 
 var note = document.createElement("p");
 note.setAttribute("class", "note");

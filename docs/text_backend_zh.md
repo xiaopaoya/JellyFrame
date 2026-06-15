@@ -2,7 +2,7 @@
 
 日期：2026-06-15
 
-WearWeb 不把字体加载和平台文本 API 放进 `wearweb_core`。核心只需要两类服务：
+JellyFrame 不把字体加载和平台文本 API 放进 `jellyframe_core`。核心只需要两类服务：
 
 - layout 阶段的文本测量；
 - software rasterization 阶段的文本绘制。
@@ -105,10 +105,10 @@ static BitmapFontContext font_context{&font, 1};
 
 同一个 `font_context` 应同时传给 `TextMeasureProvider` 和 `TextPainter`。
 
-`wearweb_font_pack_gen` 可以从 BDF bitmap 字体生成这个结构：
+`jellyframe_font_pack_gen` 可以从 BDF bitmap 字体生成这个结构：
 
 ```text
-wearweb_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
 ```
 
 生成器通过 `BitmapFontGlyph::bytes_per_row` 支持宽度超过 8px 的 glyph，这是实用中文 bitmap
@@ -116,11 +116,11 @@ wearweb_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h
 
 ## 字体子集
 
-`wearweb_capability_check` 可以辅助准备嵌入式字体包：
+`jellyframe_capability_check` 可以辅助准备嵌入式字体包：
 
 ```text
-wearweb_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
-wearweb_capability_check --font-coverage font_chars.txt app.html app.css app.js
+jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
+jellyframe_capability_check --font-coverage font_chars.txt app.html app.css app.js
 ```
 
 `used_chars.txt` 会包含源码中出现的非 ASCII UTF-8 字符，并识别常见 numeric/named character references。

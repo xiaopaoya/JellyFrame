@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 bool contains(Rect rect, int x, int y) {
@@ -102,4 +102,4 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer, int x, int y, Re
     return hit_test_box(*layer.box, x, y);
 }
 
-} // namespace wearweb
+} // namespace jellyframe

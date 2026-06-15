@@ -7,7 +7,7 @@ Last checked against the WHATWG HTML Living Standard on 2026-06-13:
 - Optional tags: https://html.spec.whatwg.org/multipage/syntax.html#optional-tags
 - Elements: https://html.spec.whatwg.org/multipage/indices.html#elements-3
 
-WearWeb should build a useful DOM for modern app HTML without implementing the
+JellyFrame should build a useful DOM for modern app HTML without implementing the
 full browser tree-construction machine. The goal is resilient app-runtime
 parsing: common structure is preserved, unsupported structure degrades, malformed
 input does not corrupt the entire tree, and pathological input is bounded.

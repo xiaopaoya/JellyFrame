@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 Event::Event(std::string type, bool bubbles, bool cancelable)
     : type_(std::move(type)), bubbles_(bubbles), cancelable_(cancelable) {}
@@ -241,4 +241,4 @@ bool dispatch_event(const Node& target, Event& event) {
     return !event.default_prevented();
 }
 
-} // namespace wearweb
+} // namespace jellyframe

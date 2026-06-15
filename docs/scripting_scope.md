@@ -1,18 +1,18 @@
 # Scripting Scope
 
-WearWeb scripting is intentionally staged. The engine should become useful for
+JellyFrame scripting is intentionally staged. The engine should become useful for
 embedded app UI without inheriting the full browser API surface.
 
 ## M2 Support
 
-- Optional `wearweb_script` target behind `WEARWEB_BUILD_SCRIPTING=ON`.
+- Optional `jellyframe_script` target behind `JELLYFRAME_BUILD_SCRIPTING=ON`.
 - `JERRYSCRIPT_ROOT` can point at an official JerryScript checkout, for example
   `third_party/jerryscript`.
 - JerryScript lifecycle owned by `JerryScriptRuntime`.
 - `eval(source, source_name)` for classic JavaScript source text.
 - Stringified success result and stringified exception result.
 - Repeated initialize/shutdown in one process, one active runtime at a time.
-- `wearweb_pseudo_browser --script file.js` for desktop acceptance.
+- `jellyframe_pseudo_browser --script file.js` for desktop acceptance.
 
 ## M3 Support
 
@@ -25,7 +25,7 @@ embedded app UI without inheriting the full browser API surface.
 - `element.setAttribute(name, value)`.
 - `element.getAttribute(name)`.
 - `node.textContent` getter/setter.
-- `wearweb_pseudo_browser --script file.js` binds the parsed page DOM before
+- `jellyframe_pseudo_browser --script file.js` binds the parsed page DOM before
   script execution, so script mutations affect the rendered output.
 
 ## M4 Support
@@ -82,7 +82,7 @@ embedded app UI without inheriting the full browser API surface.
 - Local external classic scripts (`<script src="...">`) are loaded through a
   shell-provided callback. Core code still performs no file or network I/O.
 - `type="module"` and other non-classic script types are skipped.
-- `wearweb_pseudo_browser` and `wearweb_win32_browser` execute document scripts
+- `jellyframe_pseudo_browser` and `jellyframe_win32_browser` execute document scripts
   automatically; command-line `--script file.js` remains available as an extra
   desktop validation script.
 - Network loading, ES modules, dynamic import and the full HTML loading
@@ -104,7 +104,7 @@ embedded app UI without inheriting the full browser API surface.
 - Native input dispatch exposes `pointerdown`, `pointerup`, `touchstart` and
   `touchend` as mouse-like events for press feedback on wearable shells.
 - Disabled form controls do not accept text input, range movement or activation.
-- `wearweb_capability_check` scans HTML/CSS/JS files on desktop and reports
+- `jellyframe_capability_check` scans HTML/CSS/JS files on desktop and reports
   unsupported, degraded and supported-subset usage before code reaches an MCU.
 
 ## Not Supported Yet

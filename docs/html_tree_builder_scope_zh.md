@@ -7,7 +7,7 @@
 - Optional tags: https://html.spec.whatwg.org/multipage/syntax.html#optional-tags
 - Elements: https://html.spec.whatwg.org/multipage/indices.html#elements-3
 
-WearWeb 应该为现代 app HTML 构建有用的 DOM，但不实现完整浏览器
+JellyFrame 应该为现代 app HTML 构建有用的 DOM，但不实现完整浏览器
 tree-construction 机器。目标是有韧性的 app-runtime parsing：常见结构被保留，
 不支持的结构可降级，坏输入不会破坏整棵树，病态输入有硬上限。
 

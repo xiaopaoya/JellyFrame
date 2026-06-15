@@ -312,7 +312,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     if (options.files.empty()) {
-        std::cerr << "usage: wearweb_capability_check [--font-coverage chars.txt] "
+        std::cerr << "usage: jellyframe_capability_check [--font-coverage chars.txt] "
                      "[--emit-used-chars used_chars.txt] <file.html> [style.css] [script.js...]\n";
         return 2;
     }
@@ -388,7 +388,7 @@ int main(int argc, char** argv) {
     }
 
     std::size_t unsupported = 0;
-    std::cout << "WearWeb capability check\n";
+    std::cout << "JellyFrame capability check\n";
     for (const Finding& finding : findings) {
         if (finding.level == "unsupported" || finding.level == "error") {
             ++unsupported;

@@ -5,7 +5,7 @@
 #include <cctype>
 #include <initializer_list>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 template <std::size_t Size>
@@ -377,5 +377,5 @@ void HtmlTreeBuilder::text(std::string_view data) {
     open_elements_.back()->append_child(make_text(value));
 }
 
-} // namespace wearweb
+} // namespace jellyframe
 

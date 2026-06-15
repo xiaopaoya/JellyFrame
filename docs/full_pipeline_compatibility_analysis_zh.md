@@ -23,9 +23,9 @@ layer tree -> display list
 命令：
 
 ```powershell
-.\build\Release\wearweb_pipeline_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css 360
-.\build\Release\wearweb_pipeline_dump.exe examples\modern_cases\app_shell.html examples\modern_cases\app_shell.css 360
-.\build\Release\wearweb_pipeline_dump.exe examples\modern_cases\article_cards.html examples\modern_cases\article_cards.css 360
+.\build\Release\jellyframe_pipeline_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css 360
+.\build\Release\jellyframe_pipeline_dump.exe examples\modern_cases\app_shell.html examples\modern_cases\app_shell.css 360
+.\build\Release\jellyframe_pipeline_dump.exe examples\modern_cases\article_cards.html examples\modern_cases\article_cards.css 360
 ```
 
 ## 搜索首页
@@ -36,7 +36,7 @@ layer tree -> display list
 - `form`、`input` 和 `button` 创建功能性 UI 盒。
 - `@supports`、`:has()`、高级颜色和 blur 增强视觉，但不是表单可用性的必要条件。
 
-WearWeb 结果：
+JellyFrame 结果：
 
 - `dom_nodes=21`
 - `render_objects=10`
@@ -65,7 +65,7 @@ WearWeb 结果：
 - `dialog` 没有 `open` 时默认不渲染，除非 CSS 显式让它可见。
 - `@container` 和 `:is()` 可以增强布局和 focus 样式。
 
-WearWeb 修正后结果：
+JellyFrame 修正后结果：
 
 - `dom_nodes=40`
 - `render_objects=29`
@@ -90,7 +90,7 @@ WearWeb 修正后结果：
 - Descendant selector `.story img` 应用图片样式。
 - 条件 media 和 `:where()` 增强小视口样式。
 
-WearWeb 结果：
+JellyFrame 结果：
 
 - `dom_nodes=22`
 - `render_objects=22`

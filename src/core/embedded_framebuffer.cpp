@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 bool empty_rect(Rect rect) {
@@ -212,4 +212,4 @@ HostFrameSink embedded_frame_sink(EmbeddedFrameBufferSink& sink) {
     return HostFrameSink{present_callback, &sink};
 }
 
-} // namespace wearweb
+} // namespace jellyframe

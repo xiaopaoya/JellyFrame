@@ -10,7 +10,7 @@
 #include <string>
 #include <string_view>
 
-namespace wearweb_example {
+namespace jellyframe_example {
 
 inline std::string read_file_limited(const std::filesystem::path& path, std::size_t max_input_bytes) {
     std::ifstream file(path, std::ios::binary);
@@ -78,14 +78,14 @@ inline bool load_linked_script(std::string_view src, std::string& output, void* 
 }
 
 inline std::string read_author_css_for_document(const std::string& css_path,
-                                                const wearweb::Node& document,
+                                                const jellyframe::Node& document,
                                                 std::size_t max_input_bytes) {
     const std::filesystem::path path(css_path);
     StylesheetLoadContext context;
     context.base_dir = path.has_parent_path() ? path.parent_path() : std::filesystem::current_path();
     context.max_input_bytes = max_input_bytes;
     const std::string external_css = read_file_limited(path, max_input_bytes);
-    return wearweb::combine_author_css(external_css, document, wearweb_example::load_linked_stylesheet, &context);
+    return jellyframe::combine_author_css(external_css, document, jellyframe_example::load_linked_stylesheet, &context);
 }
 
-} // namespace wearweb_example
+} // namespace jellyframe_example

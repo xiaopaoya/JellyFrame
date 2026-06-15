@@ -4,7 +4,7 @@
 
 `src/core/embedded_framebuffer.h` 提供第一版可部署的嵌入式 presentation
 adapter。它仍保持平台无关：不打开设备、不分配显示内存、不启动 DMA、不调用 LVGL，也不调用
-RTOS API。它只把 WearWeb 内部 RGBA `FrameBuffer` view 转换到调用方提供的显示 buffer，
+RTOS API。它只把 JellyFrame 内部 RGBA `FrameBuffer` view 转换到调用方提供的显示 buffer，
 并把相同 dirty rectangles 交回宿主。
 
 ## 支持格式

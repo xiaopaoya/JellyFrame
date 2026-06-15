@@ -10,7 +10,7 @@
 - CSS Cascade: https://www.w3.org/TR/css-cascade-5/
 
 本文用几组刻意包含现代 HTML/CSS 的样例，对比现代浏览器预期行为和当前
-WearWeb 行为。目标不是像素级兼容，而是可用性优先的合理降级：即使视觉增强被
+JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理降级：即使视觉增强被
 跳过，现代页面的功能骨架仍应保留。
 
 ## 样例
@@ -25,12 +25,12 @@ WearWeb 行为。目标不是像素级兼容，而是可用性优先的合理降
 生成命令：
 
 ```powershell
-.\build\Debug\wearweb_dom_dump.exe examples\modern_cases\search_home.html
-.\build\Debug\wearweb_cssom_dump.exe examples\modern_cases\search_home.css
-.\build\Debug\wearweb_dom_dump.exe examples\modern_cases\app_shell.html
-.\build\Debug\wearweb_cssom_dump.exe examples\modern_cases\app_shell.css
-.\build\Debug\wearweb_dom_dump.exe examples\modern_cases\article_cards.html
-.\build\Debug\wearweb_cssom_dump.exe examples\modern_cases\article_cards.css
+.\build\Debug\jellyframe_dom_dump.exe examples\modern_cases\search_home.html
+.\build\Debug\jellyframe_cssom_dump.exe examples\modern_cases\search_home.css
+.\build\Debug\jellyframe_dom_dump.exe examples\modern_cases\app_shell.html
+.\build\Debug\jellyframe_cssom_dump.exe examples\modern_cases\app_shell.css
+.\build\Debug\jellyframe_dom_dump.exe examples\modern_cases\article_cards.html
+.\build\Debug\jellyframe_cssom_dump.exe examples\modern_cases\article_cards.css
 ```
 
 ## 案例 1：搜索首页
@@ -58,7 +58,7 @@ WearWeb 行为。目标不是像素级兼容，而是可用性优先的合理降
   不作为普通渲染子节点。
 - CSSOM 保留 cascade layers，解析 feature query，并在支持时应用 `:has()`。
 
-当前 WearWeb 行为：
+当前 JellyFrame 行为：
 
 - DOM 保留搜索功能骨架：
   `main -> form -> label/input/button`。
@@ -103,7 +103,7 @@ WearWeb 行为。目标不是像素级兼容，而是可用性优先的合理降
 - `@container` 在容器条件满足时应用。
 - `:is()` 和 attribute selectors 参与 selector matching。
 
-当前 WearWeb 行为：
+当前 JellyFrame 行为：
 
 - DOM 保留 custom element、buttons、nav links、cards、dialog 和 form。
 - Boolean `popover` 以空属性保留。
@@ -144,7 +144,7 @@ WearWeb 行为。目标不是像素级兼容，而是可用性优先的合理降
 - `:where()` 在支持时匹配，且 specificity 为 0。
 - descendant selector `.story img` 应用图片尺寸。
 
-当前 WearWeb 行为：
+当前 JellyFrame 行为：
 
 - DOM 正确生成兄弟 `p` 元素。
 - DOM 正确生成兄弟 `li` 元素。

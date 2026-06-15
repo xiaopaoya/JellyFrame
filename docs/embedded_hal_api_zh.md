@@ -2,7 +2,7 @@
 
 日期：2026-06-15
 
-这份文档是 ESP32-S3、RTOS host 或具体开发板需要实现的接口清单。`wearweb_core`
+这份文档是 ESP32-S3、RTOS host 或具体开发板需要实现的接口清单。`jellyframe_core`
 保持平台无关；所有真实 I/O 都由硬件程序负责，再通过小型 C++ struct 和 callback 调用核心。
 
 ## 必需运行循环
@@ -239,7 +239,7 @@ ESP32-S3 映射：
 - 编译期从授权矢量字体生成该 font pack。
 - 测量和绘制使用同一份 glyph metrics。
 - 回调内部避免堆分配。
-- 中文产品对子集化常用 app 字符，并用 `wearweb_capability_check --font-coverage` 检查覆盖。
+- 中文产品对子集化常用 app 字符，并用 `jellyframe_capability_check --font-coverage` 检查覆盖。
 
 矢量字体在高配目标上可行，但 ESP32-S3 默认路线应是离线 rasterize 后的 bitmap glyph。
 
@@ -250,14 +250,14 @@ core 现在提供 `src/core/bitmap_font.h` 支撑这条默认路线。开发板 
 桌面生成器接受 BDF 输入：
 
 ```text
-wearweb_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
 ```
 
-先用 `wearweb_capability_check --emit-used-chars` 收集字符，再用你偏好的离线工具链从授权源字体生成 BDF。
+先用 `jellyframe_capability_check --emit-used-chars` 收集字符，再用你偏好的离线工具链从授权源字体生成 BDF。
 
 ## 平台无关 Bring-Up 示例
 
-`wearweb_embedded_host_demo` 是当前核心侧的开发板 bring-up 参考。它刻意避开 Win32、
+`jellyframe_embedded_host_demo` 是当前核心侧的开发板 bring-up 参考。它刻意避开 Win32、
 文件、网络和硬件 I/O：
 
 - 静态 HTML 和 CSS 直接编译进 executable；
@@ -269,7 +269,7 @@ wearweb_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h
 桌面运行：
 
 ```text
-wearweb_embedded_host_demo
+jellyframe_embedded_host_demo
 ```
 
 输出应包含一次 flush、一次 button click、已勾选 checkbox、已变化 select value，以及非零前景像素。
@@ -282,22 +282,38 @@ wearweb_embedded_host_demo
 ```cpp
 struct HostBudgets {
     std::size_t max_dom_nodes;
+    std::size_t max_dom_depth;
+    std::size_t max_attributes_per_element;
     std::size_t max_css_rules;
+    std::size_t max_css_declarations_per_rule;
+    std::size_t max_render_objects;
+    std::size_t max_layout_boxes;
+    std::size_t max_layers;
     std::size_t max_display_commands;
+    std::size_t max_dirty_rects;
     std::size_t max_timers;
     std::size_t max_event_listeners;
     std::size_t max_resource_bytes;
+    std::size_t max_framebuffer_pixels;
 };
 ```
 
-这些限制还没有贯穿所有 parser，但宿主应尽早确定目标预算。ESP32-S3 初始建议：
+`src/core/budget.h` 会把这些值映射到当前 HTML/CSS parser、render/layout/layer/display-list、
+dirty rectangle 和 JerryScript timer/listener 入口。ESP32-S3 初始建议：
 
 - DOM nodes：512-1500
+- DOM depth：32-64
+- attributes per element：16-32
 - CSS rules：256-1024
+- declarations per rule：64-128
+- render/layout boxes：通常跟 DOM node 预算相同
+- layers：64-256
 - display commands：1024-4096
+- dirty rects：4-16
 - timers：16-32
 - event listeners：128-256
 - single resource：64-256 KiB
+- framebuffer pixels：物理屏幕面积；如果使用 tiled output，可以更小
 
 ## 诊断 API
 

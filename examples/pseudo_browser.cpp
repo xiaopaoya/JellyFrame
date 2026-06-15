@@ -1,4 +1,5 @@
 #include "core/css_parser.h"
+#include "core/budget.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
 #include "core/html_parser.h"
@@ -8,7 +9,7 @@
 #include "core/software_renderer.h"
 #include "core/style.h"
 
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
 #include "script/jerryscript_runtime.h"
 #endif
 
@@ -25,11 +26,18 @@
 #include <string>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
 constexpr std::size_t kMaxInputBytes = 512 * 1024;
+
+HostBudgets desktop_validation_budgets() {
+    HostBudgets budgets;
+    budgets.max_resource_bytes = kMaxInputBytes;
+    budgets.max_framebuffer_pixels = 1600 * 1600;
+    return budgets;
+}
 
 std::string read_file_limited(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
@@ -170,7 +178,7 @@ bool is_pump_timers_flag(const std::string& value) {
 BrowserOptions parse_options(int argc, char** argv) {
     if (argc < 4) {
         throw std::runtime_error(
-            "usage: wearweb_pseudo_browser page.html style.css output.ppm [viewport_width] [viewport_height] "
+            "usage: jellyframe_pseudo_browser page.html style.css output.ppm [viewport_width] [viewport_height] "
             "[--script script.js]");
     }
 
@@ -224,36 +232,37 @@ BrowserOptions parse_options(int argc, char** argv) {
 int main(int argc, char** argv) {
     try {
         const BrowserOptions options = parse_options(argc, argv);
+        const HostBudgets budgets = desktop_validation_budgets();
         const std::string html = read_file_limited(options.html_path);
 
         HtmlParser html_parser;
         CssParser css_parser;
-        auto document = html_parser.parse(html);
+        auto document = html_parser.parse(html, html_parser_options_from_budgets(budgets));
 
         bool script_ran = false;
         bool script_ok = false;
         std::string script_output;
         std::size_t timer_callbacks = 0;
         std::size_t document_script_count = 0;
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
         std::unique_ptr<JerryScriptRuntime> runtime;
 #endif
-#if defined(WEARWEB_ENABLE_SCRIPTING)
-        wearweb_example::ScriptLoadContext script_context;
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        jellyframe_example::ScriptLoadContext script_context;
         const std::filesystem::path html_path(options.html_path);
         script_context.base_dir = html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
         script_context.max_input_bytes = kMaxInputBytes;
         std::vector<DocumentScript> document_scripts =
-            collect_classic_scripts(*document, wearweb_example::load_linked_script, &script_context);
+            collect_classic_scripts(*document, jellyframe_example::load_linked_script, &script_context);
         document_script_count = document_scripts.size();
 #endif
         if (!options.script_path.empty()
-#if defined(WEARWEB_ENABLE_SCRIPTING)
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
             || !document_scripts.empty()
 #endif
         ) {
-#if defined(WEARWEB_ENABLE_SCRIPTING)
-            runtime = std::make_unique<JerryScriptRuntime>();
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+            runtime = std::make_unique<JerryScriptRuntime>(budgets);
             runtime->set_host_time_ms(0);
             runtime->bind_document(*document);
             script_ok = true;
@@ -280,19 +289,20 @@ int main(int argc, char** argv) {
                 timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(options.pump_timers_ms), 32);
             }
 #else
-            throw std::runtime_error("this build was compiled without WEARWEB_BUILD_SCRIPTING=ON");
+            throw std::runtime_error("this build was compiled without JELLYFRAME_BUILD_SCRIPTING=ON");
 #endif
         }
 
         Stylesheet stylesheet = css_parser.parse(
-            wearweb_example::read_author_css_for_document(options.css_path, *document, kMaxInputBytes));
+            jellyframe_example::read_author_css_for_document(options.css_path, *document, kMaxInputBytes),
+            css_parser_options_from_budgets(budgets));
         StyleResolver resolver(std::move(stylesheet));
 
-        RenderTreeBuilder render_tree_builder(resolver);
+        RenderTreeBuilder render_tree_builder(resolver, render_tree_options_from_budgets(budgets));
         auto render_tree = render_tree_builder.build(*document);
-        LayoutEngine layout_engine(resolver);
+        LayoutEngine layout_engine(resolver, {}, layout_engine_options_from_budgets(budgets));
         auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
-        LayerTreeBuilder layer_tree_builder;
+        LayerTreeBuilder layer_tree_builder(layer_tree_options_from_budgets(budgets));
         auto layer_tree = layer_tree_builder.build(*layout_tree);
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
 
@@ -307,7 +317,7 @@ int main(int argc, char** argv) {
             throw std::runtime_error("failed to present output frame");
         }
 
-        std::cout << "WearWeb pseudo browser\n";
+        std::cout << "JellyFrame pseudo browser\n";
         std::cout << "  output=" << options.output_path << '\n';
         std::cout << "  viewport=" << options.viewport_width << "x" << options.viewport_height << '\n';
         std::cout << "  dom_nodes=" << count_dom_nodes(*document) << '\n';

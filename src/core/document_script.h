@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 using ScriptLoadCallback = bool (*)(std::string_view src, std::string& output, void* context);
 
@@ -21,4 +21,4 @@ std::vector<DocumentScript> collect_classic_scripts(const Node& document,
                                                     ScriptLoadCallback load_script,
                                                     void* context);
 
-} // namespace wearweb
+} // namespace jellyframe

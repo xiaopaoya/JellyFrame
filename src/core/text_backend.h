@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct TextMetrics {
     int width = 0;
@@ -26,4 +26,4 @@ TextMetrics measure_text(const TextMeasureProvider& provider,
                          int font_size,
                          int font_weight);
 
-} // namespace wearweb
+} // namespace jellyframe

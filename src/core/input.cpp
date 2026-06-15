@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 int button_to_int(PointerButton button) {
@@ -312,4 +312,4 @@ void InputController::update_hover(const Node* next_hover, const PointerInput& i
     }
 }
 
-} // namespace wearweb
+} // namespace jellyframe

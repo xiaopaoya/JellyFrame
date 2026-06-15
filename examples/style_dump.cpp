@@ -12,7 +12,7 @@
 #include <stdexcept>
 #include <string>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -116,7 +116,7 @@ void dump_styles(const Node& node, const StyleResolver& resolver, std::size_t de
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::cerr << "usage: wearweb_style_dump page.html style.css\n";
+        std::cerr << "usage: jellyframe_style_dump page.html style.css\n";
         return 1;
     }
 
@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
         CssParser css_parser;
         auto document = html_parser.parse(html);
         StyleResolver resolver(css_parser.parse(
-            wearweb_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes)));
+            jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes)));
         dump_styles(*document, resolver);
     } catch (const std::exception& error) {
         std::cerr << "style dump failed: " << error.what() << '\n';

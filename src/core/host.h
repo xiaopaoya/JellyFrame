@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-namespace wearweb {
+namespace jellyframe {
 
 enum class HostResourceKind {
     Stylesheet,
@@ -49,11 +49,19 @@ struct HostFrameSink {
 
 struct HostBudgets {
     std::size_t max_dom_nodes = 4096;
+    std::size_t max_dom_depth = 64;
+    std::size_t max_attributes_per_element = 64;
     std::size_t max_css_rules = 4096;
+    std::size_t max_css_declarations_per_rule = 256;
+    std::size_t max_render_objects = 4096;
+    std::size_t max_layout_boxes = 4096;
+    std::size_t max_layers = 1024;
     std::size_t max_display_commands = 8192;
+    std::size_t max_dirty_rects = 8;
     std::size_t max_timers = 64;
     std::size_t max_event_listeners = 512;
     std::size_t max_resource_bytes = 512 * 1024;
+    std::size_t max_framebuffer_pixels = 480 * 480;
 };
 
 enum class HostPixelFormat {
@@ -103,4 +111,4 @@ struct HostDeviceCapabilities {
     bool has_network = false;
 };
 
-} // namespace wearweb
+} // namespace jellyframe

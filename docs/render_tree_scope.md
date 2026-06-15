@@ -11,7 +11,7 @@ Last checked against implementation sources on 2026-06-13:
 
 There is no WHATWG Living Standard section that specifies a browser render tree.
 This is an implementation-defined layer between DOM/style resolution and layout.
-WearWeb follows the common engine shape while keeping the data model small
+JellyFrame follows the common engine shape while keeping the data model small
 enough for low-end wearable devices.
 
 ## Reference Shape
@@ -22,7 +22,7 @@ enough for low-end wearable devices.
   `RenderInline` and text renderers.
 - Gecko uses a frame tree around `nsIFrame` subclasses.
 
-WearWeb uses WebKit-like names for clarity:
+JellyFrame uses WebKit-like names for clarity:
 
 ```text
 DOM + computed style

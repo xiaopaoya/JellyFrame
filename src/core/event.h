@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct Node;
 
@@ -107,4 +107,4 @@ private:
 
 bool dispatch_event(const Node& target, Event& event);
 
-} // namespace wearweb
+} // namespace jellyframe

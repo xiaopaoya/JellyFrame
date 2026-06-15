@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 enum class HtmlTokenType {
     Doctype,
@@ -46,4 +46,4 @@ public:
                           const HtmlTokenizerOptions& options = {}) const;
 };
 
-} // namespace wearweb
+} // namespace jellyframe

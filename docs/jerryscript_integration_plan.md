@@ -1,6 +1,6 @@
 # JerryScript Integration Plan
 
-WearWeb should integrate JerryScript as a small host runtime, not as an attempt
+JellyFrame should integrate JerryScript as a small host runtime, not as an attempt
 to clone a full browser Web API. The binding layer must expose only capabilities
 that the core actually supports and must preserve the same embedded constraints
 as the C++ engine: bounded memory, explicit ownership, no implicit networking and
@@ -29,7 +29,7 @@ References:
 
 Ready:
 
-- M2 runtime shell behind `WEARWEB_BUILD_SCRIPTING=ON`: initialization,
+- M2 runtime shell behind `JELLYFRAME_BUILD_SCRIPTING=ON`: initialization,
   shutdown, `eval`, source names, result stringification and exception reporting.
 - M3 minimal DOM bindings: `window`, `document`, `getElementById`,
   `createElement`, `createTextNode`, `appendChild`, `removeChild`,
@@ -58,7 +58,7 @@ Not ready:
 ## Architecture
 
 ```text
-WearWebScriptRuntime
+JellyFrameScriptRuntime
   owns JerryScript engine lifecycle
   owns wrapper maps and JS callback references
   |
@@ -73,9 +73,9 @@ DOM + style + layout + layer + renderer
 
 The runtime should be optional at build time:
 
-- `WEARWEB_BUILD_SCRIPTING=OFF` by default until the bridge is stable.
+- `JELLYFRAME_BUILD_SCRIPTING=OFF` by default until the bridge is stable.
 - Core HTML/CSS/rendering remains independent from JerryScript headers.
-- The scripting target links JerryScript and depends on `wearweb_core`.
+- The scripting target links JerryScript and depends on `jellyframe_core`.
 
 ## Binding Principles
 
@@ -95,13 +95,13 @@ The runtime should be optional at build time:
 
 ### M2: Runtime Shell
 
-Status: implemented as an optional build target. `wearweb_script` links
-JerryScript only when `WEARWEB_BUILD_SCRIPTING=ON`; `wearweb_core` stays free of
-JerryScript headers and libraries. `wearweb_pseudo_browser --script` can execute
+Status: implemented as an optional build target. `jellyframe_script` links
+JerryScript only when `JELLYFRAME_BUILD_SCRIPTING=ON`; `jellyframe_core` stays free of
+JerryScript headers and libraries. `jellyframe_pseudo_browser --script` can execute
 one external script file and print the result or exception for acceptance
 testing.
 
-Create `WearWebScriptRuntime` with:
+Create `JellyFrameScriptRuntime` with:
 
 - `initialize()` / `shutdown()`.
 - `eval(std::string_view source, std::string_view name)`.
@@ -206,8 +206,8 @@ Implemented support:
 
 - inline classic `<script>`
 - optional shell-provided local script loader callback
-- automatic document script execution in `wearweb_pseudo_browser` and
-  `wearweb_win32_browser`
+- automatic document script execution in `jellyframe_pseudo_browser` and
+  `jellyframe_win32_browser`
 
 Avoid for now:
 

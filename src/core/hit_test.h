@@ -4,7 +4,7 @@
 #include "core/layer_tree.h"
 #include "core/layout.h"
 
-namespace wearweb {
+namespace jellyframe {
 
 struct HitTestResult {
     const Node* node = nullptr;
@@ -27,4 +27,4 @@ private:
     HitTestResult hit_test_layer(const LayerNode& layer, int x, int y, Rect clip, bool has_clip) const;
 };
 
-} // namespace wearweb
+} // namespace jellyframe

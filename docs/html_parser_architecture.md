@@ -20,7 +20,7 @@ Modern browser engines keep parser responsibilities separated:
 - tree builder / token sink
 - public parser orchestration
 
-WearWeb follows that structure:
+JellyFrame follows that structure:
 
 ```text
 HtmlTokenizer

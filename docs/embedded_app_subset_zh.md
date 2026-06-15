@@ -1,6 +1,6 @@
 # 嵌入式应用子集
 
-WearWeb 现在已经可以支撑按照裁剪子集编写的小型嵌入式 UI 应用。它还不是通用网页运行时，
+JellyFrame 现在已经可以支撑按照裁剪子集编写的小型嵌入式 UI 应用。它还不是通用网页运行时，
 但当前核心已经足以开发天气面板、设置页、计算器等本地应用，并且不需要把 UI 全部退回到
 canvas 手绘模型。
 
@@ -83,14 +83,14 @@ CSS 描述视觉，JavaScript 修改具名节点。
 通过 scripting pseudo browser 运行：
 
 ```powershell
-.\build-script\Release\wearweb_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css weather.bmp 360 360 --script examples\app_cases\weather.js
-.\build-script\Release\wearweb_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css clock.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
+.\build-script\Release\jellyframe_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css weather.bmp 360 360 --script examples\app_cases\weather.js
+.\build-script\Release\jellyframe_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css clock.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
 ```
 
 通过 Win32 壳交互运行：
 
 ```powershell
-.\build-script\Release\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
+.\build-script\Release\jellyframe_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
 ```
 
 ## M7 后状态

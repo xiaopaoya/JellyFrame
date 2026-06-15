@@ -5,7 +5,7 @@
 #include <cctype>
 #include <string_view>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 bool is_ascii_space(char ch) {
@@ -610,4 +610,4 @@ Stylesheet CssParser::parse(const std::string& source, const CssParserOptions& o
     return run.parse();
 }
 
-} // namespace wearweb
+} // namespace jellyframe

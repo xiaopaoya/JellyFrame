@@ -1,17 +1,17 @@
 # 脚本能力范围
 
-WearWeb 的脚本能力会分阶段推进。目标是让嵌入式 app UI 真正可用，而不是一次性继承完整浏览器
+JellyFrame 的脚本能力会分阶段推进。目标是让嵌入式 app UI 真正可用，而不是一次性继承完整浏览器
 API 表面。
 
 ## M2 支持范围
 
-- 由 `WEARWEB_BUILD_SCRIPTING=ON` 控制的可选 `wearweb_script` target。
+- 由 `JELLYFRAME_BUILD_SCRIPTING=ON` 控制的可选 `jellyframe_script` target。
 - `JERRYSCRIPT_ROOT` 可以指向官方 JerryScript checkout，例如 `third_party/jerryscript`。
 - `JerryScriptRuntime` 管理 JerryScript 生命周期。
 - `eval(source, source_name)` 执行 classic JavaScript 源码。
 - 返回字符串化后的成功结果，或字符串化后的异常结果。
 - 同一进程内可重复初始化/清理；当前实现同一时间只允许一个 runtime 存活。
-- `wearweb_pseudo_browser --script file.js` 用于桌面验收。
+- `jellyframe_pseudo_browser --script file.js` 用于桌面验收。
 
 ## M3 支持范围
 
@@ -24,7 +24,7 @@ API 表面。
 - `element.setAttribute(name, value)`。
 - `element.getAttribute(name)`。
 - `node.textContent` getter/setter。
-- `wearweb_pseudo_browser --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
+- `jellyframe_pseudo_browser --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
   因此脚本 mutation 会影响最终渲染输出。
 
 ## M4 支持范围
@@ -69,7 +69,7 @@ API 表面。
 - 本地外部 classic script（`<script src="...">`）通过壳层提供的 callback 加载。
   核心仍不执行文件或网络 I/O。
 - `type="module"` 和其他非 classic script 类型会跳过。
-- `wearweb_pseudo_browser` 和 `wearweb_win32_browser` 会自动执行文档脚本；
+- `jellyframe_pseudo_browser` 和 `jellyframe_win32_browser` 会自动执行文档脚本；
   命令行 `--script file.js` 仍作为额外桌面验收脚本保留。
 - 网络加载、ES modules、dynamic import 和完整 HTML loading algorithm 继续排除。
 
@@ -88,7 +88,7 @@ API 表面。
 - native input dispatch 会把 `pointerdown`、`pointerup`、`touchstart` 和 `touchend`
   作为 mouse-like event 暴露，便于可穿戴壳实现按下反馈。
 - disabled 表单控件不会接收文本输入、range 移动或 activation。
-- `wearweb_capability_check` 在桌面扫描 HTML/CSS/JS 文件，提前报告 unsupported、
+- `jellyframe_capability_check` 在桌面扫描 HTML/CSS/JS 文件，提前报告 unsupported、
   degraded 和 supported-subset 用法，避免问题进入 MCU。
 
 ## 暂不支持

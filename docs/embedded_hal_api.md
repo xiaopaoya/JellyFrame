@@ -3,7 +3,7 @@
 Date: 2026-06-15
 
 This document is the implementation checklist for a board or RTOS host such as
-ESP32-S3. `wearweb_core` stays platform-neutral; the hardware program owns every
+ESP32-S3. `jellyframe_core` stays platform-neutral; the hardware program owns every
 real I/O operation and calls the core through small C++ structs and callbacks.
 
 ## Required Runtime Loop
@@ -250,7 +250,7 @@ ESP32-S3 mapping:
 - Measure and paint from the same glyph metrics.
 - Avoid heap allocation inside callbacks.
 - For Chinese products, subset common app characters and verify coverage with
-  `wearweb_capability_check --font-coverage`.
+  `jellyframe_capability_check --font-coverage`.
 
 Vector fonts are feasible on high-end targets, but the default ESP32-S3 path
 should be offline-rasterized bitmap glyphs.
@@ -263,15 +263,15 @@ can expose generated glyph arrays through `BitmapFont`, then wire
 The desktop generator accepts BDF input:
 
 ```text
-wearweb_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
 ```
 
-Use `wearweb_capability_check --emit-used-chars` first, then generate a BDF
+Use `jellyframe_capability_check --emit-used-chars` first, then generate a BDF
 from the licensed source font with your preferred offline toolchain.
 
 ## Platform-Neutral Bring-Up Demo
 
-`wearweb_embedded_host_demo` is the current core-side reference for a board
+`jellyframe_embedded_host_demo` is the current core-side reference for a board
 bring-up. It intentionally avoids Win32, files, networking and hardware I/O:
 
 - static HTML and CSS are compiled into the executable;
@@ -285,7 +285,7 @@ bring-up. It intentionally avoids Win32, files, networking and hardware I/O:
 Run it on desktop:
 
 ```text
-wearweb_embedded_host_demo
+jellyframe_embedded_host_demo
 ```
 
 The output should report one flush, one button click, a checked checkbox, a
@@ -300,23 +300,39 @@ Header: `src/core/host.h`
 ```cpp
 struct HostBudgets {
     std::size_t max_dom_nodes;
+    std::size_t max_dom_depth;
+    std::size_t max_attributes_per_element;
     std::size_t max_css_rules;
+    std::size_t max_css_declarations_per_rule;
+    std::size_t max_render_objects;
+    std::size_t max_layout_boxes;
+    std::size_t max_layers;
     std::size_t max_display_commands;
+    std::size_t max_dirty_rects;
     std::size_t max_timers;
     std::size_t max_event_listeners;
     std::size_t max_resource_bytes;
+    std::size_t max_framebuffer_pixels;
 };
 ```
 
-These are not fully plumbed through every parser yet, but the host should choose
-target budgets early. Suggested ESP32-S3 starting point:
+`src/core/budget.h` maps these values into the current HTML/CSS/parser,
+render/layout/layer/display-list, dirty-rectangle and JerryScript timer/listener
+entry points. Suggested ESP32-S3 starting point:
 
 - DOM nodes: 512-1500
+- DOM depth: 32-64
+- attributes per element: 16-32
 - CSS rules: 256-1024
+- declarations per rule: 64-128
+- render/layout boxes: usually match DOM node budget
+- layers: 64-256
 - display commands: 1024-4096
+- dirty rects: 4-16
 - timers: 16-32
 - event listeners: 128-256
 - single resource: 64-256 KiB
+- framebuffer pixels: physical screen area, or smaller if using tiled output
 
 ## Diagnostics API
 

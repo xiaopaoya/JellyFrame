@@ -2,7 +2,7 @@
 
 #include <cctype>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 void append_text_descendants(const Node& node, std::string& output) {
@@ -124,4 +124,4 @@ std::string combine_author_css(const std::string& external_css,
     return combined;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

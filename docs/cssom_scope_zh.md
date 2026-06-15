@@ -10,7 +10,7 @@
 - WebKit CSS sources:
   https://github.com/WebKit/WebKit/tree/main/Source/WebCore/css
 
-WearWeb 需要一个小型 CSSOM，用来保留作者意图，并给后续 runtime 层提供稳定
+JellyFrame 需要一个小型 CSSOM，用来保留作者意图，并给后续 runtime 层提供稳定
 对象模型。第一版 CSSOM 不是完整 JavaScript 暴露 API，而是 parsing、cascade、
 style resolution、诊断工具和后续 JerryScript 绑定共用的内部表示。
 

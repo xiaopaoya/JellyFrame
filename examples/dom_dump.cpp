@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -17,10 +17,10 @@ constexpr std::size_t kMaxInputBytes = 512 * 1024;
 std::string sample_html() {
     return "<!doctype html>"
            "<html lang='en'>"
-           "<head><title>WearWeb</title><style>.hidden { display: none; }</style></head>"
+           "<head><title>JellyFrame</title><style>.hidden { display: none; }</style></head>"
            "<body>"
            "<main id='app' data-screen=round>"
-           "<h1>WearWeb</h1>"
+           "<h1>JellyFrame</h1>"
            "<p>DOM &amp; tokenizer demo<div class='card'>implicit close</div>"
            "<ul><li>steps<li>limits<li>portable</ul>"
            "<script>if (a < b) { mount('<div></div>'); }</script>"

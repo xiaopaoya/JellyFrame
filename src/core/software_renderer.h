@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct FrameBuffer {
     int width = 0;
@@ -79,4 +79,4 @@ bool present_frame(const FrameBuffer& frame_buffer,
                    const Rect* dirty_rects = nullptr,
                    std::size_t dirty_rect_count = 0);
 
-} // namespace wearweb
+} // namespace jellyframe

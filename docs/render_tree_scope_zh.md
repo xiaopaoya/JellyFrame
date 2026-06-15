@@ -10,7 +10,7 @@
   https://searchfox.org/firefox-main/source/layout/generic
 
 WHATWG Living Standard 没有规范浏览器 render tree。这是 DOM/style resolution
-和 layout 之间的实现定义层。WearWeb 参考主流引擎形态，但保持数据模型足够小，
+和 layout 之间的实现定义层。JellyFrame 参考主流引擎形态，但保持数据模型足够小，
 适合低端可穿戴设备。
 
 ## 参考形态
@@ -21,7 +21,7 @@ WHATWG Living Standard 没有规范浏览器 render tree。这是 DOM/style reso
   为核心的 rendering tree。
 - Gecko 使用围绕 `nsIFrame` 子类的 frame tree。
 
-WearWeb 采用接近 WebKit 的命名：
+JellyFrame 采用接近 WebKit 的命名：
 
 ```text
 DOM + computed style

@@ -1,6 +1,6 @@
 # 版本规则
 
-WearWeb Engine 使用轻量语义化版本规则：
+JellyFrame Engine 使用轻量语义化版本规则：
 
 ```text
 MAJOR.MINOR.PATCH[-stage]

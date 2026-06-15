@@ -3,7 +3,7 @@
 Date: 2026-06-14
 
 There is no WHATWG layer-tree standard. This part is implementation-defined, so
-WearWeb follows the practical structure used by modern engines while cutting the
+JellyFrame follows the practical structure used by modern engines while cutting the
 model down for framebuffer-class hardware.
 
 Reference points:
@@ -18,7 +18,7 @@ Reference points:
   retained scene data to the renderer:
   https://firefox-source-docs.mozilla.org/gfx/webrender/
 
-## WearWeb Model
+## JellyFrame Model
 
 ```text
 LayoutBox tree

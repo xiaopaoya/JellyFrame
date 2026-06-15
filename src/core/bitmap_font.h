@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct BitmapFontGlyph {
     std::uint32_t codepoint = 0;
@@ -53,4 +53,4 @@ bool bitmap_font_paint_callback(FrameBuffer& target,
                                 bool single_line,
                                 void* context);
 
-} // namespace wearweb
+} // namespace jellyframe

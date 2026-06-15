@@ -26,7 +26,7 @@ Tokenizer 会输出这些 token 类型：
 - character
 - end-of-file
 
-对 WearWeb 来说，重要的公开契约是稳定输出 start tag、end tag、text、
+对 JellyFrame 来说，重要的公开契约是稳定输出 start tag、end tag、text、
 按需 comment，以及 EOF。Tree construction 可以比标准简单，但 tokenizer
 应该先变得更确定。
 

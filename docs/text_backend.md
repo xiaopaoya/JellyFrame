@@ -2,7 +2,7 @@
 
 Date: 2026-06-15
 
-WearWeb keeps font loading and platform text APIs outside `wearweb_core`.
+JellyFrame keeps font loading and platform text APIs outside `jellyframe_core`.
 The core only needs two services:
 
 - text measurement during layout;
@@ -115,10 +115,10 @@ static BitmapFontContext font_context{&font, 1};
 The same `font_context` should be passed to `TextMeasureProvider` and
 `TextPainter`.
 
-`wearweb_font_pack_gen` can generate this structure from a BDF bitmap font:
+`jellyframe_font_pack_gen` can generate this structure from a BDF bitmap font:
 
 ```text
-wearweb_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
 ```
 
 The generator supports glyphs wider than 8 pixels through
@@ -127,11 +127,11 @@ bitmap fonts.
 
 ## Font Subsetting
 
-`wearweb_capability_check` can help prepare embedded font packs:
+`jellyframe_capability_check` can help prepare embedded font packs:
 
 ```text
-wearweb_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
-wearweb_capability_check --font-coverage font_chars.txt app.html app.css app.js
+jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
+jellyframe_capability_check --font-coverage font_chars.txt app.html app.css app.js
 ```
 
 `used_chars.txt` contains the non-ASCII UTF-8 characters seen in source files,

@@ -3,7 +3,7 @@
 #include "core/html_tokenizer.h"
 #include "core/html_tree_builder.h"
 
-namespace wearweb {
+namespace jellyframe {
 
 std::unique_ptr<Node> HtmlParser::parse(const std::string& source) const {
     return parse(source, HtmlParserOptions{});
@@ -18,4 +18,4 @@ std::unique_ptr<Node> HtmlParser::parse(const std::string& source, const HtmlPar
     return root;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

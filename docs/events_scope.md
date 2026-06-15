@@ -2,7 +2,7 @@
 
 Date: 2026-06-14
 
-WearWeb separates input plumbing from the core engine:
+JellyFrame separates input plumbing from the core engine:
 
 - The core engine owns hit testing, event objects, listener storage and event
   dispatch.

@@ -13,7 +13,7 @@
 #include <stdexcept>
 #include <string>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -128,7 +128,7 @@ void dump_layer_tree(const LayerNode& layer, std::size_t depth = 0) {
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::cerr << "usage: wearweb_layer_tree_dump page.html style.css [viewport_width]\n";
+        std::cerr << "usage: jellyframe_layer_tree_dump page.html style.css [viewport_width]\n";
         return 1;
     }
 
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
         CssParser css_parser;
         auto document = html_parser.parse(html);
         StyleResolver resolver(css_parser.parse(
-            wearweb_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes)));
+            jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes)));
         RenderTreeBuilder render_tree_builder(resolver);
         auto render_tree = render_tree_builder.build(*document);
         LayoutEngine layout_engine(resolver);

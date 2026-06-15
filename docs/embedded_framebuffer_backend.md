@@ -5,7 +5,7 @@ Date: 2026-06-15
 `src/core/embedded_framebuffer.h` provides the first deployable presentation
 adapter for embedded hosts. It is still platform-neutral: it does not open a
 device, allocate display memory, start DMA, talk to LVGL or call an RTOS API.
-It converts WearWeb's internal RGBA `FrameBuffer` view into a caller-owned
+It converts JellyFrame's internal RGBA `FrameBuffer` view into a caller-owned
 display buffer and reports the same dirty rectangles back to the host.
 
 ## Supported Formats

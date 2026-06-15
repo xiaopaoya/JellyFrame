@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct ScriptEventListener {
     JerryScriptRuntime* runtime = nullptr;
@@ -883,7 +883,7 @@ jerry_value_t style_set_named(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
-#define WEARWEB_STYLE_ACCESSOR(js_name, css_name) \
+#define JELLYFRAME_STYLE_ACCESSOR(js_name, css_name) \
     jerry_value_t style_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
         return style_get_named(call_info_p, css_name); \
     } \
@@ -891,16 +891,16 @@ jerry_value_t style_set_named(const jerry_call_info_t* call_info_p,
         return style_set_named(call_info_p, args_p, args_count, css_name); \
     }
 
-WEARWEB_STYLE_ACCESSOR(display, "display")
-WEARWEB_STYLE_ACCESSOR(color, "color")
-WEARWEB_STYLE_ACCESSOR(background, "background")
-WEARWEB_STYLE_ACCESSOR(backgroundColor, "background-color")
-WEARWEB_STYLE_ACCESSOR(textAlign, "text-align")
-WEARWEB_STYLE_ACCESSOR(fontWeight, "font-weight")
-WEARWEB_STYLE_ACCESSOR(width, "width")
-WEARWEB_STYLE_ACCESSOR(height, "height")
+JELLYFRAME_STYLE_ACCESSOR(display, "display")
+JELLYFRAME_STYLE_ACCESSOR(color, "color")
+JELLYFRAME_STYLE_ACCESSOR(background, "background")
+JELLYFRAME_STYLE_ACCESSOR(backgroundColor, "background-color")
+JELLYFRAME_STYLE_ACCESSOR(textAlign, "text-align")
+JELLYFRAME_STYLE_ACCESSOR(fontWeight, "font-weight")
+JELLYFRAME_STYLE_ACCESSOR(width, "width")
+JELLYFRAME_STYLE_ACCESSOR(height, "height")
 
-#undef WEARWEB_STYLE_ACCESSOR
+#undef JELLYFRAME_STYLE_ACCESSOR
 
 jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     (void) runtime;
@@ -1183,7 +1183,8 @@ jerry_value_t node_remove_event_listener(const jerry_call_info_t* call_info_p,
 
 } // namespace
 
-JerryScriptRuntime::JerryScriptRuntime() {
+JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
+    : options_(options) {
     if (g_runtime_active) {
         throw std::runtime_error("only one JerryScriptRuntime can be active in this build");
     }
@@ -1192,6 +1193,12 @@ JerryScriptRuntime::JerryScriptRuntime() {
     initialized_ = true;
     g_runtime_active = true;
 }
+
+JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
+    : JerryScriptRuntime(JerryScriptRuntimeOptions{
+          std::max<std::size_t>(1, budgets.max_timers),
+          std::max<std::size_t>(1, budgets.max_event_listeners),
+      }) {}
 
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
@@ -1326,6 +1333,13 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
                                                    std::string type,
                                                    std::uint32_t callback_value,
                                                    EventListenerOptions options) {
+    event_listeners_.erase(std::remove_if(event_listeners_.begin(), event_listeners_.end(),
+        [](const std::unique_ptr<ScriptEventListener>& listener) {
+            return !listener->active;
+        }), event_listeners_.end());
+    if (event_listeners_.size() >= std::max<std::size_t>(1, options_.max_event_listeners)) {
+        return;
+    }
     auto listener = std::make_unique<ScriptEventListener>();
     listener->runtime = this;
     listener->node = &node;
@@ -1392,6 +1406,12 @@ void JerryScriptRuntime::clear_script_event_listeners() {
 std::uint32_t JerryScriptRuntime::add_timer(std::uint32_t callback_value,
                                             std::uint32_t delay_ms,
                                             bool repeat) {
+    timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
+        return !timer->active;
+    }), timers_.end());
+    if (timers_.size() >= std::max<std::size_t>(1, options_.max_timers)) {
+        return 0;
+    }
     auto timer = std::make_unique<ScriptTimer>();
     timer->id = next_timer_id_++;
     if (next_timer_id_ == 0) {
@@ -1435,4 +1455,4 @@ void JerryScriptRuntime::clear_timers() {
     timers_.clear();
 }
 
-} // namespace wearweb
+} // namespace jellyframe

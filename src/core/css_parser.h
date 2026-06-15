@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <string>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct CssParserOptions {
     std::size_t max_rules = 4096;
@@ -21,4 +21,4 @@ public:
     Stylesheet parse(const std::string& source, const CssParserOptions& options) const;
 };
 
-} // namespace wearweb
+} // namespace jellyframe

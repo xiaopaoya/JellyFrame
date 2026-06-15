@@ -1,6 +1,6 @@
 # Versioning
 
-WearWeb Engine uses a lightweight semantic versioning scheme:
+JellyFrame Engine uses a lightweight semantic versioning scheme:
 
 ```text
 MAJOR.MINOR.PATCH[-stage]

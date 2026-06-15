@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/dom.h"
+#include "core/host.h"
 
 #include <cstdint>
 #include <cstddef>
@@ -9,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct ScriptRuntimeAccess;
 struct ScriptEventListener;
@@ -21,9 +22,15 @@ struct ScriptEvaluationResult {
     std::string error;
 };
 
+struct JerryScriptRuntimeOptions {
+    std::size_t max_timers = 64;
+    std::size_t max_event_listeners = 512;
+};
+
 class JerryScriptRuntime {
 public:
-    JerryScriptRuntime();
+    explicit JerryScriptRuntime(JerryScriptRuntimeOptions options = {});
+    explicit JerryScriptRuntime(const HostBudgets& budgets);
     ~JerryScriptRuntime();
 
     JerryScriptRuntime(const JerryScriptRuntime&) = delete;
@@ -45,6 +52,7 @@ private:
     std::vector<std::unique_ptr<Node>> detached_nodes_;
     std::vector<std::unique_ptr<ScriptEventListener>> event_listeners_;
     std::vector<std::unique_ptr<ScriptTimer>> timers_;
+    JerryScriptRuntimeOptions options_;
 
     Node& adopt_detached_node(std::unique_ptr<Node> node);
     std::unique_ptr<Node> release_detached_node(Node& node);
@@ -59,4 +67,4 @@ private:
     void clear_timers();
 };
 
-} // namespace wearweb
+} // namespace jellyframe

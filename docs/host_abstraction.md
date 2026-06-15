@@ -2,7 +2,7 @@
 
 Date: 2026-06-15
 
-WearWeb's core should stay independent from filesystems, network stacks,
+JellyFrame's core should stay independent from filesystems, network stacks,
 windowing systems, display controllers, timers, input hardware and font APIs.
 The host abstraction is the seam where a desktop shell, RTOS task, LVGL driver
 or custom wearable platform supplies those services.

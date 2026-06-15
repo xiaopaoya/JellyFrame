@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-namespace wearweb {
+namespace jellyframe {
 
 using StylesheetLoadCallback = bool (*)(std::string_view href, std::string& output, void* context);
 
@@ -16,4 +16,4 @@ std::string combine_author_css(const std::string& external_css,
                                StylesheetLoadCallback load_stylesheet,
                                void* context);
 
-} // namespace wearweb
+} // namespace jellyframe

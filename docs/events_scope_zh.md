@@ -2,7 +2,7 @@
 
 日期：2026-06-14
 
-WearWeb 将输入接线和核心引擎分开：
+JellyFrame 将输入接线和核心引擎分开：
 
 - 核心引擎负责 hit testing、event objects、listener storage 和 event dispatch。
 - 平台壳负责把原生输入，例如 Win32 messages 或 LVGL input callbacks，转换成核心事件。

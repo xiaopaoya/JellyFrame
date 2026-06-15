@@ -6,7 +6,7 @@
 
 #include <string>
 
-namespace wearweb {
+namespace jellyframe {
 
 enum class PointerButton {
     None = -1,
@@ -90,4 +90,4 @@ private:
     void update_hover(const Node* next_hover, const PointerInput& input);
 };
 
-} // namespace wearweb
+} // namespace jellyframe

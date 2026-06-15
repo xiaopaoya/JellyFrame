@@ -10,7 +10,7 @@
 - WebKit CSS parser sources:
   https://github.com/WebKit/WebKit/tree/main/Source/WebCore/css/parser
 
-WearWeb 应该能解析现代 CSS 而不发生灾难性失败，但不应该假装已经实现完整现代
+JellyFrame 应该能解析现代 CSS 而不发生灾难性失败，但不应该假装已经实现完整现代
 cascade。Parser 接受常见语法，在 at-rule 和 declaration 边界恢复错误，并让不
 支持的样式降级为统一 fallback，而不是把局部现代增强和旧布局行为混在一起。
 

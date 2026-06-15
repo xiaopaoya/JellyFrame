@@ -23,9 +23,9 @@ layer tree -> display list
 Commands:
 
 ```powershell
-.\build\Release\wearweb_pipeline_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css 360
-.\build\Release\wearweb_pipeline_dump.exe examples\modern_cases\app_shell.html examples\modern_cases\app_shell.css 360
-.\build\Release\wearweb_pipeline_dump.exe examples\modern_cases\article_cards.html examples\modern_cases\article_cards.css 360
+.\build\Release\jellyframe_pipeline_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css 360
+.\build\Release\jellyframe_pipeline_dump.exe examples\modern_cases\app_shell.html examples\modern_cases\app_shell.css 360
+.\build\Release\jellyframe_pipeline_dump.exe examples\modern_cases\article_cards.html examples\modern_cases\article_cards.css 360
 ```
 
 ## Search Home
@@ -37,7 +37,7 @@ Modern browser expectation:
 - `@supports`, `:has()`, advanced colors and blur enhance the visual style but
   are not required for the form to be usable.
 
-WearWeb result:
+JellyFrame result:
 
 - `dom_nodes=21`
 - `render_objects=10`
@@ -68,7 +68,7 @@ Modern browser expectation:
   visible.
 - `@container` and `:is()` may enhance layout and focus styling.
 
-WearWeb result after correction:
+JellyFrame result after correction:
 
 - `dom_nodes=40`
 - `render_objects=29`
@@ -95,7 +95,7 @@ Modern browser expectation:
 - Descendant selector `.story img` styles the image.
 - Conditional media and `:where()` may enhance small viewport styling.
 
-WearWeb result:
+JellyFrame result:
 
 - `dom_nodes=22`
 - `render_objects=22`

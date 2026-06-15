@@ -10,7 +10,7 @@ Last checked against CSSOM and CSS Cascade references on 2026-06-13:
 - WebKit CSS sources:
   https://github.com/WebKit/WebKit/tree/main/Source/WebCore/css
 
-WearWeb needs a small CSSOM that preserves author intent and gives later
+JellyFrame needs a small CSSOM that preserves author intent and gives later
 runtime layers a stable object model. The first CSSOM is not a JavaScript-facing
 complete API. It is the internal representation used by parsing, cascade,
 style resolution, diagnostics and later JerryScript bindings.

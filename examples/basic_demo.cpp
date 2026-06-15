@@ -6,7 +6,7 @@
 
 #include <iostream>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -23,7 +23,7 @@ int main() {
     const std::string html =
         "<body>"
         "  <section id='screen' class='panel'>"
-        "    <h1>WearWeb</h1>"
+        "    <h1>JellyFrame</h1>"
         "    <p>A tiny HTML/CSS app runtime slice.</p>"
         "    <p style='color: blue'>Ready for framebuffer rendering.</p>"
         "  </section>"

@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 bool empty_rect(Rect rect) {
@@ -143,4 +143,4 @@ std::vector<Rect> compute_dirty_rects(const Node& document,
     return rects;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

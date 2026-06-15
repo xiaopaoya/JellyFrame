@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace wearweb {
+namespace jellyframe {
 
 enum class EmbeddedPixelFormat {
     Rgba8888,
@@ -49,4 +49,4 @@ bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
 
 HostFrameSink embedded_frame_sink(EmbeddedFrameBufferSink& sink);
 
-} // namespace wearweb
+} // namespace jellyframe

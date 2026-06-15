@@ -6,7 +6,7 @@
 #include <string_view>
 #include <utility>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 enum class State {
@@ -795,4 +795,4 @@ void HtmlTokenizer::tokenize_to_sink(const std::string& source,
     run.run();
 }
 
-} // namespace wearweb
+} // namespace jellyframe

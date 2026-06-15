@@ -20,7 +20,7 @@
 - tree builder / token sink
 - 公开 parser 编排入口
 
-WearWeb 采用这个结构：
+JellyFrame 采用这个结构：
 
 ```text
 HtmlTokenizer

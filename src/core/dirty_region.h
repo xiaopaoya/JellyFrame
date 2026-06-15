@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct DirtyRegionOptions {
     Rect viewport;
@@ -20,4 +20,4 @@ std::vector<Rect> compute_dirty_rects(const Node& document,
                                       const LayoutBox* current_layout,
                                       const DirtyRegionOptions& options);
 
-} // namespace wearweb
+} // namespace jellyframe

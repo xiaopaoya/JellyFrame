@@ -28,7 +28,7 @@ tokenizer emits these token kinds:
 - character
 - end-of-file
 
-For WearWeb, the important public contract is a stream of start tags, end tags,
+For JellyFrame, the important public contract is a stream of start tags, end tags,
 text, comments if enabled, and EOF. Tree construction can stay simpler than the
 standard while the tokenizer becomes more deterministic.
 

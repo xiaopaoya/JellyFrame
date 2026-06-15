@@ -1,6 +1,6 @@
 # Embedded App Subset
 
-WearWeb is now usable for small embedded UI applications that are designed for
+JellyFrame is now usable for small embedded UI applications that are designed for
 its bounded DOM/CSS/script subset. It is not yet a general web page runtime, but
 the current core is enough to build useful local apps such as weather panels,
 settings screens and calculators without forcing developers into a canvas-only
@@ -103,14 +103,14 @@ The `examples/app_cases` directory contains four acceptance-style apps:
 Run one through the scripting pseudo browser:
 
 ```powershell
-.\build-script\Release\wearweb_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css weather.bmp 360 360 --script examples\app_cases\weather.js
-.\build-script\Release\wearweb_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css clock.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
+.\build-script\Release\jellyframe_pseudo_browser.exe examples\app_cases\weather.html examples\app_cases\weather.css weather.bmp 360 360 --script examples\app_cases\weather.js
+.\build-script\Release\jellyframe_pseudo_browser.exe examples\app_cases\clock.html examples\app_cases\clock.css clock.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
 ```
 
 Run one interactively through the Win32 shell:
 
 ```powershell
-.\build-script\Release\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
+.\build-script\Release\jellyframe_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
 ```
 
 ## Post-M7 Status

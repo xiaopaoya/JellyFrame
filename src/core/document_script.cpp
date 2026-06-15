@@ -2,7 +2,7 @@
 
 #include <cctype>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 void append_text_descendants(const Node& node, std::string& output) {
@@ -104,4 +104,4 @@ std::vector<DocumentScript> collect_classic_scripts(const Node& document,
     return scripts;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

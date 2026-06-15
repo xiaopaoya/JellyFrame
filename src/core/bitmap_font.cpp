@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 std::uint8_t clamp_u8(int value) {
@@ -202,4 +202,4 @@ bool bitmap_font_paint_callback(FrameBuffer& target,
     return true;
 }
 
-} // namespace wearweb
+} // namespace jellyframe

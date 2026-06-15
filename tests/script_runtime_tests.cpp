@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -360,6 +360,31 @@ void javascript_interval_repeats_and_can_clear_itself() {
     check(runtime.eval("count").value == "2", "interval callback updates JS state twice");
 }
 
+void javascript_runtime_respects_timer_and_listener_budgets() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>Go</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "button exists");
+
+    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{1, 1});
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var fired = 0;"
+        "var first = setTimeout(function () { fired += 1; }, 1);"
+        "var second = setTimeout(function () { fired += 10; }, 1);"
+        "button.addEventListener('click', function () { fired += 100; });"
+        "button.addEventListener('click', function () { fired += 1000; });"
+        "String(first > 0) + ':' + String(second)");
+    check(result.ok, "budget script succeeds");
+    check(result.value == "true:0", "timer budget rejects second timer");
+
+    check(runtime.pump_timers(1) == 1, "only one timer callback runs");
+    Event click("click", true, true);
+    dispatch_event(*button, click);
+    check(runtime.eval("String(fired)").value == "101", "listener budget keeps only first listener");
+}
+
 } // namespace
 
 int main() {
@@ -380,6 +405,7 @@ int main() {
         javascript_timeout_runs_when_host_pumps_time();
         javascript_clear_timeout_cancels_callback();
         javascript_interval_repeats_and_can_clear_itself();
+        javascript_runtime_respects_timer_and_listener_budgets();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

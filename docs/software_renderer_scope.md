@@ -2,7 +2,7 @@
 
 Date: 2026-06-14
 
-WearWeb now has a CPU-only validation renderer. It is meant to prove the full
+JellyFrame now has a CPU-only validation renderer. It is meant to prove the full
 pipeline can produce pixels without assuming a GPU, display controller or
 embedded windowing system.
 
@@ -12,7 +12,7 @@ Reference points:
   ordering.
 - CSS Compositing and Blending Level 1 defines the normal source-over
   compositing model used here.
-- HTML's rendering section is advisory; WearWeb keeps the implementation small
+- HTML's rendering section is advisory; JellyFrame keeps the implementation small
   and deterministic for wearable targets.
 
 ## Pipeline

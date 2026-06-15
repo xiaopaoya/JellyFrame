@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct HtmlParserOptions {
     std::size_t max_nodes = 8192;
@@ -22,4 +22,4 @@ public:
     std::unique_ptr<Node> parse(const std::string& source, const HtmlParserOptions& options) const;
 };
 
-} // namespace wearweb
+} // namespace jellyframe

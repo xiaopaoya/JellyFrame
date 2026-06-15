@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 Rect intersect_rect(Rect left, Rect right) {
@@ -578,4 +578,4 @@ bool present_frame(const FrameBuffer& frame_buffer,
     return frame_sink.present(view, dirty_rects, dirty_rect_count, frame_sink.context);
 }
 
-} // namespace wearweb
+} // namespace jellyframe

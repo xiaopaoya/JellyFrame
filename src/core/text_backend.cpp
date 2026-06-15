@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 bool consume_utf8_codepoint(const std::string& text, std::size_t& index, unsigned char& lead) {
@@ -63,4 +63,4 @@ TextMetrics measure_text(const TextMeasureProvider& provider,
     return fallback_text_metrics(text, font_size, font_weight);
 }
 
-} // namespace wearweb
+} // namespace jellyframe

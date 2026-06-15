@@ -10,7 +10,7 @@ on 2026-06-13:
 - WebKit CSS parser sources:
   https://github.com/WebKit/WebKit/tree/main/Source/WebCore/css/parser
 
-WearWeb should parse modern CSS without catastrophic failure, but it should not
+JellyFrame should parse modern CSS without catastrophic failure, but it should not
 pretend to implement the full modern cascade. The parser accepts common syntax,
 recovers at rule/declaration boundaries, and leaves unsupported styling as a
 coherent fallback rather than mixing partial modern enhancements with old

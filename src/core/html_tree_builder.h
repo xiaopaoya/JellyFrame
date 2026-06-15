@@ -9,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 class HtmlTreeBuilder final : public HtmlTokenSink {
 public:
@@ -50,5 +50,5 @@ private:
     std::size_t node_count_ = 1;
 };
 
-} // namespace wearweb
+} // namespace jellyframe
 

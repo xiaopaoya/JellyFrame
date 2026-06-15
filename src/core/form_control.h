@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-namespace wearweb {
+namespace jellyframe {
 
 enum class FormControlKind {
     None,
@@ -53,4 +53,4 @@ int form_control_selected_index(const Node& node);
 bool set_form_control_selected_index(Node& node, int selected_index);
 bool step_select_control(Node& node, int delta);
 
-} // namespace wearweb
+} // namespace jellyframe

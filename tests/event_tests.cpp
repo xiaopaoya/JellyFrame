@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 

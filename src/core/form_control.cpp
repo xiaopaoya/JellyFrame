@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <utility>
 
-namespace wearweb {
+namespace jellyframe {
 namespace {
 
 bool has_attribute(const Node& node, const std::string& name) {
@@ -318,7 +318,7 @@ bool append_text_to_control(Node& node, std::string_view text) {
     FormControlState& state = ensure_form_control_state(node);
     state.value.append(text.data(), text.size());
     state.dirty = true;
-    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -332,7 +332,7 @@ bool backspace_control(Node& node) {
     }
     state.value.pop_back();
     state.dirty = true;
-    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -356,7 +356,7 @@ bool complete_text_control_from_datalist(Node& node) {
     }
     state.value = std::move(completed);
     state.dirty = true;
-    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -368,13 +368,13 @@ bool activate_form_control(Node& node) {
     if (state.kind == FormControlKind::Checkbox) {
         state.checked = !state.checked;
         state.dirty = true;
-        mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+        mark_dirty(node, DomDirtyPaint);
         return true;
     }
     if (state.kind == FormControlKind::Radio) {
         state.checked = true;
         state.dirty = true;
-        mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+        mark_dirty(node, DomDirtyPaint);
         return true;
     }
     if (state.kind == FormControlKind::Select) {
@@ -385,7 +385,7 @@ bool activate_form_control(Node& node) {
         state.selected_index = (state.selected_index + 1) % option_count;
         state.value = form_control_display_text(node);
         state.dirty = true;
-        mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+        mark_dirty(node, DomDirtyPaint);
         return true;
     }
     return false;
@@ -409,7 +409,7 @@ bool set_range_value_from_local_x(Node& node, int local_x, int width) {
     }
     state.value = next;
     state.dirty = true;
-    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -443,7 +443,7 @@ bool set_form_control_value(Node& node, std::string value) {
     }
     state.value = std::move(value);
     state.dirty = true;
-    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -469,7 +469,7 @@ bool set_form_control_checked(Node& node, bool checked) {
     }
     state.checked = checked;
     state.dirty = true;
-    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -500,7 +500,7 @@ bool set_form_control_selected_index(Node& node, int selected_index) {
     const Node* option = option_at(node, selected_index, current_index);
     state.value = option != nullptr ? option_value(*option) : std::string{};
     state.dirty = true;
-    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -517,4 +517,4 @@ bool step_select_control(Node& node, int delta) {
     return set_form_control_selected_index(node, next);
 }
 
-} // namespace wearweb
+} // namespace jellyframe

@@ -14,7 +14,7 @@
 #include <stdexcept>
 #include <string>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
@@ -98,7 +98,7 @@ void print_command(const DisplayCommand& command, std::size_t index) {
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::cerr << "usage: wearweb_pipeline_dump page.html style.css [viewport_width]\n";
+        std::cerr << "usage: jellyframe_pipeline_dump page.html style.css [viewport_width]\n";
         return 1;
     }
 
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
         CssParser css_parser;
         auto document = html_parser.parse(html);
         Stylesheet stylesheet = css_parser.parse(
-            wearweb_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes));
+            jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes));
         StyleResolver resolver(std::move(stylesheet));
 
         RenderTreeBuilder render_tree_builder(resolver);

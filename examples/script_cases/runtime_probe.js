@@ -1,1 +1,1 @@
-"WearWeb script runtime: " + (21 * 2);
+"JellyFrame script runtime: " + (21 * 2);

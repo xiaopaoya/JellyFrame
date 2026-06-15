@@ -1,6 +1,6 @@
 # JerryScript 接入计划
 
-WearWeb 应当把 JerryScript 接成一个小型宿主运行时，而不是试图复制完整浏览器 Web API。
+JellyFrame 应当把 JerryScript 接成一个小型宿主运行时，而不是试图复制完整浏览器 Web API。
 绑定层只暴露核心已经真实支持的能力，并继续遵守 C++ 引擎的嵌入式约束：内存有界、所有权明确、不隐式联网、
 重绘调度可预测。
 
@@ -23,7 +23,7 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
 
 已经具备：
 
-- 由 `WEARWEB_BUILD_SCRIPTING=ON` 控制的 M2 runtime shell：初始化、清理、`eval`、
+- 由 `JELLYFRAME_BUILD_SCRIPTING=ON` 控制的 M2 runtime shell：初始化、清理、`eval`、
   source name、结果字符串化和异常报告。
 - M3 最小 DOM binding：`window`、`document`、`getElementById`、`createElement`、
   `createTextNode`、`appendChild`、`removeChild`、`setAttribute`、`getAttribute`
@@ -51,7 +51,7 @@ JerryScript 官方 API 示例展示了基本嵌入生命周期：用 `jerry_init
 ## 架构
 
 ```text
-WearWebScriptRuntime
+JellyFrameScriptRuntime
   管理 JerryScript 引擎生命周期
   管理 wrapper map 和 JS callback reference
   |
@@ -66,9 +66,9 @@ DOM + style + layout + layer + renderer
 
 运行时应当是可选构建目标：
 
-- `WEARWEB_BUILD_SCRIPTING=OFF`，在 bridge 稳定前默认关闭。
+- `JELLYFRAME_BUILD_SCRIPTING=OFF`，在 bridge 稳定前默认关闭。
 - 核心 HTML/CSS/rendering 不包含 JerryScript 头文件。
-- scripting target 链接 JerryScript，并依赖 `wearweb_core`。
+- scripting target 链接 JerryScript，并依赖 `jellyframe_core`。
 
 ## 绑定原则
 
@@ -84,11 +84,11 @@ DOM + style + layout + layer + renderer
 
 ### M2：Runtime Shell
 
-状态：已作为可选构建目标实现。`wearweb_script` 只在 `WEARWEB_BUILD_SCRIPTING=ON`
-时链接 JerryScript；`wearweb_core` 仍不包含 JerryScript 头文件或库。
-`wearweb_pseudo_browser --script` 可以执行一个外部脚本文件，并打印结果或异常，供验收测试使用。
+状态：已作为可选构建目标实现。`jellyframe_script` 只在 `JELLYFRAME_BUILD_SCRIPTING=ON`
+时链接 JerryScript；`jellyframe_core` 仍不包含 JerryScript 头文件或库。
+`jellyframe_pseudo_browser --script` 可以执行一个外部脚本文件，并打印结果或异常，供验收测试使用。
 
-创建 `WearWebScriptRuntime`：
+创建 `JellyFrameScriptRuntime`：
 
 - `initialize()` / `shutdown()`。
 - `eval(std::string_view source, std::string_view name)`。
@@ -187,7 +187,7 @@ DOM + style + layout + layer + renderer
 
 - inline classic `<script>`
 - 可选的壳层本地脚本加载 callback
-- `wearweb_pseudo_browser` 和 `wearweb_win32_browser` 自动执行 document scripts
+- `jellyframe_pseudo_browser` 和 `jellyframe_win32_browser` 自动执行 document scripts
 
 暂不支持：
 

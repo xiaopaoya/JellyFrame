@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 

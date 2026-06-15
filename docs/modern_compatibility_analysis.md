@@ -10,7 +10,7 @@ References:
 - CSS Cascade: https://www.w3.org/TR/css-cascade-5/
 
 This document compares a few intentionally modern HTML/CSS samples against
-expected browser behavior and current WearWeb behavior. The goal is not pixel
+expected browser behavior and current JellyFrame behavior. The goal is not pixel
 compatibility. The goal is usable degradation: modern pages should keep their
 functional skeleton even when visual enhancements are skipped.
 
@@ -26,12 +26,12 @@ functional skeleton even when visual enhancements are skipped.
 Generated with:
 
 ```powershell
-.\build\Debug\wearweb_dom_dump.exe examples\modern_cases\search_home.html
-.\build\Debug\wearweb_cssom_dump.exe examples\modern_cases\search_home.css
-.\build\Debug\wearweb_dom_dump.exe examples\modern_cases\app_shell.html
-.\build\Debug\wearweb_cssom_dump.exe examples\modern_cases\app_shell.css
-.\build\Debug\wearweb_dom_dump.exe examples\modern_cases\article_cards.html
-.\build\Debug\wearweb_cssom_dump.exe examples\modern_cases\article_cards.css
+.\build\Debug\jellyframe_dom_dump.exe examples\modern_cases\search_home.html
+.\build\Debug\jellyframe_cssom_dump.exe examples\modern_cases\search_home.css
+.\build\Debug\jellyframe_dom_dump.exe examples\modern_cases\app_shell.html
+.\build\Debug\jellyframe_cssom_dump.exe examples\modern_cases\app_shell.css
+.\build\Debug\jellyframe_dom_dump.exe examples\modern_cases\article_cards.html
+.\build\Debug\jellyframe_cssom_dump.exe examples\modern_cases\article_cards.css
 ```
 
 ## Case 1: Search Home
@@ -60,7 +60,7 @@ Expected browser behavior:
 - CSSOM keeps cascade layers, parses the feature query, and applies `:has()` if
   supported.
 
-Current WearWeb behavior:
+Current JellyFrame behavior:
 
 - DOM keeps the functional search skeleton:
   `main -> form -> label/input/button`.
@@ -107,7 +107,7 @@ Expected browser behavior:
 - `@container` applies only when the container condition matches.
 - `:is()` and attribute selectors participate in selector matching.
 
-Current WearWeb behavior:
+Current JellyFrame behavior:
 
 - DOM preserves the custom element, buttons, nav links, cards, dialog and form.
 - Boolean `popover` is preserved as an empty attribute.
@@ -149,7 +149,7 @@ Expected browser behavior:
 - `:where()` has zero specificity but still matches when supported.
 - Descendant selector `.story img` applies image sizing.
 
-Current WearWeb behavior:
+Current JellyFrame behavior:
 
 - DOM correctly creates sibling `p` elements.
 - DOM correctly creates sibling `li` elements.

@@ -7,14 +7,14 @@
 #include <stdexcept>
 #include <string>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 
 constexpr std::size_t kMaxInputBytes = 512 * 1024;
 
 std::string sample_css() {
-    return "/* WearWeb CSSOM demo */"
+    return "/* JellyFrame CSSOM demo */"
            "@layer base {"
            "  body { color: #111; background: #fff; }"
            "  #search.box { color: #333; color: oklch(50% 0.2 30); padding: 8px; }"

@@ -9,7 +9,7 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace wearweb;
+using namespace jellyframe;
 
 namespace {
 

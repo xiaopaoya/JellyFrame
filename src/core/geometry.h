@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace wearweb {
+namespace jellyframe {
 
 struct Color {
     std::uint8_t r = 0;
@@ -55,4 +55,4 @@ struct DisplayCommand {
 
 using DisplayList = std::vector<DisplayCommand>;
 
-} // namespace wearweb
+} // namespace jellyframe

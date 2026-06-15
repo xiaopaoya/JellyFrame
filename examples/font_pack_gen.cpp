@@ -17,7 +17,7 @@ struct Options {
     std::string bdf_path;
     std::string chars_path;
     std::string output_path;
-    std::string symbol = "wearweb_embedded_font";
+    std::string symbol = "jellyframe_embedded_font";
     bool allow_missing = false;
 };
 
@@ -48,7 +48,7 @@ std::string read_file(const std::string& path) {
 
 std::string sanitize_symbol(std::string value) {
     if (value.empty()) {
-        return "wearweb_embedded_font";
+        return "jellyframe_embedded_font";
     }
     for (char& ch : value) {
         const unsigned char raw = static_cast<unsigned char>(ch);
@@ -87,7 +87,7 @@ Options parse_options(int argc, char** argv) {
         }
     }
     if (options.bdf_path.empty() || options.chars_path.empty() || options.output_path.empty()) {
-        throw std::runtime_error("usage: wearweb_font_pack_gen --bdf font.bdf --chars used_chars.txt "
+        throw std::runtime_error("usage: jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt "
                                  "--output font_pack.h [--name symbol] [--allow-missing]");
     }
     return options;
@@ -256,7 +256,7 @@ void write_font_pack(const Options& options,
     output << "#pragma once\n\n";
     output << "#include \"core/bitmap_font.h\"\n\n";
     output << "#include <cstdint>\n\n";
-    output << "namespace wearweb_generated {\n\n";
+    output << "namespace jellyframe_generated {\n\n";
     for (std::uint32_t codepoint : selected) {
         const Glyph& glyph = font.glyphs.at(codepoint);
         output << "static constexpr std::uint8_t " << options.symbol << "_rows_"
@@ -271,19 +271,19 @@ void write_font_pack(const Options& options,
         output << "\n};\n\n";
     }
 
-    output << "static constexpr wearweb::BitmapFontGlyph " << options.symbol << "_glyphs[] = {\n";
+    output << "static constexpr jellyframe::BitmapFontGlyph " << options.symbol << "_glyphs[] = {\n";
     for (std::uint32_t codepoint : selected) {
         const Glyph& glyph = font.glyphs.at(codepoint);
-        output << "    wearweb::BitmapFontGlyph{0x" << std::hex << std::uppercase << codepoint << std::dec
+        output << "    jellyframe::BitmapFontGlyph{0x" << std::hex << std::uppercase << codepoint << std::dec
                << "U, " << glyph.width << ", " << glyph.height << ", " << glyph.advance << ", "
                << glyph.bytes_per_row << ", " << options.symbol << "_rows_" << codepoint_name(codepoint)
                << "},\n";
     }
     output << "};\n\n";
-    output << "static constexpr wearweb::BitmapFont " << options.symbol << "{"
+    output << "static constexpr jellyframe::BitmapFont " << options.symbol << "{"
            << options.symbol << "_glyphs, " << selected.size() << ", "
            << std::max(1, font.line_height) << ", " << std::max(1, font.fallback_advance) << "};\n\n";
-    output << "} // namespace wearweb_generated\n";
+    output << "} // namespace jellyframe_generated\n";
 
     std::cerr << "requested=" << requested.size() << " emitted=" << selected.size() << '\n';
 }
