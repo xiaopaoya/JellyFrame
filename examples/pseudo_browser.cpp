@@ -86,6 +86,37 @@ int parse_int_arg(const char* value, int fallback) {
     }
 }
 
+const Node* find_first_element(const Node& node, const char* tag_name) {
+    if (node.type == NodeType::Element && node.tag_name == tag_name) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        const Node* found = find_first_element(*child, tag_name);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+Color page_background_color(const Node& document, const StyleResolver& resolver) {
+    const Node* body = find_first_element(document, "body");
+    if (body != nullptr) {
+        const Style style = resolver.resolve(*body);
+        if (style.background_color.a != 0) {
+            return style.background_color;
+        }
+    }
+    const Node* html = find_first_element(document, "html");
+    if (html != nullptr) {
+        const Style style = resolver.resolve(*html);
+        if (style.background_color.a != 0) {
+            return style.background_color;
+        }
+    }
+    return Color{255, 255, 255, 255};
+}
+
 struct BrowserOptions {
     std::string html_path;
     std::string css_path;
@@ -95,6 +126,38 @@ struct BrowserOptions {
     int viewport_height = 240;
     int pump_timers_ms = 0;
 };
+
+struct ImageFrameSinkContext {
+    std::string path;
+    bool ok = false;
+};
+
+bool write_image_frame_sink(const HostFrameBufferView& frame,
+                            const Rect*,
+                            std::size_t,
+                            void* context) {
+    auto* image_context = static_cast<ImageFrameSinkContext*>(context);
+    if (image_context == nullptr || frame.pixels == nullptr || frame.width <= 0 || frame.height <= 0) {
+        return false;
+    }
+    FrameBuffer frame_buffer;
+    frame_buffer.width = frame.width;
+    frame_buffer.height = frame.height;
+    frame_buffer.pixels.assign(frame.pixels,
+                               frame.pixels + static_cast<std::size_t>(frame.height * frame.stride_pixels));
+    if (frame.stride_pixels != frame.width) {
+        FrameBuffer compact(frame.width, frame.height, Color{0, 0, 0, 0});
+        for (int y = 0; y < frame.height; ++y) {
+            for (int x = 0; x < frame.width; ++x) {
+                compact.pixel(x, y) = frame.pixels[static_cast<std::size_t>(y * frame.stride_pixels + x)];
+            }
+        }
+        frame_buffer = std::move(compact);
+    }
+    write_image(frame_buffer, image_context->path);
+    image_context->ok = true;
+    return true;
+}
 
 bool is_script_flag(const std::string& value) {
     return value == "--script" || value == "-s";
@@ -234,9 +297,15 @@ int main(int argc, char** argv) {
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
 
         SoftwareCompositor compositor;
+        const Color background = page_background_color(*document, resolver);
         FrameBuffer frame_buffer = compositor.render(
-            *layer_tree, options.viewport_width, options.viewport_height, Color{255, 255, 255, 255});
-        write_image(frame_buffer, options.output_path);
+            *layer_tree, options.viewport_width, options.viewport_height, background);
+        ImageFrameSinkContext frame_sink_context{options.output_path, false};
+        const Rect full_dirty{0, 0, frame_buffer.width, frame_buffer.height};
+        const HostFrameSink frame_sink{write_image_frame_sink, &frame_sink_context};
+        if (!present_frame(frame_buffer, frame_sink, &full_dirty, 1)) {
+            throw std::runtime_error("failed to present output frame");
+        }
 
         std::cout << "WearWeb pseudo browser\n";
         std::cout << "  output=" << options.output_path << '\n';
@@ -246,8 +315,9 @@ int main(int argc, char** argv) {
         std::cout << "  layout_boxes=" << count_layout_boxes(*layout_tree) << '\n';
         std::cout << "  layers=" << count_layers(*layer_tree) << '\n';
         std::cout << "  display_commands=" << display_list.size() << '\n';
+        std::cout << "  frame_sink=" << (frame_sink_context.ok ? "image" : "none") << '\n';
         std::cout << "  non_background_pixels="
-                  << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
+                  << count_non_background_pixels(frame_buffer, background) << '\n';
         if (script_ran) {
             std::cout << "  script=" << options.script_path << '\n';
             std::cout << "  document_scripts=" << document_script_count << '\n';

@@ -118,6 +118,19 @@ bool is_selector_prelude_supported(std::string_view selector) {
     return true;
 }
 
+bool strip_before_pseudo(std::string& selector) {
+    constexpr std::string_view pseudo = "::before";
+    const std::size_t pseudo_pos = selector.rfind(pseudo);
+    if (pseudo_pos == std::string::npos) {
+        return false;
+    }
+    if (pseudo_pos + pseudo.size() != selector.size()) {
+        return false;
+    }
+    selector = trim(std::string_view(selector).substr(0, pseudo_pos));
+    return !selector.empty();
+}
+
 CssSpecificity calculate_specificity(std::string_view selector) {
     CssSpecificity specificity;
     bool in_attribute = false;
@@ -306,8 +319,10 @@ private:
             if (selector.empty() || !is_selector_prelude_supported(selector)) {
                 continue;
             }
+            const bool pseudo_before = strip_before_pseudo(selector);
             CssRule rule;
             rule.selector = std::move(selector);
+            rule.pseudo_before = pseudo_before;
             rule.declarations = declarations;
             rule.specificity = calculate_specificity(rule.selector);
             rule.selector_parts = parse_css_selector_parts(rule.selector);

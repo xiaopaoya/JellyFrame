@@ -8,6 +8,22 @@ WearWeb Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 添加平台无关的 `TextMeasureProvider`，让 layout 能使用宿主文本 metrics，同时继续把字体 API
+  留在 `wearweb_core` 之外。
+- 为 display command 添加最小文本绘制语义：水平对齐，以及单行/可换行文本。
+- 在已有 GDI 文本绘制之外，为 Win32 壳添加 GDI 文本测量注入，使 UTF-8/中文桌面验证更接近真实效果。
+- 添加双语文本后端文档，描述测量/绘制契约和 fallback 限制。
+- 为 `wearweb_capability_check` 添加字体覆盖能力：可输出源码中用到的非 ASCII 字符，并用 UTF-8
+  字体覆盖文件检查缺字。
+- 在 `InputController` 上添加适合按键/表冠设备的焦点导航：
+  `focus_next()`、`focus_previous()` 和 `activate_focused()`。
+- 添加双语嵌入式 HAL API 文档，面向开发板 port，并包含 ESP32-S3 映射建议。
+- 添加平台无关的静态 bitmap font backend，提供面向生成式嵌入字体包的测量和绘制 callbacks。
+- 添加 `wearweb_font_pack_gen` 桌面 BDF 子集生成器，可输出供嵌入式构建使用的 C++
+  `BitmapFont` header。
+- 添加 `wearweb_embedded_host_demo` 平台无关静态资源示例，串起 HTML/CSS 解析、bitmap
+  文本、焦点激活和 RGB565 framebuffer 提交，且不依赖 Win32、文件或硬件 I/O。
+- 添加第一版宿主设备能力 structs，供开发板 port 描述显示、输入、内存、budgets 和可选宿主服务。
 - 通过 callback 形式的 `document_style` API 添加平台无关的外链 stylesheet
   收集能力。核心代码仍不执行文件或网络 I/O；示例工具和 Win32 壳只在桌面验证时提供本地文件加载。
 - 为常用 HTML5 语义/内容元素添加可用默认样式：`a`、`mark`、`blockquote`、
@@ -61,6 +77,26 @@ WearWeb Engine 的重要变更记录在这里。
 - 添加第一版宿主抽象草案和 `src/core/host.h`，覆盖 resource、clock、frame sink
   和 budget structs。
 - 添加 `examples/script_cases/inline_loading_probe.*`，用于验证自动 document script loading。
+- 添加 `font-weight` 解析、继承和 display-list 传递；核心 fallback 用近似加粗绘制，
+  Win32/GDI 文本路径会选择原生字重。
+- 添加轻量列表标记支持：`list-style`/`list-style-type`、`ul`/`ol` 原生轻量 marker，
+  以及面向常见自定义有序列表的极小 `::before content: counter(...)` 路径。
+- 添加简单固定 grid 列模板，例如 `grid-template-columns: 120px 1fr`，用于描述列表和设置页式结构化数据。
+- 添加 `SoftwareCompositor::render_into` dirty-rectangle framebuffer 重绘，以及
+  `HostFrameSink` presentation 辅助函数。
+- 添加 `dirty_region`，作为第一版自动 dirty-rectangle 来源，用于直接文本、属性和表单控件
+  mutation。树结构 mutation 仍保守重绘整个 viewport。
+- 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
+  转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
+  单色显示 buffer。
+- 添加面向嵌入式 app 的 JavaScript helpers：`children`、`parentElement`、简单 selector
+  `matches`/`closest`、基于已有属性的 `dataset` 快照、可写的小型 `element.style` 对象，
+  以及 boolean `hidden`/`disabled` reflection。
+- 添加 mouse-like `pointerdown`/`pointerup` 和 `touchstart`/`touchend` 事件派发，用于可穿戴按下反馈。
+- 添加 `wearweb_capability_check` 桌面 HTML/CSS/JS 扫描器，用于报告受支持子集、降级特性和不支持 API。
+- 添加保守的现代长度函数支持：当参数能归约为受支持长度时，解析 `min()`、`max()`、`clamp()`
+  和简单 `calc(A +/- B)`。
+- 添加简化 `flex-wrap` 行换行，用于常见卡片/盒子布局。
 - 添加外链 stylesheet 合并、语义 fallback 样式、inline 高亮绘制、DOM mutation invalidation
   和表单控件 fallback 行为的回归测试。启用 scripting 的构建还会加入 JerryScript runtime
   生命周期和异常路径测试。
@@ -86,14 +122,30 @@ WearWeb Engine 的重要变更记录在这里。
 - 改进简化 flex row layout，使其支持 `column-gap`。
 - 改进 dirty rerender 路径：根节点 dirty 检查为 O(1)，dirty 清理跳过干净分支，
   同值 `textContent` 不触发 invalidation，Win32 壳在 clean input callback 后不再重建管线。
+- 改进 core 文本 fallback，使测量和绘制按 UTF-8 码点处理，而不是把每个非 ASCII 字节当成独立 glyph。
+- 改进文本换行启发式，单个不可断符号即使测量宽度略超小控件，也不会被当成多行文本。
+- 改进 grid layout：auto-width grid item 会按分配到的 track 宽度布局内部内容，使按钮文字在 stretch 后仍居中。
+- grid placement 现在保留显式 item height 和 margin。
+- 更新伪浏览器和 Win32 browser 壳，使用 body/html 背景作为 canvas clear color，不再总是白底清空。
+- 将 watch calculator 示例改为使用受支持的 grid/gap 子集，不再依赖 inline-block whitespace。
 - 更新 scripting 和路线图文档，将 M7 script loading 标为可用，并把下一项主要工作转向
   host presentation 和 dirty rectangles。
+- 修复带空格的 child combinator selector 解析，例如 `.list > li` 不再错误匹配更深层后代。
+- 修复表单控件状态变化未标记 DOM dirty 的问题，确保 Win32 壳中输入、select、range 等交互后会重绘。
+- 改进交互控件键盘行为：`datalist` 输入支持 Tab/Enter 选择第一个匹配候选，
+  `select` 支持上下方向键跨 `optgroup` 切换 option。
+- 为 Win32 验证壳添加 `<a href="#id">` hash anchor 滚动。
+- 更新 `wearweb_pseudo_browser`，让它通过 `HostFrameSink` 提交帧，同时保留 BMP/PPM 验收输出。
+- 更新 Win32 browser shell，使其在非结构性 DOM 变化后复用 framebuffer，并只重绘计算出的
+  dirty rectangles。
+- 添加嵌入式 framebuffer 后端文档，并更新 host/roadmap 文档，将平台文本和可穿戴导航列为下一优先级。
+- 实现 `hidden` 渲染语义和 disabled 表单控件行为，覆盖 pointer/text/control activation 路径。
 
 ### 说明
 
 - `wearweb_pseudo_browser` 在没有注入平台 `TextPainter` 时仍使用极小内置 bitmap
   字体，因此 BMP smoke-test 输出中的非 ASCII 文本会显示为 fallback glyph。Win32 browser
-  shell 使用 GDI 文本绘制，可用于可读的 UTF-8/中文验证。
+  shell 使用 GDI 文本测量和绘制，可用于可读的 UTF-8/中文验证。
 - 示例/Win32 helper 会相对于命令行传入的 CSS 路径解析本地 linked stylesheet。缺失的外链文件会被保守忽略，
   符合当前引擎的合理降级策略。
 - `@container` 和 `object-fit` 仍延后。Container query 需要有界的 style/layout

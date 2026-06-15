@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/geometry.h"
+#include "core/host.h"
 #include "core/layer_tree.h"
 
 #include <cstddef>
@@ -29,6 +30,9 @@ using TextPaintCallback = bool (*)(FrameBuffer& target,
                                    Color color,
                                    const std::string& text,
                                    int font_size,
+                                   int font_weight,
+                                   TextCommandAlign align,
+                                   bool single_line,
                                    void* context);
 
 struct TextPainter {
@@ -52,6 +56,12 @@ public:
     explicit SoftwareCompositor(TextPainter text_painter = {});
 
     FrameBuffer render(const LayerNode& root, int viewport_width, int viewport_height, Color background) const;
+    void render_into(const LayerNode& root, FrameBuffer& target, Color background) const;
+    void render_into(const LayerNode& root,
+                     FrameBuffer& target,
+                     Color background,
+                     const Rect* dirty_rects,
+                     std::size_t dirty_rect_count) const;
 
 private:
     SoftwareRasterizer rasterizer_;
@@ -63,5 +73,10 @@ void write_ppm(const FrameBuffer& frame_buffer, const std::string& path);
 void write_bmp(const FrameBuffer& frame_buffer, const std::string& path);
 void write_image(const FrameBuffer& frame_buffer, const std::string& path);
 std::size_t count_non_background_pixels(const FrameBuffer& frame_buffer, Color background);
+HostFrameBufferView frame_buffer_view(const FrameBuffer& frame_buffer);
+bool present_frame(const FrameBuffer& frame_buffer,
+                   const HostFrameSink& frame_sink,
+                   const Rect* dirty_rects = nullptr,
+                   std::size_t dirty_rect_count = 0);
 
 } // namespace wearweb

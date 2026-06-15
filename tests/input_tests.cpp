@@ -113,7 +113,11 @@ void pointer_hover_down_up_and_click() {
     std::vector<std::string> events;
     one->add_event_listener("mouseover", [&](Event&) { events.push_back("over"); });
     one->add_event_listener("mousemove", [&](Event&) { events.push_back("move"); });
+    one->add_event_listener("pointerdown", [&](Event&) { events.push_back("pointerdown"); });
+    one->add_event_listener("touchstart", [&](Event&) { events.push_back("touchstart"); });
     one->add_event_listener("mousedown", [&](Event&) { events.push_back("down"); });
+    one->add_event_listener("pointerup", [&](Event&) { events.push_back("pointerup"); });
+    one->add_event_listener("touchend", [&](Event&) { events.push_back("touchend"); });
     one->add_event_listener("mouseup", [&](Event&) { events.push_back("up"); });
     one->add_event_listener("click", [&](Event&) { events.push_back("click"); });
 
@@ -133,12 +137,16 @@ void pointer_hover_down_up_and_click() {
     check(input.pointer_up(pointer) == one, "up hits first button");
     check(input.active_node() == nullptr, "active state cleared");
 
-    check(events.size() == 5, "all pointer events fired");
+    check(events.size() == 9, "all pointer events fired");
     check(events[0] == "over", "mouseover first");
     check(events[1] == "move", "mousemove second");
-    check(events[2] == "down", "mousedown third");
-    check(events[3] == "up", "mouseup fourth");
-    check(events[4] == "click", "click synthesized");
+    check(events[2] == "pointerdown", "pointerdown before mousedown");
+    check(events[3] == "touchstart", "touchstart before mousedown");
+    check(events[4] == "down", "mousedown after pointer aliases");
+    check(events[5] == "pointerup", "pointerup before mouseup");
+    check(events[6] == "touchend", "touchend before mouseup");
+    check(events[7] == "up", "mouseup after pointer aliases");
+    check(events[8] == "click", "click synthesized");
 }
 
 void click_requires_same_active_target() {
@@ -215,11 +223,50 @@ void text_input_updates_focused_control_value() {
 
     check(input.text_input("B"), "text input accepted");
     check(form_control_display_text(*input_node) == "AB", "text input value updated");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
+          "text input marks document dirty for rerender");
+    clear_dirty_flags(*pipeline.document);
     KeyInput key;
     key.code = KeyCode::Backspace;
     check(input.key_down(key), "backspace accepted");
     check(form_control_display_text(*input_node) == "A", "backspace updates value");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
+          "backspace marks document dirty for rerender");
     check(input_events == 2, "text input events dispatched");
+}
+
+void datalist_completion_updates_text_control() {
+    auto pipeline = build_form_pipeline(
+        "<body><input id='search' list='suggest'><datalist id='suggest'>"
+        "<option value='HTML5 semantic'></option><option value='CSS Grid'></option>"
+        "</datalist></body>",
+        "input { width: 120px; height: 24px; }");
+    Node* input_node = find_by_id(*pipeline.document, "search");
+    const LayoutBox* input_box = find_box_by_id(*pipeline.layout_tree, "search");
+    check(input_node != nullptr && input_box != nullptr, "datalist input exists");
+
+    int changes = 0;
+    input_node->add_event_listener("change", [&](Event&) { ++changes; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = input_box->rect.x + 2;
+    pointer.y = input_box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+    check(input.text_input("cs"), "datalist prefix typed");
+    clear_dirty_flags(*pipeline.document);
+
+    KeyInput key;
+    key.code = KeyCode::Tab;
+    check(input.key_down(key), "tab completes from datalist");
+    check(form_control_display_text(*input_node) == "CSS Grid", "datalist completion selects matching option");
+    check(changes == 1, "datalist completion dispatches change");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
+          "datalist completion marks document dirty");
 }
 
 void checkbox_click_toggles_checked_state() {
@@ -287,6 +334,100 @@ void select_click_cycles_selected_option() {
     check(form_control_display_text(*select) == "Two", "select cycles selected option");
 }
 
+void select_arrow_keys_work_through_optgroups() {
+    auto pipeline = build_form_pipeline(
+        "<body><select id='choice'><optgroup label='A'><option>One</option><option>Two</option></optgroup>"
+        "<optgroup label='B'><option>Three</option></optgroup></select></body>");
+    Node* select = find_by_id(*pipeline.document, "choice");
+    const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "choice");
+    check(select != nullptr && box != nullptr, "optgroup select exists");
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = box->rect.x + 2;
+    pointer.y = box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+    clear_dirty_flags(*pipeline.document);
+
+    KeyInput key;
+    key.code = KeyCode::ArrowDown;
+    check(input.key_down(key), "arrow down selects next option");
+    check(form_control_display_text(*select) == "Three", "select arrow down crosses optgroup");
+    key.code = KeyCode::ArrowUp;
+    check(input.key_down(key), "arrow up selects previous option");
+    check(form_control_display_text(*select) == "Two", "select arrow up crosses optgroup");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyLayout) != 0U,
+          "select keyboard change marks document dirty");
+}
+
+void disabled_control_ignores_pointer_and_text_input() {
+    auto pipeline = build_form_pipeline("<body><input id='name' disabled value='A'><button id='go' disabled>Go</button></body>",
+                                        "input, button { display: block; width: 120px; height: 24px; }");
+    Node* input_node = find_by_id(*pipeline.document, "name");
+    Node* button = find_by_id(*pipeline.document, "go");
+    const LayoutBox* input_box = find_box_by_id(*pipeline.layout_tree, "name");
+    const LayoutBox* button_box = find_box_by_id(*pipeline.layout_tree, "go");
+    check(input_node != nullptr && button != nullptr && input_box != nullptr && button_box != nullptr,
+          "disabled controls exist");
+
+    int clicks = 0;
+    int input_events = 0;
+    button->add_event_listener("click", [&](Event&) { ++clicks; });
+    input_node->add_event_listener("input", [&](Event&) { ++input_events; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    pointer.x = button_box->rect.x + 2;
+    pointer.y = button_box->rect.y + 2;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+    check(clicks == 0, "disabled button ignores click");
+
+    input.set_focused_node(input_node);
+    check(!input.text_input("B"), "disabled text input rejects text");
+    check(form_control_display_text(*input_node) == "A", "disabled input value unchanged");
+    check(input_events == 0, "disabled input dispatches no input event");
+}
+
+void focus_navigation_skips_disabled_and_activates() {
+    auto pipeline = build_form_pipeline(
+        "<body><button id='first'>First</button><button id='off' disabled>Off</button>"
+        "<input id='agree' type='checkbox'><select id='choice'><option>One</option><option>Two</option></select></body>",
+        "button, input, select { display: block; width: 120px; height: 24px; }");
+    Node* first = find_by_id(*pipeline.document, "first");
+    Node* disabled = find_by_id(*pipeline.document, "off");
+    Node* checkbox = find_by_id(*pipeline.document, "agree");
+    Node* select = find_by_id(*pipeline.document, "choice");
+    check(first != nullptr && disabled != nullptr && checkbox != nullptr && select != nullptr,
+          "focus navigation fixture exists");
+
+    int first_clicks = 0;
+    int checkbox_clicks = 0;
+    first->add_event_listener("click", [&](Event&) { ++first_clicks; });
+    checkbox->add_event_listener("click", [&](Event&) { ++checkbox_clicks; });
+
+    InputController input(*pipeline.layer_tree);
+    check(input.focus_next() == first, "focus starts at first control");
+    check(input.activate_focused(), "hardware activate clicks focused button");
+    check(first_clicks == 1, "focused button receives click");
+    check(input.focus_next() == checkbox, "focus skips disabled control");
+    check(input.activate_focused(), "hardware activate toggles checkbox");
+    check(ensure_form_control_state(*checkbox).checked, "focused checkbox toggled");
+    check(checkbox_clicks == 1, "focused checkbox receives click");
+    check(input.focus_next() == select, "focus advances to select");
+    check(input.activate_focused(), "hardware activate cycles select");
+    check(form_control_display_text(*select) == "Two", "focused select cycles value");
+    check(input.focus_next() == first, "focus wraps forward");
+    check(input.focus_previous() == select, "focus wraps backward");
+}
+
 } // namespace
 
 int main() {
@@ -298,6 +439,10 @@ int main() {
         checkbox_click_toggles_checked_state();
         range_drag_updates_value();
         select_click_cycles_selected_option();
+        datalist_completion_updates_text_control();
+        select_arrow_keys_work_through_optgroups();
+        disabled_control_ignores_pointer_and_text_input();
+        focus_navigation_skips_disabled_and_activates();
     } catch (const std::exception& error) {
         std::cerr << "input test failed: " << error.what() << '\n';
         return 1;

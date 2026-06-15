@@ -306,6 +306,74 @@ void physical_edge_longhands_apply_per_side() {
     check(style.border_color.r == 0x11, "border shorthand color applies");
 }
 
+void font_weight_list_style_and_generated_counter_apply() {
+    auto list = make_element("ol");
+    list->attributes["class"] = "custom-list";
+    auto item = make_element("li");
+    Node& item_node = list->append_child(std::move(item));
+
+    StyleResolver resolver(parse(
+        ".custom-list { list-style: none; }"
+        ".custom-list > li { font-weight: 500; }"
+        ".custom-list > li::before { content: counter(list-num) \".\"; color: #2b6cb0; font-weight: 600; left: 0; }"));
+
+    const Style list_style = resolver.resolve(*list);
+    const Style item_style = resolver.resolve(item_node);
+    check(list_style.list_style_type == ListStyleType::None, "list-style none parsed");
+    check(item_style.font_weight == 500, "font-weight numeric parsed");
+    check(item_style.before_content_kind == GeneratedContentKind::Counter, "counter before content parsed");
+    check(item_style.before_color.b == 0xb0, "before color parsed");
+    check(item_style.before_font_weight == 600, "before font-weight parsed");
+}
+
+void fixed_two_column_grid_template_applies() {
+    auto list = make_element("dl");
+    StyleResolver resolver(parse("dl { display: grid; grid-template-columns: 120px 1fr; gap: .8rem; }"));
+
+    const Style style = resolver.resolve(*list);
+    check(style.display == Display::Grid, "dl grid display parsed");
+    check(style.grid_template_column_count == 2, "fixed grid column count parsed");
+    check(style.grid_template_column_widths[0] == 120, "fixed grid first column parsed");
+    check(style.grid_template_column_widths[1] == 0, "fr grid column stored as flexible");
+    check(style.column_gap == 13 && style.row_gap == 13, "fractional rem gap parsed for fixed grid");
+}
+
+void repeated_fixed_grid_template_applies() {
+    auto keys = make_element("section");
+    keys->attributes["class"] = "keys";
+    StyleResolver resolver(parse(".keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }"));
+
+    const Style style = resolver.resolve(*keys);
+    check(style.display == Display::Grid, "repeat grid display parsed");
+    check(style.grid_template_column_count == 4, "repeat grid column count parsed");
+    check(style.grid_template_column_widths[0] == 0 &&
+              style.grid_template_column_widths[3] == 0,
+          "repeat fr columns stored as flexible");
+    check(style.column_gap == 8 && style.row_gap == 8, "repeat grid gap parsed");
+}
+
+void modern_length_functions_and_flex_wrap_apply() {
+    auto hero = make_element("h1");
+    auto panel = make_element("section");
+    auto card = make_element("div");
+    card->attributes["class"] = "card";
+
+    StyleResolver resolver(parse(
+        "h1 { font-size: clamp(2rem, 8vw, 4rem); }"
+        "section { padding: 4rem clamp(1rem, 5vw, 4rem); display: flex; flex-wrap: wrap; }"
+        ".card { width: calc(33% - 0.8rem); max-width: min(320px, 100%); }"));
+
+    const Style hero_style = resolver.resolve(*hero);
+    const Style panel_style = resolver.resolve(*panel);
+    const Style card_style = resolver.resolve(*card);
+
+    check(hero_style.font_size == 32, "clamp font-size parsed with conservative viewport fallback");
+    check(panel_style.padding.top == 64 && panel_style.padding.left == 18, "clamp padding parsed");
+    check(panel_style.display == Display::Flex && panel_style.flex_wrap, "flex-wrap parsed");
+    check(card_style.width > 80 && card_style.width < 130, "calc width parsed with percentage fallback");
+    check(card_style.max_width == 320, "min max-width parsed with percentage fallback");
+}
+
 } // namespace
 
 int main() {
@@ -326,6 +394,10 @@ int main() {
         border_none_removes_default_control_border();
         grid_and_aspect_ratio_properties_apply();
         physical_edge_longhands_apply_per_side();
+        font_weight_list_style_and_generated_counter_apply();
+        fixed_two_column_grid_template_applies();
+        repeated_fixed_grid_template_applies();
+        modern_length_functions_and_flex_wrap_apply();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

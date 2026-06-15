@@ -12,6 +12,9 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     if (!style.font_size_specified) {
         style.font_size = parent_style.font_size;
     }
+    if (!style.font_weight_specified) {
+        style.font_weight = parent_style.font_weight;
+    }
     if (!style.text_align_specified) {
         style.text_align = parent_style.text_align;
     }
@@ -20,6 +23,9 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     }
     if (!style.text_indent_specified) {
         style.text_indent = parent_style.text_indent;
+    }
+    if (!style.list_style_type_specified) {
+        style.list_style_type = parent_style.list_style_type;
     }
     return style;
 }

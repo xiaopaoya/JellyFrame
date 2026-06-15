@@ -3,6 +3,7 @@
 #include "core/dom.h"
 #include "core/geometry.h"
 
+#include <array>
 #include <cstddef>
 #include <string>
 #include <unordered_map>
@@ -39,6 +40,18 @@ enum class AlignItems {
     End,
 };
 
+enum class ListStyleType {
+    None,
+    Disc,
+    Decimal,
+};
+
+enum class GeneratedContentKind {
+    None,
+    Text,
+    Counter,
+};
+
 struct Style {
     Display display = Display::Inline;
     Color color{0, 0, 0, 255};
@@ -60,6 +73,8 @@ struct Style {
     int aspect_ratio_height = 0;
     int font_size = 14;
     bool font_size_specified = false;
+    int font_weight = 400;
+    bool font_weight_specified = false;
     int line_height = -1;
     bool line_height_specified = false;
     int text_indent = 0;
@@ -74,10 +89,25 @@ struct Style {
     bool box_sizing_border_box = false;
     int column_gap = 0;
     int row_gap = 0;
+    bool flex_wrap = false;
     int grid_min_track_width = -1;
+    int grid_template_column_count = 0;
+    std::array<int, 4> grid_template_column_widths{{0, 0, 0, 0}};
     int grid_auto_row_min = 0;
     int grid_column_span = 1;
     int grid_row_span = 1;
+    ListStyleType list_style_type = ListStyleType::None;
+    bool list_style_type_specified = false;
+    GeneratedContentKind before_content_kind = GeneratedContentKind::None;
+    std::string before_content_text;
+    std::string before_counter_name;
+    std::string before_counter_suffix;
+    Color before_color{0, 0, 0, 255};
+    bool before_color_specified = false;
+    int before_font_weight = 400;
+    bool before_font_weight_specified = false;
+    int before_left = 0;
+    bool before_left_specified = false;
     TextAlign text_align = TextAlign::Start;
     bool text_align_specified = false;
     JustifyContent justify_content = JustifyContent::Start;
@@ -120,6 +150,7 @@ enum class CssRuleType {
 struct CssRule {
     CssRuleType type = CssRuleType::Style;
     std::string selector;
+    bool pseudo_before = false;
     std::vector<CssDeclaration> declarations;
     CssSpecificity specificity;
     std::vector<CssSelectorPart> selector_parts;

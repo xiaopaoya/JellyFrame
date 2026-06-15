@@ -88,7 +88,8 @@ void print_command(const DisplayCommand& command, std::size_t index) {
               << " w=" << command.rect.width
               << " h=" << command.rect.height;
     if (!command.text.empty()) {
-        std::cout << " text=\"" << command.text << "\"";
+        std::cout << " font_weight=" << command.font_weight
+                  << " text=\"" << command.text << "\"";
     }
     std::cout << '\n';
 }

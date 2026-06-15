@@ -43,6 +43,9 @@ enum class KeyCode {
     Backspace,
     Enter,
     Space,
+    Tab,
+    ArrowUp,
+    ArrowDown,
 };
 
 struct KeyInput {
@@ -65,6 +68,9 @@ public:
     const Node* wheel(const WheelInput& input);
     bool text_input(const std::string& utf8_text);
     bool key_down(const KeyInput& input);
+    const Node* focus_next();
+    const Node* focus_previous();
+    bool activate_focused();
     void clear_pointer_state();
 
 private:

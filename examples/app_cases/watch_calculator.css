@@ -1,0 +1,101 @@
+body {
+  margin: 0;
+  padding: 8px;
+  background: #000000;
+  color: #ffffff;
+  font-family: system-ui, sans-serif;
+}
+
+.watch-calculator {
+  width: 344px;
+  margin: 0 auto;
+  background: #000000;
+}
+
+.display-row {
+  height: 58px;
+  margin: 0 0 6px;
+  display: grid;
+  grid-template-columns: 1fr 34px;
+  gap: 8px;
+}
+
+.display {
+  display: inline-block;
+  margin: 0;
+  padding: 0 4px 0 0;
+  width: auto;
+  height: 54px;
+  color: #ffffff;
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 54px;
+  text-align: right;
+}
+
+.delete-key {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 0;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 17px;
+  background: #a7a7ad;
+  color: #000000;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 34px;
+  text-align: center;
+}
+
+.keypad {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.key {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  width: auto;
+  height: 50px;
+  border: 0;
+  border-radius: 25px;
+  background: #333436;
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 50px;
+  text-align: center;
+}
+
+.utility {
+  background: #a5a5a8;
+  color: #000000;
+  font-size: 25px;
+  font-weight: 600;
+}
+
+.tip {
+  font-size: 20px;
+}
+
+.operator {
+  background: #ff9f0a;
+  color: #ffffff;
+  font-size: 32px;
+}
+
+.operator.active {
+  background: #ffffff;
+  color: #ff9f0a;
+}
+
+.zero {
+  grid-column: span 2;
+  width: auto;
+  text-align: center;
+}

@@ -1,6 +1,7 @@
 #include "script/jerryscript_runtime.h"
 
 #include "core/form_control.h"
+#include "core/style.h"
 
 #include <jerryscript.h>
 
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include <sstream>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -68,6 +70,7 @@ struct ScriptRuntimeAccess {
     static void clear_timer(JerryScriptRuntime& runtime, std::uint32_t id) {
         runtime.clear_timer(id);
     }
+
 };
 
 namespace {
@@ -202,6 +205,214 @@ Node* find_by_id(Node& node, const std::string& id) {
         }
     }
     return nullptr;
+}
+
+bool has_attribute(const Node& node, const std::string& name) {
+    return node.attributes.find(name) != node.attributes.end();
+}
+
+std::string data_attribute_to_dataset_key(std::string_view attribute_name) {
+    if (attribute_name.rfind("data-", 0) != 0 || attribute_name.size() <= 5) {
+        return {};
+    }
+    std::string key;
+    bool upper_next = false;
+    for (std::size_t index = 5; index < attribute_name.size(); ++index) {
+        const char ch = attribute_name[index];
+        if (ch == '-') {
+            upper_next = true;
+            continue;
+        }
+        if (upper_next && ch >= 'a' && ch <= 'z') {
+            key.push_back(static_cast<char>(ch - 'a' + 'A'));
+        } else {
+            key.push_back(ch);
+        }
+        upper_next = false;
+    }
+    return key;
+}
+
+std::string dataset_key_to_data_attribute(std::string_view key) {
+    std::string attribute = "data-";
+    for (char ch : key) {
+        if (ch >= 'A' && ch <= 'Z') {
+            attribute.push_back('-');
+            attribute.push_back(static_cast<char>(ch - 'A' + 'a'));
+        } else {
+            attribute.push_back(ch);
+        }
+    }
+    return attribute;
+}
+
+std::string css_property_name_from_js(std::string_view key) {
+    std::string property;
+    for (char ch : key) {
+        if (ch >= 'A' && ch <= 'Z') {
+            property.push_back('-');
+            property.push_back(static_cast<char>(ch - 'A' + 'a'));
+        } else {
+            property.push_back(ch);
+        }
+    }
+    return property;
+}
+
+std::vector<CssDeclaration> inline_declarations_for(const Node& node) {
+    std::vector<CssDeclaration> declarations;
+    const std::string& source = node.attribute("style");
+    std::size_t index = 0;
+    while (index < source.size()) {
+        const std::size_t colon = source.find(':', index);
+        if (colon == std::string::npos) {
+            break;
+        }
+        const std::size_t end = source.find(';', colon + 1);
+        const std::size_t value_end = end == std::string::npos ? source.size() : end;
+        CssDeclaration declaration;
+        declaration.property = ascii_lowercase(source.substr(index, colon - index));
+        declaration.property.erase(declaration.property.begin(),
+                                   std::find_if(declaration.property.begin(), declaration.property.end(),
+                                                [](unsigned char ch) { return std::isspace(ch) == 0; }));
+        declaration.property.erase(std::find_if(declaration.property.rbegin(), declaration.property.rend(),
+                                                [](unsigned char ch) { return std::isspace(ch) == 0; }).base(),
+                                   declaration.property.end());
+        declaration.value = source.substr(colon + 1, value_end - colon - 1);
+        declaration.value.erase(declaration.value.begin(),
+                                std::find_if(declaration.value.begin(), declaration.value.end(),
+                                             [](unsigned char ch) { return std::isspace(ch) == 0; }));
+        declaration.value.erase(std::find_if(declaration.value.rbegin(), declaration.value.rend(),
+                                             [](unsigned char ch) { return std::isspace(ch) == 0; }).base(),
+                                declaration.value.end());
+        if (!declaration.property.empty() && !declaration.value.empty()) {
+            declarations.push_back(std::move(declaration));
+        }
+        if (end == std::string::npos) {
+            break;
+        }
+        index = end + 1;
+    }
+    return declarations;
+}
+
+std::string inline_style_property(const Node& node, const std::string& property) {
+    std::string output;
+    for (const CssDeclaration& declaration : inline_declarations_for(node)) {
+        if (declaration.property == property) {
+            output = declaration.value;
+        }
+    }
+    return output;
+}
+
+void set_inline_style_property(Node& node, const std::string& property, const std::string& value) {
+    std::vector<CssDeclaration> declarations = inline_declarations_for(node);
+    bool updated = false;
+    for (CssDeclaration& declaration : declarations) {
+        if (declaration.property == property) {
+            declaration.value = value;
+            updated = true;
+        }
+    }
+    if (!updated) {
+        declarations.push_back(CssDeclaration{property, value, false});
+    }
+
+    std::string style;
+    for (const CssDeclaration& declaration : declarations) {
+        if (declaration.property.empty() || declaration.value.empty()) {
+            continue;
+        }
+        if (!style.empty()) {
+            style += ' ';
+        }
+        style += declaration.property;
+        style += ": ";
+        style += declaration.value;
+        style += ';';
+    }
+    node.set_attribute("style", std::move(style));
+}
+
+bool simple_selector_matches(const Node& node, std::string_view selector) {
+    if (node.type != NodeType::Element) {
+        return false;
+    }
+    std::string value(selector);
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch) {
+        return std::isspace(ch) == 0;
+    }));
+    value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) {
+        return std::isspace(ch) == 0;
+    }).base(), value.end());
+    if (value.empty() || value.find(' ') != std::string::npos || value.find('>') != std::string::npos) {
+        return false;
+    }
+
+    std::size_t index = 0;
+    if (value[index] != '.' && value[index] != '#' && value[index] != '[') {
+        const std::size_t begin = index;
+        while (index < value.size() &&
+               (std::isalnum(static_cast<unsigned char>(value[index])) != 0 ||
+                value[index] == '-' || value[index] == '_')) {
+            ++index;
+        }
+        if (node.tag_name != value.substr(begin, index - begin)) {
+            return false;
+        }
+    }
+
+    while (index < value.size()) {
+        if (value[index] == '.') {
+            const std::size_t begin = ++index;
+            while (index < value.size() &&
+                   (std::isalnum(static_cast<unsigned char>(value[index])) != 0 ||
+                    value[index] == '-' || value[index] == '_')) {
+                ++index;
+            }
+            if (!node.has_class(value.substr(begin, index - begin))) {
+                return false;
+            }
+        } else if (value[index] == '#') {
+            const std::size_t begin = ++index;
+            while (index < value.size() &&
+                   (std::isalnum(static_cast<unsigned char>(value[index])) != 0 ||
+                    value[index] == '-' || value[index] == '_')) {
+                ++index;
+            }
+            if (node.attribute("id") != value.substr(begin, index - begin)) {
+                return false;
+            }
+        } else if (value[index] == '[') {
+            const std::size_t close = value.find(']', index + 1);
+            if (close == std::string::npos) {
+                return false;
+            }
+            const std::string content = value.substr(index + 1, close - index - 1);
+            const std::size_t equals = content.find('=');
+            if (equals == std::string::npos) {
+                if (!has_attribute(node, ascii_lowercase(content))) {
+                    return false;
+                }
+            } else {
+                const std::string name = ascii_lowercase(content.substr(0, equals));
+                std::string expected = content.substr(equals + 1);
+                if (expected.size() >= 2 &&
+                    ((expected.front() == '"' && expected.back() == '"') ||
+                     (expected.front() == '\'' && expected.back() == '\''))) {
+                    expected = expected.substr(1, expected.size() - 2);
+                }
+                if (node.attribute(name) != expected) {
+                    return false;
+                }
+            }
+            index = close + 1;
+        } else {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool is_ancestor_of(const Node& possible_ancestor, const Node& node) {
@@ -401,6 +612,41 @@ jerry_value_t node_get_text_content(const jerry_call_info_t* call_info_p,
     return jerry_string_sz(node->text_content().c_str());
 }
 
+jerry_value_t node_get_parent_element(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t[],
+                                      const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->parent == nullptr ||
+        node->parent->type != NodeType::Element || node->parent->tag_name == "document") {
+        return jerry_null();
+    }
+    return make_node_wrapper(*runtime, *node->parent, false);
+}
+
+jerry_value_t node_get_children(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr) {
+        return jerry_array(0);
+    }
+    JerryValue array(jerry_array(0));
+    std::uint32_t index = 0;
+    for (const auto& child : node->children) {
+        if (child->type != NodeType::Element) {
+            continue;
+        }
+        JerryValue child_object(make_node_wrapper(*runtime, *child, false));
+        JerryValue result(jerry_object_set_index(array.get(), index, child_object.get()));
+        (void) result;
+        ++index;
+    }
+    set_number_property(array.get(), "length", index);
+    return array.release();
+}
+
 jerry_value_t node_set_text_content(const jerry_call_info_t* call_info_p,
                                     const jerry_value_t args_p[],
                                     const jerry_length_t args_count) {
@@ -409,6 +655,54 @@ jerry_value_t node_set_text_content(const jerry_call_info_t* call_info_p,
         return throw_type_error("textContent setter called on non-node object");
     }
     node->set_text_content(args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    return jerry_undefined();
+}
+
+jerry_value_t node_ignore_setter(const jerry_call_info_t*,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_hidden(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t[],
+                              const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && has_attribute(*node, "hidden"));
+}
+
+jerry_value_t node_set_hidden(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t args_p[],
+                              const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr) {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("hidden", "");
+        } else {
+            node->remove_attribute("hidden");
+        }
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_disabled(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && has_attribute(*node, "disabled"));
+}
+
+jerry_value_t node_set_disabled(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr) {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("disabled", "");
+        } else {
+            node->remove_attribute("disabled");
+        }
+    }
     return jerry_undefined();
 }
 
@@ -500,6 +794,15 @@ jerry_value_t node_add_event_listener(const jerry_call_info_t* call_info_p,
 jerry_value_t node_remove_event_listener(const jerry_call_info_t* call_info_p,
                                          const jerry_value_t args_p[],
                                          const jerry_length_t args_count);
+jerry_value_t node_matches(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count);
+jerry_value_t node_closest(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count);
+jerry_value_t element_remove_attribute(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count);
 
 void set_property(jerry_value_t object, const char* name, jerry_value_t value) {
     JerryValue result(jerry_object_set_sz(object, name, value));
@@ -544,12 +847,110 @@ void define_accessor(jerry_value_t object,
     jerry_property_descriptor_free(&descriptor);
 }
 
+jerry_value_t make_dataset_object(JerryScriptRuntime& runtime, Node& node) {
+    (void) runtime;
+    JerryValue object(jerry_object());
+    for (const auto& attribute : node.attributes) {
+        const std::string key = data_attribute_to_dataset_key(attribute.first);
+        if (key.empty()) {
+            continue;
+        }
+        set_property(object.get(), key.c_str(), string_to_value(attribute.second).get());
+    }
+    return object.release();
+}
+
+Node* style_node(const jerry_call_info_t* call_info_p) {
+    return native_node(call_info_p->this_value);
+}
+
+jerry_value_t style_get_named(const jerry_call_info_t* call_info_p, const char* property) {
+    Node* node = style_node(call_info_p);
+    if (node == nullptr) {
+        return jerry_undefined();
+    }
+    return jerry_string_sz(inline_style_property(*node, property).c_str());
+}
+
+jerry_value_t style_set_named(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t args_p[],
+                              const jerry_length_t args_count,
+                              const char* property) {
+    Node* node = style_node(call_info_p);
+    if (node != nullptr) {
+        set_inline_style_property(*node, property, args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+#define WEARWEB_STYLE_ACCESSOR(js_name, css_name) \
+    jerry_value_t style_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        return style_get_named(call_info_p, css_name); \
+    } \
+    jerry_value_t style_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        return style_set_named(call_info_p, args_p, args_count, css_name); \
+    }
+
+WEARWEB_STYLE_ACCESSOR(display, "display")
+WEARWEB_STYLE_ACCESSOR(color, "color")
+WEARWEB_STYLE_ACCESSOR(background, "background")
+WEARWEB_STYLE_ACCESSOR(backgroundColor, "background-color")
+WEARWEB_STYLE_ACCESSOR(textAlign, "text-align")
+WEARWEB_STYLE_ACCESSOR(fontWeight, "font-weight")
+WEARWEB_STYLE_ACCESSOR(width, "width")
+WEARWEB_STYLE_ACCESSOR(height, "height")
+
+#undef WEARWEB_STYLE_ACCESSOR
+
+jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
+    (void) runtime;
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
+    define_accessor(object.get(), "display", style_get_display, style_set_display);
+    define_accessor(object.get(), "color", style_get_color, style_set_color);
+    define_accessor(object.get(), "background", style_get_background, style_set_background);
+    define_accessor(object.get(), "backgroundColor", style_get_backgroundColor, style_set_backgroundColor);
+    define_accessor(object.get(), "textAlign", style_get_textAlign, style_set_textAlign);
+    define_accessor(object.get(), "fontWeight", style_get_fontWeight, style_set_fontWeight);
+    define_accessor(object.get(), "width", style_get_width, style_set_width);
+    define_accessor(object.get(), "height", style_get_height, style_set_height);
+    return object.release();
+}
+
+jerry_value_t node_get_dataset(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t[],
+                               const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element) {
+        return jerry_object();
+    }
+    return make_dataset_object(*runtime, *node);
+}
+
+jerry_value_t node_get_style_object(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element) {
+        return jerry_object();
+    }
+    return make_style_object(*runtime, *node);
+}
+
 jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool document_methods) {
     JerryValue object(jerry_object());
     jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
 
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
+    define_accessor(object.get(), "parentElement", node_get_parent_element, node_ignore_setter);
+    define_accessor(object.get(), "children", node_get_children, node_ignore_setter);
+    define_accessor(object.get(), "dataset", node_get_dataset, node_ignore_setter);
+    define_accessor(object.get(), "style", node_get_style_object, node_ignore_setter);
+    define_accessor(object.get(), "hidden", node_get_hidden, node_set_hidden);
+    define_accessor(object.get(), "disabled", node_get_disabled, node_set_disabled);
     if (is_form_control(node)) {
         define_accessor(object.get(), "value", node_get_value, node_set_value);
         define_accessor(object.get(), "checked", node_get_checked, node_set_checked);
@@ -559,8 +960,11 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     set_method(object.get(), "removeChild", node_remove_child);
     set_method(object.get(), "setAttribute", element_set_attribute);
     set_method(object.get(), "getAttribute", element_get_attribute);
+    set_method(object.get(), "removeAttribute", element_remove_attribute);
     set_method(object.get(), "addEventListener", node_add_event_listener);
     set_method(object.get(), "removeEventListener", node_remove_event_listener);
+    set_method(object.get(), "matches", node_matches);
+    set_method(object.get(), "closest", node_closest);
 
     if (node.type == NodeType::Element) {
         set_property(object.get(), "tagName", string_to_value(node.tag_name).get());
@@ -664,6 +1068,44 @@ jerry_value_t element_get_attribute(const jerry_call_info_t* call_info_p,
         return jerry_null();
     }
     return jerry_string_sz(it->second.c_str());
+}
+
+jerry_value_t element_remove_attribute(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
+        return throw_type_error("removeAttribute requires an element and attribute name");
+    }
+    node->remove_attribute(ascii_lowercase(value_to_string(args_p[0])));
+    return jerry_undefined();
+}
+
+jerry_value_t node_matches(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || args_count < 1) {
+        return jerry_boolean(false);
+    }
+    return jerry_boolean(simple_selector_matches(*node, value_to_string(args_p[0])));
+}
+
+jerry_value_t node_closest(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || args_count < 1) {
+        return jerry_null();
+    }
+    const std::string selector = value_to_string(args_p[0]);
+    for (Node* current = node; current != nullptr; current = current->parent) {
+        if (simple_selector_matches(*current, selector)) {
+            return make_node_wrapper(*runtime, *current, false);
+        }
+    }
+    return jerry_null();
 }
 
 jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,

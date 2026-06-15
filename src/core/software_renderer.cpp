@@ -198,36 +198,75 @@ std::array<std::uint8_t, 7> glyph_rows(char raw_ch) {
     }
 }
 
+char fallback_glyph_for_codepoint(const std::string& text, std::size_t& index) {
+    const unsigned char lead = static_cast<unsigned char>(text[index]);
+    std::size_t width = 1;
+    char glyph = static_cast<char>(lead);
+    if (lead >= 0x80U) {
+        glyph = '?';
+        if ((lead & 0xe0U) == 0xc0U) {
+            width = 2;
+        } else if ((lead & 0xf0U) == 0xe0U) {
+            width = 3;
+        } else if ((lead & 0xf8U) == 0xf0U) {
+            width = 4;
+        }
+    }
+    index += std::min(width, text.size() - index);
+    return glyph;
+}
+
 void draw_text(FrameBuffer& target,
                Rect rect,
                Color color,
                const std::string& text,
                int font_size,
+               int font_weight,
+               TextCommandAlign align,
+               bool single_line,
                TextPainter text_painter) {
+    (void)single_line;
     if (color.a == 0 || empty_rect(rect)) {
         return;
     }
     if (text_painter.paint != nullptr &&
-        text_painter.paint(target, rect, color, text, font_size, text_painter.context)) {
+        text_painter.paint(target, rect, color, text, font_size, font_weight, align, single_line, text_painter.context)) {
         return;
     }
     const int scale = font_size >= 22 ? 2 : 1;
     const int glyph_width = 5 * scale;
     const int advance = 6 * scale;
     const int glyph_height = 7 * scale;
+    const int stroke_passes = font_weight >= 600 ? 2 : 1;
+    int glyph_count = 0;
+    for (std::size_t index = 0; index < text.size();) {
+        fallback_glyph_for_codepoint(text, index);
+        ++glyph_count;
+    }
+    const int text_width = std::min(rect.width, glyph_count * advance);
     int cursor_x = rect.x;
+    if (align == TextCommandAlign::Center) {
+        cursor_x += std::max(0, (rect.width - text_width) / 2);
+    } else if (align == TextCommandAlign::End) {
+        cursor_x += std::max(0, rect.width - text_width);
+    }
     const int baseline_y = rect.y + std::max(0, (rect.height - glyph_height) / 2);
-    for (char ch : text) {
+    for (std::size_t index = 0; index < text.size();) {
         if (cursor_x + glyph_width > rect.x + rect.width) {
             break;
         }
+        const char ch = fallback_glyph_for_codepoint(text, index);
         const std::array<std::uint8_t, 7> rows = glyph_rows(ch);
         for (int row = 0; row < 7; ++row) {
             for (int col = 0; col < 5; ++col) {
                 if ((rows[static_cast<std::size_t>(row)] & (1U << (4 - col))) == 0U) {
                     continue;
                 }
-                fill_rect(target, Rect{cursor_x + col * scale, baseline_y + row * scale, scale, scale}, color);
+                for (int pass = 0; pass < stroke_passes; ++pass) {
+                    fill_rect(target,
+                              Rect{cursor_x + col * scale + pass, baseline_y + row * scale, scale, scale},
+                              color);
+                }
             }
         }
         cursor_x += advance;
@@ -321,7 +360,15 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         fill_rect(target, Rect{rect.x + rect.width - 1, rect.y, 1, rect.height}, command.color);
         break;
     case DisplayCommandType::Text:
-        draw_text(target, rect, command.color, command.text, command.font_size, text_painter_);
+        draw_text(target,
+                  rect,
+                  command.color,
+                  command.text,
+                  command.font_size,
+                  command.font_weight,
+                  command.text_align,
+                  command.text_single_line,
+                  text_painter_);
         break;
     }
 }
@@ -334,8 +381,35 @@ FrameBuffer SoftwareCompositor::render(const LayerNode& root,
                                        int viewport_height,
                                        Color background) const {
     FrameBuffer target(viewport_width, viewport_height, background);
-    composite_layer(root, target, Rect{0, 0, viewport_width, viewport_height}, 0, 0);
+    render_into(root, target, background);
     return target;
+}
+
+void SoftwareCompositor::render_into(const LayerNode& root, FrameBuffer& target, Color background) const {
+    render_into(root, target, background, nullptr, 0);
+}
+
+void SoftwareCompositor::render_into(const LayerNode& root,
+                                     FrameBuffer& target,
+                                     Color background,
+                                     const Rect* dirty_rects,
+                                     std::size_t dirty_rect_count) const {
+    if (target.width <= 0 || target.height <= 0) {
+        return;
+    }
+    if (dirty_rects == nullptr || dirty_rect_count == 0) {
+        target.clear(background);
+        composite_layer(root, target, Rect{0, 0, target.width, target.height}, 0, 0);
+        return;
+    }
+    for (std::size_t index = 0; index < dirty_rect_count; ++index) {
+        const Rect dirty = intersect_rect(dirty_rects[index], target_rect(target));
+        if (empty_rect(dirty)) {
+            continue;
+        }
+        fill_rect(target, dirty, background);
+        composite_layer(root, target, dirty, 0, 0);
+    }
 }
 
 void SoftwareCompositor::composite_layer(const LayerNode& layer,
@@ -482,6 +556,26 @@ std::size_t count_non_background_pixels(const FrameBuffer& frame_buffer, Color b
         }
     }
     return count;
+}
+
+HostFrameBufferView frame_buffer_view(const FrameBuffer& frame_buffer) {
+    return HostFrameBufferView{
+        frame_buffer.width,
+        frame_buffer.height,
+        frame_buffer.width,
+        frame_buffer.pixels.empty() ? nullptr : frame_buffer.pixels.data(),
+    };
+}
+
+bool present_frame(const FrameBuffer& frame_buffer,
+                   const HostFrameSink& frame_sink,
+                   const Rect* dirty_rects,
+                   std::size_t dirty_rect_count) {
+    if (frame_sink.present == nullptr) {
+        return false;
+    }
+    const HostFrameBufferView view = frame_buffer_view(frame_buffer);
+    return frame_sink.present(view, dirty_rects, dirty_rect_count, frame_sink.context);
 }
 
 } // namespace wearweb

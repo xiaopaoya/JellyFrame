@@ -90,9 +90,9 @@ source order, then runs selector matching and cascade comparison.
 - Layer tree supports sparse clipping, opacity boundaries, positioned stacking
   hints and conservative compositing boundaries.
 - Display list uses rectangles, gradients and text only.
-- Text output uses a platform-neutral bitmap fallback in core. Desktop shells
-  can inject native text drawing through `TextPainter`; the Win32 browser uses
-  that hook for GDI text.
+- Text layout accepts `TextMeasureProvider`; text output accepts `TextPainter`.
+  Core fallback is tiny, while the Win32 browser uses GDI for both measurement
+  and painting.
 - Event dispatch is platform-neutral and currently uses C++ callbacks, not
   JavaScript functions.
 
@@ -104,4 +104,4 @@ source order, then runs selector matching and cascade comparison.
 4. Reuse render/layout/layer subtrees from existing dirty flags instead of
    rebuilding the full pipeline after every mutation.
 5. Add dirty layer invalidation and rectangle flush.
-6. Add a deployable embedded framebuffer backend.
+6. Add embedded bitmap/LVGL/vendor text backend examples beyond Win32/GDI.

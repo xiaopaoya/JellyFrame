@@ -40,6 +40,7 @@ struct Node : public EventTarget {
     Node* parent = nullptr;
     mutable std::unique_ptr<FormControlState> form_control_state;
     DomDirtyFlags dirty_flags = DomDirtyNone;
+    DomDirtyFlags local_dirty_flags = DomDirtyNone;
 
     Node& append_child(std::unique_ptr<Node> child);
     std::unique_ptr<Node> detach_child(const Node& child);

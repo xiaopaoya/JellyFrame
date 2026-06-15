@@ -277,6 +277,116 @@ void box_shadow_emits_cheap_translucent_fill() {
     check(found_shadows >= 2, "box-shadow emits approximate translucent fills");
 }
 
+void list_markers_and_generated_counters_emit_text() {
+    auto pipeline = build_pipeline(
+        "<body><ol class='custom'><li>Alpha</li><li>Beta<ul><li>Nested</li></ul></li></ol></body>",
+        ".custom { list-style: none; }"
+        ".custom > li { padding-left: 20px; position: relative; }"
+        ".custom > li::before { content: counter(list-num) \".\"; color: #2b6cb0; font-weight: 600; left: 0; }"
+        ".custom ul { list-style: disc; margin-left: 16px; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_counter = false;
+    bool found_disc = false;
+    bool found_bold_text = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::Text) {
+            continue;
+        }
+        if (command.text == "1." && command.color.b == 0xb0) {
+            found_counter = true;
+        }
+        if (command.text == "*") {
+            found_disc = true;
+        }
+        if (command.text == "1." && command.font_weight >= 600) {
+            found_bold_text = true;
+        }
+    }
+    check(found_counter, "generated counter marker is painted");
+    check(found_disc, "nested native disc marker is painted");
+    check(found_bold_text, "marker font-weight reaches display command");
+}
+
+void fixed_grid_places_description_list_in_columns() {
+    auto pipeline = build_pipeline(
+        "<body><dl><dt>Name</dt><dd>WearWeb</dd><dt>Mode</dt><dd>Embedded</dd></dl></body>",
+        "dl { display: grid; grid-template-columns: 80px 1fr; gap: 4px; } dd { margin: 0; }");
+
+    const LayoutBox* term = nullptr;
+    const LayoutBox* description = nullptr;
+    const auto find_text_parent = [&](const LayoutBox& root, const char* text, const LayoutBox*& output, const auto& self) -> void {
+        if (root.node != nullptr && root.node->type == NodeType::Text && root.node->text == text) {
+            output = &root;
+            return;
+        }
+        for (const auto& child : root.children) {
+            self(*child, text, output, self);
+            if (output != nullptr) {
+                return;
+            }
+        }
+    };
+    find_text_parent(*pipeline.layout_tree, "Name", term, find_text_parent);
+    find_text_parent(*pipeline.layout_tree, "WearWeb", description, find_text_parent);
+    check(term != nullptr && description != nullptr, "description list text boxes exist");
+    check(description->rect.x > term->rect.x + 70, "fixed grid places dd in second column");
+}
+
+void unbreakable_symbol_stays_single_line() {
+    auto pipeline = build_pipeline("<body><button class='delete'>&#215;</button></body>",
+                                   ".delete { width: 34px; height: 34px; font-size: 24px;"
+                                   "line-height: 34px; text-align: center; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::Text && command.text == "\xC3\x97") {
+            check(command.rect.height == 34, "single unbreakable symbol does not wrap taller than the control");
+            check(command.text_single_line, "single unbreakable symbol is marked single-line");
+            return;
+        }
+    }
+    check(false, "symbol text command exists");
+}
+
+void grid_item_auto_width_reflows_centered_text() {
+    auto pipeline = build_pipeline(
+        "<body><section class='grid'><button>7</button><button>8</button></section></body>",
+        ".grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; width: 180px; }"
+        "button { width: auto; height: 40px; border: 0; padding: 0; text-align: center; font-size: 24px; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    Rect first_button{};
+    Rect first_text{};
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect && command.rect.width > 70 &&
+            command.color.r == 243 && command.color.g == 244 && command.color.b == 246 &&
+            first_button.width == 0) {
+            first_button = command.rect;
+        }
+        if (command.type == DisplayCommandType::Text && command.text == "7") {
+            first_text = command.rect;
+        }
+    }
+    check(first_button.width > 70, "grid button stretches to track width");
+    check(first_text.x > first_button.x + 20, "grid button text is centered after stretch");
+}
+
+void flex_wrap_places_items_on_new_lines() {
+    auto pipeline = build_pipeline(
+        "<body><section class='row'><div class='item a'>A</div><div class='item b'>B</div><div class='item c'>C</div></section></body>",
+        ".row { display: flex; flex-wrap: wrap; gap: 4px; }"
+        ".item { width: 100px; height: 20px; }");
+
+    const LayoutBox* first = find_layout_by_class(*pipeline.layout_tree, "a");
+    const LayoutBox* third = find_layout_by_class(*pipeline.layout_tree, "c");
+    check(first != nullptr && third != nullptr, "flex wrap fixture boxes exist");
+    check(third->rect.y > first->rect.y, "flex-wrap places overflowing item on next line");
+}
+
 } // namespace
 
 int main() {
@@ -292,6 +402,11 @@ int main() {
         select_does_not_paint_option_list_inline();
         grid_auto_fit_gap_span_and_aspect_ratio_layout();
         box_shadow_emits_cheap_translucent_fill();
+        list_markers_and_generated_counters_emit_text();
+        fixed_grid_places_description_list_in_columns();
+        unbreakable_symbol_stays_single_line();
+        grid_item_auto_width_reflows_centered_text();
+        flex_wrap_places_items_on_new_lines();
     } catch (const std::exception& error) {
         std::cerr << "layer tree test failed: " << error.what() << '\n';
         return 1;

@@ -153,6 +153,7 @@ void mark_dirty(Node& node, DomDirtyFlags flags) {
     if (flags == DomDirtyNone) {
         return;
     }
+    node.local_dirty_flags |= flags;
     for (Node* current = &node; current != nullptr; current = current->parent) {
         current->dirty_flags |= flags;
     }
@@ -167,6 +168,7 @@ void clear_dirty_flags(Node& node) {
         return;
     }
     node.dirty_flags = DomDirtyNone;
+    node.local_dirty_flags = DomDirtyNone;
     for (const auto& child : node.children) {
         if (child->dirty_flags != DomDirtyNone) {
             clear_dirty_flags(*child);

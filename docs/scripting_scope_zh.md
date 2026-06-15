@@ -73,9 +73,28 @@ API 表面。
   命令行 `--script file.js` 仍作为额外桌面验收脚本保留。
 - 网络加载、ES modules、dynamic import 和完整 HTML loading algorithm 继续排除。
 
+## M8 支持范围
+
+- 面向嵌入式 app 的 DOM helpers：
+  - `element.children`
+  - `element.parentElement`
+  - `element.matches(simpleSelector)`
+  - `element.closest(simpleSelector)`
+  - 面向已有 `data-*` 属性的 `element.dataset` 快照 property
+  - 小型 inline-style 属性集合 `element.style`
+  - `element.hidden` 和 `element.disabled`
+- `matches`/`closest` 支持的 selector 刻意保持很小：tag、`.class`、`#id`、
+  `[attr]` 和 `[attr=value]`。Descendant/child combinator 目前仍只在 CSS 中支持。
+- native input dispatch 会把 `pointerdown`、`pointerup`、`touchstart` 和 `touchend`
+  作为 mouse-like event 暴露，便于可穿戴壳实现按下反馈。
+- disabled 表单控件不会接收文本输入、range 移动或 activation。
+- `wearweb_capability_check` 在桌面扫描 HTML/CSS/JS 文件，提前报告 unsupported、
+  degraded 和 supported-subset 用法，避免问题进入 MCU。
+
 ## 暂不支持
 
-- `getElementById` 之外的 DOM selector。
+- 完整 selector API，例如 `querySelector` / `querySelectorAll`。
+- 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
 - 网络、模块、dynamic import、storage、canvas 和 Web Components。
 

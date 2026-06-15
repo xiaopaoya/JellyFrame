@@ -1,4 +1,5 @@
 #include "core/css_parser.h"
+#include "core/bitmap_font.h"
 #include "core/html_parser.h"
 #include "core/layer_tree.h"
 #include "core/layout.h"
@@ -111,6 +112,120 @@ void wrapped_text_layout_keeps_descent_padding() {
     check(text_box->rect.height > 44, "wrapped text keeps descent padding");
 }
 
+bool fixed_text_measure(const std::string&,
+                        int,
+                        int font_weight,
+                        TextMetrics* metrics,
+                        void*) {
+    if (metrics == nullptr || font_weight < 600) {
+        return false;
+    }
+    metrics->width = 32;
+    metrics->line_height = 21;
+    return true;
+}
+
+void layout_uses_injected_text_measurement() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><p><strong>Measured</strong></p></body>");
+    StyleResolver resolver(css_parser.parse("p { width: 120px; margin: 0; } strong { font-weight: 700; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver, TextMeasureProvider{fixed_text_measure, nullptr});
+    auto layout_tree = layout_engine.layout(*render_tree, 160);
+
+    const LayoutBox* text_box = find_first_text_box(*layout_tree);
+    check(text_box != nullptr, "measured text box exists");
+    check(text_box->rect.width == 32, "layout uses injected text width");
+    check(text_box->rect.height == 21, "layout uses injected line height");
+}
+
+void dirty_render_only_updates_requested_clip() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><section class='panel'>A</section></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; } .panel { width: 80px; height: 40px; background: #000000; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 100);
+    LayerTreeBuilder layer_tree_builder;
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+
+    FrameBuffer frame_buffer(100, 60, Color{255, 255, 255, 255});
+    SoftwareCompositor compositor;
+    const Rect dirty{0, 0, 40, 60};
+    compositor.render_into(*layer_tree, frame_buffer, Color{255, 255, 255, 255}, &dirty, 1);
+
+    check(frame_buffer.pixel(10, 10).r == 0, "dirty clip paints inside requested area");
+    check(frame_buffer.pixel(70, 10).r == 255, "dirty clip leaves outside area untouched");
+}
+
+struct FrameSinkProbe {
+    int width = 0;
+    int height = 0;
+    std::size_t dirty_count = 0;
+};
+
+bool probe_present(const HostFrameBufferView& frame,
+                   const Rect*,
+                   std::size_t dirty_count,
+                   void* context) {
+    auto* probe = static_cast<FrameSinkProbe*>(context);
+    probe->width = frame.width;
+    probe->height = frame.height;
+    probe->dirty_count = dirty_count;
+    return frame.pixels != nullptr;
+}
+
+void frame_sink_receives_framebuffer_view_and_dirty_rects() {
+    FrameBuffer frame_buffer(8, 6, Color{255, 255, 255, 255});
+    FrameSinkProbe probe;
+    const HostFrameSink sink{probe_present, &probe};
+    const Rect dirty{1, 1, 2, 2};
+
+    check(present_frame(frame_buffer, sink, &dirty, 1), "frame sink present succeeds");
+    check(probe.width == 8 && probe.height == 6, "frame sink receives dimensions");
+    check(probe.dirty_count == 1, "frame sink receives dirty count");
+}
+
+void bitmap_font_backend_measures_and_paints() {
+    static constexpr std::uint8_t rows_a[] = {
+        0b01000000,
+        0b10100000,
+        0b11100000,
+        0b10100000,
+        0b10100000,
+    };
+    static constexpr BitmapFontGlyph glyphs[] = {
+        BitmapFontGlyph{0x41, 3, 5, 4, 1, rows_a},
+    };
+    static constexpr BitmapFont font{glyphs, 1, 6, 4};
+    BitmapFontContext context{&font, 2};
+
+    TextMetrics metrics;
+    check(bitmap_font_measure_callback("AA", 12, 400, &metrics, &context), "bitmap font measure callback succeeds");
+    check(metrics.width == 16 && metrics.line_height == 12, "bitmap font metrics scale advances");
+
+    FrameBuffer frame_buffer(32, 16, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer(TextPainter{bitmap_font_paint_callback, &context});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 32, 16};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "A";
+    command.font_size = 12;
+    command.text_align = TextCommandAlign::Center;
+    command.text_single_line = true;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 32, 16});
+
+    check(count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) > 0,
+          "bitmap font painter writes pixels");
+    check(frame_buffer.pixel(0, 0).r == 255, "centered bitmap glyph leaves left edge empty");
+}
+
 } // namespace
 
 int main() {
@@ -120,6 +235,10 @@ int main() {
         clipping_limits_rasterization();
         compositor_renders_pipeline_non_empty();
         wrapped_text_layout_keeps_descent_padding();
+        layout_uses_injected_text_measurement();
+        dirty_render_only_updates_requested_clip();
+        frame_sink_receives_framebuffer_view_and_dirty_rects();
+        bitmap_font_backend_measures_and_paints();
     } catch (const std::exception& error) {
         std::cerr << "software renderer test failed: " << error.what() << '\n';
         return 1;

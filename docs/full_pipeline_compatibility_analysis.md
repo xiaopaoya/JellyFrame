@@ -129,14 +129,15 @@ Assessment:
 - Flex/grid are still subsets: useful flex rows and responsive grid cards work,
   while full CSS algorithms, subgrid, explicit placement and dense packing are
   deferred.
-- No retained layout or dirty rectangle invalidation.
+- No retained layout yet. Dirty rectangles exist for non-structural DOM changes,
+  but layer/display-command invalidation remains deferred.
 - Rounded fills and cheap shadows exist, but no true shadow blur or advanced
   filter pipeline.
 
 ## Next Functional Priorities
 
-1. Dirty layer invalidation and rectangle repaint.
-2. Host frame sink and deployable embedded framebuffer backend.
-3. Arena allocation and compact DOM/layout object storage.
-4. Text shaping/font fallback strategy for non-Latin production devices.
+1. Dirty layer/display-command invalidation.
+2. Arena allocation and compact DOM/layout object storage.
+3. Text shaping/font fallback strategy for non-Latin production devices.
+4. Concrete board/LVGL/display-driver examples for `embedded_framebuffer`.
 5. Selector/module additions only when embedded apps prove they need them.

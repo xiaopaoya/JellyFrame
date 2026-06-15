@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cctype>
 #include <cstdlib>
 #include <utility>
 
@@ -88,6 +89,56 @@ std::string option_text(const Node& option) {
 std::string option_value(const Node& option) {
     const std::string& value = option.attribute("value");
     return value.empty() ? option_text(option) : value;
+}
+
+const Node* root_of(const Node& node) {
+    const Node* root = &node;
+    while (root->parent != nullptr) {
+        root = root->parent;
+    }
+    return root;
+}
+
+const Node* find_element_by_id(const Node& node, const std::string& id) {
+    if (node.type == NodeType::Element && node.attribute("id") == id) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        const Node* found = find_element_by_id(*child, id);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+bool ascii_starts_with_case_insensitive(const std::string& value, const std::string& prefix) {
+    if (prefix.size() > value.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < prefix.size(); ++index) {
+        if (std::tolower(static_cast<unsigned char>(value[index])) !=
+            std::tolower(static_cast<unsigned char>(prefix[index]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool first_datalist_option_value(const Node& node, const std::string& prefix, std::string& output) {
+    if (node.type == NodeType::Element && node.tag_name == "option") {
+        const std::string value = option_value(node);
+        if (!value.empty() && (prefix.empty() || ascii_starts_with_case_insensitive(value, prefix))) {
+            output = value;
+            return true;
+        }
+    }
+    for (const auto& child : node.children) {
+        if (first_datalist_option_value(*child, prefix, output)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int option_index_by_value(const Node& node, const std::string& value, int& current_index) {
@@ -211,6 +262,10 @@ bool is_form_control(const Node& node) {
     return form_control_kind(node) != FormControlKind::None;
 }
 
+bool is_disabled_form_control(const Node& node) {
+    return is_form_control(node) && has_attribute(node, "disabled");
+}
+
 bool is_text_entry_control(const Node& node) {
     const FormControlKind kind = form_control_kind(node);
     return kind == FormControlKind::Text || kind == FormControlKind::TextArea ||
@@ -257,17 +312,18 @@ std::string form_control_display_text(const Node& node) {
 }
 
 bool append_text_to_control(Node& node, std::string_view text) {
-    if (!is_text_entry_control(node) || text.empty()) {
+    if (is_disabled_form_control(node) || !is_text_entry_control(node) || text.empty()) {
         return false;
     }
     FormControlState& state = ensure_form_control_state(node);
     state.value.append(text.data(), text.size());
     state.dirty = true;
+    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
     return true;
 }
 
 bool backspace_control(Node& node) {
-    if (!is_text_entry_control(node)) {
+    if (is_disabled_form_control(node) || !is_text_entry_control(node)) {
         return false;
     }
     FormControlState& state = ensure_form_control_state(node);
@@ -276,19 +332,49 @@ bool backspace_control(Node& node) {
     }
     state.value.pop_back();
     state.dirty = true;
+    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
+    return true;
+}
+
+bool complete_text_control_from_datalist(Node& node) {
+    if (is_disabled_form_control(node) || !is_text_entry_control(node)) {
+        return false;
+    }
+    const std::string& list_id = node.attribute("list");
+    if (list_id.empty()) {
+        return false;
+    }
+    const Node* root = root_of(node);
+    const Node* datalist = find_element_by_id(*root, list_id);
+    if (datalist == nullptr || datalist->tag_name != "datalist") {
+        return false;
+    }
+    FormControlState& state = ensure_form_control_state(node);
+    std::string completed;
+    if (!first_datalist_option_value(*datalist, state.value, completed) || completed == state.value) {
+        return false;
+    }
+    state.value = std::move(completed);
+    state.dirty = true;
+    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
     return true;
 }
 
 bool activate_form_control(Node& node) {
+    if (is_disabled_form_control(node)) {
+        return false;
+    }
     FormControlState& state = ensure_form_control_state(node);
     if (state.kind == FormControlKind::Checkbox) {
         state.checked = !state.checked;
         state.dirty = true;
+        mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
         return true;
     }
     if (state.kind == FormControlKind::Radio) {
         state.checked = true;
         state.dirty = true;
+        mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
         return true;
     }
     if (state.kind == FormControlKind::Select) {
@@ -299,12 +385,16 @@ bool activate_form_control(Node& node) {
         state.selected_index = (state.selected_index + 1) % option_count;
         state.value = form_control_display_text(node);
         state.dirty = true;
+        mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
         return true;
     }
     return false;
 }
 
 bool set_range_value_from_local_x(Node& node, int local_x, int width) {
+    if (is_disabled_form_control(node)) {
+        return false;
+    }
     FormControlState& state = ensure_form_control_state(node);
     if (state.kind != FormControlKind::Range || width <= 0 || state.max <= state.min) {
         return false;
@@ -319,6 +409,7 @@ bool set_range_value_from_local_x(Node& node, int local_x, int width) {
     }
     state.value = next;
     state.dirty = true;
+    mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
     return true;
 }
 
@@ -336,7 +427,7 @@ std::string form_control_value(const Node& node) {
 }
 
 bool set_form_control_value(Node& node, std::string value) {
-    if (!is_form_control(node)) {
+    if (is_disabled_form_control(node) || !is_form_control(node)) {
         return false;
     }
     if (form_control_kind(node) == FormControlKind::Select) {
@@ -365,6 +456,9 @@ bool form_control_checked(const Node& node) {
 }
 
 bool set_form_control_checked(Node& node, bool checked) {
+    if (is_disabled_form_control(node)) {
+        return false;
+    }
     const FormControlKind kind = form_control_kind(node);
     if (kind != FormControlKind::Checkbox && kind != FormControlKind::Radio) {
         return false;
@@ -387,7 +481,7 @@ int form_control_selected_index(const Node& node) {
 }
 
 bool set_form_control_selected_index(Node& node, int selected_index) {
-    if (form_control_kind(node) != FormControlKind::Select) {
+    if (is_disabled_form_control(node) || form_control_kind(node) != FormControlKind::Select) {
         return false;
     }
     const int option_count = count_options(node);
@@ -408,6 +502,19 @@ bool set_form_control_selected_index(Node& node, int selected_index) {
     state.dirty = true;
     mark_dirty(node, DomDirtyAttributes | DomDirtyLayout);
     return true;
+}
+
+bool step_select_control(Node& node, int delta) {
+    if (is_disabled_form_control(node) || form_control_kind(node) != FormControlKind::Select || delta == 0) {
+        return false;
+    }
+    const int option_count = count_options(node);
+    if (option_count <= 0) {
+        return false;
+    }
+    const int current = std::max(0, form_control_selected_index(node));
+    const int next = std::max(0, std::min(option_count - 1, current + delta));
+    return set_form_control_selected_index(node, next);
 }
 
 } // namespace wearweb

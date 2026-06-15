@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <utility>
@@ -85,7 +86,14 @@ void push_border_rects(DisplayList& display_list, Rect rect, const EdgeSizes& bo
     push_fill_rect(display_list, Rect{rect.x + rect.width - border.right, rect.y, border.right, rect.height}, color);
 }
 
-void push_text(DisplayList& display_list, Rect rect, Color color, const std::string& text, int font_size) {
+void push_text(DisplayList& display_list,
+               Rect rect,
+               Color color,
+               const std::string& text,
+               int font_size,
+               int font_weight,
+               TextCommandAlign align,
+               bool single_line) {
     if (rect.width <= 0 || rect.height <= 0 || text.empty() || color.a == 0) {
         return;
     }
@@ -96,7 +104,148 @@ void push_text(DisplayList& display_list, Rect rect, Color color, const std::str
     command.color2 = color;
     command.text = text;
     command.font_size = font_size;
+    command.font_weight = font_weight;
+    command.text_align = align;
+    command.text_single_line = single_line;
     display_list.push_back(std::move(command));
+}
+
+TextCommandAlign text_command_align(TextAlign align) {
+    switch (align) {
+    case TextAlign::Center:
+        return TextCommandAlign::Center;
+    case TextAlign::End:
+        return TextCommandAlign::End;
+    case TextAlign::Start:
+    default:
+        return TextCommandAlign::Start;
+    }
+}
+
+std::uint32_t consume_utf8_codepoint(const std::string& text, std::size_t& index) {
+    const unsigned char lead = static_cast<unsigned char>(text[index]);
+    std::uint32_t codepoint = lead;
+    std::size_t width = 1;
+    if ((lead & 0xe0U) == 0xc0U && index + 1 < text.size()) {
+        width = 2;
+        codepoint = ((lead & 0x1fU) << 6U) |
+            (static_cast<unsigned char>(text[index + 1]) & 0x3fU);
+    } else if ((lead & 0xf0U) == 0xe0U && index + 2 < text.size()) {
+        width = 3;
+        codepoint = ((lead & 0x0fU) << 12U) |
+            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 6U) |
+            (static_cast<unsigned char>(text[index + 2]) & 0x3fU);
+    } else if ((lead & 0xf8U) == 0xf0U && index + 3 < text.size()) {
+        width = 4;
+        codepoint = ((lead & 0x07U) << 18U) |
+            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 12U) |
+            ((static_cast<unsigned char>(text[index + 2]) & 0x3fU) << 6U) |
+            (static_cast<unsigned char>(text[index + 3]) & 0x3fU);
+    }
+    index += std::min(width, text.size() - index);
+    return codepoint;
+}
+
+bool is_cjk_codepoint(std::uint32_t codepoint) {
+    return (codepoint >= 0x3400U && codepoint <= 0x4dbfU) ||
+        (codepoint >= 0x4e00U && codepoint <= 0x9fffU) ||
+        (codepoint >= 0xf900U && codepoint <= 0xfaffU);
+}
+
+bool has_text_wrap_opportunity(const std::string& text) {
+    int cjk_count = 0;
+    for (std::size_t index = 0; index < text.size();) {
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
+        if (codepoint == ' ' || codepoint == '\t' || codepoint == '\n' ||
+            codepoint == '-' || codepoint == '/') {
+            return true;
+        }
+        if (is_cjk_codepoint(codepoint)) {
+            ++cjk_count;
+            if (cjk_count > 1) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int estimate_marker_width(const std::string& text, int font_size) {
+    int units = 0;
+    for (char ch : text) {
+        units += ch == '.' || ch == ' ' ? 4 : 8;
+    }
+    return std::max(font_size, (font_size * units + 7) / 14);
+}
+
+int list_item_ordinal(const Node& node) {
+    if (node.parent == nullptr) {
+        return 1;
+    }
+    int ordinal = 0;
+    for (const auto& sibling : node.parent->children) {
+        if (sibling->type == NodeType::Element && sibling->tag_name == "li") {
+            ++ordinal;
+        }
+        if (sibling.get() == &node) {
+            return std::max(1, ordinal);
+        }
+    }
+    return std::max(1, ordinal);
+}
+
+std::string generated_before_text(const LayoutBox& box) {
+    if (box.style.before_content_kind == GeneratedContentKind::Text) {
+        return box.style.before_content_text;
+    }
+    if (box.style.before_content_kind == GeneratedContentKind::Counter && box.node != nullptr) {
+        return std::to_string(list_item_ordinal(*box.node)) + box.style.before_counter_suffix;
+    }
+    return {};
+}
+
+std::string native_marker_text(const LayoutBox& box) {
+    if (box.node == nullptr || box.node->type != NodeType::Element || box.node->tag_name != "li") {
+        return {};
+    }
+    if (box.style.list_style_type == ListStyleType::Decimal) {
+        return std::to_string(list_item_ordinal(*box.node)) + ".";
+    }
+    if (box.style.list_style_type == ListStyleType::Disc) {
+        return "*";
+    }
+    return {};
+}
+
+void paint_list_marker(const LayoutBox& box, DisplayList& display_list) {
+    if (box.node == nullptr || box.node->type != NodeType::Element || box.node->tag_name != "li") {
+        return;
+    }
+    std::string marker = generated_before_text(box);
+    bool generated = !marker.empty();
+    if (!generated) {
+        marker = native_marker_text(box);
+    }
+    if (marker.empty()) {
+        return;
+    }
+
+    const int font_weight = generated && box.style.before_font_weight_specified
+        ? box.style.before_font_weight
+        : box.style.font_weight;
+    const Color color = generated && box.style.before_color_specified ? box.style.before_color : box.style.color;
+    const int width = estimate_marker_width(marker, box.style.font_size);
+    const int marker_x = generated
+        ? box.rect.x + (box.style.before_left_specified ? box.style.before_left : 0)
+        : box.rect.x - width - 4;
+    push_text(display_list,
+              Rect{marker_x, box.rect.y, width, std::max(box.rect.height, box.style.font_size + 4)},
+              color,
+              marker,
+              box.style.font_size,
+              font_weight,
+              TextCommandAlign::Start,
+              true);
 }
 
 bool parse_float_attribute(const Node& node, const char* name, float& output) {
@@ -342,13 +491,19 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
                   Rect{inner.x + 2, inner.y, std::max(0, inner.width - arrow_width - 4), inner.height},
                   text_color,
                   text,
-                  box.style.font_size);
+                  box.style.font_size,
+                  box.style.font_weight,
+                  TextCommandAlign::Start,
+                  true);
         if (state.kind == FormControlKind::Select) {
             push_text(display_list,
                       Rect{inner.x + std::max(0, inner.width - 12), inner.y, 12, inner.height},
                       Color{15, 23, 42, 255},
                       "v",
-                      box.style.font_size);
+                      box.style.font_size,
+                      box.style.font_weight,
+                      TextCommandAlign::Center,
+                      true);
         }
     }
 }
@@ -366,9 +521,21 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list) {
 
     paint_meter_bar(box, display_list);
     paint_form_control(box, display_list);
+    paint_list_marker(box, display_list);
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
-        push_text(display_list, box.rect, box.style.color, box.node->text, box.style.font_size);
+        const int line_height = box.style.line_height > 0
+            ? box.style.line_height
+            : box.style.font_size + std::max(6, box.style.font_size / 3);
+        const bool single_line = !has_text_wrap_opportunity(box.node->text) || box.rect.height <= line_height;
+        push_text(display_list,
+                  box.rect,
+                  box.style.color,
+                  box.node->text,
+                  box.style.font_size,
+                  box.style.font_weight,
+                  text_command_align(box.style.text_align),
+                  single_line);
     }
 }
 

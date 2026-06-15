@@ -29,6 +29,9 @@ still desktop-convenient rather than MCU-tight.
   traversal for parsing, dirty-flag scans and teardown.
 - Framebuffer memory is linear in viewport size. A 390x640 RGBA buffer is about
   1 MiB before any offscreen layer.
+- Embedded presentation can avoid a second RGBA-sized display buffer by using
+  `embedded_framebuffer` to convert dirty rectangles into a host-owned RGB565,
+  grayscale or monochrome buffer.
 - Offscreen compositing can allocate temporary framebuffers for opacity or
   transformed layers.
 - Text strings are stored as `std::string`; future text shaping or large pages
@@ -43,7 +46,8 @@ still desktop-convenient rather than MCU-tight.
 2. Add optional arena allocation for document-lifetime objects: DOM nodes,
    render objects, layout boxes and layer nodes.
 3. Keep a hard framebuffer policy for embedded targets: one primary framebuffer,
-   optional dirty rectangles and tightly bounded offscreen buffers.
+   optional dirty rectangles, one host-owned converted display buffer when
+   needed and tightly bounded offscreen buffers.
 4. Convert recursive tree walks to iterative walks when a target stack budget is
    known to be small.
 5. Add host-configurable budgets for maximum DOM nodes, CSS rules, display

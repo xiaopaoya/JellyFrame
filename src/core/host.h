@@ -56,4 +56,51 @@ struct HostBudgets {
     std::size_t max_resource_bytes = 512 * 1024;
 };
 
+enum class HostPixelFormat {
+    Unknown,
+    Rgba8888,
+    Bgra8888,
+    Rgb565,
+    Bgr565,
+    Rgb332,
+    Gray8,
+    Mono1,
+};
+
+struct HostDisplayCapabilities {
+    int width = 0;
+    int height = 0;
+    int dpi = 0;
+    HostPixelFormat preferred_pixel_format = HostPixelFormat::Unknown;
+    bool supports_partial_present = true;
+    bool has_full_framebuffer = true;
+    bool has_touch_overlay = false;
+};
+
+struct HostInputCapabilities {
+    bool pointer = false;
+    bool touch = false;
+    bool wheel = false;
+    bool crown = false;
+    bool focus_buttons = false;
+    bool keyboard = false;
+    bool text_input = false;
+};
+
+struct HostMemoryCapabilities {
+    std::size_t total_heap_bytes = 0;
+    std::size_t max_single_allocation_bytes = 0;
+    std::size_t preferred_framebuffer_bytes = 0;
+};
+
+struct HostDeviceCapabilities {
+    HostDisplayCapabilities display;
+    HostInputCapabilities input;
+    HostMemoryCapabilities memory;
+    HostBudgets budgets;
+    bool has_monotonic_clock = true;
+    bool has_filesystem = false;
+    bool has_network = false;
+};
+
 } // namespace wearweb

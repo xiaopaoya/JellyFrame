@@ -33,6 +33,9 @@ small wearable devices.
 - Opaque rectangle fill uses direct row fills in the software rasterizer.
 - Offscreen compositing clips source/destination rectangles before iterating
   pixels.
+- `embedded_framebuffer` converts only clipped dirty rectangles into
+  caller-owned display buffers and does not allocate, retain or flush device
+  memory itself.
 - The responsive grid subset is computed with bounded integer auto-placement,
   clamped spans and compact per-row occupancy bit masks rather than a full
   track-sizing engine.
@@ -65,6 +68,8 @@ small wearable devices.
 - Stream resources into bounded buffers.
 - Defer image decoding until layout has established a visible box.
 - Use dirty rectangles for display flushes.
+- Keep display buffers host-owned and convert through `embedded_framebuffer`
+  when the panel is RGB565, RGB332, grayscale or monochrome.
 
 ## Release Microbenchmark Baseline
 

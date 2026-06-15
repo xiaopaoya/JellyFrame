@@ -3,6 +3,9 @@
 #include "core/dom.h"
 #include "core/form_control.h"
 
+#include <algorithm>
+#include <vector>
+
 namespace wearweb {
 namespace {
 
@@ -19,6 +22,29 @@ void apply_modifiers(MouseEvent& event, const InputModifiers& modifiers) {
 
 Node* mutable_node(const Node* node) {
     return const_cast<Node*>(node);
+}
+
+bool disabled_target(const Node* node) {
+    return node != nullptr && is_disabled_form_control(*node);
+}
+
+bool focusable_node(const Node* node) {
+    if (node == nullptr || node->type != NodeType::Element || disabled_target(node)) {
+        return false;
+    }
+    return node->tag_name == "button" || node->tag_name == "input" ||
+        node->tag_name == "select" || node->tag_name == "textarea" ||
+        (node->tag_name == "a" && !node->attribute("href").empty());
+}
+
+void collect_focusable_nodes(const LayoutBox& box, std::vector<const Node*>& nodes) {
+    if (focusable_node(box.node) &&
+        std::find(nodes.begin(), nodes.end(), box.node) == nodes.end()) {
+        nodes.push_back(box.node);
+    }
+    for (const auto& child : box.children) {
+        collect_focusable_nodes(*child, nodes);
+    }
 }
 
 } // namespace
@@ -45,6 +71,9 @@ void InputController::set_focused_node(const Node* node) {
 const Node* InputController::pointer_move(const PointerInput& input) {
     HitTestResult result = hit(input.x, input.y);
     const Node* target = result ? result.node : nullptr;
+    if (disabled_target(target)) {
+        return target;
+    }
     update_hover(target, input);
     if (active_box_ != nullptr && active_box_->node != nullptr && input.buttons != 0 &&
         form_control_kind(*active_box_->node) == FormControlKind::Range) {
@@ -62,6 +91,11 @@ const Node* InputController::pointer_move(const PointerInput& input) {
 const Node* InputController::pointer_down(const PointerInput& input) {
     HitTestResult result = hit(input.x, input.y);
     const Node* target = result ? result.node : nullptr;
+    if (disabled_target(target)) {
+        active_node_ = nullptr;
+        active_box_ = nullptr;
+        return target;
+    }
     update_hover(target, input);
     active_node_ = target;
     active_box_ = result ? result.box : nullptr;
@@ -74,6 +108,10 @@ const Node* InputController::pointer_down(const PointerInput& input) {
             dispatch_simple_event(active_box_->node, "input");
         }
     }
+    MouseEvent pointer = make_mouse_event("pointerdown", input);
+    dispatch_mouse_event(target, pointer);
+    MouseEvent touch = make_mouse_event("touchstart", input);
+    dispatch_mouse_event(target, touch);
     MouseEvent event = make_mouse_event("mousedown", input);
     dispatch_mouse_event(target, event);
     return target;
@@ -81,7 +119,16 @@ const Node* InputController::pointer_down(const PointerInput& input) {
 
 const Node* InputController::pointer_up(const PointerInput& input) {
     const Node* target = hit_node(input.x, input.y);
+    if (disabled_target(target) || disabled_target(active_node_)) {
+        active_node_ = nullptr;
+        active_box_ = nullptr;
+        return target;
+    }
     update_hover(target, input);
+    MouseEvent pointer = make_mouse_event("pointerup", input);
+    dispatch_mouse_event(target, pointer);
+    MouseEvent touch = make_mouse_event("touchend", input);
+    dispatch_mouse_event(target, touch);
     MouseEvent event = make_mouse_event("mouseup", input);
     dispatch_mouse_event(target, event);
     if (target != nullptr && target == active_node_) {
@@ -131,6 +178,22 @@ bool InputController::key_down(const KeyInput& input) {
         dispatch_simple_event(focused_node_, "input");
         return true;
     }
+    if ((input.code == KeyCode::Enter || input.code == KeyCode::Tab) &&
+        complete_text_control_from_datalist(*mutable_node(focused_node_))) {
+        dispatch_simple_event(focused_node_, "input");
+        dispatch_simple_event(focused_node_, "change");
+        return true;
+    }
+    if (input.code == KeyCode::ArrowDown && step_select_control(*mutable_node(focused_node_), 1)) {
+        dispatch_simple_event(focused_node_, "input");
+        dispatch_simple_event(focused_node_, "change");
+        return true;
+    }
+    if (input.code == KeyCode::ArrowUp && step_select_control(*mutable_node(focused_node_), -1)) {
+        dispatch_simple_event(focused_node_, "input");
+        dispatch_simple_event(focused_node_, "change");
+        return true;
+    }
     if ((input.code == KeyCode::Space || input.code == KeyCode::Enter) &&
         is_form_control(*focused_node_) &&
         activate_form_control(*mutable_node(focused_node_))) {
@@ -139,6 +202,58 @@ bool InputController::key_down(const KeyInput& input) {
         return true;
     }
     return false;
+}
+
+const Node* InputController::focus_next() {
+    if (layer_tree_.box == nullptr) {
+        return nullptr;
+    }
+    std::vector<const Node*> nodes;
+    collect_focusable_nodes(*layer_tree_.box, nodes);
+    if (nodes.empty()) {
+        focused_node_ = nullptr;
+        return nullptr;
+    }
+    auto current = std::find(nodes.begin(), nodes.end(), focused_node_);
+    if (current == nodes.end() || ++current == nodes.end()) {
+        focused_node_ = nodes.front();
+    } else {
+        focused_node_ = *current;
+    }
+    return focused_node_;
+}
+
+const Node* InputController::focus_previous() {
+    if (layer_tree_.box == nullptr) {
+        return nullptr;
+    }
+    std::vector<const Node*> nodes;
+    collect_focusable_nodes(*layer_tree_.box, nodes);
+    if (nodes.empty()) {
+        focused_node_ = nullptr;
+        return nullptr;
+    }
+    auto current = std::find(nodes.begin(), nodes.end(), focused_node_);
+    if (current == nodes.end() || current == nodes.begin()) {
+        focused_node_ = nodes.back();
+    } else {
+        focused_node_ = *(--current);
+    }
+    return focused_node_;
+}
+
+bool InputController::activate_focused() {
+    if (focused_node_ == nullptr || disabled_target(focused_node_) || !focusable_node(focused_node_)) {
+        return false;
+    }
+    if (is_form_control(*focused_node_) && activate_form_control(*mutable_node(focused_node_))) {
+        dispatch_simple_event(focused_node_, "input");
+        dispatch_simple_event(focused_node_, "change");
+    }
+    PointerInput synthetic;
+    MouseEvent click = make_mouse_event("click", synthetic);
+    dispatch_mouse_event(focused_node_, click);
+    return true;
 }
 
 void InputController::clear_pointer_state() {

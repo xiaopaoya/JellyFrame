@@ -88,9 +88,29 @@ embedded app UI without inheriting the full browser API surface.
 - Network loading, ES modules, dynamic import and the full HTML loading
   algorithm remain intentionally out of scope.
 
+## M8 Support
+
+- Embedded-app DOM helpers:
+  - `element.children`
+  - `element.parentElement`
+  - `element.matches(simpleSelector)`
+  - `element.closest(simpleSelector)`
+  - `element.dataset` snapshot properties for existing `data-*` attributes
+  - `element.style` for a small inline-style property set
+  - `element.hidden` and `element.disabled`
+- Supported `matches`/`closest` selectors are intentionally small: tag,
+  `.class`, `#id`, `[attr]` and `[attr=value]`. Descendant/child combinators
+  remain CSS-only for now.
+- Native input dispatch exposes `pointerdown`, `pointerup`, `touchstart` and
+  `touchend` as mouse-like events for press feedback on wearable shells.
+- Disabled form controls do not accept text input, range movement or activation.
+- `wearweb_capability_check` scans HTML/CSS/JS files on desktop and reports
+  unsupported, degraded and supported-subset usage before code reaches an MCU.
+
 ## Not Supported Yet
 
-- DOM selectors beyond `getElementById`.
+- Full selector APIs such as `querySelector` / `querySelectorAll`.
+- Dynamic `dataset` property creation or native mutation through new arbitrary keys.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
 - Networking, modules, dynamic import, storage, canvas and Web Components.

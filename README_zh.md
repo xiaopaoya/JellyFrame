@@ -14,13 +14,18 @@ WearWeb Engine 是一个面向低功耗可穿戴设备的深度裁剪 C++ HTML/C
 - 垂直 block layout，并带有简化 inline flow 与换行
 - 稀疏 layer tree，并可 flatten 为平台无关 display list
 - CPU software rasterizer/compositor，可输出 BMP/PPM 用于验证
+- 平台无关嵌入式 framebuffer adapter，支持 RGBA8888/BGRA8888、RGB565、RGB332、
+  Gray8 和 1-bit 单色 target
 - 核心 hit testing 和类 DOM event dispatch
 - 平台无关 pointer/wheel input controller
 - 轻量平台无关表单控件状态，覆盖 text input、textarea、checkbox、radio、range 和 select
 - 可选 JerryScript runtime shell，用于脚本求值，并保持在 `wearweb_core` 之外
 - 可选 JerryScript DOM/事件/表单桥接，用于小型宿主驱动应用
+- 面向嵌入式 app 的 DOM helpers，例如 `dataset`、`children`、`parentElement`、
+  简单 `matches`/`closest`、小型 `element.style`、`hidden` 和 `disabled`
 - scripting 构建中自动加载 classic document scripts，外部本地脚本由壳层 callback 提供
-- 可选平台文本绘制回调，用于桌面验证
+- 桌面能力验证器，用于扫描不支持或会降级的 HTML/CSS/JS
+- 可选平台文本测量和绘制回调，用于桌面验证
 - Windows-only 交互式浏览器壳，用于观察和测试
 - 控制台 demo
 
@@ -78,12 +83,13 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-M6 脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
+脚本支持会执行 JavaScript，暴露很小的 `window`/`document` bridge，并允许脚本通过
 `getElementById`、`createElement`、`createTextNode`、`appendChild`、`removeChild`、
 attribute 和 `textContent` 修改 native DOM。它还会把 `addEventListener` / `removeEventListener`
 桥接到现有 C++ 事件流，并暴露轻量表单控件属性（`value`、`checked`、`selectedIndex`）。
 宿主泵动 timer 暴露 `setTimeout`、`clearTimeout`、`setInterval` 和 `clearInterval`。
-自动 `<script>` 加载仍未支持。
+scripting 示例壳也可以通过宿主 callback 收集并执行 inline classic `<script>` 和本地外部
+`<script src>` 文件。
 
 通过 CTest 运行回归测试：
 
@@ -113,6 +119,10 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\wearweb_win32_browser.exe examples\script_cases\event_probe.html examples\script_cases\event_probe.css --script examples\script_cases\event_probe.js
 .\build\Debug\wearweb_win32_browser.exe examples\app_cases\calculator.html examples\app_cases\calculator.css --script examples\app_cases\calculator.js
 .\build\Debug\wearweb_win32_browser.exe --capture output.bmp path\to\page.html path\to\style.css 390 640
+.\build\Debug\wearweb_capability_check.exe path\to\page.html path\to\style.css path\to\app.js
+.\build\Debug\wearweb_capability_check.exe --emit-used-chars used_chars.txt path\to\page.html path\to\style.css path\to\app.js
+.\build\Debug\wearweb_font_pack_gen.exe --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+.\build\Debug\wearweb_embedded_host_demo.exe
 .\build\Release\wearweb_microbench.exe 80 1000
 .\build\Debug\wearweb_core_tests.exe
 ```
@@ -129,13 +139,21 @@ ctest --test-dir build -C Debug --output-on-failure
   display-list 计数。
 - `wearweb_pipeline_dump`：输出端到端 DOM/render/layout/layer/display-list
   计数和 display-list 预览。
+- `wearweb_capability_check`：扫描 HTML/CSS/JS 文件，在部署到小目标前报告受支持子集、
+  降级特性和不支持 API。它也可以通过 `--emit-used-chars` 输出页面用到的非 ASCII 字符，
+  并通过 `--font-coverage` 检查 UTF-8 字体覆盖文件。
+- `wearweb_font_pack_gen`：把 BDF bitmap 字体裁剪成可编译进嵌入式 text backend 的 C++
+  `BitmapFont` header。
+- `wearweb_embedded_host_demo`：平台无关 bring-up 示例。它使用静态 HTML/CSS、bitmap
+  text backend、焦点激活和 RGB565 framebuffer sink，不依赖 Win32、文件或硬件 I/O，
+  开发板 port 可以照着它串接最小运行循环。
 - `wearweb_pseudo_browser`：运行当前完整管线并写出 BMP 或 PPM framebuffer
   图像。它是桌面验收工具，不是嵌入式 UI。它的内置 fallback 字体刻意保持极小；需要可读的
   UTF-8/中文文本验证时，请使用 Win32 browser 壳。在启用 scripting 的构建中，
   `--script` 会在绑定解析后的 DOM 后、渲染前执行一个外部 JavaScript 文件，并打印字符串化后的结果或异常。
   `--pump-timers ms` 会在渲染前推进宿主泵动 timer，便于无窗口 smoke test。
 - `wearweb_win32_browser`：仅在 Windows 构建中可用。它打开一个 Win32/GDI
-  交互窗口，使用同一套核心管线渲染，通过平台文本回调注入 GDI 文本绘制，并把鼠标和滚轮输入转发给平台无关
+  交互窗口，使用同一套核心管线渲染，通过平台文本回调注入 GDI 文本测量和绘制，并把鼠标和滚轮输入转发给平台无关
   input controller。它只用于桌面观察；核心仍保持窗口系统和操作系统无关。在 scripting 构建中，
   `--script` 会保持 JerryScript runtime 存活，使 JavaScript event listener 可以响应 native input，
   并在 DOM mutation 后重绘。
@@ -154,6 +172,9 @@ ctest --test-dir build -C Debug --output-on-failure
   契约。依赖某个 HTML/CSS/DOM/script 功能前，优先查这里。
 - `docs/host_abstraction_zh.md`：描述资源、时间、framebuffer 提交、文本和嵌入式 budgets
   的薄宿主边界。
+- `docs/embedded_hal_api_zh.md`：列出开发板 port 需要实现的硬件侧 API，并包含 ESP32-S3
+  映射建议。
+- `docs/text_backend_zh.md`：描述宿主文本测量/绘制契约和当前 fallback 限制。
 - `docs/memory_management_zh.md`：总结当前嵌入式内存行为、剩余风险和下一步 allocator/container 优化。
 
 ## 文档维护

@@ -8,6 +8,29 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added platform-neutral `TextMeasureProvider` so layout can use host text
+  metrics while keeping font APIs outside `wearweb_core`.
+- Added minimal text paint semantics to display commands: horizontal alignment
+  and single-line versus wrapped text.
+- Added Win32/GDI text measurement injection alongside the existing GDI text
+  painter for more faithful UTF-8/Chinese desktop validation.
+- Added bilingual text backend documentation covering measurement/painting
+  contracts and fallback limits.
+- Added font coverage support to `wearweb_capability_check`: it can emit
+  non-ASCII used characters and verify them against a UTF-8 font coverage file.
+- Added button/crown-friendly focus navigation on `InputController`:
+  `focus_next()`, `focus_previous()` and `activate_focused()`.
+- Added bilingual embedded HAL API documentation for board ports, including
+  ESP32-S3 mapping notes.
+- Added a platform-neutral static bitmap font backend with measurement and
+  painting callbacks for generated embedded font packs.
+- Added `wearweb_font_pack_gen`, a desktop BDF subset generator that emits C++
+  `BitmapFont` headers for embedded builds.
+- Added `wearweb_embedded_host_demo`, a platform-neutral static-resource demo
+  that wires HTML/CSS parsing, bitmap text, focus activation and RGB565
+  framebuffer presentation without Win32, files or hardware I/O.
+- Added first host device capability structs for board ports, covering display,
+  input, memory, budgets and optional host services.
 - Added platform-neutral linked stylesheet collection through a callback-based
   `document_style` API. Core code still performs no file or network I/O; example
   tools and the Win32 shell provide local-file loading for validation.
@@ -81,6 +104,35 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   clock, frame sink and budget structs.
 - Added `examples/script_cases/inline_loading_probe.*` for automatic document
   script loading validation.
+- Added `font-weight` parsing/inheritance and display-list propagation, with
+  approximate bold rendering in the core fallback and native weight selection
+  in the Win32/GDI text path.
+- Added lightweight list marker support: `list-style`/`list-style-type`,
+  native-lite `ul`/`ol` markers and a tiny `::before content: counter(...)`
+  path for common custom ordered lists.
+- Added simple fixed grid column templates such as
+  `grid-template-columns: 120px 1fr` for definition lists and settings-style
+  structured data.
+- Added dirty-rectangle framebuffer repaint through
+  `SoftwareCompositor::render_into` and `HostFrameSink` presentation helpers.
+- Added `dirty_region`, the first automatic dirty-rectangle source for direct
+  text, attribute and form-control mutations. Tree mutations remain
+  conservatively full-viewport.
+- Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
+  converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
+  RGB332, Gray8 or 1-bit monochrome display buffers.
+- Added embedded-app JavaScript helpers: `children`, `parentElement`,
+  simple-selector `matches`/`closest`, existing-attribute `dataset` snapshots,
+  a small writable `element.style` object and boolean `hidden`/`disabled`
+  reflection.
+- Added mouse-like `pointerdown`/`pointerup` and `touchstart`/`touchend` event
+  dispatch for wearable press feedback.
+- Added `wearweb_capability_check`, a desktop HTML/CSS/JS scanner for supported
+  subsets, degraded features and unsupported browser APIs.
+- Added conservative modern length function support for `min()`, `max()`,
+  `clamp()` and simple `calc(A +/- B)` when arguments resolve to supported
+  lengths.
+- Added simplified `flex-wrap` row wrapping for common card/box layouts.
 - Added regression coverage for linked stylesheet merging, semantic fallback
   styles, inline highlight painting, DOM mutation invalidation and form-control
   fallback behavior. Scripting builds also add JerryScript runtime lifecycle and
@@ -119,16 +171,45 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Improved dirty rerender paths: root dirty checks are O(1), dirty clearing
   skips clean branches, unchanged `textContent` avoids invalidation and the
   Win32 shell no longer rebuilds the pipeline after clean input callbacks.
+- Improved core text fallback to measure and paint UTF-8 by codepoint instead
+  of treating every non-ASCII byte as a separate glyph.
+- Improved text wrapping heuristics so single unbreakable symbols are not
+  treated as multi-line text when their measured width slightly exceeds a small
+  control.
+- Improved grid layout so auto-width grid items are laid out against their
+  assigned track width, preserving centered button text after stretch.
+- Preserved explicit grid item heights and margins during grid placement.
+- Updated pseudo/Win32 browser shells to use body/html background as the canvas
+  clear color instead of always clearing to white.
+- Updated the watch calculator example to use the supported grid/gap subset
+  instead of relying on inline-block whitespace.
 - Updated scripting and roadmap documentation to treat M7 script loading as
   available and shift the next major work toward host presentation and dirty
   rectangles.
+- Fixed child-combinator selector parsing with whitespace around `>`, so rules
+  such as `.list > li` no longer accidentally match deeper descendants.
+- Fixed form-control state changes so text input, select, range and other
+  control interactions mark DOM dirty and trigger Win32 shell rerendering.
+- Improved keyboard behavior for interactive controls: datalist-backed text
+  inputs can accept the first matching candidate with Tab/Enter, and selects
+  can move through options across `optgroup` boundaries with Up/Down.
+- Added Win32-shell hash anchor scrolling for `<a href="#id">` validation
+  pages.
+- Updated `wearweb_pseudo_browser` to present through `HostFrameSink` while
+  preserving BMP/PPM validation output.
+- Updated the Win32 browser shell to reuse its framebuffer and repaint only
+  computed dirty rectangles after non-structural DOM changes.
+- Added embedded framebuffer backend documentation and updated host/roadmap
+  docs to make platform text and wearable navigation the next priorities.
+- Implemented `hidden` rendering semantics and disabled form-control behavior
+  for pointer/text/control activation paths.
 
 ### Notes
 
 - `wearweb_pseudo_browser` still uses the tiny built-in bitmap font when no
   platform `TextPainter` is injected, so non-ASCII text appears as fallback
   glyphs in BMP smoke-test output. The Win32 browser shell uses GDI text
-  painting for readable UTF-8/Chinese validation.
+  measurement and painting for readable UTF-8/Chinese validation.
 - Local linked stylesheets are resolved by the example/Win32 helper relative to
   the CSS path passed on the command line. Missing linked files are ignored
   conservatively, matching the engine's graceful-degradation policy.

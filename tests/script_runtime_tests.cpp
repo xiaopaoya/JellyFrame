@@ -228,6 +228,50 @@ void javascript_form_properties_mutate_control_state() {
     check(result.value == "Ada:true:b:1", "form properties stringify expected state");
 }
 
+void javascript_embedded_ui_helpers_support_event_delegation() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><main id='app'>"
+        "<button id='plus' data-op='+'><span id='label'>+</span></button>"
+        "<button data-op='-'>-</button>"
+        "</main></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var app = document.getElementById('app');"
+        "var label = document.getElementById('label');"
+        "var button = label.closest('[data-op]');"
+        "button.dataset.op + ':' + app.children.length + ':' + "
+        "button.parentElement.matches('#app') + ':' + label.matches('span')");
+
+    check(result.ok, "embedded UI helper script succeeds");
+    check(result.value == "+:2:true:true", "dataset children parentElement matches closest work");
+}
+
+void javascript_element_style_hidden_and_disabled_properties_work() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='save'>Save</button><p id='panel'>Panel</p></body>");
+    clear_dirty_flags(*document);
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var save = document.getElementById('save');"
+        "var panel = document.getElementById('panel');"
+        "save.disabled = true;"
+        "panel.hidden = true;"
+        "panel.style.display = 'none';"
+        "panel.style.backgroundColor = '#ffffff';"
+        "save.disabled + ':' + panel.hidden + ':' + panel.getAttribute('style')");
+
+    check(result.ok, "style hidden disabled script succeeds");
+    check(result.value.find("true:true:") == 0, "boolean attributes reflect through properties");
+    check(result.value.find("display: none") != std::string::npos, "style display write serialized");
+    check(result.value.find("background-color: #ffffff") != std::string::npos, "style background write serialized");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "style/hidden/disabled mark layout dirty");
+}
+
 void javascript_input_event_reads_live_value() {
     HtmlParser parser;
     auto document = parser.parse("<body><input id='name'><p id='status'></p></body>");
@@ -330,6 +374,8 @@ int main() {
         javascript_click_listener_mutates_dom();
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_form_properties_mutate_control_state();
+        javascript_embedded_ui_helpers_support_event_delegation();
+        javascript_element_style_hidden_and_disabled_properties_work();
         javascript_input_event_reads_live_value();
         javascript_timeout_runs_when_host_pumps_time();
         javascript_clear_timeout_cancels_callback();

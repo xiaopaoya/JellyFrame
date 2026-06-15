@@ -26,9 +26,26 @@ WearWeb 核心应继续独立于文件系统、网络栈、窗口系统、显示
 - `HostFrameBufferView`
 - `HostFrameSink`
 - `HostBudgets`
+- `HostDeviceCapabilities`
 
-这些接口还没有贯穿整个引擎。它们用于记录后续 shell/backend 应收敛到的稳定形状，
-现有示例仍保留当前的 callback helpers。
+这些接口现在已经轻量接入 presentation 路径：software renderer 可以把 `FrameBuffer`
+暴露为 `HostFrameBufferView`，`present_frame` 可以调用 `HostFrameSink`，伪浏览器也通过
+这条路径写出验收图片。资源加载、时钟、budgets 和设备能力仍处于草案形状。
+
+## 设备能力
+
+`HostDeviceCapabilities` 是开发板 port 提供的 plain description。核心不会通过它持有硬件状态；
+它只记录后续策略可以读取的事实：
+
+- 屏幕尺寸、DPI、首选像素格式、是否支持局部提交、是否能保留完整 framebuffer；
+- touch、pointer、wheel、crown、focus buttons、keyboard 和 text input 等输入来源；
+- heap 与最大单次分配估计；
+- 显式 `HostBudgets`；
+- 是否存在 monotonic time、filesystem 和 network 服务。
+
+典型 ESP32-S3 手表目标可以从 RGB565、启用 partial present、按 RAM/PSRAM 布局设置
+`has_full_framebuffer` 开始；touch/crown flags 按开发板实际硬件填写，并给出保守 heap/allocation
+数字。filesystem 和 network 应视为可选宿主服务，而不是核心假设。
 
 ## 资源加载
 
@@ -65,7 +82,7 @@ HostResourceLoadCallback(kind=Stylesheet or ClassicScript)
 
 ## Framebuffer 提交
 
-当前 renderer 生成 `FrameBuffer`，桌面工具写 BMP/PPM 或通过 Win32/GDI blit。
+当前 renderer 生成 `FrameBuffer`，桌面工具通过 frame sink 写 BMP/PPM，或通过 Win32/GDI blit。
 
 `HostFrameSink` 应成为嵌入式显示提交边界：
 
@@ -73,15 +90,34 @@ HostResourceLoadCallback(kind=Stylesheet or ClassicScript)
 - `dirty_rects` 可选；为空表示全帧提交。
 - 宿主负责把像素转成显示格式、DMA 或硬件 layer。
 
-下一步应从 layer invalidation 生成 dirty rectangle。在那之前，software compositor 仍是全帧重绘。
+`SoftwareCompositor::render_into` 可以把调用方提供的 dirty rectangles 重绘进已有 framebuffer。
+这是第一条面向嵌入式的 presentation 路径：宿主可以保留持久 framebuffer，请核心重绘有界区域，
+再把相同 rectangles 提交给显示驱动。
+
+`dirty_region` 现在提供第一版自动 rectangle 来源。它会对带有直接 dirty flags 的节点比较旧/新
+layout box，为文本、属性和表单控件变化生成有界 rectangles。树结构变化仍保守请求全 viewport
+重绘，因为被删除节点不能再通过旧 layout 指针安全寻址。这已经足够让 Win32 验证壳中的文本输入、
+range/select 状态变化和小型脚本更新避免整帧清空。
+
+`embedded_framebuffer` 是第一版可部署的宿主侧 adapter。它消费 `HostFrameBufferView`，
+把 dirty rectangles 转换到调用方持有的 target buffer，并对每个 rectangle 调用可选 flush
+callback。支持的 target 格式包括 RGBA8888、BGRA8888、RGB565、BGR565、RGB332、Gray8
+和 1-bit 单色打包。
+
+仍然缺少：
+
+- 更细粒度的 layer/display-command invalidation；
+- 可调 dirty rectangle 合并策略；
+- 具体开发板、LVGL 或显示驱动示例。
 
 ## 文本后端
 
 当前形状：
 
+- `text_backend.h` 中的 `TextMeasureProvider`
 - `software_renderer.h` 中的 `TextPainter`
-- Win32 壳注入 GDI 文本，用于可读 UTF-8/中文验证。
-- 核心 fallback 保持极小并偏 ASCII。
+- Win32 壳注入 GDI 测量和绘制，用于可读 UTF-8/中文验证。
+- 核心 fallback 保持极小：测量按 UTF-8 码点估算，绘制使用 ASCII bitmap，并为非 ASCII 码点绘制占位 glyph。
 
 未来嵌入式后端可以提供：
 
@@ -90,7 +126,7 @@ HostResourceLoadCallback(kind=Stylesheet or ClassicScript)
 - vendor font engine；
 - 面向生产级非拉丁文本的 shaping-capable text painter。
 
-暂时不要把字体加载放进核心。
+暂时不要把字体加载放进核心。测量和绘制应来自同一个宿主字体引擎，避免裁切和换行不一致。参见 `docs/text_backend_zh.md`。
 
 ## 输入后端
 
@@ -106,7 +142,8 @@ HostResourceLoadCallback(kind=Stylesheet or ClassicScript)
 - 硬件按键到 focus navigation 和 activation；
 - 长按到宿主定义命令。
 
-现在缺的下一块是面向纯按键/表冠设备的小型 focus/navigation model。
+面向纯按键/表冠设备的第一版 focus/navigation API 已在 `InputController` 上提供：
+`focus_next()`、`focus_previous()` 和 `activate_focused()`。
 
 ## Budgets
 
@@ -123,8 +160,7 @@ HostResourceLoadCallback(kind=Stylesheet or ClassicScript)
 
 ## 推荐顺序
 
-1. 完成 M7 script loading 的示例和文档。
-2. 添加 dirty rectangle invalidation，并接入 `HostFrameSink`。
-3. 添加可部署的 embedded framebuffer backend。
-4. 添加 Win32 之外的平台文本后端示例。
-5. 把 resource/budget plumbing 贯穿 parser 和 scripting。
+1. 添加 Win32 之外的平台文本后端示例。
+2. 为 `embedded_framebuffer` 添加具体开发板、LVGL 或显示驱动示例。
+3. 把 resource/budget plumbing 贯穿 parser 和 scripting。
+4. 添加静态 embedded bitmap font backend 示例。

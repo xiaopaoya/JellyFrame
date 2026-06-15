@@ -26,10 +26,13 @@ if(JERRYSCRIPT_ROOT AND NOT JERRYSCRIPT_INCLUDE_DIR)
 endif()
 
 add_library(wearweb_core
+    src/core/bitmap_font.cpp
     src/core/css_parser.cpp
+    src/core/dirty_region.cpp
     src/core/document_script.cpp
     src/core/document_style.cpp
     src/core/dom.cpp
+    src/core/embedded_framebuffer.cpp
     src/core/event.cpp
     src/core/form_control.cpp
     src/core/hit_test.cpp
@@ -42,6 +45,7 @@ add_library(wearweb_core
     src/core/render_tree.cpp
     src/core/software_renderer.cpp
     src/core/style.cpp
+    src/core/text_backend.cpp
 )
 
 target_include_directories(wearweb_core
@@ -96,6 +100,9 @@ if(WEARWEB_BUILD_EXAMPLES)
     add_wearweb_tool(wearweb_layer_tree_dump examples/layer_tree_dump.cpp)
     add_wearweb_tool(wearweb_pipeline_dump examples/pipeline_dump.cpp)
     add_wearweb_tool(wearweb_pseudo_browser examples/pseudo_browser.cpp)
+    add_wearweb_tool(wearweb_capability_check examples/capability_check.cpp)
+    add_wearweb_tool(wearweb_font_pack_gen examples/font_pack_gen.cpp)
+    add_wearweb_tool(wearweb_embedded_host_demo examples/embedded_host_demo.cpp)
     if(WEARWEB_BUILD_SCRIPTING)
         target_link_libraries(wearweb_pseudo_browser PRIVATE wearweb_script)
     endif()
@@ -118,9 +125,12 @@ if(WEARWEB_BUILD_TESTS)
         tests/tokenizer_tests.cpp
         tests/dom_mutation_tests.cpp
         tests/document_script_tests.cpp
+        tests/dirty_region_tests.cpp
+        tests/embedded_framebuffer_tests.cpp
         tests/css_parser_tests.cpp
         tests/event_tests.cpp
         tests/hit_test_tests.cpp
+        tests/host_tests.cpp
         tests/input_tests.cpp
         tests/render_tree_tests.cpp
         tests/layer_tree_tests.cpp

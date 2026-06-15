@@ -24,6 +24,8 @@
 - 平台文本绘制通过可选回调注入；核心 renderer 保留可移植 bitmap fallback，不链接 Win32/GDI。
 - software rasterizer 对不透明矩形使用直接行填充。
 - offscreen compositing 在像素循环前裁剪 source/destination rectangles。
+- `embedded_framebuffer` 只把裁剪后的 dirty rectangles 转换到调用方持有的显示 buffer；
+  它不分配、不持有，也不自行 flush 设备内存。
 - 响应式 grid 子集使用有界整数 auto-placement、clamped span 和紧凑的逐行
   occupancy bit mask，而不是完整 track-sizing engine。
 
@@ -49,6 +51,8 @@
 - 资源流入有界 buffer。
 - 等 layout 建立可见盒后再延迟 image decode。
 - 显示刷新使用 dirty rectangles。
+- 显示 buffer 保持由宿主持有；当屏幕使用 RGB565、RGB332、灰度或单色格式时，
+  通过 `embedded_framebuffer` 转换。
 
 ## Release 微基准基线
 

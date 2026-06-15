@@ -46,7 +46,7 @@ WearWeb is not ready for:
 | --- | --- | --- |
 | Platform-neutral core | Works | Core code performs no file, network, windowing or hardware I/O. |
 | Desktop pseudo browser | Shell-only | Runs the full pipeline and writes BMP/PPM. Uses tiny built-in fallback text unless a platform text painter is injected. |
-| Win32 browser shell | Shell-only | Opens a desktop window, uses GDI text, forwards mouse/wheel/keyboard input, supports capture output and optional scripting builds. |
+| Win32 browser shell | Shell-only | Opens a desktop window, uses GDI text measurement/painting, forwards mouse/wheel/keyboard input, supports capture output and optional scripting builds. |
 | Embedded backend | Deferred | The final display/input backend should be provided by the target platform. |
 | Linked CSS loading | Shell-only | Example tools can load local `<link rel="stylesheet">`; core exposes callback-style helpers only. |
 | Network loading | Deferred | No HTTP, fetch, XHR, WebSocket or remote asset loading. |
@@ -107,6 +107,8 @@ WearWeb is not ready for:
 | `@supports` | Lazy | Whole block skipped. |
 | `@container` | Deferred/Lazy | Whole block skipped. Avoid it for required UI. |
 | `@font-face` | Lazy | Balanced block skipped; no font loading. |
+| Font coverage check | Tool-only | `wearweb_capability_check --emit-used-chars` collects non-ASCII source characters; `--font-coverage` reports missing codepoints before embedding. |
+| Bitmap font pack generation | Tool-only | `wearweb_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds. |
 | `@keyframes` | Lazy | Balanced block skipped; no animation model. |
 | Unknown at-rules | Lazy | Statement or balanced block skipped. |
 | CSS custom properties | Stored/Lazy | Declarations may survive for diagnostics, but `var()` dependency resolution is not implemented. |
@@ -128,7 +130,7 @@ WearWeb is not ready for:
 | `:root` | Works | Supported. |
 | Dynamic pseudo-classes | Deferred | `:hover`, `:focus`, `:active`, `:disabled` are not style triggers yet. |
 | `:is()`, `:where()`, `:has()` | Lazy | Rules using unsupported modern selector functions are skipped. |
-| Pseudo-elements | Deferred | `::before`, `::after`, markers and selection styling are absent. |
+| Pseudo-elements | Subset | `::before` supports a tiny generated-content path for text/counter list markers. `::after`, full marker styling and selection styling are deferred. |
 | Sibling combinators | Deferred | `+` and `~` rules are skipped/unsupported. |
 | Shadow selectors | Deferred | `::part`, `::slotted` skipped. |
 
@@ -157,6 +159,7 @@ clear older supported fallback declarations.
 | `max-width` | Works | Length value; used by block layout. |
 | `aspect-ratio` | Works | Positive number or `w / h`, including `auto w / h`. Used for intrinsic box height. |
 | `font-size` | Works | Length values. |
+| `font-weight` | Subset | `normal`, `bold`, `bolder`, `lighter` and numeric weights. Software fallback approximates bold; platform text painters decide final glyph weight. |
 | `line-height` | Works | Unitless multiplier or length. |
 | `text-align` | Works | `left`, `right`, `start`, `end`, `center`. |
 | `text-indent` | Works | Length value. |
@@ -168,20 +171,26 @@ clear older supported fallback declarations.
 | `transform` | Stored/Lazy | Non-`none` creates a compositing boundary; transform math is deferred. |
 | `justify-content` | Subset | `start`, `flex-start`, `normal`, `center`, `space-around`, `space-between` in simplified flex rows. |
 | `align-items` | Subset | `stretch`, `normal`, `start`, `flex-start`, `center`, `end`, `flex-end` in simplified flex rows. |
+| `flex-wrap` | Subset | `wrap`/`wrap-reverse` enable simple row wrapping. Full flex sizing remains absent. |
 | `gap` | Works | 1-2 length values for grid and simplified flex support. |
 | `row-gap` / `column-gap` | Works | Length values. |
 | `grid-template-columns` | Subset | Extracts minimum track from `repeat(auto-fit, minmax(<length>, 1fr))`, `minmax(<length>, 1fr)`, a length, or `1fr`. |
+| simple fixed grid columns | Subset | `grid-template-columns: <length> 1fr` and similar 2-4 column length/`fr` templates are supported for definition lists and settings forms. |
 | `grid-auto-rows` | Subset | Length or `minmax(<length>, auto)` minimum row height. |
 | `grid-column` / `grid-row` | Subset | `span N`, clamped to bounded values. Explicit line placement is absent. |
+| `list-style` / `list-style-type` | Subset | `none`, disc-like values and decimal-like values. Native-lite list markers are painted for `li`. |
+| `content` on `::before` | Subset | Plain text and `counter(name) "suffix"` for lightweight list counters. Full generated-content layout is deferred. |
 | `box-shadow` | Subset | First shadow becomes an approximate rounded translucent fill. Real blur and multiple shadows are not rasterized. |
 | `object-fit` | Deferred | Waits for image decode/replaced-element support. |
-| `font-family` / `font-weight` | Deferred | Text backend decides the actual font. Win32 shell uses Microsoft YaHei UI. |
+| `font-family` | Deferred | Text backend decides the actual font. Win32 shell uses Microsoft YaHei UI. |
 | Animations/transitions | Deferred | Declarations skipped or stored without animation behavior. |
 | Filters/backdrop filters | Deferred | Not painted. |
 
 Supported length units are currently `px`, unitless px-like numbers, `rem`,
-`em` and a simple `vh` approximation. Percentages, `calc()` and viewport-width
-math are not general-purpose layout units yet.
+`em`, simple `vh`/`vw` approximations and percentage fallbacks based on a
+default compact viewport width. `min()`, `max()`, `clamp()` and simple
+`calc(A +/- B)` are parsed when their arguments reduce to supported lengths.
+These functions are conservative fallbacks, not a full CSS value algebra.
 
 ## Layout
 
@@ -191,12 +200,12 @@ math are not general-purpose layout units yet.
 | Inline text flow | Subset | Text and inline controls flow horizontally and wrap by available width. |
 | Inline background/border | Subset | Shrunk to text/content bounds where possible. |
 | `inline-block` | Subset | Represented as inline-like render object with usable box behavior. |
-| Flex row | Subset | Simplified one-line row layout with basic justification, alignment and column gap. No wrapping or full flex sizing. |
-| Grid cards | Subset | Responsive auto-fit/minmax card grid, gaps, minimum auto rows and spans. No explicit placement, named lines, subgrid or dense packing. |
+| Flex row | Subset | Simplified row layout with basic justification, alignment, gaps and optional wrapping. No full flex sizing. |
+| Grid cards/forms | Subset | Responsive auto-fit/minmax card grid, gaps, minimum auto rows, spans and simple fixed 2-4 column templates. No explicit placement, named lines, subgrid or dense packing. |
 | Aspect ratio | Works | Provides intrinsic height when explicit height/content height is absent. |
 | Replaced elements | Subset | Common controls/media are leaf boxes with fallback sizing; real image/video layout is deferred. |
-| Text measurement | Approximate | Core fallback is tiny and ASCII-oriented. Win32 shell uses GDI text. |
-| Bidi/text shaping | Deferred | Production non-Latin text needs platform text painter or future shaping strategy. |
+| Text measurement | Subset | Core exposes `TextMeasureProvider`; fallback is tiny but UTF-8-aware. Win32 shell uses GDI measurement. |
+| Bidi/text shaping | Deferred | Production non-Latin text needs a platform text backend or future shaping strategy. |
 | Fragmentation/multicolumn | Deferred | Not implemented. |
 
 ## Form Controls
@@ -205,11 +214,12 @@ math are not general-purpose layout units yet.
 | --- | --- | --- |
 | `button` | Works | Native-lite painted box, shrink-wrap-ish default, click events. |
 | `input type=text` and default input | Works | Value state, UTF-8 text input from host, Backspace. |
+| `input list` / `datalist` | Subset | Options are not shown as a popup. Focused text inputs can accept the first matching datalist option with Tab/Enter. |
 | `textarea` | Subset | Value-like state and basic painting; full multiline editing is limited. |
 | `input type=checkbox` | Works | Checked state, click activation, input/change events. |
 | `input type=radio` | Subset | Checked state and painting; full same-name group exclusivity is limited. |
 | `input type=range` | Works | Track/thumb painting, pointer drag updates value. |
-| `select` / `option` | Subset | Paints selected option; click cycles options in validation shell. Popup UI is not implemented. |
+| `select` / `option` / `optgroup` | Subset | Paints selected option; click cycles options in validation shell; Up/Down moves across options, including options inside `optgroup`. Popup/grouped menu UI is not implemented. |
 | `progress` / `meter` | Works | Value bar painting from attributes. |
 | Date/color/file controls | Deferred | Use text/select/range fallbacks for now. |
 | Validation | Deferred | No constraint validation UI or form submission. |
@@ -226,10 +236,11 @@ math are not general-purpose layout units yet.
 | `MouseEvent` | Works | `clientX`, `clientY`, `button`, `buttons`, modifier fields. |
 | `WheelEvent` | Works | `deltaX`, `deltaY`, `deltaMode`, modifiers. |
 | Hit testing | Works | Layer/layout based, with clipping and z-order hints. |
-| Pointer move/down/up | Works | Platform-neutral input controller dispatches mouse-like events. |
+| Pointer move/down/up | Works | Platform-neutral input controller dispatches mouse-like events plus `pointerdown`/`pointerup` aliases. |
 | Click synthesis | Works | Same target down/up creates click. |
+| Hash anchor click | Shell-only | Win32 shell handles `<a href="#id">` as viewport scroll. Core only dispatches the click event. |
 | Focus tracking | Subset | Input controller stores focused node. CSS `:focus` styling is absent. |
-| Touch events | Deferred | Host can map touch to pointer-like input for now. |
+| Touch events | Subset | `touchstart`/`touchend` are exposed as mouse-like events for press feedback. Full multi-touch objects are deferred. |
 | Keyboard events | Deferred | Core handles simple key actions for controls; DOM keyboard event objects are not complete. |
 
 ## JavaScript / JerryScript Binding
@@ -245,8 +256,13 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `document.createElement` | Works | Creates detached element owned by runtime. |
 | `document.createTextNode` | Works | Creates detached text node. |
 | `appendChild` / `removeChild` | Works | Moves nodes, prevents cycles, marks dirty. |
-| `setAttribute` / `getAttribute` | Works | Attribute names are lowercased by binding. |
+| `setAttribute` / `getAttribute` / `removeAttribute` | Works | Attribute names are lowercased by binding. |
 | `textContent` | Works | Getter/setter; unchanged text avoids dirty work. |
+| `children` / `parentElement` | Subset | Snapshot element-child array and parent wrapper/null. |
+| `matches` / `closest` | Subset | Simple tag, `.class`, `#id`, `[attr]` and `[attr=value]` selectors. No combinators. |
+| `dataset` | Subset | Existing `data-*` attributes are exposed as camelCase snapshot properties for event delegation. Dynamic new keys are deferred. |
+| `element.style` | Subset | Mutable inline style object for `display`, `color`, `background`, `backgroundColor`, `textAlign`, `fontWeight`, `width`, `height`. |
+| `hidden` / `disabled` properties | Subset | Boolean reflection. `hidden` removes rendering; disabled form controls do not activate or accept text input. |
 | `addEventListener` / `removeEventListener` | Works | JS callbacks are bridged to core event dispatch. |
 | Event object | Subset | `type`, `target`, `currentTarget`, phase, cancel/propagation APIs, mouse/wheel fields. |
 | Form properties | Subset | `value`, `checked`, `selectedIndex` on relevant controls. |
@@ -256,20 +272,22 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `querySelector` | Deferred | Use IDs for now. |
 | `innerHTML` | Deferred | Use DOM creation APIs. |
 | Fetch/network/storage | Deferred | Host must provide data. |
+| Capability checker | Tool-only | `wearweb_capability_check` scans HTML/CSS/JS on desktop and reports supported subsets, degraded features and unsupported APIs. It can also emit non-ASCII used characters and verify font coverage. |
 
 ## Rendering And Pixels
 
 | Feature | Status | Behavior |
 | --- | --- | --- |
-| Display list | Works | Rectangles, borders, gradients and text commands. |
+| Display list | Works | Rectangles, borders, gradients and text commands, including approximate text weight. |
 | CPU framebuffer | Works | Software rasterizer/compositor can produce BMP/PPM. |
+| Embedded framebuffer adapter | Works | `embedded_framebuffer` converts `HostFrameBufferView` into caller-owned RGBA8888/BGRA8888, RGB565/BGR565, RGB332, Gray8 or 1-bit monochrome buffers and flushes dirty rects through a callback. |
 | Source-over alpha | Works | Straight-alpha composition. |
 | Opacity layers | Works | Offscreen compositing for opacity/composited layers. |
 | Rounded fills | Subset | Rounded rectangle fill clipping for backgrounds/shadows. |
 | Border painting | Works | Borders emitted as fill rectangles. |
 | Linear gradient | Subset | Simple vertical command support. |
-| Text | Subset | Core fallback is tiny ASCII. Win32 shell injects GDI text for UTF-8/Chinese validation. |
-| Chinese text | Shell-dependent | Use Win32 shell or future platform text painter. Pseudo-browser fallback will show fallback glyphs. |
+| Text | Subset | Core fallback is tiny ASCII bitmap painting with UTF-8 placeholder glyphs. Win32 shell injects GDI for UTF-8/Chinese validation. |
+| Chinese text | Shell-dependent | Use Win32 shell or future platform text backend. Pseudo-browser fallback will show placeholder glyphs. |
 | Images | Deferred | No image decode. `img`/media nodes get usable boxes/fallback only. |
 | Canvas/SVG | Deferred | No canvas API or SVG renderer. |
 | Real shadow blur | Deferred | `box-shadow` blur is approximated. |
@@ -285,11 +303,14 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Dirty clear | Works | Skips clean branches. |
 | Host coalescing | Subset | Win32 shell rerenders only after dirty input/script callbacks. |
 | Incremental style/layout | Deferred | Current rerender still rebuilds render/layout/layer trees once dirty. |
-| Dirty rectangle repaint | Deferred | Layer structure prepares for it, but framebuffer repaint is still full-frame. |
+| Dirty rectangle repaint | Subset | `dirty_region` computes bounded repaint rects for direct text/attribute/form-control changes by comparing old and new layout boxes. Tree mutations conservatively repaint the viewport. |
+| Host frame sink | Subset | `present_frame` exposes `FrameBuffer` through `HostFrameSink` with optional dirty rects. `embedded_framebuffer` supplies portable pixel conversion; real display I/O remains host-owned. |
+| Host device capabilities | Draft | `HostDeviceCapabilities` records display, input, memory, budget and service flags for board ports. Current core code treats it as a contract/documented policy input; deeper automatic adaptation is deferred. |
 
 Practical implication: repeated script mutations should be batched in one event
 or timer callback. The host will see one dirty document and rerender once, but
-the rerender is still a full simplified pipeline pass.
+the rerender is still a simplified pipeline pass, but the framebuffer stage can
+now repaint bounded dirty rectangles for non-structural changes.
 
 ## Recommended Authoring Rules
 
@@ -303,7 +324,8 @@ the rerender is still a full simplified pipeline pass.
 - Avoid required UI inside `@container`, `@supports`, complex media queries or
   unsupported selector functions.
 - Keep scripts synchronous and small. Use host-provided data.
-- Treat Win32 shell rendering as the desktop validation path for Chinese text.
+- Treat Win32 shell rendering as the desktop validation path for Chinese text,
+  because it injects both measurement and painting through the text backend APIs.
 - Keep pages small and bounded; parser limits exist by design.
 
 ## Current Hard Limits

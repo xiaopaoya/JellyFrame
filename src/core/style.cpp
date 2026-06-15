@@ -30,13 +30,164 @@ std::string trim(std::string_view value) {
 }
 
 constexpr int kRootFontSizePx = 16;
+constexpr int kDefaultViewportWidthPx = 360;
+constexpr int kDefaultViewportHeightPx = 240;
 
 std::string lowercase(std::string value);
+bool parse_length_px(const std::string& raw_value, int& output, int em_base = kRootFontSizePx);
 
-bool parse_length_px(const std::string& raw_value, int& output, int em_base = kRootFontSizePx) {
+std::vector<std::string> split_function_arguments(std::string_view body) {
+    std::vector<std::string> args;
+    std::size_t begin = 0;
+    int depth = 0;
+    char quote = '\0';
+    for (std::size_t index = 0; index < body.size(); ++index) {
+        const char ch = body[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < body.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '"' || ch == '\'') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++depth;
+        } else if (ch == ')' && depth > 0) {
+            --depth;
+        } else if (ch == ',' && depth == 0) {
+            args.push_back(trim(body.substr(begin, index - begin)));
+            begin = index + 1;
+        }
+    }
+    args.push_back(trim(body.substr(begin)));
+    return args;
+}
+
+bool parse_length_function(const std::string& value, int& output, int em_base) {
+    const auto function_body = [&](std::string_view name, std::string_view& body) {
+        if (value.rfind(name, 0) != 0 || value.size() <= name.size() + 2 ||
+            value[name.size()] != '(' || value.back() != ')') {
+            return false;
+        }
+        body = std::string_view(value).substr(name.size() + 1, value.size() - name.size() - 2);
+        return true;
+    };
+
+    std::string_view body;
+    if (function_body("clamp", body)) {
+        const std::vector<std::string> args = split_function_arguments(body);
+        if (args.size() != 3) {
+            return false;
+        }
+        int min_value = 0;
+        int preferred_value = 0;
+        int max_value = 0;
+        if (!parse_length_px(args[0], min_value, em_base) ||
+            !parse_length_px(args[2], max_value, em_base)) {
+            return false;
+        }
+        if (!parse_length_px(args[1], preferred_value, em_base)) {
+            preferred_value = min_value;
+        }
+        output = std::max(min_value, std::min(preferred_value, max_value));
+        return true;
+    }
+    if (function_body("min", body) || function_body("max", body)) {
+        const bool is_min = value.rfind("min", 0) == 0;
+        const std::vector<std::string> args = split_function_arguments(body);
+        bool have_value = false;
+        int result = 0;
+        for (const std::string& arg : args) {
+            int parsed = 0;
+            if (!parse_length_px(arg, parsed, em_base)) {
+                continue;
+            }
+            result = have_value ? (is_min ? std::min(result, parsed) : std::max(result, parsed)) : parsed;
+            have_value = true;
+        }
+        if (!have_value) {
+            return false;
+        }
+        output = result;
+        return true;
+    }
+    if (function_body("calc", body)) {
+        const std::string expr = trim(body);
+        std::size_t op = std::string::npos;
+        char op_char = '\0';
+        for (std::size_t index = 1; index + 1 < expr.size(); ++index) {
+            if ((expr[index] == '+' || expr[index] == '-') &&
+                std::isspace(static_cast<unsigned char>(expr[index - 1])) != 0 &&
+                std::isspace(static_cast<unsigned char>(expr[index + 1])) != 0) {
+                op = index;
+                op_char = expr[index];
+                break;
+            }
+        }
+        if (op == std::string::npos) {
+            return parse_length_px(expr, output, em_base);
+        }
+        int left = 0;
+        int right = 0;
+        if (!parse_length_px(expr.substr(0, op), left, em_base) ||
+            !parse_length_px(expr.substr(op + 1), right, em_base)) {
+            return false;
+        }
+        output = op_char == '-' ? left - right : left + right;
+        return true;
+    }
+    return false;
+}
+
+std::vector<std::string> split_whitespace_components(std::string_view value) {
+    std::vector<std::string> tokens;
+    std::size_t begin = 0;
+    int depth = 0;
+    char quote = '\0';
+    const auto flush = [&](std::size_t end) {
+        if (end > begin) {
+            std::string token = trim(value.substr(begin, end - begin));
+            if (!token.empty()) {
+                tokens.push_back(std::move(token));
+            }
+        }
+    };
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        const char ch = value[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < value.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '"' || ch == '\'') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++depth;
+        } else if (ch == ')' && depth > 0) {
+            --depth;
+        } else if (depth == 0 && std::isspace(static_cast<unsigned char>(ch)) != 0) {
+            flush(index);
+            begin = index + 1;
+        }
+    }
+    flush(value.size());
+    return tokens;
+}
+
+bool parse_length_px(const std::string& raw_value, int& output, int em_base) {
     const std::string value = trim(raw_value);
     if (value.empty()) {
         return false;
+    }
+    const std::string lowered = lowercase(value);
+    if (parse_length_function(lowered, output, em_base)) {
+        return true;
     }
 
     char* end = nullptr;
@@ -62,8 +213,14 @@ bool parse_length_px(const std::string& raw_value, int& output, int em_base = kR
         pixels = parsed * static_cast<float>(em_base);
         end += 2;
     } else if (std::strncmp(end, "vh", 2) == 0) {
-        pixels = parsed * 240.0F / 100.0F;
+        pixels = parsed * static_cast<float>(kDefaultViewportHeightPx) / 100.0F;
         end += 2;
+    } else if (std::strncmp(end, "vw", 2) == 0) {
+        pixels = parsed * static_cast<float>(kDefaultViewportWidthPx) / 100.0F;
+        end += 2;
+    } else if (*end == '%') {
+        pixels = parsed * static_cast<float>(kDefaultViewportWidthPx) / 100.0F;
+        ++end;
     } else {
         return false;
     }
@@ -177,6 +334,107 @@ bool parse_span_value(const std::string& raw_value, int& span) {
     return false;
 }
 
+bool parse_font_weight(const std::string& raw_value, int& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "normal") {
+        output = 400;
+        return true;
+    }
+    if (value == "bold" || value == "bolder") {
+        output = 700;
+        return true;
+    }
+    if (value == "lighter") {
+        output = 300;
+        return true;
+    }
+    int parsed = 0;
+    if (!parse_integer(value, parsed) || parsed < 1) {
+        return false;
+    }
+    output = std::max(100, std::min(900, ((parsed + 50) / 100) * 100));
+    return true;
+}
+
+bool parse_list_style_type(const std::string& raw_value, ListStyleType& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "none") {
+        output = ListStyleType::None;
+        return true;
+    }
+    if (value == "disc" || value == "circle" || value == "square") {
+        output = ListStyleType::Disc;
+        return true;
+    }
+    if (value == "decimal" || value == "decimal-leading-zero") {
+        output = ListStyleType::Decimal;
+        return true;
+    }
+    return false;
+}
+
+bool parse_simple_grid_template_columns(const std::string& raw_value,
+                                        std::array<int, 4>& widths,
+                                        int& count,
+                                        int em_base) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value.rfind("repeat(", 0) == 0 && value.back() == ')') {
+        const std::size_t comma = value.find(',');
+        if (comma == std::string::npos) {
+            return false;
+        }
+        int repeat_count = 0;
+        if (!parse_integer(trim(value.substr(7, comma - 7)), repeat_count) ||
+            repeat_count < 2 || repeat_count > static_cast<int>(widths.size())) {
+            return false;
+        }
+        const std::string track = trim(value.substr(comma + 1, value.size() - comma - 2));
+        int width = 0;
+        int stored_width = 0;
+        if (parse_length_px(track, width, em_base)) {
+            stored_width = std::max(1, width);
+        } else if (track == "auto" || track == "1fr" || track == "min-content" || track == "max-content" ||
+                   (!track.empty() && track.back() == 'r' && track.size() >= 2 && track[track.size() - 2] == 'f')) {
+            stored_width = 0;
+        } else {
+            return false;
+        }
+        widths = std::array<int, 4>{{0, 0, 0, 0}};
+        for (int index = 0; index < repeat_count; ++index) {
+            widths[static_cast<std::size_t>(index)] = stored_width;
+        }
+        count = repeat_count;
+        return true;
+    }
+
+    std::istringstream stream(value);
+    std::string token;
+    std::array<int, 4> parsed{{0, 0, 0, 0}};
+    int parsed_count = 0;
+    while (stream >> token) {
+        if (parsed_count >= static_cast<int>(parsed.size())) {
+            return false;
+        }
+        int width = 0;
+        if (parse_length_px(token, width, em_base)) {
+            parsed[static_cast<std::size_t>(parsed_count)] = std::max(1, width);
+        } else if (token == "auto" || token == "1fr" || token == "min-content" || token == "max-content") {
+            parsed[static_cast<std::size_t>(parsed_count)] = 0;
+        } else if (!token.empty() && token.back() == 'f' && token.size() >= 2 && token[token.size() - 2] == 'r') {
+            parsed[static_cast<std::size_t>(parsed_count)] = 0;
+        } else {
+            return false;
+        }
+        ++parsed_count;
+    }
+    if (parsed_count < 2) {
+        return false;
+    }
+    widths = parsed;
+    count = parsed_count;
+    return true;
+}
+
 bool parse_grid_template_columns_min(const std::string& raw_value, int& min_track, int em_base) {
     const std::string value = lowercase(trim(raw_value));
     const std::size_t minmax = value.find("minmax(");
@@ -229,18 +487,18 @@ bool parse_grid_auto_rows_min(const std::string& raw_value, int& min_row, int em
 }
 
 bool parse_box_edge_px(const std::string& value, EdgeSizes& output, int em_base = kRootFontSizePx) {
-    std::istringstream stream(value);
+    const std::vector<std::string> tokens = split_whitespace_components(value);
     std::array<int, 4> values{0, 0, 0, 0};
-    int count = 0;
-    std::string token;
-    while (stream >> token && count < 4) {
-        if (!parse_length_px(token, values[static_cast<std::size_t>(count)], em_base)) {
+    const int count = static_cast<int>(tokens.size());
+    if (count == 0 || count > 4) {
+        return false;
+    }
+    for (int index = 0; index < count; ++index) {
+        if (!parse_length_px(tokens[static_cast<std::size_t>(index)],
+                             values[static_cast<std::size_t>(index)],
+                             em_base)) {
             return false;
         }
-        ++count;
-    }
-    if (count == 0 || (stream >> token)) {
-        return false;
     }
     if (count == 1) {
         output = EdgeSizes{values[0], values[0], values[0], values[0]};
@@ -255,21 +513,20 @@ bool parse_box_edge_px(const std::string& value, EdgeSizes& output, int em_base 
 }
 
 bool parse_margin_edge_px(const std::string& value, EdgeSizes& output, bool& left_auto, bool& right_auto, int em_base) {
-    std::istringstream stream(value);
+    const std::vector<std::string> tokens = split_whitespace_components(value);
     std::array<int, 4> values{0, 0, 0, 0};
     std::array<bool, 4> auto_values{false, false, false, false};
-    int count = 0;
-    std::string token;
-    while (stream >> token && count < 4) {
+    const int count = static_cast<int>(tokens.size());
+    if (count == 0 || count > 4) {
+        return false;
+    }
+    for (int index = 0; index < count; ++index) {
+        const std::string& token = tokens[static_cast<std::size_t>(index)];
         if (token == "auto") {
-            auto_values[static_cast<std::size_t>(count)] = true;
-        } else if (!parse_length_px(token, values[static_cast<std::size_t>(count)], em_base)) {
+            auto_values[static_cast<std::size_t>(index)] = true;
+        } else if (!parse_length_px(token, values[static_cast<std::size_t>(index)], em_base)) {
             return false;
         }
-        ++count;
-    }
-    if (count == 0 || (stream >> token)) {
-        return false;
     }
 
     if (count == 1) {
@@ -635,6 +892,7 @@ enum class CascadeProperty : std::size_t {
     MaxWidth,
     AspectRatio,
     FontSize,
+    FontWeight,
     LineHeight,
     TextIndent,
     BoxShadow,
@@ -647,6 +905,7 @@ enum class CascadeProperty : std::size_t {
     JustifyContent,
     AlignItems,
     BoxSizing,
+    FlexWrap,
     Gap,
     ColumnGap,
     RowGap,
@@ -654,6 +913,11 @@ enum class CascadeProperty : std::size_t {
     GridAutoRows,
     GridColumn,
     GridRow,
+    ListStyleType,
+    BeforeContent,
+    BeforeColor,
+    BeforeFontWeight,
+    BeforeLeft,
     Count,
 };
 
@@ -741,6 +1005,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "font-size") {
         return &cascade_slot(slots, CascadeProperty::FontSize);
     }
+    if (property == "font-weight") {
+        return &cascade_slot(slots, CascadeProperty::FontWeight);
+    }
     if (property == "line-height") {
         return &cascade_slot(slots, CascadeProperty::LineHeight);
     }
@@ -777,6 +1044,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "box-sizing") {
         return &cascade_slot(slots, CascadeProperty::BoxSizing);
     }
+    if (property == "flex-wrap") {
+        return &cascade_slot(slots, CascadeProperty::FlexWrap);
+    }
     if (property == "gap") {
         return &cascade_slot(slots, CascadeProperty::Gap);
     }
@@ -797,6 +1067,25 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "grid-row") {
         return &cascade_slot(slots, CascadeProperty::GridRow);
+    }
+    if (property == "list-style" || property == "list-style-type") {
+        return &cascade_slot(slots, CascadeProperty::ListStyleType);
+    }
+    return nullptr;
+}
+
+CascadeSlot* cascade_slot_for_before_property(CascadeSlots& slots, const std::string& property) {
+    if (property == "content") {
+        return &cascade_slot(slots, CascadeProperty::BeforeContent);
+    }
+    if (property == "color") {
+        return &cascade_slot(slots, CascadeProperty::BeforeColor);
+    }
+    if (property == "font-weight") {
+        return &cascade_slot(slots, CascadeProperty::BeforeFontWeight);
+    }
+    if (property == "left") {
+        return &cascade_slot(slots, CascadeProperty::BeforeLeft);
     }
     return nullptr;
 }
@@ -1022,6 +1311,14 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.font_size = px;
         style.font_size_specified = true;
         return true;
+    } else if (property == "font-weight") {
+        int weight = 400;
+        if (!parse_font_weight(value, weight)) {
+            return false;
+        }
+        style.font_weight = weight;
+        style.font_weight_specified = true;
+        return true;
     } else if (property == "line-height") {
         float multiplier = 0.0F;
         int px = 0;
@@ -1140,6 +1437,16 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             return false;
         }
         return true;
+    } else if (property == "flex-wrap") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "wrap" || lowered == "wrap-reverse") {
+            style.flex_wrap = true;
+        } else if (lowered == "nowrap") {
+            style.flex_wrap = false;
+        } else {
+            return false;
+        }
+        return true;
     } else if (property == "gap") {
         EdgeSizes parsed;
         if (!parse_box_edge_px(value, parsed, style.font_size)) {
@@ -1163,11 +1470,20 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.row_gap = std::max(0, px);
         return true;
     } else if (property == "grid-template-columns") {
+        std::array<int, 4> widths{{0, 0, 0, 0}};
+        int count = 0;
+        if (parse_simple_grid_template_columns(value, widths, count, style.font_size)) {
+            style.grid_template_column_widths = widths;
+            style.grid_template_column_count = count;
+            style.grid_min_track_width = -1;
+            return true;
+        }
         int min_track = 0;
         if (!parse_grid_template_columns_min(value, min_track, style.font_size)) {
             return false;
         }
         style.grid_min_track_width = min_track;
+        style.grid_template_column_count = 0;
         return true;
     } else if (property == "grid-auto-rows") {
         int min_row = 0;
@@ -1190,6 +1506,18 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.grid_row_span = span;
         return true;
+    } else if (property == "list-style" || property == "list-style-type") {
+        std::istringstream stream(lowercase(trim(value)));
+        std::string token;
+        while (stream >> token) {
+            ListStyleType type = ListStyleType::None;
+            if (parse_list_style_type(token, type)) {
+                style.list_style_type = type;
+                style.list_style_type_specified = true;
+                return true;
+            }
+        }
+        return false;
     }
     return false;
 }
@@ -1377,12 +1705,106 @@ void apply_cascaded_declaration(Style& style,
     }
 }
 
+bool parse_counter_content(const std::string& raw_value, std::string& name, std::string& suffix) {
+    const std::string value = trim(raw_value);
+    constexpr std::string_view prefix = "counter(";
+    if (value.rfind(prefix, 0) != 0) {
+        return false;
+    }
+    const std::size_t close = value.find(')', prefix.size());
+    if (close == std::string::npos) {
+        return false;
+    }
+    name = trim(std::string_view(value).substr(prefix.size(), close - prefix.size()));
+    suffix = trim(std::string_view(value).substr(close + 1));
+    if (!suffix.empty()) {
+        suffix = unquote(suffix);
+    }
+    return !name.empty();
+}
+
+bool apply_before_declaration(Style& style, const std::string& property, const std::string& value) {
+    if (property == "content") {
+        std::string counter_name;
+        std::string suffix;
+        if (parse_counter_content(value, counter_name, suffix)) {
+            style.before_content_kind = GeneratedContentKind::Counter;
+            style.before_counter_name = std::move(counter_name);
+            style.before_counter_suffix = std::move(suffix);
+            style.before_content_text.clear();
+            return true;
+        }
+        const std::string text = unquote(value);
+        if (text.empty() || text == "none" || text == "normal") {
+            style.before_content_kind = GeneratedContentKind::None;
+            style.before_content_text.clear();
+            style.before_counter_name.clear();
+            style.before_counter_suffix.clear();
+            return true;
+        }
+        style.before_content_kind = GeneratedContentKind::Text;
+        style.before_content_text = text;
+        style.before_counter_name.clear();
+        style.before_counter_suffix.clear();
+        return true;
+    }
+    if (property == "color") {
+        Color parsed;
+        if (!parse_color(value, parsed)) {
+            return false;
+        }
+        style.before_color = parsed;
+        style.before_color_specified = true;
+        return true;
+    }
+    if (property == "font-weight") {
+        int weight = 400;
+        if (!parse_font_weight(value, weight)) {
+            return false;
+        }
+        style.before_font_weight = weight;
+        style.before_font_weight_specified = true;
+        return true;
+    }
+    if (property == "left") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        style.before_left = px;
+        style.before_left_specified = true;
+        return true;
+    }
+    return false;
+}
+
+void apply_cascaded_before_declaration(Style& style,
+                                       CascadeSlot& slot,
+                                       const CssDeclaration& declaration,
+                                       const CssSpecificity& specificity,
+                                       std::size_t source_order) {
+    if (!declaration_wins(slot, declaration, specificity, source_order)) {
+        return;
+    }
+    if (apply_before_declaration(style, declaration.property, declaration.value)) {
+        mark_slot(slot, declaration, specificity, source_order);
+    }
+}
+
 void apply_declarations(Style& style,
                         CascadeSlots& slots,
                         const std::vector<CssDeclaration>& declarations,
                         const CssSpecificity& specificity,
-                        std::size_t source_order) {
+                        std::size_t source_order,
+                        bool pseudo_before) {
     for (const CssDeclaration& declaration : declarations) {
+        if (pseudo_before) {
+            CascadeSlot* slot = cascade_slot_for_before_property(slots, declaration.property);
+            if (slot != nullptr) {
+                apply_cascaded_before_declaration(style, *slot, declaration, specificity, source_order);
+            }
+            continue;
+        }
         if (apply_edge_shorthand(style, slots, declaration, specificity, source_order)) {
             continue;
         }
@@ -1421,16 +1843,20 @@ Style default_style_for(const Node& node) {
         return style;
     }
 
-    static constexpr std::array<std::string_view, 34> block_tags = {
+    static constexpr std::array<std::string_view, 37> block_tags = {
         "document", "html", "body", "div", "p", "section", "article", "header", "footer", "main",
         "nav", "aside", "form", "fieldset", "dialog", "details", "summary", "blockquote", "address",
         "hgroup", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "tr", "td",
-        "th", "app-root"
+        "th", "dl", "dt", "dd", "app-root"
     };
     static constexpr std::array<std::string_view, 8> hidden_tags = {
         "head", "script", "style", "meta", "link", "title", "template", "noscript"
     };
 
+    if (node.attributes.find("hidden") != node.attributes.end()) {
+        style.display = Display::None;
+        return style;
+    }
     if (std::find(hidden_tags.begin(), hidden_tags.end(), std::string_view(node.tag_name)) != hidden_tags.end()) {
         style.display = Display::None;
         return style;
@@ -1441,13 +1867,35 @@ Style default_style_for(const Node& node) {
     if (node.tag_name == "h1") {
         style.font_size = 24;
         style.font_size_specified = true;
+        style.font_weight = 700;
+        style.font_weight_specified = true;
         style.margin.bottom = 8;
     } else if (node.tag_name == "h2") {
         style.font_size = 20;
         style.font_size_specified = true;
+        style.font_weight = 700;
+        style.font_weight_specified = true;
         style.margin.bottom = 6;
+    } else if (node.tag_name == "h3" || node.tag_name == "h4" || node.tag_name == "h5" ||
+               node.tag_name == "h6" || node.tag_name == "strong" || node.tag_name == "b") {
+        style.font_weight = 700;
+        style.font_weight_specified = true;
     } else if (node.tag_name == "p") {
         style.margin.bottom = 6;
+    } else if (node.tag_name == "ul") {
+        style.list_style_type = ListStyleType::Disc;
+        style.list_style_type_specified = true;
+        style.padding.left = 20;
+        style.margin.bottom = 6;
+    } else if (node.tag_name == "ol") {
+        style.list_style_type = ListStyleType::Decimal;
+        style.list_style_type_specified = true;
+        style.padding.left = 20;
+        style.margin.bottom = 6;
+    } else if (node.tag_name == "dl") {
+        style.margin.bottom = 6;
+    } else if (node.tag_name == "dd") {
+        style.margin.left = 18;
     } else if (node.tag_name == "a") {
         style.color = Color{37, 99, 235, 255};
         style.color_specified = true;
@@ -1476,12 +1924,22 @@ Style default_style_for(const Node& node) {
         style.border_width = EdgeSizes{1, 1, 1, 1};
         style.border_color = Color{107, 114, 128, 255};
         style.background_color = Color{243, 244, 246, 255};
+        if (node.attributes.find("disabled") != node.attributes.end()) {
+            style.color = Color{107, 114, 128, 255};
+            style.color_specified = true;
+            style.background_color = Color{229, 231, 235, 255};
+        }
     } else if (node.tag_name == "input" || node.tag_name == "select" || node.tag_name == "textarea") {
         style.display = Display::InlineBlock;
         style.padding = EdgeSizes{4, 6, 4, 6};
         style.border_width = EdgeSizes{1, 1, 1, 1};
         style.border_color = Color{107, 114, 128, 255};
         style.background_color = Color{255, 255, 255, 255};
+        if (node.attributes.find("disabled") != node.attributes.end()) {
+            style.color = Color{107, 114, 128, 255};
+            style.color_specified = true;
+            style.background_color = Color{229, 231, 235, 255};
+        }
         style.min_width = 140;
         if (node.tag_name == "input" && (node.attribute("type") == "checkbox" || node.attribute("type") == "radio")) {
             style.width = 18;
@@ -1515,18 +1973,12 @@ Style default_style_for(const Node& node) {
 std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector) {
     std::vector<CssSelectorPart> parts;
     std::size_t end = selector.size();
-    bool next_is_child = false;
     while (end > 0) {
         while (end > 0 && std::isspace(static_cast<unsigned char>(selector[end - 1])) != 0) {
             --end;
         }
         if (end == 0) {
             break;
-        }
-        if (selector[end - 1] == '>') {
-            next_is_child = true;
-            --end;
-            continue;
         }
 
         std::size_t begin = end;
@@ -1547,12 +1999,22 @@ std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector)
 
         CssSelectorPart part;
         part.compound = trim(selector.substr(begin, end - begin));
-        part.combinator_to_left = next_is_child ? CssSelectorCombinator::Child : CssSelectorCombinator::Descendant;
+        part.combinator_to_left = CssSelectorCombinator::Descendant;
+        std::size_t previous = begin;
+        while (previous > 0 && std::isspace(static_cast<unsigned char>(selector[previous - 1])) != 0) {
+            --previous;
+        }
+        if (previous > 0 && selector[previous - 1] == '>') {
+            part.combinator_to_left = CssSelectorCombinator::Child;
+            --previous;
+            while (previous > 0 && std::isspace(static_cast<unsigned char>(selector[previous - 1])) != 0) {
+                --previous;
+            }
+        }
         if (!part.compound.empty()) {
             parts.push_back(std::move(part));
         }
-        next_is_child = begin > 0 && selector[begin - 1] == '>';
-        end = begin;
+        end = previous;
     }
     return parts;
 }
@@ -1690,7 +2152,8 @@ Style StyleResolver::resolve(const Node& node) const {
 
     for (const CssRule* rule : candidates) {
         if (matches_rule(node, *rule)) {
-            apply_declarations(style, slots, rule->declarations, rule->specificity, rule->source_order);
+            apply_declarations(style, slots, rule->declarations, rule->specificity,
+                               rule->source_order, rule->pseudo_before);
         }
     }
     if (node.type == NodeType::Element) {
@@ -1699,7 +2162,7 @@ Style StyleResolver::resolve(const Node& node) const {
         inline_specificity.classes = 0;
         inline_specificity.elements = 0;
         apply_declarations(style, slots, parse_inline_style(node.attribute("style")), inline_specificity,
-                           static_cast<std::size_t>(-1));
+                           static_cast<std::size_t>(-1), false);
     }
     return style;
 }

@@ -14,11 +14,18 @@ planned.
 ## Milestone 2: Embedded rendering backend
 
 - Software framebuffer backend: available for validation
-- Dirty rectangle repaint from layer invalidation
-- Font atlas or platform text backend: Win32/GDI exists for validation; embedded
-  backend is still needed
-- Pointer/touch input routing: pointer/wheel core exists; wearable focus/touch
-  adapters are still needed
+- Dirty rectangle repaint: first automatic `dirty_region` subset is available
+  for non-structural DOM changes; finer layer/display-command invalidation is
+  still needed
+- Embedded framebuffer adapter: available for caller-owned RGBA8888/BGRA8888,
+  RGB565/BGR565, RGB332, Gray8 and monochrome buffers
+- Platform text measurement/painting backend: API exists, Win32/GDI validation
+  backend exists, and the first static embedded bitmap backend plus BDF pack
+  generator are available; LVGL/vendor adapters are still needed
+- Pointer/touch input routing: pointer/wheel core exists; button/crown focus
+  navigation has a first core API; board adapters are still needed
+- Platform-neutral board bring-up shape: first static-resource/RGB565 demo is
+  available through `wearweb_embedded_host_demo`
 
 ## Milestone 3: App runtime
 
@@ -27,7 +34,8 @@ planned.
 - Timer/event loop: host-pumped timers available
 - Classic document script loading: available in scripting example shells
 - Fetch/resource abstraction
-- Device capability APIs
+- Device capability APIs: first `HostDeviceCapabilities` contract available;
+  deeper automatic adaptation is deferred
 
 ## Milestone 4: Wearable UI features
 
@@ -38,8 +46,10 @@ planned.
 
 ## Recommended Next Order
 
-1. Dirty rectangle invalidation and `HostFrameSink` presentation.
-2. Deployable embedded framebuffer backend.
-3. Platform text backend beyond Win32/GDI.
-4. Wearable focus/navigation model for touch, buttons and crown.
-5. Resource and device capability APIs.
+1. Concrete board/LVGL/display-driver examples based on
+   `wearweb_embedded_host_demo`.
+2. LVGL/vendor text backend adapters beyond the static bitmap backend.
+3. Resource and device capability APIs.
+4. Centralized budgets for parser, style, script and framebuffer memory.
+5. Tiled framebuffer presentation for displays that cannot keep a full target
+   buffer.

@@ -34,6 +34,12 @@ enum class DisplayCommandType {
     Text,
 };
 
+enum class TextCommandAlign {
+    Start,
+    Center,
+    End,
+};
+
 struct DisplayCommand {
     DisplayCommandType type = DisplayCommandType::FillRect;
     Rect rect;
@@ -42,6 +48,9 @@ struct DisplayCommand {
     std::string text;
     int border_radius = 0;
     int font_size = 14;
+    int font_weight = 400;
+    TextCommandAlign text_align = TextCommandAlign::Start;
+    bool text_single_line = true;
 };
 
 using DisplayList = std::vector<DisplayCommand>;

@@ -31,10 +31,32 @@ that should harden before a real embedded backend is written.
 - `HostFrameBufferView`
 - `HostFrameSink`
 - `HostBudgets`
+- `HostDeviceCapabilities`
 
-These are not wired through the whole engine yet. They document the stable
-shape future shell/backends should converge on while existing examples keep
-their current callback helpers.
+These are now lightly wired into presentation: software rendering can expose a
+`FrameBuffer` as `HostFrameBufferView`, `present_frame` can call a
+`HostFrameSink`, and the pseudo browser uses that path to write its validation
+image. Resource loading, clocks, budgets and device capabilities are still
+draft-level shapes.
+
+## Device Capabilities
+
+`HostDeviceCapabilities` is a plain description supplied by the board port. The
+core does not own hardware state through it; it only records facts that later
+policy can use:
+
+- display size, DPI, preferred pixel format, partial-present support and whether
+  a full framebuffer fits;
+- input sources such as touch, pointer, wheel, crown, focus buttons, keyboard
+  and text input;
+- heap and maximum single-allocation estimates;
+- explicit `HostBudgets`;
+- whether monotonic time, filesystem and network services exist.
+
+For a typical ESP32-S3 watch target, start with RGB565, partial present enabled,
+`has_full_framebuffer` set according to PSRAM/RAM layout, touch or crown flags
+matching the board and conservative heap/allocation numbers. Treat filesystem
+and network as optional host services, not core assumptions.
 
 ## Resource Loading
 
@@ -72,8 +94,8 @@ Current scripting timers are host-pumped. The host decides:
 
 ## Framebuffer Presentation
 
-Current renderers produce a `FrameBuffer` and desktop tools write BMP/PPM or
-blit through Win32/GDI.
+Current renderers produce a `FrameBuffer`. Desktop tools either write BMP/PPM
+through a frame sink or blit through Win32/GDI.
 
 `HostFrameSink` should become the embedded presentation boundary:
 
@@ -81,16 +103,40 @@ blit through Win32/GDI.
 - `dirty_rects` is optional; empty means full-frame present.
 - The host maps pixels to display format or DMA/layer hardware.
 
-Next implementation step here is dirty rectangle generation from layer
-invalidation. Until then, the software compositor still repaints full frames.
+`SoftwareCompositor::render_into` can repaint caller-supplied dirty rectangles
+into an existing framebuffer. This is the first embedded-oriented presentation
+path: a host can keep a persistent framebuffer, ask the core to redraw bounded
+regions, then present the same rectangles to the display driver.
+
+`dirty_region` now provides the first automatic rectangle source. It compares
+old and new layout boxes for nodes with direct dirty flags and emits bounded
+rectangles for text, attribute and form-control changes. Tree mutations remain
+conservative and request a full viewport repaint, because removed nodes cannot
+be safely addressed through stale layout pointers. This is enough for text
+input, range/select state changes and small script updates to avoid full
+framebuffer clears in the Win32 validation shell.
+
+`embedded_framebuffer` is the first deployable host-side adapter. It consumes a
+`HostFrameBufferView`, converts dirty rectangles into a caller-owned target
+buffer and invokes an optional flush callback per rectangle. Supported target
+formats are RGBA8888, BGRA8888, RGB565, BGR565, RGB332, Gray8 and 1-bit
+monochrome packing.
+
+Still missing:
+
+- finer-grained layer/display-command invalidation;
+- tunable dirty rectangle coalescing policy;
+- concrete board/LVGL/display-driver examples.
 
 ## Text Backend
 
 Current shape:
 
+- `TextMeasureProvider` in `text_backend.h`
 - `TextPainter` in `software_renderer.h`
-- Win32 shell injects GDI text for readable UTF-8/Chinese.
-- Core fallback remains tiny and ASCII-oriented.
+- Win32 shell injects GDI measurement and painting for readable UTF-8/Chinese.
+- Core fallback remains tiny: UTF-8-aware measurement plus ASCII bitmap painting
+  with non-ASCII placeholder glyphs.
 
 Future embedded backends can provide:
 
@@ -99,7 +145,9 @@ Future embedded backends can provide:
 - vendor font engine;
 - shaping-capable text painter for production non-Latin text.
 
-Do not put font loading into the core yet.
+Do not put font loading into the core yet. Measurement and painting should come
+from the same host font engine to avoid clipping and mismatched wrapping. See
+`docs/text_backend.md`.
 
 ## Input Backend
 
@@ -118,7 +166,8 @@ Future wearable input adapters should map:
 - long press to host-defined commands.
 
 The next missing piece is a small focus/navigation model for button/crown-only
-devices.
+devices. A first core API now exists on `InputController`: `focus_next()`,
+`focus_previous()` and `activate_focused()`.
 
 ## Budgets
 
@@ -136,8 +185,7 @@ centralized direction.
 
 ## Recommended Order
 
-1. Finish M7 script loading in examples and docs.
-2. Add dirty rectangle invalidation and plumb it into `HostFrameSink`.
-3. Add a deployable embedded framebuffer backend.
-4. Add platform text backend examples beyond Win32.
-5. Add resource/budget plumbing across parsers and scripting.
+1. Add platform text backend examples beyond Win32.
+2. Add concrete board/LVGL/display-driver examples for `embedded_framebuffer`.
+3. Add resource/budget plumbing across parsers and scripting.
+4. Add a static embedded bitmap font backend example.

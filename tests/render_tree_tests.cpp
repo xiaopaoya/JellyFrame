@@ -90,6 +90,19 @@ void closed_dialog_is_not_rendered_by_default() {
           "first rendered dialog is open");
 }
 
+void hidden_attribute_skips_rendering() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><p id='gone' hidden>Gone</p><p id='shown'>Shown</p></body>");
+    StyleResolver resolver(css_parser.parse(""));
+    RenderTreeBuilder builder(resolver);
+    auto render_tree = builder.build(*document);
+
+    check(find_first_by_tag(*render_tree, "p") != nullptr, "visible paragraph rendered");
+    const RenderObject* text = find_first_text(*render_tree);
+    check(text != nullptr && text->node != nullptr && text->node->text == "Shown", "hidden text skipped");
+}
+
 } // namespace
 
 int main() {
@@ -97,6 +110,7 @@ int main() {
         render_tree_filters_non_rendered_nodes();
         render_tree_carries_computed_style_and_text_inheritance();
         closed_dialog_is_not_rendered_by_default();
+        hidden_attribute_skips_rendering();
     } catch (const std::exception& error) {
         std::cerr << "render tree test failed: " << error.what() << '\n';
         return 1;

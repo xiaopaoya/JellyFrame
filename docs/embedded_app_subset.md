@@ -117,6 +117,6 @@ Run one interactively through the Win32 shell:
 
 M7 script loading is available in scripting builds: inline classic `<script>`
 and local external classic scripts can run through shell-provided callbacks.
-The next high-impact app/runtime gap is the host boundary: dirty rectangle
-presentation, embedded framebuffer policy, platform text backends and
-button/crown/touch navigation.
+M8 added dirty rectangle presentation and a portable embedded framebuffer
+adapter. The next high-impact app/runtime gaps are platform text backends,
+button/crown/touch navigation, resource/device APIs and tighter memory budgets.

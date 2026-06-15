@@ -3,6 +3,7 @@
 #endif
 
 #include "core/css_parser.h"
+#include "core/dirty_region.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
 #include "core/html_parser.h"
@@ -152,6 +153,9 @@ bool draw_text_with_gdi(FrameBuffer& target,
                         Color color,
                         const std::string& text,
                         int font_size,
+                        int font_weight,
+                        TextCommandAlign align,
+                        bool single_line,
                         void*) {
     const std::wstring wide = utf8_to_wide(text);
     if (wide.empty() || rect.width <= 0 || rect.height <= 0 || color.a == 0) {
@@ -189,16 +193,23 @@ bool draw_text_with_gdi(FrameBuffer& target,
     DeleteObject(black);
 
     const int font_height = -std::max(8, font_size);
-    HFONT font = CreateFontW(font_height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+    const int gdi_weight = font_weight >= 600 ? FW_BOLD : FW_NORMAL;
+    HFONT font = CreateFontW(font_height, 0, 0, 0, gdi_weight, FALSE, FALSE, FALSE,
                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                              ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
                              L"Microsoft YaHei UI");
     HGDIOBJ old_font = font != nullptr ? SelectObject(memory_dc, font) : nullptr;
     SetBkMode(memory_dc, TRANSPARENT);
     SetTextColor(memory_dc, RGB(255, 255, 255));
-    const UINT flags = rect.height > 24
-        ? (DT_LEFT | DT_WORDBREAK | DT_NOPREFIX)
-        : (DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    UINT flags = DT_NOPREFIX;
+    if (align == TextCommandAlign::Center) {
+        flags |= DT_CENTER;
+    } else if (align == TextCommandAlign::End) {
+        flags |= DT_RIGHT;
+    } else {
+        flags |= DT_LEFT;
+    }
+    flags |= single_line ? (DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS) : DT_WORDBREAK;
     DrawTextW(memory_dc, wide.c_str(), static_cast<int>(wide.size()), &bounds, flags);
 
     const auto* pixels = static_cast<const std::uint32_t*>(bits);
@@ -228,6 +239,62 @@ bool draw_text_with_gdi(FrameBuffer& target,
     DeleteObject(bitmap);
     DeleteDC(memory_dc);
     return true;
+}
+
+HFONT create_gdi_text_font(int font_size, int font_weight) {
+    const int font_height = -std::max(8, font_size);
+    const int gdi_weight = font_weight >= 600 ? FW_BOLD : FW_NORMAL;
+    return CreateFontW(font_height, 0, 0, 0, gdi_weight, FALSE, FALSE, FALSE,
+                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                       ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+                       L"Microsoft YaHei UI");
+}
+
+bool measure_text_with_gdi(const std::string& text,
+                           int font_size,
+                           int font_weight,
+                           TextMetrics* metrics,
+                           void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    const std::wstring wide = utf8_to_wide(text);
+    if (!text.empty() && wide.empty()) {
+        return false;
+    }
+
+    HDC dc = GetDC(nullptr);
+    if (dc == nullptr) {
+        return false;
+    }
+    HFONT font = create_gdi_text_font(font_size, font_weight);
+    HGDIOBJ old_font = font != nullptr ? SelectObject(dc, font) : nullptr;
+
+    SIZE size{0, 0};
+    bool ok = true;
+    if (!wide.empty() &&
+        GetTextExtentPoint32W(dc, wide.c_str(), static_cast<int>(wide.size()), &size) == 0) {
+        ok = false;
+    }
+    TEXTMETRICW text_metric{};
+    if (GetTextMetricsW(dc, &text_metric) == 0) {
+        ok = false;
+    }
+
+    if (ok) {
+        metrics->width = std::max(0L, size.cx) + (wide.empty() ? 0 : std::max(2, font_size / 4));
+        metrics->line_height = std::max(1L, text_metric.tmHeight + text_metric.tmExternalLeading) +
+            std::max(2, font_size / 6);
+    }
+
+    if (old_font != nullptr) {
+        SelectObject(dc, old_font);
+    }
+    if (font != nullptr) {
+        DeleteObject(font);
+    }
+    ReleaseDC(nullptr, dc);
+    return ok;
 }
 
 InputModifiers modifiers_from_keys(WPARAM wparam) {
@@ -274,6 +341,37 @@ int parse_int_arg(const char* value, int fallback) {
     }
 }
 
+const Node* find_first_element(const Node& node, const char* tag_name) {
+    if (node.type == NodeType::Element && node.tag_name == tag_name) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        const Node* found = find_first_element(*child, tag_name);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+Color page_background_color(const Node& document, const StyleResolver& resolver) {
+    const Node* body = find_first_element(document, "body");
+    if (body != nullptr) {
+        const Style style = resolver.resolve(*body);
+        if (style.background_color.a != 0) {
+            return style.background_color;
+        }
+    }
+    const Node* html = find_first_element(document, "html");
+    if (html != nullptr) {
+        const Style style = resolver.resolve(*html);
+        if (style.background_color.a != 0) {
+            return style.background_color;
+        }
+    }
+    return Color{255, 255, 255, 255};
+}
+
 FrameBuffer render_page_with_gdi_text(const std::string& html_path,
                                       const std::string& css_path,
                                       int viewport_width,
@@ -287,14 +385,14 @@ FrameBuffer render_page_with_gdi_text(const std::string& html_path,
 
     RenderTreeBuilder render_builder(resolver);
     auto render_tree = render_builder.build(*document);
-    LayoutEngine layout_engine(resolver);
+    LayoutEngine layout_engine(resolver, TextMeasureProvider{measure_text_with_gdi, nullptr});
     auto layout_tree = layout_engine.layout(*render_tree, viewport_width);
     LayerTreeBuilder layer_builder;
     auto layer_tree = layer_builder.build(*layout_tree);
 
     const int output_height = std::max(min_viewport_height, layout_tree->rect.height);
     SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
-    return compositor.render(*layer_tree, viewport_width, output_height, Color{255, 255, 255, 255});
+    return compositor.render(*layer_tree, viewport_width, output_height, page_background_color(*document, resolver));
 }
 
 class BrowserApp {
@@ -362,6 +460,7 @@ private:
     std::unique_ptr<LayerNode> layer_tree_;
     std::unique_ptr<InputController> input_;
     FrameBuffer frame_buffer_;
+    Color page_background_{255, 255, 255, 255};
     std::vector<std::uint32_t> blit_pixels_;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -448,6 +547,7 @@ private:
             Stylesheet stylesheet = css_parser.parse(
                 wearweb_example::read_author_css_for_document(css_path_, *document_, kMaxInputBytes));
             style_resolver_ = std::make_unique<StyleResolver>(std::move(stylesheet));
+            page_background_ = page_background_color(*document_, *style_resolver_);
 
             document_->add_event_listener("click", [this](Event& event) {
                 std::cout << "click target=" << describe_node(event.target()) << '\n';
@@ -494,20 +594,45 @@ private:
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
         }
+        std::unique_ptr<LayoutBox> previous_layout = std::move(layout_tree_);
         RenderTreeBuilder render_builder(*style_resolver_);
-        render_tree_ = render_builder.build(*document_);
-        LayoutEngine layout_engine(*style_resolver_);
-        layout_tree_ = layout_engine.layout(*render_tree_, viewport_width_);
+        auto next_render_tree = render_builder.build(*document_);
+        LayoutEngine layout_engine(*style_resolver_, TextMeasureProvider{measure_text_with_gdi, nullptr});
+        auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_);
         LayerTreeBuilder layer_builder;
-        layer_tree_ = layer_builder.build(*layout_tree_);
+        auto next_layer_tree = layer_builder.build(*next_layout_tree);
 
-        scroll_y_ = clamp_scroll_y(scroll_y_);
-        const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+        const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);
+        scroll_y_ = std::max(0, std::min(scroll_y_, std::max(0, content_height - viewport_height_)));
         SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
-        frame_buffer_ = compositor.render(*layer_tree_,
-                                          viewport_width_,
-                                          content_height,
-                                          Color{255, 255, 255, 255});
+        std::vector<Rect> dirty_rects;
+        const bool can_repaint_incrementally =
+            previous_layout != nullptr &&
+            frame_buffer_.width == viewport_width_ &&
+            frame_buffer_.height == content_height;
+        if (can_repaint_incrementally && document_->dirty_flags != DomDirtyNone) {
+            dirty_rects = compute_dirty_rects(*document_,
+                                              previous_layout.get(),
+                                              next_layout_tree.get(),
+                                              DirtyRegionOptions{Rect{0, 0, viewport_width_, content_height}, 8, 3});
+        }
+
+        render_tree_ = std::move(next_render_tree);
+        layout_tree_ = std::move(next_layout_tree);
+        layer_tree_ = std::move(next_layer_tree);
+
+        if (can_repaint_incrementally && !dirty_rects.empty()) {
+            compositor.render_into(*layer_tree_,
+                                   frame_buffer_,
+                                   page_background_,
+                                   dirty_rects.data(),
+                                   dirty_rects.size());
+        } else {
+            frame_buffer_ = compositor.render(*layer_tree_,
+                                              viewport_width_,
+                                              content_height,
+                                              page_background_);
+        }
         input_ = std::make_unique<InputController>(*layer_tree_);
         input_->set_focused_node(focused_node);
         update_blit_pixels();
@@ -536,9 +661,46 @@ private:
         return true;
     }
 
+    const LayoutBox* find_layout_by_id(const LayoutBox& box, const std::string& id) const {
+        if (box.node != nullptr && box.node->attribute("id") == id) {
+            return &box;
+        }
+        for (const auto& child : box.children) {
+            const LayoutBox* found = find_layout_by_id(*child, id);
+            if (found != nullptr) {
+                return found;
+            }
+        }
+        return nullptr;
+    }
+
+    bool scroll_to_y(int y) {
+        const int previous = scroll_y_;
+        scroll_y_ = clamp_scroll_y(y);
+        if (scroll_y_ == previous) {
+            return false;
+        }
+        update_blit_pixels();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    bool follow_hash_anchor(const Node* node) {
+        if (node == nullptr || layout_tree_ == nullptr || node->type != NodeType::Element ||
+            node->tag_name != "a") {
+            return false;
+        }
+        const std::string& href = node->attribute("href");
+        if (href.size() <= 1 || href.front() != '#') {
+            return false;
+        }
+        const LayoutBox* target = find_layout_by_id(*layout_tree_, href.substr(1));
+        return target != nullptr && scroll_to_y(target->rect.y);
+    }
+
     void update_blit_pixels() {
         blit_pixels_.assign(static_cast<std::size_t>(viewport_width_) * static_cast<std::size_t>(viewport_height_),
-                            color_to_bgrx(Color{255, 255, 255, 255}));
+                            color_to_bgrx(page_background_));
         if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
             return;
         }
@@ -621,6 +783,7 @@ private:
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_up(input);
         rerender_if_dirty(input_->focused_node());
+        follow_hash_anchor(target);
         set_title("up " + describe_node(target));
     }
 
@@ -664,6 +827,12 @@ private:
             key.code = KeyCode::Enter;
         } else if (wparam == VK_SPACE) {
             key.code = KeyCode::Space;
+        } else if (wparam == VK_TAB) {
+            key.code = KeyCode::Tab;
+        } else if (wparam == VK_UP) {
+            key.code = KeyCode::ArrowUp;
+        } else if (wparam == VK_DOWN) {
+            key.code = KeyCode::ArrowDown;
         } else {
             return;
         }
