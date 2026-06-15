@@ -79,3 +79,5 @@ trees now have arena-backed build paths, and DOM teardown no longer recursively
 walks child destructors. The biggest remaining allocation question is whether
 DOM nodes should move to a document arena without hurting mutation/script
 readability.
+
+See `docs/dom_arena_feasibility.md` for the current DOM arena decision.

@@ -53,8 +53,9 @@ planned.
 1. Concrete board/LVGL/display-driver examples based on
    `jellyframe_embedded_host_demo`.
 2. LVGL/vendor text backend adapters beyond the static bitmap backend.
-3. Evaluate DOM node arena allocation; candidate-rule caching is available, but
-   full computed-style sharing still needs inheritance and invalidation design.
+3. Add DOM ownership instrumentation and prototype a `DomOwner`; the DOM arena
+   feasibility review is documented, and direct allocator replacement is
+   deferred for mutable/scripted documents.
 4. Tiled framebuffer presentation for displays that cannot keep a full target
    buffer.
 5. Resource bundle tooling and app packaging for local embedded assets.

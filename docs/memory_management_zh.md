@@ -55,3 +55,5 @@ JellyFrame 当前优先采用明确所有权和小型、可预测容器。这是
 有界嵌入式 bring-up。它仍不是极小 MCU 的最优堆模型；render/layout/layer tree 都已经有
 arena 构建路径，DOM teardown 也不再递归走子节点析构。剩余最大的分配问题是：能否把 DOM node
 移入 document arena，同时不破坏 mutation/script 的可读性和安全性。
+
+当前 DOM arena 判断见 `docs/dom_arena_feasibility_zh.md`。

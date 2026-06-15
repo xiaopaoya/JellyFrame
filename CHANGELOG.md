@@ -62,6 +62,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   patterns while preserving per-node selector matching and cascade semantics.
 - Added iterative DOM subtree teardown and whole-subtree `textContent`
   replacement to reduce stack pressure on deeply nested generated documents.
+- Added bilingual DOM arena feasibility notes documenting why direct DOM arena
+  allocation is deferred for mutable/scripted documents.
 - Added paint-only DOM dirty state for form-control value/checked/selection
   changes, enabling the Win32 shell to reuse render/layout and repaint bounded
   dirty rectangles for common control interaction.
