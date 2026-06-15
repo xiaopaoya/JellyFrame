@@ -31,6 +31,9 @@ small wearable devices.
 - DOM dirty bits propagate to ancestors, so root dirty checks are O(1), clean
   subtrees are skipped during dirty clearing, and unchanged `textContent`
   assignments do not trigger rerenders.
+- DOM subtree teardown and whole-subtree `textContent` replacement use an
+  explicit work list instead of recursive child destruction, reducing stack risk
+  on very deep generated documents.
 - Script timers are host-pumped with a callback budget and explicit JerryScript
   reference release paths.
 - Platform text painting is injected through an optional callback; the core

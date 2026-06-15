@@ -26,7 +26,8 @@ JellyFrame 当前优先采用明确所有权和小型、可预测容器。这是
 - DOM attributes 已从每节点 `std::unordered_map` 改为紧凑顺序 `AttributeList`。多数嵌入式 UI
   节点只有少量属性，线性扫描比维护 hash buckets 更省内存且更可预测。
 - DOM node 仍会独立分配许多小对象。这样清晰安全，但可能造成小堆碎片。
-- 多处树操作是递归的。极小栈目标可能需要把 parsing、dirty flag 扫描和销毁路径改成迭代遍历。
+- DOM 子树销毁已经改为迭代路径，整子树 `textContent` 替换也复用该路径。其他树扫描仍有递归，
+  因此极小栈目标可能仍需要把 parsing 和 dirty flag 扫描改成迭代遍历。
 - Framebuffer 内存和 viewport 面积线性相关。390x640 RGBA buffer 在任何离屏 layer 之前就约 1 MiB。
 - 嵌入式 presentation 可以用 `embedded_framebuffer` 把 dirty rectangles 转换到宿主持有的
   RGB565、灰度或单色 buffer，从而避免再保留一份 RGBA 大小的显示 buffer。
@@ -52,5 +53,5 @@ JellyFrame 当前优先采用明确所有权和小型、可预测容器。这是
 
 主要管线阶段已经消费 `HostBudgets`，DOM attributes 也已经去掉每节点 hash map。项目现在更适合做
 有界嵌入式 bring-up。它仍不是极小 MCU 的最优堆模型；render/layout/layer tree 都已经有
-arena 构建路径。剩余最大的分配问题是：能否把 DOM node 移入 document arena，同时不破坏
-mutation/script 的可读性和安全性。
+arena 构建路径，DOM teardown 也不再递归走子节点析构。剩余最大的分配问题是：能否把 DOM node
+移入 document arena，同时不破坏 mutation/script 的可读性和安全性。

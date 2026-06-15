@@ -34,8 +34,9 @@ still desktop-convenient rather than MCU-tight.
   attributes, so linear scans are more memory-predictable than hash buckets.
 - DOM nodes still allocate many small objects independently. This is clear and
   safe, but can fragment small heaps.
-- Several tree operations are recursive. Very small stacks may need iterative
-  traversal for parsing, dirty-flag scans and teardown.
+- DOM subtree teardown is iterative, including whole-subtree `textContent`
+  replacement. Some other tree walks remain recursive, so very small stacks may
+  still need iterative traversal for parsing and dirty-flag scans.
 - Framebuffer memory is linear in viewport size. A 390x640 RGBA buffer is about
   1 MiB before any offscreen layer.
 - Embedded presentation can avoid a second RGBA-sized display buffer by using
@@ -74,6 +75,7 @@ still desktop-convenient rather than MCU-tight.
 The project is now safer for bounded embedded bring-up because major pipeline
 stages consume `HostBudgets`, and DOM attributes no longer use per-node hash
 maps. It is still not heap-optimal for tiny MCUs. Render, layout and layer
-trees now have arena-backed build paths; the biggest remaining allocation
-question is whether DOM nodes should move to a document arena without hurting
-mutation/script readability.
+trees now have arena-backed build paths, and DOM teardown no longer recursively
+walks child destructors. The biggest remaining allocation question is whether
+DOM nodes should move to a document arena without hurting mutation/script
+readability.

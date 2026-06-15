@@ -15,6 +15,19 @@ bool attribute_affects_form_control_state(const std::string& name) {
         name == "min" || name == "max" || name == "step";
 }
 
+void destroy_node_list_iterative(std::vector<std::unique_ptr<Node>>& nodes) {
+    std::vector<std::unique_ptr<Node>> pending;
+    pending.swap(nodes);
+    while (!pending.empty()) {
+        std::unique_ptr<Node> node = std::move(pending.back());
+        pending.pop_back();
+        for (auto& child : node->children) {
+            pending.push_back(std::move(child));
+        }
+        node->children.clear();
+    }
+}
+
 } // namespace
 
 AttributeList::iterator AttributeList::find(const std::string& name) {
@@ -62,7 +75,9 @@ std::string& AttributeList::operator[](std::string name) {
 Node::Node(NodeType node_type)
     : type(node_type) {}
 
-Node::~Node() = default;
+Node::~Node() {
+    destroy_node_list_iterative(children);
+}
 
 Node& Node::append_child(std::unique_ptr<Node> child) {
     child->parent = this;
@@ -139,7 +154,7 @@ void Node::set_text_content(std::string value) {
         children.front()->text == value) {
         return;
     }
-    children.clear();
+    destroy_node_list_iterative(children);
     if (!value.empty()) {
         auto child = make_text(std::move(value));
         child->parent = this;

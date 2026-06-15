@@ -23,6 +23,8 @@
 - DOM event listener storage 惰性分配，没有 listener 的节点不携带空 listener table。
 - DOM dirty bits 会向祖先传播，因此根节点 dirty 检查为 O(1)，dirty 清理会跳过干净子树，
   且同值 `textContent` 赋值不会触发重绘。
+- DOM 子树销毁和整子树 `textContent` 替换使用显式工作列表，而不是递归销毁子节点，
+  降低极深生成式文档在小栈设备上的风险。
 - 脚本 timer 由宿主泵动，带 callback budget，并有明确的 JerryScript reference 释放路径。
 - 平台文本绘制通过可选回调注入；核心 renderer 保留可移植 bitmap fallback，不链接 Win32/GDI。
 - software rasterizer 对不透明矩形使用直接行填充。
