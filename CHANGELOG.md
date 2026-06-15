@@ -159,6 +159,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.
+- Added ESP32-S3 P3 display bring-up support: an 8 MB flash partition layout,
+  RGB565 packed dirty-rectangle flush callbacks, scratch-buffer row packing and
+  a QEMU display smoke path that exercises full-frame and partial dirty
+  presentation.
 - Added embedded-app JavaScript helpers: `children`, `parentElement`,
   simple-selector `matches`/`closest`, existing-attribute `dataset` snapshots,
   a small writable `element.style` object and boolean `hidden`/`disabled`

@@ -115,6 +115,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
   转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
   单色显示 buffer。
+- 添加 ESP32-S3 P3 显示 bring-up 支持：8 MB flash 分区布局、RGB565 packed dirty-rectangle
+  flush callback、scratch buffer 逐行打包，以及覆盖全帧和局部 dirty 提交的 QEMU 显示 smoke 路径。
 - 添加面向嵌入式 app 的 JavaScript helpers：`children`、`parentElement`、简单 selector
   `matches`/`closest`、基于已有属性的 `dataset` 快照、可写的小型 `element.style` 对象，
   以及 boolean `hidden`/`disabled` reflection。

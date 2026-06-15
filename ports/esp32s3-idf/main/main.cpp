@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <new>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -81,6 +82,56 @@ std::size_t external_script_count(const std::vector<DocumentScript>& scripts) {
         }
     }
     return total;
+}
+
+struct StridedFlushProbe {
+    std::uint32_t calls = 0;
+    std::uint32_t pixels = 0;
+    std::uint32_t bytes = 0;
+    int last_stride = 0;
+};
+
+struct PackedFlushProbe {
+    std::uint32_t calls = 0;
+    std::uint32_t pixels = 0;
+    std::uint32_t bytes = 0;
+    Rect last_dirty{};
+};
+
+bool probe_strided_flush(const std::uint16_t* pixels,
+                         int width,
+                         int height,
+                         int stride_pixels,
+                         Rect dirty_rect,
+                         void* context) {
+    if (pixels == nullptr || width <= 0 || height <= 0 || stride_pixels < width || context == nullptr) {
+        return false;
+    }
+    auto* probe = static_cast<StridedFlushProbe*>(context);
+    ++probe->calls;
+    const std::uint32_t dirty_pixels = dirty_rect.width > 0 && dirty_rect.height > 0
+        ? static_cast<std::uint32_t>(dirty_rect.width) * static_cast<std::uint32_t>(dirty_rect.height)
+        : 0;
+    probe->pixels += dirty_pixels;
+    probe->bytes += dirty_pixels * sizeof(std::uint16_t);
+    probe->last_stride = stride_pixels;
+    return true;
+}
+
+bool probe_packed_flush(const std::uint16_t* pixels,
+                        Rect dirty_rect,
+                        void* context) {
+    if (pixels == nullptr || dirty_rect.width <= 0 || dirty_rect.height <= 0 || context == nullptr) {
+        return false;
+    }
+    auto* probe = static_cast<PackedFlushProbe*>(context);
+    ++probe->calls;
+    const std::uint32_t dirty_pixels =
+        static_cast<std::uint32_t>(dirty_rect.width) * static_cast<std::uint32_t>(dirty_rect.height);
+    probe->pixels += dirty_pixels;
+    probe->bytes += dirty_pixels * sizeof(std::uint16_t);
+    probe->last_dirty = dirty_rect;
+    return true;
 }
 
 HostBudgets make_budgets(int width, int height, int cards) {
@@ -266,6 +317,83 @@ bool enough_pipeline_scratch_memory() {
     return has_room;
 }
 
+void run_p3_display_smoke(const FrameBuffer& frame_buffer, int width, int height) {
+    const Rect full_dirty{0, 0, width, height};
+    StridedFlushProbe full_probe;
+    jellyframe_esp32s3::Rgb565Panel full_panel;
+    bool full_ok = false;
+    {
+        const std::size_t full_pixels = jellyframe_esp32s3::rgb565_buffer_pixels(width, height);
+        std::unique_ptr<std::uint16_t[]> full_rgb565(new (std::nothrow) std::uint16_t[full_pixels]);
+        if (full_rgb565) {
+            full_panel.pixels = full_rgb565.get();
+            full_panel.width = width;
+            full_panel.height = height;
+            full_panel.stride_pixels = width;
+            full_panel.flush = probe_strided_flush;
+            full_panel.flush_context = &full_probe;
+            EmbeddedFrameBufferSink full_sink = jellyframe_esp32s3::make_rgb565_sink(full_panel);
+            const HostFrameSink full_frame_sink = embedded_frame_sink(full_sink);
+            full_ok = present_frame(frame_buffer, full_frame_sink, &full_dirty, 1);
+        } else {
+            ++full_panel.failed_flush_count;
+        }
+    }
+
+    const int padded_stride = width + 8;
+    const Rect partial_dirty{
+        width / 4,
+        height / 4,
+        width / 3,
+        height / 3,
+    };
+    PackedFlushProbe packed_probe;
+    jellyframe_esp32s3::Rgb565Panel packed_panel;
+    bool partial_ok = false;
+    {
+        const std::size_t partial_pixels =
+            jellyframe_esp32s3::rgb565_buffer_pixels(width, height, padded_stride);
+        const std::size_t scratch_pixels =
+            static_cast<std::size_t>(partial_dirty.width) * static_cast<std::size_t>(partial_dirty.height);
+        std::unique_ptr<std::uint16_t[]> partial_rgb565(new (std::nothrow) std::uint16_t[partial_pixels]);
+        std::unique_ptr<std::uint16_t[]> scratch(new (std::nothrow) std::uint16_t[scratch_pixels]);
+        if (partial_rgb565 && scratch) {
+            packed_panel.pixels = partial_rgb565.get();
+            packed_panel.width = width;
+            packed_panel.height = height;
+            packed_panel.stride_pixels = padded_stride;
+            packed_panel.packed_flush = probe_packed_flush;
+            packed_panel.flush_context = &packed_probe;
+            packed_panel.scratch_pixels = scratch.get();
+            packed_panel.scratch_pixel_capacity = scratch_pixels;
+            EmbeddedFrameBufferSink packed_sink = jellyframe_esp32s3::make_rgb565_sink(packed_panel);
+            const HostFrameSink packed_frame_sink = embedded_frame_sink(packed_sink);
+            partial_ok = present_frame(frame_buffer, packed_frame_sink, &partial_dirty, 1);
+        } else {
+            ++packed_panel.failed_flush_count;
+        }
+    }
+
+    ESP_LOGI(tag,
+             "p3_display_smoke full_ok=%d full_flushes=%u full_pixels=%u full_bytes=%u full_stride=%d partial_ok=%d partial_flushes=%u partial_pixels=%u partial_bytes=%u packed_flushes=%u scratch_flushes=%u failed_flushes=%u last_dirty=%d,%d %dx%d",
+             full_ok ? 1 : 0,
+             static_cast<unsigned>(full_panel.flush_count),
+             static_cast<unsigned>(full_panel.flushed_pixels),
+             static_cast<unsigned>(full_panel.flushed_bytes),
+             full_probe.last_stride,
+             partial_ok ? 1 : 0,
+             static_cast<unsigned>(packed_panel.flush_count),
+             static_cast<unsigned>(packed_panel.flushed_pixels),
+             static_cast<unsigned>(packed_panel.flushed_bytes),
+             static_cast<unsigned>(packed_panel.packed_flush_count),
+             static_cast<unsigned>(packed_panel.scratch_flush_count),
+             static_cast<unsigned>(packed_panel.failed_flush_count),
+             packed_probe.last_dirty.x,
+             packed_probe.last_dirty.y,
+             packed_probe.last_dirty.width,
+             packed_probe.last_dirty.height);
+}
+
 void run_benchmark() {
     const int card_count = CONFIG_JELLYFRAME_BENCH_CARD_COUNT;
     const int iterations = CONFIG_JELLYFRAME_BENCH_ITERATIONS;
@@ -389,6 +517,7 @@ void run_benchmark() {
         });
         rendered_frame = true;
         print_result("render_frame", iterations, render_frame_us);
+        run_p3_display_smoke(frame_buffer, viewport_width, viewport_height);
 
 #if CONFIG_JELLYFRAME_BENCH_PRESENT_RGB565
         auto rgb565 = std::make_unique<std::uint16_t[]>(
@@ -404,7 +533,12 @@ void run_benchmark() {
 
         present_rgb565_us = average_microseconds(clock, iterations, [&] {
             panel.flush_count = 0;
+            panel.packed_flush_count = 0;
+            panel.scratch_flush_count = 0;
+            panel.failed_flush_count = 0;
             panel.flushed_pixels = 0;
+            panel.flushed_bytes = 0;
+            panel.last_dirty_rect = {};
             const bool ok = present_frame(frame_buffer, frame_sink, &full_dirty, 1);
             if (!ok) {
                 ESP_LOGE(tag, "present_rgb565 failed");

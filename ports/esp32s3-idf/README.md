@@ -42,6 +42,27 @@ Useful `menuconfig` entries:
 The QEMU/bring-up defaults are `300x300`, `40` cards and `20` iterations. This
 configuration expects PSRAM for the framebuffer and full pipeline benchmark.
 
+## Flash Layout
+
+The port defaults to an 8 MB flash image with a custom partition table in
+`partitions.csv`. The app partition is intentionally 4 MB so the later
+JerryScript component, bitmap fonts and generated app resources have room to
+grow.
+
+Current layout:
+
+| Name | Type | Offset | Size | Purpose |
+|---|---|---:|---:|---|
+| `nvs` | data/nvs | `0x9000` | 24 KB | system settings |
+| `phy_init` | data/phy | `0xf000` | 4 KB | PHY init data |
+| `factory` | app/factory | `0x10000` | 4 MB | JellyFrame firmware |
+| `assets` | data/spiffs | `0x410000` | 2 MB | future generated resources/fonts |
+| `storage` | data/nvs | `0x610000` | 512 KB | app settings/state |
+| `coredump` | data/coredump | `0x690000` | 256 KB | crash diagnostics |
+
+If the product needs OTA slots, prefer moving to a 16 MB flash module and using
+a two-app layout instead of shrinking the 4 MB app partition.
+
 Expected serial output shape:
 
 ```text
@@ -58,6 +79,7 @@ I JellyFrame: layout iterations=20 avg_us=...
 I JellyFrame: layer_tree iterations=20 avg_us=...
 I JellyFrame: flatten_layers iterations=20 avg_us=...
 I JellyFrame: render_frame iterations=20 avg_us=...
+I JellyFrame: p3_display_smoke full_ok=1 full_flushes=1 full_pixels=90000 full_bytes=180000 full_stride=300 partial_ok=1 partial_flushes=1 partial_pixels=10000 partial_bytes=20000 packed_flushes=1 scratch_flushes=1 failed_flushes=0 last_dirty=75,75 100x100
 I JellyFrame: present_rgb565 iterations=20 avg_us=...
 I JellyFrame: full_pipeline iterations=20 avg_us=...
 I JellyFrame: after heap_free=... heap_min=... largest=... internal_free=... spiram_free=...
@@ -77,9 +99,10 @@ Espressif QEMU `esp_develop_9.2.2_20260417` works for this benchmark. It accepts
 Manual launch flow:
 
 ```powershell
-python -m esptool --chip esp32s3 merge_bin --output flash_image.bin --fill-flash-size 2MB "@flash_args"
+python -m esptool --chip esp32s3 merge_bin --output flash_image.bin --fill-flash-size 8MB "@flash_args"
 
 qemu-system-xtensa.exe -M esp32s3 -m 4M `
+  -global driver=ssi_psram,property=is_octal,value=true `
   -drive file=C:\Users\Administrator\AppData\Local\Temp\jellyframe-qemu-s3\flash_image.bin,if=mtd,format=raw `
   -drive file=C:\Users\Administrator\AppData\Local\Temp\jellyframe-qemu-s3\qemu_efuse.bin,if=none,format=raw,id=efuse `
   -nographic -monitor none -no-reboot
@@ -139,10 +162,43 @@ panel.stride_pixels = width;
 panel.flush = your_panel_flush;
 ```
 
-The callback receives the full RGB565 buffer, dimensions, stride and dirty
-rectangle. If your panel API accepts a tight rectangle buffer, copy each dirty
-row into a scratch buffer before calling the driver. If your panel API accepts
-strided memory or full-width row windows, submit the dirty rectangle directly.
+The `flush` callback receives the full RGB565 buffer, dimensions, stride and
+dirty rectangle. Use it when your panel driver accepts a source stride or when
+you choose to submit full-width row windows.
+
+For drivers such as `esp_lcd_panel_draw_bitmap` that expect a tightly packed
+dirty-rectangle buffer, use `packed_flush` and provide a scratch buffer:
+
+```cpp
+std::uint16_t* rgb565_pixels = persistent_rgb565_buffer;
+std::uint16_t* scratch_pixels = persistent_scratch_buffer;
+
+jellyframe_esp32s3::Rgb565Panel panel;
+panel.pixels = rgb565_pixels;
+panel.width = width;
+panel.height = height;
+panel.stride_pixels = width;
+panel.packed_flush = your_packed_rect_flush;
+panel.scratch_pixels = scratch_pixels;
+panel.scratch_pixel_capacity = scratch_pixel_count;
+```
+
+The HAL passes full-width tight rectangles directly when possible. For
+partial-width dirty rectangles, it packs rows into `scratch_pixels` before
+calling `packed_flush`. A real `packed_flush` implementation can call:
+
+```cpp
+esp_lcd_panel_draw_bitmap(panel_handle,
+                          dirty.x,
+                          dirty.y,
+                          dirty.x + dirty.width,
+                          dirty.y + dirty.height,
+                          pixels);
+```
+
+The QEMU smoke path exercises both a full-frame strided flush and a padded-stride
+partial dirty rectangle that requires scratch packing. It logs flush count,
+dirty pixels, transferred bytes, scratch usage and failed flushes.
 
 For `esp_lcd_panel_draw_bitmap`, be careful with partial-width dirty rectangles:
 the API does not carry a source stride, so passing `pixels + y * stride + x`
@@ -151,7 +207,7 @@ are packed into a temporary tight buffer.
 
 ## Next Porting Steps
 
-1. Replace the no-op `Rgb565Panel::flush` path with your board's panel driver.
+1. Replace the no-op `Rgb565Panel` path with your board's panel driver.
 2. Add touch/crown/button input and translate it into `InputController` calls.
 3. Replace fallback text rendering with a bitmap font pack for production UI.
 4. Replace the smoke-test resource table with a generated real app bundle.
