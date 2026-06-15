@@ -45,7 +45,7 @@
 
 1. 基于 `jellyframe_embedded_host_demo` 完成具体开发板、LVGL 或显示驱动示例。
 2. 在静态 bitmap backend 之外补充 LVGL/vendor text backend adapters。
-3. 添加 DOM ownership instrumentation，并原型化 `DomOwner`；DOM arena 可行性审视已文档化，
-   mutable/scripted document 的直接 allocator replacement 延后。
+3. 原型化 `DomOwner`，并添加 runtime detached-node instrumentation；核心 attached-DOM statistics
+   已可用，mutable/scripted document 的直接 DOM arena replacement 延后。
 4. 面向无法保留完整 target buffer 的屏幕补充 tiled framebuffer presentation。
 5. 补齐本地嵌入式资源包工具和 app packaging。

@@ -2,6 +2,7 @@
 
 #include "core/form_control.h"
 
+#include <algorithm>
 #include <sstream>
 #include <utility>
 
@@ -241,6 +242,31 @@ DomDirtyFlags take_dirty_flags(Node& node) {
     const DomDirtyFlags flags = node.dirty_flags;
     clear_dirty_flags(node);
     return flags;
+}
+
+DomStatistics compute_dom_statistics(const Node& root) {
+    DomStatistics statistics;
+    std::vector<std::pair<const Node*, std::size_t>> pending;
+    pending.push_back({&root, 1});
+    while (!pending.empty()) {
+        const auto [node, depth] = pending.back();
+        pending.pop_back();
+        ++statistics.node_count;
+        statistics.max_depth = std::max(statistics.max_depth, depth);
+        statistics.max_child_count = std::max(statistics.max_child_count, node->children.size());
+        if (node->type == NodeType::Element) {
+            ++statistics.element_count;
+            statistics.attribute_count += node->attributes.size();
+            statistics.max_attributes_per_element =
+                std::max(statistics.max_attributes_per_element, node->attributes.size());
+        } else {
+            ++statistics.text_count;
+        }
+        for (const auto& child : node->children) {
+            pending.push_back({child.get(), depth + 1});
+        }
+    }
+    return statistics;
 }
 
 } // namespace jellyframe

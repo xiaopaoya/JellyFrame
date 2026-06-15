@@ -115,6 +115,25 @@ void deep_subtree_replacement_and_teardown_are_iterative() {
     check(document->children.front()->type == NodeType::Text, "replacement text node exists");
 }
 
+void dom_statistics_are_iterative_and_budget_oriented() {
+    auto document = make_element("document");
+    document->attributes["data-root"] = "1";
+    Node& body = document->append_child(make_element("body"));
+    body.attributes["class"] = "app";
+    Node& paragraph = body.append_child(make_element("p"));
+    paragraph.attributes["id"] = "intro";
+    paragraph.append_child(make_text("Hello"));
+
+    const DomStatistics statistics = compute_dom_statistics(*document);
+    check(statistics.node_count == 4, "dom statistics node count");
+    check(statistics.element_count == 3, "dom statistics element count");
+    check(statistics.text_count == 1, "dom statistics text count");
+    check(statistics.attribute_count == 3, "dom statistics attribute count");
+    check(statistics.max_depth == 4, "dom statistics max depth");
+    check(statistics.max_child_count == 1, "dom statistics max child count");
+    check(statistics.max_attributes_per_element == 1, "dom statistics max attributes");
+}
+
 } // namespace
 
 int main() {
@@ -125,6 +144,7 @@ int main() {
         attributes_and_text_mark_specific_dirty_bits();
         unchanged_text_content_stays_clean();
         deep_subtree_replacement_and_teardown_are_iterative();
+        dom_statistics_are_iterative_and_budget_oriented();
     } catch (const std::exception& error) {
         std::cerr << "dom mutation test failed: " << error.what() << '\n';
         return 1;

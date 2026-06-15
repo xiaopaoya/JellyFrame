@@ -30,6 +30,16 @@ enum DomDirtyFlag : std::uint32_t {
 
 using DomDirtyFlags = std::uint32_t;
 
+struct DomStatistics {
+    std::size_t node_count = 0;
+    std::size_t element_count = 0;
+    std::size_t text_count = 0;
+    std::size_t attribute_count = 0;
+    std::size_t max_depth = 0;
+    std::size_t max_child_count = 0;
+    std::size_t max_attributes_per_element = 0;
+};
+
 class AttributeList {
 public:
     using Entry = std::pair<std::string, std::string>;
@@ -90,5 +100,6 @@ DomDirtyFlags subtree_dirty_flags(const Node& node);
 bool dirty_requires_render_or_layout(DomDirtyFlags flags);
 void clear_dirty_flags(Node& node);
 DomDirtyFlags take_dirty_flags(Node& node);
+DomStatistics compute_dom_statistics(const Node& root);
 
 } // namespace jellyframe

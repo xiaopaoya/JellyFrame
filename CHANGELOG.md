@@ -64,6 +64,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   replacement to reduce stack pressure on deeply nested generated documents.
 - Added bilingual DOM arena feasibility notes documenting why direct DOM arena
   allocation is deferred for mutable/scripted documents.
+- Added iterative `compute_dom_statistics()` instrumentation and surfaced DOM
+  depth/attribute counts from pipeline diagnostics.
 - Added paint-only DOM dirty state for form-control value/checked/selection
   changes, enabling the Win32 shell to reuse render/layout and repaint bounded
   dirty rectangles for common control interaction.

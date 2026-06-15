@@ -51,7 +51,9 @@ complicate current mutation semantics:
 
 1. Keep the current heap-owned mutable DOM for scripting-enabled documents.
 2. Add measurement before changing ownership: node count, average children,
-   average attributes and detached-node count.
+   average attributes and detached-node count. The first core-side
+   `compute_dom_statistics()` helper covers attached DOM shape; detached-node
+   counts still belong to the scripting/runtime layer.
 3. Introduce a `Document` or `DomOwner` wrapper only when it can own both the
    root and detached nodes through one lifetime boundary.
 4. Consider a parser-only arena mode for static documents that do not expose
@@ -71,5 +73,5 @@ Do not convert DOM nodes to arena allocation yet. The current best tradeoff is:
 - gather real embedded measurements before introducing a larger ownership
   abstraction.
 
-The next low-risk DOM work should be instrumentation or a `DomOwner` design
-prototype, not a direct allocator replacement.
+The next low-risk DOM work should be a `DomOwner` design prototype and runtime
+detached-node instrumentation, not a direct allocator replacement.

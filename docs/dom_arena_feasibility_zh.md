@@ -41,7 +41,9 @@ mutation。
 ## 安全路线
 
 1. 对 scripting-enabled document 保留当前 heap-owned mutable DOM。
-2. 先补测量：node count、平均 child 数、平均 attribute 数，以及 detached-node 数量。
+2. 先补测量：node count、平均 child 数、平均 attribute 数，以及 detached-node 数量。第一版核心侧
+   `compute_dom_statistics()` helper 已覆盖 attached DOM 形态；detached-node 数量仍属于
+   scripting/runtime 层。
 3. 只有在能同时管理 root 和 detached nodes 的生命周期边界时，再引入 `Document` 或 `DomOwner`
    wrapper。
 4. 可以考虑 parser-only arena mode，用于不暴露 `detach_child()` 和 script-created nodes 的静态文档。
@@ -58,4 +60,5 @@ mutation。
 - 继续渐进移除 DOM 的栈风险和 per-node 开销；
 - 在引入更大所有权抽象前，先拿到真实嵌入式测量结果。
 
-下一项低风险 DOM 工作应是 instrumentation 或 `DomOwner` 设计原型，而不是直接替换 allocator。
+下一项低风险 DOM 工作应是 `DomOwner` 设计原型和 runtime detached-node instrumentation，
+而不是直接替换 allocator。

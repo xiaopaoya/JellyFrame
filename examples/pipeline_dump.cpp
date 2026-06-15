@@ -43,14 +43,6 @@ std::string read_file_limited(const std::string& path) {
     return output.str();
 }
 
-std::size_t count_dom_nodes(const Node& node) {
-    std::size_t count = 1;
-    for (const auto& child : node.children) {
-        count += count_dom_nodes(*child);
-    }
-    return count;
-}
-
 std::size_t count_render_objects(const RenderObject& object) {
     std::size_t count = 1;
     for (const auto& child : object.children) {
@@ -120,9 +112,12 @@ int main(int argc, char** argv) {
         LayerTreeBuilder layer_tree_builder;
         auto layer_tree = layer_tree_builder.build(*layout_tree);
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
+        const DomStatistics dom_statistics = compute_dom_statistics(*document);
 
         std::cout << "Pipeline summary\n";
-        std::cout << "  dom_nodes=" << count_dom_nodes(*document) << '\n';
+        std::cout << "  dom_nodes=" << dom_statistics.node_count << '\n';
+        std::cout << "  dom_max_depth=" << dom_statistics.max_depth << '\n';
+        std::cout << "  dom_attributes=" << dom_statistics.attribute_count << '\n';
         std::cout << "  render_objects=" << count_render_objects(*render_tree) << '\n';
         std::cout << "  layout_boxes=" << count_layout_boxes(*layout_tree) << '\n';
         std::cout << "  layers=" << count_layers(*layer_tree) << '\n';
