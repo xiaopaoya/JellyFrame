@@ -5,8 +5,8 @@ Date: 2026-06-16
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
 shells or custom wearable hardware. It is not a browser feature document. It is
 the porting task contract: what each board-side module must provide, how it
-connects to the current core, how to validate it, and when the work must return
-to the core instead of being forced into a board port.
+connects to the current core, how to validate it, and which current core
+capabilities can be used directly.
 
 The current core is sufficient for a first bring-up with static resources,
 software rendering, RGB565 partial presentation, touch/button input, bitmap
@@ -41,6 +41,22 @@ The first board port should not call Win32, filesystem or desktop shell code
 directly. Use `jellyframe_embedded_host_demo` as the reference shape: it wires
 static HTML/CSS, bitmap fonts, input and RGB565 presentation without windows,
 files, networking or hardware I/O.
+
+## Responsibility Boundary
+
+This guide lists only work that belongs in a board port. The following are not
+hardware-porting tasks:
+
+- Changing the HTML/CSS/DOM/layout/render core algorithms.
+- Adding font-file loading, filesystems, networking or display drivers inside
+  `jellyframe_core`.
+- Reimplementing `jellyframe_capability_check`, `jellyframe_font_pack_gen`,
+  `embedded_framebuffer` or the bitmap font callbacks.
+- Implementing a no-full-framebuffer tiled renderer, complex text shaping,
+  image decoding or a network security model in the first ESP32-S3 port.
+
+If a product requires those capabilities, plan a mainline core milestone first
+instead of forcing them into a board port.
 
 ## Porting Phases
 
@@ -211,22 +227,68 @@ Not directly supported yet:
 
 Goal: make Chinese UI text predictable in coverage, measurement and painting.
 
+Provided by the core/tooling:
+
+- `TextMeasureProvider` and `TextPainter` callback interfaces.
+- Bitmap font data structures, measurement callback and painting callback in
+  `src/core/bitmap_font.h`.
+- `jellyframe_capability_check` for scanning non-ASCII characters from
+  HTML/CSS/JS and checking font coverage.
+- `jellyframe_font_pack_gen` for generating a C++ `BitmapFont` header from a
+  BDF font subset.
+
 Requirements:
 
-- Use offline-generated bitmap font packs in production.
-- Measurement and painting must use the same glyph metrics.
-- Font callbacks should avoid heap allocation.
-- Missing glyphs must be visible and must not break layout.
-- Run capability checks before board builds to emit used characters and verify
-  coverage.
+- Choose and document the licensed source font, sizes, weights and target
+  DPI/pixel height used by the product.
+- Generate bitmap font packs in the board or app build flow. Production firmware
+  must not depend on a runtime vector font rasterizer.
+- Compile the generated `BitmapFont` C++ header into the ESP-IDF app, RTOS app
+  or board support package.
+- Create a persistent `BitmapFontContext` in the port layer. Measurement and
+  painting must use the same glyph metrics.
+- Wire `bitmap_font_measure_callback` into `LayoutEngine` and
+  `bitmap_font_paint_callback` into `SoftwareCompositor`.
+- Font callbacks must not allocate heap memory, touch the filesystem or block on
+  peripherals.
+- Missing glyphs must draw a visible fallback glyph with stable advance; they
+  must not break layout.
+- Run font coverage checks before desktop builds or releases. Missing glyphs
+  should fail the build or at least emit a clear warning.
 
 Implementation:
 
-1. Run `jellyframe_capability_check --emit-used-chars` on HTML/CSS/JS.
-2. Generate BDF or equivalent bitmap glyph data from a licensed source font.
-3. Run `jellyframe_font_pack_gen` to emit a C++ `BitmapFont` header.
-4. Wire `bitmap_font_measure_callback` into `LayoutEngine` and
-   `bitmap_font_paint_callback` into `SoftwareCompositor`.
+1. On the desktop build machine, run:
+
+   ```text
+   jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
+   ```
+
+2. Use the board project's chosen offline tool to generate BDF or equivalent
+   bitmap glyph data from the licensed source font and `used_chars.txt`.
+3. On the desktop build machine, run:
+
+   ```text
+   jellyframe_font_pack_gen --bdf app_font.bdf --chars used_chars.txt --output app_font.h --name app_font
+   ```
+
+4. Place `app_font.h` in the port or app resource directory and include it in
+   the ESP-IDF/RTOS build.
+5. Inject the same font context when creating the layout engine and compositor:
+
+   ```cpp
+   static jellyframe::BitmapFontContext font_context{&app_font, 1};
+
+   jellyframe::TextMeasureProvider measure{
+       jellyframe::bitmap_font_measure_callback,
+       &font_context,
+   };
+
+   jellyframe::TextPainter painter{
+       jellyframe::bitmap_font_paint_callback,
+       &font_context,
+   };
+   ```
 
 Acceptance:
 
@@ -234,6 +296,10 @@ Acceptance:
 - Bold text is visible through a real bold glyph set or a cheap emboldening
   approximation.
 - Missing font coverage can fail or warn at desktop build time.
+- The same page wraps text nearly the same way in the desktop bitmap-font smoke
+  path and on the board panel.
+- The port documentation records font pack size, covered character count, font
+  size and source font license.
 
 Avoid for the first ESP32-S3 port:
 
@@ -377,9 +443,11 @@ Release gates:
 
 ## Current Prerequisite Assessment
 
-The first ESP32-S3 bring-up no longer needs new core interfaces. The required
-work is to merge the experimental files into mainline JellyFrame form, then add
-the real display driver, input driver, font resources and hardware measurements.
+The first ESP32-S3 bring-up no longer needs new core interfaces. Mainline now
+has entry points for static resources, budgets, RGB565 presentation, dirty
+rectangles, bitmap fonts, input events and optional JerryScript. The remaining
+board-port work is to add the real display driver, input driver, font resources,
+run-loop policy and hardware measurements.
 
 If a product target requires any of the following, plan core work first:
 
@@ -392,15 +460,16 @@ If a product target requires any of the following, plan core work first:
 
 ## Recommended Merge Order
 
-1. Merge `ports/virtual_board`, renamed to JellyFrame, as a desktop performance
-   estimator.
-2. Merge `ports/esp32s3-idf`, renamed to JellyFrame, initially building the
-   non-scripted core only.
-3. Move the QEMU report into `docs/esp32s3_qemu_benchmark.md` and the Chinese
-   counterpart.
-4. Wire `HostBudgets` and `budget.h` options into the ESP-IDF app.
-5. Add the real panel `flush(Rect)` implementation.
-6. Add touch/button/crown event queues.
-7. Add the bitmap font pack.
-8. Run real hardware benchmarks and update documentation.
-9. Enable the JerryScript component afterwards.
+1. Calibrate `HostBudgets` and `HostDeviceCapabilities` in the ESP-IDF app for
+   the target board.
+2. Confirm that the resource-bundle flow covers the target app's HTML, CSS and
+   classic scripts.
+3. Add the real panel `flush(Rect)` implementation and validate RGB565, dirty
+   rectangles and sleep/wake.
+4. Add the bitmap font pack, then validate Chinese font coverage and board-side
+   text smoke output.
+5. Add touch/button/crown event queues.
+6. Finish the UI task run loop: input, timers, dirty rebuild/repaint, present
+   and low-power throttling.
+7. Run real hardware benchmarks and update port documentation.
+8. Enable the JerryScript component after the non-scripted path is stable.

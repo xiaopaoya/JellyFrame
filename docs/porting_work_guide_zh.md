@@ -2,7 +2,7 @@
 
 日期：2026-06-16
 
-本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及哪些事情必须先回到核心侧补能力。
+本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及当前核心已经提供了哪些可直接使用的能力。
 
 当前核心已经足够支持第一版“静态资源 + 软件渲染 + RGB565 局部提交 + 触摸/按键输入 + bitmap 字体 + 可选 JerryScript”的开发板 bring-up。尚未具备无完整 framebuffer 的 tiled renderer、生产级复杂文字 shaping、图片解码和网络资源栈。
 
@@ -21,6 +21,17 @@
 - `src/script/jerryscript_runtime.h`：可选 JerryScript runtime、DOM/event/form/timer bridge。
 
 第一版开发板 port 不应直接调用 Win32、文件系统或桌面壳代码。参考结构是 `jellyframe_embedded_host_demo`，它已经证明核心可在无窗口、无文件、无网络、无 Win32 的情况下串起静态 HTML/CSS、bitmap 字体、输入和 RGB565 提交。
+
+## 职责边界
+
+本文只把移植侧需要完成的工作列为阶段任务。以下内容不属于硬件移植任务：
+
+- 修改 HTML/CSS/DOM/layout/render 核心算法。
+- 在 `jellyframe_core` 内加入字体文件加载、文件系统、网络或屏幕驱动。
+- 重新实现 `jellyframe_capability_check`、`jellyframe_font_pack_gen`、`embedded_framebuffer` 或 bitmap font callback。
+- 在 ESP32-S3 第一版中实现无完整 framebuffer 的 tiled renderer、复杂文字 shaping、图片解码或网络安全模型。
+
+如果产品必须依赖这些能力，应先回到主线核心规划新里程碑；不要把它们硬塞进板级 port。
 
 ## 移植阶段
 
@@ -167,26 +178,63 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 
 目标：确保开发者写中文 UI 时能预测字体覆盖、测量和绘制结果。
 
+核心已提供：
+
+- `TextMeasureProvider` 和 `TextPainter` callback 接口。
+- `src/core/bitmap_font.h` 中的 bitmap font 数据结构、测量 callback 和绘制 callback。
+- `jellyframe_capability_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符并检查字体覆盖。
+- `jellyframe_font_pack_gen`，可从 BDF 字体子集生成 C++ `BitmapFont` header。
+
 任务要求：
 
-- 生产路径使用离线生成的 bitmap font pack。
-- 测量和绘制必须使用同一份 glyph metrics。
-- 字体回调内部避免堆分配。
-- 缺字必须有可见 fallback，不允许破坏布局。
-- 桌面构建前必须运行能力检查，输出使用字符并检查覆盖。
+- 选择并记录产品使用的授权源字体、字号、字重和目标 DPI/像素高度。
+- 在板级或应用构建流程中生成 bitmap font pack；生产固件不得依赖运行时矢量字体 rasterizer。
+- 把生成的 `BitmapFont` C++ header 编译进 ESP-IDF app、RTOS app 或板级 BSP。
+- 在 port 层创建持久 `BitmapFontContext`，测量和绘制必须使用同一份 glyph metrics。
+- 把 `bitmap_font_measure_callback` 接入 `LayoutEngine`，把 `bitmap_font_paint_callback` 接入 `SoftwareCompositor`。
+- 字体回调内部不得堆分配，不得访问文件系统，不得阻塞等待外设。
+- 缺字必须显示可见 fallback glyph，并保持稳定 advance，不允许破坏布局。
+- 桌面构建或发布前运行字体覆盖检查；缺字应让构建失败，或至少产生明确警告。
 
 实现方式：
 
-1. 用 `jellyframe_capability_check --emit-used-chars` 收集 HTML/CSS/JS 中的非 ASCII 字符。
-2. 从授权字体生成 BDF 或等价 bitmap glyph 数据。
-3. 用 `jellyframe_font_pack_gen` 生成 C++ `BitmapFont` header。
-4. 在 port 中把 `bitmap_font_measure_callback` 接入 `LayoutEngine`，把 `bitmap_font_paint_callback` 接入 `SoftwareCompositor`。
+1. 在桌面构建机上运行：
+
+   ```text
+   jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
+   ```
+
+2. 用板级项目选择的离线工具，从授权源字体和 `used_chars.txt` 生成 BDF 或等价 bitmap glyph 数据。
+3. 在桌面构建机上运行：
+
+   ```text
+   jellyframe_font_pack_gen --bdf app_font.bdf --chars used_chars.txt --output app_font.h --name app_font
+   ```
+
+4. 将 `app_font.h` 放入 port 或应用资源目录，并加入 ESP-IDF/RTOS 构建。
+5. 在创建 layout engine 和 compositor 时注入同一个 font context：
+
+   ```cpp
+   static jellyframe::BitmapFontContext font_context{&app_font, 1};
+
+   jellyframe::TextMeasureProvider measure{
+       jellyframe::bitmap_font_measure_callback,
+       &font_context,
+   };
+
+   jellyframe::TextPainter painter{
+       jellyframe::bitmap_font_paint_callback,
+       &font_context,
+   };
+   ```
 
 验收：
 
 - 中文、数字、符号在按钮、标题、列表和输入控件中不裁切。
 - 加粗至少能通过选中粗体 glyph 或近似加粗策略表现。
 - 字体缺字报告能在桌面构建阶段失败或警告。
+- 同一页面在桌面 bitmap font smoke 和开发板屏幕上换行位置基本一致。
+- 字体包大小、覆盖字符数、字号和源字体许可证记录在 port 文档中。
 
 暂不建议：
 
@@ -314,7 +362,7 @@ loop:
 
 ## 当前前置工作判断
 
-第一版 ESP32-S3 bring-up 不再需要等待核心新增接口。需要做的是把实验包按 JellyFrame 主线标准合并，并补齐显示驱动、输入驱动、字体资源和真实硬件数据。
+第一版 ESP32-S3 bring-up 不再需要等待核心新增接口。当前主线已经具备静态资源、预算、RGB565 提交、dirty rect、bitmap font、输入事件和可选 JerryScript 的入口。硬件移植侧后续重点是补齐真实屏幕驱动、输入驱动、字体资源、运行循环策略和真实硬件数据。
 
 以下能力如果被产品目标强制要求，则必须先规划核心侧开发：
 
@@ -327,12 +375,11 @@ loop:
 
 ## 建议合并顺序
 
-1. 合并 `ports/virtual_board`，改名为 JellyFrame，作为桌面性能估算工具。
-2. 合并 `ports/esp32s3-idf`，改名为 JellyFrame，先只构建非脚本核心。
-3. 把 QEMU 报告迁移到 `docs/esp32s3_qemu_benchmark_zh.md` 和英文对应文档。
-4. 在 ESP-IDF app 中接入 `HostBudgets` 和 `budget.h` options。
-5. 接入真实屏幕 `flush(Rect)`。
-6. 接入触摸/按键/表冠事件队列。
-7. 接入 bitmap font pack。
-8. 跑真实硬件基准并更新文档。
-9. 再启用 JerryScript component。
+1. 在 ESP-IDF app 中按目标硬件校准 `HostBudgets` 和 `HostDeviceCapabilities`。
+2. 确认资源包生成流程覆盖目标 app 的 HTML/CSS/classic script。
+3. 接入真实屏幕 `flush(Rect)`，验证 RGB565、dirty rect 和睡眠唤醒。
+4. 接入 bitmap font pack，完成中文字体覆盖检查和板端显示 smoke。
+5. 接入触摸/按键/表冠事件队列。
+6. 完成 UI task 运行循环：输入、timer、dirty rebuild/repaint、present 和低功耗节流。
+7. 跑真实硬件基准并更新 port 文档。
+8. 非脚本路径稳定后，再启用 JerryScript component。
