@@ -2,6 +2,7 @@
 #include "core/dirty_region.h"
 #include "core/dom.h"
 #include "core/form_control.h"
+#include "core/frame_update.h"
 #include "core/html_parser.h"
 #include "core/layout.h"
 #include "core/render_tree.h"
@@ -149,6 +150,48 @@ void paint_dirty_reuses_layout_and_generates_local_rect() {
     check(rects.front().width < 240 || rects.front().height < 200, "paint dirty is not full viewport");
 }
 
+void repeated_paint_dirty_updates_remain_bounded() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(
+        html_parser.parse("<body><input id='name' value='A'><p>Stable</p></body>"),
+        "input { width: 120px; height: 24px; margin: 0; } p { margin: 0; }",
+        240);
+    clear_dirty_flags(*fixture.document);
+    Node* input = first_element(*fixture.document, "input");
+    check(input != nullptr, "input exists");
+
+    for (int iteration = 0; iteration < 128; ++iteration) {
+        check(append_text_to_control(*input, "x"), "control value changes repeatedly");
+        FrameUpdateState state;
+        state.dirty_flags = subtree_dirty_flags(*fixture.document);
+        state.has_render_tree = true;
+        state.has_layout_tree = true;
+        state.has_layer_tree = true;
+        state.has_framebuffer = true;
+        state.framebuffer_width = 240;
+        state.framebuffer_height = 200;
+        state.viewport = Rect{0, 0, 240, 200};
+        state.content_height = 200;
+        const FrameUpdatePlan plan = plan_frame_update(state);
+        check(plan.action == FrameUpdateAction::RepaintExisting,
+              "repeated paint dirty reuses existing pipeline");
+        check(plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout,
+              "repeated paint dirty uses current layout");
+
+        const std::vector<Rect> rects =
+            compute_dirty_rects(*fixture.document,
+                                fixture.layout_tree.get(),
+                                fixture.layout_tree.get(),
+                                DirtyRegionOptions{Rect{0, 0, 240, 200}, 2, 2});
+        check(!rects.empty() && rects.size() <= 2, "repeated paint dirty stays bounded");
+        check(rects.front().width < 240 || rects.front().height < 200,
+              "repeated paint dirty does not become full viewport");
+        clear_dirty_flags(*fixture.document);
+        check(subtree_dirty_flags(*fixture.document) == DomDirtyNone,
+              "dirty flags clear after repeated paint update");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -156,6 +199,7 @@ int main() {
         text_dirty_generates_local_rect();
         tree_dirty_falls_back_to_full_viewport();
         paint_dirty_reuses_layout_and_generates_local_rect();
+        repeated_paint_dirty_updates_remain_bounded();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

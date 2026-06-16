@@ -161,6 +161,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   conservatively full-viewport.
 - Added the first M8 frame-update planner and bilingual run-loop contract
   documents for host input, timer, dirty-update, repaint and present ordering.
+- Added long-running dirty-update smoke coverage to ensure repeated paint-only
+  control changes keep bounded dirty rectangles and clear dirty flags.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.
