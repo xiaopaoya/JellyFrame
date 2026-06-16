@@ -188,6 +188,9 @@ CssRuleIndexKey build_css_rule_index_key(const std::vector<CssSelectorPart>& sel
 
 struct StyleResolverOptions {
     std::size_t max_candidate_cache_entries = 128;
+    const Node* hovered_node = nullptr;
+    const Node* active_node = nullptr;
+    const Node* focused_node = nullptr;
 };
 
 class StyleResolver {
@@ -195,6 +198,7 @@ public:
     explicit StyleResolver(Stylesheet stylesheet, StyleResolverOptions options = {});
 
     Style resolve(const Node& node) const;
+    void set_interaction_state(const Node* hovered_node, const Node* active_node, const Node* focused_node);
 
 private:
     Stylesheet stylesheet_;

@@ -1,5 +1,7 @@
 #include "core/style.h"
 
+#include "core/form_control.h"
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -728,7 +730,92 @@ bool is_document_root_element(const Node& node) {
         node.parent->tag_name == "document";
 }
 
-bool matches_compound_selector(const Node& node, std::string_view selector) {
+struct SelectorMatchContext {
+    const Node* hovered_node = nullptr;
+    const Node* active_node = nullptr;
+    const Node* focused_node = nullptr;
+};
+
+bool node_is_or_ancestor_of(const Node& node, const Node* descendant) {
+    for (const Node* current = descendant; current != nullptr; current = current->parent) {
+        if (current == &node) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::size_t find_selector_function_close(std::string_view value, std::size_t open) {
+    int depth = 0;
+    char quote = '\0';
+    for (std::size_t index = open; index < value.size(); ++index) {
+        const char ch = value[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < value.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '"' || ch == '\'') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++depth;
+        } else if (ch == ')') {
+            --depth;
+            if (depth == 0) {
+                return index;
+            }
+        }
+    }
+    return std::string_view::npos;
+}
+
+bool matches_selector_from_right(const Node* node,
+                                 const std::vector<CssSelectorPart>& parts,
+                                 std::size_t index,
+                                 const SelectorMatchContext& context);
+
+bool matches_selector_function(const Node& node,
+                               std::string_view body,
+                               const SelectorMatchContext& context) {
+    for (const std::string& argument : split_function_arguments(body)) {
+        const std::vector<CssSelectorPart> parts = parse_css_selector_parts(argument);
+        if (!parts.empty() && matches_selector_from_right(&node, parts, 0, context)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool matches_dynamic_pseudo(const Node& node,
+                            const std::string& pseudo,
+                            const SelectorMatchContext& context) {
+    if (pseudo == "hover") {
+        return node_is_or_ancestor_of(node, context.hovered_node);
+    }
+    if (pseudo == "active") {
+        return node_is_or_ancestor_of(node, context.active_node);
+    }
+    if (pseudo == "focus") {
+        return &node == context.focused_node;
+    }
+    if (pseudo == "focus-within") {
+        return node_is_or_ancestor_of(node, context.focused_node);
+    }
+    if (pseudo == "checked") {
+        return form_control_checked(node);
+    }
+    if (pseudo == "disabled") {
+        return is_disabled_form_control(node);
+    }
+    return false;
+}
+
+bool matches_compound_selector(const Node& node,
+                               std::string_view selector,
+                               const SelectorMatchContext& context) {
     if (node.type != NodeType::Element || selector.empty()) {
         return false;
     }
@@ -768,6 +855,18 @@ bool matches_compound_selector(const Node& node, std::string_view selector) {
                 if (!is_document_root_element(node)) {
                     return false;
                 }
+                continue;
+            }
+            if ((pseudo == "is" || pseudo == "where") && index < selector.size() && selector[index] == '(') {
+                const std::size_t close = find_selector_function_close(selector, index);
+                if (close == std::string_view::npos ||
+                    !matches_selector_function(node, selector.substr(index + 1, close - index - 1), context)) {
+                    return false;
+                }
+                index = close + 1;
+                continue;
+            }
+            if (matches_dynamic_pseudo(node, pseudo, context)) {
                 continue;
             }
             return false;
@@ -849,8 +948,12 @@ const Node* previous_element_sibling(const Node* node) {
     return nullptr;
 }
 
-bool matches_selector_from_right(const Node* node, const std::vector<CssSelectorPart>& parts, std::size_t index) {
-    if (node == nullptr || index >= parts.size() || !matches_compound_selector(*node, parts[index].compound)) {
+bool matches_selector_from_right(const Node* node,
+                                 const std::vector<CssSelectorPart>& parts,
+                                 std::size_t index,
+                                 const SelectorMatchContext& context) {
+    if (node == nullptr || index >= parts.size() ||
+        !matches_compound_selector(*node, parts[index].compound, context)) {
         return false;
     }
     if (index + 1 >= parts.size()) {
@@ -858,15 +961,15 @@ bool matches_selector_from_right(const Node* node, const std::vector<CssSelector
     }
 
     if (parts[index].combinator_to_left == CssSelectorCombinator::Child) {
-        return matches_selector_from_right(node->parent, parts, index + 1);
+        return matches_selector_from_right(node->parent, parts, index + 1, context);
     }
     if (parts[index].combinator_to_left == CssSelectorCombinator::AdjacentSibling) {
-        return matches_selector_from_right(previous_element_sibling(node), parts, index + 1);
+        return matches_selector_from_right(previous_element_sibling(node), parts, index + 1, context);
     }
     if (parts[index].combinator_to_left == CssSelectorCombinator::GeneralSibling) {
         for (const Node* sibling = previous_element_sibling(node); sibling != nullptr;
              sibling = previous_element_sibling(sibling)) {
-            if (matches_selector_from_right(sibling, parts, index + 1)) {
+            if (matches_selector_from_right(sibling, parts, index + 1, context)) {
                 return true;
             }
         }
@@ -874,15 +977,15 @@ bool matches_selector_from_right(const Node* node, const std::vector<CssSelector
     }
 
     for (const Node* ancestor = node->parent; ancestor != nullptr; ancestor = ancestor->parent) {
-        if (matches_selector_from_right(ancestor, parts, index + 1)) {
+        if (matches_selector_from_right(ancestor, parts, index + 1, context)) {
             return true;
         }
     }
     return false;
 }
 
-bool matches_rule(const Node& node, const CssRule& rule) {
-    return !rule.selector_parts.empty() && matches_selector_from_right(&node, rule.selector_parts, 0);
+bool matches_rule(const Node& node, const CssRule& rule, const SelectorMatchContext& context) {
+    return !rule.selector_parts.empty() && matches_selector_from_right(&node, rule.selector_parts, 0, context);
 }
 
 struct CascadeSlot {
@@ -2151,9 +2254,24 @@ std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector)
 
         std::size_t begin = end;
         int bracket_depth = 0;
+        int paren_depth = 0;
+        char quote = '\0';
         while (begin > 0) {
             const char ch = selector[begin - 1];
-            if (ch == ']') {
+            if (quote != '\0') {
+                if (ch == quote) {
+                    quote = '\0';
+                }
+            } else if (ch == '"' || ch == '\'') {
+                quote = ch;
+            } else if (ch == ')') {
+                ++paren_depth;
+            } else if (ch == '(' && paren_depth > 0) {
+                --paren_depth;
+            } else if (paren_depth > 0) {
+                --begin;
+                continue;
+            } else if (ch == ']') {
                 ++bracket_depth;
             } else if (ch == '[' && bracket_depth > 0) {
                 --bracket_depth;
@@ -2357,6 +2475,10 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
     return inserted.first->second;
 }
 
+SelectorMatchContext selector_match_context_from_options(const StyleResolverOptions& options) {
+    return SelectorMatchContext{options.hovered_node, options.active_node, options.focused_node};
+}
+
 void apply_custom_declarations(CustomPropertySlots& local,
                                const std::vector<CssDeclaration>& declarations,
                                const CssSpecificity& specificity,
@@ -2379,6 +2501,7 @@ void apply_custom_declarations(CustomPropertySlots& local,
 
 CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
     CustomPropertyMap inherited;
+    const SelectorMatchContext context = selector_match_context_from_options(options_);
 
     std::vector<const Node*> path;
     bool has_inline_custom_property = false;
@@ -2399,7 +2522,7 @@ CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
         }
         CustomPropertySlots local;
         for (const CssRule* rule : candidate_rules_for(*current)) {
-            if (!rule->pseudo_before && matches_rule(*current, *rule)) {
+            if (!rule->pseudo_before && matches_rule(*current, *rule, context)) {
                 apply_custom_declarations(local, rule->declarations, rule->specificity, rule->source_order);
             }
         }
@@ -2421,10 +2544,11 @@ CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
 Style StyleResolver::resolve(const Node& node) const {
     Style style = default_style_for(node);
     CascadeSlots slots;
+    const SelectorMatchContext context = selector_match_context_from_options(options_);
     CustomPropertyMap custom_properties = custom_properties_for(node);
 
     for (const CssRule* rule : candidate_rules_for(node)) {
-        if (matches_rule(node, *rule)) {
+        if (matches_rule(node, *rule, context)) {
             apply_declarations(style, slots, rule->declarations, rule->specificity,
                                rule->source_order, rule->pseudo_before, custom_properties);
         }
@@ -2438,6 +2562,14 @@ Style StyleResolver::resolve(const Node& node) const {
                            static_cast<std::size_t>(-1), false, custom_properties);
     }
     return style;
+}
+
+void StyleResolver::set_interaction_state(const Node* hovered_node,
+                                          const Node* active_node,
+                                          const Node* focused_node) {
+    options_.hovered_node = hovered_node;
+    options_.active_node = active_node;
+    options_.focused_node = focused_node;
 }
 
 } // namespace jellyframe

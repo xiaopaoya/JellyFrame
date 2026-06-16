@@ -135,6 +135,11 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加小型 CSS custom property 解析子集：支持沿 DOM 路径继承的直接
   `var(--token)` 和 `var(--token, fallback)`。
 - 添加 adjacent/general sibling selector matching，支持 `+` 和 `~`。
+- 添加动态 pseudo-class 样式匹配，支持 `:hover`、`:active`、`:focus`、
+  `:focus-within`、`:checked` 和 `:disabled`，并在 input state 变化时触发 dirty
+  invalidation。
+- 添加 `:is()` 和 `:where()` selector-list matching，分别使用参数最高 specificity
+  和 0 specificity。
 - 添加外链 stylesheet 合并、语义 fallback 样式、inline 高亮绘制、DOM mutation invalidation
   和表单控件 fallback 行为的回归测试。启用 scripting 的构建还会加入 JerryScript runtime
   生命周期和异常路径测试。

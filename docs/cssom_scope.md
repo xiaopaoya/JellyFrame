@@ -40,8 +40,9 @@ The public names intentionally mirror CSSOM concepts:
 The current cascade is author-style only:
 
 - Match supported selectors.
-- Supported selectors include simple compound selectors, descendant combinators,
-  child combinators, simple attribute selectors and `:root`.
+- Supported selectors include simple compound selectors, descendant/child and
+  sibling combinators, simple attribute selectors, `:root`, dynamic state
+  pseudo-classes, and `:is()` / `:where()` selector-list functions.
 - Compare `!important`.
 - Compare selector specificity.
 - Compare source order.
@@ -57,9 +58,10 @@ exist as fallbacks.
 
 - User-agent origin, user origin and animation origin are not modeled yet.
 - Cascade layers are flattened during parse; layer ordering is not modeled.
-- Custom properties are preserved as declarations but not resolved.
-- Unsupported selectors such as sibling combinators and dynamic pseudo-classes
-  are skipped before CSSOM insertion or ignored during matching.
+- Custom properties support a direct inherited `var(--token)` /
+  `var(--token, fallback)` subset; full dependency graph semantics are absent.
+- Unsupported selectors such as `:has()` and shadow selectors are skipped
+  before CSSOM insertion or ignored during matching.
 - Unsupported values remain in CSSOM for diagnostics but do not override
   supported computed values.
 - A small built-in default style layer gives form controls, dialogs and media

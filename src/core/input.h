@@ -61,6 +61,7 @@ public:
     const Node* active_node() const;
     const Node* focused_node() const;
     void set_focused_node(const Node* node);
+    void set_interaction_state(const Node* hovered_node, const Node* active_node, const Node* focused_node);
 
     const Node* pointer_move(const PointerInput& input);
     const Node* pointer_down(const PointerInput& input);
@@ -83,6 +84,8 @@ private:
 
     HitTestResult hit(int x, int y) const;
     const Node* hit_node(int x, int y) const;
+    void set_hovered_node(const Node* node);
+    void set_active_node(const Node* node, const LayoutBox* box = nullptr);
     MouseEvent make_mouse_event(const char* type, const PointerInput& input) const;
     WheelEvent make_wheel_event(const WheelInput& input) const;
     void dispatch_mouse_event(const Node* target, MouseEvent& event) const;

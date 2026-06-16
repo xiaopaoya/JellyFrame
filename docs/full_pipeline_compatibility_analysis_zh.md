@@ -63,7 +63,8 @@ JellyFrame 结果：
 - Custom elements 创建普通盒。
 - `popover` 需要 runtime/event 支持。
 - `dialog` 没有 `open` 时默认不渲染，除非 CSS 显式让它可见。
-- `@container` 和 `:is()` 可以增强布局和 focus 样式。
+- `@container` 可以增强布局；当 input state 可用时，`:is()` 和 `:focus-within`
+  可以增强 focus 样式。
 
 JellyFrame 修正后结果：
 
@@ -106,7 +107,8 @@ JellyFrame 结果：
 - 没有灾难性失败。
 - 文章内容和图片节点保留。
 - 图片尺寸已经进入 computed style 和 layout。
-- 条件 media 增强现在已在有界 viewport 子集中支持；`:where()` 仍按预期跳过。
+- 条件 media 增强现在已在有界 viewport 子集中支持；`:where()` 也会以 0 specificity
+  匹配。
 
 ## 面向嵌入式的观察
 

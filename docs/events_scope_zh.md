@@ -50,12 +50,13 @@ JellyFrame 将输入接线和核心引擎分开：
 - 不支持 touch 或 pointer capture。
 - 不支持 transform 后坐标 hit testing。
 - 暂无 keyboard dispatch。
-- Event callbacks 后暂不做 DOM mutation 或 style invalidation。
+- 输入状态变化会为受支持的动态 pseudo-classes 标记 style/layout dirty。脚本/事件产生的
+  DOM mutation 使用普通 DOM dirty flags。
 
 ## 下一步
 
 1. 添加 keyboard event objects 和 dispatch。
-2. 添加 hover、active 和 focus 的默认样式钩子。
+2. 继续细化动态 pseudo-class 变化中的 paint-only dirty rectangles。
 3. 添加 event callbacks 后的 invalidation/re-render scheduling。
 4. 添加 anchors、buttons、forms 和 editable controls 的 default-action hooks。
 5. 后续将 event listeners 桥接到 JerryScript functions。

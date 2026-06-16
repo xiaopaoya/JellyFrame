@@ -1,6 +1,7 @@
 #include "core/css_parser.h"
 #include "core/document_style.h"
 #include "core/dom.h"
+#include "core/form_control.h"
 #include "core/html_parser.h"
 #include "core/style.h"
 
@@ -232,6 +233,80 @@ void matches_sibling_selectors() {
     check(third_style.background_color.r == 0xab && third_style.background_color.g == 0xcd &&
               third_style.background_color.b == 0xef,
           "general sibling selector matches");
+}
+
+void matches_dynamic_pseudo_classes() {
+    auto root = make_element("section");
+    auto panel = make_element("div");
+    panel->attributes["class"] = "panel";
+    auto button = make_element("button");
+    button->attributes["id"] = "go";
+    auto checkbox = make_element("input");
+    checkbox->attributes["id"] = "agree";
+    checkbox->attributes["type"] = "checkbox";
+    auto disabled = make_element("button");
+    disabled->attributes["id"] = "off";
+    disabled->attributes["disabled"] = "";
+
+    Node& panel_node = root->append_child(std::move(panel));
+    Node& button_node = panel_node.append_child(std::move(button));
+    Node& checkbox_node = root->append_child(std::move(checkbox));
+    Node& disabled_node = root->append_child(std::move(disabled));
+    set_form_control_checked(checkbox_node, true);
+
+    StyleResolverOptions options;
+    options.hovered_node = &button_node;
+    options.active_node = &button_node;
+    options.focused_node = &button_node;
+    StyleResolver resolver(parse(
+        ".panel:hover { background: #101010; }"
+        "button:hover { color: #123456; }"
+        "button:active { border-color: #abcdef; }"
+        "button:focus { width: 88px; }"
+        ".panel:focus-within { padding: 9px; }"
+        "input:checked { background: #0f172a; }"
+        "button:disabled { color: #777777; }"),
+        options);
+
+    const Style panel_style = resolver.resolve(panel_node);
+    const Style button_style = resolver.resolve(button_node);
+    const Style checkbox_style = resolver.resolve(checkbox_node);
+    const Style disabled_style = resolver.resolve(disabled_node);
+
+    check(panel_style.background_color.r == 0x10, "ancestor hover matches");
+    check(panel_style.padding.top == 9, "focus-within matches ancestor");
+    check(button_style.color.r == 0x12 && button_style.color.g == 0x34 && button_style.color.b == 0x56,
+          "hover style matches");
+    check(button_style.border_color.r == 0xab && button_style.border_color.g == 0xcd,
+          "active style matches");
+    check(button_style.width == 88, "focus style matches");
+    check(checkbox_style.background_color.r == 0x0f && checkbox_style.background_color.g == 0x17,
+          "checked style matches");
+    check(disabled_style.color.r == 0x77, "disabled style matches");
+}
+
+void matches_is_where_with_specificity() {
+    auto card = make_element("article");
+    card->attributes["class"] = "card selected";
+    auto button = make_element("button");
+    button->attributes["class"] = "action";
+    Node& button_node = card->append_child(std::move(button));
+
+    StyleResolverOptions options;
+    options.hovered_node = &button_node;
+    StyleResolver resolver(parse(
+        ".card { color: #111111; }"
+        ":where(.card) { color: #222222; }"
+        ":is(.card) { background: #333333; }"
+        "article:is(.missing, .selected) > button:is(.action, .other):hover { width: 77px; }"),
+        options);
+
+    const Style card_style = resolver.resolve(*card);
+    const Style button_style = resolver.resolve(button_node);
+
+    check(card_style.color.r == 0x11, ":where has zero specificity and does not override class");
+    check(card_style.background_color.r == 0x33, ":is selector matches and cascades");
+    check(button_style.width == 77, ":is selector list with pseudo state matches");
 }
 
 void controls_have_usable_default_boxes() {
@@ -526,6 +601,8 @@ int main() {
         cascade_uses_specificity_and_importance();
         matches_descendant_and_attribute_selectors();
         matches_sibling_selectors();
+        matches_dynamic_pseudo_classes();
+        matches_is_where_with_specificity();
         controls_have_usable_default_boxes();
         embedded_styles_and_common_lengths_apply();
         linked_stylesheets_merge_into_author_css();

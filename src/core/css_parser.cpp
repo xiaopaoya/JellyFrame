@@ -273,10 +273,10 @@ bool is_selector_prelude_supported(std::string_view selector) {
         return false;
     }
 
-    // Keep parser output visually conservative: selectors that require modern
-    // cascade semantics are skipped until the selector matcher supports them.
-    static constexpr std::array<std::string_view, 5> kUnsupportedSelectorFeatures = {
-        ":has(", ":is(", ":where(", "::part(", "::slotted("
+    // Keep parser output visually conservative: selectors that require
+    // unsupported tree or shadow semantics are skipped as full rules.
+    static constexpr std::array<std::string_view, 3> kUnsupportedSelectorFeatures = {
+        ":has(", "::part(", "::slotted("
     };
     for (std::string_view feature : kUnsupportedSelectorFeatures) {
         if (contains_ascii_case_insensitive(selector, feature)) {
@@ -298,6 +298,24 @@ bool strip_before_pseudo(std::string& selector) {
     selector = trim(std::string_view(selector).substr(0, pseudo_pos));
     return !selector.empty();
 }
+
+void add_specificity(CssSpecificity& target, const CssSpecificity& value) {
+    target.ids += value.ids;
+    target.classes += value.classes;
+    target.elements += value.elements;
+}
+
+bool specificity_less_than(const CssSpecificity& left, const CssSpecificity& right) {
+    if (left.ids != right.ids) {
+        return left.ids < right.ids;
+    }
+    if (left.classes != right.classes) {
+        return left.classes < right.classes;
+    }
+    return left.elements < right.elements;
+}
+
+CssSpecificity max_specificity_in_selector_list(std::string_view selector_list);
 
 CssSpecificity calculate_specificity(std::string_view selector) {
     CssSpecificity specificity;
@@ -333,13 +351,49 @@ CssSpecificity calculate_specificity(std::string_view selector) {
             ++specificity.ids;
             continue;
         }
-        if (ch == '.' || ch == ':') {
+        if (ch == '.') {
             ++specificity.classes;
-            if (ch == ':' && index + 1 < selector.size() && selector[index + 1] == ':') {
-                --specificity.classes;
+            continue;
+        }
+        if (ch == ':') {
+            if (index + 1 < selector.size() && selector[index + 1] == ':') {
                 ++specificity.elements;
                 ++index;
+                continue;
             }
+            const std::size_t name_begin = index + 1;
+            std::size_t name_end = name_begin;
+            while (name_end < selector.size() &&
+                   (std::isalnum(static_cast<unsigned char>(selector[name_end])) != 0 ||
+                    selector[name_end] == '-' || selector[name_end] == '_')) {
+                ++name_end;
+            }
+            const std::string pseudo = ascii_lowercase(std::string(selector.substr(name_begin, name_end - name_begin)));
+            if ((pseudo == "is" || pseudo == "where") && name_end < selector.size() && selector[name_end] == '(') {
+                int depth = 0;
+                std::size_t close = std::string_view::npos;
+                for (std::size_t cursor = name_end; cursor < selector.size(); ++cursor) {
+                    if (selector[cursor] == '(') {
+                        ++depth;
+                    } else if (selector[cursor] == ')') {
+                        --depth;
+                        if (depth == 0) {
+                            close = cursor;
+                            break;
+                        }
+                    }
+                }
+                if (close != std::string_view::npos) {
+                    if (pseudo == "is") {
+                        add_specificity(specificity,
+                                        max_specificity_in_selector_list(
+                                            selector.substr(name_end + 1, close - name_end - 1)));
+                    }
+                    index = close;
+                    continue;
+                }
+            }
+            ++specificity.classes;
             continue;
         }
         const bool at_identifier_start =
@@ -352,6 +406,17 @@ CssSpecificity calculate_specificity(std::string_view selector) {
         }
     }
     return specificity;
+}
+
+CssSpecificity max_specificity_in_selector_list(std::string_view selector_list) {
+    CssSpecificity result;
+    for (const std::string& item : split_top_level_commas(selector_list)) {
+        const CssSpecificity current = calculate_specificity(item);
+        if (specificity_less_than(result, current)) {
+            result = current;
+        }
+    }
+    return result;
 }
 
 bool finish_important(std::string& value) {

@@ -128,8 +128,9 @@ JellyFrame is not ready for:
 | Child combinator | Works | `main > section`. |
 | Simple attribute selector | Subset | Existence and simple equality-style matching are supported. |
 | `:root` | Works | Supported. |
-| Dynamic pseudo-classes | Deferred | `:hover`, `:focus`, `:active`, `:disabled` are not style triggers yet. |
-| `:is()`, `:where()`, `:has()` | Lazy | Rules using unsupported modern selector functions are skipped. |
+| Dynamic pseudo-classes | Subset | `:hover`, `:active`, `:focus`, `:focus-within`, `:checked` and `:disabled` participate in selector matching. Input state changes mark style/layout dirty; checked/disabled use form-control and attribute state. |
+| `:is()` / `:where()` | Subset | `:is()` matches selector-list arguments and contributes the maximum argument specificity. `:where()` matches the same subset with zero specificity. |
+| `:has()` | Deferred/Lazy | Rules using `:has()` are skipped; relational selector matching is intentionally deferred. |
 | Pseudo-elements | Subset | `::before` supports a tiny generated-content path for text/counter list markers. `::after`, full marker styling and selection styling are deferred. |
 | Sibling combinators | Subset | Adjacent `+` and general `~` sibling selectors match previous element siblings. Text nodes between elements do not block adjacent matching. |
 | Shadow selectors | Deferred | `::part`, `::slotted` skipped. |
@@ -239,7 +240,7 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 | Pointer move/down/up | Works | Platform-neutral input controller dispatches mouse-like events plus `pointerdown`/`pointerup` aliases. |
 | Click synthesis | Works | Same target down/up creates click. |
 | Hash anchor click | Shell-only | Win32 shell handles `<a href="#id">` as viewport scroll. Core only dispatches the click event. |
-| Focus tracking | Subset | Input controller stores focused node. CSS `:focus` styling is absent. |
+| Focus tracking | Subset | Input controller stores focused node and drives `:focus` / `:focus-within` style matching. |
 | Touch events | Subset | `touchstart`/`touchend` are exposed as mouse-like events for press feedback. Full multi-touch objects are deferred. |
 | Keyboard events | Deferred | Core handles simple key actions for controls; DOM keyboard event objects are not complete. |
 
@@ -325,7 +326,7 @@ changes.
 - Provide classic CSS fallbacks before unsupported modern values:
   `color: #334155; color: oklch(...);`.
 - Avoid required UI inside `@container`, `@supports`, unsupported/complex media queries or
-  unsupported selector functions.
+  unsupported selector functions such as `:has()`.
 - Keep scripts synchronous and small. Use host-provided data.
 - Treat Win32 shell rendering as the desktop validation path for Chinese text,
   because it injects both measurement and painting through the text backend APIs.

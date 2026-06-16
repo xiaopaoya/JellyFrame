@@ -66,7 +66,8 @@ Modern browser expectation:
 - `popover` needs runtime/event support.
 - `dialog` is not rendered unless it has `open` or CSS explicitly makes it
   visible.
-- `@container` and `:is()` may enhance layout and focus styling.
+- `@container` may enhance layout; `:is()` and `:focus-within` can enhance
+  focus styling when input state is available.
 
 JellyFrame result after correction:
 
@@ -113,7 +114,7 @@ Assessment:
 - Article content and image node survive.
 - Image sizing now reaches computed style and layout.
 - The conditional media enhancement is now supported in the bounded viewport
-  subset. `:where()` remains skipped as intended.
+  subset. `:where()` also matches with zero specificity.
 
 ## Embedded-Oriented Observations
 

@@ -110,7 +110,9 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - `head` 中的 inline `style` 文本被保留。
 - CSSOM 保留 `:root` custom property declarations，简单
   `var(--token)` / `var(--token, fallback)` 会通过继承 custom-property 子集解析。
-- CSSOM 跳过 `@container` 和 `:is()` 规则。
+- CSSOM 跳过 `@container` 规则。
+- 当宿主/input controller 提供对应输入状态时，`:is()` 和 `:focus-within` 会参与
+  selector matching。
 - CSSOM 保留 `dialog[open]`，简单 attribute selectors 会参与 selector matching。
 - `display: flex` 使用简化 flex-row 子集。完整 flex sizing 尚未实现，但普通 app bar
   和按钮行能保留可用结构。
@@ -121,8 +123,8 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - 导航、卡片和 dialog 内容仍在 DOM 中。
 - 主要风险是交互语义，不是解析完整性：popover/dialog 行为后续需要 event/runtime
   支持。
-- 视觉降级保持统一：简化 flex 子集会生效，container query 和 selector function 增强
-  仍作为整体跳过。
+- 视觉降级保持统一：简化 flex 子集和受支持 selector functions 会生效，container
+  query 增强仍作为整体跳过。
 
 ## 案例 3：文章卡片
 
@@ -151,7 +153,7 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - `picture`、`source` 和 `img` 被保留。
 - CSSOM 将 `.story, article.featured` 拆分为独立 style rules。
 - 当 parser viewport 匹配时，条件 `@media (max-width: 480px)` 会生效。
-- 跳过 `:where()` 规则。
+- `:where()` 规则会以 0 specificity 匹配。
 - Descendant selector `.story img` 会通过 selector matcher 生效。
 
 影响：
@@ -159,7 +161,7 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - 没有灾难性失败。
 - 文章文本、列表项和图片节点仍可用。
 - 小视口 margin/radius 增强现在可以通过受支持的 media query 子集生效。
-- `:where()` 带来的视觉增强仍会跳过。
+- `:where()` 带来的视觉增强可以生效，但不会提高 specificity。
 
 ## 总体评估
 
@@ -178,14 +180,9 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 
 这些缺口在 parse 阶段不灾难，但会影响可用渲染：
 
-- 基础 pseudo-class 策略，例如 `:root`、`:focus`、`:disabled`、`:checked`、
-  `:open`。
-- 常用 `:is()` / `:where()` selector function 的 lowering。
 - 只有当嵌入式应用证明需要时，再继续补 positioned layout、flex sizing 和 grid
   placement。
 
 ## 建议下一步
 
-1. 为 input/form 已经跟踪的状态补动态 pseudo-class 样式触发。
-2. 为简单 selector list 添加 `:is()` / `:where()` lowering。
-3. 继续延后复杂 `@container`、`:has()`、完整图片布局和高级效果，直到能可靠限定成本。
+1. 继续延后复杂 `@container`、`:has()`、完整图片布局和高级效果，直到能可靠限定成本。

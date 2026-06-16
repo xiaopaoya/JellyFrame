@@ -189,6 +189,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `var(--token)` and `var(--token, fallback)` values inherited along the DOM
   path.
 - Added adjacent and general sibling selector matching for `+` and `~`.
+- Added dynamic pseudo-class style matching for `:hover`, `:active`, `:focus`,
+  `:focus-within`, `:checked` and `:disabled`, with input-state dirty
+  invalidation.
+- Added `:is()` and `:where()` selector-list matching with max-argument and
+  zero specificity respectively.
 - Added regression coverage for linked stylesheet merging, semantic fallback
   styles, inline highlight painting, DOM mutation invalidation and form-control
   fallback behavior. Scripting builds also add JerryScript runtime lifecycle and

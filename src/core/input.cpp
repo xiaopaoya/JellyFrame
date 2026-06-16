@@ -37,6 +37,12 @@ bool focusable_node(const Node* node) {
         (node->tag_name == "a" && !node->attribute("href").empty());
 }
 
+void mark_interaction_style_dirty(const Node* node) {
+    if (node != nullptr) {
+        mark_dirty(*mutable_node(node), DomDirtyStyle | DomDirtyLayout);
+    }
+}
+
 void collect_focusable_nodes(const LayoutBox& box, std::vector<const Node*>& nodes) {
     if (focusable_node(box.node) &&
         std::find(nodes.begin(), nodes.end(), box.node) == nodes.end()) {
@@ -45,6 +51,22 @@ void collect_focusable_nodes(const LayoutBox& box, std::vector<const Node*>& nod
     for (const auto& child : box.children) {
         collect_focusable_nodes(*child, nodes);
     }
+}
+
+const LayoutBox* find_layout_box_for_node(const LayoutBox* box, const Node* node) {
+    if (box == nullptr || node == nullptr) {
+        return nullptr;
+    }
+    if (box->node == node) {
+        return box;
+    }
+    for (const auto& child : box->children) {
+        const LayoutBox* found = find_layout_box_for_node(child.get(), node);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -65,7 +87,20 @@ const Node* InputController::focused_node() const {
 }
 
 void InputController::set_focused_node(const Node* node) {
+    if (focused_node_ != node) {
+        mark_interaction_style_dirty(focused_node_);
+        mark_interaction_style_dirty(node);
+    }
     focused_node_ = node;
+}
+
+void InputController::set_interaction_state(const Node* hovered_node,
+                                            const Node* active_node,
+                                            const Node* focused_node) {
+    hovered_node_ = hovered_node;
+    active_node_ = active_node;
+    focused_node_ = focused_node;
+    active_box_ = find_layout_box_for_node(layer_tree_.box, active_node);
 }
 
 const Node* InputController::pointer_move(const PointerInput& input) {
@@ -92,14 +127,12 @@ const Node* InputController::pointer_down(const PointerInput& input) {
     HitTestResult result = hit(input.x, input.y);
     const Node* target = result ? result.node : nullptr;
     if (disabled_target(target)) {
-        active_node_ = nullptr;
-        active_box_ = nullptr;
+        set_active_node(nullptr);
         return target;
     }
     update_hover(target, input);
-    active_node_ = target;
-    active_box_ = result ? result.box : nullptr;
-    focused_node_ = target;
+    set_active_node(target, result ? result.box : nullptr);
+    set_focused_node(target);
     if (active_box_ != nullptr && active_box_->node != nullptr &&
         form_control_kind(*active_box_->node) == FormControlKind::Range) {
         if (set_range_value_from_local_x(*mutable_node(active_box_->node),
@@ -120,8 +153,7 @@ const Node* InputController::pointer_down(const PointerInput& input) {
 const Node* InputController::pointer_up(const PointerInput& input) {
     const Node* target = hit_node(input.x, input.y);
     if (disabled_target(target) || disabled_target(active_node_)) {
-        active_node_ = nullptr;
-        active_box_ = nullptr;
+        set_active_node(nullptr);
         return target;
     }
     update_hover(target, input);
@@ -145,8 +177,7 @@ const Node* InputController::pointer_up(const PointerInput& input) {
         MouseEvent click = make_mouse_event("click", input);
         dispatch_mouse_event(target, click);
     }
-    active_node_ = nullptr;
-    active_box_ = nullptr;
+    set_active_node(nullptr);
     return target;
 }
 
@@ -211,14 +242,14 @@ const Node* InputController::focus_next() {
     std::vector<const Node*> nodes;
     collect_focusable_nodes(*layer_tree_.box, nodes);
     if (nodes.empty()) {
-        focused_node_ = nullptr;
+        set_focused_node(nullptr);
         return nullptr;
     }
     auto current = std::find(nodes.begin(), nodes.end(), focused_node_);
     if (current == nodes.end() || ++current == nodes.end()) {
-        focused_node_ = nodes.front();
+        set_focused_node(nodes.front());
     } else {
-        focused_node_ = *current;
+        set_focused_node(*current);
     }
     return focused_node_;
 }
@@ -230,14 +261,14 @@ const Node* InputController::focus_previous() {
     std::vector<const Node*> nodes;
     collect_focusable_nodes(*layer_tree_.box, nodes);
     if (nodes.empty()) {
-        focused_node_ = nullptr;
+        set_focused_node(nullptr);
         return nullptr;
     }
     auto current = std::find(nodes.begin(), nodes.end(), focused_node_);
     if (current == nodes.end() || current == nodes.begin()) {
-        focused_node_ = nodes.back();
+        set_focused_node(nodes.back());
     } else {
-        focused_node_ = *(--current);
+        set_focused_node(*(--current));
     }
     return focused_node_;
 }
@@ -257,9 +288,8 @@ bool InputController::activate_focused() {
 }
 
 void InputController::clear_pointer_state() {
-    hovered_node_ = nullptr;
-    active_node_ = nullptr;
-    active_box_ = nullptr;
+    set_hovered_node(nullptr);
+    set_active_node(nullptr);
 }
 
 HitTestResult InputController::hit(int x, int y) const {
@@ -269,6 +299,23 @@ HitTestResult InputController::hit(int x, int y) const {
 const Node* InputController::hit_node(int x, int y) const {
     HitTestResult result = hit(x, y);
     return result ? result.node : nullptr;
+}
+
+void InputController::set_hovered_node(const Node* node) {
+    if (hovered_node_ != node) {
+        mark_interaction_style_dirty(hovered_node_);
+        mark_interaction_style_dirty(node);
+    }
+    hovered_node_ = node;
+}
+
+void InputController::set_active_node(const Node* node, const LayoutBox* box) {
+    if (active_node_ != node) {
+        mark_interaction_style_dirty(active_node_);
+        mark_interaction_style_dirty(node);
+    }
+    active_node_ = node;
+    active_box_ = box;
 }
 
 MouseEvent InputController::make_mouse_event(const char* type, const PointerInput& input) const {
@@ -305,7 +352,7 @@ void InputController::update_hover(const Node* next_hover, const PointerInput& i
         MouseEvent out = make_mouse_event("mouseout", input);
         dispatch_event(*hovered_node_, out);
     }
-    hovered_node_ = next_hover;
+    set_hovered_node(next_hover);
     if (hovered_node_ != nullptr) {
         MouseEvent over = make_mouse_event("mouseover", input);
         dispatch_event(*hovered_node_, over);

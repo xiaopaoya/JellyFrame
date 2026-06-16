@@ -39,8 +39,9 @@ CssStyleSheet
 当前 cascade 只覆盖 author style：
 
 - 匹配已支持 selector。
-- 已支持 selector 包括简单 compound selectors、descendant combinators、child
-  combinators、简单 attribute selectors 和 `:root`。
+- 已支持 selector 包括简单 compound selectors、descendant/child/sibling
+  combinators、简单 attribute selectors、`:root`、动态状态 pseudo-classes，以及
+  `:is()` / `:where()` selector-list functions。
 - 比较 `!important`。
 - 比较 selector specificity。
 - 比较 source order。
@@ -54,9 +55,10 @@ CssStyleSheet
 
 - 尚未建模 user-agent origin、user origin 和 animation origin。
 - Cascade layers 在 parse 阶段展开；尚未建模 layer ordering。
-- Custom properties 会作为 declaration 保留，但暂不解析依赖关系。
-- sibling combinators 和动态 pseudo-classes 等不支持 selector 会在插入 CSSOM 前
-  整体跳过，或在 matching 阶段忽略。
+- Custom properties 支持直接继承的 `var(--token)` /
+  `var(--token, fallback)` 子集；完整依赖图语义尚未实现。
+- `:has()` 和 shadow selectors 等不支持 selector 会在插入 CSSOM 前整体跳过，
+  或在 matching 阶段忽略。
 - 不支持 value 会留在 CSSOM 中用于诊断，但不会覆盖已支持 computed value。
 - 在完整 UA stylesheet 出现前，内置小型 default style layer，让 form controls、
   dialog 和 media elements 至少有可用框体。

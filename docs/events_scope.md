@@ -62,12 +62,14 @@ controllers and UI driver libraries.
 - No touch or pointer capture.
 - No transformed coordinate hit testing.
 - No keyboard dispatch yet.
-- No DOM mutation or style invalidation after event callbacks yet.
+- Input state changes mark style/layout dirty for supported dynamic
+  pseudo-classes. Script/event DOM mutations use the normal DOM dirty flags.
 
 ## Next Steps
 
 1. Add keyboard event objects and dispatch.
-2. Add default style hooks for hover, active and focus.
+2. Refine dirty rectangles for dynamic pseudo-class changes that affect paint
+   only.
 3. Add invalidation/re-render scheduling after event callbacks.
 4. Add default-action hooks for anchors, buttons, forms and editable controls.
 5. Later bridge event listeners to JerryScript functions.

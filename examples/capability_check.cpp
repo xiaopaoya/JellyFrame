@@ -275,20 +275,20 @@ void scan_html_css_js(const std::string& file, const std::string& source, std::v
     if (contains(lower, ":is(") || contains(lower, ":where(")) {
         add(findings,
             file,
-            "degraded",
+            "supported-subset",
             ":is/:where",
-            "Selector-function rules are skipped until lowering is implemented.");
+            ":is() matches with max-argument specificity; :where() matches with zero specificity.");
     }
     if (contains(lower, ":has(")) {
         add(findings, file, "deferred", ":has", "Relational selector matching is intentionally deferred.");
     }
     if (contains(lower, ":hover") || contains(lower, ":focus") || contains(lower, ":active") ||
-        contains(lower, ":checked") || contains(lower, ":disabled")) {
+        contains(lower, ":checked") || contains(lower, ":disabled") || contains(lower, ":focus-within")) {
         add(findings,
             file,
-            "degraded",
+            "supported-subset",
             "dynamic pseudo-classes",
-            "DOM/control state exists, but pseudo-class style invalidation is not implemented yet.");
+            ":hover/:active/:focus/:focus-within use input state; :checked/:disabled use form-control state.");
     }
     if (contains(lower, "filter:") || contains(lower, "backdrop-filter") || contains(lower, "mix-blend-mode")) {
         add(findings, file, "degraded", "filters/blending", "Only normal source-over and cheap shadows are supported.");

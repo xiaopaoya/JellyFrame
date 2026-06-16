@@ -602,17 +602,18 @@ private:
                 SetTimer(hwnd_, kScriptTimerId, kScriptTimerPeriodMs, nullptr);
             }
 #endif
-            render_current(nullptr);
+            render_current(nullptr, nullptr, nullptr);
         } catch (const std::exception& error) {
             std::cerr << "rebuild failed: " << error.what() << '\n';
             set_title(std::string("error: ") + error.what());
         }
     }
 
-    void render_current(const Node* focused_node) {
+    void render_current(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
         }
+        style_resolver_->set_interaction_state(hovered_node, active_node, focused_node);
         const DomDirtyFlags dirty_flags = document_->dirty_flags;
         const int current_content_height = layout_tree_ != nullptr
             ? std::max(viewport_height_, layout_tree_->rect.height)
@@ -653,7 +654,7 @@ private:
                                        dirty_rects.size());
             }
             input_ = std::make_unique<InputController>(*layer_tree_);
-            input_->set_focused_node(focused_node);
+            input_->set_interaction_state(hovered_node, active_node, focused_node);
             update_blit_pixels();
             clear_dirty_flags(*document_);
             return;
@@ -701,7 +702,7 @@ private:
                                               page_background_);
         }
         input_ = std::make_unique<InputController>(*layer_tree_);
-        input_->set_focused_node(focused_node);
+        input_->set_interaction_state(hovered_node, active_node, focused_node);
         update_blit_pixels();
         clear_dirty_flags(*document_);
     }
@@ -928,7 +929,9 @@ private:
         if (document_ == nullptr || subtree_dirty_flags(*document_) == DomDirtyNone) {
             return;
         }
-        render_current(focused_node);
+        const Node* hovered_node = input_ != nullptr ? input_->hovered_node() : nullptr;
+        const Node* active_node = input_ != nullptr ? input_->active_node() : nullptr;
+        render_current(hovered_node, active_node, focused_node);
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
 

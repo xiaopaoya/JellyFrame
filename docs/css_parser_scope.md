@@ -51,6 +51,10 @@ layout behavior.
   fallback declarations alive.
 - Type/class/id/attribute compound selectors, descendant and child combinators,
   and adjacent/general sibling combinators.
+- Dynamic pseudo-classes `:hover`, `:active`, `:focus`, `:focus-within`,
+  `:checked` and `:disabled`.
+- `:is()` and `:where()` selector-list functions for the supported selector
+  subset; `:where()` contributes zero specificity.
 - UI-oriented declarations for the embedded app subset, including
   physical `margin-*`/`padding-*`/`border-*-width` longhands,
   `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `grid-template-columns`
@@ -64,8 +68,8 @@ layout behavior.
 - `@font-face`, `@keyframes`, `@page`, `@property`: parse their balanced block
   boundaries but do not expose declarations to style resolution yet.
 - Unknown at-rules: skip statement or balanced block.
-- Unsupported selectors such as `:has()`, `:is()`, `:where()`, `::part()` and
-  `::slotted()` are skipped as full rules for now.
+- Unsupported selectors such as `:has()`, `::part()` and `::slotted()` are
+  skipped as full rules for now.
 
 ## Explicitly Not Yet Implemented
 

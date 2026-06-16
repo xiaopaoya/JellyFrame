@@ -130,9 +130,14 @@ void pointer_hover_down_up_and_click() {
 
     check(input.pointer_move(pointer) == one, "move hits first button");
     check(input.hovered_node() == one, "hover state set");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyStyle) != 0U,
+          "hover state marks style dirty");
+    clear_dirty_flags(*pipeline.document);
     check(input.pointer_down(pointer) == one, "down hits first button");
     check(input.active_node() == one, "active state set");
     check(input.focused_node() == one, "focus state set");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyStyle) != 0U,
+          "active/focus state marks style dirty");
     pointer.buttons = 0;
     check(input.pointer_up(pointer) == one, "up hits first button");
     check(input.active_node() == nullptr, "active state cleared");
@@ -220,6 +225,7 @@ void text_input_updates_focused_control_value() {
     input.pointer_down(pointer);
     pointer.buttons = 0;
     input.pointer_up(pointer);
+    clear_dirty_flags(*pipeline.document);
 
     check(input.text_input("B"), "text input accepted");
     check(form_control_display_text(*input_node) == "AB", "text input value updated");
