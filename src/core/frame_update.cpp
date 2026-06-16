@@ -25,6 +25,21 @@ int frame_update_target_height(const FrameUpdateState& state) {
     return std::max(state.viewport.height, state.content_height);
 }
 
+FrameUpdateState make_frame_update_state(DomDirtyFlags dirty_flags,
+                                         const FramePipelineCacheState& cache_state) {
+    FrameUpdateState state;
+    state.dirty_flags = dirty_flags;
+    state.has_render_tree = cache_state.has_render_tree;
+    state.has_layout_tree = cache_state.has_layout_tree;
+    state.has_layer_tree = cache_state.has_layer_tree;
+    state.has_framebuffer = cache_state.has_framebuffer;
+    state.framebuffer_width = cache_state.framebuffer_width;
+    state.framebuffer_height = cache_state.framebuffer_height;
+    state.viewport = cache_state.viewport;
+    state.content_height = cache_state.content_height;
+    return state;
+}
+
 FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
     FrameUpdatePlan plan;
     if (!valid_viewport(state.viewport) || frame_update_target_height(state) <= 0) {

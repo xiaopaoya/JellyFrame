@@ -25,7 +25,8 @@ Loop frame:
 2. Dispatch pointer/wheel/key/text/focus operations through `InputController`.
 3. If JerryScript is enabled, pump a bounded number of timer callbacks.
 4. Read root `subtree_dirty_flags(document)`.
-5. Call `plan_frame_update(...)` to choose an update path.
+5. Fill `FramePipelineCacheState`, call `make_frame_update_state(...)`, then
+   call `plan_frame_update(...)` to choose an update path.
 6. Reuse existing layout/layers or rebuild the pipeline according to the plan.
 7. Generate dirty rectangles with `compute_dirty_rects(...)`, or fall back to a
    full frame.
@@ -43,6 +44,11 @@ Header: `src/core/frame_update.h`
 
 `plan_frame_update` does not own the DOM and does not run layout. It only turns
 the current cache state and dirty flags into an update strategy.
+
+Hosts should normally build its input through `FramePipelineCacheState` and
+`make_frame_update_state(...)`. This keeps render/layout/layer/framebuffer
+ownership in the host while making the cache snapshot shape shared by desktop
+and embedded integrations.
 
 Inputs:
 

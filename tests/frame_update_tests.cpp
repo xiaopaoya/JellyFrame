@@ -14,17 +14,16 @@ void check(bool condition, const char* message) {
 }
 
 FrameUpdateState cached_state(DomDirtyFlags flags) {
-    FrameUpdateState state;
-    state.dirty_flags = flags;
-    state.has_render_tree = true;
-    state.has_layout_tree = true;
-    state.has_layer_tree = true;
-    state.has_framebuffer = true;
-    state.framebuffer_width = 240;
-    state.framebuffer_height = 320;
-    state.viewport = Rect{0, 0, 240, 200};
-    state.content_height = 320;
-    return state;
+    FramePipelineCacheState cache;
+    cache.has_render_tree = true;
+    cache.has_layout_tree = true;
+    cache.has_layer_tree = true;
+    cache.has_framebuffer = true;
+    cache.framebuffer_width = 240;
+    cache.framebuffer_height = 320;
+    cache.viewport = Rect{0, 0, 240, 200};
+    cache.content_height = 320;
+    return make_frame_update_state(flags, cache);
 }
 
 void clean_document_has_no_work() {
@@ -96,6 +95,63 @@ void target_height_uses_content_height_floor() {
     check(frame_update_target_height(state) == 260, "target height follows larger content height");
 }
 
+void cache_snapshot_builds_state_without_tree_ownership() {
+    FramePipelineCacheState cache;
+    cache.has_render_tree = true;
+    cache.has_layout_tree = false;
+    cache.has_layer_tree = true;
+    cache.has_framebuffer = true;
+    cache.framebuffer_width = 160;
+    cache.framebuffer_height = 220;
+    cache.viewport = Rect{0, 0, 160, 120};
+    cache.content_height = 220;
+
+    const FrameUpdateState state = make_frame_update_state(DomDirtyStyle | DomDirtyLayout, cache);
+    check(state.dirty_flags == (DomDirtyStyle | DomDirtyLayout), "snapshot keeps dirty flags");
+    check(state.has_render_tree && !state.has_layout_tree && state.has_layer_tree,
+          "snapshot copies cache availability");
+    check(state.has_framebuffer && state.framebuffer_width == 160 && state.framebuffer_height == 220,
+          "snapshot copies framebuffer dimensions");
+    check(state.viewport.width == 160 && state.viewport.height == 120 && state.content_height == 220,
+          "snapshot copies viewport and content height");
+}
+
+void host_frame_sequence_keeps_bounded_actions() {
+    FramePipelineCacheState cache;
+    cache.viewport = Rect{0, 0, 240, 200};
+    cache.content_height = 200;
+
+    FrameUpdatePlan plan = plan_frame_update(make_frame_update_state(DomDirtyNone, cache));
+    check(plan.action == FrameUpdateAction::RebuildPipeline, "empty cache performs first paint");
+    check(plan.dirty_rect_mode == FrameDirtyRectMode::FullFrame, "first paint is full frame");
+
+    cache.has_render_tree = true;
+    cache.has_layout_tree = true;
+    cache.has_layer_tree = true;
+    cache.has_framebuffer = true;
+    cache.framebuffer_width = 240;
+    cache.framebuffer_height = 200;
+
+    plan = plan_frame_update(make_frame_update_state(DomDirtyNone, cache));
+    check(plan.action == FrameUpdateAction::None, "clean cached frame stays idle");
+
+    plan = plan_frame_update(make_frame_update_state(DomDirtyPaint, cache));
+    check(plan.action == FrameUpdateAction::RepaintExisting, "paint dirty frame reuses cache");
+    check(plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout, "paint dirty uses current layout");
+
+    plan = plan_frame_update(make_frame_update_state(DomDirtyText | DomDirtyLayout, cache));
+    check(plan.action == FrameUpdateAction::RebuildPipeline, "layout dirty frame rebuilds");
+    check(plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout,
+          "layout dirty compares previous and current layout");
+
+    cache.content_height = 260;
+    plan = plan_frame_update(make_frame_update_state(DomDirtyPaint, cache));
+    check(plan.action == FrameUpdateAction::RebuildPipeline,
+          "content height growth invalidates existing framebuffer");
+    check(plan.dirty_rect_mode == FrameDirtyRectMode::FullFrame,
+          "content height growth falls back to full frame");
+}
+
 } // namespace
 
 int main() {
@@ -108,6 +164,8 @@ int main() {
         resized_framebuffer_forces_full_frame();
         invalid_viewport_is_conservative();
         target_height_uses_content_height_floor();
+        cache_snapshot_builds_state_without_tree_ownership();
+        host_frame_sequence_keeps_bounded_actions();
     } catch (const std::exception& error) {
         std::cerr << "frame update test failed: " << error.what() << '\n';
         return 1;

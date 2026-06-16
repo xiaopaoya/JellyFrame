@@ -144,8 +144,10 @@ sibling selectors、简化 flex grow/shrink/basis sizing，以及有界 `relativ
 
 目标：把桌面壳和平台无关 demo 中的 frame loop 经验固化成更清楚的核心/宿主契约。
 
-状态：已开始。`src/core/frame_update.h` 提供第一版平台无关更新计划，`../docs/run_loop_contract_zh.md`
-记录推荐运行循环。
+状态：已开始。`src/core/frame_update.h` 提供第一版平台无关更新计划和
+`FramePipelineCacheState` cache snapshot helper，`../docs/run_loop_contract_zh.md`
+记录推荐运行循环。核心测试已覆盖一条小型宿主帧序列：首帧、干净帧、paint-only、
+layout-dirty 和 framebuffer 尺寸变化。
 
 任务：
 

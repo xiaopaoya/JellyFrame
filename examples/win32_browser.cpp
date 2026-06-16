@@ -618,16 +618,16 @@ private:
         const int current_content_height = layout_tree_ != nullptr
             ? std::max(viewport_height_, layout_tree_->rect.height)
             : frame_buffer_.height;
-        FrameUpdateState update_state;
-        update_state.dirty_flags = dirty_flags;
-        update_state.has_render_tree = render_tree_ != nullptr;
-        update_state.has_layout_tree = layout_tree_ != nullptr;
-        update_state.has_layer_tree = layer_tree_ != nullptr;
-        update_state.has_framebuffer = frame_buffer_.width > 0 && frame_buffer_.height > 0;
-        update_state.framebuffer_width = frame_buffer_.width;
-        update_state.framebuffer_height = frame_buffer_.height;
-        update_state.viewport = Rect{0, 0, viewport_width_, viewport_height_};
-        update_state.content_height = current_content_height;
+        FramePipelineCacheState cache_state;
+        cache_state.has_render_tree = render_tree_ != nullptr;
+        cache_state.has_layout_tree = layout_tree_ != nullptr;
+        cache_state.has_layer_tree = layer_tree_ != nullptr;
+        cache_state.has_framebuffer = frame_buffer_.width > 0 && frame_buffer_.height > 0;
+        cache_state.framebuffer_width = frame_buffer_.width;
+        cache_state.framebuffer_height = frame_buffer_.height;
+        cache_state.viewport = Rect{0, 0, viewport_width_, viewport_height_};
+        cache_state.content_height = current_content_height;
+        const FrameUpdateState update_state = make_frame_update_state(dirty_flags, cache_state);
         const FrameUpdatePlan update_plan = plan_frame_update(update_state);
         if (update_plan.action == FrameUpdateAction::None) {
             return;

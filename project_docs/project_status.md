@@ -191,8 +191,10 @@ Goal: turn frame-loop experience from desktop shells and platform-neutral demos
 into a clearer core/host contract.
 
 Status: started. `src/core/frame_update.h` provides the first hardware-neutral
-update planner, and `../docs/run_loop_contract.md` records the recommended run
-loop.
+update planner plus a `FramePipelineCacheState` snapshot helper, and
+`../docs/run_loop_contract.md` records the recommended run loop. Core tests now
+cover a small host-frame sequence from first paint through clean, paint-only,
+layout-dirty and resized-framebuffer frames.
 
 Tasks:
 

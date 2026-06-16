@@ -22,7 +22,8 @@
 2. 通过 `InputController` 派发 pointer/wheel/key/text/focus 操作。
 3. 如果启用 JerryScript，泵动有限个 timer callback。
 4. 读取根节点 `subtree_dirty_flags(document)`。
-5. 调用 `plan_frame_update(...)` 决定更新路径。
+5. 填充 `FramePipelineCacheState`，调用 `make_frame_update_state(...)`，再调用
+   `plan_frame_update(...)` 决定更新路径。
 6. 按计划复用现有 layout/layer，或重建管线。
 7. 用 `compute_dirty_rects(...)` 生成 dirty rectangles，或保守全帧。
 8. 调用 `SoftwareCompositor::render_into(...)` 或完整 `render(...)`。
@@ -36,6 +37,10 @@
 头文件：`src/core/frame_update.h`
 
 `plan_frame_update` 不拥有 DOM，也不执行布局。它只根据当前缓存状态和 dirty flags 给出更新策略。
+
+宿主通常应通过 `FramePipelineCacheState` 和 `make_frame_update_state(...)`
+构造输入。这样 render/layout/layer/framebuffer 所有权仍留在宿主侧，但桌面和嵌入式集成共享同一种
+cache snapshot 形状，减少各壳层手写状态转换的出错机会。
 
 输入：
 
