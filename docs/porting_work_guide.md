@@ -329,6 +329,10 @@ Implementation:
 - The UI task drains a bounded number of events per tick and calls
   `InputController`.
 - If input dirties the DOM, enter the bounded rebuild/repaint path.
+- The ESP32-S3 reference includes `BoardInputQueue` as a fixed-capacity example.
+  It drops new events when full and records `dropped_count()`. A product port may
+  change the event shape, but it must keep bounded memory, bounded per-frame
+  dispatch and no direct layout/script execution from interrupt context.
 
 Acceptance:
 
@@ -379,6 +383,10 @@ Acceptance:
 - Control state changes do not always clear the full screen.
 - Timer-driven clock and timer examples do not slow down over time.
 - Every queue has a hard limit.
+- The ESP32-S3 bring-up currently validates P4/P5/P6 from `app_main` and raises
+  the default main-task stack to 32 KB. Product ports should move this into a
+  measured UI task, keep persistent buffers and reduce stack usage where the
+  board permits.
 
 ### P7: JerryScript
 

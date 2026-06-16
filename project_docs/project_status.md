@@ -134,6 +134,10 @@ porting, but has been normalized for mainline:
 - ESP32-S3 8 MB flash partition layout.
 - ESP32-S3 RGB565 panel HAL reference: strided flush, packed dirty-rect flush,
   scratch row packing and flush statistics.
+- ESP32-S3 P4/P5/P6 smoke support for bitmap font callbacks, a bounded board
+  input queue, focus/text/control dispatch and dirty-rectangle RGB565
+  presentation. The included bring-up font is a validation resource, not a
+  production Chinese font pack.
 - QEMU PSRAM gradient benchmark documents and results.
 - `ports/virtual_board` desktop estimator.
 

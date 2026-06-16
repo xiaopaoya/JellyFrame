@@ -260,6 +260,9 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 - ISR 或驱动回调只入队轻量事件。
 - UI task 每 tick 取有限个事件，调用 `InputController`。
 - 输入导致 DOM dirty 后，再进入有限重建/重绘路径。
+- ESP32-S3 参考工程现在包含 `BoardInputQueue` 固定容量示例。队列满时丢弃新事件并记录
+  `dropped_count()`。产品 port 可以调整事件结构，但必须保持内存有界、每帧派发有界，
+  且不得在中断上下文直接执行 layout 或脚本。
 
 验收：
 
@@ -307,6 +310,8 @@ loop:
 - 控件状态变化不强制每次清空整屏。
 - timer 驱动时钟/计时器示例不会越跑越慢。
 - 所有队列都有上限。
+- ESP32-S3 bring-up 当前在 `app_main` 中验证 P4/P5/P6，并把默认主任务栈提高到 32 KB。
+  产品 port 应将其移动到可测量的 UI task，复用持久 buffer，并在目标板允许时继续压低栈使用。
 
 ### P7：JerryScript 接入
 

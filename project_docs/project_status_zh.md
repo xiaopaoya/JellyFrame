@@ -99,6 +99,8 @@ JavaScript runtime：
 - ESP32-S3 静态资源 bundle 生成和 P2 smoke 资源。
 - ESP32-S3 8 MB flash 分区布局。
 - ESP32-S3 RGB565 panel HAL reference：strided flush、packed dirty-rect flush、scratch row packing、flush 统计。
+- ESP32-S3 P4/P5/P6 smoke 支撑：bitmap font callback、有界开发板输入队列、焦点/文本/控件派发、
+  dirty-rectangle RGB565 提交。当前内置 bring-up 字体只用于验证，不是生产中文字库。
 - QEMU PSRAM 梯度 benchmark 文档与结果。
 - `ports/virtual_board` 桌面估算工具。
 

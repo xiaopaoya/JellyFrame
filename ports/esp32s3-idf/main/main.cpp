@@ -1,13 +1,18 @@
+#include "jellyframe_esp32s3_font.h"
 #include "jellyframe_esp32s3_hal.h"
+#include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
 
+#include "core/bitmap_font.h"
 #include "core/budget.h"
 #include "core/css_parser.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
 #include "core/embedded_framebuffer.h"
+#include "core/form_control.h"
 #include "core/host.h"
 #include "core/html_parser.h"
+#include "core/input.h"
 #include "core/layer_tree.h"
 #include "core/layout.h"
 #include "core/render_tree.h"
@@ -82,6 +87,29 @@ std::size_t external_script_count(const std::vector<DocumentScript>& scripts) {
         }
     }
     return total;
+}
+
+Node* find_by_id(Node& root, const std::string& id) {
+    std::vector<Node*> stack;
+    stack.push_back(&root);
+    while (!stack.empty()) {
+        Node* node = stack.back();
+        stack.pop_back();
+        if (node->attribute("id") == id) {
+            return node;
+        }
+        for (auto child = node->children.rbegin(); child != node->children.rend(); ++child) {
+            stack.push_back(child->get());
+        }
+    }
+    return nullptr;
+}
+
+std::uint32_t rect_area(Rect rect) {
+    if (rect.width <= 0 || rect.height <= 0) {
+        return 0;
+    }
+    return static_cast<std::uint32_t>(rect.width) * static_cast<std::uint32_t>(rect.height);
 }
 
 struct StridedFlushProbe {
@@ -394,6 +422,139 @@ void run_p3_display_smoke(const FrameBuffer& frame_buffer, int width, int height
              packed_probe.last_dirty.height);
 }
 
+void seed_p5_input_smoke(jellyframe_esp32s3::BoardInputQueue& queue) {
+    using jellyframe_esp32s3::BoardInputEvent;
+    using jellyframe_esp32s3::BoardInputKind;
+
+    queue.enqueue(BoardInputEvent{BoardInputKind::FocusNext});
+    queue.enqueue(BoardInputEvent{BoardInputKind::Activate});
+    queue.enqueue(BoardInputEvent{BoardInputKind::FocusNext});
+
+    BoardInputEvent text;
+    text.kind = BoardInputKind::Text;
+    text.text[0] = 'A';
+    queue.enqueue(text);
+    queue.enqueue(BoardInputEvent{BoardInputKind::Backspace});
+    text.text[0] = 'B';
+    queue.enqueue(text);
+
+    queue.enqueue(BoardInputEvent{BoardInputKind::FocusNext});
+    queue.enqueue(BoardInputEvent{BoardInputKind::Activate});
+
+    for (int index = 0; index < 20; ++index) {
+        queue.enqueue(BoardInputEvent{BoardInputKind::Wheel, 10, 10, 0, 1});
+    }
+}
+
+void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
+    constexpr char kSmokeHtml[] =
+        "<body><main class='app'>"
+        "<h1>STATUS 中</h1>"
+        "<button id='ok'>OK</button>"
+        "<input id='name'>"
+        "<input id='check' type='checkbox'>"
+        "</main></body>";
+    constexpr char kSmokeCss[] =
+        "body { margin: 0; padding: 6px; background: #111827; color: #f8fafc; }"
+        ".app { display: grid; gap: 6px; }"
+        "h1 { margin: 0; font-size: 14px; color: #facc15; }"
+        "button { height: 28px; background: #2563eb; color: #ffffff; border: 1px solid #dbeafe; }"
+        "input { height: 24px; background: #ffffff; color: #111827; border: 1px solid #94a3b8; }";
+
+    jellyframe::BitmapFontContext font_context = jellyframe_esp32s3::make_bringup_font_context(2);
+    TextMeasureProvider text_measure{bitmap_font_measure_callback, &font_context};
+    TextPainter text_painter{bitmap_font_paint_callback, &font_context};
+
+    TextMetrics ascii_metrics{};
+    TextMetrics cjk_metrics{};
+    const bool ascii_ok = bitmap_font_measure_callback("STATUS", 14, 400, &ascii_metrics, &font_context);
+    const bool cjk_ok = bitmap_font_measure_callback("中", 14, 400, &cjk_metrics, &font_context);
+
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(kSmokeHtml, html_parser_options_from_budgets(budgets));
+    if (!document) {
+        ESP_LOGE(tag, "p4_p5_p6_ui_smoke failed: document parse failed");
+        return;
+    }
+    const Stylesheet stylesheet = css_parser.parse(kSmokeCss, css_parser_options_from_budgets(budgets));
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver, render_tree_options_from_budgets(budgets));
+    MonotonicArena render_arena;
+    auto render_tree = render_tree_builder.build(*document, render_arena);
+    LayoutEngine layout_engine(resolver, text_measure, layout_engine_options_from_budgets(budgets));
+    MonotonicArena layout_arena;
+    auto layout_tree = layout_engine.layout(*render_tree, width, layout_arena);
+    LayerTreeBuilder layer_tree_builder(layer_tree_options_from_budgets(budgets));
+    MonotonicArena layer_arena;
+    auto layer_tree = layer_tree_builder.build(*layout_tree, layer_arena);
+
+    Node* checkbox = find_by_id(*document, "check");
+    Node* input = find_by_id(*document, "name");
+    int click_count = 0;
+    if (checkbox != nullptr) {
+        checkbox->add_event_listener("click", [&](Event&) { ++click_count; });
+    }
+
+    InputController input_controller(*layer_tree);
+    jellyframe_esp32s3::BoardInputQueue input_queue;
+    seed_p5_input_smoke(input_queue);
+    const std::uint32_t dropped_before_dispatch = input_queue.dropped_count();
+    const auto dispatch_stats =
+        jellyframe_esp32s3::dispatch_input_events(input_queue, input_controller, 8);
+
+    SoftwareCompositor compositor(text_painter);
+    FrameBuffer frame_buffer(width, height, kBackground);
+    const Rect full_dirty{0, 0, width, height};
+    compositor.render_into(*layer_tree, frame_buffer, kBackground, &full_dirty, 1);
+
+    std::unique_ptr<std::uint16_t[]> rgb565(new (std::nothrow) std::uint16_t[
+        jellyframe_esp32s3::rgb565_buffer_pixels(width, height)]);
+    if (!rgb565) {
+        ESP_LOGW(tag, "p4_p5_p6_ui_smoke skipped: RGB565 allocation failed");
+        return;
+    }
+    jellyframe_esp32s3::Rgb565Panel panel;
+    panel.pixels = rgb565.get();
+    panel.width = width;
+    panel.height = height;
+    panel.stride_pixels = width;
+    EmbeddedFrameBufferSink sink = jellyframe_esp32s3::make_rgb565_sink(panel);
+    const HostFrameSink frame_sink = embedded_frame_sink(sink);
+    const bool first_present_ok = present_frame(frame_buffer, frame_sink, &full_dirty, 1);
+
+    const Rect dirty_rect{0, 0, std::min(width, 160), std::min(height, 48)};
+    compositor.render_into(*layer_tree, frame_buffer, kBackground, &dirty_rect, 1);
+    const std::uint32_t flush_count_before_dirty = panel.flush_count;
+    const std::uint32_t flush_bytes_before_dirty = panel.flushed_bytes;
+    const bool dirty_present_ok = present_frame(frame_buffer, frame_sink, &dirty_rect, 1);
+
+    ESP_LOGI(tag,
+             "p4_p5_p6_ui_smoke font_ascii_ok=%d font_cjk_ok=%d ascii=%dx%d cjk=%dx%d first_present=%d dirty_present=%d dispatched=%u queue_left=%u dropped=%u pointer=%u wheel=%u focus=%u text=%u activate=%u checkbox=%d checkbox_clicks=%d input_value=%s dirty_area=%u dirty_flushes=%u dirty_bytes=%u",
+             ascii_ok ? 1 : 0,
+             cjk_ok ? 1 : 0,
+             ascii_metrics.width,
+             ascii_metrics.line_height,
+             cjk_metrics.width,
+             cjk_metrics.line_height,
+             first_present_ok ? 1 : 0,
+             dirty_present_ok ? 1 : 0,
+             static_cast<unsigned>(dispatch_stats.dispatched),
+             static_cast<unsigned>(input_queue.size()),
+             static_cast<unsigned>(dropped_before_dispatch),
+             static_cast<unsigned>(dispatch_stats.pointer_events),
+             static_cast<unsigned>(dispatch_stats.wheel_events),
+             static_cast<unsigned>(dispatch_stats.focus_events),
+             static_cast<unsigned>(dispatch_stats.text_events),
+             static_cast<unsigned>(dispatch_stats.activation_events),
+             checkbox != nullptr && form_control_checked(*checkbox) ? 1 : 0,
+             click_count,
+             input != nullptr ? form_control_value(*input).c_str() : "",
+             static_cast<unsigned>(rect_area(dirty_rect)),
+             static_cast<unsigned>(panel.flush_count - flush_count_before_dirty),
+             static_cast<unsigned>(panel.flushed_bytes - flush_bytes_before_dirty));
+}
+
 void run_benchmark() {
     const int card_count = CONFIG_JELLYFRAME_BENCH_CARD_COUNT;
     const int iterations = CONFIG_JELLYFRAME_BENCH_ITERATIONS;
@@ -518,6 +679,7 @@ void run_benchmark() {
         rendered_frame = true;
         print_result("render_frame", iterations, render_frame_us);
         run_p3_display_smoke(frame_buffer, viewport_width, viewport_height);
+        run_p4_p5_p6_ui_smoke(viewport_width, viewport_height, budgets);
 
 #if CONFIG_JELLYFRAME_BENCH_PRESENT_RGB565
         auto rgb565 = std::make_unique<std::uint16_t[]>(

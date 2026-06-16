@@ -21,7 +21,9 @@ endif()
 idf_component_register(
     SRCS
         "main.cpp"
+        "jellyframe_esp32s3_font.cpp"
         "jellyframe_esp32s3_hal.cpp"
+        "jellyframe_esp32s3_input.cpp"
         "jellyframe_esp32s3_resources.cpp"
         "${JELLYFRAME_ESP32S3_GENERATED_RESOURCES}"
     INCLUDE_DIRS
