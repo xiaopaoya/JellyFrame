@@ -213,7 +213,9 @@ Goal: reduce unnecessary full-pipeline rebuilds after script-app interaction.
 
 Status: started. Dirty flag clearing and dirty-region traversal now use
 explicit work stacks and aggregate-dirty pruning, reducing stack pressure and
-unnecessary clean-subtree scans. Full subtree reuse is still future work.
+unnecessary clean-subtree scans. Structural `DomDirtyTree` updates now skip
+previous-layout retention and plan a conservative full-frame repaint. Full
+subtree reuse is still future work.
 
 Tasks:
 

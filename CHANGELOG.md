@@ -247,6 +247,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Improved dirty-flag and dirty-region traversal to use explicit work stacks
   and aggregate-dirty pruning, reducing stack pressure on deeply nested
   embedded documents.
+- Improved frame-update planning for structural DOM changes so `DomDirtyTree`
+  no longer retains a previous layout tree that would only lead to a
+  conservative full-frame repaint.
 - Improved core text fallback to measure and paint UTF-8 by codepoint instead
   of treating every non-ASCII byte as a separate glyph.
 - Improved the bitmap font backend so missing glyphs draw a visible stable-width

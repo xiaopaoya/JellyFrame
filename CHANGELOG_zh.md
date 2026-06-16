@@ -177,6 +177,8 @@ JellyFrame Engine 的重要变更记录在这里。
   同值 `textContent` 不触发 invalidation，Win32 壳在 clean input callback 后不再重建管线。
 - 将 dirty flag 清理和 dirty-region 遍历改为显式工作栈，并按聚合 dirty 位剪枝，
   降低深层嵌入式文档的栈压力。
+- 改进结构性 DOM 变化的 frame-update planning：`DomDirtyTree` 不再保留最终只会导致
+  保守 full-frame repaint 的上一棵 layout tree。
 - 改进 core 文本 fallback，使测量和绘制按 UTF-8 码点处理，而不是把每个非 ASCII 字节当成独立 glyph。
 - 改进 bitmap font backend：缺字现在会绘制可见且宽度稳定的 fallback 方框，而不是只保留空白 advance。
 - 改进文本换行启发式，单个不可断符号即使测量宽度略超小控件，也不会被当成多行文本。

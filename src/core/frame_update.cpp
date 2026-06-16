@@ -71,6 +71,11 @@ FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
     }
 
     plan.action = FrameUpdateAction::RebuildPipeline;
+    if ((state.dirty_flags & DomDirtyTree) != 0U) {
+        plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+        plan.needs_full_framebuffer = true;
+        return plan;
+    }
     if (cache_ready && framebuffer_ready) {
         plan.dirty_rect_mode = FrameDirtyRectMode::PreviousAndCurrentLayout;
         plan.needs_previous_layout = true;

@@ -61,6 +61,15 @@ void layout_dirty_rebuilds_with_previous_layout() {
     check(!plan.needs_full_framebuffer, "matching framebuffer avoids full render requirement");
 }
 
+void tree_dirty_rebuilds_without_previous_layout() {
+    const FrameUpdatePlan plan = plan_frame_update(cached_state(DomDirtyTree | DomDirtyLayout));
+    check(plan.action == FrameUpdateAction::RebuildPipeline, "tree dirty rebuilds pipeline");
+    check(plan.dirty_rect_mode == FrameDirtyRectMode::FullFrame,
+          "tree dirty falls back to full frame planning");
+    check(!plan.needs_previous_layout, "tree dirty does not retain previous layout");
+    check(plan.needs_full_framebuffer, "tree dirty needs full framebuffer repaint");
+}
+
 void missing_framebuffer_forces_full_frame() {
     FrameUpdateState state = cached_state(DomDirtyPaint);
     state.has_framebuffer = false;
@@ -144,6 +153,11 @@ void host_frame_sequence_keeps_bounded_actions() {
     check(plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout,
           "layout dirty compares previous and current layout");
 
+    plan = plan_frame_update(make_frame_update_state(DomDirtyTree | DomDirtyLayout, cache));
+    check(plan.action == FrameUpdateAction::RebuildPipeline, "tree dirty frame rebuilds");
+    check(plan.dirty_rect_mode == FrameDirtyRectMode::FullFrame,
+          "tree dirty frame skips previous layout comparison");
+
     cache.content_height = 260;
     plan = plan_frame_update(make_frame_update_state(DomDirtyPaint, cache));
     check(plan.action == FrameUpdateAction::RebuildPipeline,
@@ -160,6 +174,7 @@ int main() {
         clean_uncached_document_gets_first_paint();
         paint_dirty_reuses_existing_pipeline();
         layout_dirty_rebuilds_with_previous_layout();
+        tree_dirty_rebuilds_without_previous_layout();
         missing_framebuffer_forces_full_frame();
         resized_framebuffer_forces_full_frame();
         invalid_viewport_is_conservative();

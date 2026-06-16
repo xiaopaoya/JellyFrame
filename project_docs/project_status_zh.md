@@ -161,7 +161,8 @@ layout-dirty 和 framebuffer 尺寸变化。
 目标：减少脚本 app 交互后不必要的全管线重建。
 
 状态：已开始。Dirty flag 清理和 dirty-region 遍历已改为显式工作栈，并按聚合 dirty 位剪枝，
-降低深层文档的栈压力和干净子树扫描。完整 subtree reuse 仍是后续工作。
+降低深层文档的栈压力和干净子树扫描。结构性 `DomDirtyTree` 更新现在会跳过 previous-layout
+保留，并规划为保守 full-frame repaint。完整 subtree reuse 仍是后续工作。
 
 任务：
 

@@ -78,11 +78,12 @@ Outputs:
 
 - `DomDirtyPaint`: control values, selection state and similar visual-only
   changes. If caches and framebuffer match, this can use `RepaintExisting`.
-- `DomDirtyText` / `DomDirtyLayout` / `DomDirtyStyle` / `DomDirtyAttributes`:
-  rebuild render/layout/layer, but may still use `PreviousAndCurrentLayout`
-  dirty rects if framebuffer size is stable.
-- `DomDirtyTree`: structural mutation. Current `compute_dirty_rects` falls back
-  conservatively to the full viewport/content rect. M9 can refine this.
+- `DomDirtyText` / `DomDirtyLayout` / `DomDirtyStyle` / `DomDirtyAttributes`
+  without `DomDirtyTree`: rebuild render/layout/layer, but may still use
+  `PreviousAndCurrentLayout` dirty rects if framebuffer size is stable.
+- `DomDirtyTree`: structural mutation. The planner uses `FullFrame` and does
+  not retain the previous layout tree, because current dirty-region logic falls
+  back conservatively to the full viewport/content rect. M9 can refine this.
 
 Unchanged `textContent`, unchanged attributes and similar no-op mutations should
 not create dirty flags.

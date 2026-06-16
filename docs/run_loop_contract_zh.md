@@ -62,8 +62,11 @@ cache snapshot 形状，减少各壳层手写状态转换的出错机会。
 ## Dirty Flags 语义
 
 - `DomDirtyPaint`：控件值、选择状态、焦点类视觉变化等。若 framebuffer 和 layout cache 可用，可走 `RepaintExisting`。
-- `DomDirtyText` / `DomDirtyLayout` / `DomDirtyStyle` / `DomDirtyAttributes`：需要重建 render/layout/layer，但在 framebuffer 尺寸不变时可以尝试 `PreviousAndCurrentLayout` dirty rect。
-- `DomDirtyTree`：结构变化。当前 `compute_dirty_rects` 会保守退回整 viewport/content rect。后续 M9 可以继续细化。
+- 不含 `DomDirtyTree` 的 `DomDirtyText` / `DomDirtyLayout` / `DomDirtyStyle` /
+  `DomDirtyAttributes`：需要重建 render/layout/layer，但在 framebuffer 尺寸不变时可以尝试
+  `PreviousAndCurrentLayout` dirty rect。
+- `DomDirtyTree`：结构变化。Planner 直接使用 `FullFrame`，且不保留上一棵 layout tree，
+  因为当前 dirty-region 逻辑会保守退回整 viewport/content rect。后续 M9 可以继续细化。
 
 同值 `textContent`、未变化 attribute 等不应制造 dirty flags。
 
