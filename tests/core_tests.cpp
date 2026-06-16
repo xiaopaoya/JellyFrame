@@ -8,6 +8,7 @@ int dirty_region_tests_main();
 int embedded_framebuffer_tests_main();
 int css_parser_tests_main();
 int event_tests_main();
+int frame_update_tests_main();
 int hit_test_tests_main();
 int host_tests_main();
 int input_tests_main();
@@ -45,6 +46,7 @@ int main() {
     failed += run_test("embedded_framebuffer", embedded_framebuffer_tests_main);
     failed += run_test("css_parser", css_parser_tests_main);
     failed += run_test("event", event_tests_main);
+    failed += run_test("frame_update", frame_update_tests_main);
     failed += run_test("hit_test", hit_test_tests_main);
     failed += run_test("host", host_tests_main);
     failed += run_test("input", input_tests_main);

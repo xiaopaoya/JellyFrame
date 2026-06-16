@@ -7,6 +7,7 @@
 #include "core/dirty_region.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
+#include "core/frame_update.h"
 #include "core/html_parser.h"
 #include "core/input.h"
 #include "core/layer_tree.h"
@@ -562,6 +563,10 @@ private:
                 css_parser_options_from_budgets(budgets_));
             style_resolver_ = std::make_unique<StyleResolver>(std::move(stylesheet));
             page_background_ = page_background_color(*document_, *style_resolver_);
+            render_tree_.reset();
+            layout_tree_.reset();
+            layer_tree_.reset();
+            input_.reset();
 
             document_->add_event_listener("click", [this](Event& event) {
                 std::cout << "click target=" << describe_node(event.target()) << '\n';
@@ -609,38 +614,52 @@ private:
             return;
         }
         const DomDirtyFlags dirty_flags = document_->dirty_flags;
-        const bool can_reuse_layout =
-            dirty_flags != DomDirtyNone && !dirty_requires_render_or_layout(dirty_flags) &&
-            render_tree_ != nullptr && layout_tree_ != nullptr &&
-            frame_buffer_.width == viewport_width_;
-        LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets_));
-        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
-        if (can_reuse_layout) {
-            const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
-            if (frame_buffer_.height == content_height) {
-                auto next_layer_tree = layer_builder.build(*layout_tree_);
-                std::vector<Rect> dirty_rects = compute_dirty_rects(
-                    *document_,
-                    layout_tree_.get(),
-                    layout_tree_.get(),
-                    dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
-                layer_tree_ = std::move(next_layer_tree);
-                if (!dirty_rects.empty()) {
-                    compositor.render_into(*layer_tree_,
-                                           frame_buffer_,
-                                           page_background_,
-                                           dirty_rects.data(),
-                                           dirty_rects.size());
-                }
-                input_ = std::make_unique<InputController>(*layer_tree_);
-                input_->set_focused_node(focused_node);
-                update_blit_pixels();
-                clear_dirty_flags(*document_);
-                return;
-            }
+        const int current_content_height = layout_tree_ != nullptr
+            ? std::max(viewport_height_, layout_tree_->rect.height)
+            : frame_buffer_.height;
+        FrameUpdateState update_state;
+        update_state.dirty_flags = dirty_flags;
+        update_state.has_render_tree = render_tree_ != nullptr;
+        update_state.has_layout_tree = layout_tree_ != nullptr;
+        update_state.has_layer_tree = layer_tree_ != nullptr;
+        update_state.has_framebuffer = frame_buffer_.width > 0 && frame_buffer_.height > 0;
+        update_state.framebuffer_width = frame_buffer_.width;
+        update_state.framebuffer_height = frame_buffer_.height;
+        update_state.viewport = Rect{0, 0, viewport_width_, viewport_height_};
+        update_state.content_height = current_content_height;
+        const FrameUpdatePlan update_plan = plan_frame_update(update_state);
+        if (update_plan.action == FrameUpdateAction::None) {
+            return;
         }
 
-        LayoutBoxPtr previous_layout = std::move(layout_tree_);
+        LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets_));
+        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
+        if (update_plan.action == FrameUpdateAction::RepaintExisting &&
+            update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
+            layout_tree_ != nullptr) {
+            const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+            auto next_layer_tree = layer_builder.build(*layout_tree_);
+            std::vector<Rect> dirty_rects = compute_dirty_rects(
+                *document_,
+                layout_tree_.get(),
+                layout_tree_.get(),
+                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
+            layer_tree_ = std::move(next_layer_tree);
+            if (!dirty_rects.empty()) {
+                compositor.render_into(*layer_tree_,
+                                       frame_buffer_,
+                                       page_background_,
+                                       dirty_rects.data(),
+                                       dirty_rects.size());
+            }
+            input_ = std::make_unique<InputController>(*layer_tree_);
+            input_->set_focused_node(focused_node);
+            update_blit_pixels();
+            clear_dirty_flags(*document_);
+            return;
+        }
+
+        LayoutBoxPtr previous_layout = update_plan.needs_previous_layout ? std::move(layout_tree_) : LayoutBoxPtr{};
         RenderTreeBuilder render_builder(*style_resolver_, render_tree_options_from_budgets(budgets_));
         auto next_render_tree = render_builder.build(*document_);
         LayoutEngine layout_engine(*style_resolver_,
@@ -653,6 +672,7 @@ private:
         scroll_y_ = std::max(0, std::min(scroll_y_, std::max(0, content_height - viewport_height_)));
         std::vector<Rect> dirty_rects;
         const bool can_repaint_incrementally =
+            update_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout &&
             previous_layout != nullptr &&
             frame_buffer_.width == viewport_width_ &&
             frame_buffer_.height == content_height;

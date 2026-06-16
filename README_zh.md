@@ -177,6 +177,8 @@ ctest --test-dir build -C Debug --output-on-failure
   契约。依赖某个 HTML/CSS/DOM/script 功能前，优先查这里。
 - `docs/project_status_zh.md`：当前主线状态、职责边界、已完成能力、已合并移植支撑代码和后续
   核心里程碑。
+- `docs/run_loop_contract_zh.md`：M8 运行循环与增量更新契约，说明 input、timer、dirty flags、
+  rebuild/repaint 和 present 的推荐顺序。
 - `docs/host_abstraction_zh.md`：描述资源、时间、framebuffer 提交、文本和嵌入式 budgets
   的薄宿主边界。
 - `docs/embedded_hal_api_zh.md`：列出开发板 port 需要实现的硬件侧 API，并包含 ESP32-S3

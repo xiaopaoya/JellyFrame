@@ -12,6 +12,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/core/embedded_framebuffer.cpp"
         "${JELLYFRAME_ROOT}/src/core/event.cpp"
         "${JELLYFRAME_ROOT}/src/core/form_control.cpp"
+        "${JELLYFRAME_ROOT}/src/core/frame_update.cpp"
         "${JELLYFRAME_ROOT}/src/core/hit_test.cpp"
         "${JELLYFRAME_ROOT}/src/core/html_parser.cpp"
         "${JELLYFRAME_ROOT}/src/core/html_tokenizer.cpp"

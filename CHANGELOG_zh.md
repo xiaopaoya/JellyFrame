@@ -113,6 +113,8 @@ JellyFrame Engine 的重要变更记录在这里。
   `HostFrameSink` presentation 辅助函数。
 - 添加 `dirty_region`，作为第一版自动 dirty-rectangle 来源，用于直接文本、属性和表单控件
   mutation。树结构 mutation 仍保守重绘整个 viewport。
+- 添加第一版 M8 frame-update planner 和双语运行循环契约文档，明确宿主 input、timer、
+  dirty update、repaint 和 present 顺序。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
   转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
   单色显示 buffer。

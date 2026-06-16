@@ -171,6 +171,10 @@ The main remaining risks are:
 Goal: turn frame-loop experience from desktop shells and platform-neutral demos
 into a clearer core/host contract.
 
+Status: started. `src/core/frame_update.h` provides the first hardware-neutral
+update planner, and `docs/run_loop_contract.md` records the recommended run
+loop.
+
 Tasks:
 
 - Define the recommended order for first paint, input dispatch, timer pumping,

@@ -200,6 +200,8 @@ ctest --test-dir build -C Debug --output-on-failure
 - `docs/project_status.md` summarizes the current mainline status, scope
   boundary, completed capabilities, merged port-support code and next core
   milestones.
+- `docs/run_loop_contract.md` documents the M8 run-loop and incremental-update
+  contract for input, timers, dirty flags, rebuild/repaint and presentation.
 - `docs/host_abstraction.md` sketches the thin host boundary for resources,
   time, framebuffer presentation, text and embedded budgets.
 - `docs/embedded_hal_api.md` lists the hardware-side APIs a board port should
