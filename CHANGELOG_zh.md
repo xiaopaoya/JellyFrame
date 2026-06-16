@@ -160,6 +160,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 将 watch calculator 示例改为使用受支持的 grid/gap 子集，不再依赖 inline-block whitespace。
 - 更新 scripting 和路线图文档，将 M7 script loading 标为可用，并把下一项主要工作转向
   host presentation 和 dirty rectangles。
+- 更新架构、宿主抽象和兼容性规划文档，使下一步建议与硬件无关主线范围保持一致。
 - 修复带空格的 child combinator selector 解析，例如 `.list > li` 不再错误匹配更深层后代。
 - 修复表单控件状态变化未标记 DOM dirty 的问题，确保 Win32 壳中输入、select、range 等交互后会重绘。
 - 改进交互控件键盘行为：`datalist` 输入支持 Tab/Enter 选择第一个匹配候选，

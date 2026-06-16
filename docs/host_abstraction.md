@@ -126,7 +126,7 @@ Still missing:
 
 - finer-grained layer/display-command invalidation;
 - tunable dirty rectangle coalescing policy;
-- concrete board/LVGL/display-driver examples.
+- tiled/scanline presentation for devices that cannot keep a full framebuffer.
 
 ## Text Backend
 
@@ -158,7 +158,7 @@ Current shape:
 - `InputController` performs hit testing, focus, activation and DOM event
   dispatch.
 
-Future wearable input adapters should map:
+Future wearable input adapters can map:
 
 - touch to pointer down/move/up;
 - crown rotation to wheel or app-specific events;
@@ -171,7 +171,7 @@ devices. A first core API now exists on `InputController`: `focus_next()`,
 
 ## Budgets
 
-The host should eventually configure:
+The host should configure:
 
 - DOM node cap;
 - CSS rule/declaration cap;
@@ -180,12 +180,14 @@ The host should eventually configure:
 - resource byte cap;
 - framebuffer/offscreen buffer policy.
 
-The current parser has some fixed limits. `HostBudgets` documents the desired
-centralized direction.
+`HostBudgets` is now wired through `src/core/budget.h` into the main HTML/CSS
+parser, render/layout/layer, display-list, dirty-rectangle and scripting entry
+points. The remaining work is finer offscreen/tile buffer policy and long-running
+stability tests for budget-exceeded paths.
 
 ## Recommended Order
 
-1. Add platform text backend examples beyond Win32.
-2. Add concrete board/LVGL/display-driver examples for `embedded_framebuffer`.
-3. Add resource/budget plumbing across parsers and scripting.
-4. Add a static embedded bitmap font backend example.
+1. Tighten the run-loop and dirty-update contract.
+2. Implement finer invalidation and subtree reuse.
+3. Improve text backend adapters and font workflow validation.
+4. Organize local resource bundles and app packaging.

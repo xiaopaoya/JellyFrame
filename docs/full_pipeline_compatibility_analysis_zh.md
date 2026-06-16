@@ -128,8 +128,9 @@ JellyFrame 结果：
 
 ## 下一步功能优先级
 
-1. Dirty layer/display-command invalidation。
-2. Arena allocation 和紧凑 DOM/layout object storage。
-3. 面向非拉丁生产设备的 text shaping/font fallback 策略。
-4. 为 `embedded_framebuffer` 添加具体开发板、LVGL 或显示驱动示例。
-5. 只有当嵌入式应用证明需要时，再增加 selector/module 能力。
+1. 收敛运行循环和 dirty update 契约。
+2. Dirty layer/display-command invalidation 和 subtree reuse。
+3. DOM 所有权 instrumentation、`DomOwner` 原型和更紧凑的对象存储。
+4. 文本后端 adapter、字体覆盖和缺字影响诊断。
+5. 本地资源包与 app packaging。
+6. 只有当嵌入式应用证明需要时，再增加 selector/module 能力。

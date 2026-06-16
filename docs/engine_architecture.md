@@ -102,10 +102,10 @@ source order, then runs selector matching and cascade comparison.
 ## Next Professionalization Steps
 
 1. Move selector parsing into a dedicated `selector.*` module.
-2. Evaluate DOM node allocation policy and whether a document arena is worth the
-   parser/tree-builder complexity.
-3. Add style sharing or computed-style cache for repeated class patterns.
-4. Reuse render/layout/layer subtrees from existing dirty flags instead of
+2. Tighten the run-loop and dirty-update contract.
+3. Reuse render/layout/layer subtrees from existing dirty flags instead of
    rebuilding the full pipeline after every mutation.
-5. Add dirty layer invalidation and rectangle flush.
-6. Add embedded bitmap/LVGL/vendor text backend examples beyond Win32/GDI.
+4. Add style sharing or computed-style cache for repeated class patterns.
+5. Evaluate DOM node allocation policy through a `DomOwner` prototype and
+   detached-node instrumentation.
+6. Improve text backend adapters and font workflow validation.

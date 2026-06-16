@@ -233,6 +233,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Updated scripting and roadmap documentation to treat M7 script loading as
   available and shift the next major work toward host presentation and dirty
   rectangles.
+- Updated architecture, host abstraction and compatibility planning documents
+  to align next-step guidance with the hardware-neutral mainline scope.
 - Fixed child-combinator selector parsing with whitespace around `>`, so rules
   such as `.list > li` no longer accidentally match deeper descendants.
 - Fixed form-control state changes so text input, select, range and other

@@ -136,8 +136,10 @@ Assessment:
 
 ## Next Functional Priorities
 
-1. Dirty layer/display-command invalidation.
-2. Arena allocation and compact DOM/layout object storage.
-3. Text shaping/font fallback strategy for non-Latin production devices.
-4. Concrete board/LVGL/display-driver examples for `embedded_framebuffer`.
-5. Selector/module additions only when embedded apps prove they need them.
+1. Tighten the run-loop and dirty-update contract.
+2. Dirty layer/display-command invalidation and subtree reuse.
+3. DOM ownership instrumentation, a `DomOwner` prototype and more compact object
+   storage.
+4. Text backend adapters, font coverage and missing-glyph impact diagnostics.
+5. Local resource bundles and app packaging.
+6. Selector/module additions only when embedded apps prove they need them.
