@@ -342,6 +342,24 @@ void select_click_cycles_selected_option() {
     check(form_control_display_text(*select) == "Two", "select cycles selected option");
 }
 
+void unchanged_form_activation_stays_clean() {
+    auto pipeline = build_form_pipeline(
+        "<body><input id='choice' type='radio' checked><select id='single'><option>One</option></select></body>");
+    Node* radio = find_by_id(*pipeline.document, "choice");
+    Node* select = find_by_id(*pipeline.document, "single");
+    check(radio != nullptr && select != nullptr, "unchanged form controls exist");
+
+    check(ensure_form_control_state(*radio).checked, "radio starts checked");
+    clear_dirty_flags(*pipeline.document);
+    check(!activate_form_control(*radio), "checked radio activation is a no-op");
+    check(subtree_dirty_flags(*pipeline.document) == DomDirtyNone, "checked radio no-op stays clean");
+
+    check(form_control_display_text(*select) == "One", "single select starts at only option");
+    clear_dirty_flags(*pipeline.document);
+    check(!activate_form_control(*select), "single-option select activation is a no-op");
+    check(subtree_dirty_flags(*pipeline.document) == DomDirtyNone, "single-option select no-op stays clean");
+}
+
 void select_arrow_keys_work_through_optgroups() {
     auto pipeline = build_form_pipeline(
         "<body><select id='choice'><optgroup label='A'><option>One</option><option>Two</option></optgroup>"
@@ -447,6 +465,7 @@ int main() {
         checkbox_click_toggles_checked_state();
         range_drag_updates_value();
         select_click_cycles_selected_option();
+        unchanged_form_activation_stays_clean();
         datalist_completion_updates_text_control();
         select_arrow_keys_work_through_optgroups();
         disabled_control_ignores_pointer_and_text_input();

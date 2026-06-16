@@ -250,6 +250,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Improved frame-update planning for structural DOM changes so `DomDirtyTree`
   no longer retains a previous layout tree that would only lead to a
   conservative full-frame repaint.
+- Avoided paint dirty invalidation for no-op form activations such as clicking
+  an already checked radio button or cycling a single-option select.
 - Improved core text fallback to measure and paint UTF-8 by codepoint instead
   of treating every non-ASCII byte as a separate glyph.
 - Improved the bitmap font backend so missing glyphs draw a visible stable-width

@@ -372,6 +372,9 @@ bool activate_form_control(Node& node) {
         return true;
     }
     if (state.kind == FormControlKind::Radio) {
+        if (state.checked) {
+            return false;
+        }
         state.checked = true;
         state.dirty = true;
         mark_dirty(node, DomDirtyPaint);
@@ -382,11 +385,7 @@ bool activate_form_control(Node& node) {
         if (option_count <= 0) {
             return false;
         }
-        state.selected_index = (state.selected_index + 1) % option_count;
-        state.value = form_control_display_text(node);
-        state.dirty = true;
-        mark_dirty(node, DomDirtyPaint);
-        return true;
+        return set_form_control_selected_index(node, (state.selected_index + 1) % option_count);
     }
     return false;
 }
