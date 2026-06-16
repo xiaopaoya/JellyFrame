@@ -151,6 +151,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 改进 dirty rerender 路径：根节点 dirty 检查为 O(1)，dirty 清理跳过干净分支，
   同值 `textContent` 不触发 invalidation，Win32 壳在 clean input callback 后不再重建管线。
 - 改进 core 文本 fallback，使测量和绘制按 UTF-8 码点处理，而不是把每个非 ASCII 字节当成独立 glyph。
+- 改进 bitmap font backend：缺字现在会绘制可见且宽度稳定的 fallback 方框，而不是只保留空白 advance。
 - 改进文本换行启发式，单个不可断符号即使测量宽度略超小控件，也不会被当成多行文本。
 - 改进 grid layout：auto-width grid item 会按分配到的 track 宽度布局内部内容，使按钮文字在 stretch 后仍居中。
 - grid placement 现在保留显式 item height 和 margin。

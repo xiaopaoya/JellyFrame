@@ -111,6 +111,37 @@ void draw_glyph(FrameBuffer& target,
     }
 }
 
+void draw_missing_glyph(FrameBuffer& target,
+                        int x,
+                        int y,
+                        Color color,
+                        int advance,
+                        int line_height,
+                        int scale,
+                        int stroke_passes) {
+    const int width = std::max(1, advance) * scale;
+    const int height = std::max(1, line_height) * scale;
+    if (width <= 1 || height <= 1) {
+        blend_pixel(target, x, y, color);
+        return;
+    }
+
+    for (int pass = 0; pass < stroke_passes; ++pass) {
+        const int offset = pass;
+        for (int px = 0; px < width; ++px) {
+            blend_pixel(target, x + px, y + offset, color);
+            blend_pixel(target, x + px, y + height - 1 - offset, color);
+        }
+        for (int py = 0; py < height; ++py) {
+            blend_pixel(target, x + offset, y + py, color);
+            blend_pixel(target, x + width - 1 - offset, y + py, color);
+        }
+        for (int delta = 0; delta < std::min(width, height); ++delta) {
+            blend_pixel(target, x + delta, y + delta, color);
+        }
+    }
+}
+
 } // namespace
 
 const BitmapFontGlyph* find_bitmap_glyph(const BitmapFont& font, std::uint32_t codepoint) {
@@ -193,6 +224,15 @@ bool bitmap_font_paint_callback(FrameBuffer& target,
         const BitmapFontGlyph* glyph = find_bitmap_glyph(font, codepoint);
         if (glyph != nullptr) {
             draw_glyph(target, cursor_x, cursor_y, color, *glyph, scale, stroke_passes);
+        } else {
+            draw_missing_glyph(target,
+                               cursor_x,
+                               cursor_y,
+                               color,
+                               font.fallback_advance,
+                               font.line_height,
+                               scale,
+                               stroke_passes);
         }
         cursor_x += glyph_advance(font, glyph) * scale;
         if (cursor_x >= rect.x + rect.width) {

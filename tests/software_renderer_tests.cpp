@@ -199,15 +199,26 @@ void bitmap_font_backend_measures_and_paints() {
         0b10100000,
         0b10100000,
     };
+    static constexpr std::uint8_t rows_cjk[] = {
+        0b11111111, 0b10000000,
+        0b00010000, 0b00000000,
+        0b11111111, 0b10000000,
+        0b00010000, 0b00000000,
+        0b11111111, 0b10000000,
+    };
     static constexpr BitmapFontGlyph glyphs[] = {
         BitmapFontGlyph{0x41, 3, 5, 4, 1, rows_a},
+        BitmapFontGlyph{0x4e2d, 9, 5, 10, 2, rows_cjk},
     };
-    static constexpr BitmapFont font{glyphs, 1, 6, 4};
+    static constexpr BitmapFont font{glyphs, 2, 6, 4};
     BitmapFontContext context{&font, 2};
 
     TextMetrics metrics;
     check(bitmap_font_measure_callback("AA", 12, 400, &metrics, &context), "bitmap font measure callback succeeds");
     check(metrics.width == 16 && metrics.line_height == 12, "bitmap font metrics scale advances");
+    check(bitmap_font_measure_callback("\xe4\xb8\xad?", 12, 400, &metrics, &context),
+          "bitmap font measures utf-8 text");
+    check(metrics.width == 28 && metrics.line_height == 12, "wide utf-8 glyph and fallback advance are stable");
 
     FrameBuffer frame_buffer(32, 16, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer(TextPainter{bitmap_font_paint_callback, &context});
@@ -224,6 +235,19 @@ void bitmap_font_backend_measures_and_paints() {
     check(count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) > 0,
           "bitmap font painter writes pixels");
     check(frame_buffer.pixel(0, 0).r == 255, "centered bitmap glyph leaves left edge empty");
+
+    FrameBuffer utf8_frame_buffer(40, 16, Color{255, 255, 255, 255});
+    DisplayCommand utf8_command;
+    utf8_command.type = DisplayCommandType::Text;
+    utf8_command.rect = Rect{0, 0, 40, 16};
+    utf8_command.color = Color{0, 0, 0, 255};
+    utf8_command.text = "\xe4\xb8\xad?";
+    utf8_command.font_size = 12;
+    utf8_command.text_single_line = true;
+    rasterizer.rasterize(utf8_command, utf8_frame_buffer, Rect{0, 0, 40, 16});
+
+    check(count_non_background_pixels(utf8_frame_buffer, Color{255, 255, 255, 255}) > 20,
+          "wide utf-8 glyph and missing fallback draw visible pixels");
 }
 
 } // namespace

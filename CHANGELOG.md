@@ -215,6 +215,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   Win32 shell no longer rebuilds the pipeline after clean input callbacks.
 - Improved core text fallback to measure and paint UTF-8 by codepoint instead
   of treating every non-ASCII byte as a separate glyph.
+- Improved the bitmap font backend so missing glyphs draw a visible stable-width
+  fallback box instead of silently reserving empty space.
 - Improved text wrapping heuristics so single unbreakable symbols are not
   treated as multi-line text when their measured width slightly exceeds a small
   control.
