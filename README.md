@@ -197,6 +197,9 @@ ctest --test-dir build -C Debug --output-on-failure
   the supported authoring subset and the M7 readiness decision.
 - `docs/developer_capability_matrix.md` is the developer-facing can-do/cannot-do
   contract. Check it before relying on an HTML/CSS/DOM/script feature.
+- `docs/project_status.md` summarizes the current mainline status, scope
+  boundary, completed capabilities, merged port-support code and next core
+  milestones.
 - `docs/host_abstraction.md` sketches the thin host boundary for resources,
   time, framebuffer presentation, text and embedded budgets.
 - `docs/embedded_hal_api.md` lists the hardware-side APIs a board port should

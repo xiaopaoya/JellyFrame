@@ -175,6 +175,8 @@ ctest --test-dir build -C Debug --output-on-failure
   支持的开发子集和 M7 前评估见 `docs/embedded_app_subset_zh.md`。
 - `docs/developer_capability_matrix_zh.md`：面向开发者的 can do/cannot do
   契约。依赖某个 HTML/CSS/DOM/script 功能前，优先查这里。
+- `docs/project_status_zh.md`：当前主线状态、职责边界、已完成能力、已合并移植支撑代码和后续
+  核心里程碑。
 - `docs/host_abstraction_zh.md`：描述资源、时间、framebuffer 提交、文本和嵌入式 budgets
   的薄宿主边界。
 - `docs/embedded_hal_api_zh.md`：列出开发板 port 需要实现的硬件侧 API，并包含 ESP32-S3

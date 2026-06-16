@@ -1,5 +1,8 @@
 # Roadmap
 
+For the complete current status, scope boundary and next milestone definitions,
+see `docs/project_status.md`. This document keeps only the high-level route.
+
 ## Milestone 1: Static document core
 
 - HTML subset: document nodes, text, common block and inline tags
@@ -50,12 +53,13 @@ planned.
 
 ## Recommended Next Order
 
-1. Concrete board/LVGL/display-driver examples based on
-   `jellyframe_embedded_host_demo`.
-2. LVGL/vendor text backend adapters beyond the static bitmap backend.
-3. Prototype a `DomOwner` and add runtime detached-node instrumentation; core
-   attached-DOM statistics are available, and direct DOM arena replacement is
-   deferred for mutable/scripted documents.
-4. Tiled framebuffer presentation for displays that cannot keep a full target
-   buffer.
-5. Resource bundle tooling and app packaging for local embedded assets.
+1. Tighten the core run-loop and dirty-update contract, with long-running
+   timer/input smoke coverage.
+2. Implement finer invalidation and subtree reuse to reduce full pipeline
+   rebuilds after script interaction.
+3. Improve text backend adapters and font workflow validation while keeping the
+   bitmap font backend as the low-cost default.
+4. Finish local resource bundle tooling and app packaging.
+5. Continue memory and allocator work, including a `DomOwner` prototype and
+   detached-node instrumentation.
+6. Move tiled/scanline presentation forward only when target hardware needs it.

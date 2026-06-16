@@ -48,6 +48,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 为 DOM 子树销毁和整子树 `textContent` 替换添加迭代路径，降低极深生成式文档的栈压力。
 - 添加双语 DOM arena 可行性文档，说明为什么 mutable/scripted document 暂不直接切换 DOM arena。
 - 添加迭代式 `compute_dom_statistics()` instrumentation，并在管线诊断中输出 DOM 深度和属性数量。
+- 添加双语项目状态与里程碑文档，明确硬件无关主线范围、已完成能力、已合并移植支撑代码和后续核心里程碑。
 - 为表单控件 value/checked/selection 变化添加 paint-only DOM dirty 状态，使 Win32 壳能对常见控件交互复用
   render/layout，并只重绘有界 dirty rectangles。
 - 通过 callback 形式的 `document_style` API 添加平台无关的外链 stylesheet

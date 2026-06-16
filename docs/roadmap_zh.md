@@ -1,5 +1,7 @@
 # 路线图
 
+当前完整状态、职责边界和下一阶段定义见 `docs/project_status_zh.md`。本文只保留高层路线。
+
 ## 里程碑 1：静态文档核心
 
 - HTML 子集：document 节点、文本、常见 block 和 inline 标签
@@ -43,9 +45,9 @@
 
 ## 推荐下一步顺序
 
-1. 基于 `jellyframe_embedded_host_demo` 完成具体开发板、LVGL 或显示驱动示例。
-2. 在静态 bitmap backend 之外补充 LVGL/vendor text backend adapters。
-3. 原型化 `DomOwner`，并添加 runtime detached-node instrumentation；核心 attached-DOM statistics
-   已可用，mutable/scripted document 的直接 DOM arena replacement 延后。
-4. 面向无法保留完整 target buffer 的屏幕补充 tiled framebuffer presentation。
-5. 补齐本地嵌入式资源包工具和 app packaging。
+1. 收敛核心运行循环和 dirty update 契约，补充长时间 timer/input smoke。
+2. 做更细的 invalidation/subtree reuse，减少脚本交互后的全管线重建。
+3. 完善文本后端 adapter 和字体工作流验证，保持 bitmap font 作为默认低成本路线。
+4. 补齐本地资源包工具和 app packaging。
+5. 继续内存/allocator 优化，包括 `DomOwner` 原型和 detached-node instrumentation。
+6. 只有在目标硬件确实需要时，再推进 tiled/scanline presentation。

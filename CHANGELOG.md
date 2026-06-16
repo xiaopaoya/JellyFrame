@@ -66,6 +66,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   allocation is deferred for mutable/scripted documents.
 - Added iterative `compute_dom_statistics()` instrumentation and surfaced DOM
   depth/attribute counts from pipeline diagnostics.
+- Added bilingual project status and milestone documents that define the
+  hardware-neutral mainline scope, completed capabilities, merged port-support
+  code and the next core milestones.
 - Added paint-only DOM dirty state for form-control value/checked/selection
   changes, enabling the Win32 shell to reuse render/layout and repaint bounded
   dirty rectangles for common control interaction.
