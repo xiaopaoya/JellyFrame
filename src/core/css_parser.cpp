@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <string_view>
+#include <vector>
 
 namespace jellyframe {
 namespace {
@@ -82,9 +86,176 @@ bool contains_ascii_case_insensitive(std::string_view haystack, std::string_view
     return false;
 }
 
-bool is_plain_media_query(std::string_view prelude) {
+std::vector<std::string> split_top_level_commas(std::string_view value) {
+    std::vector<std::string> items;
+    std::size_t begin = 0;
+    int paren_depth = 0;
+    char quote = '\0';
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        const char ch = value[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < value.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '"' || ch == '\'') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++paren_depth;
+        } else if (ch == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (ch == ',' && paren_depth == 0) {
+            items.push_back(trim(value.substr(begin, index - begin)));
+            begin = index + 1;
+        }
+    }
+    items.push_back(trim(value.substr(begin)));
+    return items;
+}
+
+bool parse_media_length_px(std::string_view value, int& output) {
+    const std::string text = trim(value);
+    if (text.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(text.c_str(), &end);
+    if (end == text.c_str() || errno == ERANGE) {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end != nullptr && std::strncmp(end, "px", 2) == 0) {
+        end += 2;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || *end != '\0') {
+        return false;
+    }
+    output = static_cast<int>(parsed >= 0.0F ? parsed + 0.5F : parsed - 0.5F);
+    return output >= 0;
+}
+
+bool evaluate_media_feature(std::string_view condition, const CssParserOptions& options) {
+    const std::string text = ascii_lowercase(collapse_ascii_space(condition));
+    const std::size_t colon = text.find(':');
+    if (colon == std::string::npos) {
+        return false;
+    }
+    const std::string feature = trim(std::string_view(text).substr(0, colon));
+    int expected = 0;
+    if (!parse_media_length_px(std::string_view(text).substr(colon + 1), expected)) {
+        return false;
+    }
+
+    if (feature == "min-width") {
+        return options.media_viewport_width >= expected;
+    }
+    if (feature == "max-width") {
+        return options.media_viewport_width <= expected;
+    }
+    if (feature == "min-height") {
+        return options.media_viewport_height >= expected;
+    }
+    if (feature == "max-height") {
+        return options.media_viewport_height <= expected;
+    }
+    return false;
+}
+
+bool consume_media_condition(std::string_view& rest, const CssParserOptions& options) {
+    rest = std::string_view(rest).substr(std::min(rest.find_first_not_of(' '), rest.size()));
+    if (rest.empty() || rest.front() != '(') {
+        return false;
+    }
+    int depth = 0;
+    for (std::size_t index = 0; index < rest.size(); ++index) {
+        const char ch = rest[index];
+        if (ch == '(') {
+            ++depth;
+        } else if (ch == ')') {
+            --depth;
+            if (depth == 0) {
+                const std::string_view condition = rest.substr(1, index - 1);
+                rest = rest.substr(index + 1);
+                return evaluate_media_feature(condition, options);
+            }
+        }
+    }
+    return false;
+}
+
+bool starts_with_token(std::string_view value, std::string_view token) {
+    return value.size() >= token.size() && value.substr(0, token.size()) == token &&
+           (value.size() == token.size() || value[token.size()] == ' ');
+}
+
+bool evaluate_media_query_item(std::string_view item, const CssParserOptions& options) {
+    std::string media = ascii_lowercase(collapse_ascii_space(item));
+    if (media.empty() || media == "all" || media == "screen") {
+        return true;
+    }
+    if (starts_with_token(media, "not")) {
+        return false;
+    }
+    if (starts_with_token(media, "only")) {
+        media = trim(std::string_view(media).substr(4));
+    }
+
+    std::string_view rest(media);
+    if (!rest.empty() && rest.front() != '(') {
+        const std::size_t space = rest.find(' ');
+        const std::string_view type = space == std::string_view::npos ? rest : rest.substr(0, space);
+        if (type != "all" && type != "screen") {
+            return false;
+        }
+        if (space == std::string_view::npos) {
+            return true;
+        }
+        rest = rest.substr(space + 1);
+        rest = rest.substr(std::min(rest.find_first_not_of(' '), rest.size()));
+        if (!starts_with_token(rest, "and")) {
+            return false;
+        }
+        rest = rest.substr(3);
+    }
+
+    bool saw_condition = false;
+    while (true) {
+        rest = rest.substr(std::min(rest.find_first_not_of(' '), rest.size()));
+        if (rest.empty()) {
+            return saw_condition;
+        }
+        if (!consume_media_condition(rest, options)) {
+            return false;
+        }
+        saw_condition = true;
+        rest = rest.substr(std::min(rest.find_first_not_of(' '), rest.size()));
+        if (rest.empty()) {
+            return true;
+        }
+        if (!starts_with_token(rest, "and")) {
+            return false;
+        }
+        rest = rest.substr(3);
+    }
+}
+
+bool is_supported_media_query(std::string_view prelude, const CssParserOptions& options) {
     const std::string media = ascii_lowercase(collapse_ascii_space(prelude));
-    return media.empty() || media == "all" || media == "screen";
+    for (const std::string& item : split_top_level_commas(media)) {
+        if (evaluate_media_query_item(item, options)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool is_supported_group_at_rule(std::string_view name, std::string_view prelude, const CssParserOptions& options) {
@@ -92,7 +263,7 @@ bool is_supported_group_at_rule(std::string_view name, std::string_view prelude,
         return options.flatten_layer_blocks;
     }
     if (name == "media") {
-        return options.parse_plain_media_blocks && is_plain_media_query(prelude);
+        return options.parse_plain_media_blocks && is_supported_media_query(prelude, options);
     }
     return false;
 }
@@ -111,9 +282,6 @@ bool is_selector_prelude_supported(std::string_view selector) {
         if (contains_ascii_case_insensitive(selector, feature)) {
             return false;
         }
-    }
-    if (selector.find_first_of("+~") != std::string_view::npos) {
-        return false;
     }
     return true;
 }

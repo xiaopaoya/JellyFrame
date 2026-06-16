@@ -103,7 +103,7 @@ JellyFrame is not ready for:
 | Balanced functions/strings | Works | Parser skips over nested component values safely. |
 | Bad declarations/rules | Works | Recover at declaration/rule boundaries. |
 | `@layer` | Lazy | Block is flattened; layer ordering is not modeled. |
-| `@media screen/all/empty` | Subset | Plain screen/all blocks are parsed. Conditional media queries are skipped. |
+| `@media` | Subset | Empty/all/screen blocks are parsed. `screen`/`all` queries with `min-width`, `max-width`, `min-height` and `max-height` in `px` or unitless px-like values are evaluated against the configured parser viewport. Unsupported or complex media queries are skipped as full blocks. |
 | `@supports` | Lazy | Whole block skipped. |
 | `@container` | Deferred/Lazy | Whole block skipped. Avoid it for required UI. |
 | `@font-face` | Lazy | Balanced block skipped; no font loading. |
@@ -111,7 +111,7 @@ JellyFrame is not ready for:
 | Bitmap font pack generation | Tool-only | `jellyframe_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds. |
 | `@keyframes` | Lazy | Balanced block skipped; no animation model. |
 | Unknown at-rules | Lazy | Statement or balanced block skipped. |
-| CSS custom properties | Stored/Lazy | Declarations may survive for diagnostics, but `var()` dependency resolution is not implemented. |
+| CSS custom properties | Subset | Direct `var(--token)` and `var(--token, fallback)` are resolved from inherited `:root`/ancestor/current/inline custom property declarations. Unresolved `var()` values do not override earlier supported fallbacks. Full dependency graph, case-sensitive custom names and complete invalid-at-computed-value-time semantics are absent. |
 | CSS nesting | Deferred | Do not rely on nested selectors. |
 | Cascade origins | Subset | Author + inline + small built-in defaults. No user/animation origin. |
 | Rule indexing | Works | Rules are bucketed by rightmost id/class/tag/universal selector. |
@@ -131,7 +131,7 @@ JellyFrame is not ready for:
 | Dynamic pseudo-classes | Deferred | `:hover`, `:focus`, `:active`, `:disabled` are not style triggers yet. |
 | `:is()`, `:where()`, `:has()` | Lazy | Rules using unsupported modern selector functions are skipped. |
 | Pseudo-elements | Subset | `::before` supports a tiny generated-content path for text/counter list markers. `::after`, full marker styling and selection styling are deferred. |
-| Sibling combinators | Deferred | `+` and `~` rules are skipped/unsupported. |
+| Sibling combinators | Subset | Adjacent `+` and general `~` sibling selectors match previous element siblings. Text nodes between elements do not block adjacent matching. |
 | Shadow selectors | Deferred | `::part`, `::slotted` skipped. |
 
 ## CSS Properties
@@ -324,7 +324,7 @@ changes.
   custom canvas widgets.
 - Provide classic CSS fallbacks before unsupported modern values:
   `color: #334155; color: oklch(...);`.
-- Avoid required UI inside `@container`, `@supports`, complex media queries or
+- Avoid required UI inside `@container`, `@supports`, unsupported/complex media queries or
   unsupported selector functions.
 - Keep scripts synchronous and small. Use host-provided data.
 - Treat Win32 shell rendering as the desktop validation path for Chinese text,
@@ -334,7 +334,7 @@ changes.
 ## Current Hard Limits
 
 - CSS parser: `max_rules` 4096, `max_declarations_per_rule` 256,
-  `max_nesting_depth` 8.
+  `max_nesting_depth` 8, default media viewport 360x240.
 - Default host budgets cap DOM nodes, render objects, layout boxes, layers,
   display commands, dirty rects, timers, listeners and framebuffer pixels.
 - Diagnostic/example input files are capped by the tool, usually 512 KiB or

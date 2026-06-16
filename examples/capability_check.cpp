@@ -255,8 +255,40 @@ void scan_html_css_js(const std::string& file, const std::string& source, std::v
     if (contains(lower, "@container")) {
         add(findings, file, "deferred", "@container", "Container queries are intentionally deferred.");
     }
+    if (contains(lower, "@media")) {
+        add(findings,
+            file,
+            "supported-subset",
+            "@media",
+            "Only screen/all plus min/max width/height conditions are evaluated; complex media queries are skipped.");
+    }
+    if (contains(lower, "var(")) {
+        add(findings,
+            file,
+            "supported-subset",
+            "CSS var()",
+            "Direct var(--token) and var(--token, fallback) resolution is supported; full dependency graph semantics are not.");
+    }
     if (contains(lower, "object-fit")) {
         add(findings, file, "deferred", "object-fit", "Image decode/object fitting is not implemented yet.");
+    }
+    if (contains(lower, ":is(") || contains(lower, ":where(")) {
+        add(findings,
+            file,
+            "degraded",
+            ":is/:where",
+            "Selector-function rules are skipped until lowering is implemented.");
+    }
+    if (contains(lower, ":has(")) {
+        add(findings, file, "deferred", ":has", "Relational selector matching is intentionally deferred.");
+    }
+    if (contains(lower, ":hover") || contains(lower, ":focus") || contains(lower, ":active") ||
+        contains(lower, ":checked") || contains(lower, ":disabled")) {
+        add(findings,
+            file,
+            "degraded",
+            "dynamic pseudo-classes",
+            "DOM/control state exists, but pseudo-class style invalidation is not implemented yet.");
     }
     if (contains(lower, "filter:") || contains(lower, "backdrop-filter") || contains(lower, "mix-blend-mode")) {
         add(findings, file, "degraded", "filters/blending", "Only normal source-over and cheap shadows are supported.");

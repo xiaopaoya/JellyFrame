@@ -112,13 +112,14 @@ Current JellyFrame behavior:
 - DOM preserves the custom element, buttons, nav links, cards, dialog and form.
 - Boolean `popover` is preserved as an empty attribute.
 - Inline `style` text is preserved in `head`.
-- CSSOM keeps `:root` custom property declarations, but style resolution does
-  not resolve custom properties yet.
+- CSSOM keeps `:root` custom property declarations, and simple
+  `var(--token)` / `var(--token, fallback)` values resolve through the inherited
+  custom-property subset.
 - CSSOM skips `@container` and `:is()` rules.
-- CSSOM keeps `dialog[open]`, but the current selector matcher does not apply
-  attribute selectors yet.
-- `display: flex` is parsed but not applied as a supported display mode. The
-  topbar falls back to block flow.
+- CSSOM keeps `dialog[open]`, and simple attribute selectors participate in
+  selector matching.
+- `display: flex` uses the simplified flex-row subset. Full flex sizing is not
+  implemented, but ordinary app bars and button rows keep a usable structure.
 
 Impact:
 
@@ -126,8 +127,8 @@ Impact:
 - Navigation, cards and dialog contents remain in the DOM.
 - Main risk is interaction semantics, not parse integrity: popover/dialog
   behavior needs event/runtime support later.
-- Visual degradation is coherent but plain: flex/container enhancements are
-  skipped instead of partially applied.
+- Visual degradation is coherent: the simplified flex subset applies, while
+  container-query and selector-function enhancements are skipped as units.
 
 ## Case 3: Article Cards
 
@@ -155,18 +156,18 @@ Current JellyFrame behavior:
 - DOM correctly creates sibling `li` elements.
 - `picture`, `source` and `img` are preserved.
 - CSSOM splits `.story, article.featured` into separate style rules.
-- Conditional `@media (max-width: 480px)` is skipped.
+- Conditional `@media (max-width: 480px)` applies when the configured parser
+  viewport matches.
 - `:where()` rule is skipped.
-- CSSOM keeps `.story img`, but style resolution does not yet support descendant
-  selectors.
+- Descendant selector `.story img` applies through the selector matcher.
 
 Impact:
 
 - No catastrophic failure.
 - Article text, list items and image node remain available.
-- Potential functional visual issue: image sizing from `.story img` will not
-  apply until descendant selector matching is implemented.
-- This is a priority gap before real rendering tests.
+- The small-viewport margin/radius enhancement can now apply in the supported
+  media-query subset.
+- Remaining visual enhancement from `:where()` is skipped.
 
 ## Overall Assessment
 
@@ -186,26 +187,16 @@ No catastrophic parser failure was observed.
 These gaps are not catastrophic at parse time, but they matter for usable
 rendering:
 
-- Descendant selector matching, for example `.story img`.
-- Attribute selector matching, for example `dialog[open]`.
 - Basic pseudo-class handling policy for `:root`, `:focus`, `:disabled`,
   `:checked` and `:open`.
-- CSS custom property fallback resolution for simple `var(--x, fallback)`.
-- More default display values for form controls, media, dialog and custom
-  elements.
-- Basic `inline-block`, `flex` fallback strategy, and box border/radius/shadow
-  storage even before full rendering.
+- Selector-function lowering for common `:is()` / `:where()` patterns.
+- More complete positioned layout, flex sizing and grid placement only where
+  embedded apps demonstrate clear value.
 
 ## Recommended Next Steps
 
-1. Add a selector matcher module with support for compound, descendant and
-   simple attribute selectors.
-2. Add a small UA stylesheet for controls and common HTML elements.
-3. Add computed-style fields for border, border radius, box shadow and overflow,
-   even if rendering initially ignores some of them.
-4. Add simple CSS variable resolution for direct custom property lookups and
-   fallback arguments.
-5. Add a combined document demo that parses HTML, extracts `style` text and
-   linked sample CSS, builds CSSOM, resolves styles and dumps selected computed
-   styles for functional nodes such as forms, inputs and buttons.
-
+1. Add dynamic pseudo-class styling for the states already tracked by input and
+   form-control code.
+2. Add `:is()` / `:where()` lowering for simple selector lists.
+3. Keep complex `@container`, `:has()`, full image layout and advanced effects
+   deferred until they can be bounded cleanly.

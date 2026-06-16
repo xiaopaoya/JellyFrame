@@ -1,10 +1,12 @@
 # CSS Parser Scope
 
-Last checked against CSS Syntax Module Level 3 and browser parser source layout
-on 2026-06-13:
+Last checked against CSS Syntax Module Level 3, Media Queries and browser
+parser source layout on 2026-06-16:
 
 - CSS Syntax Module Level 3: https://www.w3.org/TR/css-syntax-3/
 - CSS Syntax editor draft: https://drafts.csswg.org/css-syntax/
+- CSS Conditional Rules Module Level 3: https://www.w3.org/TR/css-conditional-3/
+- Media Queries Level 4: https://www.w3.org/TR/mediaqueries-4/
 - Blink CSS parser sources:
   https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/css/parser/
 - WebKit CSS parser sources:
@@ -38,7 +40,17 @@ layout behavior.
   and declarations.
 - Top-level error recovery for malformed declarations and malformed rules.
 - `@layer` block flattening.
-- Plain `@media` blocks only when the prelude is empty, `all` or `screen`.
+- `@media` block flattening when the prelude is empty, `all`, `screen` or a
+  bounded query list made from `screen`/`all` plus `min-width`, `max-width`,
+  `min-height` and `max-height` conditions in `px` or unitless px-like values.
+  Comma-separated media lists use ordinary OR semantics when at least one
+  supported item matches the configured parser viewport.
+- CSS custom property declarations and a style-resolution subset of
+  `var(--token)` / `var(--token, fallback)`. Values inherit along the DOM path,
+  `:root` tokens and inline tokens work, and unresolved values keep earlier
+  fallback declarations alive.
+- Type/class/id/attribute compound selectors, descendant and child combinators,
+  and adjacent/general sibling combinators.
 - UI-oriented declarations for the embedded app subset, including
   physical `margin-*`/`padding-*`/`border-*-width` longhands,
   `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `grid-template-columns`
@@ -47,7 +59,8 @@ layout behavior.
 
 ## Phase 1: Lazy Handling
 
-- `@supports`, conditional `@media`, `@container`, `@scope`: skip the full block.
+- `@supports`, unsupported/complex `@media`, `@container`, `@scope`: skip the
+  full block.
 - `@font-face`, `@keyframes`, `@page`, `@property`: parse their balanced block
   boundaries but do not expose declarations to style resolution yet.
 - Unknown at-rules: skip statement or balanced block.
@@ -59,9 +72,12 @@ layout behavior.
 - Full CSS token stream objects.
 - Full selector parser.
 - Cascade layers and layer ordering.
-- Media query evaluation.
+- Full media query evaluation, including `not`, range syntax, media features
+  other than width/height and dynamic viewport updates after parsing.
 - Feature query evaluation.
-- Custom property dependency graph.
+- Full custom property dependency graph, case-sensitive custom property names,
+  guaranteed cycle handling beyond the bounded recursion guard, and CSS-wide
+  invalid-at-computed-value-time semantics.
 - CSS nesting semantics.
 - Shadow DOM selectors.
 - Animation/keyframe model.
@@ -76,3 +92,5 @@ layout behavior.
 - `max_nesting_depth`: 8
 - `flatten_layer_blocks`: true
 - `parse_plain_media_blocks`: true
+- `media_viewport_width`: 360
+- `media_viewport_height`: 240

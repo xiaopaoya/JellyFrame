@@ -108,13 +108,12 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - DOM 保留 custom element、buttons、nav links、cards、dialog 和 form。
 - Boolean `popover` 以空属性保留。
 - `head` 中的 inline `style` 文本被保留。
-- CSSOM 保留 `:root` custom property declarations，但 style resolution 尚未解析
-  custom properties。
+- CSSOM 保留 `:root` custom property declarations，简单
+  `var(--token)` / `var(--token, fallback)` 会通过继承 custom-property 子集解析。
 - CSSOM 跳过 `@container` 和 `:is()` 规则。
-- CSSOM 保留 `dialog[open]`，但当前 selector matcher 尚未应用 attribute
-  selectors。
-- `display: flex` 会被解析，但不是已支持 display mode。topbar 降级为 block
-  flow。
+- CSSOM 保留 `dialog[open]`，简单 attribute selectors 会参与 selector matching。
+- `display: flex` 使用简化 flex-row 子集。完整 flex sizing 尚未实现，但普通 app bar
+  和按钮行能保留可用结构。
 
 影响：
 
@@ -122,7 +121,8 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - 导航、卡片和 dialog 内容仍在 DOM 中。
 - 主要风险是交互语义，不是解析完整性：popover/dialog 行为后续需要 event/runtime
   支持。
-- 视觉降级统一但朴素：flex/container 增强被跳过，而不是半支持。
+- 视觉降级保持统一：简化 flex 子集会生效，container query 和 selector function 增强
+  仍作为整体跳过。
 
 ## 案例 3：文章卡片
 
@@ -150,17 +150,16 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - DOM 正确生成兄弟 `li` 元素。
 - `picture`、`source` 和 `img` 被保留。
 - CSSOM 将 `.story, article.featured` 拆分为独立 style rules。
-- 跳过条件 `@media (max-width: 480px)`。
+- 当 parser viewport 匹配时，条件 `@media (max-width: 480px)` 会生效。
 - 跳过 `:where()` 规则。
-- CSSOM 保留 `.story img`，但 style resolution 尚未支持 descendant selectors。
+- Descendant selector `.story img` 会通过 selector matcher 生效。
 
 影响：
 
 - 没有灾难性失败。
 - 文章文本、列表项和图片节点仍可用。
-- 潜在功能性视觉问题：`.story img` 的图片尺寸在实现 descendant selector matching
-  前不会生效。
-- 这是进入真实渲染测试前的优先缺口。
+- 小视口 margin/radius 增强现在可以通过受支持的 media query 子集生效。
+- `:where()` 带来的视觉增强仍会跳过。
 
 ## 总体评估
 
@@ -179,23 +178,14 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 
 这些缺口在 parse 阶段不灾难，但会影响可用渲染：
 
-- Descendant selector matching，例如 `.story img`。
-- Attribute selector matching，例如 `dialog[open]`。
 - 基础 pseudo-class 策略，例如 `:root`、`:focus`、`:disabled`、`:checked`、
   `:open`。
-- 简单 CSS custom property fallback 解析，例如 `var(--x, fallback)`。
-- 更完整的 form controls、media、dialog 和 custom elements 默认 display。
-- 即使暂不完整渲染，也应先存储 border、border radius、box shadow、overflow
-  等 computed-style 字段。
+- 常用 `:is()` / `:where()` selector function 的 lowering。
+- 只有当嵌入式应用证明需要时，再继续补 positioned layout、flex sizing 和 grid
+  placement。
 
 ## 建议下一步
 
-1. 添加 selector matcher 模块，支持 compound、descendant 和简单 attribute
-   selectors。
-2. 添加小型 UA stylesheet，覆盖 controls 和常见 HTML 元素。
-3. 添加 border、border radius、box shadow、overflow 等 computed-style 字段。
-4. 添加简单 CSS variable resolution，支持直接 custom property 查找和 fallback
-   参数。
-5. 添加 combined document demo：解析 HTML，提取 `style` 文本和样例 CSS，构建
-   CSSOM，解析样式，并输出 form、input、button 等功能节点的 computed style。
-
+1. 为 input/form 已经跟踪的状态补动态 pseudo-class 样式触发。
+2. 为简单 selector list 添加 `:is()` / `:where()` lowering。
+3. 继续延后复杂 `@container`、`:has()`、完整图片布局和高级效果，直到能可靠限定成本。

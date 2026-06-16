@@ -24,6 +24,8 @@ Stylesheet parse(const std::string& source) {
     return parser.parse(source);
 }
 
+Node* find_first_by_tag(Node& node, const std::string& tag_name);
+
 void parses_comments_strings_and_functions() {
     const Stylesheet stylesheet = parse(
         "/* reset */"
@@ -56,9 +58,10 @@ void skips_enhancement_blocks_without_corrupting_following_rules() {
         "@media (max-width: 400px) { .narrow { color: red; } }"
         ".after { color: blue; }");
 
-    check(stylesheet.size() == 2, "unsupported group rules skipped");
+    check(stylesheet.size() == 3, "unsupported group rules skipped and supported media survives");
     check(stylesheet[0].selector == ".base", "base selector");
-    check(stylesheet[1].selector == ".after", "following selector");
+    check(stylesheet[1].selector == ".narrow", "matching conditional media selector");
+    check(stylesheet[2].selector == ".after", "following selector");
 }
 
 void flattens_layers_and_plain_media() {
@@ -71,6 +74,26 @@ void flattens_layers_and_plain_media() {
     check(stylesheet[1].selector == ".screen", "screen media selector");
 }
 
+void conditional_media_queries_respect_viewport() {
+    CssParser parser;
+    CssParserOptions options;
+    options.media_viewport_width = 360;
+    options.media_viewport_height = 240;
+    const Stylesheet stylesheet = parser.parse(
+        "@media (min-width: 320px) and (max-width: 400px) { .compact { color: red; } }"
+        "@media screen and (max-height: 240px) { .short { color: blue; } }"
+        "@media (min-height: 241px) { .tall { color: green; } }"
+        "@media print { .print { color: black; } }"
+        "@media print, screen and (max-width: 360px) { .listed { color: purple; } }"
+        "@media screen and (width <= 360px) { .range { color: orange; } }",
+        options);
+
+    check(stylesheet.size() == 3, "conditional media subset applies only matching supported queries");
+    check(stylesheet[0].selector == ".compact", "width media selector");
+    check(stylesheet[1].selector == ".short", "height media selector");
+    check(stylesheet[2].selector == ".listed", "comma media selector");
+}
+
 void preserves_declaration_fallback_order() {
     const Stylesheet stylesheet = parse(".x { color: #123456; color: oklch(50% 0.2 30); }");
     check(stylesheet.size() == 1, "fallback rule count");
@@ -81,6 +104,38 @@ void preserves_declaration_fallback_order() {
     StyleResolver resolver(stylesheet);
     const Style style = resolver.resolve(*element);
     check(style.color.r == 0x12 && style.color.g == 0x34 && style.color.b == 0x56, "unsupported value keeps fallback");
+}
+
+void resolves_simple_css_custom_properties() {
+    HtmlParser html_parser;
+    auto document = html_parser.parse(
+        "<html><body><main class='theme'><button id='action' class='primary' "
+        "style='--inline-bg:#123456;background:var(--inline-bg)'>Go</button></main></body></html>");
+
+    Node* main = find_first_by_tag(*document, "main");
+    Node* button = find_first_by_tag(*document, "button");
+    check(main != nullptr && button != nullptr, "custom property fixture nodes exist");
+
+    StyleResolver resolver(parse(
+        ":root { --accent: #2563eb; --panel: #f8fafc; }"
+        ".theme { --accent: #dc2626; }"
+        ".primary { color: #111111; color: var(--accent); border-color: var(--missing, #334455); }"
+        ".primary { width: var(--missing-width); }"));
+
+    const Style main_style = resolver.resolve(*main);
+    const Style button_style = resolver.resolve(*button);
+
+    check(main_style.color.r == 0 && main_style.color.g == 0 && main_style.color.b == 0,
+          "custom property declarations do not style directly");
+    check(button_style.color.r == 0xdc && button_style.color.g == 0x26 && button_style.color.b == 0x26,
+          "inherited custom property resolves");
+    check(button_style.background_color.r == 0x12 && button_style.background_color.g == 0x34 &&
+              button_style.background_color.b == 0x56,
+          "inline custom property resolves");
+    check(button_style.border_color.r == 0x33 && button_style.border_color.g == 0x44 &&
+              button_style.border_color.b == 0x55,
+          "var fallback resolves");
+    check(button_style.width == -1, "unresolved var keeps property fallback");
 }
 
 void matches_simple_compound_selectors() {
@@ -145,6 +200,38 @@ void matches_descendant_and_attribute_selectors() {
     check(image_style.width == 240 && image_style.height == 120, "descendant selector applies");
     check(dialog_style.border_width.top == 2, "attribute selector border applies");
     check(dialog_style.background_color.r == 255, "attribute selector background applies");
+}
+
+void matches_sibling_selectors() {
+    auto root = make_element("section");
+    auto first = make_element("button");
+    first->attributes["class"] = "primary";
+    auto text = make_text(" ");
+    auto second = make_element("button");
+    second->attributes["class"] = "secondary";
+    auto third = make_element("button");
+    third->attributes["class"] = "tertiary";
+
+    Node& first_node = root->append_child(std::move(first));
+    root->append_child(std::move(text));
+    Node& second_node = root->append_child(std::move(second));
+    Node& third_node = root->append_child(std::move(third));
+
+    StyleResolver resolver(parse(
+        ".primary + .secondary { color: #123456; }"
+        ".primary ~ .tertiary { background: #abcdef; }"
+        ".secondary + .primary { width: 99px; }"));
+
+    const Style first_style = resolver.resolve(first_node);
+    const Style second_style = resolver.resolve(second_node);
+    const Style third_style = resolver.resolve(third_node);
+
+    check(first_style.width == -1, "reverse adjacent sibling does not match");
+    check(second_style.color.r == 0x12 && second_style.color.g == 0x34 && second_style.color.b == 0x56,
+          "adjacent sibling selector matches across text nodes");
+    check(third_style.background_color.r == 0xab && third_style.background_color.g == 0xcd &&
+              third_style.background_color.b == 0xef,
+          "general sibling selector matches");
 }
 
 void controls_have_usable_default_boxes() {
@@ -431,11 +518,14 @@ int main() {
         splits_selector_lists();
         skips_enhancement_blocks_without_corrupting_following_rules();
         flattens_layers_and_plain_media();
+        conditional_media_queries_respect_viewport();
         preserves_declaration_fallback_order();
+        resolves_simple_css_custom_properties();
         matches_simple_compound_selectors();
         builds_cssom_metadata();
         cascade_uses_specificity_and_importance();
         matches_descendant_and_attribute_selectors();
+        matches_sibling_selectors();
         controls_have_usable_default_boxes();
         embedded_styles_and_common_lengths_apply();
         linked_stylesheets_merge_into_author_css();

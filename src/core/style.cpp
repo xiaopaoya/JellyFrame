@@ -832,6 +832,23 @@ std::string extract_tag_from_compound(std::string_view compound) {
     return std::string(compound.substr(0, index));
 }
 
+const Node* previous_element_sibling(const Node* node) {
+    if (node == nullptr || node->parent == nullptr) {
+        return nullptr;
+    }
+    const auto& siblings = node->parent->children;
+    const Node* previous = nullptr;
+    for (const auto& sibling : siblings) {
+        if (sibling.get() == node) {
+            return previous;
+        }
+        if (sibling->type == NodeType::Element) {
+            previous = sibling.get();
+        }
+    }
+    return nullptr;
+}
+
 bool matches_selector_from_right(const Node* node, const std::vector<CssSelectorPart>& parts, std::size_t index) {
     if (node == nullptr || index >= parts.size() || !matches_compound_selector(*node, parts[index].compound)) {
         return false;
@@ -842,6 +859,18 @@ bool matches_selector_from_right(const Node* node, const std::vector<CssSelector
 
     if (parts[index].combinator_to_left == CssSelectorCombinator::Child) {
         return matches_selector_from_right(node->parent, parts, index + 1);
+    }
+    if (parts[index].combinator_to_left == CssSelectorCombinator::AdjacentSibling) {
+        return matches_selector_from_right(previous_element_sibling(node), parts, index + 1);
+    }
+    if (parts[index].combinator_to_left == CssSelectorCombinator::GeneralSibling) {
+        for (const Node* sibling = previous_element_sibling(node); sibling != nullptr;
+             sibling = previous_element_sibling(sibling)) {
+            if (matches_selector_from_right(sibling, parts, index + 1)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     for (const Node* ancestor = node->parent; ancestor != nullptr; ancestor = ancestor->parent) {
@@ -925,8 +954,24 @@ struct CascadeSlots {
     std::array<CascadeSlot, static_cast<std::size_t>(CascadeProperty::Count)> slots;
 };
 
+using CustomPropertyMap = std::unordered_map<std::string, std::string>;
+
+struct CustomPropertySlot {
+    bool set = false;
+    bool important = false;
+    CssSpecificity specificity;
+    std::size_t source_order = 0;
+    std::string value;
+};
+
+using CustomPropertySlots = std::unordered_map<std::string, CustomPropertySlot>;
+
 CascadeSlot& cascade_slot(CascadeSlots& slots, CascadeProperty property) {
     return slots.slots[static_cast<std::size_t>(property)];
+}
+
+bool is_custom_property_name(const std::string& property) {
+    return property.size() > 2 && property[0] == '-' && property[1] == '-';
 }
 
 CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& property) {
@@ -1104,6 +1149,25 @@ bool declaration_wins(const CascadeSlot& current,
                       const CssDeclaration& declaration,
                       const CssSpecificity& specificity,
                       std::size_t source_order) {
+    if (!current.set) {
+        return true;
+    }
+    if (current.important != declaration.important) {
+        return declaration.important;
+    }
+    if (specificity_less(current.specificity, specificity)) {
+        return true;
+    }
+    if (specificity_less(specificity, current.specificity)) {
+        return false;
+    }
+    return source_order >= current.source_order;
+}
+
+bool custom_declaration_wins(const CustomPropertySlot& current,
+                             const CssDeclaration& declaration,
+                             const CssSpecificity& specificity,
+                             std::size_t source_order) {
     if (!current.set) {
         return true;
     }
@@ -1522,6 +1586,105 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
     return false;
 }
 
+std::size_t find_matching_paren(std::string_view value, std::size_t open) {
+    int depth = 0;
+    char quote = '\0';
+    for (std::size_t index = open; index < value.size(); ++index) {
+        const char ch = value[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < value.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '"' || ch == '\'') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++depth;
+        } else if (ch == ')') {
+            --depth;
+            if (depth == 0) {
+                return index;
+            }
+        }
+    }
+    return std::string_view::npos;
+}
+
+bool resolve_css_vars(std::string_view value,
+                      const CustomPropertyMap& custom_properties,
+                      std::string& output,
+                      int depth = 0) {
+    constexpr int kMaxVarDepth = 8;
+    if (depth > kMaxVarDepth) {
+        return false;
+    }
+
+    if (value.find("var(") == std::string_view::npos) {
+        output = std::string(value);
+        return true;
+    }
+
+    output.clear();
+    std::size_t cursor = 0;
+    while (cursor < value.size()) {
+        const std::size_t start = value.find("var(", cursor);
+        if (start == std::string_view::npos) {
+            output.append(value.substr(cursor));
+            return true;
+        }
+        output.append(value.substr(cursor, start - cursor));
+        const std::size_t close = find_matching_paren(value, start + 3);
+        if (close == std::string_view::npos) {
+            output.append(value.substr(start));
+            return false;
+        }
+
+        const std::string_view body = value.substr(start + 4, close - start - 4);
+        const std::vector<std::string> args = split_function_arguments(body);
+        if (args.empty()) {
+            output.append(value.substr(start, close - start + 1));
+            return false;
+        }
+        const std::string name = lowercase(trim(args[0]));
+        std::string replacement;
+        const auto found = custom_properties.find(name);
+        if (found != custom_properties.end()) {
+            if (!resolve_css_vars(found->second, custom_properties, replacement, depth + 1)) {
+                return false;
+            }
+        } else if (args.size() >= 2) {
+            const std::size_t fallback_begin = body.find(',');
+            if (fallback_begin == std::string_view::npos ||
+                !resolve_css_vars(body.substr(fallback_begin + 1), custom_properties, replacement, depth + 1)) {
+                return false;
+            }
+            replacement = trim(replacement);
+        } else {
+            output.append(value.substr(start, close - start + 1));
+            return false;
+        }
+        output.append(replacement);
+        cursor = close + 1;
+    }
+    return true;
+}
+
+CssDeclaration resolve_declaration_value(const CssDeclaration& declaration,
+                                         const CustomPropertyMap& custom_properties) {
+    if (declaration.value.find("var(") == std::string::npos) {
+        return declaration;
+    }
+    CssDeclaration resolved = declaration;
+    std::string value;
+    if (resolve_css_vars(declaration.value, custom_properties, value)) {
+        resolved.value = trim(value);
+    }
+    return resolved;
+}
+
 void mark_slot(CascadeSlot& slot,
                const CssDeclaration& declaration,
                const CssSpecificity& specificity,
@@ -1796,21 +1959,26 @@ void apply_declarations(Style& style,
                         const std::vector<CssDeclaration>& declarations,
                         const CssSpecificity& specificity,
                         std::size_t source_order,
-                        bool pseudo_before) {
+                        bool pseudo_before,
+                        const CustomPropertyMap& custom_properties) {
     for (const CssDeclaration& declaration : declarations) {
+        if (is_custom_property_name(declaration.property)) {
+            continue;
+        }
+        const CssDeclaration resolved_declaration = resolve_declaration_value(declaration, custom_properties);
         if (pseudo_before) {
-            CascadeSlot* slot = cascade_slot_for_before_property(slots, declaration.property);
+            CascadeSlot* slot = cascade_slot_for_before_property(slots, resolved_declaration.property);
             if (slot != nullptr) {
-                apply_cascaded_before_declaration(style, *slot, declaration, specificity, source_order);
+                apply_cascaded_before_declaration(style, *slot, resolved_declaration, specificity, source_order);
             }
             continue;
         }
-        if (apply_edge_shorthand(style, slots, declaration, specificity, source_order)) {
+        if (apply_edge_shorthand(style, slots, resolved_declaration, specificity, source_order)) {
             continue;
         }
-        CascadeSlot* slot = cascade_slot_for_property(slots, declaration.property);
+        CascadeSlot* slot = cascade_slot_for_property(slots, resolved_declaration.property);
         if (slot != nullptr) {
-            apply_cascaded_declaration(style, *slot, declaration, specificity, source_order);
+            apply_cascaded_declaration(style, *slot, resolved_declaration, specificity, source_order);
         }
     }
 }
@@ -1989,7 +2157,7 @@ std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector)
                 ++bracket_depth;
             } else if (ch == '[' && bracket_depth > 0) {
                 --bracket_depth;
-            } else if (bracket_depth == 0 && ch == '>') {
+            } else if (bracket_depth == 0 && (ch == '>' || ch == '+' || ch == '~')) {
                 break;
             } else if (bracket_depth == 0 && std::isspace(static_cast<unsigned char>(ch)) != 0) {
                 break;
@@ -2004,8 +2172,16 @@ std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector)
         while (previous > 0 && std::isspace(static_cast<unsigned char>(selector[previous - 1])) != 0) {
             --previous;
         }
-        if (previous > 0 && selector[previous - 1] == '>') {
-            part.combinator_to_left = CssSelectorCombinator::Child;
+        if (previous > 0 && (selector[previous - 1] == '>' || selector[previous - 1] == '+' ||
+                             selector[previous - 1] == '~')) {
+            const char combinator = selector[previous - 1];
+            if (combinator == '>') {
+                part.combinator_to_left = CssSelectorCombinator::Child;
+            } else if (combinator == '+') {
+                part.combinator_to_left = CssSelectorCombinator::AdjacentSibling;
+            } else {
+                part.combinator_to_left = CssSelectorCombinator::GeneralSibling;
+            }
             --previous;
             while (previous > 0 && std::isspace(static_cast<unsigned char>(selector[previous - 1])) != 0) {
                 --previous;
@@ -2091,6 +2267,12 @@ StyleResolver::StyleResolver(Stylesheet stylesheet, StyleResolverOptions options
 
 void StyleResolver::build_rule_index() {
     for (const CssRule& rule : stylesheet_) {
+        for (const CssDeclaration& declaration : rule.declarations) {
+            if (is_custom_property_name(declaration.property)) {
+                has_custom_property_declarations_ = true;
+                break;
+            }
+        }
         if (!rule.index_key.id.empty()) {
             id_rules_[rule.index_key.id].push_back(&rule);
         } else if (!rule.index_key.class_name.empty()) {
@@ -2175,14 +2357,76 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
     return inserted.first->second;
 }
 
+void apply_custom_declarations(CustomPropertySlots& local,
+                               const std::vector<CssDeclaration>& declarations,
+                               const CssSpecificity& specificity,
+                               std::size_t source_order) {
+    for (const CssDeclaration& declaration : declarations) {
+        if (!is_custom_property_name(declaration.property)) {
+            continue;
+        }
+        CustomPropertySlot& slot = local[declaration.property];
+        if (!custom_declaration_wins(slot, declaration, specificity, source_order)) {
+            continue;
+        }
+        slot.set = true;
+        slot.important = declaration.important;
+        slot.specificity = specificity;
+        slot.source_order = source_order;
+        slot.value = declaration.value;
+    }
+}
+
+CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
+    CustomPropertyMap inherited;
+
+    std::vector<const Node*> path;
+    bool has_inline_custom_property = false;
+    for (const Node* current = &node; current != nullptr; current = current->parent) {
+        path.push_back(current);
+        if (current->type == NodeType::Element && current->attribute("style").find("--") != std::string::npos) {
+            has_inline_custom_property = true;
+        }
+    }
+    if (!has_custom_property_declarations_ && !has_inline_custom_property) {
+        return inherited;
+    }
+    std::reverse(path.begin(), path.end());
+
+    for (const Node* current : path) {
+        if (current->type != NodeType::Element) {
+            continue;
+        }
+        CustomPropertySlots local;
+        for (const CssRule* rule : candidate_rules_for(*current)) {
+            if (!rule->pseudo_before && matches_rule(*current, *rule)) {
+                apply_custom_declarations(local, rule->declarations, rule->specificity, rule->source_order);
+            }
+        }
+        CssSpecificity inline_specificity;
+        inline_specificity.ids = 1;
+        apply_custom_declarations(local,
+                                  parse_inline_style(current->attribute("style")),
+                                  inline_specificity,
+                                  static_cast<std::size_t>(-1));
+        for (const auto& entry : local) {
+            if (entry.second.set) {
+                inherited[entry.first] = entry.second.value;
+            }
+        }
+    }
+    return inherited;
+}
+
 Style StyleResolver::resolve(const Node& node) const {
     Style style = default_style_for(node);
     CascadeSlots slots;
+    CustomPropertyMap custom_properties = custom_properties_for(node);
 
     for (const CssRule* rule : candidate_rules_for(node)) {
         if (matches_rule(node, *rule)) {
             apply_declarations(style, slots, rule->declarations, rule->specificity,
-                               rule->source_order, rule->pseudo_before);
+                               rule->source_order, rule->pseudo_before, custom_properties);
         }
     }
     if (node.type == NodeType::Element) {
@@ -2191,7 +2435,7 @@ Style StyleResolver::resolve(const Node& node) const {
         inline_specificity.classes = 0;
         inline_specificity.elements = 0;
         apply_declarations(style, slots, parse_inline_style(node.attribute("style")), inline_specificity,
-                           static_cast<std::size_t>(-1), false);
+                           static_cast<std::size_t>(-1), false, custom_properties);
     }
     return style;
 }

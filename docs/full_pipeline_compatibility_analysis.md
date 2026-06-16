@@ -104,13 +104,16 @@ JellyFrame result:
 - `display_commands=8`
 - Paragraph and list-item implied closures are preserved.
 - `.story img` now applies through descendant selector matching.
+- The simple `@media (max-width: 480px)` rule applies for the 360px validation
+  viewport.
 
 Assessment:
 
 - No catastrophic failure.
 - Article content and image node survive.
 - Image sizing now reaches computed style and layout.
-- Conditional media and `:where()` are skipped as intended.
+- The conditional media enhancement is now supported in the bounded viewport
+  subset. `:where()` remains skipped as intended.
 
 ## Embedded-Oriented Observations
 

@@ -129,6 +129,8 @@ struct CssSpecificity {
 enum class CssSelectorCombinator {
     Descendant,
     Child,
+    AdjacentSibling,
+    GeneralSibling,
 };
 
 struct CssSelectorPart {
@@ -202,9 +204,11 @@ private:
     std::unordered_map<std::string, std::vector<const CssRule*>> tag_rules_;
     std::vector<const CssRule*> universal_rules_;
     mutable std::unordered_map<std::string, std::vector<const CssRule*>> candidate_cache_;
+    bool has_custom_property_declarations_ = false;
 
     void build_rule_index();
     const std::vector<const CssRule*>& candidate_rules_for(const Node& node) const;
+    std::unordered_map<std::string, std::string> custom_properties_for(const Node& node) const;
 };
 
 } // namespace jellyframe

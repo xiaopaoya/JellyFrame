@@ -182,6 +182,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `clamp()` and simple `calc(A +/- B)` when arguments resolve to supported
   lengths.
 - Added simplified `flex-wrap` row wrapping for common card/box layouts.
+- Added a bounded conditional `@media` subset for `screen`/`all` queries using
+  `min-width`, `max-width`, `min-height` and `max-height` against the parser
+  viewport.
+- Added a small CSS custom property resolution subset for direct
+  `var(--token)` and `var(--token, fallback)` values inherited along the DOM
+  path.
+- Added adjacent and general sibling selector matching for `+` and `~`.
 - Added regression coverage for linked stylesheet merging, semantic fallback
   styles, inline highlight painting, DOM mutation invalidation and form-control
   fallback behavior. Scripting builds also add JerryScript runtime lifecycle and
