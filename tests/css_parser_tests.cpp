@@ -65,6 +65,22 @@ void skips_enhancement_blocks_without_corrupting_following_rules() {
     check(stylesheet[2].selector == ".after", "following selector");
 }
 
+void supports_queries_flatten_safe_declaration_subset() {
+    const Stylesheet stylesheet = parse(
+        "@supports (display: grid) { .grid { display: grid; } }"
+        "@supports ((display: flex) and (gap: 8px)) { .flex { display: flex; gap: 8px; } }"
+        "@supports not (color: oklch(50% 0.2 30)) { .fallback { color: #123456; } }"
+        "@supports ((display: grid) or (unknown-prop: 1px)) { .either { display: block; } }"
+        "@supports ((display: grid) and (gap: 8px) or (color: red)) { .mixed { color: red; } }"
+        "@supports selector(:has(*)) { .has { color: red; } }");
+
+    check(stylesheet.size() == 4, "supported @supports subset flattens matching safe blocks");
+    check(stylesheet[0].selector == ".grid", "display grid supports selector");
+    check(stylesheet[1].selector == ".flex", "and supports selector");
+    check(stylesheet[2].selector == ".fallback", "not unsupported supports selector");
+    check(stylesheet[3].selector == ".either", "or supports selector");
+}
+
 void flattens_layers_and_plain_media() {
     const Stylesheet stylesheet = parse(
         "@layer components { .button { color: red; } }"
@@ -592,6 +608,7 @@ int main() {
         parses_comments_strings_and_functions();
         splits_selector_lists();
         skips_enhancement_blocks_without_corrupting_following_rules();
+        supports_queries_flatten_safe_declaration_subset();
         flattens_layers_and_plain_media();
         conditional_media_queries_respect_viewport();
         preserves_declaration_fallback_order();

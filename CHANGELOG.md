@@ -194,6 +194,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   invalidation.
 - Added `:is()` and `:where()` selector-list matching with max-argument and
   zero specificity respectively.
+- Added a conservative `@supports` subset for declaration feature queries,
+  including `not`, homogeneous `and`/`or` chains and safe block flattening.
 - Added regression coverage for linked stylesheet merging, semantic fallback
   styles, inline highlight painting, DOM mutation invalidation and form-control
   fallback behavior. Scripting builds also add JerryScript runtime lifecycle and

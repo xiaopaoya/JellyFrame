@@ -70,7 +70,8 @@ Current JellyFrame behavior:
   default style, so it should not render, but `template.content` semantics do
   not exist yet.
 - CSSOM flattens `@layer`.
-- CSSOM skips `@supports` and the `:has()` rule.
+- CSSOM evaluates conservative declaration-based `@supports` conditions and
+  skips unsupported/unsafe feature queries; the `:has()` rule is still skipped.
 - Fallback box styling survives:
   `#search.search-box` keeps `display`, `width`, `padding`, `background`,
   `border-radius` and `box-shadow`.

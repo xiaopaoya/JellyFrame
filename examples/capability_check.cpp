@@ -262,6 +262,13 @@ void scan_html_css_js(const std::string& file, const std::string& source, std::v
             "@media",
             "Only screen/all plus min/max width/height conditions are evaluated; complex media queries are skipped.");
     }
+    if (contains(lower, "@supports")) {
+        add(findings,
+            file,
+            "supported-subset",
+            "@supports",
+            "Declaration conditions, not/and/or and parentheses are evaluated conservatively; selector() and unknown features are skipped.");
+    }
     if (contains(lower, "var(")) {
         add(findings,
             file,

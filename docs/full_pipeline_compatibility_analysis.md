@@ -140,10 +140,12 @@ Assessment:
 
 ## Next Functional Priorities
 
-1. Tighten the run-loop and dirty-update contract.
-2. Dirty layer/display-command invalidation and subtree reuse.
-3. DOM ownership instrumentation, a `DomOwner` prototype and more compact object
+1. Finish the remaining low-cost modern CSS authoring subset: simplified flex
+   sizing and bounded positioned layout.
+2. Tighten the run-loop and dirty-update contract.
+3. Dirty layer/display-command invalidation and subtree reuse.
+4. DOM ownership instrumentation, a `DomOwner` prototype and more compact object
    storage.
-4. Text backend adapters, font coverage and missing-glyph impact diagnostics.
-5. Local resource bundles and app packaging.
-6. Selector/module additions only when embedded apps prove they need them.
+5. Text backend adapters, font coverage and missing-glyph impact diagnostics.
+6. Local resource bundles and app packaging.
+7. Selector/module additions only when embedded apps prove they need them.

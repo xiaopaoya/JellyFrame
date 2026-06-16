@@ -43,11 +43,21 @@
 - 低功耗动画调度
 - App 打包格式
 
+## 兼容性短线：现代 CSS authoring 子集
+
+- 现代语法分析报告中最高收益的项目已经落地：`var()` fallback resolution、有界条件
+  `@media`、动态 pseudo-classes、`:is()` / `:where()` 和 sibling selectors
+- 保守的 `@supports (property: value)` query 展开已经可用
+- 剩余低成本工作：简化 flex sizing，以及有界 `absolute`/`fixed` positioned layout
+- 继续延后：完整 `:has()`、完整 `@container`、完整动画/filter/image pipeline 和浏览器级完整
+  layout 算法
+
 ## 推荐下一步顺序
 
-1. 收敛核心运行循环和 dirty update 契约，补充长时间 timer/input smoke。
-2. 做更细的 invalidation/subtree reuse，减少脚本交互后的全管线重建。
-3. 完善文本后端 adapter 和字体工作流验证，保持 bitmap font 作为默认低成本路线。
-4. 补齐本地资源包工具和 app packaging。
-5. 继续内存/allocator 优化，包括 `DomOwner` 原型和 detached-node instrumentation。
-6. 只有在目标硬件确实需要时，再推进 tiled/scanline presentation。
+1. 完成低成本现代 CSS authoring 子集，下一步从简化 flex sizing 和有界 positioned layout 开始。
+2. 收敛核心运行循环和 dirty update 契约，补充长时间 timer/input smoke。
+3. 做更细的 invalidation/subtree reuse，减少脚本交互后的全管线重建。
+4. 完善文本后端 adapter 和字体工作流验证，保持 bitmap font 作为默认低成本路线。
+5. 补齐本地资源包工具和 app packaging。
+6. 继续内存/allocator 优化，包括 `DomOwner` 原型和 detached-node instrumentation。
+7. 只有在目标硬件确实需要时，再推进 tiled/scanline presentation。

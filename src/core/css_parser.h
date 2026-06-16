@@ -13,6 +13,7 @@ struct CssParserOptions {
     std::size_t max_nesting_depth = 8;
     bool flatten_layer_blocks = true;
     bool parse_plain_media_blocks = true;
+    bool parse_supports_blocks = true;
     int media_viewport_width = 360;
     int media_viewport_height = 240;
 };

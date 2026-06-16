@@ -140,6 +140,8 @@ JellyFrame Engine 的重要变更记录在这里。
   invalidation。
 - 添加 `:is()` 和 `:where()` selector-list matching，分别使用参数最高 specificity
   和 0 specificity。
+- 添加保守的 `@supports` declaration feature query 子集，支持 `not`、同质
+  `and`/`or` 链，并安全展开匹配 block。
 - 添加外链 stylesheet 合并、语义 fallback 样式、inline 高亮绘制、DOM mutation invalidation
   和表单控件 fallback 行为的回归测试。启用 scripting 的构建还会加入 JerryScript runtime
   生命周期和异常路径测试。

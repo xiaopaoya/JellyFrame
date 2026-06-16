@@ -51,15 +51,28 @@ planned.
 - Power-aware animation scheduling
 - App packaging format
 
+## Compatibility Short Track: Modern CSS authoring subset
+
+- Highest-return compatibility items from the modern syntax report are now
+  implemented: `var()` fallback resolution, bounded conditional `@media`,
+  dynamic pseudo-classes, `:is()` / `:where()` and sibling selectors
+- Conservative `@supports (property: value)` query flattening is available
+- Remaining low-cost work: simplified flex sizing and bounded
+  `absolute`/`fixed` positioned layout
+- Still deferred: full `:has()`, full `@container`, full animation/filter/image
+  pipelines and browser-complete layout algorithms
+
 ## Recommended Next Order
 
-1. Tighten the core run-loop and dirty-update contract, with long-running
+1. Finish the low-cost modern CSS authoring subset, starting with simplified
+   flex sizing and bounded positioned layout.
+2. Tighten the core run-loop and dirty-update contract, with long-running
    timer/input smoke coverage.
-2. Implement finer invalidation and subtree reuse to reduce full pipeline
+3. Implement finer invalidation and subtree reuse to reduce full pipeline
    rebuilds after script interaction.
-3. Improve text backend adapters and font workflow validation while keeping the
+4. Improve text backend adapters and font workflow validation while keeping the
    bitmap font backend as the low-cost default.
-4. Finish local resource bundle tooling and app packaging.
-5. Continue memory and allocator work, including a `DomOwner` prototype and
+5. Finish local resource bundle tooling and app packaging.
+6. Continue memory and allocator work, including a `DomOwner` prototype and
    detached-node instrumentation.
-6. Move tiled/scanline presentation forward only when target hardware needs it.
+7. Move tiled/scanline presentation forward only when target hardware needs it.

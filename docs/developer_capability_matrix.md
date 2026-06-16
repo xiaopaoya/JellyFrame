@@ -104,7 +104,7 @@ JellyFrame is not ready for:
 | Bad declarations/rules | Works | Recover at declaration/rule boundaries. |
 | `@layer` | Lazy | Block is flattened; layer ordering is not modeled. |
 | `@media` | Subset | Empty/all/screen blocks are parsed. `screen`/`all` queries with `min-width`, `max-width`, `min-height` and `max-height` in `px` or unitless px-like values are evaluated against the configured parser viewport. Unsupported or complex media queries are skipped as full blocks. |
-| `@supports` | Lazy | Whole block skipped. |
+| `@supports` | Subset | Declaration feature queries are evaluated conservatively. `(property: value)`, `not`, homogeneous `and`/`or` chains and parentheses are supported. `selector()` and unknown/unsafe features evaluate false and skip the block. |
 | `@container` | Deferred/Lazy | Whole block skipped. Avoid it for required UI. |
 | `@font-face` | Lazy | Balanced block skipped; no font loading. |
 | Font coverage check | Tool-only | `jellyframe_capability_check --emit-used-chars` collects non-ASCII source characters; `--font-coverage` reports missing codepoints before embedding. |
@@ -325,8 +325,9 @@ changes.
   custom canvas widgets.
 - Provide classic CSS fallbacks before unsupported modern values:
   `color: #334155; color: oklch(...);`.
-- Avoid required UI inside `@container`, `@supports`, unsupported/complex media queries or
-  unsupported selector functions such as `:has()`.
+- Avoid required UI inside `@container`, unsupported/complex `@supports`,
+  unsupported/complex media queries or unsupported selector functions such as
+  `:has()`.
 - Keep scripts synchronous and small. Use host-provided data.
 - Treat Win32 shell rendering as the desktop validation path for Chinese text,
   because it injects both measurement and painting through the text backend APIs.

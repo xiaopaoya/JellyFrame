@@ -131,9 +131,10 @@ JellyFrame 结果：
 
 ## 下一步功能优先级
 
-1. 收敛运行循环和 dirty update 契约。
-2. Dirty layer/display-command invalidation 和 subtree reuse。
-3. DOM 所有权 instrumentation、`DomOwner` 原型和更紧凑的对象存储。
-4. 文本后端 adapter、字体覆盖和缺字影响诊断。
-5. 本地资源包与 app packaging。
-6. 只有当嵌入式应用证明需要时，再增加 selector/module 能力。
+1. 完成剩余低成本现代 CSS authoring 子集：简化 flex sizing 和有界 positioned layout。
+2. 收敛运行循环和 dirty update 契约。
+3. Dirty layer/display-command invalidation 和 subtree reuse。
+4. DOM 所有权 instrumentation、`DomOwner` 原型和更紧凑的对象存储。
+5. 文本后端 adapter、字体覆盖和缺字影响诊断。
+6. 本地资源包与 app packaging。
+7. 只有当嵌入式应用证明需要时，再增加 selector/module 能力。

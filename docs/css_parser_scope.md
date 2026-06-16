@@ -45,6 +45,10 @@ layout behavior.
   `min-height` and `max-height` conditions in `px` or unitless px-like values.
   Comma-separated media lists use ordinary OR semantics when at least one
   supported item matches the configured parser viewport.
+- `@supports` block flattening for conservative declaration feature queries.
+  The supported subset accepts `(property: value)`, `not`, homogeneous `and` or
+  `or` chains, and parentheses. `selector()` and unknown/unsafe feature queries
+  evaluate false so enhancement blocks degrade cleanly.
 - CSS custom property declarations and a style-resolution subset of
   `var(--token)` / `var(--token, fallback)`. Values inherit along the DOM path,
   `:root` tokens and inline tokens work, and unresolved values keep earlier
@@ -63,8 +67,8 @@ layout behavior.
 
 ## Phase 1: Lazy Handling
 
-- `@supports`, unsupported/complex `@media`, `@container`, `@scope`: skip the
-  full block.
+- Unsupported/complex `@media`, unsupported/complex `@supports`, `@container`,
+  `@scope`: skip the full block.
 - `@font-face`, `@keyframes`, `@page`, `@property`: parse their balanced block
   boundaries but do not expose declarations to style resolution yet.
 - Unknown at-rules: skip statement or balanced block.
@@ -78,7 +82,8 @@ layout behavior.
 - Cascade layers and layer ordering.
 - Full media query evaluation, including `not`, range syntax, media features
   other than width/height and dynamic viewport updates after parsing.
-- Feature query evaluation.
+- Full feature query evaluation, including `selector()`, font technology tests,
+  and exact browser support semantics.
 - Full custom property dependency graph, case-sensitive custom property names,
   guaranteed cycle handling beyond the bounded recursion guard, and CSS-wide
   invalid-at-computed-value-time semantics.
@@ -96,5 +101,6 @@ layout behavior.
 - `max_nesting_depth`: 8
 - `flatten_layer_blocks`: true
 - `parse_plain_media_blocks`: true
+- `parse_supports_blocks`: true
 - `media_viewport_width`: 360
 - `media_viewport_height`: 240

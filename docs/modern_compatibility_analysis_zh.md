@@ -67,7 +67,8 @@ JellyFrame 行为。目标不是像素级兼容，而是可用性优先的合理
 - `template` 暂时按普通元素带 children 解析。默认样式会隐藏它，所以不应渲染，
   但尚未实现 `template.content` 语义。
 - CSSOM 展开 `@layer`。
-- CSSOM 跳过 `@supports` 和 `:has()` 规则。
+- CSSOM 会保守求值 declaration-based `@supports` 条件，并跳过不支持或不安全的
+  feature query；`:has()` 规则仍会跳过。
 - fallback 框体样式保留：
   `#search.search-box` 保留 `display`、`width`、`padding`、`background`、
   `border-radius` 和 `box-shadow`。
