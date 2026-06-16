@@ -8,6 +8,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added first-time developer onboarding docs (`HOW_TO_START.md` /
+  `HOW_TO_START_zh.md`) and a bilingual `docs/README` index that separates
+  technical contracts from active project/process documents.
 - Renamed the project to `JellyFrame`; `WearWeb` is now documented only as the
   early codename.
 - Added platform-neutral `TextMeasureProvider` so layout can use host text
@@ -273,6 +276,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Notes
 
+- Superseded development reports/plans were archived outside the workspace:
+  old modern/full-pipeline compatibility analyses, the completed JerryScript
+  integration plan and the old embedded-app subset status note.
 - `jellyframe_pseudo_browser` still uses the tiny built-in bitmap font when no
   platform `TextPainter` is injected, so non-ASCII text appears as fallback
   glyphs in BMP smoke-test output. The Win32 browser shell uses GDI text

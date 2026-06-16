@@ -8,6 +8,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 添加面向第一次接触项目的上手文档（`HOW_TO_START.md` / `HOW_TO_START_zh.md`）
+  和双语 `docs/README` 索引，用于区分技术契约与当前项目/过程文档。
 - 项目正式更名为 `JellyFrame`；`WearWeb` 现在仅作为早期代号出现在文档中。
 - 添加平台无关的 `TextMeasureProvider`，让 layout 能使用宿主文本 metrics，同时继续把字体 API
   留在 `jellyframe_core` 之外。
@@ -190,6 +192,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 说明
 
+- 已将被当前维护文档取代的开发过程文档归档到工作区外：旧现代/全流程兼容性分析、
+  已完成的 JerryScript 接入计划和旧嵌入式 app 子集状态说明。
 - `jellyframe_pseudo_browser` 在没有注入平台 `TextPainter` 时仍使用极小内置 bitmap
   字体，因此 BMP smoke-test 输出中的非 ASCII 文本会显示为 fallback glyph。Win32 browser
   shell 使用 GDI 文本测量和绘制，可用于可读的 UTF-8/中文验证。
