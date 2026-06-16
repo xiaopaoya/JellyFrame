@@ -115,6 +115,20 @@ void deep_subtree_replacement_and_teardown_are_iterative() {
     check(document->children.front()->type == NodeType::Text, "replacement text node exists");
 }
 
+void deep_dirty_flags_clear_iteratively() {
+    auto document = make_element("document");
+    Node* current = document.get();
+    for (int depth = 0; depth < 4096; ++depth) {
+        current = &current->append_child(make_element("div"));
+    }
+    clear_dirty_flags(*document);
+
+    current->set_attribute("class", "changed");
+    check(subtree_dirty_flags(*document) != DomDirtyNone, "deep mutation marks root dirty");
+    clear_dirty_flags(*document);
+    check(subtree_dirty_flags(*document) == DomDirtyNone, "deep dirty flags clear without recursion");
+}
+
 void dom_statistics_are_iterative_and_budget_oriented() {
     auto document = make_element("document");
     document->attributes["data-root"] = "1";
@@ -144,6 +158,7 @@ int main() {
         attributes_and_text_mark_specific_dirty_bits();
         unchanged_text_content_stays_clean();
         deep_subtree_replacement_and_teardown_are_iterative();
+        deep_dirty_flags_clear_iteratively();
         dom_statistics_are_iterative_and_budget_oriented();
     } catch (const std::exception& error) {
         std::cerr << "dom mutation test failed: " << error.what() << '\n';

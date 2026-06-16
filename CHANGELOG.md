@@ -244,6 +244,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Improved dirty rerender paths: root dirty checks are O(1), dirty clearing
   skips clean branches, unchanged `textContent` avoids invalidation and the
   Win32 shell no longer rebuilds the pipeline after clean input callbacks.
+- Improved dirty-flag and dirty-region traversal to use explicit work stacks
+  and aggregate-dirty pruning, reducing stack pressure on deeply nested
+  embedded documents.
 - Improved core text fallback to measure and paint UTF-8 by codepoint instead
   of treating every non-ASCII byte as a separate glyph.
 - Improved the bitmap font backend so missing glyphs draw a visible stable-width

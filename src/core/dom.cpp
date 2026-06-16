@@ -229,11 +229,21 @@ void clear_dirty_flags(Node& node) {
     if (node.dirty_flags == DomDirtyNone) {
         return;
     }
-    node.dirty_flags = DomDirtyNone;
-    node.local_dirty_flags = DomDirtyNone;
-    for (const auto& child : node.children) {
-        if (child->dirty_flags != DomDirtyNone) {
-            clear_dirty_flags(*child);
+
+    std::vector<Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        Node* current = pending.back();
+        pending.pop_back();
+        if (current->dirty_flags == DomDirtyNone) {
+            continue;
+        }
+        current->dirty_flags = DomDirtyNone;
+        current->local_dirty_flags = DomDirtyNone;
+        for (const auto& child : current->children) {
+            if (child->dirty_flags != DomDirtyNone) {
+                pending.push_back(child.get());
+            }
         }
     }
 }

@@ -47,44 +47,72 @@ Rect expand_rect(Rect rect, int amount) {
 
 Rect subtree_bounds(const LayoutBox& box) {
     Rect bounds = box.rect;
+    std::vector<const LayoutBox*> pending;
+    pending.reserve(box.children.size());
     for (const auto& child : box.children) {
-        bounds = union_rect(bounds, subtree_bounds(*child));
+        pending.push_back(child.get());
+    }
+    while (!pending.empty()) {
+        const LayoutBox* current = pending.back();
+        pending.pop_back();
+        bounds = union_rect(bounds, current->rect);
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
     }
     return bounds;
 }
 
 const LayoutBox* find_box_for_node(const LayoutBox& box, const Node& node) {
-    if (box.node == &node) {
-        return &box;
-    }
-    for (const auto& child : box.children) {
-        const LayoutBox* found = find_box_for_node(*child, node);
-        if (found != nullptr) {
-            return found;
+    std::vector<const LayoutBox*> pending;
+    pending.push_back(&box);
+    while (!pending.empty()) {
+        const LayoutBox* current = pending.back();
+        pending.pop_back();
+        if (current->node == &node) {
+            return current;
+        }
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
         }
     }
     return nullptr;
 }
 
 bool has_local_tree_dirty(const Node& node) {
-    if ((node.local_dirty_flags & DomDirtyTree) != 0U) {
-        return true;
+    if ((node.dirty_flags & DomDirtyTree) == 0U) {
+        return false;
     }
-    for (const auto& child : node.children) {
-        if (has_local_tree_dirty(*child)) {
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if ((current->local_dirty_flags & DomDirtyTree) != 0U) {
             return true;
+        }
+        for (const auto& child : current->children) {
+            if ((child->dirty_flags & DomDirtyTree) != 0U) {
+                pending.push_back(child.get());
+            }
         }
     }
     return false;
 }
 
 void append_dirty_nodes(const Node& node, std::vector<const Node*>& output) {
-    if (node.local_dirty_flags != DomDirtyNone) {
-        output.push_back(&node);
-    }
-    for (const auto& child : node.children) {
-        if (child->dirty_flags != DomDirtyNone) {
-            append_dirty_nodes(*child, output);
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->local_dirty_flags != DomDirtyNone) {
+            output.push_back(current);
+        }
+        for (const auto& child : current->children) {
+            if (child->dirty_flags != DomDirtyNone) {
+                pending.push_back(child.get());
+            }
         }
     }
 }
