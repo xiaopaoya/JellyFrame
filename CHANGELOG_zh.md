@@ -132,6 +132,10 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加保守的现代长度函数支持：当参数能归约为受支持长度时，解析 `min()`、`max()`、`clamp()`
   和简单 `calc(A +/- B)`。
 - 添加简化 `flex-wrap` 行换行，用于常见卡片/盒子布局。
+- 添加简化 flex row sizing，支持常见 app 布局中的 `flex`、`flex-grow`、
+  `flex-shrink` 和 `flex-basis`。
+- 添加有界 positioned layout，支持常见 app overlay 中的 `relative`、`absolute`、
+  `fixed` 和简单 `top`/`right`/`bottom`/`left` offset。
 - 添加有界条件 `@media` 子集：支持 `screen`/`all` 查询中的 `min-width`、`max-width`、
   `min-height` 和 `max-height`，按 parser viewport 一次性求值。
 - 添加小型 CSS custom property 解析子集：支持沿 DOM 路径继承的直接

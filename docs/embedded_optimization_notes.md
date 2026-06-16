@@ -62,7 +62,7 @@ small wearable devices.
   inheritance and mutation invalidation can be kept simple.
 - Keep layer/display-list output bounded or tile it by dirty region on small RAM
   systems.
-- See `docs/memory_management.md` for the current ownership and allocation
+- See `../project_docs/memory_management.md` for the current ownership and allocation
   review.
 
 ## CPU/Instruction-Set Guidance

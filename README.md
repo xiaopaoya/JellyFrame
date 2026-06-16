@@ -30,7 +30,8 @@ Typical targets:
 - Modern authoring helpers such as CSS variables, bounded `@media`,
   conservative `@supports`, `:is()` / `:where()`, sibling selectors and dynamic
   state pseudo-classes.
-- Block, inline, simplified flex row/wrap and responsive grid-card layout.
+- Block, inline, simplified flex row/wrap/sizing, bounded positioned layout and
+  responsive grid-card layout.
 - Form controls for buttons, text inputs, textareas, checkboxes, radios, ranges,
   selects, progress and meter.
 - Hit testing, capture/target/bubble event dispatch and platform-neutral input.
@@ -101,26 +102,29 @@ the embedded core.
 - `tests`: platform-neutral regression tests.
 - `benchmarks`: desktop microbenchmarks.
 - `ports`: port-support code and desktop virtual-board benchmark.
-- `docs`: technical contracts plus the current roadmap/status documents.
+- `docs`: technical contracts and module/API documentation.
+- `project_docs`: current status, roadmap and development process notes.
 
 ## Documentation
 
 Start here:
 
 - [HOW_TO_START.md](HOW_TO_START.md): full first-time developer guide.
-- [docs/README.md](docs/README.md): documentation index split into technical
-  docs and active project/process docs.
+- [docs/README.md](docs/README.md): technical documentation index.
+- [project_docs/README.md](project_docs/README.md): current status, roadmap and
+  development process index.
 - [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md):
   supported, degraded, lazy and deferred features.
 - [docs/engine_architecture.md](docs/engine_architecture.md): pipeline overview.
 - [docs/embedded_hal_api.md](docs/embedded_hal_api.md): host/HAL contract for
   board ports.
-- [docs/project_status.md](docs/project_status.md): current mainline status and
-  next milestones.
+- [project_docs/project_status.md](project_docs/project_status.md): current
+  mainline status and next milestones.
 
 Chinese documentation uses the `_zh` suffix, for example
-[README_zh.md](README_zh.md), [HOW_TO_START_zh.md](HOW_TO_START_zh.md) and
-[docs/README_zh.md](docs/README_zh.md).
+[README_zh.md](README_zh.md), [HOW_TO_START_zh.md](HOW_TO_START_zh.md),
+[docs/README_zh.md](docs/README_zh.md) and
+[project_docs/README_zh.md](project_docs/README_zh.md).
 
 ## Versioning
 

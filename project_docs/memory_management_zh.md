@@ -56,4 +56,4 @@ JellyFrame 当前优先采用明确所有权和小型、可预测容器。这是
 arena 构建路径，DOM teardown 也不再递归走子节点析构。剩余最大的分配问题是：能否把 DOM node
 移入 document arena，同时不破坏 mutation/script 的可读性和安全性。
 
-当前 DOM arena 判断见 `docs/dom_arena_feasibility_zh.md`。
+当前 DOM arena 判断见 `dom_arena_feasibility_zh.md`。

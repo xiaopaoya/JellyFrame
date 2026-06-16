@@ -1,21 +1,17 @@
 # JellyFrame Documentation Index
 
-This directory contains two kinds of documents:
+This directory contains technical documents: module behavior, supported subsets,
+interfaces and host contracts. These docs should stay close to the code.
 
-- **Technical documents**: module behavior, supported subsets, interfaces and
-  host contracts. These should stay close to the code.
-- **Active project/process documents**: current status, roadmap, memory review,
-  run-loop policy and changelog. These explain where the project is going.
-
-Historical compatibility reports and completed milestone plans are archived
-outside the workspace when they are fully superseded by maintained docs.
+Active project/process documents now live in
+[../project_docs/README.md](../project_docs/README.md).
 
 ## First-Time Reading Order
 
 1. [../HOW_TO_START.md](../HOW_TO_START.md)
 2. [engine_architecture.md](engine_architecture.md)
 3. [developer_capability_matrix.md](developer_capability_matrix.md)
-4. [project_status.md](project_status.md)
+4. [../project_docs/project_status.md](../project_docs/project_status.md)
 5. The module document for the area you want to change.
 
 ## Technical Documents
@@ -67,19 +63,6 @@ outside the workspace when they are fully superseded by maintained docs.
 - [developer_capability_matrix.md](developer_capability_matrix.md): the primary
   can-do/cannot-do contract.
 - [versioning.md](versioning.md): versioning and release discipline.
-
-## Active Project / Process Documents
-
-- [project_status.md](project_status.md): current scope boundary, completed work
-  and next milestones.
-- [roadmap.md](roadmap.md): high-level route.
-- [memory_management.md](memory_management.md): current memory behavior and next
-  allocator/container work.
-- [dom_arena_feasibility.md](dom_arena_feasibility.md): DOM ownership and arena
-  feasibility notes.
-- [esp32s3_qemu_benchmark.md](esp32s3_qemu_benchmark.md): retained historical
-  benchmark data for the ESP32-S3 reference port.
-- [../CHANGELOG.md](../CHANGELOG.md): change history.
 
 ## Bilingual Maintenance
 

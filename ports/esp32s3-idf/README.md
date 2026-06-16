@@ -123,8 +123,9 @@ present_rgb565 avg_us=35101.45
 full_pipeline avg_us=178022.15
 ```
 
-The formal benchmark summary lives in `docs/esp32s3_qemu_benchmark.md` and
-`docs/esp32s3_qemu_benchmark_zh.md`.
+The formal benchmark summary lives in
+`../../project_docs/esp32s3_qemu_benchmark.md` and
+`../../project_docs/esp32s3_qemu_benchmark_zh.md`.
 
 ## Resource Bundle Hook
 

@@ -54,7 +54,7 @@ CSS and style:
   `:root`.
 - Indexed rule buckets and a bounded candidate-rule cache.
 - Practical property subset including color, background, margin, padding,
-  border, text, simplified flex/grid, gap, aspect-ratio and approximate
+  border, text, simplified flex/grid sizing, gap, aspect-ratio and approximate
   box-shadow.
 - Explicitly deferred quirks mode, broad modern selectors, container queries and
   full dynamic CSSOM behavior.
@@ -173,17 +173,15 @@ embedded subset and avoiding expensive browser-complete features.
 
 Status: started. The highest-return report items are now implemented:
 custom-property `var()` fallback resolution, bounded conditional `@media`,
-dynamic pseudo-class invalidation, `:is()` / `:where()` and sibling selectors.
-The first conservative `@supports` declaration-query subset is also available.
+dynamic pseudo-class invalidation, `:is()` / `:where()`, sibling selectors and
+simplified flex grow/shrink/basis sizing, plus bounded `relative`/`absolute`/
+`fixed` positioned layout. The first conservative `@supports`
+declaration-query subset is also available.
 
 Remaining tasks:
 
 - Broaden `@supports` tests only for declarations already supported by the
   embedded CSS subset; keep `selector()`, `:has()` and unsafe features false.
-- Add a simplified flex sizing pass for common `flex: 1`, `flex-grow`,
-  `flex-shrink` and `flex-basis` app layouts.
-- Add a bounded positioned-layout subset for `absolute`/`fixed` boxes with
-  simple `top/right/bottom/left` offsets.
 - Keep full `:has()`, full `@container`, full animation/filter/image pipelines
   deferred unless a small embedded app proves the need.
 
@@ -193,7 +191,7 @@ Goal: turn frame-loop experience from desktop shells and platform-neutral demos
 into a clearer core/host contract.
 
 Status: started. `src/core/frame_update.h` provides the first hardware-neutral
-update planner, and `docs/run_loop_contract.md` records the recommended run
+update planner, and `../docs/run_loop_contract.md` records the recommended run
 loop.
 
 Tasks:
@@ -275,14 +273,12 @@ full-framebuffer path.
 
 Mainline priority:
 
-1. M7.5: finish the remaining low-cost modern CSS authoring compatibility
-   items, starting with simplified flex sizing and bounded positioned layout.
-2. M8: document and test the run-loop and dirty-update contract.
-3. M9: implement finer invalidation and subtree reuse.
-4. M10: improve text backend adapters and font workflow validation.
-5. M11: define app packaging.
-6. M12: continue memory and allocator optimization.
-7. M13: decide on tiled presentation based on real hardware pressure.
+1. M8: deepen tests around the run-loop and dirty-update contract.
+2. M9: implement finer invalidation and subtree reuse.
+3. M10: improve text backend adapters and font workflow validation.
+4. M11: define app packaging.
+5. M12: continue memory and allocator optimization.
+6. M13: decide on tiled presentation based on real hardware pressure.
 
 Hardware porting can continue in parallel, but it should not block mainline core
 work. When the porting side finds a missing core capability, it should provide a

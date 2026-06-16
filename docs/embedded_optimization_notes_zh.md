@@ -44,7 +44,7 @@
 - CSS rules 已按 id/class/tag/universal bucket 建索引，并复用有界候选规则缓存；完整 computed-style
   sharing 仍延后到继承和 mutation invalidation 能保持简单之后。
 - 在小 RAM 系统上限制 layer/display-list 输出，或按 dirty region 分块生成。
-- 当前所有权和分配审视见 `docs/memory_management_zh.md`。
+- 当前所有权和分配审视见 `../project_docs/memory_management_zh.md`。
 
 ## CPU/指令集建议
 

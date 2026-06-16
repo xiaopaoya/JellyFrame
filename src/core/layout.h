@@ -52,6 +52,12 @@ private:
     int layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
     int layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
     int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const;
+    void layout_positioned_children(LayoutBox& box,
+                                    int content_x,
+                                    int content_y,
+                                    int content_width,
+                                    int content_height,
+                                    int viewport_width) const;
     LayoutBoxPtr build_with_arena(const RenderObject& render_tree,
                                   int viewport_width,
                                   MonotonicArena* arena) const;

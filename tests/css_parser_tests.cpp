@@ -552,6 +552,34 @@ void modern_length_functions_and_flex_wrap_apply() {
     check(card_style.max_width == 320, "min max-width parsed with percentage fallback");
 }
 
+void flex_sizing_properties_apply() {
+    auto item = make_element("div");
+    item->attributes["class"] = "item";
+    StyleResolver resolver(parse(
+        ".item { flex: 2 1 40px; }"
+        ".item { flex-grow: 3; flex-shrink: 0; flex-basis: 24px; }"));
+
+    const Style style = resolver.resolve(*item);
+    check(style.flex_grow == 3000, "flex-grow parsed");
+    check(style.flex_shrink == 0, "flex-shrink parsed");
+    check(style.flex_basis == 24, "flex-basis parsed");
+}
+
+void positioned_offsets_apply() {
+    auto panel = make_element("section");
+    panel->attributes["class"] = "panel";
+    StyleResolver resolver(parse(
+        ".panel { position: absolute; top: 8px; right: 12px; bottom: auto; left: 4px; z-index: 3; }"));
+
+    const Style style = resolver.resolve(*panel);
+    check(style.position == "absolute", "position absolute parsed");
+    check(style.inset_top_specified && style.inset_top == 8, "top offset parsed");
+    check(style.inset_right_specified && style.inset_right == 12, "right offset parsed");
+    check(!style.inset_bottom_specified, "bottom auto clears offset");
+    check(style.inset_left_specified && style.inset_left == 4, "left offset parsed");
+    check(!style.z_index_auto && style.z_index == 3, "z-index still applies with positioned offsets");
+}
+
 void style_candidate_cache_preserves_selector_context() {
     auto root = make_element("main");
     auto sidebar = make_element("section");
@@ -631,6 +659,8 @@ int main() {
         fixed_two_column_grid_template_applies();
         repeated_fixed_grid_template_applies();
         modern_length_functions_and_flex_wrap_apply();
+        flex_sizing_properties_apply();
+        positioned_offsets_apply();
         style_candidate_cache_preserves_selector_context();
         style_candidate_cache_respects_tiny_budget_and_inline_style();
     } catch (const std::exception& error) {

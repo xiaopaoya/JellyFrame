@@ -93,7 +93,8 @@ For embedded porting:
 - `benchmarks`: microbenchmarks.
 - `ports/virtual_board`: desktop estimator for board-like framebuffer costs.
 - `ports/esp32s3-idf`: ESP32-S3 reference bring-up project.
-- `docs`: current technical documentation plus active status/roadmap docs.
+- `docs`: technical documentation and module/API contracts.
+- `project_docs`: current status, roadmap and development process notes.
 
 ## 5. Engine Pipeline
 
@@ -354,11 +355,11 @@ Most important technical docs:
 
 Active process docs:
 
-- [docs/project_status.md](docs/project_status.md)
-- [docs/roadmap.md](docs/roadmap.md)
+- [project_docs/project_status.md](project_docs/project_status.md)
+- [project_docs/roadmap.md](project_docs/roadmap.md)
 - [docs/run_loop_contract.md](docs/run_loop_contract.md)
-- [docs/memory_management.md](docs/memory_management.md)
-- [docs/dom_arena_feasibility.md](docs/dom_arena_feasibility.md)
+- [project_docs/memory_management.md](project_docs/memory_management.md)
+- [project_docs/dom_arena_feasibility.md](project_docs/dom_arena_feasibility.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## 14. Common Development Workflows

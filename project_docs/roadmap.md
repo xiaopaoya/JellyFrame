@@ -1,7 +1,7 @@
 # Roadmap
 
 For the complete current status, scope boundary and next milestone definitions,
-see `docs/project_status.md`. This document keeps only the high-level route.
+see `project_status.md`. This document keeps only the high-level route.
 
 ## Milestone 1: Static document core
 
@@ -55,24 +55,25 @@ planned.
 
 - Highest-return compatibility items from the modern syntax report are now
   implemented: `var()` fallback resolution, bounded conditional `@media`,
-  dynamic pseudo-classes, `:is()` / `:where()` and sibling selectors
+  dynamic pseudo-classes, `:is()` / `:where()`, sibling selectors and
+  simplified flex grow/shrink/basis sizing
 - Conservative `@supports (property: value)` query flattening is available
-- Remaining low-cost work: simplified flex sizing and bounded
-  `absolute`/`fixed` positioned layout
+- Bounded `relative`/`absolute`/`fixed` positioned layout is available for
+  common app overlays
+- Remaining work on this track is mostly incremental tests around already
+  supported declarations
 - Still deferred: full `:has()`, full `@container`, full animation/filter/image
   pipelines and browser-complete layout algorithms
 
 ## Recommended Next Order
 
-1. Finish the low-cost modern CSS authoring subset, starting with simplified
-   flex sizing and bounded positioned layout.
-2. Tighten the core run-loop and dirty-update contract, with long-running
+1. Tighten the core run-loop and dirty-update contract, with long-running
    timer/input smoke coverage.
-3. Implement finer invalidation and subtree reuse to reduce full pipeline
+2. Implement finer invalidation and subtree reuse to reduce full pipeline
    rebuilds after script interaction.
-4. Improve text backend adapters and font workflow validation while keeping the
+3. Improve text backend adapters and font workflow validation while keeping the
    bitmap font backend as the low-cost default.
-5. Finish local resource bundle tooling and app packaging.
-6. Continue memory and allocator work, including a `DomOwner` prototype and
+4. Finish local resource bundle tooling and app packaging.
+5. Continue memory and allocator work, including a `DomOwner` prototype and
    detached-node instrumentation.
-7. Move tiled/scanline presentation forward only when target hardware needs it.
+6. Move tiled/scanline presentation forward only when target hardware needs it.

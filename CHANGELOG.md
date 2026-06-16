@@ -185,6 +185,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `clamp()` and simple `calc(A +/- B)` when arguments resolve to supported
   lengths.
 - Added simplified `flex-wrap` row wrapping for common card/box layouts.
+- Added simplified flex row sizing for common app layouts using `flex`,
+  `flex-grow`, `flex-shrink` and `flex-basis`.
+- Added bounded positioned layout for common `relative`, `absolute` and `fixed`
+  app overlays using simple `top`/`right`/`bottom`/`left` offsets.
 - Added a bounded conditional `@media` subset for `screen`/`all` queries using
   `min-width`, `max-width`, `min-height` and `max-height` against the parser
   viewport.

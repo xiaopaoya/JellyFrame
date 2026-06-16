@@ -358,6 +358,105 @@ bool parse_font_weight(const std::string& raw_value, int& output) {
     return true;
 }
 
+bool parse_flex_factor(const std::string& raw_value, int& output) {
+    float parsed = 0.0F;
+    if (!parse_float(raw_value, parsed) || parsed < 0.0F) {
+        return false;
+    }
+    output = std::max(0, std::min(1000000, static_cast<int>(parsed * 1000.0F + 0.5F)));
+    return true;
+}
+
+bool parse_position_inset(const std::string& raw_value, int font_size, int& output, bool& specified) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "auto") {
+        output = 0;
+        specified = false;
+        return true;
+    }
+    int px = 0;
+    if (!parse_length_px(value, px, font_size)) {
+        return false;
+    }
+    output = px;
+    specified = true;
+    return true;
+}
+
+bool parse_flex_basis_value(const std::string& raw_value, int font_size, int& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "auto") {
+        output = -1;
+        return true;
+    }
+    return parse_length_px(value, output, font_size);
+}
+
+bool parse_flex_shorthand(const std::string& raw_value,
+                          int font_size,
+                          int& grow,
+                          int& shrink,
+                          int& basis) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "none") {
+        grow = 0;
+        shrink = 0;
+        basis = -1;
+        return true;
+    }
+    if (value == "auto") {
+        grow = 1000;
+        shrink = 1000;
+        basis = -1;
+        return true;
+    }
+
+    std::istringstream stream(value);
+    std::vector<std::string> tokens;
+    std::string token;
+    while (stream >> token) {
+        if (tokens.size() >= 3) {
+            return false;
+        }
+        tokens.push_back(token);
+    }
+    if (tokens.empty()) {
+        return false;
+    }
+
+    int parsed_grow = 0;
+    if (!parse_flex_factor(tokens[0], parsed_grow)) {
+        return false;
+    }
+    int parsed_shrink = 1000;
+    int parsed_basis = 0;
+    if (tokens.size() == 1) {
+        grow = parsed_grow;
+        shrink = parsed_shrink;
+        basis = parsed_basis;
+        return true;
+    }
+
+    int second_factor = 0;
+    if (parse_flex_factor(tokens[1], second_factor)) {
+        parsed_shrink = second_factor;
+        if (tokens.size() == 3 && !parse_flex_basis_value(tokens[2], font_size, parsed_basis)) {
+            return false;
+        }
+    } else if (tokens.size() == 2) {
+        if (!parse_flex_basis_value(tokens[1], font_size, parsed_basis)) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    grow = parsed_grow;
+    shrink = parsed_shrink;
+    basis = parsed_basis;
+    return true;
+}
+
 bool parse_list_style_type(const std::string& raw_value, ListStyleType& output) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "none") {
@@ -1032,11 +1131,19 @@ enum class CascadeProperty : std::size_t {
     Opacity,
     Transform,
     Position,
+    Top,
+    Right,
+    Bottom,
+    Left,
     ZIndex,
     TextAlign,
     JustifyContent,
     AlignItems,
     BoxSizing,
+    Flex,
+    FlexGrow,
+    FlexShrink,
+    FlexBasis,
     FlexWrap,
     Gap,
     ColumnGap,
@@ -1177,6 +1284,18 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "position") {
         return &cascade_slot(slots, CascadeProperty::Position);
     }
+    if (property == "top") {
+        return &cascade_slot(slots, CascadeProperty::Top);
+    }
+    if (property == "right") {
+        return &cascade_slot(slots, CascadeProperty::Right);
+    }
+    if (property == "bottom") {
+        return &cascade_slot(slots, CascadeProperty::Bottom);
+    }
+    if (property == "left") {
+        return &cascade_slot(slots, CascadeProperty::Left);
+    }
     if (property == "z-index") {
         return &cascade_slot(slots, CascadeProperty::ZIndex);
     }
@@ -1191,6 +1310,18 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "box-sizing") {
         return &cascade_slot(slots, CascadeProperty::BoxSizing);
+    }
+    if (property == "flex") {
+        return &cascade_slot(slots, CascadeProperty::Flex);
+    }
+    if (property == "flex-grow") {
+        return &cascade_slot(slots, CascadeProperty::FlexGrow);
+    }
+    if (property == "flex-shrink") {
+        return &cascade_slot(slots, CascadeProperty::FlexShrink);
+    }
+    if (property == "flex-basis") {
+        return &cascade_slot(slots, CascadeProperty::FlexBasis);
     }
     if (property == "flex-wrap") {
         return &cascade_slot(slots, CascadeProperty::FlexWrap);
@@ -1539,6 +1670,27 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.position = lowered == "static" ? std::string{} : lowered;
         return true;
+    } else if (property == "top" || property == "right" ||
+               property == "bottom" || property == "left") {
+        int px = 0;
+        bool specified = false;
+        if (!parse_position_inset(value, style.font_size, px, specified)) {
+            return false;
+        }
+        if (property == "top") {
+            style.inset_top = px;
+            style.inset_top_specified = specified;
+        } else if (property == "right") {
+            style.inset_right = px;
+            style.inset_right_specified = specified;
+        } else if (property == "bottom") {
+            style.inset_bottom = px;
+            style.inset_bottom_specified = specified;
+        } else {
+            style.inset_left = px;
+            style.inset_left_specified = specified;
+        }
+        return true;
     } else if (property == "z-index") {
         const std::string lowered = lowercase(trim(value));
         if (lowered == "auto") {
@@ -1603,6 +1755,38 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         } else {
             return false;
         }
+        return true;
+    } else if (property == "flex") {
+        int grow = 0;
+        int shrink = 0;
+        int basis = -1;
+        if (!parse_flex_shorthand(value, style.font_size, grow, shrink, basis)) {
+            return false;
+        }
+        style.flex_grow = grow;
+        style.flex_shrink = shrink;
+        style.flex_basis = basis;
+        return true;
+    } else if (property == "flex-grow") {
+        int factor = 0;
+        if (!parse_flex_factor(value, factor)) {
+            return false;
+        }
+        style.flex_grow = factor;
+        return true;
+    } else if (property == "flex-shrink") {
+        int factor = 0;
+        if (!parse_flex_factor(value, factor)) {
+            return false;
+        }
+        style.flex_shrink = factor;
+        return true;
+    } else if (property == "flex-basis") {
+        int basis = -1;
+        if (!parse_flex_basis_value(value, style.font_size, basis)) {
+            return false;
+        }
+        style.flex_basis = basis;
         return true;
     } else if (property == "flex-wrap") {
         const std::string lowered = lowercase(trim(value));

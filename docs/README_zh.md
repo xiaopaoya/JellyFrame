@@ -1,19 +1,15 @@
 # JellyFrame 文档索引
 
-本目录里的文档分两类：
+本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
-- **技术文档**：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
-- **当前项目/过程文档**：当前状态、路线图、内存审视、运行循环策略和变更记录，用来说明项目已经做到哪里、
-  接下来往哪里走。
-
-已经被维护中文档完全取代的历史兼容性报告和已完成里程碑计划，会归档到工作区外。
+仍在维护的项目/过程文档现位于 [../project_docs/README_zh.md](../project_docs/README_zh.md)。
 
 ## 第一次阅读顺序
 
 1. [../HOW_TO_START_zh.md](../HOW_TO_START_zh.md)
 2. [engine_architecture_zh.md](engine_architecture_zh.md)
 3. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
-4. [project_status_zh.md](project_status_zh.md)
+4. [../project_docs/project_status_zh.md](../project_docs/project_status_zh.md)
 5. 你要修改哪个模块，就读对应模块文档。
 
 ## 技术文档
@@ -49,15 +45,6 @@
 
 - [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)：最主要的 can-do/cannot-do 契约。
 - [versioning_zh.md](versioning_zh.md)：版本和发布纪律。
-
-## 当前项目 / 过程文档
-
-- [project_status_zh.md](project_status_zh.md)：当前职责边界、已完成能力和后续里程碑。
-- [roadmap_zh.md](roadmap_zh.md)：高层路线。
-- [memory_management_zh.md](memory_management_zh.md)：当前内存行为和下一步 allocator/container 工作。
-- [dom_arena_feasibility_zh.md](dom_arena_feasibility_zh.md)：DOM 所有权和 arena 可行性说明。
-- [esp32s3_qemu_benchmark_zh.md](esp32s3_qemu_benchmark_zh.md)：ESP32-S3 参考 port 保留的历史基准数据。
-- [../CHANGELOG_zh.md](../CHANGELOG_zh.md)：变更记录。
 
 ## 双语维护
 

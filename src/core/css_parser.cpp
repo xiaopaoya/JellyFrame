@@ -436,6 +436,16 @@ bool is_supported_declaration_feature(std::string_view feature) {
         return supported_keyword(value, {"block", "inline", "inline-block", "flex",
                                         "inline-flex", "grid", "inline-grid", "none"});
     }
+    if (property == "flex") {
+        return value == "auto" || value == "none" ||
+               value.find("px") != std::string::npos || is_number_with_suffix(value, {""}, false);
+    }
+    if (property == "flex-grow" || property == "flex-shrink") {
+        return is_number_with_suffix(value, {""}, false);
+    }
+    if (property == "flex-basis") {
+        return value == "auto" || is_supported_length_value(value);
+    }
     if (property == "color" || property == "background-color" ||
         property == "background" || property == "border-color") {
         return is_supported_color_value(value);
@@ -445,6 +455,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
         property == "text-indent" || property == "gap" || property == "row-gap" ||
         property == "column-gap" || property == "grid-auto-rows") {
         return is_supported_length_value(value);
+    }
+    if (property == "top" || property == "right" || property == "bottom" || property == "left") {
+        return value == "auto" || is_supported_length_value(value);
     }
     if (property == "margin" || property == "margin-top" || property == "margin-right" ||
         property == "margin-bottom" || property == "margin-left") {

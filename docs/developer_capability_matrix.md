@@ -167,12 +167,15 @@ clear older supported fallback declarations.
 | `box-sizing` | Works | `content-box`, `border-box`. |
 | `overflow` | Subset | `visible`, `hidden`, `clip`, `auto`, `scroll`; clipping creates layer boundaries, but native scroll containers are not complete. |
 | `opacity` | Subset | 0..1; creates composited layer in software compositor. |
-| `position` | Stored/Subset | `relative`, `absolute`, `fixed`, `sticky` create stacking/layer hints; full positioned layout is not implemented. |
+| `position` | Subset | `relative` applies visual offsets without changing normal-flow space. `absolute`/`fixed` boxes are taken out of flow and positioned by simple insets. `sticky` is only stored as a layer hint. |
+| `top` / `right` / `bottom` / `left` | Subset | Length and `auto` values. Absolute/fixed boxes use parent content box or viewport-like origin. Percentages, shrink-to-fit, full containing-block rules and sticky scrolling are absent. |
 | `z-index` | Subset | Integer or `auto`; layer-local ordering only. |
 | `transform` | Stored/Lazy | Non-`none` creates a compositing boundary; transform math is deferred. |
 | `justify-content` | Subset | `start`, `flex-start`, `normal`, `center`, `space-around`, `space-between` in simplified flex rows. |
 | `align-items` | Subset | `stretch`, `normal`, `start`, `flex-start`, `center`, `end`, `flex-end` in simplified flex rows. |
-| `flex-wrap` | Subset | `wrap`/`wrap-reverse` enable simple row wrapping. Full flex sizing remains absent. |
+| `flex` | Subset | Shorthand supports common `none`, `auto`, `<grow>`, `<grow> <basis>` and `<grow> <shrink> <basis>` forms for simplified row flex layouts. Full Flexbox grammar is absent. |
+| `flex-grow` / `flex-shrink` / `flex-basis` | Subset | Non-negative numeric grow/shrink factors and supported length/`auto` basis values participate in the simplified row sizing pass. |
+| `flex-wrap` | Subset | `wrap`/`wrap-reverse` enable simple row wrapping. Wrapped lines use fixed/basis probing and do not run the full per-line Flexbox algorithm. |
 | `gap` | Works | 1-2 length values for grid and simplified flex support. |
 | `row-gap` / `column-gap` | Works | Length values. |
 | `grid-template-columns` | Subset | Extracts minimum track from `repeat(auto-fit, minmax(<length>, 1fr))`, `minmax(<length>, 1fr)`, a length, or `1fr`. |
@@ -201,9 +204,10 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 | Inline text flow | Subset | Text and inline controls flow horizontally and wrap by available width. |
 | Inline background/border | Subset | Shrunk to text/content bounds where possible. |
 | `inline-block` | Subset | Represented as inline-like render object with usable box behavior. |
-| Flex row | Subset | Simplified row layout with basic justification, alignment, gaps and optional wrapping. No full flex sizing. |
+| Flex row | Subset | Simplified row layout with basic grow/shrink/basis sizing, justification, alignment, gaps and optional wrapping. No full Flexbox algorithm, column flex, order, baseline alignment or min-content sizing. |
 | Grid cards/forms | Subset | Responsive auto-fit/minmax card grid, gaps, minimum auto rows, spans and simple fixed 2-4 column templates. No explicit placement, named lines, subgrid or dense packing. |
 | Aspect ratio | Works | Provides intrinsic height when explicit height/content height is absent. |
+| Positioned boxes | Subset | Bounded `relative`, `absolute` and `fixed` positioning for app overlays, badges and pinned panels. Out-of-flow boxes do not consume block/flex/grid/inline placement space. |
 | Replaced elements | Subset | Common controls/media are leaf boxes with fallback sizing; real image/video layout is deferred. |
 | Text measurement | Subset | Core exposes `TextMeasureProvider`; fallback is tiny but UTF-8-aware. Win32 shell uses GDI measurement. |
 | Bidi/text shaping | Deferred | Production non-Latin text needs a platform text backend or future shaping strategy. |
