@@ -218,6 +218,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Improved
 
+- Folded the HTML Living Standard degradation audit into the roadmap as an
+  HTML parser/DOM compatibility short track, prioritizing low-cost app-author
+  surprises while keeping quirks mode and heavy historical compatibility out of
+  scope.
 - Improved inline layout so runs of text, links, highlights and inline controls
   flow horizontally and wrap by available width instead of stacking every inline
   node vertically.

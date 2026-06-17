@@ -160,6 +160,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 改进
 
+- 将 HTML Living Standard 降级审计纳入路线图，形成 HTML parser/DOM 兼容短线：
+  优先处理低成本、容易让 app 作者踩坑的差异，同时继续排除 quirks mode 和沉重历史兼容包袱。
 - 改进 inline layout，使文本、链接、高亮和 inline 控件按可用宽度横向流动并换行，不再把每个 inline
   节点都垂直堆叠。
 - 在简化 layout engine 中保留父级 `text-align` 对 inline text run 的影响。

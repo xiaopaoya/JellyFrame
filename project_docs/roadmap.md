@@ -65,15 +65,63 @@ planned.
 - Still deferred: full `:has()`, full `@container`, full animation/filter/image
   pipelines and browser-complete layout algorithms
 
+## Compatibility Short Track: HTML parser and DOM expectations
+
+The HTML Living Standard degradation audit highlights several gaps that matter
+more to app authors than old browser compatibility modes. Accepted items should
+improve developer intuition and document correctness without adding quirks mode,
+`document.write()`, speculative parsing or the full adoption-agency algorithm.
+
+Accepted first batch:
+
+- Correct non-void self-closing slash handling so `<div/>` is treated as an HTML
+  start tag, while real void elements remain leaf nodes.
+- Stop folding ordinary text during tree construction; preserve text nodes and
+  let layout/rendering handle whitespace according to the supported CSS subset.
+- Treat `textarea` and `title` as RCDATA-like content so character references
+  are decoded, while `script` and `style` remain raw-text.
+- Expand named character references for common HTML entities and tighten
+  semicolon, attribute-context and numeric-reference recovery rules.
+- Add parser degradation diagnostics for node/depth/attribute budget limits,
+  keeping the current graceful truncation behavior but making it observable.
+- Introduce a minimal document metadata model for doctype and optional comments,
+  with a path toward `Document`/`Comment`/`DocumentType` nodes when it does not
+  destabilize existing DOM ownership.
+
+Accepted second batch:
+
+- Define a minimal insertion-mode subset for before-html, before-head, in-head,
+  after-head and in-body routing.
+- Add fragment parsing for `innerHTML`, template fragments and component
+  snippets.
+- Add `template.content`-style inert fragment ownership.
+- Broaden common implied-end-tag behavior, including `p`, `select`/`option` and
+  `optgroup` cases.
+- Add a bounded table tree-construction subset for
+  `table`/`tbody`/`thead`/`tfoot`/`tr`/`td`/`th`.
+- Improve classic-script raw-text boundaries and make unsupported module
+  scripts explicit diagnostics instead of silent surprises.
+
+Accepted but cautious:
+
+- Minimal inline SVG/foreign-content boundary detection is useful, but full
+  foreign-content parsing is deferred.
+- Complete quirks/limited-quirks, parser-reentrant `document.write()`,
+  speculative parsing, full adoption-agency behavior and full table foster
+  parenting remain out of scope unless the project changes direction toward a
+  general-purpose browser.
+
 ## Recommended Next Order
 
-1. Tighten the core run-loop and dirty-update contract, with long-running
+1. Land the first HTML parser/DOM compatibility batch where it is cheap and
+   directly reduces app-author surprises.
+2. Tighten the core run-loop and dirty-update contract, with long-running
    timer/input smoke coverage.
-2. Implement finer invalidation and subtree reuse to reduce full pipeline
+3. Implement finer invalidation and subtree reuse to reduce full pipeline
    rebuilds after script interaction.
-3. Improve text backend adapters and font workflow validation while keeping the
+4. Improve text backend adapters and font workflow validation while keeping the
    bitmap font backend as the low-cost default.
-4. Finish local resource bundle tooling and app packaging.
-5. Continue memory and allocator work, including a `DomOwner` prototype and
+5. Finish local resource bundle tooling and app packaging.
+6. Continue memory and allocator work, including a `DomOwner` prototype and
    detached-node instrumentation.
-6. Move tiled/scanline presentation forward only when target hardware needs it.
+7. Move tiled/scanline presentation forward only when target hardware needs it.

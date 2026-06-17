@@ -54,11 +54,47 @@
 - 继续延后：完整 `:has()`、完整 `@container`、完整动画/filter/image pipeline 和浏览器级完整
   layout 算法
 
+## 兼容性短线：HTML parser 与 DOM 直觉
+
+HTML Living Standard 降级审计指出的若干缺口，比旧浏览器兼容模式更影响 app 作者的日常直觉。
+采纳项应优先减少“写了正常 HTML 却得到意外 DOM”的情况，同时不引入 quirks mode、
+`document.write()`、speculative parser 或完整 adoption-agency 算法。
+
+第一批采纳：
+
+- 修正非 void 元素自闭合斜杠语义：`<div/>` 在 HTML 中仍应按 start tag 处理，真正的 void
+  元素继续保持叶子节点。
+- tree construction 阶段不再折叠普通文本空白；保留文本节点，由 layout/rendering 根据受支持的
+  CSS 子集处理空白。
+- 将 `textarea` 和 `title` 作为近似 RCDATA 处理，支持字符引用解码；`script` 和 `style`
+  继续保持 raw-text。
+- 扩充常用 HTML named character references，并收紧分号、属性上下文和 numeric reference
+  恢复规则。
+- 为 node/depth/attribute 预算触发增加 parser 降级诊断：继续允许优雅截断，但必须让调用方可观察。
+- 引入最小文档元数据模型，记录 doctype 和可选 comment，并保留未来升级到
+  `Document`/`Comment`/`DocumentType` 节点的路径，前提是不破坏现有 DOM ownership。
+
+第二批采纳：
+
+- 定义最小 insertion-mode 子集：before-html、before-head、in-head、after-head、in-body。
+- 增加 fragment parsing，用于 `innerHTML`、template fragment 和组件片段。
+- 增加 `template.content` 风格的 inert fragment ownership。
+- 扩大常用 implied-end-tag 行为，覆盖 `p`、`select`/`option` 和 `optgroup` 等场景。
+- 增加有界 table tree-construction 子集：`table`/`tbody`/`thead`/`tfoot`/`tr`/`td`/`th`。
+- 改善 classic script raw-text 边界，并让不支持的 module script 产生显式诊断，避免静默惊讶。
+
+采纳但谨慎：
+
+- 最小 inline SVG/foreign-content 边界识别有价值，但完整 foreign-content parsing 延后。
+- 完整 quirks/limited-quirks、parser reentrant `document.write()`、speculative parser、
+  完整 adoption-agency 和完整 table foster parenting 继续不进入当前范围；除非项目转向通用浏览器。
+
 ## 推荐下一步顺序
 
-1. 收敛核心运行循环和 dirty update 契约，补充长时间 timer/input smoke。
-2. 做更细的 invalidation/subtree reuse，减少脚本交互后的全管线重建。
-3. 完善文本后端 adapter 和字体工作流验证，保持 bitmap font 作为默认低成本路线。
-4. 补齐本地资源包工具和 app packaging。
-5. 继续内存/allocator 优化，包括 `DomOwner` 原型和 detached-node instrumentation。
-6. 只有在目标硬件确实需要时，再推进 tiled/scanline presentation。
+1. 先落地第一批 HTML parser/DOM 兼容项，优先选择便宜且能直接减少 app 作者惊讶的项目。
+2. 收敛核心运行循环和 dirty update 契约，补充长时间 timer/input smoke。
+3. 做更细的 invalidation/subtree reuse，减少脚本交互后的全管线重建。
+4. 完善文本后端 adapter 和字体工作流验证，保持 bitmap font 作为默认低成本路线。
+5. 补齐本地资源包工具和 app packaging。
+6. 继续内存/allocator 优化，包括 `DomOwner` 原型和 detached-node instrumentation。
+7. 只有在目标硬件确实需要时，再推进 tiled/scanline presentation。

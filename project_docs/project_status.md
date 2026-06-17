@@ -189,6 +189,40 @@ Remaining tasks:
 - Keep full `:has()`, full `@container`, full animation/filter/image pipelines
   deferred unless a small embedded app proves the need.
 
+### M7.6: HTML Parser And DOM Compatibility Baseline
+
+Goal: reduce surprising parser/DOM differences for ordinary modern app HTML
+without importing old browser compatibility machinery.
+
+Status: planned from the HTML Living Standard degradation audit. The highest
+return items are accepted because they are mostly local parser/tree-builder work
+with strong usability payoff. Full quirks mode, parser-reentrant
+`document.write()`, speculative parsing, full adoption-agency behavior and full
+table foster parenting remain out of scope.
+
+First tasks:
+
+- Correct non-void self-closing slash handling while preserving true void
+  elements.
+- Preserve ordinary text whitespace in the tree builder and leave whitespace
+  collapsing to layout/rendering.
+- Treat `textarea` and `title` as RCDATA-like content with character reference
+  decoding.
+- Expand common named character references and tighten numeric/semicolon
+  recovery.
+- Surface parser budget-limit diagnostics instead of silent-only truncation.
+- Add minimal doctype/comment/document metadata support.
+
+Second tasks:
+
+- Add a minimal insertion-mode subset for html/head/body routing.
+- Add fragment parsing for `innerHTML`, template and component snippets.
+- Implement `template.content`-style inert fragments.
+- Broaden implied end tags for common rich-text, select/option and table cases.
+- Add bounded table tree construction and explicit module-script diagnostics.
+- Add minimal inline SVG/foreign-content boundary recognition only when it can
+  degrade safely.
+
 ### M8: Run Loop And Incremental Update Contract
 
 Goal: turn frame-loop experience from desktop shells and platform-neutral demos
@@ -293,12 +327,13 @@ full-framebuffer path.
 
 Mainline priority:
 
-1. M8: deepen tests around the run-loop and dirty-update contract.
-2. M9: implement finer invalidation and subtree reuse.
-3. M10: improve text backend adapters and font workflow validation.
-4. M11: define app packaging.
-5. M12: continue memory and allocator optimization.
-6. M13: decide on tiled presentation based on real hardware pressure.
+1. M7.6: land the first HTML parser/DOM compatibility batch.
+2. M8: deepen tests around the run-loop and dirty-update contract.
+3. M9: implement finer invalidation and subtree reuse.
+4. M10: improve text backend adapters and font workflow validation.
+5. M11: define app packaging.
+6. M12: continue memory and allocator optimization.
+7. M13: decide on tiled presentation based on real hardware pressure.
 
 Hardware porting can continue in parallel, but it should not block mainline core
 work. When the porting side finds a missing core capability, it should provide a
