@@ -245,6 +245,9 @@ ESP32-S3 映射：
 - 测量和绘制使用同一份 glyph metrics。
 - 回调内部避免堆分配。
 - 中文产品对子集化常用 app 字符，并用 `jellyframe_capability_check --font-coverage` 检查覆盖。
+- 用能力验证器输出的 profile 在 `tiny`、中文 app-specific subset、`cn-standard` 和按市场划分的
+  global packs 之间选择。`cn-standard` 表示 ASCII + 常用符号 + GB2312 一级汉字，它是中文市场预设，
+  不是全球默认字体。
 
 矢量字体在高配目标上可行，但 ESP32-S3 默认路线应是离线 rasterize 后的 bitmap glyph。
 

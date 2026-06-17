@@ -270,6 +270,58 @@ void bitmap_font_lookup_uses_sorted_codepoints() {
     check(find_bitmap_glyph(font, 0x42) == nullptr, "bitmap font lookup reports missing glyph");
 }
 
+void bitmap_font_scaling_bold_and_missing_glyphs_are_stable() {
+    static constexpr std::uint8_t rows_a[] = {
+        0b10000000,
+        0b10000000,
+        0b10000000,
+    };
+    static constexpr std::uint8_t rows_wide[] = {
+        0b11111111, 0b10000000,
+        0b10000000, 0b10000000,
+        0b11111111, 0b10000000,
+    };
+    static constexpr BitmapFontGlyph glyphs[] = {
+        BitmapFontGlyph{0x41, 1, 3, 2, 1, rows_a},
+        BitmapFontGlyph{0xff0c, 9, 3, 10, 2, rows_wide},
+    };
+    static constexpr BitmapFont font{glyphs, 2, 4, 3};
+    BitmapFontContext context{&font, 3};
+
+    const TextMetrics metrics = measure_bitmap_text(context, "A\xef\xbc\x8c?", 18, 700);
+    check(metrics.width == 45, "bitmap font metrics include scale, wide punctuation and fallback advance");
+    check(metrics.line_height == 12, "bitmap font metrics scale line height");
+
+    SoftwareRasterizer rasterizer(TextPainter{bitmap_font_paint_callback, &context});
+    DisplayCommand normal;
+    normal.type = DisplayCommandType::Text;
+    normal.rect = Rect{0, 0, 64, 24};
+    normal.color = Color{0, 0, 0, 255};
+    normal.text = "A";
+    normal.font_size = 18;
+    normal.font_weight = 400;
+    normal.text_single_line = true;
+
+    DisplayCommand bold = normal;
+    bold.font_weight = 700;
+
+    FrameBuffer normal_frame(64, 24, Color{255, 255, 255, 255});
+    FrameBuffer bold_frame(64, 24, Color{255, 255, 255, 255});
+    rasterizer.rasterize(normal, normal_frame, Rect{0, 0, 64, 24});
+    rasterizer.rasterize(bold, bold_frame, Rect{0, 0, 64, 24});
+
+    const int normal_pixels = count_non_background_pixels(normal_frame, Color{255, 255, 255, 255});
+    const int bold_pixels = count_non_background_pixels(bold_frame, Color{255, 255, 255, 255});
+    check(bold_pixels > normal_pixels, "bitmap font bold approximation paints an extra stroke");
+
+    DisplayCommand missing = normal;
+    missing.text = "\xf0\x9f\x98\x80";
+    FrameBuffer missing_frame(64, 24, Color{255, 255, 255, 255});
+    rasterizer.rasterize(missing, missing_frame, Rect{0, 0, 64, 24});
+    check(count_non_background_pixels(missing_frame, Color{255, 255, 255, 255}) > 8,
+          "missing high-codepoint glyph draws a visible fallback box");
+}
+
 } // namespace
 
 int main() {
@@ -284,6 +336,7 @@ int main() {
         frame_sink_receives_framebuffer_view_and_dirty_rects();
         bitmap_font_backend_measures_and_paints();
         bitmap_font_lookup_uses_sorted_codepoints();
+        bitmap_font_scaling_bold_and_missing_glyphs_are_stable();
     } catch (const std::exception& error) {
         std::cerr << "software renderer test failed: " << error.what() << '\n';
         return 1;

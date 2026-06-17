@@ -121,9 +121,8 @@ Accepted but cautious:
    timer/input smoke coverage.
 3. M9 bounded invalidation/diagnostics are complete; add retained subtree reuse
    later only where real diagnostics justify the ownership complexity.
-4. Improve text backend adapters and font workflow validation while keeping the
-   bitmap font backend as the low-cost default, and keep LVGL/vendor integration
-   limited to thin host hooks unless real hardware proves otherwise.
+4. M10 text backend adapter and font workflow work is complete for the current
+   mainline scope.
 5. Finish local resource bundle tooling and app packaging.
 6. Continue memory and allocator work, including a `DomOwner` prototype and
    detached-node instrumentation.

@@ -209,6 +209,115 @@ std::size_t count_non_ascii(const std::set<std::uint32_t>& codepoints) {
     return count;
 }
 
+struct FontProfileStats {
+    std::size_t ascii_printable = 0;
+    std::size_t non_ascii = 0;
+    std::size_t cjk_unified = 0;
+    std::size_t cjk_symbols = 0;
+    std::size_t latin_extended = 0;
+    std::size_t greek = 0;
+    std::size_t cyrillic = 0;
+    std::size_t kana = 0;
+    std::size_t hangul = 0;
+    std::size_t symbols = 0;
+    std::size_t other = 0;
+};
+
+bool in_range(std::uint32_t codepoint, std::uint32_t first, std::uint32_t last) {
+    return codepoint >= first && codepoint <= last;
+}
+
+bool is_cjk_unified(std::uint32_t codepoint) {
+    return in_range(codepoint, 0x4e00U, 0x9fffU) ||
+        in_range(codepoint, 0x3400U, 0x4dbfU) ||
+        in_range(codepoint, 0x20000U, 0x2a6dfU) ||
+        in_range(codepoint, 0x2a700U, 0x2b73fU) ||
+        in_range(codepoint, 0x2b740U, 0x2b81fU) ||
+        in_range(codepoint, 0x2b820U, 0x2ceafU);
+}
+
+bool is_cjk_symbol(std::uint32_t codepoint) {
+    return in_range(codepoint, 0x3000U, 0x303fU) ||
+        in_range(codepoint, 0xfe10U, 0xfe6fU) ||
+        in_range(codepoint, 0xff00U, 0xffefU);
+}
+
+bool is_common_symbol(std::uint32_t codepoint) {
+    return in_range(codepoint, 0x00a0U, 0x00bfU) ||
+        in_range(codepoint, 0x2000U, 0x206fU) ||
+        in_range(codepoint, 0x20a0U, 0x20cfU) ||
+        in_range(codepoint, 0x2100U, 0x214fU) ||
+        in_range(codepoint, 0x2190U, 0x21ffU) ||
+        in_range(codepoint, 0x2500U, 0x257fU) ||
+        in_range(codepoint, 0x25a0U, 0x25ffU) ||
+        in_range(codepoint, 0x2600U, 0x27bfU);
+}
+
+FontProfileStats summarize_font_profile(const std::set<std::uint32_t>& codepoints) {
+    FontProfileStats stats;
+    for (std::uint32_t codepoint : codepoints) {
+        if (codepoint >= 0x20U && codepoint < 0x7fU) {
+            ++stats.ascii_printable;
+            continue;
+        }
+        if (codepoint < 0x80U) {
+            continue;
+        }
+        ++stats.non_ascii;
+        if (is_cjk_unified(codepoint)) {
+            ++stats.cjk_unified;
+        } else if (is_cjk_symbol(codepoint)) {
+            ++stats.cjk_symbols;
+        } else if (in_range(codepoint, 0x00c0U, 0x024fU)) {
+            ++stats.latin_extended;
+        } else if (in_range(codepoint, 0x0370U, 0x03ffU)) {
+            ++stats.greek;
+        } else if (in_range(codepoint, 0x0400U, 0x052fU)) {
+            ++stats.cyrillic;
+        } else if (in_range(codepoint, 0x3040U, 0x30ffU)) {
+            ++stats.kana;
+        } else if (in_range(codepoint, 0xac00U, 0xd7afU) || in_range(codepoint, 0x1100U, 0x11ffU)) {
+            ++stats.hangul;
+        } else if (is_common_symbol(codepoint)) {
+            ++stats.symbols;
+        } else {
+            ++stats.other;
+        }
+    }
+    return stats;
+}
+
+std::string recommended_font_profile(const FontProfileStats& stats) {
+    if (stats.non_ascii == 0) {
+        return "tiny";
+    }
+    const std::size_t global_scripts =
+        stats.latin_extended + stats.greek + stats.cyrillic + stats.kana + stats.hangul + stats.other;
+    if (stats.cjk_unified > 0 && global_scripts == 0) {
+        return stats.non_ascii <= 128 ? "app-subset-cn" : "cn-standard";
+    }
+    if (stats.cjk_unified == 0 && global_scripts == 0) {
+        return "tiny-plus-symbols";
+    }
+    return "global-product";
+}
+
+std::string font_profile_detail(const std::string& recommendation) {
+    if (recommendation == "tiny") {
+        return "ASCII, digits and basic UI symbols are enough for the scanned sources.";
+    }
+    if (recommendation == "tiny-plus-symbols") {
+        return "Add the scanned symbols to the tiny bring-up font; no broad language pack is implied.";
+    }
+    if (recommendation == "app-subset-cn") {
+        return "The page uses a small Chinese subset; generate an app-specific pack, or use CN standard for broader domestic firmware.";
+    }
+    if (recommendation == "cn-standard") {
+        return "For domestic Chinese devices, ASCII + common symbols + GB2312 level-1 Chinese is the recommended reusable profile.";
+    }
+    return "Mixed or non-Chinese scripts were detected; choose per-market global subsets instead of a single oversized universal font.";
+}
+
 std::size_t estimated_bitmap_font_bytes(std::size_t glyph_count, int glyph_width, int glyph_height) {
     if (glyph_count == 0 || glyph_width <= 0 || glyph_height <= 0) {
         return 0;
@@ -471,6 +580,21 @@ int main(int argc, char** argv) {
                   << " non_ascii_count=" << count_non_ascii(all_used_codepoints) << '\n';
     }
     const std::size_t non_ascii_count = count_non_ascii(all_used_codepoints);
+    const FontProfileStats font_stats = summarize_font_profile(all_used_codepoints);
+    const std::string recommendation = recommended_font_profile(font_stats);
+    std::cout << "font_profile recommendation=" << recommendation
+              << " detail=\"" << font_profile_detail(recommendation) << "\"\n";
+    std::cout << "font_profile_counts ascii_printable=" << font_stats.ascii_printable
+              << " non_ascii=" << font_stats.non_ascii
+              << " cjk=" << font_stats.cjk_unified
+              << " cjk_symbols=" << font_stats.cjk_symbols
+              << " latin_extended=" << font_stats.latin_extended
+              << " greek=" << font_stats.greek
+              << " cyrillic=" << font_stats.cyrillic
+              << " kana=" << font_stats.kana
+              << " hangul=" << font_stats.hangul
+              << " symbols=" << font_stats.symbols
+              << " other=" << font_stats.other << '\n';
     if (options.budget_glyph_width > 0 && options.budget_glyph_height > 0) {
         std::cout << "font_budget glyph=" << options.budget_glyph_width << "x" << options.budget_glyph_height
                   << " non_ascii_count=" << non_ascii_count

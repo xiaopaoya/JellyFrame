@@ -137,7 +137,18 @@ jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
 
 `used_chars.txt` 会包含源码中出现的非 ASCII UTF-8 字符，并识别常见 numeric/named character references。
 `font_chars.txt` 是一个普通 UTF-8 文本文件，列出嵌入式 font pack 已提供的字符。部署前，工具会报告缺失的非 ASCII codepoints。
-`--font-budget WxH` 会根据非 ASCII 子集输出粗略 bitmap font pack byte 估算，便于决定是否纳入更大的中文字符集。
+`--font-budget WxH` 会根据非 ASCII 子集输出粗略 bitmap font pack byte 估算，
+便于决定是否纳入更大的中文字符集。工具也会输出字体 profile 建议：
+
+- `tiny`：ASCII、数字和基础 UI 符号足够，适合 bring-up 或纯英文 UI。
+- `tiny-plus-symbols`：保留 tiny 字体，只追加扫描到的非 ASCII 符号。
+- `app-subset-cn`：应用只使用少量中文，建议生成 app-specific 字体包。
+- `cn-standard`：面向国内中文设备时，推荐 ASCII + 常用符号 + GB2312 一级汉字作为可复用 profile。
+- `global-product`：检测到混合或非中文脚本，应按市场选择 Latin Extended、Greek、Cyrillic、Kana、
+  Hangul 等子集，而不是放入一个全球大而全字体。
+
+不要把 `cn-standard` 当作 JellyFrame 的全球默认字体。它是中文市场推荐预设。flash 紧张的产品应优先使用
+app-specific subset；全球化产品应按销售区域提供字体包。
 
 预期生产路径：
 

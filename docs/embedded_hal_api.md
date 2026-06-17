@@ -257,7 +257,11 @@ ESP32-S3 mapping:
 - Measure and paint from the same glyph metrics.
 - Avoid heap allocation inside callbacks.
 - For Chinese products, subset common app characters and verify coverage with
-  `jellyframe_capability_check --font-coverage`.
+  `jellyframe_capability_check --font-coverage`. Use the capability checker
+  profile output to choose between `tiny`, app-specific Chinese subsets,
+  `cn-standard` or market-specific global packs. `cn-standard` means ASCII +
+  common symbols + GB2312 level-1 Chinese; it is a Chinese-market preset, not a
+  global default.
 
 Vector fonts are feasible on high-end targets, but the default ESP32-S3 path
 should be offline-rasterized bitmap glyphs.

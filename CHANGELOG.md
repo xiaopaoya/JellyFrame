@@ -8,6 +8,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Completed the current M10 text/font workflow scope with capability-check
+  font profile recommendations for tiny, symbol-only, Chinese app subset,
+  Chinese standard and global product font packs.
 - Documented the ESP32-S3 audit conclusion that LVGL/vendor SDKs should
   remain optional thin panel/input/text hooks, not the primary JellyFrame
   renderer backend.
@@ -247,6 +250,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Improved
 
+- Expanded bitmap font regression coverage for scaling, wide punctuation,
+  bold approximation and missing high-codepoint fallback glyphs.
 - Changed bitmap font glyph lookup from linear scan to binary search;
   generated glyph tables must stay sorted by Unicode codepoint.
 - `textarea` and `title` now use a bounded RCDATA-like tokenizer path with

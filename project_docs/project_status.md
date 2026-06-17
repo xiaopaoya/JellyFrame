@@ -298,11 +298,12 @@ Tasks:
 
 Goal: make Chinese and small-screen text more stable for production apps.
 
-Status: started with the first mainline batch complete. The core now exposes
-`HostTextAdapter`, a platform-neutral bridge that wraps LVGL/vendor measurement
-and paint callbacks into the layout and software-renderer text APIs.
-`jellyframe_capability_check` adds `--font-budget WxH` for rough bitmap-pack
-size estimates from the non-ASCII subset, and `jellyframe_font_pack_gen` reports
+Status: mainline deliverables complete. The core exposes `HostTextAdapter`,
+a platform-neutral bridge that wraps LVGL/vendor measurement and paint callbacks
+into the layout and software-renderer text APIs. `jellyframe_capability_check`
+now reports rough bitmap-pack budgets and font profile recommendations
+(`tiny`, `tiny-plus-symbols`, `app-subset-cn`, `cn-standard`,
+`global-product`) from scanned codepoints. `jellyframe_font_pack_gen` reports
 emitted glyph counts, row bytes, glyph-table estimates and total estimated
 bytes for port documentation.
 
@@ -312,10 +313,9 @@ Tasks:
 - Add a platform-neutral LVGL/vendor text backend adapter example or interface
   note. First `HostTextAdapter` version is complete.
 - Expand tests for font coverage, missing glyphs, bold, wide glyphs,
-  punctuation and scaling. Bitmap font regressions exist; punctuation/scale
-  matrix can still expand.
+  punctuation and scaling. Done for the core bitmap backend's current scope.
 - Make the capability checker report font-pack size and missing-glyph impact
-  more directly. First budget and coverage summaries are complete.
+  more directly. Done for the current tool scope with profile and budget output.
 
 ### M11: Resource Bundle And App Packaging
 
@@ -359,11 +359,10 @@ full-framebuffer path.
 
 Mainline priority:
 
-1. M10: improve text backend adapters and font workflow validation.
-2. M11: define app packaging.
-3. M12: continue memory and allocator optimization, including any retained
+1. M11: define app packaging.
+2. M12: continue memory and allocator optimization, including any retained
    subtree reuse justified by M9 diagnostics.
-4. M13: decide on tiled presentation based on real hardware pressure.
+3. M13: decide on tiled presentation based on real hardware pressure.
 
 Hardware porting can continue in parallel, but it should not block mainline core
 work. When the porting side finds a missing core capability, it should provide a

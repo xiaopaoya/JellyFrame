@@ -156,7 +156,17 @@ plain UTF-8 text file listing characters provided by the embedded font pack.
 Missing non-ASCII codepoints are reported before deployment.
 `--font-budget WxH` prints a rough bitmap-pack byte estimate for the non-ASCII
 subset, useful before deciding whether to include a larger Chinese character
-set.
+set. The tool also prints a font profile recommendation:
+
+- `tiny`: ASCII, digits and basic UI symbols are enough for bring-up or English-only UI.
+- `tiny-plus-symbols`: keep the tiny font and add only the scanned non-ASCII symbols.
+- `app-subset-cn`: the app uses a small Chinese subset; generate an app-specific pack.
+- `cn-standard`: for domestic Chinese devices, use ASCII + common symbols + GB2312 level-1 Chinese as the reusable profile.
+- `global-product`: mixed or non-Chinese scripts were detected; choose per-market subsets such as Latin Extended,
+  Greek, Cyrillic, Kana or Hangul instead of one universal font.
+
+Do not treat `cn-standard` as JellyFrame's global default. It is the recommended Chinese-market preset. Products with
+tight flash budgets should prefer app-specific subsets, while global products should ship market-specific font packs.
 
 The intended production path is:
 

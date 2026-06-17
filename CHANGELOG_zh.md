@@ -8,6 +8,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 完成当前 M10 文本/字体工作流范围：能力验证器会给出 tiny、符号追加、
+  中文 app 子集、中文标准和全球化产品字体包 profile 建议。
 - 记录 ESP32-S3 增量审计结论：LVGL/vendor SDK 只应作为可选的薄
   panel/input/text hooks，不作为 JellyFrame 主渲染后端。
 - 添加第一批 M7.6 HTML parser 兼容项：node/depth/attribute 上限的 parser 预算诊断、
@@ -181,6 +183,7 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 改进
 
+- 扩展 bitmap font 回归覆盖，验证缩放、宽标点、粗体近似和高码点缺字 fallback glyph。
 - 将 bitmap font glyph 查找从线性扫描改为二分查找；生成的 glyph table
   必须继续按 Unicode codepoint 升序排列。
 - `textarea` 和 `title` 现在走有界 RCDATA-like tokenizer 路径并解码字符引用；
