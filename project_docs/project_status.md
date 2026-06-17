@@ -322,8 +322,8 @@ Tasks:
 Goal: turn example resource loading into a repeatable local app packaging flow.
 
 Status: package-format survey and first JellyFrame manifest/resource-bundle
-design are documented in `docs/app_packaging.md`. Implementation has not landed
-yet.
+design are documented in `docs/app_packaging.md`. A first desktop packer and
+pseudo-browser package loading path are being implemented.
 
 Tasks:
 
@@ -333,7 +333,9 @@ Tasks:
   behavior. First policy is documented.
 - Chain the capability checker, font-pack generator and resource-bundle
   generator into one desktop build flow.
-- Keep the core filesystem-free and network-free; I/O remains host-provided.
+- Keep package resource loading filesystem-free and network-free in the core;
+  runtime network requests are represented as manifest capabilities for future
+  host APIs.
 
 ### M12: Memory And Allocator Work
 

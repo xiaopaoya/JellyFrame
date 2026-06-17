@@ -14,6 +14,7 @@
 #endif
 
 #include "example_css_io.h"
+#include "app_package.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -122,6 +123,7 @@ struct BrowserOptions {
     std::string css_path;
     std::string output_path;
     std::string script_path;
+    std::string app_path;
     int viewport_width = 360;
     int viewport_height = 240;
     int pump_timers_ms = 0;
@@ -167,11 +169,58 @@ bool is_pump_timers_flag(const std::string& value) {
     return value == "--pump-timers";
 }
 
+bool is_app_flag(const std::string& value) {
+    return value == "--app";
+}
+
 BrowserOptions parse_options(int argc, char** argv) {
+    if (argc >= 2 && is_app_flag(argv[1])) {
+        if (argc < 4) {
+            throw std::runtime_error(
+                "usage: jellyframe_pseudo_browser --app package_dir output.ppm [viewport_width] [viewport_height] "
+                "[--script script.js] [--pump-timers ms]");
+        }
+        BrowserOptions options;
+        options.app_path = argv[2];
+        options.output_path = argv[3];
+        bool width_set = false;
+        bool height_set = false;
+        for (int i = 4; i < argc; ++i) {
+            const std::string arg = argv[i];
+            if (is_script_flag(arg)) {
+                if (i + 1 >= argc) {
+                    throw std::runtime_error("--script requires a script file path");
+                }
+                options.script_path = argv[++i];
+                continue;
+            }
+            if (is_pump_timers_flag(arg)) {
+                if (i + 1 >= argc) {
+                    throw std::runtime_error("--pump-timers requires a duration in milliseconds");
+                }
+                options.pump_timers_ms = std::max(0, parse_int_arg(argv[++i], 0));
+                continue;
+            }
+            if (!width_set) {
+                options.viewport_width = parse_int_arg(argv[i], options.viewport_width);
+                width_set = true;
+                continue;
+            }
+            if (!height_set) {
+                options.viewport_height = parse_int_arg(argv[i], options.viewport_height);
+                height_set = true;
+                continue;
+            }
+            throw std::runtime_error("too many positional arguments");
+        }
+        return options;
+    }
+
     if (argc < 4) {
         throw std::runtime_error(
             "usage: jellyframe_pseudo_browser page.html style.css output.ppm [viewport_width] [viewport_height] "
-            "[--script script.js]");
+            "[--script script.js]\n"
+            "   or: jellyframe_pseudo_browser --app package_dir output.ppm [viewport_width] [viewport_height]");
     }
 
     BrowserOptions options;
@@ -225,7 +274,37 @@ int main(int argc, char** argv) {
     try {
         const BrowserOptions options = parse_options(argc, argv);
         const HostBudgets budgets = desktop_validation_budgets();
-        const std::string html = read_file_limited(options.html_path);
+        std::string html;
+        std::string css;
+        std::string package_id;
+        std::string package_name;
+        bool package_network_allowed = false;
+        jellyframe_example::PackageResourceStats package_stats;
+        jellyframe_example::PackageResourceContext package_context;
+        BrowserOptions effective_options = options;
+
+        if (!options.app_path.empty()) {
+            const jellyframe_example::AppPackage app =
+                jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
+            package_id = app.manifest.id;
+            package_name = app.manifest.name;
+            package_network_allowed = app.manifest.network_allowed;
+            if (app.manifest.viewport_width > 0 && effective_options.viewport_width == BrowserOptions{}.viewport_width) {
+                effective_options.viewport_width = app.manifest.viewport_width;
+            }
+            if (app.manifest.viewport_height > 0 && effective_options.viewport_height == BrowserOptions{}.viewport_height) {
+                effective_options.viewport_height = app.manifest.viewport_height;
+            }
+            package_context.root = app.root;
+            package_context.base_url = app.manifest.entry;
+            package_context.max_input_bytes = kMaxInputBytes;
+            package_context.stats = &package_stats;
+            if (!jellyframe_example::load_package_resource(app.manifest.entry, "/", html, &package_context)) {
+                throw std::runtime_error("failed to load app entry resource");
+            }
+        } else {
+            html = read_file_limited(options.html_path);
+        }
 
         HtmlParser html_parser;
         CssParser css_parser;
@@ -240,15 +319,20 @@ int main(int argc, char** argv) {
         std::unique_ptr<JerryScriptRuntime> runtime;
 #endif
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
-        jellyframe_example::ScriptLoadContext script_context;
-        const std::filesystem::path html_path(options.html_path);
-        script_context.base_dir = html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
-        script_context.max_input_bytes = kMaxInputBytes;
-        std::vector<DocumentScript> document_scripts =
-            collect_classic_scripts(*document, jellyframe_example::load_linked_script, &script_context);
+        std::vector<DocumentScript> document_scripts;
+        if (!options.app_path.empty()) {
+            document_scripts = collect_classic_scripts(*document, jellyframe_example::load_package_script, &package_context);
+        } else {
+            jellyframe_example::ScriptLoadContext script_context;
+            const std::filesystem::path html_path(options.html_path);
+            script_context.base_dir =
+                html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
+            script_context.max_input_bytes = kMaxInputBytes;
+            document_scripts = collect_classic_scripts(*document, jellyframe_example::load_linked_script, &script_context);
+        }
         document_script_count = document_scripts.size();
 #endif
-        if (!options.script_path.empty()
+        if (!effective_options.script_path.empty()
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
             || !document_scripts.empty()
 #endif
@@ -267,33 +351,36 @@ int main(int argc, char** argv) {
                 }
                 script_output = script_result.value;
             }
-            if (script_ok && !options.script_path.empty()) {
+            if (script_ok && !effective_options.script_path.empty()) {
                 const ScriptEvaluationResult script_result =
-                    runtime->eval(read_file_limited(options.script_path), options.script_path);
+                    runtime->eval(read_file_limited(effective_options.script_path), effective_options.script_path);
                 script_ok = script_result.ok;
                 script_output = script_result.ok ? script_result.value : script_result.error;
             }
             script_ran = true;
-            for (int now_ms = 16; now_ms <= options.pump_timers_ms; now_ms += 16) {
+            for (int now_ms = 16; now_ms <= effective_options.pump_timers_ms; now_ms += 16) {
                 timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(now_ms), 32);
             }
-            if (options.pump_timers_ms > 0 && options.pump_timers_ms % 16 != 0) {
-                timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(options.pump_timers_ms), 32);
+            if (effective_options.pump_timers_ms > 0 && effective_options.pump_timers_ms % 16 != 0) {
+                timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(effective_options.pump_timers_ms), 32);
             }
 #else
             throw std::runtime_error("this build was compiled without JELLYFRAME_BUILD_SCRIPTING=ON");
 #endif
         }
 
-        Stylesheet stylesheet = css_parser.parse(
-            jellyframe_example::read_author_css_for_document(options.css_path, *document, kMaxInputBytes),
-            css_parser_options_from_budgets(budgets));
+        if (!options.app_path.empty()) {
+            css = combine_author_css({}, *document, jellyframe_example::load_package_stylesheet, &package_context);
+        } else {
+            css = jellyframe_example::read_author_css_for_document(options.css_path, *document, kMaxInputBytes);
+        }
+        Stylesheet stylesheet = css_parser.parse(css, css_parser_options_from_budgets(budgets));
         StyleResolver resolver(std::move(stylesheet));
 
         RenderTreeBuilder render_tree_builder(resolver, render_tree_options_from_budgets(budgets));
         auto render_tree = render_tree_builder.build(*document);
         LayoutEngine layout_engine(resolver, {}, layout_engine_options_from_budgets(budgets));
-        auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
+        auto layout_tree = layout_engine.layout(*render_tree, effective_options.viewport_width);
         LayerTreeBuilder layer_tree_builder(layer_tree_options_from_budgets(budgets));
         auto layer_tree = layer_tree_builder.build(*layout_tree);
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
@@ -302,8 +389,8 @@ int main(int argc, char** argv) {
         SoftwareCompositor compositor;
         const Color background = page_background_color(*document, resolver);
         FrameBuffer frame_buffer = compositor.render(
-            *layer_tree, options.viewport_width, options.viewport_height, background);
-        ImageFrameSinkContext frame_sink_context{options.output_path, false};
+            *layer_tree, effective_options.viewport_width, effective_options.viewport_height, background);
+        ImageFrameSinkContext frame_sink_context{effective_options.output_path, false};
         const Rect full_dirty{0, 0, frame_buffer.width, frame_buffer.height};
         const HostFrameSink frame_sink{write_image_frame_sink, &frame_sink_context};
         if (!present_frame(frame_buffer, frame_sink, &full_dirty, 1)) {
@@ -311,8 +398,17 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "JellyFrame pseudo browser\n";
-        std::cout << "  output=" << options.output_path << '\n';
-        std::cout << "  viewport=" << options.viewport_width << "x" << options.viewport_height << '\n';
+        std::cout << "  output=" << effective_options.output_path << '\n';
+        std::cout << "  viewport=" << effective_options.viewport_width << "x" << effective_options.viewport_height << '\n';
+        if (!options.app_path.empty()) {
+            std::cout << "  app_id=" << package_id << '\n';
+            std::cout << "  app_name=" << package_name << '\n';
+            std::cout << "  app_network_allowed=" << (package_network_allowed ? "true" : "false") << '\n';
+            std::cout << "  app_resource_loads=" << package_stats.successful_loads << '\n';
+            std::cout << "  app_resource_missing=" << package_stats.missing_loads << '\n';
+            std::cout << "  app_resource_rejected=" << package_stats.rejected_loads << '\n';
+            std::cout << "  app_resource_bytes=" << package_stats.loaded_bytes << '\n';
+        }
         std::cout << "  dom_nodes=" << dom_statistics.node_count << '\n';
         std::cout << "  dom_max_depth=" << dom_statistics.max_depth << '\n';
         std::cout << "  dom_attributes=" << dom_statistics.attribute_count << '\n';
@@ -324,7 +420,7 @@ int main(int argc, char** argv) {
         std::cout << "  non_background_pixels="
                   << count_non_background_pixels(frame_buffer, background) << '\n';
         if (script_ran) {
-            std::cout << "  script=" << options.script_path << '\n';
+            std::cout << "  script=" << effective_options.script_path << '\n';
             std::cout << "  document_scripts=" << document_script_count << '\n';
             std::cout << "  script_ok=" << (script_ok ? "true" : "false") << '\n';
             std::cout << "  script_result=" << script_output << '\n';

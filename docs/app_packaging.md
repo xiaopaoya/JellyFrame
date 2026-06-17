@@ -41,8 +41,12 @@ The reviewed platforms converge on a few practical patterns:
   heap-heavy archive parsing.
 - All budgets are declared before deployment: resource bytes, DOM nodes, CSS
   rules, display commands, timers, listeners and framebuffer policy.
-- Core stays filesystem-free and network-free. Hosts provide bytes through the
-  existing `HostResourceLoader` boundary.
+- Core package loading stays filesystem-free and network-free. Hosts provide
+  package bytes through the existing `HostResourceLoader` boundary.
+- Apps may request network capability for runtime data APIs. That capability is
+  declared separately from package resource loading, so remote pages and remote
+  CSS/script/image resources remain disabled in M11 without closing the door on
+  future host-provided fetch APIs.
 - Missing optional resources degrade cleanly; missing required entry resources
   fail package validation before flashing.
 
@@ -123,8 +127,8 @@ desktop tools, not by the MCU runtime:
       "output": "cpp"
     }
   },
-  "permissions": [],
-  "capabilities": []
+  "permissions": ["network"],
+  "capabilities": ["network.fetch"]
 }
 ```
 
@@ -135,15 +139,18 @@ Fields that affect runtime compatibility must be required by the packer:
 - `budgets.maxResourceBytes`;
 - target name and output kind.
 
-Permissions are intentionally empty in M11. They reserve a stable place for
-future host APIs without implying that the core owns device capabilities.
+`permissions: ["network"]` and `capabilities: ["network.fetch"]` declare that
+the app expects a future host-provided network request API for runtime data.
+They do not enable remote package resources. The M11 packer records these fields
+in the report so product firmware can reject apps whose requested capabilities
+do not match the board policy.
 
 ## Resource Path Rules
 
 JellyFrame should use a strict local path subset:
 
-- Resource URLs are local only: no scheme, no `//host`, no query-driven network
-  fetch.
+- Package resource URLs are local only: no scheme, no `//host`, no query-driven
+  network fetch.
 - Absolute app paths start with `/`.
 - Relative paths resolve against the referring resource directory.
 - `.` is ignored; `..` is rejected when it escapes the app root.
@@ -210,7 +217,7 @@ M11 should not add these yet:
 - runtime ZIP extraction or general archive parsing on MCU;
 - dependency package managers;
 - dynamic native libraries;
-- arbitrary remote resources;
+- arbitrary remote package resources;
 - service workers, caches or browser storage;
 - multi-process install/update semantics;
 - page module transpilation comparable to Vela `.ux` or HarmonyOS ArkUI.
@@ -227,6 +234,27 @@ Those features belong outside the core or to a future desktop packaging layer.
 5. Update the pseudo browser to open a package directory by manifest.
 6. Add one weather/clock/calculator package sample that exercises HTML/CSS/JS,
    fonts and assets.
+
+## Current Tooling
+
+The first implementation provides a desktop packer:
+
+```powershell
+python tools/package_app.py `
+  --root examples/apps/watch_weather `
+  --output-cpp build/watch_weather_resources.cpp `
+  --report build/watch_weather_report.json
+```
+
+The pseudo browser can open a source package directory directly:
+
+```powershell
+.\build\Release\jellyframe_pseudo_browser.exe `
+  --app examples/apps/watch_weather build\watch_weather.ppm
+```
+
+The pseudo browser reports whether the manifest requested network capability,
+but network requests are not executed yet.
 
 References:
 

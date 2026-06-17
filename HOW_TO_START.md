@@ -304,6 +304,8 @@ CMake options are enabled.
 
 Notes:
 
+- `jellyframe_pseudo_browser.exe` also supports `--app package_dir output.ppm`
+  for M11 app-package source directories containing `jellyframe.app.json`.
 - `jellyframe_win32_browser.exe` is only built on Windows.
 - In scripting builds, `jellyframe_pseudo_browser.exe`,
   `jellyframe_win32_browser.exe` and `jellyframe_core_tests.exe` link the
@@ -314,6 +316,9 @@ Notes:
 
 ## 12. Useful Example Pages
 
+- `examples/apps/watch_weather`: first M11 app package sample with
+  `jellyframe.app.json`, local HTML/CSS/classic JS and a declared network
+  capability for future runtime data requests.
 - `examples/modern_cases`: modern HTML/CSS samples that exercise graceful
   degradation.
 - `examples/script_cases`: minimal scripting probes for runtime, DOM mutation,
@@ -322,6 +327,22 @@ Notes:
 - `examples/app_cases/clock.*`: timer-driven clock.
 - `examples/app_cases/timer.*`: timer/stopwatch UI.
 - `examples/app_cases/calculator.*`: button-driven calculator.
+
+Package the M11 sample into a generated resource table:
+
+```powershell
+python tools\package_app.py `
+  --root examples\apps\watch_weather `
+  --output-cpp build\watch_weather_resources.cpp `
+  --report build\watch_weather_report.json
+```
+
+Render it through the pseudo browser:
+
+```powershell
+.\build\Release\jellyframe_pseudo_browser.exe `
+  --app examples\apps\watch_weather build\watch_weather.ppm
+```
 
 When an example renders badly, inspect in this order:
 

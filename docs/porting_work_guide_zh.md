@@ -117,8 +117,9 @@ budgets.max_framebuffer_pixels = width * height;
 
 实现方式：
 
-- 当前 ESP32-S3 bring-up：`ports/esp32s3-idf/tools/generate_resource_bundle.py`
-  会从 `ports/esp32s3-idf/resources/app` 生成
+- 当前 ESP32-S3 bring-up：顶层 `tools/package_app.py` 会校验
+  `ports/esp32s3-idf/resources/app/jellyframe.app.json`，并从
+  `ports/esp32s3-idf/resources/app` 生成
   `ResourceEntry { url, kind, bytes, size }` 只读表。
 - 若使用分区或文件系统，读取到有界 `std::string` 后交给现有 document style/script loader。
 

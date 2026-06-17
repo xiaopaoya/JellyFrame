@@ -1,0 +1,39 @@
+{
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.esp32s3.smoke",
+  "name": "ESP32-S3 Smoke",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/p2_smoke.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 131072,
+    "maxDomNodes": 512,
+    "maxCssRules": 256,
+    "maxDisplayCommands": 512
+  },
+  "permissions": [],
+  "capabilities": [],
+  "targets": {
+    "esp32s3-round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "tiny",
+      "output": "cpp"
+    }
+  }
+}

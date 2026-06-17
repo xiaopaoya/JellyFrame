@@ -155,8 +155,9 @@ Requirements:
 
 Implementation:
 
-- Current ESP32-S3 bring-up: `ports/esp32s3-idf/tools/generate_resource_bundle.py`
-  generates a read-only `ResourceEntry { url, kind, bytes, size }` table from
+- Current ESP32-S3 bring-up: top-level `tools/package_app.py` validates
+  `ports/esp32s3-idf/resources/app/jellyframe.app.json` and generates a
+  read-only `ResourceEntry { url, kind, bytes, size }` table from
   `ports/esp32s3-idf/resources/app`.
 - If a partition or filesystem is used, read into a bounded `std::string` and
   pass it to the existing document style/script loader.

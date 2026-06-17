@@ -26,7 +26,9 @@ MCU 端不应解析文件系统、网络资源或复杂压缩归档。
 - 构建输出可重复：资源排序、路径规范化、稳定生成 C++ 或 binary table。
 - 运行时加载保持 O(log n) 或小包有界线性查找，不做高堆开销的归档解析。
 - 部署前声明全部预算：resource bytes、DOM nodes、CSS rules、display commands、timers、listeners 和 framebuffer policy。
-- 核心继续无文件系统、无网络；宿主通过现有 `HostResourceLoader` 边界提供字节。
+- 包资源加载继续无文件系统、无网络；宿主通过现有 `HostResourceLoader` 边界提供包内字节。
+- 应用可以为运行时数据 API 声明网络能力。这个能力与包资源加载分离，因此 M11 仍禁止远程页面、
+  远程 CSS/script/image 资源，但不会把未来宿主提供的 fetch API 路线写死。
 - 可选资源缺失时干净降级；必需 entry 资源缺失应在烧录前由打包器报错。
 
 ## 源包目录
@@ -103,8 +105,8 @@ my_app/
       "output": "cpp"
     }
   },
-  "permissions": [],
-  "capabilities": []
+  "permissions": ["network"],
+  "capabilities": ["network.fetch"]
 }
 ```
 
@@ -115,13 +117,15 @@ my_app/
 - `budgets.maxResourceBytes`；
 - target 名称和输出类型。
 
-`permissions` 在 M11 中应保持空数组。它只是为未来宿主 API 留稳定位置，不代表核心开始拥有设备能力。
+`permissions: ["network"]` 和 `capabilities: ["network.fetch"]` 表示 app 期待未来宿主提供
+运行时网络请求 API。它们不会启用远程包资源。M11 packer 会把这些字段写入报告，产品固件可以据此拒绝
+不符合板级策略的 app。
 
 ## 资源路径规则
 
 JellyFrame 应使用严格的本地路径子集：
 
-- 资源 URL 只能是本地路径：不接受 scheme、不接受 `//host`、不做 query 驱动的网络 fetch。
+- 包资源 URL 只能是本地路径：不接受 scheme、不接受 `//host`、不做 query 驱动的网络 fetch。
 - 绝对 app 路径以 `/` 开头。
 - 相对路径按引用它的资源目录解析。
 - `.` 忽略；`..` 如果逃出 app root 就拒绝。
@@ -182,7 +186,7 @@ M11 暂不应加入：
 - MCU 端 runtime ZIP 解压或通用归档解析；
 - 依赖包管理器；
 - 动态 native libraries；
-- 任意远程资源；
+- 任意远程包资源；
 - service workers、caches 或浏览器存储；
 - 多进程安装/更新语义；
 - 类似 Vela `.ux` 或 HarmonyOS ArkUI 的页面模块转译。
@@ -197,6 +201,26 @@ M11 暂不应加入：
 4. 将生成的资源集合接入 capability check 和 font-pack 生成。
 5. 让 pseudo browser 能按 manifest 打开 package directory。
 6. 增加一个 weather/clock/calculator package sample，覆盖 HTML/CSS/JS、fonts 和 assets。
+
+## 当前工具
+
+第一版实现提供桌面 packer：
+
+```powershell
+python tools/package_app.py `
+  --root examples/apps/watch_weather `
+  --output-cpp build/watch_weather_resources.cpp `
+  --report build/watch_weather_report.json
+```
+
+伪浏览器可以直接打开源包目录：
+
+```powershell
+.\build\Release\jellyframe_pseudo_browser.exe `
+  --app examples/apps/watch_weather build\watch_weather.ppm
+```
+
+伪浏览器会报告 manifest 是否请求了网络能力，但目前还不会执行网络请求。
 
 参考资料：
 

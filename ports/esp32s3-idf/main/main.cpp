@@ -41,7 +41,7 @@ namespace {
 
 constexpr const char* tag = "JellyFrame";
 constexpr Color kBackground{248, 250, 252, 255};
-constexpr std::string_view kAppBaseUrl = "/app/index.html";
+constexpr std::string_view kAppBaseUrl = "/p2_smoke.html";
 
 std::string make_card_html(int count) {
     std::ostringstream html;
@@ -242,11 +242,11 @@ void print_capabilities(const HostDeviceCapabilities& capabilities) {
 bool run_p2_resource_smoke(const HostBudgets& budgets) {
     jellyframe_esp32s3::ResourceLoadStats stats;
     jellyframe_esp32s3::ResourceBundleContext resource_context =
-        jellyframe_esp32s3::make_resource_context(budgets, "/app/p2_smoke.html", &stats);
+        jellyframe_esp32s3::make_resource_context(budgets, "/p2_smoke.html", &stats);
 
     std::string html;
     const bool loaded_html = jellyframe_esp32s3::load_resource(
-        HostResourceRequest{HostResourceKind::Other, "/app/p2_smoke.html", {}},
+        HostResourceRequest{HostResourceKind::Other, "/p2_smoke.html", {}},
         html,
         &resource_context);
     if (!loaded_html) {
@@ -277,10 +277,10 @@ bool run_p2_resource_smoke(const HostBudgets& budgets) {
     HostBudgets tiny_budget = budgets;
     tiny_budget.max_resource_bytes = 8;
     jellyframe_esp32s3::ResourceBundleContext tiny_context =
-        jellyframe_esp32s3::make_resource_context(tiny_budget, "/app/p2_smoke.html", &reject_stats);
+        jellyframe_esp32s3::make_resource_context(tiny_budget, "/p2_smoke.html", &reject_stats);
     std::string rejected_output;
     const bool oversized_blocked = !jellyframe_esp32s3::load_resource(
-        HostResourceRequest{HostResourceKind::Stylesheet, "styles/benchmark.css", "/app/p2_smoke.html"},
+        HostResourceRequest{HostResourceKind::Stylesheet, "styles/benchmark.css", "/p2_smoke.html"},
         rejected_output,
         &tiny_context);
 

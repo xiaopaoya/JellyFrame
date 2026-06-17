@@ -141,14 +141,14 @@ The formal benchmark summary lives in
 
 P2 resource loading is implemented in `main/jellyframe_esp32s3_resources.*`.
 The current bring-up stores source assets under `resources/app/` and generates
-a compile-time C++ table during ESP-IDF configure using
-`tools/generate_resource_bundle.py`.
+a compile-time C++ table during ESP-IDF configure using the top-level
+`tools/package_app.py` packer.
 
 The smoke-test bundle contains:
 
-- `/app/p2_smoke.html`
-- `/app/styles/benchmark.css`
-- `/app/scripts/benchmark.js`
+- `/p2_smoke.html`
+- `/styles/benchmark.css`
+- `/scripts/benchmark.js`
 
 The loader resolves relative URLs against the host-provided base URL, rejects
 non-local URLs, enforces `HostBudgets::max_resource_bytes` on every load, and
@@ -156,9 +156,10 @@ adapts to the existing linked stylesheet and classic-script callbacks. Missing
 resources return `false`, so first paint can continue with inline or default
 content.
 
-To replace the smoke-test resources, edit files under `resources/app/` or point
-the generator at a different asset root in `main/CMakeLists.txt`; generated
-sources stay in the build directory and should not be committed.
+To replace the smoke-test resources, edit files under `resources/app/` and its
+`jellyframe.app.json`, or point the packer at a different app root in
+`main/CMakeLists.txt`; generated sources stay in the build directory and should
+not be committed.
 
 ## Display Hook
 
