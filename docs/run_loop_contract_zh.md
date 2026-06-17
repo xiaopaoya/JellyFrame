@@ -110,7 +110,7 @@ framebuffer，并执行 full frame repaint。
 
 `DirtyRegionFallbackReason` 会说明为什么退回 full-frame：viewport 无效、缺少 previous/current
 layout、结构性 tree dirty、找不到 dirty node bounds，或局部 rect 被裁剪后全部为空。这个接口是给宿主和测试观察边界用的诊断契约；
-它不表示 retained subtree reuse 或 display-command 级 invalidation 已经完整实现。
+它不表示 retained subtree reuse 已经完整实现。
 
 `dirty_region_mode_name(...)` 和 `dirty_region_fallback_reason_name(...)` 提供稳定的短名称，
 供壳层诊断使用。Win32 验证壳会在增量重绘后把这些信息显示在窗口标题中，交互时可以直接看到 fallback 原因。
@@ -125,12 +125,25 @@ rect 面积直接求和，不扣除重叠部分；这是刻意保守的嵌入式
 全帧重绘可能比提交大量局部 flush 更便宜。Win32 验证壳当前使用 70% 阈值，并在因此选择全帧时记录
 `DirtyAreaTooLarge`。
 
+## Display Invalidation 诊断
+
+头文件：`src/core/display_invalidation.h`
+
+`analyze_display_invalidation(...)` 会报告一组 dirty rectangles 映射到当前 layer tree 和
+display commands 后的覆盖情况。它会统计访问/命中的 layer、带 clip/composited 的命中 layer、
+访问/命中的 display command。Win32 验证壳会在窗口标题中用 `cmds=命中/访问` 显示最近一次
+command 覆盖情况。
+
+这是审计 helper，不是 retained display-list reuse。Compositor 仍会在每个 dirty clip 内重放命令。
+它的价值是让宿主和测试能看到一次页面交互是否真的缩小了 paint 工作，然后再决定是否值得加入更重的
+retained layer/display-command 结构。
+
 ## 边界
 
 当前核心仍不做：
 
 - retained layout tree 的完整复用。
-- display-command 级别 invalidation。
+- retained display-command reuse。
 - tiled/scanline renderer。
 - 自动线程调度或低功耗策略。
 

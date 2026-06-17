@@ -93,6 +93,8 @@ source order, then runs selector matching and cascade comparison.
 - Layer tree supports sparse clipping, opacity boundaries, positioned stacking
   hints and conservative compositing boundaries.
 - Display list uses rectangles, gradients and text only.
+- Display invalidation diagnostics can map dirty rectangles to affected layers
+  and display commands, but retained display-list reuse is still deferred.
 - Text layout accepts `TextMeasureProvider`; text output accepts `TextPainter`.
   Core fallback is tiny, while the Win32 browser uses GDI for both measurement
   and painting.
@@ -103,8 +105,8 @@ source order, then runs selector matching and cascade comparison.
 
 1. Move selector parsing into a dedicated `selector.*` module.
 2. Tighten the run-loop and dirty-update contract.
-3. Reuse render/layout/layer subtrees from existing dirty flags instead of
-   rebuilding the full pipeline after every mutation.
+3. Use dirty-region and display-invalidation diagnostics to decide which
+   retained render/layout/layer subtrees are worth adding.
 4. Add style sharing or computed-style cache for repeated class patterns.
 5. Evaluate DOM node allocation policy through a `DomOwner` prototype and
    detached-node instrumentation.

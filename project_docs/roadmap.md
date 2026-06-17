@@ -18,8 +18,9 @@ planned.
 
 - Software framebuffer backend: available for validation
 - Dirty rectangle repaint: first automatic `dirty_region` subset is available
-  for non-structural DOM changes; finer layer/display-command invalidation is
-  still needed
+  for non-structural DOM changes; display invalidation diagnostics now count
+  dirty rectangle coverage across layers/display commands, while retained
+  display-list reuse is deferred
 - Embedded framebuffer adapter: available for caller-owned RGBA8888/BGRA8888,
   RGB565/BGR565, RGB332, Gray8 and monochrome buffers
 - Platform text measurement/painting backend: API exists, Win32/GDI validation
@@ -117,8 +118,8 @@ Accepted but cautious:
    directly reduces app-author surprises.
 2. Tighten the core run-loop and dirty-update contract, with long-running
    timer/input smoke coverage.
-3. Implement finer invalidation and subtree reuse to reduce full pipeline
-   rebuilds after script interaction.
+3. M9 bounded invalidation/diagnostics are complete; add retained subtree reuse
+   later only where real diagnostics justify the ownership complexity.
 4. Improve text backend adapters and font workflow validation while keeping the
    bitmap font backend as the low-cost default.
 5. Finish local resource bundle tooling and app packaging.

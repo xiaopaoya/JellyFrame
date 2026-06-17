@@ -4,6 +4,7 @@
 
 #include "core/budget.h"
 #include "core/css_parser.h"
+#include "core/display_invalidation.h"
 #include "core/dirty_region.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
@@ -483,6 +484,7 @@ private:
     DirtyRegionFallbackReason last_dirty_region_reason_ = DirtyRegionFallbackReason::None;
     std::size_t last_dirty_rect_count_ = 0;
     int last_dirty_area_percent_ = 0;
+    DisplayInvalidationResult last_display_invalidation_;
     DirtyRegionStatistics dirty_region_statistics_;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -666,6 +668,8 @@ private:
                                        page_background_,
                                        dirty_rects.data(),
                                        dirty_rects.size());
+                last_display_invalidation_ =
+                    analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
                 record_dirty_region(dirty_region);
             } else {
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
@@ -717,6 +721,8 @@ private:
                                    page_background_,
                                    dirty_rects.data(),
                                    dirty_rects.size());
+            last_display_invalidation_ =
+                analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
             record_dirty_region(dirty_region);
         } else {
             render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
@@ -742,6 +748,8 @@ private:
             ? attempted_region.fallback_reason
             : DirtyRegionFallbackReason::DirtyAreaTooLarge;
         full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
+        last_display_invalidation_ =
+            analyze_display_invalidation(*layer_tree_, full_region.rects.data(), full_region.rects.size());
         record_dirty_region(full_region);
     }
 
@@ -975,12 +983,17 @@ private:
         last_dirty_rect_count_ = region.rects.size();
         last_dirty_area_percent_ =
             dirty_region_area_percent(region, Rect{0, 0, frame_buffer_.width, frame_buffer_.height});
+        if (region.rects.empty()) {
+            last_display_invalidation_ = DisplayInvalidationResult{};
+        }
         record_dirty_region_result(dirty_region_statistics_, region);
         if (hwnd_ != nullptr) {
             std::ostringstream status;
             status << "dirty=" << dirty_region_mode_name(last_dirty_region_mode_)
                    << " rects=" << last_dirty_rect_count_
                    << " area=" << last_dirty_area_percent_ << "%"
+                   << " cmds=" << last_display_invalidation_.commands_intersecting
+                   << "/" << last_display_invalidation_.commands_visited
                    << " local=" << dirty_region_statistics_.dirty_rect_frames
                    << " full=" << dirty_region_statistics_.full_frame_frames
                    << " clean=" << dirty_region_statistics_.clean_frames;

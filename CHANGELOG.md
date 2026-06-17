@@ -190,6 +190,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added dirty-region repaint-cost helpers so hosts can compare estimated dirty
   area against the viewport and choose full-frame repaint when partial flushes
   would no longer be worthwhile.
+- Added `display_invalidation` diagnostics to count how dirty rectangles cover
+  layers and display commands, and surfaced command coverage in the Win32
+  validation shell title.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.

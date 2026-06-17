@@ -29,6 +29,7 @@ add_library(jellyframe_core
     src/core/arena.cpp
     src/core/bitmap_font.cpp
     src/core/css_parser.cpp
+    src/core/display_invalidation.cpp
     src/core/dirty_region.cpp
     src/core/document_script.cpp
     src/core/document_style.cpp
@@ -131,6 +132,7 @@ if(JELLYFRAME_BUILD_TESTS)
         tests/arena_tests.cpp
         tests/dom_mutation_tests.cpp
         tests/document_script_tests.cpp
+        tests/display_invalidation_tests.cpp
         tests/dirty_region_tests.cpp
         tests/embedded_framebuffer_tests.cpp
         tests/css_parser_tests.cpp

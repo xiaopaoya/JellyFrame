@@ -257,7 +257,7 @@ Tasks:
 
 Goal: reduce unnecessary full-pipeline rebuilds after script-app interaction.
 
-Status: started. Dirty flag clearing and dirty-region traversal now use
+Status: core deliverables complete. Dirty flag clearing and dirty-region traversal now use
 explicit work stacks and aggregate-dirty pruning, reducing stack pressure and
 unnecessary clean-subtree scans. Dirty-region layout matching now scans
 previous/current layout trees once and aggregates dirty-node bounds instead of
@@ -267,18 +267,27 @@ Layout, style and text changes compare previous/current layouts only after the
 second-stage repaint plan confirms the framebuffer still matches the resolved
 content size. Full subtree reuse is still future work. Form-control activation
 also filters a few no-op paths so unchanged radio/select state does not schedule
-paint work. M9 now also exposes `compute_dirty_region(...)` with explicit
+paint work. M9 exposes `compute_dirty_region(...)` with explicit
 clean/dirty-rect/full-frame modes and fallback reasons, so hosts and tests can
 observe why dirty repaint could not stay local. It also exposes conservative
 dirty-area cost helpers, letting hosts fall back to full-frame repaint when
 partial flushes would cover most of the framebuffer.
+`analyze_display_invalidation(...)` now reports how many layers/display commands
+dirty rectangles touch, and the Win32 validation shell surfaces
+`cmds=intersecting/visited` for quick interaction audits. Full retained
+subtree/display-list reuse remains future data-driven work rather than an M9
+blocker.
 
 Tasks:
 
-- Audit tree/style/layout/paint dirty-flag propagation boundaries. Started with
-  dirty-region fallback diagnostics and repaint-cost thresholds.
+- Audit tree/style/layout/paint dirty-flag propagation boundaries. First
+  diagnostics and tests are complete.
 - Reuse unchanged render/layout/layer subtrees where the data model allows it.
-- Add tests and diagnostics for dirty layer/display-command invalidation.
+  M9 conservatively reuses render/layout for paint-only updates; retained
+  subtree reuse is deferred until diagnostics show it is worth the ownership
+  complexity.
+- Add tests and diagnostics for dirty layer/display-command invalidation. First
+  display-invalidation diagnostics are complete.
 - Keep the fallback simple: complex structural changes may still rebuild the
   full viewport.
 
@@ -338,13 +347,11 @@ full-framebuffer path.
 
 Mainline priority:
 
-1. M7.6: land the first HTML parser/DOM compatibility batch.
-2. M8: deepen tests around the run-loop and dirty-update contract.
-3. M9: implement finer invalidation and subtree reuse.
-4. M10: improve text backend adapters and font workflow validation.
-5. M11: define app packaging.
-6. M12: continue memory and allocator optimization.
-7. M13: decide on tiled presentation based on real hardware pressure.
+1. M10: improve text backend adapters and font workflow validation.
+2. M11: define app packaging.
+3. M12: continue memory and allocator optimization, including any retained
+   subtree reuse justified by M9 diagnostics.
+4. M13: decide on tiled presentation based on real hardware pressure.
 
 Hardware porting can continue in parallel, but it should not block mainline core
 work. When the porting side finds a missing core capability, it should provide a

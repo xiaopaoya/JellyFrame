@@ -137,8 +137,8 @@ same rectangles plus:
 `DirtyRegionFallbackReason` explains why a full-frame fallback happened:
 invalid viewport, missing previous/current layout, structural tree dirty,
 missing dirty-node bounds or clipping that removed every local rect. This is a
-diagnostic contract for hosts and tests; it does not yet mean retained subtree
-reuse or display-command-level invalidation is complete.
+diagnostic contract for hosts and tests; it does not mean retained subtree reuse
+is complete.
 
 `dirty_region_mode_name(...)` and `dirty_region_fallback_reason_name(...)`
 provide stable short names for shell diagnostics. The Win32 validation shell
@@ -161,12 +161,27 @@ cheaper than issuing many partial flushes. The Win32 validation shell currently
 uses a 70% threshold and records `DirtyAreaTooLarge` when it chooses that
 full-frame path.
 
+## Display Invalidation Diagnostics
+
+Header: `src/core/display_invalidation.h`
+
+`analyze_display_invalidation(...)` reports how a dirty-rectangle set maps onto
+the current layer tree and display commands. It counts visited/intersecting
+layers, clipped/composited layers and visited/intersecting display commands.
+The Win32 validation shell surfaces the latest command coverage as
+`cmds=intersecting/visited` in the window title.
+
+This is an audit helper, not retained display-list reuse. The compositor still
+replays commands inside each dirty clip. The value is that hosts and tests can
+see whether a page interaction genuinely narrows paint work before the project
+adds heavier retained layer/display-command structures.
+
 ## Boundaries
 
 The current core still does not implement:
 
 - full retained-layout reuse;
-- display-command-level invalidation;
+- retained display-command reuse;
 - tiled/scanline rendering;
 - automatic threading or power policy.
 

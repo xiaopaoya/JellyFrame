@@ -188,7 +188,8 @@ budget-exceeded paths.
 
 ## Recommended Order
 
-1. Tighten the run-loop and dirty-update contract.
-2. Implement finer invalidation and subtree reuse.
-3. Improve text backend adapters and font workflow validation.
-4. Organize local resource bundles and app packaging.
+1. Improve text backend adapters and font workflow validation.
+2. Organize local resource bundles and app packaging.
+3. Continue allocator work and use M9 diagnostics to decide whether retained
+   subtree reuse is worth its ownership cost.
+4. Refine offscreen/tile buffer policy when real hardware pressure requires it.
