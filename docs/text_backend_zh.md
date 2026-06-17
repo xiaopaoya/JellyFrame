@@ -42,6 +42,17 @@ layout engine 会用这个宽度在可用内容宽度内估算换行。
 
 重视视觉正确性的宿主应让测量和绘制来自同一个字体引擎。二者不一致时，文本可能被裁切，或换行位置与实际绘制不一致。
 
+`src/core/text_adapter.h` 提供 `HostTextAdapter`，用于桥接已经同时提供测量和绘制能力的
+LVGL 或厂商字体引擎。adapter 不持有资源；宿主拥有的 context 必须覆盖 layout 和 render 生命周期：
+
+```cpp
+HostTextAdapter adapter{measure_text, paint_text, host_font_context};
+LayoutEngine layout(style_resolver, text_measure_provider_from_adapter(adapter));
+SoftwareCompositor compositor(text_painter_from_adapter(adapter));
+```
+
+这个 helper 只是为了让板级 port 的接入形态一致，不会把字体发现、shaping 或 cache 放进核心。
+
 ## Fallback 行为
 
 内置测量 fallback：
@@ -121,10 +132,12 @@ jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pac
 ```text
 jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
 jellyframe_capability_check --font-coverage font_chars.txt app.html app.css app.js
+jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
 ```
 
 `used_chars.txt` 会包含源码中出现的非 ASCII UTF-8 字符，并识别常见 numeric/named character references。
 `font_chars.txt` 是一个普通 UTF-8 文本文件，列出嵌入式 font pack 已提供的字符。部署前，工具会报告缺失的非 ASCII codepoints。
+`--font-budget WxH` 会根据非 ASCII 子集输出粗略 bitmap font pack byte 估算，便于决定是否纳入更大的中文字符集。
 
 预期生产路径：
 

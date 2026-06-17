@@ -49,6 +49,7 @@ add_library(jellyframe_core
     src/core/render_tree.cpp
     src/core/software_renderer.cpp
     src/core/style.cpp
+    src/core/text_adapter.cpp
     src/core/text_backend.cpp
     src/core/text_normalization.cpp
 )
@@ -146,6 +147,7 @@ if(JELLYFRAME_BUILD_TESTS)
         tests/render_tree_tests.cpp
         tests/layer_tree_tests.cpp
         tests/software_renderer_tests.cpp
+        tests/text_adapter_tests.cpp
     )
     if(JELLYFRAME_BUILD_SCRIPTING)
         list(APPEND JELLYFRAME_CORE_TEST_SOURCES tests/script_runtime_tests.cpp)

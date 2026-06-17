@@ -295,15 +295,24 @@ Tasks:
 
 Goal: make Chinese and small-screen text more stable for production apps.
 
+Status: started with the first mainline batch complete. The core now exposes
+`HostTextAdapter`, a platform-neutral bridge that wraps LVGL/vendor measurement
+and paint callbacks into the layout and software-renderer text APIs.
+`jellyframe_capability_check` adds `--font-budget WxH` for rough bitmap-pack
+size estimates from the non-ASCII subset, and `jellyframe_font_pack_gen` reports
+emitted glyph counts, row bytes, glyph-table estimates and total estimated
+bytes for port documentation.
+
 Tasks:
 
 - Keep the bitmap font backend as the lowest-cost default route.
 - Add a platform-neutral LVGL/vendor text backend adapter example or interface
-  note.
+  note. First `HostTextAdapter` version is complete.
 - Expand tests for font coverage, missing glyphs, bold, wide glyphs,
-  punctuation and scaling.
+  punctuation and scaling. Bitmap font regressions exist; punctuation/scale
+  matrix can still expand.
 - Make the capability checker report font-pack size and missing-glyph impact
-  more directly.
+  more directly. First budget and coverage summaries are complete.
 
 ### M11: Resource Bundle And App Packaging
 

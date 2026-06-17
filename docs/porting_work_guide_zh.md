@@ -184,6 +184,8 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 - `src/core/bitmap_font.h` 中的 bitmap font 数据结构、测量 callback 和绘制 callback。
 - `jellyframe_capability_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符并检查字体覆盖。
 - `jellyframe_font_pack_gen`，可从 BDF 字体子集生成 C++ `BitmapFont` header。
+- `src/core/text_adapter.h` 中的 `HostTextAdapter`，用于把 LVGL/vendor 测量和绘制 callback
+  包装成核心需要的接口，同时不把平台头文件带进 core。
 
 任务要求：
 
@@ -202,6 +204,7 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 
    ```text
    jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
+   jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
    ```
 
 2. 用板级项目选择的离线工具，从授权源字体和 `used_chars.txt` 生成 BDF 或等价 bitmap glyph 数据。
@@ -210,6 +213,9 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
    ```text
    jellyframe_font_pack_gen --bdf app_font.bdf --chars used_chars.txt --output app_font.h --name app_font
    ```
+
+   生成器会输出 requested/emitted glyph 数、row bytes、glyph table 估算 bytes 和总估算 bytes。
+   这些数字应记录到 port 文档中。
 
 4. 将 `app_font.h` 放入 port 或应用资源目录，并加入 ESP-IDF/RTOS 构建。
 5. 在创建 layout engine 和 compositor 时注入同一个 font context：

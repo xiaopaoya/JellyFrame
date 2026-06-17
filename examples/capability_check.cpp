@@ -23,6 +23,8 @@ struct Options {
     std::vector<std::string> files;
     std::string font_coverage_path;
     std::string emit_used_chars_path;
+    int budget_glyph_width = 0;
+    int budget_glyph_height = 0;
 };
 
 std::string read_file(const std::string& path) {
@@ -162,14 +164,14 @@ void collect_used_codepoints(const std::string& source, std::set<std::uint32_t>&
         std::size_t entity_end = index;
         if (parse_numeric_entity(source, index, codepoint, entity_end) ||
             parse_named_entity(source, index, codepoint, entity_end)) {
-            if (codepoint >= 0x20U && codepoint != 0x7fU) {
+            if (codepoint >= 0x20U && codepoint != 0x7fU && codepoint != 0xfeffU) {
                 output.insert(codepoint);
             }
             index = entity_end;
             continue;
         }
         codepoint = consume_utf8_codepoint(source, index);
-        if (codepoint >= 0x20U && codepoint != 0x7fU) {
+        if (codepoint >= 0x20U && codepoint != 0x7fU && codepoint != 0xfeffU) {
             output.insert(codepoint);
         }
     }
@@ -205,6 +207,25 @@ std::size_t count_non_ascii(const std::set<std::uint32_t>& codepoints) {
         }
     }
     return count;
+}
+
+std::size_t estimated_bitmap_font_bytes(std::size_t glyph_count, int glyph_width, int glyph_height) {
+    if (glyph_count == 0 || glyph_width <= 0 || glyph_height <= 0) {
+        return 0;
+    }
+    const std::size_t bytes_per_row = static_cast<std::size_t>((glyph_width + 7) / 8);
+    constexpr std::size_t glyph_metadata_bytes = 16;
+    return glyph_count * (bytes_per_row * static_cast<std::size_t>(glyph_height) + glyph_metadata_bytes);
+}
+
+bool parse_font_budget(std::string_view value, int& width, int& height) {
+    const std::size_t separator = value.find('x');
+    if (separator == std::string_view::npos) {
+        return false;
+    }
+    width = std::stoi(std::string(value.substr(0, separator)));
+    height = std::stoi(std::string(value.substr(separator + 1)));
+    return width > 0 && height > 0;
 }
 
 std::string lowercase(std::string value) {
@@ -335,6 +356,13 @@ Options parse_options(int argc, char** argv) {
             options.emit_used_chars_path = argv[++index];
             continue;
         }
+        if (arg == "--font-budget") {
+            if (index + 1 >= argc ||
+                !parse_font_budget(argv[++index], options.budget_glyph_width, options.budget_glyph_height)) {
+                throw std::runtime_error("--font-budget requires a WxH glyph size, for example 16x16");
+            }
+            continue;
+        }
         options.files.push_back(arg);
     }
     return options;
@@ -352,7 +380,8 @@ int main(int argc, char** argv) {
     }
     if (options.files.empty()) {
         std::cerr << "usage: jellyframe_capability_check [--font-coverage chars.txt] "
-                     "[--emit-used-chars used_chars.txt] <file.html> [style.css] [script.js...]\n";
+                     "[--emit-used-chars used_chars.txt] [--font-budget WxH] "
+                     "<file.html> [style.css] [script.js...]\n";
         return 2;
     }
 
@@ -440,6 +469,33 @@ int main(int argc, char** argv) {
     if (!options.emit_used_chars_path.empty()) {
         std::cout << "used_chars=" << options.emit_used_chars_path
                   << " non_ascii_count=" << count_non_ascii(all_used_codepoints) << '\n';
+    }
+    const std::size_t non_ascii_count = count_non_ascii(all_used_codepoints);
+    if (options.budget_glyph_width > 0 && options.budget_glyph_height > 0) {
+        std::cout << "font_budget glyph=" << options.budget_glyph_width << "x" << options.budget_glyph_height
+                  << " non_ascii_count=" << non_ascii_count
+                  << " estimated_bytes="
+                  << estimated_bitmap_font_bytes(non_ascii_count,
+                                                 options.budget_glyph_width,
+                                                 options.budget_glyph_height)
+                  << '\n';
+    }
+    if (!options.font_coverage_path.empty()) {
+        std::size_t covered = 0;
+        std::size_t missing = 0;
+        for (std::uint32_t codepoint : all_used_codepoints) {
+            if (codepoint < 0x80U) {
+                continue;
+            }
+            if (font_coverage.find(codepoint) != font_coverage.end()) {
+                ++covered;
+            } else {
+                ++missing;
+            }
+        }
+        std::cout << "font_coverage used_non_ascii=" << non_ascii_count
+                  << " covered=" << covered
+                  << " missing=" << missing << '\n';
     }
     return unsupported == 0 ? 0 : 1;
 }

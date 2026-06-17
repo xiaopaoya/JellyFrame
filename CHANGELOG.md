@@ -193,6 +193,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `display_invalidation` diagnostics to count how dirty rectangles cover
   layers and display commands, and surfaced command coverage in the Win32
   validation shell title.
+- Added `HostTextAdapter`, a platform-neutral bridge for LVGL/vendor text
+  measurement and painting callbacks.
+- Added font budget summaries to `jellyframe_capability_check` and font-pack
+  size estimates to `jellyframe_font_pack_gen`.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.

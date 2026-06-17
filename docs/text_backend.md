@@ -46,6 +46,19 @@ Hosts that care about visual correctness should provide both measurement and
 painting from the same font engine. If they disagree, text can be clipped or
 wrapped differently from what is drawn.
 
+`src/core/text_adapter.h` provides `HostTextAdapter`, a tiny bridge for LVGL or
+vendor engines that already expose both services. The adapter owns no resources;
+the host-owned context must outlive layout and rendering:
+
+```cpp
+HostTextAdapter adapter{measure_text, paint_text, host_font_context};
+LayoutEngine layout(style_resolver, text_measure_provider_from_adapter(adapter));
+SoftwareCompositor compositor(text_painter_from_adapter(adapter));
+```
+
+This helper exists to keep board ports consistent. It does not add font
+discovery, shaping or caching to the core.
+
 ## Fallback Behavior
 
 The built-in measurement fallback:
@@ -132,12 +145,16 @@ bitmap fonts.
 ```text
 jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
 jellyframe_capability_check --font-coverage font_chars.txt app.html app.css app.js
+jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
 ```
 
 `used_chars.txt` contains the non-ASCII UTF-8 characters seen in source files,
 including common numeric and named character references. `font_chars.txt` is a
 plain UTF-8 text file listing characters provided by the embedded font pack.
 Missing non-ASCII codepoints are reported before deployment.
+`--font-budget WxH` prints a rough bitmap-pack byte estimate for the non-ASCII
+subset, useful before deciding whether to include a larger Chinese character
+set.
 
 The intended production path is:
 

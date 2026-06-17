@@ -139,6 +139,9 @@ JellyFrame Engine 的重要变更记录在这里。
   flush 已经不划算时选择全帧重绘。
 - 添加 `display_invalidation` 诊断，可统计 dirty rectangles 覆盖了多少 layer 和 display
   command，并在 Win32 验证壳标题中显示 command 覆盖情况。
+- 添加 `HostTextAdapter`，作为 LVGL/vendor 文本测量和绘制 callback 的平台无关桥接。
+- 为 `jellyframe_capability_check` 添加字体预算汇总，并让 `jellyframe_font_pack_gen`
+  输出 font pack 体积估算。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
   转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
   单色显示 buffer。

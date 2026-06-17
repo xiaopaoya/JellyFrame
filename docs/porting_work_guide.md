@@ -236,6 +236,8 @@ Provided by the core/tooling:
   HTML/CSS/JS and checking font coverage.
 - `jellyframe_font_pack_gen` for generating a C++ `BitmapFont` header from a
   BDF font subset.
+- `HostTextAdapter` in `src/core/text_adapter.h` for wrapping LVGL/vendor
+  measure and paint callbacks without adding platform headers to the core.
 
 Requirements:
 
@@ -262,6 +264,7 @@ Implementation:
 
    ```text
    jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
+   jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
    ```
 
 2. Use the board project's chosen offline tool to generate BDF or equivalent
@@ -271,6 +274,9 @@ Implementation:
    ```text
    jellyframe_font_pack_gen --bdf app_font.bdf --chars used_chars.txt --output app_font.h --name app_font
    ```
+
+   The generator prints requested/emitted glyph counts plus estimated row,
+   glyph-table and total bytes. Record those numbers in the port notes.
 
 4. Place `app_font.h` in the port or app resource directory and include it in
    the ESP-IDF/RTOS build.

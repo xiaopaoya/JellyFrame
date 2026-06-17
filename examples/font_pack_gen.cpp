@@ -140,7 +140,7 @@ std::set<std::uint32_t> load_chars(const std::string& path) {
     const std::string source = read_file(path);
     for (std::size_t index = 0; index < source.size();) {
         const std::uint32_t codepoint = consume_utf8_codepoint(source, index);
-        if (codepoint >= 0x20U && codepoint != 0x7fU) {
+        if (codepoint >= 0x20U && codepoint != 0x7fU && codepoint != 0xfeffU) {
             chars.insert(codepoint);
         }
     }
@@ -285,7 +285,18 @@ void write_font_pack(const Options& options,
            << std::max(1, font.line_height) << ", " << std::max(1, font.fallback_advance) << "};\n\n";
     output << "} // namespace jellyframe_generated\n";
 
-    std::cerr << "requested=" << requested.size() << " emitted=" << selected.size() << '\n';
+    std::size_t row_bytes = 0;
+    for (std::uint32_t codepoint : selected) {
+        row_bytes += font.glyphs.at(codepoint).rows.size();
+    }
+    constexpr std::size_t glyph_metadata_bytes = 16;
+    const std::size_t glyph_table_bytes = selected.size() * glyph_metadata_bytes;
+    std::cerr << "requested=" << requested.size()
+              << " emitted=" << selected.size()
+              << " rows_bytes=" << row_bytes
+              << " glyph_table_estimated_bytes=" << glyph_table_bytes
+              << " total_estimated_bytes=" << (row_bytes + glyph_table_bytes)
+              << '\n';
 }
 
 } // namespace

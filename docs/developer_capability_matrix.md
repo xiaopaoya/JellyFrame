@@ -109,7 +109,8 @@ JellyFrame is not ready for:
 | `@container` | Deferred/Lazy | Whole block skipped. Avoid it for required UI. |
 | `@font-face` | Lazy | Balanced block skipped; no font loading. |
 | Font coverage check | Tool-only | `jellyframe_capability_check --emit-used-chars` collects non-ASCII source characters; `--font-coverage` reports missing codepoints before embedding. |
-| Bitmap font pack generation | Tool-only | `jellyframe_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds. |
+| Font budget estimate | Tool-only | `jellyframe_capability_check --font-budget WxH` prints a rough bitmap-pack byte estimate for the non-ASCII subset. |
+| Bitmap font pack generation | Tool-only | `jellyframe_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds and reports emitted glyph/byte estimates. |
 | `@keyframes` | Lazy | Balanced block skipped; no animation model. |
 | Unknown at-rules | Lazy | Statement or balanced block skipped. |
 | CSS custom properties | Subset | Direct `var(--token)` and `var(--token, fallback)` are resolved from inherited `:root`/ancestor/current/inline custom property declarations. Unresolved `var()` values do not override earlier supported fallbacks. Full dependency graph, case-sensitive custom names and complete invalid-at-computed-value-time semantics are absent. |
@@ -210,7 +211,7 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 | Aspect ratio | Works | Provides intrinsic height when explicit height/content height is absent. |
 | Positioned boxes | Subset | Bounded `relative`, `absolute` and `fixed` positioning for app overlays, badges and pinned panels. Out-of-flow boxes do not consume block/flex/grid/inline placement space. |
 | Replaced elements | Subset | Common controls/media are leaf boxes with fallback sizing; real image/video layout is deferred. |
-| Text measurement | Subset | Core exposes `TextMeasureProvider`; fallback is tiny but UTF-8-aware. Win32 shell uses GDI measurement. |
+| Text measurement | Subset | Core exposes `TextMeasureProvider`; fallback is tiny but UTF-8-aware. Win32 shell uses GDI measurement. `HostTextAdapter` can wrap LVGL/vendor measurement callbacks. |
 | Bidi/text shaping | Deferred | Production non-Latin text needs a platform text backend or future shaping strategy. |
 | Fragmentation/multicolumn | Deferred | Not implemented. |
 
