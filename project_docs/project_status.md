@@ -233,11 +233,14 @@ into a clearer core/host contract.
 
 Status: started. `src/core/frame_update.h` provides the first hardware-neutral
 update planner plus a `FramePipelineCacheState` snapshot helper, and
+`src/core/frame_loop.h` adds bounded per-frame input/timer work planning.
 `../docs/run_loop_contract.md` records the recommended run loop. Core tests now
 cover a small host-frame sequence from first paint through clean, paint-only,
-layout-dirty and resized-framebuffer frames. The planner now also has a
-second-stage repaint check for the resolved layout height, so hosts can fall
-back to a full framebuffer repaint when content height changes after layout.
+layout-dirty and resized-framebuffer frames, plus a long-running input/timer
+backlog smoke that proves per-frame consumption stays capped and clean cached
+idle frames are reached after work drains. The planner also has a second-stage
+repaint check for the resolved layout height, so hosts can fall back to a full
+framebuffer repaint when content height changes after layout.
 
 Tasks:
 
@@ -248,7 +251,7 @@ Tasks:
 - Preserve conservative full-viewport rebuild for structural mutation, with
   clear diagnostics.
 - Add long-running timer/input smoke tests so queues and dirty flags do not grow
-  without bound.
+  without bound. First bounded planner smoke is done.
 
 ### M9: Finer Invalidation And Subtree Reuse
 

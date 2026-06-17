@@ -49,6 +49,8 @@ constexpr UINT kScriptTimerPeriodMs = 16;
 HostBudgets desktop_browser_budgets() {
     HostBudgets budgets;
     budgets.max_resource_bytes = kMaxInputBytes;
+    budgets.max_input_events_per_frame = 64;
+    budgets.max_timer_callbacks_per_frame = 32;
     budgets.max_framebuffer_pixels = 2400 * 2400;
     return budgets;
 }

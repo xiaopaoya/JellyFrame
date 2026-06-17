@@ -312,7 +312,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Dirty rectangle repaint | Subset | `dirty_region` computes bounded repaint rects for direct text/attribute/form-control paint changes by comparing old and new layout boxes, or by reusing the same layout for paint-only changes. Tree mutations conservatively repaint the viewport. |
 | Host frame sink | Subset | `present_frame` exposes `FrameBuffer` through `HostFrameSink` with optional dirty rects. `embedded_framebuffer` supplies portable pixel conversion; real display I/O remains host-owned. |
 | Host device capabilities | Draft | `HostDeviceCapabilities` records display, input, memory, budget and service flags for board ports. Current core code treats it as a contract/documented policy input; deeper automatic adaptation is deferred. |
-| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count and JerryScript timer/listener limits. Render, layout and layer trees now have arena-backed build paths; DOM arenas and offscreen framebuffer budgets remain future work. |
+| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count, frame-loop input/timer caps and JerryScript timer/listener limits. Render, layout and layer trees now have arena-backed build paths; DOM arenas and offscreen framebuffer budgets remain future work. |
 
 Practical implication: repeated script mutations should be batched in one event
 or timer callback. The host will see one dirty document and rerender once.

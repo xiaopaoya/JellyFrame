@@ -120,12 +120,15 @@ JellyFrame Engine 的重要变更记录在这里。
   mutation。树结构 mutation 仍保守重绘整个 viewport。
 - 添加第一版 M8 frame-update planner 和双语运行循环契约文档，明确宿主 input、timer、
   dirty update、repaint 和 present 顺序。
+- 添加 `FrameLoopOptions` / `FrameLoopPendingWork` planning helpers，让宿主可以限制每帧
+  input event 派发和 script timer 泵动数量，同时不把队列所有权交给核心。
 - 添加 `FramePipelineCacheState` / `make_frame_update_state`，让宿主可以用统一的
   cache snapshot 构造 frame-update plan，同时不把 render/layout/layer 所有权交给核心。
 - 添加第二阶段 frame repaint planning，使宿主在 layout 解析出新的内容高度后再次确认
   framebuffer 是否可复用。
 - 添加长时间 dirty-update smoke 覆盖，验证重复 paint-only 控件变化仍保持有界 dirty rectangles
   并正确清理 dirty flags。
+- 添加长时间 frame-loop smoke 覆盖，验证 input/timer 积压能按每帧预算排空，并回到 clean cached idle。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
   转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
   单色显示 buffer。

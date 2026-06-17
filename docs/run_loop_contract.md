@@ -40,6 +40,31 @@ Hosts may place these steps in a UI task, desktop message loop or validation
 shell, but scripts, layout and rendering should not run inside an ISR or display
 flush callback.
 
+## `plan_frame_loop`
+
+Header: `src/core/frame_loop.h`
+
+`plan_frame_loop_work(...)` is a tiny helper for host UI tasks. It does not own
+an input queue or a timer queue. The host reports pending input events and due
+timer callbacks through `FrameLoopPendingWork`, then receives a bounded
+`FrameLoopWorkPlan`:
+
+- `input_events_to_dispatch`: how many host input events to drain this frame.
+- `timer_callbacks_to_pump`: how many script timer callbacks to run this frame.
+- `has_more_input_events` / `has_more_timer_callbacks`: whether the host should
+  schedule another frame or keep the UI task awake.
+
+`FrameLoopOptions` carries the per-frame caps. A zero cap is valid and means the
+host deliberately pauses that class of work, for example while throttling a
+screen-off device. The helper never drops work; it only tells the host how much
+to consume. Hosts can derive these caps from `HostBudgets` with
+`frame_loop_options_from_budgets(...)`.
+
+`plan_frame_loop(...)` combines that bounded work plan with
+`plan_frame_update(...)` for hosts that want one shared planning call. It still
+does not dispatch input, pump timers, mutate DOM, rebuild layout or present
+pixels.
+
 ## `plan_frame_update`
 
 Header: `src/core/frame_update.h`
@@ -117,3 +142,5 @@ Those belong to M9, M13 or host policy.
   when framebuffer dimensions still match after the new layout is resolved.
 - missing caches, dimension changes and invalid viewports conservatively use a
   full frame.
+- long-running frame-loop smoke keeps input/timer consumption bounded per frame
+  and eventually reaches clean cached idle frames after backlogs drain.

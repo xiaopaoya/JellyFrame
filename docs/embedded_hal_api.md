@@ -310,6 +310,8 @@ struct HostBudgets {
     std::size_t max_display_commands;
     std::size_t max_dirty_rects;
     std::size_t max_timers;
+    std::size_t max_input_events_per_frame;
+    std::size_t max_timer_callbacks_per_frame;
     std::size_t max_event_listeners;
     std::size_t max_resource_bytes;
     std::size_t max_framebuffer_pixels;
@@ -317,7 +319,7 @@ struct HostBudgets {
 ```
 
 `src/core/budget.h` maps these values into the current HTML/CSS/parser,
-render/layout/layer/display-list, dirty-rectangle and JerryScript timer/listener
+render/layout/layer/display-list, dirty-rectangle, frame-loop and JerryScript timer/listener
 entry points. Suggested ESP32-S3 starting point:
 
 - DOM nodes: 512-1500

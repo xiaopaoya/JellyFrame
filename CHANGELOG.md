@@ -169,6 +169,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   conservatively full-viewport.
 - Added the first M8 frame-update planner and bilingual run-loop contract
   documents for host input, timer, dirty-update, repaint and present ordering.
+- Added `FrameLoopOptions` / `FrameLoopPendingWork` planning helpers so hosts
+  can cap input-event dispatch and script-timer pumping per frame without
+  handing queue ownership to the core.
 - Added `FramePipelineCacheState` / `make_frame_update_state` so hosts can build
   frame-update plans from a shared cache snapshot shape without transferring
   render/layout/layer ownership to the core.
@@ -176,6 +179,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   after layout resolves the new content height.
 - Added long-running dirty-update smoke coverage to ensure repeated paint-only
   control changes keep bounded dirty rectangles and clear dirty flags.
+- Added long-running frame-loop smoke coverage for bounded input/timer backlog
+  draining and clean cached idle recovery.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.

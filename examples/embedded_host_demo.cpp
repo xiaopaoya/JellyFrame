@@ -34,6 +34,8 @@ HostBudgets embedded_demo_budgets() {
     budgets.max_display_commands = 128;
     budgets.max_dirty_rects = 4;
     budgets.max_timers = 4;
+    budgets.max_input_events_per_frame = 4;
+    budgets.max_timer_callbacks_per_frame = 2;
     budgets.max_event_listeners = 16;
     budgets.max_resource_bytes = 8 * 1024;
     budgets.max_framebuffer_pixels = kViewportWidth * kViewportHeight;

@@ -35,6 +35,8 @@ int main() {
     caps.budgets.max_layers = 12;
     caps.budgets.max_display_commands = 34;
     caps.budgets.max_dirty_rects = 3;
+    caps.budgets.max_input_events_per_frame = 4;
+    caps.budgets.max_timer_callbacks_per_frame = 2;
     caps.budgets.max_framebuffer_pixels = 240 * 240;
     assert(caps.has_monotonic_clock);
     assert(!caps.has_filesystem);
@@ -47,6 +49,8 @@ int main() {
     assert(layer_tree_options_from_budgets(caps.budgets).max_layers == 12);
     assert(layer_tree_options_from_budgets(caps.budgets).max_display_commands == 34);
     assert(dirty_region_options_from_budgets(caps.budgets, Rect{0, 0, 1, 1}).max_rects == 3);
+    assert(frame_loop_options_from_budgets(caps.budgets).max_input_events_per_frame == 4);
+    assert(frame_loop_options_from_budgets(caps.budgets).max_timer_callbacks_per_frame == 2);
     assert(framebuffer_size_fits_budget(240, 240, caps.budgets));
     assert(!framebuffer_size_fits_budget(241, 241, caps.budgets));
 

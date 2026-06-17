@@ -176,14 +176,15 @@ The host should configure:
 - DOM node cap;
 - CSS rule/declaration cap;
 - display command cap;
-- timer and event listener cap;
+- timer count, event listener and per-frame input/timer callback caps;
 - resource byte cap;
 - framebuffer/offscreen buffer policy.
 
 `HostBudgets` is now wired through `src/core/budget.h` into the main HTML/CSS
 parser, render/layout/layer, display-list, dirty-rectangle and scripting entry
-points. The remaining work is finer offscreen/tile buffer policy and long-running
-stability tests for budget-exceeded paths.
+points, plus the M8 frame-loop work caps. The remaining work is finer
+offscreen/tile buffer policy and long-running stability tests for
+budget-exceeded paths.
 
 ## Recommended Order
 

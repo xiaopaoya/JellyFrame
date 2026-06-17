@@ -175,17 +175,18 @@ parser、完整 adoption-agency 和完整 table foster parenting 继续不进入
 目标：把桌面壳和平台无关 demo 中的 frame loop 经验固化成更清楚的核心/宿主契约。
 
 状态：已开始。`src/core/frame_update.h` 提供第一版平台无关更新计划和
-`FramePipelineCacheState` cache snapshot helper，`../docs/run_loop_contract_zh.md`
-记录推荐运行循环。核心测试已覆盖一条小型宿主帧序列：首帧、干净帧、paint-only、
-layout-dirty 和 framebuffer 尺寸变化。Planner 现在还包含第二阶段 repaint 检查：
-layout 解析出新内容高度后，宿主可在内容高度变化时回退到 full framebuffer repaint。
+`FramePipelineCacheState` cache snapshot helper，`src/core/frame_loop.h` 增加每帧有界
+input/timer 工作规划。`../docs/run_loop_contract_zh.md` 记录推荐运行循环。核心测试已覆盖一条小型宿主帧序列：
+首帧、干净帧、paint-only、layout-dirty 和 framebuffer 尺寸变化，也新增了长时间 input/timer
+积压 smoke，验证每帧消费有上限，且工作排空后能回到 clean cached idle frame。Planner 还包含第二阶段
+repaint 检查：layout 解析出新内容高度后，宿主可在内容高度变化时回退到 full framebuffer repaint。
 
 任务：
 
 - 明确 first paint、input dispatch、timer pump、dirty collection、rebuild/repaint、present 的推荐顺序。
 - 把非结构性 DOM mutation 尽量保持在 paint-only 或小范围 repaint。
 - 为结构性 mutation 保留保守全 viewport rebuild，但输出清晰诊断。
-- 增加长时间 timer/input smoke，避免队列或 dirty flags 越积越多。
+- 增加长时间 timer/input smoke，避免队列或 dirty flags 越积越多。第一版有界 planner smoke 已完成。
 
 ### M9：更细的 invalidation 与 subtree reuse
 

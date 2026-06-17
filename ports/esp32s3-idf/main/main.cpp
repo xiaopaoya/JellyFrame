@@ -176,6 +176,8 @@ HostBudgets make_budgets(int width, int height, int cards) {
     budgets.max_display_commands = 2048;
     budgets.max_dirty_rects = 8;
     budgets.max_timers = 0;
+    budgets.max_input_events_per_frame = 0;
+    budgets.max_timer_callbacks_per_frame = 0;
     budgets.max_event_listeners = 0;
     budgets.max_resource_bytes = 128 * 1024;
     budgets.max_framebuffer_pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
@@ -212,7 +214,7 @@ void print_heap(const char* label) {
 
 void print_budgets(const HostBudgets& budgets) {
     ESP_LOGI(tag,
-             "budgets dom_nodes=%u css_rules=%u render_objects=%u layout_boxes=%u layers=%u display_commands=%u dirty_rects=%u resource_bytes=%u framebuffer_pixels=%u",
+             "budgets dom_nodes=%u css_rules=%u render_objects=%u layout_boxes=%u layers=%u display_commands=%u dirty_rects=%u input_per_frame=%u timer_callbacks_per_frame=%u resource_bytes=%u framebuffer_pixels=%u",
              static_cast<unsigned>(budgets.max_dom_nodes),
              static_cast<unsigned>(budgets.max_css_rules),
              static_cast<unsigned>(budgets.max_render_objects),
@@ -220,6 +222,8 @@ void print_budgets(const HostBudgets& budgets) {
              static_cast<unsigned>(budgets.max_layers),
              static_cast<unsigned>(budgets.max_display_commands),
              static_cast<unsigned>(budgets.max_dirty_rects),
+             static_cast<unsigned>(budgets.max_input_events_per_frame),
+             static_cast<unsigned>(budgets.max_timer_callbacks_per_frame),
              static_cast<unsigned>(budgets.max_resource_bytes),
              static_cast<unsigned>(budgets.max_framebuffer_pixels));
 }

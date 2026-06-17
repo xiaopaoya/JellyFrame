@@ -34,6 +34,26 @@
 
 宿主可以把这些步骤放进一个 UI task、桌面消息循环或测试壳中，但不应在 ISR 或屏幕 flush callback 内执行脚本、layout 或渲染。
 
+## `plan_frame_loop`
+
+头文件：`src/core/frame_loop.h`
+
+`plan_frame_loop_work(...)` 是一个很薄的宿主 UI task 辅助函数。它不拥有输入队列，也不拥有
+timer 队列。宿主通过 `FrameLoopPendingWork` 告诉核心当前有多少待处理输入事件和到期 timer
+callback，然后得到一个有界的 `FrameLoopWorkPlan`：
+
+- `input_events_to_dispatch`：本帧最多取多少个宿主输入事件。
+- `timer_callbacks_to_pump`：本帧最多泵动多少个脚本 timer callback。
+- `has_more_input_events` / `has_more_timer_callbacks`：是否还有积压，宿主可据此继续调度下一帧或保持
+  UI task 唤醒。
+
+`FrameLoopOptions` 保存每帧上限。上限为 0 是合法的，表示宿主刻意暂停该类工作，例如息屏低功耗节流。
+这个 helper 不会丢弃工作，只告诉宿主本帧应消费多少。宿主可以用
+`frame_loop_options_from_budgets(...)` 从 `HostBudgets` 派生这些上限。
+
+`plan_frame_loop(...)` 会把上述有界工作计划和 `plan_frame_update(...)` 合成一次调用，适合希望统一规划的宿主。
+它仍然不派发输入、不泵动 timer、不修改 DOM、不重建 layout，也不提交像素。
+
 ## `plan_frame_update`
 
 头文件：`src/core/frame_update.h`
@@ -96,3 +116,4 @@ framebuffer，并执行 full frame repaint。
 - layout/style/text dirty 在新 layout 解析后 framebuffer 尺寸仍匹配时，可比较旧/新 layout
   后增量重绘。
 - 缓存缺失、尺寸变化或 viewport 无效时保守 full frame。
+- 长时间 frame-loop smoke 会验证 input/timer 每帧消费有上限，且积压排空后能回到 clean cached idle frame。

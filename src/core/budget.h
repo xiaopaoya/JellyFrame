@@ -2,6 +2,7 @@
 
 #include "core/css_parser.h"
 #include "core/dirty_region.h"
+#include "core/frame_loop.h"
 #include "core/host.h"
 #include "core/html_parser.h"
 #include "core/layer_tree.h"
@@ -47,6 +48,13 @@ inline DirtyRegionOptions dirty_region_options_from_budgets(const HostBudgets& b
                                                             Rect viewport,
                                                             int expansion_px = 2) {
     return DirtyRegionOptions{viewport, std::max<std::size_t>(1, budgets.max_dirty_rects), expansion_px};
+}
+
+inline FrameLoopOptions frame_loop_options_from_budgets(const HostBudgets& budgets) {
+    return FrameLoopOptions{
+        budgets.max_input_events_per_frame,
+        budgets.max_timer_callbacks_per_frame,
+    };
 }
 
 inline bool framebuffer_size_fits_budget(int width, int height, const HostBudgets& budgets) {

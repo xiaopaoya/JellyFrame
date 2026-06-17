@@ -36,6 +36,7 @@ add_library(jellyframe_core
     src/core/embedded_framebuffer.cpp
     src/core/event.cpp
     src/core/form_control.cpp
+    src/core/frame_loop.cpp
     src/core/frame_update.cpp
     src/core/hit_test.cpp
     src/core/html_parser.cpp
@@ -134,6 +135,7 @@ if(JELLYFRAME_BUILD_TESTS)
         tests/embedded_framebuffer_tests.cpp
         tests/css_parser_tests.cpp
         tests/event_tests.cpp
+        tests/frame_loop_tests.cpp
         tests/frame_update_tests.cpp
         tests/hit_test_tests.cpp
         tests/host_tests.cpp

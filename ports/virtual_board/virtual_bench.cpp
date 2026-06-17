@@ -85,6 +85,8 @@ HostBudgets make_budgets(const Options& options) {
     budgets.max_display_commands = 2048;
     budgets.max_dirty_rects = 8;
     budgets.max_timers = 0;
+    budgets.max_input_events_per_frame = 0;
+    budgets.max_timer_callbacks_per_frame = 0;
     budgets.max_event_listeners = 0;
     budgets.max_resource_bytes = 128 * 1024;
     budgets.max_framebuffer_pixels =
