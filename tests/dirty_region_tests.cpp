@@ -258,6 +258,9 @@ void clean_document_reports_clean_region() {
     check(region.rects.empty(), "clean region has no rects");
     check(region.mode == DirtyRegionMode::Clean, "clean region reports clean mode");
     check(region.fallback_reason == DirtyRegionFallbackReason::None, "clean region has no fallback reason");
+    check(std::string(dirty_region_mode_name(region.mode)) == "clean", "clean mode name");
+    check(std::string(dirty_region_fallback_reason_name(region.fallback_reason)) == "none",
+          "clean fallback reason name");
 }
 
 void missing_layout_reports_full_frame_reason() {
@@ -281,6 +284,25 @@ void missing_layout_reports_full_frame_reason() {
           "missing layout produces viewport rect");
 }
 
+void tree_dirty_reason_wins_over_missing_layout() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(html_parser.parse("<body><main><p>Alpha</p></main></body>"), "", 240);
+    clear_dirty_flags(*fixture.document);
+    Node* main = first_element(*fixture.document, "main");
+    check(main != nullptr, "main exists");
+    main->append_child(make_element("section"));
+
+    const DirtyRegionResult region =
+        compute_dirty_region(*fixture.document,
+                             nullptr,
+                             fixture.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
+
+    check(region.mode == DirtyRegionMode::FullFrame, "tree dirty with missing layout reports full frame");
+    check(region.fallback_reason == DirtyRegionFallbackReason::TreeDirty,
+          "tree dirty reason wins over missing layout");
+}
+
 void invalid_viewport_reports_reason_without_rects() {
     HtmlParser html_parser;
     auto fixture = build_layout(html_parser.parse("<body><input value='A'></body>"), "", 240);
@@ -299,6 +321,8 @@ void invalid_viewport_reports_reason_without_rects() {
     check(region.fallback_reason == DirtyRegionFallbackReason::InvalidViewport,
           "invalid viewport reason is explicit");
     check(region.rects.empty(), "invalid viewport cannot produce a rect");
+    check(std::string(dirty_region_fallback_reason_name(region.fallback_reason)) == "invalid-viewport",
+          "invalid viewport fallback reason name");
 }
 
 void dirty_node_missing_from_layout_reports_reason() {
@@ -355,6 +379,7 @@ int main() {
         multiple_dirty_nodes_are_coalesced_without_full_frame();
         clean_document_reports_clean_region();
         missing_layout_reports_full_frame_reason();
+        tree_dirty_reason_wins_over_missing_layout();
         invalid_viewport_reports_reason_without_rects();
         dirty_node_missing_from_layout_reports_reason();
         clipped_dirty_bounds_report_empty_after_clipping();

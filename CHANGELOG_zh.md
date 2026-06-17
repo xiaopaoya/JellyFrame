@@ -131,6 +131,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加长时间 frame-loop smoke 覆盖，验证 input/timer 积压能按每帧预算排空，并回到 clean cached idle。
 - 添加 `compute_dirty_region(...)` 诊断接口，提供 clean、dirty-rect、full-frame mode
   和显式 fallback reason，用于 M9 invalidation 审计。
+- 添加稳定的 dirty-region mode/reason 名称，并在 Win32 验证壳窗口标题中显示最近一次 dirty
+  repaint mode。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
   转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
   单色显示 buffer。

@@ -140,9 +140,14 @@ missing dirty-node bounds or clipping that removed every local rect. This is a
 diagnostic contract for hosts and tests; it does not yet mean retained subtree
 reuse or display-command-level invalidation is complete.
 
+`dirty_region_mode_name(...)` and `dirty_region_fallback_reason_name(...)`
+provide stable short names for shell diagnostics. The Win32 validation shell
+uses them in the window title after incremental repaints, so fallback causes can
+be seen while interacting with a page.
+
 ## Boundaries
 
-M8 does not implement:
+The current core still does not implement:
 
 - full retained-layout reuse;
 - display-command-level invalidation;

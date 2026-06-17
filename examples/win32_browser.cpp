@@ -478,6 +478,9 @@ private:
     FrameBuffer frame_buffer_;
     Color page_background_{255, 255, 255, 255};
     std::vector<std::uint32_t> blit_pixels_;
+    DirtyRegionMode last_dirty_region_mode_ = DirtyRegionMode::Clean;
+    DirtyRegionFallbackReason last_dirty_region_reason_ = DirtyRegionFallbackReason::None;
+    std::size_t last_dirty_rect_count_ = 0;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
         BrowserApp* app = nullptr;
@@ -632,6 +635,7 @@ private:
         const FrameUpdateState update_state = make_frame_update_state(dirty_flags, cache_state);
         const FrameUpdatePlan update_plan = plan_frame_update(update_state);
         if (update_plan.action == FrameUpdateAction::None) {
+            record_dirty_region(DirtyRegionResult{});
             return;
         }
 
@@ -642,11 +646,12 @@ private:
             layout_tree_ != nullptr) {
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
             auto next_layer_tree = layer_builder.build(*layout_tree_);
-            std::vector<Rect> dirty_rects = compute_dirty_rects(
+            const DirtyRegionResult dirty_region = compute_dirty_region(
                 *document_,
                 layout_tree_.get(),
                 layout_tree_.get(),
                 dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
+            const std::vector<Rect>& dirty_rects = dirty_region.rects;
             layer_tree_ = std::move(next_layer_tree);
             if (!dirty_rects.empty()) {
                 compositor.render_into(*layer_tree_,
@@ -655,6 +660,7 @@ private:
                                        dirty_rects.data(),
                                        dirty_rects.size());
             }
+            record_dirty_region(dirty_region);
             input_ = std::make_unique<InputController>(*layer_tree_);
             input_->set_interaction_state(hovered_node, active_node, focused_node);
             update_blit_pixels();
@@ -676,15 +682,17 @@ private:
         const FrameRepaintPlan repaint_plan = plan_frame_repaint(update_state, update_plan, content_height);
         scroll_y_ = std::max(0, std::min(scroll_y_, std::max(0, content_height - viewport_height_)));
         std::vector<Rect> dirty_rects;
+        DirtyRegionResult dirty_region;
         const bool can_repaint_incrementally = repaint_plan.can_repaint_dirty_rects &&
             repaint_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout &&
             previous_layout != nullptr;
         if (can_repaint_incrementally && rebuild_dirty_flags != DomDirtyNone) {
-            dirty_rects = compute_dirty_rects(*document_,
-                                              previous_layout.get(),
-                                              next_layout_tree.get(),
-                                              dirty_region_options_from_budgets(
-                                                  budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
+            dirty_region = compute_dirty_region(*document_,
+                                                previous_layout.get(),
+                                                next_layout_tree.get(),
+                                                dirty_region_options_from_budgets(
+                                                    budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
+            dirty_rects = dirty_region.rects;
         }
 
         render_tree_ = std::move(next_render_tree);
@@ -697,11 +705,17 @@ private:
                                    page_background_,
                                    dirty_rects.data(),
                                    dirty_rects.size());
+            record_dirty_region(dirty_region);
         } else {
             frame_buffer_ = compositor.render(*layer_tree_,
                                               viewport_width_,
                                               content_height,
                                               page_background_);
+            DirtyRegionResult full_region;
+            full_region.mode = DirtyRegionMode::FullFrame;
+            full_region.fallback_reason = dirty_region.fallback_reason;
+            full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
+            record_dirty_region(full_region);
         }
         input_ = std::make_unique<InputController>(*layer_tree_);
         input_->set_interaction_state(hovered_node, active_node, focused_node);
@@ -935,6 +949,21 @@ private:
         const Node* active_node = input_ != nullptr ? input_->active_node() : nullptr;
         render_current(hovered_node, active_node, focused_node);
         InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+
+    void record_dirty_region(const DirtyRegionResult& region) {
+        last_dirty_region_mode_ = region.mode;
+        last_dirty_region_reason_ = region.fallback_reason;
+        last_dirty_rect_count_ = region.rects.size();
+        if (hwnd_ != nullptr) {
+            std::ostringstream status;
+            status << "dirty=" << dirty_region_mode_name(last_dirty_region_mode_)
+                   << " rects=" << last_dirty_rect_count_;
+            if (last_dirty_region_reason_ != DirtyRegionFallbackReason::None) {
+                status << " reason=" << dirty_region_fallback_reason_name(last_dirty_region_reason_);
+            }
+            set_title(status.str());
+        }
     }
 
     void set_title(const std::string& status) {

@@ -24,6 +24,9 @@ enum class DirtyRegionFallbackReason {
     EmptyAfterClipping,
 };
 
+const char* dirty_region_mode_name(DirtyRegionMode mode);
+const char* dirty_region_fallback_reason_name(DirtyRegionFallbackReason reason);
+
 struct DirtyRegionOptions {
     Rect viewport;
     std::size_t max_rects = 8;

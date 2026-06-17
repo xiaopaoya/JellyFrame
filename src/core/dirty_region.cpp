@@ -147,6 +147,36 @@ DirtyRegionResult full_frame_result(Rect viewport, DirtyRegionFallbackReason rea
 
 } // namespace
 
+const char* dirty_region_mode_name(DirtyRegionMode mode) {
+    switch (mode) {
+    case DirtyRegionMode::Clean:
+        return "clean";
+    case DirtyRegionMode::DirtyRects:
+        return "dirty-rects";
+    case DirtyRegionMode::FullFrame:
+        return "full-frame";
+    }
+    return "unknown";
+}
+
+const char* dirty_region_fallback_reason_name(DirtyRegionFallbackReason reason) {
+    switch (reason) {
+    case DirtyRegionFallbackReason::None:
+        return "none";
+    case DirtyRegionFallbackReason::InvalidViewport:
+        return "invalid-viewport";
+    case DirtyRegionFallbackReason::MissingLayout:
+        return "missing-layout";
+    case DirtyRegionFallbackReason::TreeDirty:
+        return "tree-dirty";
+    case DirtyRegionFallbackReason::NoDirtyBounds:
+        return "no-dirty-bounds";
+    case DirtyRegionFallbackReason::EmptyAfterClipping:
+        return "empty-after-clipping";
+    }
+    return "unknown";
+}
+
 DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* previous_layout,
                                        const LayoutBox* current_layout,
@@ -158,11 +188,11 @@ DirtyRegionResult compute_dirty_region(const Node& document,
     if (empty_rect(options.viewport)) {
         return full_frame_result(options.viewport, DirtyRegionFallbackReason::InvalidViewport);
     }
-    if (previous_layout == nullptr || current_layout == nullptr) {
-        return full_frame_result(options.viewport, DirtyRegionFallbackReason::MissingLayout);
-    }
     if (has_local_tree_dirty(document)) {
         return full_frame_result(options.viewport, DirtyRegionFallbackReason::TreeDirty);
+    }
+    if (previous_layout == nullptr || current_layout == nullptr) {
+        return full_frame_result(options.viewport, DirtyRegionFallbackReason::MissingLayout);
     }
 
     std::vector<DirtyNodeBounds> dirty_bounds;
