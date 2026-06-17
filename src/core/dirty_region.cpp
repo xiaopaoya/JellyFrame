@@ -1,6 +1,7 @@
 #include "core/dirty_region.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace jellyframe {
 namespace {
@@ -32,6 +33,35 @@ Rect union_rect(Rect left, Rect right) {
     const int x2 = std::max(left.x + left.width, right.x + right.width);
     const int y2 = std::max(left.y + left.height, right.y + right.height);
     return Rect{x1, y1, x2 - x1, y2 - y1};
+}
+
+std::size_t rect_area(Rect rect) {
+    if (empty_rect(rect)) {
+        return 0;
+    }
+    const auto width = static_cast<unsigned long long>(rect.width);
+    const auto height = static_cast<unsigned long long>(rect.height);
+    const unsigned long long area = width * height;
+    constexpr unsigned long long max_size = static_cast<unsigned long long>(std::numeric_limits<std::size_t>::max());
+    return area > max_size ? std::numeric_limits<std::size_t>::max() : static_cast<std::size_t>(area);
+}
+
+std::size_t saturating_add(std::size_t left, std::size_t right) {
+    if (std::numeric_limits<std::size_t>::max() - left < right) {
+        return std::numeric_limits<std::size_t>::max();
+    }
+    return left + right;
+}
+
+std::size_t area_for_percent(std::size_t area, int percent) {
+    if (percent <= 0) {
+        return 0;
+    }
+    if (percent >= 100) {
+        return area;
+    }
+    const auto safe_percent = static_cast<std::size_t>(percent);
+    return (area / 100U) * safe_percent + ((area % 100U) * safe_percent) / 100U;
 }
 
 Rect expand_rect(Rect rect, int amount) {
@@ -173,6 +203,8 @@ const char* dirty_region_fallback_reason_name(DirtyRegionFallbackReason reason) 
         return "no-dirty-bounds";
     case DirtyRegionFallbackReason::EmptyAfterClipping:
         return "empty-after-clipping";
+    case DirtyRegionFallbackReason::DirtyAreaTooLarge:
+        return "dirty-area-too-large";
     }
     return "unknown";
 }
@@ -191,6 +223,8 @@ std::size_t dirty_region_fallback_reason_index(DirtyRegionFallbackReason reason)
         return 4;
     case DirtyRegionFallbackReason::EmptyAfterClipping:
         return 5;
+    case DirtyRegionFallbackReason::DirtyAreaTooLarge:
+        return 6;
     }
     return 0;
 }
@@ -209,10 +243,7 @@ void record_dirty_region_result(DirtyRegionStatistics& statistics, const DirtyRe
     }
     statistics.total_rects += result.rects.size();
     for (Rect rect : result.rects) {
-        if (!empty_rect(rect)) {
-            statistics.total_dirty_area +=
-                static_cast<std::size_t>(rect.width) * static_cast<std::size_t>(rect.height);
-        }
+        statistics.total_dirty_area = saturating_add(statistics.total_dirty_area, rect_area(rect));
     }
     ++statistics.fallback_reasons[dirty_region_fallback_reason_index(result.fallback_reason)];
 }
@@ -220,6 +251,55 @@ void record_dirty_region_result(DirtyRegionStatistics& statistics, const DirtyRe
 std::size_t dirty_region_fallback_count(const DirtyRegionStatistics& statistics,
                                         DirtyRegionFallbackReason reason) {
     return statistics.fallback_reasons[dirty_region_fallback_reason_index(reason)];
+}
+
+std::size_t dirty_region_area(const DirtyRegionResult& result) {
+    std::size_t total = 0;
+    for (Rect rect : result.rects) {
+        total = saturating_add(total, rect_area(rect));
+    }
+    return total;
+}
+
+std::size_t dirty_region_viewport_area(Rect viewport) {
+    return rect_area(viewport);
+}
+
+int dirty_region_area_percent(const DirtyRegionResult& result, Rect viewport) {
+    const std::size_t viewport_area = dirty_region_viewport_area(viewport);
+    if (viewport_area == 0) {
+        return 0;
+    }
+    const std::size_t dirty_area = dirty_region_area(result);
+    if (dirty_area == 0) {
+        return 0;
+    }
+    if (dirty_area >= viewport_area) {
+        return 100;
+    }
+    for (int percent = 1; percent < 100; ++percent) {
+        if (dirty_area <= area_for_percent(viewport_area, percent)) {
+            return percent;
+        }
+    }
+    return 100;
+}
+
+bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
+                                               Rect viewport,
+                                               int max_area_percent) {
+    if (result.mode != DirtyRegionMode::DirtyRects || result.rects.empty() || max_area_percent <= 0) {
+        return false;
+    }
+    const std::size_t viewport_area = dirty_region_viewport_area(viewport);
+    if (viewport_area == 0) {
+        return false;
+    }
+    if (max_area_percent >= 100) {
+        return true;
+    }
+    const std::size_t dirty_area = dirty_region_area(result);
+    return dirty_area <= area_for_percent(viewport_area, max_area_percent);
 }
 
 DirtyRegionResult compute_dirty_region(const Node& document,

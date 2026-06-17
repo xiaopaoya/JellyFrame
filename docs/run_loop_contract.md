@@ -151,6 +151,16 @@ total dirty area and fallback reason counts. This is intended for M9 audits:
 measure where full-frame fallback comes from before adding heavier retained
 subtree reuse.
 
+Hosts can also use `dirty_region_area(...)`,
+`dirty_region_area_percent(...)` and
+`dirty_region_should_repaint_incrementally(...)` to decide whether local repaint
+is still worth doing. The area estimate intentionally sums clipped rectangle
+areas without subtracting overlaps. This is a conservative embedded-friendly
+cost signal: when the estimate exceeds the host threshold, a full repaint can be
+cheaper than issuing many partial flushes. The Win32 validation shell currently
+uses a 70% threshold and records `DirtyAreaTooLarge` when it chooses that
+full-frame path.
+
 ## Boundaries
 
 The current core still does not implement:

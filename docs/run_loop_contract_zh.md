@@ -119,6 +119,12 @@ layout、结构性 tree dirty、找不到 dirty node bounds，或局部 rect 被
 frame、full-frame frame、总 rect 数、总 dirty area 和 fallback reason 次数。它面向 M9 审计：
 先测出 full-frame fallback 主要来自哪里，再决定是否加入更重的 retained subtree reuse。
 
+宿主还可以使用 `dirty_region_area(...)`、`dirty_region_area_percent(...)`
+和 `dirty_region_should_repaint_incrementally(...)` 判断局部重绘是否仍然划算。面积估计会把裁剪后的
+rect 面积直接求和，不扣除重叠部分；这是刻意保守的嵌入式友好成本信号。若估算面积超过宿主阈值，
+全帧重绘可能比提交大量局部 flush 更便宜。Win32 验证壳当前使用 70% 阈值，并在因此选择全帧时记录
+`DirtyAreaTooLarge`。
+
 ## 边界
 
 当前核心仍不做：

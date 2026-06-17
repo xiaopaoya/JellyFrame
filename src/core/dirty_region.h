@@ -23,9 +23,10 @@ enum class DirtyRegionFallbackReason {
     TreeDirty,
     NoDirtyBounds,
     EmptyAfterClipping,
+    DirtyAreaTooLarge,
 };
 
-constexpr std::size_t kDirtyRegionFallbackReasonCount = 6;
+constexpr std::size_t kDirtyRegionFallbackReasonCount = 7;
 
 const char* dirty_region_mode_name(DirtyRegionMode mode);
 const char* dirty_region_fallback_reason_name(DirtyRegionFallbackReason reason);
@@ -55,6 +56,12 @@ struct DirtyRegionStatistics {
 void record_dirty_region_result(DirtyRegionStatistics& statistics, const DirtyRegionResult& result);
 std::size_t dirty_region_fallback_count(const DirtyRegionStatistics& statistics,
                                         DirtyRegionFallbackReason reason);
+std::size_t dirty_region_area(const DirtyRegionResult& result);
+std::size_t dirty_region_viewport_area(Rect viewport);
+int dirty_region_area_percent(const DirtyRegionResult& result, Rect viewport);
+bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
+                                               Rect viewport,
+                                               int max_area_percent);
 
 DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* previous_layout,

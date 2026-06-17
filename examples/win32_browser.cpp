@@ -45,6 +45,7 @@ constexpr std::size_t kMaxInputBytes = 1024 * 1024;
 constexpr wchar_t kWindowClassName[] = L"JellyFrameWin32Browser";
 constexpr UINT_PTR kScriptTimerId = 1;
 constexpr UINT kScriptTimerPeriodMs = 16;
+constexpr int kIncrementalDirtyAreaLimitPercent = 70;
 
 HostBudgets desktop_browser_budgets() {
     HostBudgets budgets;
@@ -481,6 +482,7 @@ private:
     DirtyRegionMode last_dirty_region_mode_ = DirtyRegionMode::Clean;
     DirtyRegionFallbackReason last_dirty_region_reason_ = DirtyRegionFallbackReason::None;
     std::size_t last_dirty_rect_count_ = 0;
+    int last_dirty_area_percent_ = 0;
     DirtyRegionStatistics dirty_region_statistics_;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -655,14 +657,29 @@ private:
                 dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             layer_tree_ = std::move(next_layer_tree);
-            if (!dirty_rects.empty()) {
+            if (!dirty_rects.empty() &&
+                dirty_region_should_repaint_incrementally(dirty_region,
+                                                          Rect{0, 0, viewport_width_, content_height},
+                                                          kIncrementalDirtyAreaLimitPercent)) {
                 compositor.render_into(*layer_tree_,
                                        frame_buffer_,
                                        page_background_,
                                        dirty_rects.data(),
                                        dirty_rects.size());
+                record_dirty_region(dirty_region);
+            } else {
+                frame_buffer_ = compositor.render(*layer_tree_,
+                                                  viewport_width_,
+                                                  content_height,
+                                                  page_background_);
+                DirtyRegionResult full_region;
+                full_region.mode = DirtyRegionMode::FullFrame;
+                full_region.fallback_reason = dirty_rects.empty()
+                    ? dirty_region.fallback_reason
+                    : DirtyRegionFallbackReason::DirtyAreaTooLarge;
+                full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
+                record_dirty_region(full_region);
             }
-            record_dirty_region(dirty_region);
             input_ = std::make_unique<InputController>(*layer_tree_);
             input_->set_interaction_state(hovered_node, active_node, focused_node);
             update_blit_pixels();
@@ -701,7 +718,10 @@ private:
         layout_tree_ = std::move(next_layout_tree);
         layer_tree_ = std::move(next_layer_tree);
 
-        if (can_repaint_incrementally && !dirty_rects.empty()) {
+        if (can_repaint_incrementally && !dirty_rects.empty() &&
+            dirty_region_should_repaint_incrementally(dirty_region,
+                                                      Rect{0, 0, viewport_width_, content_height},
+                                                      kIncrementalDirtyAreaLimitPercent)) {
             compositor.render_into(*layer_tree_,
                                    frame_buffer_,
                                    page_background_,
@@ -715,7 +735,9 @@ private:
                                               page_background_);
             DirtyRegionResult full_region;
             full_region.mode = DirtyRegionMode::FullFrame;
-            full_region.fallback_reason = dirty_region.fallback_reason;
+            full_region.fallback_reason = dirty_rects.empty()
+                ? dirty_region.fallback_reason
+                : DirtyRegionFallbackReason::DirtyAreaTooLarge;
             full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
             record_dirty_region(full_region);
         }
@@ -957,11 +979,14 @@ private:
         last_dirty_region_mode_ = region.mode;
         last_dirty_region_reason_ = region.fallback_reason;
         last_dirty_rect_count_ = region.rects.size();
+        last_dirty_area_percent_ =
+            dirty_region_area_percent(region, Rect{0, 0, frame_buffer_.width, frame_buffer_.height});
         record_dirty_region_result(dirty_region_statistics_, region);
         if (hwnd_ != nullptr) {
             std::ostringstream status;
             status << "dirty=" << dirty_region_mode_name(last_dirty_region_mode_)
                    << " rects=" << last_dirty_rect_count_
+                   << " area=" << last_dirty_area_percent_ << "%"
                    << " local=" << dirty_region_statistics_.dirty_rect_frames
                    << " full=" << dirty_region_statistics_.full_frame_frames
                    << " clean=" << dirty_region_statistics_.clean_frames;

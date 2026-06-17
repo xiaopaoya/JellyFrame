@@ -187,6 +187,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   validation-shell dirty repaint mode in the window title.
 - Added `DirtyRegionStatistics` so tests and validation shells can accumulate
   dirty-rect/full-frame counts, dirty area and fallback reason distribution.
+- Added dirty-region repaint-cost helpers so hosts can compare estimated dirty
+  area against the viewport and choose full-frame repaint when partial flushes
+  would no longer be worthwhile.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.
@@ -284,6 +287,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   conservative full-frame repaint.
 - Improved the Win32 browser dirty repaint path to use the shared second-stage
   repaint planner instead of duplicating layout/framebuffer size checks.
+- Improved the Win32 browser dirty repaint path to fall back to full-frame
+  repaint when estimated dirty rectangles exceed 70% of the framebuffer area.
 - Avoided paint dirty invalidation for no-op form activations such as clicking
   an already checked radio button or cycling a single-option select.
 - Improved core text fallback to measure and paint UTF-8 by codepoint instead

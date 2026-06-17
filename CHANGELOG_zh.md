@@ -135,6 +135,8 @@ JellyFrame Engine 的重要变更记录在这里。
   repaint mode。
 - 添加 `DirtyRegionStatistics`，让测试和验证壳可以累计 dirty-rect/full-frame 次数、dirty area
   与 fallback reason 分布。
+- 添加 dirty-region 重绘成本 helper，让宿主可以把估算 dirty area 与 viewport 对比，并在局部
+  flush 已经不划算时选择全帧重绘。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
   转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
   单色显示 buffer。
@@ -204,6 +206,8 @@ JellyFrame Engine 的重要变更记录在这里。
   保守 full-frame repaint 的上一棵 layout tree。
 - 改进 Win32 browser dirty repaint 路径，改用共享的第二阶段 repaint planner，
   不再在壳层重复手写 layout/framebuffer 尺寸判断。
+- 改进 Win32 browser dirty repaint 路径：当估算 dirty rectangles 超过 framebuffer 面积
+  70% 时，直接退回全帧重绘。
 - 避免无变化的表单激活制造 paint dirty，例如再次点击已选中的 radio，或循环只有一个
   option 的 select。
 - 改进 core 文本 fallback，使测量和绘制按 UTF-8 码点处理，而不是把每个非 ASCII 字节当成独立 glyph。

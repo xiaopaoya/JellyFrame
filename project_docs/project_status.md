@@ -269,12 +269,14 @@ content size. Full subtree reuse is still future work. Form-control activation
 also filters a few no-op paths so unchanged radio/select state does not schedule
 paint work. M9 now also exposes `compute_dirty_region(...)` with explicit
 clean/dirty-rect/full-frame modes and fallback reasons, so hosts and tests can
-observe why dirty repaint could not stay local.
+observe why dirty repaint could not stay local. It also exposes conservative
+dirty-area cost helpers, letting hosts fall back to full-frame repaint when
+partial flushes would cover most of the framebuffer.
 
 Tasks:
 
 - Audit tree/style/layout/paint dirty-flag propagation boundaries. Started with
-  dirty-region fallback diagnostics.
+  dirty-region fallback diagnostics and repaint-cost thresholds.
 - Reuse unchanged render/layout/layer subtrees where the data model allows it.
 - Add tests and diagnostics for dirty layer/display-command invalidation.
 - Keep the fallback simple: complex structural changes may still rebuild the

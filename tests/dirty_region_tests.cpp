@@ -399,6 +399,46 @@ void dirty_region_statistics_accumulate_modes_reasons_and_area() {
           "full frame mode name");
 }
 
+void dirty_region_cost_helpers_bound_incremental_repaint() {
+    DirtyRegionResult clean;
+    check(dirty_region_area(clean) == 0, "clean dirty area is zero");
+    check(dirty_region_area_percent(clean, Rect{0, 0, 100, 100}) == 0,
+          "clean dirty area percent is zero");
+    check(!dirty_region_should_repaint_incrementally(clean, Rect{0, 0, 100, 100}, 70),
+          "clean result is not an incremental repaint");
+
+    DirtyRegionResult local;
+    local.mode = DirtyRegionMode::DirtyRects;
+    local.rects.push_back(Rect{0, 0, 40, 50});
+    local.rects.push_back(Rect{40, 0, 10, 50});
+    check(dirty_region_area(local) == 2500, "dirty area sums rects");
+    check(dirty_region_viewport_area(Rect{0, 0, 100, 100}) == 10000,
+          "viewport area helper");
+    check(dirty_region_area_percent(local, Rect{0, 0, 100, 100}) == 25,
+          "dirty area percent is rounded up conservatively");
+    check(dirty_region_should_repaint_incrementally(local, Rect{0, 0, 100, 100}, 25),
+          "dirty area at threshold can repaint incrementally");
+    check(!dirty_region_should_repaint_incrementally(local, Rect{0, 0, 100, 100}, 24),
+          "dirty area over threshold should use full repaint");
+
+    DirtyRegionResult overlapping = local;
+    overlapping.rects.push_back(Rect{0, 0, 100, 100});
+    check(dirty_region_area_percent(overlapping, Rect{0, 0, 100, 100}) == 100,
+          "overlapping dirty area estimate saturates at viewport percent");
+    check(!dirty_region_should_repaint_incrementally(overlapping, Rect{0, 0, 100, 100}, 70),
+          "large dirty area should not repaint incrementally");
+
+    DirtyRegionResult full;
+    full.mode = DirtyRegionMode::FullFrame;
+    full.fallback_reason = DirtyRegionFallbackReason::DirtyAreaTooLarge;
+    full.rects.push_back(Rect{0, 0, 100, 100});
+    check(!dirty_region_should_repaint_incrementally(full, Rect{0, 0, 100, 100}, 100),
+          "full-frame result is never treated as incremental");
+    check(std::string(dirty_region_fallback_reason_name(DirtyRegionFallbackReason::DirtyAreaTooLarge)) ==
+              "dirty-area-too-large",
+          "dirty area fallback reason name");
+}
+
 } // namespace
 
 int main() {
@@ -415,6 +455,7 @@ int main() {
         dirty_node_missing_from_layout_reports_reason();
         clipped_dirty_bounds_report_empty_after_clipping();
         dirty_region_statistics_accumulate_modes_reasons_and_area();
+        dirty_region_cost_helpers_bound_incremental_repaint();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;
