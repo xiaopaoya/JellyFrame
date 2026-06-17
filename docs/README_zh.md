@@ -35,6 +35,7 @@
 ### 宿主、嵌入式和文本
 
 - [host_abstraction_zh.md](host_abstraction_zh.md)：资源、时间、framebuffer、文本和预算的薄宿主边界。
+- [app_packaging_zh.md](app_packaging_zh.md)：M11 app 包格式、manifest 和资源包工作流。
 - [embedded_hal_api_zh.md](embedded_hal_api_zh.md)：开发板侧 API checklist。
 - [embedded_framebuffer_backend_zh.md](embedded_framebuffer_backend_zh.md)：调用方持有 framebuffer 的转换和 flush 契约。
 - [text_backend_zh.md](text_backend_zh.md)：文本测量/绘制 API 和字体工作流。

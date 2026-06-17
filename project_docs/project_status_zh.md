@@ -236,10 +236,13 @@ row bytes、glyph table 估算和总估算，便于 port 文档记录。
 
 目标：把示例资源加载升级为可重复的本地 app 打包流程。
 
+状态：包格式调研和 JellyFrame 第一版 manifest/resource-bundle 设计已写入
+`docs/app_packaging_zh.md`。实现尚未落地。
+
 任务：
 
-- 统一 HTML/CSS/classic script/font/resource manifest。
-- 明确资源大小、路径解析、缓存和缺失资源策略。
+- 统一 HTML/CSS/classic script/font/resource manifest。V0 设计已写入文档。
+- 明确资源大小、路径解析、缓存和缺失资源策略。第一版策略已写入文档。
 - 让 capability checker、font pack generator 和资源 bundle generator 能串成一条桌面构建链。
 - 保持核心无文件系统、无网络；I/O 仍由宿主提供。
 

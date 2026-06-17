@@ -321,11 +321,16 @@ Tasks:
 
 Goal: turn example resource loading into a repeatable local app packaging flow.
 
+Status: package-format survey and first JellyFrame manifest/resource-bundle
+design are documented in `docs/app_packaging.md`. Implementation has not landed
+yet.
+
 Tasks:
 
-- Define a manifest for HTML/CSS/classic script/font/resources.
+- Define a manifest for HTML/CSS/classic script/font/resources. First V0 design
+  is documented.
 - Specify resource size limits, path resolution, caching and missing-resource
-  behavior.
+  behavior. First policy is documented.
 - Chain the capability checker, font-pack generator and resource-bundle
   generator into one desktop build flow.
 - Keep the core filesystem-free and network-free; I/O remains host-provided.

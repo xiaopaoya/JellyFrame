@@ -49,6 +49,8 @@ Active project/process documents now live in
 
 - [host_abstraction.md](host_abstraction.md): thin host boundary for resources,
   time, framebuffer, text and budgets.
+- [app_packaging.md](app_packaging.md): M11 app package format, manifest and
+  resource-bundle workflow.
 - [embedded_hal_api.md](embedded_hal_api.md): board-side API checklist.
 - [embedded_framebuffer_backend.md](embedded_framebuffer_backend.md): caller-owned
   framebuffer conversion and flush contract.
