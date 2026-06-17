@@ -121,6 +121,25 @@ the host must resize or recreate the framebuffer and repaint the full frame.
 Unchanged `textContent`, unchanged attributes and similar no-op mutations should
 not create dirty flags.
 
+## Dirty Region Diagnostics
+
+Header: `src/core/dirty_region.h`
+
+`compute_dirty_rects(...)` remains the simple compatibility API for hosts that
+only need rectangles. M9 adds `compute_dirty_region(...)`, which returns the
+same rectangles plus:
+
+- `DirtyRegionMode::Clean`: no repaint needed.
+- `DirtyRegionMode::DirtyRects`: bounded local rectangles were produced.
+- `DirtyRegionMode::FullFrame`: the core chose a conservative full-frame
+  fallback.
+
+`DirtyRegionFallbackReason` explains why a full-frame fallback happened:
+invalid viewport, missing previous/current layout, structural tree dirty,
+missing dirty-node bounds or clipping that removed every local rect. This is a
+diagnostic contract for hosts and tests; it does not yet mean retained subtree
+reuse or display-command-level invalidation is complete.
+
 ## Boundaries
 
 M8 does not implement:

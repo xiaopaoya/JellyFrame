@@ -108,9 +108,16 @@ void text_dirty_generates_local_rect() {
                             previous_layout.get(),
                             next.layout_tree.get(),
                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
+    const DirtyRegionResult region =
+        compute_dirty_region(*next.document,
+                             previous_layout.get(),
+                             next.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
 
     check(!rects.empty(), "text dirty produces rect");
     check(rects.front().width < 240 || rects.front().height < 200, "text dirty is not full viewport");
+    check(region.mode == DirtyRegionMode::DirtyRects, "text dirty reports dirty-rect mode");
+    check(region.fallback_reason == DirtyRegionFallbackReason::None, "text dirty has no fallback reason");
 }
 
 void tree_dirty_falls_back_to_full_viewport() {
@@ -128,11 +135,19 @@ void tree_dirty_falls_back_to_full_viewport() {
                             previous_layout.get(),
                             next.layout_tree.get(),
                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
+    const DirtyRegionResult region =
+        compute_dirty_region(*next.document,
+                             previous_layout.get(),
+                             next.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
 
     check(rects.size() == 1, "tree dirty produces one conservative rect");
     check(rects.front().x == 0 && rects.front().y == 0 &&
               rects.front().width == 240 && rects.front().height == 200,
           "tree dirty falls back to full viewport");
+    check(region.mode == DirtyRegionMode::FullFrame, "tree dirty reports full-frame mode");
+    check(region.fallback_reason == DirtyRegionFallbackReason::TreeDirty,
+          "tree dirty reports fallback reason");
 }
 
 void paint_dirty_reuses_layout_and_generates_local_rect() {
@@ -229,6 +244,106 @@ void multiple_dirty_nodes_are_coalesced_without_full_frame() {
           "multiple dirty nodes do not immediately force full frame");
 }
 
+void clean_document_reports_clean_region() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(html_parser.parse("<body><p>Clean</p></body>"), "", 240);
+    clear_dirty_flags(*fixture.document);
+
+    const DirtyRegionResult region =
+        compute_dirty_region(*fixture.document,
+                             fixture.layout_tree.get(),
+                             fixture.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
+
+    check(region.rects.empty(), "clean region has no rects");
+    check(region.mode == DirtyRegionMode::Clean, "clean region reports clean mode");
+    check(region.fallback_reason == DirtyRegionFallbackReason::None, "clean region has no fallback reason");
+}
+
+void missing_layout_reports_full_frame_reason() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(html_parser.parse("<body><input value='A'></body>"), "", 240);
+    clear_dirty_flags(*fixture.document);
+    Node* input = first_element(*fixture.document, "input");
+    check(input != nullptr, "input exists");
+    check(append_text_to_control(*input, "B"), "paint dirty exists");
+
+    const DirtyRegionResult region =
+        compute_dirty_region(*fixture.document,
+                             nullptr,
+                             fixture.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
+
+    check(region.mode == DirtyRegionMode::FullFrame, "missing layout reports full frame");
+    check(region.fallback_reason == DirtyRegionFallbackReason::MissingLayout,
+          "missing layout reason is explicit");
+    check(region.rects.size() == 1 && region.rects.front().width == 240,
+          "missing layout produces viewport rect");
+}
+
+void invalid_viewport_reports_reason_without_rects() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(html_parser.parse("<body><input value='A'></body>"), "", 240);
+    clear_dirty_flags(*fixture.document);
+    Node* input = first_element(*fixture.document, "input");
+    check(input != nullptr, "input exists");
+    check(append_text_to_control(*input, "B"), "paint dirty exists");
+
+    const DirtyRegionResult region =
+        compute_dirty_region(*fixture.document,
+                             fixture.layout_tree.get(),
+                             fixture.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 0, 0}, 8, 2});
+
+    check(region.mode == DirtyRegionMode::FullFrame, "invalid viewport reports full frame");
+    check(region.fallback_reason == DirtyRegionFallbackReason::InvalidViewport,
+          "invalid viewport reason is explicit");
+    check(region.rects.empty(), "invalid viewport cannot produce a rect");
+}
+
+void dirty_node_missing_from_layout_reports_reason() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(html_parser.parse("<body><p>Visible</p></body>"), "", 240);
+    clear_dirty_flags(*fixture.document);
+    Node* body = first_element(*fixture.document, "body");
+    check(body != nullptr, "body exists");
+    Node& detached_like = body->append_child(make_element("section"));
+    clear_dirty_flags(*fixture.document);
+    mark_dirty(detached_like, DomDirtyPaint);
+
+    const DirtyRegionResult region =
+        compute_dirty_region(*fixture.document,
+                             fixture.layout_tree.get(),
+                             fixture.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 2});
+
+    check(region.mode == DirtyRegionMode::FullFrame, "missing dirty bounds reports full frame");
+    check(region.fallback_reason == DirtyRegionFallbackReason::NoDirtyBounds,
+          "missing dirty bounds reason is explicit");
+}
+
+void clipped_dirty_bounds_report_empty_after_clipping() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(
+        html_parser.parse("<body><p>Outside viewport</p></body>"),
+        "p { width: 100px; height: 20px; margin-top: 80px; }",
+        240);
+    clear_dirty_flags(*fixture.document);
+    Node* paragraph = first_element(*fixture.document, "p");
+    check(paragraph != nullptr, "paragraph exists");
+    mark_dirty(*paragraph, DomDirtyPaint);
+
+    const DirtyRegionResult region =
+        compute_dirty_region(*fixture.document,
+                             fixture.layout_tree.get(),
+                             fixture.layout_tree.get(),
+                             DirtyRegionOptions{Rect{0, 0, 240, 40}, 8, 0});
+
+    check(region.mode == DirtyRegionMode::FullFrame, "clipped dirty bounds report full frame");
+    check(region.fallback_reason == DirtyRegionFallbackReason::EmptyAfterClipping,
+          "empty clipping fallback reason is explicit");
+}
+
 } // namespace
 
 int main() {
@@ -238,6 +353,11 @@ int main() {
         paint_dirty_reuses_layout_and_generates_local_rect();
         repeated_paint_dirty_updates_remain_bounded();
         multiple_dirty_nodes_are_coalesced_without_full_frame();
+        clean_document_reports_clean_region();
+        missing_layout_reports_full_frame_reason();
+        invalid_viewport_reports_reason_without_rects();
+        dirty_node_missing_from_layout_reports_reason();
+        clipped_dirty_bounds_report_empty_after_clipping();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

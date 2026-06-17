@@ -135,40 +135,60 @@ void append_coalesced(std::vector<Rect>& rects, Rect rect, Rect viewport, std::s
     rects.push_back(rect);
 }
 
+DirtyRegionResult full_frame_result(Rect viewport, DirtyRegionFallbackReason reason) {
+    DirtyRegionResult result;
+    result.mode = DirtyRegionMode::FullFrame;
+    result.fallback_reason = reason;
+    if (!empty_rect(viewport)) {
+        result.rects.push_back(viewport);
+    }
+    return result;
+}
+
 } // namespace
 
-std::vector<Rect> compute_dirty_rects(const Node& document,
-                                      const LayoutBox* previous_layout,
-                                      const LayoutBox* current_layout,
-                                      const DirtyRegionOptions& options) {
-    std::vector<Rect> rects;
+DirtyRegionResult compute_dirty_region(const Node& document,
+                                       const LayoutBox* previous_layout,
+                                       const LayoutBox* current_layout,
+                                       const DirtyRegionOptions& options) {
+    DirtyRegionResult result;
     if (document.dirty_flags == DomDirtyNone) {
-        return rects;
+        return result;
     }
-    if (empty_rect(options.viewport) || previous_layout == nullptr || current_layout == nullptr ||
-        has_local_tree_dirty(document)) {
-        if (!empty_rect(options.viewport)) {
-            rects.push_back(options.viewport);
-        }
-        return rects;
+    if (empty_rect(options.viewport)) {
+        return full_frame_result(options.viewport, DirtyRegionFallbackReason::InvalidViewport);
+    }
+    if (previous_layout == nullptr || current_layout == nullptr) {
+        return full_frame_result(options.viewport, DirtyRegionFallbackReason::MissingLayout);
+    }
+    if (has_local_tree_dirty(document)) {
+        return full_frame_result(options.viewport, DirtyRegionFallbackReason::TreeDirty);
     }
 
     std::vector<DirtyNodeBounds> dirty_bounds;
     append_dirty_bounds_from_layout(*previous_layout, dirty_bounds);
     append_dirty_bounds_from_layout(*current_layout, dirty_bounds);
     if (dirty_bounds.empty()) {
-        rects.push_back(options.viewport);
-        return rects;
+        return full_frame_result(options.viewport, DirtyRegionFallbackReason::NoDirtyBounds);
     }
 
     const std::size_t max_rects = std::max<std::size_t>(1, options.max_rects);
     for (const DirtyNodeBounds& bounds : dirty_bounds) {
-        append_coalesced(rects, expand_rect(bounds.bounds, options.expansion_px), options.viewport, max_rects);
+        append_coalesced(result.rects, expand_rect(bounds.bounds, options.expansion_px), options.viewport, max_rects);
     }
-    if (rects.empty()) {
-        rects.push_back(options.viewport);
+    if (result.rects.empty()) {
+        return full_frame_result(options.viewport, DirtyRegionFallbackReason::EmptyAfterClipping);
     }
-    return rects;
+
+    result.mode = DirtyRegionMode::DirtyRects;
+    return result;
+}
+
+std::vector<Rect> compute_dirty_rects(const Node& document,
+                                      const LayoutBox* previous_layout,
+                                      const LayoutBox* current_layout,
+                                      const DirtyRegionOptions& options) {
+    return compute_dirty_region(document, previous_layout, current_layout, options).rects;
 }
 
 } // namespace jellyframe

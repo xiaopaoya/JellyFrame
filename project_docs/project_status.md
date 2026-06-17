@@ -267,11 +267,14 @@ Layout, style and text changes compare previous/current layouts only after the
 second-stage repaint plan confirms the framebuffer still matches the resolved
 content size. Full subtree reuse is still future work. Form-control activation
 also filters a few no-op paths so unchanged radio/select state does not schedule
-paint work.
+paint work. M9 now also exposes `compute_dirty_region(...)` with explicit
+clean/dirty-rect/full-frame modes and fallback reasons, so hosts and tests can
+observe why dirty repaint could not stay local.
 
 Tasks:
 
-- Audit tree/style/layout/paint dirty-flag propagation boundaries.
+- Audit tree/style/layout/paint dirty-flag propagation boundaries. Started with
+  dirty-region fallback diagnostics.
 - Reuse unchanged render/layout/layer subtrees where the data model allows it.
 - Add tests and diagnostics for dirty layer/display-command invalidation.
 - Keep the fallback simple: complex structural changes may still rebuild the

@@ -181,6 +181,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   control changes keep bounded dirty rectangles and clear dirty flags.
 - Added long-running frame-loop smoke coverage for bounded input/timer backlog
   draining and clean cached idle recovery.
+- Added `compute_dirty_region(...)` diagnostics with clean, dirty-rect and
+  full-frame modes plus explicit fallback reasons for M9 invalidation audits.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.

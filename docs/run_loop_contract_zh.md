@@ -97,6 +97,21 @@ framebuffer，并执行 full frame repaint。
 
 同值 `textContent`、未变化 attribute 等不应制造 dirty flags。
 
+## Dirty Region 诊断
+
+头文件：`src/core/dirty_region.h`
+
+`compute_dirty_rects(...)` 仍保留为只需要矩形的宿主使用的兼容 API。M9 新增
+`compute_dirty_region(...)`，返回同样的 rectangles，并额外给出：
+
+- `DirtyRegionMode::Clean`：无需重绘。
+- `DirtyRegionMode::DirtyRects`：已生成有界局部矩形。
+- `DirtyRegionMode::FullFrame`：核心选择保守 full-frame fallback。
+
+`DirtyRegionFallbackReason` 会说明为什么退回 full-frame：viewport 无效、缺少 previous/current
+layout、结构性 tree dirty、找不到 dirty node bounds，或局部 rect 被裁剪后全部为空。这个接口是给宿主和测试观察边界用的诊断契约；
+它不表示 retained subtree reuse 或 display-command 级 invalidation 已经完整实现。
+
 ## 边界
 
 当前 M8 不做：
