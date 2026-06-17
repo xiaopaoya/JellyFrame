@@ -57,7 +57,7 @@ std::size_t area_for_percent(std::size_t area, int percent) {
     if (percent <= 0) {
         return 0;
     }
-    if (percent >= 100) {
+    if (percent >= 100 || area == 0) {
         return area;
     }
     const auto safe_percent = static_cast<std::size_t>(percent);
@@ -277,12 +277,16 @@ int dirty_region_area_percent(const DirtyRegionResult& result, Rect viewport) {
     if (dirty_area >= viewport_area) {
         return 100;
     }
-    for (int percent = 1; percent < 100; ++percent) {
-        if (dirty_area <= area_for_percent(viewport_area, percent)) {
-            return percent;
+    if (dirty_area > std::numeric_limits<std::size_t>::max() / 100U) {
+        for (int percent = 1; percent < 100; ++percent) {
+            if (dirty_area <= area_for_percent(viewport_area, percent)) {
+                return percent;
+            }
         }
+        return 100;
     }
-    return 100;
+    const std::size_t scaled_area = dirty_area * 100U;
+    return static_cast<int>(1U + (scaled_area - 1U) / viewport_area);
 }
 
 bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
@@ -294,9 +298,6 @@ bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
     const std::size_t viewport_area = dirty_region_viewport_area(viewport);
     if (viewport_area == 0) {
         return false;
-    }
-    if (max_area_percent >= 100) {
-        return true;
     }
     const std::size_t dirty_area = dirty_region_area(result);
     return dirty_area <= area_for_percent(viewport_area, max_area_percent);

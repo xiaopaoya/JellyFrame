@@ -208,6 +208,8 @@ JellyFrame Engine 的重要变更记录在这里。
   不再在壳层重复手写 layout/framebuffer 尺寸判断。
 - 改进 Win32 browser dirty repaint 路径：当估算 dirty rectangles 超过 framebuffer 面积
   70% 时，直接退回全帧重绘。
+- 收紧 dirty-region 重绘成本 helper 语义：即使阈值为 100%，保守估算面积超过 viewport
+  时也不会继续走局部重绘。
 - 避免无变化的表单激活制造 paint dirty，例如再次点击已选中的 radio，或循环只有一个
   option 的 select。
 - 改进 core 文本 fallback，使测量和绘制按 UTF-8 码点处理，而不是把每个非 ASCII 字节当成独立 glyph。

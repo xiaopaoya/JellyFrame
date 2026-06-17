@@ -26,7 +26,8 @@ enum class DirtyRegionFallbackReason {
     DirtyAreaTooLarge,
 };
 
-constexpr std::size_t kDirtyRegionFallbackReasonCount = 7;
+constexpr std::size_t kDirtyRegionFallbackReasonCount =
+    static_cast<std::size_t>(DirtyRegionFallbackReason::DirtyAreaTooLarge) + 1;
 
 const char* dirty_region_mode_name(DirtyRegionMode mode);
 const char* dirty_region_fallback_reason_name(DirtyRegionFallbackReason reason);

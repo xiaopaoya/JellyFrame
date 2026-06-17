@@ -427,6 +427,8 @@ void dirty_region_cost_helpers_bound_incremental_repaint() {
           "overlapping dirty area estimate saturates at viewport percent");
     check(!dirty_region_should_repaint_incrementally(overlapping, Rect{0, 0, 100, 100}, 70),
           "large dirty area should not repaint incrementally");
+    check(!dirty_region_should_repaint_incrementally(overlapping, Rect{0, 0, 100, 100}, 100),
+          "over-viewport estimated area should not repaint incrementally even at 100 percent");
 
     DirtyRegionResult full;
     full.mode = DirtyRegionMode::FullFrame;

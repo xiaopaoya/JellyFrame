@@ -289,6 +289,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   repaint planner instead of duplicating layout/framebuffer size checks.
 - Improved the Win32 browser dirty repaint path to fall back to full-frame
   repaint when estimated dirty rectangles exceed 70% of the framebuffer area.
+- Tightened dirty-region repaint-cost helpers so a 100% threshold still rejects
+  conservative estimates that exceed the viewport area.
 - Avoided paint dirty invalidation for no-op form activations such as clicking
   an already checked radio button or cycling a single-option select.
 - Improved core text fallback to measure and paint UTF-8 by codepoint instead

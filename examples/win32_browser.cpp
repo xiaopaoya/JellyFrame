@@ -668,17 +668,7 @@ private:
                                        dirty_rects.size());
                 record_dirty_region(dirty_region);
             } else {
-                frame_buffer_ = compositor.render(*layer_tree_,
-                                                  viewport_width_,
-                                                  content_height,
-                                                  page_background_);
-                DirtyRegionResult full_region;
-                full_region.mode = DirtyRegionMode::FullFrame;
-                full_region.fallback_reason = dirty_rects.empty()
-                    ? dirty_region.fallback_reason
-                    : DirtyRegionFallbackReason::DirtyAreaTooLarge;
-                full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
-                record_dirty_region(full_region);
+                render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
             input_ = std::make_unique<InputController>(*layer_tree_);
             input_->set_interaction_state(hovered_node, active_node, focused_node);
@@ -729,17 +719,7 @@ private:
                                    dirty_rects.size());
             record_dirty_region(dirty_region);
         } else {
-            frame_buffer_ = compositor.render(*layer_tree_,
-                                              viewport_width_,
-                                              content_height,
-                                              page_background_);
-            DirtyRegionResult full_region;
-            full_region.mode = DirtyRegionMode::FullFrame;
-            full_region.fallback_reason = dirty_rects.empty()
-                ? dirty_region.fallback_reason
-                : DirtyRegionFallbackReason::DirtyAreaTooLarge;
-            full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
-            record_dirty_region(full_region);
+            render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
         }
         input_ = std::make_unique<InputController>(*layer_tree_);
         input_->set_interaction_state(hovered_node, active_node, focused_node);
@@ -749,6 +729,20 @@ private:
 
     int max_scroll_y() const {
         return std::max(0, frame_buffer_.height - viewport_height_);
+    }
+
+    void render_full_frame(SoftwareCompositor& compositor,
+                           const DirtyRegionResult& attempted_region,
+                           bool had_no_dirty_rects,
+                           int content_height) {
+        frame_buffer_ = compositor.render(*layer_tree_, viewport_width_, content_height, page_background_);
+        DirtyRegionResult full_region;
+        full_region.mode = DirtyRegionMode::FullFrame;
+        full_region.fallback_reason = had_no_dirty_rects
+            ? attempted_region.fallback_reason
+            : DirtyRegionFallbackReason::DirtyAreaTooLarge;
+        full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
+        record_dirty_region(full_region);
     }
 
     int clamp_scroll_y(int value) const {
