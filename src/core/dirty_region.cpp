@@ -63,22 +63,6 @@ Rect subtree_bounds(const LayoutBox& box) {
     return bounds;
 }
 
-const LayoutBox* find_box_for_node(const LayoutBox& box, const Node& node) {
-    std::vector<const LayoutBox*> pending;
-    pending.push_back(&box);
-    while (!pending.empty()) {
-        const LayoutBox* current = pending.back();
-        pending.pop_back();
-        if (current->node == &node) {
-            return current;
-        }
-        for (const auto& child : current->children) {
-            pending.push_back(child.get());
-        }
-    }
-    return nullptr;
-}
-
 bool has_local_tree_dirty(const Node& node) {
     if ((node.dirty_flags & DomDirtyTree) == 0U) {
         return false;
@@ -100,19 +84,41 @@ bool has_local_tree_dirty(const Node& node) {
     return false;
 }
 
-void append_dirty_nodes(const Node& node, std::vector<const Node*>& output) {
-    std::vector<const Node*> pending;
-    pending.push_back(&node);
+struct DirtyNodeBounds {
+    const Node* node = nullptr;
+    Rect bounds;
+};
+
+void merge_dirty_bounds(std::vector<DirtyNodeBounds>& output, const Node* node, Rect bounds) {
+    if (node == nullptr || empty_rect(bounds)) {
+        return;
+    }
+    for (DirtyNodeBounds& entry : output) {
+        if (entry.node == node) {
+            entry.bounds = union_rect(entry.bounds, bounds);
+            return;
+        }
+    }
+    output.push_back(DirtyNodeBounds{node, bounds});
+}
+
+void append_dirty_bounds_from_layout(const LayoutBox& layout, std::vector<DirtyNodeBounds>& output) {
+    std::vector<const LayoutBox*> pending;
+    pending.push_back(&layout);
     while (!pending.empty()) {
-        const Node* current = pending.back();
+        const LayoutBox* current = pending.back();
         pending.pop_back();
-        if (current->local_dirty_flags != DomDirtyNone) {
-            output.push_back(current);
+        if (current->node != nullptr) {
+            if (current->node->local_dirty_flags != DomDirtyNone) {
+                merge_dirty_bounds(output, current->node, subtree_bounds(*current));
+                continue;
+            }
+            if (current->node->dirty_flags == DomDirtyNone) {
+                continue;
+            }
         }
         for (const auto& child : current->children) {
-            if (child->dirty_flags != DomDirtyNone) {
-                pending.push_back(child.get());
-            }
+            pending.push_back(child.get());
         }
     }
 }
@@ -147,23 +153,17 @@ std::vector<Rect> compute_dirty_rects(const Node& document,
         return rects;
     }
 
-    std::vector<const Node*> dirty_nodes;
-    append_dirty_nodes(document, dirty_nodes);
-    if (dirty_nodes.empty()) {
+    std::vector<DirtyNodeBounds> dirty_bounds;
+    append_dirty_bounds_from_layout(*previous_layout, dirty_bounds);
+    append_dirty_bounds_from_layout(*current_layout, dirty_bounds);
+    if (dirty_bounds.empty()) {
         rects.push_back(options.viewport);
         return rects;
     }
 
     const std::size_t max_rects = std::max<std::size_t>(1, options.max_rects);
-    for (const Node* node : dirty_nodes) {
-        Rect dirty{};
-        if (const LayoutBox* old_box = find_box_for_node(*previous_layout, *node)) {
-            dirty = union_rect(dirty, subtree_bounds(*old_box));
-        }
-        if (const LayoutBox* new_box = find_box_for_node(*current_layout, *node)) {
-            dirty = union_rect(dirty, subtree_bounds(*new_box));
-        }
-        append_coalesced(rects, expand_rect(dirty, options.expansion_px), options.viewport, max_rects);
+    for (const DirtyNodeBounds& bounds : dirty_bounds) {
+        append_coalesced(rects, expand_rect(bounds.bounds, options.expansion_px), options.viewport, max_rects);
     }
     if (rects.empty()) {
         rects.push_back(options.viewport);

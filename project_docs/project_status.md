@@ -198,7 +198,9 @@ Status: started. `src/core/frame_update.h` provides the first hardware-neutral
 update planner plus a `FramePipelineCacheState` snapshot helper, and
 `../docs/run_loop_contract.md` records the recommended run loop. Core tests now
 cover a small host-frame sequence from first paint through clean, paint-only,
-layout-dirty and resized-framebuffer frames.
+layout-dirty and resized-framebuffer frames. The planner now also has a
+second-stage repaint check for the resolved layout height, so hosts can fall
+back to a full framebuffer repaint when content height changes after layout.
 
 Tasks:
 
@@ -217,10 +219,15 @@ Goal: reduce unnecessary full-pipeline rebuilds after script-app interaction.
 
 Status: started. Dirty flag clearing and dirty-region traversal now use
 explicit work stacks and aggregate-dirty pruning, reducing stack pressure and
-unnecessary clean-subtree scans. Structural `DomDirtyTree` updates now skip
-previous-layout retention and plan a conservative full-frame repaint. Full
-subtree reuse is still future work. Form-control activation also filters a few
-no-op paths so unchanged radio/select state does not schedule paint work.
+unnecessary clean-subtree scans. Dirty-region layout matching now scans
+previous/current layout trees once and aggregates dirty-node bounds instead of
+repeatedly searching the full layout tree. Structural `DomDirtyTree` updates now
+skip previous-layout retention and plan a conservative full-frame repaint.
+Layout, style and text changes compare previous/current layouts only after the
+second-stage repaint plan confirms the framebuffer still matches the resolved
+content size. Full subtree reuse is still future work. Form-control activation
+also filters a few no-op paths so unchanged radio/select state does not schedule
+paint work.
 
 Tasks:
 

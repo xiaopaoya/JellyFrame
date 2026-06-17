@@ -119,6 +119,8 @@ JellyFrame Engine 的重要变更记录在这里。
   dirty update、repaint 和 present 顺序。
 - 添加 `FramePipelineCacheState` / `make_frame_update_state`，让宿主可以用统一的
   cache snapshot 构造 frame-update plan，同时不把 render/layout/layer 所有权交给核心。
+- 添加第二阶段 frame repaint planning，使宿主在 layout 解析出新的内容高度后再次确认
+  framebuffer 是否可复用。
 - 添加长时间 dirty-update smoke 覆盖，验证重复 paint-only 控件变化仍保持有界 dirty rectangles
   并正确清理 dirty flags。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
@@ -179,8 +181,12 @@ JellyFrame Engine 的重要变更记录在这里。
   同值 `textContent` 不触发 invalidation，Win32 壳在 clean input callback 后不再重建管线。
 - 将 dirty flag 清理和 dirty-region 遍历改为显式工作栈，并按聚合 dirty 位剪枝，
   降低深层嵌入式文档的栈压力。
+- 改进 dirty-region 的 layout 匹配方式：旧/新 layout tree 各扫描一次并聚合 dirty node
+  bounds，避免多个脏节点时反复全树查找。
 - 改进结构性 DOM 变化的 frame-update planning：`DomDirtyTree` 不再保留最终只会导致
   保守 full-frame repaint 的上一棵 layout tree。
+- 改进 Win32 browser dirty repaint 路径，改用共享的第二阶段 repaint planner，
+  不再在壳层重复手写 layout/framebuffer 尺寸判断。
 - 避免无变化的表单激活制造 paint dirty，例如再次点击已选中的 radio，或循环只有一个
   option 的 select。
 - 改进 core 文本 fallback，使测量和绘制按 UTF-8 码点处理，而不是把每个非 ASCII 字节当成独立 glyph。

@@ -19,6 +19,12 @@ bool framebuffer_matches_target(const FrameUpdateState& state) {
         state.framebuffer_height == frame_update_target_height(state);
 }
 
+bool framebuffer_matches_size(const FrameUpdateState& state, int target_height) {
+    return state.has_framebuffer &&
+        state.framebuffer_width == state.viewport.width &&
+        state.framebuffer_height == target_height;
+}
+
 } // namespace
 
 int frame_update_target_height(const FrameUpdateState& state) {
@@ -84,6 +90,38 @@ FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
         plan.needs_full_framebuffer = true;
     }
     return plan;
+}
+
+FrameRepaintPlan plan_frame_repaint(const FrameUpdateState& state,
+                                    const FrameUpdatePlan& update_plan,
+                                    int resolved_content_height) {
+    FrameRepaintPlan repaint;
+    if (!valid_viewport(state.viewport)) {
+        repaint.needs_full_framebuffer = true;
+        return repaint;
+    }
+
+    repaint.target_width = state.viewport.width;
+    repaint.target_height = std::max(state.viewport.height, resolved_content_height);
+
+    if (update_plan.action == FrameUpdateAction::None) {
+        return repaint;
+    }
+
+    const bool framebuffer_ready = framebuffer_matches_size(state, repaint.target_height);
+    const bool dirty_rect_mode =
+        update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout ||
+        update_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout;
+
+    if (dirty_rect_mode && framebuffer_ready) {
+        repaint.dirty_rect_mode = update_plan.dirty_rect_mode;
+        repaint.can_repaint_dirty_rects = true;
+        return repaint;
+    }
+
+    repaint.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+    repaint.needs_full_framebuffer = true;
+    return repaint;
 }
 
 } // namespace jellyframe

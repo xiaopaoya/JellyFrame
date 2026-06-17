@@ -28,11 +28,13 @@ Loop frame:
 5. Fill `FramePipelineCacheState`, call `make_frame_update_state(...)`, then
    call `plan_frame_update(...)` to choose an update path.
 6. Reuse existing layout/layers or rebuild the pipeline according to the plan.
-7. Generate dirty rectangles with `compute_dirty_rects(...)`, or fall back to a
+7. After layout is known, call `plan_frame_repaint(...)` with the resolved
+   content height to confirm whether the existing framebuffer still matches.
+8. Generate dirty rectangles with `compute_dirty_rects(...)`, or fall back to a
    full frame.
-8. Call `SoftwareCompositor::render_into(...)` or full `render(...)`.
-9. Present dirty rectangles through `HostFrameSink`.
-10. Clear DOM dirty flags.
+9. Call `SoftwareCompositor::render_into(...)` or full `render(...)`.
+10. Present dirty rectangles through `HostFrameSink`.
+11. Clear DOM dirty flags.
 
 Hosts may place these steps in a UI task, desktop message loop or validation
 shell, but scripts, layout and rendering should not run inside an ISR or display
@@ -74,6 +76,12 @@ Outputs:
 - `FrameDirtyRectMode::FullFrame`: use a conservative full-frame render when
   caches are missing, dimensions changed or the viewport is invalid.
 
+`plan_frame_repaint(...)` is the second-stage check used after a rebuild has
+resolved the new layout height. It keeps `PreviousAndCurrentLayout` or
+`CurrentLayout` only when the existing framebuffer dimensions still match the
+resolved target. If text/style/layout changes make content taller or shorter,
+the host must resize or recreate the framebuffer and repaint the full frame.
+
 ## Dirty Flag Semantics
 
 - `DomDirtyPaint`: control values, selection state and similar visual-only
@@ -106,6 +114,6 @@ Those belong to M9, M13 or host policy.
 - paint-only dirty reuses render/layout when caches and framebuffer dimensions
   match.
 - layout/style/text dirty can compare old/new layout for incremental repaint
-  when framebuffer dimensions match.
+  when framebuffer dimensions still match after the new layout is resolved.
 - missing caches, dimension changes and invalid viewports conservatively use a
   full frame.

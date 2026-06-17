@@ -79,6 +79,15 @@ Node* first_element(Node& node, const char* tag) {
     return nullptr;
 }
 
+void collect_elements(Node& node, const char* tag, std::vector<Node*>& output) {
+    if (node.type == NodeType::Element && node.tag_name == tag) {
+        output.push_back(&node);
+    }
+    for (const auto& child : node.children) {
+        collect_elements(*child, tag, output);
+    }
+}
+
 void text_dirty_generates_local_rect() {
     HtmlParser html_parser;
     auto initial = build_layout(
@@ -192,6 +201,34 @@ void repeated_paint_dirty_updates_remain_bounded() {
     }
 }
 
+void multiple_dirty_nodes_are_coalesced_without_full_frame() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(
+        html_parser.parse("<body><p>A</p><p>B</p><p>C</p><p>D</p></body>"),
+        "p { width: 80px; height: 20px; margin: 0; }",
+        240);
+    clear_dirty_flags(*fixture.document);
+
+    std::vector<Node*> paragraphs;
+    collect_elements(*fixture.document, "p", paragraphs);
+    check(paragraphs.size() == 4, "paragraphs exist");
+    mark_dirty(*paragraphs[0], DomDirtyPaint);
+    mark_dirty(*paragraphs[1], DomDirtyPaint);
+    mark_dirty(*paragraphs[2], DomDirtyPaint);
+    mark_dirty(*paragraphs[3], DomDirtyPaint);
+
+    const std::vector<Rect> rects =
+        compute_dirty_rects(*fixture.document,
+                            fixture.layout_tree.get(),
+                            fixture.layout_tree.get(),
+                            DirtyRegionOptions{Rect{0, 0, 240, 200}, 2, 2});
+
+    check(!rects.empty(), "multiple dirty nodes produce rects");
+    check(rects.size() <= 2, "multiple dirty nodes respect max rects");
+    check(rects.front().width < 240 || rects.front().height < 200,
+          "multiple dirty nodes do not immediately force full frame");
+}
+
 } // namespace
 
 int main() {
@@ -200,6 +237,7 @@ int main() {
         tree_dirty_falls_back_to_full_viewport();
         paint_dirty_reuses_layout_and_generates_local_rect();
         repeated_paint_dirty_updates_remain_bounded();
+        multiple_dirty_nodes_are_coalesced_without_full_frame();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

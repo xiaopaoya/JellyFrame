@@ -49,9 +49,20 @@ struct FrameUpdatePlan {
     bool needs_full_framebuffer = false;
 };
 
+struct FrameRepaintPlan {
+    FrameDirtyRectMode dirty_rect_mode = FrameDirtyRectMode::None;
+    int target_width = 0;
+    int target_height = 0;
+    bool can_repaint_dirty_rects = false;
+    bool needs_full_framebuffer = false;
+};
+
 FrameUpdateState make_frame_update_state(DomDirtyFlags dirty_flags,
                                          const FramePipelineCacheState& cache_state);
 int frame_update_target_height(const FrameUpdateState& state);
 FrameUpdatePlan plan_frame_update(const FrameUpdateState& state);
+FrameRepaintPlan plan_frame_repaint(const FrameUpdateState& state,
+                                    const FrameUpdatePlan& update_plan,
+                                    int resolved_content_height);
 
 } // namespace jellyframe

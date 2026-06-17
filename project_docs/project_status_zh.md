@@ -149,7 +149,8 @@ sibling selectors、简化 flex grow/shrink/basis sizing，以及有界 `relativ
 状态：已开始。`src/core/frame_update.h` 提供第一版平台无关更新计划和
 `FramePipelineCacheState` cache snapshot helper，`../docs/run_loop_contract_zh.md`
 记录推荐运行循环。核心测试已覆盖一条小型宿主帧序列：首帧、干净帧、paint-only、
-layout-dirty 和 framebuffer 尺寸变化。
+layout-dirty 和 framebuffer 尺寸变化。Planner 现在还包含第二阶段 repaint 检查：
+layout 解析出新内容高度后，宿主可在内容高度变化时回退到 full framebuffer repaint。
 
 任务：
 
@@ -163,9 +164,12 @@ layout-dirty 和 framebuffer 尺寸变化。
 目标：减少脚本 app 交互后不必要的全管线重建。
 
 状态：已开始。Dirty flag 清理和 dirty-region 遍历已改为显式工作栈，并按聚合 dirty 位剪枝，
-降低深层文档的栈压力和干净子树扫描。结构性 `DomDirtyTree` 更新现在会跳过 previous-layout
-保留，并规划为保守 full-frame repaint。表单控件激活也过滤了少量 no-op 路径，避免 radio/select
-状态未变化时安排 paint 工作。完整 subtree reuse 仍是后续工作。
+降低深层文档的栈压力和干净子树扫描。Dirty-region 的 layout 匹配现在会对 previous/current
+layout tree 各扫描一次并聚合 dirty node bounds，不再为多个脏节点反复全树查找。
+结构性 `DomDirtyTree` 更新现在会跳过 previous-layout 保留，并规划为保守 full-frame repaint。
+Layout/style/text 变化只有在第二阶段 repaint plan 确认 framebuffer 仍匹配新内容尺寸时，才比较 previous/current layout 做增量重绘。
+表单控件激活也过滤了少量 no-op 路径，避免 radio/select 状态未变化时安排 paint 工作。
+完整 subtree reuse 仍是后续工作。
 
 任务：
 

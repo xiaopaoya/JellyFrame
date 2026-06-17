@@ -167,6 +167,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `FramePipelineCacheState` / `make_frame_update_state` so hosts can build
   frame-update plans from a shared cache snapshot shape without transferring
   render/layout/layer ownership to the core.
+- Added second-stage frame repaint planning so hosts recheck framebuffer reuse
+  after layout resolves the new content height.
 - Added long-running dirty-update smoke coverage to ensure repeated paint-only
   control changes keep bounded dirty rectangles and clear dirty flags.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
@@ -250,9 +252,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Improved dirty-flag and dirty-region traversal to use explicit work stacks
   and aggregate-dirty pruning, reducing stack pressure on deeply nested
   embedded documents.
+- Improved dirty-region layout matching to scan previous/current layout trees
+  once and aggregate dirty-node bounds, avoiding repeated full-tree searches for
+  pages with multiple dirty nodes.
 - Improved frame-update planning for structural DOM changes so `DomDirtyTree`
   no longer retains a previous layout tree that would only lead to a
   conservative full-frame repaint.
+- Improved the Win32 browser dirty repaint path to use the shared second-stage
+  repaint planner instead of duplicating layout/framebuffer size checks.
 - Avoided paint dirty invalidation for no-op form activations such as clicking
   an already checked radio button or cycling a single-option select.
 - Improved core text fallback to measure and paint UTF-8 by codepoint instead

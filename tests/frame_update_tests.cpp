@@ -61,6 +61,48 @@ void layout_dirty_rebuilds_with_previous_layout() {
     check(!plan.needs_full_framebuffer, "matching framebuffer avoids full render requirement");
 }
 
+void repaint_plan_keeps_incremental_layout_when_size_matches() {
+    const FrameUpdateState state = cached_state(DomDirtyText | DomDirtyLayout);
+    const FrameUpdatePlan update_plan = plan_frame_update(state);
+    const FrameRepaintPlan repaint_plan = plan_frame_repaint(state, update_plan, 320);
+    check(repaint_plan.can_repaint_dirty_rects, "matching resolved layout keeps dirty rect repaint");
+    check(repaint_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout,
+          "matching resolved layout compares previous and current layout");
+    check(!repaint_plan.needs_full_framebuffer, "matching resolved layout avoids full framebuffer");
+    check(repaint_plan.target_width == 240 && repaint_plan.target_height == 320,
+          "repaint plan records target size");
+}
+
+void repaint_plan_forces_full_frame_when_resolved_layout_grows() {
+    const FrameUpdateState state = cached_state(DomDirtyText | DomDirtyLayout);
+    const FrameUpdatePlan update_plan = plan_frame_update(state);
+    const FrameRepaintPlan repaint_plan = plan_frame_repaint(state, update_plan, 420);
+    check(!repaint_plan.can_repaint_dirty_rects, "grown resolved layout cannot reuse framebuffer");
+    check(repaint_plan.dirty_rect_mode == FrameDirtyRectMode::FullFrame,
+          "grown resolved layout falls back to full frame");
+    check(repaint_plan.needs_full_framebuffer, "grown resolved layout needs full framebuffer");
+    check(repaint_plan.target_height == 420, "repaint plan uses grown content height");
+}
+
+void repaint_plan_uses_viewport_floor_when_content_shrinks() {
+    const FrameUpdateState state = cached_state(DomDirtyText | DomDirtyLayout);
+    const FrameUpdatePlan update_plan = plan_frame_update(state);
+    const FrameRepaintPlan repaint_plan = plan_frame_repaint(state, update_plan, 80);
+    check(!repaint_plan.can_repaint_dirty_rects, "shrunk resolved layout changes framebuffer size");
+    check(repaint_plan.needs_full_framebuffer, "shrunk resolved layout needs full framebuffer");
+    check(repaint_plan.target_height == 200, "repaint target height is at least viewport height");
+}
+
+void repaint_plan_reuses_current_layout_for_paint_dirty() {
+    const FrameUpdateState state = cached_state(DomDirtyPaint);
+    const FrameUpdatePlan update_plan = plan_frame_update(state);
+    const FrameRepaintPlan repaint_plan = plan_frame_repaint(state, update_plan, 320);
+    check(repaint_plan.can_repaint_dirty_rects, "paint dirty can repaint current layout");
+    check(repaint_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout,
+          "paint dirty keeps current layout mode");
+    check(!repaint_plan.needs_full_framebuffer, "paint dirty avoids full framebuffer");
+}
+
 void tree_dirty_rebuilds_without_previous_layout() {
     const FrameUpdatePlan plan = plan_frame_update(cached_state(DomDirtyTree | DomDirtyLayout));
     check(plan.action == FrameUpdateAction::RebuildPipeline, "tree dirty rebuilds pipeline");
@@ -174,6 +216,10 @@ int main() {
         clean_uncached_document_gets_first_paint();
         paint_dirty_reuses_existing_pipeline();
         layout_dirty_rebuilds_with_previous_layout();
+        repaint_plan_keeps_incremental_layout_when_size_matches();
+        repaint_plan_forces_full_frame_when_resolved_layout_grows();
+        repaint_plan_uses_viewport_floor_when_content_shrinks();
+        repaint_plan_reuses_current_layout_for_paint_dirty();
         tree_dirty_rebuilds_without_previous_layout();
         missing_framebuffer_forces_full_frame();
         resized_framebuffer_forces_full_frame();

@@ -660,6 +660,7 @@ private:
             return;
         }
 
+        const DomDirtyFlags rebuild_dirty_flags = document_->dirty_flags;
         LayoutBoxPtr previous_layout = update_plan.needs_previous_layout ? std::move(layout_tree_) : LayoutBoxPtr{};
         RenderTreeBuilder render_builder(*style_resolver_, render_tree_options_from_budgets(budgets_));
         auto next_render_tree = render_builder.build(*document_);
@@ -670,14 +671,13 @@ private:
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
 
         const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);
+        const FrameRepaintPlan repaint_plan = plan_frame_repaint(update_state, update_plan, content_height);
         scroll_y_ = std::max(0, std::min(scroll_y_, std::max(0, content_height - viewport_height_)));
         std::vector<Rect> dirty_rects;
-        const bool can_repaint_incrementally =
-            update_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout &&
-            previous_layout != nullptr &&
-            frame_buffer_.width == viewport_width_ &&
-            frame_buffer_.height == content_height;
-        if (can_repaint_incrementally && document_->dirty_flags != DomDirtyNone) {
+        const bool can_repaint_incrementally = repaint_plan.can_repaint_dirty_rects &&
+            repaint_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout &&
+            previous_layout != nullptr;
+        if (can_repaint_incrementally && rebuild_dirty_flags != DomDirtyNone) {
             dirty_rects = compute_dirty_rects(*document_,
                                               previous_layout.get(),
                                               next_layout_tree.get(),

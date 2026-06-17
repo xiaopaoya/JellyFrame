@@ -25,10 +25,12 @@
 5. 填充 `FramePipelineCacheState`，调用 `make_frame_update_state(...)`，再调用
    `plan_frame_update(...)` 决定更新路径。
 6. 按计划复用现有 layout/layer，或重建管线。
-7. 用 `compute_dirty_rects(...)` 生成 dirty rectangles，或保守全帧。
-8. 调用 `SoftwareCompositor::render_into(...)` 或完整 `render(...)`。
-9. 通过 `HostFrameSink` 提交 dirty rectangles。
-10. 清理 DOM dirty flags。
+7. 新 layout 已知后，用解析出的内容高度调用 `plan_frame_repaint(...)`，确认现有
+   framebuffer 尺寸是否仍匹配。
+8. 用 `compute_dirty_rects(...)` 生成 dirty rectangles，或保守全帧。
+9. 调用 `SoftwareCompositor::render_into(...)` 或完整 `render(...)`。
+10. 通过 `HostFrameSink` 提交 dirty rectangles。
+11. 清理 DOM dirty flags。
 
 宿主可以把这些步骤放进一个 UI task、桌面消息循环或测试壳中，但不应在 ISR 或屏幕 flush callback 内执行脚本、layout 或渲染。
 
@@ -59,6 +61,11 @@ cache snapshot 形状，减少各壳层手写状态转换的出错机会。
 - `FrameDirtyRectMode::PreviousAndCurrentLayout`：重建后比较旧/新 layout，适合文本、样式或布局变化的增量重绘。
 - `FrameDirtyRectMode::FullFrame`：缺少缓存、尺寸不匹配或 viewport 无效时保守整帧。
 
+`plan_frame_repaint(...)` 是重建 layout 后使用的第二阶段检查。它只在现有
+framebuffer 尺寸仍匹配解析后的目标高度时保留 `PreviousAndCurrentLayout` 或
+`CurrentLayout`。如果文本、样式或布局变化导致内容变高或变矮，宿主必须 resize 或重建
+framebuffer，并执行 full frame repaint。
+
 ## Dirty Flags 语义
 
 - `DomDirtyPaint`：控件值、选择状态、焦点类视觉变化等。若 framebuffer 和 layout cache 可用，可走 `RepaintExisting`。
@@ -86,5 +93,6 @@ cache snapshot 形状，减少各壳层手写状态转换的出错机会。
 - clean + cached frame 不工作。
 - clean + uncached document 触发首帧 full render。
 - paint-only dirty 在缓存齐全且 framebuffer 尺寸匹配时复用 render/layout。
-- layout/style/text dirty 在 framebuffer 尺寸匹配时可比较旧/新 layout 后增量重绘。
+- layout/style/text dirty 在新 layout 解析后 framebuffer 尺寸仍匹配时，可比较旧/新 layout
+  后增量重绘。
 - 缓存缺失、尺寸变化或 viewport 无效时保守 full frame。
