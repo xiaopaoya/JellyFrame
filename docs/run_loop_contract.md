@@ -145,6 +145,12 @@ provide stable short names for shell diagnostics. The Win32 validation shell
 uses them in the window title after incremental repaints, so fallback causes can
 be seen while interacting with a page.
 
+`DirtyRegionStatistics` can accumulate many `DirtyRegionResult` samples. It
+tracks clean frames, dirty-rect frames, full-frame frames, total rect count,
+total dirty area and fallback reason counts. This is intended for M9 audits:
+measure where full-frame fallback comes from before adding heavier retained
+subtree reuse.
+
 ## Boundaries
 
 The current core still does not implement:

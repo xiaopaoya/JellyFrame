@@ -4,6 +4,7 @@
 #include "core/geometry.h"
 #include "core/layout.h"
 
+#include <array>
 #include <cstddef>
 #include <vector>
 
@@ -24,8 +25,11 @@ enum class DirtyRegionFallbackReason {
     EmptyAfterClipping,
 };
 
+constexpr std::size_t kDirtyRegionFallbackReasonCount = 6;
+
 const char* dirty_region_mode_name(DirtyRegionMode mode);
 const char* dirty_region_fallback_reason_name(DirtyRegionFallbackReason reason);
+std::size_t dirty_region_fallback_reason_index(DirtyRegionFallbackReason reason);
 
 struct DirtyRegionOptions {
     Rect viewport;
@@ -38,6 +42,19 @@ struct DirtyRegionResult {
     DirtyRegionMode mode = DirtyRegionMode::Clean;
     DirtyRegionFallbackReason fallback_reason = DirtyRegionFallbackReason::None;
 };
+
+struct DirtyRegionStatistics {
+    std::size_t clean_frames = 0;
+    std::size_t dirty_rect_frames = 0;
+    std::size_t full_frame_frames = 0;
+    std::size_t total_rects = 0;
+    std::size_t total_dirty_area = 0;
+    std::array<std::size_t, kDirtyRegionFallbackReasonCount> fallback_reasons{};
+};
+
+void record_dirty_region_result(DirtyRegionStatistics& statistics, const DirtyRegionResult& result);
+std::size_t dirty_region_fallback_count(const DirtyRegionStatistics& statistics,
+                                        DirtyRegionFallbackReason reason);
 
 DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* previous_layout,

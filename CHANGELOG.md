@@ -185,6 +185,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   full-frame modes plus explicit fallback reasons for M9 invalidation audits.
 - Added stable dirty-region mode/reason names and surfaced the latest Win32
   validation-shell dirty repaint mode in the window title.
+- Added `DirtyRegionStatistics` so tests and validation shells can accumulate
+  dirty-rect/full-frame counts, dirty area and fallback reason distribution.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
   RGB332, Gray8 or 1-bit monochrome display buffers.

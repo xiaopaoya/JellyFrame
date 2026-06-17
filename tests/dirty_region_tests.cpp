@@ -368,6 +368,37 @@ void clipped_dirty_bounds_report_empty_after_clipping() {
           "empty clipping fallback reason is explicit");
 }
 
+void dirty_region_statistics_accumulate_modes_reasons_and_area() {
+    DirtyRegionStatistics statistics;
+
+    DirtyRegionResult clean;
+    record_dirty_region_result(statistics, clean);
+
+    DirtyRegionResult local;
+    local.mode = DirtyRegionMode::DirtyRects;
+    local.rects.push_back(Rect{0, 0, 10, 5});
+    local.rects.push_back(Rect{10, 0, 4, 5});
+    record_dirty_region_result(statistics, local);
+
+    DirtyRegionResult full;
+    full.mode = DirtyRegionMode::FullFrame;
+    full.fallback_reason = DirtyRegionFallbackReason::TreeDirty;
+    full.rects.push_back(Rect{0, 0, 20, 10});
+    record_dirty_region_result(statistics, full);
+
+    check(statistics.clean_frames == 1, "statistics count clean frames");
+    check(statistics.dirty_rect_frames == 1, "statistics count dirty rect frames");
+    check(statistics.full_frame_frames == 1, "statistics count full frame fallbacks");
+    check(statistics.total_rects == 3, "statistics count total rects");
+    check(statistics.total_dirty_area == 270, "statistics accumulate dirty area");
+    check(dirty_region_fallback_count(statistics, DirtyRegionFallbackReason::None) == 2,
+          "statistics count non-fallback frames");
+    check(dirty_region_fallback_count(statistics, DirtyRegionFallbackReason::TreeDirty) == 1,
+          "statistics count tree dirty fallback");
+    check(std::string(dirty_region_mode_name(DirtyRegionMode::FullFrame)) == "full-frame",
+          "full frame mode name");
+}
+
 } // namespace
 
 int main() {
@@ -383,6 +414,7 @@ int main() {
         invalid_viewport_reports_reason_without_rects();
         dirty_node_missing_from_layout_reports_reason();
         clipped_dirty_bounds_report_empty_after_clipping();
+        dirty_region_statistics_accumulate_modes_reasons_and_area();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

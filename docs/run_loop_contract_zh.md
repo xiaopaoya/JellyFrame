@@ -115,6 +115,10 @@ layout、结构性 tree dirty、找不到 dirty node bounds，或局部 rect 被
 `dirty_region_mode_name(...)` 和 `dirty_region_fallback_reason_name(...)` 提供稳定的短名称，
 供壳层诊断使用。Win32 验证壳会在增量重绘后把这些信息显示在窗口标题中，交互时可以直接看到 fallback 原因。
 
+`DirtyRegionStatistics` 可累计多次 `DirtyRegionResult` 样本。它会记录 clean frame、dirty-rect
+frame、full-frame frame、总 rect 数、总 dirty area 和 fallback reason 次数。它面向 M9 审计：
+先测出 full-frame fallback 主要来自哪里，再决定是否加入更重的 retained subtree reuse。
+
 ## 边界
 
 当前核心仍不做：

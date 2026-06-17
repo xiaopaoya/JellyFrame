@@ -481,6 +481,7 @@ private:
     DirtyRegionMode last_dirty_region_mode_ = DirtyRegionMode::Clean;
     DirtyRegionFallbackReason last_dirty_region_reason_ = DirtyRegionFallbackReason::None;
     std::size_t last_dirty_rect_count_ = 0;
+    DirtyRegionStatistics dirty_region_statistics_;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
         BrowserApp* app = nullptr;
@@ -572,6 +573,7 @@ private:
             layout_tree_.reset();
             layer_tree_.reset();
             input_.reset();
+            dirty_region_statistics_ = DirtyRegionStatistics{};
 
             document_->add_event_listener("click", [this](Event& event) {
                 std::cout << "click target=" << describe_node(event.target()) << '\n';
@@ -955,10 +957,14 @@ private:
         last_dirty_region_mode_ = region.mode;
         last_dirty_region_reason_ = region.fallback_reason;
         last_dirty_rect_count_ = region.rects.size();
+        record_dirty_region_result(dirty_region_statistics_, region);
         if (hwnd_ != nullptr) {
             std::ostringstream status;
             status << "dirty=" << dirty_region_mode_name(last_dirty_region_mode_)
-                   << " rects=" << last_dirty_rect_count_;
+                   << " rects=" << last_dirty_rect_count_
+                   << " local=" << dirty_region_statistics_.dirty_rect_frames
+                   << " full=" << dirty_region_statistics_.full_frame_frames
+                   << " clean=" << dirty_region_statistics_.clean_frames;
             if (last_dirty_region_reason_ != DirtyRegionFallbackReason::None) {
                 status << " reason=" << dirty_region_fallback_reason_name(last_dirty_region_reason_);
             }

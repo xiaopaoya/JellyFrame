@@ -177,6 +177,51 @@ const char* dirty_region_fallback_reason_name(DirtyRegionFallbackReason reason) 
     return "unknown";
 }
 
+std::size_t dirty_region_fallback_reason_index(DirtyRegionFallbackReason reason) {
+    switch (reason) {
+    case DirtyRegionFallbackReason::None:
+        return 0;
+    case DirtyRegionFallbackReason::InvalidViewport:
+        return 1;
+    case DirtyRegionFallbackReason::MissingLayout:
+        return 2;
+    case DirtyRegionFallbackReason::TreeDirty:
+        return 3;
+    case DirtyRegionFallbackReason::NoDirtyBounds:
+        return 4;
+    case DirtyRegionFallbackReason::EmptyAfterClipping:
+        return 5;
+    }
+    return 0;
+}
+
+void record_dirty_region_result(DirtyRegionStatistics& statistics, const DirtyRegionResult& result) {
+    switch (result.mode) {
+    case DirtyRegionMode::Clean:
+        ++statistics.clean_frames;
+        break;
+    case DirtyRegionMode::DirtyRects:
+        ++statistics.dirty_rect_frames;
+        break;
+    case DirtyRegionMode::FullFrame:
+        ++statistics.full_frame_frames;
+        break;
+    }
+    statistics.total_rects += result.rects.size();
+    for (Rect rect : result.rects) {
+        if (!empty_rect(rect)) {
+            statistics.total_dirty_area +=
+                static_cast<std::size_t>(rect.width) * static_cast<std::size_t>(rect.height);
+        }
+    }
+    ++statistics.fallback_reasons[dirty_region_fallback_reason_index(result.fallback_reason)];
+}
+
+std::size_t dirty_region_fallback_count(const DirtyRegionStatistics& statistics,
+                                        DirtyRegionFallbackReason reason) {
+    return statistics.fallback_reasons[dirty_region_fallback_reason_index(reason)];
+}
+
 DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* previous_layout,
                                        const LayoutBox* current_layout,
