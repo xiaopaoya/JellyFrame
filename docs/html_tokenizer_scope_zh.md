@@ -51,10 +51,12 @@ Tokenizer 会输出这些 token 类型：
 - Comment recognition，并支持可选 comment token 输出
 - Bogus comment consumption
 - 简单 `DOCTYPE` 识别
-- `script`、`style`、`textarea` 和 `title` 的简化 raw-text 处理
+- `script` 和 `style` 的简化 raw-text 处理
+- `textarea` 和 `title` 的简化 RCDATA-like 处理，包含字符引用解码
 - CDATA sections 按文本消费，用于容错
-- Character reference state，搭配一个紧凑 named entity 表
-- Numeric character reference state，支持十进制和十六进制
+- Character reference state，搭配一个紧凑常用 named entity 表
+- Numeric character reference state，支持十进制、十六进制，以及常见网页内容依赖的
+  legacy Windows-1252 control-code remap
 
 支持行为：
 
@@ -74,19 +76,19 @@ Tokenizer 会输出这些 token 类型：
 - `DOCTYPE`：输出名称，但永远不进入 quirks mode。
 - Comment：默认忽略，诊断模式下可以输出。
 - 未知 markup declaration：消费到 `>` 并忽略。
-- Named character references：先保留紧凑表：
-  `amp`、`lt`、`gt`、`quot`、`apos`、`nbsp`、`copy`、`reg`。未知引用保持
-  字面量。
+- Named character references：先保留紧凑常用表，覆盖 XML/HTML 基础项，以及
+  `nbsp`、`copy`、`reg`、`hellip`、`mdash`、`ldquo`、`rdquo`、`trade`、`euro`
+  等 app 内容常见项。未知引用保持字面量。
 - `script`：按 raw text 处理直到 `</script>`。这不是完整浏览器 script-data
   状态族，但可以避免打包后的 JavaScript 破坏后续 token stream。
-- `textarea` 和 `title`：先做简化 raw-text 处理。如果真实 app 需要其中的实体
-  解码，再补完整 RCDATA。
+- `textarea` 和 `title`：按简化 RCDATA-like 内容处理。结束标签识别仍是有界简化路径，
+  但会解码字符引用，使 app 标题和 textarea 默认内容更接近现代 HTML 作者预期。
 
 ## 推迟到需要时再做
 
 这些标准状态主要服务浏览器兼容，应该延后：
 
-- 完整 RCDATA 状态族。
+- 当前 `textarea`/`title` 简化路径之外的完整 RCDATA 状态族。
 - 简化 raw-text 路径之外的完整 RAWTEXT 状态族。
 - `</script>` raw-text 消费之外的完整 script data 状态族。
 - PLAINTEXT state。
@@ -145,6 +147,7 @@ Tokenizer 应该可以独立测试。这样 parser 正确性不会被 layout 或
 - 文本中不是合法 tag 的小于号。
 - Comments 和 bogus comments。
 - Numeric references：`&#65;`、`&#x41;`。
-- Named references：`&amp;`、`&lt;`、未知引用字面量 fallback。
+- Named references：`&amp;`、`&lt;`、常见排版引用和未知引用字面量 fallback。
+- `textarea` 和 `title` 内的 RCDATA-like 字符引用。
 - CRLF normalization。
 - Null character replacement。

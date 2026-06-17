@@ -34,8 +34,8 @@ tree-construction 机器。目标是有韧性的 app-runtime parsing：常见结
 - 常见隐式闭合：
   `p`、`li`、`dt`、`dd`、`option`、`tr`、`td`、`th`。
 - 遇到不匹配的 end tag 时忽略，而不是弹出无关祖先。
-- 普通文本折叠空白，但在 `pre`、`script`、`style`、`textarea` 和 `title`
-  内保留文本。
+- DOM 中保留普通文本空白。Layout/rendering 可在默认 CSS 显示语义下折叠普通文本，
+  `pre`、`script`、`style`、`textarea` 和 `title` 在 DOM 和渲染路径都保留文本。
 - 应用硬上限：
   最大节点数、最大深度、每个元素最大属性数。
 
@@ -74,5 +74,5 @@ tree-construction 机器。目标是有韧性的 app-runtime parsing：常见结
 - `max_depth`：64
 - `max_attributes_per_element`：64
 - `synthesize_document_structure`：true
-- `collapse_whitespace`：true
-
+- `collapse_whitespace`：false；该选项仅作为兼容开关保留，显示期空白规范化由
+  layout/rendering 处理

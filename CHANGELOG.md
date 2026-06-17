@@ -8,6 +8,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added the first M7.6 HTML parser compatibility batch: parser budget
+  diagnostics for node/depth/attribute limits, a compact common named-entity
+  table and Windows-1252 legacy numeric-reference remaps.
+- Added shared render-time text normalization so DOM text keeps author
+  whitespace while layout/layer output still collapses ordinary display text.
 - Added first-time developer onboarding docs (`HOW_TO_START.md` /
   `HOW_TO_START_zh.md`) and a bilingual `docs/README` index that separates
   technical contracts from active project/process documents.
@@ -218,6 +223,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Improved
 
+- `textarea` and `title` now use a bounded RCDATA-like tokenizer path with
+  character-reference decoding; `script` and `style` remain simplified raw text.
+- Non-void HTML elements with a self-closing slash now follow HTML semantics and
+  stay open; true void elements still remain leaf nodes.
 - Folded the HTML Living Standard degradation audit into the roadmap as an
   HTML parser/DOM compatibility short track, prioritizing low-cost app-author
   surprises while keeping quirks mode and heavy historical compatibility out of

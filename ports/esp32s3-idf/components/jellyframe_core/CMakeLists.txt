@@ -24,6 +24,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/core/software_renderer.cpp"
         "${JELLYFRAME_ROOT}/src/core/style.cpp"
         "${JELLYFRAME_ROOT}/src/core/text_backend.cpp"
+        "${JELLYFRAME_ROOT}/src/core/text_normalization.cpp"
     INCLUDE_DIRS
         "${JELLYFRAME_ROOT}/src"
 )

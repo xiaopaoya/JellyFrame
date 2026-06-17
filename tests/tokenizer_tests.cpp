@@ -83,6 +83,23 @@ void treats_style_as_raw_text() {
     check(token_at(tokens, 3, HtmlTokenType::StartTag).name == "div", "post-style div tag");
 }
 
+void treats_textarea_and_title_as_rcdata() {
+    const auto tokens = tokenize("<title>A &amp; B</title><textarea>x &lt; y</textarea>");
+    check(token_at(tokens, 0, HtmlTokenType::StartTag).name == "title", "title start tag");
+    check(token_at(tokens, 1, HtmlTokenType::Text).data == "A & B", "title decodes character references");
+    check(token_at(tokens, 2, HtmlTokenType::EndTag).name == "title", "title end tag");
+    check(token_at(tokens, 3, HtmlTokenType::StartTag).name == "textarea", "textarea start tag");
+    check(token_at(tokens, 4, HtmlTokenType::Text).data == "x < y", "textarea decodes character references");
+    check(token_at(tokens, 5, HtmlTokenType::EndTag).name == "textarea", "textarea end tag");
+}
+
+void decodes_common_named_and_numeric_references() {
+    const auto tokens = tokenize("&hellip;&mdash;&ldquo;x&rdquo;&#x80;");
+    check(token_at(tokens, 0, HtmlTokenType::Text).data ==
+              "\xE2\x80\xA6\xE2\x80\x94\xE2\x80\x9Cx\xE2\x80\x9D\xE2\x82\xAC",
+          "common named and numeric references decode");
+}
+
 void keeps_first_duplicate_attribute() {
     const auto tokens = tokenize("<input VALUE=first value=second disabled>");
     const HtmlToken& input = token_at(tokens, 0, HtmlTokenType::StartTag);
@@ -109,6 +126,25 @@ void parser_consumes_token_stream() {
     check(body.children[2]->tag_name == "p", "second p");
 }
 
+void parser_treats_non_void_self_closing_as_start_tag() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><div/><span>x</span></body>");
+    const Node& body = *document->children[0]->children[0];
+    check(body.children.size() == 1, "span stays inside self-closing div in HTML mode");
+    check(body.children[0]->tag_name == "div", "div created");
+    check(body.children[0]->children.size() == 1, "div remains open");
+    check(body.children[0]->children[0]->tag_name == "span", "span child inside div");
+}
+
+void parser_preserves_dom_text_whitespace() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p>a <b>x</b>  b</p></body>");
+    const Node& p = *document->children[0]->children[0]->children[0];
+    check(p.children.size() == 3, "p has text, b, text");
+    check(p.children[0]->text == "a ", "leading text preserves trailing space");
+    check(p.children[2]->text == "  b", "trailing text preserves repeated spaces");
+}
+
 void parser_applies_common_implied_end_tags() {
     HtmlParser parser;
     auto document = parser.parse("<ul><li>one<li>two</ul><p>a<div>b</div>");
@@ -130,6 +166,21 @@ void parser_respects_resource_limits() {
 
     auto document = parser.parse("<div><div><div><div><span>too deep</span></div></div></div></div>", options);
     check(document->children.size() == 1, "limited document still has html");
+}
+
+void parser_reports_resource_limit_diagnostics() {
+    HtmlParser parser;
+    HtmlParserOptions options;
+    options.max_nodes = 5;
+    options.max_depth = 4;
+    options.max_attributes_per_element = 1;
+
+    HtmlParseResult result =
+        parser.parse_with_diagnostics("<div a=1 b=2><div><div><div><span>too deep</span></div></div></div></div>", options);
+    check(result.document != nullptr, "diagnostic parse returns document");
+    check((result.diagnostics & HtmlParserDiagnosticNodeLimit) != 0U, "node limit diagnostic");
+    check((result.diagnostics & HtmlParserDiagnosticDepthLimit) != 0U, "depth limit diagnostic");
+    check((result.diagnostics & HtmlParserDiagnosticAttributeLimit) != 0U, "attribute limit diagnostic");
 }
 
 void streaming_tokenizer_matches_vector_tokenizer() {
@@ -156,10 +207,15 @@ int main() {
         keeps_malformed_less_than_as_text();
         treats_script_as_raw_text();
         treats_style_as_raw_text();
+        treats_textarea_and_title_as_rcdata();
+        decodes_common_named_and_numeric_references();
         keeps_first_duplicate_attribute();
         parser_consumes_token_stream();
+        parser_treats_non_void_self_closing_as_start_tag();
+        parser_preserves_dom_text_whitespace();
         parser_applies_common_implied_end_tags();
         parser_respects_resource_limits();
+        parser_reports_resource_limit_diagnostics();
         streaming_tokenizer_matches_vector_tokenizer();
     } catch (const std::exception& error) {
         std::cerr << "tokenizer test failed: " << error.what() << '\n';

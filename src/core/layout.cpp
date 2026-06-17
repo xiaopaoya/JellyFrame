@@ -1,6 +1,7 @@
 #include "core/layout.h"
 
 #include "core/form_control.h"
+#include "core/text_normalization.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -254,13 +255,14 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
     int cursor_y = content_y;
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
-        const TextMetrics metrics = measure_text(text_measure_, box.node->text, box.style.font_size, box.style.font_weight);
+        const std::string text = normalized_render_text(*box.node);
+        const TextMetrics metrics = measure_text(text_measure_, text, box.style.font_size, box.style.font_weight);
         const int raw_text_width = metrics.width;
         const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
         const int usable_text_width = std::max(0, content_width - text_indent);
         const int text_width = std::max(box.style.min_width, std::min(usable_text_width, raw_text_width));
         const int line_height = box.style.line_height > 0 ? box.style.line_height : metrics.line_height;
-        const bool can_wrap = has_text_wrap_opportunity(box.node->text);
+        const bool can_wrap = has_text_wrap_opportunity(text);
         const int line_count = can_wrap && usable_text_width > 0
             ? std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width)
             : 1;

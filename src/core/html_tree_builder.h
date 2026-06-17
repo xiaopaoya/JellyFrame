@@ -16,10 +16,11 @@ public:
     HtmlTreeBuilder(Node& document, const HtmlParserOptions& options);
 
     void consume(const HtmlToken& token) override;
+    HtmlParserDiagnosticFlags diagnostics() const;
 
 private:
-    bool can_add_node() const;
-    bool can_descend() const;
+    bool can_add_node();
+    bool can_descend();
     Node& append_element(Node& parent, const HtmlToken& token);
     Node& append_synthetic_element(Node& parent, std::string_view tag_name);
     Node* find_open_element(std::string_view tag_name) const;
@@ -48,7 +49,7 @@ private:
     Node* head_ = nullptr;
     Node* body_ = nullptr;
     std::size_t node_count_ = 1;
+    HtmlParserDiagnosticFlags diagnostics_ = HtmlParserDiagnosticNone;
 };
 
 } // namespace jellyframe
-

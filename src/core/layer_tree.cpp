@@ -1,6 +1,7 @@
 #include "core/layer_tree.h"
 
 #include "core/form_control.h"
+#include "core/text_normalization.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -524,14 +525,15 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list) {
     paint_list_marker(box, display_list);
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
+        const std::string text = normalized_render_text(*box.node);
         const int line_height = box.style.line_height > 0
             ? box.style.line_height
             : box.style.font_size + std::max(6, box.style.font_size / 3);
-        const bool single_line = !has_text_wrap_opportunity(box.node->text) || box.rect.height <= line_height;
+        const bool single_line = !has_text_wrap_opportunity(text) || box.rect.height <= line_height;
         push_text(display_list,
                   box.rect,
                   box.style.color,
-                  box.node->text,
+                  text,
                   box.style.font_size,
                   box.style.font_weight,
                   text_command_align(box.style.text_align),

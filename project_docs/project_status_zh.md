@@ -146,18 +146,19 @@ sibling selectors、简化 flex grow/shrink/basis sizing，以及有界 `relativ
 
 目标：减少普通现代 app HTML 在 parser/DOM 层的意外差异，但不引入旧浏览器兼容包袱。
 
-状态：根据 HTML Living Standard 降级审计纳入计划。最高收益项大多是局部 parser/tree-builder
-工作，成本可控且可用性收益高，因此采纳。完整 quirks mode、parser reentrant
-`document.write()`、speculative parser、完整 adoption-agency 和完整 table foster parenting
-继续不进入范围。
+状态：已开始。第一批兼容项已经落到 tokenizer、tree builder 和 layout/layer 文本路径：
+非 void 元素自闭合斜杠语义、DOM 空白保留与显示期文本规范化、`textarea`/`title`
+RCDATA-like 字符引用解码、更宽的紧凑常用 entity 表、numeric legacy remap，以及
+parser 预算诊断。完整 quirks mode、parser reentrant `document.write()`、speculative
+parser、完整 adoption-agency 和完整 table foster parenting 继续不进入范围。
 
 第一批任务：
 
-- 修正非 void 元素自闭合斜杠语义，同时保留真正 void 元素的叶子行为。
-- tree builder 保留普通文本空白，把空白折叠交给 layout/rendering。
-- 将 `textarea` 和 `title` 作为近似 RCDATA 处理，支持字符引用解码。
-- 扩充常用 named character references，并收紧 numeric/semicolon 恢复规则。
-- 暴露 parser 预算上限诊断，避免只有静默截断。
+- 修正非 void 元素自闭合斜杠语义，同时保留真正 void 元素的叶子行为。已完成。
+- tree builder 保留普通文本空白，把空白折叠交给 layout/rendering。已完成。
+- 将 `textarea` 和 `title` 作为近似 RCDATA 处理，支持字符引用解码。已完成有界简化路径。
+- 扩充常用 named character references，并收紧 numeric/semicolon 恢复规则。已完成紧凑常用表和 numeric legacy remap。
+- 暴露 parser 预算上限诊断，避免只有静默截断。已覆盖 node、depth 和单元素 attribute 上限。
 - 增加最小 doctype/comment/document metadata 支撑。
 
 第二批任务：

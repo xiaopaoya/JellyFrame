@@ -42,36 +42,6 @@ bool is_block_start(std::string_view tag_name) {
     return contains_name(kBlockElements, tag_name);
 }
 
-bool preserves_text(std::string_view tag_name) {
-    static constexpr std::array<std::string_view, 5> kPreservingElements = {
-        "pre", "script", "style", "textarea", "title"
-    };
-    return contains_name(kPreservingElements, tag_name);
-}
-
-std::string collapse_tree_text(std::string_view value) {
-    std::string output;
-    output.reserve(value.size());
-    bool last_was_space = false;
-    for (const char ch : value) {
-        const bool is_space = std::isspace(static_cast<unsigned char>(ch)) != 0;
-        if (is_space) {
-            if (!last_was_space && !output.empty()) {
-                output.push_back(' ');
-            }
-            last_was_space = true;
-        } else {
-            output.push_back(ch);
-            last_was_space = false;
-        }
-    }
-
-    if (!output.empty() && output.back() == ' ') {
-        output.pop_back();
-    }
-    return output;
-}
-
 } // namespace
 
 HtmlTreeBuilder::HtmlTreeBuilder(Node& document, const HtmlParserOptions& options)
@@ -98,12 +68,24 @@ void HtmlTreeBuilder::consume(const HtmlToken& token) {
     }
 }
 
-bool HtmlTreeBuilder::can_add_node() const {
-    return node_count_ < options_.max_nodes;
+HtmlParserDiagnosticFlags HtmlTreeBuilder::diagnostics() const {
+    return diagnostics_;
 }
 
-bool HtmlTreeBuilder::can_descend() const {
-    return open_elements_.size() < options_.max_depth;
+bool HtmlTreeBuilder::can_add_node() {
+    if (node_count_ < options_.max_nodes) {
+        return true;
+    }
+    diagnostics_ |= HtmlParserDiagnosticNodeLimit;
+    return false;
+}
+
+bool HtmlTreeBuilder::can_descend() {
+    if (open_elements_.size() < options_.max_depth) {
+        return true;
+    }
+    diagnostics_ |= HtmlParserDiagnosticDepthLimit;
+    return false;
 }
 
 Node& HtmlTreeBuilder::append_element(Node& parent, const HtmlToken& token) {
@@ -111,6 +93,7 @@ Node& HtmlTreeBuilder::append_element(Node& parent, const HtmlToken& token) {
     std::size_t count = 0;
     for (const HtmlAttribute& attribute : token.attributes) {
         if (count >= options_.max_attributes_per_element) {
+            diagnostics_ |= HtmlParserDiagnosticAttributeLimit;
             break;
         }
         element->attributes.emplace(attribute.name, attribute.value);
@@ -230,7 +213,7 @@ void HtmlTreeBuilder::start_tag(const HtmlToken& token) {
 
     Node& parent = *open_elements_.back();
     Node& appended = append_element(parent, token);
-    if (!token.self_closing && !is_void_element(appended.tag_name) && can_descend()) {
+    if (!is_void_element(appended.tag_name) && can_descend()) {
         open_elements_.push_back(&appended);
     }
 }
@@ -274,7 +257,7 @@ void HtmlTreeBuilder::start_body(const HtmlToken& token) {
 void HtmlTreeBuilder::append_to_head(const HtmlToken& token) {
     Node& head = ensure_head();
     Node& appended = append_element(head, token);
-    if (!token.self_closing && !is_void_element(appended.tag_name) && can_descend()) {
+    if (!is_void_element(appended.tag_name) && can_descend()) {
         open_elements_.push_back(&appended);
     }
 }
@@ -283,6 +266,7 @@ void HtmlTreeBuilder::merge_attributes(Node& node, const HtmlToken& token) {
     std::size_t count = node.attributes.size();
     for (const HtmlAttribute& attribute : token.attributes) {
         if (count >= options_.max_attributes_per_element) {
+            diagnostics_ |= HtmlParserDiagnosticAttributeLimit;
             break;
         }
         const auto inserted = node.attributes.emplace(attribute.name, attribute.value);
@@ -358,17 +342,16 @@ void HtmlTreeBuilder::text(std::string_view data) {
     }
     if (options_.synthesize_document_structure && body_ == nullptr &&
         (open_elements_.back() == &document_ || open_elements_.back()->tag_name == "html")) {
-        const std::string collapsed = collapse_tree_text(data);
-        if (collapsed.empty()) {
+        const bool has_non_space = std::any_of(data.begin(), data.end(), [](char ch) {
+            return std::isspace(static_cast<unsigned char>(ch)) == 0;
+        });
+        if (!has_non_space) {
             return;
         }
         ensure_body();
     }
 
-    const bool preserve = preserves_text(open_elements_.back()->tag_name);
-    const std::string value = options_.collapse_whitespace && !preserve
-        ? collapse_tree_text(data)
-        : std::string(data);
+    const std::string value = std::string(data);
     if (value.empty()) {
         return;
     }
@@ -378,4 +361,3 @@ void HtmlTreeBuilder::text(std::string_view data) {
 }
 
 } // namespace jellyframe
-

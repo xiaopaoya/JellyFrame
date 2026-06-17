@@ -194,23 +194,26 @@ Remaining tasks:
 Goal: reduce surprising parser/DOM differences for ordinary modern app HTML
 without importing old browser compatibility machinery.
 
-Status: planned from the HTML Living Standard degradation audit. The highest
-return items are accepted because they are mostly local parser/tree-builder work
-with strong usability payoff. Full quirks mode, parser-reentrant
-`document.write()`, speculative parsing, full adoption-agency behavior and full
-table foster parenting remain out of scope.
+Status: started. The first compatibility batch is implemented in the tokenizer,
+tree builder and layout/layer text paths: non-void self-closing slash handling,
+DOM whitespace preservation with display-time text normalization,
+`textarea`/`title` RCDATA-like character-reference decoding, a broader compact
+common entity table, numeric legacy remaps and parser budget diagnostics. Full
+quirks mode, parser-reentrant `document.write()`, speculative parsing, full
+adoption-agency behavior and full table foster parenting remain out of scope.
 
 First tasks:
 
 - Correct non-void self-closing slash handling while preserving true void
-  elements.
+  elements. Done.
 - Preserve ordinary text whitespace in the tree builder and leave whitespace
-  collapsing to layout/rendering.
+  collapsing to layout/rendering. Done.
 - Treat `textarea` and `title` as RCDATA-like content with character reference
-  decoding.
+  decoding. Done as a bounded simplified path.
 - Expand common named character references and tighten numeric/semicolon
-  recovery.
+  recovery. Partly done with a compact common table and numeric legacy remaps.
 - Surface parser budget-limit diagnostics instead of silent-only truncation.
+  Done for node, depth and per-element attribute limits.
 - Add minimal doctype/comment/document metadata support.
 
 Second tasks:

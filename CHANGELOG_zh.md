@@ -8,6 +8,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 添加第一批 M7.6 HTML parser 兼容项：node/depth/attribute 上限的 parser 预算诊断、
+  紧凑常用 named entity 表，以及 Windows-1252 legacy numeric-reference remap。
+- 添加共享的显示期文本规范化，使 DOM 文本保留作者空白，而 layout/layer 输出仍能折叠普通显示文本。
 - 添加面向第一次接触项目的上手文档（`HOW_TO_START.md` / `HOW_TO_START_zh.md`）
   和双语 `docs/README` 索引，用于区分技术契约与当前项目/过程文档。
 - 项目正式更名为 `JellyFrame`；`WearWeb` 现在仅作为早期代号出现在文档中。
@@ -160,6 +163,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 改进
 
+- `textarea` 和 `title` 现在走有界 RCDATA-like tokenizer 路径并解码字符引用；
+  `script` 和 `style` 继续使用简化 raw text。
+- 带自闭合斜杠的非 void HTML 元素现在遵循 HTML 语义并保持打开；真正 void 元素仍保持叶子节点行为。
 - 将 HTML Living Standard 降级审计纳入路线图，形成 HTML parser/DOM 兼容短线：
   优先处理低成本、容易让 app 作者踩坑的差异，同时继续排除 quirks mode 和沉重历史兼容包袱。
 - 改进 inline layout，使文本、链接、高亮和 inline 控件按可用宽度横向流动并换行，不再把每个 inline

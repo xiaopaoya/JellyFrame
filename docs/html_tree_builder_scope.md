@@ -36,8 +36,9 @@ input does not corrupt the entire tree, and pathological input is bounded.
 - Common implied closures:
   `p`, `li`, `dt`, `dd`, `option`, `tr`, `td`, `th`.
 - Ignore unmatched end tags instead of popping unrelated ancestors.
-- Collapse normal text whitespace, but preserve text inside `pre`, `script`,
-  `style`, `textarea` and `title`.
+- Preserve normal DOM text whitespace. Rendering/layout may collapse ordinary
+  text for CSS-default display, while `pre`, `script`, `style`, `textarea` and
+  `title` preserve text for both DOM and rendering paths.
 - Apply hard parser limits:
   max node count, max depth and max attributes per element.
 
@@ -79,5 +80,5 @@ input does not corrupt the entire tree, and pathological input is bounded.
 - `max_depth`: 64
 - `max_attributes_per_element`: 64
 - `synthesize_document_structure`: true
-- `collapse_whitespace`: true
-
+- `collapse_whitespace`: false; kept only as a compatibility option while
+  layout/rendering handle display-time whitespace normalization

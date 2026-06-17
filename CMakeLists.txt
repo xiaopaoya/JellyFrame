@@ -48,6 +48,7 @@ add_library(jellyframe_core
     src/core/software_renderer.cpp
     src/core/style.cpp
     src/core/text_backend.cpp
+    src/core/text_normalization.cpp
 )
 
 target_include_directories(jellyframe_core

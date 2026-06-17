@@ -1,6 +1,7 @@
 #include "core/html_tokenizer.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
 #include <string_view>
@@ -25,6 +26,7 @@ enum class State {
     AfterAttributeValueQuoted,
     SelfClosingStartTag,
     RawText,
+    RcData,
     EndOfFile,
 };
 
@@ -122,7 +124,11 @@ bool starts_with_raw_text_end_tag(std::string_view source, std::size_t index, st
 }
 
 bool is_raw_text_element(const std::string& name) {
-    return name == "script" || name == "style" || name == "textarea" || name == "title";
+    return name == "script" || name == "style";
+}
+
+bool is_rcdata_element(const std::string& name) {
+    return name == "textarea" || name == "title";
 }
 
 bool is_duplicate_attribute(const HtmlToken& token, const std::string& name) {
@@ -132,31 +138,86 @@ bool is_duplicate_attribute(const HtmlToken& token, const std::string& name) {
 }
 
 std::string lookup_named_character_reference(const std::string& name) {
-    if (name == "amp") {
-        return "&";
-    }
-    if (name == "lt") {
-        return "<";
-    }
-    if (name == "gt") {
-        return ">";
-    }
-    if (name == "quot") {
-        return "\"";
-    }
-    if (name == "apos") {
-        return "'";
-    }
-    if (name == "nbsp") {
-        return "\xC2\xA0";
-    }
-    if (name == "copy") {
-        return "\xC2\xA9";
-    }
-    if (name == "reg") {
-        return "\xC2\xAE";
+    struct NamedReference {
+        std::string_view name;
+        std::string_view replacement;
+    };
+    static constexpr std::array<NamedReference, 34> kNamedReferences = {{
+        {"amp", "&"},
+        {"apos", "'"},
+        {"bull", "\xE2\x80\xA2"},
+        {"cent", "\xC2\xA2"},
+        {"copy", "\xC2\xA9"},
+        {"deg", "\xC2\xB0"},
+        {"divide", "\xC3\xB7"},
+        {"euro", "\xE2\x82\xAC"},
+        {"gt", ">"},
+        {"hellip", "\xE2\x80\xA6"},
+        {"laquo", "\xC2\xAB"},
+        {"ldquo", "\xE2\x80\x9C"},
+        {"lsaquo", "\xE2\x80\xB9"},
+        {"lsquo", "\xE2\x80\x98"},
+        {"lt", "<"},
+        {"mdash", "\xE2\x80\x94"},
+        {"micro", "\xC2\xB5"},
+        {"middot", "\xC2\xB7"},
+        {"nbsp", "\xC2\xA0"},
+        {"ndash", "\xE2\x80\x93"},
+        {"para", "\xC2\xB6"},
+        {"plusmn", "\xC2\xB1"},
+        {"pound", "\xC2\xA3"},
+        {"quot", "\""},
+        {"raquo", "\xC2\xBB"},
+        {"rdquo", "\xE2\x80\x9D"},
+        {"reg", "\xC2\xAE"},
+        {"rsaquo", "\xE2\x80\xBA"},
+        {"rsquo", "\xE2\x80\x99"},
+        {"sect", "\xC2\xA7"},
+        {"times", "\xC3\x97"},
+        {"trade", "\xE2\x84\xA2"},
+        {"yen", "\xC2\xA5"},
+        {"ZeroWidthSpace", "\xE2\x80\x8B"},
+    }};
+    for (const NamedReference& reference : kNamedReferences) {
+        if (name == reference.name) {
+            return std::string(reference.replacement);
+        }
     }
     return {};
+}
+
+std::uint32_t remap_numeric_character_reference(std::uint32_t value) {
+    switch (value) {
+    case 0x80: return 0x20AC;
+    case 0x82: return 0x201A;
+    case 0x83: return 0x0192;
+    case 0x84: return 0x201E;
+    case 0x85: return 0x2026;
+    case 0x86: return 0x2020;
+    case 0x87: return 0x2021;
+    case 0x88: return 0x02C6;
+    case 0x89: return 0x2030;
+    case 0x8A: return 0x0160;
+    case 0x8B: return 0x2039;
+    case 0x8C: return 0x0152;
+    case 0x8E: return 0x017D;
+    case 0x91: return 0x2018;
+    case 0x92: return 0x2019;
+    case 0x93: return 0x201C;
+    case 0x94: return 0x201D;
+    case 0x95: return 0x2022;
+    case 0x96: return 0x2013;
+    case 0x97: return 0x2014;
+    case 0x98: return 0x02DC;
+    case 0x99: return 0x2122;
+    case 0x9A: return 0x0161;
+    case 0x9B: return 0x203A;
+    case 0x9C: return 0x0153;
+    case 0x9E: return 0x017E;
+    case 0x9F: return 0x0178;
+    default:
+        return value;
+    }
 }
 
 class TokenizerRun {
@@ -211,6 +272,9 @@ public:
                 break;
             case State::RawText:
                 raw_text_state();
+                break;
+            case State::RcData:
+                rcdata_state();
                 break;
             case State::EndOfFile:
                 break;
@@ -287,15 +351,18 @@ private:
 
     void emit_current_token() {
         finish_attribute();
-        const bool enter_raw_text =
-            current_token_.type == HtmlTokenType::StartTag && is_raw_text_element(current_token_.name) &&
-            !current_token_.self_closing;
         if (current_token_.type == HtmlTokenType::StartTag || current_token_.type == HtmlTokenType::EndTag) {
             current_token_.name = ascii_lowercase(current_token_.name);
         }
-        raw_text_end_tag_ = enter_raw_text ? current_token_.name : std::string{};
+        const bool enter_raw_text =
+            current_token_.type == HtmlTokenType::StartTag && is_raw_text_element(current_token_.name) &&
+            !current_token_.self_closing;
+        const bool enter_rcdata =
+            current_token_.type == HtmlTokenType::StartTag && is_rcdata_element(current_token_.name) &&
+            !current_token_.self_closing;
+        raw_text_end_tag_ = (enter_raw_text || enter_rcdata) ? current_token_.name : std::string{};
         emit_token(current_token_);
-        state_ = enter_raw_text ? State::RawText : State::Data;
+        state_ = enter_raw_text ? State::RawText : enter_rcdata ? State::RcData : State::Data;
     }
 
     std::string consume_character_reference() {
@@ -342,7 +409,7 @@ private:
             }
 
             std::string output;
-            append_codepoint_utf8(output, value);
+            append_codepoint_utf8(output, remap_numeric_character_reference(value));
             return output;
         }
 
@@ -668,6 +735,28 @@ private:
         }
 
         append_text_char(consume());
+    }
+
+    void rcdata_state() {
+        if (eof()) {
+            state_ = State::EndOfFile;
+            return;
+        }
+
+        if (peek() == '<' && starts_with_raw_text_end_tag(source_, index_, raw_text_end_tag_)) {
+            flush_text();
+            index_ += 2;
+            begin_token(HtmlTokenType::EndTag);
+            state_ = State::TagName;
+            return;
+        }
+
+        const char ch = consume();
+        if (ch == '&') {
+            text_buffer_ += consume_character_reference();
+        } else {
+            append_text_char(ch);
+        }
     }
 
     void consume_comment() {

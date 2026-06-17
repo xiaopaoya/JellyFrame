@@ -53,10 +53,13 @@ These states and behaviors are the phase-1 baseline for modern app HTML:
 - Comment recognition, with optional comment token emission
 - Bogus comment consumption
 - Simple `DOCTYPE` recognition
-- Simplified raw-text handling for `script`, `style`, `textarea` and `title`
+- Simplified raw-text handling for `script` and `style`
+- Simplified RCDATA-like handling for `textarea` and `title`, including
+  character reference decoding
 - CDATA sections consumed as text for tolerance
-- Character reference state, with a compact named-entity table
-- Numeric character reference state, decimal and hexadecimal
+- Character reference state, with a compact common named-entity table
+- Numeric character reference state, decimal and hexadecimal, including the
+  legacy Windows-1252 control-code remap used by common web content
 
 Supported behavior:
 
@@ -77,20 +80,23 @@ These cases should not block useful apps, but should degrade predictably:
 - `DOCTYPE`: emit the name, never enter quirks mode.
 - Comments: ignore by default, optionally emit for diagnostics.
 - Unknown markup declarations: consume until `>` and ignore.
-- Named character references: keep a compact table first:
-  `amp`, `lt`, `gt`, `quot`, `apos`, `nbsp`, `copy`, `reg`. Unknown references
-  remain literal.
+- Named character references: keep a compact common table first, covering
+  required XML/HTML basics plus frequent app-content names such as `nbsp`,
+  `copy`, `reg`, `hellip`, `mdash`, `ldquo`, `rdquo`, `trade` and `euro`.
+  Unknown references remain literal.
 - `script`: treat as raw text until `</script>`. This is intentionally not the
   full browser script-data state family, but it keeps bundled JavaScript from
   corrupting the remaining token stream.
-- `textarea` and `title`: simplified raw-text handling first. Proper RCDATA can
-  be added if app behavior needs entity decoding inside them.
+- `textarea` and `title`: treat as simplified RCDATA-like content. End-tag
+  detection is still a bounded simplified path, but character references are
+  decoded so app titles and textarea defaults behave like modern authored HTML.
 
 ## Defer until needed
 
 These standard states mostly exist for browser compatibility and should wait:
 
-- Full RCDATA state family.
+- Full RCDATA state family beyond the current simplified `textarea`/`title`
+  path.
 - Full RAWTEXT state family beyond the simplified raw-text path.
 - Full script data state family beyond raw-text consumption to `</script>`.
 - PLAINTEXT state.
@@ -149,6 +155,8 @@ correctness visible before layout or rendering becomes involved.
 - Less-than signs in text that are not valid tags.
 - Comments and bogus comments.
 - Numeric references: `&#65;`, `&#x41;`.
-- Named references: `&amp;`, `&lt;`, unknown reference literal fallback.
+- Named references: `&amp;`, `&lt;`, common typography references and unknown
+  reference literal fallback.
+- RCDATA-like references inside `textarea` and `title`.
 - CRLF normalization.
 - Null character replacement.

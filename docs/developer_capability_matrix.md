@@ -59,15 +59,16 @@ JellyFrame is not ready for:
 | UTF-8 input bytes/string | Works | Input is treated as byte/string data. Text rendering quality depends on the renderer backend. |
 | Start/end tags | Works | Common tags become DOM elements. |
 | Attributes | Works | Quoted and common unquoted forms are parsed. Attribute names are normalized by parser paths that lowercase HTML names. |
-| Text nodes | Works | Text is preserved and participates in layout. |
+| Text nodes | Works | DOM text preserves author whitespace. Layout/rendering collapses ordinary display text while preserving `pre`, `script`, `style`, `textarea` and `title` text. |
 | Comments | Works | Tokenized and ignored by visual tree construction. |
 | Doctype | Works/Lazy | Accepted; no quirks mode is entered. |
-| Character references | Subset | Common references are decoded. Unknown or unsupported cases degrade to literal/fallback behavior. |
+| Character references | Subset | Common named references and decimal/hex numeric references are decoded, including common Windows-1252 legacy numeric remaps. Unknown or unsupported cases degrade to literal/fallback behavior. |
 | Raw text for `script`/`style` | Subset | Content is preserved enough for style/script collection. |
+| RCDATA-like `textarea`/`title` | Subset | Character references are decoded in bounded simplified content scanning. Full browser RCDATA state compatibility is absent. |
 | Synthesized `html`/`body` | Works | Missing wrapper structure is repaired. |
 | Void elements | Works | Common void tags do not require closing tags. |
 | Implied end tags | Subset | Common paragraph/list/table-ish cases are tolerated; full HTML tree-builder compatibility is not a goal. |
-| Malformed markup | Subset | Parser recovers with limits; it should not loop forever or crash. |
+| Malformed markup | Subset | Parser recovers with limits and can report node/depth/attribute budget diagnostics; it should not loop forever or crash. |
 | Quirks mode | Deferred | Always ignored. JellyFrame targets modern authored pages. |
 | Template contents | Lazy | `template` is hidden by default style; template DOM semantics are not implemented. |
 | Custom elements | Subset | Unknown tags create elements and can be styled as ordinary boxes; lifecycle callbacks are absent. |
