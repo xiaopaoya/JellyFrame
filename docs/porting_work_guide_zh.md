@@ -182,14 +182,17 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 
 - `TextMeasureProvider` 和 `TextPainter` callback 接口。
 - `src/core/bitmap_font.h` 中的 bitmap font 数据结构、测量 callback 和绘制 callback。
-- `jellyframe_capability_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符并检查字体覆盖。
+- `jellyframe_capability_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符、检查字体覆盖、
+  估算 bitmap pack 预算并建议字体 profile。
 - `jellyframe_font_pack_gen`，可从 BDF 字体子集生成 C++ `BitmapFont` header。
 - `src/core/text_adapter.h` 中的 `HostTextAdapter`，用于把 LVGL/vendor 测量和绘制 callback
   包装成核心需要的接口，同时不把平台头文件带进 core。
 
 任务要求：
 
-- 选择并记录产品使用的授权源字体、字号、字重和目标 DPI/像素高度。
+- 选择并记录产品使用的字体 profile、授权源字体、字号、字重和目标 DPI/像素高度。
+  `cn-standard` 是中文市场推荐的可复用 profile；flash 紧张的产品应优先
+  app-specific subset，全球化产品应按市场选择字体子集。
 - 在板级或应用构建流程中生成 bitmap font pack；生产固件不得依赖运行时矢量字体 rasterizer。
 - 把生成的 `BitmapFont` C++ header 编译进 ESP-IDF app、RTOS app 或板级 BSP。
 - 在 port 层创建持久 `BitmapFontContext`，测量和绘制必须使用同一份 glyph metrics。
@@ -205,6 +208,9 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
    ```text
    jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
    jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
+
+   根据输出的 font profile，在 `tiny`、`app-subset-cn`、`cn-standard` 和
+   按市场划分的 global packs 之间选择。
    ```
 
 2. 用板级项目选择的离线工具，从授权源字体和 `used_chars.txt` 生成 BDF 或等价 bitmap glyph 数据。

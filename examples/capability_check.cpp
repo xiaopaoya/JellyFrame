@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <set>
 #include <iostream>
 #include <sstream>
@@ -291,12 +292,12 @@ std::string recommended_font_profile(const FontProfileStats& stats) {
     if (stats.non_ascii == 0) {
         return "tiny";
     }
-    const std::size_t global_scripts =
+    const std::size_t non_chinese_script_codepoints =
         stats.latin_extended + stats.greek + stats.cyrillic + stats.kana + stats.hangul + stats.other;
-    if (stats.cjk_unified > 0 && global_scripts == 0) {
+    if (stats.cjk_unified > 0 && non_chinese_script_codepoints == 0) {
         return stats.non_ascii <= 128 ? "app-subset-cn" : "cn-standard";
     }
-    if (stats.cjk_unified == 0 && global_scripts == 0) {
+    if (stats.cjk_unified == 0 && non_chinese_script_codepoints == 0) {
         return "tiny-plus-symbols";
     }
     return "global-product";
@@ -327,14 +328,35 @@ std::size_t estimated_bitmap_font_bytes(std::size_t glyph_count, int glyph_width
     return glyph_count * (bytes_per_row * static_cast<std::size_t>(glyph_height) + glyph_metadata_bytes);
 }
 
-bool parse_font_budget(std::string_view value, int& width, int& height) {
-    const std::size_t separator = value.find('x');
-    if (separator == std::string_view::npos) {
+bool parse_positive_int(std::string_view text, int& value) {
+    if (text.empty()) {
         return false;
     }
-    width = std::stoi(std::string(value.substr(0, separator)));
-    height = std::stoi(std::string(value.substr(separator + 1)));
-    return width > 0 && height > 0;
+    int parsed = 0;
+    for (const char ch : text) {
+        if (!std::isdigit(static_cast<unsigned char>(ch))) {
+            return false;
+        }
+        const int digit = ch - '0';
+        if (parsed > (std::numeric_limits<int>::max() - digit) / 10) {
+            return false;
+        }
+        parsed = parsed * 10 + digit;
+    }
+    if (parsed <= 0) {
+        return false;
+    }
+    value = parsed;
+    return true;
+}
+
+bool parse_font_budget(std::string_view value, int& width, int& height) {
+    const std::size_t separator = value.find('x');
+    if (separator == std::string_view::npos || separator == 0 || separator + 1 >= value.size()) {
+        return false;
+    }
+    return parse_positive_int(value.substr(0, separator), width) &&
+           parse_positive_int(value.substr(separator + 1), height);
 }
 
 std::string lowercase(std::string value) {

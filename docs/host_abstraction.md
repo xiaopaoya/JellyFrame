@@ -144,12 +144,12 @@ Current shape:
 - Core fallback remains tiny: UTF-8-aware measurement plus ASCII bitmap painting
   with non-ASCII placeholder glyphs.
 
-Future embedded backends can provide:
+Embedded backends can provide:
 
-- bitmap font atlas;
-- LVGL text draw bridge;
+- generated bitmap font packs for `tiny`, app-specific, `cn-standard` or market-specific profiles;
+- LVGL text draw bridge used only as a host text hook;
 - vendor font engine;
-- shaping-capable text painter for production non-Latin text.
+- shaping-capable text painter for production scripts that need it.
 
 Do not put font loading into the core yet. Measurement and painting should come
 from the same host font engine to avoid clipping and mismatched wrapping. See
@@ -194,8 +194,7 @@ budget-exceeded paths.
 
 ## Recommended Order
 
-1. Improve text backend adapters and font workflow validation.
-2. Organize local resource bundles and app packaging.
-3. Continue allocator work and use M9 diagnostics to decide whether retained
+1. Organize local resource bundles and app packaging.
+2. Continue allocator work and use M9 diagnostics to decide whether retained
    subtree reuse is worth its ownership cost.
-4. Refine offscreen/tile buffer policy when real hardware pressure requires it.
+3. Refine offscreen/tile buffer policy when real hardware pressure requires it.

@@ -123,7 +123,8 @@ JellyFrame 明确不提供：
 可选：
 
 - 启用脚本构建时需要 JerryScript 源码和已构建库
-- 生成嵌入式字体包时需要 BDF bitmap font
+- 生成嵌入式字体包时需要 BDF bitmap font；先用
+  `jellyframe_capability_check --font-budget WxH` 选择字体 profile
 - 开发 `ports/esp32s3-idf` 时需要 ESP-IDF
 
 下面命令使用 PowerShell，因为当前工作区是 Windows。

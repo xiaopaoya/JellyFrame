@@ -134,7 +134,8 @@ Required:
 Optional:
 
 - JerryScript source checkout and built libraries for scripting builds
-- A BDF bitmap font when generating embedded font packs
+- A BDF bitmap font when generating embedded font packs; use
+  `jellyframe_capability_check --font-budget WxH` first to choose a font profile
 - ESP-IDF when working on `ports/esp32s3-idf`
 
 The commands below use PowerShell because the current workspace is Windows.

@@ -233,7 +233,8 @@ Provided by the core/tooling:
 - Bitmap font data structures, measurement callback and painting callback in
   `src/core/bitmap_font.h`.
 - `jellyframe_capability_check` for scanning non-ASCII characters from
-  HTML/CSS/JS and checking font coverage.
+  HTML/CSS/JS, checking font coverage, estimating bitmap-pack budgets and
+  recommending a font profile.
 - `jellyframe_font_pack_gen` for generating a C++ `BitmapFont` header from a
   BDF font subset.
 - `HostTextAdapter` in `src/core/text_adapter.h` for wrapping LVGL/vendor
@@ -241,8 +242,10 @@ Provided by the core/tooling:
 
 Requirements:
 
-- Choose and document the licensed source font, sizes, weights and target
-  DPI/pixel height used by the product.
+- Choose and document the font profile, licensed source font, sizes, weights
+  and target DPI/pixel height used by the product. `cn-standard` is the
+  recommended reusable Chinese-market profile; tight products should prefer
+  app-specific subsets, and global products should choose per-market subsets.
 - Generate bitmap font packs in the board or app build flow. Production firmware
   must not depend on a runtime vector font rasterizer.
 - Compile the generated `BitmapFont` C++ header into the ESP-IDF app, RTOS app
@@ -265,6 +268,9 @@ Implementation:
    ```text
    jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
    jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
+
+   Review the printed font profile before deciding between `tiny`,
+   `app-subset-cn`, `cn-standard` and market-specific global packs.
    ```
 
 2. Use the board project's chosen offline tool to generate BDF or equivalent

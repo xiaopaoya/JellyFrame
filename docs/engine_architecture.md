@@ -110,4 +110,6 @@ source order, then runs selector matching and cascade comparison.
 4. Add style sharing or computed-style cache for repeated class patterns.
 5. Evaluate DOM node allocation policy through a `DomOwner` prototype and
    detached-node instrumentation.
-6. Improve text backend adapters and font workflow validation.
+6. Organize local resource bundles, app packaging and release artifacts.
+7. Continue allocator work and refine offscreen/tile buffer policy only when
+   real hardware pressure proves the extra ownership complexity is worthwhile.

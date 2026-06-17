@@ -221,9 +221,11 @@ are packed into a temporary tight buffer.
 `main/jellyframe_esp32s3_font.*` contains a deliberately tiny bring-up bitmap
 font. It covers the ASCII glyphs needed by the smoke text plus one CJK glyph
 (`U+4E2D`) so the board path can validate UTF-8 codepoint measurement and
-painting. It is not a production Chinese font. Product firmware should generate
-an app-specific bitmap font pack with `jellyframe_font_pack_gen` and document
-the source font license, glyph count and flash size.
+painting. It is not a production Chinese font. Product firmware should choose a
+font profile with `jellyframe_capability_check`, then generate either an
+app-specific bitmap font pack or a documented product profile such as
+`cn-standard` with `jellyframe_font_pack_gen`. Record the source font license,
+glyph count and flash size.
 
 `main/jellyframe_esp32s3_input.*` contains a fixed-capacity
 `BoardInputQueue`. Drivers or ISRs should enqueue small board events, then the
@@ -243,6 +245,7 @@ low-power policy and product-level resource packaging.
 
 1. Replace the no-op `Rgb565Panel` path with your board's panel driver.
 2. Add touch/crown/button input and translate it into `InputController` calls.
-3. Replace fallback text rendering with a bitmap font pack for production UI.
+3. Choose a font profile and replace the bring-up font with a production bitmap
+   font pack.
 4. Replace the smoke-test resource table with a generated real app bundle.
 5. Enable JerryScript only after the non-scripted pipeline is stable.
