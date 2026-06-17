@@ -25,7 +25,8 @@ planned.
   RGB565/BGR565, RGB332, Gray8 and monochrome buffers
 - Platform text measurement/painting backend: API exists, Win32/GDI validation
   backend exists, and the first static embedded bitmap backend plus BDF pack
-  generator are available; LVGL/vendor adapters are still needed
+  generator are available; LVGL/vendor engines should be wrapped only as thin
+  text/panel/input hooks, not as the main JellyFrame renderer
 - Pointer/touch input routing: pointer/wheel core exists; button/crown focus
   navigation has a first core API; board adapters are still needed
 - Platform-neutral board bring-up shape: first static-resource/RGB565 demo is
@@ -121,7 +122,8 @@ Accepted but cautious:
 3. M9 bounded invalidation/diagnostics are complete; add retained subtree reuse
    later only where real diagnostics justify the ownership complexity.
 4. Improve text backend adapters and font workflow validation while keeping the
-   bitmap font backend as the low-cost default.
+   bitmap font backend as the low-cost default, and keep LVGL/vendor integration
+   limited to thin host hooks unless real hardware proves otherwise.
 5. Finish local resource bundle tooling and app packaging.
 6. Continue memory and allocator work, including a `DomOwner` prototype and
    detached-node instrumentation.

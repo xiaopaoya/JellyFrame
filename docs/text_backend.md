@@ -109,7 +109,9 @@ Recommended options:
 `src/core/bitmap_font.h` provides the first static bitmap font backend:
 
 - `BitmapFontGlyph`: one monochrome glyph, addressed by Unicode codepoint;
-- `BitmapFont`: glyph table plus line-height and fallback advance;
+- `BitmapFont`: glyph table plus line-height and fallback advance. The glyph
+  table must be sorted by ascending Unicode codepoint because lookup uses
+  binary search for large CJK packs;
 - `BitmapFontContext`: selected font and integer scale;
 - `bitmap_font_measure_callback`;
 - `bitmap_font_paint_callback`.

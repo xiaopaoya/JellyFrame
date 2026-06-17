@@ -137,7 +137,9 @@ porting, but has been normalized for mainline:
 - ESP32-S3 P4/P5/P6 smoke support for bitmap font callbacks, a bounded board
   input queue, focus/text/control dispatch and dirty-rectangle RGB565
   presentation. The included bring-up font is a validation resource, not a
-  production Chinese font pack.
+  production Chinese font pack. Large generated font packs should be produced
+  by the port/application build and reviewed separately before being checked
+  into mainline.
 - QEMU PSRAM gradient benchmark documents and results.
 - `ports/virtual_board` desktop estimator.
 
@@ -162,8 +164,9 @@ The main remaining risks are:
 
 - Incremental rebuild after dynamic DOM changes is still conservative.
 - Full framebuffer remains the default rendering assumption.
-- The default bitmap text route exists, but LVGL/vendor adapters do not yet have
-  mainline examples.
+- The default bitmap text route exists. LVGL/vendor integration is intentionally
+  limited to optional thin text/panel/input hooks; it is not a planned main
+  renderer backend.
 - App packaging and release workflow are not settled.
 - JerryScript is usable as a subset, but long-running resource budgets and
   stability need more testing.

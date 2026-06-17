@@ -167,6 +167,13 @@ using EmbeddedFlushCallback = bool (*)(Rect dirty_rect, void* context);
 
 `flush` should send only the dirty rectangle to the panel driver.
 
+LVGL is optional here. It is reasonable to reuse LVGL or a vendor BSP to
+initialize the panel, touch controller or backlight, or to forward a dirty
+rectangle into a vendor flush primitive. It is not recommended to translate
+JellyFrame nodes into LVGL widgets as the primary renderer. Keep the core
+pipeline and framebuffer path authoritative, then adapt only the final I/O
+hooks.
+
 ## Input API
 
 Header: `src/core/input.h`

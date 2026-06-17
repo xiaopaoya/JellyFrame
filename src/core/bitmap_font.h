@@ -20,6 +20,7 @@ struct BitmapFontGlyph {
 };
 
 struct BitmapFont {
+    // Glyphs must be sorted by ascending Unicode codepoint; lookup is binary.
     const BitmapFontGlyph* glyphs = nullptr;
     std::size_t glyph_count = 0;
     std::uint8_t line_height = 0;

@@ -8,6 +8,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Documented the ESP32-S3 audit conclusion that LVGL/vendor SDKs should
+  remain optional thin panel/input/text hooks, not the primary JellyFrame
+  renderer backend.
 - Added the first M7.6 HTML parser compatibility batch: parser budget
   diagnostics for node/depth/attribute limits, a compact common named-entity
   table and Windows-1252 legacy numeric-reference remaps.
@@ -244,6 +247,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Improved
 
+- Changed bitmap font glyph lookup from linear scan to binary search;
+  generated glyph tables must stay sorted by Unicode codepoint.
 - `textarea` and `title` now use a bounded RCDATA-like tokenizer path with
   character-reference decoding; `script` and `style` remain simplified raw text.
 - Non-void HTML elements with a self-closing slash now follow HTML semantics and

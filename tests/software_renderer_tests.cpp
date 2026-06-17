@@ -250,6 +250,26 @@ void bitmap_font_backend_measures_and_paints() {
           "wide utf-8 glyph and missing fallback draw visible pixels");
 }
 
+void bitmap_font_lookup_uses_sorted_codepoints() {
+    static constexpr std::uint8_t row[] = {0b10000000};
+    static constexpr BitmapFontGlyph glyphs[] = {
+        BitmapFontGlyph{0x20, 1, 1, 2, 1, row},
+        BitmapFontGlyph{0x41, 1, 1, 3, 1, row},
+        BitmapFontGlyph{0x4e2d, 1, 1, 4, 1, row},
+        BitmapFontGlyph{0x1f600, 1, 1, 5, 1, row},
+    };
+    static constexpr BitmapFont font{glyphs, 4, 2, 1};
+
+    const BitmapFontGlyph* ascii = find_bitmap_glyph(font, 0x41);
+    const BitmapFontGlyph* cjk = find_bitmap_glyph(font, 0x4e2d);
+    const BitmapFontGlyph* emoji = find_bitmap_glyph(font, 0x1f600);
+
+    check(ascii != nullptr && ascii->advance == 3, "bitmap font lookup finds ASCII glyph");
+    check(cjk != nullptr && cjk->advance == 4, "bitmap font lookup finds CJK glyph");
+    check(emoji != nullptr && emoji->advance == 5, "bitmap font lookup finds high codepoint glyph");
+    check(find_bitmap_glyph(font, 0x42) == nullptr, "bitmap font lookup reports missing glyph");
+}
+
 } // namespace
 
 int main() {
@@ -263,6 +283,7 @@ int main() {
         dirty_render_only_updates_requested_clip();
         frame_sink_receives_framebuffer_view_and_dirty_rects();
         bitmap_font_backend_measures_and_paints();
+        bitmap_font_lookup_uses_sorted_codepoints();
     } catch (const std::exception& error) {
         std::cerr << "software renderer test failed: " << error.what() << '\n';
         return 1;

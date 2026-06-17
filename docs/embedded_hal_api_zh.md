@@ -159,6 +159,11 @@ using EmbeddedFlushCallback = bool (*)(Rect dirty_rect, void* context);
 
 `flush` 应只把 dirty rectangle 发送给屏幕驱动。
 
+这里的 LVGL 是可选项。可以复用 LVGL 或厂商 BSP 初始化屏幕、触摸控制器、背光，
+也可以把 dirty rectangle 转交给厂商 flush primitive；但不建议把 JellyFrame 节点翻译成
+LVGL widgets 作为主渲染器。核心 pipeline 和 framebuffer 路径应保持权威，只在最终 I/O
+hooks 处适配。
+
 ## 输入 API
 
 头文件：`src/core/input.h`

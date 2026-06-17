@@ -128,6 +128,12 @@ Still missing:
 - tunable dirty rectangle coalescing policy;
 - tiled/scanline presentation for devices that cannot keep a full framebuffer.
 
+## Vendor And LVGL Backend Policy
+
+Keep JellyFrame's main rendering path independent from LVGL and vendor UI widget trees. The core should continue to own HTML/CSS parsing, DOM/style/layout/layer construction, software framebuffer rendering and input event dispatch. A board port may use LVGL or a vendor BSP as a thin adapter for panel initialization, touch/backlight setup, text measurement/painting callbacks or final dirty-rectangle flushes, but it should not map JellyFrame DOM/CSS/layout into an LVGL widget tree. That would create two competing layout, style, focus, event and font systems.
+
+For ESP32-S3, the preferred path is: JellyFrame software `FrameBuffer` -> `embedded_framebuffer` RGB565 conversion -> `flush(Rect)`/`packed_flush(Rect)` -> `esp_lcd_panel_draw_bitmap` or an equivalent panel driver call. Input should flow from board queues into `InputController`; text should flow through `TextMeasureProvider` and `TextPainter`. If a vendor SDK is LVGL-centric, wrap only the final panel/input/text hooks and keep `src/core` free of LVGL headers.
+
 ## Text Backend
 
 Current shape:

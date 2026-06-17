@@ -98,7 +98,7 @@ SoftwareCompositor compositor(text_painter_from_adapter(adapter));
 `src/core/bitmap_font.h` 提供第一版静态 bitmap font backend：
 
 - `BitmapFontGlyph`：一个按 Unicode codepoint 寻址的单色 glyph；
-- `BitmapFont`：glyph table、line-height 和 fallback advance；
+- `BitmapFont`：glyph table、line-height 和 fallback advance。glyph table 必须按 Unicode codepoint 升序排列，因为大 CJK 字库查找使用二分搜索；
 - `BitmapFontContext`：选择的 font 和整数 scale；
 - `bitmap_font_measure_callback`；
 - `bitmap_font_paint_callback`。
