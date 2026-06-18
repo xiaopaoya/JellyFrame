@@ -186,6 +186,46 @@ def cmd_check(args: argparse.Namespace) -> int:
     return run_command(command)
 
 
+def cmd_font(args: argparse.Namespace) -> int:
+    validate_result = cmd_validate(args)
+    if validate_result != 0:
+        return validate_result
+    capability_check = tool_path(args.build_dir, "jellyframe_capability_check")
+    ensure_tool(capability_check)
+    args.used_chars.parent.mkdir(parents=True, exist_ok=True)
+    files = resource_files_from_report(args.root, args.report)
+    command = [
+        str(capability_check),
+        "--emit-used-chars",
+        str(args.used_chars),
+    ]
+    if args.font_budget:
+        command.extend(["--font-budget", args.font_budget])
+    command.extend(files)
+    check_result = run_command(command)
+    if check_result != 0 or not args.bdf:
+        return check_result
+    if not args.output_header:
+        raise SystemExit("--output-header is required when --bdf is provided")
+    font_pack_gen = tool_path(args.build_dir, "jellyframe_font_pack_gen")
+    ensure_tool(font_pack_gen)
+    args.output_header.parent.mkdir(parents=True, exist_ok=True)
+    font_command = [
+        str(font_pack_gen),
+        "--bdf",
+        str(args.bdf),
+        "--chars",
+        str(args.used_chars),
+        "--output",
+        str(args.output_header),
+        "--name",
+        args.name,
+    ]
+    if args.allow_missing:
+        font_command.append("--allow-missing")
+    return run_command(font_command)
+
+
 def cmd_schema(args: argparse.Namespace) -> int:
     path = schema_path()
     if args.print_path:
@@ -245,6 +285,17 @@ def main() -> int:
     check.add_argument("--font-budget", help="Optional glyph size such as 16x16 for font budget estimates.")
     check.add_argument("--emit-used-chars", type=Path, help="Optional output file for used non-ASCII characters.")
     check.set_defaults(func=cmd_check)
+
+    font = subparsers.add_parser("font", help="Collect package characters and optionally generate a bitmap font header.")
+    add_common_package_args(font)
+    font.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
+    font.add_argument("--used-chars", required=True, type=Path, help="Output file for used non-ASCII characters.")
+    font.add_argument("--font-budget", default="16x16", help="Glyph size such as 16x16 for font budget estimates.")
+    font.add_argument("--bdf", type=Path, help="Optional BDF source font for header generation.")
+    font.add_argument("--output-header", type=Path, help="Generated C++ BitmapFont header path.")
+    font.add_argument("--name", default="jellyframe_embedded_font", help="Generated C++ font symbol name.")
+    font.add_argument("--allow-missing", action="store_true", help="Allow missing BDF glyphs when generating a header.")
+    font.set_defaults(func=cmd_font)
 
     schema = subparsers.add_parser("schema", help="Print the JellyFrame app manifest JSON schema.")
     schema.add_argument("--print-path", action="store_true", help="Print only the schema file path.")

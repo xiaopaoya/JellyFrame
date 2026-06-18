@@ -240,15 +240,17 @@ row bytes、glyph table 估算和总估算，便于 port 文档记录。
 `docs/app_packaging_zh.md`。第一版桌面 packer、伪浏览器 package 加载路径、developer CLI
 和示例 package 已经可用。`schemas/jellyframe.app.schema.json` 可供编辑器/CI 校验
 manifest。内置 target presets 已提供第一版可复用 viewport、budget、font-profile 和
-framebuffer defaults。
+framebuffer defaults。developer CLI 现在也包含 `font` 工作流，可收集 used characters，
+并调用 BDF bitmap font header generator。
 
 任务：
 
 - 统一 HTML/CSS/classic script/font/resource manifest。V0 设计已写入文档。
 - 明确资源大小、路径解析、缓存和缺失资源策略。第一版策略已写入文档。
 - 让 capability checker、font pack generator 和资源 bundle generator 能串成一条桌面构建链。
-  packer 输出已包含结构化 resource/reference 数据；第一版 CLI 已能 validate、生成资源表、
-  preview package 并运行 package-scoped capability checks。font-pack generation 仍待接入。
+  packer 输出已包含结构化 resource/reference 数据；CLI 已能 validate、生成资源表、
+  preview package、运行 package-scoped capability checks，并可从 package used characters
+  生成 bitmap font header。
 - 核心中的包资源加载保持无文件系统、无网络；运行时网络请求先以 manifest capability 表达，
   后续由宿主 API 提供。
 

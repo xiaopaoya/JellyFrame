@@ -269,6 +269,31 @@ python tools/jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+收集 package 使用到的字符，并可选择生成嵌入式 bitmap font header：
+
+```powershell
+python tools/jellyframe_cli.py font `
+  --root examples/apps/watch_weather `
+  --target round-300 `
+  --report build/watch_weather_report.json `
+  --used-chars build/watch_weather_used_chars.txt `
+  --font-budget 16x16
+```
+
+如果已有 BDF 源字体，追加 `--bdf` 和 `--output-header`：
+
+```powershell
+python tools/jellyframe_cli.py font `
+  --root examples/apps/watch_weather `
+  --target round-300 `
+  --report build/watch_weather_report.json `
+  --used-chars build/watch_weather_used_chars.txt `
+  --font-budget 16x16 `
+  --bdf path/to/ui.bdf `
+  --output-header build/watch_weather_font.h `
+  --name watch_weather_font
+```
+
 伪浏览器会报告 manifest 是否请求了网络能力，但目前还不会执行网络请求。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、

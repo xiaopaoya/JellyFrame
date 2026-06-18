@@ -326,7 +326,9 @@ design are documented in `docs/app_packaging.md`. A first desktop packer,
 pseudo-browser package loading path, developer CLI and sample package are
 available. `schemas/jellyframe.app.schema.json` provides editor/CI validation
 for the manifest. Built-in target presets provide first reusable viewport,
-budget, font-profile and framebuffer defaults.
+budget, font-profile and framebuffer defaults. The developer CLI now includes a
+`font` workflow that collects used characters and can invoke the BDF bitmap font
+header generator.
 
 Tasks:
 
@@ -335,10 +337,10 @@ Tasks:
 - Specify resource size limits, path resolution, caching and missing-resource
   behavior. First policy is documented.
 - Chain the capability checker, font-pack generator and resource-bundle
-  generator into one desktop build flow. Packer output now includes structured
-  resource and reference data; the first CLI wrapper can validate packages,
-  generate resource tables, preview packages and run package-scoped capability
-  checks. Font-pack generation is still pending.
+  generator into one desktop build flow. Packer output includes structured
+  resource and reference data; the CLI wrapper can validate packages, generate
+  resource tables, preview packages, run package-scoped capability checks and
+  produce bitmap font headers from collected package characters.
 - Keep package resource loading filesystem-free and network-free in the core;
   runtime network requests are represented as manifest capabilities for future
   host APIs.

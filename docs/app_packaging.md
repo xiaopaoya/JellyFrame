@@ -304,6 +304,32 @@ python tools/jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+Collect package characters and optionally generate an embedded bitmap font
+header:
+
+```powershell
+python tools/jellyframe_cli.py font `
+  --root examples/apps/watch_weather `
+  --target round-300 `
+  --report build/watch_weather_report.json `
+  --used-chars build/watch_weather_used_chars.txt `
+  --font-budget 16x16
+```
+
+When a BDF source font is available, add `--bdf` and `--output-header`:
+
+```powershell
+python tools/jellyframe_cli.py font `
+  --root examples/apps/watch_weather `
+  --target round-300 `
+  --report build/watch_weather_report.json `
+  --used-chars build/watch_weather_used_chars.txt `
+  --font-budget 16x16 `
+  --bdf path/to/ui.bdf `
+  --output-header build/watch_weather_font.h `
+  --name watch_weather_font
+```
+
 The pseudo browser reports whether the manifest requested network capability,
 but network requests are not executed yet.
 

@@ -316,12 +316,14 @@ scripting shell 会自动收集 inline classic scripts 和宿主可加载的本�
 ```powershell
 python tools\jellyframe_cli.py validate `
   --root examples\apps\watch_weather `
+  --target round-300 `
   --report build\watch_weather_report.json
 ```
 
 ```powershell
 python tools\jellyframe_cli.py package `
   --root examples\apps\watch_weather `
+  --target round-300 `
   --output-cpp build\watch_weather_resources.cpp `
   --report build\watch_weather_report.json `
   --debug-dir build\watch_weather.jfdir
@@ -332,6 +334,7 @@ python tools\jellyframe_cli.py package `
 ```powershell
 python tools\jellyframe_cli.py preview `
   --root examples\apps\watch_weather `
+  --target round-300 `
   --output build\watch_weather.ppm
 ```
 
@@ -340,7 +343,19 @@ python tools\jellyframe_cli.py preview `
 ```powershell
 python tools\jellyframe_cli.py check `
   --root examples\apps\watch_weather `
+  --target round-300 `
   --report build\watch_weather_report.json `
+  --font-budget 16x16
+```
+
+收集 package 的非 ASCII 字符，供嵌入式 bitmap font pack 使用：
+
+```powershell
+python tools\jellyframe_cli.py font `
+  --root examples\apps\watch_weather `
+  --target round-300 `
+  --report build\watch_weather_report.json `
+  --used-chars build\watch_weather_used_chars.txt `
   --font-budget 16x16
 ```
 
