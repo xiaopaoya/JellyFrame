@@ -1,0 +1,98 @@
+html,
+body {
+  margin: 0;
+  width: 300px;
+  height: 300px;
+  background: #130f1f;
+  color: #fff8ec;
+  font-family: sans-serif;
+}
+
+.screen {
+  box-sizing: border-box;
+  width: 300px;
+  height: 300px;
+  padding: 12px 18px;
+  text-align: center;
+  background: #211839;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 18px;
+  margin-bottom: 10px;
+  color: #d9c7ef;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.meta {
+  text-align: right;
+}
+
+.display {
+  box-sizing: border-box;
+  height: 108px;
+  margin: 0 0 10px;
+  padding: 16px 6px;
+  border: 1px solid #4f3d72;
+  border-radius: 14px;
+  background: #181226;
+}
+
+#time {
+  display: block;
+  font-size: 44px;
+  line-height: 1;
+}
+
+#state {
+  display: block;
+  margin-top: 10px;
+  color: #f2c879;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rings {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  height: 8px;
+  margin: 0 34px 14px;
+}
+
+.ring {
+  height: 8px;
+  border-radius: 6px;
+  background: #44345f;
+}
+
+.ring.active {
+  background: #f2c879;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+button {
+  box-sizing: border-box;
+  height: 32px;
+  border: 1px solid #c99cf0;
+  border-radius: 9px;
+  background: #3a2a4c;
+  color: #fff8ec;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+button:active,
+button:focus {
+  background: #513b69;
+}

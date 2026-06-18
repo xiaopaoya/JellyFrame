@@ -35,7 +35,7 @@ def repo_root() -> Path:
 
 
 def presets_dir() -> Path:
-    return repo_root() / "presets" / "targets"
+    return repo_root() / "tools" / "presets" / "targets"
 
 
 def normalize_app_path(value: str) -> str:
@@ -381,7 +381,7 @@ def main() -> int:
     parser.add_argument("--include", default="jellyframe_esp32s3_resources.h", help="C++ include used by generated table.")
     parser.add_argument("--debug-dir", help="Optional copied debug package directory.")
     parser.add_argument("--validate-only", action="store_true", help="Validate and report without emitting C++.")
-    parser.add_argument("--target", help="Optional target id. Loads presets/targets/<id>.json and overlays manifest target settings.")
+    parser.add_argument("--target", help="Optional target id. Loads tools/presets/targets/<id>.json and overlays manifest target settings.")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()

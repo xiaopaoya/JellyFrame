@@ -17,7 +17,9 @@
 - `src/core/document_style.h`、`src/core/document_script.h`：外链 CSS 和 classic script 的宿主加载 callback。
 - `src/script/jerryscript_runtime.h`：可选 JerryScript runtime、DOM/event/form/timer bridge。
 
-第一版开发板 port 不应直接调用 Win32、文件系统或桌面壳代码。参考结构是 `jellyframe_embedded_host_demo`，它已经证明核心可在无窗口、无文件、无网络、无 Win32 的情况下串起静态 HTML/CSS、bitmap 字体、输入和 RGB565 提交。
+第一版开发板 port 不应直接调用 Win32、文件系统或桌面壳代码。参考结构是
+`ports/embedded_host_demo`，它已经证明核心可在无窗口、无文件、无网络、无 Win32
+的情况下串起静态 HTML/CSS、bitmap 字体、输入和 RGB565 提交。
 
 ## 职责边界
 

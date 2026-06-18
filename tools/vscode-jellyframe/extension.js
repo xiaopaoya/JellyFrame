@@ -352,7 +352,7 @@ function showReportPanel(context) {
 }
 
 function templateNames(context) {
-  const root = path.join(repoRoot(context), "templates", "apps");
+  const root = path.join(repoRoot(context), "tools", "templates", "apps");
   if (!fs.existsSync(root)) {
     return [];
   }

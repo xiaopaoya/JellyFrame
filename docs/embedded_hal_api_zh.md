@@ -264,7 +264,7 @@ jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pac
 
 ## 平台无关 Bring-Up 示例
 
-`jellyframe_embedded_host_demo` 是当前核心侧的开发板 bring-up 参考。它刻意避开 Win32、
+`ports/embedded_host_demo` 是当前核心侧的开发板 bring-up 参考。它刻意避开 Win32、
 文件、网络和硬件 I/O：
 
 - 静态 HTML 和 CSS 直接编译进 executable；
@@ -276,7 +276,7 @@ jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pac
 桌面运行：
 
 ```text
-jellyframe_embedded_host_demo
+ports/embedded_host_demo
 ```
 
 输出应包含一次 flush、一次 button click、已勾选 checkbox、已变化 select value，以及非零前景像素。

@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Timer</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <main class="screen" id="app">
+    <section class="topbar">
+      <span>Focus Timer</span>
+      <span id="round" class="meta">1/4</span>
+    </section>
+    <section class="display">
+      <strong id="time">00:00</strong>
+      <span id="state">Stopped</span>
+    </section>
+    <section class="rings">
+      <div class="ring active"></div>
+      <div class="ring"></div>
+      <div class="ring"></div>
+      <div class="ring"></div>
+    </section>
+    <section class="actions">
+      <button data-action="tick">+1s</button>
+      <button data-action="toggle" id="toggle">Start</button>
+      <button data-action="reset">Reset</button>
+    </section>
+  </main>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

@@ -54,7 +54,7 @@ API 表面。
 - 原生文本输入、Backspace、checkbox/radio/select 激活和 range 拖动会更新 JavaScript 可见的控件状态。
 - 原生输入派发会通过现有 C++ 事件流触发 JavaScript 可观察的 `input` 和 `change` 事件。
 - JavaScript 修改表单状态后会标记 DOM dirty，宿主可以据此重绘轻量原生风格控件。
-- scripting pseudo browser 和 Win32 壳可以运行 `examples/app_cases` 中的小型应用式示例。
+- scripting pseudo browser 和 Win32 壳可以运行 `samples/apps/loose` 中的小型应用式示例。
 
 ## Timers
 

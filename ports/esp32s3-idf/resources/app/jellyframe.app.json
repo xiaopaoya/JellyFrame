@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../../schemas/jellyframe.app.schema.json",
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
   "format": "jellyframe.app",
   "formatVersion": 0,
   "id": "org.jellyframe.esp32s3.smoke",

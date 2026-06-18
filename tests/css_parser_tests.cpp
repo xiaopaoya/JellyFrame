@@ -530,6 +530,19 @@ void repeated_fixed_grid_template_applies() {
     check(style.column_gap == 8 && style.row_gap == 8, "repeat grid gap parsed");
 }
 
+void repeated_minmax_zero_grid_template_applies() {
+    auto keys = make_element("section");
+    keys->attributes["class"] = "keys";
+    StyleResolver resolver(parse(".keys { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }"));
+
+    const Style style = resolver.resolve(*keys);
+    check(style.display == Display::Grid, "repeat minmax grid display parsed");
+    check(style.grid_template_column_count == 4, "repeat minmax grid column count parsed");
+    check(style.grid_template_column_widths[0] == 0 &&
+              style.grid_template_column_widths[3] == 0,
+          "repeat minmax zero columns stored as flexible");
+}
+
 void modern_length_functions_and_flex_wrap_apply() {
     auto hero = make_element("h1");
     auto panel = make_element("section");

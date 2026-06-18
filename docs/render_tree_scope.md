@@ -49,6 +49,9 @@ DOM + computed style
 - `display:none` nodes do not create render objects.
 - `head`, `script`, `style`, `meta`, `link`, `title`, `template` and `noscript`
   stay out of the render tree through default style.
+- Pure formatting whitespace text nodes outside preserving contexts are skipped
+  during render-tree construction so indentation does not pollute block, flex
+  or grid layout.
 - Text nodes inherit text color and font size from the parent render object.
 - `inline-block` is represented as `RenderInline` for now.
 - `flex` and `grid` keep block-like render object shape while preserving their
@@ -73,7 +76,8 @@ DOM + computed style
 - Responsive grid cards using `display:grid`,
   `grid-template-columns: repeat(auto-fit, minmax(<length>, 1fr))`, `gap`,
   `grid-auto-rows: minmax(<length>, auto)` and `grid-column`/`grid-row:
-  span N`.
+  span N`. `repeat(N, 1fr)` and `repeat(N, minmax(0, 1fr))` are also in this
+  subset.
 - `aspect-ratio` participates in intrinsic content height for empty media/card
   boxes.
 - Simplified flex rows can use `column-gap` in addition to the existing

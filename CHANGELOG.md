@@ -8,6 +8,22 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Refreshed the starter app templates and `examples/apps/watch_weather` into
+  modern watch-style UI fixtures, then verified their 300x300 output through
+  the pseudo browser.
+- Added Win32 `--app` package preview/capture parity with the pseudo browser,
+  including manifest viewport loading, package-local CSS/script resources and
+  fixed-viewport capture output.
+- Moved the platform-neutral embedded host bring-up demo source under
+  `ports/embedded_host_demo` while keeping the executable name unchanged.
+- Consolidated sample resources under `samples/` and moved native C++ validation
+  tools under `tools/native`, removing the mixed-purpose top-level `examples`
+  directory.
+- The render tree now skips pure formatting whitespace text nodes outside
+  preserving contexts, which keeps indentation from polluting block/grid/flex
+  layout and reduces wasted render/layout objects.
+- Added support for `repeat(N, minmax(0, 1fr))` as a simplified fixed grid
+  column template for common keypad/card UIs.
 - Added PolyForm Noncommercial 1.0.0 licensing, a commercial-license contact
   note and README wording that clearly describes JellyFrame as noncommercial
   source-available software.

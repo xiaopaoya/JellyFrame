@@ -59,4 +59,3 @@ HtmlParser = orchestration wrapper
 - 不做 table foster parenting。
 - 不做 parser pause 或 `document.write()` 重入。
 - 不做完整 script-data 历史 escape-state 兼容。
-

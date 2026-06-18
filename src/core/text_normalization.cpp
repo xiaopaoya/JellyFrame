@@ -53,6 +53,13 @@ bool preserves_dom_text_whitespace(const Node& node) {
     return false;
 }
 
+bool is_collapsible_whitespace_text(const Node& text_node) {
+    if (text_node.type != NodeType::Text || preserves_dom_text_whitespace(text_node)) {
+        return false;
+    }
+    return std::all_of(text_node.text.begin(), text_node.text.end(), ascii_space);
+}
+
 std::string normalized_render_text(const Node& text_node) {
     if (text_node.type != NodeType::Text || preserves_dom_text_whitespace(text_node)) {
         return text_node.text;

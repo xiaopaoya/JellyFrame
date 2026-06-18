@@ -64,7 +64,8 @@ layout behavior.
   `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `flex`,
   `flex-grow`, `flex-shrink`, `flex-basis`, `position`, `top`, `right`,
   `bottom`, `left`, `grid-template-columns` with a `minmax()` minimum track,
-  `grid-auto-rows` with a minimum track, and `grid-column`/`grid-row: span N`.
+  `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))`, `grid-auto-rows` with a
+  minimum track, and `grid-column`/`grid-row: span N`.
 
 ## Phase 1: Lazy Handling
 

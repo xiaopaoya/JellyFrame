@@ -55,8 +55,8 @@ Render a static page to an image:
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  examples\modern_cases\article_cards.html `
-  examples\modern_cases\article_cards.css `
+  samples\pages\modern\article_cards.html `
+  samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -64,8 +64,7 @@ Open an interactive Windows validation shell:
 
 ```powershell
 .\build\Release\jellyframe_win32_browser.exe `
-  examples\app_cases\calculator.html `
-  examples\app_cases\calculator.css
+  --app tools\templates\apps\calculator
 ```
 
 Create and check an app package:
@@ -112,14 +111,15 @@ the embedded core.
 
 - `src/core`: platform-neutral engine core.
 - `src/script`: optional JerryScript binding layer.
-- `examples`: inspection tools, pseudo browser, Win32 shell and sample pages.
+- `samples`: app packages, loose app fixtures, modern pages, script probes and
+  font-tool inputs.
 - `tests`: platform-neutral regression tests.
 - `benchmarks`: desktop microbenchmarks.
-- `ports`: port-support code and board-oriented demos.
-- `templates`: app package starter templates.
-- `presets`: target presets used by packaging tools.
-- `schemas`: JSON Schema files for editor/CI validation.
-- `tools`: desktop packaging and editor helper tools.
+- `ports`: port-support code, board-oriented demos and virtual board tools.
+- `tools/templates`: app package starter templates copied by developer tools.
+- `tools/presets`: target presets used by packaging tools.
+- `tools/schemas`: JSON Schema files for editor/CI validation.
+- `tools`: desktop packaging, native inspection and editor helper tools.
 - `docs`: technical contracts, supported subsets and host APIs.
 
 ## Documentation

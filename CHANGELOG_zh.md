@@ -8,6 +8,18 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 将 starter app templates 和 `examples/apps/watch_weather` 更新为更现代的手表式
+  UI 验收样例，并用伪浏览器截图验证 300x300 输出。
+- 为 Win32 壳添加与伪浏览器对齐的 `--app` package 预览/截图路径，支持读取
+  manifest viewport、package 本地 CSS/script 资源，并固定按 viewport 输出截图。
+- 将平台无关 embedded host bring-up 示例源码移入 `ports/embedded_host_demo`，
+  可执行文件名保持不变。
+- 将样例资源统一收拢到 `samples/`，并把原生 C++ 验证工具移入
+  `tools/native`，移除职责混杂的顶层 `examples` 目录。
+- Render tree 构建会跳过非保留上下文中的纯格式化空白文本节点，减少缩进换行对
+  block/grid/flex layout 的污染，并降低无意义 render/layout 对象数量。
+- 支持 `repeat(N, minmax(0, 1fr))` 作为简化固定 grid 列模板，便于常见现代
+  keypad/card UI 降级到 JellyFrame 的有界 grid 子集。
 - 添加 PolyForm Noncommercial 1.0.0 许可证、商业授权联系说明，并在 README
   中明确 JellyFrame 是“非商业源码可用”软件。
 - 为公开源码、示例、测试、工具、preset、schema、template 和 port 目录补充

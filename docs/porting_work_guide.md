@@ -33,7 +33,7 @@ These interfaces exist now and can be used as porting entry points:
   event, form and timer bridges.
 
 The first board port should not call Win32, filesystem or desktop shell code
-directly. Use `jellyframe_embedded_host_demo` as the reference shape: it wires
+directly. Use `ports/embedded_host_demo` as the reference shape: it wires
 static HTML/CSS, bitmap fonts, input and RGB565 presentation without windows,
 files, networking or hardware I/O.
 

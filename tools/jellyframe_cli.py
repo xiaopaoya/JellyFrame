@@ -42,18 +42,18 @@ def package_script() -> Path:
 
 
 def schema_path() -> Path:
-    path = repo_root() / "schemas" / "jellyframe.app.schema.json"
+    path = repo_root() / "tools" / "schemas" / "jellyframe.app.schema.json"
     if not path.is_file():
         raise SystemExit(f"missing schema: {path}")
     return path
 
 
 def target_presets_dir() -> Path:
-    return repo_root() / "presets" / "targets"
+    return repo_root() / "tools" / "presets" / "targets"
 
 
 def app_templates_dir() -> Path:
-    return repo_root() / "templates" / "apps"
+    return repo_root() / "tools" / "templates" / "apps"
 
 
 def load_target_config(target: str) -> dict:

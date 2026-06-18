@@ -59,7 +59,7 @@ my_app/
 
 ```json
 {
-  "$schema": "../../../schemas/jellyframe.app.schema.json",
+  "$schema": "../../../tools/schemas/jellyframe.app.schema.json",
   "format": "jellyframe.app",
   "formatVersion": 0,
   "id": "com.example.weather",
@@ -109,19 +109,19 @@ my_app/
 }
 ```
 
-schema 位于 `schemas/jellyframe.app.schema.json`。developer CLI 可以输出 schema 或其路径：
+schema 位于 `tools/schemas/jellyframe.app.schema.json`。developer CLI 可以输出 schema 或其路径：
 
 ```powershell
 python tools/jellyframe_cli.py schema --print-path
 ```
 
-内置 target presets 位于 `presets/targets`。可以这样列出：
+内置 target presets 位于 `tools/presets/targets`。可以这样列出：
 
 ```powershell
 python tools/jellyframe_cli.py targets
 ```
 
-内置 source-package 模板位于 `templates/apps`。可以这样列出并创建：
+内置 source-package 模板位于 `tools/templates/apps`。可以这样列出并创建：
 
 ```powershell
 python tools/jellyframe_cli.py templates
@@ -133,7 +133,7 @@ python tools/jellyframe_cli.py new `
   --target round-300
 ```
 
-使用 `--target id` 时，packer 会先加载存在的 `presets/targets/id.json`，再叠加
+使用 `--target id` 时，packer 会先加载存在的 `tools/presets/targets/id.json`，再叠加
 manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 target 也允许；
 完全未知的 target 会明确失败。
 
@@ -226,7 +226,7 @@ dist/my_app_report.json
 
 ```powershell
 python tools/jellyframe_cli.py validate `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --report build/watch_weather_report.json
 ```
 
@@ -234,7 +234,7 @@ python tools/jellyframe_cli.py validate `
 
 ```powershell
 python tools/jellyframe_cli.py package `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json
@@ -244,7 +244,7 @@ python tools/jellyframe_cli.py package `
 
 ```powershell
 python tools/jellyframe_cli.py package `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json `
@@ -255,7 +255,7 @@ python tools/jellyframe_cli.py package `
 
 ```powershell
 python tools/jellyframe_cli.py preview `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --output build/watch_weather.ppm
 ```
@@ -264,7 +264,7 @@ python tools/jellyframe_cli.py preview `
 
 ```powershell
 python tools/jellyframe_cli.py check `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --report build/watch_weather_report.json `
   --font-budget 16x16
@@ -274,7 +274,7 @@ python tools/jellyframe_cli.py check `
 
 ```powershell
 python tools/jellyframe_cli.py font `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --report build/watch_weather_report.json `
   --used-chars build/watch_weather_used_chars.txt `
@@ -285,7 +285,7 @@ python tools/jellyframe_cli.py font `
 
 ```powershell
 python tools/jellyframe_cli.py font `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --report build/watch_weather_report.json `
   --used-chars build/watch_weather_used_chars.txt `

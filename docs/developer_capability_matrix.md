@@ -58,7 +58,7 @@ JellyFrame is not ready for:
 | UTF-8 input bytes/string | Works | Input is treated as byte/string data. Text rendering quality depends on the renderer backend. |
 | Start/end tags | Works | Common tags become DOM elements. |
 | Attributes | Works | Quoted and common unquoted forms are parsed. Attribute names are normalized by parser paths that lowercase HTML names. |
-| Text nodes | Works | DOM text preserves author whitespace. Layout/rendering collapses ordinary display text while preserving `pre`, `script`, `style`, `textarea` and `title` text. |
+| Text nodes | Works | DOM text preserves author whitespace. The render tree skips pure formatting whitespace outside preserving contexts so indentation does not pollute block/grid/flex layout. Layout/rendering collapses ordinary display text while preserving `pre`, `script`, `style`, `textarea` and `title` text. |
 | Comments | Works | Tokenized and ignored by visual tree construction. |
 | Doctype | Works/Lazy | Accepted; no quirks mode is entered. |
 | Character references | Subset | Common named references and decimal/hex numeric references are decoded, including common Windows-1252 legacy numeric remaps. Unknown or unsupported cases degrade to literal/fallback behavior. |
@@ -180,7 +180,7 @@ clear older supported fallback declarations.
 | `gap` | Works | 1-2 length values for grid and simplified flex support. |
 | `row-gap` / `column-gap` | Works | Length values. |
 | `grid-template-columns` | Subset | Extracts minimum track from `repeat(auto-fit, minmax(<length>, 1fr))`, `minmax(<length>, 1fr)`, a length, or `1fr`. |
-| simple fixed grid columns | Subset | `grid-template-columns: <length> 1fr` and similar 2-4 column length/`fr` templates are supported for definition lists and settings forms. |
+| simple fixed grid columns | Subset | `grid-template-columns: <length> 1fr`, `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))` and similar 2-4 column length/`fr` templates are supported for definition lists, settings forms and compact keypads. |
 | `grid-auto-rows` | Subset | Length or `minmax(<length>, auto)` minimum row height. |
 | `grid-column` / `grid-row` | Subset | `span N`, clamped to bounded values. Explicit line placement is absent. |
 | `list-style` / `list-style-type` | Subset | `none`, disc-like values and decimal-like values. Native-lite list markers are painted for `li`. |
@@ -206,7 +206,7 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 | Inline background/border | Subset | Shrunk to text/content bounds where possible. |
 | `inline-block` | Subset | Represented as inline-like render object with usable box behavior. |
 | Flex row | Subset | Simplified row layout with basic grow/shrink/basis sizing, justification, alignment, gaps and optional wrapping. No full Flexbox algorithm, column flex, order, baseline alignment or min-content sizing. |
-| Grid cards/forms | Subset | Responsive auto-fit/minmax card grid, gaps, minimum auto rows, spans and simple fixed 2-4 column templates. No explicit placement, named lines, subgrid or dense packing. |
+| Grid cards/forms | Subset | Responsive auto-fit/minmax card grid, gaps, minimum auto rows, spans, `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))` and simple fixed 2-4 column templates. No explicit placement, named lines, subgrid or dense packing. |
 | Aspect ratio | Works | Provides intrinsic height when explicit height/content height is absent. |
 | Positioned boxes | Subset | Bounded `relative`, `absolute` and `fixed` positioning for app overlays, badges and pinned panels. Out-of-flow boxes do not consume block/flex/grid/inline placement space. |
 | Replaced elements | Subset | Common controls/media are leaf boxes with fallback sizing; real image/video layout is deferred. |

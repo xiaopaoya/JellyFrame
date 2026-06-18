@@ -81,7 +81,7 @@ desktop tools, not by the MCU runtime:
 
 ```json
 {
-  "$schema": "../../../schemas/jellyframe.app.schema.json",
+  "$schema": "../../../tools/schemas/jellyframe.app.schema.json",
   "format": "jellyframe.app",
   "formatVersion": 0,
   "id": "com.example.weather",
@@ -131,20 +131,20 @@ desktop tools, not by the MCU runtime:
 }
 ```
 
-The schema is stored at `schemas/jellyframe.app.schema.json`. The developer CLI
+The schema is stored at `tools/schemas/jellyframe.app.schema.json`. The developer CLI
 can print it or its path:
 
 ```powershell
 python tools/jellyframe_cli.py schema --print-path
 ```
 
-Built-in target presets live under `presets/targets`. List them with:
+Built-in target presets live under `tools/presets/targets`. List them with:
 
 ```powershell
 python tools/jellyframe_cli.py targets
 ```
 
-Built-in source-package templates live under `templates/apps`. List and create
+Built-in source-package templates live under `tools/templates/apps`. List and create
 them with:
 
 ```powershell
@@ -157,7 +157,7 @@ python tools/jellyframe_cli.py new `
   --target round-300
 ```
 
-When `--target id` is used, the packer first loads `presets/targets/id.json`
+When `--target id` is used, the packer first loads `tools/presets/targets/id.json`
 when present, then overlays any same-named manifest `targets[id]` settings.
 Manifest-only custom targets are also allowed; unknown targets fail explicitly.
 
@@ -261,7 +261,7 @@ only:
 
 ```powershell
 python tools/jellyframe_cli.py validate `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --report build/watch_weather_report.json
 ```
 
@@ -269,7 +269,7 @@ Generate a C++ resource table and report:
 
 ```powershell
 python tools/jellyframe_cli.py package `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json
@@ -279,7 +279,7 @@ Generate a copied debug directory for editor tooling or inspection:
 
 ```powershell
 python tools/jellyframe_cli.py package `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json `
@@ -290,7 +290,7 @@ The pseudo browser can open a source package directory directly:
 
 ```powershell
 python tools/jellyframe_cli.py preview `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --output build/watch_weather.ppm
 ```
@@ -299,7 +299,7 @@ Run package validation plus capability checks on packaged files:
 
 ```powershell
 python tools/jellyframe_cli.py check `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --report build/watch_weather_report.json `
   --font-budget 16x16
@@ -310,7 +310,7 @@ header:
 
 ```powershell
 python tools/jellyframe_cli.py font `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --report build/watch_weather_report.json `
   --used-chars build/watch_weather_used_chars.txt `
@@ -321,7 +321,7 @@ When a BDF source font is available, add `--bdf` and `--output-header`:
 
 ```powershell
 python tools/jellyframe_cli.py font `
-  --root examples/apps/watch_weather `
+  --root samples/apps/packages/watch_weather `
   --target round-300 `
   --report build/watch_weather_report.json `
   --used-chars build/watch_weather_used_chars.txt `

@@ -76,7 +76,7 @@ For embedded porting:
 
 1. Read [docs/embedded_hal_api.md](docs/embedded_hal_api.md).
 2. Read [docs/porting_work_guide.md](docs/porting_work_guide.md).
-3. Start from `jellyframe_embedded_host_demo`.
+3. Start from `ports/embedded_host_demo`.
 4. Use `ports/virtual_board` to estimate framebuffer and flush behavior before
    a real board is ready.
 
@@ -84,13 +84,18 @@ For embedded porting:
 
 - `src/core`: platform-neutral engine core.
 - `src/script`: optional JerryScript binding layer.
-- `examples`: desktop tools, pseudo browser, Win32 shell and sample pages.
-- `examples/modern_cases`: modern HTML/CSS compatibility samples.
-- `examples/script_cases`: scripting acceptance probes.
-- `examples/app_cases`: weather, clock, timer and calculator app samples.
-- `examples/font_cases`: font-pack sample input.
+- `samples`: all sample pages and sample app packages.
+- `samples/pages/modern`: modern HTML/CSS compatibility samples.
+- `samples/scripts/classic`: scripting acceptance probes.
+- `samples/apps/loose`: small loose-file app fixtures.
+- `samples/apps/packages`: complete app-package examples with `jellyframe.app.json`.
+- `samples/fonts/bitmap`: font-pack sample input.
+- `tools/templates/apps`: starter app packages copied by developer tools.
+- `tools/native`: C++ inspection tools, pseudo browser and Win32 shell sources.
 - `tests`: platform-neutral regression test sources.
 - `benchmarks`: microbenchmarks.
+- `ports/embedded_host_demo`: platform-neutral board bring-up shape with static
+  resources, bitmap text, input and RGB565 output.
 - `ports/virtual_board`: desktop estimator for board-like framebuffer costs.
 - `ports/esp32s3-idf`: ESP32-S3 reference bring-up project.
 - `docs`: technical documentation and module/API contracts.
@@ -193,8 +198,8 @@ Render a page to BMP or PPM without opening a window:
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  examples\modern_cases\article_cards.html `
-  examples\modern_cases\article_cards.css `
+  samples\pages\modern\article_cards.html `
+  samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -202,38 +207,40 @@ Open a Windows interactive shell:
 
 ```powershell
 .\build\Release\jellyframe_win32_browser.exe `
-  examples\app_cases\calculator.html `
-  examples\app_cases\calculator.css
+  --app tools\templates\apps\calculator
 ```
+
+Use `--app` for package directories. That path reads `jellyframe.app.json`,
+including the design viewport, local linked CSS and document scripts. Loose
+HTML/CSS arguments are still useful for focused fixtures, but they deliberately
+do not apply package manifest settings.
 
 Capture through the Win32/GDI text path:
 
 ```powershell
 .\build\Release\jellyframe_win32_browser.exe --capture `
-  calculator.bmp `
-  examples\app_cases\calculator.html `
-  examples\app_cases\calculator.css `
-  390 640
+  calculator.ppm `
+  --app tools\templates\apps\calculator
 ```
 
 Inspect intermediate structures:
 
 ```powershell
-.\build\Release\jellyframe_dom_dump.exe examples\modern_cases\search_home.html
-.\build\Release\jellyframe_cssom_dump.exe examples\modern_cases\search_home.css
-.\build\Release\jellyframe_style_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css
-.\build\Release\jellyframe_render_tree_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css
-.\build\Release\jellyframe_layer_tree_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css
-.\build\Release\jellyframe_pipeline_dump.exe examples\modern_cases\search_home.html examples\modern_cases\search_home.css
+.\build\Release\jellyframe_dom_dump.exe samples\pages\modern\search_home.html
+.\build\Release\jellyframe_cssom_dump.exe samples\pages\modern\search_home.css
+.\build\Release\jellyframe_style_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
+.\build\Release\jellyframe_render_tree_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
+.\build\Release\jellyframe_layer_tree_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
+.\build\Release\jellyframe_pipeline_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
 ```
 
 Scan a page before embedding it:
 
 ```powershell
 .\build\Release\jellyframe_capability_check.exe `
-  examples\app_cases\weather.html `
-  examples\app_cases\weather.css `
-  examples\app_cases\weather.js
+  samples\apps\loose\weather.html `
+  samples\apps\loose\weather.css `
+  samples\apps\loose\weather.js
 ```
 
 ## 10. Optional JerryScript Build
@@ -259,18 +266,18 @@ Run a scripted page:
 
 ```powershell
 .\build-script\Release\jellyframe_pseudo_browser.exe `
-  examples\app_cases\weather.html `
-  examples\app_cases\weather.css `
-  weather.bmp 360 360 --script examples\app_cases\weather.js
+  samples\apps\loose\weather.html `
+  samples\apps\loose\weather.css `
+  weather.bmp 360 360 --script samples\apps\loose\weather.js
 ```
 
 Run a timer-driven page:
 
 ```powershell
 .\build-script\Release\jellyframe_pseudo_browser.exe `
-  examples\app_cases\clock.html `
-  examples\app_cases\clock.css `
-  clock.bmp 360 360 --script examples\app_cases\clock.js --pump-timers 3200
+  samples\apps\loose\clock.html `
+  samples\apps\loose\clock.css `
+  clock.bmp 360 360 --script samples\apps\loose\clock.js --pump-timers 3200
 ```
 
 The scripting shells automatically collect inline classic scripts and
@@ -296,15 +303,18 @@ CMake options are enabled.
 | `jellyframe_win32_browser.exe` | Windows-only interactive validation shell using Win32/GDI text measurement and painting. |
 | `jellyframe_capability_check.exe` | Scans HTML/CSS/JS for supported subsets, degraded features and unsupported APIs. Also supports font coverage checks. |
 | `jellyframe_font_pack_gen.exe` | Converts a BDF bitmap font and used-character list into a C++ `BitmapFont` header. |
-| `jellyframe_embedded_host_demo.exe` | Platform-neutral bring-up demo using static resources, bitmap text and RGB565 framebuffer output. |
+| `jellyframe_embedded_host_demo.exe` | Platform-neutral port bring-up demo from `ports/embedded_host_demo`, using static resources, bitmap text and RGB565 framebuffer output. |
 | `jellyframe_microbench.exe` | Runs parser/render/layout/layer/flatten microbenchmarks. |
 | `jellyframe_virtual_bench.exe` | Runs a desktop virtual-board benchmark and estimates RGB565 flush costs. |
 | `jellyframe_core_tests.exe` | Single platform-neutral regression test executable. |
 
 Notes:
 
-- `jellyframe_pseudo_browser.exe` also supports `--app package_dir output.ppm`
+- `jellyframe_pseudo_browser.exe` supports `--app package_dir output.ppm`
   for app-package source directories containing `jellyframe.app.json`.
+- `jellyframe_win32_browser.exe` supports interactive package preview with
+  `--app package_dir` and package capture with `--capture output.ppm --app
+  package_dir`.
 - `jellyframe_win32_browser.exe` is only built on Windows.
 - In scripting builds, `jellyframe_pseudo_browser.exe`,
   `jellyframe_win32_browser.exe` and `jellyframe_core_tests.exe` link the
@@ -315,30 +325,33 @@ Notes:
 
 ## 12. Useful Example Pages
 
-- `examples/apps/watch_weather`: app package sample with
+- `samples/apps/packages/watch_weather`: complete app package sample with
   `jellyframe.app.json`, local HTML/CSS/classic JS and a declared network
   capability for future runtime data requests.
-- `examples/modern_cases`: modern HTML/CSS samples that exercise graceful
+- `tools/templates/apps`: source-package starter templates. Use these with
+  `tools/jellyframe_cli.py new`; do not use them as exhaustive compatibility
+  fixtures.
+- `samples/pages/modern`: modern HTML/CSS samples that exercise graceful
   degradation.
-- `examples/script_cases`: minimal scripting probes for runtime, DOM mutation,
+- `samples/scripts/classic`: minimal scripting probes for runtime, DOM mutation,
   events and script loading.
-- `examples/app_cases/weather.*`: select-driven weather panel.
-- `examples/app_cases/clock.*`: timer-driven clock.
-- `examples/app_cases/timer.*`: timer/stopwatch UI.
-- `examples/app_cases/calculator.*`: button-driven calculator.
+- `samples/apps/loose/weather.*`: select-driven weather panel.
+- `samples/apps/loose/clock.*`: timer-driven clock.
+- `samples/apps/loose/timer.*`: timer/stopwatch UI.
+- `samples/apps/loose/calculator.*`: button-driven calculator.
 
 Package the sample app into a generated resource table:
 
 ```powershell
 python tools\jellyframe_cli.py validate `
-  --root examples\apps\watch_weather `
+  --root samples\apps\packages\watch_weather `
   --target round-300 `
   --report build\watch_weather_report.json
 ```
 
 ```powershell
 python tools\jellyframe_cli.py package `
-  --root examples\apps\watch_weather `
+  --root samples\apps\packages\watch_weather `
   --target round-300 `
   --output-cpp build\watch_weather_resources.cpp `
   --report build\watch_weather_report.json `
@@ -349,7 +362,7 @@ Render it through the pseudo browser:
 
 ```powershell
 python tools\jellyframe_cli.py preview `
-  --root examples\apps\watch_weather `
+  --root samples\apps\packages\watch_weather `
   --target round-300 `
   --output build\watch_weather.ppm
 ```
@@ -358,7 +371,7 @@ Run package validation and capability checks together:
 
 ```powershell
 python tools\jellyframe_cli.py check `
-  --root examples\apps\watch_weather `
+  --root samples\apps\packages\watch_weather `
   --target round-300 `
   --report build\watch_weather_report.json `
   --font-budget 16x16
@@ -368,7 +381,7 @@ Collect the package's non-ASCII characters for an embedded bitmap font pack:
 
 ```powershell
 python tools\jellyframe_cli.py font `
-  --root examples\apps\watch_weather `
+  --root samples\apps\packages\watch_weather `
   --target round-300 `
   --report build\watch_weather_report.json `
   --used-chars build\watch_weather_used_chars.txt `
@@ -414,6 +427,11 @@ When an example renders badly, inspect in this order:
 6. `jellyframe_layer_tree_dump`
 7. `jellyframe_pipeline_dump`
 8. `jellyframe_pseudo_browser` or `jellyframe_win32_browser --capture`
+
+For package apps, prefer `jellyframe_win32_browser --app package_dir` or
+`jellyframe_win32_browser --capture output.ppm --app package_dir` so the Win32
+shell uses the same manifest viewport and resource resolution as the pseudo
+browser.
 
 ## 13. Documentation Map
 

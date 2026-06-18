@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Watch Weather</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <main class="screen" id="app">
+    <section class="topbar">
+      <span>Shanghai</span>
+      <span id="updated" class="meta">Now</span>
+    </section>
+    <section class="hero">
+      <div class="label">Weather</div>
+      <div class="temp" id="temp">26</div>
+      <div class="summary" id="summary">Cloudy AQI 42</div>
+    </section>
+    <section class="stats">
+      <div><strong id="wind">8</strong><span>KMH</span></div>
+      <div><strong id="rain">20</strong><span>RAIN</span></div>
+    </section>
+    <section class="actions">
+      <button class="tile" data-mode="hourly">Hourly</button>
+      <button class="tile" data-mode="daily">Daily</button>
+      <button class="tile" data-mode="air">Air</button>
+    </section>
+  </main>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

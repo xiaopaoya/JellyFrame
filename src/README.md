@@ -7,4 +7,4 @@ Platform-neutral JellyFrame source code.
 - `script/`: optional JerryScript binding layer.
 
 The core should remain free of OS, filesystem, network and hardware dependencies.
-Those concerns belong in examples, tools, ports or host adapters.
+Those concerns belong in samples, tools, ports or host adapters.

@@ -63,7 +63,7 @@ surface.
 - JavaScript changes to form state mark the DOM dirty so the host can rerender
   lightweight native-style controls.
 - The scripting pseudo browser and Win32 shell can run small app-style examples
-  from `examples/app_cases`.
+  from `samples/apps/loose`.
 
 ## Timers
 

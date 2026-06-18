@@ -281,7 +281,7 @@ from the licensed source font with your preferred offline toolchain.
 
 ## Platform-Neutral Bring-Up Demo
 
-`jellyframe_embedded_host_demo` is the current core-side reference for a board
+`ports/embedded_host_demo` is the current core-side reference for a board
 bring-up. It intentionally avoids Win32, files, networking and hardware I/O:
 
 - static HTML and CSS are compiled into the executable;
@@ -295,7 +295,7 @@ bring-up. It intentionally avoids Win32, files, networking and hardware I/O:
 Run it on desktop:
 
 ```text
-jellyframe_embedded_host_demo
+ports/embedded_host_demo
 ```
 
 The output should report one flush, one button click, a checked checkbox, a

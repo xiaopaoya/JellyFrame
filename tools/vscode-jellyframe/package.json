@@ -77,7 +77,7 @@
           "jellyframe.app.json",
           "**/jellyframe.app.json"
         ],
-        "url": "../../schemas/jellyframe.app.schema.json"
+        "url": "../schemas/jellyframe.app.schema.json"
       }
     ]
   }

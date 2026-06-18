@@ -103,6 +103,33 @@ void hidden_attribute_skips_rendering() {
     check(text != nullptr && text->node != nullptr && text->node->text == "Shown", "hidden text skipped");
 }
 
+void formatting_whitespace_text_is_skipped() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body>\n  <main>\n    <button>Go</button>\n  </main>\n</body>");
+    StyleResolver resolver(css_parser.parse(""));
+    RenderTreeBuilder builder(resolver);
+    auto render_tree = builder.build(*document);
+
+    int text_count = 0;
+    const auto count_text = [&](const RenderObject& object, const auto& self) -> void {
+        if (object.type == RenderObjectType::Text) {
+            ++text_count;
+        }
+        for (const auto& child : object.children) {
+            self(*child, self);
+        }
+    };
+    count_text(*render_tree, count_text);
+    check(text_count == 1, "formatting whitespace text skipped");
+
+    auto pre_document = html_parser.parse("<body><pre>\n  keep\n</pre></body>");
+    auto pre_render_tree = builder.build(*pre_document);
+    const RenderObject* pre_text = find_first_text(*pre_render_tree);
+    check(pre_text != nullptr && pre_text->node != nullptr && pre_text->node->text.find("  keep") != std::string::npos,
+          "pre whitespace text preserved");
+}
+
 void render_tree_respects_object_budget() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -145,6 +172,7 @@ int main() {
         render_tree_carries_computed_style_and_text_inheritance();
         closed_dialog_is_not_rendered_by_default();
         hidden_attribute_skips_rendering();
+        formatting_whitespace_text_is_skipped();
         render_tree_respects_object_budget();
         render_tree_can_use_monotonic_arena();
     } catch (const std::exception& error) {

@@ -28,4 +28,3 @@ MAJOR.MINOR.PATCH[-stage]
 - `0.2.x`：framebuffer renderer 和输入路由。
 - `0.3.x`：JerryScript 集成和 DOM mutation APIs。
 - `0.4.x`：可穿戴 app runtime APIs 和打包格式。
-

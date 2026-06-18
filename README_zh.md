@@ -47,8 +47,8 @@ ctest --test-dir build -C Release --output-on-failure
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  examples\modern_cases\article_cards.html `
-  examples\modern_cases\article_cards.css `
+  samples\pages\modern\article_cards.html `
+  samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -56,8 +56,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 ```powershell
 .\build\Release\jellyframe_win32_browser.exe `
-  examples\app_cases\calculator.html `
-  examples\app_cases\calculator.css
+  --app tools\templates\apps\calculator
 ```
 
 创建并检查 app package：
@@ -102,14 +101,14 @@ cmake --build build-script --config Release
 
 - `src/core`：平台无关核心。
 - `src/script`：可选 JerryScript 绑定层。
-- `examples`：检查工具、伪浏览器、Win32 shell 和示例页面。
+- `samples`：app packages、散文件 app fixture、现代页面、脚本探针和字体工具输入。
 - `tests`：平台无关回归测试。
 - `benchmarks`：桌面微基准。
-- `ports`：移植支撑代码和面向开发板的演示。
-- `templates`：app package 起始模板。
-- `presets`：packaging tools 使用的 target presets。
-- `schemas`：用于编辑器/CI 校验的 JSON Schema。
-- `tools`：桌面 packaging 和编辑器辅助工具。
+- `ports`：移植支撑代码、面向开发板的演示和 virtual board 工具。
+- `tools/templates`：供开发工具复制的 app package 起始模板。
+- `tools/presets`：packaging tools 使用的 target presets。
+- `tools/schemas`：用于编辑器/CI 校验的 JSON Schema。
+- `tools`：桌面 packaging、原生检查工具和编辑器辅助工具。
 - `docs`：技术契约、支持子集和宿主 API。
 
 ## 文档入口

@@ -48,6 +48,8 @@ DOM + computed style
 - `display:none` 节点不创建 render object。
 - `head`、`script`、`style`、`meta`、`link`、`title`、`template` 和 `noscript`
   通过默认样式排除在 render tree 外。
+- 非保留上下文中的纯格式化空白文本节点会在 render tree 构建阶段被跳过，避免
+  缩进换行污染 block、flex 和 grid 布局。
 - Text nodes 继承父 render object 的文字颜色和字号。
 - `inline-block` 暂时表示为 `RenderInline`。
 - `flex` 和 `grid` 保持 block-like render object 形态，但 computed style 中保留
@@ -71,7 +73,7 @@ DOM + computed style
 - 响应式 grid card：支持 `display:grid`、
   `grid-template-columns: repeat(auto-fit, minmax(<length>, 1fr))`、`gap`、
   `grid-auto-rows: minmax(<length>, auto)`，以及 `grid-column`/`grid-row:
-  span N`。
+  span N`。`repeat(N, 1fr)` 和 `repeat(N, minmax(0, 1fr))` 也属于该子集。
 - `aspect-ratio` 会参与空媒体框/card 的 intrinsic content height 计算。
 - 简化 flex row 可以使用 `column-gap`，并保留现有 justification 行为。
 

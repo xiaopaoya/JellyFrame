@@ -72,7 +72,7 @@ SoftwareCompositor compositor(text_painter_from_adapter(adapter));
 
 ## Win32 验证后端
 
-`examples/win32_browser.cpp` 现在同时为 layout 测量和文本绘制注入 GDI。
+`tools/native/win32_browser.cpp` 现在同时为 layout 测量和文本绘制注入 GDI。
 桌面截图和交互式验证壳因此会更接近真实显示效果，尤其是中文和其他 UTF-8 文本。
 
 这个后端不是嵌入式核心的一部分，只属于桌面验证壳。

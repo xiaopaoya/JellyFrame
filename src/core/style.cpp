@@ -494,6 +494,24 @@ bool parse_simple_grid_template_columns(const std::string& raw_value,
         int stored_width = 0;
         if (parse_length_px(track, width, em_base)) {
             stored_width = std::max(1, width);
+        } else if (track.rfind("minmax(", 0) == 0 && track.back() == ')') {
+            const std::size_t track_comma = track.find(',');
+            if (track_comma == std::string::npos) {
+                return false;
+            }
+            const std::string min_track = trim(track.substr(7, track_comma - 7));
+            const std::string max_track = trim(track.substr(track_comma + 1, track.size() - track_comma - 2));
+            int min_width = 0;
+            if (!parse_length_px(min_track, min_width, em_base)) {
+                return false;
+            }
+            if (max_track == "auto" || max_track == "1fr" ||
+                (!max_track.empty() && max_track.back() == 'r' && max_track.size() >= 2 &&
+                 max_track[max_track.size() - 2] == 'f')) {
+                stored_width = min_width > 0 ? std::max(1, min_width) : 0;
+            } else {
+                return false;
+            }
         } else if (track == "auto" || track == "1fr" || track == "min-content" || track == "max-content" ||
                    (!track.empty() && track.back() == 'r' && track.size() >= 2 && track[track.size() - 2] == 'f')) {
             stored_width = 0;

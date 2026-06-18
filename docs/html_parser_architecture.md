@@ -64,4 +64,3 @@ token stream before building the DOM.
 - No table foster parenting.
 - No parser pause or `document.write()` reentrancy.
 - No full script-data historical escape-state compatibility.
-

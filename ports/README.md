@@ -7,6 +7,8 @@ hardware glue, generated resources, board build files and validation demos.
 
 Current port areas:
 
+- `embedded_host_demo/`: platform-neutral host bring-up demo for static
+  resources, bitmap text, input and RGB565 presentation.
 - `virtual_board/`: desktop virtual-board benchmark and presentation harness.
 - `esp32s3-idf/`: ESP32-S3 bring-up project and static-resource experiment.
 

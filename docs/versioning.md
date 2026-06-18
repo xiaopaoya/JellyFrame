@@ -30,4 +30,3 @@ MAJOR.MINOR.PATCH[-stage]
 - `0.2.x`: framebuffer renderer and input routing.
 - `0.3.x`: JerryScript integration and DOM mutation APIs.
 - `0.4.x`: wearable app runtime APIs and packaging.
-

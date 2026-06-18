@@ -50,7 +50,7 @@ interfaces and host contracts. These docs should stay close to the code.
   resource-bundle workflow.
 - [../tools/vscode-jellyframe/README.md](../tools/vscode-jellyframe/README.md):
   optional VS Code helper that delegates to the developer CLI.
-- [../schemas/jellyframe.app.schema.json](../schemas/jellyframe.app.schema.json):
+- [../tools/schemas/jellyframe.app.schema.json](../tools/schemas/jellyframe.app.schema.json):
   JSON Schema for `jellyframe.app.json`.
 - [embedded_hal_api.md](embedded_hal_api.md): board-side API checklist.
 - [embedded_framebuffer_backend.md](embedded_framebuffer_backend.md): caller-owned

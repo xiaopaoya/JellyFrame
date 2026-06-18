@@ -80,7 +80,7 @@ font discovery, glyph caching, shaping, bidi, kerning or full Unicode fallback.
 
 ## Win32 Validation Backend
 
-`examples/win32_browser.cpp` now injects GDI for both layout measurement and
+`tools/native/win32_browser.cpp` now injects GDI for both layout measurement and
 text painting. This makes desktop captures much closer to what users see in the
 interactive validation shell, especially for Chinese and other UTF-8 text.
 

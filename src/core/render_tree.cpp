@@ -1,5 +1,7 @@
 #include "core/render_tree.h"
 
+#include "core/text_normalization.h"
+
 #include <algorithm>
 #include <utility>
 
@@ -40,7 +42,7 @@ bool creates_render_object(const Node& node, const Style& style) {
         return false;
     }
     if (node.type == NodeType::Text) {
-        return !node.text.empty();
+        return !node.text.empty() && !is_collapsible_whitespace_text(node);
     }
     return true;
 }
