@@ -358,6 +358,11 @@ The built-in weather, clock, timer and calculator templates are ordinary source
 packages. They cover event delegation, `dataset`, timers, grid layout and form
 controls without adding another app framework above HTML/CSS/JS.
 
+An optional VS Code helper lives under `tools/vscode-jellyframe`. It contributes
+manifest schema association and command-palette actions that call
+`tools/jellyframe_cli.py` for validate, check, preview, package and template
+creation. The CLI remains the source of truth for CI and non-VS-Code workflows.
+
 References:
 
 - Xiaomi Vela JS App project configuration and project structure:

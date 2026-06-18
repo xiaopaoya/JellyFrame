@@ -63,6 +63,8 @@ M11 是可穿戴 app runtime 中的打包部分。目标开发体验应先做 CL
   bitmap font header
 - 内置 weather、clock、timer 和 calculator app 模板，并可通过
   `jellyframe_cli.py new` 创建
+- 第一版 VS Code 辅助扩展位于 `tools/vscode-jellyframe`，委托 CLI 完成 schema-backed
+  authoring、validate/check/preview/package 和模板创建
 - pseudo browser `--app` 源包预览路径
 - `examples/apps/watch_weather` 第一份 package sample
 - ESP32-S3 bring-up 资源已改用顶层 packer
@@ -70,8 +72,7 @@ M11 是可穿戴 app runtime 中的打包部分。目标开发体验应先做 CL
 下一步 packaging 工作：
 
 1. 在硬件需求更明确后继续补充 target presets。
-2. 在 CLI 之上做 VS Code extension：schema association、一键 preview/package、报告面板和
-   inline capability warnings。
+2. 扩展 VS Code helper，增加 report panel 和 inline capability warnings。
 3. 只有当 CLI/plugin 工作流无法满足非程序员 app 作者时，再考虑独立可视化工具。
 
 ## 兼容性短线：现代 CSS authoring 子集

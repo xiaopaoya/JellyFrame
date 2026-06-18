@@ -51,6 +51,8 @@ Active project/process documents now live in
   time, framebuffer, text and budgets.
 - [app_packaging.md](app_packaging.md): M11 app package format, manifest and
   resource-bundle workflow.
+- [../tools/vscode-jellyframe/README.md](../tools/vscode-jellyframe/README.md):
+  optional VS Code helper that delegates to the developer CLI.
 - [../schemas/jellyframe.app.schema.json](../schemas/jellyframe.app.schema.json):
   JSON Schema for `jellyframe.app.json`.
 - [embedded_hal_api.md](embedded_hal_api.md): board-side API checklist.

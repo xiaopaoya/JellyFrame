@@ -1,0 +1,79 @@
+{
+  "name": "jellyframe-tools",
+  "displayName": "JellyFrame Tools",
+  "description": "VS Code helpers for JellyFrame app packages.",
+  "version": "0.1.0",
+  "publisher": "jellyframe",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:jellyframe.validate",
+    "onCommand:jellyframe.check",
+    "onCommand:jellyframe.preview",
+    "onCommand:jellyframe.package",
+    "onCommand:jellyframe.newFromTemplate"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "jellyframe.validate",
+        "title": "JellyFrame: Validate Package"
+      },
+      {
+        "command": "jellyframe.check",
+        "title": "JellyFrame: Check Package Capabilities"
+      },
+      {
+        "command": "jellyframe.preview",
+        "title": "JellyFrame: Preview Package"
+      },
+      {
+        "command": "jellyframe.package",
+        "title": "JellyFrame: Generate Resource Package"
+      },
+      {
+        "command": "jellyframe.newFromTemplate",
+        "title": "JellyFrame: New App From Template"
+      }
+    ],
+    "configuration": {
+      "title": "JellyFrame",
+      "properties": {
+        "jellyframe.repoRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Optional JellyFrame repository root. Leave empty when running the extension from this repository."
+        },
+        "jellyframe.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Python executable used to run tools/jellyframe_cli.py."
+        },
+        "jellyframe.defaultTarget": {
+          "type": "string",
+          "default": "round-300",
+          "description": "Default target preset passed to JellyFrame CLI commands."
+        },
+        "jellyframe.fontBudget": {
+          "type": "string",
+          "default": "16x16",
+          "description": "Default glyph budget passed to capability checks."
+        }
+      }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "jellyframe.app.json",
+          "**/jellyframe.app.json"
+        ],
+        "url": "../../schemas/jellyframe.app.schema.json"
+      }
+    ]
+  }
+}

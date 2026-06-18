@@ -75,6 +75,9 @@ Completed or first-cut:
   generate a bitmap font header from BDF input
 - built-in app templates for weather, clock, timer and calculator, plus CLI
   creation through `jellyframe_cli.py new`
+- first VS Code helper extension under `tools/vscode-jellyframe`, delegating to
+  the CLI for schema-backed authoring, validate/check/preview/package and
+  template creation
 - pseudo-browser `--app` source-package preview path
 - first package sample under `examples/apps/watch_weather`
 - ESP32-S3 bring-up resources now use the top-level packer
@@ -82,8 +85,7 @@ Completed or first-cut:
 Next packaging steps:
 
 1. Add more target presets as hardware requirements become concrete.
-2. Build a VS Code extension on top of the CLI: schema association, one-click
-   preview/package, report panel and inline capability warnings.
+2. Expand the VS Code helper with a report panel and inline capability warnings.
 3. Consider a standalone visual tool only after the CLI/plugin workflow proves
    insufficient for non-programmer app authors.
 

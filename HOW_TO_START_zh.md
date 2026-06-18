@@ -383,6 +383,9 @@ python tools\jellyframe_cli.py new `
   --target round-300
 ```
 
+可选 VS Code 辅助扩展位于 `tools/vscode-jellyframe`。它会为 `jellyframe.app.json`
+关联 schema，并在命令面板中包装同一套 CLI 命令；它不会替代 CLI，也不会复制 packer。
+
 如果页面渲染不对，建议按这个顺序排查：
 
 1. `jellyframe_capability_check`

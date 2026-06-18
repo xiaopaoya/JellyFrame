@@ -36,6 +36,8 @@
 
 - [host_abstraction_zh.md](host_abstraction_zh.md)：资源、时间、framebuffer、文本和预算的薄宿主边界。
 - [app_packaging_zh.md](app_packaging_zh.md)：M11 app 包格式、manifest 和资源包工作流。
+- [../tools/vscode-jellyframe/README_zh.md](../tools/vscode-jellyframe/README_zh.md)：
+  调用 developer CLI 的可选 VS Code 辅助扩展。
 - [../schemas/jellyframe.app.schema.json](../schemas/jellyframe.app.schema.json)：
   `jellyframe.app.json` 的 JSON Schema。
 - [embedded_hal_api_zh.md](embedded_hal_api_zh.md)：开发板侧 API checklist。

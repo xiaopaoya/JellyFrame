@@ -329,7 +329,8 @@ for the manifest. Built-in target presets provide first reusable viewport,
 budget, font-profile and framebuffer defaults. The developer CLI now includes a
 `font` workflow that collects used characters and can invoke the BDF bitmap font
 header generator. Built-in source-package templates cover weather, clock, timer
-and calculator apps.
+and calculator apps. A first VS Code helper extension now delegates package
+commands to the same CLI.
 
 Tasks:
 
@@ -344,6 +345,9 @@ Tasks:
   produce bitmap font headers from collected package characters.
 - Provide starter packages for common watch apps. Weather, clock, timer and
   calculator templates are available through `jellyframe_cli.py new`.
+- Provide editor integration without creating a second toolchain. The first VS
+  Code helper contributes schema association and output-channel-backed CLI
+  commands.
 - Keep package resource loading filesystem-free and network-free in the core;
   runtime network requests are represented as manifest capabilities for future
   host APIs.
