@@ -139,6 +139,8 @@ void dirty_and_framebuffer_budget_helpers_are_conservative() {
     check(framebuffer_size_fits_budget(100, 100, budgets), "framebuffer at budget is accepted");
     check(!framebuffer_size_fits_budget(101, 100, budgets), "framebuffer over budget is rejected");
     check(!framebuffer_size_fits_budget(0, 100, budgets), "invalid framebuffer size is rejected");
+    check(software_compositor_options_from_budgets(budgets).max_offscreen_pixels == budgets.max_framebuffer_pixels,
+          "offscreen compositor budget maps from framebuffer budget");
 
     FramePipelineCacheState cache;
     cache.has_render_tree = true;

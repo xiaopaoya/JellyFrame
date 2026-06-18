@@ -36,6 +36,8 @@ DOM + CSSOM
 - Windows 下通过 GDI CPU mask 绘制文本。
 - 非 Windows 构建保留内置 tiny ASCII fallback text drawing。
 - 针对 opacity/composited layers 的离屏合成。
+- 可选 offscreen pixel budget：过大的 composited layer 会降级为逐命令透明绘制，
+  避免分配大块临时 RGBA framebuffer。
 - 用于 pseudo-browser 验收的 BMP 和 PPM 图片写出。
 
 ## 明确裁剪

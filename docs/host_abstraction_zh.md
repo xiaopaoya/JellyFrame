@@ -163,11 +163,12 @@ ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_frameb
 
 `HostBudgets` 已通过 `src/core/budget.h` 贯穿 HTML/CSS parser、render/layout/layer、
 display-list、dirty rectangle 和 frame-loop 工作上限。JerryScript runtime 构建也会使用
-timer、listener 和 detached DOM node 上限。后续重点不是再定义预算结构，而是补齐更细的
-offscreen/tile buffer 策略，以及预算超限路径的长时间稳定性测试。
+timer、listener 和 detached DOM node 上限。软件 compositor 也可以使用由 framebuffer 预算
+派生出的 offscreen pixel 上限。后续重点不是再定义预算结构，而是补齐 tile/scanline
+presentation 策略，以及预算超限路径的长时间稳定性测试。
 
 ## 推荐顺序
 
 1. 整理本地资源包与 app packaging。
 2. 继续 allocator 工作，并用 dirty-region 诊断判断 retained subtree reuse 是否值得承担所有权复杂度。
-3. 在真实硬件压力要求时，再细化 offscreen/tile buffer 策略。
+3. 在真实硬件压力要求时，再细化 tile/scanline presentation 策略。

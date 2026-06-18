@@ -163,6 +163,37 @@ void dirty_render_only_updates_requested_clip() {
     check(frame_buffer.pixel(70, 10).r == 255, "dirty clip leaves outside area untouched");
 }
 
+DisplayCommand black_fill(Rect rect) {
+    DisplayCommand command;
+    command.type = DisplayCommandType::FillRect;
+    command.rect = rect;
+    command.color = Color{0, 0, 0, 255};
+    return command;
+}
+
+void compositor_degrades_oversized_offscreen_layers_without_crashing() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 2, 1};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->opacity = 0.5F;
+    child->bounds = Rect{0, 0, 2, 1};
+    child->display_list.push_back(black_fill(Rect{0, 0, 1, 1}));
+    child->display_list.push_back(black_fill(Rect{0, 0, 1, 1}));
+    root.children.push_back(std::move(child));
+
+    const Color white{255, 255, 255, 255};
+    const FrameBuffer precise = SoftwareCompositor().render(root, 2, 1, white);
+    const FrameBuffer degraded =
+        SoftwareCompositor({}, SoftwareCompositor::Options{1}).render(root, 2, 1, white);
+
+    check(precise.pixel(0, 0).r > degraded.pixel(0, 0).r,
+          "offscreen budget fallback uses bounded direct compositing");
+    check(degraded.pixel(1, 0).r == 255, "fallback keeps untouched pixels");
+}
+
 struct FrameSinkProbe {
     int width = 0;
     int height = 0;
@@ -333,6 +364,7 @@ int main() {
         wrapped_text_layout_keeps_descent_padding();
         layout_uses_injected_text_measurement();
         dirty_render_only_updates_requested_clip();
+        compositor_degrades_oversized_offscreen_layers_without_crashing();
         frame_sink_receives_framebuffer_view_and_dirty_rects();
         bitmap_font_backend_measures_and_paints();
         bitmap_font_lookup_uses_sorted_codepoints();

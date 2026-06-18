@@ -113,5 +113,5 @@ source order, then runs selector matching and cascade comparison.
 5. Evaluate DOM node allocation policy through a `DomOwner` prototype and
    detached-node instrumentation.
 6. Organize local resource bundles, app packaging and release artifacts.
-7. Continue allocator work and refine offscreen/tile buffer policy only when
-   real hardware pressure proves the extra ownership complexity is worthwhile.
+7. Continue allocator work and refine tile/scanline presentation only when real
+   hardware pressure proves the extra ownership complexity is worthwhile.

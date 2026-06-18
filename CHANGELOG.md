@@ -19,6 +19,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   now report memory/budget-oriented pipeline statistics through the same helper.
 - Render, layout and layer tree counting now use explicit work stacks instead
   of recursive helper walks.
+- Software compositor users can now cap offscreen compositing pixels from
+  `HostBudgets`; oversized opacity/composited layers degrade to direct
+  per-command opacity instead of allocating a large temporary framebuffer.
 
 ## 0.3.0-dev - 2026-06-18
 

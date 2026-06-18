@@ -189,12 +189,13 @@ The host should configure:
 `HostBudgets` is now wired through `src/core/budget.h` into the main HTML/CSS
 parser, render/layout/layer, display-list, dirty-rectangle and frame-loop work
 caps. JerryScript runtime construction also consumes timer, listener and
-detached DOM node limits. The remaining work is finer offscreen/tile buffer
-policy and long-running stability tests for budget-exceeded paths.
+detached DOM node limits. The software compositor also accepts an offscreen
+pixel cap derived from the framebuffer budget. The remaining work is tile/scanline
+presentation policy and long-running stability tests for budget-exceeded paths.
 
 ## Recommended Order
 
 1. Organize local resource bundles and app packaging.
 2. Continue allocator work and use dirty-region diagnostics to decide whether
    retained subtree reuse is worth its ownership cost.
-3. Refine offscreen/tile buffer policy when real hardware pressure requires it.
+3. Refine tile/scanline presentation policy when real hardware pressure requires it.

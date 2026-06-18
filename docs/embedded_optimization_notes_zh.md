@@ -95,4 +95,5 @@ full_pipeline avg_us=2228.91
 - 响应式 grid card 和 `aspect-ratio` 增加了可测量的 layout 工作，但成本有界，
   换来了明显更强的嵌入式应用 UI 表达能力。
 - 当前 full pipeline 仍主要由 HTML parse 和 style/render 工作主导。
-- 下一项性能升级应转向重复 class pattern 的 computed-style sharing，以及更严格的离屏 framebuffer 预算。
+- 下一项性能升级应转向重复 class pattern 的 computed-style sharing；如果硬件内存压力证明
+  full framebuffer 路径过贵，再推进 tile/scanline presentation。

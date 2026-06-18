@@ -8,6 +8,7 @@
 #include "core/layer_tree.h"
 #include "core/layout.h"
 #include "core/render_tree.h"
+#include "core/software_renderer.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -63,6 +64,10 @@ inline bool framebuffer_size_fits_budget(int width, int height, const HostBudget
     }
     const auto pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
     return pixels <= std::max<std::size_t>(1, budgets.max_framebuffer_pixels);
+}
+
+inline SoftwareCompositor::Options software_compositor_options_from_budgets(const HostBudgets& budgets) {
+    return SoftwareCompositor::Options{std::max<std::size_t>(1, budgets.max_framebuffer_pixels)};
 }
 
 } // namespace jellyframe

@@ -507,7 +507,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     const auto dispatch_stats =
         jellyframe_esp32s3::dispatch_input_events(input_queue, input_controller, 8);
 
-    SoftwareCompositor compositor(text_painter);
+    SoftwareCompositor compositor(text_painter, software_compositor_options_from_budgets(budgets));
     FrameBuffer frame_buffer(width, height, kBackground);
     const Rect full_dirty{0, 0, width, height};
     compositor.render_into(*layer_tree, frame_buffer, kBackground, &full_dirty, 1);
@@ -675,7 +675,7 @@ void run_benchmark() {
     double present_rgb565_us = 0.0;
     if (framebuffer_size_fits_budget(viewport_width, viewport_height, budgets) &&
         enough_framebuffer_memory(viewport_width, viewport_height)) {
-        SoftwareCompositor compositor;
+        SoftwareCompositor compositor({}, software_compositor_options_from_budgets(budgets));
         FrameBuffer frame_buffer(viewport_width, viewport_height, kBackground);
         render_frame_us = average_microseconds(clock, iterations, [&] {
             compositor.render_into(*layer_tree, frame_buffer, kBackground);

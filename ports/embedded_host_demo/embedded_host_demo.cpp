@@ -128,8 +128,9 @@ Pipeline build_pipeline(BitmapFontContext& font_context, const HostBudgets& budg
     return pipeline;
 }
 
-FrameBuffer render_to_rgba(const LayerNode& layer_tree, BitmapFontContext& font_context) {
-    SoftwareCompositor compositor(TextPainter{bitmap_font_paint_callback, &font_context});
+FrameBuffer render_to_rgba(const LayerNode& layer_tree, BitmapFontContext& font_context, const HostBudgets& budgets) {
+    SoftwareCompositor compositor(TextPainter{bitmap_font_paint_callback, &font_context},
+                                  software_compositor_options_from_budgets(budgets));
     return compositor.render(layer_tree, kViewportWidth, kViewportHeight, Color{0, 0, 0, 255});
 }
 
@@ -164,7 +165,7 @@ int main() {
     input.focus_next();
     input.activate_focused();
 
-    FrameBuffer rgba = render_to_rgba(*pipeline.layer_tree, font_context);
+    FrameBuffer rgba = render_to_rgba(*pipeline.layer_tree, font_context, budgets);
     std::vector<std::uint8_t> rgb565 = make_rgb565_buffer();
     FlushProbe flush_probe_state;
     EmbeddedFrameBufferSink sink;

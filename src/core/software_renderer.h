@@ -53,7 +53,11 @@ private:
 
 class SoftwareCompositor {
 public:
-    explicit SoftwareCompositor(TextPainter text_painter = {});
+    struct Options {
+        std::size_t max_offscreen_pixels = 0;
+    };
+
+    explicit SoftwareCompositor(TextPainter text_painter = {}, Options options = {});
 
     FrameBuffer render(const LayerNode& root, int viewport_width, int viewport_height, Color background) const;
     void render_into(const LayerNode& root, FrameBuffer& target, Color background) const;
@@ -65,8 +69,14 @@ public:
 
 private:
     SoftwareRasterizer rasterizer_;
+    Options options_;
 
-    void composite_layer(const LayerNode& layer, FrameBuffer& target, Rect clip, int offset_x, int offset_y) const;
+    void composite_layer(const LayerNode& layer,
+                         FrameBuffer& target,
+                         Rect clip,
+                         int offset_x,
+                         int offset_y,
+                         float inherited_opacity = 1.0F) const;
 };
 
 void write_ppm(const FrameBuffer& frame_buffer, const std::string& path);

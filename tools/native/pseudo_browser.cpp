@@ -382,7 +382,7 @@ int main(int argc, char** argv) {
         auto layer_tree = layer_tree_builder.build(*layout_tree);
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
 
-        SoftwareCompositor compositor;
+        SoftwareCompositor compositor({}, software_compositor_options_from_budgets(budgets));
         const Color background = page_background_color(*document, resolver);
         FrameBuffer frame_buffer = compositor.render(
             *layer_tree, effective_options.viewport_width, effective_options.viewport_height, background);

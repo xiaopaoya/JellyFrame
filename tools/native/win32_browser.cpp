@@ -491,7 +491,8 @@ FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
     LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets));
     auto layer_tree = layer_builder.build(*layout_tree);
 
-    SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
+    SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr},
+                                  software_compositor_options_from_budgets(budgets));
     return compositor.render(*layer_tree,
                              options.viewport_width,
                              options.viewport_height,
@@ -741,7 +742,8 @@ private:
         }
 
         LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets_));
-        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr});
+        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr},
+                                      software_compositor_options_from_budgets(budgets_));
         if (update_plan.action == FrameUpdateAction::RepaintExisting &&
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {

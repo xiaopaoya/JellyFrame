@@ -291,6 +291,36 @@ void composite_buffer(FrameBuffer& target, const FrameBuffer& source, int dst_x,
     }
 }
 
+bool offscreen_fits_budget(Rect bounds, SoftwareCompositor::Options options) {
+    if (bounds.width <= 0 || bounds.height <= 0) {
+        return false;
+    }
+    if (options.max_offscreen_pixels == 0) {
+        return true;
+    }
+    const std::size_t pixels = static_cast<std::size_t>(bounds.width) * static_cast<std::size_t>(bounds.height);
+    return pixels <= options.max_offscreen_pixels;
+}
+
+void rasterize_with_opacity(const SoftwareRasterizer& rasterizer,
+                            const DisplayList& display_list,
+                            FrameBuffer& target,
+                            Rect clip,
+                            int offset_x,
+                            int offset_y,
+                            float opacity) {
+    if (opacity >= 0.999F) {
+        rasterizer.rasterize(display_list, target, clip, offset_x, offset_y);
+        return;
+    }
+    for (const DisplayCommand& source : display_list) {
+        DisplayCommand command = source;
+        command.color = with_opacity(command.color, opacity);
+        command.color2 = with_opacity(command.color2, opacity);
+        rasterizer.rasterize(command, target, clip, offset_x, offset_y);
+    }
+}
+
 } // namespace
 
 FrameBuffer::FrameBuffer(int width_in, int height_in, Color clear_color) {
@@ -373,8 +403,8 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
     }
 }
 
-SoftwareCompositor::SoftwareCompositor(TextPainter text_painter)
-    : rasterizer_(text_painter) {}
+SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, Options options)
+    : rasterizer_(text_painter), options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,
                                        int viewport_width,
@@ -399,7 +429,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
     }
     if (dirty_rects == nullptr || dirty_rect_count == 0) {
         target.clear(background);
-        composite_layer(root, target, Rect{0, 0, target.width, target.height}, 0, 0);
+        composite_layer(root, target, Rect{0, 0, target.width, target.height}, 0, 0, 1.0F);
         return;
     }
     for (std::size_t index = 0; index < dirty_rect_count; ++index) {
@@ -408,7 +438,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
             continue;
         }
         fill_rect(target, dirty, background);
-        composite_layer(root, target, dirty, 0, 0);
+        composite_layer(root, target, dirty, 0, 0, 1.0F);
     }
 }
 
@@ -416,7 +446,8 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                          FrameBuffer& target,
                                          Rect clip,
                                          int offset_x,
-                                         int offset_y) const {
+                                         int offset_y,
+                                         float inherited_opacity) const {
     Rect layer_clip = clip;
     if (layer.has_clip) {
         Rect translated_clip = layer.clip_rect;
@@ -428,6 +459,7 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         }
     }
 
+    const float layer_opacity = inherited_opacity * layer.opacity;
     const bool needs_offscreen = layer.type == LayerType::Composited || layer.opacity < 0.999F;
     if (needs_offscreen) {
         Rect bounds = layer.bounds;
@@ -438,6 +470,19 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         if (empty_rect(bounds)) {
             return;
         }
+        if (!offscreen_fits_budget(bounds, options_)) {
+            rasterize_with_opacity(rasterizer_,
+                                   layer.display_list,
+                                   target,
+                                   layer_clip,
+                                   offset_x,
+                                   offset_y,
+                                   layer_opacity);
+            for (const auto& child : layer.children) {
+                composite_layer(*child, target, layer_clip, offset_x, offset_y, layer_opacity);
+            }
+            return;
+        }
 
         FrameBuffer offscreen(bounds.width, bounds.height, Color{0, 0, 0, 0});
         const int child_offset_x = offset_x - bounds.x;
@@ -445,15 +490,15 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         const Rect offscreen_clip{0, 0, bounds.width, bounds.height};
         rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y);
         for (const auto& child : layer.children) {
-            composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y);
+            composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F);
         }
-        composite_buffer(target, offscreen, bounds.x, bounds.y, layer.opacity);
+        composite_buffer(target, offscreen, bounds.x, bounds.y, layer_opacity);
         return;
     }
 
-    rasterizer_.rasterize(layer.display_list, target, layer_clip, offset_x, offset_y);
+    rasterize_with_opacity(rasterizer_, layer.display_list, target, layer_clip, offset_x, offset_y, layer_opacity);
     for (const auto& child : layer.children) {
-        composite_layer(*child, target, layer_clip, offset_x, offset_y);
+        composite_layer(*child, target, layer_clip, offset_x, offset_y, layer_opacity);
     }
 }
 

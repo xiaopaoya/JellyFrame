@@ -122,4 +122,5 @@ Interpretation:
   the cost bounded and buy a large amount of embedded-app UI expressiveness.
 - Full pipeline time is still dominated by HTML parse and style/render work.
 - The next performance upgrade should target computed-style sharing for
-  repeated class patterns and tighter offscreen framebuffer budgeting.
+  repeated class patterns and tile/scanline presentation if hardware memory
+  pressure proves the full framebuffer path too expensive.

@@ -252,7 +252,7 @@ int main(int argc, char** argv) {
     });
 
     constexpr Color background{248, 250, 252, 255};
-    SoftwareCompositor compositor;
+    SoftwareCompositor compositor({}, software_compositor_options_from_budgets(budgets));
     FrameBuffer frame_buffer(options.width, options.height, background);
     const double render_frame_us = average_microseconds(options.iterations, [&] {
         compositor.render_into(*layer_tree, frame_buffer, background);

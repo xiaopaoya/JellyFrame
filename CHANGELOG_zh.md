@@ -17,6 +17,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - Pseudo browser、pipeline dump、embedded host demo 和 virtual-board benchmark
   现在通过同一个 helper 输出面向内存/预算的管线统计。
 - Render、layout 和 layer tree 计数改为显式工作栈，替代递归 helper 遍历。
+- Software compositor 现在可从 `HostBudgets` 限制 offscreen compositing pixels；
+  过大的 opacity/composited layer 会降级为逐命令透明绘制，而不是分配大块临时 framebuffer。
 
 ## 0.3.0-dev - 2026-06-18
 

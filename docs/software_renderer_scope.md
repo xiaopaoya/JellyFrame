@@ -39,6 +39,8 @@ DOM + CSSOM
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.
 - Offscreen compositing for opacity/composited layers.
+- Optional offscreen pixel budget: oversized composited layers degrade to direct
+  per-command opacity instead of allocating a large temporary RGBA framebuffer.
 - BMP and PPM image writers for pseudo-browser validation.
 
 ## Deliberate Cuts

@@ -288,7 +288,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | CPU framebuffer | Works | Software rasterizer/compositor can produce BMP/PPM. |
 | Embedded framebuffer adapter | Works | `embedded_framebuffer` converts `HostFrameBufferView` into caller-owned RGBA8888/BGRA8888, RGB565/BGR565, RGB332, Gray8 or 1-bit monochrome buffers and flushes dirty rects through a callback. |
 | Source-over alpha | Works | Straight-alpha composition. |
-| Opacity layers | Works | Offscreen compositing for opacity/composited layers. |
+| Opacity layers | Subset | Offscreen compositing for opacity/composited layers. Embedded hosts can cap offscreen pixels; oversized layers degrade to direct per-command opacity instead of allocating a large temporary buffer. |
 | Rounded fills | Subset | Rounded rectangle fill clipping for backgrounds/shadows. |
 | Border painting | Works | Borders emitted as fill rectangles. |
 | Linear gradient | Subset | Simple vertical command support. |
@@ -313,7 +313,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Display invalidation diagnostics | Works | `analyze_display_invalidation(...)` reports dirty-rectangle coverage over layers and display commands. This is diagnostic only; retained display-list reuse is still deferred. |
 | Host frame sink | Subset | `present_frame` exposes `FrameBuffer` through `HostFrameSink` with optional dirty rects. `embedded_framebuffer` supplies portable pixel conversion; real display I/O remains host-owned. |
 | Host device capabilities | Draft | `HostDeviceCapabilities` records display, input, memory, budget and service flags for board ports. Current core code treats it as a contract/documented policy input; deeper automatic adaptation is deferred. |
-| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count, frame-loop input/timer caps, JerryScript timer/listener limits and detached DOM node limits. Render, layout and layer trees now have arena-backed build paths; full mutable DOM arenas and offscreen framebuffer budgets remain future work. |
+| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count, frame-loop input/timer caps, JerryScript timer/listener limits, detached DOM node limits and software-compositor offscreen pixel caps. Render, layout and layer trees now have arena-backed build paths; full mutable DOM arenas remain future work. |
 
 Practical implication: repeated script mutations should be batched in one event
 or timer callback. The host will see one dirty document and rerender once.
