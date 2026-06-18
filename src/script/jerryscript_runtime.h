@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/dom.h"
+#include "core/dom_owner.h"
 #include "core/host.h"
 
 #include <cstdint>
@@ -25,6 +26,13 @@ struct ScriptEvaluationResult {
 struct JerryScriptRuntimeOptions {
     std::size_t max_timers = 64;
     std::size_t max_event_listeners = 512;
+    std::size_t max_detached_nodes = 256;
+};
+
+struct ScriptRuntimeStatistics {
+    std::size_t timer_count = 0;
+    std::size_t event_listener_count = 0;
+    DetachedDomStatistics detached_nodes;
 };
 
 class JerryScriptRuntime {
@@ -42,6 +50,8 @@ public:
     std::size_t pump_timers(std::uint64_t now_ms, std::size_t max_callbacks = 32);
     bool has_pending_timers() const;
     std::uint64_t next_timer_due_ms() const;
+    std::size_t detached_node_count() const;
+    ScriptRuntimeStatistics statistics() const;
 
 private:
     friend struct ScriptRuntimeAccess;
@@ -49,12 +59,13 @@ private:
     bool initialized_ = false;
     std::uint32_t next_timer_id_ = 1;
     std::uint64_t current_time_ms_ = 0;
-    std::vector<std::unique_ptr<Node>> detached_nodes_;
+    DomOwner detached_nodes_;
     std::vector<std::unique_ptr<ScriptEventListener>> event_listeners_;
     std::vector<std::unique_ptr<ScriptTimer>> timers_;
     JerryScriptRuntimeOptions options_;
 
-    Node& adopt_detached_node(std::unique_ptr<Node> node);
+    bool can_adopt_detached_node() const;
+    Node* adopt_detached_node(std::unique_ptr<Node> node);
     std::unique_ptr<Node> release_detached_node(Node& node);
     void add_script_event_listener(Node& node,
                                    std::string type,

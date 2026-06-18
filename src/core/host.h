@@ -59,6 +59,7 @@ struct HostBudgets {
     std::size_t max_display_commands = 8192;
     std::size_t max_dirty_rects = 8;
     std::size_t max_timers = 64;
+    std::size_t max_detached_dom_nodes = 256;
     std::size_t max_input_events_per_frame = 8;
     std::size_t max_timer_callbacks_per_frame = 8;
     std::size_t max_event_listeners = 512;

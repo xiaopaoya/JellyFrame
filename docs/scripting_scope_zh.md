@@ -21,6 +21,9 @@ API 表面。
 - `document.createTextNode(text)`。
 - `node.appendChild(child)`，并处理 detached node 的所有权转移。
 - `node.removeChild(child)`，返回的 wrapper 仍可继续使用。
+- detached node 在未挂载到 document 前由 runtime 通过 `DomOwner` 持有。
+  `HostBudgets::max_detached_dom_nodes` 会限制脚本创建和移除后保留的节点数量，
+  避免嵌入式 app 无界扩大该池。
 - `element.setAttribute(name, value)`。
 - `element.getAttribute(name)`。
 - `node.textContent` getter/setter。
@@ -105,5 +108,6 @@ API 表面。
 - 核心 HTML/CSS/rendering 必须能在没有 JerryScript 时构建。
 - native wrapper 不拥有 DOM node。
 - 每一个被保留的 `jerry_value_t` 都必须有清晰释放路径。
+- detached DOM node 必须能通过 runtime statistics 观察，便于 port 审计脚本密集 UI 的内存行为。
 - 脚本触发的重绘应消费 dirty flags，并合并重复工作。
 - 只有当 C++ 核心能可预测地兑现行为时，才增加对应 API。

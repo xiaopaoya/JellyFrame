@@ -320,6 +320,7 @@ struct HostBudgets {
     std::size_t max_display_commands;
     std::size_t max_dirty_rects;
     std::size_t max_timers;
+    std::size_t max_detached_dom_nodes;
     std::size_t max_input_events_per_frame;
     std::size_t max_timer_callbacks_per_frame;
     std::size_t max_event_listeners;
@@ -329,8 +330,9 @@ struct HostBudgets {
 ```
 
 `src/core/budget.h` maps these values into the current HTML/CSS/parser,
-render/layout/layer/display-list, dirty-rectangle, frame-loop and JerryScript timer/listener
-entry points. Suggested ESP32-S3 starting point:
+render/layout/layer/display-list, dirty-rectangle and frame-loop entry points.
+JerryScript runtime construction also consumes timer, listener and detached DOM
+node limits. Suggested ESP32-S3 starting point:
 
 - DOM nodes: 512-1500
 - DOM depth: 32-64

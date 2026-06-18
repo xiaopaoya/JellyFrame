@@ -181,15 +181,16 @@ The host should configure:
 - DOM node cap;
 - CSS rule/declaration cap;
 - display command cap;
-- timer count, event listener and per-frame input/timer callback caps;
+- timer count, event listener, detached DOM node and per-frame input/timer
+  callback caps;
 - resource byte cap;
 - framebuffer/offscreen buffer policy.
 
 `HostBudgets` is now wired through `src/core/budget.h` into the main HTML/CSS
-parser, render/layout/layer, display-list, dirty-rectangle and scripting entry
-points, plus the frame-loop work caps. The remaining work is finer
-offscreen/tile buffer policy and long-running stability tests for
-budget-exceeded paths.
+parser, render/layout/layer, display-list, dirty-rectangle and frame-loop work
+caps. JerryScript runtime construction also consumes timer, listener and
+detached DOM node limits. The remaining work is finer offscreen/tile buffer
+policy and long-running stability tests for budget-exceeded paths.
 
 ## Recommended Order
 

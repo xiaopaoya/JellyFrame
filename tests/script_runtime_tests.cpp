@@ -123,6 +123,7 @@ void document_create_and_append_element() {
     check(paragraph != nullptr, "created paragraph attached");
     check(paragraph->attribute("class") == "note", "created paragraph attribute");
     check(paragraph->text_content() == "Hello from JS", "created paragraph text");
+    check(runtime.detached_node_count() == 0, "attached JS nodes leave detached owner");
 }
 
 void remove_child_keeps_wrapper_usable() {
@@ -142,6 +143,35 @@ void remove_child_keeps_wrapper_usable() {
     check(result.value == "Detached", "removed wrapper remains usable");
     Node* paragraph = find_first_by_tag(*document, "p");
     check(paragraph == nullptr, "removed paragraph detached from DOM");
+    check(runtime.detached_node_count() == 1, "removed child remains runtime-owned detached node");
+    const ScriptRuntimeStatistics statistics = runtime.statistics();
+    check(statistics.detached_nodes.root_count == 1, "detached statistics count removed root");
+    check(statistics.detached_nodes.aggregate.node_count == 2, "detached statistics include subtree");
+}
+
+void javascript_detached_node_budget_is_bounded() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><main id='app'></main></body>");
+
+    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{64, 512, 1});
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult create_result = runtime.eval(
+        "var first = document.createElement('p');"
+        "var secondOk = true;"
+        "try { document.createElement('section'); } catch (e) { secondOk = false; }"
+        "String(secondOk) + ':' + first.tagName");
+
+    check(create_result.ok, "detached budget script succeeds");
+    check(create_result.value == "false:p", "second detached node is rejected");
+    check(runtime.detached_node_count() == 1, "detached node count stays bounded");
+
+    const ScriptEvaluationResult attach_result = runtime.eval(
+        "document.getElementById('app').appendChild(first);"
+        "var second = document.createElement('section');"
+        "second.tagName");
+    check(attach_result.ok, "attaching releases detached budget");
+    check(attach_result.value == "section", "new detached node can be created after attach");
+    check(runtime.detached_node_count() == 1, "only second node remains detached");
 }
 
 void javascript_click_listener_mutates_dom() {
@@ -396,6 +426,7 @@ int main() {
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();
         remove_child_keeps_wrapper_usable();
+        javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_form_properties_mutate_control_state();

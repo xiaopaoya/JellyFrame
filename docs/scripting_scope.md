@@ -23,6 +23,9 @@ surface.
 - `document.createTextNode(text)`.
 - `node.appendChild(child)` with detached-node ownership transfer.
 - `node.removeChild(child)` while keeping the returned wrapper usable.
+- Detached nodes are runtime-owned through `DomOwner` while not attached to the
+  document. `HostBudgets::max_detached_dom_nodes` bounds script-created and
+  removed nodes so embedded apps cannot grow this pool without limit.
 - `element.setAttribute(name, value)`.
 - `element.getAttribute(name)`.
 - `node.textContent` getter/setter.
@@ -123,5 +126,7 @@ The scripting bridge must stay optional, explicit and bounded:
 - Core HTML/CSS/rendering must build without JerryScript.
 - Native wrappers must not own DOM nodes.
 - Every retained `jerry_value_t` must have a clear release path.
+- Detached DOM nodes must remain observable through runtime statistics so ports
+  can audit script-heavy UI memory behavior.
 - Script-driven redraws should consume dirty flags and coalesce work.
 - APIs are added only when the C++ core can honor their behavior predictably.

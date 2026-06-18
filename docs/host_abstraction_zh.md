@@ -157,13 +157,14 @@ ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_frameb
 - DOM node 上限；
 - CSS rule/declaration 上限；
 - display command 上限；
-- timer 数量、event listener 和每帧 input/timer callback 上限；
+- timer 数量、event listener、detached DOM node 和每帧 input/timer callback 上限；
 - resource byte 上限；
 - framebuffer/offscreen buffer 策略。
 
 `HostBudgets` 已通过 `src/core/budget.h` 贯穿 HTML/CSS parser、render/layout/layer、
-display-list、dirty rectangle、scripting 主要入口，以及 frame-loop 工作上限。后续重点不是再定义预算结构，
-而是补齐更细的 offscreen/tile buffer 策略，以及预算超限路径的长时间稳定性测试。
+display-list、dirty rectangle 和 frame-loop 工作上限。JerryScript runtime 构建也会使用
+timer、listener 和 detached DOM node 上限。后续重点不是再定义预算结构，而是补齐更细的
+offscreen/tile buffer 策略，以及预算超限路径的长时间稳定性测试。
 
 ## 推荐顺序
 

@@ -299,6 +299,7 @@ struct HostBudgets {
     std::size_t max_display_commands;
     std::size_t max_dirty_rects;
     std::size_t max_timers;
+    std::size_t max_detached_dom_nodes;
     std::size_t max_input_events_per_frame;
     std::size_t max_timer_callbacks_per_frame;
     std::size_t max_event_listeners;
@@ -308,7 +309,8 @@ struct HostBudgets {
 ```
 
 `src/core/budget.h` 会把这些值映射到当前 HTML/CSS parser、render/layout/layer/display-list、
-dirty rectangle、frame-loop 和 JerryScript timer/listener 入口。ESP32-S3 初始建议：
+dirty rectangle 和 frame-loop 入口。JerryScript runtime 构建还会使用 timer、listener 和
+detached DOM node 上限。ESP32-S3 初始建议：
 
 - DOM nodes：512-1500
 - DOM depth：32-64

@@ -259,9 +259,9 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Classic document scripts | Subset | In scripting builds, pseudo/Win32 shells execute inline classic `<script>` and local external `<script src>` through host callbacks. |
 | `window` / `document` | Subset | Bound objects expose the methods below. |
 | `document.getElementById` | Works | Returns wrapper or `null`. |
-| `document.createElement` | Works | Creates detached element owned by runtime. |
-| `document.createTextNode` | Works | Creates detached text node. |
-| `appendChild` / `removeChild` | Works | Moves nodes, prevents cycles, marks dirty. |
+| `document.createElement` | Works | Creates a detached element owned by the runtime until it is attached. Creation is bounded by `HostBudgets::max_detached_dom_nodes`. |
+| `document.createTextNode` | Works | Creates a detached text node with the same detached-node budget. |
+| `appendChild` / `removeChild` | Works | Moves nodes, prevents cycles and marks dirty. `removeChild` keeps the returned node runtime-owned and reusable while it is detached. |
 | `setAttribute` / `getAttribute` / `removeAttribute` | Works | Attribute names are lowercased by binding. |
 | `textContent` | Works | Getter/setter; unchanged text avoids dirty work. |
 | `children` / `parentElement` | Subset | Snapshot element-child array and parent wrapper/null. |
@@ -313,7 +313,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Display invalidation diagnostics | Works | `analyze_display_invalidation(...)` reports dirty-rectangle coverage over layers and display commands. This is diagnostic only; retained display-list reuse is still deferred. |
 | Host frame sink | Subset | `present_frame` exposes `FrameBuffer` through `HostFrameSink` with optional dirty rects. `embedded_framebuffer` supplies portable pixel conversion; real display I/O remains host-owned. |
 | Host device capabilities | Draft | `HostDeviceCapabilities` records display, input, memory, budget and service flags for board ports. Current core code treats it as a contract/documented policy input; deeper automatic adaptation is deferred. |
-| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count, frame-loop input/timer caps and JerryScript timer/listener limits. Render, layout and layer trees now have arena-backed build paths; DOM arenas and offscreen framebuffer budgets remain future work. |
+| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count, frame-loop input/timer caps, JerryScript timer/listener limits and detached DOM node limits. Render, layout and layer trees now have arena-backed build paths; full mutable DOM arenas and offscreen framebuffer budgets remain future work. |
 
 Practical implication: repeated script mutations should be batched in one event
 or timer callback. The host will see one dirty document and rerender once.

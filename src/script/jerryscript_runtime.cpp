@@ -37,7 +37,11 @@ struct ScriptTimer {
 };
 
 struct ScriptRuntimeAccess {
-    static Node& adopt_detached_node(JerryScriptRuntime& runtime, std::unique_ptr<Node> node) {
+    static bool can_adopt_detached_node(const JerryScriptRuntime& runtime) {
+        return runtime.can_adopt_detached_node();
+    }
+
+    static Node* adopt_detached_node(JerryScriptRuntime& runtime, std::unique_ptr<Node> node) {
         return runtime.adopt_detached_node(std::move(node));
     }
 
@@ -1033,13 +1037,19 @@ jerry_value_t node_remove_child(const jerry_call_info_t* call_info_p,
     if (child->parent != parent) {
         return jerry_throw_sz(JERRY_ERROR_TYPE, "removeChild child is not attached to this parent");
     }
+    if (!ScriptRuntimeAccess::can_adopt_detached_node(*runtime)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
+    }
 
     auto detached = parent->detach_child(*child);
     if (!detached) {
         return jerry_throw_sz(JERRY_ERROR_TYPE, "removeChild failed");
     }
-    Node& adopted = ScriptRuntimeAccess::adopt_detached_node(*runtime, std::move(detached));
-    return make_node_wrapper(*runtime, adopted, false);
+    Node* adopted = ScriptRuntimeAccess::adopt_detached_node(*runtime, std::move(detached));
+    if (adopted == nullptr) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
+    }
+    return make_node_wrapper(*runtime, *adopted, false);
 }
 
 jerry_value_t element_set_attribute(const jerry_call_info_t* call_info_p,
@@ -1132,9 +1142,12 @@ jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
         return throw_type_error("createElement requires a tag name");
     }
 
-    Node& node = ScriptRuntimeAccess::adopt_detached_node(
+    Node* node = ScriptRuntimeAccess::adopt_detached_node(
         *runtime, make_element(ascii_lowercase(value_to_string(args_p[0]))));
-    return make_node_wrapper(*runtime, node, false);
+    if (node == nullptr) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
+    }
+    return make_node_wrapper(*runtime, *node, false);
 }
 
 jerry_value_t document_create_text_node(const jerry_call_info_t* call_info_p,
@@ -1145,9 +1158,12 @@ jerry_value_t document_create_text_node(const jerry_call_info_t* call_info_p,
         return throw_type_error("createTextNode requires a document");
     }
 
-    Node& node = ScriptRuntimeAccess::adopt_detached_node(
+    Node* node = ScriptRuntimeAccess::adopt_detached_node(
         *runtime, make_text(args_count > 0 ? value_to_string(args_p[0]) : std::string()));
-    return make_node_wrapper(*runtime, node, false);
+    if (node == nullptr) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
+    }
+    return make_node_wrapper(*runtime, *node, false);
 }
 
 jerry_value_t node_add_event_listener(const jerry_call_info_t* call_info_p,
@@ -1198,6 +1214,7 @@ JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
     : JerryScriptRuntime(JerryScriptRuntimeOptions{
           std::max<std::size_t>(1, budgets.max_timers),
           std::max<std::size_t>(1, budgets.max_event_listeners),
+          std::max<std::size_t>(1, budgets.max_detached_dom_nodes),
       }) {}
 
 JerryScriptRuntime::~JerryScriptRuntime() {
@@ -1213,7 +1230,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 void JerryScriptRuntime::bind_document(Node& document) {
     clear_script_event_listeners();
     clear_timers();
-    detached_nodes_.clear();
+    detached_nodes_.clear_detached_nodes();
 
     JerryValue global(jerry_current_realm());
     jerry_object_set_native_ptr(global.get(), &kRuntimeNativeInfo, this);
@@ -1311,22 +1328,31 @@ std::uint64_t JerryScriptRuntime::next_timer_due_ms() const {
     return due == std::numeric_limits<std::uint64_t>::max() ? 0 : due;
 }
 
-Node& JerryScriptRuntime::adopt_detached_node(std::unique_ptr<Node> node) {
-    detached_nodes_.push_back(std::move(node));
-    return *detached_nodes_.back();
+std::size_t JerryScriptRuntime::detached_node_count() const {
+    return detached_nodes_.detached_node_count();
+}
+
+ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
+    ScriptRuntimeStatistics output;
+    output.timer_count = timers_.size();
+    output.event_listener_count = event_listeners_.size();
+    output.detached_nodes = detached_nodes_.detached_statistics();
+    return output;
+}
+
+bool JerryScriptRuntime::can_adopt_detached_node() const {
+    return detached_nodes_.detached_node_count() < options_.max_detached_nodes;
+}
+
+Node* JerryScriptRuntime::adopt_detached_node(std::unique_ptr<Node> node) {
+    if (!node || !can_adopt_detached_node()) {
+        return nullptr;
+    }
+    return detached_nodes_.adopt_detached_node(std::move(node));
 }
 
 std::unique_ptr<Node> JerryScriptRuntime::release_detached_node(Node& node) {
-    for (auto it = detached_nodes_.begin(); it != detached_nodes_.end(); ++it) {
-        if (it->get() != &node) {
-            continue;
-        }
-
-        std::unique_ptr<Node> released = std::move(*it);
-        detached_nodes_.erase(it);
-        return released;
-    }
-    return nullptr;
+    return detached_nodes_.release_detached_node(node);
 }
 
 void JerryScriptRuntime::add_script_event_listener(Node& node,

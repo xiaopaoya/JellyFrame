@@ -12,6 +12,8 @@ JellyFrame Engine 的重要变更记录在这里。
   中明确 JellyFrame 是“非商业源码可用”软件。
 - 为公开源码、示例、测试、工具、preset、schema、template 和 port 目录补充
   README，方便用户 clone 后快速审查仓库结构。
+- 添加第一版 M12 `DomOwner` 原型，并为 JerryScript 脚本创建/移除后保留的
+  detached DOM nodes 增加统计和预算限制。
 - 完成当前 M10 文本/字体工作流范围：能力验证器会给出 tiny、符号追加、
   中文 app 子集、中文标准和全球化产品字体包 profile 建议。
 - 记录 ESP32-S3 增量审计结论：LVGL/vendor SDK 只应作为可选的薄

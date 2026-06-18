@@ -34,6 +34,7 @@ add_library(jellyframe_core
     src/core/document_script.cpp
     src/core/document_style.cpp
     src/core/dom.cpp
+    src/core/dom_owner.cpp
     src/core/embedded_framebuffer.cpp
     src/core/event.cpp
     src/core/form_control.cpp
@@ -132,6 +133,7 @@ if(JELLYFRAME_BUILD_TESTS)
         tests/tokenizer_tests.cpp
         tests/arena_tests.cpp
         tests/dom_mutation_tests.cpp
+        tests/dom_owner_tests.cpp
         tests/document_script_tests.cpp
         tests/display_invalidation_tests.cpp
         tests/dirty_region_tests.cpp

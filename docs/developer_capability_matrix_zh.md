@@ -252,9 +252,9 @@ JerryScript 源码树时可用。
 | Classic document scripts | 子集 | scripting 构建中，伪浏览器/Win32 壳会执行 inline classic `<script>`，并通过宿主 callback 加载本地外部 `<script src>`。 |
 | `window` / `document` | 子集 | 暴露下列方法。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
-| `document.createElement` | 可用 | 创建 runtime 持有的 detached element。 |
-| `document.createTextNode` | 可用 | 创建 detached text node。 |
-| `appendChild` / `removeChild` | 可用 | 移动节点、防止环、标记 dirty。 |
+| `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；数量受 `HostBudgets::max_detached_dom_nodes` 限制。 |
+| `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |
+| `appendChild` / `removeChild` | 可用 | 移动节点、防止环、标记 dirty。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
 | `setAttribute` / `getAttribute` / `removeAttribute` | 可用 | 绑定层会 lowercase 属性名。 |
 | `textContent` | 可用 | getter/setter；同值设置不会触发 dirty。 |
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
@@ -306,7 +306,7 @@ JerryScript 源码树时可用。
 | Display invalidation 诊断 | 可用 | `analyze_display_invalidation(...)` 会报告 dirty rectangles 对 layer 和 display command 的覆盖情况。它只提供诊断；retained display-list reuse 仍延后。 |
 | Host frame sink | 子集 | `present_frame` 可以通过 `HostFrameSink` 暴露 `FrameBuffer`，并携带可选 dirty rects。`embedded_framebuffer` 已提供可移植像素转换；真实显示 I/O 仍由宿主负责。 |
 | Host device capabilities | 草案 | `HostDeviceCapabilities` 记录开发板 port 的显示、输入、内存、budget 和服务 flags。当前核心把它作为契约/策略输入文档；更深的自动适配仍延后。 |
-| Host budgets | 子集 | `HostBudgets` 已接入 HTML/CSS parsing、render/layout/layer tree 上限、display-list 上限、dirty rect 数量、frame-loop input/timer 上限和 JerryScript timer/listener 限制。Render/layout/layer tree 已有 arena-backed 构建路径；DOM arena 和离屏 framebuffer 预算仍是后续工作。 |
+| Host budgets | 子集 | `HostBudgets` 已接入 HTML/CSS parsing、render/layout/layer tree 上限、display-list 上限、dirty rect 数量、frame-loop input/timer 上限、JerryScript timer/listener 限制和 detached DOM node 限制。Render/layout/layer tree 已有 arena-backed 构建路径；完整 mutable DOM arena 和离屏 framebuffer 预算仍是后续工作。 |
 
 实际含义：脚本中多次 DOM mutation 应尽量放在同一次事件或 timer callback 内。宿主会观察到一次
 dirty 并重绘一次。paint-only 表单控件变化在 Win32 验证壳中可以避免 render/layout 重建；其他变化仍会走简化管线
