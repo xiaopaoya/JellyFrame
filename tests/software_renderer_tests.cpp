@@ -187,11 +187,27 @@ void compositor_degrades_oversized_offscreen_layers_without_crashing() {
     const Color white{255, 255, 255, 255};
     const FrameBuffer precise = SoftwareCompositor().render(root, 2, 1, white);
     const FrameBuffer degraded =
-        SoftwareCompositor({}, SoftwareCompositor::Options{1}).render(root, 2, 1, white);
+        SoftwareCompositor({}, SoftwareCompositor::Options{0, 1}).render(root, 2, 1, white);
 
     check(precise.pixel(0, 0).r > degraded.pixel(0, 0).r,
           "offscreen budget fallback uses bounded direct compositing");
     check(degraded.pixel(1, 0).r == 255, "fallback keeps untouched pixels");
+}
+
+void compositor_rejects_oversized_framebuffer_before_allocation() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 4, 4};
+    root.display_list.push_back(black_fill(Rect{0, 0, 4, 4}));
+
+    const FrameBuffer rejected =
+        SoftwareCompositor({}, SoftwareCompositor::Options{3, 0}).render(root, 4, 4, Color{255, 255, 255, 255});
+    const FrameBuffer accepted =
+        SoftwareCompositor({}, SoftwareCompositor::Options{16, 0}).render(root, 4, 4, Color{255, 255, 255, 255});
+
+    check(rejected.width == 0 && rejected.height == 0 && rejected.pixels.empty(),
+          "framebuffer budget rejects oversized render before allocation");
+    check(accepted.width == 4 && accepted.height == 4, "framebuffer at budget renders normally");
 }
 
 struct FrameSinkProbe {
@@ -365,6 +381,7 @@ int main() {
         layout_uses_injected_text_measurement();
         dirty_render_only_updates_requested_clip();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
+        compositor_rejects_oversized_framebuffer_before_allocation();
         frame_sink_receives_framebuffer_view_and_dirty_rects();
         bitmap_font_backend_measures_and_paints();
         bitmap_font_lookup_uses_sorted_codepoints();

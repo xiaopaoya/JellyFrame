@@ -29,6 +29,7 @@ DOM + CSSOM
 ## 已实现
 
 - 使用 integer RGBA pixels 的 straight-alpha `FrameBuffer`。
+- `SoftwareCompositor::render()` 支持可选主 framebuffer pixel budget；超限时会在分配像素前返回空 framebuffer。
 - Source-over alpha compositing。
 - Rectangle fills、stroke rectangles、便宜近似 `box-shadow` 填充，以及简单垂直
   linear-gradient command。

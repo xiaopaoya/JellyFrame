@@ -302,6 +302,17 @@ bool offscreen_fits_budget(Rect bounds, SoftwareCompositor::Options options) {
     return pixels <= options.max_offscreen_pixels;
 }
 
+bool framebuffer_fits_budget(int width, int height, SoftwareCompositor::Options options) {
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    if (options.max_framebuffer_pixels == 0) {
+        return true;
+    }
+    const std::size_t pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    return pixels <= options.max_framebuffer_pixels;
+}
+
 void rasterize_with_opacity(const SoftwareRasterizer& rasterizer,
                             const DisplayList& display_list,
                             FrameBuffer& target,
@@ -410,6 +421,9 @@ FrameBuffer SoftwareCompositor::render(const LayerNode& root,
                                        int viewport_width,
                                        int viewport_height,
                                        Color background) const {
+    if (!framebuffer_fits_budget(viewport_width, viewport_height, options_)) {
+        return {};
+    }
     FrameBuffer target(viewport_width, viewport_height, background);
     render_into(root, target, background);
     return target;

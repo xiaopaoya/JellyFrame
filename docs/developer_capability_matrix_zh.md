@@ -278,7 +278,7 @@ JerryScript 源码树时可用。
 | 功能 | 状态 | 行为 |
 | --- | --- | --- |
 | Display list | 可用 | 矩形、边框、渐变、文本命令，包含近似文本字重。 |
-| CPU framebuffer | 可用 | 软件 rasterizer/compositor 可输出 BMP/PPM。 |
+| CPU framebuffer | 可用 | 软件 rasterizer/compositor 可输出 BMP/PPM。带预算的 compositor 会在分配前拒绝过大的主 framebuffer。 |
 | 嵌入式 framebuffer adapter | 可用 | `embedded_framebuffer` 可把 `HostFrameBufferView` 转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit 单色 buffer，并通过 callback flush dirty rects。 |
 | Source-over alpha | 可用 | straight-alpha 合成。 |
 | Opacity layer | 子集 | opacity/composited layer 使用离屏合成。嵌入式宿主可限制 offscreen pixels；超限 layer 会降级为逐命令直接透明绘制，避免分配过大的临时 buffer。 |
@@ -306,7 +306,7 @@ JerryScript 源码树时可用。
 | Display invalidation 诊断 | 可用 | `analyze_display_invalidation(...)` 会报告 dirty rectangles 对 layer 和 display command 的覆盖情况。它只提供诊断；retained display-list reuse 仍延后。 |
 | Host frame sink | 子集 | `present_frame` 可以通过 `HostFrameSink` 暴露 `FrameBuffer`，并携带可选 dirty rects。`embedded_framebuffer` 已提供可移植像素转换；真实显示 I/O 仍由宿主负责。 |
 | Host device capabilities | 草案 | `HostDeviceCapabilities` 记录开发板 port 的显示、输入、内存、budget 和服务 flags。当前核心把它作为契约/策略输入文档；更深的自动适配仍延后。 |
-| Host budgets | 子集 | `HostBudgets` 已接入 HTML/CSS parsing、render/layout/layer tree 上限、display-list 上限、dirty rect 数量、frame-loop input/timer 上限、JerryScript timer/listener 限制、detached DOM node 限制和软件 compositor 的 offscreen pixel 上限。Render/layout/layer tree 已有 arena-backed 构建路径；完整 mutable DOM arena 仍是后续工作。 |
+| Host budgets | 子集 | `HostBudgets` 已接入 HTML/CSS parsing、render/layout/layer tree 上限、display-list 上限、dirty rect 数量、frame-loop input/timer 上限、JerryScript timer/listener 限制、detached DOM node 限制和软件 compositor 的主/offscreen pixel 上限。Render/layout/layer tree 已有 arena-backed 构建路径；完整 mutable DOM arena 仍是后续工作。 |
 
 实际含义：脚本中多次 DOM mutation 应尽量放在同一次事件或 timer callback 内。宿主会观察到一次
 dirty 并重绘一次。paint-only 表单控件变化在 Win32 验证壳中可以避免 render/layout 重建；其他变化仍会走简化管线

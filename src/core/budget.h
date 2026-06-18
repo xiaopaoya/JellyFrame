@@ -67,7 +67,8 @@ inline bool framebuffer_size_fits_budget(int width, int height, const HostBudget
 }
 
 inline SoftwareCompositor::Options software_compositor_options_from_budgets(const HostBudgets& budgets) {
-    return SoftwareCompositor::Options{std::max<std::size_t>(1, budgets.max_framebuffer_pixels)};
+    const std::size_t pixels = std::max<std::size_t>(1, budgets.max_framebuffer_pixels);
+    return SoftwareCompositor::Options{pixels, pixels};
 }
 
 } // namespace jellyframe

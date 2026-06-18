@@ -19,6 +19,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - Render、layout 和 layer tree 计数改为显式工作栈，替代递归 helper 遍历。
 - Software compositor 现在可从 `HostBudgets` 限制 offscreen compositing pixels；
   过大的 opacity/composited layer 会降级为逐命令透明绘制，而不是分配大块临时 framebuffer。
+- 配置 framebuffer pixel 预算后，`SoftwareCompositor::render()` 会在分配前拒绝过大的主 framebuffer。
 
 ## 0.3.0-dev - 2026-06-18
 

@@ -166,6 +166,10 @@ int main() {
     input.activate_focused();
 
     FrameBuffer rgba = render_to_rgba(*pipeline.layer_tree, font_context, budgets);
+    if (rgba.width <= 0 || rgba.height <= 0) {
+        std::cerr << "embedded host demo failed: framebuffer budget exceeded\n";
+        return 1;
+    }
     std::vector<std::uint8_t> rgb565 = make_rgb565_buffer();
     FlushProbe flush_probe_state;
     EmbeddedFrameBufferSink sink;

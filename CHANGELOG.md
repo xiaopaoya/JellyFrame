@@ -22,6 +22,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Software compositor users can now cap offscreen compositing pixels from
   `HostBudgets`; oversized opacity/composited layers degrade to direct
   per-command opacity instead of allocating a large temporary framebuffer.
+- `SoftwareCompositor::render()` now rejects oversized primary framebuffers
+  before allocation when a framebuffer pixel budget is configured.
 
 ## 0.3.0-dev - 2026-06-18
 

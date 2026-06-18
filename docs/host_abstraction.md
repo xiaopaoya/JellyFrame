@@ -189,8 +189,8 @@ The host should configure:
 `HostBudgets` is now wired through `src/core/budget.h` into the main HTML/CSS
 parser, render/layout/layer, display-list, dirty-rectangle and frame-loop work
 caps. JerryScript runtime construction also consumes timer, listener and
-detached DOM node limits. The software compositor also accepts an offscreen
-pixel cap derived from the framebuffer budget. The remaining work is tile/scanline
+detached DOM node limits. The software compositor also accepts primary and
+offscreen pixel caps derived from the framebuffer budget. The remaining work is tile/scanline
 presentation policy and long-running stability tests for budget-exceeded paths.
 
 ## Recommended Order

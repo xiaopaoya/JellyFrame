@@ -493,10 +493,14 @@ FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
 
     SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr},
                                   software_compositor_options_from_budgets(budgets));
-    return compositor.render(*layer_tree,
-                             options.viewport_width,
-                             options.viewport_height,
-                             page_background_color(*page.document, resolver));
+    FrameBuffer frame_buffer = compositor.render(*layer_tree,
+                                                 options.viewport_width,
+                                                 options.viewport_height,
+                                                 page_background_color(*page.document, resolver));
+    if (frame_buffer.width <= 0 || frame_buffer.height <= 0) {
+        throw std::runtime_error("framebuffer budget exceeded");
+    }
+    return frame_buffer;
 }
 
 FrameBuffer render_page_with_gdi_text(const std::string& html_path,

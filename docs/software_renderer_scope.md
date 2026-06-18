@@ -32,6 +32,8 @@ DOM + CSSOM
 ## Implemented
 
 - Straight-alpha `FrameBuffer` with integer RGBA pixels.
+- Optional primary framebuffer pixel budget for `SoftwareCompositor::render()`;
+  oversized renders return an empty framebuffer before allocating pixels.
 - Source-over alpha compositing.
 - Rectangle fills, stroke rectangles, cheap approximate `box-shadow` fills and
   simple vertical linear-gradient command support.

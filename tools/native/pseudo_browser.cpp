@@ -386,6 +386,9 @@ int main(int argc, char** argv) {
         const Color background = page_background_color(*document, resolver);
         FrameBuffer frame_buffer = compositor.render(
             *layer_tree, effective_options.viewport_width, effective_options.viewport_height, background);
+        if (frame_buffer.width <= 0 || frame_buffer.height <= 0) {
+            throw std::runtime_error("framebuffer budget exceeded");
+        }
         ImageFrameSinkContext frame_sink_context{effective_options.output_path, false};
         const Rect full_dirty{0, 0, frame_buffer.width, frame_buffer.height};
         const HostFrameSink frame_sink{write_image_frame_sink, &frame_sink_context};

@@ -164,7 +164,7 @@ ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_frameb
 `HostBudgets` 已通过 `src/core/budget.h` 贯穿 HTML/CSS parser、render/layout/layer、
 display-list、dirty rectangle 和 frame-loop 工作上限。JerryScript runtime 构建也会使用
 timer、listener 和 detached DOM node 上限。软件 compositor 也可以使用由 framebuffer 预算
-派生出的 offscreen pixel 上限。后续重点不是再定义预算结构，而是补齐 tile/scanline
+派生出的主 framebuffer 与 offscreen pixel 上限。后续重点不是再定义预算结构，而是补齐 tile/scanline
 presentation 策略，以及预算超限路径的长时间稳定性测试。
 
 ## 推荐顺序

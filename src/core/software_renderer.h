@@ -54,6 +54,7 @@ private:
 class SoftwareCompositor {
 public:
     struct Options {
+        std::size_t max_framebuffer_pixels = 0;
         std::size_t max_offscreen_pixels = 0;
     };
 
