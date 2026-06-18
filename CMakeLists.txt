@@ -132,6 +132,7 @@ if(JELLYFRAME_BUILD_TESTS)
     set(JELLYFRAME_CORE_TEST_SOURCES
         tests/tokenizer_tests.cpp
         tests/arena_tests.cpp
+        tests/budget_stress_tests.cpp
         tests/dom_mutation_tests.cpp
         tests/dom_owner_tests.cpp
         tests/document_script_tests.cpp

@@ -323,6 +323,8 @@ int main(int argc, char** argv) {
         std::size_t document_script_count = 0;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         std::unique_ptr<JerryScriptRuntime> runtime;
+        ScriptRuntimeStatistics script_statistics;
+        bool has_script_statistics = false;
 #endif
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         std::vector<DocumentScript> document_scripts;
@@ -370,6 +372,8 @@ int main(int argc, char** argv) {
             if (effective_options.pump_timers_ms > 0 && effective_options.pump_timers_ms % 16 != 0) {
                 timer_callbacks += runtime->pump_timers(static_cast<std::uint64_t>(effective_options.pump_timers_ms), 32);
             }
+            script_statistics = runtime->statistics();
+            has_script_statistics = true;
 #else
             throw std::runtime_error("this build was compiled without JELLYFRAME_BUILD_SCRIPTING=ON");
 #endif
@@ -431,6 +435,17 @@ int main(int argc, char** argv) {
             std::cout << "  script_ok=" << (script_ok ? "true" : "false") << '\n';
             std::cout << "  script_result=" << script_output << '\n';
             std::cout << "  timer_callbacks=" << timer_callbacks << '\n';
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+            if (has_script_statistics) {
+                std::cout << "  script_timers=" << script_statistics.timer_count << '\n';
+                std::cout << "  script_event_listeners=" << script_statistics.event_listener_count << '\n';
+                std::cout << "  script_detached_roots=" << script_statistics.detached_nodes.root_count << '\n';
+                std::cout << "  script_detached_nodes="
+                          << script_statistics.detached_nodes.aggregate.node_count << '\n';
+                std::cout << "  script_detached_max_subtree="
+                          << script_statistics.detached_nodes.max_subtree_nodes << '\n';
+            }
+#endif
         }
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';

@@ -15,6 +15,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   template and port directories so cloned repositories are easier to review.
 - Added the first M12 `DomOwner` prototype plus JerryScript detached-node
   statistics and budget enforcement for script-created or removed DOM nodes.
+- Added platform-neutral budget stress tests and pseudo-browser script runtime
+  diagnostics for timers, listeners and detached DOM node counts.
 - Completed the current M10 text/font workflow scope with capability-check
   font profile recommendations for tiny, symbol-only, Chinese app subset,
   Chinese standard and global product font packs.
