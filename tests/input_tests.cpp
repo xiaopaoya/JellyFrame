@@ -277,6 +277,44 @@ void datalist_completion_updates_text_control() {
           "datalist completion marks document dirty for repaint");
 }
 
+void deep_form_control_helpers_are_iterative() {
+    auto document = make_element("document");
+    Node& body = document->append_child(make_element("body"));
+    Node& input = body.append_child(make_element("input"));
+    input.attributes["list"] = "suggest";
+
+    Node* current = &body;
+    for (int depth = 0; depth < 4096; ++depth) {
+        current = &current->append_child(make_element("div"));
+    }
+    Node& datalist = current->append_child(make_element("datalist"));
+    datalist.attributes["id"] = "suggest";
+    Node& datalist_option = datalist.append_child(make_element("option"));
+    datalist_option.attributes["value"] = "Deep Match";
+
+    Node& textarea = current->append_child(make_element("textarea"));
+    Node* text_parent = &textarea;
+    for (int depth = 0; depth < 128; ++depth) {
+        text_parent = &text_parent->append_child(make_element("span"));
+    }
+    text_parent->append_child(make_text("Nested text"));
+
+    Node& select = current->append_child(make_element("select"));
+    Node& group = select.append_child(make_element("optgroup"));
+    group.attributes["label"] = "Nested";
+    group.append_child(make_element("option")).append_child(make_text("One"));
+    Node& selected = group.append_child(make_element("option"));
+    selected.attributes["selected"] = "";
+    selected.append_child(make_text("Two"));
+
+    ensure_form_control_state(input).value = "deep";
+    check(complete_text_control_from_datalist(input), "deep datalist completion works");
+    check(form_control_display_text(input) == "Deep Match", "deep datalist completion value");
+    check(form_control_display_text(textarea) == "Nested text", "deep textarea text collected");
+    check(form_control_selected_index(select) == 1, "deep select selected index");
+    check(form_control_display_text(select) == "Two", "deep select display text");
+}
+
 void checkbox_click_toggles_checked_state() {
     auto pipeline = build_form_pipeline("<body><input id='agree' type='checkbox'></body>");
     Node* checkbox = find_by_id(*pipeline.document, "agree");
@@ -467,6 +505,7 @@ int main() {
         select_click_cycles_selected_option();
         unchanged_form_activation_stays_clean();
         datalist_completion_updates_text_control();
+        deep_form_control_helpers_are_iterative();
         select_arrow_keys_work_through_optgroups();
         disabled_control_ignores_pointer_and_text_input();
         focus_navigation_skips_disabled_and_activates();

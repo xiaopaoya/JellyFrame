@@ -1,17 +1,24 @@
 #include "core/document_script.h"
 
 #include <cctype>
+#include <vector>
 
 namespace jellyframe {
 namespace {
 
 void append_text_descendants(const Node& node, std::string& output) {
-    if (node.type == NodeType::Text) {
-        output.append(node.text);
-        return;
-    }
-    for (const auto& child : node.children) {
-        append_text_descendants(*child, output);
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Text) {
+            output.append(current->text);
+            continue;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
 }
 
@@ -62,31 +69,37 @@ void collect_scripts(const Node& node,
                      std::vector<DocumentScript>& scripts,
                      ScriptLoadCallback load_script,
                      void* context) {
-    if (node.type == NodeType::Element && node.tag_name == "script") {
-        if (!is_classic_script_type(node.attribute("type"))) {
-            return;
-        }
-        const std::string& src = node.attribute("src");
-        if (!src.empty()) {
-            if (load_script == nullptr) {
-                return;
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "script") {
+            if (!is_classic_script_type(current->attribute("type"))) {
+                continue;
+            }
+            const std::string& src = current->attribute("src");
+            if (!src.empty()) {
+                if (load_script == nullptr) {
+                    continue;
+                }
+                std::string source;
+                if (load_script(src, source, context) && !source.empty()) {
+                    scripts.push_back(DocumentScript{std::move(source), src, true});
+                }
+                continue;
             }
             std::string source;
-            if (load_script(src, source, context) && !source.empty()) {
-                scripts.push_back(DocumentScript{std::move(source), src, true});
+            append_text_descendants(*current, source);
+            if (!source.empty()) {
+                scripts.push_back(DocumentScript{std::move(source), "(inline script)", false});
             }
-            return;
+            continue;
         }
-        std::string source;
-        append_text_descendants(node, source);
-        if (!source.empty()) {
-            scripts.push_back(DocumentScript{std::move(source), "(inline script)", false});
-        }
-        return;
-    }
 
-    for (const auto& child : node.children) {
-        collect_scripts(*child, scripts, load_script, context);
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
 }
 

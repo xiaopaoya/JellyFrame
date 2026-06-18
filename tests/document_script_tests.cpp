@@ -59,12 +59,27 @@ void external_scripts_use_callback_in_document_order() {
     check(scripts[1].source.find("loaded") != std::string::npos, "external script source loaded");
 }
 
+void deep_script_collection_is_iterative() {
+    auto document = make_element("document");
+    Node* current = document.get();
+    for (int depth = 0; depth < 4096; ++depth) {
+        current = &current->append_child(make_element("div"));
+    }
+    Node& script = current->append_child(make_element("script"));
+    script.append_child(make_text("window.deep = true;"));
+
+    const std::vector<DocumentScript> scripts = collect_classic_scripts(*document);
+    check(scripts.size() == 1, "deep inline script is collected");
+    check(scripts[0].source.find("window.deep") != std::string::npos, "deep script source is preserved");
+}
+
 } // namespace
 
 int main() {
     try {
         inline_classic_scripts_are_collected();
         external_scripts_use_callback_in_document_order();
+        deep_script_collection_is_iterative();
     } catch (const std::exception& error) {
         std::cerr << "document script test failed: " << error.what() << '\n';
         return 1;

@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <utility>
+#include <vector>
 
 namespace jellyframe {
 namespace {
@@ -28,26 +29,35 @@ int parse_int_attribute(const Node& node, const std::string& name, int fallback)
 }
 
 void append_descendant_text(const Node& node, std::string& output) {
-    if (node.type == NodeType::Text) {
-        output += node.text;
-        return;
-    }
-    for (const auto& child : node.children) {
-        append_descendant_text(*child, output);
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Text) {
+            output += current->text;
+            continue;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
 }
 
 const Node* option_at(const Node& node, int wanted_index, int& current_index) {
-    if (node.type == NodeType::Element && node.tag_name == "option") {
-        if (current_index == wanted_index) {
-            return &node;
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "option") {
+            if (current_index == wanted_index) {
+                return current;
+            }
+            ++current_index;
         }
-        ++current_index;
-    }
-    for (const auto& child : node.children) {
-        const Node* found = option_at(*child, wanted_index, current_index);
-        if (found != nullptr) {
-            return found;
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
         }
     }
     return nullptr;
@@ -55,26 +65,35 @@ const Node* option_at(const Node& node, int wanted_index, int& current_index) {
 
 int count_options(const Node& node) {
     int count = 0;
-    if (node.type == NodeType::Element && node.tag_name == "option") {
-        ++count;
-    }
-    for (const auto& child : node.children) {
-        count += count_options(*child);
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "option") {
+            ++count;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
     return count;
 }
 
 int first_selected_option_index(const Node& node, int& current_index) {
-    if (node.type == NodeType::Element && node.tag_name == "option") {
-        if (has_attribute(node, "selected")) {
-            return current_index;
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "option") {
+            if (has_attribute(*current, "selected")) {
+                return current_index;
+            }
+            ++current_index;
         }
-        ++current_index;
-    }
-    for (const auto& child : node.children) {
-        const int found = first_selected_option_index(*child, current_index);
-        if (found >= 0) {
-            return found;
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
         }
     }
     return -1;
@@ -100,13 +119,16 @@ const Node* root_of(const Node& node) {
 }
 
 const Node* find_element_by_id(const Node& node, const std::string& id) {
-    if (node.type == NodeType::Element && node.attribute("id") == id) {
-        return &node;
-    }
-    for (const auto& child : node.children) {
-        const Node* found = find_element_by_id(*child, id);
-        if (found != nullptr) {
-            return found;
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->attribute("id") == id) {
+            return current;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
         }
     }
     return nullptr;
@@ -126,32 +148,39 @@ bool ascii_starts_with_case_insensitive(const std::string& value, const std::str
 }
 
 bool first_datalist_option_value(const Node& node, const std::string& prefix, std::string& output) {
-    if (node.type == NodeType::Element && node.tag_name == "option") {
-        const std::string value = option_value(node);
-        if (!value.empty() && (prefix.empty() || ascii_starts_with_case_insensitive(value, prefix))) {
-            output = value;
-            return true;
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "option") {
+            const std::string value = option_value(*current);
+            if (!value.empty() && (prefix.empty() || ascii_starts_with_case_insensitive(value, prefix))) {
+                output = value;
+                return true;
+            }
         }
-    }
-    for (const auto& child : node.children) {
-        if (first_datalist_option_value(*child, prefix, output)) {
-            return true;
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
         }
     }
     return false;
 }
 
 int option_index_by_value(const Node& node, const std::string& value, int& current_index) {
-    if (node.type == NodeType::Element && node.tag_name == "option") {
-        if (option_value(node) == value) {
-            return current_index;
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "option") {
+            if (option_value(*current) == value) {
+                return current_index;
+            }
+            ++current_index;
         }
-        ++current_index;
-    }
-    for (const auto& child : node.children) {
-        const int found = option_index_by_value(*child, value, current_index);
-        if (found >= 0) {
-            return found;
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
         }
     }
     return -1;

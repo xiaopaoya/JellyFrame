@@ -1,28 +1,41 @@
 #include "core/document_style.h"
 
 #include <cctype>
+#include <vector>
 
 namespace jellyframe {
 namespace {
 
 void append_text_descendants(const Node& node, std::string& output) {
-    if (node.type == NodeType::Text) {
-        output.append(node.text);
-        output.push_back('\n');
-        return;
-    }
-    for (const auto& child : node.children) {
-        append_text_descendants(*child, output);
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Text) {
+            output.append(current->text);
+            output.push_back('\n');
+            continue;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
 }
 
 void collect_style_nodes(const Node& node, std::string& output) {
-    if (node.type == NodeType::Element && node.tag_name == "style") {
-        append_text_descendants(node, output);
-        return;
-    }
-    for (const auto& child : node.children) {
-        collect_style_nodes(*child, output);
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "style") {
+            append_text_descendants(*current, output);
+            continue;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
 }
 
@@ -77,23 +90,29 @@ void collect_document_author_css(const Node& node,
                                  std::string& output,
                                  StylesheetLoadCallback load_stylesheet,
                                  void* context) {
-    if (node.type == NodeType::Element && node.tag_name == "link" &&
-        rel_has_stylesheet(node.attribute("rel")) && !node.attribute("href").empty() &&
-        load_stylesheet != nullptr) {
-        std::string linked_css;
-        if (load_stylesheet(node.attribute("href"), linked_css, context)) {
-            append_css_chunk(output, linked_css);
+    std::vector<const Node*> pending;
+    pending.push_back(&node);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "link" &&
+            rel_has_stylesheet(current->attribute("rel")) && !current->attribute("href").empty() &&
+            load_stylesheet != nullptr) {
+            std::string linked_css;
+            if (load_stylesheet(current->attribute("href"), linked_css, context)) {
+                append_css_chunk(output, linked_css);
+            }
+            continue;
         }
-        return;
-    }
-    if (node.type == NodeType::Element && node.tag_name == "style") {
-        std::string embedded_css;
-        append_text_descendants(node, embedded_css);
-        append_css_chunk(output, embedded_css);
-        return;
-    }
-    for (const auto& child : node.children) {
-        collect_document_author_css(*child, output, load_stylesheet, context);
+        if (current->type == NodeType::Element && current->tag_name == "style") {
+            std::string embedded_css;
+            append_text_descendants(*current, embedded_css);
+            append_css_chunk(output, embedded_css);
+            continue;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
 }
 

@@ -410,6 +410,28 @@ void linked_stylesheets_merge_into_author_css() {
           "linked stylesheet applies");
 }
 
+void deep_author_css_collection_is_iterative() {
+    auto document = make_element("document");
+    Node& head = document->append_child(make_element("head"));
+    Node& linked = head.append_child(make_element("link"));
+    linked.attributes["rel"] = "stylesheet";
+    linked.attributes["href"] = "style1.css";
+
+    Node* current = &head;
+    for (int depth = 0; depth < 4096; ++depth) {
+        current = &current->append_child(make_element("div"));
+    }
+    Node& style = current->append_child(make_element("style"));
+    style.append_child(make_text("h1 { background: #abcdef; }"));
+
+    const std::string css = combine_author_css("", *document, linked_stylesheet_callback, nullptr);
+    const std::size_t linked_pos = css.find("color: #123456");
+    const std::size_t embedded_pos = css.find("background: #abcdef");
+    check(linked_pos != std::string::npos, "deep author css keeps linked stylesheet");
+    check(embedded_pos != std::string::npos, "deep author css keeps embedded stylesheet");
+    check(linked_pos < embedded_pos, "deep author css preserves order");
+}
+
 void html5_semantic_defaults_are_visible() {
     auto mark = make_element("mark");
     auto blockquote = make_element("blockquote");
@@ -664,6 +686,7 @@ int main() {
         controls_have_usable_default_boxes();
         embedded_styles_and_common_lengths_apply();
         linked_stylesheets_merge_into_author_css();
+        deep_author_css_collection_is_iterative();
         html5_semantic_defaults_are_visible();
         border_none_removes_default_control_border();
         grid_and_aspect_ratio_properties_apply();
