@@ -2620,12 +2620,19 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
 
     const auto cached = candidate_cache_.find(key);
     if (cached != candidate_cache_.end()) {
+        ++statistics_.candidate_cache_hits;
         return cached->second;
     }
+    ++statistics_.candidate_cache_misses;
 
     if (options_.max_candidate_cache_entries == 0 ||
         candidate_cache_.size() >= options_.max_candidate_cache_entries) {
+        if (!candidate_cache_.empty()) {
+            ++statistics_.candidate_cache_clears;
+        }
         candidate_cache_.clear();
+        statistics_.candidate_cache_entries = 0;
+        statistics_.candidate_cache_rule_refs = 0;
     }
 
     std::vector<const CssRule*> candidates;
@@ -2674,6 +2681,8 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
     });
 
     auto inserted = candidate_cache_.emplace(std::move(key), std::move(candidates));
+    statistics_.candidate_cache_entries = candidate_cache_.size();
+    statistics_.candidate_cache_rule_refs += inserted.first->second.size();
     return inserted.first->second;
 }
 
@@ -2764,6 +2773,12 @@ Style StyleResolver::resolve(const Node& node) const {
                            static_cast<std::size_t>(-1), false, custom_properties);
     }
     return style;
+}
+
+StyleResolverStatistics StyleResolver::statistics() const {
+    StyleResolverStatistics snapshot = statistics_;
+    snapshot.candidate_cache_entries = candidate_cache_.size();
+    return snapshot;
 }
 
 void StyleResolver::set_interaction_state(const Node* hovered_node,

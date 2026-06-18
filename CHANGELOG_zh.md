@@ -11,6 +11,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加共享 `PipelineStatistics` 统计入口，用同一口径统计 DOM、render、layout、
   layer、display-list、framebuffer、resource 和 arena 使用情况。
 - 添加 arena capacity 和 waste 统计，便于嵌入式 benchmark 区分真实对象用量和块式分配余量。
+- 添加低成本 `StyleResolver` 候选缓存统计，可观察缓存条目、缓存规则引用、命中、
+  未命中和预算清空次数。
 
 ### 变更
 
@@ -20,6 +22,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - Software compositor 现在可从 `HostBudgets` 限制 offscreen compositing pixels；
   过大的 opacity/composited layer 会降级为逐命令透明绘制，而不是分配大块临时 framebuffer。
 - 配置 framebuffer pixel 预算后，`SoftwareCompositor::render()` 会在分配前拒绝过大的主 framebuffer。
+- Microbench 和 virtual-board benchmark 现在会输出样式候选缓存统计，便于用真实 app
+  数据判断是否值得继续做 computed-style sharing。
 
 ## 0.3.0-dev - 2026-06-18
 

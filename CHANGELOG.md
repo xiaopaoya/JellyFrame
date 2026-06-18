@@ -12,6 +12,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   display-list, framebuffer, resource and arena usage.
 - Added arena capacity and waste accounting so embedded benchmarks can separate
   live object bytes from block-allocation slack.
+- Added low-cost `StyleResolver` candidate-cache statistics for entries,
+  cached rule references, hits, misses and budget clears.
 
 ### Changed
 
@@ -24,6 +26,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   per-command opacity instead of allocating a large temporary framebuffer.
 - `SoftwareCompositor::render()` now rejects oversized primary framebuffers
   before allocation when a framebuffer pixel budget is configured.
+- Microbench and virtual-board benchmark now print style candidate-cache
+  statistics so computed-style sharing decisions can be based on app data.
 
 ## 0.3.0-dev - 2026-06-18
 

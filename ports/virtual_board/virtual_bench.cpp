@@ -174,6 +174,14 @@ void print_metric(const std::string& name, double value) {
               << std::right << std::fixed << std::setprecision(2) << value << '\n';
 }
 
+void print_style_statistics(const StyleResolverStatistics& statistics) {
+    std::cout << "style_candidate_cache_entries=" << statistics.candidate_cache_entries
+              << " style_candidate_cache_rule_refs=" << statistics.candidate_cache_rule_refs
+              << " style_candidate_cache_hits=" << statistics.candidate_cache_hits
+              << " style_candidate_cache_misses=" << statistics.candidate_cache_misses
+              << " style_candidate_cache_clears=" << statistics.candidate_cache_clears << '\n';
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -359,6 +367,7 @@ int main(int argc, char** argv) {
               << " layer_arena_bytes=" << pipeline_statistics.layer_arena.used_bytes
               << " layer_arena_capacity=" << pipeline_statistics.layer_arena.capacity_bytes
               << " layer_arena_waste=" << pipeline_statistics.layer_arena.wasted_bytes << '\n';
+    print_style_statistics(resolver.statistics());
 
     return 0;
 }

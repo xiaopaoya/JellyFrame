@@ -204,11 +204,20 @@ struct StyleResolverOptions {
     const Node* focused_node = nullptr;
 };
 
+struct StyleResolverStatistics {
+    std::size_t candidate_cache_entries = 0;
+    std::size_t candidate_cache_rule_refs = 0;
+    std::size_t candidate_cache_hits = 0;
+    std::size_t candidate_cache_misses = 0;
+    std::size_t candidate_cache_clears = 0;
+};
+
 class StyleResolver {
 public:
     explicit StyleResolver(Stylesheet stylesheet, StyleResolverOptions options = {});
 
     Style resolve(const Node& node) const;
+    StyleResolverStatistics statistics() const;
     void set_interaction_state(const Node* hovered_node, const Node* active_node, const Node* focused_node);
 
 private:
@@ -219,6 +228,7 @@ private:
     std::unordered_map<std::string, std::vector<const CssRule*>> tag_rules_;
     std::vector<const CssRule*> universal_rules_;
     mutable std::unordered_map<std::string, std::vector<const CssRule*>> candidate_cache_;
+    mutable StyleResolverStatistics statistics_;
     bool has_custom_property_declarations_ = false;
 
     void build_rule_index();

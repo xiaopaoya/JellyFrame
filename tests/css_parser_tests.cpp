@@ -636,11 +636,16 @@ void style_candidate_cache_preserves_selector_context() {
     const Style first_style = resolver.resolve(first_node);
     const Style second_style = resolver.resolve(second_node);
     const Style first_style_again = resolver.resolve(first_node);
+    const StyleResolverStatistics statistics = resolver.statistics();
 
     check(first_style.color.b == 0xeb, "cached candidates keep descendant match");
     check(second_style.color.r == 0x11 && second_style.color.b == 0x11,
           "cached candidates do not leak ancestor match");
     check(first_style_again.color.b == 0xeb, "repeated resolve keeps descendant style");
+    check(statistics.candidate_cache_hits == 2, "style candidate cache records repeated key hits");
+    check(statistics.candidate_cache_misses == 1, "style candidate cache records first key miss");
+    check(statistics.candidate_cache_entries == 1, "style candidate cache reuses equivalent candidate keys");
+    check(statistics.candidate_cache_rule_refs >= 2, "style candidate cache reports cached rule references");
 }
 
 void style_candidate_cache_respects_tiny_budget_and_inline_style() {
@@ -658,10 +663,15 @@ void style_candidate_cache_respects_tiny_budget_and_inline_style() {
     const Style primary_style = resolver.resolve(*primary);
     const Style danger_style = resolver.resolve(*danger);
     const Style primary_style_again = resolver.resolve(*primary);
+    const StyleResolverStatistics statistics = resolver.statistics();
 
     check(primary_style.color.b == 0xeb, "tiny style cache resolves first class");
     check(danger_style.color.r == 0xff && danger_style.color.g == 0, "inline style survives tiny cache");
     check(primary_style_again.color.b == 0xeb, "tiny style cache rebuilds evicted class");
+    check(statistics.candidate_cache_hits == 0, "tiny style cache records no hits after evictions");
+    check(statistics.candidate_cache_misses == 3, "tiny style cache records rebuilt candidate keys");
+    check(statistics.candidate_cache_clears == 2, "tiny style cache records budget clears");
+    check(statistics.candidate_cache_entries == 1, "tiny style cache keeps one entry after final rebuild");
 }
 
 } // namespace

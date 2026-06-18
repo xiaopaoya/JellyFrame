@@ -54,6 +54,14 @@ void print_result(const char* name, int iterations, double average_us) {
     std::cout << name << " iterations=" << iterations << " avg_us=" << average_us << '\n';
 }
 
+void print_style_statistics(const StyleResolverStatistics& statistics) {
+    std::cout << "style_candidate_cache entries=" << statistics.candidate_cache_entries
+              << " rule_refs=" << statistics.candidate_cache_rule_refs
+              << " hits=" << statistics.candidate_cache_hits
+              << " misses=" << statistics.candidate_cache_misses
+              << " clears=" << statistics.candidate_cache_clears << '\n';
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -134,6 +142,7 @@ int main(int argc, char** argv) {
         DisplayList display_list = local_layer_tree_builder.flatten(*local_layer_tree);
         (void)display_list;
     }));
+    print_style_statistics(resolver.statistics());
 
     return 0;
 }
