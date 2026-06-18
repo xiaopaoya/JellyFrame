@@ -33,6 +33,7 @@ public:
 
     void reset();
     std::size_t used_bytes() const;
+    std::size_t capacity_bytes() const;
     std::size_t block_count() const;
 
 private:
@@ -60,4 +61,3 @@ private:
 };
 
 } // namespace jellyframe
-

@@ -13,6 +13,8 @@ namespace jellyframe {
 
 struct PipelineArenaStatistics {
     std::size_t used_bytes = 0;
+    std::size_t capacity_bytes = 0;
+    std::size_t wasted_bytes = 0;
     std::size_t block_count = 0;
 };
 

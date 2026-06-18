@@ -34,6 +34,8 @@
   occupancy bit mask，而不是完整 track-sizing engine。
 - `MonotonicArena` 已可用于文档生命周期分配。Render tree、layout tree 和 layer tree builder
   都提供 arena-backed 路径，并已接入嵌入式 benchmark。
+- Arena 统计会同时报告 used bytes 和 block capacity，因此 benchmark 日志可以区分真实管线数据
+  与块式分配余量。
 
 ## 内存建议
 

@@ -49,6 +49,8 @@ small wearable devices.
 - `MonotonicArena` is available for document-lifetime allocation. Render,
   layout and layer tree builders expose arena-backed paths for embedded
   benchmarks.
+- Arena accounting reports both used bytes and block capacity, so benchmark
+  logs can distinguish live pipeline data from block-allocation slack.
 
 ## Memory Guidance
 

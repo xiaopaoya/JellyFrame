@@ -58,6 +58,11 @@ void pipeline_statistics_reports_core_sizes() {
     check(statistics.resource_bytes == 1234, "resource bytes are propagated");
     check(statistics.render_arena.used_bytes == render_arena.used_bytes(),
           "render arena bytes are reported");
+    check(statistics.render_arena.capacity_bytes == render_arena.capacity_bytes(),
+          "render arena capacity is reported");
+    check(statistics.render_arena.wasted_bytes ==
+              statistics.render_arena.capacity_bytes - statistics.render_arena.used_bytes,
+          "render arena waste is derived from capacity");
     check(statistics.layout_arena.used_bytes == layout_arena.used_bytes(),
           "layout arena bytes are reported");
     check(statistics.layer_arena.used_bytes == layer_arena.used_bytes(),

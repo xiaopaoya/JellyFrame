@@ -351,8 +351,14 @@ int main(int argc, char** argv) {
               << " framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes
               << " resource_bytes=" << pipeline_statistics.resource_bytes
               << " render_arena_bytes=" << pipeline_statistics.render_arena.used_bytes
+              << " render_arena_capacity=" << pipeline_statistics.render_arena.capacity_bytes
+              << " render_arena_waste=" << pipeline_statistics.render_arena.wasted_bytes
               << " layout_arena_bytes=" << pipeline_statistics.layout_arena.used_bytes
-              << " layer_arena_bytes=" << pipeline_statistics.layer_arena.used_bytes << '\n';
+              << " layout_arena_capacity=" << pipeline_statistics.layout_arena.capacity_bytes
+              << " layout_arena_waste=" << pipeline_statistics.layout_arena.wasted_bytes
+              << " layer_arena_bytes=" << pipeline_statistics.layer_arena.used_bytes
+              << " layer_arena_capacity=" << pipeline_statistics.layer_arena.capacity_bytes
+              << " layer_arena_waste=" << pipeline_statistics.layer_arena.wasted_bytes << '\n';
 
     return 0;
 }

@@ -9,7 +9,9 @@ PipelineArenaStatistics arena_statistics(const MonotonicArena* arena) {
     if (arena == nullptr) {
         return {};
     }
-    return PipelineArenaStatistics{arena->used_bytes(), arena->block_count()};
+    const std::size_t used = arena->used_bytes();
+    const std::size_t capacity = arena->capacity_bytes();
+    return PipelineArenaStatistics{used, capacity, capacity > used ? capacity - used : 0, arena->block_count()};
 }
 
 std::size_t estimate_dom_bytes(const DomStatistics& statistics) {

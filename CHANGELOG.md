@@ -10,6 +10,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 - Added shared `PipelineStatistics` accounting for DOM, render, layout, layer,
   display-list, framebuffer, resource and arena usage.
+- Added arena capacity and waste accounting so embedded benchmarks can separate
+  live object bytes from block-allocation slack.
 
 ### Changed
 

@@ -42,6 +42,7 @@ void allocates_aligned_objects() {
     check(reinterpret_cast<std::uintptr_t>(&first) % alignof(Pair) == 0, "pair is aligned");
     check(reinterpret_cast<std::uintptr_t>(&second) % alignof(double) == 0, "double is aligned");
     check(arena.used_bytes() >= sizeof(Pair) + sizeof(double), "used bytes include allocations");
+    check(arena.capacity_bytes() >= arena.used_bytes(), "capacity includes used bytes");
 }
 
 void grows_by_blocks() {
@@ -77,6 +78,7 @@ void reset_releases_blocks() {
     check(log.size() == 1 && log[0] == 7, "reset destroys live objects");
     check(arena.block_count() == 0, "reset releases blocks");
     check(arena.used_bytes() == 0, "reset clears used byte accounting");
+    check(arena.capacity_bytes() == 0, "reset clears capacity accounting");
 }
 
 } // namespace

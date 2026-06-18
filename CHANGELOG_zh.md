@@ -10,6 +10,7 @@ JellyFrame Engine 的重要变更记录在这里。
 
 - 添加共享 `PipelineStatistics` 统计入口，用同一口径统计 DOM、render、layout、
   layer、display-list、framebuffer、resource 和 arena 使用情况。
+- 添加 arena capacity 和 waste 统计，便于嵌入式 benchmark 区分真实对象用量和块式分配余量。
 
 ### 变更
 

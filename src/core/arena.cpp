@@ -63,6 +63,14 @@ std::size_t MonotonicArena::used_bytes() const {
     return total;
 }
 
+std::size_t MonotonicArena::capacity_bytes() const {
+    std::size_t total = 0;
+    for (const Block& block : blocks_) {
+        total += block.capacity;
+    }
+    return total;
+}
+
 std::size_t MonotonicArena::block_count() const {
     return blocks_.size();
 }
@@ -77,4 +85,3 @@ MonotonicArena::Block& MonotonicArena::add_block(std::size_t min_capacity) {
 }
 
 } // namespace jellyframe
-
