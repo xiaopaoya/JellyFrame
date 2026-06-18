@@ -242,7 +242,8 @@ row bytes、glyph table 估算和总估算，便于 port 文档记录。
 manifest。内置 target presets 已提供第一版可复用 viewport、budget、font-profile 和
 framebuffer defaults。developer CLI 现在也包含 `font` 工作流，可收集 used characters，
 并调用 BDF bitmap font header generator。内置 source-package 模板覆盖 weather、clock、
-timer 和 calculator 应用。第一版 VS Code 辅助扩展现在会把 package 命令委托给同一套 CLI。
+timer 和 calculator 应用。第一版 VS Code 辅助扩展现在会把 package 命令委托给同一套 CLI，
+并把 CLI report/output 转成报告面板和 inline diagnostics。
 
 任务：
 
@@ -255,7 +256,7 @@ timer 和 calculator 应用。第一版 VS Code 辅助扩展现在会把 package
 - 提供常见 watch app starter package。weather、clock、timer 和 calculator 模板已可通过
   `jellyframe_cli.py new` 创建。
 - 提供编辑器集成，但不建立第二套工具链。第一版 VS Code helper 提供 schema 关联和
-  output-channel-backed CLI 命令。
+  output-channel-backed CLI 命令，并从 CLI 输出生成 report-panel 和 diagnostics 视图。
 - 核心中的包资源加载保持无文件系统、无网络；运行时网络请求先以 manifest capability 表达，
   后续由宿主 API 提供。
 

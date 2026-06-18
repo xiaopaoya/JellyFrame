@@ -330,7 +330,8 @@ budget, font-profile and framebuffer defaults. The developer CLI now includes a
 `font` workflow that collects used characters and can invoke the BDF bitmap font
 header generator. Built-in source-package templates cover weather, clock, timer
 and calculator apps. A first VS Code helper extension now delegates package
-commands to the same CLI.
+commands to the same CLI and turns CLI reports/output into a report panel and
+inline diagnostics.
 
 Tasks:
 
@@ -347,7 +348,7 @@ Tasks:
   calculator templates are available through `jellyframe_cli.py new`.
 - Provide editor integration without creating a second toolchain. The first VS
   Code helper contributes schema association and output-channel-backed CLI
-  commands.
+  commands, plus report-panel and diagnostic views generated from CLI output.
 - Keep package resource loading filesystem-free and network-free in the core;
   runtime network requests are represented as manifest capabilities for future
   host APIs.

@@ -77,7 +77,7 @@ Completed or first-cut:
   creation through `jellyframe_cli.py new`
 - first VS Code helper extension under `tools/vscode-jellyframe`, delegating to
   the CLI for schema-backed authoring, validate/check/preview/package and
-  template creation
+  template creation, plus a report panel and inline diagnostics from CLI output
 - pseudo-browser `--app` source-package preview path
 - first package sample under `examples/apps/watch_weather`
 - ESP32-S3 bring-up resources now use the top-level packer
@@ -85,7 +85,8 @@ Completed or first-cut:
 Next packaging steps:
 
 1. Add more target presets as hardware requirements become concrete.
-2. Expand the VS Code helper with a report panel and inline capability warnings.
+2. Expand the VS Code helper with richer problem matchers and optional VSIX
+   packaging.
 3. Consider a standalone visual tool only after the CLI/plugin workflow proves
    insufficient for non-programmer app authors.
 

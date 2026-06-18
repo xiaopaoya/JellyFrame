@@ -319,7 +319,8 @@ HTML/CSS/JS 之上再引入一层 app framework。
 
 可选 VS Code 辅助扩展位于 `tools/vscode-jellyframe`。它提供 manifest schema 关联，
 并通过命令面板调用 `tools/jellyframe_cli.py` 完成 validate、check、preview、package
-和模板创建。CLI 仍是 CI 和非 VS Code 工作流的权威入口。
+和模板创建。它还会读取 CLI report/output，显示报告面板和 inline diagnostics。
+CLI 仍是 CI 和非 VS Code 工作流的权威入口。
 
 参考资料：
 

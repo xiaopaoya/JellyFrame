@@ -15,7 +15,8 @@
     "onCommand:jellyframe.check",
     "onCommand:jellyframe.preview",
     "onCommand:jellyframe.package",
-    "onCommand:jellyframe.newFromTemplate"
+    "onCommand:jellyframe.newFromTemplate",
+    "onCommand:jellyframe.showReport"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -39,6 +40,10 @@
       {
         "command": "jellyframe.newFromTemplate",
         "title": "JellyFrame: New App From Template"
+      },
+      {
+        "command": "jellyframe.showReport",
+        "title": "JellyFrame: Show Last Report"
       }
     ],
     "configuration": {
