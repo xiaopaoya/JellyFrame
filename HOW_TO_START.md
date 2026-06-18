@@ -333,8 +333,16 @@ Package the M11 sample into a generated resource table:
 ```powershell
 python tools\package_app.py `
   --root examples\apps\watch_weather `
-  --output-cpp build\watch_weather_resources.cpp `
+  --validate-only `
   --report build\watch_weather_report.json
+```
+
+```powershell
+python tools\package_app.py `
+  --root examples\apps\watch_weather `
+  --output-cpp build\watch_weather_resources.cpp `
+  --report build\watch_weather_report.json `
+  --debug-dir build\watch_weather.jfdir
 ```
 
 Render it through the pseudo browser:

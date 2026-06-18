@@ -51,7 +51,40 @@ planned.
 - Focus/navigation model for crown/buttons/touch: first core focus traversal and
   activation API is available
 - Power-aware animation scheduling
-- App packaging format
+
+## Milestone 4 Packaging Track
+
+M11 is the packaging part of the wearable app runtime. The target developer
+experience is CLI first, then VS Code integration. The standalone IDE question
+stays deferred until the CLI and preview shell are stable.
+
+Completed or first-cut:
+
+- `jellyframe.app.json` V0 manifest shape for identity, entry, runtime,
+  viewport, budgets, targets, permissions and capabilities
+- local-only package resource policy; runtime network capability is declared
+  separately for future host APIs
+- top-level `tools/package_app.py` packer that validates packages and emits a
+  generated C++ resource table plus JSON report
+- pseudo-browser `--app` source-package preview path
+- first package sample under `examples/apps/watch_weather`
+- ESP32-S3 bring-up resources now use the top-level packer
+
+Next packaging steps:
+
+1. Wrap packer, pseudo-browser preview, capability check and font-pack
+   generation behind a single developer CLI command group.
+2. Add JSON schema for `jellyframe.app.json` so editors and CI can validate it
+   without running a full package build.
+3. Feed the packer's resolved resource list directly into
+   `jellyframe_capability_check` and font profile reporting.
+4. Add package templates for weather, clock, timer and calculator apps.
+5. Add optional target presets that map viewport, default budgets, font profile
+   and output kind.
+6. Build a VS Code extension on top of the CLI: schema association, one-click
+   preview/package, report panel and inline capability warnings.
+7. Consider a standalone visual tool only after the CLI/plugin workflow proves
+   insufficient for non-programmer app authors.
 
 ## Compatibility Short Track: Modern CSS authoring subset
 

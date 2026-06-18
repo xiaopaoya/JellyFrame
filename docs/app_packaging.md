@@ -237,13 +237,32 @@ Those features belong outside the core or to a future desktop packaging layer.
 
 ## Current Tooling
 
-The first implementation provides a desktop packer:
+The first implementation provides a desktop packer. Validate only:
+
+```powershell
+python tools/package_app.py `
+  --root examples/apps/watch_weather `
+  --validate-only `
+  --report build/watch_weather_report.json
+```
+
+Generate a C++ resource table and report:
 
 ```powershell
 python tools/package_app.py `
   --root examples/apps/watch_weather `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json
+```
+
+Generate a copied debug directory for editor tooling or inspection:
+
+```powershell
+python tools/package_app.py `
+  --root examples/apps/watch_weather `
+  --output-cpp build/watch_weather_resources.cpp `
+  --report build/watch_weather_report.json `
+  --debug-dir build/watch_weather.jfdir
 ```
 
 The pseudo browser can open a source package directory directly:
@@ -255,6 +274,10 @@ The pseudo browser can open a source package directory directly:
 
 The pseudo browser reports whether the manifest requested network capability,
 but network requests are not executed yet.
+
+The JSON report is intended for CI and editor integrations. It contains app
+metadata, resource sizes, CRC32/SHA-256 checksums, local/remote reference
+diagnostics and package-resource warnings.
 
 References:
 

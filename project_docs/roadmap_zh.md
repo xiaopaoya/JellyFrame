@@ -43,7 +43,33 @@
 - 小屏 viewport model
 - 适配表冠、按键、触摸的 focus/navigation model：核心已有第一版焦点遍历和激活 API
 - 低功耗动画调度
-- App 打包格式
+
+## 里程碑 4 Packaging 线
+
+M11 是可穿戴 app runtime 中的打包部分。目标开发体验应先做 CLI，再做 VS Code
+集成；独立 IDE 先延后，等 CLI 和预览壳稳定后再判断是否值得做。
+
+已完成或已有第一版：
+
+- `jellyframe.app.json` V0 manifest 形态，覆盖 identity、entry、runtime、
+  viewport、budgets、targets、permissions 和 capabilities
+- 包资源保持 local-only；运行时网络能力单独声明，留给未来宿主 API
+- 顶层 `tools/package_app.py` packer，可校验 package，并输出 C++ 资源表和 JSON report
+- pseudo browser `--app` 源包预览路径
+- `examples/apps/watch_weather` 第一份 package sample
+- ESP32-S3 bring-up 资源已改用顶层 packer
+
+下一步 packaging 工作：
+
+1. 用统一开发者 CLI 包住 packer、pseudo-browser preview、capability check 和 font-pack
+   generation。
+2. 增加 `jellyframe.app.json` JSON schema，让编辑器和 CI 不必完整打包也能校验。
+3. 将 packer 解析出的资源列表直接接入 `jellyframe_capability_check` 和字体 profile 报告。
+4. 增加 weather、clock、timer、calculator package 模板。
+5. 增加可选 target presets，映射 viewport、默认 budgets、font profile 和 output kind。
+6. 在 CLI 之上做 VS Code extension：schema association、一键 preview/package、报告面板和
+   inline capability warnings。
+7. 只有当 CLI/plugin 工作流无法满足非程序员 app 作者时，再考虑独立可视化工具。
 
 ## 兼容性短线：现代 CSS authoring 子集
 

@@ -204,13 +204,32 @@ M11 暂不应加入：
 
 ## 当前工具
 
-第一版实现提供桌面 packer：
+第一版实现提供桌面 packer。仅校验：
+
+```powershell
+python tools/package_app.py `
+  --root examples/apps/watch_weather `
+  --validate-only `
+  --report build/watch_weather_report.json
+```
+
+生成 C++ resource table 和 report：
 
 ```powershell
 python tools/package_app.py `
   --root examples/apps/watch_weather `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json
+```
+
+生成给编辑器工具或人工检查使用的 debug 目录：
+
+```powershell
+python tools/package_app.py `
+  --root examples/apps/watch_weather `
+  --output-cpp build/watch_weather_resources.cpp `
+  --report build/watch_weather_report.json `
+  --debug-dir build/watch_weather.jfdir
 ```
 
 伪浏览器可以直接打开源包目录：
@@ -221,6 +240,9 @@ python tools/package_app.py `
 ```
 
 伪浏览器会报告 manifest 是否请求了网络能力，但目前还不会执行网络请求。
+
+JSON report 面向 CI 和编辑器集成，包含 app 元信息、资源大小、CRC32/SHA-256 校验、
+local/remote reference 诊断和 package-resource warnings。
 
 参考资料：
 
