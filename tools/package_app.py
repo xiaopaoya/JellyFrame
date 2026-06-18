@@ -30,6 +30,14 @@ def fail(message: str) -> None:
     raise SystemExit(f"jellyframe_package_app: {message}")
 
 
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def presets_dir() -> Path:
+    return repo_root() / "presets" / "targets"
+
+
 def normalize_app_path(value: str) -> str:
     if not value or "://" in value or value.startswith("//"):
         fail(f"resource path must be local: {value!r}")
@@ -121,6 +129,9 @@ def validate_manifest(manifest: dict) -> dict:
     capabilities = manifest.get("capabilities", [])
     if not isinstance(capabilities, list):
         capabilities = []
+    targets = manifest.get("targets", {})
+    if not isinstance(targets, dict):
+        targets = {}
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     return {
         "id": app_id,
@@ -132,10 +143,59 @@ def validate_manifest(manifest: dict) -> dict:
         "script": runtime.get("script", "classic"),
         "viewport": viewport,
         "budgets": budgets,
+        "targets": targets,
         "permissions": permissions,
         "capabilities": capabilities,
         "networkAllowed": network_allowed,
     }
+
+
+def load_target_preset(target: str) -> dict:
+    if not target:
+        return {}
+    path = presets_dir() / f"{target}.json"
+    if not path.is_file():
+        return {}
+    try:
+        preset = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        fail(f"invalid target preset {target}: {error}")
+    if preset.get("id") != target:
+        fail(f"target preset id mismatch: {target}")
+    return preset
+
+
+def merge_dict(base: dict, overlay: dict) -> dict:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def effective_target_config(manifest: dict, target: str) -> dict:
+    manifest_targets = manifest.get("targets", {})
+    manifest_target = manifest_targets.get(target, {}) if target else {}
+    preset = load_target_preset(target) if target else {}
+    has_manifest_target = isinstance(manifest_target, dict) and bool(manifest_target)
+    if target and not has_manifest_target and not preset:
+        fail(f"target is not declared by manifest and no preset exists: {target}")
+    if target and not has_manifest_target:
+        print(f"warning: target {target} comes from preset only; manifest does not declare it")
+    config = merge_dict(preset, manifest_target if isinstance(manifest_target, dict) else {})
+    if target:
+        config["id"] = target
+    return config
+
+
+def effective_budgets(manifest: dict, target_config: dict) -> dict:
+    budgets = dict(manifest.get("budgets", {}))
+    target_budgets = target_config.get("budgets", {})
+    if isinstance(target_budgets, dict):
+        budgets.update(target_budgets)
+    return budgets
 
 
 def build_resource_entry(root: Path, path: Path, app_path: str, max_resource_bytes: int) -> dict:
@@ -321,11 +381,14 @@ def main() -> int:
     parser.add_argument("--include", default="jellyframe_esp32s3_resources.h", help="C++ include used by generated table.")
     parser.add_argument("--debug-dir", help="Optional copied debug package directory.")
     parser.add_argument("--validate-only", action="store_true", help="Validate and report without emitting C++.")
+    parser.add_argument("--target", help="Optional target id. Loads presets/targets/<id>.json and overlays manifest target settings.")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
     manifest = validate_manifest(read_manifest(root))
-    max_resource_bytes = int_field(manifest["budgets"], "maxResourceBytes", 0)
+    target_config = effective_target_config(manifest, args.target)
+    budgets = effective_budgets(manifest, target_config)
+    max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
     warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
 
@@ -336,6 +399,8 @@ def main() -> int:
     report = {
         "format": "jellyframe.package.report",
         "app": manifest,
+        "target": target_config,
+        "effectiveBudgets": budgets,
         "resourceCount": len(resources),
         "totalResourceBytes": sum(resource["size"] for resource in resources),
         "resources": [

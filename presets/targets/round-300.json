@@ -1,0 +1,22 @@
+{
+  "id": "round-300",
+  "description": "Generic 300x300 round wearable display.",
+  "viewport": {
+    "width": 300,
+    "height": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 131072,
+    "maxDomNodes": 512,
+    "maxCssRules": 256,
+    "maxDisplayCommands": 512
+  },
+  "fontProfile": "app-subset-cn",
+  "output": "cpp",
+  "framebuffer": {
+    "preferredPixelFormat": "rgb565",
+    "fullFramebuffer": true,
+    "partialPresent": true
+  }
+}

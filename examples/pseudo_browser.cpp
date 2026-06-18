@@ -126,6 +126,8 @@ struct BrowserOptions {
     std::string app_path;
     int viewport_width = 360;
     int viewport_height = 240;
+    bool viewport_width_set = false;
+    bool viewport_height_set = false;
     int pump_timers_ms = 0;
 };
 
@@ -203,11 +205,13 @@ BrowserOptions parse_options(int argc, char** argv) {
             }
             if (!width_set) {
                 options.viewport_width = parse_int_arg(argv[i], options.viewport_width);
+                options.viewport_width_set = true;
                 width_set = true;
                 continue;
             }
             if (!height_set) {
                 options.viewport_height = parse_int_arg(argv[i], options.viewport_height);
+                options.viewport_height_set = true;
                 height_set = true;
                 continue;
             }
@@ -249,11 +253,13 @@ BrowserOptions parse_options(int argc, char** argv) {
 
         if (!width_set) {
             options.viewport_width = parse_int_arg(argv[i], options.viewport_width);
+            options.viewport_width_set = true;
             width_set = true;
             continue;
         }
         if (!height_set) {
             options.viewport_height = parse_int_arg(argv[i], options.viewport_height);
+            options.viewport_height_set = true;
             height_set = true;
             continue;
         }
@@ -289,10 +295,10 @@ int main(int argc, char** argv) {
             package_id = app.manifest.id;
             package_name = app.manifest.name;
             package_network_allowed = app.manifest.network_allowed;
-            if (app.manifest.viewport_width > 0 && effective_options.viewport_width == BrowserOptions{}.viewport_width) {
+            if (app.manifest.viewport_width > 0 && !effective_options.viewport_width_set) {
                 effective_options.viewport_width = app.manifest.viewport_width;
             }
-            if (app.manifest.viewport_height > 0 && effective_options.viewport_height == BrowserOptions{}.viewport_height) {
+            if (app.manifest.viewport_height > 0 && !effective_options.viewport_height_set) {
                 effective_options.viewport_height = app.manifest.viewport_height;
             }
             package_context.root = app.root;

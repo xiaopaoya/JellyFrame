@@ -1,0 +1,22 @@
+{
+  "id": "rect-320x240",
+  "description": "Generic 320x240 rectangular embedded display.",
+  "viewport": {
+    "width": 320,
+    "height": 240,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 131072,
+    "maxDomNodes": 640,
+    "maxCssRules": 320,
+    "maxDisplayCommands": 640
+  },
+  "fontProfile": "app-subset-cn",
+  "output": "cpp",
+  "framebuffer": {
+    "preferredPixelFormat": "rgb565",
+    "fullFramebuffer": true,
+    "partialPresent": true
+  }
+}

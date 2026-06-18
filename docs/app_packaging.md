@@ -140,6 +140,16 @@ can print it or its path:
 python tools/jellyframe_cli.py schema --print-path
 ```
 
+Built-in target presets live under `presets/targets`. List them with:
+
+```powershell
+python tools/jellyframe_cli.py targets
+```
+
+When `--target id` is used, the packer first loads `presets/targets/id.json`
+when present, then overlays any same-named manifest `targets[id]` settings.
+Manifest-only custom targets are also allowed; unknown targets fail explicitly.
+
 Fields that affect runtime compatibility must be required by the packer:
 
 - `id`, `version.code`, `entry`, `runtime.minJellyFrame`;
@@ -259,6 +269,7 @@ Generate a C++ resource table and report:
 ```powershell
 python tools/jellyframe_cli.py package `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json
 ```
@@ -268,6 +279,7 @@ Generate a copied debug directory for editor tooling or inspection:
 ```powershell
 python tools/jellyframe_cli.py package `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json `
   --debug-dir build/watch_weather.jfdir
@@ -278,6 +290,7 @@ The pseudo browser can open a source package directory directly:
 ```powershell
 python tools/jellyframe_cli.py preview `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --output build/watch_weather.ppm
 ```
 
@@ -286,6 +299,7 @@ Run package validation plus capability checks on packaged files:
 ```powershell
 python tools/jellyframe_cli.py check `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --report build/watch_weather_report.json `
   --font-budget 16x16
 ```
@@ -294,8 +308,9 @@ The pseudo browser reports whether the manifest requested network capability,
 but network requests are not executed yet.
 
 The JSON report is intended for CI and editor integrations. It contains app
-metadata, resource sizes, CRC32/SHA-256 checksums, local/remote reference
-diagnostics and package-resource warnings.
+metadata, selected target config, effective budgets, resource sizes,
+CRC32/SHA-256 checksums, local/remote reference diagnostics and
+package-resource warnings.
 
 `tools/package_app.py` remains the lower-level packer used by the CLI and
 embedded build integrations.

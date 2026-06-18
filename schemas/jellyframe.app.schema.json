@@ -154,6 +154,9 @@
           "viewport": {
             "$ref": "#/$defs/runtimeViewport"
           },
+          "budgets": {
+            "$ref": "#/$defs/budgets"
+          },
           "fontProfile": {
             "enum": [
               "tiny",
@@ -165,6 +168,9 @@
           },
           "output": {
             "enum": ["cpp", "debug-dir"]
+          },
+          "framebuffer": {
+            "$ref": "#/$defs/framebuffer"
           }
         }
       }
@@ -242,6 +248,51 @@
         },
         "shape": {
           "enum": ["rect", "round"]
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxResourceBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDomNodes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxCssRules": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDisplayCommands": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxTimers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxEventListeners": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "framebuffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preferredPixelFormat": {
+          "enum": ["rgba8888", "bgra8888", "rgb565", "bgr565", "rgb332", "gray8", "mono1"]
+        },
+        "fullFramebuffer": {
+          "type": "boolean"
+        },
+        "partialPresent": {
+          "type": "boolean"
         }
       }
     }

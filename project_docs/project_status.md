@@ -325,7 +325,8 @@ Status: package-format survey and first JellyFrame manifest/resource-bundle
 design are documented in `docs/app_packaging.md`. A first desktop packer,
 pseudo-browser package loading path, developer CLI and sample package are
 available. `schemas/jellyframe.app.schema.json` provides editor/CI validation
-for the manifest.
+for the manifest. Built-in target presets provide first reusable viewport,
+budget, font-profile and framebuffer defaults.
 
 Tasks:
 

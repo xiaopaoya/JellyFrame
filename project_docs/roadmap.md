@@ -69,16 +69,17 @@ Completed or first-cut:
 - `tools/package_app.py` packer that validates packages and emits a generated
   C++ resource table plus JSON report
 - `schemas/jellyframe.app.schema.json` for editor and CI manifest validation
+- built-in target presets for `round-300`, `rect-320x240` and
+  `esp32s3-round-300`
 - pseudo-browser `--app` source-package preview path
 - first package sample under `examples/apps/watch_weather`
 - ESP32-S3 bring-up resources now use the top-level packer
 
 Next packaging steps:
 
-1. Extend the developer CLI with font-pack generation and target presets.
+1. Extend the developer CLI with font-pack generation.
 2. Add package templates for weather, clock, timer and calculator apps.
-3. Add optional target presets that map viewport, default budgets, font profile
-   and output kind.
+3. Add more target presets as hardware requirements become concrete.
 4. Build a VS Code extension on top of the CLI: schema association, one-click
    preview/package, report panel and inline capability warnings.
 5. Consider a standalone visual tool only after the CLI/plugin workflow proves

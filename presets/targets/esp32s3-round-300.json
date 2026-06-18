@@ -1,0 +1,24 @@
+{
+  "id": "esp32s3-round-300",
+  "description": "ESP32-S3 class 300x300 round wearable target with RGB565 presentation.",
+  "viewport": {
+    "width": 300,
+    "height": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 131072,
+    "maxDomNodes": 512,
+    "maxCssRules": 256,
+    "maxDisplayCommands": 512,
+    "maxTimers": 16,
+    "maxEventListeners": 128
+  },
+  "fontProfile": "app-subset-cn",
+  "output": "cpp",
+  "framebuffer": {
+    "preferredPixelFormat": "rgb565",
+    "fullFramebuffer": true,
+    "partialPresent": true
+  }
+}

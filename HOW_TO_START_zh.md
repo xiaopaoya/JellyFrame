@@ -350,6 +350,12 @@ python tools\jellyframe_cli.py check `
 python tools\jellyframe_cli.py schema --print-path
 ```
 
+列出 target presets：
+
+```powershell
+python tools\jellyframe_cli.py targets
+```
+
 如果页面渲染不对，建议按这个顺序排查：
 
 1. `jellyframe_capability_check`

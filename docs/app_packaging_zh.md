@@ -117,6 +117,16 @@ schema 位于 `schemas/jellyframe.app.schema.json`。developer CLI 可以输出 
 python tools/jellyframe_cli.py schema --print-path
 ```
 
+内置 target presets 位于 `presets/targets`。可以这样列出：
+
+```powershell
+python tools/jellyframe_cli.py targets
+```
+
+使用 `--target id` 时，packer 会先加载存在的 `presets/targets/id.json`，再叠加
+manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 target 也允许；
+完全未知的 target 会明确失败。
+
 影响运行兼容性的字段应由 packer 强制要求：
 
 - `id`、`version.code`、`entry`、`runtime.minJellyFrame`；
@@ -224,6 +234,7 @@ python tools/jellyframe_cli.py validate `
 ```powershell
 python tools/jellyframe_cli.py package `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json
 ```
@@ -233,6 +244,7 @@ python tools/jellyframe_cli.py package `
 ```powershell
 python tools/jellyframe_cli.py package `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json `
   --debug-dir build/watch_weather.jfdir
@@ -243,6 +255,7 @@ python tools/jellyframe_cli.py package `
 ```powershell
 python tools/jellyframe_cli.py preview `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --output build/watch_weather.ppm
 ```
 
@@ -251,14 +264,15 @@ python tools/jellyframe_cli.py preview `
 ```powershell
 python tools/jellyframe_cli.py check `
   --root examples/apps/watch_weather `
+  --target round-300 `
   --report build/watch_weather_report.json `
   --font-budget 16x16
 ```
 
 伪浏览器会报告 manifest 是否请求了网络能力，但目前还不会执行网络请求。
 
-JSON report 面向 CI 和编辑器集成，包含 app 元信息、资源大小、CRC32/SHA-256 校验、
-local/remote reference 诊断和 package-resource warnings。
+JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
+资源大小、CRC32/SHA-256 校验、local/remote reference 诊断和 package-resource warnings。
 
 `tools/package_app.py` 仍作为 CLI 和嵌入式构建集成使用的底层 packer。
 

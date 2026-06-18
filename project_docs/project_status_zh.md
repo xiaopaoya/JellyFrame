@@ -239,7 +239,8 @@ row bytes、glyph table 估算和总估算，便于 port 文档记录。
 状态：包格式调研和 JellyFrame 第一版 manifest/resource-bundle 设计已写入
 `docs/app_packaging_zh.md`。第一版桌面 packer、伪浏览器 package 加载路径、developer CLI
 和示例 package 已经可用。`schemas/jellyframe.app.schema.json` 可供编辑器/CI 校验
-manifest。
+manifest。内置 target presets 已提供第一版可复用 viewport、budget、font-profile 和
+framebuffer defaults。
 
 任务：
 

@@ -46,6 +46,64 @@ def schema_path() -> Path:
     return path
 
 
+def target_presets_dir() -> Path:
+    return repo_root() / "presets" / "targets"
+
+
+def load_target_config(target: str) -> dict:
+    if not target:
+        return {}
+    path = target_presets_dir() / f"{target}.json"
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def merge_dict(base: dict, overlay: dict) -> dict:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_manifest_target(root: Path, target: str) -> dict:
+    if not target:
+        return {}
+    manifest_path = root / "jellyframe.app.json"
+    if not manifest_path.is_file():
+        return {}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_targets = manifest.get("targets", {})
+    if not isinstance(manifest_targets, dict):
+        return {}
+    target_config = manifest_targets.get(target, {})
+    return target_config if isinstance(target_config, dict) else {}
+
+
+def effective_target_config(root: Path, target: str) -> dict:
+    preset = load_target_config(target)
+    manifest_target = load_manifest_target(root, target)
+    if target and not preset and not manifest_target:
+        raise SystemExit(f"target is not declared by manifest and no preset exists: {target}")
+    config = merge_dict(preset, manifest_target)
+    if target:
+        config["id"] = target
+    return config
+
+
+def list_target_presets() -> list[dict]:
+    directory = target_presets_dir()
+    if not directory.is_dir():
+        return []
+    presets = []
+    for path in sorted(directory.glob("*.json")):
+        presets.append(json.loads(path.read_text(encoding="utf-8")))
+    return presets
+
+
 def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
     command = [
         sys.executable,
@@ -65,6 +123,8 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
         command.extend(["--namespace", args.namespace])
     if args.include:
         command.extend(["--include", args.include])
+    if args.target:
+        command.extend(["--target", args.target])
     return command
 
 
@@ -79,16 +139,20 @@ def cmd_package(args: argparse.Namespace) -> int:
 def cmd_preview(args: argparse.Namespace) -> int:
     pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
     ensure_tool(pseudo_browser)
+    target_config = effective_target_config(args.root, args.target) if args.target else {}
+    viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
+    width = args.width or int(viewport.get("width", 0) or 0)
+    height = args.height or int(viewport.get("height", 0) or 0)
     command = [
         str(pseudo_browser),
         "--app",
         str(args.root),
         str(args.output),
     ]
-    if args.width:
-        command.append(str(args.width))
-    if args.height:
-        command.append(str(args.height))
+    if width:
+        command.append(str(width))
+    if height:
+        command.append(str(height))
     if args.pump_timers:
         command.extend(["--pump-timers", str(args.pump_timers)])
     return run_command(command)
@@ -131,11 +195,24 @@ def cmd_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_targets(args: argparse.Namespace) -> int:
+    presets = list_target_presets()
+    if args.json:
+        print(json.dumps(presets, ensure_ascii=False, indent=2))
+        return 0
+    for preset in presets:
+        viewport = preset.get("viewport", {})
+        viewport_text = f"{viewport.get('width', '?')}x{viewport.get('height', '?')} {viewport.get('shape', '')}".strip()
+        print(f"{preset.get('id', '(unknown)')}: {viewport_text} - {preset.get('description', '')}")
+    return 0
+
+
 def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
     parser.add_argument("--namespace", default="jellyframe_esp32s3", help="Generated C++ namespace.")
     parser.add_argument("--include", default="jellyframe_esp32s3_resources.h", help="Generated C++ include.")
+    parser.add_argument("--target", help="Optional target preset id.")
 
 
 def main() -> int:
@@ -156,6 +233,7 @@ def main() -> int:
     preview.add_argument("--root", required=True, type=Path, help="App package source directory.")
     preview.add_argument("--output", required=True, type=Path, help="Output BMP/PPM path.")
     preview.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
+    preview.add_argument("--target", help="Optional target preset id used for viewport defaults.")
     preview.add_argument("--width", type=int, default=0, help="Optional viewport width override.")
     preview.add_argument("--height", type=int, default=0, help="Optional viewport height override.")
     preview.add_argument("--pump-timers", type=int, default=0, help="Optional timer pump duration in milliseconds.")
@@ -171,6 +249,10 @@ def main() -> int:
     schema = subparsers.add_parser("schema", help="Print the JellyFrame app manifest JSON schema.")
     schema.add_argument("--print-path", action="store_true", help="Print only the schema file path.")
     schema.set_defaults(func=cmd_schema)
+
+    targets = subparsers.add_parser("targets", help="List available target presets.")
+    targets.add_argument("--json", action="store_true", help="Print presets as JSON.")
+    targets.set_defaults(func=cmd_targets)
 
     args = parser.parse_args()
     return args.func(args)

@@ -367,6 +367,12 @@ Print the manifest schema path for editor setup:
 python tools\jellyframe_cli.py schema --print-path
 ```
 
+List target presets:
+
+```powershell
+python tools\jellyframe_cli.py targets
+```
+
 When an example renders badly, inspect in this order:
 
 1. `jellyframe_capability_check`
