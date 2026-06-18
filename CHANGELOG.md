@@ -8,6 +8,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added PolyForm Noncommercial 1.0.0 licensing, a commercial-license contact
+  note and README wording that clearly describes JellyFrame as noncommercial
+  source-available software.
 - Completed the current M10 text/font workflow scope with capability-check
   font profile recommendations for tiny, symbol-only, Chinese app subset,
   Chinese standard and global product font packs.

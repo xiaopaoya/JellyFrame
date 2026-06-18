@@ -8,6 +8,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 添加 PolyForm Noncommercial 1.0.0 许可证、商业授权联系说明，并在 README
+  中明确 JellyFrame 是“非商业源码可用”软件。
 - 完成当前 M10 文本/字体工作流范围：能力验证器会给出 tiny、符号追加、
   中文 app 子集、中文标准和全球化产品字体包 profile 建议。
 - 记录 ESP32-S3 增量审计结论：LVGL/vendor SDK 只应作为可选的薄

@@ -147,5 +147,12 @@ Chinese documentation uses the `_zh` suffix, for example
 
 ## License
 
-No public license file has been selected yet. Choose and add a license before
-publishing this repository as open source.
+JellyFrame is source-available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE).
+
+Personal, educational, research, hobby and other noncommercial uses are allowed.
+Commercial use requires a separate commercial license from the author; see
+[COMMERCIAL.md](COMMERCIAL.md).
+
+This is not an OSI-approved open-source license. The project is intentionally
+published as noncommercial source-available software.

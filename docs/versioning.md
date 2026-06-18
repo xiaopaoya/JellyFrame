@@ -20,6 +20,8 @@ MAJOR.MINOR.PATCH[-stage]
 - Update both `CHANGELOG.md` and `CHANGELOG_zh.md` for user-visible changes.
 - Public documentation should be maintained in English and Chinese. The Chinese
   file uses a `_zh` suffix.
+- Licensing changes must update `LICENSE`, `COMMERCIAL.md`, both README files
+  and both changelog files in the same release batch.
 - Prefer small, milestone-based releases over large untracked batches.
 
 ## Early project version map

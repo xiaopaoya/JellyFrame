@@ -18,6 +18,8 @@ MAJOR.MINOR.PATCH[-stage]
 - 当前版本记录在 `VERSION`。
 - 面向用户可见的变更需要同时更新 `CHANGELOG.md` 和 `CHANGELOG_zh.md`。
 - 公开文档应同时维护英文和中文版本。中文文件使用 `_zh` 后缀。
+- 许可证变更需要在同一批发布中同步更新 `LICENSE`、`COMMERCIAL.md`、
+  双语 README 和双语变更记录。
 - 优先做小的里程碑式发布，避免大量未记录变更堆积。
 
 ## 早期版本映射

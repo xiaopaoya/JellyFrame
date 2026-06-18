@@ -133,4 +133,10 @@ cmake --build build-script --config Release
 
 ## 许可证
 
-当前尚未选择公开许可证文件。正式以开源项目发布前，请先选择并添加许可证。
+JellyFrame 以 [PolyForm Noncommercial License 1.0.0](LICENSE) 形式提供源码。
+
+个人、教育、研究、爱好和其他非商业用途可以使用。商业使用需要另行取得作者的
+商业授权；见 [COMMERCIAL.md](COMMERCIAL.md)。
+
+这不是 OSI 批准的传统开源许可证。本项目有意以“非商业源码可用”
+（noncommercial source-available）的方式发布。
