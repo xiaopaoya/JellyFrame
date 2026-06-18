@@ -331,14 +331,13 @@ Notes:
 Package the M11 sample into a generated resource table:
 
 ```powershell
-python tools\package_app.py `
+python tools\jellyframe_cli.py validate `
   --root examples\apps\watch_weather `
-  --validate-only `
   --report build\watch_weather_report.json
 ```
 
 ```powershell
-python tools\package_app.py `
+python tools\jellyframe_cli.py package `
   --root examples\apps\watch_weather `
   --output-cpp build\watch_weather_resources.cpp `
   --report build\watch_weather_report.json `
@@ -348,8 +347,18 @@ python tools\package_app.py `
 Render it through the pseudo browser:
 
 ```powershell
-.\build\Release\jellyframe_pseudo_browser.exe `
-  --app examples\apps\watch_weather build\watch_weather.ppm
+python tools\jellyframe_cli.py preview `
+  --root examples\apps\watch_weather `
+  --output build\watch_weather.ppm
+```
+
+Run package validation and capability checks together:
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root examples\apps\watch_weather `
+  --report build\watch_weather_report.json `
+  --font-budget 16x16
 ```
 
 When an example renders badly, inspect in this order:

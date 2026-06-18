@@ -237,19 +237,19 @@ Those features belong outside the core or to a future desktop packaging layer.
 
 ## Current Tooling
 
-The first implementation provides a desktop packer. Validate only:
+The recommended developer entry point is `tools/jellyframe_cli.py`. Validate
+only:
 
 ```powershell
-python tools/package_app.py `
+python tools/jellyframe_cli.py validate `
   --root examples/apps/watch_weather `
-  --validate-only `
   --report build/watch_weather_report.json
 ```
 
 Generate a C++ resource table and report:
 
 ```powershell
-python tools/package_app.py `
+python tools/jellyframe_cli.py package `
   --root examples/apps/watch_weather `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json
@@ -258,7 +258,7 @@ python tools/package_app.py `
 Generate a copied debug directory for editor tooling or inspection:
 
 ```powershell
-python tools/package_app.py `
+python tools/jellyframe_cli.py package `
   --root examples/apps/watch_weather `
   --output-cpp build/watch_weather_resources.cpp `
   --report build/watch_weather_report.json `
@@ -268,8 +268,18 @@ python tools/package_app.py `
 The pseudo browser can open a source package directory directly:
 
 ```powershell
-.\build\Release\jellyframe_pseudo_browser.exe `
-  --app examples/apps/watch_weather build\watch_weather.ppm
+python tools/jellyframe_cli.py preview `
+  --root examples/apps/watch_weather `
+  --output build/watch_weather.ppm
+```
+
+Run package validation plus capability checks on packaged files:
+
+```powershell
+python tools/jellyframe_cli.py check `
+  --root examples/apps/watch_weather `
+  --report build/watch_weather_report.json `
+  --font-budget 16x16
 ```
 
 The pseudo browser reports whether the manifest requested network capability,
@@ -278,6 +288,9 @@ but network requests are not executed yet.
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, resource sizes, CRC32/SHA-256 checksums, local/remote reference
 diagnostics and package-resource warnings.
+
+`tools/package_app.py` remains the lower-level packer used by the CLI and
+embedded build integrations.
 
 References:
 

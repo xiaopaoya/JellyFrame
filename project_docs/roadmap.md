@@ -64,26 +64,25 @@ Completed or first-cut:
   viewport, budgets, targets, permissions and capabilities
 - local-only package resource policy; runtime network capability is declared
   separately for future host APIs
-- top-level `tools/package_app.py` packer that validates packages and emits a
-  generated C++ resource table plus JSON report
+- top-level `tools/jellyframe_cli.py` developer CLI for validate/package/preview
+  and package-scoped capability checks
+- `tools/package_app.py` packer that validates packages and emits a generated
+  C++ resource table plus JSON report
 - pseudo-browser `--app` source-package preview path
 - first package sample under `examples/apps/watch_weather`
 - ESP32-S3 bring-up resources now use the top-level packer
 
 Next packaging steps:
 
-1. Wrap packer, pseudo-browser preview, capability check and font-pack
-   generation behind a single developer CLI command group.
-2. Add JSON schema for `jellyframe.app.json` so editors and CI can validate it
+1. Add JSON schema for `jellyframe.app.json` so editors and CI can validate it
    without running a full package build.
-3. Feed the packer's resolved resource list directly into
-   `jellyframe_capability_check` and font profile reporting.
-4. Add package templates for weather, clock, timer and calculator apps.
-5. Add optional target presets that map viewport, default budgets, font profile
+2. Extend the developer CLI with font-pack generation and target presets.
+3. Add package templates for weather, clock, timer and calculator apps.
+4. Add optional target presets that map viewport, default budgets, font profile
    and output kind.
-6. Build a VS Code extension on top of the CLI: schema association, one-click
+5. Build a VS Code extension on top of the CLI: schema association, one-click
    preview/package, report panel and inline capability warnings.
-7. Consider a standalone visual tool only after the CLI/plugin workflow proves
+6. Consider a standalone visual tool only after the CLI/plugin workflow proves
    insufficient for non-programmer app authors.
 
 ## Compatibility Short Track: Modern CSS authoring subset

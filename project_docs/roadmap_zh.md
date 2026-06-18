@@ -54,22 +54,22 @@ M11 是可穿戴 app runtime 中的打包部分。目标开发体验应先做 CL
 - `jellyframe.app.json` V0 manifest 形态，覆盖 identity、entry、runtime、
   viewport、budgets、targets、permissions 和 capabilities
 - 包资源保持 local-only；运行时网络能力单独声明，留给未来宿主 API
-- 顶层 `tools/package_app.py` packer，可校验 package，并输出 C++ 资源表和 JSON report
+- 顶层 `tools/jellyframe_cli.py` developer CLI，支持 validate/package/preview
+  和 package-scoped capability checks
+- `tools/package_app.py` packer，可校验 package，并输出 C++ 资源表和 JSON report
 - pseudo browser `--app` 源包预览路径
 - `examples/apps/watch_weather` 第一份 package sample
 - ESP32-S3 bring-up 资源已改用顶层 packer
 
 下一步 packaging 工作：
 
-1. 用统一开发者 CLI 包住 packer、pseudo-browser preview、capability check 和 font-pack
-   generation。
-2. 增加 `jellyframe.app.json` JSON schema，让编辑器和 CI 不必完整打包也能校验。
-3. 将 packer 解析出的资源列表直接接入 `jellyframe_capability_check` 和字体 profile 报告。
-4. 增加 weather、clock、timer、calculator package 模板。
-5. 增加可选 target presets，映射 viewport、默认 budgets、font profile 和 output kind。
-6. 在 CLI 之上做 VS Code extension：schema association、一键 preview/package、报告面板和
+1. 增加 `jellyframe.app.json` JSON schema，让编辑器和 CI 不必完整打包也能校验。
+2. 扩展 developer CLI，加入 font-pack generation 和 target presets。
+3. 增加 weather、clock、timer、calculator package 模板。
+4. 增加可选 target presets，映射 viewport、默认 budgets、font profile 和 output kind。
+5. 在 CLI 之上做 VS Code extension：schema association、一键 preview/package、报告面板和
    inline capability warnings。
-7. 只有当 CLI/plugin 工作流无法满足非程序员 app 作者时，再考虑独立可视化工具。
+6. 只有当 CLI/plugin 工作流无法满足非程序员 app 作者时，再考虑独立可视化工具。
 
 ## 兼容性短线：现代 CSS authoring 子集
 
