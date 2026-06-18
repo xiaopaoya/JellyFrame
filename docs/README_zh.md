@@ -2,14 +2,12 @@
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
-仍在维护的项目/过程文档现位于 [../project_docs/README_zh.md](../project_docs/README_zh.md)。
-
 ## 第一次阅读顺序
 
 1. [../HOW_TO_START_zh.md](../HOW_TO_START_zh.md)
 2. [engine_architecture_zh.md](engine_architecture_zh.md)
 3. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
-4. [../project_docs/project_status_zh.md](../project_docs/project_status_zh.md)
+4. 如果要构建本地 app package，读 [app_packaging_zh.md](app_packaging_zh.md)。
 5. 你要修改哪个模块，就读对应模块文档。
 
 ## 技术文档
@@ -35,7 +33,7 @@
 ### 宿主、嵌入式和文本
 
 - [host_abstraction_zh.md](host_abstraction_zh.md)：资源、时间、framebuffer、文本和预算的薄宿主边界。
-- [app_packaging_zh.md](app_packaging_zh.md)：M11 app 包格式、manifest 和资源包工作流。
+- [app_packaging_zh.md](app_packaging_zh.md)：app 包格式、manifest 和资源包工作流。
 - [../tools/vscode-jellyframe/README_zh.md](../tools/vscode-jellyframe/README_zh.md)：
   调用 developer CLI 的可选 VS Code 辅助扩展。
 - [../schemas/jellyframe.app.schema.json](../schemas/jellyframe.app.schema.json)：

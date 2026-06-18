@@ -1,6 +1,5 @@
 # Host Abstraction Draft
 
-Date: 2026-06-15
 
 JellyFrame's core should stay independent from filesystems, network stacks,
 windowing systems, display controllers, timers, input hardware and font APIs.
@@ -188,13 +187,13 @@ The host should configure:
 
 `HostBudgets` is now wired through `src/core/budget.h` into the main HTML/CSS
 parser, render/layout/layer, display-list, dirty-rectangle and scripting entry
-points, plus the M8 frame-loop work caps. The remaining work is finer
+points, plus the frame-loop work caps. The remaining work is finer
 offscreen/tile buffer policy and long-running stability tests for
 budget-exceeded paths.
 
 ## Recommended Order
 
 1. Organize local resource bundles and app packaging.
-2. Continue allocator work and use M9 diagnostics to decide whether retained
-   subtree reuse is worth its ownership cost.
+2. Continue allocator work and use dirty-region diagnostics to decide whether
+   retained subtree reuse is worth its ownership cost.
 3. Refine offscreen/tile buffer policy when real hardware pressure requires it.

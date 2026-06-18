@@ -1,6 +1,5 @@
 # Engine Architecture
 
-Date: 2026-06-14
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
 with smaller data structures and explicit feature cuts for wearable targets.

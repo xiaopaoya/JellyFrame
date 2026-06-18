@@ -133,9 +133,8 @@ present_rgb565 avg_us=35101.45
 full_pipeline avg_us=178022.15
 ```
 
-The formal benchmark summary lives in
-`../../project_docs/esp32s3_qemu_benchmark.md` and
-`../../project_docs/esp32s3_qemu_benchmark_zh.md`.
+The raw benchmark CSV files in this directory capture the latest QEMU smoke
+measurements used during bring-up.
 
 ## Resource Bundle Hook
 

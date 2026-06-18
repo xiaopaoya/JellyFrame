@@ -1,6 +1,5 @@
 # Embedded Framebuffer Backend
 
-Date: 2026-06-15
 
 `src/core/embedded_framebuffer.h` provides the first deployable presentation
 adapter for embedded hosts. It is still platform-neutral: it does not open a

@@ -1,6 +1,5 @@
 # 嵌入式 Framebuffer 后端
 
-日期：2026-06-15
 
 `src/core/embedded_framebuffer.h` 提供第一版可部署的嵌入式 presentation
 adapter。它仍保持平台无关：不打开设备、不分配显示内存、不启动 DMA、不调用 LVGL，也不调用

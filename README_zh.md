@@ -1,41 +1,39 @@
-# JellyFrame Engine
+# JellyFrame
 
-JellyFrame 是一个面向低功耗可穿戴和嵌入式设备的深度裁剪 C++ HTML/CSS/JS
-UI 运行时。它不是通用浏览器，而是一个“浏览器形状”的小型应用引擎：用 HTML 描述结构，
-用 CSS 描述表现，并通过可选 JerryScript 桥接提供有界交互。
+JellyFrame 是一个面向低功耗可穿戴和嵌入式设备的紧凑 C++ HTML/CSS/JS UI
+运行时。它保留本地 app UI 真正有价值的浏览器管线部分，同时裁掉对小目标设备过重、
+过复杂或不可预测的浏览器能力。
+
+它不是通用浏览器，而是一个“浏览器形状”的嵌入式 app 引擎：HTML 构建结构，
+CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerryScript 桥接提供有界交互。
 
 项目早期代号是 `WearWeb`；当前代码、target 和文档均使用 `JellyFrame`。
 
-## 为什么做它
+## 亮点
 
-很多可穿戴 UI 栈要求开发者用类似 canvas 的 API 手绘所有界面。JellyFrame 尝试另一条路：
-保留浏览器模型里便宜而有价值的部分，裁掉不适合小 MCU 的部分，并把显示、输入、文本和资源
-交给清晰的宿主接口。
+- 平台无关 C++ 核心，不依赖文件系统、网络或窗口系统。
+- 容错 HTML tokenizer/tree builder 和紧凑可变 DOM。
+- 面向嵌入式子集的 CSS parser、cascade 和 style resolver。
+- Block/inline layout、简化 flex、响应式 grid-card layout、有界 positioning 和表单控件。
+- 命中测试、类 DOM 事件派发和硬件无关输入处理。
+- 可选 JerryScript binding，支持本地 classic scripts、DOM mutation、events、form state
+  和宿主泵动 timers。
+- Layer tree、display list、CPU rasterizer/compositor，以及 RGBA/BGRA、RGB565/BGR565、
+  RGB332、Gray8、单色输出的 framebuffer adapter。
+- 桌面检查工具、伪浏览器、Win32 验证壳、能力检查器、app packer、字体包生成器和薄 VS Code helper。
 
-典型目标：
-
-- 手表和小型仪表设备；
-- 本地 HTML/CSS/JS 应用壳；
-- 需要可维护 UI、但不能承担完整浏览器成本的嵌入式产品；
-- 用于开发板 port 的桌面验证工具。
-
-## 当前能力
-
-- 容错 HTML tokenizer、tree builder 和紧凑 DOM。
-- 面向嵌入式子集的 CSS parser、CSSOM 和 style resolver。
-- 现代开发常用补充能力：CSS variables、有界 `@media`、保守 `@supports`、
-  `:is()` / `:where()`、sibling selectors 和动态状态 pseudo-classes。
-- Block、inline、简化 flex row/wrap/sizing、有界 positioned layout 和响应式
-  grid-card layout。
-- 按钮、文本输入、textarea、checkbox、radio、range、select、progress、meter 等控件。
-- 命中测试、capture/target/bubble 事件流和平台无关输入。
-- 可选 JerryScript runtime，提供小型 DOM/event/form/timer 绑定。
-- Layer tree、display list、CPU rasterizer/compositor，以及面向 RGBA/BGRA、
-  RGB565/BGR565、RGB332、Gray8、单色 buffer 的嵌入式 framebuffer adapter。
-- DOM/CSSOM/style/render/layer/pipeline 检查、能力验证、字体包生成、截图和 Win32 交互验证工具。
-
-精确的 can-do/cannot-do 契约见
+精确的支持/降级/延后功能见
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
+
+## 典型用途
+
+- 使用小型 HTML/CSS/JS 子集编写手表类本地 app。
+- 需要可维护 UI、但不能承担完整浏览器成本的嵌入式 dashboard。
+- 从 web-like 源包生成适合固件集成的资源表。
+- 在桌面验证开发板 port、文本后端、输入和渲染。
+
+JellyFrame 不适合直接运行任意现代网站、完整前端框架、浏览器存储、网络加载页面、
+Canvas/SVG/video、完整 Web 兼容或像素级一致渲染。
 
 ## 快速开始
 
@@ -62,13 +60,29 @@ ctest --test-dir build -C Release --output-on-failure
   examples\app_cases\calculator.css
 ```
 
-第一次接触项目时，请继续读 [HOW_TO_START_zh.md](HOW_TO_START_zh.md)。那里包含更完整的项目结构、
-阅读顺序、编译运行方法，以及 Release 目录里每个 exe 的用途。
+创建并检查 app package：
+
+```powershell
+python tools\jellyframe_cli.py new `
+  --template calculator `
+  --output build\my_calculator `
+  --id org.example.calculator `
+  --name Calculator `
+  --target round-300
+
+python tools\jellyframe_cli.py check `
+  --root build\my_calculator `
+  --target round-300 `
+  --report build\my_calculator_report.json `
+  --font-budget 16x16
+```
+
+第一次接触项目时，请继续读 [HOW_TO_START_zh.md](HOW_TO_START_zh.md)。
 
 ## 可选脚本构建
 
-脚本能力是可选的。除非显式设置 `JELLYFRAME_BUILD_SCRIPTING=ON`，否则 `jellyframe_core`
-不依赖 JerryScript。
+脚本能力是可选的。除非显式设置 `JELLYFRAME_BUILD_SCRIPTING=ON`，否则
+`jellyframe_core` 不依赖 JerryScript。
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
@@ -81,32 +95,33 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-脚本壳支持 classic inline scripts、宿主提供的本地外部 classic scripts、小型 DOM mutation API、
-event listeners、表单属性和宿主泵动 timers。ES modules、网络加载和浏览器存储不属于嵌入式核心。
+脚本壳支持 classic inline/local scripts、小型 DOM mutation API、event listeners、
+表单属性和宿主泵动 timers。ES modules、网络加载、浏览器存储和完整浏览器加载算法不属于嵌入式核心。
 
 ## 仓库结构
 
 - `src/core`：平台无关核心。
 - `src/script`：可选 JerryScript 绑定层。
-- `examples`：检查工具、伪浏览器、Win32 browser 和验收页面。
+- `examples`：检查工具、伪浏览器、Win32 shell 和示例页面。
 - `tests`：平台无关回归测试。
 - `benchmarks`：桌面微基准。
-- `ports`：移植支撑代码和桌面 virtual-board 基准。
-- `docs`：技术契约和模块/API 文档。
-- `project_docs`：当前状态、路线图和开发过程说明。
+- `ports`：移植支撑代码和面向开发板的演示。
+- `templates`：app package 起始模板。
+- `presets`：packaging tools 使用的 target presets。
+- `schemas`：用于编辑器/CI 校验的 JSON Schema。
+- `tools`：桌面 packaging 和编辑器辅助工具。
+- `docs`：技术契约、支持子集和宿主 API。
 
 ## 文档入口
 
-建议从这里开始：
-
-- [HOW_TO_START_zh.md](HOW_TO_START_zh.md)：完整上手文档。
+- [HOW_TO_START_zh.md](HOW_TO_START_zh.md)：首次构建、运行和工具说明。
 - [docs/README_zh.md](docs/README_zh.md)：技术文档索引。
-- [project_docs/README_zh.md](project_docs/README_zh.md)：当前状态、路线图和开发过程文档索引。
 - [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)：
   支持、降级、懒处理和延后功能。
 - [docs/engine_architecture_zh.md](docs/engine_architecture_zh.md)：管线总览。
+- [docs/app_packaging_zh.md](docs/app_packaging_zh.md)：app package 格式和工具链。
 - [docs/embedded_hal_api_zh.md](docs/embedded_hal_api_zh.md)：开发板 port 的宿主/HAL 契约。
-- [project_docs/project_status_zh.md](project_docs/project_status_zh.md)：当前主线状态和后续里程碑。
+- [docs/versioning_zh.md](docs/versioning_zh.md)：版本和发布纪律。
 
 英文文档使用原文件名；中文文档使用 `_zh` 后缀。
 
@@ -116,7 +131,6 @@ event listeners、表单属性和宿主泵动 timers。ES modules、网络加载
 - 变更记录：[CHANGELOG.md](CHANGELOG.md) 和 [CHANGELOG_zh.md](CHANGELOG_zh.md)。
 - 版本规则：[docs/versioning_zh.md](docs/versioning_zh.md)。
 
-## 当前状态
+## 许可证
 
-JellyFrame 目前适合小型本地嵌入式 UI 实验和桌面验证；不适合直接运行任意现代网站、
-完整前端框架、联网浏览器应用或像素级兼容渲染。
+当前尚未选择公开许可证文件。正式以开源项目发布前，请先选择并添加许可证。

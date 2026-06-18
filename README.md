@@ -1,48 +1,47 @@
-# JellyFrame Engine
+# JellyFrame
 
-JellyFrame is a deeply trimmed C++ HTML/CSS/JS UI runtime for low-power wearable
-and embedded devices. It is not a general web browser. It is a small
-browser-shaped app engine: HTML describes structure, CSS describes presentation,
-and an optional JerryScript bridge adds bounded interaction for local apps.
+JellyFrame is a compact C++ HTML/CSS/JS UI runtime for low-power wearable and
+embedded devices. It keeps the parts of a browser pipeline that are useful for
+local app UI, then cuts browser features that are too costly or unpredictable
+for small targets.
+
+It is not a general-purpose web browser. It is a browser-shaped embedded app
+engine: HTML builds structure, CSS describes presentation, platform-neutral C++
+code owns layout/rendering, and an optional JerryScript bridge adds bounded
+interaction.
 
 The project was developed under the early codename `WearWeb`; current code,
 targets and documentation use `JellyFrame`.
 
-## Why It Exists
+## Highlights
 
-Many wearable UI stacks force application authors to draw every screen through a
-canvas-like API. JellyFrame explores a different route: keep the browser
-programming model where it is cheap and useful, cut the parts that do not fit a
-small MCU, and expose clear host interfaces for display, input, text and
-resources.
+- Platform-neutral C++ core with no file-system, network or windowing
+  dependency.
+- Tolerant HTML tokenizer/tree builder and compact mutable DOM.
+- CSS parser, cascade and style resolver for a documented embedded subset.
+- Block/inline layout, simplified flex, responsive grid-card layout, bounded
+  positioning and form controls.
+- Hit testing, DOM-style event dispatch and hardware-neutral input handling.
+- Optional JerryScript bindings for local classic scripts, DOM mutation, events,
+  form state and host-pumped timers.
+- Layer tree, display list, CPU rasterizer/compositor and framebuffer adapters
+  for RGBA/BGRA, RGB565/BGR565, RGB332, Gray8 and monochrome output.
+- Desktop inspection tools, pseudo browser, Win32 validation shell, capability
+  checker, app packer, font-pack generator and a thin VS Code helper.
 
-Typical targets:
-
-- watches and small dashboard devices;
-- local HTML/CSS/JS app shells;
-- embedded products that need maintainable UI without full browser cost;
-- desktop validation tools for board ports.
-
-## Current Capabilities
-
-- Tolerant HTML tokenizer, tree builder and compact DOM.
-- CSS parser, CSSOM and style resolver for the documented embedded subset.
-- Modern authoring helpers such as CSS variables, bounded `@media`,
-  conservative `@supports`, `:is()` / `:where()`, sibling selectors and dynamic
-  state pseudo-classes.
-- Block, inline, simplified flex row/wrap/sizing, bounded positioned layout and
-  responsive grid-card layout.
-- Form controls for buttons, text inputs, textareas, checkboxes, radios, ranges,
-  selects, progress and meter.
-- Hit testing, capture/target/bubble event dispatch and platform-neutral input.
-- Optional JerryScript runtime with a small DOM/event/form/timer binding.
-- Layer tree, display list, CPU rasterizer/compositor and embedded framebuffer
-  adapters for RGBA/BGRA, RGB565/BGR565, RGB332, Gray8 and monochrome targets.
-- Desktop tools for DOM/CSSOM/style/render/layer/pipeline inspection,
-  capability checking, font pack generation, screenshots and Win32 interaction.
-
-The precise can-do/cannot-do contract lives in
+For the exact supported/degraded/deferred feature set, read
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
+
+## Typical Uses
+
+- Watch-style local apps written with a small HTML/CSS/JS subset.
+- Embedded dashboards that need maintainable UI without a full browser.
+- Firmware-friendly resource bundles generated from web-like source packages.
+- Desktop validation for board ports, text backends, input and rendering.
+
+JellyFrame is not suitable for arbitrary modern websites, full frontend
+frameworks, browser storage, network-loaded pages, Canvas/SVG/video, complete
+web compatibility or pixel-perfect rendering.
 
 ## Quick Start
 
@@ -69,13 +68,29 @@ Open an interactive Windows validation shell:
   examples\app_cases\calculator.css
 ```
 
-For the longer onboarding path, including every generated executable and what it
-does, read [HOW_TO_START.md](HOW_TO_START.md).
+Create and check an app package:
+
+```powershell
+python tools\jellyframe_cli.py new `
+  --template calculator `
+  --output build\my_calculator `
+  --id org.example.calculator `
+  --name Calculator `
+  --target round-300
+
+python tools\jellyframe_cli.py check `
+  --root build\my_calculator `
+  --target round-300 `
+  --report build\my_calculator_report.json `
+  --font-budget 16x16
+```
+
+For a full first-time walkthrough, read [HOW_TO_START.md](HOW_TO_START.md).
 
 ## Optional Scripting Build
 
-Scripting is intentionally optional. `jellyframe_core` does not depend on
-JerryScript unless `JELLYFRAME_BUILD_SCRIPTING=ON` is requested.
+Scripting is optional. `jellyframe_core` builds without JerryScript unless
+`JELLYFRAME_BUILD_SCRIPTING=ON` is requested.
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
@@ -88,43 +103,40 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-Scripting shells support classic inline scripts, host-provided local external
-classic scripts, small DOM mutation APIs, event listeners, form properties and
-host-pumped timers. ES modules, network loading and browser storage are outside
+The scripting shell supports classic inline/local scripts, small DOM mutation
+APIs, event listeners, form properties and host-pumped timers. ES modules,
+network loading, browser storage and full browser loading algorithms are outside
 the embedded core.
 
 ## Repository Map
 
 - `src/core`: platform-neutral engine core.
 - `src/script`: optional JerryScript binding layer.
-- `examples`: inspection tools, pseudo browser, Win32 browser and acceptance
-  pages.
+- `examples`: inspection tools, pseudo browser, Win32 shell and sample pages.
 - `tests`: platform-neutral regression tests.
 - `benchmarks`: desktop microbenchmarks.
-- `ports`: port-support code and desktop virtual-board benchmark.
-- `docs`: technical contracts and module/API documentation.
-- `project_docs`: current status, roadmap and development process notes.
+- `ports`: port-support code and board-oriented demos.
+- `templates`: app package starter templates.
+- `presets`: target presets used by packaging tools.
+- `schemas`: JSON Schema files for editor/CI validation.
+- `tools`: desktop packaging and editor helper tools.
+- `docs`: technical contracts, supported subsets and host APIs.
 
 ## Documentation
 
-Start here:
-
-- [HOW_TO_START.md](HOW_TO_START.md): full first-time developer guide.
+- [HOW_TO_START.md](HOW_TO_START.md): first-time build, run and tool guide.
 - [docs/README.md](docs/README.md): technical documentation index.
-- [project_docs/README.md](project_docs/README.md): current status, roadmap and
-  development process index.
 - [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md):
   supported, degraded, lazy and deferred features.
 - [docs/engine_architecture.md](docs/engine_architecture.md): pipeline overview.
+- [docs/app_packaging.md](docs/app_packaging.md): app package format and tools.
 - [docs/embedded_hal_api.md](docs/embedded_hal_api.md): host/HAL contract for
   board ports.
-- [project_docs/project_status.md](project_docs/project_status.md): current
-  mainline status and next milestones.
+- [docs/versioning.md](docs/versioning.md): versioning and release discipline.
 
 Chinese documentation uses the `_zh` suffix, for example
-[README_zh.md](README_zh.md), [HOW_TO_START_zh.md](HOW_TO_START_zh.md),
-[docs/README_zh.md](docs/README_zh.md) and
-[project_docs/README_zh.md](project_docs/README_zh.md).
+[README_zh.md](README_zh.md), [HOW_TO_START_zh.md](HOW_TO_START_zh.md) and
+[docs/README_zh.md](docs/README_zh.md).
 
 ## Versioning
 
@@ -133,8 +145,7 @@ Chinese documentation uses the `_zh` suffix, for example
   [CHANGELOG_zh.md](CHANGELOG_zh.md).
 - Version rules: [docs/versioning.md](docs/versioning.md).
 
-## Status
+## License
 
-JellyFrame is suitable for small local embedded UI experiments and desktop
-validation today. It is not suitable for arbitrary modern websites, full
-frontend frameworks, networked browser apps or pixel-compatible rendering.
+No public license file has been selected yet. Choose and add a license before
+publishing this repository as open source.

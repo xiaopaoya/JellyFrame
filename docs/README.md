@@ -3,15 +3,12 @@
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
 
-Active project/process documents now live in
-[../project_docs/README.md](../project_docs/README.md).
-
 ## First-Time Reading Order
 
 1. [../HOW_TO_START.md](../HOW_TO_START.md)
 2. [engine_architecture.md](engine_architecture.md)
 3. [developer_capability_matrix.md](developer_capability_matrix.md)
-4. [../project_docs/project_status.md](../project_docs/project_status.md)
+4. [app_packaging.md](app_packaging.md) if you are building local app packages.
 5. The module document for the area you want to change.
 
 ## Technical Documents
@@ -49,7 +46,7 @@ Active project/process documents now live in
 
 - [host_abstraction.md](host_abstraction.md): thin host boundary for resources,
   time, framebuffer, text and budgets.
-- [app_packaging.md](app_packaging.md): M11 app package format, manifest and
+- [app_packaging.md](app_packaging.md): app package format, manifest and
   resource-bundle workflow.
 - [../tools/vscode-jellyframe/README.md](../tools/vscode-jellyframe/README.md):
   optional VS Code helper that delegates to the developer CLI.

@@ -1,6 +1,5 @@
 # Layer Tree 裁剪范围
 
-日期：2026-06-14
 
 WHATWG 没有规定浏览器的 layer tree。这里属于浏览器实现层，因此
 JellyFrame 参考现代内核的事实结构，同时为了 framebuffer 级别硬件做深度裁剪。

@@ -1,10 +1,8 @@
 # App Packaging
 
-日期：2026-06-17
-
-M11 的目标是把临时示例资源升级成可重复的 app packaging 流程。这里不应照搬手机或手表应用商店的安装包；
-JellyFrame 更适合保留小型类 Web 的开发体验，然后在桌面离线生成适合固件读取的资源表。
-MCU 端不应解析文件系统、网络资源或复杂压缩归档。
+JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的资源表。
+这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
+然后在桌面离线生成无需文件系统、网络栈或复杂压缩归档即可加载的资源 bundle。
 
 ## 调研摘要
 
@@ -27,7 +25,7 @@ MCU 端不应解析文件系统、网络资源或复杂压缩归档。
 - 运行时加载保持 O(log n) 或小包有界线性查找，不做高堆开销的归档解析。
 - 部署前声明全部预算：resource bytes、DOM nodes、CSS rules、display commands、timers、listeners 和 framebuffer policy。
 - 包资源加载继续无文件系统、无网络；宿主通过现有 `HostResourceLoader` 边界提供包内字节。
-- 应用可以为运行时数据 API 声明网络能力。这个能力与包资源加载分离，因此 M11 仍禁止远程页面、
+- 应用可以为运行时数据 API 声明网络能力。这个能力与包资源加载分离，因此仍禁止远程页面、
   远程 CSS/script/image 资源，但不会把未来宿主提供的 fetch API 路线写死。
 - 可选资源缺失时干净降级；必需 entry 资源缺失应在烧录前由打包器报错。
 
@@ -147,7 +145,7 @@ manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 tar
 - target 名称和输出类型。
 
 `permissions: ["network"]` 和 `capabilities: ["network.fetch"]` 表示 app 期待未来宿主提供
-运行时网络请求 API。它们不会启用远程包资源。M11 packer 会把这些字段写入报告，产品固件可以据此拒绝
+运行时网络请求 API。它们不会启用远程包资源。packer 会把这些字段写入报告，产品固件可以据此拒绝
 不符合板级策略的 app。
 
 ## 资源路径规则
@@ -165,7 +163,7 @@ JellyFrame 应使用严格的本地路径子集：
 
 ## 构建输出
 
-M11 应从同一份 manifest 生成两类输出。
+工具可以从同一份 manifest 生成两类输出。
 
 桌面/调试输出：
 
@@ -210,7 +208,7 @@ dist/my_app_report.json
 
 ## 明确裁剪
 
-M11 暂不应加入：
+嵌入式包模型刻意不包含：
 
 - MCU 端 runtime ZIP 解压或通用归档解析；
 - 依赖包管理器；
@@ -220,16 +218,7 @@ M11 暂不应加入：
 - 多进程安装/更新语义；
 - 类似 Vela `.ux` 或 HarmonyOS ArkUI 的页面模块转译。
 
-这些功能应放在核心之外，或等未来桌面 packaging 层需要时再做。
-
-## 建议的 M11 实现顺序
-
-1. 增加平台无关的 app manifest parser/validator，作为桌面工具。
-2. 把 ESP32-S3 resource generator 提升为顶层可复用工具。
-3. 为任意源包生成兼容 `ResourceBundle` 的 C++ table。
-4. 将生成的资源集合接入 capability check 和 font-pack 生成。
-5. 让 pseudo browser 能按 manifest 打开 package directory。
-6. 增加一个 weather/clock/calculator package sample，覆盖 HTML/CSS/JS、fonts 和 assets。
+这些功能应放在 embedded core 之外，或等未来桌面 packaging 层需要时再做。
 
 ## 当前工具
 

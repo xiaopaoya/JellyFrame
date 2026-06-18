@@ -1,6 +1,5 @@
 # 运行循环与增量更新契约
 
-日期：2026-06-16
 
 本文定义 JellyFrame 主线核心建议的宿主运行循环。它只描述硬件无关契约：输入、timer、dirty flags、重建、重绘和提交如何排序。真实线程、ISR、屏幕驱动、电源管理和 RTOS 调度由宿主负责。
 
@@ -93,7 +92,8 @@ framebuffer，并执行 full frame repaint。
   `DomDirtyAttributes`：需要重建 render/layout/layer，但在 framebuffer 尺寸不变时可以尝试
   `PreviousAndCurrentLayout` dirty rect。
 - `DomDirtyTree`：结构变化。Planner 直接使用 `FullFrame`，且不保留上一棵 layout tree，
-  因为当前 dirty-region 逻辑会保守退回整 viewport/content rect。后续 M9 可以继续细化。
+  因为当前 dirty-region 逻辑会保守退回整 viewport/content rect。未来 retained-subtree
+  工作可以继续细化。
 
 同值 `textContent`、未变化 attribute 等不应制造 dirty flags。
 
@@ -101,8 +101,8 @@ framebuffer，并执行 full frame repaint。
 
 头文件：`src/core/dirty_region.h`
 
-`compute_dirty_rects(...)` 仍保留为只需要矩形的宿主使用的兼容 API。M9 新增
-`compute_dirty_region(...)`，返回同样的 rectangles，并额外给出：
+`compute_dirty_rects(...)` 仍保留为只需要矩形的宿主使用的兼容 API。
+`compute_dirty_region(...)` 返回同样的 rectangles，并额外给出：
 
 - `DirtyRegionMode::Clean`：无需重绘。
 - `DirtyRegionMode::DirtyRects`：已生成有界局部矩形。
@@ -116,7 +116,7 @@ layout、结构性 tree dirty、找不到 dirty node bounds，或局部 rect 被
 供壳层诊断使用。Win32 验证壳会在增量重绘后把这些信息显示在窗口标题中，交互时可以直接看到 fallback 原因。
 
 `DirtyRegionStatistics` 可累计多次 `DirtyRegionResult` 样本。它会记录 clean frame、dirty-rect
-frame、full-frame frame、总 rect 数、总 dirty area 和 fallback reason 次数。它面向 M9 审计：
+frame、full-frame frame、总 rect 数、总 dirty area 和 fallback reason 次数。它面向审计：
 先测出 full-frame fallback 主要来自哪里，再决定是否加入更重的 retained subtree reuse。
 
 宿主还可以使用 `dirty_region_area(...)`、`dirty_region_area_percent(...)`
@@ -147,7 +147,7 @@ retained layer/display-command 结构。
 - tiled/scanline renderer。
 - 自动线程调度或低功耗策略。
 
-这些分别属于 M9、M13 或宿主策略。
+这些分别属于未来 retained-rendering 工作、可选 tiled presentation 或宿主策略。
 
 ## 验收
 

@@ -1,6 +1,5 @@
 # Events 与 Hit Testing 裁剪范围
 
-日期：2026-06-14
 
 JellyFrame 将输入接线和核心引擎分开：
 

@@ -1,12 +1,10 @@
 # App Packaging
 
-Date: 2026-06-17
-
-M11 turns ad-hoc example resources into a repeatable app packaging flow. The
-goal is not to copy a phone/watch app store package. JellyFrame should keep a
-small browser-like authoring model while producing firmware-friendly resource
-tables that can be loaded without a filesystem, network stack or runtime
-archive parser.
+JellyFrame app packaging turns web-like source files into deterministic,
+firmware-friendly resource tables. The goal is not to copy a phone/watch app
+store package. JellyFrame keeps a small browser-like authoring model while
+producing bundles that can be loaded without a filesystem, network stack or
+runtime archive parser.
 
 ## Survey Summary
 
@@ -45,8 +43,8 @@ The reviewed platforms converge on a few practical patterns:
   package bytes through the existing `HostResourceLoader` boundary.
 - Apps may request network capability for runtime data APIs. That capability is
   declared separately from package resource loading, so remote pages and remote
-  CSS/script/image resources remain disabled in M11 without closing the door on
-  future host-provided fetch APIs.
+  CSS/script/image resources remain disabled without closing the door on future
+  host-provided fetch APIs.
 - Missing optional resources degrade cleanly; missing required entry resources
   fail package validation before flashing.
 
@@ -172,9 +170,9 @@ Fields that affect runtime compatibility must be required by the packer:
 
 `permissions: ["network"]` and `capabilities: ["network.fetch"]` declare that
 the app expects a future host-provided network request API for runtime data.
-They do not enable remote package resources. The M11 packer records these fields
-in the report so product firmware can reject apps whose requested capabilities
-do not match the board policy.
+They do not enable remote package resources. The packer records these fields in
+the report so product firmware can reject apps whose requested capabilities do
+not match the board policy.
 
 ## Resource Path Rules
 
@@ -195,7 +193,7 @@ small.
 
 ## Build Outputs
 
-M11 should produce two output forms from the same manifest.
+The tools can produce two output forms from the same manifest.
 
 Desktop/debug output:
 
@@ -243,7 +241,7 @@ Recommended desktop pipeline:
 
 ## Explicit Cuts
 
-M11 should not add these yet:
+The embedded package model intentionally does not include:
 
 - runtime ZIP extraction or general archive parsing on MCU;
 - dependency package managers;
@@ -253,18 +251,8 @@ M11 should not add these yet:
 - multi-process install/update semantics;
 - page module transpilation comparable to Vela `.ux` or HarmonyOS ArkUI.
 
-Those features belong outside the core or to a future desktop packaging layer.
-
-## Recommended M11 Implementation Order
-
-1. Add a platform-neutral app manifest parser/validator as a desktop tool.
-2. Move the ESP32-S3 resource generator into a reusable top-level tool.
-3. Generate a `ResourceBundle`-compatible C++ table for any source package.
-4. Feed the generated resource set into capability check and font-pack
-   generation.
-5. Update the pseudo browser to open a package directory by manifest.
-6. Add one weather/clock/calculator package sample that exercises HTML/CSS/JS,
-   fonts and assets.
+Those features belong outside the embedded core or to a future desktop
+packaging layer.
 
 ## Current Tooling
 

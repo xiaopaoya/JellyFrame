@@ -1,6 +1,5 @@
 # 宿主抽象草案
 
-日期：2026-06-15
 
 JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显示控制器、timer、输入硬件和字体 API。
 宿主抽象层是桌面壳、RTOS task、LVGL driver 或自定义可穿戴平台向核心提供这些服务的边界。
@@ -163,11 +162,11 @@ ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_frameb
 - framebuffer/offscreen buffer 策略。
 
 `HostBudgets` 已通过 `src/core/budget.h` 贯穿 HTML/CSS parser、render/layout/layer、
-display-list、dirty rectangle、scripting 主要入口，以及 M8 frame-loop 工作上限。后续重点不是再定义预算结构，
+display-list、dirty rectangle、scripting 主要入口，以及 frame-loop 工作上限。后续重点不是再定义预算结构，
 而是补齐更细的 offscreen/tile buffer 策略，以及预算超限路径的长时间稳定性测试。
 
 ## 推荐顺序
 
 1. 整理本地资源包与 app packaging。
-2. 继续 allocator 工作，并用 M9 诊断判断 retained subtree reuse 是否值得承担所有权复杂度。
+2. 继续 allocator 工作，并用 dirty-region 诊断判断 retained subtree reuse 是否值得承担所有权复杂度。
 3. 在真实硬件压力要求时，再细化 offscreen/tile buffer 策略。

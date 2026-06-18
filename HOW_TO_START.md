@@ -94,7 +94,6 @@ For embedded porting:
 - `ports/virtual_board`: desktop estimator for board-like framebuffer costs.
 - `ports/esp32s3-idf`: ESP32-S3 reference bring-up project.
 - `docs`: technical documentation and module/API contracts.
-- `project_docs`: current status, roadmap and development process notes.
 
 ## 5. Engine Pipeline
 
@@ -305,7 +304,7 @@ CMake options are enabled.
 Notes:
 
 - `jellyframe_pseudo_browser.exe` also supports `--app package_dir output.ppm`
-  for M11 app-package source directories containing `jellyframe.app.json`.
+  for app-package source directories containing `jellyframe.app.json`.
 - `jellyframe_win32_browser.exe` is only built on Windows.
 - In scripting builds, `jellyframe_pseudo_browser.exe`,
   `jellyframe_win32_browser.exe` and `jellyframe_core_tests.exe` link the
@@ -316,7 +315,7 @@ Notes:
 
 ## 12. Useful Example Pages
 
-- `examples/apps/watch_weather`: first M11 app package sample with
+- `examples/apps/watch_weather`: app package sample with
   `jellyframe.app.json`, local HTML/CSS/classic JS and a declared network
   capability for future runtime data requests.
 - `examples/modern_cases`: modern HTML/CSS samples that exercise graceful
@@ -328,7 +327,7 @@ Notes:
 - `examples/app_cases/timer.*`: timer/stopwatch UI.
 - `examples/app_cases/calculator.*`: button-driven calculator.
 
-Package the M11 sample into a generated resource table:
+Package the sample app into a generated resource table:
 
 ```powershell
 python tools\jellyframe_cli.py validate `
@@ -436,13 +435,9 @@ Most important technical docs:
 - [docs/text_backend.md](docs/text_backend.md)
 - [docs/embedded_hal_api.md](docs/embedded_hal_api.md)
 
-Active process docs:
+Other useful project documents:
 
-- [project_docs/project_status.md](project_docs/project_status.md)
-- [project_docs/roadmap.md](project_docs/roadmap.md)
 - [docs/run_loop_contract.md](docs/run_loop_contract.md)
-- [project_docs/memory_management.md](project_docs/memory_management.md)
-- [project_docs/dom_arena_feasibility.md](project_docs/dom_arena_feasibility.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## 14. Common Development Workflows

@@ -1,12 +1,9 @@
 # JellyFrame 移植工作指导
 
-日期：2026-06-16
 
 本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及当前核心已经提供了哪些可直接使用的能力。
 
 当前核心已经足够支持第一版“静态资源 + 软件渲染 + RGB565 局部提交 + 触摸/按键输入 + bitmap 字体 + 可选 JerryScript”的开发板 bring-up。尚未具备无完整 framebuffer 的 tiled renderer、生产级复杂文字 shaping、图片解码和网络资源栈。
-
-项目早期代号为 `WearWeb`。旧 ESP32-S3/QEMU 实验包仍使用该代号；合并进主线时必须统一为 `JellyFrame`、`jellyframe`、`JELLYFRAME` 和 `namespace jellyframe`。
 
 ## 当前可确定的核心契约
 
@@ -35,20 +32,15 @@
 
 ## 移植阶段
 
-### P0：导入与命名整理
+### P0：Port 骨架
 
-目标：把实验性移植文件变成主线可维护目录，不破坏现有核心构建。
+目标：加入可维护的 port 目录，不破坏现有核心构建。
 
 任务要求：
 
 - 新建或整理 `ports/esp32s3-idf/`，保留为独立 ESP-IDF app。
 - 新建或整理 `ports/virtual_board/`，保留为桌面性能估算工具。
-- 不要把实验包里的根 `CMakeLists.txt` 覆盖主线根 CMake。
-- 把旧名全部改为：
-  - `WearWeb` -> `JellyFrame`
-  - `wearweb` -> `jellyframe`
-  - `WEARWEB` -> `JELLYFRAME`
-  - `namespace wearweb` -> `namespace jellyframe`
+- 不要覆盖主线根 `CMakeLists.txt`。
 - ESP-IDF component 名称改为 `jellyframe_core`。
 - 日志 tag、Kconfig menu、README 和 benchmark 输出使用 JellyFrame。
 
@@ -62,7 +54,6 @@
 
 - 桌面主线仍能配置、构建和测试。
 - ESP-IDF app 能执行 `idf.py set-target esp32s3 && idf.py build`。
-- `rg -n "WearWeb|wearweb|WEARWEB" ports docs README* CHANGELOG*` 只允许在历史说明中出现。
 
 ### P1：设备能力与预算
 

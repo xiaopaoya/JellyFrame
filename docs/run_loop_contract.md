@@ -1,6 +1,5 @@
 # Run Loop And Incremental Update Contract
 
-Date: 2026-06-16
 
 This document defines JellyFrame's recommended host run loop. It covers only the
 hardware-neutral contract: how input, timers, dirty flags, rebuilds, repaint and
@@ -116,7 +115,8 @@ the host must resize or recreate the framebuffer and repaint the full frame.
   `PreviousAndCurrentLayout` dirty rects if framebuffer size is stable.
 - `DomDirtyTree`: structural mutation. The planner uses `FullFrame` and does
   not retain the previous layout tree, because current dirty-region logic falls
-  back conservatively to the full viewport/content rect. M9 can refine this.
+  back conservatively to the full viewport/content rect. Future retained-subtree
+  work can refine this.
 
 Unchanged `textContent`, unchanged attributes and similar no-op mutations should
 not create dirty flags.
@@ -126,8 +126,8 @@ not create dirty flags.
 Header: `src/core/dirty_region.h`
 
 `compute_dirty_rects(...)` remains the simple compatibility API for hosts that
-only need rectangles. M9 adds `compute_dirty_region(...)`, which returns the
-same rectangles plus:
+only need rectangles. `compute_dirty_region(...)` returns the same rectangles
+plus:
 
 - `DirtyRegionMode::Clean`: no repaint needed.
 - `DirtyRegionMode::DirtyRects`: bounded local rectangles were produced.
@@ -147,7 +147,7 @@ be seen while interacting with a page.
 
 `DirtyRegionStatistics` can accumulate many `DirtyRegionResult` samples. It
 tracks clean frames, dirty-rect frames, full-frame frames, total rect count,
-total dirty area and fallback reason counts. This is intended for M9 audits:
+total dirty area and fallback reason counts. This is intended for audits:
 measure where full-frame fallback comes from before adding heavier retained
 subtree reuse.
 
@@ -185,7 +185,8 @@ The current core still does not implement:
 - tiled/scanline rendering;
 - automatic threading or power policy.
 
-Those belong to M9, M13 or host policy.
+Those belong to future retained-rendering work, optional tiled presentation or
+host policy.
 
 ## Acceptance
 

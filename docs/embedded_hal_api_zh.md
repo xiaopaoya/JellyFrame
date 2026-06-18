@@ -1,6 +1,5 @@
 # 嵌入式 HAL API
 
-日期：2026-06-15
 
 这份文档是 ESP32-S3、RTOS host 或具体开发板需要实现的接口清单。`jellyframe_core`
 保持平台无关；所有真实 I/O 都由硬件程序负责，再通过小型 C++ struct 和 callback 调用核心。

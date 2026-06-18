@@ -1,6 +1,5 @@
 # 文本后端
 
-日期：2026-06-15
 
 JellyFrame 不把字体加载和平台文本 API 放进 `jellyframe_core`。核心只需要两类服务：
 

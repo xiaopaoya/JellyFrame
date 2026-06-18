@@ -1,6 +1,5 @@
 # Developer Capability Matrix
 
-Date: 2026-06-15
 
 This document is the practical contract for application authors using JellyFrame.
 It describes what the engine can do today, what it deliberately degrades, and

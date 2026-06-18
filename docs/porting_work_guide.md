@@ -1,6 +1,5 @@
 # JellyFrame Porting Work Guide
 
-Date: 2026-06-16
 
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
 shells or custom wearable hardware. It is not a browser feature document. It is
@@ -13,10 +12,6 @@ software rendering, RGB565 partial presentation, touch/button input, bitmap
 fonts and optional JerryScript. It does not yet provide a no-full-framebuffer
 tiled renderer, production-grade complex text shaping, image decoding or a
 network resource stack.
-
-The project was developed under the early codename `WearWeb`. Old ESP32-S3/QEMU
-experiments still use that name. Anything merged into the main repository must
-use `JellyFrame`, `jellyframe`, `JELLYFRAME` and `namespace jellyframe`.
 
 ## Stable Core Contracts
 
@@ -60,21 +55,16 @@ instead of forcing them into a board port.
 
 ## Porting Phases
 
-### P0: Import And Naming
+### P0: Port Skeleton
 
-Goal: turn experimental port files into maintainable mainline directories
-without breaking the existing core build.
+Goal: add maintainable port directories without breaking the existing core
+build.
 
 Requirements:
 
 - Add or normalize `ports/esp32s3-idf/` as an independent ESP-IDF app.
 - Add or normalize `ports/virtual_board/` as a desktop performance estimator.
-- Do not overwrite the main root `CMakeLists.txt` with the experimental one.
-- Rename old symbols:
-  - `WearWeb` -> `JellyFrame`
-  - `wearweb` -> `jellyframe`
-  - `WEARWEB` -> `JELLYFRAME`
-  - `namespace wearweb` -> `namespace jellyframe`
+- Do not overwrite the main root `CMakeLists.txt`.
 - Rename the ESP-IDF component to `jellyframe_core`.
 - Use JellyFrame in log tags, Kconfig menus, READMEs and benchmark output.
 
@@ -91,8 +81,6 @@ Acceptance:
 
 - The desktop mainline build and tests still work.
 - The ESP-IDF app can run `idf.py set-target esp32s3 && idf.py build`.
-- `rg -n "WearWeb|wearweb|WEARWEB" ports docs README* CHANGELOG*` only finds
-  intentional historical notes.
 
 ### P1: Device Capabilities And Budgets
 

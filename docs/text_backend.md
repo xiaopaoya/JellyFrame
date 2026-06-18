@@ -1,6 +1,5 @@
 # Text Backend
 
-Date: 2026-06-15
 
 JellyFrame keeps font loading and platform text APIs outside `jellyframe_core`.
 The core only needs two services:

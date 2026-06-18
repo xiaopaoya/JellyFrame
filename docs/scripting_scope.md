@@ -1,9 +1,10 @@
 # Scripting Scope
 
-JellyFrame scripting is intentionally staged. The engine should become useful for
-embedded app UI without inheriting the full browser API surface.
+JellyFrame scripting is intentionally small and optional. The engine should
+become useful for embedded app UI without inheriting the full browser API
+surface.
 
-## M2 Support
+## Runtime Shell
 
 - Optional `jellyframe_script` target behind `JELLYFRAME_BUILD_SCRIPTING=ON`.
 - `JERRYSCRIPT_ROOT` can point at an official JerryScript checkout, for example
@@ -14,7 +15,7 @@ embedded app UI without inheriting the full browser API surface.
 - Repeated initialize/shutdown in one process, one active runtime at a time.
 - `jellyframe_pseudo_browser --script file.js` for desktop acceptance.
 
-## M3 Support
+## DOM Binding
 
 - Global `window` and `document` objects when a host binds a native DOM tree.
 - `document.getElementById(id)`.
@@ -28,7 +29,7 @@ embedded app UI without inheriting the full browser API surface.
 - `jellyframe_pseudo_browser --script file.js` binds the parsed page DOM before
   script execution, so script mutations affect the rendered output.
 
-## M4 Support
+## Events
 
 - `node.addEventListener(type, callback, options)`.
 - `node.removeEventListener(type, callback)`.
@@ -43,7 +44,7 @@ embedded app UI without inheriting the full browser API surface.
 - The Win32 browser shell accepts `--script file.js` in scripting builds and
   rerenders when script event callbacks dirty the DOM.
 
-## M5 Support
+## Form Controls
 
 - Form-control properties on relevant nodes:
   - `input.value`
@@ -61,7 +62,7 @@ embedded app UI without inheriting the full browser API surface.
 - The scripting pseudo browser and Win32 shell can run small app-style examples
   from `examples/app_cases`.
 
-## M6 Support
+## Timers
 
 - `setTimeout(callback, ms)` and `clearTimeout(id)`.
 - `setInterval(callback, ms)` and `clearInterval(id)`.
@@ -75,7 +76,7 @@ embedded app UI without inheriting the full browser API surface.
 - The Win32 browser shell pumps timers through a desktop `WM_TIMER` and rerenders
   if callbacks dirty the DOM.
 
-## M7 Support
+## Document Script Loading
 
 - Classic inline `<script>` elements are collected from the parsed document and
   evaluated in DOM order in scripting builds.
@@ -88,7 +89,7 @@ embedded app UI without inheriting the full browser API surface.
 - Network loading, ES modules, dynamic import and the full HTML loading
   algorithm remain intentionally out of scope.
 
-## M8 Support
+## Embedded-App DOM Helpers
 
 - Embedded-app DOM helpers:
   - `element.children`

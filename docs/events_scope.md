@@ -1,6 +1,5 @@
 # Events and Hit Testing Scope
 
-Date: 2026-06-14
 
 JellyFrame separates input plumbing from the core engine:
 

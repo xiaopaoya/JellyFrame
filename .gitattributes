@@ -1,17 +1,9 @@
-* text=auto
-
-*.cpp text
-*.h text
-*.md text
-*.css text
-*.html text
-*.txt text
-*.cmake text
-CMakeLists.txt text
-VERSION text
+* text=auto eol=lf
 
 *.bmp binary
 *.png binary
 *.jpg binary
 *.jpeg binary
-*.ppm binary
+*.gif binary
+*.webp binary
+*.bdf text eol=lf

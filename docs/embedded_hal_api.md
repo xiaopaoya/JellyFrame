@@ -1,6 +1,5 @@
 # Embedded HAL API
 
-Date: 2026-06-15
 
 This document is the implementation checklist for a board or RTOS host such as
 ESP32-S3. `jellyframe_core` stays platform-neutral; the hardware program owns every

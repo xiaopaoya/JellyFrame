@@ -1,9 +1,9 @@
 # 脚本能力范围
 
-JellyFrame 的脚本能力会分阶段推进。目标是让嵌入式 app UI 真正可用，而不是一次性继承完整浏览器
+JellyFrame 的脚本能力保持小型、可选、有界。目标是让嵌入式 app UI 真正可用，而不是一次性继承完整浏览器
 API 表面。
 
-## M2 支持范围
+## Runtime Shell
 
 - 由 `JELLYFRAME_BUILD_SCRIPTING=ON` 控制的可选 `jellyframe_script` target。
 - `JERRYSCRIPT_ROOT` 可以指向官方 JerryScript checkout，例如 `third_party/jerryscript`。
@@ -13,7 +13,7 @@ API 表面。
 - 同一进程内可重复初始化/清理；当前实现同一时间只允许一个 runtime 存活。
 - `jellyframe_pseudo_browser --script file.js` 用于桌面验收。
 
-## M3 支持范围
+## DOM Binding
 
 - 宿主绑定 native DOM tree 后，提供全局 `window` 和 `document` 对象。
 - `document.getElementById(id)`。
@@ -27,7 +27,7 @@ API 表面。
 - `jellyframe_pseudo_browser --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
   因此脚本 mutation 会影响最终渲染输出。
 
-## M4 支持范围
+## Events
 
 - `node.addEventListener(type, callback, options)`。
 - `node.removeEventListener(type, callback)`。
@@ -39,7 +39,7 @@ API 表面。
   过程中修改 DOM。
 - scripting 构建中的 Win32 browser shell 支持 `--script file.js`，并在脚本事件回调弄脏 DOM 后重绘。
 
-## M5 支持范围
+## Form Controls
 
 - 相关表单控件节点上的属性：
   - `input.value`
@@ -53,7 +53,7 @@ API 表面。
 - JavaScript 修改表单状态后会标记 DOM dirty，宿主可以据此重绘轻量原生风格控件。
 - scripting pseudo browser 和 Win32 壳可以运行 `examples/app_cases` 中的小型应用式示例。
 
-## M6 支持范围
+## Timers
 
 - `setTimeout(callback, ms)` 和 `clearTimeout(id)`。
 - `setInterval(callback, ms)` 和 `clearInterval(id)`。
@@ -63,7 +63,7 @@ API 表面。
 - pseudo browser 支持 `--pump-timers ms`，用于非交互验收。
 - Win32 browser shell 通过桌面 `WM_TIMER` 泵动 timer，并在 callback 弄脏 DOM 后重绘。
 
-## M7 支持范围
+## Document Script Loading
 
 - scripting 构建会从解析后的文档中收集 classic inline `<script>`，并按 DOM 顺序执行。
 - 本地外部 classic script（`<script src="...">`）通过壳层提供的 callback 加载。
@@ -73,7 +73,7 @@ API 表面。
   命令行 `--script file.js` 仍作为额外桌面验收脚本保留。
 - 网络加载、ES modules、dynamic import 和完整 HTML loading algorithm 继续排除。
 
-## M8 支持范围
+## Embedded-App DOM Helpers
 
 - 面向嵌入式 app 的 DOM helpers：
   - `element.children`

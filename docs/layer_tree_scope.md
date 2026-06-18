@@ -1,6 +1,5 @@
 # Layer Tree Scope
 
-Date: 2026-06-14
 
 There is no WHATWG layer-tree standard. This part is implementation-defined, so
 JellyFrame follows the practical structure used by modern engines while cutting the
