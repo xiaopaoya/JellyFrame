@@ -140,7 +140,7 @@ Chinese documentation uses the `_zh` suffix, for example
 
 ## Versioning
 
-- Current version: `0.2.0-dev` in [VERSION](VERSION).
+- Current version: `0.3.0-dev` in [VERSION](VERSION).
 - Changelog: [CHANGELOG.md](CHANGELOG.md) and
   [CHANGELOG_zh.md](CHANGELOG_zh.md).
 - Version rules: [docs/versioning.md](docs/versioning.md).

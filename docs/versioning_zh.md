@@ -26,5 +26,6 @@ MAJOR.MINOR.PATCH[-stage]
 
 - `0.1.x`：静态 HTML/CSS 文档核心。
 - `0.2.x`：framebuffer renderer 和输入路由。
-- `0.3.x`：JerryScript 集成和 DOM mutation APIs。
-- `0.4.x`：可穿戴 app runtime APIs 和打包格式。
+- `0.3.x`：可穿戴 app runtime 开发线，包括可选 JerryScript、DOM mutation APIs、
+  packaging、文本/字体工作流和嵌入式内存优化。
+- `0.4.x`：在更多真实设备验证后，继续稳定 package app API。

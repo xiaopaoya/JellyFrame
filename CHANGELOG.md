@@ -6,9 +6,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ## Unreleased
 
+No changes yet.
+
+## 0.3.0-dev - 2026-06-18
+
 ### Added
 
-- Refreshed the starter app templates and `examples/apps/watch_weather` into
+- Refreshed the starter app templates and `samples/apps/packages/watch_weather` into
   modern watch-style UI fixtures, then verified their 300x300 output through
   the pseudo browser.
 - Added Win32 `--app` package preview/capture parity with the pseudo browser,
@@ -136,24 +140,24 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   from JerryScript headers and libraries.
 - Added initial `jellyframe_pseudo_browser --script` support for scripting builds:
   it evaluates one external JavaScript file and reports the result or exception.
-- Added `examples/script_cases/runtime_probe.*` as the first scripting
+- Added `samples/scripts/classic/runtime_probe.*` as the first scripting
   acceptance page.
 - Added M3 minimal DOM bindings for JerryScript: `window`, `document`,
   `getElementById`, `createElement`, `createTextNode`, `appendChild`,
   `removeChild`, `setAttribute`, `getAttribute` and `textContent`.
-- Added `examples/script_cases/dom_mutation_probe.*` to validate script-driven
+- Added `samples/scripts/classic/dom_mutation_probe.*` to validate script-driven
   DOM mutation through the pseudo browser.
 - Added M4 JavaScript event bindings for `addEventListener`,
   `removeEventListener`, event objects, default prevention and propagation
   control.
 - Added scripting support to the Win32 browser shell so desktop native input can
   dispatch into JavaScript listeners and rerender dirty DOM mutations.
-- Added `examples/script_cases/event_probe.*` for interactive event bridge
+- Added `samples/scripts/classic/event_probe.*` for interactive event bridge
   validation.
 - Added M5 JavaScript form-control properties for app UI: `value`, `checked`,
   `selectedIndex` and `select.value`.
 - Added app-style acceptance examples for weather, clock, timer and calculator
-  under `examples/app_cases`.
+  under `samples/apps/loose`.
 - Added bilingual embedded app subset documentation describing what can be
   built after M6 and which browser assumptions are intentionally absent.
 - Added M6 host-pumped timers: `setTimeout`, `clearTimeout`, `setInterval` and
@@ -182,7 +186,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `document_script` helpers for platform-neutral script collection.
 - Added a first host abstraction draft and `src/core/host.h` with resource,
   clock, frame sink and budget structs.
-- Added `examples/script_cases/inline_loading_probe.*` for automatic document
+- Added `samples/scripts/classic/inline_loading_probe.*` for automatic document
   script loading validation.
 - Added `font-weight` parsing/inheritance and display-list propagation, with
   approximate bold rendering in the core fallback and native weight selection

@@ -28,5 +28,7 @@ MAJOR.MINOR.PATCH[-stage]
 
 - `0.1.x`: static HTML/CSS document core.
 - `0.2.x`: framebuffer renderer and input routing.
-- `0.3.x`: JerryScript integration and DOM mutation APIs.
-- `0.4.x`: wearable app runtime APIs and packaging.
+- `0.3.x`: wearable app runtime development, including optional JerryScript,
+  DOM mutation APIs, packaging, text/font workflow and embedded memory work.
+- `0.4.x`: future stabilization of packaged app APIs after more real-device
+  validation.

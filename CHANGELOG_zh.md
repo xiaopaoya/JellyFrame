@@ -6,9 +6,13 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ## Unreleased
 
+暂无变更。
+
+## 0.3.0-dev - 2026-06-18
+
 ### 新增
 
-- 将 starter app templates 和 `examples/apps/watch_weather` 更新为更现代的手表式
+- 将 starter app templates 和 `samples/apps/packages/watch_weather` 更新为更现代的手表式
   UI 验收样例，并用伪浏览器截图验证 300x300 输出。
 - 为 Win32 壳添加与伪浏览器对齐的 `--app` package 预览/截图路径，支持读取
   manifest viewport、package 本地 CSS/script 资源，并固定按 viewport 输出截图。
@@ -98,18 +102,18 @@ JellyFrame Engine 的重要变更记录在这里。
   `JELLYFRAME_BUILD_SCRIPTING=OFF` 关闭，保证 `jellyframe_core` 不依赖 JerryScript 头文件或库。
 - 为 scripting 构建添加初始 `jellyframe_pseudo_browser --script`：执行一个外部 JavaScript
   文件并报告结果或异常。
-- 添加 `examples/script_cases/runtime_probe.*`，作为第一个脚本 runtime 验收页面。
+- 添加 `samples/scripts/classic/runtime_probe.*`，作为第一个脚本 runtime 验收页面。
 - 添加 JerryScript M3 最小 DOM binding：`window`、`document`、`getElementById`、
   `createElement`、`createTextNode`、`appendChild`、`removeChild`、`setAttribute`、
   `getAttribute` 和 `textContent`。
-- 添加 `examples/script_cases/dom_mutation_probe.*`，用于通过伪浏览器验证脚本驱动的 DOM mutation。
+- 添加 `samples/scripts/classic/dom_mutation_probe.*`，用于通过伪浏览器验证脚本驱动的 DOM mutation。
 - 添加 M4 JavaScript 事件 binding：`addEventListener`、`removeEventListener`、event object、
   default prevention 和 propagation control。
 - 为 Win32 browser shell 添加 scripting 支持，使桌面 native input 可以派发到 JavaScript listener，
   并在 DOM mutation 后重绘。
-- 添加 `examples/script_cases/event_probe.*`，用于交互式事件桥验收。
+- 添加 `samples/scripts/classic/event_probe.*`，用于交互式事件桥验收。
 - 添加 M5 JavaScript 表单控件属性：`value`、`checked`、`selectedIndex` 和 `select.value`。
-- 在 `examples/app_cases` 下添加天气、时钟、计时器和计算器应用式验收示例。
+- 在 `samples/apps/loose` 下添加天气、时钟、计时器和计算器应用式验收示例。
 - 添加中英文嵌入式应用子集文档，说明 M6 后能构建什么，以及哪些浏览器假设被刻意排除。
 - 添加 M6 宿主泵动 timer：`setTimeout`、`clearTimeout`、`setInterval` 和 `clearInterval`。
 - 添加 `jellyframe_pseudo_browser --pump-timers ms`，用于无交互窗口的 timer 脚本 smoke test。
@@ -132,7 +136,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 `document_script` helper，用于平台无关的脚本收集。
 - 添加第一版宿主抽象草案和 `src/core/host.h`，覆盖 resource、clock、frame sink
   和 budget structs。
-- 添加 `examples/script_cases/inline_loading_probe.*`，用于验证自动 document script loading。
+- 添加 `samples/scripts/classic/inline_loading_probe.*`，用于验证自动 document script loading。
 - 添加 `font-weight` 解析、继承和 display-list 传递；核心 fallback 用近似加粗绘制，
   Win32/GDI 文本路径会选择原生字重。
 - 添加轻量列表标记支持：`list-style`/`list-style-type`、`ul`/`ol` 原生轻量 marker，
