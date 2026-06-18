@@ -24,36 +24,6 @@ void check(bool condition, const char* message) {
     }
 }
 
-std::size_t count_render_objects_for_test(const RenderObject& object) {
-    std::size_t count = 0;
-    std::vector<const RenderObject*> pending;
-    pending.push_back(&object);
-    while (!pending.empty()) {
-        const RenderObject* current = pending.back();
-        pending.pop_back();
-        ++count;
-        for (const auto& child : current->children) {
-            pending.push_back(child.get());
-        }
-    }
-    return count;
-}
-
-std::size_t count_layout_boxes_for_test(const LayoutBox& box) {
-    std::size_t count = 0;
-    std::vector<const LayoutBox*> pending;
-    pending.push_back(&box);
-    while (!pending.empty()) {
-        const LayoutBox* current = pending.back();
-        pending.pop_back();
-        ++count;
-        for (const auto& child : current->children) {
-            pending.push_back(child.get());
-        }
-    }
-    return count;
-}
-
 std::string repeated_cards_html(int count) {
     std::ostringstream html;
     html << "<body><main id='app'>";
@@ -144,13 +114,13 @@ void full_pipeline_stays_bounded_with_tiny_budgets() {
     RenderTreeBuilder render_builder(resolver, render_tree_options_from_budgets(budgets));
     auto render_tree = render_builder.build(*document);
     check(render_tree != nullptr, "render tree root exists under tiny budgets");
-    check(count_render_objects_for_test(*render_tree) <= budgets.max_render_objects,
+    check(count_render_objects(*render_tree) <= budgets.max_render_objects,
           "render tree stays within object budget");
 
     LayoutEngine layout_engine(resolver, {}, layout_engine_options_from_budgets(budgets));
     auto layout_tree = layout_engine.layout(*render_tree, 120);
     check(layout_tree != nullptr, "layout tree root exists under tiny budgets");
-    check(count_layout_boxes_for_test(*layout_tree) <= budgets.max_layout_boxes,
+    check(count_layout_boxes(*layout_tree) <= budgets.max_layout_boxes,
           "layout tree stays within box budget");
 
     LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets));

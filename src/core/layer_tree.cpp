@@ -784,17 +784,31 @@ LayerNodePtr LayerTreeBuilder::make_layer_node(MonotonicArena* arena) const {
 }
 
 std::size_t count_layers(const LayerNode& layer) {
-    std::size_t count = 1;
-    for (const auto& child : layer.children) {
-        count += count_layers(*child);
+    std::size_t count = 0;
+    std::vector<const LayerNode*> pending;
+    pending.push_back(&layer);
+    while (!pending.empty()) {
+        const LayerNode* current = pending.back();
+        pending.pop_back();
+        ++count;
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
     }
     return count;
 }
 
 std::size_t count_layer_display_commands(const LayerNode& layer) {
-    std::size_t count = layer.display_list.size();
-    for (const auto& child : layer.children) {
-        count += count_layer_display_commands(*child);
+    std::size_t count = 0;
+    std::vector<const LayerNode*> pending;
+    pending.push_back(&layer);
+    while (!pending.empty()) {
+        const LayerNode* current = pending.back();
+        pending.pop_back();
+        count += current->display_list.size();
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
     }
     return count;
 }

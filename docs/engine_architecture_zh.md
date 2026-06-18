@@ -47,6 +47,8 @@ DOM + StyleResolver
 - `HitTester`：通过 layout 和 layer geometry 将 viewport 坐标映射到 DOM event target。
 - `InputController`：将平台无关 pointer/wheel input 转成类 mouse events、hover/active/focus state 和 click synthesis。
 - `EventTarget`：保存 C++ listeners，并执行类 DOM 的 capture、target 和 bubble phases。
+- `PipelineStatistics`：可选只读统计入口，用于统计 DOM、render、layout、layer、display-list、
+  framebuffer、resource 和 arena 使用情况。它面向验证壳和 benchmark，不进入渲染热路径。
 
 ## Rule Indexing
 

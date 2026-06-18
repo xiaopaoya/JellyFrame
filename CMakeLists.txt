@@ -47,6 +47,7 @@ add_library(jellyframe_core
     src/core/input.cpp
     src/core/layer_tree.cpp
     src/core/layout.cpp
+    src/core/pipeline_statistics.cpp
     src/core/render_tree.cpp
     src/core/software_renderer.cpp
     src/core/style.cpp
@@ -147,6 +148,7 @@ if(JELLYFRAME_BUILD_TESTS)
         tests/host_tests.cpp
         tests/input_tests.cpp
         tests/layout_tests.cpp
+        tests/pipeline_statistics_tests.cpp
         tests/render_tree_tests.cpp
         tests/layer_tree_tests.cpp
         tests/software_renderer_tests.cpp

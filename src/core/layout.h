@@ -68,4 +68,6 @@ private:
     LayoutBoxPtr make_layout_box(MonotonicArena* arena) const;
 };
 
+std::size_t count_layout_boxes(const LayoutBox& root);
+
 } // namespace jellyframe

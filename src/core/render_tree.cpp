@@ -147,4 +147,19 @@ RenderObjectType RenderTreeBuilder::render_type_for(const Node& node, const Styl
     return RenderObjectType::Block;
 }
 
+std::size_t count_render_objects(const RenderObject& root) {
+    std::size_t count = 0;
+    std::vector<const RenderObject*> pending;
+    pending.push_back(&root);
+    while (!pending.empty()) {
+        const RenderObject* current = pending.back();
+        pending.pop_back();
+        ++count;
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
+    }
+    return count;
+}
+
 } // namespace jellyframe

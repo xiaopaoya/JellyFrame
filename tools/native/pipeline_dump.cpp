@@ -3,6 +3,7 @@
 #include "core/html_parser.h"
 #include "core/layer_tree.h"
 #include "core/layout.h"
+#include "core/pipeline_statistics.h"
 #include "core/render_tree.h"
 #include "core/style.h"
 
@@ -41,22 +42,6 @@ std::string read_file_limited(const std::string& path) {
         total += static_cast<std::size_t>(read);
     }
     return output.str();
-}
-
-std::size_t count_render_objects(const RenderObject& object) {
-    std::size_t count = 1;
-    for (const auto& child : object.children) {
-        count += count_render_objects(*child);
-    }
-    return count;
-}
-
-std::size_t count_layout_boxes(const LayoutBox& box) {
-    std::size_t count = 1;
-    for (const auto& child : box.children) {
-        count += count_layout_boxes(*child);
-    }
-    return count;
 }
 
 const char* command_name(DisplayCommandType type) {
@@ -101,8 +86,8 @@ int main(int argc, char** argv) {
         HtmlParser html_parser;
         CssParser css_parser;
         auto document = html_parser.parse(html);
-        Stylesheet stylesheet = css_parser.parse(
-            jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes));
+        const std::string css = jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes);
+        Stylesheet stylesheet = css_parser.parse(css);
         StyleResolver resolver(std::move(stylesheet));
 
         RenderTreeBuilder render_tree_builder(resolver);
@@ -112,16 +97,30 @@ int main(int argc, char** argv) {
         LayerTreeBuilder layer_tree_builder;
         auto layer_tree = layer_tree_builder.build(*layout_tree);
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
-        const DomStatistics dom_statistics = compute_dom_statistics(*document);
+        const PipelineStatistics pipeline_statistics = collect_pipeline_statistics(PipelineStatisticsInput{
+            document.get(),
+            render_tree.get(),
+            layout_tree.get(),
+            layer_tree.get(),
+            &display_list,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            html.size() + css.size(),
+        });
 
         std::cout << "Pipeline summary\n";
-        std::cout << "  dom_nodes=" << dom_statistics.node_count << '\n';
-        std::cout << "  dom_max_depth=" << dom_statistics.max_depth << '\n';
-        std::cout << "  dom_attributes=" << dom_statistics.attribute_count << '\n';
-        std::cout << "  render_objects=" << count_render_objects(*render_tree) << '\n';
-        std::cout << "  layout_boxes=" << count_layout_boxes(*layout_tree) << '\n';
-        std::cout << "  layers=" << count_layers(*layer_tree) << '\n';
-        std::cout << "  display_commands=" << display_list.size() << '\n';
+        std::cout << "  dom_nodes=" << pipeline_statistics.dom.node_count << '\n';
+        std::cout << "  dom_max_depth=" << pipeline_statistics.dom.max_depth << '\n';
+        std::cout << "  dom_attributes=" << pipeline_statistics.dom.attribute_count << '\n';
+        std::cout << "  render_objects=" << pipeline_statistics.render_objects << '\n';
+        std::cout << "  layout_boxes=" << pipeline_statistics.layout_boxes << '\n';
+        std::cout << "  layers=" << pipeline_statistics.layers << '\n';
+        std::cout << "  display_commands=" << pipeline_statistics.flattened_display_commands << '\n';
+        std::cout << "  layer_display_commands=" << pipeline_statistics.display_commands << '\n';
+        std::cout << "  resource_bytes=" << pipeline_statistics.resource_bytes << '\n';
+        std::cout << "  estimated_pipeline_bytes=" << pipeline_statistics.estimated_heap_bytes << '\n';
         std::cout << "  viewport_width=" << viewport_width << '\n';
         std::cout << "  root_height=" << layout_tree->rect.height << '\n';
         std::cout << "Display list preview\n";

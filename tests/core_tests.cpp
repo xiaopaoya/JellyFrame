@@ -14,6 +14,7 @@ int hit_test_tests_main();
 int host_tests_main();
 int input_tests_main();
 int layout_tests_main();
+int pipeline_statistics_tests_main();
 int render_tree_tests_main();
 int layer_tree_tests_main();
 int software_renderer_tests_main();
@@ -54,6 +55,7 @@ int main() {
     failed += run_test("host", host_tests_main);
     failed += run_test("input", input_tests_main);
     failed += run_test("layout", layout_tests_main);
+    failed += run_test("pipeline_statistics", pipeline_statistics_tests_main);
     failed += run_test("render_tree", render_tree_tests_main);
     failed += run_test("layer_tree", layer_tree_tests_main);
     failed += run_test("software_renderer", software_renderer_tests_main);

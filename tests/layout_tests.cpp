@@ -44,14 +44,6 @@ const LayoutBox* find_first_by_id(const LayoutBox& box, const std::string& id) {
     return nullptr;
 }
 
-int count_layout_boxes(const LayoutBox& box) {
-    int count = 1;
-    for (const auto& child : box.children) {
-        count += count_layout_boxes(*child);
-    }
-    return count;
-}
-
 void layout_tree_can_use_monotonic_arena() {
     HtmlParser html_parser;
     CssParser css_parser;

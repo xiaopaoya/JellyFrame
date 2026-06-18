@@ -4,6 +4,7 @@
 #include "core/html_parser.h"
 #include "core/layer_tree.h"
 #include "core/layout.h"
+#include "core/pipeline_statistics.h"
 #include "core/render_tree.h"
 #include "core/software_renderer.h"
 
@@ -256,6 +257,19 @@ int main(int argc, char** argv) {
     const double render_frame_us = average_microseconds(options.iterations, [&] {
         compositor.render_into(*layer_tree, frame_buffer, background);
     });
+    DisplayList final_display_list = layer_tree_builder.flatten(*layer_tree);
+    const PipelineStatistics pipeline_statistics = collect_pipeline_statistics(PipelineStatisticsInput{
+        document.get(),
+        render_tree.get(),
+        layout_tree.get(),
+        layer_tree.get(),
+        &final_display_list,
+        &frame_buffer,
+        &render_tree_arena,
+        &layout_arena,
+        &layer_arena,
+        html.size() + css.size(),
+    });
 
     auto rgb565 = std::make_unique<std::uint16_t[]>(
         static_cast<std::size_t>(options.width) * static_cast<std::size_t>(options.height));
@@ -333,6 +347,12 @@ int main(int argc, char** argv) {
     std::cout << "last_flush_bytes=" << last_flush_bytes
               << " last_flush_pixels=" << panel.pixels
               << " last_flushes=" << panel.flushes << '\n';
+    std::cout << "pipeline_estimated_bytes=" << pipeline_statistics.estimated_heap_bytes
+              << " framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes
+              << " resource_bytes=" << pipeline_statistics.resource_bytes
+              << " render_arena_bytes=" << pipeline_statistics.render_arena.used_bytes
+              << " layout_arena_bytes=" << pipeline_statistics.layout_arena.used_bytes
+              << " layer_arena_bytes=" << pipeline_statistics.layer_arena.used_bytes << '\n';
 
     return 0;
 }

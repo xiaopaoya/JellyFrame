@@ -55,6 +55,9 @@ DOM + StyleResolver
   events, hover/active/focus state and click synthesis.
 - `EventTarget`: stores C++ listeners and dispatches DOM-style capture, target
   and bubble phases.
+- `PipelineStatistics`: optional read-only accounting for DOM, render, layout,
+  layer, display-list, framebuffer, resource and arena usage. It is meant for
+  validation shells and benchmarks, not for the hot render path.
 
 ## Rule Indexing
 

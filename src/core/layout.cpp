@@ -779,4 +779,19 @@ int LayoutEngine::layout_grid_box(LayoutBox& box, int content_x, int content_y, 
     return total_height;
 }
 
+std::size_t count_layout_boxes(const LayoutBox& root) {
+    std::size_t count = 0;
+    std::vector<const LayoutBox*> pending;
+    pending.push_back(&root);
+    while (!pending.empty()) {
+        const LayoutBox* current = pending.back();
+        pending.pop_back();
+        ++count;
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
+    }
+    return count;
+}
+
 } // namespace jellyframe

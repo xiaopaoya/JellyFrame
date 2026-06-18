@@ -57,4 +57,6 @@ private:
     RenderObjectType render_type_for(const Node& node, const Style& style) const;
 };
 
+std::size_t count_render_objects(const RenderObject& root);
+
 } // namespace jellyframe

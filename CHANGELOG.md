@@ -6,7 +6,17 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ## Unreleased
 
-No changes yet.
+### Added
+
+- Added shared `PipelineStatistics` accounting for DOM, render, layout, layer,
+  display-list, framebuffer, resource and arena usage.
+
+### Changed
+
+- Pseudo browser, pipeline dump, embedded host demo and virtual-board benchmark
+  now report memory/budget-oriented pipeline statistics through the same helper.
+- Render, layout and layer tree counting now use explicit work stacks instead
+  of recursive helper walks.
 
 ## 0.3.0-dev - 2026-06-18
 

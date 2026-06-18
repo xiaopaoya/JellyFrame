@@ -6,7 +6,16 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ## Unreleased
 
-暂无变更。
+### 新增
+
+- 添加共享 `PipelineStatistics` 统计入口，用同一口径统计 DOM、render、layout、
+  layer、display-list、framebuffer、resource 和 arena 使用情况。
+
+### 变更
+
+- Pseudo browser、pipeline dump、embedded host demo 和 virtual-board benchmark
+  现在通过同一个 helper 输出面向内存/预算的管线统计。
+- Render、layout 和 layer tree 计数改为显式工作栈，替代递归 helper 遍历。
 
 ## 0.3.0-dev - 2026-06-18
 

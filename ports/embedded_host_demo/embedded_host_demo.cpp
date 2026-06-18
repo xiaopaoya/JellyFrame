@@ -7,6 +7,7 @@
 #include "core/input.h"
 #include "core/layer_tree.h"
 #include "core/layout.h"
+#include "core/pipeline_statistics.h"
 #include "core/render_tree.h"
 #include "core/software_renderer.h"
 #include "core/style.h"
@@ -189,6 +190,21 @@ int main() {
     std::cout << "  rgb565_bytes=" << rgb565.size() << '\n';
     std::cout << "  flush_count=" << flush_probe_state.count << '\n';
     std::cout << "  flush_area=" << flush_probe_state.total_area << '\n';
+    const PipelineStatistics pipeline_statistics = collect_pipeline_statistics(PipelineStatisticsInput{
+        pipeline.document.get(),
+        pipeline.render_tree.get(),
+        pipeline.layout_tree.get(),
+        pipeline.layer_tree.get(),
+        nullptr,
+        &rgba,
+        nullptr,
+        nullptr,
+        nullptr,
+        sizeof(kHtml) + sizeof(kCss),
+    });
+    std::cout << "  estimated_pipeline_bytes=" << pipeline_statistics.estimated_heap_bytes << '\n';
+    std::cout << "  framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes << '\n';
+    std::cout << "  resource_bytes=" << pipeline_statistics.resource_bytes << '\n';
     std::cout << "  button_clicks=" << button_clicks << '\n';
     std::cout << "  checkbox_checked=" << (ensure_form_control_state(*checkbox).checked ? "true" : "false") << '\n';
     std::cout << "  select_value=" << form_control_display_text(*select) << '\n';
