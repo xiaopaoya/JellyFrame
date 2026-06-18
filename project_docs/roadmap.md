@@ -68,21 +68,20 @@ Completed or first-cut:
   and package-scoped capability checks
 - `tools/package_app.py` packer that validates packages and emits a generated
   C++ resource table plus JSON report
+- `schemas/jellyframe.app.schema.json` for editor and CI manifest validation
 - pseudo-browser `--app` source-package preview path
 - first package sample under `examples/apps/watch_weather`
 - ESP32-S3 bring-up resources now use the top-level packer
 
 Next packaging steps:
 
-1. Add JSON schema for `jellyframe.app.json` so editors and CI can validate it
-   without running a full package build.
-2. Extend the developer CLI with font-pack generation and target presets.
-3. Add package templates for weather, clock, timer and calculator apps.
-4. Add optional target presets that map viewport, default budgets, font profile
+1. Extend the developer CLI with font-pack generation and target presets.
+2. Add package templates for weather, clock, timer and calculator apps.
+3. Add optional target presets that map viewport, default budgets, font profile
    and output kind.
-5. Build a VS Code extension on top of the CLI: schema association, one-click
+4. Build a VS Code extension on top of the CLI: schema association, one-click
    preview/package, report panel and inline capability warnings.
-6. Consider a standalone visual tool only after the CLI/plugin workflow proves
+5. Consider a standalone visual tool only after the CLI/plugin workflow proves
    insufficient for non-programmer app authors.
 
 ## Compatibility Short Track: Modern CSS authoring subset

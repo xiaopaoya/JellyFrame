@@ -57,19 +57,19 @@ M11 是可穿戴 app runtime 中的打包部分。目标开发体验应先做 CL
 - 顶层 `tools/jellyframe_cli.py` developer CLI，支持 validate/package/preview
   和 package-scoped capability checks
 - `tools/package_app.py` packer，可校验 package，并输出 C++ 资源表和 JSON report
+- `schemas/jellyframe.app.schema.json`，用于编辑器和 CI 校验 manifest
 - pseudo browser `--app` 源包预览路径
 - `examples/apps/watch_weather` 第一份 package sample
 - ESP32-S3 bring-up 资源已改用顶层 packer
 
 下一步 packaging 工作：
 
-1. 增加 `jellyframe.app.json` JSON schema，让编辑器和 CI 不必完整打包也能校验。
-2. 扩展 developer CLI，加入 font-pack generation 和 target presets。
-3. 增加 weather、clock、timer、calculator package 模板。
-4. 增加可选 target presets，映射 viewport、默认 budgets、font profile 和 output kind。
-5. 在 CLI 之上做 VS Code extension：schema association、一键 preview/package、报告面板和
+1. 扩展 developer CLI，加入 font-pack generation 和 target presets。
+2. 增加 weather、clock、timer、calculator package 模板。
+3. 增加可选 target presets，映射 viewport、默认 budgets、font profile 和 output kind。
+4. 在 CLI 之上做 VS Code extension：schema association、一键 preview/package、报告面板和
    inline capability warnings。
-6. 只有当 CLI/plugin 工作流无法满足非程序员 app 作者时，再考虑独立可视化工具。
+5. 只有当 CLI/plugin 工作流无法满足非程序员 app 作者时，再考虑独立可视化工具。
 
 ## 兼容性短线：现代 CSS authoring 子集
 

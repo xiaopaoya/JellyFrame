@@ -61,6 +61,7 @@ my_app/
 
 ```json
 {
+  "$schema": "../../../schemas/jellyframe.app.schema.json",
   "format": "jellyframe.app",
   "formatVersion": 0,
   "id": "com.example.weather",
@@ -108,6 +109,12 @@ my_app/
   "permissions": ["network"],
   "capabilities": ["network.fetch"]
 }
+```
+
+schema 位于 `schemas/jellyframe.app.schema.json`。developer CLI 可以输出 schema 或其路径：
+
+```powershell
+python tools/jellyframe_cli.py schema --print-path
 ```
 
 影响运行兼容性的字段应由 packer 强制要求：

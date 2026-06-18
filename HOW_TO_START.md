@@ -361,6 +361,12 @@ python tools\jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+Print the manifest schema path for editor setup:
+
+```powershell
+python tools\jellyframe_cli.py schema --print-path
+```
+
 When an example renders badly, inspect in this order:
 
 1. `jellyframe_capability_check`

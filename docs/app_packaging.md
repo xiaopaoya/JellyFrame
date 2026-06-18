@@ -83,6 +83,7 @@ desktop tools, not by the MCU runtime:
 
 ```json
 {
+  "$schema": "../../../schemas/jellyframe.app.schema.json",
   "format": "jellyframe.app",
   "formatVersion": 0,
   "id": "com.example.weather",
@@ -130,6 +131,13 @@ desktop tools, not by the MCU runtime:
   "permissions": ["network"],
   "capabilities": ["network.fetch"]
 }
+```
+
+The schema is stored at `schemas/jellyframe.app.schema.json`. The developer CLI
+can print it or its path:
+
+```powershell
+python tools/jellyframe_cli.py schema --print-path
 ```
 
 Fields that affect runtime compatibility must be required by the packer:

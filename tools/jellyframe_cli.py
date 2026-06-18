@@ -39,6 +39,13 @@ def package_script() -> Path:
     return path
 
 
+def schema_path() -> Path:
+    path = repo_root() / "schemas" / "jellyframe.app.schema.json"
+    if not path.is_file():
+        raise SystemExit(f"missing schema: {path}")
+    return path
+
+
 def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
     command = [
         sys.executable,
@@ -115,6 +122,15 @@ def cmd_check(args: argparse.Namespace) -> int:
     return run_command(command)
 
 
+def cmd_schema(args: argparse.Namespace) -> int:
+    path = schema_path()
+    if args.print_path:
+        print(path)
+    else:
+        print(path.read_text(encoding="utf-8"), end="")
+    return 0
+
+
 def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
@@ -151,6 +167,10 @@ def main() -> int:
     check.add_argument("--font-budget", help="Optional glyph size such as 16x16 for font budget estimates.")
     check.add_argument("--emit-used-chars", type=Path, help="Optional output file for used non-ASCII characters.")
     check.set_defaults(func=cmd_check)
+
+    schema = subparsers.add_parser("schema", help="Print the JellyFrame app manifest JSON schema.")
+    schema.add_argument("--print-path", action="store_true", help="Print only the schema file path.")
+    schema.set_defaults(func=cmd_schema)
 
     args = parser.parse_args()
     return args.func(args)

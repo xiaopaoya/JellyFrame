@@ -344,6 +344,12 @@ python tools\jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+输出 manifest schema 路径，便于编辑器配置：
+
+```powershell
+python tools\jellyframe_cli.py schema --print-path
+```
+
 如果页面渲染不对，建议按这个顺序排查：
 
 1. `jellyframe_capability_check`

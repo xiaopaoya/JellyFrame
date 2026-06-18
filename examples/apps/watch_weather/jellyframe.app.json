@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/jellyframe.app.schema.json",
   "format": "jellyframe.app",
   "formatVersion": 0,
   "id": "org.jellyframe.examples.weather",

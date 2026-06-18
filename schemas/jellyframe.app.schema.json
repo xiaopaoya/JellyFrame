@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jellyframe.dev/schemas/jellyframe.app.schema.json",
+  "title": "JellyFrame App Manifest",
+  "description": "Manifest for JellyFrame app source packages.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "id",
+    "version",
+    "entry",
+    "runtime",
+    "viewport",
+    "budgets",
+    "targets"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "jellyframe.app"
+    },
+    "formatVersion": {
+      "const": 0
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "code"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "entry": {
+      "$ref": "#/$defs/appPath"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minJellyFrame", "script"],
+      "properties": {
+        "minJellyFrame": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "script": {
+          "enum": ["none", "classic"]
+        }
+      }
+    },
+    "viewport": {
+      "$ref": "#/$defs/designViewport"
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxResourceBytes"],
+      "properties": {
+        "maxResourceBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDomNodes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxCssRules": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDisplayCommands": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxTimers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxEventListeners": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "fonts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "profile"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "$ref": "#/$defs/relativePath"
+          },
+          "profile": {
+            "enum": [
+              "tiny",
+              "tiny-plus-symbols",
+              "app-subset-cn",
+              "cn-standard",
+              "global-product"
+            ]
+          },
+          "sizes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1
+          },
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "targets": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["viewport", "output"],
+        "properties": {
+          "viewport": {
+            "$ref": "#/$defs/runtimeViewport"
+          },
+          "fontProfile": {
+            "enum": [
+              "tiny",
+              "tiny-plus-symbols",
+              "app-subset-cn",
+              "cn-standard",
+              "global-product"
+            ]
+          },
+          "output": {
+            "enum": ["cpp", "debug-dir"]
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "enum": ["network"]
+      },
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "enum": ["network.fetch"]
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "appPath": {
+      "type": "string",
+      "pattern": "^/([^./][^?#]*|[^?#]*[^.][^?#]*)$",
+      "not": {
+        "pattern": "(^|/)\\.\\.(/|$)"
+      }
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^[a-zA-Z][a-zA-Z0-9+.-]*:"
+          },
+          {
+            "pattern": "^//"
+          },
+          {
+            "pattern": "(^|/)\\.\\.(/|$)"
+          }
+        ]
+      }
+    },
+    "designViewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["designWidth", "designHeight"],
+      "properties": {
+        "designWidth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "designHeight": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "shape": {
+          "enum": ["rect", "round"]
+        }
+      }
+    },
+    "runtimeViewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "shape": {
+          "enum": ["rect", "round"]
+        }
+      }
+    }
+  }
+}
