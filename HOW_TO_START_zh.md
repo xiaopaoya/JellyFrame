@@ -371,6 +371,18 @@ python tools\jellyframe_cli.py schema --print-path
 python tools\jellyframe_cli.py targets
 ```
 
+列出并创建 source-package 模板：
+
+```powershell
+python tools\jellyframe_cli.py templates
+python tools\jellyframe_cli.py new `
+  --template calculator `
+  --output build\my_calculator `
+  --id org.example.calculator `
+  --name Calculator `
+  --target round-300
+```
+
 如果页面渲染不对，建议按这个顺序排查：
 
 1. `jellyframe_capability_check`

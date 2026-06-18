@@ -328,7 +328,8 @@ available. `schemas/jellyframe.app.schema.json` provides editor/CI validation
 for the manifest. Built-in target presets provide first reusable viewport,
 budget, font-profile and framebuffer defaults. The developer CLI now includes a
 `font` workflow that collects used characters and can invoke the BDF bitmap font
-header generator.
+header generator. Built-in source-package templates cover weather, clock, timer
+and calculator apps.
 
 Tasks:
 
@@ -341,6 +342,8 @@ Tasks:
   resource and reference data; the CLI wrapper can validate packages, generate
   resource tables, preview packages, run package-scoped capability checks and
   produce bitmap font headers from collected package characters.
+- Provide starter packages for common watch apps. Weather, clock, timer and
+  calculator templates are available through `jellyframe_cli.py new`.
 - Keep package resource loading filesystem-free and network-free in the core;
   runtime network requests are represented as manifest capabilities for future
   host APIs.

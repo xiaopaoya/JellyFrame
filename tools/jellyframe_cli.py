@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -48,6 +50,10 @@ def schema_path() -> Path:
 
 def target_presets_dir() -> Path:
     return repo_root() / "presets" / "targets"
+
+
+def app_templates_dir() -> Path:
+    return repo_root() / "templates" / "apps"
 
 
 def load_target_config(target: str) -> dict:
@@ -102,6 +108,19 @@ def list_target_presets() -> list[dict]:
     for path in sorted(directory.glob("*.json")):
         presets.append(json.loads(path.read_text(encoding="utf-8")))
     return presets
+
+
+def list_app_templates() -> list[str]:
+    directory = app_templates_dir()
+    if not directory.is_dir():
+        return []
+    return sorted(path.name for path in directory.iterdir() if path.is_dir())
+
+
+def validate_app_id(value: str) -> None:
+    if re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", value):
+        return
+    raise SystemExit(f"invalid app id: {value}")
 
 
 def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
@@ -247,6 +266,67 @@ def cmd_targets(args: argparse.Namespace) -> int:
     return 0
 
 
+def update_template_manifest(manifest_path: Path, args: argparse.Namespace) -> None:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if args.app_id:
+        validate_app_id(args.app_id)
+        manifest["id"] = args.app_id
+    if args.name:
+        manifest["name"] = args.name
+    if args.target:
+        target_config = load_target_config(args.target)
+        if not target_config:
+            raise SystemExit(f"unknown target preset: {args.target}")
+        viewport = target_config.get("viewport", {})
+        if isinstance(viewport, dict):
+            width = int(viewport.get("width", 0) or 0)
+            height = int(viewport.get("height", 0) or 0)
+            shape = viewport.get("shape", "rect")
+            manifest["viewport"] = {
+                "designWidth": width,
+                "designHeight": height,
+                "shape": shape,
+            }
+            target_entry = {
+                "viewport": viewport,
+                "fontProfile": target_config.get("fontProfile", "tiny-plus-symbols"),
+                "output": target_config.get("output", "cpp"),
+            }
+            for key in ("budgets", "framebuffer"):
+                if isinstance(target_config.get(key), dict):
+                    target_entry[key] = target_config[key]
+            manifest["targets"] = {
+                args.target: target_entry
+            }
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def cmd_templates(args: argparse.Namespace) -> int:
+    templates = list_app_templates()
+    if args.json:
+        print(json.dumps({"templates": templates}, ensure_ascii=False, indent=2))
+    else:
+        for name in templates:
+            print(name)
+    return 0
+
+
+def cmd_new(args: argparse.Namespace) -> int:
+    template_path = app_templates_dir() / args.template
+    if not template_path.is_dir():
+        available = ", ".join(list_app_templates()) or "<none>"
+        raise SystemExit(f"unknown template: {args.template}; available: {available}")
+    if args.output.exists() and not args.output.is_dir():
+        raise SystemExit(f"output path is not a directory: {args.output}")
+    if args.output.exists() and any(args.output.iterdir()):
+        raise SystemExit(f"output directory is not empty: {args.output}")
+    args.output.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(template_path, args.output, dirs_exist_ok=True)
+    update_template_manifest(args.output / "jellyframe.app.json", args)
+    print(f"created {args.template} app at {args.output}")
+    return 0
+
+
 def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
@@ -304,6 +384,18 @@ def main() -> int:
     targets = subparsers.add_parser("targets", help="List available target presets.")
     targets.add_argument("--json", action="store_true", help="Print presets as JSON.")
     targets.set_defaults(func=cmd_targets)
+
+    templates = subparsers.add_parser("templates", help="List available app templates.")
+    templates.add_argument("--json", action="store_true", help="Print templates as JSON.")
+    templates.set_defaults(func=cmd_templates)
+
+    new = subparsers.add_parser("new", help="Create a new source package from a template.")
+    new.add_argument("--template", required=True, choices=list_app_templates(), help="Template name.")
+    new.add_argument("--output", required=True, type=Path, help="Destination directory; must be missing or empty.")
+    new.add_argument("--id", dest="app_id", help="Manifest app id override.")
+    new.add_argument("--name", help="Manifest display name override.")
+    new.add_argument("--target", help="Optional target preset applied to manifest viewport and targets.")
+    new.set_defaults(func=cmd_new)
 
     args = parser.parse_args()
     return args.func(args)

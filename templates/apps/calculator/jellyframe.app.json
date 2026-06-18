@@ -1,0 +1,40 @@
+{
+  "$schema": "https://jellyframe.dev/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.template.calculator",
+  "name": "Calculator",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 131072,
+    "maxDomNodes": 512,
+    "maxCssRules": 256,
+    "maxDisplayCommands": 512,
+    "maxTimers": 2,
+    "maxEventListeners": 16
+  },
+  "targets": {
+    "round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "tiny",
+      "output": "cpp"
+    }
+  }
+}

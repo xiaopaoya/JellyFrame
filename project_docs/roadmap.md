@@ -73,17 +73,18 @@ Completed or first-cut:
   `esp32s3-round-300`
 - CLI `font` workflow that validates a package, emits used characters and can
   generate a bitmap font header from BDF input
+- built-in app templates for weather, clock, timer and calculator, plus CLI
+  creation through `jellyframe_cli.py new`
 - pseudo-browser `--app` source-package preview path
 - first package sample under `examples/apps/watch_weather`
 - ESP32-S3 bring-up resources now use the top-level packer
 
 Next packaging steps:
 
-1. Add package templates for weather, clock, timer and calculator apps.
-2. Add more target presets as hardware requirements become concrete.
-3. Build a VS Code extension on top of the CLI: schema association, one-click
+1. Add more target presets as hardware requirements become concrete.
+2. Build a VS Code extension on top of the CLI: schema association, one-click
    preview/package, report panel and inline capability warnings.
-4. Consider a standalone visual tool only after the CLI/plugin workflow proves
+3. Consider a standalone visual tool only after the CLI/plugin workflow proves
    insufficient for non-programmer app authors.
 
 ## Compatibility Short Track: Modern CSS authoring subset

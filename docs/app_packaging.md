@@ -146,6 +146,19 @@ Built-in target presets live under `presets/targets`. List them with:
 python tools/jellyframe_cli.py targets
 ```
 
+Built-in source-package templates live under `templates/apps`. List and create
+them with:
+
+```powershell
+python tools/jellyframe_cli.py templates
+python tools/jellyframe_cli.py new `
+  --template calculator `
+  --output build/my_calculator `
+  --id org.example.calculator `
+  --name Calculator `
+  --target round-300
+```
+
 When `--target id` is used, the packer first loads `presets/targets/id.json`
 when present, then overlays any same-named manifest `targets[id]` settings.
 Manifest-only custom targets are also allowed; unknown targets fail explicitly.
@@ -340,6 +353,10 @@ package-resource warnings.
 
 `tools/package_app.py` remains the lower-level packer used by the CLI and
 embedded build integrations.
+
+The built-in weather, clock, timer and calculator templates are ordinary source
+packages. They cover event delegation, `dataset`, timers, grid layout and form
+controls without adding another app framework above HTML/CSS/JS.
 
 References:
 

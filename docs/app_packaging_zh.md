@@ -123,6 +123,18 @@ python tools/jellyframe_cli.py schema --print-path
 python tools/jellyframe_cli.py targets
 ```
 
+内置 source-package 模板位于 `templates/apps`。可以这样列出并创建：
+
+```powershell
+python tools/jellyframe_cli.py templates
+python tools/jellyframe_cli.py new `
+  --template calculator `
+  --output build/my_calculator `
+  --id org.example.calculator `
+  --name Calculator `
+  --target round-300
+```
+
 使用 `--target id` 时，packer 会先加载存在的 `presets/targets/id.json`，再叠加
 manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 target 也允许；
 完全未知的 target 会明确失败。
@@ -300,6 +312,10 @@ JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 targ
 资源大小、CRC32/SHA-256 校验、local/remote reference 诊断和 package-resource warnings。
 
 `tools/package_app.py` 仍作为 CLI 和嵌入式构建集成使用的底层 packer。
+
+内置 weather、clock、timer 和 calculator 模板都是普通 source package。它们覆盖
+event delegation、`dataset`、timers、grid layout 和 form controls，不会在
+HTML/CSS/JS 之上再引入一层 app framework。
 
 参考资料：
 

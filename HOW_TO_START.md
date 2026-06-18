@@ -388,6 +388,18 @@ List target presets:
 python tools\jellyframe_cli.py targets
 ```
 
+List and create source-package templates:
+
+```powershell
+python tools\jellyframe_cli.py templates
+python tools\jellyframe_cli.py new `
+  --template calculator `
+  --output build\my_calculator `
+  --id org.example.calculator `
+  --name Calculator `
+  --target round-300
+```
+
 When an example renders badly, inspect in this order:
 
 1. `jellyframe_capability_check`
