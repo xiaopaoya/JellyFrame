@@ -21,6 +21,8 @@ JellyFrame Engine 的重要变更记录在这里。
   package/resource loader、inline style parser 和 software renderer/paint fallback 也会报告触发字段。
 - 添加 `jellyframe_pseudo_browser --diagnostics-json`，用于输出结构化桌面报告，
   覆盖管线统计、脚本状态、package 资源加载和各组件 diagnostics。
+- 添加 GitHub Actions CI workflow：构建 Windows 验证目标，运行核心测试，检查
+  Python/VS Code 工具，并执行 package 管线 diagnostics smoke。
 
 ### 变更
 

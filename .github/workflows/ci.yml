@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows build and smoke tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build
+          -DJELLYFRAME_BUILD_EXAMPLES=ON
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_BUILD_BENCHMARKS=ON
+          -DJELLYFRAME_BUILD_SCRIPTING=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Run CTest
+        shell: pwsh
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Check Python tools
+        shell: pwsh
+        run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py
+
+      - name: Check VS Code helper
+        shell: pwsh
+        run: |
+          node --check tools\vscode-jellyframe\extension.js
+          node -e "JSON.parse(require('fs').readFileSync('tools/vscode-jellyframe/package.json','utf8'))"
+
+      - name: Run package diagnostics smoke tests
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build\ci | Out-Null
+          python tools\jellyframe_cli.py check `
+            --root samples\apps\packages\watch_weather `
+            --target round-300 `
+            --report build\ci\watch_weather.check.report.json `
+            --build-dir build\Release
+          python tools\jellyframe_cli.py preview `
+            --root samples\apps\packages\watch_weather `
+            --target round-300 `
+            --output build\ci\watch_weather.ppm `
+            --report build\ci\watch_weather.preview.report.json `
+            --build-dir build\Release
+          python tools\jellyframe_cli.py package `
+            --root samples\apps\packages\watch_weather `
+            --target round-300 `
+            --output-cpp build\ci\watch_weather_resources.cpp `
+            --report build\ci\watch_weather.package.report.json `
+            --build-dir build\Release
+
+      - name: Verify pipeline diagnostics report
+        shell: pwsh
+        run: |
+          @'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("build/ci/watch_weather.package.report.json").read_text(encoding="utf-8"))
+          pipeline = report.get("pipelineDiagnostics", {})
+          summary = pipeline.get("summary", {})
+          assert pipeline.get("format") == "jellyframe.pipeline.diagnostics"
+          assert int(summary.get("error", 0)) == 0
+          print("pipelineDiagnostics", summary)
+          '@ | python -
+
+      - name: Check whitespace
+        shell: pwsh
+        run: git diff --check

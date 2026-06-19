@@ -1,5 +1,7 @@
 # JellyFrame
 
+[![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
+
 JellyFrame is a compact C++ HTML/CSS/JS UI runtime for low-power wearable and
 embedded devices. It keeps the parts of a browser pipeline that are useful for
 local app UI, then cuts browser features that are too costly or unpredictable

@@ -26,6 +26,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `jellyframe_pseudo_browser --diagnostics-json`, a structured desktop
   report for pipeline statistics, script status, package resource loads and
   component diagnostics.
+- Added a GitHub Actions CI workflow that builds the Windows validation target,
+  runs core tests, checks Python/VS Code tooling and exercises package pipeline
+  diagnostics.
 
 ### Changed
 
