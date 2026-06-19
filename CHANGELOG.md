@@ -8,6 +8,22 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added `.jffont` V0 binary font supplement output to
+  `jellyframe_font_pack_gen`, reusing the existing `BitmapFont` glyph data model
+  without C++ pointers or compile-time symbols as groundwork for future dynamic
+  in-bundle `.jfapp` fonts.
+- Added `BitmapFontResource`, which parses `.jffont` bytes into a read-only
+  `BitmapFont` view that reuses the existing bitmap font measurement and
+  painting backend.
+- Added `AppFontSet` and wired it into `AppRuntimeHost` so `.jffont` resources
+  load, clear and switch with `app_instance_id`; the Win32 package loader reads
+  manifest `fonts` declarations and attaches `.jffont` resources to the current
+  runtime state.
+- Added `--use-app-fonts` to the Win32 browser shell so in-bundle `.jffont`
+  resources can explicitly participate in layout and paint for dynamic font
+  supplement validation; the default path still uses GDI text.
+- `jellyframe_cli.py package/check/preview/install` now runs font resource
+  preflight by default; `--no-font-check` skips it explicitly.
 - Added shared `PipelineStatistics` accounting for DOM, render, layout, layer,
   display-list, framebuffer, resource and arena usage.
 - Added arena capacity and waste accounting so embedded benchmarks can separate

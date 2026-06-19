@@ -191,8 +191,11 @@ Embedded backends can provide:
 - vendor font engine;
 - shaping-capable text painter for production scripts that need it.
 
-Do not put font loading into the core yet. Measurement and painting should come
-from the same host font engine to avoid clipping and mismatched wrapping. See
+Do not let the render core read or parse arbitrary font files by itself. The
+current production path is compile-time bitmap font packs; future high-priority
+`.jfapp` dynamic font supplements should still enter through a controlled font
+resource provider and the same host text backend. Measurement and painting must
+come from the same glyph metrics to avoid clipping and mismatched wrapping. See
 `src/render_core/docs/text_backend.md`.
 
 ## Input Backend

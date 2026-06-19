@@ -206,12 +206,22 @@ ctest --test-dir build -C Release --output-on-failure
 `jellyframe.app.json`，包括 design viewport、本地 linked CSS 和文档脚本。
 散文件 HTML/CSS 参数仍适合小 fixture，但它们不会应用 package manifest 设置。
 
-通过 Win32/GDI 文本路径截图：
+通过 Win32 默认 GDI 文本路径截图：
 
 ```powershell
 .\build\Release\jellyframe_win32_browser.exe --capture `
   calculator.ppm `
   --app tools\templates\apps\calculator
+```
+
+如果 package manifest 声明了 `.jffont` 字体补充包，可显式验收包内 bitmap 字体是否参与
+layout 和 paint：
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --capture `
+  calculator_font.ppm `
+  --app tools\templates\apps\calculator `
+  --use-app-fonts
 ```
 
 检查中间结构：
@@ -292,7 +302,7 @@ Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 c
 | `jellyframe_pseudo_browser.exe` | 从独立 HTML/CSS 跑 render-core 管线并写出 BMP/PPM 图片。用于无交互渲染验收。 |
 | `jellyframe_win32_browser.exe` | Windows-only 交互式系统壳 mock，用于 app package、输入、脚本和 Win32/GDI 文本测量/绘制。 |
 | `jellyframe_font_resource_check.exe` | 仅保留用于字体/资源准备：输出非 ASCII 使用字符、估算 bitmap font 预算并验证字体覆盖。文本检索式兼容性扫描已弃用。 |
-| `jellyframe_font_pack_gen.exe` | 把 BDF bitmap font 和 used-character list 转成 C++ `BitmapFont` header。 |
+| `jellyframe_font_pack_gen.exe` | 把 BDF bitmap font 和 used-character list 转成 C++ `BitmapFont` header，或 `.jffont` V0 二进制字体补充包。 |
 | `jellyframe_embedded_host_demo.exe` | 来自 `ports/embedded_host_demo` 的平台无关 port bring-up demo，使用静态资源、bitmap text 和 RGB565 framebuffer。 |
 | `jellyframe_render_core_microbench.exe` | 跑 parser/render/layout/layer/flatten 微基准。 |
 | `jellyframe_app_runtime_microbench.exe` | 跑 app-runtime queue/completion/host-handle 微基准。 |

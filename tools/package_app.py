@@ -27,6 +27,7 @@ KIND_BY_SUFFIX = {
     ".bmp": "jellyframe::HostResourceKind::Image",
     ".bdf": "jellyframe::HostResourceKind::Font",
     ".fnt": "jellyframe::HostResourceKind::Font",
+    ".jffont": "jellyframe::HostResourceKind::Font",
     ".ttf": "jellyframe::HostResourceKind::Font",
     ".otf": "jellyframe::HostResourceKind::Font",
     ".woff": "jellyframe::HostResourceKind::Font",
@@ -161,6 +162,30 @@ def validate_manifest(manifest: dict) -> dict:
     capabilities = manifest.get("capabilities", [])
     if not isinstance(capabilities, list):
         capabilities = []
+    fonts = []
+    raw_fonts = manifest.get("fonts", [])
+    if raw_fonts and not isinstance(raw_fonts, list):
+        fail("manifest fonts must be an array")
+    if isinstance(raw_fonts, list):
+        for index, font in enumerate(raw_fonts):
+            if not isinstance(font, dict):
+                fail(f"manifest fonts[{index}] must be an object")
+            font_id = font.get("id", "")
+            source = font.get("source", "")
+            profile = font.get("profile", "")
+            if not isinstance(font_id, str) or not font_id:
+                fail(f"manifest fonts[{index}].id is required")
+            if not isinstance(source, str) or not source:
+                fail(f"manifest fonts[{index}].source is required")
+            if not isinstance(profile, str) or not profile:
+                fail(f"manifest fonts[{index}].profile is required")
+            fonts.append({
+                "id": font_id,
+                "source": normalize_app_path(source),
+                "profile": profile,
+                "sizes": font.get("sizes", []),
+                "weights": font.get("weights", []),
+            })
     targets = manifest.get("targets", {})
     if not isinstance(targets, dict):
         targets = {}
@@ -179,6 +204,7 @@ def validate_manifest(manifest: dict) -> dict:
         "script": runtime.get("script", "classic"),
         "viewport": viewport,
         "budgets": budgets,
+        "fonts": fonts,
         "targets": targets,
         "permissions": permissions,
         "capabilities": capabilities,
@@ -454,6 +480,21 @@ def collect_reference_diagnostics(root: Path, resources: list[dict], entry: str)
     return warnings, references
 
 
+def collect_manifest_font_diagnostics(manifest: dict, resources: list[dict]) -> list[dict]:
+    resources_by_path = {resource["path"] for resource in resources}
+    warnings = []
+    for font in manifest.get("fonts", []):
+        source = font.get("source", "") if isinstance(font, dict) else ""
+        if source and source not in resources_by_path:
+            warnings.append({
+                "level": "warning",
+                "code": "missing-font-resource",
+                "message": f"manifest font source is not packaged: {source}",
+                "source": "jellyframe.app.json",
+            })
+    return warnings
+
+
 def write_cpp(resources: list[dict], output: Path, namespace: str, include: str) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8", newline="\n") as generated:
@@ -645,6 +686,7 @@ def main() -> int:
     resources = discover_resources(root, max_resource_bytes)
     reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
     warnings.extend(reference_warnings)
+    warnings.extend(collect_manifest_font_diagnostics(manifest, resources))
 
     if not args.validate_only:
         if not args.output_cpp and not args.output_bundle and not args.debug_dir:

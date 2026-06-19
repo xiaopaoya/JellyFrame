@@ -28,6 +28,7 @@ endif()
 add_library(jellyframe_render_core
     src/render_core/arena.cpp
     src/render_core/bitmap_font.cpp
+    src/render_core/bitmap_font_resource.cpp
     src/render_core/css_parser.cpp
     src/render_core/display_invalidation.cpp
     src/render_core/dirty_region.cpp
@@ -70,6 +71,7 @@ else()
 endif()
 
 add_library(jellyframe_app_runtime
+    src/app_runtime/app_font_set.cpp
     src/app_runtime/app_host.cpp
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/host_services.cpp

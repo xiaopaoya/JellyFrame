@@ -32,6 +32,7 @@ struct AppPackageManifest {
     int viewport_width = 0;
     int viewport_height = 0;
     bool network_allowed = false;
+    std::vector<std::string> font_sources;
 };
 
 struct BundleResourceEntry {
@@ -435,6 +436,89 @@ inline bool json_array_contains_string(const std::string& json, std::string_view
     return json.substr(open, close - open).find("\"" + std::string(expected) + "\"") != std::string::npos;
 }
 
+inline std::vector<std::string> json_collect_object_string_values(const std::string& json,
+                                                                  std::string_view array_key,
+                                                                  std::string_view field_key) {
+    std::vector<std::string> values;
+    const std::string array_needle = "\"" + std::string(array_key) + "\"";
+    const std::string field_needle = "\"" + std::string(field_key) + "\"";
+    const std::size_t key_pos = json.find(array_needle);
+    if (key_pos == std::string::npos) {
+        return values;
+    }
+    const std::size_t open = json.find('[', key_pos + array_needle.size());
+    if (open == std::string::npos) {
+        return values;
+    }
+
+    int array_depth = 0;
+    bool in_string = false;
+    bool escaped = false;
+    std::size_t close = std::string::npos;
+    for (std::size_t index = open; index < json.size(); ++index) {
+        const char ch = json[index];
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '[') {
+            ++array_depth;
+        } else if (ch == ']') {
+            --array_depth;
+            if (array_depth == 0) {
+                close = index;
+                break;
+            }
+        }
+    }
+    if (close == std::string::npos) {
+        return values;
+    }
+
+    std::size_t cursor = open + 1;
+    while (cursor < close) {
+        const std::size_t field_pos = json.find(field_needle, cursor);
+        if (field_pos == std::string::npos || field_pos >= close) {
+            break;
+        }
+        const std::size_t colon = json.find(':', field_pos + field_needle.size());
+        if (colon == std::string::npos || colon >= close) {
+            break;
+        }
+        std::size_t quote = json.find('"', colon + 1);
+        if (quote == std::string::npos || quote >= close) {
+            break;
+        }
+        std::string parsed;
+        for (++quote; quote < close; ++quote) {
+            const char ch = json[quote];
+            if (ch == '"') {
+                values.push_back(std::move(parsed));
+                cursor = quote + 1;
+                break;
+            }
+            if (ch == '\\' && quote + 1 < close) {
+                const char escaped_ch = json[++quote];
+                parsed.push_back(escaped_ch == 'n' ? '\n' : escaped_ch);
+                continue;
+            }
+            parsed.push_back(ch);
+        }
+        if (quote >= close) {
+            break;
+        }
+    }
+    return values;
+}
+
 inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     AppPackageManifest manifest;
     json_find_string(json, "id", manifest.id);
@@ -458,6 +542,14 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     manifest.network_allowed =
         json_array_contains_string(json, "permissions", "network") ||
         json_array_contains_string(json, "capabilities", "network.fetch");
+    manifest.font_sources = json_collect_object_string_values(json, "fonts", "source");
+    for (std::string& source : manifest.font_sources) {
+        std::string normalized;
+        if (!normalize_app_path(source, normalized)) {
+            throw std::runtime_error("manifest font source must be a local app path");
+        }
+        source = std::move(normalized);
+    }
 
     std::string normalized_entry;
     if (!normalize_app_path(manifest.entry.empty() ? std::string_view{"/index.html"} : std::string_view{manifest.entry},

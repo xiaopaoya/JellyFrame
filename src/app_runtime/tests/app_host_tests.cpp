@@ -1,4 +1,5 @@
 #include "app_runtime/app_host.h"
+#include "render_core/software_renderer.h"
 
 #include <cassert>
 #include <vector>
@@ -13,13 +14,32 @@ AppRuntimeHost make_host() {
         2,
         4,
         4096,
+        2,
     });
+}
+
+const std::vector<std::uint8_t>& tiny_jffont_bytes() {
+    static const std::vector<std::uint8_t> bytes = {
+        'J', 'F', 'F', 'O', 'N', 'T', '0', 0,
+        0x20, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+        0x08, 0x08, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00,
+        0x40, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00,
+        0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x07, 0x00, 0x00, 0x00, 0x05, 0x07, 0x06, 0x01,
+        0x2d, 0x4e, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
+        0x08, 0x00, 0x00, 0x00, 0x08, 0x08, 0x08, 0x01,
+        0x20, 0x50, 0x88, 0xf8, 0x88, 0x88, 0x88,
+        0x10, 0x10, 0xfe, 0x92, 0x92, 0xfe, 0x10, 0x10,
+    };
+    return bytes;
 }
 
 void current_instance_submission_and_handles_are_scoped() {
     AppRuntimeHost host = make_host();
     assert(!host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
     assert(host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 16) == 0);
+    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
+    assert(host.load_current_jffont(bytes.data(), bytes.size()).status == AppFontLoadStatus::EmptyInstance);
 
     const AppInstance app = host.launch("org.example.app", AppRole::App);
     const auto submitted = host.submit_current(HostServiceJobKind::NetworkFetch, 0, 3, 1000);
@@ -57,6 +77,45 @@ void launch_cleans_previous_instance_state() {
     assert(host.requests().empty());
     assert(host.completions().empty());
     assert(host.handles().active_count() == 0);
+}
+
+void app_fonts_follow_active_instance_lifecycle() {
+    AppRuntimeHost host = make_host();
+    const AppInstance first = host.launch("org.example.first", AppRole::App);
+    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
+    const AppFontLoadResult loaded = host.load_current_jffont(bytes.data(), bytes.size());
+    assert(loaded.loaded());
+    assert(host.fonts().size() == 1);
+    assert(host.fonts().app_instance_id() == first.id);
+
+    TextMetrics metrics;
+    TextMeasureProvider provider = host.fonts().measure_provider();
+    assert(provider.measure("A\xe4\xb8\xad", 8, 400, &metrics, provider.context));
+    assert(metrics.width == 14);
+    assert(metrics.line_height == 8);
+
+    FrameBuffer frame(32, 16, Color{255, 255, 255, 255});
+    TextPainter painter = host.fonts().painter();
+    assert(painter.paint(frame,
+                         Rect{0, 0, 32, 16},
+                         Color{0, 0, 0, 255},
+                         "A",
+                         8,
+                         400,
+                         TextCommandAlign::Start,
+                         true,
+                         painter.context));
+    assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
+
+    const AppInstance second = host.launch("org.example.second", AppRole::App);
+    assert(second.id == first.id + 1);
+    assert(host.fonts().empty());
+    assert(host.load_current_jffont(bytes.data(), bytes.size()).loaded());
+
+    const AppTeardownResult teardown = host.exit_current();
+    assert(teardown.app_instance_id == second.id);
+    assert(teardown.released_font_resources == 1);
+    assert(host.fonts().empty());
 }
 
 void frame_pump_limits_completions_and_filters_stale_instances() {
@@ -116,11 +175,13 @@ void options_follow_host_capabilities() {
     assert(options.max_completion_events_per_frame == 3);
     assert(options.max_host_handles == 5);
     assert(options.max_host_handle_bytes == 2048);
+    assert(options.max_app_fonts == 1);
 
     AppRuntimeHost host(options);
     assert(host.requests().capacity() == 7);
     assert(host.completions().capacity() == 7);
     assert(host.handles().capacity() == 5);
+    assert(host.fonts().capacity() == 1);
     assert(host.max_completion_events_per_frame() == 3);
 }
 
@@ -129,6 +190,7 @@ void options_follow_host_capabilities() {
 int main() {
     current_instance_submission_and_handles_are_scoped();
     launch_cleans_previous_instance_state();
+    app_fonts_follow_active_instance_lifecycle();
     frame_pump_limits_completions_and_filters_stale_instances();
     options_follow_host_capabilities();
     return 0;

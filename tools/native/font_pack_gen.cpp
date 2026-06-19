@@ -17,6 +17,7 @@ struct Options {
     std::string bdf_path;
     std::string chars_path;
     std::string output_path;
+    std::string output_binary_path;
     std::string symbol = "jellyframe_embedded_font";
     bool allow_missing = false;
 };
@@ -78,6 +79,8 @@ Options parse_options(int argc, char** argv) {
             options.chars_path = require_value("--chars");
         } else if (arg == "--output") {
             options.output_path = require_value("--output");
+        } else if (arg == "--output-binary") {
+            options.output_binary_path = require_value("--output-binary");
         } else if (arg == "--name") {
             options.symbol = sanitize_symbol(require_value("--name"));
         } else if (arg == "--allow-missing") {
@@ -86,9 +89,11 @@ Options parse_options(int argc, char** argv) {
             throw std::runtime_error("unknown option: " + arg);
         }
     }
-    if (options.bdf_path.empty() || options.chars_path.empty() || options.output_path.empty()) {
+    if (options.bdf_path.empty() || options.chars_path.empty() ||
+        (options.output_path.empty() && options.output_binary_path.empty())) {
         throw std::runtime_error("usage: jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt "
-                                 "--output font_pack.h [--name symbol] [--allow-missing]");
+                                 "[--output font_pack.h] [--output-binary font.jffont] "
+                                 "[--name symbol] [--allow-missing]");
     }
     return options;
 }
@@ -244,10 +249,57 @@ std::string codepoint_name(std::uint32_t codepoint) {
     return output.str();
 }
 
-void write_font_pack(const Options& options,
-                     const BdfFont& font,
-                     const std::set<std::uint32_t>& requested,
-                     const std::vector<std::uint32_t>& selected) {
+std::uint8_t checked_u8(int value, const char* field) {
+    if (value < 0 || value > 255) {
+        throw std::runtime_error(std::string("font ") + field + " is outside uint8 range");
+    }
+    return static_cast<std::uint8_t>(value);
+}
+
+void append_u16(std::vector<std::uint8_t>& output, std::uint16_t value) {
+    output.push_back(static_cast<std::uint8_t>(value & 0xffU));
+    output.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xffU));
+}
+
+void append_u32(std::vector<std::uint8_t>& output, std::uint32_t value) {
+    output.push_back(static_cast<std::uint8_t>(value & 0xffU));
+    output.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xffU));
+    output.push_back(static_cast<std::uint8_t>((value >> 16U) & 0xffU));
+    output.push_back(static_cast<std::uint8_t>((value >> 24U) & 0xffU));
+}
+
+void validate_glyph_for_pack(const Glyph& glyph) {
+    checked_u8(glyph.width, "width");
+    checked_u8(glyph.height, "height");
+    checked_u8(glyph.advance, "advance");
+    checked_u8(glyph.bytes_per_row, "bytes_per_row");
+}
+
+std::size_t selected_row_bytes(const BdfFont& font, const std::vector<std::uint32_t>& selected) {
+    std::size_t row_bytes = 0;
+    for (std::uint32_t codepoint : selected) {
+        row_bytes += font.glyphs.at(codepoint).rows.size();
+    }
+    return row_bytes;
+}
+
+void print_summary(const BdfFont& font,
+                   const std::set<std::uint32_t>& requested,
+                   const std::vector<std::uint32_t>& selected) {
+    constexpr std::size_t glyph_metadata_bytes = 16;
+    const std::size_t row_bytes = selected_row_bytes(font, selected);
+    const std::size_t glyph_table_bytes = selected.size() * glyph_metadata_bytes;
+    std::cerr << "requested=" << requested.size()
+              << " emitted=" << selected.size()
+              << " rows_bytes=" << row_bytes
+              << " glyph_table_estimated_bytes=" << glyph_table_bytes
+              << " total_estimated_bytes=" << (row_bytes + glyph_table_bytes)
+              << '\n';
+}
+
+void write_font_header(const Options& options,
+                       const BdfFont& font,
+                       const std::vector<std::uint32_t>& selected) {
     std::ofstream output(options.output_path, std::ios::binary);
     if (!output) {
         throw std::runtime_error("cannot write " + options.output_path);
@@ -259,6 +311,7 @@ void write_font_pack(const Options& options,
     output << "namespace jellyframe_generated {\n\n";
     for (std::uint32_t codepoint : selected) {
         const Glyph& glyph = font.glyphs.at(codepoint);
+        validate_glyph_for_pack(glyph);
         output << "static constexpr std::uint8_t " << options.symbol << "_rows_"
                << codepoint_name(codepoint) << "[] = {";
         for (std::size_t index = 0; index < glyph.rows.size(); ++index) {
@@ -284,19 +337,56 @@ void write_font_pack(const Options& options,
            << options.symbol << "_glyphs, " << selected.size() << ", "
            << std::max(1, font.line_height) << ", " << std::max(1, font.fallback_advance) << "};\n\n";
     output << "} // namespace jellyframe_generated\n";
+}
 
-    std::size_t row_bytes = 0;
+void write_font_binary(const Options& options,
+                       const BdfFont& font,
+                       const std::vector<std::uint32_t>& selected) {
+    constexpr std::uint16_t header_size = 32;
+    constexpr std::uint16_t version = 0;
+    constexpr std::uint32_t glyph_entry_size = 16;
+    const std::uint32_t glyph_count = static_cast<std::uint32_t>(selected.size());
+    const std::uint32_t glyph_table_offset = header_size;
+    const std::uint32_t row_data_offset = glyph_table_offset + glyph_count * glyph_entry_size;
+    const std::uint32_t row_data_size = static_cast<std::uint32_t>(selected_row_bytes(font, selected));
+
+    std::vector<std::uint8_t> data;
+    data.reserve(static_cast<std::size_t>(row_data_offset) + row_data_size);
+    const char magic[8] = {'J', 'F', 'F', 'O', 'N', 'T', '0', '\0'};
+    data.insert(data.end(), magic, magic + 8);
+    append_u16(data, header_size);
+    append_u16(data, version);
+    append_u32(data, glyph_count);
+    data.push_back(checked_u8(std::max(1, font.line_height), "line_height"));
+    data.push_back(checked_u8(std::max(1, font.fallback_advance), "fallback_advance"));
+    append_u16(data, 0);
+    append_u32(data, glyph_table_offset);
+    append_u32(data, row_data_offset);
+    append_u32(data, row_data_size);
+
+    std::uint32_t row_offset = 0;
     for (std::uint32_t codepoint : selected) {
-        row_bytes += font.glyphs.at(codepoint).rows.size();
+        const Glyph& glyph = font.glyphs.at(codepoint);
+        validate_glyph_for_pack(glyph);
+        append_u32(data, codepoint);
+        append_u32(data, row_offset);
+        append_u32(data, static_cast<std::uint32_t>(glyph.rows.size()));
+        data.push_back(static_cast<std::uint8_t>(glyph.width));
+        data.push_back(static_cast<std::uint8_t>(glyph.height));
+        data.push_back(static_cast<std::uint8_t>(glyph.advance));
+        data.push_back(static_cast<std::uint8_t>(glyph.bytes_per_row));
+        row_offset += static_cast<std::uint32_t>(glyph.rows.size());
     }
-    constexpr std::size_t glyph_metadata_bytes = 16;
-    const std::size_t glyph_table_bytes = selected.size() * glyph_metadata_bytes;
-    std::cerr << "requested=" << requested.size()
-              << " emitted=" << selected.size()
-              << " rows_bytes=" << row_bytes
-              << " glyph_table_estimated_bytes=" << glyph_table_bytes
-              << " total_estimated_bytes=" << (row_bytes + glyph_table_bytes)
-              << '\n';
+    for (std::uint32_t codepoint : selected) {
+        const std::vector<std::uint8_t>& rows = font.glyphs.at(codepoint).rows;
+        data.insert(data.end(), rows.begin(), rows.end());
+    }
+
+    std::ofstream output(options.output_binary_path, std::ios::binary);
+    if (!output) {
+        throw std::runtime_error("cannot write " + options.output_binary_path);
+    }
+    output.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
 }
 
 } // namespace
@@ -323,7 +413,13 @@ int main(int argc, char** argv) {
             std::cerr << '\n';
             return 1;
         }
-        write_font_pack(options, font, requested, selected);
+        if (!options.output_path.empty()) {
+            write_font_header(options, font, selected);
+        }
+        if (!options.output_binary_path.empty()) {
+            write_font_binary(options, font, selected);
+        }
+        print_summary(font, requested, selected);
         if (!missing.empty()) {
             std::cerr << "missing=" << missing.size() << " (allowed)\n";
         }

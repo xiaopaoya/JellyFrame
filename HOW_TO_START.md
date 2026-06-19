@@ -222,12 +222,22 @@ including the design viewport, local linked CSS and document scripts. Loose
 HTML/CSS arguments are still useful for focused fixtures, but they deliberately
 do not apply package manifest settings.
 
-Capture through the Win32/GDI text path:
+Capture through the default Win32/GDI text path:
 
 ```powershell
 .\build\Release\jellyframe_win32_browser.exe --capture `
   calculator.ppm `
   --app tools\templates\apps\calculator
+```
+
+If the package manifest declares a `.jffont` supplement, explicitly validate
+that the in-bundle bitmap font participates in layout and paint:
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --capture `
+  calculator_font.ppm `
+  --app tools\templates\apps\calculator `
+  --use-app-fonts
 ```
 
 Inspect intermediate structures:
@@ -309,7 +319,7 @@ CMake options are enabled.
 | `jellyframe_pseudo_browser.exe` | Runs the render-core pipeline from standalone HTML/CSS and writes a BMP/PPM image. It is the non-interactive render acceptance shell. |
 | `jellyframe_win32_browser.exe` | Windows-only interactive system-shell mock for app packages, input, scripting and Win32/GDI text measurement/painting. |
 | `jellyframe_font_resource_check.exe` | Retained only for font/resource preparation: emits non-ASCII used characters, estimates bitmap font budget and verifies font coverage. Text-search compatibility scanning is retired. |
-| `jellyframe_font_pack_gen.exe` | Converts a BDF bitmap font and used-character list into a C++ `BitmapFont` header. |
+| `jellyframe_font_pack_gen.exe` | Converts a BDF bitmap font and used-character list into a C++ `BitmapFont` header or a `.jffont` V0 binary font supplement. |
 | `jellyframe_embedded_host_demo.exe` | Platform-neutral port bring-up demo from `ports/embedded_host_demo`, using static resources, bitmap text and RGB565 framebuffer output. |
 | `jellyframe_render_core_microbench.exe` | Runs parser/render/layout/layer/flatten microbenchmarks. |
 | `jellyframe_app_runtime_microbench.exe` | Runs app-runtime queue/completion/host-handle microbenchmarks. |

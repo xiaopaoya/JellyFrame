@@ -158,9 +158,14 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def should_run_font_resource_check(args: argparse.Namespace) -> bool:
-    return bool(getattr(args, "font_budget", None) or
-                getattr(args, "emit_used_chars", None) or
-                getattr(args, "font_coverage", None))
+    if getattr(args, "skip_check", False) or getattr(args, "no_font_check", False):
+        return False
+    return True
+
+
+def effective_font_budget(args: argparse.Namespace) -> str:
+    font_budget = getattr(args, "font_budget", None)
+    return font_budget if font_budget else "16x16"
 
 
 def load_json_if_exists(path: Path) -> dict:
@@ -320,13 +325,11 @@ def run_font_resource_check(args: argparse.Namespace) -> int:
     ensure_tool(font_check)
     files = resource_files_from_report(args.root, args.report)
     command = [str(font_check)]
-    font_budget = getattr(args, "font_budget", None)
     emit_used_chars = getattr(args, "emit_used_chars", None)
     font_coverage = getattr(args, "font_coverage", None)
     if font_coverage:
         command.extend(["--font-coverage", str(font_coverage)])
-    if font_budget:
-        command.extend(["--font-budget", font_budget])
+    command.extend(["--font-budget", effective_font_budget(args)])
     if emit_used_chars:
         command.extend(["--emit-used-chars", str(emit_used_chars)])
     command.extend(files)
@@ -348,8 +351,14 @@ def cmd_check(args: argparse.Namespace) -> int:
     policy_result = enforce_diagnostics_policy(args)
     if policy_result != 0:
         return policy_result
-    print("package is valid; pipeline diagnostics ran through the render-core pseudo browser.")
-    print("Text-search compatibility scanning has been retired; pass font options for font resource checks.")
+    if getattr(args, "skip_check", False):
+        print("package is valid; developer preflight checks were skipped by request.")
+    else:
+        print("package is valid; pipeline diagnostics ran through the render-core pseudo browser.")
+        if getattr(args, "no_font_check", False):
+            print("Text-search compatibility scanning has been retired; font resource preflight was skipped by request.")
+        else:
+            print("Text-search compatibility scanning has been retired; font resource preflight ran with the package check.")
     return 0
 
 
@@ -362,22 +371,25 @@ def cmd_font(args: argparse.Namespace) -> int:
     check_result = run_font_resource_check(args)
     if check_result != 0 or not args.bdf:
         return check_result
-    if not args.output_header:
-        raise SystemExit("--output-header is required when --bdf is provided")
+    if not args.output_header and not args.output_binary:
+        raise SystemExit("--output-header or --output-binary is required when --bdf is provided")
     font_pack_gen = tool_path(args.build_dir, "jellyframe_font_pack_gen")
     ensure_tool(font_pack_gen)
-    args.output_header.parent.mkdir(parents=True, exist_ok=True)
     font_command = [
         str(font_pack_gen),
         "--bdf",
         str(args.bdf),
         "--chars",
         str(args.used_chars),
-        "--output",
-        str(args.output_header),
         "--name",
         args.name,
     ]
+    if args.output_header:
+        args.output_header.parent.mkdir(parents=True, exist_ok=True)
+        font_command.extend(["--output", str(args.output_header)])
+    if args.output_binary:
+        args.output_binary.parent.mkdir(parents=True, exist_ok=True)
+        font_command.extend(["--output-binary", str(args.output_binary)])
     if args.allow_missing:
         font_command.append("--allow-missing")
     return run_command(font_command)
@@ -516,6 +528,17 @@ def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
 
 
+def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--no-font-check", action="store_true",
+                        help="Skip the default font resource preflight.")
+    parser.add_argument("--font-budget",
+                        help="Glyph size such as 16x16 for font budget estimates. Defaults to 16x16.")
+    parser.add_argument("--font-coverage", type=Path,
+                        help="Optional embedded font coverage text file for preflight checks.")
+    parser.add_argument("--emit-used-chars", type=Path,
+                        help="Optional output file for used non-ASCII characters.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="JellyFrame developer CLI.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -529,9 +552,7 @@ def main() -> int:
     package.add_argument("--output-cpp", type=Path, help="Generated C++ resource table.")
     package.add_argument("--output-bundle", type=Path, help="Generated installable .jfapp bundle.")
     package.add_argument("--debug-dir", type=Path, help="Optional copied debug package directory.")
-    package.add_argument("--font-budget", help="Optional glyph size such as 16x16 for preflight font budget estimates.")
-    package.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file for preflight checks.")
-    package.add_argument("--emit-used-chars", type=Path, help="Optional output file for preflight used non-ASCII characters.")
+    add_font_preflight_args(package)
     package.set_defaults(func=cmd_package)
 
     preview = subparsers.add_parser("preview", help="Render an app package through the Win32 shell capture path.")
@@ -542,29 +563,26 @@ def main() -> int:
     preview.add_argument("--target", help="Optional target preset id used for viewport defaults.")
     preview.add_argument("--width", type=int, default=0, help="Optional viewport width override.")
     preview.add_argument("--height", type=int, default=0, help="Optional viewport height override.")
-    preview.add_argument("--font-budget", help="Optional glyph size such as 16x16 for preflight font budget estimates.")
-    preview.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file for preflight checks.")
-    preview.add_argument("--emit-used-chars", type=Path, help="Optional output file for preflight used non-ASCII characters.")
+    add_font_preflight_args(preview)
     preview.add_argument("--namespace", default="jellyframe_esp32s3", help=argparse.SUPPRESS)
     preview.add_argument("--include", default="jellyframe_esp32s3_resources.h", help=argparse.SUPPRESS)
-    preview.add_argument("--skip-check", action="store_true", help="Skip optional font resource preflight.")
+    preview.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
     preview.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
     preview.set_defaults(func=cmd_preview)
 
-    check = subparsers.add_parser("check", help="Validate package and optionally run font resource checks.")
+    check = subparsers.add_parser("check", help="Validate package and run pipeline/font preflight.")
     add_common_package_args(check)
-    check.add_argument("--font-budget", help="Optional glyph size such as 16x16 for font budget estimates.")
-    check.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file.")
-    check.add_argument("--emit-used-chars", type=Path, help="Optional output file for used non-ASCII characters.")
+    add_font_preflight_args(check)
     check.set_defaults(func=cmd_check)
 
-    font = subparsers.add_parser("font", help="Collect package characters and optionally generate a bitmap font header.")
+    font = subparsers.add_parser("font", help="Collect package characters and optionally generate bitmap font packs.")
     add_common_package_args(font)
     font.add_argument("--used-chars", required=True, type=Path, help="Output file for used non-ASCII characters.")
     font.add_argument("--font-budget", default="16x16", help="Glyph size such as 16x16 for font budget estimates.")
     font.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file.")
-    font.add_argument("--bdf", type=Path, help="Optional BDF source font for header generation.")
+    font.add_argument("--bdf", type=Path, help="Optional BDF source font for bitmap pack generation.")
     font.add_argument("--output-header", type=Path, help="Generated C++ BitmapFont header path.")
+    font.add_argument("--output-binary", type=Path, help="Generated .jffont bitmap font supplement path.")
     font.add_argument("--name", default="jellyframe_embedded_font", help="Generated C++ font symbol name.")
     font.add_argument("--allow-missing", action="store_true", help="Allow missing BDF glyphs when generating a header.")
     font.set_defaults(func=cmd_font)
@@ -600,9 +618,7 @@ def main() -> int:
     install.add_argument("--include", default="jellyframe_esp32s3_resources.h", help=argparse.SUPPRESS)
     install.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
     install.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
-    install.add_argument("--font-budget", help="Optional glyph size such as 16x16 for font budget estimates.")
-    install.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file.")
-    install.add_argument("--emit-used-chars", type=Path, help="Optional output file for used non-ASCII characters.")
+    add_font_preflight_args(install)
     install.set_defaults(func=cmd_install)
 
     registry = subparsers.add_parser("registry", help="Manage a desktop installed-app registry mock.")

@@ -159,7 +159,9 @@ ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_frameb
 - vendor font engine；
 - 面向确实需要复杂文字系统的 shaping-capable text painter。
 
-暂时不要把字体加载放进核心。测量和绘制应来自同一个宿主字体引擎，避免裁切和换行不一致。参见 `src/render_core/docs/text_backend_zh.md`。
+不要让 render core 自己读取或解析任意字体文件。当前生产路径是编译期 bitmap font pack；后续高优先级的
+`.jfapp` 包内动态字体补充也应通过受控 font resource provider 和同一个宿主文本后端接入。测量和绘制
+必须来自同一套 glyph metrics，避免裁切和换行不一致。参见 `src/render_core/docs/text_backend_zh.md`。
 
 ## 输入后端
 

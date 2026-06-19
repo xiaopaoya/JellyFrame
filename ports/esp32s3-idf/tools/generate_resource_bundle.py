@@ -11,7 +11,7 @@ def resource_kind(path: Path) -> str:
         return "jellyframe::HostResourceKind::ClassicScript"
     if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}:
         return "jellyframe::HostResourceKind::Image"
-    if suffix in {".bdf", ".fnt", ".ttf", ".otf", ".woff", ".woff2"}:
+    if suffix in {".bdf", ".fnt", ".jffont", ".ttf", ".otf", ".woff", ".woff2"}:
         return "jellyframe::HostResourceKind::Font"
     return "jellyframe::HostResourceKind::Other"
 

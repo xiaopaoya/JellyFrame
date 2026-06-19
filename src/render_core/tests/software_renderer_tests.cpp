@@ -1,5 +1,6 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/bitmap_font.h"
+#include "render_core/bitmap_font_resource.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
@@ -8,6 +9,7 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 using namespace jellyframe;
 
@@ -424,6 +426,54 @@ void bitmap_font_scaling_bold_and_missing_glyphs_are_stable() {
           "missing high-codepoint glyph draws a visible fallback box");
 }
 
+void jffont_resource_loads_bitmap_font_view() {
+    const std::vector<std::uint8_t> bytes = {
+        'J', 'F', 'F', 'O', 'N', 'T', '0', 0,
+        0x20, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+        0x08, 0x08, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00,
+        0x40, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00,
+        0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x07, 0x00, 0x00, 0x00, 0x05, 0x07, 0x06, 0x01,
+        0x2d, 0x4e, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
+        0x08, 0x00, 0x00, 0x00, 0x08, 0x08, 0x08, 0x01,
+        0x20, 0x50, 0x88, 0xf8, 0x88, 0x88, 0x88,
+        0x10, 0x10, 0xfe, 0x92, 0x92, 0xfe, 0x10, 0x10,
+    };
+
+    BitmapFontResource resource;
+    check(resource.load_jffont(bytes.data(), bytes.size()), "jffont resource loads");
+    check(resource.valid(), "jffont resource exposes valid font");
+    BitmapFontContext context{&resource.font(), 1};
+
+    const TextMetrics metrics = measure_bitmap_text(context, "A\xe4\xb8\xad?", 8, 400);
+    check(metrics.width == 22 && metrics.line_height == 8, "jffont metrics reuse bitmap backend");
+
+    FrameBuffer frame_buffer(32, 12, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer(TextPainter{bitmap_font_paint_callback, &context});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 32, 12};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "A\xe4\xb8\xad";
+    command.font_size = 8;
+    command.text_single_line = true;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 32, 12});
+    check(count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) > 10,
+          "jffont glyphs paint through bitmap backend");
+
+    std::vector<std::uint8_t> corrupted = bytes;
+    corrupted[0] = 0;
+    check(!resource.load_jffont(corrupted.data(), corrupted.size()), "jffont rejects bad magic");
+    check(!resource.valid(), "failed jffont load clears font view");
+
+    corrupted = bytes;
+    corrupted[40] = 0x01;
+    corrupted[41] = 0x00;
+    corrupted[42] = 0x00;
+    corrupted[43] = 0x00;
+    check(!resource.load_jffont(corrupted.data(), corrupted.size()), "jffont rejects short glyph row data");
+}
+
 } // namespace
 
 int main() {
@@ -442,6 +492,7 @@ int main() {
         bitmap_font_backend_measures_and_paints();
         bitmap_font_lookup_uses_sorted_codepoints();
         bitmap_font_scaling_bold_and_missing_glyphs_are_stable();
+        jffont_resource_loads_bitmap_font_view();
     } catch (const std::exception& error) {
         std::cerr << "software renderer test failed: " << error.what() << '\n';
         return 1;

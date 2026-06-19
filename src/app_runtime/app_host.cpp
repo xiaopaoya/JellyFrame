@@ -8,6 +8,7 @@ AppRuntimeHost::AppRuntimeHost(const AppRuntimeHostOptions& options)
     : requests_(options.max_in_flight_jobs),
       completions_(std::max(options.max_in_flight_jobs, options.max_completion_events_per_frame)),
       handles_(options.max_host_handles, options.max_host_handle_bytes),
+      fonts_(options.max_app_fonts),
       max_completion_events_per_frame_(options.max_completion_events_per_frame) {}
 
 AppRuntimeHostOptions AppRuntimeHost::options_from_capabilities(const HostDeviceCapabilities& capabilities,
@@ -18,15 +19,19 @@ AppRuntimeHostOptions AppRuntimeHost::options_from_capabilities(const HostDevice
         capabilities.async.max_completion_events_per_frame,
         max_host_handles,
         max_host_handle_bytes,
+        1,
     };
 }
 
 AppInstance AppRuntimeHost::launch(std::string app_id, AppRole role) {
+    fonts_.clear_app_instance(lifecycle_.current_app_instance_id());
     return lifecycle_.launch(std::move(app_id), role, &requests_, &completions_, &handles_);
 }
 
 AppTeardownResult AppRuntimeHost::exit_current() {
-    return lifecycle_.exit_current(&requests_, &completions_, &handles_);
+    AppTeardownResult result = lifecycle_.exit_current(&requests_, &completions_, &handles_);
+    result.released_font_resources = fonts_.clear_app_instance(result.app_instance_id);
+    return result;
 }
 
 bool AppRuntimeHost::suspend_current() {
@@ -56,6 +61,14 @@ std::uint32_t AppRuntimeHost::allocate_current_handle(HostServiceHandleKind kind
         return 0;
     }
     return handles_.allocate(kind, app_instance_id, bytes, payload);
+}
+
+AppFontLoadResult AppRuntimeHost::load_current_jffont(const std::uint8_t* data, std::size_t size) {
+    return fonts_.load_jffont(lifecycle_.current_app_instance_id(), data, size);
+}
+
+std::size_t AppRuntimeHost::clear_current_fonts() {
+    return fonts_.clear_app_instance(lifecycle_.current_app_instance_id());
 }
 
 bool AppRuntimeHost::push_completion(const HostServiceCompletion& completion) {

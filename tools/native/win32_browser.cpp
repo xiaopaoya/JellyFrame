@@ -74,6 +74,7 @@ struct BrowserOptions {
     int viewport_height = 640;
     bool viewport_width_set = false;
     bool viewport_height_set = false;
+    bool use_app_fonts = false;
 };
 
 struct LoadedPage {
@@ -380,6 +381,21 @@ bool measure_text_with_gdi(const std::string& text,
     return ok;
 }
 
+struct BrowserTextBackend {
+    TextMeasureProvider measure;
+    TextPainter painter;
+};
+
+BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppRuntimeHost* runtime) {
+    if (options.use_app_fonts && runtime != nullptr && runtime->fonts().primary_font() != nullptr) {
+        return BrowserTextBackend{runtime->fonts().measure_provider(), runtime->fonts().painter()};
+    }
+    return BrowserTextBackend{
+        TextMeasureProvider{measure_text_with_gdi, nullptr},
+        TextPainter{draw_text_with_gdi, nullptr},
+    };
+}
+
 InputModifiers modifiers_from_keys(WPARAM wparam) {
     InputModifiers modifiers;
     modifiers.shift = (wparam & MK_SHIFT) != 0;
@@ -609,7 +625,42 @@ const Node* find_shell_action_node(const Node* node) {
     return nullptr;
 }
 
-LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, DiagnosticSink* diagnostics) {
+void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifest& manifest,
+                                     jellyframe_example::PackageResourceContext& package_context,
+                                     AppRuntimeHost* app_runtime,
+                                     DiagnosticSink* diagnostics) {
+    if (app_runtime == nullptr || manifest.font_sources.empty()) {
+        return;
+    }
+    app_runtime->clear_current_fonts();
+    for (const std::string& source : manifest.font_sources) {
+        std::string bytes;
+        if (!jellyframe_example::load_package_resource(source, manifest.entry, bytes, &package_context)) {
+            report_diagnostic(diagnostics,
+                              DiagnosticStage::Package,
+                              DiagnosticSeverity::Warning,
+                              "app-font-resource-missing",
+                              "Manifest font resource could not be loaded",
+                              source);
+            continue;
+        }
+        const AppFontLoadResult result = app_runtime->load_current_jffont(
+            reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size());
+        if (!result.loaded()) {
+            report_diagnostic(diagnostics,
+                              DiagnosticStage::Package,
+                              DiagnosticSeverity::Warning,
+                              "app-font-resource-invalid",
+                              "Manifest font resource is not a supported .jffont supplement",
+                              source);
+        }
+    }
+}
+
+LoadedPage load_page(const BrowserOptions& options,
+                     const HostBudgets& budgets,
+                     DiagnosticSink* diagnostics,
+                     AppRuntimeHost* app_runtime = nullptr) {
     HtmlParser html_parser;
     CssParser css_parser;
     HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
@@ -635,6 +686,7 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, 
         page.package_context.bundle_bytes = std::move(package.bundle_bytes);
         page.package_context.bundle_entries = std::move(package.bundle_entries);
         page.package_context.bundle_payload_offset = package.bundle_payload_offset;
+        load_package_fonts_into_runtime(package.manifest, page.package_context, app_runtime, diagnostics);
         std::string html;
         if (!jellyframe_example::load_package_resource(package.manifest.entry,
                                                        package.manifest.entry,
@@ -670,10 +722,17 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, 
     return page;
 }
 
-FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
+FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     const HostBudgets budgets = desktop_browser_budgets();
     VectorDiagnosticSink diagnostics;
-    LoadedPage page = load_page(options, budgets, &diagnostics);
+    AppRuntimeHost app_runtime{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
+    AppRuntimeHost* runtime = nullptr;
+    if (!options.app_path.empty()) {
+        app_runtime.launch(options.app_path, AppRole::App);
+        runtime = &app_runtime;
+    }
+    LoadedPage page = load_page(options, budgets, &diagnostics, runtime);
+    BrowserTextBackend text_backend = make_browser_text_backend(options, runtime);
     StyleResolverOptions style_options;
     style_options.diagnostics = &diagnostics;
     StyleResolver resolver(std::move(page.stylesheet), style_options);
@@ -684,9 +743,7 @@ FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
     auto render_tree = render_builder.build(*page.document);
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     layout_options.diagnostics = &diagnostics;
-    LayoutEngine layout_engine(resolver,
-                               TextMeasureProvider{measure_text_with_gdi, nullptr},
-                               layout_options);
+    LayoutEngine layout_engine(resolver, text_backend.measure, layout_options);
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
@@ -695,7 +752,7 @@ FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
 
     SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
     compositor_options.diagnostics = &diagnostics;
-    SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr}, compositor_options);
+    SoftwareCompositor compositor(text_backend.painter, compositor_options);
     FrameBuffer frame_buffer = compositor.render(*layer_tree,
                                                  options.viewport_width,
                                                  options.viewport_height,
@@ -707,16 +764,16 @@ FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
     return frame_buffer;
 }
 
-FrameBuffer render_page_with_gdi_text(const std::string& html_path,
-                                      const std::string& css_path,
-                                      int viewport_width,
-                                      int min_viewport_height) {
+FrameBuffer render_page_with_browser_text(const std::string& html_path,
+                                          const std::string& css_path,
+                                          int viewport_width,
+                                          int min_viewport_height) {
     BrowserOptions options;
     options.html_path = html_path;
     options.css_path = css_path;
     options.viewport_width = viewport_width;
     options.viewport_height = min_viewport_height;
-    return render_page_with_gdi_text(options);
+    return render_page_with_browser_text(options);
 }
 
 class BrowserApp {
@@ -803,7 +860,7 @@ private:
     VectorDiagnosticSink diagnostics_;
     bool system_shell_mode_ = false;
     std::string active_app_id_;
-    AppRuntimeHost app_runtime_;
+    AppRuntimeHost app_runtime_{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
     std::string pending_shell_action_;
     std::string pending_shell_app_id_;
 
@@ -970,7 +1027,7 @@ private:
             KillTimer(hwnd_, kScriptTimerId);
             script_runtime_.reset();
 #endif
-            LoadedPage page = load_page(options_, budgets_, &diagnostics_);
+            LoadedPage page = load_page(options_, budgets_, &diagnostics_, &app_runtime_);
             document_ = std::move(page.document);
             StyleResolverOptions style_options;
             style_options.diagnostics = &diagnostics_;
@@ -1085,7 +1142,8 @@ private:
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
-        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr}, compositor_options);
+        BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
+        SoftwareCompositor compositor(text_backend.painter, compositor_options);
         if (update_plan.action == FrameUpdateAction::RepaintExisting &&
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {
@@ -1128,9 +1186,7 @@ private:
         auto next_render_tree = render_builder.build(*document_);
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
         layout_options.diagnostics = &diagnostics_;
-        LayoutEngine layout_engine(*style_resolver_,
-                                   TextMeasureProvider{measure_text_with_gdi, nullptr},
-                                   layout_options);
+        LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_);
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
 
@@ -1552,6 +1608,10 @@ int main(int argc, char** argv) {
             options.viewport_height_set = true;
             continue;
         }
+        if (arg == "--use-app-fonts") {
+            options.use_app_fonts = true;
+            continue;
+        }
         positional.push_back(arg);
     }
 
@@ -1613,11 +1673,12 @@ int main(int argc, char** argv) {
             if (options.capture) {
                 options.html_path.clear();
                 options.css_path.clear();
-                FrameBuffer frame_buffer = render_page_with_gdi_text(options);
+                FrameBuffer frame_buffer = render_page_with_browser_text(options);
                 write_image(frame_buffer, options.output_path);
                 std::cout << "JellyFrame Win32 browser capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
+                          << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
                           << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                           << "  non_background_pixels="
                           << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
@@ -1630,11 +1691,12 @@ int main(int argc, char** argv) {
     } else if (options.capture) {
         if (!options.inline_html.empty()) {
             try {
-                FrameBuffer frame_buffer = render_page_with_gdi_text(options);
+                FrameBuffer frame_buffer = render_page_with_browser_text(options);
                 write_image(frame_buffer, options.output_path);
                 std::cout << "JellyFrame Win32 browser capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
+                          << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
                           << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                           << "  non_background_pixels="
                           << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
@@ -1657,12 +1719,15 @@ int main(int argc, char** argv) {
             options.viewport_height = parse_int_arg(positional[3].c_str(), options.viewport_height);
         }
         try {
-            FrameBuffer frame_buffer = render_page_with_gdi_text(options.html_path, options.css_path, options.viewport_width,
-                                                                  options.viewport_height);
+            FrameBuffer frame_buffer = render_page_with_browser_text(options.html_path,
+                                                                      options.css_path,
+                                                                      options.viewport_width,
+                                                                      options.viewport_height);
             write_image(frame_buffer, options.output_path);
             std::cout << "JellyFrame Win32 browser capture\n"
                       << "  output=" << options.output_path << '\n'
                       << "  viewport_width=" << options.viewport_width << '\n'
+                      << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
                       << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                       << "  non_background_pixels="
                       << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';

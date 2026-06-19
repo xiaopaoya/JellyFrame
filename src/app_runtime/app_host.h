@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app_runtime/app_font_set.h"
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/host_services.h"
 
@@ -15,6 +16,7 @@ struct AppRuntimeHostOptions {
     std::size_t max_completion_events_per_frame = 0;
     std::size_t max_host_handles = 0;
     std::size_t max_host_handle_bytes = 0;
+    std::size_t max_app_fonts = 0;
 };
 
 class AppRuntimeHost {
@@ -46,6 +48,8 @@ public:
     std::uint32_t allocate_current_handle(HostServiceHandleKind kind,
                                           std::uint32_t bytes = 0,
                                           void* payload = nullptr);
+    AppFontLoadResult load_current_jffont(const std::uint8_t* data, std::size_t size);
+    std::size_t clear_current_fonts();
 
     bool push_completion(const HostServiceCompletion& completion);
     bool pop_worker_request(HostServiceRequest& request);
@@ -64,6 +68,10 @@ public:
         return handles_;
     }
 
+    AppFontSet& fonts() {
+        return fonts_;
+    }
+
     const HostServiceRequestQueue& requests() const {
         return requests_;
     }
@@ -76,6 +84,10 @@ public:
         return handles_;
     }
 
+    const AppFontSet& fonts() const {
+        return fonts_;
+    }
+
     std::size_t max_completion_events_per_frame() const {
         return max_completion_events_per_frame_;
     }
@@ -85,6 +97,7 @@ private:
     HostServiceRequestQueue requests_;
     HostServiceCompletionQueue completions_;
     HostHandleTable handles_;
+    AppFontSet fonts_;
     std::size_t max_completion_events_per_frame_ = 0;
 };
 

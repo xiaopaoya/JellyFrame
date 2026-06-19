@@ -8,6 +8,18 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有
+  `BitmapFont` glyph 数据模型，但去掉 C++ 指针和编译期符号，为后续 `.jfapp`
+  动态包内字体资源打基础。
+- 添加 `BitmapFontResource`，可把 `.jffont` bytes 解析成只读 `BitmapFont` view，
+  复用现有 bitmap font 测量和绘制后端。
+- 添加 `AppFontSet` 并接入 `AppRuntimeHost`，让 `.jffont` 字体资源随
+  `app_instance_id` 加载、清理和切换；Win32 package loader 会读取 manifest
+  `fonts` 声明并把 `.jffont` 加入当前 runtime 状态。
+- Win32 browser 壳新增 `--use-app-fonts`，可显式让 `.jfapp` 包内 `.jffont`
+  参与 layout 和 paint，用于动态字体补充包验收；默认路径仍使用 GDI 文本。
+- `jellyframe_cli.py package/check/preview/install` 默认执行字体资源预检；新增
+  `--no-font-check` 用于显式跳过。
 - 添加共享 `PipelineStatistics` 统计入口，用同一口径统计 DOM、render、layout、
   layer、display-list、framebuffer、resource 和 arena 使用情况。
 - 添加 arena capacity 和 waste 统计，便于嵌入式 benchmark 区分真实对象用量和块式分配余量。
