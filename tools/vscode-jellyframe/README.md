@@ -7,12 +7,13 @@ implement its own parser or packer; every command delegates to
 ## Features
 
 - JSON schema association for `jellyframe.app.json`.
-- Command palette actions for validate, capability check, preview and package.
+- Command palette actions for validate, pipeline diagnostics, optional font resource checks, preview
+  and package.
 - App creation from the built-in weather, clock, timer and calculator templates.
 - CLI output in a dedicated `JellyFrame` output channel.
 - A `JellyFrame Report` webview that summarizes the latest package report,
-  resources, references, warnings and capability findings.
-- Inline diagnostics for actionable package/capability issues.
+  resources, references, warnings, pipeline diagnostics and optional font-resource findings.
+- Inline diagnostics for actionable package, pipeline and font-resource issues.
 - Configurable repository root, Python executable, default target and font
   budget.
 

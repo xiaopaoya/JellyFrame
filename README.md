@@ -26,8 +26,9 @@ targets and documentation use `JellyFrame`.
   form state and host-pumped timers.
 - Layer tree, display list, CPU rasterizer/compositor and framebuffer adapters
   for RGBA/BGRA, RGB565/BGR565, RGB332, Gray8 and monochrome output.
-- Desktop inspection tools, pseudo browser, Win32 validation shell, capability
-  checker, app packer, font-pack generator and a thin VS Code helper.
+- Desktop inspection tools, pseudo browser, Win32 validation shell, pipeline
+  diagnostics, app packer, font-resource checker, font-pack generator and a
+  thin VS Code helper.
 
 For the exact supported/degraded/deferred feature set, read
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
@@ -67,7 +68,7 @@ Open an interactive Windows validation shell:
   --app tools\templates\apps\calculator
 ```
 
-Create and check an app package:
+Create an app package and run package validation plus pipeline diagnostics:
 
 ```powershell
 python tools\jellyframe_cli.py new `

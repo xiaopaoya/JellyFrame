@@ -83,8 +83,9 @@ RenderObjectPtr RenderTreeBuilder::build_with_arena(const Node& document, Monoto
     view->style = style_resolver_.resolve(document);
 
     std::size_t render_object_count = 1;
+    bool budget_reported = false;
     for (const auto& child : document.children) {
-        auto object = build_object(*child, &view->style, render_object_count, arena);
+        auto object = build_object(*child, &view->style, render_object_count, budget_reported, arena);
         if (object != nullptr) {
             view->children.push_back(std::move(object));
         }
@@ -95,9 +96,19 @@ RenderObjectPtr RenderTreeBuilder::build_with_arena(const Node& document, Monoto
 RenderObjectPtr RenderTreeBuilder::build_object(const Node& node,
                                                 const Style* parent_style,
                                                 std::size_t& render_object_count,
+                                                bool& budget_reported,
                                                 MonotonicArena* arena) const {
     const std::size_t max_render_objects = std::max<std::size_t>(1, options_.max_render_objects);
     if (render_object_count >= max_render_objects) {
+        if (!budget_reported) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::RenderTree,
+                              DiagnosticSeverity::Warning,
+                              "render-object-limit",
+                              "Render object budget was reached; remaining visible nodes were skipped",
+                              "Increase max_render_objects or simplify the view hierarchy.");
+            budget_reported = true;
+        }
         return nullptr;
     }
 
@@ -120,7 +131,7 @@ RenderObjectPtr RenderTreeBuilder::build_object(const Node& node,
 
     if (!is_replaced_control(node)) {
         for (const auto& child : node.children) {
-            auto child_object = build_object(*child, &object->style, render_object_count, arena);
+            auto child_object = build_object(*child, &object->style, render_object_count, budget_reported, arena);
             if (child_object != nullptr) {
                 object->children.push_back(std::move(child_object));
             }

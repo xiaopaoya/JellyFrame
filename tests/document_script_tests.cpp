@@ -16,6 +16,15 @@ void check(bool condition, const char* message) {
     }
 }
 
+bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
+    for (const Diagnostic& diagnostic : sink.diagnostics()) {
+        if (diagnostic.code == code) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool script_loader(std::string_view src, std::string& output, void*) {
     if (src == "app.js") {
         output = "window.loaded = true;";
@@ -59,6 +68,22 @@ void external_scripts_use_callback_in_document_order() {
     check(scripts[1].source.find("loaded") != std::string::npos, "external script source loaded");
 }
 
+void script_collection_reports_skipped_and_failed_scripts() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body>"
+        "<script type='module'>export default 1;</script>"
+        "<script src='missing.js'></script>"
+        "</body>");
+
+    VectorDiagnosticSink diagnostics;
+    const std::vector<DocumentScript> scripts =
+        collect_classic_scripts(*document, script_loader, nullptr, &diagnostics);
+    check(scripts.empty(), "unsupported and missing scripts are not collected");
+    check(has_diagnostic_code(diagnostics, "script-type-unsupported"), "module script skip is reported");
+    check(has_diagnostic_code(diagnostics, "script-load-failed"), "missing external script is reported");
+}
+
 void deep_script_collection_is_iterative() {
     auto document = make_element("document");
     Node* current = document.get();
@@ -79,6 +104,7 @@ int main() {
     try {
         inline_classic_scripts_are_collected();
         external_scripts_use_callback_in_document_order();
+        script_collection_reports_skipped_and_failed_scripts();
         deep_script_collection_is_iterative();
     } catch (const std::exception& error) {
         std::cerr << "document script test failed: " << error.what() << '\n';

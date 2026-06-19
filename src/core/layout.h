@@ -30,6 +30,7 @@ struct LayoutBox {
 
 struct LayoutEngineOptions {
     std::size_t max_layout_boxes = 4096;
+    DiagnosticSink* diagnostics = nullptr;
 };
 
 class LayoutEngine {
@@ -64,6 +65,7 @@ private:
     void build_layout_tree(const RenderObject& object,
                            LayoutBox& box,
                            std::size_t& layout_box_count,
+                           bool& budget_reported,
                            MonotonicArena* arena) const;
     LayoutBoxPtr make_layout_box(MonotonicArena* arena) const;
 };

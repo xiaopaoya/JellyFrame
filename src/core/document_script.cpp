@@ -68,7 +68,8 @@ bool is_classic_script_type(std::string_view raw_type) {
 void collect_scripts(const Node& node,
                      std::vector<DocumentScript>& scripts,
                      ScriptLoadCallback load_script,
-                     void* context) {
+                     void* context,
+                     DiagnosticSink* diagnostics) {
     std::vector<const Node*> pending;
     pending.push_back(&node);
     while (!pending.empty()) {
@@ -76,16 +77,35 @@ void collect_scripts(const Node& node,
         pending.pop_back();
         if (current->type == NodeType::Element && current->tag_name == "script") {
             if (!is_classic_script_type(current->attribute("type"))) {
+                report_diagnostic(diagnostics,
+                                  DiagnosticStage::Script,
+                                  DiagnosticSeverity::Warning,
+                                  "script-type-unsupported",
+                                  "Non-classic script type was skipped",
+                                  current->attribute("type"));
                 continue;
             }
             const std::string& src = current->attribute("src");
             if (!src.empty()) {
                 if (load_script == nullptr) {
+                    report_diagnostic(diagnostics,
+                                      DiagnosticStage::Script,
+                                      DiagnosticSeverity::Warning,
+                                      "script-loader-missing",
+                                      "External script was skipped because no script loader is available",
+                                      src);
                     continue;
                 }
                 std::string source;
                 if (load_script(src, source, context) && !source.empty()) {
                     scripts.push_back(DocumentScript{std::move(source), src, true});
+                } else {
+                    report_diagnostic(diagnostics,
+                                      DiagnosticStage::Script,
+                                      DiagnosticSeverity::Warning,
+                                      "script-load-failed",
+                                      "External script could not be loaded or was empty",
+                                      src);
                 }
                 continue;
             }
@@ -106,14 +126,15 @@ void collect_scripts(const Node& node,
 } // namespace
 
 std::vector<DocumentScript> collect_classic_scripts(const Node& document) {
-    return collect_classic_scripts(document, nullptr, nullptr);
+    return collect_classic_scripts(document, nullptr, nullptr, nullptr);
 }
 
 std::vector<DocumentScript> collect_classic_scripts(const Node& document,
                                                     ScriptLoadCallback load_script,
-                                                    void* context) {
+                                                    void* context,
+                                                    DiagnosticSink* diagnostics) {
     std::vector<DocumentScript> scripts;
-    collect_scripts(document, scripts, load_script, context);
+    collect_scripts(document, scripts, load_script, context, diagnostics);
     return scripts;
 }
 

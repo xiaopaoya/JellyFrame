@@ -27,7 +27,7 @@
 
 - 修改 HTML/CSS/DOM/layout/render 核心算法。
 - 在 `jellyframe_core` 内加入字体文件加载、文件系统、网络或屏幕驱动。
-- 重新实现 `jellyframe_capability_check`、`jellyframe_font_pack_gen`、`embedded_framebuffer` 或 bitmap font callback。
+- 重新实现 `jellyframe_font_resource_check`、`jellyframe_font_pack_gen`、`embedded_framebuffer` 或 bitmap font callback。
 - 在 ESP32-S3 第一版中实现无完整 framebuffer 的 tiled renderer、复杂文字 shaping、图片解码或网络安全模型。
 
 如果产品必须依赖这些能力，应先回到主线核心规划新里程碑；不要把它们硬塞进板级 port。
@@ -120,7 +120,7 @@ budgets.max_framebuffer_pixels = width * height;
 
 - 静态资源、内联 `<style>`、本地 `<link rel="stylesheet">`、classic `<script>` 均能通过宿主 callback 加载。
 - 资源缺失不会阻塞首帧。
-- capability checker 可以在桌面扫描同一组资源。
+- 字体资源检查器可以在桌面扫描同一组资源中的文本与 glyph 覆盖。
 
 ### P3：显示与 framebuffer
 
@@ -176,7 +176,7 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 
 - `TextMeasureProvider` 和 `TextPainter` callback 接口。
 - `src/core/bitmap_font.h` 中的 bitmap font 数据结构、测量 callback 和绘制 callback。
-- `jellyframe_capability_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符、检查字体覆盖、
+- `jellyframe_font_resource_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符、检查字体覆盖、
   估算 bitmap pack 预算并建议字体 profile。
 - `jellyframe_font_pack_gen`，可从 BDF 字体子集生成 C++ `BitmapFont` header。
 - `src/core/text_adapter.h` 中的 `HostTextAdapter`，用于把 LVGL/vendor 测量和绘制 callback
@@ -200,8 +200,8 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 1. 在桌面构建机上运行：
 
    ```text
-   jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
-   jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
+   jellyframe_font_resource_check --emit-used-chars used_chars.txt app.html app.css app.js
+   jellyframe_font_resource_check --font-budget 16x16 app.html app.css app.js
 
    根据输出的 font profile，在 `tiny`、`app-subset-cn`、`cn-standard` 和
    按市场划分的 global packs 之间选择。

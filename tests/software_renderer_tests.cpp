@@ -19,6 +19,27 @@ void check(bool condition, const char* message) {
     }
 }
 
+bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
+    for (const Diagnostic& diagnostic : sink.diagnostics()) {
+        if (diagnostic.code == code) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool rejecting_text_painter(FrameBuffer&,
+                            Rect,
+                            Color,
+                            const std::string&,
+                            int,
+                            int,
+                            TextCommandAlign,
+                            bool,
+                            void*) {
+    return false;
+}
+
 const LayoutBox* find_first_text_box(const LayoutBox& box) {
     if (box.node != nullptr && box.node->type == NodeType::Text) {
         return &box;
@@ -186,12 +207,17 @@ void compositor_degrades_oversized_offscreen_layers_without_crashing() {
 
     const Color white{255, 255, 255, 255};
     const FrameBuffer precise = SoftwareCompositor().render(root, 2, 1, white);
+    VectorDiagnosticSink diagnostics;
+    SoftwareCompositor::Options options;
+    options.max_offscreen_pixels = 1;
+    options.diagnostics = &diagnostics;
     const FrameBuffer degraded =
-        SoftwareCompositor({}, SoftwareCompositor::Options{0, 1}).render(root, 2, 1, white);
+        SoftwareCompositor({}, options).render(root, 2, 1, white);
 
     check(precise.pixel(0, 0).r > degraded.pixel(0, 0).r,
           "offscreen budget fallback uses bounded direct compositing");
     check(degraded.pixel(1, 0).r == 255, "fallback keeps untouched pixels");
+    check(has_diagnostic_code(diagnostics, "paint-offscreen-budget"), "offscreen fallback is reported");
 }
 
 void compositor_rejects_oversized_framebuffer_before_allocation() {
@@ -200,14 +226,43 @@ void compositor_rejects_oversized_framebuffer_before_allocation() {
     root.bounds = Rect{0, 0, 4, 4};
     root.display_list.push_back(black_fill(Rect{0, 0, 4, 4}));
 
+    VectorDiagnosticSink diagnostics;
+    SoftwareCompositor::Options rejecting_options;
+    rejecting_options.max_framebuffer_pixels = 3;
+    rejecting_options.diagnostics = &diagnostics;
     const FrameBuffer rejected =
-        SoftwareCompositor({}, SoftwareCompositor::Options{3, 0}).render(root, 4, 4, Color{255, 255, 255, 255});
+        SoftwareCompositor({}, rejecting_options).render(root, 4, 4, Color{255, 255, 255, 255});
     const FrameBuffer accepted =
         SoftwareCompositor({}, SoftwareCompositor::Options{16, 0}).render(root, 4, 4, Color{255, 255, 255, 255});
 
     check(rejected.width == 0 && rejected.height == 0 && rejected.pixels.empty(),
           "framebuffer budget rejects oversized render before allocation");
     check(accepted.width == 4 && accepted.height == 4, "framebuffer at budget renders normally");
+    check(has_diagnostic_code(diagnostics, "paint-framebuffer-budget"), "framebuffer rejection is reported");
+}
+
+void rasterizer_reports_text_fallback() {
+    VectorDiagnosticSink diagnostics;
+    SoftwareRasterizer rasterizer({}, &diagnostics);
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 80, 20};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "中文";
+    command.font_size = 14;
+    command.text_single_line = true;
+    FrameBuffer frame(80, 20, Color{255, 255, 255, 255});
+
+    rasterizer.rasterize(command, frame, Rect{0, 0, 80, 20});
+
+    check(has_diagnostic_code(diagnostics, "paint-non-ascii-fallback"), "non-ascii fallback is reported");
+
+    VectorDiagnosticSink backend_diagnostics;
+    SoftwareRasterizer rejecting_rasterizer(TextPainter{rejecting_text_painter, nullptr}, &backend_diagnostics);
+    command.text = "ASCII";
+    rejecting_rasterizer.rasterize(command, frame, Rect{0, 0, 80, 20});
+    check(has_diagnostic_code(backend_diagnostics, "paint-text-backend-failed"),
+          "text backend rejection is reported");
 }
 
 struct FrameSinkProbe {
@@ -380,6 +435,7 @@ int main() {
         wrapped_text_layout_keeps_descent_padding();
         layout_uses_injected_text_measurement();
         dirty_render_only_updates_requested_clip();
+        rasterizer_reports_text_fallback();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
         compositor_rejects_oversized_framebuffer_before_allocation();
         frame_sink_receives_framebuffer_view_and_dirty_rects();

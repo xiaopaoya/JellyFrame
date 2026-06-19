@@ -222,7 +222,7 @@ are packed into a temporary tight buffer.
 font. It covers the ASCII glyphs needed by the smoke text plus one CJK glyph
 (`U+4E2D`) so the board path can validate UTF-8 codepoint measurement and
 painting. It is not a production Chinese font. Product firmware should choose a
-font profile with `jellyframe_capability_check`, then generate either an
+font profile with `jellyframe_font_resource_check`, then generate either an
 app-specific bitmap font pack or a documented product profile such as
 `cn-standard` with `jellyframe_font_pack_gen`. Record the source font license,
 glyph count and flash size.

@@ -180,7 +180,16 @@ Node& HtmlTreeBuilder::ensure_body() {
 }
 
 void HtmlTreeBuilder::start_tag(const HtmlToken& token) {
-    if (token.name.empty() || !can_add_node()) {
+    if (token.name.empty()) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::Html,
+                          DiagnosticSeverity::Warning,
+                          "html-empty-tag-name",
+                          "Start tag with an empty name was ignored",
+                          {});
+        return;
+    }
+    if (!can_add_node()) {
         return;
     }
 
@@ -213,6 +222,14 @@ void HtmlTreeBuilder::start_tag(const HtmlToken& token) {
 
     Node& parent = *open_elements_.back();
     Node& appended = append_element(parent, token);
+    if (token.self_closing && !is_void_element(appended.tag_name)) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::Html,
+                          DiagnosticSeverity::Info,
+                          "html-non-void-self-closing",
+                          "Self-closing slash on a non-void HTML element was ignored",
+                          appended.tag_name);
+    }
     if (!is_void_element(appended.tag_name) && can_descend()) {
         open_elements_.push_back(&appended);
     }
@@ -333,7 +350,14 @@ void HtmlTreeBuilder::end_tag(std::string_view tag_name) {
 
     if (has_open_element(tag_name)) {
         pop_until(tag_name);
+        return;
     }
+    report_diagnostic(options_.diagnostics,
+                      DiagnosticStage::Html,
+                      DiagnosticSeverity::Warning,
+                      "html-unmatched-end-tag",
+                      "End tag did not match any open element and was ignored",
+                      tag_name);
 }
 
 void HtmlTreeBuilder::text(std::string_view data) {

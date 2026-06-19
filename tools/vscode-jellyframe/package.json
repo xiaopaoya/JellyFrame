@@ -67,7 +67,7 @@
         "jellyframe.fontBudget": {
           "type": "string",
           "default": "16x16",
-          "description": "Default glyph budget passed to capability checks."
+          "description": "Default glyph budget passed to font resource checks."
         }
       }
     },

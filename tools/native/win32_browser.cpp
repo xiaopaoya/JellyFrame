@@ -5,6 +5,7 @@
 #include "core/budget.h"
 #include "core/css_parser.h"
 #include "core/display_invalidation.h"
+#include "core/diagnostics.h"
 #include "core/dirty_region.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
@@ -441,9 +442,30 @@ Color page_background_color(const Node& document, const StyleResolver& resolver)
     return Color{255, 255, 255, 255};
 }
 
-LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets) {
+void print_diagnostics(const VectorDiagnosticSink& diagnostics) {
+    if (diagnostics.empty()) {
+        std::cout << "diagnostics: 0\n";
+        return;
+    }
+    std::cout << "diagnostics: " << diagnostics.size() << '\n';
+    for (const Diagnostic& diagnostic : diagnostics.diagnostics()) {
+        std::cout << "  [" << diagnostic_severity_name(diagnostic.severity) << "] "
+                  << diagnostic_stage_name(diagnostic.stage) << "::" << diagnostic.code
+                  << " - " << diagnostic.message;
+        if (!diagnostic.detail.empty()) {
+            std::cout << " (" << diagnostic.detail << ')';
+        }
+        std::cout << '\n';
+    }
+}
+
+LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, DiagnosticSink* diagnostics) {
     HtmlParser html_parser;
     CssParser css_parser;
+    HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
+    html_options.diagnostics = diagnostics;
+    CssParserOptions css_options = css_parser_options_from_budgets(budgets);
+    css_options.diagnostics = diagnostics;
     LoadedPage page;
     if (!options.app_path.empty()) {
         const auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
@@ -453,6 +475,7 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets) 
         page.package_context.base_url = package.manifest.entry;
         page.package_context.max_input_bytes = kMaxInputBytes;
         page.package_context.stats = &page.package_stats;
+        page.package_context.diagnostics = diagnostics;
         std::string html;
         if (!jellyframe_example::load_package_resource(package.manifest.entry,
                                                        package.manifest.entry,
@@ -460,18 +483,29 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets) 
                                                        &page.package_context)) {
             throw std::runtime_error("failed to load package entry: " + package.manifest.entry);
         }
-        page.document = html_parser.parse(html, html_parser_options_from_budgets(budgets));
+        page.document = html_parser.parse(html, html_options);
         const std::string css = combine_author_css(
             {}, *page.document, jellyframe_example::load_package_stylesheet, &page.package_context);
-        page.stylesheet = css_parser.parse(css, css_parser_options_from_budgets(budgets));
+        page.stylesheet = css_parser.parse(css, css_options);
         page.script_base_dir = package.root / std::filesystem::path(package.manifest.entry).parent_path().relative_path();
         return page;
     }
 
-    page.document = html_parser.parse(read_file_limited(options.html_path), html_parser_options_from_budgets(budgets));
+    page.document = html_parser.parse(read_file_limited(options.html_path), html_options);
     page.stylesheet = css_parser.parse(
-        jellyframe_example::read_author_css_for_document(options.css_path, *page.document, kMaxInputBytes),
-        css_parser_options_from_budgets(budgets));
+        [&]() {
+            jellyframe_example::StylesheetLoadContext stylesheet_context;
+            const std::filesystem::path css_path(options.css_path);
+            stylesheet_context.base_dir =
+                css_path.has_parent_path() ? css_path.parent_path() : std::filesystem::current_path();
+            stylesheet_context.max_input_bytes = kMaxInputBytes;
+            stylesheet_context.diagnostics = diagnostics;
+            return combine_author_css(jellyframe_example::read_file_limited(options.css_path, kMaxInputBytes),
+                                      *page.document,
+                                      jellyframe_example::load_linked_stylesheet,
+                                      &stylesheet_context);
+        }(),
+        css_options);
     const std::filesystem::path html_path(options.html_path);
     page.script_base_dir = html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
     return page;
@@ -479,20 +513,30 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets) 
 
 FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
     const HostBudgets budgets = desktop_browser_budgets();
-    LoadedPage page = load_page(options, budgets);
-    StyleResolver resolver(std::move(page.stylesheet));
+    VectorDiagnosticSink diagnostics;
+    LoadedPage page = load_page(options, budgets, &diagnostics);
+    StyleResolverOptions style_options;
+    style_options.diagnostics = &diagnostics;
+    StyleResolver resolver(std::move(page.stylesheet), style_options);
 
-    RenderTreeBuilder render_builder(resolver, render_tree_options_from_budgets(budgets));
+    RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
+    render_options.diagnostics = &diagnostics;
+    RenderTreeBuilder render_builder(resolver, render_options);
     auto render_tree = render_builder.build(*page.document);
+    LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
+    layout_options.diagnostics = &diagnostics;
     LayoutEngine layout_engine(resolver,
                                TextMeasureProvider{measure_text_with_gdi, nullptr},
-                               layout_engine_options_from_budgets(budgets));
+                               layout_options);
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
-    LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets));
+    LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
+    layer_options.diagnostics = &diagnostics;
+    LayerTreeBuilder layer_builder(layer_options);
     auto layer_tree = layer_builder.build(*layout_tree);
 
-    SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr},
-                                  software_compositor_options_from_budgets(budgets));
+    SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
+    compositor_options.diagnostics = &diagnostics;
+    SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr}, compositor_options);
     FrameBuffer frame_buffer = compositor.render(*layer_tree,
                                                  options.viewport_width,
                                                  options.viewport_height,
@@ -500,6 +544,7 @@ FrameBuffer render_page_with_gdi_text(const BrowserOptions& options) {
     if (frame_buffer.width <= 0 || frame_buffer.height <= 0) {
         throw std::runtime_error("framebuffer budget exceeded");
     }
+    print_diagnostics(diagnostics);
     return frame_buffer;
 }
 
@@ -587,6 +632,7 @@ private:
     int last_dirty_area_percent_ = 0;
     DisplayInvalidationResult last_display_invalidation_;
     DirtyRegionStatistics dirty_region_statistics_;
+    VectorDiagnosticSink diagnostics_;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
         BrowserApp* app = nullptr;
@@ -662,13 +708,16 @@ private:
 
     void rebuild() {
         try {
+            diagnostics_.clear();
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
             KillTimer(hwnd_, kScriptTimerId);
             script_runtime_.reset();
 #endif
-            LoadedPage page = load_page(options_, budgets_);
+            LoadedPage page = load_page(options_, budgets_, &diagnostics_);
             document_ = std::move(page.document);
-            style_resolver_ = std::make_unique<StyleResolver>(std::move(page.stylesheet));
+            StyleResolverOptions style_options;
+            style_options.diagnostics = &diagnostics_;
+            style_resolver_ = std::make_unique<StyleResolver>(std::move(page.stylesheet), style_options);
             page_background_ = page_background_color(*document_, *style_resolver_);
             render_tree_.reset();
             layout_tree_.reset();
@@ -685,11 +734,13 @@ private:
             jellyframe_example::ScriptLoadContext script_context;
             script_context.base_dir = page.script_base_dir.empty() ? std::filesystem::current_path() : page.script_base_dir;
             script_context.max_input_bytes = kMaxInputBytes;
+            script_context.diagnostics = &diagnostics_;
             std::vector<DocumentScript> document_scripts =
                 page.package_mode
                     ? collect_classic_scripts(
-                          *document_, jellyframe_example::load_package_script, &page.package_context)
-                    : collect_classic_scripts(*document_, jellyframe_example::load_linked_script, &script_context);
+                          *document_, jellyframe_example::load_package_script, &page.package_context, &diagnostics_)
+                    : collect_classic_scripts(
+                          *document_, jellyframe_example::load_linked_script, &script_context, &diagnostics_);
             if (!document_scripts.empty() || !options_.script_path.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
                 script_runtime_->set_host_time_ms(GetTickCount64());
@@ -697,6 +748,12 @@ private:
                 for (const DocumentScript& script : document_scripts) {
                     const ScriptEvaluationResult result = script_runtime_->eval(script.source, script.name);
                     if (!result.ok) {
+                        report_diagnostic(&diagnostics_,
+                                          DiagnosticStage::Script,
+                                          DiagnosticSeverity::Error,
+                                          "script-evaluation-failed",
+                                          "Document script evaluation failed",
+                                          script.name + ": " + result.error);
                         std::cerr << "document script failed: " << result.error << '\n';
                         set_title("script error: " + result.error);
                         break;
@@ -706,6 +763,12 @@ private:
                     const ScriptEvaluationResult result =
                         script_runtime_->eval(read_file_limited(options_.script_path), options_.script_path);
                     if (!result.ok) {
+                        report_diagnostic(&diagnostics_,
+                                          DiagnosticStage::Script,
+                                          DiagnosticSeverity::Error,
+                                          "script-evaluation-failed",
+                                          "Standalone script evaluation failed",
+                                          options_.script_path + ": " + result.error);
                         std::cerr << "script failed: " << result.error << '\n';
                         set_title("script error: " + result.error);
                     }
@@ -714,6 +777,7 @@ private:
             }
 #endif
             render_current(nullptr, nullptr, nullptr);
+            print_diagnostics(diagnostics_);
         } catch (const std::exception& error) {
             std::cerr << "rebuild failed: " << error.what() << '\n';
             set_title(std::string("error: ") + error.what());
@@ -745,9 +809,12 @@ private:
             return;
         }
 
-        LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(budgets_));
-        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr},
-                                      software_compositor_options_from_budgets(budgets_));
+        LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
+        layer_options.diagnostics = &diagnostics_;
+        LayerTreeBuilder layer_builder(layer_options);
+        SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
+        compositor_options.diagnostics = &diagnostics_;
+        SoftwareCompositor compositor(TextPainter{draw_text_with_gdi, nullptr}, compositor_options);
         if (update_plan.action == FrameUpdateAction::RepaintExisting &&
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {
@@ -784,11 +851,15 @@ private:
 
         const DomDirtyFlags rebuild_dirty_flags = document_->dirty_flags;
         LayoutBoxPtr previous_layout = update_plan.needs_previous_layout ? std::move(layout_tree_) : LayoutBoxPtr{};
-        RenderTreeBuilder render_builder(*style_resolver_, render_tree_options_from_budgets(budgets_));
+        RenderTreeOptions render_options = render_tree_options_from_budgets(budgets_);
+        render_options.diagnostics = &diagnostics_;
+        RenderTreeBuilder render_builder(*style_resolver_, render_options);
         auto next_render_tree = render_builder.build(*document_);
+        LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
+        layout_options.diagnostics = &diagnostics_;
         LayoutEngine layout_engine(*style_resolver_,
                                    TextMeasureProvider{measure_text_with_gdi, nullptr},
-                                   layout_engine_options_from_budgets(budgets_));
+                                   layout_options);
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_);
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
 

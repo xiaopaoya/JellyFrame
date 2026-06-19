@@ -1,10 +1,20 @@
 # App Packaging
 
 JellyFrame app packaging turns web-like source files into deterministic,
-firmware-friendly resource tables. The goal is not to copy a phone/watch app
-store package. JellyFrame keeps a small browser-like authoring model while
-producing bundles that can be loaded without a filesystem, network stack or
-runtime archive parser.
+firmware-friendly app resources. The goal is not to copy a phone/watch app store
+package. JellyFrame keeps a small browser-like authoring model while producing
+resources that can be loaded without a filesystem, network stack or runtime
+archive parser.
+
+There are two deployment shapes:
+
+- Static C++ resource tables are for firmware-built apps: launchers, watch faces,
+  app lists, factory apps, bring-up fixtures and safe fallback UI.
+- Flash-resident installable bundles are the intended path for third-party apps.
+  They are not implemented yet, but the package format and resource boundary
+  should evolve toward this path. If third-party apps required reflashing
+  firmware, JellyFrame would lose its main advantage over a conventional LVGL/C
+  firmware UI.
 
 ## Survey Summary
 
@@ -34,7 +44,7 @@ The reviewed platforms converge on a few practical patterns:
 - Source packages stay friendly to web authors: HTML, CSS, classic JS, assets,
   fonts and i18n files.
 - Build output is deterministic: sorted resources, normalized paths and stable
-  generated C++ or binary tables.
+  generated C++ tables or future binary installable bundles.
 - Runtime loading is O(log n) or bounded linear for very small bundles, with no
   heap-heavy archive parsing.
 - All budgets are declared before deployment: resource bytes, DOM nodes, CSS
@@ -73,6 +83,11 @@ my_app/
 Only `jellyframe.app.json` and the declared entry HTML are required. Everything
 else is optional and should be referenced through local absolute or relative
 paths.
+
+Development-only files such as `README.md`, `README_zh.md`, hidden directories,
+`__pycache__`, `.DS_Store` and `Thumbs.db` are ignored by the packer. They can
+document source packages without inflating runtime resources or font coverage
+reports.
 
 ## Manifest V0
 
@@ -203,7 +218,7 @@ dist/my_app.jfdir/
   resources...
 ```
 
-Embedded output:
+Built-in firmware output:
 
 ```text
 dist/my_app_resources.cpp
@@ -211,6 +226,18 @@ dist/my_app_resources.h
 dist/my_app_font.h
 dist/my_app_report.json
 ```
+
+Planned third-party installation output:
+
+```text
+dist/my_app.jfapp
+dist/my_app_report.json
+```
+
+The static C++ table and the future binary bundle should expose the same logical
+resource map to the runtime. The renderer and script runtime should not care
+whether bytes came from a compiled table, a flash partition, a debug folder or a
+board-specific app store.
 
 The generated resource table should include:
 
@@ -231,13 +258,16 @@ Recommended desktop pipeline:
 
 1. Validate `jellyframe.app.json` and normalize paths.
 2. Walk entry HTML, linked stylesheets and classic scripts.
-3. Run `jellyframe_capability_check` on the resolved resource set.
+3. Run real pipeline diagnostics from the components that actually parsed,
+   styled, laid out, rendered or loaded the app. The old text-search
+   compatibility scanner is retired; diagnostics should come from parser, CSS,
+   style, layout, layer, renderer, scripting and package loading components.
 4. Generate or verify bitmap font packs with `jellyframe_font_pack_gen`.
 5. Enforce budgets: per-resource bytes, total bundle bytes, CSS rule estimates
    and script byte limits.
 6. Emit generated resources for the selected target.
-7. Emit a report containing warnings, unsupported features, font coverage,
-   estimated memory and final resource table.
+7. Emit a report containing warnings, pipeline diagnostics, optional font
+   coverage, estimated memory and final resource table.
 
 ## Explicit Cuts
 
@@ -295,7 +325,24 @@ python tools/jellyframe_cli.py preview `
   --output build/watch_weather.ppm
 ```
 
-Run package validation plus capability checks on packaged files:
+`package` and `check` run package validation first, then run a temporary
+pseudo-browser pipeline pass so parser/style/layout/layer diagnostics come from
+the components that actually handled the app. `preview` is already a full
+pipeline run, so it does not duplicate that preflight. Pass `--font-budget`,
+`--font-coverage` or `--emit-used-chars` when you also want the font resource
+audit before packaging or previewing.
+
+For human app authoring on Windows, prefer the interactive Win32 browser shell:
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\watch_weather
+```
+
+The pseudo browser remains the deterministic CI/capture shell. It is still
+important because it can render without a window, but it should not be treated
+as the primary human debugging surface for interactive apps.
+
+Run package validation plus optional font resource checks on packaged files:
 
 ```powershell
 python tools/jellyframe_cli.py check `
@@ -337,7 +384,9 @@ but network requests are not executed yet.
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
 CRC32/SHA-256 checksums, local/remote reference diagnostics and
-package-resource warnings.
+package-resource warnings. Future reports should also include every known
+ignored, deferred, degraded, partially handled or lazily handled feature from
+the actual pipeline, plus fallback diagnostics for unknown parse/render events.
 
 `tools/package_app.py` remains the lower-level packer used by the CLI and
 embedded build integrations.

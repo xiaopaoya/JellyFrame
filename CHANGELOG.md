@@ -14,6 +14,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   live object bytes from block-allocation slack.
 - Added low-cost `StyleResolver` candidate-cache statistics for entries,
   cached rule references, hits, misses and budget clears.
+- Added a lightweight pipeline diagnostics sink. The HTML parser, CSS parser,
+  style resolver, render tree, layout and layer tree now report budget caps,
+  skipped input, ignored declarations and degraded pipeline events to desktop
+  tools.
+- Expanded diagnostics fallback coverage. The HTML tokenizer/tree builder now
+  reports unusual tags, attributes, character references, unclosed raw text and
+  unmatched end tags; script collection reports module/unknown script skips and
+  external load failures; package/resource loading, inline style parsing and
+  software renderer/paint fallbacks also report the triggering field.
 
 ### Changed
 
@@ -28,6 +37,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   before allocation when a framebuffer pixel budget is configured.
 - Microbench and virtual-board benchmark now print style candidate-cache
   statistics so computed-style sharing decisions can be based on app data.
+- Retired the old text-search compatibility scanner. `jellyframe_font_resource_check`
+  is now retained only for deterministic font resource work such as used-character
+  collection, bitmap font budget estimates and font coverage checks.
+- Renamed the former `jellyframe_capability_check` binary to
+  `jellyframe_font_resource_check`; the old name remains only as historical
+  wording.
+- `jellyframe_cli.py package` and `check` now run pseudo-browser pipeline
+  diagnostics by default. `preview` is itself a full pipeline run. Font resource
+  checks still run only when font options are requested.
 
 ## 0.3.0-dev - 2026-06-18
 
@@ -82,7 +100,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   painter for more faithful UTF-8/Chinese desktop validation.
 - Added bilingual text backend documentation covering measurement/painting
   contracts and fallback limits.
-- Added font coverage support to `jellyframe_capability_check`: it can emit
+- Added font coverage support to `jellyframe_font_resource_check`: it can emit
   non-ASCII used characters and verify them against a UTF-8 font coverage file.
 - Added button/crown-friendly focus navigation on `InputController`:
   `focus_next()`, `focus_previous()` and `activate_focused()`.
@@ -251,7 +269,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   validation shell title.
 - Added `HostTextAdapter`, a platform-neutral bridge for LVGL/vendor text
   measurement and painting callbacks.
-- Added font budget summaries to `jellyframe_capability_check` and font-pack
+- Added font budget summaries to `jellyframe_font_resource_check` and font-pack
   size estimates to `jellyframe_font_pack_gen`.
 - Added `embedded_framebuffer`, a platform-neutral `HostFrameSink` adapter that
   converts dirty rectangles into caller-owned RGBA8888/BGRA8888, RGB565/BGR565,
@@ -269,8 +287,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   reflection.
 - Added mouse-like `pointerdown`/`pointerup` and `touchstart`/`touchend` event
   dispatch for wearable press feedback.
-- Added `jellyframe_capability_check`, a desktop HTML/CSS/JS scanner for supported
-  subsets, degraded features and unsupported browser APIs.
+- Added the early `jellyframe_capability_check` desktop HTML/CSS/JS scanner for
+  supported subsets, degraded features and unsupported browser APIs. This tool
+  was later retired and replaced by pipeline diagnostics; its remaining font
+  work was renamed to `jellyframe_font_resource_check`.
 - Added conservative modern length function support for `min()`, `max()`,
   `clamp()` and simple `calc(A +/- B)` when arguments resolve to supported
   lengths.

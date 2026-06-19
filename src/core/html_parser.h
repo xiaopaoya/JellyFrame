@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/dom.h"
+#include "core/diagnostics.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,7 @@ struct HtmlParserOptions {
     std::size_t max_nodes = 8192;
     std::size_t max_depth = 64;
     std::size_t max_attributes_per_element = 64;
+    DiagnosticSink* diagnostics = nullptr;
     bool synthesize_document_structure = true;
     bool collapse_whitespace = false;
 };

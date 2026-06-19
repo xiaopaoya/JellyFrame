@@ -141,12 +141,12 @@ bitmap fonts.
 
 ## Font Subsetting
 
-`jellyframe_capability_check` can help prepare embedded font packs:
+`jellyframe_font_resource_check` can help prepare embedded font packs:
 
 ```text
-jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
-jellyframe_capability_check --font-coverage font_chars.txt app.html app.css app.js
-jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
+jellyframe_font_resource_check --emit-used-chars used_chars.txt app.html app.css app.js
+jellyframe_font_resource_check --font-coverage font_chars.txt app.html app.css app.js
+jellyframe_font_resource_check --font-budget 16x16 app.html app.css app.js
 ```
 
 `used_chars.txt` contains the non-ASCII UTF-8 characters seen in source files,
@@ -170,7 +170,7 @@ tight flash budgets should prefer app-specific subsets, while global products sh
 The intended production path is:
 
 1. Author normal HTML/CSS/JS text.
-2. Run the capability checker to collect required non-ASCII characters.
+2. Run the font resource checker to collect required non-ASCII characters.
 3. Use an offline font tool to rasterize those glyphs from a licensed vector
    font into a static embedded bitmap font pack.
 4. Link that pack into the host text backend.

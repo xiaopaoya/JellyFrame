@@ -107,8 +107,8 @@ JellyFrame is not ready for:
 | `@supports` | Subset | Declaration feature queries are evaluated conservatively. `(property: value)`, `not`, homogeneous `and`/`or` chains and parentheses are supported. `selector()` and unknown/unsafe features evaluate false and skip the block. |
 | `@container` | Deferred/Lazy | Whole block skipped. Avoid it for required UI. |
 | `@font-face` | Lazy | Balanced block skipped; no font loading. |
-| Font coverage check | Tool-only | `jellyframe_capability_check --emit-used-chars` collects non-ASCII source characters; `--font-coverage` reports missing codepoints before embedding. |
-| Font profile and budget estimate | Tool-only | `jellyframe_capability_check --font-budget WxH` prints a rough bitmap-pack byte estimate and recommends `tiny`, `tiny-plus-symbols`, `app-subset-cn`, `cn-standard` or `global-product` from scanned codepoints. |
+| Font coverage check | Tool-only | `jellyframe_font_resource_check --emit-used-chars` collects non-ASCII source characters; `--font-coverage` reports missing codepoints before embedding. |
+| Font profile and budget estimate | Tool-only | `jellyframe_font_resource_check --font-budget WxH` prints a rough bitmap-pack byte estimate and recommends `tiny`, `tiny-plus-symbols`, `app-subset-cn`, `cn-standard` or `global-product` from scanned codepoints. |
 | Bitmap font pack generation | Tool-only | `jellyframe_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds and reports emitted glyph/byte estimates. |
 | `@keyframes` | Lazy | Balanced block skipped; no animation model. |
 | Unknown at-rules | Lazy | Statement or balanced block skipped. |
@@ -278,7 +278,9 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `querySelector` | Deferred | Use IDs for now. |
 | `innerHTML` | Deferred | Use DOM creation APIs. |
 | Fetch/network/storage | Deferred | Host must provide data. |
-| Capability checker | Tool-only | `jellyframe_capability_check` scans HTML/CSS/JS on desktop and reports supported subsets, degraded features and unsupported APIs. It can also emit non-ASCII used characters and verify font coverage. |
+| Text-search compatibility checker | Retired | The old HTML/CSS/JS substring scanner is no longer used for compatibility decisions. Future diagnostics must come from the pipeline component that actually parsed, styled, laid out, rendered or loaded the feature. |
+| Pipeline diagnostics | Started | HTML tokenizer/parser, CSS parser, style resolver, render tree, layout, layer tree, script collection, package/resource loading and software renderer report caps, skipped input, ignored declarations, load failures and degradation through an optional sink used by desktop tools. Known incompatibilities should include a precise reason; unknown or unclassified recovery should at least include the triggering field or snippet. |
+| Font resource checker | Tool-only | `jellyframe_font_resource_check` is currently retained for deterministic font work: emit non-ASCII used characters, estimate bitmap font budgets and verify embedded font coverage. |
 
 ## Rendering And Pixels
 

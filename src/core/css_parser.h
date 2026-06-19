@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/style.h"
+#include "core/diagnostics.h"
 
 #include <cstddef>
 #include <string>
@@ -16,6 +17,7 @@ struct CssParserOptions {
     bool parse_supports_blocks = true;
     int media_viewport_width = 360;
     int media_viewport_height = 240;
+    DiagnosticSink* diagnostics = nullptr;
 };
 
 class CssParser {

@@ -126,12 +126,12 @@ jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pac
 
 ## 字体子集
 
-`jellyframe_capability_check` 可以辅助准备嵌入式字体包：
+`jellyframe_font_resource_check` 可以辅助准备嵌入式字体包：
 
 ```text
-jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
-jellyframe_capability_check --font-coverage font_chars.txt app.html app.css app.js
-jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
+jellyframe_font_resource_check --emit-used-chars used_chars.txt app.html app.css app.js
+jellyframe_font_resource_check --font-coverage font_chars.txt app.html app.css app.js
+jellyframe_font_resource_check --font-budget 16x16 app.html app.css app.js
 ```
 
 `used_chars.txt` 会包含源码中出现的非 ASCII UTF-8 字符，并识别常见 numeric/named character references。
@@ -152,7 +152,7 @@ app-specific subset；全球化产品应按销售区域提供字体包。
 预期生产路径：
 
 1. 作者正常编写 HTML/CSS/JS 文本。
-2. 用能力验证器收集需要的非 ASCII 字符。
+2. 用字体资源检查器收集需要的非 ASCII 字符。
 3. 用离线字体工具从授权矢量字体 rasterize 这些 glyph，生成静态嵌入式 bitmap font pack。
 4. 宿主文本后端链接这个 font pack。
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/diagnostics.h"
 #include "core/geometry.h"
 #include "core/host.h"
 #include "core/layer_tree.h"
@@ -42,13 +43,14 @@ struct TextPainter {
 
 class SoftwareRasterizer {
 public:
-    explicit SoftwareRasterizer(TextPainter text_painter = {});
+    explicit SoftwareRasterizer(TextPainter text_painter = {}, DiagnosticSink* diagnostics = nullptr);
 
     void rasterize(const DisplayList& display_list, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
     void rasterize(const DisplayCommand& command, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
 
 private:
     TextPainter text_painter_;
+    DiagnosticSink* diagnostics_ = nullptr;
 };
 
 class SoftwareCompositor {
@@ -56,6 +58,7 @@ public:
     struct Options {
         std::size_t max_framebuffer_pixels = 0;
         std::size_t max_offscreen_pixels = 0;
+        DiagnosticSink* diagnostics = nullptr;
     };
 
     explicit SoftwareCompositor(TextPainter text_painter = {}, Options options = {});

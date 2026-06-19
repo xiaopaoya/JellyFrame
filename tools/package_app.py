@@ -150,6 +150,70 @@ def validate_manifest(manifest: dict) -> dict:
     }
 
 
+def collect_manifest_warnings(manifest: dict) -> list[dict]:
+    warnings = []
+    allowed_top_level = {
+        "$schema",
+        "format",
+        "formatVersion",
+        "id",
+        "name",
+        "version",
+        "entry",
+        "runtime",
+        "viewport",
+        "budgets",
+        "permissions",
+        "capabilities",
+        "targets",
+    }
+    for key in sorted(manifest.keys()):
+        if key not in allowed_top_level:
+            warnings.append({
+                "level": "warning",
+                "code": "manifest-field-unknown",
+                "message": f"manifest field is not recognized by this JellyFrame toolchain: {key}",
+                "source": "jellyframe.app.json",
+            })
+    nested_allowed = {
+        "version": {"name", "code"},
+        "runtime": {"minJellyFrame", "script"},
+        "viewport": {"designWidth", "designHeight", "shape"},
+        "budgets": {
+            "maxResourceBytes",
+            "maxDomNodes",
+            "maxDomDepth",
+            "maxAttributesPerElement",
+            "maxCssRules",
+            "maxCssDeclarationsPerRule",
+            "maxRenderObjects",
+            "maxLayoutBoxes",
+            "maxLayers",
+            "maxDisplayCommands",
+            "maxDirtyRects",
+            "maxTimers",
+            "maxDetachedDomNodes",
+            "maxInputEventsPerFrame",
+            "maxTimerCallbacksPerFrame",
+            "maxEventListeners",
+            "maxFramebufferPixels",
+        },
+    }
+    for parent, allowed in nested_allowed.items():
+        value = manifest.get(parent)
+        if not isinstance(value, dict):
+            continue
+        for key in sorted(value.keys()):
+            if key not in allowed:
+                warnings.append({
+                    "level": "warning",
+                    "code": "manifest-field-unknown",
+                    "message": f"manifest field is not recognized by this JellyFrame toolchain: {parent}.{key}",
+                    "source": "jellyframe.app.json",
+                })
+    return warnings
+
+
 def load_target_preset(target: str) -> dict:
     if not target:
         return {}
@@ -213,14 +277,32 @@ def build_resource_entry(root: Path, path: Path, app_path: str, max_resource_byt
     }
 
 
+def is_development_only_file(path: Path) -> bool:
+    lowered = path.name.lower()
+    return lowered in {
+        ".ds_store",
+        "readme",
+        "readme.md",
+        "readme_zh.md",
+        "thumbs.db",
+    }
+
+
+def is_development_only_path(relative: Path) -> bool:
+    return any(part.startswith(".") or part == "__pycache__" for part in relative.parts) or \
+        is_development_only_file(relative)
+
+
 def discover_resources(root: Path, max_resource_bytes: int) -> list[dict]:
     resources = []
     seen = set()
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.name == "jellyframe.app.json":
             continue
-        relative = path.relative_to(root).as_posix()
-        app_path = normalize_app_path(relative)
+        relative_path = path.relative_to(root)
+        if is_development_only_path(relative_path):
+            continue
+        app_path = normalize_app_path(relative_path.as_posix())
         if app_path in seen:
             fail(f"duplicate normalized resource path: {app_path}")
         seen.add(app_path)
@@ -385,12 +467,15 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
-    manifest = validate_manifest(read_manifest(root))
+    raw_manifest = read_manifest(root)
+    warnings = collect_manifest_warnings(raw_manifest)
+    manifest = validate_manifest(raw_manifest)
     target_config = effective_target_config(manifest, args.target)
     budgets = effective_budgets(manifest, target_config)
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
-    warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
+    reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
+    warnings.extend(reference_warnings)
 
     if not args.validate_only:
         if not args.output_cpp:

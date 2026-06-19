@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/dom.h"
+#include "core/diagnostics.h"
 #include "core/geometry.h"
 
 #include <array>
@@ -202,6 +203,7 @@ struct StyleResolverOptions {
     const Node* hovered_node = nullptr;
     const Node* active_node = nullptr;
     const Node* focused_node = nullptr;
+    DiagnosticSink* diagnostics = nullptr;
 };
 
 struct StyleResolverStatistics {

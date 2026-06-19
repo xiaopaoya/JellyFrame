@@ -45,7 +45,7 @@ hardware-porting tasks:
 - Changing the HTML/CSS/DOM/layout/render core algorithms.
 - Adding font-file loading, filesystems, networking or display drivers inside
   `jellyframe_core`.
-- Reimplementing `jellyframe_capability_check`, `jellyframe_font_pack_gen`,
+- Reimplementing `jellyframe_font_resource_check`, `jellyframe_font_pack_gen`,
   `embedded_framebuffer` or the bitmap font callbacks.
 - Implementing a no-full-framebuffer tiled renderer, complex text shaping,
   image decoding or a network security model in the first ESP32-S3 port.
@@ -155,7 +155,8 @@ Acceptance:
 - Static resources, inline `<style>`, local `<link rel="stylesheet">` and
   classic `<script>` can load through host callbacks.
 - Missing resources do not block first paint.
-- The desktop capability checker can scan the same resource set.
+- The desktop font resource checker can scan the same resource set for text and
+  glyph coverage.
 
 ### P3: Display And Framebuffer
 
@@ -221,7 +222,7 @@ Provided by the core/tooling:
 - `TextMeasureProvider` and `TextPainter` callback interfaces.
 - Bitmap font data structures, measurement callback and painting callback in
   `src/core/bitmap_font.h`.
-- `jellyframe_capability_check` for scanning non-ASCII characters from
+- `jellyframe_font_resource_check` for scanning non-ASCII characters from
   HTML/CSS/JS, checking font coverage, estimating bitmap-pack budgets and
   recommending a font profile.
 - `jellyframe_font_pack_gen` for generating a C++ `BitmapFont` header from a
@@ -255,8 +256,8 @@ Implementation:
 1. On the desktop build machine, run:
 
    ```text
-   jellyframe_capability_check --emit-used-chars used_chars.txt app.html app.css app.js
-   jellyframe_capability_check --font-budget 16x16 app.html app.css app.js
+   jellyframe_font_resource_check --emit-used-chars used_chars.txt app.html app.css app.js
+   jellyframe_font_resource_check --font-budget 16x16 app.html app.css app.js
 
    Review the printed font profile before deciding between `tiny`,
    `app-subset-cn`, `cn-standard` and market-specific global packs.

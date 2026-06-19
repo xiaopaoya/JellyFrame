@@ -27,6 +27,15 @@ Stylesheet parse(const std::string& source) {
 
 Node* find_first_by_tag(Node& node, const std::string& tag_name);
 
+bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
+    for (const Diagnostic& diagnostic : sink.diagnostics()) {
+        if (diagnostic.code == code) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void parses_comments_strings_and_functions() {
     const Stylesheet stylesheet = parse(
         "/* reset */"
@@ -63,6 +72,32 @@ void skips_enhancement_blocks_without_corrupting_following_rules() {
     check(stylesheet[0].selector == ".base", "base selector");
     check(stylesheet[1].selector == ".narrow", "matching conditional media selector");
     check(stylesheet[2].selector == ".after", "following selector");
+}
+
+void pipeline_diagnostics_report_css_and_style_degradation() {
+    VectorDiagnosticSink diagnostics;
+    CssParser parser;
+    CssParserOptions css_options;
+    css_options.diagnostics = &diagnostics;
+    Stylesheet stylesheet = parser.parse(
+        "@container card (min-width: 120px) { .card { color: red; } }"
+        ".card:has(button) { color: blue; }"
+        ".card { color: oklch(50% 0.2 30); backdrop-filter: blur(8px); }",
+        css_options);
+
+    auto node = make_element("div");
+    node->attributes["class"] = "card";
+    node->attributes["style"] = "color; background:";
+    StyleResolverOptions style_options;
+    style_options.diagnostics = &diagnostics;
+    StyleResolver resolver(std::move(stylesheet), style_options);
+    (void)resolver.resolve(*node);
+
+    check(has_diagnostic_code(diagnostics, "css-at-rule-skipped"), "unsupported at-rule is reported");
+    check(has_diagnostic_code(diagnostics, "css-selector-skipped"), "unsupported selector is reported");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"), "unsupported value is reported");
+    check(has_diagnostic_code(diagnostics, "style-property-unsupported"), "unsupported property is reported");
+    check(has_diagnostic_code(diagnostics, "style-inline-declaration-malformed"), "bad inline style is reported");
 }
 
 void supports_queries_flatten_safe_declaration_subset() {
@@ -681,6 +716,7 @@ int main() {
         parses_comments_strings_and_functions();
         splits_selector_lists();
         skips_enhancement_blocks_without_corrupting_following_rules();
+        pipeline_diagnostics_report_css_and_style_degradation();
         supports_queries_flatten_safe_declaration_subset();
         flattens_layers_and_plain_media();
         conditional_media_queries_respect_viewport();

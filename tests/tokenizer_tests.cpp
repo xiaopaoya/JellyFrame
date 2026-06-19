@@ -40,6 +40,15 @@ void check(bool condition, const char* message) {
     }
 }
 
+bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
+    for (const Diagnostic& diagnostic : sink.diagnostics()) {
+        if (diagnostic.code == code) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void parses_common_document_shell() {
     const auto tokens = tokenize("<!doctype html><div class=\"a\" disabled data-x=1>&amp;&#x41;</div>");
 
@@ -183,6 +192,25 @@ void parser_reports_resource_limit_diagnostics() {
     check((result.diagnostics & HtmlParserDiagnosticAttributeLimit) != 0U, "attribute limit diagnostic");
 }
 
+void parser_reports_tokenizer_and_tree_recovery_diagnostics() {
+    HtmlParser parser;
+    HtmlParserOptions options;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+
+    HtmlParseResult result = parser.parse_with_diagnostics(
+        "<body><div a=1 a=2 bad<'x'><span/>Text &notareal;</missing><script>unterminated",
+        options);
+
+    check(result.document != nullptr, "diagnostic parser returns document for malformed markup");
+    check(has_diagnostic_code(diagnostics, "html-duplicate-attribute"), "duplicate attribute is reported");
+    check(has_diagnostic_code(diagnostics, "html-suspicious-attribute-name"), "suspicious attribute name is reported");
+    check(has_diagnostic_code(diagnostics, "html-character-reference-unknown"), "unknown character reference is reported");
+    check(has_diagnostic_code(diagnostics, "html-unmatched-end-tag"), "unmatched end tag is reported");
+    check(has_diagnostic_code(diagnostics, "html-non-void-self-closing"), "non-void self closing recovery is reported");
+    check(has_diagnostic_code(diagnostics, "html-raw-text-unclosed"), "unclosed raw text is reported");
+}
+
 void streaming_tokenizer_matches_vector_tokenizer() {
     const std::string source = "<div a=1>&amp;<script>x < y</script></div>";
     HtmlTokenizer tokenizer;
@@ -216,6 +244,7 @@ int main() {
         parser_applies_common_implied_end_tags();
         parser_respects_resource_limits();
         parser_reports_resource_limit_diagnostics();
+        parser_reports_tokenizer_and_tree_recovery_diagnostics();
         streaming_tokenizer_matches_vector_tokenizer();
     } catch (const std::exception& error) {
         std::cerr << "tokenizer test failed: " << error.what() << '\n';

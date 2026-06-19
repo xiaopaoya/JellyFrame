@@ -827,6 +827,12 @@ private:
                 return;
             }
             if (stylesheet_.size() >= options_.max_rules) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-rule-limit",
+                                  "CSS rule budget was reached; remaining rules were skipped",
+                                  "This keeps low-memory targets bounded but may remove later cascade overrides.");
                 skip_until_eof_or_block_end(stop_at_block_end);
                 return;
             }
@@ -851,9 +857,21 @@ private:
 
         if (delimiter == ';') {
             consume();
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Info,
+                              "css-at-rule-ignored",
+                              "Non-block CSS at-rule was ignored",
+                              name.empty() ? std::string("@") : "@" + name);
             return;
         }
         if (delimiter != '{') {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-at-rule-malformed",
+                              "Malformed CSS at-rule was skipped",
+                              name.empty() ? std::string("@") : "@" + name);
             return;
         }
 
@@ -861,6 +879,12 @@ private:
         if (depth + 1 <= options_.max_nesting_depth && is_supported_group_at_rule(name, prelude, options_)) {
             parse_rule_list(depth + 1, true);
         } else {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-at-rule-skipped",
+                              "CSS at-rule block was skipped or lazily ignored",
+                              "@" + name + (prelude.empty() ? std::string{} : " " + prelude));
             skip_balanced_block();
         }
     }
@@ -873,20 +897,53 @@ private:
             if (delimiter == ';') {
                 consume();
             }
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-rule-malformed",
+                              "Malformed CSS qualified rule was skipped",
+                              selector_text);
             return;
         }
 
         consume();
         std::vector<CssDeclaration> declarations = parse_declaration_block();
-        if (declarations.empty() || !is_selector_prelude_supported(selector_text)) {
+        if (declarations.empty()) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Info,
+                              "css-empty-rule",
+                              "CSS rule had no usable declarations",
+                              selector_text);
+            return;
+        }
+        if (!is_selector_prelude_supported(selector_text)) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-selector-skipped",
+                              "CSS selector requires unsupported selector semantics and was skipped",
+                              selector_text);
             return;
         }
 
         for (std::string selector : split_selector_list(selector_text)) {
             if (stylesheet_.size() >= options_.max_rules) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-rule-limit",
+                                  "CSS rule budget was reached; remaining selector-list items were skipped",
+                                  selector_text);
                 return;
             }
             if (selector.empty() || !is_selector_prelude_supported(selector)) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-selector-skipped",
+                                  "CSS selector-list item was skipped",
+                                  selector);
                 continue;
             }
             const bool pseudo_before = strip_before_pseudo(selector);
@@ -897,6 +954,12 @@ private:
             rule.specificity = calculate_specificity(rule.selector);
             rule.selector_parts = parse_css_selector_parts(rule.selector);
             if (rule.selector_parts.empty()) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-selector-unmatched",
+                                  "CSS selector could not be indexed and was skipped",
+                                  rule.selector);
                 continue;
             }
             rule.index_key = build_css_rule_index_key(rule.selector_parts);
@@ -917,6 +980,12 @@ private:
                 break;
             }
             if (declarations.size() >= options_.max_declarations_per_rule) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-declaration-limit",
+                                  "CSS declaration budget was reached; remaining declarations in the block were skipped",
+                                  {});
                 skip_balanced_block_tail();
                 break;
             }
@@ -931,11 +1000,23 @@ private:
 
             std::string property = ascii_lowercase(trim(source_.substr(name_begin, index_ - name_begin)));
             if (property.empty()) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-declaration-malformed",
+                                  "Malformed CSS declaration was skipped",
+                                  {});
                 recover_declaration();
                 continue;
             }
             skip_whitespace_and_comments();
             if (eof() || peek() != ':') {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-declaration-malformed",
+                                  "CSS declaration without ':' was skipped",
+                                  property);
                 recover_declaration();
                 continue;
             }
@@ -948,6 +1029,13 @@ private:
             declaration.value = std::move(value);
             if (!declaration.value.empty()) {
                 declarations.push_back(std::move(declaration));
+            } else {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-empty-declaration",
+                                  "CSS declaration had an empty value and was skipped",
+                                  declaration.property);
             }
         }
         return declarations;

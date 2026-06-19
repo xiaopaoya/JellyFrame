@@ -2160,17 +2160,19 @@ bool apply_edge_shorthand(Style& style,
     return false;
 }
 
-void apply_cascaded_declaration(Style& style,
+bool apply_cascaded_declaration(Style& style,
                                 CascadeSlot& slot,
                                 const CssDeclaration& declaration,
                                 const CssSpecificity& specificity,
                                 std::size_t source_order) {
     if (!declaration_wins(slot, declaration, specificity, source_order)) {
-        return;
+        return true;
     }
     if (apply_declaration(style, declaration.property, declaration.value)) {
         mark_slot(slot, declaration, specificity, source_order);
+        return true;
     }
+    return false;
 }
 
 bool parse_counter_content(const std::string& raw_value, std::string& name, std::string& suffix) {
@@ -2246,17 +2248,19 @@ bool apply_before_declaration(Style& style, const std::string& property, const s
     return false;
 }
 
-void apply_cascaded_before_declaration(Style& style,
+bool apply_cascaded_before_declaration(Style& style,
                                        CascadeSlot& slot,
                                        const CssDeclaration& declaration,
                                        const CssSpecificity& specificity,
                                        std::size_t source_order) {
     if (!declaration_wins(slot, declaration, specificity, source_order)) {
-        return;
+        return true;
     }
     if (apply_before_declaration(style, declaration.property, declaration.value)) {
         mark_slot(slot, declaration, specificity, source_order);
+        return true;
     }
+    return false;
 }
 
 void apply_declarations(Style& style,
@@ -2265,7 +2269,8 @@ void apply_declarations(Style& style,
                         const CssSpecificity& specificity,
                         std::size_t source_order,
                         bool pseudo_before,
-                        const CustomPropertyMap& custom_properties) {
+                        const CustomPropertyMap& custom_properties,
+                        DiagnosticSink* diagnostics) {
     for (const CssDeclaration& declaration : declarations) {
         if (is_custom_property_name(declaration.property)) {
             continue;
@@ -2274,7 +2279,21 @@ void apply_declarations(Style& style,
         if (pseudo_before) {
             CascadeSlot* slot = cascade_slot_for_before_property(slots, resolved_declaration.property);
             if (slot != nullptr) {
-                apply_cascaded_before_declaration(style, *slot, resolved_declaration, specificity, source_order);
+                if (!apply_cascaded_before_declaration(style, *slot, resolved_declaration, specificity, source_order)) {
+                    report_diagnostic(diagnostics,
+                                      DiagnosticStage::Style,
+                                      DiagnosticSeverity::Warning,
+                                      "style-before-declaration-ignored",
+                                      "Pseudo-element declaration could not be applied",
+                                      resolved_declaration.property + ": " + resolved_declaration.value);
+                }
+            } else {
+                report_diagnostic(diagnostics,
+                                  DiagnosticStage::Style,
+                                  DiagnosticSeverity::Info,
+                                  "style-before-property-unsupported",
+                                  "Pseudo-element property is outside the supported subset",
+                                  resolved_declaration.property);
             }
             continue;
         }
@@ -2283,17 +2302,40 @@ void apply_declarations(Style& style,
         }
         CascadeSlot* slot = cascade_slot_for_property(slots, resolved_declaration.property);
         if (slot != nullptr) {
-            apply_cascaded_declaration(style, *slot, resolved_declaration, specificity, source_order);
+            if (!apply_cascaded_declaration(style, *slot, resolved_declaration, specificity, source_order)) {
+                report_diagnostic(diagnostics,
+                                  DiagnosticStage::Style,
+                                  DiagnosticSeverity::Warning,
+                                  "style-declaration-ignored",
+                                  "CSS declaration could not be applied by the supported style subset",
+                                  resolved_declaration.property + ": " + resolved_declaration.value);
+            }
+        } else {
+            report_diagnostic(diagnostics,
+                              DiagnosticStage::Style,
+                              DiagnosticSeverity::Info,
+                              "style-property-unsupported",
+                              "CSS property is outside the supported subset and was ignored",
+                              resolved_declaration.property);
         }
     }
 }
 
-std::vector<CssDeclaration> parse_inline_style(const std::string& source) {
+std::vector<CssDeclaration> parse_inline_style(const std::string& source, DiagnosticSink* diagnostics = nullptr) {
     std::vector<CssDeclaration> declarations;
     std::size_t index = 0;
     while (index < source.size()) {
         const std::size_t colon = source.find(':', index);
         if (colon == std::string::npos) {
+            const std::string remaining = trim(std::string_view(source).substr(index));
+            if (!remaining.empty()) {
+                report_diagnostic(diagnostics,
+                                  DiagnosticStage::Style,
+                                  DiagnosticSeverity::Warning,
+                                  "style-inline-declaration-malformed",
+                                  "Inline style declaration without ':' was ignored",
+                                  remaining);
+            }
             break;
         }
         const std::size_t semicolon = source.find(';', colon + 1);
@@ -2303,6 +2345,13 @@ std::vector<CssDeclaration> parse_inline_style(const std::string& source) {
         declaration.value = trim(std::string_view(source).substr(colon + 1, end - colon - 1));
         if (!declaration.property.empty() && !declaration.value.empty()) {
             declarations.push_back(std::move(declaration));
+        } else {
+            report_diagnostic(diagnostics,
+                              DiagnosticStage::Style,
+                              DiagnosticSeverity::Warning,
+                              "style-inline-declaration-malformed",
+                              "Inline style declaration had an empty property or value and was ignored",
+                              trim(std::string_view(source).substr(index, end - index)));
         }
         index = end + 1;
     }
@@ -2740,7 +2789,7 @@ CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
         CssSpecificity inline_specificity;
         inline_specificity.ids = 1;
         apply_custom_declarations(local,
-                                  parse_inline_style(current->attribute("style")),
+                                  parse_inline_style(current->attribute("style"), options_.diagnostics),
                                   inline_specificity,
                                   static_cast<std::size_t>(-1));
         for (const auto& entry : local) {
@@ -2761,7 +2810,8 @@ Style StyleResolver::resolve(const Node& node) const {
     for (const CssRule* rule : candidate_rules_for(node)) {
         if (matches_rule(node, *rule, context)) {
             apply_declarations(style, slots, rule->declarations, rule->specificity,
-                               rule->source_order, rule->pseudo_before, custom_properties);
+                               rule->source_order, rule->pseudo_before, custom_properties,
+                               options_.diagnostics);
         }
     }
     if (node.type == NodeType::Element) {
@@ -2769,8 +2819,9 @@ Style StyleResolver::resolve(const Node& node) const {
         inline_specificity.ids = 1;
         inline_specificity.classes = 0;
         inline_specificity.elements = 0;
-        apply_declarations(style, slots, parse_inline_style(node.attribute("style")), inline_specificity,
-                           static_cast<std::size_t>(-1), false, custom_properties);
+        apply_declarations(style, slots, parse_inline_style(node.attribute("style"), options_.diagnostics), inline_specificity,
+                           static_cast<std::size_t>(-1), false, custom_properties,
+                           options_.diagnostics);
     }
     return style;
 }

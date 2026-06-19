@@ -359,17 +359,6 @@ bool parse_font_budget(std::string_view value, int& width, int& height) {
            parse_positive_int(value.substr(separator + 1), height);
 }
 
-std::string lowercase(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return value;
-}
-
-bool contains(std::string_view haystack, std::string_view needle) {
-    return haystack.find(needle) != std::string_view::npos;
-}
-
 void add(std::vector<Finding>& findings,
          const std::string& file,
          const char* level,
@@ -384,89 +373,6 @@ void add(std::vector<Finding>& findings,
          const char* feature,
          const std::string& detail) {
     findings.push_back(Finding{file, level, feature, detail});
-}
-
-void scan_html_css_js(const std::string& file, const std::string& source, std::vector<Finding>& findings) {
-    const std::string lower = lowercase(source);
-
-    if (contains(lower, "queryselector(") || contains(lower, "queryselectorall(")) {
-        add(findings, file, "unsupported", "querySelector", "Use stable id lookups or event.target.closest(simple-selector).");
-    }
-    if (contains(lower, ".innerhtml") || contains(lower, "innerhtml")) {
-        add(findings, file, "unsupported", "innerHTML", "Use createElement/createTextNode/appendChild.");
-    }
-    if (contains(lower, "fetch(") || contains(lower, "xmlhttprequest") || contains(lower, "localstorage")) {
-        add(findings, file, "unsupported", "network/storage", "Provide data through host callbacks; no browser network/storage exists.");
-    }
-    if (contains(lower, "type=\"module\"") || contains(lower, "type='module'") || contains(lower, "import(")) {
-        add(findings, file, "unsupported", "ES modules", "Only classic scripts are collected by scripting shells.");
-    }
-    if (contains(lower, "<canvas") || contains(lower, "<svg")) {
-        add(findings, file, "unsupported", "canvas/svg", "Use HTML controls and CSS boxes; no canvas/SVG renderer exists.");
-    }
-    if (contains(lower, "@container")) {
-        add(findings, file, "deferred", "@container", "Container queries are intentionally deferred.");
-    }
-    if (contains(lower, "@media")) {
-        add(findings,
-            file,
-            "supported-subset",
-            "@media",
-            "Only screen/all plus min/max width/height conditions are evaluated; complex media queries are skipped.");
-    }
-    if (contains(lower, "@supports")) {
-        add(findings,
-            file,
-            "supported-subset",
-            "@supports",
-            "Declaration conditions, not/and/or and parentheses are evaluated conservatively; selector() and unknown features are skipped.");
-    }
-    if (contains(lower, "var(")) {
-        add(findings,
-            file,
-            "supported-subset",
-            "CSS var()",
-            "Direct var(--token) and var(--token, fallback) resolution is supported; full dependency graph semantics are not.");
-    }
-    if (contains(lower, "object-fit")) {
-        add(findings, file, "deferred", "object-fit", "Image decode/object fitting is not implemented yet.");
-    }
-    if (contains(lower, ":is(") || contains(lower, ":where(")) {
-        add(findings,
-            file,
-            "supported-subset",
-            ":is/:where",
-            ":is() matches with max-argument specificity; :where() matches with zero specificity.");
-    }
-    if (contains(lower, ":has(")) {
-        add(findings, file, "deferred", ":has", "Relational selector matching is intentionally deferred.");
-    }
-    if (contains(lower, ":hover") || contains(lower, ":focus") || contains(lower, ":active") ||
-        contains(lower, ":checked") || contains(lower, ":disabled") || contains(lower, ":focus-within")) {
-        add(findings,
-            file,
-            "supported-subset",
-            "dynamic pseudo-classes",
-            ":hover/:active/:focus/:focus-within use input state; :checked/:disabled use form-control state.");
-    }
-    if (contains(lower, "filter:") || contains(lower, "backdrop-filter") || contains(lower, "mix-blend-mode")) {
-        add(findings, file, "degraded", "filters/blending", "Only normal source-over and cheap shadows are supported.");
-    }
-    if (contains(lower, "display: grid") && contains(lower, "repeat(")) {
-        add(findings, file, "supported-subset", "grid repeat", "repeat(N, 1fr) and repeat(N, minmax(0, 1fr)) are supported subsets; auto-fit/minmax(length, 1fr) remains supported.");
-    }
-    if (contains(lower, "data-")) {
-        add(findings, file, "supported", "dataset", "Existing data-* attributes are exposed through element.dataset.");
-    }
-    if (contains(lower, ".closest(") || contains(lower, ".matches(")) {
-        add(findings, file, "supported-subset", "matches/closest", "Simple tag/class/id/attribute selectors are supported.");
-    }
-    if (contains(lower, ".style.")) {
-        add(findings, file, "supported-subset", "element.style", "display/color/background/backgroundColor/textAlign/fontWeight/width/height are supported.");
-    }
-    if (contains(lower, "pointerdown") || contains(lower, "touchstart")) {
-        add(findings, file, "supported", "pointer/touch events", "pointerdown/pointerup and touchstart/touchend are exposed as mouse-like events.");
-    }
 }
 
 Options parse_options(int argc, char** argv) {
@@ -506,11 +412,11 @@ int main(int argc, char** argv) {
     try {
         options = parse_options(argc, argv);
     } catch (const std::exception& error) {
-        std::cerr << "capability check failed: " << error.what() << '\n';
+        std::cerr << "font resource check failed: " << error.what() << '\n';
         return 2;
     }
     if (options.files.empty()) {
-        std::cerr << "usage: jellyframe_capability_check [--font-coverage chars.txt] "
+        std::cerr << "usage: jellyframe_font_resource_check [--font-coverage chars.txt] "
                      "[--emit-used-chars used_chars.txt] [--font-budget WxH] "
                      "<file.html> [style.css] [script.js...]\n";
         return 2;
@@ -530,7 +436,6 @@ int main(int argc, char** argv) {
     for (const std::string& file : options.files) {
         try {
             const std::string source = read_file(file);
-            scan_html_css_js(file, source, findings);
 
             std::set<std::uint32_t> file_codepoints;
             collect_used_codepoints(source, file_codepoints);
@@ -553,7 +458,7 @@ int main(int argc, char** argv) {
                 if (missing > 0) {
                     add(findings,
                         file,
-                        "unsupported",
+                        "missing-font-glyphs",
                         "font coverage",
                         "font pack misses " + std::to_string(missing) +
                             " non-ASCII codepoints used by this source; examples: " + examples);
@@ -586,17 +491,17 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::size_t unsupported = 0;
-    std::cout << "JellyFrame capability check\n";
+    std::size_t blocking = 0;
+    std::cout << "JellyFrame font resource check\n";
     for (const Finding& finding : findings) {
-        if (finding.level == "unsupported" || finding.level == "error") {
-            ++unsupported;
+        if (finding.level == "missing-font-glyphs" || finding.level == "error") {
+            ++blocking;
         }
         std::cout << "  [" << finding.level << "] " << finding.file << " :: "
                   << finding.feature << " - " << finding.detail << '\n';
     }
     std::cout << "summary: findings=" << findings.size()
-              << " unsupported_or_errors=" << unsupported << '\n';
+              << " blocking_font_issues=" << blocking << '\n';
     if (!options.emit_used_chars_path.empty()) {
         std::cout << "used_chars=" << options.emit_used_chars_path
                   << " non_ascii_count=" << count_non_ascii(all_used_codepoints) << '\n';
@@ -643,5 +548,5 @@ int main(int argc, char** argv) {
                   << " covered=" << covered
                   << " missing=" << missing << '\n';
     }
-    return unsupported == 0 ? 0 : 1;
+    return blocking == 0 ? 0 : 1;
 }

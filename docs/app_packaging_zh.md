@@ -1,8 +1,16 @@
 # App Packaging
 
-JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的资源表。
+JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
-然后在桌面离线生成无需文件系统、网络栈或复杂压缩归档即可加载的资源 bundle。
+然后在桌面离线生成无需文件系统、网络栈或复杂压缩归档即可加载的资源。
+
+部署形态应分成两类：
+
+- 静态 C++ 资源表用于固件内置 app：启动器、表盘、软件列表、出厂 app、bring-up fixture
+  和安全兜底 UI。
+- Flash 中的可安装 bundle 才是第三方 app 的目标路径。它尚未实现，但 package 格式和资源边界
+  应继续向这个方向演进。如果第三方 app 必须靠重新烧录固件安装，JellyFrame 相比传统
+  LVGL/C 固件 UI 的核心优势会消失。
 
 ## 调研摘要
 
@@ -21,7 +29,7 @@ JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固
 ## 设计目标
 
 - 源包对 Web 作者友好：HTML、CSS、classic JS、assets、fonts 和 i18n 文件。
-- 构建输出可重复：资源排序、路径规范化、稳定生成 C++ 或 binary table。
+- 构建输出可重复：资源排序、路径规范化、稳定生成 C++ table 或未来的 binary installable bundle。
 - 运行时加载保持 O(log n) 或小包有界线性查找，不做高堆开销的归档解析。
 - 部署前声明全部预算：resource bytes、DOM nodes、CSS rules、display commands、timers、listeners 和 framebuffer policy。
 - 包资源加载继续无文件系统、无网络；宿主通过现有 `HostResourceLoader` 边界提供包内字节。
@@ -52,6 +60,9 @@ my_app/
 ```
 
 只有 `jellyframe.app.json` 和声明的 entry HTML 是必需的。其他文件均可选，并通过本地绝对路径或相对路径引用。
+
+`README.md`、`README_zh.md`、隐藏目录、`__pycache__`、`.DS_Store` 和 `Thumbs.db`
+等开发说明/系统文件会被 packer 忽略。它们可以用于说明源包，而不会扩大运行时资源或污染字体覆盖报告。
 
 ## Manifest V0
 
@@ -173,7 +184,7 @@ dist/my_app.jfdir/
   resources...
 ```
 
-嵌入式输出：
+固件内置输出：
 
 ```text
 dist/my_app_resources.cpp
@@ -181,6 +192,16 @@ dist/my_app_resources.h
 dist/my_app_font.h
 dist/my_app_report.json
 ```
+
+计划中的第三方安装输出：
+
+```text
+dist/my_app.jfapp
+dist/my_app_report.json
+```
+
+静态 C++ table 和未来 binary bundle 应向 runtime 暴露同一张逻辑资源表。Renderer 和 script
+runtime 不应关心字节来自编译期 table、flash partition、debug 目录，还是板级 app store。
 
 生成的资源表应包含：
 
@@ -200,11 +221,12 @@ dist/my_app_report.json
 
 1. 校验 `jellyframe.app.json` 并规范化路径。
 2. 遍历 entry HTML、linked stylesheets 和 classic scripts。
-3. 对解析出的资源集合运行 `jellyframe_capability_check`。
+3. 运行真实管线组件上报的 diagnostics。旧的文本检索式兼容性扫描已弃用；诊断应来自真正执行了
+   parse、CSS、style、layout、layer、render、scripting 或 package loading 的组件。
 4. 使用 `jellyframe_font_pack_gen` 生成或验证 bitmap font pack。
 5. 执行预算检查：单资源字节、总包字节、CSS rule 估算和 script byte 限制。
 6. 为选定 target 生成资源表。
-7. 输出报告：warnings、不支持功能、字体覆盖、估算内存和最终资源表。
+7. 输出报告：warnings、管线 diagnostics、可选字体覆盖、估算内存和最终资源表。
 
 ## 明确裁剪
 
@@ -260,7 +282,21 @@ python tools/jellyframe_cli.py preview `
   --output build/watch_weather.ppm
 ```
 
-对 package 文件运行校验和 capability check：
+`package` 和 `check` 默认先运行 package validation，再通过临时伪浏览器跑一遍管线，
+让 parser/style/layout/layer diagnostics 来自真正处理 app 的组件。`preview` 本身就是完整
+管线运行，因此不会重复做这次预检。需要在打包或预览前做字体资源审计时，传入
+`--font-budget`、`--font-coverage` 或 `--emit-used-chars`。
+
+Windows 上做人类 app 开发时，应优先使用交互式 Win32 browser 壳：
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\watch_weather
+```
+
+pseudo browser 继续作为确定性的 CI/截图壳。它能无窗口渲染，所以仍然重要，但不应作为交互式
+app 的首选人工调试界面。
+
+对 package 文件运行校验和可选字体资源检查：
 
 ```powershell
 python tools/jellyframe_cli.py check `
@@ -299,6 +335,8 @@ python tools/jellyframe_cli.py font `
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、local/remote reference 诊断和 package-resource warnings。
+未来 report 还应包含实际管线中所有已知的忽略、延后、降级、部分处理、懒处理特性，
+以及未知 parse/render 事件的 fallback 诊断。
 
 `tools/package_app.py` 仍作为 CLI 和嵌入式构建集成使用的底层 packer。
 

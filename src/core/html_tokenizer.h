@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/diagnostics.h"
+
 #include <string>
 #include <vector>
 
@@ -29,6 +31,7 @@ struct HtmlToken {
 
 struct HtmlTokenizerOptions {
     bool emit_comments = false;
+    DiagnosticSink* diagnostics = nullptr;
 };
 
 class HtmlTokenSink {

@@ -640,8 +640,19 @@ void flatten_layer(const LayerNode& layer,
                    Rect clip,
                    bool has_clip,
                    float opacity,
-                   std::size_t max_display_commands) {
+                   std::size_t max_display_commands,
+                   DiagnosticSink* diagnostics,
+                   bool& display_budget_reported) {
     if (output.size() >= max_display_commands) {
+        if (!display_budget_reported) {
+            report_diagnostic(diagnostics,
+                              DiagnosticStage::LayerTree,
+                              DiagnosticSeverity::Warning,
+                              "display-command-limit",
+                              "Flattened display command budget was reached; remaining paint commands were skipped",
+                              "Increase max_display_commands for complex pages.");
+            display_budget_reported = true;
+        }
         return;
     }
     if (layer.has_clip) {
@@ -656,12 +667,31 @@ void flatten_layer(const LayerNode& layer,
     for (const DisplayCommand& command : layer.display_list) {
         append_flattened_command(output, command, clip, has_clip, layer_opacity, max_display_commands);
         if (output.size() >= max_display_commands) {
+            if (!display_budget_reported) {
+                report_diagnostic(diagnostics,
+                                  DiagnosticStage::LayerTree,
+                                  DiagnosticSeverity::Warning,
+                                  "display-command-limit",
+                                  "Flattened display command budget was reached; remaining paint commands were skipped",
+                                  "Increase max_display_commands for complex pages.");
+                display_budget_reported = true;
+            }
             return;
         }
     }
     for (const auto& child : layer.children) {
-        flatten_layer(*child, output, clip, has_clip, layer_opacity, max_display_commands);
+        flatten_layer(*child, output, clip, has_clip, layer_opacity, max_display_commands,
+                      diagnostics, display_budget_reported);
         if (output.size() >= max_display_commands) {
+            if (!display_budget_reported) {
+                report_diagnostic(diagnostics,
+                                  DiagnosticStage::LayerTree,
+                                  DiagnosticSeverity::Warning,
+                                  "display-command-limit",
+                                  "Flattened display command budget was reached; remaining paint commands were skipped",
+                                  "Increase max_display_commands for complex pages.");
+                display_budget_reported = true;
+            }
             return;
         }
     }
@@ -715,7 +745,8 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
 
     paint_box_self(root, root_layer->display_list);
     trim_display_list(root_layer->display_list);
-    build_children(root, *root_layer, next_source_order, layer_count, arena);
+    bool layer_budget_reported = false;
+    build_children(root, *root_layer, next_source_order, layer_count, layer_budget_reported, arena);
     sort_layer_children(*root_layer);
     return root_layer;
 }
@@ -724,13 +755,21 @@ DisplayList LayerTreeBuilder::flatten(const LayerNode& root) const {
     DisplayList output;
     const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
     output.reserve(std::min(count_layer_display_commands(root), max_display_commands));
-    flatten_layer(root, output, Rect{}, false, 1.0F, max_display_commands);
+    bool display_budget_reported = false;
+    flatten_layer(root, output, Rect{}, false, 1.0F, max_display_commands,
+                  options_.diagnostics, display_budget_reported);
     return output;
 }
 
 void LayerTreeBuilder::trim_display_list(DisplayList& display_list) const {
     const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
     if (display_list.size() > max_display_commands) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::LayerTree,
+                          DiagnosticSeverity::Warning,
+                          "display-command-limit",
+                          "Layer display command budget was reached; commands in this layer were clipped",
+                          "Increase max_display_commands for complex pages.");
         display_list.resize(max_display_commands);
     }
 }
@@ -739,9 +778,10 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
                                       LayerNode& layer,
                                       std::size_t& next_source_order,
                                       std::size_t& layer_count,
+                                      bool& layer_budget_reported,
                                       MonotonicArena* arena) const {
     for (const auto& child : box.children) {
-        build_box(*child, layer, next_source_order, layer_count, arena);
+        build_box(*child, layer, next_source_order, layer_count, layer_budget_reported, arena);
     }
 }
 
@@ -749,6 +789,7 @@ void LayerTreeBuilder::build_box(const LayoutBox& box,
                                  LayerNode& parent_layer,
                                  std::size_t& next_source_order,
                                  std::size_t& layer_count,
+                                 bool& layer_budget_reported,
                                  MonotonicArena* arena) const {
     const LayerReasons reasons = layer_reasons_for(box, false);
     const std::size_t max_layers = std::max<std::size_t>(1, options_.max_layers);
@@ -766,14 +807,23 @@ void LayerTreeBuilder::build_box(const LayoutBox& box,
         child_layer->source_order = next_source_order++;
         paint_box_self(box, child_layer->display_list);
         trim_display_list(child_layer->display_list);
-        build_children(box, *child_layer, next_source_order, layer_count, arena);
+        build_children(box, *child_layer, next_source_order, layer_count, layer_budget_reported, arena);
         parent_layer.children.push_back(std::move(child_layer));
         return;
+    }
+    if (needs_own_layer(reasons) && !layer_budget_reported) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::LayerTree,
+                          DiagnosticSeverity::Warning,
+                          "layer-limit",
+                          "Layer budget was reached; later stacking/clip/composited boxes were folded into parent layers",
+                          "This preserves paint output where possible but may reduce clipping or stacking fidelity.");
+        layer_budget_reported = true;
     }
 
     paint_box_self(box, parent_layer.display_list);
     trim_display_list(parent_layer.display_list);
-    build_children(box, parent_layer, next_source_order, layer_count, arena);
+    build_children(box, parent_layer, next_source_order, layer_count, layer_budget_reported, arena);
 }
 
 LayerNodePtr LayerTreeBuilder::make_layer_node(MonotonicArena* arena) const {

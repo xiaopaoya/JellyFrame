@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/diagnostics.h"
+
 #include <cctype>
 #include <cstddef>
 #include <filesystem>
@@ -42,6 +44,7 @@ struct PackageResourceContext {
     std::string base_url = "/index.html";
     std::size_t max_input_bytes = 512 * 1024;
     PackageResourceStats* stats = nullptr;
+    jellyframe::DiagnosticSink* diagnostics = nullptr;
 };
 
 inline std::string read_text_file_limited(const std::filesystem::path& path, std::size_t max_input_bytes) {
@@ -178,11 +181,23 @@ inline bool load_package_resource(std::string_view url,
     std::string resolved;
     if (!resolve_package_url(url, base_url.empty() ? context->base_url : std::string(base_url), resolved)) {
         record_package_rejected(context);
+        jellyframe::report_diagnostic(context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "package-resource-rejected",
+                                      "Package resource URL was rejected because it is not a local app path",
+                                      url);
         return false;
     }
     output = read_text_file_limited(package_file_path(context->root, resolved), context->max_input_bytes);
     if (output.empty()) {
         record_package_missing(context);
+        jellyframe::report_diagnostic(context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "package-resource-missing",
+                                      "Package resource could not be loaded or was empty",
+                                      resolved);
         return false;
     }
     record_package_success(context, output.size());

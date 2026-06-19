@@ -58,6 +58,7 @@ struct LayerNode {
 struct LayerTreeBuilderOptions {
     std::size_t max_layers = 1024;
     std::size_t max_display_commands = 8192;
+    DiagnosticSink* diagnostics = nullptr;
 };
 
 class LayerTreeBuilder {
@@ -75,13 +76,15 @@ private:
     void trim_display_list(DisplayList& display_list) const;
     void build_children(const LayoutBox& box,
                         LayerNode& layer,
-                        std::size_t& next_source_order,
-                        std::size_t& layer_count,
-                        MonotonicArena* arena) const;
+                   std::size_t& next_source_order,
+                   std::size_t& layer_count,
+                   bool& layer_budget_reported,
+                   MonotonicArena* arena) const;
     void build_box(const LayoutBox& box,
                    LayerNode& parent_layer,
                    std::size_t& next_source_order,
                    std::size_t& layer_count,
+                   bool& layer_budget_reported,
                    MonotonicArena* arena) const;
     LayerNodePtr make_layer_node(MonotonicArena* arena) const;
 };

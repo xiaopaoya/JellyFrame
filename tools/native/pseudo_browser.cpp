@@ -2,6 +2,7 @@
 #include "core/budget.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
+#include "core/diagnostics.h"
 #include "core/html_parser.h"
 #include "core/layer_tree.h"
 #include "core/layout.h"
@@ -274,6 +275,7 @@ int main(int argc, char** argv) {
         jellyframe_example::PackageResourceContext package_context;
         BrowserOptions effective_options = options;
         std::string standalone_script_source;
+        VectorDiagnosticSink diagnostics;
 
         if (!options.app_path.empty()) {
             const jellyframe_example::AppPackage app =
@@ -291,6 +293,7 @@ int main(int argc, char** argv) {
             package_context.base_url = app.manifest.entry;
             package_context.max_input_bytes = kMaxInputBytes;
             package_context.stats = &package_stats;
+            package_context.diagnostics = &diagnostics;
             if (!jellyframe_example::load_package_resource(app.manifest.entry, "/", html, &package_context)) {
                 throw std::runtime_error("failed to load app entry resource");
             }
@@ -300,7 +303,9 @@ int main(int argc, char** argv) {
 
         HtmlParser html_parser;
         CssParser css_parser;
-        auto document = html_parser.parse(html, html_parser_options_from_budgets(budgets));
+        HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
+        html_options.diagnostics = &diagnostics;
+        auto document = html_parser.parse(html, html_options);
 
         bool script_ran = false;
         bool script_ok = false;
@@ -315,14 +320,21 @@ int main(int argc, char** argv) {
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         std::vector<DocumentScript> document_scripts;
         if (!options.app_path.empty()) {
-            document_scripts = collect_classic_scripts(*document, jellyframe_example::load_package_script, &package_context);
+            document_scripts = collect_classic_scripts(*document,
+                                                       jellyframe_example::load_package_script,
+                                                       &package_context,
+                                                       &diagnostics);
         } else {
             jellyframe_example::ScriptLoadContext script_context;
             const std::filesystem::path html_path(options.html_path);
             script_context.base_dir =
                 html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
             script_context.max_input_bytes = kMaxInputBytes;
-            document_scripts = collect_classic_scripts(*document, jellyframe_example::load_linked_script, &script_context);
+            script_context.diagnostics = &diagnostics;
+            document_scripts = collect_classic_scripts(*document,
+                                                       jellyframe_example::load_linked_script,
+                                                       &script_context,
+                                                       &diagnostics);
         }
         document_script_count = document_scripts.size();
 #endif
@@ -341,6 +353,12 @@ int main(int argc, char** argv) {
                 if (!script_result.ok) {
                     script_ok = false;
                     script_output = script_result.error;
+                    report_diagnostic(&diagnostics,
+                                      DiagnosticStage::Script,
+                                      DiagnosticSeverity::Error,
+                                      "script-evaluation-failed",
+                                      "Document script evaluation failed",
+                                      script.name + ": " + script_result.error);
                     break;
                 }
                 script_output = script_result.value;
@@ -351,6 +369,14 @@ int main(int argc, char** argv) {
                     runtime->eval(standalone_script_source, effective_options.script_path);
                 script_ok = script_result.ok;
                 script_output = script_result.ok ? script_result.value : script_result.error;
+                if (!script_result.ok) {
+                    report_diagnostic(&diagnostics,
+                                      DiagnosticStage::Script,
+                                      DiagnosticSeverity::Error,
+                                      "script-evaluation-failed",
+                                      "Standalone script evaluation failed",
+                                      effective_options.script_path + ": " + script_result.error);
+                }
             }
             script_ran = true;
             for (int now_ms = 16; now_ms <= effective_options.pump_timers_ms; now_ms += 16) {
@@ -369,20 +395,41 @@ int main(int argc, char** argv) {
         if (!options.app_path.empty()) {
             css = combine_author_css({}, *document, jellyframe_example::load_package_stylesheet, &package_context);
         } else {
-            css = jellyframe_example::read_author_css_for_document(options.css_path, *document, kMaxInputBytes);
+            jellyframe_example::StylesheetLoadContext stylesheet_context;
+            const std::filesystem::path css_path(options.css_path);
+            stylesheet_context.base_dir =
+                css_path.has_parent_path() ? css_path.parent_path() : std::filesystem::current_path();
+            stylesheet_context.max_input_bytes = kMaxInputBytes;
+            stylesheet_context.diagnostics = &diagnostics;
+            css = combine_author_css(jellyframe_example::read_file_limited(options.css_path, kMaxInputBytes),
+                                     *document,
+                                     jellyframe_example::load_linked_stylesheet,
+                                     &stylesheet_context);
         }
-        Stylesheet stylesheet = css_parser.parse(css, css_parser_options_from_budgets(budgets));
-        StyleResolver resolver(std::move(stylesheet));
+        CssParserOptions css_options = css_parser_options_from_budgets(budgets);
+        css_options.diagnostics = &diagnostics;
+        Stylesheet stylesheet = css_parser.parse(css, css_options);
+        StyleResolverOptions style_options;
+        style_options.diagnostics = &diagnostics;
+        StyleResolver resolver(std::move(stylesheet), style_options);
 
-        RenderTreeBuilder render_tree_builder(resolver, render_tree_options_from_budgets(budgets));
+        RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
+        render_options.diagnostics = &diagnostics;
+        RenderTreeBuilder render_tree_builder(resolver, render_options);
         auto render_tree = render_tree_builder.build(*document);
-        LayoutEngine layout_engine(resolver, {}, layout_engine_options_from_budgets(budgets));
+        LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
+        layout_options.diagnostics = &diagnostics;
+        LayoutEngine layout_engine(resolver, {}, layout_options);
         auto layout_tree = layout_engine.layout(*render_tree, effective_options.viewport_width);
-        LayerTreeBuilder layer_tree_builder(layer_tree_options_from_budgets(budgets));
+        LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
+        layer_options.diagnostics = &diagnostics;
+        LayerTreeBuilder layer_tree_builder(layer_options);
         auto layer_tree = layer_tree_builder.build(*layout_tree);
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
 
-        SoftwareCompositor compositor({}, software_compositor_options_from_budgets(budgets));
+        SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
+        compositor_options.diagnostics = &diagnostics;
+        SoftwareCompositor compositor({}, compositor_options);
         const Color background = page_background_color(*document, resolver);
         FrameBuffer frame_buffer = compositor.render(
             *layer_tree, effective_options.viewport_width, effective_options.viewport_height, background);
@@ -436,6 +483,16 @@ int main(int argc, char** argv) {
         std::cout << "  frame_sink=" << (frame_sink_context.ok ? "image" : "none") << '\n';
         std::cout << "  non_background_pixels="
                   << count_non_background_pixels(frame_buffer, background) << '\n';
+        std::cout << "  diagnostics=" << diagnostics.size() << '\n';
+        for (const Diagnostic& diagnostic : diagnostics.diagnostics()) {
+            std::cout << "  diagnostic [" << diagnostic_severity_name(diagnostic.severity) << "] "
+                      << diagnostic_stage_name(diagnostic.stage) << "::" << diagnostic.code
+                      << " - " << diagnostic.message;
+            if (!diagnostic.detail.empty()) {
+                std::cout << " (" << diagnostic.detail << ')';
+            }
+            std::cout << '\n';
+        }
         if (script_ran) {
             std::cout << "  script=" << effective_options.script_path << '\n';
             std::cout << "  document_scripts=" << document_script_count << '\n';

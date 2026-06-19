@@ -20,6 +20,15 @@ void check(bool condition, const char* message) {
     }
 }
 
+bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
+    for (const Diagnostic& diagnostic : sink.diagnostics()) {
+        if (diagnostic.code == code) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct BuiltPipeline {
     std::unique_ptr<Node> document;
     Stylesheet stylesheet;
@@ -265,12 +274,19 @@ void layer_builder_respects_layer_and_display_command_budgets() {
         "<body><div class='a'>A</div><div class='b'>B</div><div class='c'>C</div></body>",
         "div { position: relative; z-index: 1; background: #ffffff; border: 1px solid #000000; }");
 
-    LayerTreeBuilder tight_layer_builder(LayerTreeBuilderOptions{2, 4});
+    VectorDiagnosticSink diagnostics;
+    LayerTreeBuilderOptions options;
+    options.max_layers = 2;
+    options.max_display_commands = 4;
+    options.diagnostics = &diagnostics;
+    LayerTreeBuilder tight_layer_builder(options);
     auto tight_layer_tree = tight_layer_builder.build(*pipeline.layout_tree);
     DisplayList flattened = tight_layer_builder.flatten(*tight_layer_tree);
 
     check(count_layers(*tight_layer_tree) <= 2, "layer budget caps own layers");
     check(flattened.size() <= 4, "display command budget caps flattened output");
+    check(has_diagnostic_code(diagnostics, "layer-limit"), "layer budget diagnostic is reported");
+    check(has_diagnostic_code(diagnostics, "display-command-limit"), "display command budget diagnostic is reported");
 }
 
 void layer_tree_can_use_monotonic_arena() {

@@ -13,6 +13,12 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 arena capacity 和 waste 统计，便于嵌入式 benchmark 区分真实对象用量和块式分配余量。
 - 添加低成本 `StyleResolver` 候选缓存统计，可观察缓存条目、缓存规则引用、命中、
   未命中和预算清空次数。
+- 添加轻量管线 diagnostics sink。HTML parser、CSS parser、style resolver、
+  render tree、layout 和 layer tree 现在会向 PC 工具报告预算截断、跳过、忽略和
+  降级事件。
+- 扩展 diagnostics 兜底覆盖：HTML tokenizer/tree-builder 会报告异常 tag、属性、字符引用、
+  未闭合 raw text 和不匹配 end tag；script 收集会报告 module/未知类型跳过和外部脚本加载失败；
+  package/resource loader、inline style parser 和 software renderer/paint fallback 也会报告触发字段。
 
 ### 变更
 
@@ -24,6 +30,12 @@ JellyFrame Engine 的重要变更记录在这里。
 - 配置 framebuffer pixel 预算后，`SoftwareCompositor::render()` 会在分配前拒绝过大的主 framebuffer。
 - Microbench 和 virtual-board benchmark 现在会输出样式候选缓存统计，便于用真实 app
   数据判断是否值得继续做 computed-style sharing。
+- 弃用旧的文本检索式兼容性扫描。`jellyframe_font_resource_check` 现在只保留用于确定性的
+  字体资源工作，例如 used-character 收集、bitmap font 预算估算和字体覆盖检查。
+- 将原 `jellyframe_capability_check` 二进制重命名为 `jellyframe_font_resource_check`，
+  旧名称仅作为早期工具名保留在历史记录中。
+- `jellyframe_cli.py package` 和 `check` 现在默认先通过伪浏览器运行一次管线 diagnostics；
+  `preview` 本身就是完整管线运行。只有请求字体选项时才运行字体资源检查。
 
 ## 0.3.0-dev - 2026-06-18
 
@@ -49,7 +61,7 @@ JellyFrame Engine 的重要变更记录在这里。
   detached DOM nodes 增加统计和预算限制。
 - 添加平台无关 budget stress tests，并让伪浏览器输出脚本 runtime 的 timer、
   listener 和 detached DOM node 统计。
-- 完成当前 M10 文本/字体工作流范围：能力验证器会给出 tiny、符号追加、
+- 完成当前 M10 文本/字体工作流范围：字体资源检查器会给出 tiny、符号追加、
   中文 app 子集、中文标准和全球化产品字体包 profile 建议。
 - 记录 ESP32-S3 增量审计结论：LVGL/vendor SDK 只应作为可选的薄
   panel/input/text hooks，不作为 JellyFrame 主渲染后端。
@@ -64,7 +76,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 为 display command 添加最小文本绘制语义：水平对齐，以及单行/可换行文本。
 - 在已有 GDI 文本绘制之外，为 Win32 壳添加 GDI 文本测量注入，使 UTF-8/中文桌面验证更接近真实效果。
 - 添加双语文本后端文档，描述测量/绘制契约和 fallback 限制。
-- 为 `jellyframe_capability_check` 添加字体覆盖能力：可输出源码中用到的非 ASCII 字符，并用 UTF-8
+- 为 `jellyframe_font_resource_check` 添加字体覆盖能力：可输出源码中用到的非 ASCII 字符，并用 UTF-8
   字体覆盖文件检查缺字。
 - 在 `InputController` 上添加适合按键/表冠设备的焦点导航：
   `focus_next()`、`focus_previous()` 和 `activate_focused()`。
@@ -185,7 +197,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 `display_invalidation` 诊断，可统计 dirty rectangles 覆盖了多少 layer 和 display
   command，并在 Win32 验证壳标题中显示 command 覆盖情况。
 - 添加 `HostTextAdapter`，作为 LVGL/vendor 文本测量和绘制 callback 的平台无关桥接。
-- 为 `jellyframe_capability_check` 添加字体预算汇总，并让 `jellyframe_font_pack_gen`
+- 为 `jellyframe_font_resource_check` 添加字体预算汇总，并让 `jellyframe_font_pack_gen`
   输出 font pack 体积估算。
 - 添加 `embedded_framebuffer`，作为平台无关 `HostFrameSink` adapter，可把 dirty rectangles
   转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit
@@ -198,7 +210,9 @@ JellyFrame Engine 的重要变更记录在这里。
   `matches`/`closest`、基于已有属性的 `dataset` 快照、可写的小型 `element.style` 对象，
   以及 boolean `hidden`/`disabled` reflection。
 - 添加 mouse-like `pointerdown`/`pointerup` 和 `touchstart`/`touchend` 事件派发，用于可穿戴按下反馈。
-- 添加 `jellyframe_capability_check` 桌面 HTML/CSS/JS 扫描器，用于报告受支持子集、降级特性和不支持 API。
+- 添加早期 `jellyframe_capability_check` 桌面 HTML/CSS/JS 扫描器，用于报告受支持子集、
+  降级特性和不支持 API。该工具后来被废弃并由管线 diagnostics 取代；剩余字体工作已重命名为
+  `jellyframe_font_resource_check`。
 - 添加保守的现代长度函数支持：当参数能归约为受支持长度时，解析 `min()`、`max()`、`clamp()`
   和简单 `calc(A +/- B)`。
 - 添加简化 `flex-wrap` 行换行，用于常见卡片/盒子布局。

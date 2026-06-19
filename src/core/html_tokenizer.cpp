@@ -286,6 +286,22 @@ public:
     }
 
 private:
+    std::string snippet_at(std::size_t index) const {
+        if (index >= source_.size()) {
+            return {};
+        }
+        constexpr std::size_t kMaxSnippetBytes = 48;
+        const std::size_t size = std::min(kMaxSnippetBytes, source_.size() - index);
+        return std::string(source_.substr(index, size));
+    }
+
+    void report(DiagnosticSeverity severity,
+                std::string_view code,
+                std::string_view message,
+                std::string_view detail = {}) const {
+        report_diagnostic(options_.diagnostics, DiagnosticStage::Html, severity, code, message, detail);
+    }
+
     bool eof() const {
         return index_ >= source_.size();
     }
@@ -307,6 +323,10 @@ private:
 
     void append_text_char(char ch) {
         if (ch == '\0') {
+            report(DiagnosticSeverity::Warning,
+                   "html-null-character",
+                   "HTML null character was replaced with U+FFFD",
+                   snippet_at(index_ > 0 ? index_ - 1 : 0));
             text_buffer_ += kReplacement;
         } else {
             text_buffer_.push_back(ch);
@@ -344,6 +364,11 @@ private:
         }
         if (!is_duplicate_attribute(current_token_, current_attribute_.name)) {
             current_token_.attributes.push_back(std::move(current_attribute_));
+        } else {
+            report(DiagnosticSeverity::Warning,
+                   "html-duplicate-attribute",
+                   "Duplicate HTML attribute was ignored",
+                   current_attribute_.name);
         }
         current_attribute_ = HtmlAttribute{};
         has_current_attribute_ = false;
@@ -402,10 +427,19 @@ private:
 
             if (!has_digits) {
                 index_ = start;
+                report(DiagnosticSeverity::Warning,
+                       "html-character-reference-invalid",
+                       "Numeric character reference had no digits and was kept as text",
+                       snippet_at(start > 0 ? start - 1 : start));
                 return "&";
             }
             if (!eof() && peek() == ';') {
                 consume();
+            } else {
+                report(DiagnosticSeverity::Info,
+                       "html-character-reference-missing-semicolon",
+                       "Numeric character reference is missing a semicolon",
+                       snippet_at(start > 0 ? start - 1 : start));
             }
 
             std::string output;
@@ -424,10 +458,20 @@ private:
 
         const std::string replacement = lookup_named_character_reference(name);
         if (!replacement.empty()) {
+            if (!had_semicolon) {
+                report(DiagnosticSeverity::Info,
+                       "html-character-reference-missing-semicolon",
+                       "Named character reference is missing a semicolon",
+                       "&" + name);
+            }
             return replacement;
         }
 
         index_ = start;
+        report(DiagnosticSeverity::Warning,
+               "html-character-reference-unknown",
+               "Unknown named character reference was kept as text",
+               name.empty() ? snippet_at(start > 0 ? start - 1 : start) : "&" + name);
         return "&";
     }
 
@@ -462,6 +506,10 @@ private:
             state_ = State::EndTagOpen;
         } else if (ch == '?') {
             flush_text();
+            report(DiagnosticSeverity::Warning,
+                   "html-processing-instruction",
+                   "Processing-instruction-like markup was treated as a bogus comment",
+                   snippet_at(index_ > 0 ? index_ - 1 : 0));
             consume_bogus_comment();
             state_ = State::Data;
         } else if (is_ascii_alpha(ch)) {
@@ -469,6 +517,10 @@ private:
             begin_token(HtmlTokenType::StartTag);
             reconsume_in(State::TagName);
         } else {
+            report(DiagnosticSeverity::Warning,
+                   "html-invalid-tag-open",
+                   "Invalid '<' sequence was treated as text",
+                   snippet_at(index_ > 0 ? index_ - 1 : 0));
             text_buffer_.push_back('<');
             reconsume_in(State::Data);
         }
@@ -487,8 +539,16 @@ private:
             begin_token(HtmlTokenType::EndTag);
             reconsume_in(State::TagName);
         } else if (ch == '>') {
+            report(DiagnosticSeverity::Warning,
+                   "html-empty-end-tag",
+                   "Empty end tag was ignored",
+                   "</>");
             state_ = State::Data;
         } else {
+            report(DiagnosticSeverity::Warning,
+                   "html-invalid-end-tag",
+                   "Invalid end tag was treated as a bogus comment",
+                   snippet_at(index_ > 1 ? index_ - 2 : 0));
             consume_bogus_comment();
             state_ = State::Data;
         }
@@ -503,8 +563,16 @@ private:
             consume_doctype();
         } else if (starts_with_case_insensitive(source_, index_, "[CDATA[")) {
             index_ += 7;
+            report(DiagnosticSeverity::Info,
+                   "html-cdata-as-text",
+                   "CDATA section was treated as text by the simplified HTML tokenizer",
+                   snippet_at(index_));
             consume_cdata_as_text();
         } else {
+            report(DiagnosticSeverity::Warning,
+                   "html-bogus-declaration",
+                   "Unknown markup declaration was treated as a bogus comment",
+                   snippet_at(index_));
             consume_bogus_comment();
         }
         state_ = State::Data;
@@ -512,6 +580,10 @@ private:
 
     void tag_name_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-tag-unclosed",
+                   "Tag reached EOF before '>'",
+                   current_token_.name);
             emit_current_token();
             state_ = State::EndOfFile;
             return;
@@ -533,6 +605,10 @@ private:
         } else if (ch == '>') {
             emit_current_token();
         } else if (ch == '\0') {
+            report(DiagnosticSeverity::Warning,
+                   "html-null-character",
+                   "Null character in tag name was replaced with U+FFFD",
+                   current_token_.name);
             current_token_.name += kReplacement;
         } else {
             current_token_.name.push_back(ascii_lower(ch));
@@ -541,6 +617,10 @@ private:
 
     void before_attribute_name_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-tag-unclosed",
+                   "Tag reached EOF while reading attributes",
+                   current_token_.name);
             emit_current_token();
             state_ = State::EndOfFile;
             return;
@@ -555,6 +635,12 @@ private:
         } else if (ch == '>') {
             emit_current_token();
         } else {
+            if (ch == '<' || ch == '=' || ch == '"' || ch == '\'') {
+                report(DiagnosticSeverity::Warning,
+                       "html-suspicious-attribute-name",
+                       "Suspicious character started an HTML attribute name",
+                       snippet_at(index_ > 0 ? index_ - 1 : 0));
+            }
             begin_attribute();
             reconsume_in(State::AttributeName);
         }
@@ -562,6 +648,10 @@ private:
 
     void attribute_name_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-tag-unclosed",
+                   "Tag reached EOF while reading an attribute name",
+                   current_token_.name);
             finish_attribute();
             emit_current_token();
             state_ = State::EndOfFile;
@@ -580,14 +670,28 @@ private:
             finish_attribute();
             emit_current_token();
         } else if (ch == '\0') {
+            report(DiagnosticSeverity::Warning,
+                   "html-null-character",
+                   "Null character in attribute name was replaced with U+FFFD",
+                   current_attribute_.name);
             current_attribute_.name += kReplacement;
         } else {
+            if (ch == '<' || ch == '"' || ch == '\'') {
+                report(DiagnosticSeverity::Warning,
+                       "html-suspicious-attribute-name",
+                       "Suspicious character was included in an HTML attribute name",
+                       current_attribute_.name + ch);
+            }
             current_attribute_.name.push_back(ascii_lower(ch));
         }
     }
 
     void after_attribute_name_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-tag-unclosed",
+                   "Tag reached EOF after an attribute name",
+                   current_token_.name);
             finish_attribute();
             emit_current_token();
             state_ = State::EndOfFile;
@@ -607,6 +711,10 @@ private:
             finish_attribute();
             emit_current_token();
         } else {
+            report(DiagnosticSeverity::Warning,
+                   "html-missing-attribute-value",
+                   "Attribute without a value was kept as a boolean attribute",
+                   current_attribute_.name);
             begin_attribute();
             reconsume_in(State::AttributeName);
         }
@@ -614,6 +722,10 @@ private:
 
     void before_attribute_value_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-attribute-value-unclosed",
+                   "Tag reached EOF before an attribute value",
+                   current_attribute_.name);
             finish_attribute();
             emit_current_token();
             state_ = State::EndOfFile;
@@ -629,6 +741,10 @@ private:
         } else if (ch == '\'') {
             state_ = State::AttributeValueSingleQuoted;
         } else if (ch == '>') {
+            report(DiagnosticSeverity::Warning,
+                   "html-missing-attribute-value",
+                   "Attribute value was missing before tag close",
+                   current_attribute_.name);
             finish_attribute();
             emit_current_token();
         } else {
@@ -638,6 +754,10 @@ private:
 
     void attribute_value_quoted_state(char quote) {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-quoted-attribute-unclosed",
+                   "Quoted attribute value reached EOF before its closing quote",
+                   std::string(1, quote) + current_attribute_.name);
             finish_attribute();
             emit_current_token();
             state_ = State::EndOfFile;
@@ -650,6 +770,10 @@ private:
         } else if (ch == '&') {
             current_attribute_.value += consume_character_reference();
         } else if (ch == '\0') {
+            report(DiagnosticSeverity::Warning,
+                   "html-null-character",
+                   "Null character in attribute value was replaced with U+FFFD",
+                   current_attribute_.name);
             current_attribute_.value += kReplacement;
         } else {
             current_attribute_.value.push_back(ch);
@@ -674,8 +798,18 @@ private:
             finish_attribute();
             emit_current_token();
         } else if (ch == '\0') {
+            report(DiagnosticSeverity::Warning,
+                   "html-null-character",
+                   "Null character in unquoted attribute value was replaced with U+FFFD",
+                   current_attribute_.name);
             current_attribute_.value += kReplacement;
         } else {
+            if (ch == '"' || ch == '\'' || ch == '<' || ch == '=' || ch == '`') {
+                report(DiagnosticSeverity::Warning,
+                       "html-unquoted-attribute-value-suspicious-char",
+                       "Suspicious character was kept inside an unquoted attribute value",
+                       current_attribute_.name + "=" + current_attribute_.value + ch);
+            }
             current_attribute_.value.push_back(ch);
         }
     }
@@ -700,12 +834,20 @@ private:
             emit_current_token();
         } else {
             finish_attribute();
+            report(DiagnosticSeverity::Warning,
+                   "html-missing-space-after-attribute",
+                   "Missing whitespace after quoted attribute value was recovered",
+                   snippet_at(index_ > 0 ? index_ - 1 : 0));
             reconsume_in(State::BeforeAttributeName);
         }
     }
 
     void self_closing_start_tag_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-tag-unclosed",
+                   "Self-closing tag reached EOF before '>'",
+                   current_token_.name);
             emit_current_token();
             state_ = State::EndOfFile;
             return;
@@ -716,12 +858,20 @@ private:
             current_token_.self_closing = true;
             emit_current_token();
         } else {
+            report(DiagnosticSeverity::Warning,
+                   "html-invalid-self-closing-tag",
+                   "Unexpected characters after '/' in a tag were parsed as attributes",
+                   snippet_at(index_ > 0 ? index_ - 1 : 0));
             reconsume_in(State::BeforeAttributeName);
         }
     }
 
     void raw_text_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-raw-text-unclosed",
+                   "Raw-text element reached EOF before its end tag",
+                   raw_text_end_tag_);
             state_ = State::EndOfFile;
             return;
         }
@@ -739,6 +889,10 @@ private:
 
     void rcdata_state() {
         if (eof()) {
+            report(DiagnosticSeverity::Warning,
+                   "html-rcdata-unclosed",
+                   "RCDATA element reached EOF before its end tag",
+                   raw_text_end_tag_);
             state_ = State::EndOfFile;
             return;
         }
@@ -763,6 +917,10 @@ private:
         const std::size_t end = source_.find("-->", index_);
         std::string data;
         if (end == std::string::npos) {
+            report(DiagnosticSeverity::Warning,
+                   "html-comment-unclosed",
+                   "HTML comment reached EOF before '-->'",
+                   snippet_at(index_));
             data = std::string(source_.substr(index_));
             index_ = source_.size();
         } else {
@@ -781,6 +939,10 @@ private:
         const std::size_t begin = index_;
         const std::size_t end = source_.find('>', index_);
         if (end == std::string::npos) {
+            report(DiagnosticSeverity::Warning,
+                   "html-doctype-unclosed",
+                   "DOCTYPE reached EOF before '>'",
+                   snippet_at(begin));
             index_ = source_.size();
         } else {
             index_ = end + 1;
@@ -794,6 +956,10 @@ private:
     void consume_cdata_as_text() {
         const std::size_t end = source_.find("]]>", index_);
         if (end == std::string::npos) {
+            report(DiagnosticSeverity::Warning,
+                   "html-cdata-unclosed",
+                   "CDATA section reached EOF before ']]>'",
+                   snippet_at(index_));
             const std::string_view remaining = source_.substr(index_);
             text_buffer_.append(remaining.data(), remaining.size());
             index_ = source_.size();

@@ -139,7 +139,7 @@ Optional:
 
 - JerryScript source checkout and built libraries for scripting builds
 - A BDF bitmap font when generating embedded font packs; use
-  `jellyframe_capability_check --font-budget WxH` first to choose a font profile
+  `jellyframe_font_resource_check --font-budget WxH` first to choose a font profile
 - ESP-IDF when working on `ports/esp32s3-idf`
 
 The commands below use PowerShell because the current workspace is Windows.
@@ -234,10 +234,11 @@ Inspect intermediate structures:
 .\build\Release\jellyframe_pipeline_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
 ```
 
-Scan a page before embedding it:
+Collect text resources before embedding a font pack:
 
 ```powershell
-.\build\Release\jellyframe_capability_check.exe `
+.\build\Release\jellyframe_font_resource_check.exe `
+  --font-budget 16x16 `
   samples\apps\loose\weather.html `
   samples\apps\loose\weather.css `
   samples\apps\loose\weather.js
@@ -301,7 +302,7 @@ CMake options are enabled.
 | `jellyframe_pipeline_dump.exe` | Prints end-to-end DOM/render/layout/layer/display-list counts and a display-list preview. |
 | `jellyframe_pseudo_browser.exe` | Runs the full pipeline and writes a BMP/PPM image. It is the best non-interactive acceptance shell. |
 | `jellyframe_win32_browser.exe` | Windows-only interactive validation shell using Win32/GDI text measurement and painting. |
-| `jellyframe_capability_check.exe` | Scans HTML/CSS/JS for supported subsets, degraded features and unsupported APIs. Also supports font coverage checks. |
+| `jellyframe_font_resource_check.exe` | Retained only for font/resource preparation: emits non-ASCII used characters, estimates bitmap font budget and verifies font coverage. Text-search compatibility scanning is retired. |
 | `jellyframe_font_pack_gen.exe` | Converts a BDF bitmap font and used-character list into a C++ `BitmapFont` header. |
 | `jellyframe_embedded_host_demo.exe` | Platform-neutral port bring-up demo from `ports/embedded_host_demo`, using static resources, bitmap text and RGB565 framebuffer output. |
 | `jellyframe_microbench.exe` | Runs parser/render/layout/layer/flatten microbenchmarks. |
@@ -367,7 +368,7 @@ python tools\jellyframe_cli.py preview `
   --output build\watch_weather.ppm
 ```
 
-Run package validation and capability checks together:
+Run package validation plus pipeline diagnostics; font resource checks are optional:
 
 ```powershell
 python tools\jellyframe_cli.py check `
@@ -415,18 +416,19 @@ python tools\jellyframe_cli.py new `
 The optional VS Code helper lives in `tools/vscode-jellyframe`. It adds schema
 association for `jellyframe.app.json` and command-palette wrappers around the
 same CLI commands, a report panel and inline diagnostics for actionable
-capability/package issues; it does not replace the CLI or duplicate the packer.
+package/font-resource issues; it does not replace the CLI or duplicate the packer.
 
 When an example renders badly, inspect in this order:
 
-1. `jellyframe_capability_check`
-2. `jellyframe_dom_dump`
-3. `jellyframe_cssom_dump`
-4. `jellyframe_style_dump`
-5. `jellyframe_render_tree_dump`
-6. `jellyframe_layer_tree_dump`
-7. `jellyframe_pipeline_dump`
-8. `jellyframe_pseudo_browser` or `jellyframe_win32_browser --capture`
+1. `jellyframe_win32_browser --app package_dir` for interactive behavior and text.
+2. `jellyframe_pseudo_browser --app package_dir output.ppm` for deterministic capture.
+3. `jellyframe_pipeline_dump`
+4. `jellyframe_dom_dump`
+5. `jellyframe_cssom_dump`
+6. `jellyframe_style_dump`
+7. `jellyframe_render_tree_dump`
+8. `jellyframe_layer_tree_dump`
+9. `jellyframe_font_resource_check` only for font resource and glyph coverage questions.
 
 For package apps, prefer `jellyframe_win32_browser --app package_dir` or
 `jellyframe_win32_browser --capture output.ppm --app package_dir` so the Win32
@@ -471,7 +473,7 @@ When adding CSS support:
 1. Keep unsupported values from overwriting supported fallbacks.
 2. Add parser/style resolver tests.
 3. Run `jellyframe_cssom_dump` and `jellyframe_style_dump`.
-4. Update the capability matrix and capability checker.
+4. Update the capability matrix and pipeline diagnostics or font resource checker.
 
 When changing layout or rendering:
 

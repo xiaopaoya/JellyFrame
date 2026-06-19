@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -151,11 +152,61 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return run_command(package_command(args, True))
 
 
+def should_run_font_resource_check(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "font_budget", None) or
+                getattr(args, "emit_used_chars", None) or
+                getattr(args, "font_coverage", None))
+
+
+def run_pipeline_check(args: argparse.Namespace) -> int:
+    pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
+    ensure_tool(pseudo_browser)
+    target = getattr(args, "target", None)
+    target_config = effective_target_config(args.root, target) if target else {}
+    viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
+    width = int(viewport.get("width", 0) or 0)
+    height = int(viewport.get("height", 0) or 0)
+    with tempfile.TemporaryDirectory(prefix="jellyframe-pipeline-check-") as directory:
+        output = Path(directory) / "preflight.bmp"
+        command = [
+            str(pseudo_browser),
+            "--app",
+            str(args.root),
+            str(output),
+        ]
+        if width:
+            command.append(str(width))
+        if height:
+            command.append(str(height))
+        return run_command(command)
+
+
+def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> int:
+    validate_result = cmd_validate(args)
+    if validate_result != 0 or getattr(args, "skip_check", False):
+        return validate_result
+    if include_pipeline:
+        pipeline_result = run_pipeline_check(args)
+        if pipeline_result != 0:
+            return pipeline_result
+    if should_run_font_resource_check(args):
+        return run_font_resource_check(args)
+    return 0
+
+
 def cmd_package(args: argparse.Namespace) -> int:
+    preflight_result = run_package_preflight(args, include_pipeline=True)
+    if preflight_result != 0:
+        return preflight_result
     return run_command(package_command(args, False))
 
 
 def cmd_preview(args: argparse.Namespace) -> int:
+    if args.report is None:
+        args.report = args.output.with_suffix(".report.json")
+    preflight_result = run_package_preflight(args, include_pipeline=False)
+    if preflight_result != 0:
+        return preflight_result
     pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
     ensure_tool(pseudo_browser)
     target_config = effective_target_config(args.root, args.target) if args.target else {}
@@ -189,39 +240,46 @@ def resource_files_from_report(root: Path, report_path: Path) -> list[str]:
     return files
 
 
+def run_font_resource_check(args: argparse.Namespace) -> int:
+    font_check = tool_path(args.build_dir, "jellyframe_font_resource_check")
+    ensure_tool(font_check)
+    files = resource_files_from_report(args.root, args.report)
+    command = [str(font_check)]
+    font_budget = getattr(args, "font_budget", None)
+    emit_used_chars = getattr(args, "emit_used_chars", None)
+    font_coverage = getattr(args, "font_coverage", None)
+    if font_coverage:
+        command.extend(["--font-coverage", str(font_coverage)])
+    if font_budget:
+        command.extend(["--font-budget", font_budget])
+    if emit_used_chars:
+        command.extend(["--emit-used-chars", str(emit_used_chars)])
+    command.extend(files)
+    return run_command(command)
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     validate_result = cmd_validate(args)
     if validate_result != 0:
         return validate_result
-    capability_check = tool_path(args.build_dir, "jellyframe_capability_check")
-    ensure_tool(capability_check)
-    files = resource_files_from_report(args.root, args.report)
-    command = [str(capability_check)]
-    if args.font_budget:
-        command.extend(["--font-budget", args.font_budget])
-    if args.emit_used_chars:
-        command.extend(["--emit-used-chars", str(args.emit_used_chars)])
-    command.extend(files)
-    return run_command(command)
+    if not getattr(args, "skip_check", False):
+        pipeline_result = run_pipeline_check(args)
+        if pipeline_result != 0:
+            return pipeline_result
+    if should_run_font_resource_check(args):
+        return run_font_resource_check(args)
+    print("package is valid; pipeline diagnostics ran through the pseudo browser.")
+    print("Text-search compatibility scanning has been retired; pass font options for font resource checks.")
+    return 0
 
 
 def cmd_font(args: argparse.Namespace) -> int:
     validate_result = cmd_validate(args)
     if validate_result != 0:
         return validate_result
-    capability_check = tool_path(args.build_dir, "jellyframe_capability_check")
-    ensure_tool(capability_check)
     args.used_chars.parent.mkdir(parents=True, exist_ok=True)
-    files = resource_files_from_report(args.root, args.report)
-    command = [
-        str(capability_check),
-        "--emit-used-chars",
-        str(args.used_chars),
-    ]
-    if args.font_budget:
-        command.extend(["--font-budget", args.font_budget])
-    command.extend(files)
-    check_result = run_command(command)
+    args.emit_used_chars = args.used_chars
+    check_result = run_font_resource_check(args)
     if check_result != 0 or not args.bdf:
         return check_result
     if not args.output_header:
@@ -327,7 +385,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
-def add_common_package_args(parser: argparse.ArgumentParser) -> None:
+def add_manifest_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
     parser.add_argument("--namespace", default="jellyframe_esp32s3", help="Generated C++ namespace.")
@@ -335,42 +393,58 @@ def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--target", help="Optional target preset id.")
 
 
+def add_common_package_args(parser: argparse.ArgumentParser) -> None:
+    add_manifest_package_args(parser)
+    parser.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
+    parser.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="JellyFrame developer CLI.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     validate = subparsers.add_parser("validate", help="Validate a JellyFrame app package.")
-    add_common_package_args(validate)
+    add_manifest_package_args(validate)
     validate.set_defaults(func=cmd_validate)
 
     package = subparsers.add_parser("package", help="Generate a resource table and report.")
     add_common_package_args(package)
     package.add_argument("--output-cpp", required=True, type=Path, help="Generated C++ resource table.")
     package.add_argument("--debug-dir", type=Path, help="Optional copied debug package directory.")
+    package.add_argument("--font-budget", help="Optional glyph size such as 16x16 for preflight font budget estimates.")
+    package.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file for preflight checks.")
+    package.add_argument("--emit-used-chars", type=Path, help="Optional output file for preflight used non-ASCII characters.")
     package.set_defaults(func=cmd_package)
 
     preview = subparsers.add_parser("preview", help="Render an app package through the pseudo browser.")
     preview.add_argument("--root", required=True, type=Path, help="App package source directory.")
     preview.add_argument("--output", required=True, type=Path, help="Output BMP/PPM path.")
+    preview.add_argument("--report", type=Path, help="Output JSON report path. Defaults beside --output.")
     preview.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
     preview.add_argument("--target", help="Optional target preset id used for viewport defaults.")
     preview.add_argument("--width", type=int, default=0, help="Optional viewport width override.")
     preview.add_argument("--height", type=int, default=0, help="Optional viewport height override.")
     preview.add_argument("--pump-timers", type=int, default=0, help="Optional timer pump duration in milliseconds.")
+    preview.add_argument("--font-budget", help="Optional glyph size such as 16x16 for preflight font budget estimates.")
+    preview.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file for preflight checks.")
+    preview.add_argument("--emit-used-chars", type=Path, help="Optional output file for preflight used non-ASCII characters.")
+    preview.add_argument("--namespace", default="jellyframe_esp32s3", help=argparse.SUPPRESS)
+    preview.add_argument("--include", default="jellyframe_esp32s3_resources.h", help=argparse.SUPPRESS)
+    preview.add_argument("--skip-check", action="store_true", help="Skip optional font resource preflight.")
     preview.set_defaults(func=cmd_preview)
 
-    check = subparsers.add_parser("check", help="Validate package and run capability checks on packaged files.")
+    check = subparsers.add_parser("check", help="Validate package and optionally run font resource checks.")
     add_common_package_args(check)
-    check.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
     check.add_argument("--font-budget", help="Optional glyph size such as 16x16 for font budget estimates.")
+    check.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file.")
     check.add_argument("--emit-used-chars", type=Path, help="Optional output file for used non-ASCII characters.")
     check.set_defaults(func=cmd_check)
 
     font = subparsers.add_parser("font", help="Collect package characters and optionally generate a bitmap font header.")
     add_common_package_args(font)
-    font.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
     font.add_argument("--used-chars", required=True, type=Path, help="Output file for used non-ASCII characters.")
     font.add_argument("--font-budget", default="16x16", help="Glyph size such as 16x16 for font budget estimates.")
+    font.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file.")
     font.add_argument("--bdf", type=Path, help="Optional BDF source font for header generation.")
     font.add_argument("--output-header", type=Path, help="Generated C++ BitmapFont header path.")
     font.add_argument("--name", default="jellyframe_embedded_font", help="Generated C++ font symbol name.")

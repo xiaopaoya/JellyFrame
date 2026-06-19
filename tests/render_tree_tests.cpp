@@ -42,6 +42,15 @@ const RenderObject* find_first_text(const RenderObject& object) {
     return nullptr;
 }
 
+bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
+    for (const Diagnostic& diagnostic : sink.diagnostics()) {
+        if (diagnostic.code == code) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void render_tree_filters_non_rendered_nodes() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -149,6 +158,22 @@ void render_tree_respects_object_budget() {
     check(count == 4, "render tree is capped by object budget");
 }
 
+void render_tree_reports_object_budget_diagnostic() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><p>A</p><p>B</p><p>C</p></main></body>");
+    StyleResolver resolver(css_parser.parse(""));
+    VectorDiagnosticSink diagnostics;
+    RenderTreeOptions options;
+    options.max_render_objects = 4;
+    options.diagnostics = &diagnostics;
+    RenderTreeBuilder builder(resolver, options);
+    auto render_tree = builder.build(*document);
+
+    check(count_render_objects(*render_tree) == 4, "render budget still caps objects");
+    check(has_diagnostic_code(diagnostics, "render-object-limit"), "render budget diagnostic is reported");
+}
+
 void render_tree_can_use_monotonic_arena() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -174,6 +199,7 @@ int main() {
         hidden_attribute_skips_rendering();
         formatting_whitespace_text_is_skipped();
         render_tree_respects_object_budget();
+        render_tree_reports_object_budget_diagnostic();
         render_tree_can_use_monotonic_arena();
     } catch (const std::exception& error) {
         std::cerr << "render tree test failed: " << error.what() << '\n';

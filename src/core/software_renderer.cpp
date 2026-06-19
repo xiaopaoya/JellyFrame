@@ -224,7 +224,8 @@ void draw_text(FrameBuffer& target,
                int font_weight,
                TextCommandAlign align,
                bool single_line,
-               TextPainter text_painter) {
+               TextPainter text_painter,
+               DiagnosticSink* diagnostics) {
     (void)single_line;
     if (color.a == 0 || empty_rect(rect)) {
         return;
@@ -232,6 +233,25 @@ void draw_text(FrameBuffer& target,
     if (text_painter.paint != nullptr &&
         text_painter.paint(target, rect, color, text, font_size, font_weight, align, single_line, text_painter.context)) {
         return;
+    }
+    const bool has_non_ascii = std::any_of(text.begin(), text.end(), [](char ch) {
+        return static_cast<unsigned char>(ch) >= 0x80U;
+    });
+    if (text_painter.paint != nullptr) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Paint,
+                          DiagnosticSeverity::Warning,
+                          "paint-text-backend-failed",
+                          "Text painter rejected a text command; built-in bitmap fallback was used",
+                          text);
+    }
+    if (has_non_ascii) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Paint,
+                          DiagnosticSeverity::Warning,
+                          "paint-non-ascii-fallback",
+                          "Built-in text fallback cannot draw real non-ASCII glyphs",
+                          text);
     }
     const int scale = font_size >= 22 ? 2 : 1;
     const int glyph_width = 5 * scale;
@@ -361,8 +381,8 @@ const Color& FrameBuffer::pixel(int x, int y) const {
     return pixels[static_cast<std::size_t>(y * width + x)];
 }
 
-SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter)
-    : text_painter_(text_painter) {}
+SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter, DiagnosticSink* diagnostics)
+    : text_painter_(text_painter), diagnostics_(diagnostics) {}
 
 void SoftwareRasterizer::rasterize(const DisplayList& display_list,
                                    FrameBuffer& target,
@@ -409,19 +429,26 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                   command.font_weight,
                   command.text_align,
                   command.text_single_line,
-                  text_painter_);
+                  text_painter_,
+                  diagnostics_);
         break;
     }
 }
 
 SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, Options options)
-    : rasterizer_(text_painter), options_(options) {}
+    : rasterizer_(text_painter, options.diagnostics), options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,
                                        int viewport_width,
                                        int viewport_height,
                                        Color background) const {
     if (!framebuffer_fits_budget(viewport_width, viewport_height, options_)) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::Paint,
+                          DiagnosticSeverity::Error,
+                          "paint-framebuffer-budget",
+                          "Primary framebuffer exceeded the configured pixel budget",
+                          std::to_string(viewport_width) + "x" + std::to_string(viewport_height));
         return {};
     }
     FrameBuffer target(viewport_width, viewport_height, background);
@@ -485,6 +512,12 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
             return;
         }
         if (!offscreen_fits_budget(bounds, options_)) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "paint-offscreen-budget",
+                              "Offscreen compositing buffer exceeded budget; layer was painted by direct opacity fallback",
+                              std::to_string(bounds.width) + "x" + std::to_string(bounds.height));
             rasterize_with_opacity(rasterizer_,
                                    layer.display_list,
                                    target,

@@ -256,7 +256,7 @@ ESP32-S3 mapping:
 - Measure and paint from the same glyph metrics.
 - Avoid heap allocation inside callbacks.
 - For Chinese products, subset common app characters and verify coverage with
-  `jellyframe_capability_check --font-coverage`. Use the capability checker
+  `jellyframe_font_resource_check --font-coverage`. Use the font resource checker
   profile output to choose between `tiny`, app-specific Chinese subsets,
   `cn-standard` or market-specific global packs. `cn-standard` means ASCII +
   common symbols + GB2312 level-1 Chinese; it is a Chinese-market preset, not a
@@ -276,7 +276,7 @@ The desktop generator accepts BDF input:
 jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
 ```
 
-Use `jellyframe_capability_check --emit-used-chars` first, then generate a BDF
+Use `jellyframe_font_resource_check --emit-used-chars` first, then generate a BDF
 from the licensed source font with your preferred offline toolchain.
 
 ## Platform-Neutral Bring-Up Demo

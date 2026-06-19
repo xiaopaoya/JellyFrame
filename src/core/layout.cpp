@@ -190,7 +190,8 @@ LayoutBoxPtr LayoutEngine::build_with_arena(const RenderObject& render_tree,
     root_box->node = render_tree.node;
     root_box->style = render_tree.style;
     std::size_t layout_box_count = 1;
-    build_layout_tree(render_tree, *root_box, layout_box_count, arena);
+    bool budget_reported = false;
+    build_layout_tree(render_tree, *root_box, layout_box_count, budget_reported, arena);
     root_box->rect.height = layout_box(*root_box, 0, 0, viewport_width);
     return root_box;
 }
@@ -198,17 +199,27 @@ LayoutBoxPtr LayoutEngine::build_with_arena(const RenderObject& render_tree,
 void LayoutEngine::build_layout_tree(const RenderObject& object,
                                      LayoutBox& box,
                                      std::size_t& layout_box_count,
+                                     bool& budget_reported,
                                      MonotonicArena* arena) const {
     const std::size_t max_layout_boxes = std::max<std::size_t>(1, options_.max_layout_boxes);
     for (const auto& child : object.children) {
         if (layout_box_count >= max_layout_boxes) {
+            if (!budget_reported) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Layout,
+                                  DiagnosticSeverity::Warning,
+                                  "layout-box-limit",
+                                  "Layout box budget was reached; remaining render objects were skipped",
+                                  "Increase max_layout_boxes or simplify nested layout.");
+                budget_reported = true;
+            }
             return;
         }
         auto child_box = make_layout_box(arena);
         ++layout_box_count;
         child_box->node = child->node;
         child_box->style = child->style;
-        build_layout_tree(*child, *child_box, layout_box_count, arena);
+        build_layout_tree(*child, *child_box, layout_box_count, budget_reported, arena);
         box.children.push_back(std::move(child_box));
     }
 }

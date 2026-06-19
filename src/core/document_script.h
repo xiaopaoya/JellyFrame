@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/diagnostics.h"
 #include "core/dom.h"
 
 #include <string>
@@ -19,6 +20,7 @@ struct DocumentScript {
 std::vector<DocumentScript> collect_classic_scripts(const Node& document);
 std::vector<DocumentScript> collect_classic_scripts(const Node& document,
                                                     ScriptLoadCallback load_script,
-                                                    void* context);
+                                                    void* context,
+                                                    DiagnosticSink* diagnostics = nullptr);
 
 } // namespace jellyframe

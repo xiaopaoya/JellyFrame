@@ -20,7 +20,8 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
   和宿主泵动 timers。
 - Layer tree、display list、CPU rasterizer/compositor，以及 RGBA/BGRA、RGB565/BGR565、
   RGB332、Gray8、单色输出的 framebuffer adapter。
-- 桌面检查工具、伪浏览器、Win32 验证壳、能力检查器、app packer、字体包生成器和薄 VS Code helper。
+- 桌面检查工具、伪浏览器、Win32 验证壳、管线 diagnostics、app packer、字体资源检查、
+  字体包生成器和薄 VS Code helper。
 
 精确的支持/降级/延后功能见
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
@@ -59,7 +60,7 @@ ctest --test-dir build -C Release --output-on-failure
   --app tools\templates\apps\calculator
 ```
 
-创建并检查 app package：
+创建 app package，并运行 package validation 与管线 diagnostics：
 
 ```powershell
 python tools\jellyframe_cli.py new `

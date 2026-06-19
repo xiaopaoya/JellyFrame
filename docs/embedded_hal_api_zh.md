@@ -243,8 +243,8 @@ ESP32-S3 映射：
 - 编译期从授权矢量字体生成该 font pack。
 - 测量和绘制使用同一份 glyph metrics。
 - 回调内部避免堆分配。
-- 中文产品对子集化常用 app 字符，并用 `jellyframe_capability_check --font-coverage` 检查覆盖。
-- 用能力验证器输出的 profile 在 `tiny`、中文 app-specific subset、`cn-standard` 和按市场划分的
+- 中文产品对子集化常用 app 字符，并用 `jellyframe_font_resource_check --font-coverage` 检查覆盖。
+- 用字体资源检查输出的 profile 在 `tiny`、中文 app-specific subset、`cn-standard` 和按市场划分的
   global packs 之间选择。`cn-standard` 表示 ASCII + 常用符号 + GB2312 一级汉字，它是中文市场预设，
   不是全球默认字体。
 
@@ -260,7 +260,7 @@ core 现在提供 `src/core/bitmap_font.h` 支撑这条默认路线。开发板 
 jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
 ```
 
-先用 `jellyframe_capability_check --emit-used-chars` 收集字符，再用你偏好的离线工具链从授权源字体生成 BDF。
+先用 `jellyframe_font_resource_check --emit-used-chars` 收集字符，再用你偏好的离线工具链从授权源字体生成 BDF。
 
 ## 平台无关 Bring-Up 示例
 

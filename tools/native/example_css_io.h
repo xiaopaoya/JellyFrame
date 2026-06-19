@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/diagnostics.h"
 #include "core/document_script.h"
 #include "core/document_style.h"
 
@@ -38,11 +39,13 @@ inline std::string read_file_limited(const std::filesystem::path& path, std::siz
 struct StylesheetLoadContext {
     std::filesystem::path base_dir;
     std::size_t max_input_bytes = 512 * 1024;
+    jellyframe::DiagnosticSink* diagnostics = nullptr;
 };
 
 struct ScriptLoadContext {
     std::filesystem::path base_dir;
     std::size_t max_input_bytes = 512 * 1024;
+    jellyframe::DiagnosticSink* diagnostics = nullptr;
 };
 
 inline bool is_local_stylesheet_href(std::string_view href) {
@@ -53,11 +56,26 @@ inline bool is_local_stylesheet_href(std::string_view href) {
 
 inline bool load_linked_stylesheet(std::string_view href, std::string& output, void* raw_context) {
     if (!is_local_stylesheet_href(href) || raw_context == nullptr) {
+        const auto* context = static_cast<const StylesheetLoadContext*>(raw_context);
+        jellyframe::report_diagnostic(context == nullptr ? nullptr : context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "stylesheet-resource-rejected",
+                                      "Linked stylesheet URL was rejected because it is not local",
+                                      href);
         return false;
     }
     const auto* context = static_cast<const StylesheetLoadContext*>(raw_context);
     const std::filesystem::path path = context->base_dir / std::filesystem::path(std::string(href));
     output = read_file_limited(path, context->max_input_bytes);
+    if (output.empty()) {
+        jellyframe::report_diagnostic(context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "stylesheet-resource-missing",
+                                      "Linked stylesheet could not be loaded or was empty",
+                                      href);
+    }
     return !output.empty();
 }
 
@@ -69,11 +87,26 @@ inline bool is_local_script_src(std::string_view src) {
 
 inline bool load_linked_script(std::string_view src, std::string& output, void* raw_context) {
     if (!is_local_script_src(src) || raw_context == nullptr) {
+        const auto* context = static_cast<const ScriptLoadContext*>(raw_context);
+        jellyframe::report_diagnostic(context == nullptr ? nullptr : context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "script-resource-rejected",
+                                      "Linked script URL was rejected because it is not local",
+                                      src);
         return false;
     }
     const auto* context = static_cast<const ScriptLoadContext*>(raw_context);
     const std::filesystem::path path = context->base_dir / std::filesystem::path(std::string(src));
     output = read_file_limited(path, context->max_input_bytes);
+    if (output.empty()) {
+        jellyframe::report_diagnostic(context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "script-resource-missing",
+                                      "Linked script could not be loaded or was empty",
+                                      src);
+    }
     return !output.empty();
 }
 

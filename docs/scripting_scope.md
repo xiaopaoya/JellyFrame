@@ -108,8 +108,9 @@ surface.
 - Native input dispatch exposes `pointerdown`, `pointerup`, `touchstart` and
   `touchend` as mouse-like events for press feedback on wearable shells.
 - Disabled form controls do not accept text input, range movement or activation.
-- `jellyframe_capability_check` scans HTML/CSS/JS files on desktop and reports
-  unsupported, degraded and supported-subset usage before code reaches an MCU.
+- Text-search compatibility scanning is retired. Script-related diagnostics
+  should come from the package loader, JerryScript runtime and DOM/event binding
+  code paths that actually handled the app.
 
 ## Not Supported Yet
 
