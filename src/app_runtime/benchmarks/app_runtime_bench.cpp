@@ -1,5 +1,6 @@
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_lifecycle.h"
+#include "app_runtime/app_services.h"
 #include "app_runtime/host_services.h"
 
 #include <algorithm>
@@ -8,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <vector>
 
 using namespace jellyframe;
@@ -132,6 +134,61 @@ void bench_runtime_host_completion_pump(std::size_t capacity) {
     }
 }
 
+void bench_network_fetch_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
+    host.launch("org.example.network", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
+    network.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"t\":21}"});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        network.submit_fetch(host, "app://weather", 1000);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        network.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            if (completion.handle != 0) {
+                network.release_response(host, completion.handle);
+            }
+        }
+    }
+}
+
+void bench_kv_storage_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity * 2, 8, capacity, capacity * 512, 1});
+    host.launch("org.example.storage", AppRole::App);
+    AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, capacity, capacity * 64});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        storage.submit_set(host, "k" + std::to_string(i), "value");
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        storage.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        storage.submit_get(host, "k" + std::to_string(i));
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        storage.complete_next(host);
+    }
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            if (completion.handle != 0) {
+                storage.release_value(host, completion.handle);
+            }
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -152,6 +209,12 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_host_completion_pump", iterations, average_microseconds(iterations, [&] {
         bench_runtime_host_completion_pump(capacity);
+    }));
+    print_result("app_runtime_network_fetch_mock", iterations, average_microseconds(iterations, [&] {
+        bench_network_fetch_mock(capacity);
+    }));
+    print_result("app_runtime_kv_storage_mock", iterations, average_microseconds(iterations, [&] {
+        bench_kv_storage_mock(capacity);
     }));
 
     return 0;
