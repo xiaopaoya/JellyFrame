@@ -83,6 +83,8 @@ Current core helpers:
   limits and stale `app_instance_id` discarding.
 - `HostHandleTable`: bounded host handle table with generation checks to reject
   stale handles after release, plus active-count and used-byte accounting.
+- `AppSystemEventQueue`: bounded host-injected system status events, tagged with
+  the active `app_instance_id` and consumed at frame boundaries.
 
 ## Generic Job Shape
 
@@ -412,6 +414,49 @@ Rules:
 - Failed installs discard staging and must not corrupt the committed registry.
 - Updates write the new bundle fully before atomically switching the registry.
 - Deleting the active app should first switch back to the system shell.
+
+## System Data Events
+
+System data events provide small host-approved status snapshots to apps without
+placing hardware APIs in the core. The first platform-neutral helper is
+`AppSystemEventQueue` in `src/app_runtime/system_events.h`.
+
+Supported event kinds:
+
+```cpp
+enum class AppSystemEventKind {
+    TimeChanged,
+    TimezoneChanged,
+    NetworkStatusChanged,
+    BatteryChanged,
+    ScreenStateChanged,
+    LowPowerModeChanged,
+};
+```
+
+The snapshot is deliberately tiny and copyable:
+
+```cpp
+struct AppSystemStateSnapshot {
+    uint64_t unix_time_ms;
+    int16_t timezone_offset_minutes;
+    uint8_t battery_percent;
+    bool charging;
+    bool network_online;
+    bool screen_on;
+    bool low_power_mode;
+};
+```
+
+Rules:
+
+- The host pushes events for the current app instance with `push_current(...)`.
+- The UI/main task consumes events with `pump_current(...)` at frame boundaries.
+- `max_events_per_frame` bounds event work per frame.
+- Events for stale app instances are consumed and dropped.
+- The queue does not call JS, mutate DOM, read RTC/network/battery hardware or
+  trigger layout by itself. Bindings decide how an accepted event becomes an app
+  callback later.
 
 ## Implementation Order
 

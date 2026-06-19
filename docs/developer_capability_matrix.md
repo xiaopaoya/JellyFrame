@@ -50,6 +50,7 @@ JellyFrame is not ready for:
 | Linked CSS loading | Shell-only | Example tools can load local `<link rel="stylesheet">`; core exposes callback-style helpers only. |
 | Network loading | Host-optional V0 mock | Core has no HTTP, XHR, WebSocket or remote resource loading, and remote HTML/CSS/script/image resources still cannot enter the page loader. `NetworkFetchMock` provides a fixture/handle/completion contract for later bounded runtime data APIs. `app_service_policies_for_app(...)` enables it only when both manifest and host/profile allow `network.fetch`; JS `fetch` is not exposed yet. |
 | Storage | Host-optional V0 mock | No cookies, synchronous localStorage, IndexedDB or filesystem API in core. `AppPrivateKvStorageMock` provides app-id-isolated async KV semantics and budget checks for settings, small JSON state and tokens. `storage.kv` is enabled only after manifest/profile policy is merged; no JS API is exposed yet. |
+| System status events | Host-optional V0 queue | `AppSystemEventQueue` lets the host inject bounded time/timezone/network/battery/screen/low-power snapshots for the current app instance. Stale-instance events are dropped at frame boundaries. JS callback binding is still deferred. |
 
 ## HTML Parsing
 

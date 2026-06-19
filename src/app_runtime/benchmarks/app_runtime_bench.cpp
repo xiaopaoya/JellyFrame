@@ -1,6 +1,7 @@
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/app_services.h"
+#include "app_runtime/system_events.h"
 #include "app_runtime/host_services.h"
 
 #include <algorithm>
@@ -189,6 +190,26 @@ void bench_kv_storage_mock(std::size_t capacity) {
     }
 }
 
+void bench_system_event_queue(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.system-events", AppRole::App);
+    AppSystemEventQueue queue(capacity, 8);
+    AppSystemStateSnapshot snapshot;
+    snapshot.unix_time_ms = 1800000000000ULL;
+    snapshot.timezone_offset_minutes = 480;
+    snapshot.battery_percent = 80;
+    snapshot.network_online = true;
+    for (std::size_t i = 0; i < capacity; ++i) {
+        queue.push_current(host, AppSystemEventKind::TimeChanged, snapshot);
+        ++snapshot.unix_time_ms;
+    }
+    std::vector<AppSystemEvent> accepted;
+    while (!queue.empty()) {
+        accepted.clear();
+        queue.pump_current(host, accepted);
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -215,6 +236,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_kv_storage_mock", iterations, average_microseconds(iterations, [&] {
         bench_kv_storage_mock(capacity);
+    }));
+    print_result("app_runtime_system_event_queue", iterations, average_microseconds(iterations, [&] {
+        bench_system_event_queue(capacity);
     }));
 
     return 0;

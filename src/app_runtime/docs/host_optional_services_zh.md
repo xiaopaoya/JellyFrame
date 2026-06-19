@@ -64,6 +64,7 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
   `app_instance_id` 的 completion。
 - `HostHandleTable`：有界 host handle 表，使用 generation 防止释放后的旧 handle 误命中新资源，
   并统计 active count 与 used bytes。
+- `AppSystemEventQueue`：有界宿主注入系统状态事件，事件绑定 active `app_instance_id`，并在帧边界消费。
 
 ## 通用 Job 结构
 
@@ -373,6 +374,47 @@ validation_state
 - 安装失败只能丢弃 staging，不能破坏已提交 registry。
 - 升级应先完整写入新 bundle，再原子切换 registry。
 - 删除活动 app 时应先切回系统 shell。
+
+## System Data Events
+
+System data events 用于把小型、经宿主允许的系统状态快照提供给 app，同时不把硬件 API 放进核心。
+第一版平台无关 helper 位于 `src/app_runtime/system_events.h`，类型为 `AppSystemEventQueue`。
+
+支持的事件类型：
+
+```cpp
+enum class AppSystemEventKind {
+    TimeChanged,
+    TimezoneChanged,
+    NetworkStatusChanged,
+    BatteryChanged,
+    ScreenStateChanged,
+    LowPowerModeChanged,
+};
+```
+
+状态快照刻意保持很小、可直接复制：
+
+```cpp
+struct AppSystemStateSnapshot {
+    uint64_t unix_time_ms;
+    int16_t timezone_offset_minutes;
+    uint8_t battery_percent;
+    bool charging;
+    bool network_online;
+    bool screen_on;
+    bool low_power_mode;
+};
+```
+
+规则：
+
+- 宿主使用 `push_current(...)` 为当前 app instance 注入事件。
+- UI/main task 在帧边界通过 `pump_current(...)` 消费事件。
+- `max_events_per_frame` 限制每帧事件处理量。
+- 旧 app instance 的事件会被消费并丢弃。
+- 队列本身不调用 JS、不修改 DOM、不读取 RTC/network/battery 硬件，也不直接触发 layout；后续 binding
+  决定 accepted event 如何变成 app callback。
 
 ## 实现顺序
 
