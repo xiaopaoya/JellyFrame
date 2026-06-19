@@ -79,6 +79,8 @@ Current core helpers:
   table state for desktop shells and MCU hosts wiring optional services.
 - `HostServiceRequestQueue`: bounded request queue with priority selection,
   pending-job cancellation and bulk cancellation by `app_instance_id`.
+  Workers that own only one service kind should use kind-filtered popping so
+  network, storage, image and media jobs cannot consume each other's requests.
 - `HostServiceCompletionQueue`: bounded completion queue with per-frame pop
   limits and stale `app_instance_id` discarding.
 - `HostHandleTable`: bounded host handle table with generation checks to reject

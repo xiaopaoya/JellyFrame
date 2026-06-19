@@ -49,6 +49,28 @@ void request_queue_cancels_pending_jobs() {
     assert(!queue.cancel_pending(third.job_id));
 }
 
+void request_queue_can_pop_by_kind_without_consuming_other_jobs() {
+    HostServiceRequestQueue queue(4);
+    const auto network_low = queue.submit(HostServiceJobKind::NetworkFetch, 1, 0, 1);
+    const auto storage = queue.submit(HostServiceJobKind::StorageKv, 1, 0, 9);
+    const auto network_high = queue.submit(HostServiceJobKind::NetworkFetch, 1, 0, 3);
+
+    HostServiceRequest request;
+    assert(queue.pop_next(HostServiceJobKind::NetworkFetch, request));
+    assert(request.job_id == network_high.job_id);
+    assert(request.kind == HostServiceJobKind::NetworkFetch);
+    assert(queue.size() == 2);
+
+    assert(queue.pop_next(HostServiceJobKind::StorageKv, request));
+    assert(request.job_id == storage.job_id);
+    assert(queue.size() == 1);
+
+    assert(!queue.pop_next(HostServiceJobKind::ImageDecode, request));
+    assert(queue.pop_next(request));
+    assert(request.job_id == network_low.job_id);
+    assert(queue.empty());
+}
+
 void completion_queue_drains_with_frame_budget() {
     HostServiceCompletionQueue queue(4);
     assert(queue.push(HostServiceCompletion{1, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 7}));
@@ -145,6 +167,7 @@ void cancelled_completion_preserves_request_identity() {
 int main() {
     request_queue_is_bounded_and_priority_ordered();
     request_queue_cancels_pending_jobs();
+    request_queue_can_pop_by_kind_without_consuming_other_jobs();
     completion_queue_drains_with_frame_budget();
     completion_queue_rejects_overflow();
     handle_table_rejects_stale_handles();

@@ -85,6 +85,10 @@ bool AppRuntimeHost::pop_worker_request(HostServiceRequest& request) {
     return requests_.pop_next(request);
 }
 
+bool AppRuntimeHost::pop_worker_request(HostServiceJobKind kind, HostServiceRequest& request) {
+    return requests_.pop_next(kind, request);
+}
+
 AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(std::vector<HostServiceCompletion>& accepted) {
     return lifecycle_.pump_completions(completions_, max_completion_events_per_frame_, accepted, &handles_);
 }

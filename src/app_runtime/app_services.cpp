@@ -120,7 +120,7 @@ AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
 
 bool NetworkFetchMock::complete_next(AppRuntimeHost& host) {
     HostServiceRequest request;
-    if (!host.pop_worker_request(request) || request.kind != HostServiceJobKind::NetworkFetch) {
+    if (!host.pop_worker_request(HostServiceJobKind::NetworkFetch, request)) {
         return false;
     }
     const auto pending = find_job(pending_, request.job_id);
@@ -313,7 +313,7 @@ HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
 
 bool AppPrivateKvStorageMock::complete_next(AppRuntimeHost& host) {
     HostServiceRequest request;
-    if (!host.pop_worker_request(request) || request.kind != HostServiceJobKind::StorageKv) {
+    if (!host.pop_worker_request(HostServiceJobKind::StorageKv, request)) {
         return false;
     }
     const auto pending = find_job(pending_, request.job_id);

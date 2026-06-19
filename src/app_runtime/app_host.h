@@ -54,6 +54,7 @@ public:
 
     bool push_completion(const HostServiceCompletion& completion);
     bool pop_worker_request(HostServiceRequest& request);
+    bool pop_worker_request(HostServiceJobKind kind, HostServiceRequest& request);
 
     AppCompletionPumpResult pump_frame_completions(std::vector<HostServiceCompletion>& accepted);
 

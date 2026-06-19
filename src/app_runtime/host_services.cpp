@@ -53,6 +53,24 @@ bool HostServiceRequestQueue::pop_next(HostServiceRequest& request) {
     return true;
 }
 
+bool HostServiceRequestQueue::pop_next(HostServiceJobKind kind, HostServiceRequest& request) {
+    auto best = requests_.end();
+    for (auto it = requests_.begin(); it != requests_.end(); ++it) {
+        if (it->kind != kind) {
+            continue;
+        }
+        if (best == requests_.end() || it->priority > best->priority) {
+            best = it;
+        }
+    }
+    if (best == requests_.end()) {
+        return false;
+    }
+    request = *best;
+    requests_.erase(best);
+    return true;
+}
+
 bool HostServiceRequestQueue::cancel_pending(std::uint32_t job_id) {
     const auto it = std::find_if(requests_.begin(), requests_.end(), [job_id](const HostServiceRequest& request) {
         return request.job_id == job_id;

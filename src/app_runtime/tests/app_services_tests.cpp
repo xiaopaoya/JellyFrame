@@ -176,6 +176,30 @@ void kv_storage_enforces_budgets() {
     check(accepted.front().status == HostServiceStatus::BudgetExceeded, "kv budget overflow status");
 }
 
+void service_workers_do_not_consume_other_service_requests() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.mixed", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
+    AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 4, 96});
+    check(network.add_fixture(NetworkFetchFixture{"app://mixed", 200, "application/json", "{}"}),
+          "mixed fixture accepted");
+
+    const AppServiceSubmitResult set = storage.submit_set(host, "theme", "dark");
+    const AppServiceSubmitResult fetch = network.submit_fetch(host, "app://mixed");
+    check(set.accepted(), "mixed kv submitted");
+    check(fetch.accepted(), "mixed network submitted");
+    check(network.complete_next(host), "mixed network completed first");
+    check(storage.complete_next(host), "mixed storage completed second");
+
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 2, "mixed first frame completions");
+    check(accepted[0].kind == HostServiceJobKind::NetworkFetch, "mixed network completion kept");
+    check(accepted[1].kind == HostServiceJobKind::StorageKv, "mixed storage completion kept");
+    if (accepted[0].handle != 0) {
+        check(network.release_response(host, accepted[0].handle), "mixed network release");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -184,5 +208,6 @@ int main() {
     network_fetch_pending_request_is_cancelled_on_app_switch();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();
+    service_workers_do_not_consume_other_service_requests();
     return 0;
 }

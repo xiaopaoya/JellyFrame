@@ -74,6 +74,7 @@ public:
                                    std::uint32_t timeout_ms = 0);
 
     bool pop_next(HostServiceRequest& request);
+    bool pop_next(HostServiceJobKind kind, HostServiceRequest& request);
     bool cancel_pending(std::uint32_t job_id);
     std::size_t cancel_app_instance(std::uint32_t app_instance_id);
     void clear();

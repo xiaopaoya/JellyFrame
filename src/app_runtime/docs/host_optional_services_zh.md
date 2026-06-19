@@ -59,7 +59,8 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
 - `AppRuntimeHost`：组合 lifecycle、request/completion queue 与 handle table，作为桌面壳和
   MCU host 接入可选服务的推荐状态容器。
 - `HostServiceRequestQueue`：有界 request FIFO，支持 priority 选择、pending job 取消和按
-  `app_instance_id` 批量取消。
+  `app_instance_id` 批量取消。只负责单一 service kind 的 worker 应使用按 kind 过滤的 pop，
+  避免 network、storage、image、media job 彼此误消费。
 - `HostServiceCompletionQueue`：有界 completion FIFO，支持每帧按上限 pop，并可丢弃旧
   `app_instance_id` 的 completion。
 - `HostHandleTable`：有界 host handle 表，使用 generation 防止释放后的旧 handle 误命中新资源，
