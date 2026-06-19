@@ -40,6 +40,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added a `host_services` core helper module with bounded request/completion
   queues and a generation-checked host handle table for future installable apps,
   images, audio and network services.
+- Added `AppLifecycleController` for active `app_instance_id` assignment,
+  foreground/suspended state and request/completion/host-handle cleanup during
+  app switch or exit.
 - Added `.jfapp` V0 installable-bundle output. `tools/package_app.py` and
   `jellyframe_cli.py package` can now emit little-endian, uncompressed,
   fixed-index binary resource bundles and report bundle CRC/SHA-256 plus section
@@ -50,6 +53,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added a desktop installed-app registry mock. `jellyframe_cli.py registry
   install/list/path/remove` validates `.jfapp` bundles, installs through staging,
   atomically commits the registry and prepares the system-shell app-manager path.
+- Added `samples/apps/system/sample_launcher` and modeled the Win32 App Manager
+  launcher as a privileged JellyFrame App role; `--launcher-app` can point to a
+  different trusted launcher app.
 - Added ESP32-S3 N16R8 benchmark defaults and a 16 MB partition table, and
   recorded the 2026-06-19 real-chip baseline: 16 MB flash, 8 MB octal PSRAM and
   a passing 300x300 / 40 cards / 20 iterations full pipeline.
@@ -60,6 +66,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   reviewing ESP32-S3 decode experiments: MP3 and small MJPEG/image decode may
   be optional host services, H.264 is not in the default ESP32-S3 profile, and
   networking remains runtime data fetch only, not remote page-resource loading.
+- App manifests/schemas now include a `role` field and reserved system
+  capabilities. Declaring launcher/watchface/settings roles does not grant
+  privileges; host/profile policy still owns authorization.
 - Pseudo browser, pipeline dump, embedded host demo and virtual-board benchmark
   now report memory/budget-oriented pipeline statistics through the same helper.
 - Render, layout and layer tree counting now use explicit work stacks instead

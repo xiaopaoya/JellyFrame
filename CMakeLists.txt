@@ -70,6 +70,7 @@ else()
 endif()
 
 add_library(jellyframe_app_runtime
+    src/app_runtime/app_lifecycle.cpp
     src/app_runtime/host_services.cpp
 )
 
@@ -133,7 +134,7 @@ if(JELLYFRAME_BUILD_EXAMPLES)
     endif()
     if(WIN32)
         add_jellyframe_tool(jellyframe_win32_browser tools/native/win32_browser.cpp)
-        target_link_libraries(jellyframe_win32_browser PRIVATE gdi32 user32)
+        target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_app_runtime gdi32 user32)
         if(JELLYFRAME_BUILD_SCRIPTING)
             target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_script)
         endif()
@@ -187,6 +188,7 @@ if(JELLYFRAME_BUILD_TESTS)
     add_test(NAME jellyframe_render_core_tests COMMAND jellyframe_render_core_tests)
 
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
+        src/app_runtime/tests/app_lifecycle_tests.cpp
         src/app_runtime/tests/host_services_tests.cpp
     )
     foreach(test_source IN LISTS JELLYFRAME_APP_RUNTIME_TEST_SOURCES)

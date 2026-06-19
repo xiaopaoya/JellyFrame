@@ -31,12 +31,16 @@ JellyFrame Engine 的重要变更记录在这里。
   轻量视频、fetch response 和安装式 bundle registry 的 V0 实现形状。
 - 添加 `host_services` 核心辅助模块，提供有界 request/completion 队列和带 generation
   校验的 host handle table，为安装式 app、图片、音频和网络服务打地基。
+- 添加 `AppLifecycleController`，用于生成 active `app_instance_id`、管理 foreground/suspended
+  状态，并在 app 切换/退出时取消旧 request、丢弃旧 completion、释放旧 host handles。
 - 添加 `.jfapp` V0 安装式 bundle 输出：`tools/package_app.py` 和 `jellyframe_cli.py package`
   可生成小端、未压缩、固定索引的二进制资源包，并在报告中记录 bundle CRC/SHA-256 和分段大小。
 - 伪浏览器和 Win32 browser 壳现在可以通过 `--app path.jfapp` 直接加载安装式 bundle，
   用于验证 bundle 与源包目录渲染结果一致。
 - 添加桌面 installed-app registry mock：`jellyframe_cli.py registry install/list/path/remove`
   可校验 `.jfapp`、通过 staging 安装 bundle、原子提交 registry，并为后续系统壳 app manager 打基础。
+- 添加 `samples/apps/system/sample_launcher`，并将 Win32 App Manager 启动器建模为带系统权限的
+  JellyFrame App 角色；`--launcher-app` 可指定其他受信 launcher app。
 - 添加 ESP32-S3 N16R8 benchmark 配置与 16MB 分区表，并记录 2026-06-19 实机基线：
   16MB Flash、8MB octal PSRAM、300x300 / 40 cards / 20 iterations 完整 pipeline 通过。
 
@@ -45,6 +49,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 根据 ESP32-S3 解码实验审计更新 HAL、宿主抽象、运行循环、app packaging 和路线图：
   MP3 与小尺寸 MJPEG/图片 decode 可作为可选宿主服务，H.264 不进入默认 ESP32-S3 profile；
   网络继续只作为运行时数据 API，不作为远程页面资源 loader。
+- App manifest/schema 增加 `role` 字段和系统 capability 预留，声明 launcher/watchface/settings
+  角色本身不授予权限，授权仍由宿主/profile 决定。
 - Pseudo browser、pipeline dump、embedded host demo 和 virtual-board benchmark
   现在通过同一个 helper 输出面向内存/预算的管线统计。
 - Render、layout 和 layer tree 计数改为显式工作栈，替代递归 helper 遍历。

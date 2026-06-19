@@ -11,6 +11,11 @@
 它提供有界 request queue、completion queue、host handle table 和基础状态类型；它不创建线程，
 不执行 I/O，也不拥有任何平台资源。
 
+`src/app_runtime/app_lifecycle.h` / `src/app_runtime/app_lifecycle.cpp` 提供第一版
+app 实例生命周期 helper。它只负责生成 `app_instance_id`、记录 foreground/suspended 状态、
+在 app 切换或退出时取消旧 request、丢弃旧 completion、释放旧 host handles，并在每帧消费
+completion 时过滤 stale instance。它不拥有 DOM、JS runtime、framebuffer 或平台线程。
+
 ## 总体模型
 
 JellyFrame 只有一个 UI owner：
@@ -34,6 +39,8 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
 
 当前 `app_runtime` helper 对应：
 
+- `AppLifecycleController`：管理当前 active app instance、显式 suspend/resume，以及
+  launch/exit 时的 request/completion/handle teardown。
 - `HostServiceRequestQueue`：有界 request FIFO，支持 priority 选择、pending job 取消和按
   `app_instance_id` 批量取消。
 - `HostServiceCompletionQueue`：有界 completion FIFO，支持每帧按上限 pop，并可丢弃旧
@@ -77,6 +84,9 @@ struct HostServiceCompletion {
 
 `app_instance_id` 用于 app 切换、页面销毁或系统休眠时隔离旧 job。UI 收到 completion 时，如果
 `app_instance_id` 已不是当前实例，应释放相关 host handle，并忽略 DOM/JS 回调。
+`AppLifecycleController::pump_completions()` 提供这个过滤策略的参考实现：当前实例的 completion
+进入业务处理列表；旧实例 completion 会被消费并释放其 handle，避免旧网络响应、旧图片 surface 或旧音频状态
+回调到新 app。
 
 `handle` 是宿主资源层的短句柄，不是裸指针。句柄可以指向 decoded surface、audio stream、
 network response buffer 或 bundle staging record。句柄生命周期由宿主控制。

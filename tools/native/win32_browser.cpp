@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 
+#include "app_runtime/app_lifecycle.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
 #include "render_core/display_invalidation.h"
@@ -722,7 +723,15 @@ class BrowserApp {
 public:
     explicit BrowserApp(BrowserOptions options)
         : options_(std::move(options)),
-          active_app_id_(options_.launch_app_id) {}
+          active_app_id_(options_.launch_app_id) {
+        if (!options_.launch_app_id.empty()) {
+            lifecycle_.launch(options_.launch_app_id, AppRole::App);
+        } else if (!options_.app_path.empty()) {
+            lifecycle_.launch(options_.app_path, AppRole::App);
+        } else if (!options_.registry_store_path.empty()) {
+            lifecycle_.launch("org.jellyframe.system.launcher", AppRole::Launcher);
+        }
+    }
 
     bool initialize(HINSTANCE instance, int show_command) {
         WNDCLASSW window_class{};
@@ -794,6 +803,7 @@ private:
     VectorDiagnosticSink diagnostics_;
     bool system_shell_mode_ = false;
     std::string active_app_id_;
+    AppLifecycleController lifecycle_;
     std::string pending_shell_action_;
     std::string pending_shell_app_id_;
 
@@ -878,6 +888,7 @@ private:
         }
         system_shell_mode_ = true;
         active_app_id_.clear();
+        lifecycle_.launch("org.jellyframe.system.launcher", AppRole::Launcher);
         options_.app_path.clear();
         options_.script_path.clear();
         try {
@@ -900,6 +911,7 @@ private:
             options_.inline_html.clear();
             options_.inline_css.clear();
             active_app_id_ = app_id;
+            lifecycle_.launch(app_id, AppRole::App);
             system_shell_mode_ = false;
             scroll_y_ = 0;
             if (!options_.viewport_width_set && package.manifest.viewport_width > 0) {
@@ -921,6 +933,7 @@ private:
     void delete_installed_app(const std::string& app_id) {
         try {
             if (!active_app_id_.empty() && active_app_id_ == app_id) {
+                lifecycle_.exit_current();
                 configure_system_shell("Cannot delete the active app; returned to shell first.");
             }
             const auto removed = jellyframe_example::remove_bundle_from_registry(options_.registry_store_path, app_id);

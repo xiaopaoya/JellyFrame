@@ -15,6 +15,13 @@ The first platform-neutral helpers live in `src/app_runtime/host_services.h` /
 completion queues, a host handle table and basic status types. They do not
 create threads, perform I/O or own platform resources.
 
+`src/app_runtime/app_lifecycle.h` / `src/app_runtime/app_lifecycle.cpp` provide
+the first app-instance lifecycle helper. It only assigns `app_instance_id`,
+tracks foreground/suspended state, cancels old requests, discards old
+completions, releases old host handles on app switch/exit, and filters stale
+completions at frame boundaries. It does not own DOM, a JS runtime, framebuffers
+or platform threads.
+
 ## Overall Model
 
 JellyFrame has one UI owner:
@@ -42,6 +49,8 @@ consumed per UI frame.
 
 Current core helpers:
 
+- `AppLifecycleController`: active app instance management, explicit
+  suspend/resume and request/completion/handle teardown during launch/exit.
 - `HostServiceRequestQueue`: bounded request queue with priority selection,
   pending-job cancellation and bulk cancellation by `app_instance_id`.
 - `HostServiceCompletionQueue`: bounded completion queue with per-frame pop
@@ -87,6 +96,10 @@ struct HostServiceCompletion {
 `app_instance_id` isolates old jobs after app switches, document teardown or
 sleep. If a completion belongs to an inactive app instance, release the host
 handle and skip DOM/JS callbacks.
+`AppLifecycleController::pump_completions()` is the reference filtering policy:
+current-instance completions enter the business handling list; stale completions
+are consumed and their handles released so old network responses, image surfaces
+or audio states cannot call into the new app.
 
 `handle` is a small host-resource handle, not a raw pointer. It may identify a
 decoded surface, audio stream, network response buffer or bundle staging record.
