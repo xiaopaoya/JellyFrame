@@ -32,6 +32,7 @@ struct AppPackageManifest {
     int viewport_width = 0;
     int viewport_height = 0;
     bool network_allowed = false;
+    bool storage_kv_allowed = false;
     std::vector<std::string> font_sources;
 };
 
@@ -542,6 +543,7 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     manifest.network_allowed =
         json_array_contains_string(json, "permissions", "network") ||
         json_array_contains_string(json, "capabilities", "network.fetch");
+    manifest.storage_kv_allowed = json_array_contains_string(json, "capabilities", "storage.kv");
     manifest.font_sources = json_collect_object_string_values(json, "fonts", "source");
     for (std::string& source : manifest.font_sources) {
         std::string normalized;

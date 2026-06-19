@@ -25,6 +25,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 B3/B4 平台无关 mock：`NetworkFetchMock` 提供 manifest/profile 之后可复用的
   fixture/handle/completion 网络数据契约，`AppPrivateKvStorageMock` 提供按 app id
   隔离的异步 KV storage 契约和预算检查。
+- package report 和 C++ package manifest reader 增加 `storage.kv` capability 摘要，用于后续
+  runtime storage gate。
 - `jellyframe_cli.py package/check/preview/install` 默认执行字体资源预检；新增
   `--no-font-check` 用于显式跳过。
 - 添加共享 `PipelineStatistics` 统计入口，用同一口径统计 DOM、render、layout、

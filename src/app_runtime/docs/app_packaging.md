@@ -82,15 +82,19 @@ Runtime bundle boundary:
   launcher refreshes on a later frame.
 - Failed staging can be discarded without corrupting the committed app table.
 
-Network boundary:
+Runtime data and storage boundary:
 
 - `permissions: ["network"]` / `capabilities: ["network.fetch"]` declares
   runtime data requests only.
+- `capabilities: ["storage.kv"]` declares small app-private async KV storage
+  only.
 - Apps may request weather/account data, small JSON sync or download a `.jfapp`
   for the system installer to verify.
 - Remote HTML/CSS/script/image resources are still forbidden as page resources.
-- Target profiles may reject network apps or cap response bytes, concurrency
-  and timeouts.
+- Cookies, synchronous `localStorage`, IndexedDB, Cache API and general
+  filesystem access are still absent.
+- Target profiles may reject network/storage apps or cap response bytes,
+  concurrency, timeouts, KV item counts and byte quotas.
 
 This keeps installable third-party apps viable without turning the MCU runtime
 into an uncontrolled general-purpose browser loader.
@@ -652,8 +656,10 @@ python tools/jellyframe_cli.py font `
   --output-binary build/watch_weather_font.jffont
 ```
 
-The package report records whether the manifest requested network capability,
-but network requests are not executed yet.
+The package report records whether the manifest requested network or app-private
+KV storage capability. The desktop app-runtime mocks can validate the
+request/completion/handle contract, but no real network or filesystem I/O is
+performed by the core.
 
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,

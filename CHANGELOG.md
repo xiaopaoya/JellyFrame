@@ -31,6 +31,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   fixture/handle/completion contract for future manifest/profile-gated runtime
   network data, and `AppPrivateKvStorageMock` provides app-id-isolated async KV
   storage semantics with budget checks.
+- Added `storage.kv` capability summaries to package reports and the C++
+  package manifest reader for later runtime storage gates.
 - `jellyframe_cli.py package/check/preview/install` now runs font resource
   preflight by default; `--no-font-check` skips it explicitly.
 - Added shared `PipelineStatistics` accounting for DOM, render, layout, layer,

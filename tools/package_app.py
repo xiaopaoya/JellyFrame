@@ -193,6 +193,7 @@ def validate_manifest(manifest: dict) -> dict:
     if not isinstance(role, str) or role not in {"app", "launcher", "watchface", "settings"}:
         fail("manifest role must be one of: app, launcher, watchface, settings")
     network_allowed = "network" in permissions or "network.fetch" in capabilities
+    storage_kv_allowed = "storage.kv" in capabilities
     return {
         "id": app_id,
         "name": manifest.get("name", app_id),
@@ -209,6 +210,7 @@ def validate_manifest(manifest: dict) -> dict:
         "permissions": permissions,
         "capabilities": capabilities,
         "networkAllowed": network_allowed,
+        "storageKvAllowed": storage_kv_allowed,
     }
 
 
@@ -728,6 +730,7 @@ def main() -> int:
     print(
         f"packaged {manifest['id']} resources={len(resources)} "
         f"bytes={report['totalResourceBytes']} network_allowed={manifest['networkAllowed']} "
+        f"storage_kv_allowed={manifest['storageKvAllowed']} "
         f"warnings={len(warnings)}"
     )
     for warning in warnings:
