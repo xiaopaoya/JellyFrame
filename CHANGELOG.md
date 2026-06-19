@@ -8,6 +8,17 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added manifest/profile policy merging for optional data services:
+  `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
+  `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`
+  before runtime mocks or future JS bindings can submit work.
+- Added `AppSystemEventQueue`, a bounded app-instance-scoped queue for
+  host-injected time, timezone, network, battery, screen and low-power snapshots.
+- Added app-runtime microbench coverage for optional network fetch, KV storage
+  and system-event pumping.
+- Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
+  planned callback-based `JellyFrame.fetchText`, `JellyFrame.storage` and
+  `JellyFrame.system` JavaScript API shape before exposing it.
 - Added `.jffont` V0 binary font supplement output to
   `jellyframe_font_pack_gen`, reusing the existing `BitmapFont` glyph data model
   without C++ pointers or compile-time symbols as groundwork for future dynamic
@@ -92,6 +103,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Host service workers can now pop requests by `HostServiceJobKind`, preventing
+  network, storage, image and media workers from accidentally consuming each
+  other's queued jobs.
 - Updated HAL, host abstraction, run-loop, app-packaging and roadmap docs after
   reviewing ESP32-S3 decode experiments: MP3 and small MJPEG/image decode may
   be optional host services, H.264 is not in the default ESP32-S3 profile, and

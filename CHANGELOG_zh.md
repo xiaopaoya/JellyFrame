@@ -8,6 +8,15 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 添加可选数据服务的 manifest/profile policy 合成：`AppServiceManifestCapabilities`、
+  `AppServiceHostProfile` 和 `app_service_policies_for_app(...)` 现在会在 runtime mock
+  或未来 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。
+- 添加 `AppSystemEventQueue`，这是一个有界、绑定 app instance 的系统事件队列，用于宿主注入
+  时间、时区、网络、电量、屏幕和低功耗状态快照。
+- app-runtime microbench 新增可选 network fetch、KV storage 和 system-event pump 覆盖。
+- 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，在真正暴露前记录计划中的
+  callback 风格 `JellyFrame.fetchText`、`JellyFrame.storage` 和 `JellyFrame.system`
+  JavaScript API 形状。
 - `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有
   `BitmapFont` glyph 数据模型，但去掉 C++ 指针和编译期符号，为后续 `.jfapp`
   动态包内字体资源打基础。
@@ -69,6 +78,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- Host service worker 现在可以按 `HostServiceJobKind` 弹出 request，避免 network、
+  storage、image 和 media worker 误消费彼此的队列任务。
 - 根据 ESP32-S3 解码实验审计更新 HAL、宿主抽象、运行循环、app packaging 和路线图：
   MP3 与小尺寸 MJPEG/图片 decode 可作为可选宿主服务，H.264 不进入默认 ESP32-S3 profile；
   网络继续只作为运行时数据 API，不作为远程页面资源 loader。
