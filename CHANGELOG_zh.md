@@ -18,6 +18,10 @@ JellyFrame Engine 的重要变更记录在这里。
   `fonts` 声明并把 `.jffont` 加入当前 runtime 状态。
 - Win32 browser 壳新增 `--use-app-fonts`，可显式让 `.jfapp` 包内 `.jffont`
   参与 layout 和 paint，用于动态字体补充包验收；默认路径仍使用 GDI 文本。
+- 完成 A4 app 生命周期契约第一版：`AppRuntimeHost::crash_current()` 会复用统一
+  teardown 规则；Win32 壳现在把 package loader、脚本 runtime、timer、输入和
+  completion pump 绑定到 active `app_instance_id`，app 加载失败会释放实例并回到
+  system shell。
 - `jellyframe_cli.py package/check/preview/install` 默认执行字体资源预检；新增
   `--no-font-check` 用于显式跳过。
 - 添加共享 `PipelineStatistics` 统计入口，用同一口径统计 DOM、render、layout、

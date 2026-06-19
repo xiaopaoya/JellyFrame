@@ -118,6 +118,36 @@ void app_fonts_follow_active_instance_lifecycle() {
     assert(host.fonts().empty());
 }
 
+void crash_current_tears_down_active_instance_state() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.crashy", AppRole::App);
+    const auto request = host.submit_current(HostServiceJobKind::NetworkFetch);
+    assert(request.accepted);
+    const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
+    assert(handle != 0);
+    assert(host.load_current_jffont(tiny_jffont_bytes().data(), tiny_jffont_bytes().size()).loaded());
+    assert(host.push_completion(HostServiceCompletion{request.job_id,
+                                                      HostServiceJobKind::NetworkFetch,
+                                                      HostServiceStatus::Completed,
+                                                      app.id,
+                                                      handle,
+                                                      0,
+                                                      64}));
+
+    const AppTeardownResult result = host.crash_current();
+    assert(result.crashed);
+    assert(result.app_instance_id == app.id);
+    assert(result.cancelled_requests == 1);
+    assert(result.discarded_completions == 1);
+    assert(result.released_handles == 1);
+    assert(result.released_font_resources == 1);
+    assert(host.current_app_instance_id() == 0);
+    assert(host.requests().empty());
+    assert(host.completions().empty());
+    assert(host.handles().active_count() == 0);
+    assert(host.fonts().empty());
+}
+
 void frame_pump_limits_completions_and_filters_stale_instances() {
     AppRuntimeHost host = make_host();
     const AppInstance first = host.launch("org.example.first", AppRole::App);
@@ -191,6 +221,7 @@ int main() {
     current_instance_submission_and_handles_are_scoped();
     launch_cleans_previous_instance_state();
     app_fonts_follow_active_instance_lifecycle();
+    crash_current_tears_down_active_instance_state();
     frame_pump_limits_completions_and_filters_stale_instances();
     options_follow_host_capabilities();
     return 0;

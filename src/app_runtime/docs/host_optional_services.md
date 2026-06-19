@@ -18,7 +18,7 @@ create threads, perform I/O or own platform resources.
 `src/app_runtime/app_lifecycle.h` / `src/app_runtime/app_lifecycle.cpp` provide
 the first app-instance lifecycle helper. It only assigns `app_instance_id`,
 tracks foreground/suspended state, cancels old requests, discards old
-completions, releases old host handles on app switch/exit, and filters stale
+completions, releases old host handles on app switch, exit or crash recovery, and filters stale
 completions at frame boundaries. It does not own DOM, a JS runtime, framebuffers
 or platform threads.
 
@@ -26,9 +26,10 @@ or platform threads.
 higher-level `AppRuntimeHost`: a bounded state container that keeps the lifecycle
 controller, request queue, completion queue and host handle table together. It
 offers fixed entry points for submitting jobs from the current app, allocating
-current-app handles and pumping frame completions. It still does not perform
-network, file, decode or flash I/O; real work belongs to desktop shells, RTOS
-workers or board ports.
+current-app handles and pumping frame completions. It also exposes
+`crash_current()` so hosts can apply the same resource-release rule after app
+load or runtime failures. It still does not perform network, file, decode or
+flash I/O; real work belongs to desktop shells, RTOS workers or board ports.
 
 ## Overall Model
 
@@ -58,7 +59,7 @@ consumed per UI frame.
 Current core helpers:
 
 - `AppLifecycleController`: active app instance management, explicit
-  suspend/resume and request/completion/handle teardown during launch/exit.
+  suspend/resume and request/completion/handle teardown during launch/exit/crash.
 - `AppRuntimeHost`: combined lifecycle, request/completion queue and handle
   table state for desktop shells and MCU hosts wiring optional services.
 - `HostServiceRequestQueue`: bounded request queue with priority selection,
@@ -113,6 +114,14 @@ or audio states cannot call into the new app.
 
 `handle` is a small host-resource handle, not a raw pointer. It may identify a
 decoded surface, audio stream, network response buffer or bundle staging record.
+
+The Win32 reference shell follows the A4 rule set:
+
+- package loading, JerryScript runtime ownership, timer pumping, input dispatch
+  and completion pumping are bound to the active `app_instance_id`;
+- stale or non-foreground instances do not receive input or script timer pumps;
+- app rebuild/load failures call `AppRuntimeHost::crash_current()` and return to
+  the system shell.
 
 ## Image Decode Service
 

@@ -841,6 +841,7 @@ private:
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
     std::unique_ptr<JerryScriptRuntime> script_runtime_;
+    std::uint32_t script_runtime_instance_id_ = 0;
 #endif
     std::unique_ptr<Node> document_;
     std::unique_ptr<StyleResolver> style_resolver_;
@@ -939,6 +940,26 @@ private:
         viewport_height_ = std::max(1L, rect.bottom - rect.top);
     }
 
+    bool runtime_controls_page() const {
+        return !options_.app_path.empty() || !options_.registry_store_path.empty();
+    }
+
+    bool accepts_ui_events() const {
+        return !runtime_controls_page() || app_runtime_.current().state == AppLifecycleState::Foreground;
+    }
+
+    void drain_host_completions() {
+        std::vector<HostServiceCompletion> accepted;
+        const AppCompletionPumpResult result = app_runtime_.pump_frame_completions(accepted);
+        if (result.consumed == 0) {
+            return;
+        }
+        std::cout << "host completions consumed=" << result.consumed
+                  << " accepted=" << result.accepted
+                  << " stale=" << result.stale
+                  << " released_stale_handles=" << result.released_stale_handles << '\n';
+    }
+
     void configure_system_shell(std::string status) {
         if (options_.registry_store_path.empty()) {
             return;
@@ -977,7 +998,9 @@ private:
             if (!options_.viewport_height_set && package.manifest.viewport_height > 0) {
                 options_.viewport_height = package.manifest.viewport_height;
             }
-            rebuild();
+            if (!rebuild()) {
+                return;
+            }
             InvalidateRect(hwnd_, nullptr, FALSE);
             set_title("launched " + app_id);
         } catch (const std::exception& error) {
@@ -1020,12 +1043,33 @@ private:
         return true;
     }
 
-    void rebuild() {
+    void recover_active_app_after_failure(const std::exception& error) {
+        std::cerr << "rebuild failed: " << error.what() << '\n';
+        if (!options_.registry_store_path.empty() && !system_shell_mode_) {
+            const AppTeardownResult teardown = app_runtime_.crash_current();
+            const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
+            configure_system_shell(
+                "Recovered from " + crashed_app + " after an error; released instance " +
+                std::to_string(teardown.app_instance_id) + ".");
+            try {
+                rebuild();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            } catch (const std::exception& shell_error) {
+                std::cerr << "system shell recovery failed: " << shell_error.what() << '\n';
+                set_title(std::string("error: ") + shell_error.what());
+            }
+            return;
+        }
+        set_title(std::string("error: ") + error.what());
+    }
+
+    bool rebuild() {
         try {
             diagnostics_.clear();
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
             KillTimer(hwnd_, kScriptTimerId);
             script_runtime_.reset();
+            script_runtime_instance_id_ = 0;
 #endif
             LoadedPage page = load_page(options_, budgets_, &diagnostics_, &app_runtime_);
             document_ = std::move(page.document);
@@ -1071,6 +1115,7 @@ private:
                           *document_, jellyframe_example::load_linked_script, &script_context, &diagnostics_);
             if (!document_scripts.empty() || !options_.script_path.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
+                script_runtime_instance_id_ = app_runtime_.current_app_instance_id();
                 script_runtime_->set_host_time_ms(GetTickCount64());
                 script_runtime_->bind_document(*document_);
                 for (const DocumentScript& script : document_scripts) {
@@ -1106,9 +1151,10 @@ private:
 #endif
             render_current(nullptr, nullptr, nullptr);
             print_diagnostics(diagnostics_);
+            return true;
         } catch (const std::exception& error) {
-            std::cerr << "rebuild failed: " << error.what() << '\n';
-            set_title(std::string("error: ") + error.what());
+            recover_active_app_after_failure(error);
+            return false;
         }
     }
 
@@ -1116,6 +1162,7 @@ private:
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
         }
+        drain_host_completions();
         style_resolver_->set_interaction_state(hovered_node, active_node, focused_node);
         const DomDirtyFlags dirty_flags = document_->dirty_flags;
         const int current_content_height = layout_tree_ != nullptr
@@ -1352,7 +1399,7 @@ private:
     }
 
     void handle_pointer_move(WPARAM wparam, LPARAM lparam) {
-        if (!input_) {
+        if (!input_ || !accepts_ui_events()) {
             return;
         }
         PointerInput input;
@@ -1366,7 +1413,7 @@ private:
     }
 
     void handle_pointer_down(WPARAM wparam, LPARAM lparam) {
-        if (!input_) {
+        if (!input_ || !accepts_ui_events()) {
             return;
         }
         PointerInput input;
@@ -1381,7 +1428,7 @@ private:
     }
 
     void handle_pointer_up(WPARAM wparam, LPARAM lparam) {
-        if (!input_) {
+        if (!input_ || !accepts_ui_events()) {
             return;
         }
         PointerInput input;
@@ -1400,7 +1447,7 @@ private:
     }
 
     void handle_wheel(WPARAM wparam, LPARAM lparam) {
-        if (!input_) {
+        if (!input_ || !accepts_ui_events()) {
             return;
         }
         POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
@@ -1419,7 +1466,7 @@ private:
     }
 
     void handle_char(WPARAM wparam) {
-        if (!input_ || wparam < 0x20 || wparam == 0x7f) {
+        if (!input_ || !accepts_ui_events() || wparam < 0x20 || wparam == 0x7f) {
             return;
         }
         const Node* focus = input_->focused_node();
@@ -1429,7 +1476,7 @@ private:
     }
 
     void handle_key_down(WPARAM wparam) {
-        if (!input_) {
+        if (!input_ || !accepts_ui_events()) {
             return;
         }
         KeyInput key;
@@ -1464,7 +1511,8 @@ private:
             return;
         }
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
-        if (script_runtime_ == nullptr) {
+        if (script_runtime_ == nullptr || !accepts_ui_events() ||
+            script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
             return;
         }
         const std::size_t callbacks = script_runtime_->pump_timers(GetTickCount64(), 8);

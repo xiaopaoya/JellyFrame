@@ -37,6 +37,7 @@ public:
 
     AppInstance launch(std::string app_id, AppRole role);
     AppTeardownResult exit_current();
+    AppTeardownResult crash_current();
     bool suspend_current();
     bool resume_current();
 

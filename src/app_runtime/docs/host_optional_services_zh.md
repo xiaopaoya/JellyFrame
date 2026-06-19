@@ -13,12 +13,13 @@
 
 `src/app_runtime/app_lifecycle.h` / `src/app_runtime/app_lifecycle.cpp` 提供第一版
 app 实例生命周期 helper。它只负责生成 `app_instance_id`、记录 foreground/suspended 状态、
-在 app 切换或退出时取消旧 request、丢弃旧 completion、释放旧 host handles，并在每帧消费
+在 app 切换、退出或 crash recovery 时取消旧 request、丢弃旧 completion、释放旧 host handles，并在每帧消费
 completion 时过滤 stale instance。它不拥有 DOM、JS runtime、framebuffer 或平台线程。
 
 `src/app_runtime/app_host.h` / `src/app_runtime/app_host.cpp` 提供更高一层的
 `AppRuntimeHost`：把 lifecycle controller、request queue、completion queue 和 host handle
 table 放进同一个有界容器，并提供“当前 app 提交 job / 分配 handle / 每帧 pump completion”的固定入口。
+它还提供 `crash_current()`，用于宿主捕获 app 加载或运行错误后执行同一套资源释放规则。
 它仍然不执行网络、文件、解码或 flash I/O；真实工作由桌面壳、RTOS worker 或 port 层完成。
 
 ## 总体模型
@@ -45,7 +46,7 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
 当前 `app_runtime` helper 对应：
 
 - `AppLifecycleController`：管理当前 active app instance、显式 suspend/resume，以及
-  launch/exit 时的 request/completion/handle teardown。
+  launch/exit/crash 时的 request/completion/handle teardown。
 - `AppRuntimeHost`：组合 lifecycle、request/completion queue 与 handle table，作为桌面壳和
   MCU host 接入可选服务的推荐状态容器。
 - `HostServiceRequestQueue`：有界 request FIFO，支持 priority 选择、pending job 取消和按
@@ -97,6 +98,13 @@ struct HostServiceCompletion {
 
 `handle` 是宿主资源层的短句柄，不是裸指针。句柄可以指向 decoded surface、audio stream、
 network response buffer 或 bundle staging record。句柄生命周期由宿主控制。
+
+Win32 参考壳的 A4 行为：
+
+- package loader、JerryScript runtime、timer pump、输入派发和 completion pump 都绑定当前 active
+  `app_instance_id`。
+- 旧实例或非 foreground 实例不会接收输入，也不会泵动脚本 timer。
+- app rebuild/load 失败时，壳调用 `AppRuntimeHost::crash_current()` 释放资源，然后回到 system shell。
 
 ## 图片解码服务
 

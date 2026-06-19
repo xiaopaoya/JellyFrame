@@ -34,6 +34,12 @@ AppTeardownResult AppRuntimeHost::exit_current() {
     return result;
 }
 
+AppTeardownResult AppRuntimeHost::crash_current() {
+    AppTeardownResult result = exit_current();
+    result.crashed = result.app_instance_id != 0;
+    return result;
+}
+
 bool AppRuntimeHost::suspend_current() {
     return lifecycle_.suspend_current();
 }

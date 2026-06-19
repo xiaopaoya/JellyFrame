@@ -22,6 +22,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `--use-app-fonts` to the Win32 browser shell so in-bundle `.jffont`
   resources can explicitly participate in layout and paint for dynamic font
   supplement validation; the default path still uses GDI text.
+- Completed the first A4 app lifecycle contract pass: `AppRuntimeHost::crash_current()`
+  reuses the unified teardown rule, and the Win32 shell now binds package
+  loading, scripting, timers, input and completion pumping to the active
+  `app_instance_id`; app load failures release the instance and return to the
+  system shell.
 - `jellyframe_cli.py package/check/preview/install` now runs font resource
   preflight by default; `--no-font-check` skips it explicitly.
 - Added shared `PipelineStatistics` accounting for DOM, render, layout, layer,

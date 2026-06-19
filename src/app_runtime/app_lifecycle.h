@@ -38,6 +38,7 @@ struct AppTeardownResult {
     std::size_t discarded_completions = 0;
     std::size_t released_handles = 0;
     std::size_t released_font_resources = 0;
+    bool crashed = false;
 };
 
 struct AppCompletionPumpResult {
