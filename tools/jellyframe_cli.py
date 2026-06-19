@@ -472,6 +472,35 @@ def cmd_registry(args: argparse.Namespace) -> int:
     return app_registry.main(registry_args)
 
 
+def cmd_install(args: argparse.Namespace) -> int:
+    if bool(args.root) == bool(args.bundle):
+        raise SystemExit("install requires exactly one of --root or --bundle")
+    if args.root:
+        if args.report is None:
+            args.report = args.store / "last-install.report.json"
+        with tempfile.TemporaryDirectory(prefix="jellyframe-install-") as directory:
+            args.output_cpp = None
+            args.output_bundle = Path(directory) / "app.jfapp"
+            args.debug_dir = None
+            package_result = cmd_package(args)
+            if package_result != 0:
+                return package_result
+            return app_registry.main([
+                "install",
+                "--store",
+                str(args.store),
+                "--bundle",
+                str(args.output_bundle),
+            ])
+    return app_registry.main([
+        "install",
+        "--store",
+        str(args.store),
+        "--bundle",
+        str(args.bundle),
+    ])
+
+
 def add_manifest_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
@@ -559,6 +588,22 @@ def main() -> int:
     new.add_argument("--name", help="Manifest display name override.")
     new.add_argument("--target", help="Optional target preset applied to manifest viewport and targets.")
     new.set_defaults(func=cmd_new)
+
+    install = subparsers.add_parser("install", help="Validate, package and install an app into a desktop registry.")
+    install.add_argument("--store", required=True, type=Path, help="Installed-app registry directory.")
+    install.add_argument("--root", type=Path, help="Source app package directory. Runs validation and pipeline diagnostics.")
+    install.add_argument("--bundle", type=Path, help="Existing .jfapp bundle to install.")
+    install.add_argument("--report", type=Path, help="Output JSON report path for --root installs.")
+    install.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
+    install.add_argument("--target", help="Optional target preset id used for package diagnostics.")
+    install.add_argument("--namespace", default="jellyframe_esp32s3", help=argparse.SUPPRESS)
+    install.add_argument("--include", default="jellyframe_esp32s3_resources.h", help=argparse.SUPPRESS)
+    install.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
+    install.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
+    install.add_argument("--font-budget", help="Optional glyph size such as 16x16 for font budget estimates.")
+    install.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file.")
+    install.add_argument("--emit-used-chars", type=Path, help="Optional output file for used non-ASCII characters.")
+    install.set_defaults(func=cmd_install)
 
     registry = subparsers.add_parser("registry", help="Manage a desktop installed-app registry mock.")
     registry.add_argument("registry_args", nargs=argparse.REMAINDER,

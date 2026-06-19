@@ -22,6 +22,7 @@
 #include "script/jerryscript_runtime.h"
 #endif
 
+#include "app_registry.h"
 #include "app_package.h"
 #include "example_css_io.h"
 
@@ -55,8 +56,15 @@ struct BrowserOptions {
     std::string output_path;
     std::string html_path = "src/render_core/samples/pages/modern/app_shell.html";
     std::string css_path = "src/render_core/samples/pages/modern/app_shell.css";
+    std::string inline_html;
+    std::string inline_css;
     std::string script_path;
     std::string app_path;
+    std::string registry_store_path;
+    std::string install_bundle_path;
+    std::string launch_app_id;
+    std::string remove_app_id;
+    std::string startup_status;
     int viewport_width = 390;
     int viewport_height = 640;
     bool viewport_width_set = false;
@@ -459,6 +467,88 @@ void print_diagnostics(const VectorDiagnosticSink& diagnostics) {
     }
 }
 
+std::string html_escape_text(const std::string& value) {
+    std::string output;
+    output.reserve(value.size() + 8);
+    for (const char ch : value) {
+        switch (ch) {
+        case '&':
+            output += "&amp;";
+            break;
+        case '<':
+            output += "&lt;";
+            break;
+        case '>':
+            output += "&gt;";
+            break;
+        case '"':
+            output += "&quot;";
+            break;
+        default:
+            output.push_back(ch);
+            break;
+        }
+    }
+    return output;
+}
+
+std::string system_shell_css() {
+    return
+        "body { margin: 0; padding: 18px; background: #0f172a; color: #e5e7eb; font-size: 14px; }"
+        ".shell { display: grid; gap: 14px; }"
+        ".top { display: grid; gap: 4px; margin-bottom: 2px; }"
+        "h1 { margin: 0; font-size: 24px; color: #ffffff; }"
+        ".hint { color: #9ca3af; font-size: 12px; }"
+        ".status { padding: 9px; background: #172554; color: #bfdbfe; border: 1px solid #2563eb; border-radius: 8px; }"
+        ".empty { padding: 18px; background: #111827; border: 1px solid #334155; border-radius: 10px; }"
+        ".app { display: grid; gap: 8px; padding: 12px; background: #111827; border: 1px solid #334155; border-radius: 12px; }"
+        ".name { font-size: 18px; color: #ffffff; }"
+        ".meta { color: #a5b4fc; font-size: 12px; }"
+        ".actions { display: flex; gap: 8px; }"
+        "button { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #64748b; background: #1f2937; color: #f8fafc; }"
+        "button.primary { background: #2563eb; border-color: #60a5fa; }"
+        "button.danger { background: #7f1d1d; border-color: #ef4444; }";
+}
+
+std::string build_system_shell_html(const std::filesystem::path& registry_store, const std::string& status) {
+    const jellyframe_example::InstalledAppRegistry registry =
+        jellyframe_example::load_installed_app_registry(registry_store);
+    std::ostringstream html;
+    html << "<body><main class='shell'>";
+    html << "<section class='top'><h1>JellyFrame</h1>"
+         << "<p class='hint'>Installed apps from local .jfapp bundles</p></section>";
+    if (!status.empty()) {
+        html << "<p class='status'>" << html_escape_text(status) << "</p>";
+    }
+    if (registry.apps.empty()) {
+        html << "<section class='empty'><p>No installed apps.</p>"
+             << "<p class='hint'>Use --install-bundle app.jfapp with --registry-store.</p></section>";
+    }
+    for (const jellyframe_example::InstalledAppEntry& app : registry.apps) {
+        html << "<article class='app'>"
+             << "<h2 class='name'>" << html_escape_text(app.name) << "</h2>"
+             << "<p class='meta'>" << html_escape_text(app.id) << " - v"
+             << html_escape_text(app.version_name) << " - "
+             << app.bundle_size << " bytes</p>"
+             << "<div class='actions'>"
+             << "<button class='primary' data-action='launch' data-app-id='" << html_escape_text(app.id) << "'>Launch</button>"
+             << "<button class='danger' data-action='delete' data-app-id='" << html_escape_text(app.id) << "'>Delete</button>"
+             << "</div></article>";
+    }
+    html << "</main></body>";
+    return html.str();
+}
+
+const Node* find_shell_action_node(const Node* node) {
+    for (const Node* current = node; current != nullptr; current = current->parent) {
+        if (current->type == NodeType::Element && !current->attribute("data-action").empty() &&
+            !current->attribute("data-app-id").empty()) {
+            return current;
+        }
+    }
+    return nullptr;
+}
+
 LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, DiagnosticSink* diagnostics) {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -467,6 +557,12 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, 
     CssParserOptions css_options = css_parser_options_from_budgets(budgets);
     css_options.diagnostics = diagnostics;
     LoadedPage page;
+    if (!options.inline_html.empty()) {
+        page.document = html_parser.parse(options.inline_html, html_options);
+        page.stylesheet = css_parser.parse(options.inline_css, css_options);
+        page.script_base_dir = std::filesystem::current_path();
+        return page;
+    }
     if (!options.app_path.empty()) {
         auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
         page.package_mode = true;
@@ -566,7 +662,8 @@ FrameBuffer render_page_with_gdi_text(const std::string& html_path,
 class BrowserApp {
 public:
     explicit BrowserApp(BrowserOptions options)
-        : options_(std::move(options)) {}
+        : options_(std::move(options)),
+          active_app_id_(options_.launch_app_id) {}
 
     bool initialize(HINSTANCE instance, int show_command) {
         WNDCLASSW window_class{};
@@ -636,6 +733,10 @@ private:
     DisplayInvalidationResult last_display_invalidation_;
     DirtyRegionStatistics dirty_region_statistics_;
     VectorDiagnosticSink diagnostics_;
+    bool system_shell_mode_ = false;
+    std::string active_app_id_;
+    std::string pending_shell_action_;
+    std::string pending_shell_app_id_;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
         BrowserApp* app = nullptr;
@@ -658,6 +759,9 @@ private:
         switch (message) {
         case WM_CREATE:
             resize_to_client();
+            if (!options_.registry_store_path.empty() && options_.app_path.empty() && options_.inline_html.empty()) {
+                configure_system_shell(options_.startup_status);
+            }
             rebuild();
             return 0;
         case WM_SIZE:
@@ -709,6 +813,78 @@ private:
         viewport_height_ = std::max(1L, rect.bottom - rect.top);
     }
 
+    void configure_system_shell(std::string status) {
+        if (options_.registry_store_path.empty()) {
+            return;
+        }
+        system_shell_mode_ = true;
+        active_app_id_.clear();
+        options_.app_path.clear();
+        options_.script_path.clear();
+        options_.inline_html = build_system_shell_html(options_.registry_store_path, status);
+        options_.inline_css = system_shell_css();
+        scroll_y_ = 0;
+    }
+
+    void launch_installed_app(const std::string& app_id) {
+        try {
+            const std::filesystem::path bundle_path =
+                jellyframe_example::find_installed_app_bundle_path(options_.registry_store_path, app_id);
+            auto package = jellyframe_example::load_app_package(bundle_path, kMaxInputBytes);
+            options_.app_path = bundle_path.string();
+            options_.inline_html.clear();
+            options_.inline_css.clear();
+            active_app_id_ = app_id;
+            system_shell_mode_ = false;
+            scroll_y_ = 0;
+            if (!options_.viewport_width_set && package.manifest.viewport_width > 0) {
+                options_.viewport_width = package.manifest.viewport_width;
+            }
+            if (!options_.viewport_height_set && package.manifest.viewport_height > 0) {
+                options_.viewport_height = package.manifest.viewport_height;
+            }
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            set_title("launched " + app_id);
+        } catch (const std::exception& error) {
+            configure_system_shell(std::string("Launch failed: ") + error.what());
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+
+    void delete_installed_app(const std::string& app_id) {
+        try {
+            if (!active_app_id_.empty() && active_app_id_ == app_id) {
+                configure_system_shell("Cannot delete the active app; returned to shell first.");
+            }
+            const auto removed = jellyframe_example::remove_bundle_from_registry(options_.registry_store_path, app_id);
+            configure_system_shell("Deleted " + removed.name + ".");
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        } catch (const std::exception& error) {
+            configure_system_shell(std::string("Delete failed: ") + error.what());
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+
+    bool process_shell_action_if_needed() {
+        if (pending_shell_action_.empty() || pending_shell_app_id_.empty()) {
+            return false;
+        }
+        const std::string action = std::move(pending_shell_action_);
+        const std::string app_id = std::move(pending_shell_app_id_);
+        pending_shell_action_.clear();
+        pending_shell_app_id_.clear();
+        if (action == "launch") {
+            launch_installed_app(app_id);
+        } else if (action == "delete") {
+            delete_installed_app(app_id);
+        }
+        return true;
+    }
+
     void rebuild() {
         try {
             diagnostics_.clear();
@@ -726,12 +902,26 @@ private:
             layout_tree_.reset();
             layer_tree_.reset();
             input_.reset();
+            pending_shell_action_.clear();
+            pending_shell_app_id_.clear();
             dirty_region_statistics_ = DirtyRegionStatistics{};
 
-            document_->add_event_listener("click", [this](Event& event) {
-                std::cout << "click target=" << describe_node(event.target()) << '\n';
-                set_title("clicked " + describe_node(event.target()));
-            });
+            if (system_shell_mode_) {
+                document_->add_event_listener("click", [this](Event& event) {
+                    const Node* action_node = find_shell_action_node(event.target());
+                    if (action_node == nullptr) {
+                        return;
+                    }
+                    pending_shell_action_ = action_node->attribute("data-action");
+                    pending_shell_app_id_ = action_node->attribute("data-app-id");
+                    event.prevent_default();
+                });
+            } else {
+                document_->add_event_listener("click", [this](Event& event) {
+                    std::cout << "click target=" << describe_node(event.target()) << '\n';
+                    set_title("clicked " + describe_node(event.target()));
+                });
+            }
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
             jellyframe_example::ScriptLoadContext script_context;
@@ -1069,6 +1259,9 @@ private:
         const Node* target = input_->pointer_up(input);
         rerender_if_dirty(input_->focused_node());
         follow_hash_anchor(target);
+        if (process_shell_action_if_needed()) {
+            return;
+        }
         set_title("up " + describe_node(target));
     }
 
@@ -1108,6 +1301,11 @@ private:
         KeyInput key;
         if (wparam == VK_BACK) {
             key.code = KeyCode::Backspace;
+        } else if (wparam == VK_ESCAPE && !options_.registry_store_path.empty() && !system_shell_mode_) {
+            configure_system_shell("Returned from " + active_app_id_ + ".");
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
         } else if (wparam == VK_RETURN) {
             key.code = KeyCode::Enter;
         } else if (wparam == VK_SPACE) {
@@ -1210,6 +1408,38 @@ int main(int argc, char** argv) {
             options.app_path = argv[++i];
             continue;
         }
+        if (arg == "--registry-store") {
+            if (i + 1 >= argc) {
+                std::cerr << "--registry-store requires a directory\n";
+                return 1;
+            }
+            options.registry_store_path = argv[++i];
+            continue;
+        }
+        if (arg == "--install-bundle") {
+            if (i + 1 >= argc) {
+                std::cerr << "--install-bundle requires a .jfapp file\n";
+                return 1;
+            }
+            options.install_bundle_path = argv[++i];
+            continue;
+        }
+        if (arg == "--launch-app") {
+            if (i + 1 >= argc) {
+                std::cerr << "--launch-app requires an installed app id\n";
+                return 1;
+            }
+            options.launch_app_id = argv[++i];
+            continue;
+        }
+        if (arg == "--remove-app") {
+            if (i + 1 >= argc) {
+                std::cerr << "--remove-app requires an installed app id\n";
+                return 1;
+            }
+            options.remove_app_id = argv[++i];
+            continue;
+        }
         if (arg == "--script" || arg == "-s") {
             if (i + 1 >= argc) {
                 std::cerr << "--script requires a script file path\n";
@@ -1239,8 +1469,42 @@ int main(int argc, char** argv) {
         positional.push_back(arg);
     }
 
-    if (options.app_path.empty() && positional.empty()) {
+    if (options.registry_store_path.empty() && options.app_path.empty() && positional.empty()) {
         options.app_path = "samples/apps/packages/watch_weather";
+    }
+
+    if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() || !options.launch_app_id.empty()) {
+        if (options.registry_store_path.empty()) {
+            std::cerr << "--registry-store is required for install/remove/launch app manager commands\n";
+            return 1;
+        }
+    }
+
+    try {
+        if (!options.install_bundle_path.empty()) {
+            const auto installed = jellyframe_example::install_bundle_into_registry(
+                options.registry_store_path, options.install_bundle_path, kMaxInputBytes);
+            options.startup_status = "Installed " + installed.name + ".";
+            std::cout << "installed " << installed.id << " " << installed.version_name << '\n';
+        }
+        if (!options.remove_app_id.empty()) {
+            const auto removed =
+                jellyframe_example::remove_bundle_from_registry(options.registry_store_path, options.remove_app_id);
+            options.startup_status = "Removed " + removed.name + ".";
+            std::cout << "removed " << removed.id << '\n';
+        }
+        if (!options.launch_app_id.empty()) {
+            options.app_path =
+                jellyframe_example::find_installed_app_bundle_path(options.registry_store_path, options.launch_app_id).string();
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "app manager command failed: " << error.what() << '\n';
+            return 1;
+    }
+
+    if (!options.registry_store_path.empty() && options.app_path.empty() && positional.empty()) {
+        options.inline_html = build_system_shell_html(options.registry_store_path, options.startup_status);
+        options.inline_css = system_shell_css();
     }
 
     if (!options.app_path.empty()) {
@@ -1272,6 +1536,22 @@ int main(int argc, char** argv) {
             return 1;
         }
     } else if (options.capture) {
+        if (!options.inline_html.empty()) {
+            try {
+                FrameBuffer frame_buffer = render_page_with_gdi_text(options);
+                write_image(frame_buffer, options.output_path);
+                std::cout << "JellyFrame Win32 browser capture\n"
+                          << "  output=" << options.output_path << '\n'
+                          << "  viewport_width=" << options.viewport_width << '\n'
+                          << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
+                          << "  non_background_pixels="
+                          << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
+                return 0;
+            } catch (const std::exception& error) {
+                std::cerr << "capture failed: " << error.what() << '\n';
+                return 1;
+            }
+        }
         if (positional.size() >= 1) {
             options.html_path = positional[0];
         }

@@ -79,6 +79,29 @@ jobs:
             --output-cpp build\ci\watch_weather_resources.cpp `
             --report build\ci\watch_weather.package.report.json `
             --build-dir build\Release
+          python tools\jellyframe_cli.py install `
+            --store build\ci\installed_apps `
+            --root samples\apps\packages\watch_weather `
+            --target round-300 `
+            --report build\ci\watch_weather.install.report.json `
+            --build-dir build\Release
+          build\Release\jellyframe_win32_browser.exe `
+            --capture build\ci\app_manager.ppm `
+            --registry-store build\ci\installed_apps `
+            --viewport-width 390 `
+            --viewport-height 640
+          build\Release\jellyframe_win32_browser.exe `
+            --capture build\ci\installed_launch.ppm `
+            --registry-store build\ci\installed_apps `
+            --launch-app org.jellyframe.examples.weather `
+            --viewport-width 300 `
+            --viewport-height 300
+          build\Release\jellyframe_win32_browser.exe `
+            --capture build\ci\app_manager_removed.ppm `
+            --registry-store build\ci\installed_apps `
+            --remove-app org.jellyframe.examples.weather `
+            --viewport-width 390 `
+            --viewport-height 640
 
       - name: Verify pipeline diagnostics report
         shell: pwsh

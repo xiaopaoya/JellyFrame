@@ -448,8 +448,28 @@ renders like the source directory:
 .\build\Release\jellyframe_win32_browser.exe --capture build\watch_weather.bmp --app build\watch_weather.jfapp
 ```
 
-The desktop installed-app registry mock can simulate the system shell/app
-manager installation table:
+For the recommended source-package install path, let the CLI run validation,
+pipeline diagnostics, bundle generation and registry installation in one step:
+
+```powershell
+python tools/jellyframe_cli.py install `
+  --store build/installed_apps `
+  --root samples/apps/packages/watch_weather `
+  --target round-300 `
+  --report build/watch_weather.install.report.json
+```
+
+The Win32 shell can then display the installed-app registry, launch apps through
+the rendered system-shell UI and delete inactive apps:
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --registry-store build/installed_apps
+.\build\Release\jellyframe_win32_browser.exe --registry-store build/installed_apps --launch-app org.jellyframe.examples.weather
+.\build\Release\jellyframe_win32_browser.exe --capture build/app_manager.bmp --registry-store build/installed_apps
+```
+
+The lower-level registry helper remains available for installing an existing
+`.jfapp` bundle or scripting registry tests:
 
 ```powershell
 python tools/jellyframe_cli.py registry install `
@@ -471,9 +491,8 @@ python tools/jellyframe_cli.py registry remove `
 
 The registry mock validates the `.jfapp` header, section ranges, CRC32 and
 manifest summary, copies the bundle through staging and commits `registry.json`
-with an atomic write. It is not the final graphical app manager; A3 will make
-the Win32 shell or a separate desktop shell display, launch and delete apps from
-this registry.
+with an atomic write. The Win32 system-shell mode uses this same registry format
+for app discovery, launch and inactive-app deletion.
 
 The render-core pseudo browser remains the deterministic CI shell for standalone
 HTML/CSS pages and package entry preflight. App/package capture and human

@@ -438,10 +438,13 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     AppPackageManifest manifest;
     json_find_string(json, "id", manifest.id);
     json_find_string(json, "name", manifest.name);
+    json_find_string(json, "versionName", manifest.version_name);
     json_find_string(json, "entry", manifest.entry);
     json_find_string(json, "script", manifest.script_mode);
     json_find_string(json, "minJellyFrame", manifest.min_jellyframe);
-    json_find_int(json, "code", manifest.version_code);
+    if (!json_find_int(json, "versionCode", manifest.version_code)) {
+        json_find_int(json, "code", manifest.version_code);
+    }
     json_find_int(json, "width", manifest.viewport_width);
     json_find_int(json, "height", manifest.viewport_height);
     if (manifest.viewport_width <= 0) {

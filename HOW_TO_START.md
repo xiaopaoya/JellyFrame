@@ -384,7 +384,27 @@ bundle behaves like the source directory:
 .\build\Release\jellyframe_win32_browser.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
 ```
 
-Simulate installation into the desktop app registry:
+Install the source package into the desktop app registry. This path runs
+validation, pipeline diagnostics and bundle generation before committing the app:
+
+```powershell
+python tools\jellyframe_cli.py install `
+  --store build\installed_apps `
+  --root samples\apps\packages\watch_weather `
+  --target round-300 `
+  --report build\watch_weather.install.report.json
+```
+
+Open the Win32 system shell/app manager:
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps
+.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
+.\build\Release\jellyframe_win32_browser.exe --capture build\app_manager.bmp --registry-store build\installed_apps
+```
+
+The lower-level registry helper is still useful for scripting with an existing
+`.jfapp`:
 
 ```powershell
 python tools\jellyframe_cli.py registry install `

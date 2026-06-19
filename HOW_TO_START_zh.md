@@ -361,7 +361,26 @@ python tools\jellyframe_cli.py preview `
 .\build\Release\jellyframe_win32_browser.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
 ```
 
-模拟安装到桌面 app registry：
+把源码包安装到桌面 app registry。这个路径会先运行 validation、pipeline diagnostics 和 bundle
+生成，再提交安装：
+
+```powershell
+python tools\jellyframe_cli.py install `
+  --store build\installed_apps `
+  --root samples\apps\packages\watch_weather `
+  --target round-300 `
+  --report build\watch_weather.install.report.json
+```
+
+打开 Win32 system shell / app manager：
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps
+.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
+.\build\Release\jellyframe_win32_browser.exe --capture build\app_manager.bmp --registry-store build\installed_apps
+```
+
+低层 registry helper 仍适合脚本化处理已有 `.jfapp`：
 
 ```powershell
 python tools\jellyframe_cli.py registry install `
