@@ -266,8 +266,8 @@ HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
                                                  AppRuntimeHost& host,
                                                  std::uint32_t& handle,
                                                  std::uint32_t& byte_count) {
-    AppSpace& space = spaces_[op.app_id];
     if (op.operation == AppPrivateKvOperation::Set) {
+        AppSpace& space = spaces_[op.app_id];
         if (!can_store(space, op.key, op.value)) {
             return HostServiceStatus::BudgetExceeded;
         }
@@ -280,6 +280,11 @@ HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
         byte_count = static_cast<std::uint32_t>(op.value.size());
         return HostServiceStatus::Completed;
     }
+    const auto space_found = spaces_.find(op.app_id);
+    if (space_found == spaces_.end()) {
+        return op.operation == AppPrivateKvOperation::Get ? HostServiceStatus::Failed : HostServiceStatus::Completed;
+    }
+    AppSpace& space = space_found->second;
     if (op.operation == AppPrivateKvOperation::Get) {
         const auto found = space.values.find(op.key);
         if (found == space.values.end()) {
@@ -300,12 +305,14 @@ HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
         if (found != space.values.end()) {
             space.bytes -= found->first.size() + found->second.size();
             space.values.erase(found);
+            if (space.values.empty()) {
+                spaces_.erase(space_found);
+            }
         }
         return HostServiceStatus::Completed;
     }
     if (op.operation == AppPrivateKvOperation::Clear) {
-        space.values.clear();
-        space.bytes = 0;
+        spaces_.erase(space_found);
         return HostServiceStatus::Completed;
     }
     return HostServiceStatus::Failed;
