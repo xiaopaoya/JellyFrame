@@ -158,6 +158,57 @@ def should_run_font_resource_check(args: argparse.Namespace) -> bool:
                 getattr(args, "font_coverage", None))
 
 
+def load_json_if_exists(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json_report(path: Path, report: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def merge_pipeline_report(package_report_path: Path, pipeline_report: dict) -> None:
+    if not pipeline_report:
+        return
+    report = load_json_if_exists(package_report_path)
+    if not report:
+        report = {
+            "format": "jellyframe.package.report",
+        }
+    report["pipelineDiagnostics"] = pipeline_report
+    write_json_report(package_report_path, report)
+
+
+def remember_pipeline_report(args: argparse.Namespace, pipeline_report_path: Path) -> None:
+    args._pipeline_report = load_json_if_exists(pipeline_report_path)
+    merge_pipeline_report(args.report, args._pipeline_report)
+
+
+def diagnostic_status_from_report(package_report_path: Path) -> tuple[int, int, int]:
+    report = load_json_if_exists(package_report_path)
+    pipeline = report.get("pipelineDiagnostics", {})
+    summary = pipeline.get("summary", {}) if isinstance(pipeline, dict) else {}
+    errors = int(summary.get("error", 0) or 0)
+    warnings = int(summary.get("warning", 0) or 0)
+    package_warnings = report.get("warnings", [])
+    if isinstance(package_warnings, list):
+        warnings += len(package_warnings)
+    infos = int(summary.get("info", 0) or 0)
+    return errors, warnings, infos
+
+
+def enforce_diagnostics_policy(args: argparse.Namespace) -> int:
+    errors, warnings, infos = diagnostic_status_from_report(args.report)
+    print(f"diagnostic policy: errors={errors} warnings={warnings} info={infos}")
+    if errors > 0:
+        return 1
+    if getattr(args, "strict", False) and warnings > 0:
+        return 1
+    return 0
+
+
 def run_pipeline_check(args: argparse.Namespace) -> int:
     pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
     ensure_tool(pseudo_browser)
@@ -168,17 +219,23 @@ def run_pipeline_check(args: argparse.Namespace) -> int:
     height = int(viewport.get("height", 0) or 0)
     with tempfile.TemporaryDirectory(prefix="jellyframe-pipeline-check-") as directory:
         output = Path(directory) / "preflight.bmp"
+        diagnostics_json = Path(directory) / "pipeline.diagnostics.json"
         command = [
             str(pseudo_browser),
             "--app",
             str(args.root),
             str(output),
+            "--diagnostics-json",
+            str(diagnostics_json),
         ]
         if width:
             command.append(str(width))
         if height:
             command.append(str(height))
-        return run_command(command)
+        result = run_command(command)
+        if result == 0:
+            remember_pipeline_report(args, diagnostics_json)
+        return result
 
 
 def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> int:
@@ -190,15 +247,21 @@ def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> i
         if pipeline_result != 0:
             return pipeline_result
     if should_run_font_resource_check(args):
-        return run_font_resource_check(args)
-    return 0
+        font_result = run_font_resource_check(args)
+        if font_result != 0:
+            return font_result
+    return enforce_diagnostics_policy(args) if include_pipeline else 0
 
 
 def cmd_package(args: argparse.Namespace) -> int:
     preflight_result = run_package_preflight(args, include_pipeline=True)
     if preflight_result != 0:
         return preflight_result
-    return run_command(package_command(args, False))
+    package_result = run_command(package_command(args, False))
+    if package_result != 0:
+        return package_result
+    merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
+    return enforce_diagnostics_policy(args)
 
 
 def cmd_preview(args: argparse.Namespace) -> int:
@@ -213,19 +276,27 @@ def cmd_preview(args: argparse.Namespace) -> int:
     viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
     width = args.width or int(viewport.get("width", 0) or 0)
     height = args.height or int(viewport.get("height", 0) or 0)
-    command = [
-        str(pseudo_browser),
-        "--app",
-        str(args.root),
-        str(args.output),
-    ]
-    if width:
-        command.append(str(width))
-    if height:
-        command.append(str(height))
-    if args.pump_timers:
-        command.extend(["--pump-timers", str(args.pump_timers)])
-    return run_command(command)
+    with tempfile.TemporaryDirectory(prefix="jellyframe-preview-") as directory:
+        diagnostics_json = Path(directory) / "pipeline.diagnostics.json"
+        command = [
+            str(pseudo_browser),
+            "--app",
+            str(args.root),
+            str(args.output),
+            "--diagnostics-json",
+            str(diagnostics_json),
+        ]
+        if width:
+            command.append(str(width))
+        if height:
+            command.append(str(height))
+        if args.pump_timers:
+            command.extend(["--pump-timers", str(args.pump_timers)])
+        result = run_command(command)
+        if result == 0:
+            remember_pipeline_report(args, diagnostics_json)
+            return enforce_diagnostics_policy(args)
+        return result
 
 
 def resource_files_from_report(root: Path, report_path: Path) -> list[str]:
@@ -267,7 +338,12 @@ def cmd_check(args: argparse.Namespace) -> int:
         if pipeline_result != 0:
             return pipeline_result
     if should_run_font_resource_check(args):
-        return run_font_resource_check(args)
+        font_result = run_font_resource_check(args)
+        if font_result != 0:
+            return font_result
+    policy_result = enforce_diagnostics_policy(args)
+    if policy_result != 0:
+        return policy_result
     print("package is valid; pipeline diagnostics ran through the pseudo browser.")
     print("Text-search compatibility scanning has been retired; pass font options for font resource checks.")
     return 0
@@ -397,6 +473,7 @@ def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     add_manifest_package_args(parser)
     parser.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
     parser.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
+    parser.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
 
 
 def main() -> int:
@@ -431,6 +508,7 @@ def main() -> int:
     preview.add_argument("--namespace", default="jellyframe_esp32s3", help=argparse.SUPPRESS)
     preview.add_argument("--include", default="jellyframe_esp32s3_resources.h", help=argparse.SUPPRESS)
     preview.add_argument("--skip-check", action="store_true", help="Skip optional font resource preflight.")
+    preview.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
     preview.set_defaults(func=cmd_preview)
 
     check = subparsers.add_parser("check", help="Validate package and optionally run font resource checks.")

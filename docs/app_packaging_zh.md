@@ -287,6 +287,10 @@ python tools/jellyframe_cli.py preview `
 管线运行，因此不会重复做这次预检。需要在打包或预览前做字体资源审计时，传入
 `--font-budget`、`--font-coverage` 或 `--emit-used-chars`。
 
+CLI 会把伪浏览器输出合并进指定 JSON report 的 `pipelineDiagnostics` 字段。任何 severity 为
+`error` 的诊断都会使 `check`、`preview` 和 `package` 失败。warning 默认写入报告但不阻断；
+CI 或发布打包希望 warning 也失败时，传入 `--strict`。
+
 Windows 上做人类 app 开发时，应优先使用交互式 Win32 browser 壳：
 
 ```powershell
@@ -334,9 +338,11 @@ python tools/jellyframe_cli.py font `
 伪浏览器会报告 manifest 是否请求了网络能力，但目前还不会执行网络请求。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
-资源大小、CRC32/SHA-256 校验、local/remote reference 诊断和 package-resource warnings。
-未来 report 还应包含实际管线中所有已知的忽略、延后、降级、部分处理、懒处理特性，
-以及未知 parse/render 事件的 fallback 诊断。
+资源大小、CRC32/SHA-256 校验、local/remote reference 诊断、package-resource warnings 和
+`pipelineDiagnostics`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、package 资源加载计数、
+面向内存的管线统计、脚本状态、severity 汇总，以及 parser、style、layout、layer、renderer、
+scripting 或 package loading 代码实际发出的 diagnostics。已知不支持或降级的特性应给出明确原因；
+未知恢复至少应包含触发字段或片段。
 
 `tools/package_app.py` 仍作为 CLI 和嵌入式构建集成使用的底层 packer。
 

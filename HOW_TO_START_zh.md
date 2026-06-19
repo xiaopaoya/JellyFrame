@@ -358,6 +358,10 @@ python tools\jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+`check`、`preview` 和 `package` 会把真实管线 diagnostics 写入 JSON report 的
+`pipelineDiagnostics` 字段。severity 为 `error` 的诊断默认失败；希望 warning 在 CI 或发布打包时
+也失败，可以加 `--strict`。
+
 收集 package 的非 ASCII 字符，供嵌入式 bitmap font pack 使用：
 
 ```powershell

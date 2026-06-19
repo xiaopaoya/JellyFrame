@@ -23,6 +23,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   unmatched end tags; script collection reports module/unknown script skips and
   external load failures; package/resource loading, inline style parsing and
   software renderer/paint fallbacks also report the triggering field.
+- Added `jellyframe_pseudo_browser --diagnostics-json`, a structured desktop
+  report for pipeline statistics, script status, package resource loads and
+  component diagnostics.
 
 ### Changed
 
@@ -46,6 +49,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - `jellyframe_cli.py package` and `check` now run pseudo-browser pipeline
   diagnostics by default. `preview` is itself a full pipeline run. Font resource
   checks still run only when font options are requested.
+- CLI `check`, `preview` and `package` now merge pseudo-browser diagnostics into
+  the JSON report under `pipelineDiagnostics`. Errors fail by default; warnings
+  remain advisory unless `--strict` is passed.
 
 ## 0.3.0-dev - 2026-06-18
 

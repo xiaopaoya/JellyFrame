@@ -19,6 +19,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 扩展 diagnostics 兜底覆盖：HTML tokenizer/tree-builder 会报告异常 tag、属性、字符引用、
   未闭合 raw text 和不匹配 end tag；script 收集会报告 module/未知类型跳过和外部脚本加载失败；
   package/resource loader、inline style parser 和 software renderer/paint fallback 也会报告触发字段。
+- 添加 `jellyframe_pseudo_browser --diagnostics-json`，用于输出结构化桌面报告，
+  覆盖管线统计、脚本状态、package 资源加载和各组件 diagnostics。
 
 ### 变更
 
@@ -36,6 +38,8 @@ JellyFrame Engine 的重要变更记录在这里。
   旧名称仅作为早期工具名保留在历史记录中。
 - `jellyframe_cli.py package` 和 `check` 现在默认先通过伪浏览器运行一次管线 diagnostics；
   `preview` 本身就是完整管线运行。只有请求字体选项时才运行字体资源检查。
+- CLI 的 `check`、`preview` 和 `package` 会把伪浏览器 diagnostics 合并进 JSON report 的
+  `pipelineDiagnostics` 字段。error 默认失败；warning 默认只提示，传入 `--strict` 后会失败。
 
 ## 0.3.0-dev - 2026-06-18
 

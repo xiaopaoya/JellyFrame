@@ -108,6 +108,7 @@ struct BrowserOptions {
     std::string html_path;
     std::string css_path;
     std::string output_path;
+    std::string diagnostics_json_path;
     std::string script_path;
     std::string app_path;
     int viewport_width = 360;
@@ -161,12 +162,143 @@ bool is_app_flag(const std::string& value) {
     return value == "--app";
 }
 
+bool is_diagnostics_json_flag(const std::string& value) {
+    return value == "--diagnostics-json";
+}
+
+std::string json_escape(const std::string& value) {
+    std::string output;
+    output.reserve(value.size() + 8);
+    for (const char ch : value) {
+        switch (ch) {
+        case '\\':
+            output += "\\\\";
+            break;
+        case '"':
+            output += "\\\"";
+            break;
+        case '\b':
+            output += "\\b";
+            break;
+        case '\f':
+            output += "\\f";
+            break;
+        case '\n':
+            output += "\\n";
+            break;
+        case '\r':
+            output += "\\r";
+            break;
+        case '\t':
+            output += "\\t";
+            break;
+        default:
+            if (static_cast<unsigned char>(ch) < 0x20U) {
+                constexpr char digits[] = "0123456789abcdef";
+                output += "\\u00";
+                output.push_back(digits[(static_cast<unsigned char>(ch) >> 4U) & 0x0fU]);
+                output.push_back(digits[static_cast<unsigned char>(ch) & 0x0fU]);
+            } else {
+                output.push_back(ch);
+            }
+            break;
+        }
+    }
+    return output;
+}
+
+void write_diagnostics_json(const std::string& path,
+                            const BrowserOptions& options,
+                            const PipelineStatistics& statistics,
+                            const VectorDiagnosticSink& diagnostics,
+                            const std::string& app_id,
+                            const std::string& app_name,
+                            bool app_network_allowed,
+                            const jellyframe_example::PackageResourceStats& package_stats,
+                            bool package_mode,
+                            bool script_ran,
+                            bool script_ok,
+                            std::size_t document_script_count,
+                            std::size_t timer_callbacks) {
+    if (path.empty()) {
+        return;
+    }
+    std::ofstream output(path, std::ios::binary);
+    if (!output) {
+        throw std::runtime_error("failed to open diagnostics JSON output");
+    }
+    std::size_t info_count = 0;
+    std::size_t warning_count = 0;
+    std::size_t error_count = 0;
+    for (const Diagnostic& diagnostic : diagnostics.diagnostics()) {
+        if (diagnostic.severity == DiagnosticSeverity::Error) {
+            ++error_count;
+        } else if (diagnostic.severity == DiagnosticSeverity::Warning) {
+            ++warning_count;
+        } else {
+            ++info_count;
+        }
+    }
+
+    output << "{\n";
+    output << "  \"format\": \"jellyframe.pipeline.diagnostics\",\n";
+    output << "  \"formatVersion\": 1,\n";
+    output << "  \"output\": \"" << json_escape(options.output_path) << "\",\n";
+    output << "  \"viewport\": {\"width\": " << options.viewport_width
+           << ", \"height\": " << options.viewport_height << "},\n";
+    if (package_mode) {
+        output << "  \"app\": {\"id\": \"" << json_escape(app_id)
+               << "\", \"name\": \"" << json_escape(app_name)
+               << "\", \"networkAllowed\": " << (app_network_allowed ? "true" : "false") << "},\n";
+        output << "  \"resources\": {\"loads\": " << package_stats.successful_loads
+               << ", \"missing\": " << package_stats.missing_loads
+               << ", \"rejected\": " << package_stats.rejected_loads
+               << ", \"bytes\": " << package_stats.loaded_bytes << "},\n";
+    }
+    output << "  \"pipeline\": {\n";
+    output << "    \"domNodes\": " << statistics.dom.node_count << ",\n";
+    output << "    \"domMaxDepth\": " << statistics.dom.max_depth << ",\n";
+    output << "    \"domAttributes\": " << statistics.dom.attribute_count << ",\n";
+    output << "    \"renderObjects\": " << statistics.render_objects << ",\n";
+    output << "    \"layoutBoxes\": " << statistics.layout_boxes << ",\n";
+    output << "    \"layers\": " << statistics.layers << ",\n";
+    output << "    \"displayCommands\": " << statistics.flattened_display_commands << ",\n";
+    output << "    \"layerDisplayCommands\": " << statistics.display_commands << ",\n";
+    output << "    \"framebufferBytes\": " << statistics.framebuffer_bytes << ",\n";
+    output << "    \"resourceBytes\": " << statistics.resource_bytes << ",\n";
+    output << "    \"estimatedHeapBytes\": " << statistics.estimated_heap_bytes << "\n";
+    output << "  },\n";
+    output << "  \"script\": {\"ran\": " << (script_ran ? "true" : "false")
+           << ", \"ok\": " << ((!script_ran || script_ok) ? "true" : "false")
+           << ", \"documentScripts\": " << document_script_count
+           << ", \"timerCallbacks\": " << timer_callbacks << "},\n";
+    output << "  \"summary\": {\"total\": " << diagnostics.size()
+           << ", \"info\": " << info_count
+           << ", \"warning\": " << warning_count
+           << ", \"error\": " << error_count << "},\n";
+    output << "  \"diagnostics\": [\n";
+    for (std::size_t index = 0; index < diagnostics.diagnostics().size(); ++index) {
+        const Diagnostic& diagnostic = diagnostics.diagnostics()[index];
+        output << "    {\"stage\": \"" << diagnostic_stage_name(diagnostic.stage)
+               << "\", \"severity\": \"" << diagnostic_severity_name(diagnostic.severity)
+               << "\", \"code\": \"" << json_escape(diagnostic.code)
+               << "\", \"message\": \"" << json_escape(diagnostic.message)
+               << "\", \"detail\": \"" << json_escape(diagnostic.detail) << "\"}";
+        if (index + 1 < diagnostics.diagnostics().size()) {
+            output << ',';
+        }
+        output << '\n';
+    }
+    output << "  ]\n";
+    output << "}\n";
+}
+
 BrowserOptions parse_options(int argc, char** argv) {
     if (argc >= 2 && is_app_flag(argv[1])) {
         if (argc < 4) {
             throw std::runtime_error(
                 "usage: jellyframe_pseudo_browser --app package_dir output.ppm [viewport_width] [viewport_height] "
-                "[--script script.js] [--pump-timers ms]");
+                "[--script script.js] [--pump-timers ms] [--diagnostics-json report.json]");
         }
         BrowserOptions options;
         options.app_path = argv[2];
@@ -189,6 +321,13 @@ BrowserOptions parse_options(int argc, char** argv) {
                 options.pump_timers_ms = std::max(0, parse_int_arg(argv[++i], 0));
                 continue;
             }
+            if (is_diagnostics_json_flag(arg)) {
+                if (i + 1 >= argc) {
+                    throw std::runtime_error("--diagnostics-json requires a file path");
+                }
+                options.diagnostics_json_path = argv[++i];
+                continue;
+            }
             if (!width_set) {
                 options.viewport_width = parse_int_arg(argv[i], options.viewport_width);
                 options.viewport_width_set = true;
@@ -209,8 +348,9 @@ BrowserOptions parse_options(int argc, char** argv) {
     if (argc < 4) {
         throw std::runtime_error(
             "usage: jellyframe_pseudo_browser page.html style.css output.ppm [viewport_width] [viewport_height] "
-            "[--script script.js]\n"
-            "   or: jellyframe_pseudo_browser --app package_dir output.ppm [viewport_width] [viewport_height]");
+            "[--script script.js] [--pump-timers ms] [--diagnostics-json report.json]\n"
+            "   or: jellyframe_pseudo_browser --app package_dir output.ppm [viewport_width] [viewport_height] "
+            "[--script script.js] [--pump-timers ms] [--diagnostics-json report.json]");
     }
 
     BrowserOptions options;
@@ -234,6 +374,13 @@ BrowserOptions parse_options(int argc, char** argv) {
                 throw std::runtime_error("--pump-timers requires a duration in milliseconds");
             }
             options.pump_timers_ms = std::max(0, parse_int_arg(argv[++i], 0));
+            continue;
+        }
+        if (is_diagnostics_json_flag(arg)) {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--diagnostics-json requires a file path");
+            }
+            options.diagnostics_json_path = argv[++i];
             continue;
         }
 
@@ -511,6 +658,19 @@ int main(int argc, char** argv) {
             }
 #endif
         }
+        write_diagnostics_json(effective_options.diagnostics_json_path,
+                               effective_options,
+                               pipeline_statistics,
+                               diagnostics,
+                               package_id,
+                               package_name,
+                               package_network_allowed,
+                               package_stats,
+                               !options.app_path.empty(),
+                               script_ran,
+                               script_ok,
+                               document_script_count,
+                               timer_callbacks);
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';
         return 1;

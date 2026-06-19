@@ -272,7 +272,7 @@ JerryScript 源码树时可用。
 | `innerHTML` | 延后 | 使用 DOM creation APIs。 |
 | Fetch/network/storage | 延后 | 数据由宿主提供。 |
 | 文本检索式兼容性检查 | 已弃用 | 旧的 HTML/CSS/JS substring 扫描不再用于兼容性判断。未来 diagnostics 必须来自实际 parse、style、layout、render 或 load 该功能的管线组件。 |
-| 管线 diagnostics | 已开始 | HTML tokenizer/parser、CSS parser、style resolver、render tree、layout、layer tree、script collection、package/resource loader 和 software renderer 会通过可选 sink 向桌面工具报告预算截断、跳过、忽略、加载失败和降级。原则是：已知不兼容给出明确原因；未知或无法分类的异常至少给出触发字段或片段。 |
+| 管线 diagnostics | 已开始 | HTML tokenizer/parser、CSS parser、style resolver、render tree、layout、layer tree、script collection、package/resource loader 和 software renderer 会通过可选 sink 向桌面工具报告预算截断、跳过、忽略、加载失败和降级。`jellyframe_pseudo_browser --diagnostics-json` 会输出结构化报告，`jellyframe_cli.py check`/`preview`/`package` 会把它合并到 `pipelineDiagnostics`。原则是：已知不兼容给出明确原因；未知或无法分类的异常至少给出触发字段或片段。 |
 | 字体资源检查 | 工具限定 | `jellyframe_font_resource_check` 暂时保留用于确定性的字体工作：输出非 ASCII 使用字符、估算 bitmap font 预算，并验证嵌入式字体覆盖。 |
 
 ## 渲染与像素输出

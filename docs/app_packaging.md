@@ -332,6 +332,12 @@ pipeline run, so it does not duplicate that preflight. Pass `--font-budget`,
 `--font-coverage` or `--emit-used-chars` when you also want the font resource
 audit before packaging or previewing.
 
+The CLI merges pseudo-browser output into the selected JSON report as
+`pipelineDiagnostics`. Any diagnostic with severity `error` fails `check`,
+`preview` and `package`. Warnings are emitted into the report but do not fail by
+default; pass `--strict` when CI or release packaging should reject warnings as
+well.
+
 For human app authoring on Windows, prefer the interactive Win32 browser shell:
 
 ```powershell
@@ -383,10 +389,14 @@ but network requests are not executed yet.
 
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
-CRC32/SHA-256 checksums, local/remote reference diagnostics and
-package-resource warnings. Future reports should also include every known
-ignored, deferred, degraded, partially handled or lazily handled feature from
-the actual pipeline, plus fallback diagnostics for unknown parse/render events.
+CRC32/SHA-256 checksums, local/remote reference diagnostics, package-resource
+warnings and `pipelineDiagnostics`. Pipeline diagnostics include the
+pseudo-browser format/version marker, output viewport, package resource load
+counts, memory-oriented pipeline statistics, script status, a severity summary
+and the concrete diagnostics emitted by parser, style, layout, layer, renderer,
+scripting or package loading code. Known unsupported/degraded features should
+include a precise reason; unknown recovery should at least include the
+triggering field or snippet.
 
 `tools/package_app.py` remains the lower-level packer used by the CLI and
 embedded build integrations.

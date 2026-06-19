@@ -378,6 +378,10 @@ python tools\jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+`check`, `preview` and `package` write real pipeline diagnostics into the JSON
+report as `pipelineDiagnostics`. Diagnostics with severity `error` fail by
+default. Add `--strict` when warnings should fail CI or release packaging too.
+
 Collect the package's non-ASCII characters for an embedded bitmap font pack:
 
 ```powershell
