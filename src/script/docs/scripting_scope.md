@@ -89,6 +89,16 @@ surface.
 - Network loading, ES modules, dynamic import and the full HTML loading
   algorithm remain intentionally out of scope.
 
+## Planned Runtime Data APIs
+
+Optional network, app-private KV storage and system status events are being
+designed under `src/app_runtime/docs/runtime_data_api.md`. The intended V0 shape
+is a small `JellyFrame` namespace with callback-based APIs such as
+`JellyFrame.fetchText(...)`, `JellyFrame.storage.get(...)` and
+`JellyFrame.system.on(...)`. These APIs are not exposed yet; the current
+implementation only provides the platform-neutral C++ request/completion queues,
+policy gates, mocks and system-event queue.
+
 ## Embedded-App DOM Helpers
 
 - Embedded-app DOM helpers:
@@ -115,7 +125,8 @@ surface.
 - Dynamic `dataset` property creation or native mutation through new arbitrary keys.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
-- Networking, modules, dynamic import, storage, canvas and Web Components.
+- Networking, modules, dynamic import, storage, system-status JS callbacks,
+  canvas and Web Components.
 
 ## Embedded Policy
 

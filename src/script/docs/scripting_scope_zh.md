@@ -75,6 +75,14 @@ API 表面。
   仍作为额外桌面验收脚本保留。
 - 网络加载、ES modules、dynamic import 和完整 HTML loading algorithm 继续排除。
 
+## 规划中的 Runtime Data APIs
+
+可选网络、app 私有 KV storage 和 system status events 的 JS 暴露形状记录在
+`src/app_runtime/docs/runtime_data_api_zh.md`。计划中的 V0 是一个小型 `JellyFrame`
+命名空间，使用 callback API，例如 `JellyFrame.fetchText(...)`、`JellyFrame.storage.get(...)`
+和 `JellyFrame.system.on(...)`。这些 API 尚未暴露；当前实现只提供平台无关 C++ request/completion
+队列、policy gate、mock 和 system-event queue。
+
 ## Embedded-App DOM Helpers
 
 - 面向嵌入式 app 的 DOM helpers：
@@ -98,7 +106,7 @@ API 表面。
 - 完整 selector API，例如 `querySelector` / `querySelectorAll`。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
-- 网络、模块、dynamic import、storage、canvas 和 Web Components。
+- 网络、模块、dynamic import、storage、system-status JS callback、canvas 和 Web Components。
 
 ## 嵌入式策略
 
