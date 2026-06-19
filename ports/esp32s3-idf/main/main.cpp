@@ -481,7 +481,7 @@ void seed_p5_input_smoke(jellyframe_esp32s3::BoardInputQueue& queue) {
 void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     constexpr char kSmokeHtml[] =
         "<body><main class='app'>"
-        "<h1>STATUS 中</h1>"
+        "<h1>STATUS \xe4\xb8\xad</h1>"
         "<button id='ok'>OK</button>"
         "<input id='name'>"
         "<input id='check' type='checkbox'>"
@@ -500,7 +500,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     TextMetrics ascii_metrics{};
     TextMetrics cjk_metrics{};
     const bool ascii_ok = bitmap_font_measure_callback("STATUS", 14, 400, &ascii_metrics, &font_context);
-    const bool cjk_ok = bitmap_font_measure_callback("中", 14, 400, &cjk_metrics, &font_context);
+    const bool cjk_ok = bitmap_font_measure_callback("\xe4\xb8\xad", 14, 400, &cjk_metrics, &font_context);
 
     HtmlParser html_parser;
     CssParser css_parser;

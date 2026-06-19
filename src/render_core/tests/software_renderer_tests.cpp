@@ -248,7 +248,7 @@ void rasterizer_reports_text_fallback() {
     command.type = DisplayCommandType::Text;
     command.rect = Rect{0, 0, 80, 20};
     command.color = Color{0, 0, 0, 255};
-    command.text = "中文";
+    command.text = "\xe4\xb8\xad\xe6\x96\x87";
     command.font_size = 14;
     command.text_single_line = true;
     FrameBuffer frame(80, 20, Color{255, 255, 255, 255});

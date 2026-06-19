@@ -188,6 +188,8 @@ void write_diagnostics_json(const std::string& path,
     }
 
     output << "{\n";
+    output << "  \"format\": \"jellyframe.pipeline.diagnostics\",\n";
+    output << "  \"formatVersion\": 0,\n";
     output << "  \"tool\": \"jellyframe_pseudo_browser\",\n";
     output << "  \"mode\": \"render_core\",\n";
     output << "  \"html\": \"" << json_escape(options.html_path) << "\",\n";
