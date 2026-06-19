@@ -1,13 +1,14 @@
 #include <iostream>
 
 int host_services_tests_main();
+int app_services_tests_main();
 int app_host_tests_main();
 int app_lifecycle_tests_main();
 
 namespace {
 
 int run_test(const char* name, int (*test_main)()) {
-    std::cout << "[ RUN      ] " << name << '\n';
+    std::cout << "[ RUN      ] " << name << '\n' << std::flush;
     const int result = test_main();
     if (result == 0) {
         std::cout << "[       OK ] " << name << '\n';
@@ -23,6 +24,7 @@ int main() {
     int failed = 0;
     failed += run_test("app_host", app_host_tests_main);
     failed += run_test("app_lifecycle", app_lifecycle_tests_main);
+    failed += run_test("app_services", app_services_tests_main);
     failed += run_test("host_services", host_services_tests_main);
 
     if (failed != 0) {

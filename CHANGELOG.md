@@ -27,6 +27,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   loading, scripting, timers, input and completion pumping to the active
   `app_instance_id`; app load failures release the instance and return to the
   system shell.
+- Added B3/B4 platform-neutral mocks: `NetworkFetchMock` provides a
+  fixture/handle/completion contract for future manifest/profile-gated runtime
+  network data, and `AppPrivateKvStorageMock` provides app-id-isolated async KV
+  storage semantics with budget checks.
 - `jellyframe_cli.py package/check/preview/install` now runs font resource
   preflight by default; `--no-font-check` skips it explicitly.
 - Added shared `PipelineStatistics` accounting for DOM, render, layout, layer,

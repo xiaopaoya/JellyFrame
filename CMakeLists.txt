@@ -74,6 +74,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_font_set.cpp
     src/app_runtime/app_host.cpp
     src/app_runtime/app_lifecycle.cpp
+    src/app_runtime/app_services.cpp
     src/app_runtime/host_services.cpp
 )
 
@@ -193,6 +194,7 @@ if(JELLYFRAME_BUILD_TESTS)
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
         src/app_runtime/tests/app_host_tests.cpp
         src/app_runtime/tests/app_lifecycle_tests.cpp
+        src/app_runtime/tests/app_services_tests.cpp
         src/app_runtime/tests/host_services_tests.cpp
     )
     foreach(test_source IN LISTS JELLYFRAME_APP_RUNTIME_TEST_SOURCES)

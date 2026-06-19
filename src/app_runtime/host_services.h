@@ -13,6 +13,7 @@ enum class HostServiceJobKind {
     AudioCommand,
     VideoFrameDecode,
     NetworkFetch,
+    StorageKv,
     BundleInstall,
     BundleRemove,
     Other,
@@ -32,6 +33,7 @@ enum class HostServiceHandleKind {
     Surface,
     AudioStream,
     FetchResponse,
+    StorageValue,
     BundleRecord,
     Other,
 };

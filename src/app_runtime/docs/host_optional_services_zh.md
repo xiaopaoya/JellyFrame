@@ -22,6 +22,10 @@ table 放进同一个有界容器，并提供“当前 app 提交 job / 分配 h
 它还提供 `crash_current()`，用于宿主捕获 app 加载或运行错误后执行同一套资源释放规则。
 它仍然不执行网络、文件、解码或 flash I/O；真实工作由桌面壳、RTOS worker 或 port 层完成。
 
+`src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` 提供第一版平台无关 mock：
+`NetworkFetchMock` 和 `AppPrivateKvStorageMock`。它们用于桌面验证和端到端契约测试，仍不访问真实网络、
+文件系统或 flash；真实产品 host 应以相同 request/completion/handle 语义替换其 worker 实现。
+
 ## 总体模型
 
 JellyFrame 只有一个 UI owner：
@@ -66,6 +70,7 @@ enum class HostServiceJobKind {
     AudioCommand,
     VideoFrameDecode,
     NetworkFetch,
+    StorageKv,
     BundleInstall,
     BundleRemove,
 };
@@ -214,6 +219,11 @@ completion event：
 
 网络只用于 runtime data API，不用于页面资源 loader。
 
+当前 V0 mock：`NetworkFetchMock` 用固定 fixture 模拟 `network.fetch`，通过
+`HostServiceJobKind::NetworkFetch` 提交 request，completion 返回 `FetchResponse` handle。
+它会检查 capability、URL 长度、响应 byte budget 和 request queue 上限。响应 body 由 mock
+持有，UI/main task 只能通过 handle 查询并显式释放。
+
 推荐 request：
 
 ```cpp
@@ -256,6 +266,11 @@ struct HostFetchResponse {
 
 存储只用于 app 私有小数据，不提供浏览器级同步 `localStorage`、cookie、IndexedDB、Cache API
 或通用文件系统。目标是支持设置、token、小型 JSON 状态、离线缓存索引等常见嵌入式 app 需求。
+
+当前 V0 mock：`AppPrivateKvStorageMock` 使用 app id 隔离命名空间，通过
+`HostServiceJobKind::StorageKv` 异步完成 `get/set/remove/clear`。`get` 成功时返回
+`StorageValue` handle；`set`、`remove` 和 `clear` 只返回状态。mock 会检查 key 长度、单 value
+大小、每 app item 数和总 byte budget。
 
 推荐命名空间：
 

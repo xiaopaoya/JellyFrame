@@ -31,6 +31,13 @@ current-app handles and pumping frame completions. It also exposes
 load or runtime failures. It still does not perform network, file, decode or
 flash I/O; real work belongs to desktop shells, RTOS workers or board ports.
 
+`src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` provide
+the first platform-neutral mocks: `NetworkFetchMock` and
+`AppPrivateKvStorageMock`. They exist for desktop validation and end-to-end
+contract tests. They still do not access real networking, filesystems or flash;
+product hosts should replace their worker implementation while keeping the same
+request/completion/handle semantics.
+
 ## Overall Model
 
 JellyFrame has one UI owner:
@@ -80,6 +87,7 @@ enum class HostServiceJobKind {
     AudioCommand,
     VideoFrameDecode,
     NetworkFetch,
+    StorageKv,
     BundleInstall,
     BundleRemove,
 };
@@ -232,6 +240,13 @@ Rules:
 
 Network is for runtime data APIs only, not page resource loading.
 
+Current V0 mock: `NetworkFetchMock` simulates `network.fetch` from fixed
+fixtures. It submits `HostServiceJobKind::NetworkFetch` requests and returns
+`FetchResponse` handles in completions. It checks capability policy, URL length,
+response byte budget and request-queue capacity. The response body is owned by
+the mock; the UI/main task can only inspect it through a handle and explicitly
+release it.
+
 Recommended request:
 
 ```cpp
@@ -278,6 +293,12 @@ Storage is for small app-private data only. It is not browser-style synchronous
 `localStorage`, cookies, IndexedDB, Cache API or a general filesystem. The goal
 is to support settings, tokens, small JSON state and offline-cache indexes for
 embedded apps.
+
+Current V0 mock: `AppPrivateKvStorageMock` isolates namespaces by app id and
+completes `get/set/remove/clear` asynchronously through
+`HostServiceJobKind::StorageKv`. Successful `get` operations return
+`StorageValue` handles; `set`, `remove` and `clear` return status only. The mock
+checks key length, single-value size, per-app item count and total byte budget.
 
 Recommended namespace:
 

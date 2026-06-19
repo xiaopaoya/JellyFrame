@@ -22,6 +22,9 @@ JellyFrame Engine 的重要变更记录在这里。
   teardown 规则；Win32 壳现在把 package loader、脚本 runtime、timer、输入和
   completion pump 绑定到 active `app_instance_id`，app 加载失败会释放实例并回到
   system shell。
+- 添加 B3/B4 平台无关 mock：`NetworkFetchMock` 提供 manifest/profile 之后可复用的
+  fixture/handle/completion 网络数据契约，`AppPrivateKvStorageMock` 提供按 app id
+  隔离的异步 KV storage 契约和预算检查。
 - `jellyframe_cli.py package/check/preview/install` 默认执行字体资源预检；新增
   `--no-font-check` 用于显式跳过。
 - 添加共享 `PipelineStatistics` 统计入口，用同一口径统计 DOM、render、layout、
