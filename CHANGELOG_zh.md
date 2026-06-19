@@ -33,6 +33,8 @@ JellyFrame Engine 的重要变更记录在这里。
   校验的 host handle table，为安装式 app、图片、音频和网络服务打地基。
 - 添加 `AppLifecycleController`，用于生成 active `app_instance_id`、管理 foreground/suspended
   状态，并在 app 切换/退出时取消旧 request、丢弃旧 completion、释放旧 host handles。
+- 添加 `AppRuntimeHost` 有界状态容器，将 app lifecycle、request/completion queue 和
+  host handle table 组合为桌面壳/MCU host 接入可选服务的统一入口。
 - 添加 `.jfapp` V0 安装式 bundle 输出：`tools/package_app.py` 和 `jellyframe_cli.py package`
   可生成小端、未压缩、固定索引的二进制资源包，并在报告中记录 bundle CRC/SHA-256 和分段大小。
 - 伪浏览器和 Win32 browser 壳现在可以通过 `--app path.jfapp` 直接加载安装式 bundle，

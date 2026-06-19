@@ -16,6 +16,11 @@ app 实例生命周期 helper。它只负责生成 `app_instance_id`、记录 fo
 在 app 切换或退出时取消旧 request、丢弃旧 completion、释放旧 host handles，并在每帧消费
 completion 时过滤 stale instance。它不拥有 DOM、JS runtime、framebuffer 或平台线程。
 
+`src/app_runtime/app_host.h` / `src/app_runtime/app_host.cpp` 提供更高一层的
+`AppRuntimeHost`：把 lifecycle controller、request queue、completion queue 和 host handle
+table 放进同一个有界容器，并提供“当前 app 提交 job / 分配 handle / 每帧 pump completion”的固定入口。
+它仍然不执行网络、文件、解码或 flash I/O；真实工作由桌面壳、RTOS worker 或 port 层完成。
+
 ## 总体模型
 
 JellyFrame 只有一个 UI owner：
@@ -41,6 +46,8 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
 
 - `AppLifecycleController`：管理当前 active app instance、显式 suspend/resume，以及
   launch/exit 时的 request/completion/handle teardown。
+- `AppRuntimeHost`：组合 lifecycle、request/completion queue 与 handle table，作为桌面壳和
+  MCU host 接入可选服务的推荐状态容器。
 - `HostServiceRequestQueue`：有界 request FIFO，支持 priority 选择、pending job 取消和按
   `app_instance_id` 批量取消。
 - `HostServiceCompletionQueue`：有界 completion FIFO，支持每帧按上限 pop，并可丢弃旧

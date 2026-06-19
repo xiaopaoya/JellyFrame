@@ -22,6 +22,14 @@ completions, releases old host handles on app switch/exit, and filters stale
 completions at frame boundaries. It does not own DOM, a JS runtime, framebuffers
 or platform threads.
 
+`src/app_runtime/app_host.h` / `src/app_runtime/app_host.cpp` provide the
+higher-level `AppRuntimeHost`: a bounded state container that keeps the lifecycle
+controller, request queue, completion queue and host handle table together. It
+offers fixed entry points for submitting jobs from the current app, allocating
+current-app handles and pumping frame completions. It still does not perform
+network, file, decode or flash I/O; real work belongs to desktop shells, RTOS
+workers or board ports.
+
 ## Overall Model
 
 JellyFrame has one UI owner:
@@ -51,6 +59,8 @@ Current core helpers:
 
 - `AppLifecycleController`: active app instance management, explicit
   suspend/resume and request/completion/handle teardown during launch/exit.
+- `AppRuntimeHost`: combined lifecycle, request/completion queue and handle
+  table state for desktop shells and MCU hosts wiring optional services.
 - `HostServiceRequestQueue`: bounded request queue with priority selection,
   pending-job cancellation and bulk cancellation by `app_instance_id`.
 - `HostServiceCompletionQueue`: bounded completion queue with per-frame pop

@@ -43,6 +43,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `AppLifecycleController` for active `app_instance_id` assignment,
   foreground/suspended state and request/completion/host-handle cleanup during
   app switch or exit.
+- Added `AppRuntimeHost`, a bounded state container that combines app lifecycle,
+  request/completion queues and the host handle table for desktop shells and MCU
+  hosts wiring optional services.
 - Added `.jfapp` V0 installable-bundle output. `tools/package_app.py` and
   `jellyframe_cli.py package` can now emit little-endian, uncompressed,
   fixed-index binary resource bundles and report bundle CRC/SHA-256 plus section

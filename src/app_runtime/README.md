@@ -5,6 +5,8 @@
 It owns contracts and small bounded data structures for:
 
 - App lifecycle state, active app instances and teardown cleanup.
+- A small runtime-host state container that ties lifecycle, request/completion
+  queues and host handles together without performing platform I/O.
 - App-instance-scoped async requests and completions.
 - Host-owned resource handles with generation checks.
 - Future app lifecycle, package install/update/delete, network fetch, private

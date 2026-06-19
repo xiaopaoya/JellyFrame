@@ -1,3 +1,4 @@
+#include "app_runtime/app_host.h"
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/host_services.h"
 
@@ -105,6 +106,32 @@ void bench_lifecycle_teardown(std::size_t capacity) {
     lifecycle.exit_current(&requests, &completions, &handles);
 }
 
+void bench_runtime_host_completion_pump(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{
+        capacity,
+        8,
+        capacity,
+        capacity * 256,
+    });
+    const AppInstance app = host.launch("org.example.bench", AppRole::App);
+    for (std::size_t i = 0; i < capacity; ++i) {
+        host.push_completion(HostServiceCompletion{
+            static_cast<std::uint32_t>(i + 1),
+            HostServiceJobKind::NetworkFetch,
+            HostServiceStatus::Completed,
+            app.id,
+            0,
+            0,
+            128,
+        });
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -122,6 +149,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_lifecycle_teardown", iterations, average_microseconds(iterations, [&] {
         bench_lifecycle_teardown(capacity);
+    }));
+    print_result("app_runtime_host_completion_pump", iterations, average_microseconds(iterations, [&] {
+        bench_runtime_host_completion_pump(capacity);
     }));
 
     return 0;
