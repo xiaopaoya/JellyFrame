@@ -1,0 +1,42 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.system.sample_launcher",
+  "name": "Sample Launcher",
+  "role": "launcher",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 390,
+    "designHeight": 640,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 65536,
+    "maxDomNodes": 256,
+    "maxCssRules": 128,
+    "maxDisplayCommands": 256,
+    "maxTimers": 2,
+    "maxEventListeners": 16
+  },
+  "capabilities": ["system.launcher", "system.appManager"],
+  "targets": {
+    "rect-390x640": {
+      "viewport": {
+        "width": 390,
+        "height": 640,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp"
+    }
+  }
+}

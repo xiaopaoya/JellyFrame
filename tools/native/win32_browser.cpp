@@ -50,6 +50,9 @@ constexpr wchar_t kWindowClassName[] = L"JellyFrameWin32Browser";
 constexpr UINT_PTR kScriptTimerId = 1;
 constexpr UINT kScriptTimerPeriodMs = 16;
 constexpr int kIncrementalDirtyAreaLimitPercent = 70;
+constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_launcher";
+constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
+constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
 
 struct BrowserOptions {
     bool capture = false;
@@ -61,6 +64,7 @@ struct BrowserOptions {
     std::string script_path;
     std::string app_path;
     std::string registry_store_path;
+    std::string launcher_app_path = kDefaultLauncherAppPath;
     std::string install_bundle_path;
     std::string launch_app_id;
     std::string remove_app_id;
@@ -492,34 +496,19 @@ std::string html_escape_text(const std::string& value) {
     return output;
 }
 
-std::string system_shell_css() {
-    return
-        "body { margin: 0; padding: 18px; background: #0f172a; color: #e5e7eb; font-size: 14px; }"
-        ".shell { display: grid; gap: 14px; }"
-        ".top { display: grid; gap: 4px; margin-bottom: 2px; }"
-        "h1 { margin: 0; font-size: 24px; color: #ffffff; }"
-        ".hint { color: #9ca3af; font-size: 12px; }"
-        ".status { padding: 9px; background: #172554; color: #bfdbfe; border: 1px solid #2563eb; border-radius: 8px; }"
-        ".empty { padding: 18px; background: #111827; border: 1px solid #334155; border-radius: 10px; }"
-        ".app { display: grid; gap: 8px; padding: 12px; background: #111827; border: 1px solid #334155; border-radius: 12px; }"
-        ".name { font-size: 18px; color: #ffffff; }"
-        ".meta { color: #a5b4fc; font-size: 12px; }"
-        ".actions { display: flex; gap: 8px; }"
-        "button { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #64748b; background: #1f2937; color: #f8fafc; }"
-        "button.primary { background: #2563eb; border-color: #60a5fa; }"
-        "button.danger { background: #7f1d1d; border-color: #ef4444; }";
+bool replace_once(std::string& text, std::string_view marker, std::string_view replacement) {
+    const std::size_t pos = text.find(marker);
+    if (pos == std::string::npos) {
+        return false;
+    }
+    text.replace(pos, marker.size(), replacement);
+    return true;
 }
 
-std::string build_system_shell_html(const std::filesystem::path& registry_store, const std::string& status) {
+std::string build_launcher_app_list_html(const std::filesystem::path& registry_store) {
     const jellyframe_example::InstalledAppRegistry registry =
         jellyframe_example::load_installed_app_registry(registry_store);
     std::ostringstream html;
-    html << "<body><main class='shell'>";
-    html << "<section class='top'><h1>JellyFrame</h1>"
-         << "<p class='hint'>Installed apps from local .jfapp bundles</p></section>";
-    if (!status.empty()) {
-        html << "<p class='status'>" << html_escape_text(status) << "</p>";
-    }
     if (registry.apps.empty()) {
         html << "<section class='empty'><p>No installed apps.</p>"
              << "<p class='hint'>Use --install-bundle app.jfapp with --registry-store.</p></section>";
@@ -535,8 +524,78 @@ std::string build_system_shell_html(const std::filesystem::path& registry_store,
              << "<button class='danger' data-action='delete' data-app-id='" << html_escape_text(app.id) << "'>Delete</button>"
              << "</div></article>";
     }
-    html << "</main></body>";
     return html.str();
+}
+
+std::string build_launcher_status_html(const std::string& status) {
+    if (status.empty()) {
+        return {};
+    }
+    return "<p class='status'>" + html_escape_text(status) + "</p>";
+}
+
+std::string load_launcher_resource(const jellyframe_example::AppPackage& package,
+                                   const std::string& resource_path,
+                                   jellyframe::DiagnosticSink* diagnostics = nullptr) {
+    jellyframe_example::PackageResourceStats stats;
+    jellyframe_example::PackageResourceContext context;
+    context.root = package.root;
+    context.base_url = package.manifest.entry;
+    context.max_input_bytes = kMaxInputBytes;
+    context.stats = &stats;
+    context.diagnostics = diagnostics;
+    context.bundle_bytes = package.bundle_bytes;
+    context.bundle_entries = package.bundle_entries;
+    context.bundle_payload_offset = package.bundle_payload_offset;
+    std::string text;
+    if (!jellyframe_example::load_package_resource(resource_path, package.manifest.entry, text, &context)) {
+        return {};
+    }
+    return text;
+}
+
+std::string load_launcher_entry_html(const jellyframe_example::AppPackage& package) {
+    std::string html = load_launcher_resource(package, package.manifest.entry);
+    if (html.empty()) {
+        throw std::runtime_error("failed to load launcher entry: " + package.manifest.entry);
+    }
+    return html;
+}
+
+void inject_launcher_markup(std::string& html, const std::string& app_list_html, const std::string& status_html) {
+    if (!replace_once(html, kLauncherStatusMarker, status_html) && !status_html.empty()) {
+        const std::size_t main_end = html.find("</main>");
+        html.insert(main_end == std::string::npos ? html.size() : main_end, status_html);
+    }
+    if (!replace_once(html, kLauncherAppListMarker, app_list_html)) {
+        const std::size_t main_end = html.find("</main>");
+        html.insert(main_end == std::string::npos ? html.size() : main_end, app_list_html);
+    }
+}
+
+std::string build_system_shell_html(const std::filesystem::path& launcher_app_path,
+                                    const std::filesystem::path& registry_store,
+                                    const std::string& status) {
+    const auto package = jellyframe_example::load_app_package(launcher_app_path, kMaxInputBytes);
+    std::string html = load_launcher_entry_html(package);
+    inject_launcher_markup(html, build_launcher_app_list_html(registry_store), build_launcher_status_html(status));
+    return html;
+}
+
+std::string load_system_shell_css(const std::filesystem::path& launcher_app_path) {
+    const auto package = jellyframe_example::load_app_package(launcher_app_path, kMaxInputBytes);
+    return load_launcher_resource(package, "/styles/app.css");
+}
+
+std::string emergency_launcher_error_html(const std::string& message) {
+    return "<body><main class='launcher'><section class='empty'><h1>Launcher unavailable</h1><p>" +
+        html_escape_text(message) + "</p></section></main></body>";
+}
+
+std::string emergency_launcher_error_css() {
+    return "body{margin:0;padding:18px;background:#101418;color:#f8fafc;font-size:14px}"
+           ".empty{padding:12px;background:#171d24;border:1px solid #ef4444;border-radius:8px}"
+           "h1{margin:0 0 8px 0;font-size:20px;color:#ffffff}p{margin:0;color:#fecaca}";
 }
 
 const Node* find_shell_action_node(const Node* node) {
@@ -821,8 +880,14 @@ private:
         active_app_id_.clear();
         options_.app_path.clear();
         options_.script_path.clear();
-        options_.inline_html = build_system_shell_html(options_.registry_store_path, status);
-        options_.inline_css = system_shell_css();
+        try {
+            options_.inline_html =
+                build_system_shell_html(options_.launcher_app_path, options_.registry_store_path, status);
+            options_.inline_css = load_system_shell_css(options_.launcher_app_path);
+        } catch (const std::exception& error) {
+            options_.inline_html = emergency_launcher_error_html(error.what());
+            options_.inline_css = emergency_launcher_error_css();
+        }
         scroll_y_ = 0;
     }
 
@@ -1416,6 +1481,14 @@ int main(int argc, char** argv) {
             options.registry_store_path = argv[++i];
             continue;
         }
+        if (arg == "--launcher-app") {
+            if (i + 1 >= argc) {
+                std::cerr << "--launcher-app requires a JellyFrame app package directory or .jfapp file\n";
+                return 1;
+            }
+            options.launcher_app_path = argv[++i];
+            continue;
+        }
         if (arg == "--install-bundle") {
             if (i + 1 >= argc) {
                 std::cerr << "--install-bundle requires a .jfapp file\n";
@@ -1503,8 +1576,14 @@ int main(int argc, char** argv) {
     }
 
     if (!options.registry_store_path.empty() && options.app_path.empty() && positional.empty()) {
-        options.inline_html = build_system_shell_html(options.registry_store_path, options.startup_status);
-        options.inline_css = system_shell_css();
+        try {
+            options.inline_html =
+                build_system_shell_html(options.launcher_app_path, options.registry_store_path, options.startup_status);
+            options.inline_css = load_system_shell_css(options.launcher_app_path);
+        } catch (const std::exception& error) {
+            std::cerr << "launcher app load failed: " << error.what() << '\n';
+            return 1;
+        }
     }
 
     if (!options.app_path.empty()) {

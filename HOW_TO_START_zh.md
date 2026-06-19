@@ -84,6 +84,7 @@ JellyFrame 明确不提供：
 - `src/script/samples/classic`：runtime、DOM mutation、事件和脚本加载探针。
 - `samples/apps/loose`：小型散文件 app fixture。
 - `samples/apps/packages`：带 `jellyframe.app.json` 的完整 app package 示例。
+- `samples/apps/system`：带系统权限的 app 样例，例如 Win32 App Manager 使用的 sample launcher。
 - `src/render_core/samples/fonts/bitmap`：字体包样例输入。
 - `tools/templates/apps`：供开发工具复制的 app package 起始模板。
 - `tools/native`：C++ 检查工具、伪浏览器和 Win32 壳源码。
@@ -379,6 +380,19 @@ python tools\jellyframe_cli.py install `
 .\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
 .\build\Release\jellyframe_win32_browser.exe --capture build\app_manager.bmp --registry-store build\installed_apps
 ```
+
+默认 app manager 会加载 `samples/apps/system/sample_launcher`。也可以显式指定另一个受信
+launcher app：
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe `
+  --registry-store build\installed_apps `
+  --launcher-app samples\apps\system\sample_launcher
+```
+
+`--launcher-app` 可以指向 source package 目录或 `.jfapp`。当前宿主仍负责把 registry app 列表注入
+launcher 模板；未来可替换为受控 system API。这个 sample launcher 是 bring-up/CI 样例，不是
+runtime 写死的一方启动器。
 
 低层 registry helper 仍适合脚本化处理已有 `.jfapp`：
 

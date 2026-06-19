@@ -35,6 +35,10 @@
       "type": "string",
       "minLength": 1
     },
+    "role": {
+      "description": "Optional app role. System roles require host trust; declaring a role alone does not grant privileges.",
+      "enum": ["app", "launcher", "watchface", "settings"]
+    },
     "version": {
       "type": "object",
       "additionalProperties": false,
@@ -185,7 +189,7 @@
     "capabilities": {
       "type": "array",
       "items": {
-        "enum": ["network.fetch"]
+        "enum": ["network.fetch", "storage.kv", "system.launcher", "system.appManager"]
       },
       "uniqueItems": true
     }

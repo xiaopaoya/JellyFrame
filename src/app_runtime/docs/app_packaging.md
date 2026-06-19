@@ -15,6 +15,9 @@ There are two deployment shapes:
   directly by the Win32 shell and CLI preview path. If third-party apps required reflashing
   firmware, JellyFrame would lose its main advantage over a conventional LVGL/C
   firmware UI.
+- Launchers should be modeled as privileged JellyFrame App roles, not built-in
+  runtime pages. The repository ships `samples/apps/system/sample_launcher` for
+  desktop bring-up/CI; product hosts can choose their own trusted launcher app.
 
 ## Survey Summary
 
@@ -131,6 +134,7 @@ desktop tools, not by the MCU runtime:
   "formatVersion": 0,
   "id": "com.example.weather",
   "name": "Weather",
+  "role": "app",
   "version": {
     "name": "0.1.0",
     "code": 1
@@ -182,6 +186,11 @@ can print it or its path:
 ```powershell
 python tools/jellyframe_cli.py schema --print-path
 ```
+
+`role` defaults to `app`. The schema reserves `launcher`, `watchface` and
+`settings` system roles. Declaring a system role or
+`system.launcher`/`system.appManager` capability does not grant privileges by
+itself; authorization belongs to the host/profile policy.
 
 Built-in target presets live under `tools/presets/targets`. List them with:
 

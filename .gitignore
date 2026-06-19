@@ -6,6 +6,8 @@ out/
 *.suo
 *.pdb
 *.ilk
+__pycache__/
+*.pyc
 jerryscript-master.zip
 third_party/jerryscript/
 project_docs/

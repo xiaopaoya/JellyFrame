@@ -165,6 +165,7 @@ def make_registry_entry(bundle_info: dict, bundle_file: str) -> dict:
     return {
         "id": summary["id"],
         "name": summary.get("name", summary["id"]),
+        "role": summary.get("role", "app"),
         "versionName": summary.get("versionName", "0.0.0"),
         "versionCode": int(summary.get("versionCode", 0) or 0),
         "entry": summary.get("entry", "/index.html"),

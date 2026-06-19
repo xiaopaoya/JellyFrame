@@ -18,6 +18,7 @@ namespace jellyframe_example {
 struct InstalledAppEntry {
     std::string id;
     std::string name;
+    std::string role = "app";
     std::string version_name;
     int version_code = 0;
     std::string entry = "/index.html";
@@ -173,6 +174,7 @@ inline InstalledAppEntry parse_registry_entry(std::string_view object_text) {
     InstalledAppEntry entry;
     json_find_string(object, "id", entry.id);
     json_find_string(object, "name", entry.name);
+    json_find_string(object, "role", entry.role);
     json_find_string(object, "versionName", entry.version_name);
     json_find_string(object, "entry", entry.entry);
     json_find_string(object, "script", entry.script_mode);
@@ -241,6 +243,7 @@ inline void write_installed_app_registry(const std::filesystem::path& store, con
         output << "    {\n";
         output << "      \"id\": \"" << json_escape_text(app.id) << "\",\n";
         output << "      \"name\": \"" << json_escape_text(app.name) << "\",\n";
+        output << "      \"role\": \"" << json_escape_text(app.role) << "\",\n";
         output << "      \"versionName\": \"" << json_escape_text(app.version_name) << "\",\n";
         output << "      \"versionCode\": " << app.version_code << ",\n";
         output << "      \"entry\": \"" << json_escape_text(app.entry) << "\",\n";
@@ -306,6 +309,7 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
     InstalledAppEntry entry;
     entry.id = package.manifest.id;
     entry.name = package.manifest.name;
+    entry.role = package.manifest.role.empty() ? "app" : package.manifest.role;
     entry.version_name = package.manifest.version_name.empty() ? "0.0.0" : package.manifest.version_name;
     entry.version_code = package.manifest.version_code;
     entry.entry = package.manifest.entry;

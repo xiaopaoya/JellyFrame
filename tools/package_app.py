@@ -164,10 +164,14 @@ def validate_manifest(manifest: dict) -> dict:
     targets = manifest.get("targets", {})
     if not isinstance(targets, dict):
         targets = {}
+    role = manifest.get("role", "app")
+    if not isinstance(role, str) or role not in {"app", "launcher", "watchface", "settings"}:
+        fail("manifest role must be one of: app, launcher, watchface, settings")
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     return {
         "id": app_id,
         "name": manifest.get("name", app_id),
+        "role": role,
         "versionName": version.get("name", "0.0.0"),
         "versionCode": int_field(version, "code", 0),
         "entry": entry,
@@ -190,6 +194,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "formatVersion",
         "id",
         "name",
+        "role",
         "version",
         "entry",
         "runtime",
@@ -208,6 +213,17 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
                 "message": f"manifest field is not recognized by this JellyFrame toolchain: {key}",
                 "source": "jellyframe.app.json",
             })
+    known_capabilities = {"network.fetch", "storage.kv", "system.launcher", "system.appManager"}
+    capabilities = manifest.get("capabilities", [])
+    if isinstance(capabilities, list):
+        for capability in capabilities:
+            if isinstance(capability, str) and capability not in known_capabilities:
+                warnings.append({
+                    "level": "warning",
+                    "code": "manifest-capability-unknown",
+                    "message": f"manifest capability is not recognized by this JellyFrame toolchain: {capability}",
+                    "source": "jellyframe.app.json",
+                })
     nested_allowed = {
         "version": {"name", "code"},
         "runtime": {"minJellyFrame", "script"},

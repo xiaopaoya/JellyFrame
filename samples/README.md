@@ -5,6 +5,8 @@ Native desktop tools live in `../tools/native`.
 
 - `apps/packages/`: complete JellyFrame source packages with
   `jellyframe.app.json`.
+- `apps/system/`: privileged system-app samples such as the sample launcher used
+  by the Win32 app-manager host path.
 - `apps/loose/`: small loose-file app fixtures used for focused runtime,
   scripting and rendering checks.
 

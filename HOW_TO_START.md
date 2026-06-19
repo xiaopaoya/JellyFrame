@@ -90,6 +90,8 @@ For embedded porting:
 - `src/script/samples/classic`: scripting acceptance probes.
 - `samples/apps/loose`: small loose-file app fixtures.
 - `samples/apps/packages`: complete app-package examples with `jellyframe.app.json`.
+- `samples/apps/system`: privileged app samples, such as the sample launcher
+  used by the Win32 App Manager path.
 - `src/render_core/samples/fonts/bitmap`: font-pack sample input.
 - `tools/templates/apps`: starter app packages copied by developer tools.
 - `tools/native`: C++ inspection tools, pseudo browser and Win32 shell sources.
@@ -402,6 +404,20 @@ Open the Win32 system shell/app manager:
 .\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
 .\build\Release\jellyframe_win32_browser.exe --capture build\app_manager.bmp --registry-store build\installed_apps
 ```
+
+The app manager loads `samples/apps/system/sample_launcher` by default. A host
+can explicitly point to another trusted launcher app:
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe `
+  --registry-store build\installed_apps `
+  --launcher-app samples\apps\system\sample_launcher
+```
+
+`--launcher-app` accepts a source package directory or `.jfapp`. The host still
+injects the registry app list into the launcher template for now; a controlled
+system API can replace that bridge later. The sample launcher is for bring-up/CI,
+not a first-party launcher hard-coded into the runtime.
 
 The lower-level registry helper is still useful for scripting with an existing
 `.jfapp`:

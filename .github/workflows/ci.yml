@@ -50,7 +50,7 @@ jobs:
 
       - name: Check Python tools
         shell: pwsh
-        run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py
+        run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py tools\app_registry.py
 
       - name: Check VS Code helper
         shell: pwsh

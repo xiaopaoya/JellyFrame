@@ -1,0 +1,95 @@
+body {
+  margin: 0;
+  padding: 18px;
+  background: #101418;
+  color: #f6f8fb;
+  font-size: 14px;
+}
+
+.launcher {
+  display: grid;
+  gap: 14px;
+}
+
+.top {
+  display: grid;
+  gap: 4px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #86efac;
+  font-size: 12px;
+}
+
+h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 28px;
+}
+
+.hint {
+  margin: 0;
+  color: #a9b2c3;
+  font-size: 12px;
+}
+
+.status {
+  margin: 0;
+  padding: 9px;
+  background: #152238;
+  color: #bfdbfe;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+}
+
+.apps {
+  display: grid;
+  gap: 10px;
+}
+
+.empty,
+.app {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: #171d24;
+  border: 1px solid #344154;
+  border-radius: 12px;
+}
+
+.name {
+  margin: 0;
+  color: #ffffff;
+  font-size: 18px;
+}
+
+.meta {
+  margin: 0;
+  color: #a7c4ff;
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  height: 34px;
+  padding: 0 12px;
+  color: #f8fafc;
+  background: #222b37;
+  border: 1px solid #64748b;
+  border-radius: 8px;
+}
+
+button.primary {
+  background: #2563eb;
+  border-color: #60a5fa;
+}
+
+button.danger {
+  background: #7f1d1d;
+  border-color: #ef4444;
+}

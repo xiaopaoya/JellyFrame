@@ -23,6 +23,7 @@ constexpr std::size_t kJfappResourceEntrySize = 28;
 struct AppPackageManifest {
     std::string id;
     std::string name;
+    std::string role = "app";
     std::string version_name;
     std::string min_jellyframe;
     int version_code = 0;
@@ -438,6 +439,7 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     AppPackageManifest manifest;
     json_find_string(json, "id", manifest.id);
     json_find_string(json, "name", manifest.name);
+    json_find_string(json, "role", manifest.role);
     json_find_string(json, "versionName", manifest.version_name);
     json_find_string(json, "entry", manifest.entry);
     json_find_string(json, "script", manifest.script_mode);
