@@ -29,6 +29,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added a GitHub Actions CI workflow that builds the Windows validation target,
   runs core tests, checks Python/VS Code tooling and exercises package pipeline
   diagnostics.
+- Added README app-gallery screenshots rendered by the JellyFrame pseudo
+  browser from the starter app templates.
 
 ### Changed
 
@@ -58,6 +60,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - The VS Code helper now consumes `pipelineDiagnostics` in its report panel and
   inline diagnostics, makes `preview` write a report, and adds a command to open
   the selected package in the Win32 browser shell.
+- Removed the loose `watch_calculator` fixture to avoid shipping an app that was
+  intentionally close to a proprietary watch calculator design.
 
 ## 0.3.0-dev - 2026-06-18
 
@@ -404,7 +408,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Preserved explicit grid item heights and margins during grid placement.
 - Updated pseudo/Win32 browser shells to use body/html background as the canvas
   clear color instead of always clearing to white.
-- Updated the watch calculator example to use the supported grid/gap subset
+- Updated the calculator example to use the supported grid/gap subset
   instead of relying on inline-block whitespace.
 - Updated scripting and roadmap documentation to treat M7 script loading as
   available and shift the next major work toward host presentation and dirty

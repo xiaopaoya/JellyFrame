@@ -28,6 +28,19 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 精确的支持/降级/延后功能见
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
 
+## 应用截图
+
+下面这些 300x300 截图由 `jellyframe_pseudo_browser` 从 `tools/templates/apps`
+中的 source package 实际渲染生成。
+
+| Weather | Clock |
+| --- | --- |
+| ![JellyFrame 渲染的 Weather app](docs/assets/screenshots/weather.png) | ![JellyFrame 渲染的 Clock app](docs/assets/screenshots/clock.png) |
+
+| Timer | Pocket Math |
+| --- | --- |
+| ![JellyFrame 渲染的 Timer app](docs/assets/screenshots/timer.png) | ![JellyFrame 渲染的 Pocket Math app](docs/assets/screenshots/calculator.png) |
+
 ## 典型用途
 
 - 使用小型 HTML/CSS/JS 子集编写手表类本地 app。

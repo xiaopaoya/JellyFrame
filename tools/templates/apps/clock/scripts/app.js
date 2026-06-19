@@ -1,6 +1,8 @@
 var time = document.getElementById("time");
 var note = document.getElementById("note");
 var refresh = document.getElementById("refresh");
+var zoneButton = document.getElementById("zoneButton");
+var zone = document.getElementById("zone");
 var steps = document.getElementById("steps");
 var heart = document.getElementById("heart");
 var samples = [
@@ -10,6 +12,8 @@ var samples = [
   ["22:15", "Rest mode", "12k", "64"]
 ];
 var index = 0;
+var zones = ["Local", "UTC+8", "Travel"];
+var zoneIndex = 0;
 
 function renderClock() {
   var item = samples[index];
@@ -21,5 +25,9 @@ function renderClock() {
 }
 
 refresh.addEventListener("click", renderClock);
+zoneButton.addEventListener("click", function () {
+  zoneIndex = (zoneIndex + 1) % zones.length;
+  zone.textContent = zones[zoneIndex];
+});
 renderClock();
 setInterval(renderClock, 1000);

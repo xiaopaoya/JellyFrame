@@ -23,6 +23,8 @@ JellyFrame Engine 的重要变更记录在这里。
   覆盖管线统计、脚本状态、package 资源加载和各组件 diagnostics。
 - 添加 GitHub Actions CI workflow：构建 Windows 验证目标，运行核心测试，检查
   Python/VS Code 工具，并执行 package 管线 diagnostics smoke。
+- 添加 README 应用截图画廊，截图由 JellyFrame 伪浏览器从 starter app templates
+  实际渲染生成。
 
 ### 变更
 
@@ -44,6 +46,7 @@ JellyFrame Engine 的重要变更记录在这里。
   `pipelineDiagnostics` 字段。error 默认失败；warning 默认只提示，传入 `--strict` 后会失败。
 - VS Code 辅助扩展现在会在报告面板和 inline diagnostics 中消费 `pipelineDiagnostics`，
   `preview` 也会写出 report，并新增打开所选 package 的 Win32 browser 壳命令。
+- 删除 loose `watch_calculator` fixture，避免仓库发布一个刻意贴近专有手表计算器设计的 app。
 
 ## 0.3.0-dev - 2026-06-18
 
@@ -293,7 +296,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 改进 grid layout：auto-width grid item 会按分配到的 track 宽度布局内部内容，使按钮文字在 stretch 后仍居中。
 - grid placement 现在保留显式 item height 和 margin。
 - 更新伪浏览器和 Win32 browser 壳，使用 body/html 背景作为 canvas clear color，不再总是白底清空。
-- 将 watch calculator 示例改为使用受支持的 grid/gap 子集，不再依赖 inline-block whitespace。
+- 将 calculator 示例改为使用受支持的 grid/gap 子集，不再依赖 inline-block whitespace。
 - 更新 scripting 和路线图文档，将 M7 script loading 标为可用，并把下一项主要工作转向
   host presentation 和 dirty rectangles。
 - 更新架构、宿主抽象和兼容性规划文档，使下一步建议与硬件无关主线范围保持一致。

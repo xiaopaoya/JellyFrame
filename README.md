@@ -35,6 +35,19 @@ targets and documentation use `JellyFrame`.
 For the exact supported/degraded/deferred feature set, read
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
 
+## App Gallery
+
+These 300x300 screenshots are rendered by `jellyframe_pseudo_browser` from the
+source packages in `tools/templates/apps`.
+
+| Weather | Clock |
+| --- | --- |
+| ![Weather app rendered by JellyFrame](docs/assets/screenshots/weather.png) | ![Clock app rendered by JellyFrame](docs/assets/screenshots/clock.png) |
+
+| Timer | Pocket Math |
+| --- | --- |
+| ![Timer app rendered by JellyFrame](docs/assets/screenshots/timer.png) | ![Pocket Math app rendered by JellyFrame](docs/assets/screenshots/calculator.png) |
+
 ## Typical Uses
 
 - Watch-style local apps written with a small HTML/CSS/JS subset.
