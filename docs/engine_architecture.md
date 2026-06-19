@@ -4,6 +4,17 @@
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
 with smaller data structures and explicit feature cuts for wearable targets.
 
+The source tree is split into three hardware-neutral subprojects:
+
+- `src/render_core` / `jellyframe_render_core`: the HTML/CSS/DOM/rendering
+  subset. It has no JerryScript, app-install, filesystem, network or OS
+  dependency.
+- `src/app_runtime` / `jellyframe_app_runtime`: installable-app lifecycle and
+  optional host-service queues. It depends on `render_core` for shared host
+  capability and budget types.
+- `src/script` / `jellyframe_script`: optional JerryScript bridge. It can be
+  left out of embedded builds.
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer
@@ -20,6 +31,11 @@ Platform-neutral input
   -> InputController
   -> Event / MouseEvent / WheelEvent
   -> EventTarget dispatch on DOM nodes
+
+Host async services
+  -> decode/network/install workers
+  -> bounded completion queue
+  -> UI/main task event dispatch or dirty marking
 
 DOM + StyleResolver
   -> RenderTreeBuilder
@@ -55,6 +71,10 @@ DOM + StyleResolver
   events, hover/active/focus state and click synthesis.
 - `EventTarget`: stores C++ listeners and dispatches DOM-style capture, target
   and bubble phases.
+- `Host async services`: optional `app_runtime` services for image/audio/
+  lightweight video, network data requests and installable bundles. They do not
+  own DOM or framebuffers; they return to the UI/main task through bounded
+  completion events.
 - `PipelineStatistics`: optional read-only accounting for DOM, render, layout,
   layer, display-list, framebuffer, resource and arena usage. It is meant for
   validation shells and benchmarks, not for the hot render path.

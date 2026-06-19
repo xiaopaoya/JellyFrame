@@ -1,4 +1,4 @@
-# Embedded Optimization Notes
+﻿# Embedded Optimization Notes
 
 
 The exact target CPU, memory map, display controller and instruction set are not
@@ -87,7 +87,7 @@ small wearable devices.
 Command:
 
 ```powershell
-.\build\Release\jellyframe_microbench.exe 80 1000
+.\build\Release\jellyframe_render_core_microbench.exe 80 1000
 ```
 
 Result on this Windows build machine after the responsive grid/aspect-ratio

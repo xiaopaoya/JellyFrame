@@ -1,4 +1,4 @@
-# Host Abstraction Draft
+﻿# Host Abstraction Draft
 
 
 JellyFrame's core should stay independent from filesystems, network stacks,
@@ -23,7 +23,7 @@ that should harden before a real embedded backend is written.
 
 ## Minimal Interfaces
 
-`src/core/host.h` now defines the first small set:
+`src/render_core/host.h` now defines the first small set:
 
 - `HostResourceRequest` and `HostResourceLoadCallback`
 - `HostClock`
@@ -49,6 +49,8 @@ policy can use:
 - input sources such as touch, pointer, wheel, crown, focus buttons, keyboard
   and text input;
 - heap and maximum single-allocation estimates;
+- optional async jobs, media decode/playback, runtime network fetch and
+  installable bundle-store capabilities;
 - explicit `HostBudgets`;
 - whether monotonic time, filesystem and network services exist.
 
@@ -56,6 +58,45 @@ For a typical ESP32-S3 watch target, start with RGB565, partial present enabled,
 `has_full_framebuffer` set according to PSRAM/RAM layout, touch or crown flags
 matching the board and conservative heap/allocation numbers. Treat filesystem
 and network as optional host services, not core assumptions.
+
+## Slow Work And Optional Services
+
+`HostDeviceCapabilities` now splits slow-service facts into four groups:
+
+- `async`: whether the host can run jobs outside the UI task, whether jobs are
+  cancellable and how many completion events can be consumed per frame;
+- `media`: image decode, audio playback, lightweight video decode and hard
+  size/buffer caps;
+- `network`: runtime data fetch capability, request/response caps and the
+  remote-page-resource switch;
+- `app_bundles`: third-party flash bundle installation, integrity checks and
+  capacity caps.
+
+These fields do not mean the core calls hardware directly. They are a policy
+contract shared by ports, desktop tools, packagers and future JS APIs. If an app
+declares `network.fetch` or `media.audio.mp3`, tools can compare that against
+the target profile before packaging or installation, and runtime bindings can
+decide whether to expose the API.
+
+Recommended execution boundary:
+
+- The UI/main task exclusively owns DOM, JerryScript, style/layout/layer, dirty
+  regions and the framebuffer.
+- Decode, network, install and file I/O work runs only in host workers, RTOS
+  tasks or system services.
+- Workers post small completion events back to the UI queue.
+- The UI frame loop consumes a bounded number of completion events, then marks
+  DOM dirty or dispatches JavaScript events.
+- Workers must not hold raw DOM node pointers, call layout/render or write the
+  framebuffer.
+
+This keeps installable third-party apps, network requests and audio playback
+from blocking the system/app main process.
+
+The ESP32-S3 decode experiments should map into target profiles, not default
+core features: MP3 playback and small MJPEG/image decode can be optional host
+services; H.264 failed under the observed QEMU run and should remain
+experimental or disabled.
 
 ## Resource Loading
 
@@ -131,7 +172,7 @@ Still missing:
 
 Keep JellyFrame's main rendering path independent from LVGL and vendor UI widget trees. The core should continue to own HTML/CSS parsing, DOM/style/layout/layer construction, software framebuffer rendering and input event dispatch. A board port may use LVGL or a vendor BSP as a thin adapter for panel initialization, touch/backlight setup, text measurement/painting callbacks or final dirty-rectangle flushes, but it should not map JellyFrame DOM/CSS/layout into an LVGL widget tree. That would create two competing layout, style, focus, event and font systems.
 
-For ESP32-S3, the preferred path is: JellyFrame software `FrameBuffer` -> `embedded_framebuffer` RGB565 conversion -> `flush(Rect)`/`packed_flush(Rect)` -> `esp_lcd_panel_draw_bitmap` or an equivalent panel driver call. Input should flow from board queues into `InputController`; text should flow through `TextMeasureProvider` and `TextPainter`. If a vendor SDK is LVGL-centric, wrap only the final panel/input/text hooks and keep `src/core` free of LVGL headers.
+For ESP32-S3, the preferred path is: JellyFrame software `FrameBuffer` -> `embedded_framebuffer` RGB565 conversion -> `flush(Rect)`/`packed_flush(Rect)` -> `esp_lcd_panel_draw_bitmap` or an equivalent panel driver call. Input should flow from board queues into `InputController`; text should flow through `TextMeasureProvider` and `TextPainter`. If a vendor SDK is LVGL-centric, wrap only the final panel/input/text hooks and keep `src/render_core` free of LVGL headers.
 
 ## Text Backend
 
@@ -152,7 +193,7 @@ Embedded backends can provide:
 
 Do not put font loading into the core yet. Measurement and painting should come
 from the same host font engine to avoid clipping and mismatched wrapping. See
-`docs/text_backend.md`.
+`src/render_core/docs/text_backend.md`.
 
 ## Input Backend
 
@@ -186,7 +227,7 @@ The host should configure:
 - resource byte cap;
 - framebuffer/offscreen buffer policy.
 
-`HostBudgets` is now wired through `src/core/budget.h` into the main HTML/CSS
+`HostBudgets` is now wired through `src/render_core/budget.h` into the main HTML/CSS
 parser, render/layout/layer, display-list, dirty-rectangle and frame-loop work
 caps. JerryScript runtime construction also consumes timer, listener and
 detached DOM node limits. The software compositor also accepts primary and

@@ -1,4 +1,4 @@
-# How To Start With JellyFrame
+﻿# How To Start With JellyFrame
 
 This guide is for developers opening the repository for the first time. It
 explains what JellyFrame is, how the project is organized, how to build and run
@@ -82,18 +82,19 @@ For embedded porting:
 
 ## 4. Repository Layout
 
-- `src/core`: platform-neutral engine core.
+- `src/render_core`: platform-neutral HTML/CSS/DOM/rendering core.
+- `src/app_runtime`: app lifecycle and optional host-service helpers.
 - `src/script`: optional JerryScript binding layer.
-- `samples`: all sample pages and sample app packages.
-- `samples/pages/modern`: modern HTML/CSS compatibility samples.
-- `samples/scripts/classic`: scripting acceptance probes.
+- `samples`: app packages and app lifecycle samples.
+- `src/render_core/samples/pages/modern`: modern HTML/CSS compatibility samples.
+- `src/script/samples/classic`: scripting acceptance probes.
 - `samples/apps/loose`: small loose-file app fixtures.
 - `samples/apps/packages`: complete app-package examples with `jellyframe.app.json`.
-- `samples/fonts/bitmap`: font-pack sample input.
+- `src/render_core/samples/fonts/bitmap`: font-pack sample input.
 - `tools/templates/apps`: starter app packages copied by developer tools.
 - `tools/native`: C++ inspection tools, pseudo browser and Win32 shell sources.
-- `tests`: platform-neutral regression test sources.
-- `benchmarks`: microbenchmarks.
+- `tests`: cross-subproject acceptance test placeholder; subproject tests live beside code.
+- `benchmarks`: cross-subproject benchmark placeholder; subproject benchmarks live beside code.
 - `ports/embedded_host_demo`: platform-neutral board bring-up shape with static
   resources, bitmap text, input and RGB565 output.
 - `ports/virtual_board`: desktop estimator for board-like framebuffer costs.
@@ -102,26 +103,30 @@ For embedded porting:
 
 ## 5. Engine Pipeline
 
-The core modules roughly map to these files:
+The render core modules roughly map to these files:
 
-- HTML tokenizer: `src/core/html_tokenizer.*`
-- HTML tree builder/parser: `src/core/html_tree_builder.*`,
-  `src/core/html_parser.*`
-- DOM and dirty flags: `src/core/dom.*`
-- CSS parser and CSSOM data: `src/core/css_parser.*`, `src/core/style.*`
-- Linked style/script collection helpers: `src/core/document_style.*`,
-  `src/core/document_script.*`
-- Render tree and layout: `src/core/render_tree.*`, `src/core/layout.*`
-- Layer tree and hit testing: `src/core/layer_tree.*`,
-  `src/core/hit_test.*`
-- Events and input: `src/core/event.*`, `src/core/input.*`
-- Form controls: `src/core/form_control.*`
-- Software rendering: `src/core/software_renderer.*`
-- Text backend contract: `src/core/text_backend.*`
-- Host/HAL contracts and budgets: `src/core/host.h`, `src/core/budget.h`
-- Embedded framebuffer adapter: `src/core/embedded_framebuffer.*`
-- Frame update and dirty rectangles: `src/core/frame_update.*`,
-  `src/core/dirty_region.*`
+- HTML tokenizer: `src/render_core/html_tokenizer.*`
+- HTML tree builder/parser: `src/render_core/html_tree_builder.*`,
+  `src/render_core/html_parser.*`
+- DOM and dirty flags: `src/render_core/dom.*`
+- CSS parser and CSSOM data: `src/render_core/css_parser.*`,
+  `src/render_core/style.*`
+- Linked style/script collection helpers: `src/render_core/document_style.*`,
+  `src/render_core/document_script.*`
+- Render tree and layout: `src/render_core/render_tree.*`,
+  `src/render_core/layout.*`
+- Layer tree and hit testing: `src/render_core/layer_tree.*`,
+  `src/render_core/hit_test.*`
+- Events and input: `src/render_core/event.*`, `src/render_core/input.*`
+- Form controls: `src/render_core/form_control.*`
+- Software rendering: `src/render_core/software_renderer.*`
+- Text backend contract: `src/render_core/text_backend.*`
+- Host/HAL contracts and budgets: `src/render_core/host.h`,
+  `src/render_core/budget.h`
+- Embedded framebuffer adapter: `src/render_core/embedded_framebuffer.*`
+- Frame update and dirty rectangles: `src/render_core/frame_update.*`,
+  `src/render_core/dirty_region.*`
+- Optional app-runtime host services: `src/app_runtime/host_services.*`
 - Optional scripting: `src/script/jerryscript_runtime.*`
 
 The current implementation favors simple data structures, bounded recovery,
@@ -181,7 +186,7 @@ ctest --test-dir build -C Release --output-on-failure
 Run the core microbenchmark:
 
 ```powershell
-.\build\Release\jellyframe_microbench.exe
+.\build\Release\jellyframe_render_core_microbench.exe
 ```
 
 Run the virtual board benchmark:
@@ -198,8 +203,8 @@ Render a page to BMP or PPM without opening a window:
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  samples\pages\modern\article_cards.html `
-  samples\pages\modern\article_cards.css `
+  src\\render_core\\samples\\pages\\modern\article_cards.html `
+  src\\render_core\\samples\\pages\\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -226,12 +231,12 @@ Capture through the Win32/GDI text path:
 Inspect intermediate structures:
 
 ```powershell
-.\build\Release\jellyframe_dom_dump.exe samples\pages\modern\search_home.html
-.\build\Release\jellyframe_cssom_dump.exe samples\pages\modern\search_home.css
-.\build\Release\jellyframe_style_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
-.\build\Release\jellyframe_render_tree_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
-.\build\Release\jellyframe_layer_tree_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
-.\build\Release\jellyframe_pipeline_dump.exe samples\pages\modern\search_home.html samples\pages\modern\search_home.css
+.\build\Release\jellyframe_dom_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html
+.\build\Release\jellyframe_cssom_dump.exe src\\render_core\\samples\\pages\\modern\search_home.css
+.\build\Release\jellyframe_style_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
+.\build\Release\jellyframe_render_tree_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
+.\build\Release\jellyframe_layer_tree_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
+.\build\Release\jellyframe_pipeline_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
 ```
 
 Collect text resources before embedding a font pack:
@@ -263,28 +268,27 @@ cmake -S . -B build-script `
 cmake --build build-script --config Release
 ```
 
-Run a scripted page:
+Run a scripted page in the interactive Win32 shell:
 
 ```powershell
-.\build-script\Release\jellyframe_pseudo_browser.exe `
+.\build-script\Release\jellyframe_win32_browser.exe `
   samples\apps\loose\weather.html `
   samples\apps\loose\weather.css `
-  weather.bmp 360 360 --script samples\apps\loose\weather.js
+  --script samples\apps\loose\weather.js
 ```
 
 Run a timer-driven page:
 
 ```powershell
-.\build-script\Release\jellyframe_pseudo_browser.exe `
+.\build-script\Release\jellyframe_win32_browser.exe `
   samples\apps\loose\clock.html `
   samples\apps\loose\clock.css `
-  clock.bmp 360 360 --script samples\apps\loose\clock.js --pump-timers 3200
+  --script samples\apps\loose\clock.js
 ```
 
-The scripting shells automatically collect inline classic scripts and
-host-loadable local classic `<script src>` files. `--script extra.js` is also
-available for examples that keep JavaScript beside the page instead of linking it
-from HTML.
+The Win32 shell automatically collects inline classic scripts and host-loadable
+local classic `<script src>` files. `--script extra.js` is also available for
+examples that keep JavaScript beside the page instead of linking it from HTML.
 
 ## 11. What The Release EXEs Do
 
@@ -300,26 +304,28 @@ CMake options are enabled.
 | `jellyframe_render_tree_dump.exe` | Prints the render tree generated from DOM and style. |
 | `jellyframe_layer_tree_dump.exe` | Prints layer boundaries, layer reasons, clips and flattened display-list counts. |
 | `jellyframe_pipeline_dump.exe` | Prints end-to-end DOM/render/layout/layer/display-list counts and a display-list preview. |
-| `jellyframe_pseudo_browser.exe` | Runs the full pipeline and writes a BMP/PPM image. It is the best non-interactive acceptance shell. |
-| `jellyframe_win32_browser.exe` | Windows-only interactive validation shell using Win32/GDI text measurement and painting. |
+| `jellyframe_pseudo_browser.exe` | Runs the render-core pipeline from standalone HTML/CSS and writes a BMP/PPM image. It is the non-interactive render acceptance shell. |
+| `jellyframe_win32_browser.exe` | Windows-only interactive system-shell mock for app packages, input, scripting and Win32/GDI text measurement/painting. |
 | `jellyframe_font_resource_check.exe` | Retained only for font/resource preparation: emits non-ASCII used characters, estimates bitmap font budget and verifies font coverage. Text-search compatibility scanning is retired. |
 | `jellyframe_font_pack_gen.exe` | Converts a BDF bitmap font and used-character list into a C++ `BitmapFont` header. |
 | `jellyframe_embedded_host_demo.exe` | Platform-neutral port bring-up demo from `ports/embedded_host_demo`, using static resources, bitmap text and RGB565 framebuffer output. |
-| `jellyframe_microbench.exe` | Runs parser/render/layout/layer/flatten microbenchmarks. |
+| `jellyframe_render_core_microbench.exe` | Runs parser/render/layout/layer/flatten microbenchmarks. |
+| `jellyframe_app_runtime_microbench.exe` | Runs app-runtime queue/completion/host-handle microbenchmarks. |
 | `jellyframe_virtual_bench.exe` | Runs a desktop virtual-board benchmark and estimates RGB565 flush costs. |
-| `jellyframe_core_tests.exe` | Single platform-neutral regression test executable. |
+| `jellyframe_render_core_tests.exe` | Render-core regression tests. |
+| `jellyframe_app_runtime_tests.exe` | App-runtime host-service regression tests. |
+| `jellyframe_script_tests.exe` | Optional JerryScript bridge regression tests when scripting is enabled. |
 
 Notes:
 
-- `jellyframe_pseudo_browser.exe` supports `--app package_dir output.ppm`
-  for app-package source directories containing `jellyframe.app.json`.
+- `jellyframe_pseudo_browser.exe` intentionally does not load `.jfapp` bundles
+  or execute JavaScript; it validates render-core behavior only.
 - `jellyframe_win32_browser.exe` supports interactive package preview with
   `--app package_dir` and package capture with `--capture output.ppm --app
   package_dir`.
 - `jellyframe_win32_browser.exe` is only built on Windows.
-- In scripting builds, `jellyframe_pseudo_browser.exe`,
-  `jellyframe_win32_browser.exe` and `jellyframe_core_tests.exe` link the
-  optional scripting target.
+- In scripting builds, `jellyframe_win32_browser.exe` and
+  `jellyframe_script_tests.exe` link the optional scripting target.
 - Inspection tools and the Win32 shell merge CSS from explicit CSS files,
   embedded `<style>` and host-loadable local `<link rel="stylesheet">` files.
   The core itself does not perform file I/O.
@@ -332,16 +338,17 @@ Notes:
 - `tools/templates/apps`: source-package starter templates. Use these with
   `tools/jellyframe_cli.py new`; do not use them as exhaustive compatibility
   fixtures.
-- `samples/pages/modern`: modern HTML/CSS samples that exercise graceful
+- `src/render_core/samples/pages/modern`: modern HTML/CSS samples that exercise graceful
   degradation.
-- `samples/scripts/classic`: minimal scripting probes for runtime, DOM mutation,
+- `src/script/samples/classic`: minimal scripting probes for runtime, DOM mutation,
   events and script loading.
 - `samples/apps/loose/weather.*`: select-driven weather panel.
 - `samples/apps/loose/clock.*`: timer-driven clock.
 - `samples/apps/loose/timer.*`: timer/stopwatch UI.
 - `samples/apps/loose/calculator.*`: button-driven calculator.
 
-Package the sample app into a generated resource table:
+Package the sample app into a generated resource table, debug directory or
+installable `.jfapp`:
 
 ```powershell
 python tools\jellyframe_cli.py validate `
@@ -355,17 +362,36 @@ python tools\jellyframe_cli.py package `
   --root samples\apps\packages\watch_weather `
   --target round-300 `
   --output-cpp build\watch_weather_resources.cpp `
+  --output-bundle build\watch_weather.jfapp `
   --report build\watch_weather_report.json `
   --debug-dir build\watch_weather.jfdir
 ```
 
-Render it through the pseudo browser:
+Render it through the Win32 shell capture path:
 
 ```powershell
 python tools\jellyframe_cli.py preview `
   --root samples\apps\packages\watch_weather `
   --target round-300 `
   --output build\watch_weather.ppm
+```
+
+You can also open the generated `.jfapp` directly to verify that the installable
+bundle behaves like the source directory:
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --app build\watch_weather.jfapp
+.\build\Release\jellyframe_win32_browser.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
+```
+
+Simulate installation into the desktop app registry:
+
+```powershell
+python tools\jellyframe_cli.py registry install `
+  --store build\installed_apps `
+  --bundle build\watch_weather.jfapp
+
+python tools\jellyframe_cli.py registry list --store build\installed_apps
 ```
 
 Run package validation plus pipeline diagnostics; font resource checks are optional:
@@ -426,7 +452,7 @@ replace the CLI or duplicate the packer.
 When an example renders badly, inspect in this order:
 
 1. `jellyframe_win32_browser --app package_dir` for interactive behavior and text.
-2. `jellyframe_pseudo_browser --app package_dir output.ppm` for deterministic capture.
+2. `jellyframe_win32_browser --capture output.ppm --app package_dir` for package capture.
 3. `jellyframe_pipeline_dump`
 4. `jellyframe_dom_dump`
 5. `jellyframe_cssom_dump`
@@ -437,8 +463,8 @@ When an example renders badly, inspect in this order:
 
 For package apps, prefer `jellyframe_win32_browser --app package_dir` or
 `jellyframe_win32_browser --capture output.ppm --app package_dir` so the Win32
-shell uses the same manifest viewport and resource resolution as the pseudo
-browser.
+shell uses the app package loader, manifest viewport and resource resolution
+path.
 
 ## 13. Documentation Map
 
@@ -448,21 +474,21 @@ Most important technical docs:
 
 - [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md)
 - [docs/engine_architecture.md](docs/engine_architecture.md)
-- [docs/html_tokenizer_scope.md](docs/html_tokenizer_scope.md)
-- [docs/html_tree_builder_scope.md](docs/html_tree_builder_scope.md)
-- [docs/css_parser_scope.md](docs/css_parser_scope.md)
-- [docs/cssom_scope.md](docs/cssom_scope.md)
-- [docs/render_tree_scope.md](docs/render_tree_scope.md)
-- [docs/layer_tree_scope.md](docs/layer_tree_scope.md)
-- [docs/software_renderer_scope.md](docs/software_renderer_scope.md)
-- [docs/events_scope.md](docs/events_scope.md)
-- [docs/scripting_scope.md](docs/scripting_scope.md)
-- [docs/text_backend.md](docs/text_backend.md)
+- [src/render_core/docs/html_tokenizer_scope.md](src/render_core/docs/html_tokenizer_scope.md)
+- [src/render_core/docs/html_tree_builder_scope.md](src/render_core/docs/html_tree_builder_scope.md)
+- [src/render_core/docs/css_parser_scope.md](src/render_core/docs/css_parser_scope.md)
+- [src/render_core/docs/cssom_scope.md](src/render_core/docs/cssom_scope.md)
+- [src/render_core/docs/render_tree_scope.md](src/render_core/docs/render_tree_scope.md)
+- [src/render_core/docs/layer_tree_scope.md](src/render_core/docs/layer_tree_scope.md)
+- [src/render_core/docs/software_renderer_scope.md](src/render_core/docs/software_renderer_scope.md)
+- [src/render_core/docs/events_scope.md](src/render_core/docs/events_scope.md)
+- [src/script/docs/scripting_scope.md](src/script/docs/scripting_scope.md)
+- [src/render_core/docs/text_backend.md](src/render_core/docs/text_backend.md)
 - [docs/embedded_hal_api.md](docs/embedded_hal_api.md)
 
 Other useful project documents:
 
-- [docs/run_loop_contract.md](docs/run_loop_contract.md)
+- [src/render_core/docs/run_loop_contract.md](src/render_core/docs/run_loop_contract.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## 14. Common Development Workflows
@@ -492,7 +518,7 @@ When adding scripting APIs:
 1. Ensure the C++ core can honor the behavior without browser services.
 2. Keep wrappers as non-owning views over native DOM nodes.
 3. Retain and release every JerryScript value deliberately.
-4. Add scripting tests and update [docs/scripting_scope.md](docs/scripting_scope.md).
+4. Add scripting tests and update [src/script/docs/scripting_scope.md](src/script/docs/scripting_scope.md).
 
 ## 15. Rules For Updating This Guide
 

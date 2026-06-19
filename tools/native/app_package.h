@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 
-#include "core/diagnostics.h"
+#include "render_core/diagnostics.h"
 
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -13,6 +14,11 @@
 #include <vector>
 
 namespace jellyframe_example {
+
+constexpr std::uint32_t kJfappFnvOffset = 0x811c9dc5U;
+constexpr std::uint32_t kJfappFnvPrime = 0x01000193U;
+constexpr std::size_t kJfappHeaderSize = 56;
+constexpr std::size_t kJfappResourceEntrySize = 28;
 
 struct AppPackageManifest {
     std::string id;
@@ -27,9 +33,22 @@ struct AppPackageManifest {
     bool network_allowed = false;
 };
 
+struct BundleResourceEntry {
+    std::string path;
+    std::uint32_t path_hash = 0;
+    std::uint16_t kind = 0;
+    std::uint32_t payload_offset = 0;
+    std::uint32_t payload_size = 0;
+    std::uint32_t crc32 = 0;
+    std::uint32_t flags = 0;
+};
+
 struct AppPackage {
     std::filesystem::path root;
     AppPackageManifest manifest;
+    std::vector<std::uint8_t> bundle_bytes;
+    std::vector<BundleResourceEntry> bundle_entries;
+    std::uint32_t bundle_payload_offset = 0;
 };
 
 struct PackageResourceStats {
@@ -45,6 +64,13 @@ struct PackageResourceContext {
     std::size_t max_input_bytes = 512 * 1024;
     PackageResourceStats* stats = nullptr;
     jellyframe::DiagnosticSink* diagnostics = nullptr;
+    std::vector<std::uint8_t> bundle_bytes;
+    std::vector<BundleResourceEntry> bundle_entries;
+    std::uint32_t bundle_payload_offset = 0;
+
+    bool bundle_mode() const {
+        return !bundle_bytes.empty();
+    }
 };
 
 inline std::string read_text_file_limited(const std::filesystem::path& path, std::size_t max_input_bytes) {
@@ -68,6 +94,77 @@ inline std::string read_text_file_limited(const std::filesystem::path& path, std
         total += static_cast<std::size_t>(read);
     }
     return output.str();
+}
+
+inline std::vector<std::uint8_t> read_binary_file_limited(const std::filesystem::path& path,
+                                                          std::size_t max_input_bytes) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        return {};
+    }
+    std::vector<std::uint8_t> output;
+    char buffer[4096];
+    std::size_t total = 0;
+    while (file && total < max_input_bytes) {
+        const std::size_t remaining = max_input_bytes - total;
+        const std::size_t chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+        file.read(buffer, static_cast<std::streamsize>(chunk));
+        const std::streamsize read = file.gcount();
+        if (read <= 0) {
+            break;
+        }
+        const auto* bytes = reinterpret_cast<const std::uint8_t*>(buffer);
+        output.insert(output.end(), bytes, bytes + read);
+        total += static_cast<std::size_t>(read);
+    }
+    return output;
+}
+
+inline std::uint16_t read_le16(const std::uint8_t* data) {
+    return static_cast<std::uint16_t>(data[0]) |
+           static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) << 8U);
+}
+
+inline std::uint32_t read_le32(const std::uint8_t* data) {
+    return static_cast<std::uint32_t>(data[0]) |
+           (static_cast<std::uint32_t>(data[1]) << 8U) |
+           (static_cast<std::uint32_t>(data[2]) << 16U) |
+           (static_cast<std::uint32_t>(data[3]) << 24U);
+}
+
+inline void write_le32(std::uint8_t* data, std::uint32_t value) {
+    data[0] = static_cast<std::uint8_t>(value & 0xffU);
+    data[1] = static_cast<std::uint8_t>((value >> 8U) & 0xffU);
+    data[2] = static_cast<std::uint8_t>((value >> 16U) & 0xffU);
+    data[3] = static_cast<std::uint8_t>((value >> 24U) & 0xffU);
+}
+
+inline std::uint32_t crc32_update(std::uint32_t crc, const std::uint8_t* data, std::size_t size) {
+    crc = ~crc;
+    for (std::size_t index = 0; index < size; ++index) {
+        crc ^= data[index];
+        for (int bit = 0; bit < 8; ++bit) {
+            crc = (crc >> 1U) ^ (0xedb88320U & (0U - (crc & 1U)));
+        }
+    }
+    return ~crc;
+}
+
+inline std::uint32_t crc32_bytes(const std::uint8_t* data, std::size_t size) {
+    return crc32_update(0, data, size);
+}
+
+inline std::uint32_t fnv1a_32(std::string_view value) {
+    std::uint32_t result = kJfappFnvOffset;
+    for (const char ch : value) {
+        result ^= static_cast<std::uint8_t>(ch);
+        result *= kJfappFnvPrime;
+    }
+    return result;
+}
+
+inline bool byte_range_is_valid(std::size_t total, std::size_t offset, std::size_t size) {
+    return offset <= total && size <= total - offset;
 }
 
 inline void record_package_success(PackageResourceContext* context, std::size_t bytes) {
@@ -187,6 +284,54 @@ inline bool load_package_resource(std::string_view url,
                                       "package-resource-rejected",
                                       "Package resource URL was rejected because it is not a local app path",
                                       url);
+        return false;
+    }
+    if (context->bundle_mode()) {
+        const std::uint32_t resolved_hash = fnv1a_32(resolved);
+        for (const BundleResourceEntry& entry : context->bundle_entries) {
+            if (entry.path_hash != resolved_hash || entry.path != resolved) {
+                continue;
+            }
+            const std::size_t absolute_payload_offset =
+                static_cast<std::size_t>(context->bundle_payload_offset) + entry.payload_offset;
+            if (entry.payload_size > context->max_input_bytes ||
+                !byte_range_is_valid(context->bundle_bytes.size(), absolute_payload_offset, entry.payload_size)) {
+                record_package_rejected(context);
+                jellyframe::report_diagnostic(context->diagnostics,
+                                              jellyframe::DiagnosticStage::Package,
+                                              jellyframe::DiagnosticSeverity::Warning,
+                                              "package-resource-rejected",
+                                              "Bundle resource exceeds the loader budget or points outside the payload",
+                                              resolved);
+                return false;
+            }
+            const std::uint8_t* begin = context->bundle_bytes.data() + absolute_payload_offset;
+            if (crc32_bytes(begin, entry.payload_size) != entry.crc32) {
+                record_package_rejected(context);
+                jellyframe::report_diagnostic(context->diagnostics,
+                                              jellyframe::DiagnosticStage::Package,
+                                              jellyframe::DiagnosticSeverity::Warning,
+                                              "package-resource-crc-mismatch",
+                                              "Bundle resource checksum did not match its index entry",
+                                              resolved);
+                return false;
+            }
+            output.assign(reinterpret_cast<const char*>(begin),
+                          reinterpret_cast<const char*>(begin + entry.payload_size));
+            if (output.empty()) {
+                record_package_missing(context);
+                return false;
+            }
+            record_package_success(context, output.size());
+            return true;
+        }
+        record_package_missing(context);
+        jellyframe::report_diagnostic(context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "package-resource-missing",
+                                      "Bundle resource was not present in the package index",
+                                      resolved);
         return false;
     }
     output = read_text_file_limited(package_file_path(context->root, resolved), context->max_input_bytes);
@@ -324,8 +469,86 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     return manifest;
 }
 
+inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, std::size_t max_input_bytes) {
+    std::vector<std::uint8_t> bytes = read_binary_file_limited(bundle_path, max_input_bytes);
+    if (bytes.size() < kJfappHeaderSize) {
+        throw std::runtime_error("failed to read .jfapp header");
+    }
+    if (std::string_view(reinterpret_cast<const char*>(bytes.data()), 8) != std::string_view("JFAPPV0\0", 8)) {
+        throw std::runtime_error("invalid .jfapp magic");
+    }
+    const std::uint16_t header_size = read_le16(bytes.data() + 8);
+    const std::uint16_t format_version = read_le16(bytes.data() + 10);
+    if (header_size != kJfappHeaderSize || format_version != 0) {
+        throw std::runtime_error("unsupported .jfapp format version");
+    }
+    const std::uint32_t summary_offset = read_le32(bytes.data() + 16);
+    const std::uint32_t summary_size = read_le32(bytes.data() + 20);
+    const std::uint32_t index_offset = read_le32(bytes.data() + 24);
+    const std::uint32_t resource_count = read_le32(bytes.data() + 28);
+    const std::uint32_t strings_offset = read_le32(bytes.data() + 32);
+    const std::uint32_t strings_size = read_le32(bytes.data() + 36);
+    const std::uint32_t payload_offset = read_le32(bytes.data() + 40);
+    const std::uint32_t payload_size = read_le32(bytes.data() + 44);
+    const std::uint32_t expected_crc32 = read_le32(bytes.data() + 48);
+    if (!byte_range_is_valid(bytes.size(), summary_offset, summary_size) ||
+        !byte_range_is_valid(bytes.size(), index_offset, resource_count * kJfappResourceEntrySize) ||
+        !byte_range_is_valid(bytes.size(), strings_offset, strings_size) ||
+        !byte_range_is_valid(bytes.size(), payload_offset, payload_size)) {
+        throw std::runtime_error(".jfapp contains an out-of-range section");
+    }
+    if (expected_crc32 != 0) {
+        std::vector<std::uint8_t> crc_bytes = bytes;
+        write_le32(crc_bytes.data() + 48, 0);
+        if (crc32_bytes(crc_bytes.data(), crc_bytes.size()) != expected_crc32) {
+            throw std::runtime_error(".jfapp checksum mismatch");
+        }
+    }
+
+    std::string summary(reinterpret_cast<const char*>(bytes.data() + summary_offset),
+                        reinterpret_cast<const char*>(bytes.data() + summary_offset + summary_size));
+    std::vector<BundleResourceEntry> entries;
+    entries.reserve(resource_count);
+    for (std::uint32_t index = 0; index < resource_count; ++index) {
+        const std::uint8_t* raw = bytes.data() + index_offset + index * kJfappResourceEntrySize;
+        const std::uint32_t path_hash = read_le32(raw);
+        const std::uint32_t path_offset = read_le32(raw + 4);
+        const std::uint16_t path_size = read_le16(raw + 8);
+        const std::uint16_t kind = read_le16(raw + 10);
+        const std::uint32_t entry_payload_offset = read_le32(raw + 12);
+        const std::uint32_t entry_payload_size = read_le32(raw + 16);
+        const std::uint32_t entry_crc32 = read_le32(raw + 20);
+        const std::uint32_t flags = read_le32(raw + 24);
+        if (!byte_range_is_valid(strings_size, path_offset, path_size) ||
+            !byte_range_is_valid(payload_size, entry_payload_offset, entry_payload_size)) {
+            throw std::runtime_error(".jfapp resource entry points outside its section");
+        }
+        const char* path_begin = reinterpret_cast<const char*>(bytes.data() + strings_offset + path_offset);
+        entries.push_back(BundleResourceEntry{
+            std::string(path_begin, path_begin + path_size),
+            path_hash,
+            kind,
+            entry_payload_offset,
+            entry_payload_size,
+            entry_crc32,
+            flags,
+        });
+    }
+
+    AppPackage package;
+    package.root = std::filesystem::absolute(bundle_path).parent_path();
+    package.manifest = parse_app_manifest_text(summary);
+    package.bundle_payload_offset = payload_offset;
+    package.bundle_entries = std::move(entries);
+    package.bundle_bytes = std::move(bytes);
+    return package;
+}
+
 inline AppPackage load_app_package(const std::filesystem::path& package_root, std::size_t max_input_bytes) {
     const std::filesystem::path root = std::filesystem::absolute(package_root);
+    if (std::filesystem::is_regular_file(root)) {
+        return load_jfapp_bundle(root, max_input_bytes);
+    }
     const std::filesystem::path manifest_path = root / "jellyframe.app.json";
     std::string manifest_text = read_text_file_limited(manifest_path, max_input_bytes);
     if (manifest_text.empty()) {

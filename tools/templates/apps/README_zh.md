@@ -1,4 +1,4 @@
-# 应用模板
+﻿# 应用模板
 
 常见可穿戴工作流的参考应用模板。这些模板刻意保持小而现代的手表式 UI，
 并停留在 JellyFrame 已文档化的 HTML、CSS 和脚本子集内，而不是依赖完整浏览器布局行为。
@@ -10,4 +10,4 @@
 
 这些目录是 app 作者的起点。它们会保持正常 source-package 结构，但不承载每个边缘测试；
 用于验收和展示的完整示例放在 `../../../samples/apps/packages`，更小的针对性 fixture 放在
-`../../../samples/apps/loose`、`../../../samples/pages/modern` 和 `../../../samples/scripts/classic`。
+`../../../samples/apps/loose`、`../../../src/render_core/samples/pages/modern` 和 `../../../src/script/samples/classic`。

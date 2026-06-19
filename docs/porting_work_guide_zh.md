@@ -1,4 +1,4 @@
-# JellyFrame 移植工作指导
+﻿# JellyFrame 移植工作指导
 
 
 本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及当前核心已经提供了哪些可直接使用的能力。
@@ -9,12 +9,12 @@
 
 这些接口已经存在，可作为移植开发的稳定入口：
 
-- `src/core/host.h`：设备能力、资源请求、时钟、frame sink、预算。
-- `src/core/budget.h`：把 `HostBudgets` 映射到 parser、render/layout/layer、dirty rect 和 scripting 限制。
-- `src/core/embedded_framebuffer.h`：把核心 RGBA framebuffer 转换到宿主持有的 RGB565、灰度、单色等目标 buffer。
-- `src/core/input.h`：触摸、指针、滚轮、按键、文本输入、焦点导航和激活。
-- `src/core/text_backend.h`、`src/core/bitmap_font.h`：宿主文本测量与 bitmap 字体绘制。
-- `src/core/document_style.h`、`src/core/document_script.h`：外链 CSS 和 classic script 的宿主加载 callback。
+- `src/render_core/host.h`：设备能力、资源请求、时钟、frame sink、预算。
+- `src/render_core/budget.h`：把 `HostBudgets` 映射到 parser、render/layout/layer、dirty rect 和 scripting 限制。
+- `src/render_core/embedded_framebuffer.h`：把核心 RGBA framebuffer 转换到宿主持有的 RGB565、灰度、单色等目标 buffer。
+- `src/render_core/input.h`：触摸、指针、滚轮、按键、文本输入、焦点导航和激活。
+- `src/render_core/text_backend.h`、`src/render_core/bitmap_font.h`：宿主文本测量与 bitmap 字体绘制。
+- `src/render_core/document_style.h`、`src/render_core/document_script.h`：外链 CSS 和 classic script 的宿主加载 callback。
 - `src/script/jerryscript_runtime.h`：可选 JerryScript runtime、DOM/event/form/timer bridge。
 
 第一版开发板 port 不应直接调用 Win32、文件系统或桌面壳代码。参考结构是
@@ -26,7 +26,7 @@
 本文只把移植侧需要完成的工作列为阶段任务。以下内容不属于硬件移植任务：
 
 - 修改 HTML/CSS/DOM/layout/render 核心算法。
-- 在 `jellyframe_core` 内加入字体文件加载、文件系统、网络或屏幕驱动。
+- 在 `jellyframe_render_core` 内加入字体文件加载、文件系统、网络或屏幕驱动。
 - 重新实现 `jellyframe_font_resource_check`、`jellyframe_font_pack_gen`、`embedded_framebuffer` 或 bitmap font callback。
 - 在 ESP32-S3 第一版中实现无完整 framebuffer 的 tiled renderer、复杂文字 shaping、图片解码或网络安全模型。
 
@@ -43,13 +43,14 @@
 - 新建或整理 `ports/esp32s3-idf/`，保留为独立 ESP-IDF app。
 - 新建或整理 `ports/virtual_board/`，保留为桌面性能估算工具。
 - 不要覆盖主线根 `CMakeLists.txt`。
-- ESP-IDF component 名称改为 `jellyframe_core`。
+- ESP-IDF render component 名称使用 `jellyframe_render_core`。
 - 日志 tag、Kconfig menu、README 和 benchmark 输出使用 JellyFrame。
 
 实现方式：
 
 - ESP-IDF app 目录只包含 port 代码、Kconfig、sdkconfig defaults 和 component CMake。
-- component CMake 引用主线 `src/core/*.cpp`，源码清单必须跟根 CMake 当前的 `jellyframe_core` 保持一致。
+- component CMake 引用主线 `src/render_core/*.cpp`，源码清单必须跟根 CMake 当前的
+  `jellyframe_render_core` 保持一致。
 - JerryScript 不进入 P0/P1 的 ESP32-S3 component；先证明非脚本管线稳定。
 
 验收：
@@ -65,7 +66,7 @@
 
 - 在 port 层填充 `HostDeviceCapabilities`。
 - 根据实际屏幕、PSRAM、堆大小和最大连续块设置 `HostBudgets`。
-- 所有 parser/layout/layer/dirty/script 入口都通过 `src/core/budget.h` 派生 options。
+- 所有 parser/layout/layer/dirty/script 入口都通过 `src/render_core/budget.h` 派生 options。
 - 当资源或 framebuffer 超预算时，必须降级或跳过，不允许崩溃。
 
 ESP32-S3 初始建议：
@@ -175,11 +176,11 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 核心已提供：
 
 - `TextMeasureProvider` 和 `TextPainter` callback 接口。
-- `src/core/bitmap_font.h` 中的 bitmap font 数据结构、测量 callback 和绘制 callback。
+- `src/render_core/bitmap_font.h` 中的 bitmap font 数据结构、测量 callback 和绘制 callback。
 - `jellyframe_font_resource_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符、检查字体覆盖、
   估算 bitmap pack 预算并建议字体 profile。
 - `jellyframe_font_pack_gen`，可从 BDF 字体子集生成 C++ `BitmapFont` header。
-- `src/core/text_adapter.h` 中的 `HostTextAdapter`，用于把 LVGL/vendor 测量和绘制 callback
+- `src/render_core/text_adapter.h` 中的 `HostTextAdapter`，用于把 LVGL/vendor 测量和绘制 callback
   包装成核心需要的接口，同时不把平台头文件带进 core。
 
 任务要求：
@@ -333,7 +334,7 @@ loop:
 
 任务要求：
 
-- JerryScript 作为可选 component，不进入 `jellyframe_core`。
+- JerryScript 作为可选 component，不进入 `jellyframe_render_core`。
 - heap、timer、listener 数量必须按 `HostBudgets` 限制。
 - script 执行不得发生在 ISR 或显示驱动 callback 中。
 - 页面脚本仅承诺 classic script 子集，不承诺 ES modules、fetch、Web APIs、CSSOM 动态全量能力。

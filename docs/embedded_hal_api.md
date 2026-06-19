@@ -1,9 +1,13 @@
-# Embedded HAL API
+﻿# Embedded HAL API
 
 
 This document is the implementation checklist for a board or RTOS host such as
-ESP32-S3. `jellyframe_core` stays platform-neutral; the hardware program owns every
+ESP32-S3. `jellyframe_render_core` stays platform-neutral; the hardware program owns every
 real I/O operation and calls the core through small C++ structs and callbacks.
+
+See `host_optional_services.md` for the concrete optional-service shapes for
+images, audio, lightweight video, network data requests and installable bundles.
+This document keeps the overall checklist and porting guidance.
 
 ## Required Runtime Loop
 
@@ -19,13 +23,17 @@ A minimal embedded host should perform this loop:
 
 ## Device Capability API
 
-Header: `src/core/host.h`
+Header: `src/render_core/host.h`
 
 ```cpp
 struct HostDeviceCapabilities {
     HostDisplayCapabilities display;
     HostInputCapabilities input;
     HostMemoryCapabilities memory;
+    HostAsyncCapabilities async;
+    HostMediaCapabilities media;
+    HostNetworkCapabilities network;
+    HostAppBundleCapabilities app_bundles;
     HostBudgets budgets;
     bool has_monotonic_clock;
     bool has_filesystem;
@@ -42,6 +50,14 @@ the app host. Current fields are descriptive, not a mandatory runtime registry:
   input availability;
 - `memory`: total heap, maximum single allocation and preferred framebuffer
   budget;
+- `async`: whether slow decode/network/install work can run outside the UI task
+  and how many completion events may be consumed per frame;
+- `media`: optional image/audio/lightweight-video services, preferred decoded
+  pixel formats and hard size/buffer caps;
+- `network`: optional runtime data fetch service, request/response caps and
+  whether remote page resources are allowed;
+- `app_bundles`: optional third-party flash bundle installation capability,
+  integrity checks and installed-app/bundle-size caps;
 - `budgets`: DOM/CSS/display-list/timer/listener/resource limits;
 - service flags for monotonic time, filesystem and network.
 
@@ -53,11 +69,105 @@ Suggested ESP32-S3 watch starting point:
   buffer plus core working memory;
 - set either `touch`, `crown`/`focus_buttons`, or both according to the board;
 - leave `has_network = false` unless the product host explicitly exposes a
-  bounded network/data layer to apps.
+  bounded network/data layer to apps;
+- even when network is enabled, keep `network.allows_remote_page_resources =
+  false` and expose only runtime app data APIs;
+- expose MP3, small-image and MJPEG services as optional host capabilities;
+  keep H.264 or high-resolution video disabled by default or experimental on
+  ESP32-S3.
+
+## Async Work API
+
+The JellyFrame UI/main task owns DOM, script, layout, layers and the framebuffer.
+Potentially blocking work must not run synchronously inside that task:
+
+- flash directory scans, large resource reads and third-party app installation;
+- network requests, DNS/TLS and HTTP body reads;
+- image, audio and video decoding;
+- large font/resource-table validation.
+
+Recommended host shape:
+
+```text
+submit(kind, request, budget, priority) -> job_id
+cancel(job_id)
+pump_completions(max_events) -> completion events
+```
+
+Completion events are consumed only on UI/main-task frame boundaries. They carry
+a job id, status, resource handle or error code. Worker tasks must never mutate
+DOM, run JavaScript, rebuild layout or write the framebuffer directly. This lets
+third-party apps request data, play audio or install packages without stalling
+the system shell or the active page.
+
+Request, completion and surface/audio/fetch/bundle handle lifetimes are detailed
+in `host_optional_services.md`.
+
+Minimal ESP32-S3 policy:
+
+- one low-priority worker task for image decode, package checks and small file
+  I/O;
+- host-owned audio pipelines; UI receives playback handles and state events;
+- network request task with max concurrency, max response bytes and timeouts;
+- consume only a few completion events per frame, for example 2-4.
+
+## Media And Decode API
+
+The ESP32-S3 decode experiments support a conservative optional-service design:
+
+- The GMF MP3 QEMU bench reports roughly 27x real-time with stable heap
+  headroom, so audio playback is reasonable as an optional host service.
+- The GMF video bench is MJPEG -> RGB565, not H.264. A 240x240, 30-frame sample
+  reports roughly 46-49fps with about 115 KiB decoded output per frame. This is
+  useful evidence for small image/lightweight animation decode.
+- The H.264 bench reports `esp_cache_msync` invalid-address errors and open
+  failures under QEMU, so it should not be treated as a stable ESP32-S3
+  JellyFrame capability.
+
+Current recommendation:
+
+- **Image decode**: optional. Input comes from local packages or future bundles;
+  output is an RGB565/RGBA surface handle. Enforce width, height, decoded-byte
+  and concurrency caps. Resize or reject large images during packaging.
+- **Audio playback**: optional. Core/JS controls play/pause/stop/volume and
+  receives ended/error events; PCM buffers, I2S, codecs and GMF/ADF pipelines
+  remain host-owned.
+- **Video decode**: experimental. The first useful shape is a low-resolution
+  MJPEG frame provider. Do not promise `<video>` or make it required for normal
+  layout. H.264 is not in the default ESP32-S3 profile.
+- **Images in pages**: before image decode is wired, `<img>` and CSS backgrounds
+  may use placeholder boxes. Once wired, decoded surfaces can replace them on a
+  later dirty repaint.
+
+Decoded surfaces must be owned by the host resource/cache layer. The UI task may
+reference handles and request dirty repaint; large pixel buffers should not be
+copied into DOM or JavaScript objects.
+
+## Network And Installation API
+
+Package resource loading remains local, deterministic and remote-resource-free.
+When network support exists, it means runtime app data requests only:
+
+- allowed: weather APIs, account/device services, small JSON sync and downloads
+  of app bundles for the system installer to verify;
+- blocked: loading remote HTML/CSS/script/image resources into the page loader,
+  unless a future security model explicitly enables that.
+
+Third-party flash bundle installation should be owned by the system shell or app
+manager, not directly mounted by the active app's JavaScript:
+
+1. Download or receive `.jfapp` into a staging area.
+2. Verify manifest, version, target device, budgets and hash/signature.
+3. Write the bundle store outside the active app context.
+4. Atomically commit the resource-table index.
+5. Notify the launcher to refresh the app list.
+
+Install, delete and update operations must be cancellable or recoverable. A
+failure must not corrupt the currently bootable app table.
 
 ## Resource API
 
-Header: `src/core/host.h`
+Header: `src/render_core/host.h`
 
 ```cpp
 using HostResourceLoadCallback = bool (*)(const HostResourceRequest& request,
@@ -82,7 +192,7 @@ No network is required by the core.
 
 ## Clock And Timers
 
-Header: `src/core/host.h`
+Header: `src/render_core/host.h`
 
 ```cpp
 struct HostClock {
@@ -109,9 +219,9 @@ ESP32-S3 mapping:
 
 Headers:
 
-- `src/core/software_renderer.h`
-- `src/core/host.h`
-- `src/core/embedded_framebuffer.h`
+- `src/render_core/software_renderer.h`
+- `src/render_core/host.h`
+- `src/render_core/embedded_framebuffer.h`
 
 Core framebuffer view:
 
@@ -175,7 +285,7 @@ hooks.
 
 ## Input API
 
-Header: `src/core/input.h`
+Header: `src/render_core/input.h`
 
 Touch or pointer:
 
@@ -222,8 +332,8 @@ form-control state updates.
 
 Headers:
 
-- `src/core/text_backend.h`
-- `src/core/software_renderer.h`
+- `src/render_core/text_backend.h`
+- `src/render_core/software_renderer.h`
 
 Measurement:
 
@@ -265,7 +375,7 @@ ESP32-S3 mapping:
 Vector fonts are feasible on high-end targets, but the default ESP32-S3 path
 should be offline-rasterized bitmap glyphs.
 
-Core now provides `src/core/bitmap_font.h` for this default path. A board port
+Core now provides `src/render_core/bitmap_font.h` for this default path. A board port
 can expose generated glyph arrays through `BitmapFont`, then wire
 `bitmap_font_measure_callback` into `LayoutEngine` and
 `bitmap_font_paint_callback` into `SoftwareCompositor`.
@@ -305,7 +415,7 @@ and framebuffer flush callback.
 
 ## Budgets
 
-Header: `src/core/host.h`
+Header: `src/render_core/host.h`
 
 ```cpp
 struct HostBudgets {
@@ -329,7 +439,7 @@ struct HostBudgets {
 };
 ```
 
-`src/core/budget.h` maps these values into the current HTML/CSS/parser,
+`src/render_core/budget.h` maps these values into the current HTML/CSS/parser,
 render/layout/layer/display-list, dirty-rectangle and frame-loop entry points.
 JerryScript runtime construction also consumes timer, listener and detached DOM
 node limits. Suggested ESP32-S3 starting point:

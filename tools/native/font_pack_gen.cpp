@@ -1,4 +1,4 @@
-#include <algorithm>
+﻿#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <fstream>
@@ -254,7 +254,7 @@ void write_font_pack(const Options& options,
     }
 
     output << "#pragma once\n\n";
-    output << "#include \"core/bitmap_font.h\"\n\n";
+    output << "#include \"render_core/bitmap_font.h\"\n\n";
     output << "#include <cstdint>\n\n";
     output << "namespace jellyframe_generated {\n\n";
     for (std::uint32_t codepoint : selected) {

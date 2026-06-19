@@ -3,6 +3,14 @@
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
 
+源码树现在拆成三个平台无关逻辑子项目：
+
+- `src/render_core` / `jellyframe_render_core`：HTML/CSS/DOM/rendering 子集；
+  不依赖 JerryScript、app 安装、文件系统、网络或 OS API。
+- `src/app_runtime` / `jellyframe_app_runtime`：安装式 app 生命周期和可选 host-service
+  队列；可依赖 `render_core` 的宿主能力与预算类型。
+- `src/script` / `jellyframe_script`：可选 JerryScript 桥接层；嵌入式构建可以完全关闭。
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer
@@ -19,6 +27,11 @@ Platform-neutral input
   -> InputController
   -> Event / MouseEvent / WheelEvent
   -> DOM nodes 上的 EventTarget dispatch
+
+Host async services
+  -> decode/network/install workers
+  -> bounded completion queue
+  -> UI/main task event dispatch or dirty marking
 
 DOM + StyleResolver
   -> RenderTreeBuilder
@@ -47,6 +60,8 @@ DOM + StyleResolver
 - `HitTester`：通过 layout 和 layer geometry 将 viewport 坐标映射到 DOM event target。
 - `InputController`：将平台无关 pointer/wheel input 转成类 mouse events、hover/active/focus state 和 click synthesis。
 - `EventTarget`：保存 C++ listeners，并执行类 DOM 的 capture、target 和 bubble phases。
+- `Host async services`：位于 `app_runtime` 的可选宿主服务，用于图片/音频/轻量视频、网络数据请求和安装式 bundle。
+  它们不拥有 DOM 或 framebuffer，只通过有界 completion events 回到 UI/main task。
 - `PipelineStatistics`：可选只读统计入口，用于统计 DOM、render、layout、layer、display-list、
   framebuffer、resource 和 arena 使用情况。它面向验证壳和 benchmark，不进入渲染热路径。
 

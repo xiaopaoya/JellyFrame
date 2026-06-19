@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 
-#include "core/dom.h"
-#include "core/dom_owner.h"
-#include "core/host.h"
+#include "render_core/dom.h"
+#include "render_core/dom_owner.h"
+#include "render_core/host.h"
 
 #include <cstdint>
 #include <cstddef>

@@ -1,4 +1,4 @@
-# JellyFrame
+﻿# JellyFrame
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -30,7 +30,7 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 
 ## 应用截图
 
-下面这些 300x300 截图由 `jellyframe_pseudo_browser` 从 `tools/templates/apps`
+下面这些 300x300 截图通过 Win32 capture shell 从 `tools/templates/apps`
 中的 source package 实际渲染生成。
 
 | Weather | Clock |
@@ -63,8 +63,8 @@ ctest --test-dir build -C Release --output-on-failure
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  samples\pages\modern\article_cards.html `
-  samples\pages\modern\article_cards.css `
+  src\render_core\samples\pages\modern\article_cards.html `
+  src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -92,12 +92,22 @@ python tools\jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+需要生成第三方安装包时，同一个 `package` 命令可以输出 `.jfapp`：
+
+```powershell
+python tools\jellyframe_cli.py package `
+  --root build\my_calculator `
+  --target round-300 `
+  --output-bundle build\my_calculator.jfapp `
+  --report build\my_calculator_report.json
+```
+
 第一次接触项目时，请继续读 [HOW_TO_START_zh.md](HOW_TO_START_zh.md)。
 
 ## 可选脚本构建
 
 脚本能力是可选的。除非显式设置 `JELLYFRAME_BUILD_SCRIPTING=ON`，否则
-`jellyframe_core` 不依赖 JerryScript。
+`jellyframe_render_core` 不依赖 JerryScript。
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
@@ -115,9 +125,10 @@ cmake --build build-script --config Release
 
 ## 仓库结构
 
-- `src/core`：平台无关核心。
+- `src/render_core`：平台无关 HTML/CSS/DOM/rendering 核心。
+- `src/app_runtime`：app 生命周期与可选 host-service helper。
 - `src/script`：可选 JerryScript 绑定层。
-- `samples`：app packages、散文件 app fixture、现代页面、脚本探针和字体工具输入。
+- `samples`：app packages 和 app 生命周期样例。
 - `tests`：平台无关回归测试。
 - `benchmarks`：桌面微基准。
 - `ports`：移植支撑代码、面向开发板的演示和 virtual board 工具。
@@ -134,7 +145,7 @@ cmake --build build-script --config Release
 - [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)：
   支持、降级、懒处理和延后功能。
 - [docs/engine_architecture_zh.md](docs/engine_architecture_zh.md)：管线总览。
-- [docs/app_packaging_zh.md](docs/app_packaging_zh.md)：app package 格式和工具链。
+- [src/app_runtime/docs/app_packaging_zh.md](src/app_runtime/docs/app_packaging_zh.md)：app package 格式和工具链。
 - [docs/embedded_hal_api_zh.md](docs/embedded_hal_api_zh.md)：开发板 port 的宿主/HAL 契约。
 - [docs/versioning_zh.md](docs/versioning_zh.md)：版本和发布纪律。
 

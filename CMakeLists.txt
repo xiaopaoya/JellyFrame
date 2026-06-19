@@ -25,48 +25,65 @@ if(JERRYSCRIPT_ROOT AND NOT JERRYSCRIPT_INCLUDE_DIR)
     endif()
 endif()
 
-add_library(jellyframe_core
-    src/core/arena.cpp
-    src/core/bitmap_font.cpp
-    src/core/css_parser.cpp
-    src/core/display_invalidation.cpp
-    src/core/dirty_region.cpp
-    src/core/document_script.cpp
-    src/core/document_style.cpp
-    src/core/dom.cpp
-    src/core/dom_owner.cpp
-    src/core/embedded_framebuffer.cpp
-    src/core/event.cpp
-    src/core/form_control.cpp
-    src/core/frame_loop.cpp
-    src/core/frame_update.cpp
-    src/core/hit_test.cpp
-    src/core/html_parser.cpp
-    src/core/html_tokenizer.cpp
-    src/core/html_tree_builder.cpp
-    src/core/input.cpp
-    src/core/layer_tree.cpp
-    src/core/layout.cpp
-    src/core/pipeline_statistics.cpp
-    src/core/render_tree.cpp
-    src/core/software_renderer.cpp
-    src/core/style.cpp
-    src/core/text_adapter.cpp
-    src/core/text_backend.cpp
-    src/core/text_normalization.cpp
+add_library(jellyframe_render_core
+    src/render_core/arena.cpp
+    src/render_core/bitmap_font.cpp
+    src/render_core/css_parser.cpp
+    src/render_core/display_invalidation.cpp
+    src/render_core/dirty_region.cpp
+    src/render_core/document_script.cpp
+    src/render_core/document_style.cpp
+    src/render_core/dom.cpp
+    src/render_core/dom_owner.cpp
+    src/render_core/embedded_framebuffer.cpp
+    src/render_core/event.cpp
+    src/render_core/form_control.cpp
+    src/render_core/frame_loop.cpp
+    src/render_core/frame_update.cpp
+    src/render_core/hit_test.cpp
+    src/render_core/html_parser.cpp
+    src/render_core/html_tokenizer.cpp
+    src/render_core/html_tree_builder.cpp
+    src/render_core/input.cpp
+    src/render_core/layer_tree.cpp
+    src/render_core/layout.cpp
+    src/render_core/pipeline_statistics.cpp
+    src/render_core/render_tree.cpp
+    src/render_core/software_renderer.cpp
+    src/render_core/style.cpp
+    src/render_core/text_adapter.cpp
+    src/render_core/text_backend.cpp
+    src/render_core/text_normalization.cpp
 )
 
-target_include_directories(jellyframe_core
+target_include_directories(jellyframe_render_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_compile_features(jellyframe_core PUBLIC cxx_std_17)
+target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
 
 if(MSVC)
-    target_compile_options(jellyframe_core PRIVATE /W4)
+    target_compile_options(jellyframe_render_core PRIVATE /W4)
 else()
-    target_compile_options(jellyframe_core PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(jellyframe_render_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_library(jellyframe_app_runtime
+    src/app_runtime/host_services.cpp
+)
+
+target_link_libraries(jellyframe_app_runtime PUBLIC jellyframe_render_core)
+target_include_directories(jellyframe_app_runtime
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_compile_features(jellyframe_app_runtime PUBLIC cxx_std_17)
+
+if(MSVC)
+    target_compile_options(jellyframe_app_runtime PRIVATE /W4)
+else()
+    target_compile_options(jellyframe_app_runtime PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 if(JELLYFRAME_BUILD_SCRIPTING)
@@ -78,7 +95,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
     add_library(jellyframe_script
         src/script/jerryscript_runtime.cpp
     )
-    target_link_libraries(jellyframe_script PUBLIC jellyframe_core ${JERRYSCRIPT_LIBRARIES})
+    target_link_libraries(jellyframe_script PUBLIC jellyframe_render_core ${JERRYSCRIPT_LIBRARIES})
     target_include_directories(jellyframe_script
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -96,7 +113,7 @@ endif()
 
 function(add_jellyframe_tool target)
     add_executable(${target} ${ARGN})
-    target_link_libraries(${target} PRIVATE jellyframe_core)
+    target_link_libraries(${target} PRIVATE jellyframe_render_core)
 endfunction()
 
 if(JELLYFRAME_BUILD_EXAMPLES)
@@ -124,53 +141,82 @@ if(JELLYFRAME_BUILD_EXAMPLES)
 endif()
 
 if(JELLYFRAME_BUILD_BENCHMARKS)
-    add_jellyframe_tool(jellyframe_microbench benchmarks/microbench.cpp)
+    add_jellyframe_tool(jellyframe_render_core_microbench src/render_core/benchmarks/microbench.cpp)
+    add_executable(jellyframe_app_runtime_microbench src/app_runtime/benchmarks/app_runtime_bench.cpp)
+    target_link_libraries(jellyframe_app_runtime_microbench PRIVATE jellyframe_app_runtime)
     add_jellyframe_tool(jellyframe_virtual_bench ports/virtual_board/virtual_bench.cpp)
 endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
-    set(JELLYFRAME_CORE_TEST_SOURCES
-        tests/tokenizer_tests.cpp
-        tests/arena_tests.cpp
-        tests/budget_stress_tests.cpp
-        tests/dom_mutation_tests.cpp
-        tests/dom_owner_tests.cpp
-        tests/document_script_tests.cpp
-        tests/display_invalidation_tests.cpp
-        tests/dirty_region_tests.cpp
-        tests/embedded_framebuffer_tests.cpp
-        tests/css_parser_tests.cpp
-        tests/event_tests.cpp
-        tests/frame_loop_tests.cpp
-        tests/frame_update_tests.cpp
-        tests/hit_test_tests.cpp
-        tests/host_tests.cpp
-        tests/input_tests.cpp
-        tests/layout_tests.cpp
-        tests/pipeline_statistics_tests.cpp
-        tests/render_tree_tests.cpp
-        tests/layer_tree_tests.cpp
-        tests/software_renderer_tests.cpp
-        tests/text_adapter_tests.cpp
+    set(JELLYFRAME_RENDER_CORE_TEST_SOURCES
+        src/render_core/tests/tokenizer_tests.cpp
+        src/render_core/tests/arena_tests.cpp
+        src/render_core/tests/budget_stress_tests.cpp
+        src/render_core/tests/dom_mutation_tests.cpp
+        src/render_core/tests/dom_owner_tests.cpp
+        src/render_core/tests/document_script_tests.cpp
+        src/render_core/tests/display_invalidation_tests.cpp
+        src/render_core/tests/dirty_region_tests.cpp
+        src/render_core/tests/embedded_framebuffer_tests.cpp
+        src/render_core/tests/css_parser_tests.cpp
+        src/render_core/tests/event_tests.cpp
+        src/render_core/tests/frame_loop_tests.cpp
+        src/render_core/tests/frame_update_tests.cpp
+        src/render_core/tests/hit_test_tests.cpp
+        src/render_core/tests/host_tests.cpp
+        src/render_core/tests/input_tests.cpp
+        src/render_core/tests/layout_tests.cpp
+        src/render_core/tests/pipeline_statistics_tests.cpp
+        src/render_core/tests/render_tree_tests.cpp
+        src/render_core/tests/layer_tree_tests.cpp
+        src/render_core/tests/software_renderer_tests.cpp
+        src/render_core/tests/text_adapter_tests.cpp
     )
-    if(JELLYFRAME_BUILD_SCRIPTING)
-        list(APPEND JELLYFRAME_CORE_TEST_SOURCES tests/script_runtime_tests.cpp)
-    endif()
 
-    foreach(test_source IN LISTS JELLYFRAME_CORE_TEST_SOURCES)
+    foreach(test_source IN LISTS JELLYFRAME_RENDER_CORE_TEST_SOURCES)
         get_filename_component(test_name ${test_source} NAME_WE)
         set_source_files_properties(${test_source}
             PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
     endforeach()
 
-    add_jellyframe_tool(jellyframe_core_tests
-        tests/core_tests.cpp
-        ${JELLYFRAME_CORE_TEST_SOURCES}
+    add_jellyframe_tool(jellyframe_render_core_tests
+        src/render_core/tests/render_core_tests.cpp
+        ${JELLYFRAME_RENDER_CORE_TEST_SOURCES}
     )
-    if(JELLYFRAME_BUILD_SCRIPTING)
-        target_link_libraries(jellyframe_core_tests PRIVATE jellyframe_script)
-    endif()
+    add_test(NAME jellyframe_render_core_tests COMMAND jellyframe_render_core_tests)
 
-    add_test(NAME jellyframe_core_tests COMMAND jellyframe_core_tests)
+    set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
+        src/app_runtime/tests/host_services_tests.cpp
+    )
+    foreach(test_source IN LISTS JELLYFRAME_APP_RUNTIME_TEST_SOURCES)
+        get_filename_component(test_name ${test_source} NAME_WE)
+        set_source_files_properties(${test_source}
+            PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
+    endforeach()
+
+    add_executable(jellyframe_app_runtime_tests
+        src/app_runtime/tests/app_runtime_tests.cpp
+        ${JELLYFRAME_APP_RUNTIME_TEST_SOURCES}
+    )
+    target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_app_runtime)
+    add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
+
+    if(JELLYFRAME_BUILD_SCRIPTING)
+        set(JELLYFRAME_SCRIPT_TEST_SOURCES
+            src/script/tests/script_runtime_tests.cpp
+        )
+        foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TEST_SOURCES)
+            get_filename_component(test_name ${test_source} NAME_WE)
+            set_source_files_properties(${test_source}
+                PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
+        endforeach()
+
+        add_executable(jellyframe_script_tests
+            src/script/tests/script_tests.cpp
+            ${JELLYFRAME_SCRIPT_TEST_SOURCES}
+        )
+        target_link_libraries(jellyframe_script_tests PRIVATE jellyframe_script)
+        add_test(NAME jellyframe_script_tests COMMAND jellyframe_script_tests)
+    endif()
 endif()

@@ -1,20 +1,11 @@
 # Tests
 
-Regression tests for the platform-neutral engine.
+Root-level tests are reserved for future cross-subproject and app-lifecycle
+acceptance tests.
 
-The directory contains many source files, but CMake builds them into a single
-`jellyframe_core_tests` executable. The split is intentional: each file follows a
-module boundary so failures are easy to locate without creating many test
-binaries.
+Current subproject tests live next to their owners:
 
-Keep tests that protect:
-
-- Parser recovery and bounded parsing.
-- DOM mutation and script-facing APIs.
-- Style, render, layout and layer tree behavior.
-- Dirty-region and frame-update reuse.
-- Input, events, hit testing and form controls.
-- Text backends and embedded framebuffer behavior.
-
-Small files can be merged when they share the same ownership boundary, but do
-not remove coverage simply to reduce file count.
+- `../src/render_core/tests`: render pipeline, DOM, CSS, layout, layer,
+  framebuffer, input and diagnostics tests.
+- `../src/app_runtime/tests`: app-runtime host-service queue and handle tests.
+- `../src/script/tests`: optional JerryScript bridge tests.

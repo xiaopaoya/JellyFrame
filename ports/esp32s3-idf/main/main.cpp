@@ -1,22 +1,22 @@
-#include "jellyframe_esp32s3_font.h"
+﻿#include "jellyframe_esp32s3_font.h"
 #include "jellyframe_esp32s3_hal.h"
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
 
-#include "core/bitmap_font.h"
-#include "core/budget.h"
-#include "core/css_parser.h"
-#include "core/document_script.h"
-#include "core/document_style.h"
-#include "core/embedded_framebuffer.h"
-#include "core/form_control.h"
-#include "core/host.h"
-#include "core/html_parser.h"
-#include "core/input.h"
-#include "core/layer_tree.h"
-#include "core/layout.h"
-#include "core/render_tree.h"
-#include "core/software_renderer.h"
+#include "render_core/bitmap_font.h"
+#include "render_core/budget.h"
+#include "render_core/css_parser.h"
+#include "render_core/document_script.h"
+#include "render_core/document_style.h"
+#include "render_core/embedded_framebuffer.h"
+#include "render_core/form_control.h"
+#include "render_core/host.h"
+#include "render_core/html_parser.h"
+#include "render_core/input.h"
+#include "render_core/layer_tree.h"
+#include "render_core/layout.h"
+#include "render_core/render_tree.h"
+#include "render_core/software_renderer.h"
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -197,6 +197,28 @@ HostDeviceCapabilities make_device_capabilities(int width, int height, int cards
     capabilities.memory.max_single_allocation_bytes = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     capabilities.memory.preferred_framebuffer_bytes =
         static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * sizeof(std::uint16_t);
+    capabilities.async.runs_jobs_off_ui_thread = true;
+    capabilities.async.supports_cancel = true;
+    capabilities.async.max_in_flight_jobs = 2;
+    capabilities.async.max_completion_events_per_frame = 2;
+    capabilities.media.supports_image_decode = true;
+    capabilities.media.supports_audio_playback = true;
+    capabilities.media.supports_video_decode = true;
+    capabilities.media.supports_mjpeg = true;
+    capabilities.media.supports_mp3 = true;
+    capabilities.media.preferred_decoded_image_format = HostPixelFormat::Rgb565;
+    capabilities.media.preferred_video_frame_format = HostPixelFormat::Rgb565;
+    capabilities.media.max_image_width = width;
+    capabilities.media.max_image_height = height;
+    capabilities.media.max_video_width = std::min(width, 240);
+    capabilities.media.max_video_height = std::min(height, 240);
+    capabilities.media.max_video_fps = 15;
+    capabilities.media.max_decoded_image_bytes =
+        static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * sizeof(std::uint16_t);
+    capabilities.media.max_video_frame_bytes =
+        static_cast<std::size_t>(capabilities.media.max_video_width) *
+        static_cast<std::size_t>(capabilities.media.max_video_height) * sizeof(std::uint16_t);
+    capabilities.media.max_audio_streams = 1;
     capabilities.budgets = make_budgets(width, height, cards);
     return capabilities;
 }
@@ -230,13 +252,19 @@ void print_budgets(const HostBudgets& budgets) {
 
 void print_capabilities(const HostDeviceCapabilities& capabilities) {
     ESP_LOGI(tag,
-             "device display=%dx%d pixel_format=rgb565 partial=%d heap=%u largest=%u framebuffer_bytes=%u",
+             "device display=%dx%d pixel_format=rgb565 partial=%d heap=%u largest=%u framebuffer_bytes=%u async_jobs=%u completion_per_frame=%u media_mp3=%d media_mjpeg=%d media_h264=%d network_fetch=%d",
              capabilities.display.width,
              capabilities.display.height,
              capabilities.display.supports_partial_present ? 1 : 0,
              static_cast<unsigned>(capabilities.memory.total_heap_bytes),
              static_cast<unsigned>(capabilities.memory.max_single_allocation_bytes),
-             static_cast<unsigned>(capabilities.memory.preferred_framebuffer_bytes));
+             static_cast<unsigned>(capabilities.memory.preferred_framebuffer_bytes),
+             static_cast<unsigned>(capabilities.async.max_in_flight_jobs),
+             static_cast<unsigned>(capabilities.async.max_completion_events_per_frame),
+             capabilities.media.supports_mp3 ? 1 : 0,
+             capabilities.media.supports_mjpeg ? 1 : 0,
+             capabilities.media.supports_h264 ? 1 : 0,
+             capabilities.network.supports_fetch ? 1 : 0);
 }
 
 bool run_p2_resource_smoke(const HostBudgets& budgets) {

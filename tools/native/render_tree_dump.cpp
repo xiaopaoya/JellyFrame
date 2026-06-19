@@ -1,7 +1,7 @@
-#include "core/css_parser.h"
-#include "core/document_style.h"
-#include "core/html_parser.h"
-#include "core/render_tree.h"
+﻿#include "render_core/css_parser.h"
+#include "render_core/document_style.h"
+#include "render_core/html_parser.h"
+#include "render_core/render_tree.h"
 
 #include "example_css_io.h"
 

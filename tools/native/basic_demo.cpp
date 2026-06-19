@@ -1,8 +1,8 @@
-#include "core/css_parser.h"
-#include "core/html_parser.h"
-#include "core/layer_tree.h"
-#include "core/layout.h"
-#include "core/style.h"
+﻿#include "render_core/css_parser.h"
+#include "render_core/html_parser.h"
+#include "render_core/layer_tree.h"
+#include "render_core/layout.h"
+#include "render_core/style.h"
 
 #include <iostream>
 

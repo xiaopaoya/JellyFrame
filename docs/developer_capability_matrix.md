@@ -48,7 +48,7 @@ JellyFrame is not ready for:
 | Win32 browser shell | Shell-only | Opens a desktop window, uses GDI text measurement/painting, forwards mouse/wheel/keyboard input, supports capture output and optional scripting builds. |
 | Embedded backend | Deferred | The final display/input backend should be provided by the target platform. |
 | Linked CSS loading | Shell-only | Example tools can load local `<link rel="stylesheet">`; core exposes callback-style helpers only. |
-| Network loading | Deferred | No HTTP, fetch, XHR, WebSocket or remote asset loading. |
+| Network loading | Deferred/host-optional | Core has no HTTP, XHR, WebSocket or remote resource loading. Future hosts may expose bounded `network.fetch` runtime data APIs according to manifest/profile policy, but remote HTML/CSS/script/image resources still cannot enter the page loader. |
 | Storage | Deferred | No cookies, localStorage, IndexedDB or filesystem API in core. |
 
 ## HTML Parsing
@@ -296,7 +296,9 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Linear gradient | Subset | Simple vertical command support. |
 | Text | Subset | Core fallback is tiny ASCII bitmap painting with UTF-8 placeholder glyphs. Win32 shell injects GDI for UTF-8/Chinese validation. |
 | Chinese text | Shell-dependent | Use Win32 shell or future platform text backend. Pseudo-browser fallback will show placeholder glyphs. |
-| Images | Deferred | No image decode. `img`/media nodes get usable boxes/fallback only. |
+| Images | Deferred/host-optional | Core does not decode images yet. `img`/media nodes get usable boxes/fallback only. A target may declare an optional host image decode service; decoded output must still obey size, byte and concurrency budgets. |
+| Audio playback | Deferred/host-optional | Core does not own PCM/I2S/codecs. ESP32-S3 MP3 experiments justify an optional host-owned MP3 playback pipeline; JS/core should receive handles and state events only. |
+| Lightweight video/MJPEG | Experimental/host-optional | Planned only as a low-resolution frame provider. `<video>` is not promised. H.264 is not in the default ESP32-S3 profile. |
 | Canvas/SVG | Deferred | No canvas API or SVG renderer. |
 | Real shadow blur | Deferred | `box-shadow` blur is approximated. |
 | Filters/blend modes | Deferred | Only normal source-over. |

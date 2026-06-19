@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -31,9 +31,35 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   diagnostics.
 - Added README app-gallery screenshots rendered by the JellyFrame pseudo
   browser from the starter app templates.
+- Added Host/HAL capability-profile fields for async, media, network and app
+  bundles, preparing optional image/audio/lightweight-video services, runtime
+  network data requests and installable bundles.
+- Added an optional host-services contract that defines the V0 shape for generic
+  jobs/completions, image surfaces, audio handles, lightweight video, fetch
+  responses and installable-bundle registries.
+- Added a `host_services` core helper module with bounded request/completion
+  queues and a generation-checked host handle table for future installable apps,
+  images, audio and network services.
+- Added `.jfapp` V0 installable-bundle output. `tools/package_app.py` and
+  `jellyframe_cli.py package` can now emit little-endian, uncompressed,
+  fixed-index binary resource bundles and report bundle CRC/SHA-256 plus section
+  sizes.
+- The pseudo browser and Win32 browser shell can now load installable bundles
+  directly with `--app path.jfapp`, making it possible to compare bundle output
+  against source-package directories.
+- Added a desktop installed-app registry mock. `jellyframe_cli.py registry
+  install/list/path/remove` validates `.jfapp` bundles, installs through staging,
+  atomically commits the registry and prepares the system-shell app-manager path.
+- Added ESP32-S3 N16R8 benchmark defaults and a 16 MB partition table, and
+  recorded the 2026-06-19 real-chip baseline: 16 MB flash, 8 MB octal PSRAM and
+  a passing 300x300 / 40 cards / 20 iterations full pipeline.
 
 ### Changed
 
+- Updated HAL, host abstraction, run-loop, app-packaging and roadmap docs after
+  reviewing ESP32-S3 decode experiments: MP3 and small MJPEG/image decode may
+  be optional host services, H.264 is not in the default ESP32-S3 profile, and
+  networking remains runtime data fetch only, not remote page-resource loading.
 - Pseudo browser, pipeline dump, embedded host demo and virtual-board benchmark
   now report memory/budget-oriented pipeline statistics through the same helper.
 - Render, layout and layer tree counting now use explicit work stacks instead
@@ -109,7 +135,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Renamed the project to `JellyFrame`; `WearWeb` is now documented only as the
   early codename.
 - Added platform-neutral `TextMeasureProvider` so layout can use host text
-  metrics while keeping font APIs outside `jellyframe_core`.
+  metrics while keeping font APIs outside `jellyframe_render_core`.
 - Added minimal text paint semantics to display commands: horizontal alignment
   and single-line versus wrapped text.
 - Added Win32/GDI text measurement injection alongside the existing GDI text
@@ -140,7 +166,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   framebuffer presentation without Win32, files or hardware I/O.
 - Added first host device capability structs for board ports, covering display,
   input, memory, budgets and optional host services.
-- Added `core/budget.h` helpers that map `HostBudgets` into HTML/CSS parser,
+- Added `render_core/budget.h` helpers that map `HostBudgets` into HTML/CSS parser,
   render/layout/layer/display-list, dirty-rectangle and JerryScript
   timer/listener limits.
 - Replaced per-node DOM attribute `std::unordered_map` storage with a compact
@@ -191,23 +217,23 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   lifecycle, binding ownership, milestones, risks and the first interactive demo
   target.
 - Added optional `jellyframe_script` JerryScript runtime shell, gated behind
-  `JELLYFRAME_BUILD_SCRIPTING=OFF` by default so `jellyframe_core` remains independent
+  `JELLYFRAME_BUILD_SCRIPTING=OFF` by default so `jellyframe_render_core` remains independent
   from JerryScript headers and libraries.
 - Added initial `jellyframe_pseudo_browser --script` support for scripting builds:
   it evaluates one external JavaScript file and reports the result or exception.
-- Added `samples/scripts/classic/runtime_probe.*` as the first scripting
+- Added `src/script/samples/classic/runtime_probe.*` as the first scripting
   acceptance page.
 - Added M3 minimal DOM bindings for JerryScript: `window`, `document`,
   `getElementById`, `createElement`, `createTextNode`, `appendChild`,
   `removeChild`, `setAttribute`, `getAttribute` and `textContent`.
-- Added `samples/scripts/classic/dom_mutation_probe.*` to validate script-driven
+- Added `src/script/samples/classic/dom_mutation_probe.*` to validate script-driven
   DOM mutation through the pseudo browser.
 - Added M4 JavaScript event bindings for `addEventListener`,
   `removeEventListener`, event objects, default prevention and propagation
   control.
 - Added scripting support to the Win32 browser shell so desktop native input can
   dispatch into JavaScript listeners and rerender dirty DOM mutations.
-- Added `samples/scripts/classic/event_probe.*` for interactive event bridge
+- Added `src/script/samples/classic/event_probe.*` for interactive event bridge
   validation.
 - Added M5 JavaScript form-control properties for app UI: `value`, `checked`,
   `selectedIndex` and `select.value`.
@@ -221,7 +247,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   tests without an interactive window.
 - Added bilingual memory management review documents covering current ownership,
   embedded risks and allocator/container priorities.
-- Added a single aggregate `jellyframe_core_tests` executable for platform-neutral
+- Added a single aggregate `jellyframe_render_core_tests` executable for platform-neutral
   regression coverage, replacing the many standalone test executables in normal
   builds.
 - Added `JERRYSCRIPT_ROOT` CMake support for local official JerryScript source
@@ -239,9 +265,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added M7 classic document script loading: scripting builds collect and execute
   inline `<script>` and local external `<script src>` through shell callbacks.
 - Added `document_script` helpers for platform-neutral script collection.
-- Added a first host abstraction draft and `src/core/host.h` with resource,
+- Added a first host abstraction draft and `src/render_core/host.h` with resource,
   clock, frame sink and budget structs.
-- Added `samples/scripts/classic/inline_loading_probe.*` for automatic document
+- Added `src/script/samples/classic/inline_loading_probe.*` for automatic document
   script loading validation.
 - Added `font-weight` parsing/inheritance and display-list propagation, with
   approximate bold rendering in the core fallback and native weight selection
@@ -497,7 +523,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Notes
 
-- `jellyframe_core` remains platform-neutral. Windows libraries are linked only by
+- `jellyframe_render_core` remains platform-neutral. Windows libraries are linked only by
   Windows-specific example tools.
 - The core text fallback is intentionally tiny and portable; the Win32 browser
   uses native GDI text for readable UTF-8/Chinese validation.
@@ -506,7 +532,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
-- Created the initial C++17 CMake project and `jellyframe_core` library.
+- Created the initial C++17 CMake project and `jellyframe_render_core` library.
 - Added tolerant HTML tokenizer/parser support with start/end tags, attributes,
   doctype, comments, text, raw-text and character references.
 - Added resilient DOM construction with synthesized `html/body`, common implied

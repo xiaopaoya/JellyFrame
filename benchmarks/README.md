@@ -1,7 +1,14 @@
 # Benchmarks
 
-This directory contains desktop microbenchmarks for the platform-neutral engine
-core. They are not product code and are not required by embedded ports.
+Root-level benchmarks are reserved for future cross-subproject and app-lifecycle
+benchmarks.
+
+Current microbenchmarks live next to their owning subprojects:
+
+- `../src/render_core/benchmarks`: parser/style/render/layout/layer pipeline
+  microbenchmarks.
+- `../src/app_runtime/benchmarks`: request/completion queue and host-handle
+  microbenchmarks.
 
 Build them with:
 
@@ -10,5 +17,5 @@ cmake -S . -B build -DJELLYFRAME_BUILD_BENCHMARKS=ON
 cmake --build build --config Release
 ```
 
-Current benchmarks focus on parser, style, render/layout/layer and framebuffer
-paths that are sensitive on small devices.
+The generated executables are `jellyframe_render_core_microbench` and
+`jellyframe_app_runtime_microbench`.

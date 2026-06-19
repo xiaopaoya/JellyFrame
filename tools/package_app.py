@@ -4,9 +4,17 @@ import hashlib
 import json
 import shutil
 import re
+import struct
 import zlib
 from pathlib import Path, PurePosixPath
 
+
+JFAPP_MAGIC = b"JFAPPV0\0"
+JFAPP_HEADER_FORMAT = "<8sHHIIIIIIIIIII"
+JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
+JFAPP_ENTRY_FORMAT = "<IIHHIIII"
+JFAPP_ENTRY_SIZE = struct.calcsize(JFAPP_ENTRY_FORMAT)
+JFAPP_ALIGNMENT = 4
 
 KIND_BY_SUFFIX = {
     ".css": "jellyframe::HostResourceKind::Stylesheet",
@@ -23,6 +31,14 @@ KIND_BY_SUFFIX = {
     ".otf": "jellyframe::HostResourceKind::Font",
     ".woff": "jellyframe::HostResourceKind::Font",
     ".woff2": "jellyframe::HostResourceKind::Font",
+}
+
+BUNDLE_KIND_BY_RESOURCE_KIND = {
+    "jellyframe::HostResourceKind::Other": 0,
+    "jellyframe::HostResourceKind::Stylesheet": 1,
+    "jellyframe::HostResourceKind::ClassicScript": 2,
+    "jellyframe::HostResourceKind::Image": 3,
+    "jellyframe::HostResourceKind::Font": 4,
 }
 
 
@@ -85,6 +101,22 @@ def emit_byte_array(name: str, data: bytes) -> str:
 
 def resource_kind_name(kind: str) -> str:
     return kind.split("::")[-1]
+
+
+def fnv1a_32(value: str) -> int:
+    result = 0x811c9dc5
+    for byte in value.encode("utf-8"):
+        result ^= byte
+        result = (result * 0x01000193) & 0xffffffff
+    return result
+
+
+def align_up(value: int, alignment: int = JFAPP_ALIGNMENT) -> int:
+    return (value + alignment - 1) // alignment * alignment
+
+
+def append_padding(data: bytearray, alignment: int = JFAPP_ALIGNMENT) -> None:
+    data.extend(b"\0" * (align_up(len(data), alignment) - len(data)))
 
 
 def read_manifest(root: Path) -> dict:
@@ -163,6 +195,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "runtime",
         "viewport",
         "budgets",
+        "fonts",
         "permissions",
         "capabilities",
         "targets",
@@ -454,10 +487,130 @@ def write_debug_dir(root: Path, output_dir: Path, manifest: dict, resources: lis
         encoding="utf-8")
 
 
+def bundle_summary_bytes(manifest: dict) -> bytes:
+    return (json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def write_jfapp_bundle(output: Path, manifest: dict, resources: list[dict]) -> dict:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    summary = bundle_summary_bytes(manifest)
+    strings = bytearray()
+    payload = bytearray()
+    entries = []
+    for resource in sorted(resources, key=lambda item: item["path"]):
+        path_bytes = resource["path"].encode("utf-8")
+        path_offset = len(strings)
+        strings.extend(path_bytes)
+        payload_offset = len(payload)
+        data = resource["file"].read_bytes()
+        payload.extend(data)
+        append_padding(payload)
+        entries.append({
+            "path": resource["path"],
+            "pathHash": fnv1a_32(resource["path"]),
+            "pathOffset": path_offset,
+            "pathSize": len(path_bytes),
+            "kind": BUNDLE_KIND_BY_RESOURCE_KIND.get(resource["kind"], 0),
+            "payloadOffset": payload_offset,
+            "payloadSize": len(data),
+            "crc32": zlib.crc32(data) & 0xffffffff,
+            "flags": 0,
+        })
+
+    index = bytearray()
+    for entry in entries:
+        index.extend(struct.pack(
+            JFAPP_ENTRY_FORMAT,
+            entry["pathHash"],
+            entry["pathOffset"],
+            entry["pathSize"],
+            entry["kind"],
+            entry["payloadOffset"],
+            entry["payloadSize"],
+            entry["crc32"],
+            entry["flags"],
+        ))
+
+    summary_offset = JFAPP_HEADER_SIZE
+    summary_size = len(summary)
+    index_offset = align_up(summary_offset + summary_size)
+    strings_offset = align_up(index_offset + len(index))
+    payload_offset = align_up(strings_offset + len(strings))
+    payload_size = len(payload)
+
+    bundle = bytearray()
+    bundle.extend(b"\0" * JFAPP_HEADER_SIZE)
+    bundle.extend(summary)
+    append_padding(bundle)
+    if len(bundle) != index_offset:
+        fail("internal jfapp index alignment mismatch")
+    bundle.extend(index)
+    append_padding(bundle)
+    if len(bundle) != strings_offset:
+        fail("internal jfapp string alignment mismatch")
+    bundle.extend(strings)
+    append_padding(bundle)
+    if len(bundle) != payload_offset:
+        fail("internal jfapp payload alignment mismatch")
+    bundle.extend(payload)
+
+    header_without_crc = struct.pack(
+        JFAPP_HEADER_FORMAT,
+        JFAPP_MAGIC,
+        JFAPP_HEADER_SIZE,
+        0,
+        0,
+        summary_offset,
+        summary_size,
+        index_offset,
+        len(entries),
+        strings_offset,
+        len(strings),
+        payload_offset,
+        payload_size,
+        0,
+        0,
+    )
+    bundle[:JFAPP_HEADER_SIZE] = header_without_crc
+    bundle_crc32 = zlib.crc32(bundle) & 0xffffffff
+    bundle[:JFAPP_HEADER_SIZE] = struct.pack(
+        JFAPP_HEADER_FORMAT,
+        JFAPP_MAGIC,
+        JFAPP_HEADER_SIZE,
+        0,
+        0,
+        summary_offset,
+        summary_size,
+        index_offset,
+        len(entries),
+        strings_offset,
+        len(strings),
+        payload_offset,
+        payload_size,
+        bundle_crc32,
+        0,
+    )
+    output.write_bytes(bundle)
+    return {
+        "format": "jfapp",
+        "formatVersion": 0,
+        "path": str(output),
+        "size": len(bundle),
+        "crc32": f"{bundle_crc32:08x}",
+        "sha256": hashlib.sha256(bundle).hexdigest(),
+        "summaryBytes": summary_size,
+        "resourceIndexBytes": len(index),
+        "stringTableBytes": len(strings),
+        "payloadBytes": payload_size,
+        "resourceCount": len(entries),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate and package a JellyFrame app directory.")
     parser.add_argument("--root", required=True, help="App package source directory.")
     parser.add_argument("--output-cpp", help="Generated C++ resource table.")
+    parser.add_argument("--output-bundle", help="Generated installable .jfapp bundle.")
     parser.add_argument("--report", required=True, help="Generated JSON report.")
     parser.add_argument("--namespace", default="jellyframe_esp32s3", help="C++ namespace for generated resources.")
     parser.add_argument("--include", default="jellyframe_esp32s3_resources.h", help="C++ include used by generated table.")
@@ -478,9 +631,14 @@ def main() -> int:
     warnings.extend(reference_warnings)
 
     if not args.validate_only:
-        if not args.output_cpp:
-            fail("--output-cpp is required unless --validate-only is used")
-        write_cpp(resources, Path(args.output_cpp).resolve(), args.namespace, args.include)
+        if not args.output_cpp and not args.output_bundle and not args.debug_dir:
+            fail("at least one output is required unless --validate-only is used")
+        if args.output_cpp:
+            write_cpp(resources, Path(args.output_cpp).resolve(), args.namespace, args.include)
+    bundle_report = None
+    if not args.validate_only and args.output_bundle:
+        bundle_report = write_jfapp_bundle(Path(args.output_bundle).resolve(), manifest, resources)
+
     report = {
         "format": "jellyframe.package.report",
         "app": manifest,
@@ -501,6 +659,8 @@ def main() -> int:
         "references": references,
         "warnings": warnings,
     }
+    if bundle_report is not None:
+        report["bundle"] = bundle_report
     report_path = Path(args.report).resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

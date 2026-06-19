@@ -1,4 +1,4 @@
-# 嵌入式优化说明
+﻿# 嵌入式优化说明
 
 
 目前尚未明确目标 CPU、内存布局、显示控制器和指令集，所以当前优化集中在小型可穿戴设备通用的重要约束上。
@@ -67,7 +67,7 @@
 命令：
 
 ```powershell
-.\build\Release\jellyframe_microbench.exe 80 1000
+.\build\Release\jellyframe_render_core_microbench.exe 80 1000
 ```
 
 加入响应式 grid/aspect-ratio layout 子集后，本 Windows 构建机结果：

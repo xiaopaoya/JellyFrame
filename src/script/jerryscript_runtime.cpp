@@ -1,7 +1,7 @@
-#include "script/jerryscript_runtime.h"
+﻿#include "script/jerryscript_runtime.h"
 
-#include "core/form_control.h"
-#include "core/style.h"
+#include "render_core/form_control.h"
+#include "render_core/style.h"
 
 #include <jerryscript.h>
 

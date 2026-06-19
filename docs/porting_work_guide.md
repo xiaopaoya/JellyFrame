@@ -1,4 +1,4 @@
-# JellyFrame Porting Work Guide
+﻿# JellyFrame Porting Work Guide
 
 
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
@@ -17,17 +17,17 @@ network resource stack.
 
 These interfaces exist now and can be used as porting entry points:
 
-- `src/core/host.h`: device capabilities, resource requests, clocks, frame
+- `src/render_core/host.h`: device capabilities, resource requests, clocks, frame
   sinks and budgets.
-- `src/core/budget.h`: maps `HostBudgets` into parser, render/layout/layer,
+- `src/render_core/budget.h`: maps `HostBudgets` into parser, render/layout/layer,
   dirty-rectangle and scripting limits.
-- `src/core/embedded_framebuffer.h`: converts the core RGBA framebuffer into a
+- `src/render_core/embedded_framebuffer.h`: converts the core RGBA framebuffer into a
   host-owned RGB565, grayscale, monochrome or similar target buffer.
-- `src/core/input.h`: touch, pointer, wheel, key, text input, focus navigation
+- `src/render_core/input.h`: touch, pointer, wheel, key, text input, focus navigation
   and activation.
-- `src/core/text_backend.h` and `src/core/bitmap_font.h`: host text measurement
+- `src/render_core/text_backend.h` and `src/render_core/bitmap_font.h`: host text measurement
   and bitmap font painting.
-- `src/core/document_style.h` and `src/core/document_script.h`: host callbacks
+- `src/render_core/document_style.h` and `src/render_core/document_script.h`: host callbacks
   for linked CSS and classic scripts.
 - `src/script/jerryscript_runtime.h`: optional JerryScript runtime and DOM,
   event, form and timer bridges.
@@ -44,7 +44,7 @@ hardware-porting tasks:
 
 - Changing the HTML/CSS/DOM/layout/render core algorithms.
 - Adding font-file loading, filesystems, networking or display drivers inside
-  `jellyframe_core`.
+  `jellyframe_render_core`.
 - Reimplementing `jellyframe_font_resource_check`, `jellyframe_font_pack_gen`,
   `embedded_framebuffer` or the bitmap font callbacks.
 - Implementing a no-full-framebuffer tiled renderer, complex text shaping,
@@ -65,15 +65,15 @@ Requirements:
 - Add or normalize `ports/esp32s3-idf/` as an independent ESP-IDF app.
 - Add or normalize `ports/virtual_board/` as a desktop performance estimator.
 - Do not overwrite the main root `CMakeLists.txt`.
-- Rename the ESP-IDF component to `jellyframe_core`.
+- Name the ESP-IDF render component `jellyframe_render_core`.
 - Use JellyFrame in log tags, Kconfig menus, READMEs and benchmark output.
 
 Implementation:
 
 - The ESP-IDF app directory should contain only port code, Kconfig, sdkconfig
   defaults and component CMake files.
-- The component CMake should reference mainline `src/core/*.cpp`; its source
-  list must match the current root `jellyframe_core` target.
+- The component CMake should reference mainline `src/render_core/*.cpp`; its
+  source list must match the current root `jellyframe_render_core` target.
 - Keep JerryScript out of the P0/P1 ESP32-S3 component until the non-scripted
   pipeline is stable.
 
@@ -92,7 +92,7 @@ Requirements:
 - Fill `HostDeviceCapabilities` in the port layer.
 - Set `HostBudgets` from real screen size, PSRAM, heap size and largest free
   block.
-- Derive parser/layout/layer/dirty/script options through `src/core/budget.h`.
+- Derive parser/layout/layer/dirty/script options through `src/render_core/budget.h`.
 - When resources or framebuffers exceed the budget, degrade or skip cleanly.
 
 Initial ESP32-S3 suggestion:
@@ -221,13 +221,13 @@ Provided by the core/tooling:
 
 - `TextMeasureProvider` and `TextPainter` callback interfaces.
 - Bitmap font data structures, measurement callback and painting callback in
-  `src/core/bitmap_font.h`.
+  `src/render_core/bitmap_font.h`.
 - `jellyframe_font_resource_check` for scanning non-ASCII characters from
   HTML/CSS/JS, checking font coverage, estimating bitmap-pack budgets and
   recommending a font profile.
 - `jellyframe_font_pack_gen` for generating a C++ `BitmapFont` header from a
   BDF font subset.
-- `HostTextAdapter` in `src/core/text_adapter.h` for wrapping LVGL/vendor
+- `HostTextAdapter` in `src/render_core/text_adapter.h` for wrapping LVGL/vendor
   measure and paint callbacks without adding platform headers to the core.
 
 Requirements:
@@ -404,7 +404,8 @@ Prerequisites:
 
 Requirements:
 
-- JerryScript is an optional component and does not enter `jellyframe_core`.
+- JerryScript is an optional component and does not enter
+  `jellyframe_render_core`.
 - Heap, timer and listener counts are constrained by `HostBudgets`.
 - Script execution never happens in ISR or display flush callbacks.
 - The supported script model is classic scripts only. Do not promise ES modules,

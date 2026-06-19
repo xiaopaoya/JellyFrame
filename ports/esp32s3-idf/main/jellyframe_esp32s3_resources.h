@@ -1,6 +1,6 @@
-#pragma once
+﻿#pragma once
 
-#include "core/host.h"
+#include "render_core/host.h"
 
 #include <cstddef>
 #include <cstdint>

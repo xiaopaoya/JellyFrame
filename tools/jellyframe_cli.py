@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import app_registry
+
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -136,7 +138,10 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
     if validate_only:
         command.append("--validate-only")
     else:
-        command.extend(["--output-cpp", str(args.output_cpp)])
+        if args.output_cpp:
+            command.extend(["--output-cpp", str(args.output_cpp)])
+        if getattr(args, "output_bundle", None):
+            command.extend(["--output-bundle", str(args.output_bundle)])
         if args.debug_dir:
             command.extend(["--debug-dir", str(args.debug_dir)])
     if args.namespace:
@@ -212,26 +217,31 @@ def enforce_diagnostics_policy(args: argparse.Namespace) -> int:
 def run_pipeline_check(args: argparse.Namespace) -> int:
     pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
     ensure_tool(pseudo_browser)
+    manifest_path = args.root / "jellyframe.app.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entry = str(manifest.get("entry", "/index.html"))
+    entry_path = args.root / Path(*entry.lstrip("/").split("/"))
     target = getattr(args, "target", None)
     target_config = effective_target_config(args.root, target) if target else {}
     viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
     width = int(viewport.get("width", 0) or 0)
     height = int(viewport.get("height", 0) or 0)
     with tempfile.TemporaryDirectory(prefix="jellyframe-pipeline-check-") as directory:
+        empty_css = Path(directory) / "empty.css"
+        empty_css.write_text("", encoding="utf-8")
         output = Path(directory) / "preflight.bmp"
         diagnostics_json = Path(directory) / "pipeline.diagnostics.json"
         command = [
             str(pseudo_browser),
-            "--app",
-            str(args.root),
+            str(entry_path),
+            str(empty_css),
             str(output),
-            "--diagnostics-json",
-            str(diagnostics_json),
         ]
         if width:
             command.append(str(width))
         if height:
             command.append(str(height))
+        command.extend(["--diagnostics-json", str(diagnostics_json)])
         result = run_command(command)
         if result == 0:
             remember_pipeline_report(args, diagnostics_json)
@@ -267,36 +277,30 @@ def cmd_package(args: argparse.Namespace) -> int:
 def cmd_preview(args: argparse.Namespace) -> int:
     if args.report is None:
         args.report = args.output.with_suffix(".report.json")
-    preflight_result = run_package_preflight(args, include_pipeline=False)
+    preflight_result = run_package_preflight(args, include_pipeline=True)
     if preflight_result != 0:
         return preflight_result
-    pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
-    ensure_tool(pseudo_browser)
+    win32_browser = tool_path(args.build_dir, "jellyframe_win32_browser")
+    ensure_tool(win32_browser)
     target_config = effective_target_config(args.root, args.target) if args.target else {}
     viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
     width = args.width or int(viewport.get("width", 0) or 0)
     height = args.height or int(viewport.get("height", 0) or 0)
-    with tempfile.TemporaryDirectory(prefix="jellyframe-preview-") as directory:
-        diagnostics_json = Path(directory) / "pipeline.diagnostics.json"
-        command = [
-            str(pseudo_browser),
-            "--app",
-            str(args.root),
-            str(args.output),
-            "--diagnostics-json",
-            str(diagnostics_json),
-        ]
-        if width:
-            command.append(str(width))
-        if height:
-            command.append(str(height))
-        if args.pump_timers:
-            command.extend(["--pump-timers", str(args.pump_timers)])
-        result = run_command(command)
-        if result == 0:
-            remember_pipeline_report(args, diagnostics_json)
-            return enforce_diagnostics_policy(args)
-        return result
+    command = [
+        str(win32_browser),
+        "--capture",
+        str(args.output),
+        "--app",
+        str(args.root),
+    ]
+    if width:
+        command.extend(["--viewport-width", str(width)])
+    if height:
+        command.extend(["--viewport-height", str(height)])
+    result = run_command(command)
+    if result == 0:
+        return enforce_diagnostics_policy(args)
+    return result
 
 
 def resource_files_from_report(root: Path, report_path: Path) -> list[str]:
@@ -344,7 +348,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     policy_result = enforce_diagnostics_policy(args)
     if policy_result != 0:
         return policy_result
-    print("package is valid; pipeline diagnostics ran through the pseudo browser.")
+    print("package is valid; pipeline diagnostics ran through the render-core pseudo browser.")
     print("Text-search compatibility scanning has been retired; pass font options for font resource checks.")
     return 0
 
@@ -461,6 +465,13 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_registry(args: argparse.Namespace) -> int:
+    registry_args = list(args.registry_args)
+    if registry_args and registry_args[0] == "--":
+        registry_args = registry_args[1:]
+    return app_registry.main(registry_args)
+
+
 def add_manifest_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
@@ -486,14 +497,15 @@ def main() -> int:
 
     package = subparsers.add_parser("package", help="Generate a resource table and report.")
     add_common_package_args(package)
-    package.add_argument("--output-cpp", required=True, type=Path, help="Generated C++ resource table.")
+    package.add_argument("--output-cpp", type=Path, help="Generated C++ resource table.")
+    package.add_argument("--output-bundle", type=Path, help="Generated installable .jfapp bundle.")
     package.add_argument("--debug-dir", type=Path, help="Optional copied debug package directory.")
     package.add_argument("--font-budget", help="Optional glyph size such as 16x16 for preflight font budget estimates.")
     package.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file for preflight checks.")
     package.add_argument("--emit-used-chars", type=Path, help="Optional output file for preflight used non-ASCII characters.")
     package.set_defaults(func=cmd_package)
 
-    preview = subparsers.add_parser("preview", help="Render an app package through the pseudo browser.")
+    preview = subparsers.add_parser("preview", help="Render an app package through the Win32 shell capture path.")
     preview.add_argument("--root", required=True, type=Path, help="App package source directory.")
     preview.add_argument("--output", required=True, type=Path, help="Output BMP/PPM path.")
     preview.add_argument("--report", type=Path, help="Output JSON report path. Defaults beside --output.")
@@ -501,7 +513,6 @@ def main() -> int:
     preview.add_argument("--target", help="Optional target preset id used for viewport defaults.")
     preview.add_argument("--width", type=int, default=0, help="Optional viewport width override.")
     preview.add_argument("--height", type=int, default=0, help="Optional viewport height override.")
-    preview.add_argument("--pump-timers", type=int, default=0, help="Optional timer pump duration in milliseconds.")
     preview.add_argument("--font-budget", help="Optional glyph size such as 16x16 for preflight font budget estimates.")
     preview.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file for preflight checks.")
     preview.add_argument("--emit-used-chars", type=Path, help="Optional output file for preflight used non-ASCII characters.")
@@ -548,6 +559,11 @@ def main() -> int:
     new.add_argument("--name", help="Manifest display name override.")
     new.add_argument("--target", help="Optional target preset applied to manifest viewport and targets.")
     new.set_defaults(func=cmd_new)
+
+    registry = subparsers.add_parser("registry", help="Manage a desktop installed-app registry mock.")
+    registry.add_argument("registry_args", nargs=argparse.REMAINDER,
+                          help="Arguments passed to tools/app_registry.py.")
+    registry.set_defaults(func=cmd_registry)
 
     args = parser.parse_args()
     return args.func(args)

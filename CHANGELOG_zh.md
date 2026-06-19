@@ -1,4 +1,4 @@
-# 变更记录
+﻿# 变更记录
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -25,9 +25,26 @@ JellyFrame Engine 的重要变更记录在这里。
   Python/VS Code 工具，并执行 package 管线 diagnostics smoke。
 - 添加 README 应用截图画廊，截图由 JellyFrame 伪浏览器从 starter app templates
   实际渲染生成。
+- 扩展 Host/HAL capability profile，新增 async、media、network 和 app bundle
+  能力描述，用于后续可选图片/音频/轻量视频、运行时网络数据请求和安装式 bundle。
+- 添加可选宿主服务接口契约文档，定义通用 job/completion、图片 surface、音频句柄、
+  轻量视频、fetch response 和安装式 bundle registry 的 V0 实现形状。
+- 添加 `host_services` 核心辅助模块，提供有界 request/completion 队列和带 generation
+  校验的 host handle table，为安装式 app、图片、音频和网络服务打地基。
+- 添加 `.jfapp` V0 安装式 bundle 输出：`tools/package_app.py` 和 `jellyframe_cli.py package`
+  可生成小端、未压缩、固定索引的二进制资源包，并在报告中记录 bundle CRC/SHA-256 和分段大小。
+- 伪浏览器和 Win32 browser 壳现在可以通过 `--app path.jfapp` 直接加载安装式 bundle，
+  用于验证 bundle 与源包目录渲染结果一致。
+- 添加桌面 installed-app registry mock：`jellyframe_cli.py registry install/list/path/remove`
+  可校验 `.jfapp`、通过 staging 安装 bundle、原子提交 registry，并为后续系统壳 app manager 打基础。
+- 添加 ESP32-S3 N16R8 benchmark 配置与 16MB 分区表，并记录 2026-06-19 实机基线：
+  16MB Flash、8MB octal PSRAM、300x300 / 40 cards / 20 iterations 完整 pipeline 通过。
 
 ### 变更
 
+- 根据 ESP32-S3 解码实验审计更新 HAL、宿主抽象、运行循环、app packaging 和路线图：
+  MP3 与小尺寸 MJPEG/图片 decode 可作为可选宿主服务，H.264 不进入默认 ESP32-S3 profile；
+  网络继续只作为运行时数据 API，不作为远程页面资源 loader。
 - Pseudo browser、pipeline dump、embedded host demo 和 virtual-board benchmark
   现在通过同一个 helper 输出面向内存/预算的管线统计。
 - Render、layout 和 layer tree 计数改为显式工作栈，替代递归 helper 遍历。
@@ -83,7 +100,7 @@ JellyFrame Engine 的重要变更记录在这里。
   和双语 `docs/README` 索引，用于区分技术契约与维护资料。
 - 项目正式更名为 `JellyFrame`；`WearWeb` 现在仅作为早期代号出现在文档中。
 - 添加平台无关的 `TextMeasureProvider`，让 layout 能使用宿主文本 metrics，同时继续把字体 API
-  留在 `jellyframe_core` 之外。
+  留在 `jellyframe_render_core` 之外。
 - 为 display command 添加最小文本绘制语义：水平对齐，以及单行/可换行文本。
 - 在已有 GDI 文本绘制之外，为 Win32 壳添加 GDI 文本测量注入，使 UTF-8/中文桌面验证更接近真实效果。
 - 添加双语文本后端文档，描述测量/绘制契约和 fallback 限制。
@@ -105,7 +122,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 `jellyframe_embedded_host_demo` 平台无关静态资源示例，串起 HTML/CSS 解析、bitmap
   文本、焦点激活和 RGB565 framebuffer 提交，且不依赖 Win32、文件或硬件 I/O。
 - 添加第一版宿主设备能力 structs，供开发板 port 描述显示、输入、内存、budgets 和可选宿主服务。
-- 添加 `core/budget.h` helpers，把 `HostBudgets` 映射到 HTML/CSS parser、render/layout/layer/
+- 添加 `render_core/budget.h` helpers，把 `HostBudgets` 映射到 HTML/CSS parser、render/layout/layer/
   display-list、dirty-rectangle 和 JerryScript timer/listener 限制。
 - 将 DOM attribute 存储从每节点 `std::unordered_map` 改为紧凑顺序 `AttributeList`，降低小型嵌入式 UI
   的 per-node heap 开销，同时保留现有 map-like 调用形态。
@@ -139,26 +156,26 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加双语 JerryScript 接入规划文档，覆盖 runtime 生命周期、binding 所有权、里程碑、风险和第一个交互式
   demo 目标。
 - 添加可选 `jellyframe_script` JerryScript runtime shell。该能力默认由
-  `JELLYFRAME_BUILD_SCRIPTING=OFF` 关闭，保证 `jellyframe_core` 不依赖 JerryScript 头文件或库。
+  `JELLYFRAME_BUILD_SCRIPTING=OFF` 关闭，保证 `jellyframe_render_core` 不依赖 JerryScript 头文件或库。
 - 为 scripting 构建添加初始 `jellyframe_pseudo_browser --script`：执行一个外部 JavaScript
   文件并报告结果或异常。
-- 添加 `samples/scripts/classic/runtime_probe.*`，作为第一个脚本 runtime 验收页面。
+- 添加 `src/script/samples/classic/runtime_probe.*`，作为第一个脚本 runtime 验收页面。
 - 添加 JerryScript M3 最小 DOM binding：`window`、`document`、`getElementById`、
   `createElement`、`createTextNode`、`appendChild`、`removeChild`、`setAttribute`、
   `getAttribute` 和 `textContent`。
-- 添加 `samples/scripts/classic/dom_mutation_probe.*`，用于通过伪浏览器验证脚本驱动的 DOM mutation。
+- 添加 `src/script/samples/classic/dom_mutation_probe.*`，用于通过伪浏览器验证脚本驱动的 DOM mutation。
 - 添加 M4 JavaScript 事件 binding：`addEventListener`、`removeEventListener`、event object、
   default prevention 和 propagation control。
 - 为 Win32 browser shell 添加 scripting 支持，使桌面 native input 可以派发到 JavaScript listener，
   并在 DOM mutation 后重绘。
-- 添加 `samples/scripts/classic/event_probe.*`，用于交互式事件桥验收。
+- 添加 `src/script/samples/classic/event_probe.*`，用于交互式事件桥验收。
 - 添加 M5 JavaScript 表单控件属性：`value`、`checked`、`selectedIndex` 和 `select.value`。
 - 在 `samples/apps/loose` 下添加天气、时钟、计时器和计算器应用式验收示例。
 - 添加中英文嵌入式应用子集文档，说明 M6 后能构建什么，以及哪些浏览器假设被刻意排除。
 - 添加 M6 宿主泵动 timer：`setTimeout`、`clearTimeout`、`setInterval` 和 `clearInterval`。
 - 添加 `jellyframe_pseudo_browser --pump-timers ms`，用于无交互窗口的 timer 脚本 smoke test。
 - 添加中英文内存管理审视文档，覆盖当前所有权、嵌入式风险和 allocator/container 优化优先级。
-- 添加单一聚合测试程序 `jellyframe_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
+- 添加单一聚合测试程序 `jellyframe_render_core_tests`，覆盖平台无关回归测试，替代普通构建中的多个独立测试
   executable。
 - 添加 `JERRYSCRIPT_ROOT` CMake 支持，便于使用 `third_party/jerryscript` 这样的官方 JerryScript
   本地源码树。
@@ -174,9 +191,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 M7 classic document script loading：scripting 构建会收集并执行 inline
   `<script>`，本地外部 `<script src>` 通过壳层 callback 加载。
 - 添加 `document_script` helper，用于平台无关的脚本收集。
-- 添加第一版宿主抽象草案和 `src/core/host.h`，覆盖 resource、clock、frame sink
+- 添加第一版宿主抽象草案和 `src/render_core/host.h`，覆盖 resource、clock、frame sink
   和 budget structs。
-- 添加 `samples/scripts/classic/inline_loading_probe.*`，用于验证自动 document script loading。
+- 添加 `src/script/samples/classic/inline_loading_probe.*`，用于验证自动 document script loading。
 - 添加 `font-weight` 解析、继承和 display-list 传递；核心 fallback 用近似加粗绘制，
   Win32/GDI 文本路径会选择原生字重。
 - 添加轻量列表标记支持：`list-style`/`list-style-type`、`ul`/`ol` 原生轻量 marker，
@@ -352,14 +369,14 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 说明
 
-- `jellyframe_core` 保持平台无关。Windows 库只由 Windows 专用例程链接。
+- `jellyframe_render_core` 保持平台无关。Windows 库只由 Windows 专用例程链接。
 - core 文本 fallback 刻意保持极小和可移植；Win32 browser 使用原生 GDI 文本进行 UTF-8/中文验证。
 
 ## 0.1.0-dev - 2026-06-13
 
 ### 新增
 
-- 创建初始 C++17/CMake 工程和 `jellyframe_core` 核心库。
+- 创建初始 C++17/CMake 工程和 `jellyframe_render_core` 核心库。
 - 添加容错 HTML tokenizer/parser，支持 start/end tag、attribute、doctype、comment、text、raw-text 和 character reference。
 - 添加韧性 DOM construction，支持合成 `html/body`、常见隐式闭合、void elements、不匹配 end tag 容错和 parser 资源上限。
 - 添加 `jellyframe_dom_dump`，用于输出 tokenizer 结果和 ASCII DOM 树。

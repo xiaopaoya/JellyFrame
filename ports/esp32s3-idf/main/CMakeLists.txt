@@ -36,5 +36,5 @@ idf_component_register(
         freertos
         heap
         log
-        jellyframe_core
+        jellyframe_render_core
 )

@@ -6,7 +6,7 @@ shape described in `docs/embedded_hal_api.md`.
 
 ## What Runs Now
 
-- Builds `src/core` as an ESP-IDF component named `jellyframe_core`.
+- Builds `src/render_core` as an ESP-IDF component named `jellyframe_render_core`.
 - Runs a synthetic HTML/CSS pipeline benchmark from `app_main`.
 - Loads static HTML/CSS/classic-script resources through a bounded host
   resource bundle before the benchmark.
@@ -72,6 +72,13 @@ Current layout:
 If the product needs OTA slots, prefer moving to a 16 MB flash module and using
 a two-app layout instead of shrinking the 4 MB app partition.
 
+For ESP32-S3 N16R8 boards with 16 MB flash and 8 MB octal PSRAM, this directory
+also provides `partitions_16mb_n16r8.csv` and
+`sdkconfig.n16r8_bench.defaults`. That profile keeps the 4 MB app partition,
+expands `assets` to 8 MB, leaves 1 MB for settings/storage and reserves 512 KB
+for coredumps. It is the current real-chip benchmark profile for the 300x300
+synthetic UI workload.
+
 Expected serial output shape:
 
 ```text
@@ -135,6 +142,53 @@ full_pipeline avg_us=178022.15
 
 The raw benchmark CSV files in this directory capture the latest QEMU smoke
 measurements used during bring-up.
+
+## N16R8 Real-Chip Baseline
+
+On 2026-06-19, a generic ESP32-S3 N16R8 development board passed the current
+P2/P3/P4/P5/P6 smoke path and the full 300x300 synthetic UI benchmark.
+
+Board and build profile:
+
+- ESP32-S3 QFN56 rev v0.2, 240 MHz.
+- 16 MB flash, 8 MB octal PSRAM at 40 MHz.
+- `300x300`, `40` synthetic cards, `20` iterations.
+- Generic memory panel path; no physical display bus was measured yet.
+- Build used `sdkconfig.n16r8_bench.defaults` and
+  `partitions_16mb_n16r8.csv`.
+
+Average timings:
+
+| Stage | Average |
+|---|---:|
+| `html_parse` | 10787.35 us |
+| `css_parse` | 2168.25 us |
+| `render_tree` | 189014.00 us |
+| `layout` | 11973.60 us |
+| `layer_tree` | 4225.80 us |
+| `flatten_layers` | 312.80 us |
+| `render_frame` | 72705.35 us |
+| `present_rgb565` | 47431.30 us |
+| `full_pipeline` | 279536.95 us |
+
+Heap watermarks from the same run:
+
+| Point | heap_free | heap_min | largest | internal_free | spiram_free |
+|---|---:|---:|---:|---:|---:|
+| before | 8736935 | 8728363 | 8257536 | 351215 | 8385720 |
+| after | 8313131 | 7382219 | 8257536 | 32975 | 8280156 |
+
+This confirms that 8 MB PSRAM is enough for the current 300x300 full pipeline
+benchmark and is a reasonable baseline for small watch-style UIs. The low
+post-benchmark `internal_free` value is the main caution for real display work:
+panel DMA buffers, SPI/I80/QSPI transaction descriptors, touch drivers and
+other internal-RAM-only allocations must be measured on the final board.
+
+Compared with the QEMU 8 MB run, the real N16R8 `full_pipeline` is about 1.66x
+slower. Parser/layout helper phases can be faster than QEMU, while
+`render_tree`, `render_frame` and future physical display `present` work are
+the stages to watch. Treat QEMU as a capacity and regression smoke test, not a
+real timing source.
 
 ## Resource Bundle Hook
 

@@ -1,22 +1,22 @@
-#ifndef NOMINMAX
+﻿#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
-#include "core/budget.h"
-#include "core/css_parser.h"
-#include "core/display_invalidation.h"
-#include "core/diagnostics.h"
-#include "core/dirty_region.h"
-#include "core/document_script.h"
-#include "core/document_style.h"
-#include "core/frame_update.h"
-#include "core/html_parser.h"
-#include "core/input.h"
-#include "core/layer_tree.h"
-#include "core/layout.h"
-#include "core/render_tree.h"
-#include "core/software_renderer.h"
-#include "core/style.h"
+#include "render_core/budget.h"
+#include "render_core/css_parser.h"
+#include "render_core/display_invalidation.h"
+#include "render_core/diagnostics.h"
+#include "render_core/dirty_region.h"
+#include "render_core/document_script.h"
+#include "render_core/document_style.h"
+#include "render_core/frame_update.h"
+#include "render_core/html_parser.h"
+#include "render_core/input.h"
+#include "render_core/layer_tree.h"
+#include "render_core/layout.h"
+#include "render_core/render_tree.h"
+#include "render_core/software_renderer.h"
+#include "render_core/style.h"
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
 #include "script/jerryscript_runtime.h"
@@ -53,8 +53,8 @@ constexpr int kIncrementalDirtyAreaLimitPercent = 70;
 struct BrowserOptions {
     bool capture = false;
     std::string output_path;
-    std::string html_path = "samples/pages/modern/app_shell.html";
-    std::string css_path = "samples/pages/modern/app_shell.css";
+    std::string html_path = "src/render_core/samples/pages/modern/app_shell.html";
+    std::string css_path = "src/render_core/samples/pages/modern/app_shell.css";
     std::string script_path;
     std::string app_path;
     int viewport_width = 390;
@@ -468,7 +468,7 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, 
     css_options.diagnostics = diagnostics;
     LoadedPage page;
     if (!options.app_path.empty()) {
-        const auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
+        auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
         page.package_mode = true;
         page.package_stats = {};
         page.package_context.root = package.root;
@@ -476,6 +476,9 @@ LoadedPage load_page(const BrowserOptions& options, const HostBudgets& budgets, 
         page.package_context.max_input_bytes = kMaxInputBytes;
         page.package_context.stats = &page.package_stats;
         page.package_context.diagnostics = diagnostics;
+        page.package_context.bundle_bytes = std::move(package.bundle_bytes);
+        page.package_context.bundle_entries = std::move(package.bundle_entries);
+        page.package_context.bundle_payload_offset = package.bundle_payload_offset;
         std::string html;
         if (!jellyframe_example::load_package_resource(package.manifest.entry,
                                                        package.manifest.entry,
@@ -1185,8 +1188,8 @@ private:
 
 int main(int argc, char** argv) {
     BrowserOptions options;
-    options.html_path = "samples/pages/modern/app_shell.html";
-    options.css_path = "samples/pages/modern/app_shell.css";
+    options.html_path = "src/render_core/samples/pages/modern/app_shell.html";
+    options.css_path = "src/render_core/samples/pages/modern/app_shell.css";
     std::vector<std::string> positional;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -1234,6 +1237,10 @@ int main(int argc, char** argv) {
             continue;
         }
         positional.push_back(arg);
+    }
+
+    if (options.app_path.empty() && positional.empty()) {
+        options.app_path = "samples/apps/packages/watch_weather";
     }
 
     if (!options.app_path.empty()) {

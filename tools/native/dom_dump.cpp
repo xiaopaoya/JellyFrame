@@ -1,6 +1,6 @@
-#include "core/dom.h"
-#include "core/html_parser.h"
-#include "core/html_tokenizer.h"
+﻿#include "render_core/dom.h"
+#include "render_core/html_parser.h"
+#include "render_core/html_tokenizer.h"
 
 #include <fstream>
 #include <iostream>

@@ -1,4 +1,4 @@
-# JellyFrame
+﻿# JellyFrame
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -37,7 +37,7 @@ For the exact supported/degraded/deferred feature set, read
 
 ## App Gallery
 
-These 300x300 screenshots are rendered by `jellyframe_pseudo_browser` from the
+These 300x300 screenshots are rendered through the Win32 capture shell from the
 source packages in `tools/templates/apps`.
 
 | Weather | Clock |
@@ -71,8 +71,8 @@ Render a static page to an image:
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  samples\pages\modern\article_cards.html `
-  samples\pages\modern\article_cards.css `
+  src\render_core\samples\pages\modern\article_cards.html `
+  src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -100,12 +100,22 @@ python tools\jellyframe_cli.py check `
   --font-budget 16x16
 ```
 
+Use the same `package` command to produce a third-party installable `.jfapp`:
+
+```powershell
+python tools\jellyframe_cli.py package `
+  --root build\my_calculator `
+  --target round-300 `
+  --output-bundle build\my_calculator.jfapp `
+  --report build\my_calculator_report.json
+```
+
 For a full first-time walkthrough, read [HOW_TO_START.md](HOW_TO_START.md).
 
 ## Optional Scripting Build
 
-Scripting is optional. `jellyframe_core` builds without JerryScript unless
-`JELLYFRAME_BUILD_SCRIPTING=ON` is requested.
+Scripting is optional. `jellyframe_render_core` builds without JerryScript
+unless `JELLYFRAME_BUILD_SCRIPTING=ON` is requested.
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
@@ -125,10 +135,10 @@ the embedded core.
 
 ## Repository Map
 
-- `src/core`: platform-neutral engine core.
+- `src/render_core`: platform-neutral HTML/CSS/DOM/rendering core.
+- `src/app_runtime`: app lifecycle and optional host-service helpers.
 - `src/script`: optional JerryScript binding layer.
-- `samples`: app packages, loose app fixtures, modern pages, script probes and
-  font-tool inputs.
+- `samples`: app packages and app lifecycle samples.
 - `tests`: platform-neutral regression tests.
 - `benchmarks`: desktop microbenchmarks.
 - `ports`: port-support code, board-oriented demos and virtual board tools.
@@ -145,7 +155,7 @@ the embedded core.
 - [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md):
   supported, degraded, lazy and deferred features.
 - [docs/engine_architecture.md](docs/engine_architecture.md): pipeline overview.
-- [docs/app_packaging.md](docs/app_packaging.md): app package format and tools.
+- [src/app_runtime/docs/app_packaging.md](src/app_runtime/docs/app_packaging.md): app package format and tools.
 - [docs/embedded_hal_api.md](docs/embedded_hal_api.md): host/HAL contract for
   board ports.
 - [docs/versioning.md](docs/versioning.md): versioning and release discipline.

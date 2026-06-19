@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 
-#include "core/diagnostics.h"
-#include "core/document_script.h"
-#include "core/document_style.h"
+#include "render_core/diagnostics.h"
+#include "render_core/document_script.h"
+#include "render_core/document_style.h"
 
 #include <cstddef>
 #include <filesystem>

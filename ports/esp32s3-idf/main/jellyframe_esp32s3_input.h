@@ -1,6 +1,6 @@
-#pragma once
+﻿#pragma once
 
-#include "core/input.h"
+#include "render_core/input.h"
 
 #include <cstddef>
 #include <cstdint>

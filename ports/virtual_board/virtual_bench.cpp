@@ -1,12 +1,12 @@
-#include "core/css_parser.h"
-#include "core/budget.h"
-#include "core/embedded_framebuffer.h"
-#include "core/html_parser.h"
-#include "core/layer_tree.h"
-#include "core/layout.h"
-#include "core/pipeline_statistics.h"
-#include "core/render_tree.h"
-#include "core/software_renderer.h"
+﻿#include "render_core/css_parser.h"
+#include "render_core/budget.h"
+#include "render_core/embedded_framebuffer.h"
+#include "render_core/html_parser.h"
+#include "render_core/layer_tree.h"
+#include "render_core/layout.h"
+#include "render_core/pipeline_statistics.h"
+#include "render_core/render_tree.h"
+#include "render_core/software_renderer.h"
 
 #include <chrono>
 #include <algorithm>

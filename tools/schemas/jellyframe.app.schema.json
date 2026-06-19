@@ -167,7 +167,7 @@
             ]
           },
           "output": {
-            "enum": ["cpp", "debug-dir"]
+            "enum": ["cpp", "debug-dir", "jfapp"]
           },
           "framebuffer": {
             "$ref": "#/$defs/framebuffer"

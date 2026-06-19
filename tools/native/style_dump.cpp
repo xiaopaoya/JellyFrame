@@ -1,8 +1,8 @@
-#include "core/css_parser.h"
-#include "core/document_style.h"
-#include "core/dom.h"
-#include "core/html_parser.h"
-#include "core/style.h"
+﻿#include "render_core/css_parser.h"
+#include "render_core/document_style.h"
+#include "render_core/dom.h"
+#include "render_core/html_parser.h"
+#include "render_core/style.h"
 
 #include "example_css_io.h"
 
