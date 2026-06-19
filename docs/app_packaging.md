@@ -408,9 +408,10 @@ controls without adding another app framework above HTML/CSS/JS.
 An optional VS Code helper lives under `tools/vscode-jellyframe`. It contributes
 manifest schema association and command-palette actions that call
 `tools/jellyframe_cli.py` for validate, check, preview, package and template
-creation. It also reads the CLI report/output to show a report panel and inline
-diagnostics. The CLI remains the source of truth for CI and non-VS-Code
-workflows.
+creation, plus a command that launches the Win32 interactive browser for the
+selected package. It reads the CLI report to show a report panel and inline
+diagnostics for package warnings and `pipelineDiagnostics`. The CLI remains the
+source of truth for CI and non-VS-Code workflows.
 
 References:
 

@@ -40,6 +40,8 @@ JellyFrame Engine 的重要变更记录在这里。
   `preview` 本身就是完整管线运行。只有请求字体选项时才运行字体资源检查。
 - CLI 的 `check`、`preview` 和 `package` 会把伪浏览器 diagnostics 合并进 JSON report 的
   `pipelineDiagnostics` 字段。error 默认失败；warning 默认只提示，传入 `--strict` 后会失败。
+- VS Code 辅助扩展现在会在报告面板和 inline diagnostics 中消费 `pipelineDiagnostics`，
+  `preview` 也会写出 report，并新增打开所选 package 的 Win32 browser 壳命令。
 
 ## 0.3.0-dev - 2026-06-18
 

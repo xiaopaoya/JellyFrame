@@ -419,8 +419,9 @@ python tools\jellyframe_cli.py new `
 
 The optional VS Code helper lives in `tools/vscode-jellyframe`. It adds schema
 association for `jellyframe.app.json` and command-palette wrappers around the
-same CLI commands, a report panel and inline diagnostics for actionable
-package/font-resource issues; it does not replace the CLI or duplicate the packer.
+same CLI commands, an interactive Win32 browser launcher, a report panel and
+inline diagnostics for actionable package and pipeline issues; it does not
+replace the CLI or duplicate the packer.
 
 When an example renders badly, inspect in this order:
 

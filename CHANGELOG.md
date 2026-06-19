@@ -52,6 +52,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - CLI `check`, `preview` and `package` now merge pseudo-browser diagnostics into
   the JSON report under `pipelineDiagnostics`. Errors fail by default; warnings
   remain advisory unless `--strict` is passed.
+- The VS Code helper now consumes `pipelineDiagnostics` in its report panel and
+  inline diagnostics, makes `preview` write a report, and adds a command to open
+  the selected package in the Win32 browser shell.
 
 ## 0.3.0-dev - 2026-06-18
 

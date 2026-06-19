@@ -398,8 +398,9 @@ python tools\jellyframe_cli.py new `
 ```
 
 可选 VS Code 辅助扩展位于 `tools/vscode-jellyframe`。它会为 `jellyframe.app.json`
-关联 schema，在命令面板中包装同一套 CLI 命令，并提供报告面板和针对可处理
-package/字体资源问题的 inline diagnostics；它不会替代 CLI，也不会复制 packer。
+关联 schema，在命令面板中包装同一套 CLI 命令，提供交互式 Win32 browser 启动入口、
+报告面板，以及针对可处理 package 和管线问题的 inline diagnostics；它不会替代 CLI，
+也不会复制 packer。
 
 如果页面渲染不对，建议按这个顺序排查：
 

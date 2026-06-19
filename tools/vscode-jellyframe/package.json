@@ -14,6 +14,7 @@
     "onCommand:jellyframe.validate",
     "onCommand:jellyframe.check",
     "onCommand:jellyframe.preview",
+    "onCommand:jellyframe.openWin32Browser",
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.showReport"
@@ -27,11 +28,15 @@
       },
       {
         "command": "jellyframe.check",
-        "title": "JellyFrame: Check Package Capabilities"
+        "title": "JellyFrame: Check Package"
       },
       {
         "command": "jellyframe.preview",
         "title": "JellyFrame: Preview Package"
+      },
+      {
+        "command": "jellyframe.openWin32Browser",
+        "title": "JellyFrame: Open In Win32 Browser"
       },
       {
         "command": "jellyframe.package",

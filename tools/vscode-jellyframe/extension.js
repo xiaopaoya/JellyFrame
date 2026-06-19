@@ -7,7 +7,6 @@ let outputChannel;
 let reportPanel;
 let capabilityDiagnostics;
 let lastReport;
-let lastFindings = [];
 
 function config() {
   return vscode.workspace.getConfiguration("jellyframe");
@@ -24,6 +23,22 @@ function cliPath(context) {
 
 function buildDir(context) {
   return path.join(repoRoot(context), "build");
+}
+
+function ensureBuildDir(context) {
+  fs.mkdirSync(buildDir(context), { recursive: true });
+}
+
+function nativeBuildDir(context) {
+  return path.join(repoRoot(context), "build", "Release");
+}
+
+function exeName(name) {
+  return process.platform === "win32" ? `${name}.exe` : name;
+}
+
+function nativeToolPath(context, name) {
+  return path.join(nativeBuildDir(context), exeName(name));
 }
 
 function ensureOutputChannel() {
@@ -43,7 +58,6 @@ function runCliWithOptions(context, args, options) {
   const cli = cliPath(context);
   const channel = ensureOutputChannel();
   const commandArgs = [cli, ...args];
-  let output = "";
   channel.appendLine(`+ ${[python, ...commandArgs].join(" ")}`);
   const child = childProcess.spawn(python, commandArgs, {
     cwd: repoRoot(context),
@@ -51,12 +65,10 @@ function runCliWithOptions(context, args, options) {
   });
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString();
-    output += text;
     channel.append(text);
   });
   child.stderr.on("data", (chunk) => {
     const text = chunk.toString();
-    output += text;
     channel.append(text);
   });
   child.on("error", (error) => {
@@ -68,11 +80,7 @@ function runCliWithOptions(context, args, options) {
     if (options.reportPath) {
       loadReport(options.reportPath);
     }
-    if (options.packageRoot && options.commandName === "check") {
-      lastFindings = parseCapabilityFindings(output);
-      updateCapabilityDiagnostics(options.packageRoot, lastFindings);
-      showReportPanel(context);
-    } else if (options.commandName === "validate" || options.commandName === "package") {
+    if (options.packageRoot && options.reportPath) {
       updateReportDiagnostics(options.packageRoot);
       showReportPanel(context);
     }
@@ -90,6 +98,22 @@ function loadReport(reportPath) {
   } catch (error) {
     ensureOutputChannel().appendLine(`failed to read report ${reportPath}: ${error.message}`);
   }
+}
+
+function runDetachedTool(context, executable, args) {
+  const channel = ensureOutputChannel();
+  channel.appendLine(`+ ${[executable, ...args].join(" ")}`);
+  const child = childProcess.spawn(executable, args, {
+    cwd: repoRoot(context),
+    detached: true,
+    stdio: "ignore",
+    windowsHide: false
+  });
+  child.on("error", (error) => {
+    channel.appendLine(`JellyFrame tool failed to start: ${error.message}`);
+    vscode.window.showErrorMessage(`JellyFrame tool failed to start: ${error.message}`);
+  });
+  child.unref();
 }
 
 function workspaceFolderPath() {
@@ -161,6 +185,7 @@ async function runPackageCommand(context, commandName) {
   if (!selectedTarget) {
     return;
   }
+  ensureBuildDir(context);
   const base = outputBase(root);
   const report = path.join(buildDir(context), `vscode-${base}-report.json`);
   const args = [commandName, "--root", root, "--target", selectedTarget, "--report", report];
@@ -191,90 +216,86 @@ async function previewPackage(context) {
   if (!selectedTarget) {
     return;
   }
-  const output = path.join(buildDir(context), `vscode-${outputBase(root)}.ppm`);
-  runCli(context, ["preview", "--root", root, "--target", selectedTarget, "--output", output]);
-}
-
-function parseCapabilityFindings(output) {
-  const findings = [];
-  const pattern = /^\s+\[([^\]]+)\]\s+(.+?)\s+::\s+(.+?)\s+-\s+(.+)$/;
-  for (const line of output.split(/\r?\n/)) {
-    const match = line.match(pattern);
-    if (!match) {
-      continue;
+  ensureBuildDir(context);
+  const base = outputBase(root);
+  const output = path.join(buildDir(context), `vscode-${base}.ppm`);
+  const report = path.join(buildDir(context), `vscode-${base}-preview-report.json`);
+  runCliWithOptions(
+    context,
+    ["preview", "--root", root, "--target", selectedTarget, "--output", output, "--report", report],
+    {
+      commandName: "preview",
+      packageRoot: root,
+      reportPath: report
     }
-    findings.push({
-      kind: match[1],
-      file: match[2],
-      feature: match[3],
-      message: match[4]
-    });
-  }
-  return findings;
+  );
 }
 
-function diagnosticSeverity(kind) {
-  if (kind === "unsupported" || kind === "error") {
+async function openWin32Browser(context) {
+  if (process.platform !== "win32") {
+    vscode.window.showErrorMessage("JellyFrame Win32 browser is only available on Windows.");
+    return;
+  }
+  const root = await packageRoot();
+  if (!root) {
+    return;
+  }
+  const executable = nativeToolPath(context, "jellyframe_win32_browser");
+  if (!fs.existsSync(executable)) {
+    vscode.window.showErrorMessage(`Missing Win32 browser: ${executable}`);
+    return;
+  }
+  runDetachedTool(context, executable, ["--app", root]);
+}
+
+function diagnosticSeverity(severity) {
+  if (severity === "error") {
     return vscode.DiagnosticSeverity.Error;
   }
-  if (kind === "font-subset" || kind === "degraded" || kind === "ignored") {
+  if (severity === "warning") {
     return vscode.DiagnosticSeverity.Warning;
   }
-  if (kind === "supported-subset") {
+  if (severity === "info") {
     return vscode.DiagnosticSeverity.Information;
   }
-  return undefined;
+  return vscode.DiagnosticSeverity.Warning;
 }
 
 function diagnosticRange() {
   return new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
 }
 
-function updateCapabilityDiagnostics(root, findings) {
-  if (!capabilityDiagnostics) {
-    return;
-  }
-  const byFile = new Map();
-  for (const finding of findings) {
-    const severity = diagnosticSeverity(finding.kind);
-    if (severity === undefined || finding.kind === "supported") {
-      continue;
-    }
-    const filePath = path.isAbsolute(finding.file) ? finding.file : path.resolve(root, finding.file);
-    const diagnostics = byFile.get(filePath) || [];
-    diagnostics.push(new vscode.Diagnostic(
-      diagnosticRange(),
-      `${finding.feature}: ${finding.message}`,
-      severity
-    ));
-    byFile.set(filePath, diagnostics);
-  }
-  capabilityDiagnostics.clear();
-  for (const [filePath, diagnostics] of byFile.entries()) {
-    capabilityDiagnostics.set(vscode.Uri.file(filePath), diagnostics);
-  }
-}
-
 function updateReportDiagnostics(root) {
   if (!capabilityDiagnostics || !root || !lastReport) {
     return;
   }
-  const diagnostics = [];
+  const diagnostics = new Map();
+  const addDiagnostic = (filePath, message, severity) => {
+    const items = diagnostics.get(filePath) || [];
+    items.push(new vscode.Diagnostic(diagnosticRange(), message, severity));
+    diagnostics.set(filePath, items);
+  };
+  const entryPath = path.resolve(root, String(lastReport.app?.entry || "jellyframe.app.json").replace(/^[/\\]/, ""));
+
   for (const warning of lastReport.warnings || []) {
     const from = warning.from || lastReport.app?.entry || "/jellyframe.app.json";
     const filePath = path.resolve(root, String(from).replace(/^[/\\]/, ""));
     const message = warning.message || warning.reason || JSON.stringify(warning);
-    const list = diagnostics.find((entry) => entry.filePath === filePath);
-    const diagnostic = new vscode.Diagnostic(diagnosticRange(), message, vscode.DiagnosticSeverity.Warning);
-    if (list) {
-      list.items.push(diagnostic);
-    } else {
-      diagnostics.push({ filePath, items: [diagnostic] });
-    }
+    addDiagnostic(filePath, message, vscode.DiagnosticSeverity.Warning);
   }
+
+  const pipeline = lastReport.pipelineDiagnostics || {};
+  for (const diagnostic of pipeline.diagnostics || []) {
+    const stage = diagnostic.stage || "pipeline";
+    const code = diagnostic.code || "diagnostic";
+    const detail = diagnostic.detail ? ` (${diagnostic.detail})` : "";
+    const message = `${stage}::${code}: ${diagnostic.message || "Pipeline diagnostic"}${detail}`;
+    addDiagnostic(entryPath, message, diagnosticSeverity(diagnostic.severity));
+  }
+
   capabilityDiagnostics.clear();
-  for (const entry of diagnostics) {
-    capabilityDiagnostics.set(vscode.Uri.file(entry.filePath), entry.items);
+  for (const [filePath, items] of diagnostics.entries()) {
+    capabilityDiagnostics.set(vscode.Uri.file(filePath), items);
   }
 }
 
@@ -300,6 +321,10 @@ function reportHtml() {
   const warnings = report?.warnings || [];
   const resources = report?.resources || [];
   const references = report?.references || [];
+  const pipeline = report?.pipelineDiagnostics || {};
+  const summary = pipeline.summary || {};
+  const pipelineStats = pipeline.pipeline || {};
+  const pipelineDiagnostics = pipeline.diagnostics || [];
   return `<!doctype html>
 <html>
 <head>
@@ -313,6 +338,9 @@ function reportHtml() {
     code { color: var(--vscode-textPreformat-foreground); }
     .muted { color: var(--vscode-descriptionForeground); }
     .pill { display: inline-block; padding: 1px 6px; border: 1px solid var(--vscode-panel-border); border-radius: 10px; }
+    .error { color: var(--vscode-errorForeground); }
+    .warning { color: var(--vscode-editorWarning-foreground); }
+    .info { color: var(--vscode-editorInfo-foreground); }
   </style>
 </head>
 <body>
@@ -320,10 +348,25 @@ function reportHtml() {
   ${report ? `
     <p><strong>${escapeHtml(app.name || app.id || "App")}</strong> <span class="muted">${escapeHtml(app.id || "")}</span></p>
     <p>Target: <code>${escapeHtml(targetConfig.id || "default")}</code> · Resources: ${resources.length} · Bytes: ${escapeHtml(report.totalResourceBytes || 0)}</p>
+    <h2>Pipeline Diagnostics</h2>
+    ${pipeline.format ? `
+      <p>
+        Total: ${escapeHtml(summary.total || 0)}
+        · <span class="error">Errors: ${escapeHtml(summary.error || 0)}</span>
+        · <span class="warning">Warnings: ${escapeHtml(summary.warning || 0)}</span>
+        · <span class="info">Info: ${escapeHtml(summary.info || 0)}</span>
+      </p>
+      <p class="muted">
+        DOM: ${escapeHtml(pipelineStats.domNodes || 0)} nodes ·
+        Layout: ${escapeHtml(pipelineStats.layoutBoxes || 0)} boxes ·
+        Layers: ${escapeHtml(pipelineStats.layers || 0)} ·
+        Display commands: ${escapeHtml(pipelineStats.displayCommands || 0)} ·
+        Estimated heap: ${escapeHtml(pipelineStats.estimatedHeapBytes || 0)} bytes
+      </p>
+      ${renderList(pipelineDiagnostics, (diagnostic) => `<li><span class="pill ${escapeHtml(diagnostic.severity || "")}">${escapeHtml(diagnostic.severity || "diagnostic")}</span> <code>${escapeHtml(diagnostic.stage || "pipeline")}::${escapeHtml(diagnostic.code || "diagnostic")}</code> · ${escapeHtml(diagnostic.message || "")}${diagnostic.detail ? ` <span class="muted">(${escapeHtml(diagnostic.detail)})</span>` : ""}</li>`)}
+    ` : "<p class=\"muted\">No pipeline diagnostics in the latest report.</p>"}
     <h2>Warnings</h2>
     ${renderList(warnings, (warning) => `<li>${escapeHtml(warning.message || warning.reason || JSON.stringify(warning))}</li>`)}
-    <h2>Capability Findings</h2>
-    ${renderList(lastFindings, (finding) => `<li><span class="pill">${escapeHtml(finding.kind)}</span> <code>${escapeHtml(finding.file)}</code> · ${escapeHtml(finding.feature)}: ${escapeHtml(finding.message)}</li>`)}
     <h2>Resources</h2>
     <table><tr><th>Path</th><th>Kind</th><th>Bytes</th></tr>
     ${resources.map((resource) => `<tr><td><code>${escapeHtml(resource.path)}</code></td><td>${escapeHtml(resource.kind)}</td><td>${escapeHtml(resource.size)}</td></tr>`).join("")}
@@ -414,6 +457,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.validate", () => runPackageCommand(context, "validate")),
     vscode.commands.registerCommand("jellyframe.check", () => runPackageCommand(context, "check")),
     vscode.commands.registerCommand("jellyframe.preview", () => previewPackage(context)),
+    vscode.commands.registerCommand("jellyframe.openWin32Browser", () => openWin32Browser(context)),
     vscode.commands.registerCommand("jellyframe.package", () => runPackageCommand(context, "package")),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context))
