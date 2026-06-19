@@ -48,8 +48,8 @@ JellyFrame is not ready for:
 | Win32 browser shell | Shell-only | Opens a desktop window, uses GDI text measurement/painting, forwards mouse/wheel/keyboard input, supports capture output and optional scripting builds. |
 | Embedded backend | Deferred | The final display/input backend should be provided by the target platform. |
 | Linked CSS loading | Shell-only | Example tools can load local `<link rel="stylesheet">`; core exposes callback-style helpers only. |
-| Network loading | Host-optional V0 mock | Core has no HTTP, XHR, WebSocket or remote resource loading, and remote HTML/CSS/script/image resources still cannot enter the page loader. `NetworkFetchMock` provides a fixture/handle/completion contract for later bounded runtime data APIs gated by manifest/profile policy; JS `fetch` is not exposed yet. |
-| Storage | Host-optional V0 mock | No cookies, synchronous localStorage, IndexedDB or filesystem API in core. `AppPrivateKvStorageMock` provides app-id-isolated async KV semantics and budget checks for settings, small JSON state and tokens; no JS API is exposed yet. |
+| Network loading | Host-optional V0 mock | Core has no HTTP, XHR, WebSocket or remote resource loading, and remote HTML/CSS/script/image resources still cannot enter the page loader. `NetworkFetchMock` provides a fixture/handle/completion contract for later bounded runtime data APIs. `app_service_policies_for_app(...)` enables it only when both manifest and host/profile allow `network.fetch`; JS `fetch` is not exposed yet. |
+| Storage | Host-optional V0 mock | No cookies, synchronous localStorage, IndexedDB or filesystem API in core. `AppPrivateKvStorageMock` provides app-id-isolated async KV semantics and budget checks for settings, small JSON state and tokens. `storage.kv` is enabled only after manifest/profile policy is merged; no JS API is exposed yet. |
 
 ## HTML Parsing
 

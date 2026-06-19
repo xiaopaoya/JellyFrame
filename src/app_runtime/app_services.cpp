@@ -25,6 +25,43 @@ typename std::vector<T>::iterator find_job(std::vector<T>& items, std::uint32_t 
 
 } // namespace
 
+AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDeviceCapabilities& capabilities,
+                                                                 const AppPrivateKvPolicy& storage_policy) {
+    AppServiceHostProfile profile;
+    profile.allow_network_fetch = capabilities.has_network && capabilities.network.supports_fetch;
+    profile.max_network_url_bytes = capabilities.network.max_request_bytes == 0
+        ? profile.max_network_url_bytes
+        : capabilities.network.max_request_bytes;
+    profile.max_network_response_bytes = capabilities.network.max_response_bytes == 0
+        ? profile.max_network_response_bytes
+        : capabilities.network.max_response_bytes;
+
+    profile.allow_storage_kv = storage_policy.enabled;
+    profile.max_storage_key_bytes = storage_policy.max_key_bytes;
+    profile.max_storage_value_bytes = storage_policy.max_value_bytes;
+    profile.max_storage_items_per_app = storage_policy.max_items_per_app;
+    profile.max_storage_bytes_per_app = storage_policy.max_bytes_per_app;
+    return profile;
+}
+
+AppServicePolicies app_service_policies_for_app(const AppServiceManifestCapabilities& manifest,
+                                                const AppServiceHostProfile& profile) {
+    AppServicePolicies policies;
+    policies.network = NetworkFetchPolicy{
+        manifest.network_fetch && profile.allow_network_fetch,
+        profile.max_network_url_bytes,
+        profile.max_network_response_bytes,
+    };
+    policies.storage = AppPrivateKvPolicy{
+        manifest.storage_kv && profile.allow_storage_kv,
+        profile.max_storage_key_bytes,
+        profile.max_storage_value_bytes,
+        profile.max_storage_items_per_app,
+        profile.max_storage_bytes_per_app,
+    };
+    return policies;
+}
+
 NetworkFetchMock::NetworkFetchMock(NetworkFetchPolicy policy)
     : policy_(policy) {}
 

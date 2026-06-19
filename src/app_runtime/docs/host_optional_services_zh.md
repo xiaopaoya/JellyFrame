@@ -26,6 +26,11 @@ table 放进同一个有界容器，并提供“当前 app 提交 job / 分配 h
 `NetworkFetchMock` 和 `AppPrivateKvStorageMock`。它们用于桌面验证和端到端契约测试，仍不访问真实网络、
 文件系统或 flash；真实产品 host 应以相同 request/completion/handle 语义替换其 worker 实现。
 
+同一组文件还提供第一版 manifest/profile gate：`AppServiceManifestCapabilities`、
+`AppServiceHostProfile` 和 `app_service_policies_for_app(...)`。manifest 中的
+`network.fetch` 或 `storage.kv` 只表示 app 请求能力；只有被选中的 host/profile 同时允许该服务，
+并提供有界预算时，最终 runtime policy 才会启用。这样 JS binding 和 worker 实现都不需要各自散落权限判断。
+
 ## 总体模型
 
 JellyFrame 只有一个 UI owner：
@@ -224,6 +229,19 @@ completion event：
 它会检查 capability、URL 长度、响应 byte budget 和 request queue 上限。响应 body 由 mock
 持有，UI/main task 只能通过 handle 查询并显式释放。
 
+能力 gate：
+
+```cpp
+AppServiceHostProfile profile =
+    app_service_host_profile_from_capabilities(device_capabilities, storage_policy);
+AppServicePolicies policies =
+    app_service_policies_for_app(manifest_capabilities, profile);
+NetworkFetchMock network(policies.network);
+```
+
+只有 app manifest 请求了 `network.fetch`，并且 host profile 允许有界 fetch job 时，
+`policies.network.enabled` 才为 true。
+
 推荐 request：
 
 ```cpp
@@ -271,6 +289,10 @@ struct HostFetchResponse {
 `HostServiceJobKind::StorageKv` 异步完成 `get/set/remove/clear`。`get` 成功时返回
 `StorageValue` handle；`set`、`remove` 和 `clear` 只返回状态。mock 会检查 key 长度、单 value
 大小、每 app item 数和总 byte budget。
+
+能力 gate：只有 app manifest 请求了 `storage.kv`，并且 host profile 提供启用状态的
+`AppPrivateKvPolicy` 时，`policies.storage.enabled` 才为 true。key/value/item/byte 预算会被复制到
+最终 mock 或产品 worker 使用的具体 storage policy 中。
 
 推荐命名空间：
 

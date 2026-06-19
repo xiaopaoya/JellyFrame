@@ -87,6 +87,35 @@ struct AppPrivateKvPolicy {
     std::size_t max_bytes_per_app = 4096;
 };
 
+struct AppServiceManifestCapabilities {
+    bool network_fetch = false;
+    bool storage_kv = false;
+};
+
+struct AppServiceHostProfile {
+    bool allow_network_fetch = false;
+    std::size_t max_network_url_bytes = 256;
+    std::size_t max_network_response_bytes = 4096;
+
+    bool allow_storage_kv = false;
+    std::size_t max_storage_key_bytes = 64;
+    std::size_t max_storage_value_bytes = 1024;
+    std::size_t max_storage_items_per_app = 32;
+    std::size_t max_storage_bytes_per_app = 4096;
+};
+
+struct AppServicePolicies {
+    NetworkFetchPolicy network;
+    AppPrivateKvPolicy storage;
+};
+
+AppServiceHostProfile app_service_host_profile_from_capabilities(
+    const HostDeviceCapabilities& capabilities,
+    const AppPrivateKvPolicy& storage_policy = {});
+
+AppServicePolicies app_service_policies_for_app(const AppServiceManifestCapabilities& manifest,
+                                                const AppServiceHostProfile& profile);
+
 enum class AppPrivateKvOperation {
     Get,
     Set,

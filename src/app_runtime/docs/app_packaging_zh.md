@@ -202,6 +202,10 @@ manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 tar
 运行时网络请求 API。它们不会启用远程包资源。packer 会把这些字段写入报告，产品固件可以据此拒绝
 不符合板级策略的 app。
 
+运行时应把这些 manifest 字段转换为 `AppServiceManifestCapabilities`，再与选中的
+`AppServiceHostProfile` 通过 `app_service_policies_for_app(...)` 合成。某个 capability 被请求，
+并不等于已经启用；host/profile 必须同时允许它，并提供有界预算。
+
 ## 资源路径规则
 
 JellyFrame 应使用严格的本地路径子集：
@@ -574,7 +578,8 @@ python tools/jellyframe_cli.py font `
 ```
 
 package report 会记录 manifest 是否请求了网络能力或 app 私有 KV storage 能力。桌面 app-runtime mock
-可以验证 request/completion/handle 契约，但核心不会执行真实网络或文件系统 I/O。
+可以验证 request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这些请求与
+host/profile 策略合成。核心不会执行真实网络或文件系统 I/O。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、local/remote reference 诊断、package-resource warnings 和

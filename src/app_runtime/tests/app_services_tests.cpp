@@ -69,6 +69,36 @@ void network_fetch_requires_capability_and_returns_fixture_handle() {
     check(network.release_response(host, accepted.front().handle), "network response release");
 }
 
+void service_policy_requires_manifest_and_host_approval() {
+    HostDeviceCapabilities capabilities;
+    capabilities.has_network = true;
+    capabilities.network.supports_fetch = true;
+    capabilities.network.max_request_bytes = 96;
+    capabilities.network.max_response_bytes = 512;
+    AppServiceHostProfile profile = app_service_host_profile_from_capabilities(
+        capabilities, AppPrivateKvPolicy{true, 12, 24, 3, 64});
+    check(profile.allow_network_fetch, "profile network allowed");
+    check(profile.max_network_url_bytes == 96, "profile network url budget");
+    check(profile.allow_storage_kv, "profile storage allowed");
+    check(profile.max_storage_value_bytes == 24, "profile storage value budget");
+
+    AppServicePolicies policies = app_service_policies_for_app(AppServiceManifestCapabilities{}, profile);
+    check(!policies.network.enabled, "network denied without manifest capability");
+    check(!policies.storage.enabled, "storage denied without manifest capability");
+
+    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true}, profile);
+    check(policies.network.enabled, "network allowed with manifest and host");
+    check(policies.network.max_response_bytes == 512, "network response budget carried");
+    check(policies.storage.enabled, "storage allowed with manifest and host");
+    check(policies.storage.max_items_per_app == 3, "storage item budget carried");
+
+    capabilities.has_network = false;
+    profile = app_service_host_profile_from_capabilities(capabilities, AppPrivateKvPolicy{});
+    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true}, profile);
+    check(!policies.network.enabled, "network denied without host network");
+    check(!policies.storage.enabled, "storage denied without host storage");
+}
+
 void network_fetch_pending_request_is_cancelled_on_app_switch() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.first", AppRole::App);
@@ -150,6 +180,7 @@ void kv_storage_enforces_budgets() {
 
 int main() {
     network_fetch_requires_capability_and_returns_fixture_handle();
+    service_policy_requires_manifest_and_host_approval();
     network_fetch_pending_request_is_cancelled_on_app_switch();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();

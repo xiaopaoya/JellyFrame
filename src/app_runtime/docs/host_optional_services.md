@@ -38,6 +38,14 @@ contract tests. They still do not access real networking, filesystems or flash;
 product hosts should replace their worker implementation while keeping the same
 request/completion/handle semantics.
 
+The same files also provide the first manifest/profile gate:
+`AppServiceManifestCapabilities`, `AppServiceHostProfile` and
+`app_service_policies_for_app(...)`. A manifest request such as
+`network.fetch` or `storage.kv` is only an app request. It becomes an enabled
+runtime policy only when the selected host/profile also allows that service and
+provides bounded budgets. This keeps policy decisions out of JS bindings and
+worker implementations.
+
 ## Overall Model
 
 JellyFrame has one UI owner:
@@ -247,6 +255,19 @@ response byte budget and request-queue capacity. The response body is owned by
 the mock; the UI/main task can only inspect it through a handle and explicitly
 release it.
 
+Policy gate:
+
+```cpp
+AppServiceHostProfile profile =
+    app_service_host_profile_from_capabilities(device_capabilities, storage_policy);
+AppServicePolicies policies =
+    app_service_policies_for_app(manifest_capabilities, profile);
+NetworkFetchMock network(policies.network);
+```
+
+`policies.network.enabled` is true only when both the app manifest requested
+`network.fetch` and the host profile allows bounded fetch jobs.
+
 Recommended request:
 
 ```cpp
@@ -299,6 +320,11 @@ completes `get/set/remove/clear` asynchronously through
 `HostServiceJobKind::StorageKv`. Successful `get` operations return
 `StorageValue` handles; `set`, `remove` and `clear` return status only. The mock
 checks key length, single-value size, per-app item count and total byte budget.
+
+Policy gate: `policies.storage.enabled` is true only when the app manifest
+requested `storage.kv` and the host profile supplies an enabled
+`AppPrivateKvPolicy`. The resulting key/value/item/byte budgets are copied into
+the concrete storage policy used by the mock or product worker.
 
 Recommended namespace:
 

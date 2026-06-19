@@ -248,6 +248,12 @@ They do not enable remote package resources. The packer records these fields in
 the report so product firmware can reject apps whose requested capabilities do
 not match the board policy.
 
+At runtime these manifest fields should be converted to
+`AppServiceManifestCapabilities` and combined with the selected
+`AppServiceHostProfile` through `app_service_policies_for_app(...)`. A requested
+capability is not enabled unless the host/profile also allows it and supplies
+bounded budgets.
+
 ## Resource Path Rules
 
 JellyFrame should use a strict local path subset:
@@ -658,8 +664,9 @@ python tools/jellyframe_cli.py font `
 
 The package report records whether the manifest requested network or app-private
 KV storage capability. The desktop app-runtime mocks can validate the
-request/completion/handle contract, but no real network or filesystem I/O is
-performed by the core.
+request/completion/handle contract, and `app_service_policies_for_app(...)`
+combines those requests with host/profile policy. No real network or filesystem
+I/O is performed by the core.
 
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
