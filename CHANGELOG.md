@@ -11,23 +11,22 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added manifest/profile policy merging for optional data services:
   `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
   `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`
-  before runtime mocks or future JS bindings can submit work.
+  before runtime mocks or JS bindings can submit work.
 - Added `AppSystemEventQueue`, a bounded app-instance-scoped queue for
   host-injected time, timezone, network, battery, screen and low-power snapshots.
 - Added app-runtime microbench coverage for optional network fetch, KV storage
   and system-event pumping.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
-  planned standard-subset runtime data API direction before exposing it:
-  asynchronous `XMLHttpRequest` first, `fetch()` only after bounded
-  Promise/microtask support, tiny `localStorage` only when backed by a
-  non-blocking app-private shadow, and system state mapped to web-adjacent
-  events where possible.
+  standard-subset runtime data API direction: asynchronous `XMLHttpRequest`
+  first, `fetch()` only after bounded Promise/microtask support, tiny
+  `localStorage` only when backed by a non-blocking app-private shadow, and
+  system state mapped to web-adjacent events where possible.
 - Added `AppLocalStorageShadow`, a compact in-memory helper for a future
   standard `localStorage` subset that enforces the app-private KV policy without
   performing host I/O on the UI task.
 - Added `AppXmlHttpRequest`, a platform-neutral async XHR V0 state machine over
   `NetworkFetchMock`/host completions, covering GET, abort, readyState/status,
-  response text and standard event sequencing before exposing a JS binding.
+  response text and standard event sequencing used by the JS binding.
 - Exposed an async `XMLHttpRequest` GET V0 subset through the JerryScript bridge
   and wired Win32 browser scripting builds to a debug network mock so host
   completions dispatch JavaScript callbacks on the main task.

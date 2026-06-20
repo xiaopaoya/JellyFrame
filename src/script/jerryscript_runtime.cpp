@@ -1103,13 +1103,13 @@ void install_xhr_members(jerry_value_t object) {
     set_method(object, "abort", xhr_abort);
 }
 
-void install_xml_http_request_constructor(jerry_value_t target, JerryScriptRuntime& runtime) {
+jerry_value_t make_xml_http_request_constructor(JerryScriptRuntime& runtime) {
     JerryValue constructor(jerry_function_external(xhr_construct));
     jerry_object_set_native_ptr(constructor.get(), &kRuntimeNativeInfo, &runtime);
     JerryValue prototype(jerry_object());
     install_xhr_members(prototype.get());
     set_property(constructor.get(), "prototype", prototype.get());
-    set_property(target, "XMLHttpRequest", constructor.get());
+    return constructor.release();
 }
 
 jerry_value_t make_dataset_object(JerryScriptRuntime& runtime, Node& node) {
@@ -1514,8 +1514,9 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(global.get(), "setInterval", script_set_interval, *this);
     set_runtime_method(global.get(), "clearInterval", script_clear_timer, *this);
-    install_xml_http_request_constructor(window_object.get(), *this);
-    install_xml_http_request_constructor(global.get(), *this);
+    JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
+    set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
+    set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
 }
 
 void JerryScriptRuntime::bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) {

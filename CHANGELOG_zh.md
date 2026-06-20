@@ -10,19 +10,18 @@ JellyFrame Engine 的重要变更记录在这里。
 
 - 添加可选数据服务的 manifest/profile policy 合成：`AppServiceManifestCapabilities`、
   `AppServiceHostProfile` 和 `app_service_policies_for_app(...)` 现在会在 runtime mock
-  或未来 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。
+  或 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。
 - 添加 `AppSystemEventQueue`，这是一个有界、绑定 app instance 的系统事件队列，用于宿主注入
   时间、时区、网络、电量、屏幕和低功耗状态快照。
 - app-runtime microbench 新增可选 network fetch、KV storage 和 system-event pump 覆盖。
-- 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，在真正暴露前记录计划中的
-  标准子集优先 runtime data API 方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界
+- 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，记录标准子集优先 runtime data API
+  方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界
   Promise/microtask 支持成熟后再考虑；只有存在非阻塞 app 私有内存 shadow 时才暴露极小
   `localStorage` 子集；系统状态尽量映射到 Web 邻近事件。
 - 添加 `AppLocalStorageShadow`，作为未来标准 `localStorage` 子集的紧凑内存 helper；
   它执行 app 私有 KV policy 限制，但不会在 UI task 上做宿主 I/O。
 - 添加 `AppXmlHttpRequest`，在 `NetworkFetchMock`/host completion 之上提供平台无关异步
-  XHR V0 状态机，覆盖 GET、abort、readyState/status、响应文本和标准事件顺序，为后续 JS
-  binding 做准备。
+  XHR V0 状态机，覆盖 GET、abort、readyState/status、响应文本和 JS binding 使用的标准事件顺序。
 - JerryScript bridge 暴露异步 `XMLHttpRequest` GET V0 子集，并让 Win32 browser scripting 构建
   通过 debug network mock 验证 host completion 到 JS callback 的主线程分发路径。
 - `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有

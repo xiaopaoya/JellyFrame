@@ -481,6 +481,17 @@ void javascript_xml_http_request_budget_is_bounded() {
     check(runtime.statistics().xml_http_request_count == 1, "XHR statistics count one live object");
 }
 
+void javascript_xml_http_request_constructor_is_shared_with_window() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval("String(XMLHttpRequest === window.XMLHttpRequest)");
+    check(result.ok, "XHR constructor identity script evaluates");
+    check(result.value == "true", "global and window share the XHR constructor");
+}
+
 void javascript_runtime_respects_timer_and_listener_budgets() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>Go</button></body>");
@@ -530,6 +541,7 @@ int main() {
         javascript_xml_http_request_get_completes_from_host_service();
         javascript_xml_http_request_error_callback_runs_on_missing_fixture();
         javascript_xml_http_request_budget_is_bounded();
+        javascript_xml_http_request_constructor_is_shared_with_window();
         javascript_runtime_respects_timer_and_listener_budgets();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';

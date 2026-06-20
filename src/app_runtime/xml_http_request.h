@@ -86,7 +86,6 @@ private:
     std::uint16_t status_ = 0;
     std::uint32_t job_id_ = 0;
     bool sent_ = false;
-    std::string method_;
     std::string url_;
     std::string response_text_;
     std::string response_url_;

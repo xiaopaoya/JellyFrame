@@ -121,6 +121,37 @@ void xhr_abort_cancels_pending_request() {
     check(events[2] == AppXhrEventKind::LoadEnd, "xhr abort loadend");
 }
 
+void xhr_missing_response_record_releases_handle() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.missing-record", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+
+    AppXmlHttpRequest xhr;
+    check(xhr.open("GET", "app://missing-record", true) == AppXhrStatus::Ok, "xhr missing-record open");
+    take_events(xhr);
+    check(xhr.send(host, network) == AppXhrStatus::Ok, "xhr missing-record send");
+    const std::uint32_t handle = host.handles().allocate(
+        HostServiceHandleKind::FetchResponse, host.current_app_instance_id(), 8);
+    check(handle != 0, "xhr missing-record handle allocated");
+    HostServiceCompletion completion{
+        xhr.job_id(),
+        HostServiceJobKind::NetworkFetch,
+        HostServiceStatus::Completed,
+        host.current_app_instance_id(),
+        handle,
+        0,
+        8,
+    };
+
+    check(xhr.handle_completion(host, network, completion), "xhr missing-record completion handled");
+    check(host.handles().active_count() == 0, "xhr missing-record handle released");
+    const std::vector<AppXhrEventKind> events = take_events(xhr);
+    check(events.size() == 3, "xhr missing-record event count");
+    check(events[0] == AppXhrEventKind::ReadyStateChange, "xhr missing-record readystatechange");
+    check(events[1] == AppXhrEventKind::Error, "xhr missing-record error");
+    check(events[2] == AppXhrEventKind::LoadEnd, "xhr missing-record loadend");
+}
+
 } // namespace
 
 int main() {
@@ -128,5 +159,6 @@ int main() {
     xhr_rejects_non_subset_calls();
     xhr_send_failure_becomes_error_event();
     xhr_abort_cancels_pending_request();
+    xhr_missing_response_record_releases_handle();
     return 0;
 }

@@ -48,7 +48,6 @@ AppXhrStatus AppXmlHttpRequest::open(std::string method, std::string url, bool a
     }
 
     reset();
-    method_ = std::move(method);
     url_ = std::move(url);
     response_url_ = url_;
     set_ready_state(AppXhrReadyState::Opened);
@@ -117,6 +116,7 @@ bool AppXmlHttpRequest::handle_completion(AppRuntimeHost& host,
     const NetworkFetchRecord* record = network.response(completion.handle);
     if (record == nullptr) {
         finish_error(AppXhrEventKind::Error);
+        network.release_response(host, completion.handle);
         return true;
     }
 
@@ -153,7 +153,6 @@ void AppXmlHttpRequest::reset() {
     status_ = 0;
     job_id_ = 0;
     sent_ = false;
-    method_.clear();
     url_.clear();
     response_text_.clear();
     response_url_.clear();

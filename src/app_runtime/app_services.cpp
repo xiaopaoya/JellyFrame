@@ -172,7 +172,11 @@ bool NetworkFetchMock::release_response(AppRuntimeHost& host, std::uint32_t hand
         return record.handle == handle;
     });
     if (found == records_.end()) {
-        return false;
+        const HostHandleInfo* info = host.handles().lookup(handle);
+        if (info == nullptr || info->kind != HostServiceHandleKind::FetchResponse) {
+            return false;
+        }
+        return host.handles().release(handle);
     }
     records_.erase(found);
     return host.handles().release(handle);
