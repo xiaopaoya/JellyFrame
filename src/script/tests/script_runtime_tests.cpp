@@ -1,5 +1,6 @@
 ﻿#include "script/jerryscript_runtime.h"
 
+#include "app_runtime/app_services.h"
 #include "render_core/document_script.h"
 #include "render_core/dom.h"
 #include "render_core/form_control.h"
@@ -390,6 +391,96 @@ void javascript_interval_repeats_and_can_clear_itself() {
     check(runtime.eval("count").value == "2", "interval callback updates JS state twice");
 }
 
+std::size_t complete_network_and_dispatch(AppRuntimeHost& host,
+                                          NetworkFetchMock& network,
+                                          JerryScriptRuntime& runtime) {
+    network.complete_next(host);
+    std::vector<HostServiceCompletion> completions;
+    const AppCompletionPumpResult pumped = host.pump_frame_completions(completions);
+    (void) pumped;
+    std::size_t handled = 0;
+    for (const HostServiceCompletion& completion : completions) {
+        if (runtime.handle_host_completion(completion)) {
+            ++handled;
+        }
+    }
+    return handled;
+}
+
+void javascript_xml_http_request_get_completes_from_host_service() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>wait</p></body>");
+
+    AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
+    host.launch("org.example.xhr", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    check(network.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"temp\":21}"}),
+          "XHR fixture added");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_app_services(host, network);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var status = document.getElementById('status');"
+        "var log = '';"
+        "var xhr = new XMLHttpRequest();"
+        "xhr.onreadystatechange = function () { if (xhr.readyState == 4) log += 'done:' + xhr.status + ';'; };"
+        "xhr.onload = function (event) { status.textContent = event.type + ':' + xhr.responseText; };"
+        "xhr.onloadend = function () { log += 'end'; };"
+        "xhr.open('GET', 'app://weather', true);"
+        "xhr.send();"
+        "'sent'");
+    check(result.ok, "XHR script evaluates");
+    check(result.value == "sent", "XHR send script result");
+
+    check(complete_network_and_dispatch(host, network, runtime) == 1, "XHR completion dispatched");
+    check(document->text_content().find("load:{\"temp\":21}") != std::string::npos, "XHR load updates DOM");
+    check(runtime.eval("log").value.find("done:200") != std::string::npos, "XHR readyState/status observable");
+    check(runtime.eval("log").value.find("end") != std::string::npos, "XHR loadend observable");
+}
+
+void javascript_xml_http_request_error_callback_runs_on_missing_fixture() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>wait</p></body>");
+
+    AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
+    host.launch("org.example.xhr-error", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+
+    JerryScriptRuntime runtime;
+    runtime.bind_app_services(host, network);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var status = document.getElementById('status');"
+        "var xhr = new XMLHttpRequest();"
+        "xhr.onerror = function (event) { status.textContent = event.type + ':' + xhr.status; };"
+        "xhr.open('GET', 'app://missing', true);"
+        "xhr.send();"
+        "'sent'");
+    check(result.ok, "XHR error script evaluates");
+
+    check(complete_network_and_dispatch(host, network, runtime) == 1, "XHR error completion dispatched");
+    check(document->text_content().find("error:0") != std::string::npos, "XHR error updates DOM");
+}
+
+void javascript_xml_http_request_budget_is_bounded() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{64, 512, 256, 1});
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var bareOk = true;"
+        "try { XMLHttpRequest(); } catch (e) { bareOk = false; }"
+        "var first = new XMLHttpRequest();"
+        "var secondOk = true;"
+        "try { var second = new XMLHttpRequest(); } catch (e) { secondOk = false; }"
+        "String(bareOk) + ':' + String(secondOk)");
+    check(result.ok, "XHR budget script evaluates");
+    check(result.value == "false:false", "XHR requires new and rejects second object");
+    check(runtime.statistics().xml_http_request_count == 1, "XHR statistics count one live object");
+}
+
 void javascript_runtime_respects_timer_and_listener_budgets() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>Go</button></body>");
@@ -436,6 +527,9 @@ int main() {
         javascript_timeout_runs_when_host_pumps_time();
         javascript_clear_timeout_cancels_callback();
         javascript_interval_repeats_and_can_clear_itself();
+        javascript_xml_http_request_get_completes_from_host_service();
+        javascript_xml_http_request_error_callback_runs_on_missing_fixture();
+        javascript_xml_http_request_budget_is_bounded();
         javascript_runtime_respects_timer_and_listener_budgets();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';

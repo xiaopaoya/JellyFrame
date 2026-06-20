@@ -232,8 +232,8 @@ completion event：
 持有，UI/main task 只能通过 handle 查询并显式释放。
 
 `AppXmlHttpRequest` 会把这个服务映射成平台无关的异步 XHR V0 状态机：`open("GET", url, true)`、
-`send()`、`abort()`、`readyState`、`status`、`responseText`、`responseURL`、content type，以及后续
-JS binding 需要的标准事件序列。
+`send()`、`abort()`、`readyState`、`status`、`responseText`、`responseURL`、content type，以及
+JerryScript binding 使用的标准事件序列。
 
 能力 gate：
 
@@ -438,7 +438,7 @@ struct AppSystemStateSnapshot {
 3. 实现 image decode mock：用桌面库或预生成 raw surface 验证 `<img>`/图标生命周期。
 4. 在 ESP32-S3 port 中接 RGB565 小图/MJPEG decode，并严格限制尺寸和并发。
 5. 接 host-owned MP3 playback，只返回句柄和 ended/error 事件。
-6. 最后再暴露面向用户的 JS API。网络优先做异步 `XMLHttpRequest` 子集，`fetch()` 等有界
-   Promise/microtask 支持存在后再考虑；让 manifest/profile 检查拦截不支持目标。
+6. 面向用户的 JS API 必须在上述边界稳定后暴露。当前已暴露异步 `XMLHttpRequest` GET V0；
+   `fetch()` 等有界 Promise/microtask 支持存在后再考虑；让 manifest/profile 检查拦截不支持目标。
 
 这条顺序的核心目的很朴素：先把生命周期和调度做对，再逐步把真实硬件能力接进来。

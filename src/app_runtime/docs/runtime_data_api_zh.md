@@ -1,7 +1,7 @@
 # Runtime Data API 规划
 
-本文定义可选 runtime data services 未来如何暴露给 JavaScript。API 尚未暴露。面向用户的语法应尽量保持为
-Web 平台 API 的文档化子集，避免 app 作者学习 JellyFrame 专用的数据 API。
+本文定义可选 runtime data services 如何暴露给 JavaScript。面向用户的语法应尽量保持为 Web 平台 API
+的文档化子集，避免 app 作者学习 JellyFrame 专用的数据 API。
 
 ## 原则
 
@@ -23,17 +23,17 @@ V0 首选用户 API：异步 `XMLHttpRequest` 子集。
 `fetch()` 应等待 JellyFrame 具备有界 Promise/microtask 方案后再暴露。自定义 callback helper
 更容易实现，但会制造非标准写法，因此弃用该方向。
 
-当前平台无关地基：`AppXmlHttpRequest` 已在 `NetworkFetchMock`/host completion 之上实现 V0 XHR
-状态机。它还不是 JS binding；它提供了未来 `XMLHttpRequest` 构造器可以包装的已测试生命周期。
+当前已实现：`AppXmlHttpRequest` 在 `NetworkFetchMock`/host completion 之上提供 V0 XHR 状态机；
+`JerryScriptRuntime` 暴露 `XMLHttpRequest` 构造器，并通过 UI/main task pump accepted completion 后调用
+JS callback。Win32 browser shell 在 scripting 构建中绑定一个 debug network mock，便于桌面验证宿主完成路径。
 
-计划中的 XHR 子集：
+当前 XHR 子集：
 
 ```js
 var xhr = new XMLHttpRequest();
 xhr.open("GET", "https://api.example.com/weather", true);
-xhr.timeout = 3000;
 xhr.onload = function () {
-  console.log(xhr.status, xhr.responseText);
+  document.getElementById("status").textContent = xhr.status + ":" + xhr.responseText;
 };
 xhr.onerror = function () {};
 xhr.ontimeout = function () {};
@@ -46,7 +46,6 @@ V0 支持面应限制在：
 - `open(method, url, async)`，仅支持 async `GET`
 - `send()`
 - `abort()`
-- `timeout`
 - `readyState`
 - `status`
 - `responseText`
@@ -56,7 +55,7 @@ V0 支持面应限制在：
 - `onerror`
 - `ontimeout`
 - `onabort`
-- `getResponseHeader("content-type")`
+- `onloadend`
 
 规则：
 
@@ -64,7 +63,8 @@ V0 支持面应限制在：
 - 远程 HTML/CSS/script/image 仍禁止作为页面资源。
 - URL 长度、响应字节、超时和并发请求数来自合成后的 `NetworkFetchPolicy`。
 - 非 2xx HTTP status 不自动等同于传输错误。
-- POST、自定义 header、credentials、redirect、streaming、binary response type 和 upload progress 延后。
+- `timeout` property、`getResponseHeader()`、POST、自定义 header、credentials、redirect、streaming、
+  binary response type 和 upload progress 延后。
 
 ## App 私有 Storage
 

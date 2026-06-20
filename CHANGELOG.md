@@ -28,6 +28,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `AppXmlHttpRequest`, a platform-neutral async XHR V0 state machine over
   `NetworkFetchMock`/host completions, covering GET, abort, readyState/status,
   response text and standard event sequencing before exposing a JS binding.
+- Exposed an async `XMLHttpRequest` GET V0 subset through the JerryScript bridge
+  and wired Win32 browser scripting builds to a debug network mock so host
+  completions dispatch JavaScript callbacks on the main task.
 - Added `.jffont` V0 binary font supplement output to
   `jellyframe_font_pack_gen`, reusing the existing `BitmapFont` glyph data model
   without C++ pointers or compile-time symbols as groundwork for future dynamic

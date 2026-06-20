@@ -1,9 +1,9 @@
 # Runtime Data API Plan
 
-This document defines how optional runtime data services should eventually be
-exposed to JavaScript. The APIs are not exposed yet. User-facing syntax should
-stay a documented subset of Web platform APIs whenever practical, so app authors
-do not need to learn JellyFrame-only data APIs.
+This document defines how optional runtime data services are exposed to
+JavaScript. User-facing syntax should stay a documented subset of Web platform
+APIs whenever practical, so app authors do not need to learn JellyFrame-only
+data APIs.
 
 ## Principles
 
@@ -28,19 +28,20 @@ Preferred V0 user-facing API: an asynchronous `XMLHttpRequest` subset.
 A custom callback helper would be easier to implement, but it would create
 non-standard authoring habits and is therefore rejected.
 
-Current platform-neutral groundwork: `AppXmlHttpRequest` implements the V0 XHR
-state machine over `NetworkFetchMock`/host completions. It is not a JS binding
-yet; it provides the tested lifecycle that a future `XMLHttpRequest` constructor
-can wrap.
+Current implementation: `AppXmlHttpRequest` provides the V0 XHR state machine
+over `NetworkFetchMock`/host completions. `JerryScriptRuntime` exposes an
+`XMLHttpRequest` constructor and calls JavaScript callbacks only after the
+UI/main task pumps accepted completions. The Win32 browser shell binds a debug
+network mock in scripting builds so desktop validation can exercise the same
+host-completion path.
 
-Planned XHR subset:
+Current XHR subset:
 
 ```js
 var xhr = new XMLHttpRequest();
 xhr.open("GET", "https://api.example.com/weather", true);
-xhr.timeout = 3000;
 xhr.onload = function () {
-  console.log(xhr.status, xhr.responseText);
+  document.getElementById("status").textContent = xhr.status + ":" + xhr.responseText;
 };
 xhr.onerror = function () {};
 xhr.ontimeout = function () {};
@@ -53,7 +54,6 @@ Supported V0 surface should be limited to:
 - `open(method, url, async)` with async `GET` only
 - `send()`
 - `abort()`
-- `timeout`
 - `readyState`
 - `status`
 - `responseText`
@@ -63,7 +63,7 @@ Supported V0 surface should be limited to:
 - `onerror`
 - `ontimeout`
 - `onabort`
-- `getResponseHeader("content-type")`
+- `onloadend`
 
 Rules:
 
@@ -73,8 +73,9 @@ Rules:
 - URL length, response bytes, timeout and in-flight request count come from the
   merged `NetworkFetchPolicy`.
 - Non-2xx HTTP status is not automatically a transport error.
-- POST, custom headers, credentials, redirects, streaming, binary response
-  types and upload progress are deferred.
+- `timeout` property, `getResponseHeader()`, POST, custom headers,
+  credentials, redirects, streaming, binary response types and upload progress
+  are deferred.
 
 ## App-Private Storage
 

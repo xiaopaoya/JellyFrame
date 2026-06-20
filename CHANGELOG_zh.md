@@ -23,6 +23,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 `AppXmlHttpRequest`，在 `NetworkFetchMock`/host completion 之上提供平台无关异步
   XHR V0 状态机，覆盖 GET、abort、readyState/status、响应文本和标准事件顺序，为后续 JS
   binding 做准备。
+- JerryScript bridge 暴露异步 `XMLHttpRequest` GET V0 子集，并让 Win32 browser scripting 构建
+  通过 debug network mock 验证 host completion 到 JS callback 的主线程分发路径。
 - `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有
   `BitmapFont` glyph 数据模型，但去掉 C++ 指针和编译期符号，为后续 `.jfapp`
   动态包内字体资源打基础。

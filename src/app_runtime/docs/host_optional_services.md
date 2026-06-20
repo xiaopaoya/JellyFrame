@@ -262,7 +262,7 @@ release it.
 `AppXmlHttpRequest` maps this service into a platform-neutral asynchronous XHR
 V0 state machine: `open("GET", url, true)`, `send()`, `abort()`,
 `readyState`, `status`, `responseText`, `responseURL`, content type and the
-standard event sequence needed by a later JS binding.
+standard event sequence used by the JerryScript binding.
 
 Policy gate:
 
@@ -487,9 +487,10 @@ Recommended order:
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.
-6. Expose user-facing JS APIs last. Prefer an asynchronous `XMLHttpRequest`
-   subset before `fetch()`; expose `fetch()` only after bounded Promise/microtask
-   support exists. Let manifest/profile checks reject unsupported targets.
+6. Expose user-facing JS APIs only after the lifetime boundary is stable. The
+   asynchronous `XMLHttpRequest` GET V0 subset is now exposed; `fetch()` waits
+   for bounded Promise/microtask support. Let manifest/profile checks reject
+   unsupported targets.
 
 The point is to get lifetime and scheduling right first, then attach real
 hardware capabilities gradually.

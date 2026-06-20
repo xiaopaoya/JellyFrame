@@ -89,16 +89,25 @@ surface.
 - Network loading, ES modules, dynamic import and the full HTML loading
   algorithm remain intentionally out of scope.
 
-## Planned Runtime Data APIs
+## Runtime Data APIs
 
-Optional network, app-private KV storage and system status events are being
-designed under `src/app_runtime/docs/runtime_data_api.md`. The intended V0 shape
-is standard-subset first: asynchronous `XMLHttpRequest` before `fetch()`,
-a tiny `localStorage` subset only when a non-blocking app-private RAM shadow is
-available, and system state mapped to existing web-adjacent events such as
-`online`, `offline` and `visibilitychange` where possible. These APIs are not
-exposed yet; the current implementation only provides the platform-neutral C++
-request/completion queues, policy gates, mocks and system-event queue.
+Optional network, app-private KV storage and system status event shapes are
+documented under `src/app_runtime/docs/runtime_data_api.md`.
+
+- Exposed now: asynchronous `XMLHttpRequest` V0, including
+  `new XMLHttpRequest()`, async `GET` `open()`, `send()`, `abort()`,
+  `readyState`, `status`, `responseText`, `responseURL` and
+  `onreadystatechange/onload/onerror/ontimeout/onabort/onloadend` callback
+  properties.
+- Callbacks run only after the host pumps network completions back to the
+  UI/main task. Workers never call JavaScript directly.
+- The Win32 browser shell binds a debug `NetworkFetchMock` in scripting builds
+  for desktop validation of the completion-dispatch model. It does not mean the
+  core contains a real network stack.
+- `fetch()` should wait for bounded Promise/microtask support. A tiny
+  `localStorage` subset should be exposed only when a host can provide a
+  non-blocking app-private RAM shadow. System state should map to web-adjacent
+  `online`, `offline` and `visibilitychange` events where possible.
 
 ## Embedded-App DOM Helpers
 
@@ -126,7 +135,7 @@ request/completion queues, policy gates, mocks and system-event queue.
 - Dynamic `dataset` property creation or native mutation through new arbitrary keys.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
-- Networking, modules, dynamic import, storage, system-status JS callbacks,
+- `fetch()`, modules, dynamic import, storage, system-status JS callbacks,
   canvas and Web Components.
 
 ## Embedded Policy

@@ -1,11 +1,13 @@
 ﻿#include "script/jerryscript_runtime.h"
 
+#include "app_runtime/xml_http_request.h"
 #include "render_core/form_control.h"
 #include "render_core/style.h"
 
 #include <jerryscript.h>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
@@ -33,6 +35,14 @@ struct ScriptTimer {
     std::uint32_t delay_ms = 0;
     jerry_value_t callback = 0;
     bool repeat = false;
+    bool active = false;
+};
+
+struct ScriptXmlHttpRequest {
+    JerryScriptRuntime* runtime = nullptr;
+    AppXmlHttpRequest request;
+    jerry_value_t object = 0;
+    std::array<jerry_value_t, 6> callbacks{};
     bool active = false;
 };
 
@@ -75,6 +85,18 @@ struct ScriptRuntimeAccess {
         runtime.clear_timer(id);
     }
 
+    static ScriptXmlHttpRequest* create_xml_http_request(JerryScriptRuntime& runtime) {
+        return runtime.create_xml_http_request();
+    }
+
+    static AppRuntimeHost* app_host(JerryScriptRuntime& runtime) {
+        return runtime.app_host_;
+    }
+
+    static NetworkFetchMock* network_fetch(JerryScriptRuntime& runtime) {
+        return runtime.network_fetch_;
+    }
+
 };
 
 namespace {
@@ -84,6 +106,7 @@ bool g_runtime_active = false;
 const jerry_object_native_info_t kNodeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kRuntimeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kEventNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kXhrNativeInfo = {nullptr, 0, 0};
 
 class JerryValue {
 public:
@@ -437,6 +460,35 @@ Event* native_event(const jerry_value_t object) {
         return nullptr;
     }
     return static_cast<Event*>(jerry_object_get_native_ptr(object, &kEventNativeInfo));
+}
+
+ScriptXmlHttpRequest* native_xhr(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    return static_cast<ScriptXmlHttpRequest*>(jerry_object_get_native_ptr(object, &kXhrNativeInfo));
+}
+
+std::size_t xhr_event_index(AppXhrEventKind kind) {
+    return static_cast<std::size_t>(kind);
+}
+
+const char* xhr_event_type(AppXhrEventKind kind) {
+    switch (kind) {
+    case AppXhrEventKind::ReadyStateChange:
+        return "readystatechange";
+    case AppXhrEventKind::Load:
+        return "load";
+    case AppXhrEventKind::Error:
+        return "error";
+    case AppXhrEventKind::Timeout:
+        return "timeout";
+    case AppXhrEventKind::Abort:
+        return "abort";
+    case AppXhrEventKind::LoadEnd:
+        return "loadend";
+    }
+    return "event";
 }
 
 bool same_js_value(jerry_value_t left, jerry_value_t right) {
@@ -851,6 +903,215 @@ void define_accessor(jerry_value_t object,
     jerry_property_descriptor_free(&descriptor);
 }
 
+jerry_value_t make_xhr_event_object(ScriptXmlHttpRequest& xhr, AppXhrEventKind kind) {
+    JerryValue object(jerry_object());
+    set_property(object.get(), "type", string_to_value(xhr_event_type(kind)).get());
+    if (xhr.object != 0) {
+        JerryValue target(jerry_value_copy(xhr.object));
+        set_property(object.get(), "target", target.get());
+        set_property(object.get(), "currentTarget", target.get());
+    } else {
+        set_property(object.get(), "target", jerry_null());
+        set_property(object.get(), "currentTarget", jerry_null());
+    }
+    return object.release();
+}
+
+void dispatch_xhr_events(ScriptXmlHttpRequest& xhr) {
+    AppXhrEventKind events[AppXmlHttpRequest::kMaxQueuedEvents];
+    while (true) {
+        const std::size_t count = xhr.request.take_events(events, AppXmlHttpRequest::kMaxQueuedEvents);
+        if (count == 0) {
+            return;
+        }
+        for (std::size_t index = 0; index < count; ++index) {
+            const std::size_t callback_index = xhr_event_index(events[index]);
+            if (callback_index >= xhr.callbacks.size() || xhr.callbacks[callback_index] == 0 ||
+                !jerry_value_is_function(xhr.callbacks[callback_index])) {
+                continue;
+            }
+            JerryValue callback(jerry_value_copy(xhr.callbacks[callback_index]));
+            JerryValue event_object(make_xhr_event_object(xhr, events[index]));
+            const jerry_value_t event_arg = event_object.get();
+            JerryValue this_value(xhr.object != 0 ? jerry_value_copy(xhr.object) : jerry_undefined());
+            JerryValue result(jerry_call(callback.get(), this_value.get(), &event_arg, 1));
+            if (jerry_value_is_exception(result.get())) {
+                JerryValue exception_value(jerry_exception_value(result.release(), true));
+                (void) exception_value;
+            }
+        }
+    }
+}
+
+void set_xhr_callback(ScriptXmlHttpRequest& xhr, AppXhrEventKind kind, jerry_value_t value) {
+    const std::size_t index = xhr_event_index(kind);
+    if (index >= xhr.callbacks.size()) {
+        return;
+    }
+    if (xhr.callbacks[index] != 0) {
+        jerry_value_free(xhr.callbacks[index]);
+        xhr.callbacks[index] = 0;
+    }
+    if (jerry_value_is_function(value)) {
+        xhr.callbacks[index] = jerry_value_copy(value);
+    }
+}
+
+jerry_value_t get_xhr_callback(const ScriptXmlHttpRequest& xhr, AppXhrEventKind kind) {
+    const std::size_t index = xhr_event_index(kind);
+    if (index >= xhr.callbacks.size() || xhr.callbacks[index] == 0) {
+        return jerry_null();
+    }
+    return jerry_value_copy(xhr.callbacks[index]);
+}
+
+jerry_value_t xhr_construct(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t[],
+                            const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr || jerry_value_is_undefined(call_info_p->new_target) ||
+        !jerry_value_is_object(call_info_p->this_value)) {
+        return throw_type_error("XMLHttpRequest must be constructed with new");
+    }
+    ScriptXmlHttpRequest* xhr = ScriptRuntimeAccess::create_xml_http_request(*runtime);
+    if (xhr == nullptr) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "XMLHttpRequest budget exceeded");
+    }
+
+    xhr->object = jerry_value_copy(call_info_p->this_value);
+    jerry_object_set_native_ptr(call_info_p->this_value, &kXhrNativeInfo, xhr);
+    jerry_object_set_native_ptr(call_info_p->this_value, &kRuntimeNativeInfo, runtime);
+    return jerry_undefined();
+}
+
+jerry_value_t xhr_open(const jerry_call_info_t* call_info_p,
+                       const jerry_value_t args_p[],
+                       const jerry_length_t args_count) {
+    ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value);
+    if (xhr == nullptr || args_count < 2) {
+        return throw_type_error("XMLHttpRequest.open requires method and url");
+    }
+    const bool async = args_count < 3 || jerry_value_to_boolean(args_p[2]);
+    const AppXhrStatus status = xhr->request.open(value_to_string(args_p[0]), value_to_string(args_p[1]), async);
+    dispatch_xhr_events(*xhr);
+    if (status == AppXhrStatus::Ok) {
+        return jerry_undefined();
+    }
+    if (status == AppXhrStatus::SyncNotSupported) {
+        return throw_type_error("synchronous XMLHttpRequest is not supported");
+    }
+    if (status == AppXhrStatus::UnsupportedMethod) {
+        return throw_type_error("XMLHttpRequest only supports GET in this build");
+    }
+    return throw_type_error("invalid XMLHttpRequest.open arguments");
+}
+
+jerry_value_t xhr_send(const jerry_call_info_t* call_info_p,
+                       const jerry_value_t[],
+                       const jerry_length_t) {
+    ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value);
+    JerryScriptRuntime* runtime = xhr != nullptr ? xhr->runtime : nullptr;
+    if (xhr == nullptr || runtime == nullptr) {
+        return throw_type_error("XMLHttpRequest.send called on invalid object");
+    }
+    AppRuntimeHost* host = ScriptRuntimeAccess::app_host(*runtime);
+    NetworkFetchMock* network = ScriptRuntimeAccess::network_fetch(*runtime);
+    if (host == nullptr || network == nullptr) {
+        return throw_type_error("XMLHttpRequest network service is not bound");
+    }
+    const AppXhrStatus status = xhr->request.send(*host, *network);
+    dispatch_xhr_events(*xhr);
+    if (status == AppXhrStatus::Ok || status == AppXhrStatus::SubmitFailed) {
+        return jerry_undefined();
+    }
+    return throw_type_error("XMLHttpRequest.send called before open or after send");
+}
+
+jerry_value_t xhr_abort(const jerry_call_info_t* call_info_p,
+                        const jerry_value_t[],
+                        const jerry_length_t) {
+    ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value);
+    JerryScriptRuntime* runtime = xhr != nullptr ? xhr->runtime : nullptr;
+    AppRuntimeHost* host = runtime != nullptr ? ScriptRuntimeAccess::app_host(*runtime) : nullptr;
+    if (xhr == nullptr || runtime == nullptr || host == nullptr) {
+        return jerry_undefined();
+    }
+    xhr->request.abort(*host);
+    dispatch_xhr_events(*xhr);
+    return jerry_undefined();
+}
+
+jerry_value_t xhr_get_ready_state(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) {
+    ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value);
+    return jerry_number(xhr != nullptr ? static_cast<int>(xhr->request.ready_state()) : 0);
+}
+
+jerry_value_t xhr_get_status(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) {
+    ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value);
+    return jerry_number(xhr != nullptr ? xhr->request.status() : 0);
+}
+
+jerry_value_t xhr_get_response_text(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value);
+    return jerry_string_sz(xhr != nullptr ? xhr->request.response_text().c_str() : "");
+}
+
+jerry_value_t xhr_get_response_url(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t[],
+                                   const jerry_length_t) {
+    ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value);
+    return jerry_string_sz(xhr != nullptr ? xhr->request.response_url().c_str() : "");
+}
+
+#define JELLYFRAME_XHR_CALLBACK_ACCESSOR(js_name, event_kind) \
+    jerry_value_t xhr_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value); \
+        return xhr != nullptr ? get_xhr_callback(*xhr, event_kind) : jerry_null(); \
+    } \
+    jerry_value_t xhr_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        ScriptXmlHttpRequest* xhr = native_xhr(call_info_p->this_value); \
+        if (xhr != nullptr) { \
+            set_xhr_callback(*xhr, event_kind, args_count > 0 ? args_p[0] : jerry_null()); \
+        } \
+        return jerry_undefined(); \
+    }
+
+JELLYFRAME_XHR_CALLBACK_ACCESSOR(onreadystatechange, AppXhrEventKind::ReadyStateChange)
+JELLYFRAME_XHR_CALLBACK_ACCESSOR(onload, AppXhrEventKind::Load)
+JELLYFRAME_XHR_CALLBACK_ACCESSOR(onerror, AppXhrEventKind::Error)
+JELLYFRAME_XHR_CALLBACK_ACCESSOR(ontimeout, AppXhrEventKind::Timeout)
+JELLYFRAME_XHR_CALLBACK_ACCESSOR(onabort, AppXhrEventKind::Abort)
+JELLYFRAME_XHR_CALLBACK_ACCESSOR(onloadend, AppXhrEventKind::LoadEnd)
+
+#undef JELLYFRAME_XHR_CALLBACK_ACCESSOR
+
+void install_xhr_members(jerry_value_t object) {
+    define_accessor(object, "readyState", xhr_get_ready_state, node_ignore_setter);
+    define_accessor(object, "status", xhr_get_status, node_ignore_setter);
+    define_accessor(object, "responseText", xhr_get_response_text, node_ignore_setter);
+    define_accessor(object, "responseURL", xhr_get_response_url, node_ignore_setter);
+    define_accessor(object, "onreadystatechange", xhr_get_onreadystatechange, xhr_set_onreadystatechange);
+    define_accessor(object, "onload", xhr_get_onload, xhr_set_onload);
+    define_accessor(object, "onerror", xhr_get_onerror, xhr_set_onerror);
+    define_accessor(object, "ontimeout", xhr_get_ontimeout, xhr_set_ontimeout);
+    define_accessor(object, "onabort", xhr_get_onabort, xhr_set_onabort);
+    define_accessor(object, "onloadend", xhr_get_onloadend, xhr_set_onloadend);
+    set_method(object, "open", xhr_open);
+    set_method(object, "send", xhr_send);
+    set_method(object, "abort", xhr_abort);
+}
+
+void install_xml_http_request_constructor(jerry_value_t target, JerryScriptRuntime& runtime) {
+    JerryValue constructor(jerry_function_external(xhr_construct));
+    jerry_object_set_native_ptr(constructor.get(), &kRuntimeNativeInfo, &runtime);
+    JerryValue prototype(jerry_object());
+    install_xhr_members(prototype.get());
+    set_property(constructor.get(), "prototype", prototype.get());
+    set_property(target, "XMLHttpRequest", constructor.get());
+}
+
 jerry_value_t make_dataset_object(JerryScriptRuntime& runtime, Node& node) {
     (void) runtime;
     JerryValue object(jerry_object());
@@ -1215,10 +1476,12 @@ JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
           std::max<std::size_t>(1, budgets.max_timers),
           std::max<std::size_t>(1, budgets.max_event_listeners),
           std::max<std::size_t>(1, budgets.max_detached_dom_nodes),
+          16,
       }) {}
 
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
+        clear_xml_http_requests();
         clear_script_event_listeners();
         clear_timers();
         jerry_cleanup();
@@ -1228,6 +1491,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 }
 
 void JerryScriptRuntime::bind_document(Node& document) {
+    clear_xml_http_requests();
     clear_script_event_listeners();
     clear_timers();
     detached_nodes_.clear_detached_nodes();
@@ -1250,6 +1514,18 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(global.get(), "setInterval", script_set_interval, *this);
     set_runtime_method(global.get(), "clearInterval", script_clear_timer, *this);
+    install_xml_http_request_constructor(window_object.get(), *this);
+    install_xml_http_request_constructor(global.get(), *this);
+}
+
+void JerryScriptRuntime::bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) {
+    app_host_ = &host;
+    network_fetch_ = &network;
+}
+
+void JerryScriptRuntime::clear_app_services() {
+    app_host_ = nullptr;
+    network_fetch_ = nullptr;
 }
 
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {
@@ -1309,6 +1585,22 @@ std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t ma
     return callbacks;
 }
 
+bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& completion) {
+    if (app_host_ == nullptr || network_fetch_ == nullptr) {
+        return false;
+    }
+    for (const auto& xhr : xml_http_requests_) {
+        if (!xhr->active) {
+            continue;
+        }
+        if (xhr->request.handle_completion(*app_host_, *network_fetch_, completion)) {
+            dispatch_xhr_events(*xhr);
+            return true;
+        }
+    }
+    return false;
+}
+
 bool JerryScriptRuntime::has_pending_timers() const {
     for (const auto& timer : timers_) {
         if (timer->active) {
@@ -1336,6 +1628,7 @@ ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
     ScriptRuntimeStatistics output;
     output.timer_count = timers_.size();
     output.event_listener_count = event_listeners_.size();
+    output.xml_http_request_count = xml_http_requests_.size();
     output.detached_nodes = detached_nodes_.detached_statistics();
     return output;
 }
@@ -1479,6 +1772,42 @@ void JerryScriptRuntime::clear_timers() {
         }
     }
     timers_.clear();
+}
+
+ScriptXmlHttpRequest* JerryScriptRuntime::create_xml_http_request() {
+    xml_http_requests_.erase(std::remove_if(xml_http_requests_.begin(), xml_http_requests_.end(),
+        [](const std::unique_ptr<ScriptXmlHttpRequest>& xhr) {
+            return !xhr->active;
+        }), xml_http_requests_.end());
+    if (xml_http_requests_.size() >= std::max<std::size_t>(1, options_.max_xml_http_requests)) {
+        return nullptr;
+    }
+    auto xhr = std::make_unique<ScriptXmlHttpRequest>();
+    xhr->runtime = this;
+    xhr->active = true;
+    ScriptXmlHttpRequest* raw = xhr.get();
+    xml_http_requests_.push_back(std::move(xhr));
+    return raw;
+}
+
+void JerryScriptRuntime::clear_xml_http_requests() {
+    for (const auto& xhr : xml_http_requests_) {
+        if (xhr->active && app_host_ != nullptr) {
+            xhr->request.abort(*app_host_);
+        }
+        if (xhr->object != 0) {
+            jerry_value_free(xhr->object);
+            xhr->object = 0;
+        }
+        for (jerry_value_t& callback : xhr->callbacks) {
+            if (callback != 0) {
+                jerry_value_free(callback);
+                callback = 0;
+            }
+        }
+        xhr->active = false;
+    }
+    xml_http_requests_.clear();
 }
 
 } // namespace jellyframe

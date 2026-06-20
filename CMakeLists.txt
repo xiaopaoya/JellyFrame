@@ -102,7 +102,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
     add_library(jellyframe_script
         src/script/jerryscript_runtime.cpp
     )
-    target_link_libraries(jellyframe_script PUBLIC jellyframe_render_core ${JERRYSCRIPT_LIBRARIES})
+    target_link_libraries(jellyframe_script PUBLIC jellyframe_app_runtime ${JERRYSCRIPT_LIBRARIES})
     target_include_directories(jellyframe_script
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src

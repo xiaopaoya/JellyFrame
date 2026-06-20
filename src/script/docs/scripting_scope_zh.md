@@ -75,14 +75,20 @@ API 表面。
   仍作为额外桌面验收脚本保留。
 - 网络加载、ES modules、dynamic import 和完整 HTML loading algorithm 继续排除。
 
-## 规划中的 Runtime Data APIs
+## Runtime Data APIs
 
 可选网络、app 私有 KV storage 和 system status events 的 JS 暴露形状记录在
-`src/app_runtime/docs/runtime_data_api_zh.md`。计划中的 V0 改为标准子集优先：先做异步
-`XMLHttpRequest` 子集，再等 Promise/microtask 有界后考虑 `fetch()`；只有在宿主能提供非阻塞
-app 私有内存 shadow 时才暴露极小 `localStorage` 子集；系统状态尽量映射到 `online`、`offline`
-和 `visibilitychange` 等已有 Web 邻近事件。这些 API 尚未暴露；当前实现只提供平台无关 C++
-request/completion 队列、policy gate、mock 和 system-event queue。
+`src/app_runtime/docs/runtime_data_api_zh.md`。
+
+- 已暴露：异步 `XMLHttpRequest` V0 子集，包含 `new XMLHttpRequest()`、async `GET`
+  `open()`、`send()`、`abort()`、`readyState`、`status`、`responseText`、`responseURL`
+  和 `onreadystatechange/onload/onerror/ontimeout/onabort/onloadend` callback 属性。
+- 回调只在宿主把 network completion 泵回 UI/main task 后执行；worker 不直接调用 JS。
+- scripting 构建中的 Win32 browser shell 绑定 debug `NetworkFetchMock`，用于桌面验证 completion
+  分发模型，不代表核心包含真实网络栈。
+- `fetch()` 等 Promise/microtask 有界后再考虑；只有在宿主能提供非阻塞 app 私有内存 shadow 时才暴露
+  极小 `localStorage` 子集；系统状态尽量映射到 `online`、`offline` 和 `visibilitychange` 等
+  Web 邻近事件。
 
 ## Embedded-App DOM Helpers
 
@@ -107,7 +113,7 @@ request/completion 队列、policy gate、mock 和 system-event queue。
 - 完整 selector API，例如 `querySelector` / `querySelectorAll`。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
-- 网络、模块、dynamic import、storage、system-status JS callback、canvas 和 Web Components。
+- `fetch()`、模块、dynamic import、storage、system-status JS callback、canvas 和 Web Components。
 
 ## 嵌入式策略
 

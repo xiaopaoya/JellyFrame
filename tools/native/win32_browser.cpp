@@ -3,6 +3,7 @@
 #endif
 
 #include "app_runtime/app_host.h"
+#include "app_runtime/app_services.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
 #include "render_core/display_invalidation.h"
@@ -787,7 +788,11 @@ public:
             app_runtime_.launch(options_.app_path, AppRole::App);
         } else if (!options_.registry_store_path.empty()) {
             app_runtime_.launch("org.jellyframe.system.launcher", AppRole::Launcher);
+        } else {
+            app_runtime_.launch("org.jellyframe.debug.page", AppRole::App);
         }
+        debug_network_.add_fixture(NetworkFetchFixture{"app://ping", 200, "text/plain", "pong"});
+        debug_network_.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"temp\":21}"});
     }
 
     bool initialize(HINSTANCE instance, int show_command) {
@@ -862,6 +867,7 @@ private:
     bool system_shell_mode_ = false;
     std::string active_app_id_;
     AppRuntimeHost app_runtime_{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
+    NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
     std::string pending_shell_action_;
     std::string pending_shell_app_id_;
 
@@ -948,16 +954,29 @@ private:
         return !runtime_controls_page() || app_runtime_.current().state == AppLifecycleState::Foreground;
     }
 
-    void drain_host_completions() {
+    bool drain_host_completions() {
         std::vector<HostServiceCompletion> accepted;
         const AppCompletionPumpResult result = app_runtime_.pump_frame_completions(accepted);
         if (result.consumed == 0) {
-            return;
+            return false;
         }
+        std::size_t script_handled = 0;
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr &&
+            script_runtime_instance_id_ == app_runtime_.current_app_instance_id()) {
+            for (const HostServiceCompletion& completion : accepted) {
+                if (script_runtime_->handle_host_completion(completion)) {
+                    ++script_handled;
+                }
+            }
+        }
+#endif
         std::cout << "host completions consumed=" << result.consumed
                   << " accepted=" << result.accepted
                   << " stale=" << result.stale
-                  << " released_stale_handles=" << result.released_stale_handles << '\n';
+                  << " released_stale_handles=" << result.released_stale_handles
+                  << " script_handled=" << script_handled << '\n';
+        return script_handled != 0;
     }
 
     void configure_system_shell(std::string status) {
@@ -1116,6 +1135,7 @@ private:
             if (!document_scripts.empty() || !options_.script_path.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
                 script_runtime_instance_id_ = app_runtime_.current_app_instance_id();
+                script_runtime_->bind_app_services(app_runtime_, debug_network_);
                 script_runtime_->set_host_time_ms(GetTickCount64());
                 script_runtime_->bind_document(*document_);
                 for (const DocumentScript& script : document_scripts) {
@@ -1515,8 +1535,10 @@ private:
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
             return;
         }
+        const bool completed_network = debug_network_.complete_next(app_runtime_);
+        const bool handled_completion = drain_host_completions();
         const std::size_t callbacks = script_runtime_->pump_timers(GetTickCount64(), 8);
-        if (callbacks != 0) {
+        if (callbacks != 0 || completed_network || handled_completion) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #endif
