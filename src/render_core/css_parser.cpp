@@ -611,6 +611,33 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "outline-color") {
         return is_supported_color_value(value);
     }
+    if (property == "text-decoration" || property == "text-decoration-line") {
+        if (value == "none") {
+            return true;
+        }
+        bool saw_line = false;
+        std::size_t begin = 0;
+        while (begin < value.size()) {
+            while (begin < value.size() && is_ascii_space(value[begin])) {
+                ++begin;
+            }
+            std::size_t end = begin;
+            while (end < value.size() && !is_ascii_space(value[end])) {
+                ++end;
+            }
+            const std::string token = trim(std::string_view(value).substr(begin, end - begin));
+            if (token.empty()) {
+                break;
+            }
+            if (token == "underline" || token == "line-through") {
+                saw_line = true;
+            } else if (token != "solid" && token != "none") {
+                return false;
+            }
+            begin = end;
+        }
+        return saw_line;
+    }
     return false;
 }
 

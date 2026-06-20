@@ -164,22 +164,29 @@ void outline_and_text_shadow_emit_paint_commands() {
     auto pipeline = build_pipeline("<body><button class='cta'>Glow</button></body>",
                                    ".cta { display: block; width: 80px; height: 32px; "
                                    "outline: 2px solid rgba(255,255,255,0.5); "
-                                   "text-shadow: 1px 1px 2px rgba(0,0,0,0.35); }");
+                                   "text-shadow: 1px 1px 2px rgba(0,0,0,0.35); "
+                                   "text-decoration: underline; }");
 
     LayerTreeBuilder layer_tree_builder;
     DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
     bool found_outline = false;
+    bool found_decoration = false;
     int glow_text_commands = 0;
     for (const DisplayCommand& command : flattened) {
         if (command.type == DisplayCommandType::StrokeRect && command.stroke_width == 2 &&
             command.color.a >= 126 && command.color.a <= 128) {
             found_outline = true;
         }
+        if (command.type == DisplayCommandType::FillRect && command.rect.height <= 2 &&
+            command.rect.width > 20 && command.color.a == 255) {
+            found_decoration = true;
+        }
         if (command.type == DisplayCommandType::Text && command.text == "Glow") {
             ++glow_text_commands;
         }
     }
     check(found_outline, "outline emits stroke command");
+    check(found_decoration, "text-decoration emits a small paint command");
     check(glow_text_commands >= 2, "text-shadow emits shadow text before main text");
 }
 

@@ -36,8 +36,8 @@ DOM + CSSOM
   oversized renders return an empty framebuffer before allocating pixels.
 - Source-over alpha compositing.
 - Rectangle fills, stroke rectangles, non-layout outline strokes, cheap
-  approximate `box-shadow`/`text-shadow` commands and two-color horizontal or
-  vertical linear-gradient command support.
+  approximate `box-shadow`/`text-shadow` commands, solid text-decoration lines
+  and two-color horizontal or vertical linear-gradient command support.
 - Rounded rectangle clipping for filled backgrounds.
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.

@@ -1738,6 +1738,7 @@ enum class CascadeProperty : std::size_t {
     FontWeight,
     LineHeight,
     TextIndent,
+    TextDecoration,
     BoxShadow,
     Overflow,
     Opacity,
@@ -1897,6 +1898,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "text-indent") {
         return &cascade_slot(slots, CascadeProperty::TextIndent);
+    }
+    if (property == "text-decoration" || property == "text-decoration-line") {
+        return &cascade_slot(slots, CascadeProperty::TextDecoration);
     }
     if (property == "text-shadow") {
         return &cascade_slot(slots, CascadeProperty::TextShadow);
@@ -2332,6 +2336,31 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.text_indent = px;
         style.text_indent_specified = true;
+        return true;
+    } else if (property == "text-decoration" || property == "text-decoration-line") {
+        const std::vector<std::string> tokens = split_whitespace_components(lowercase(trim(value)));
+        if (tokens.empty()) {
+            return false;
+        }
+        bool underline = false;
+        bool line_through = false;
+        for (const std::string& token : tokens) {
+            if (token == "none") {
+                underline = false;
+                line_through = false;
+            } else if (token == "underline") {
+                underline = true;
+            } else if (token == "line-through") {
+                line_through = true;
+            } else if (token == "solid") {
+                continue;
+            } else {
+                return false;
+            }
+        }
+        style.text_decoration_underline = underline;
+        style.text_decoration_line_through = line_through;
+        style.text_decoration_specified = true;
         return true;
     } else if (property == "text-shadow") {
         const std::string lowered = lowercase(trim(value));

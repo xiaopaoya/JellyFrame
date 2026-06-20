@@ -134,6 +134,9 @@ struct Style {
     bool line_height_specified = false;
     int text_indent = 0;
     bool text_indent_specified = false;
+    bool text_decoration_underline = false;
+    bool text_decoration_line_through = false;
+    bool text_decoration_specified = false;
     std::string text_shadow;
     bool text_shadow_specified = false;
     std::string box_shadow;

@@ -65,7 +65,7 @@ layout behavior.
   subset; `:where()` contributes zero specificity.
 - UI-oriented declarations for the embedded app subset, including
   physical `margin-*`/`padding-*`/`border-*-width` longhands,
-  `outline`, `text-shadow`, `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `flex`,
+  `outline`, `text-shadow`, `text-decoration`, `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `flex`,
   `flex-grow`, `flex-shrink`, `flex-basis`, `position`, `top`, `right`,
   `bottom`, `left`, `grid-template-columns` with a `minmax()` minimum track,
   `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))`, `grid-auto-rows` with a

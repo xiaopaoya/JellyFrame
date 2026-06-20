@@ -167,6 +167,7 @@ clear older supported fallback declarations.
 | `line-height` | Works | Unitless multiplier or length. |
 | `text-align` | Works | `left`, `right`, `start`, `end`, `center`. |
 | `text-indent` | Works | Length value. |
+| `text-decoration` / `text-decoration-line` | Subset | `none`, `underline` and `line-through` paint cheap solid decoration lines. Color/thickness/style variants and wavy/double lines are deferred. |
 | `text-shadow` | Subset | First shadow is painted as offset text; blur is parsed for compatibility but not rasterized, and multiple shadows are not painted yet. |
 | `box-sizing` | Works | `content-box`, `border-box`. |
 | `overflow` | Subset | `visible`, `hidden`, `clip`, `auto`, `scroll`; clipping creates layer boundaries, but native scroll containers are not complete. |

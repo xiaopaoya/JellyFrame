@@ -27,6 +27,10 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     if (!style.text_indent_specified) {
         style.text_indent = parent_style.text_indent;
     }
+    if (!style.text_decoration_specified) {
+        style.text_decoration_underline = parent_style.text_decoration_underline;
+        style.text_decoration_line_through = parent_style.text_decoration_line_through;
+    }
     if (!style.text_shadow_specified) {
         style.text_shadow = parent_style.text_shadow;
     }

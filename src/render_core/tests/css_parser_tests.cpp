@@ -199,7 +199,8 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
         ".gel { background: #102030; background: linear-gradient(to right, #102030, rgba(80, 120, 160, 0.5)); }"
         ".bad-color { color: #123456; color: linear-gradient(#ffffff, #000000); }"
         ".fallback { background: #111111; background: linear-gradient(45deg, #ffffff, #000000); }"
-        ".fx { text-shadow: 0 1px 2px rgba(0,0,0,0.35); outline: 2px solid rgba(255,255,255,0.5); }",
+        ".fx { text-shadow: 0 1px 2px rgba(0,0,0,0.35); outline: 2px solid rgba(255,255,255,0.5); "
+        "text-decoration: underline; }",
         css_options);
 
     auto gel = make_element("div");
@@ -235,6 +236,8 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
     check(!fx_style.text_shadow.empty() && fx_style.outline_width == 2 &&
               fx_style.outline_color.a >= 126 && fx_style.outline_color.a <= 128,
           "text-shadow and outline subset apply");
+    check(fx_style.text_decoration_underline && !fx_style.text_decoration_line_through,
+          "text-decoration underline applies");
     check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
           "unsupported gradient value is diagnosed by style resolver");
 }

@@ -14,6 +14,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 扩展“可选付费”的视觉 CSS 子集：加入水平 `linear-gradient(...)`、第一条
   `text-shadow` 近似绘制，以及不参与布局的 `outline` stroke；并把后续视觉能力按
   标准子集和可选成本评估的原则写入路线图。
+- 添加便宜的 `text-decoration` / `text-decoration-line` 子集，支持
+  `underline`、`line-through` 和 `none`。
 - 添加第一版有界 CSS `@keyframes` / `animation-*` 子集。Parser 会保存
   `from`/`to` 或 `0%`/`100%` keyframes，style resolution 每个 style 最多保留四条
   animation entry，`AnimationTimeline` 在共享 active-animation 预算内采样

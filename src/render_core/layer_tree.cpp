@@ -187,6 +187,33 @@ void push_image(DisplayList& display_list, Rect rect, std::uint32_t image_handle
     display_list.push_back(std::move(command));
 }
 
+void push_text_decorations(DisplayList& display_list, const LayoutBox& box, Rect rect) {
+    if (!box.style.text_decoration_underline && !box.style.text_decoration_line_through) {
+        return;
+    }
+    const int thickness = std::max(1, box.style.font_size / 12);
+    const int inset = std::max(0, box.style.font_size / 12);
+    const Rect line_rect_base{
+        rect.x + inset,
+        rect.y,
+        std::max(0, rect.width - inset * 2),
+        thickness,
+    };
+    if (line_rect_base.width <= 0) {
+        return;
+    }
+    if (box.style.text_decoration_line_through) {
+        Rect strike = line_rect_base;
+        strike.y = rect.y + std::max(0, (rect.height - thickness) / 2);
+        push_fill_rect(display_list, strike, box.style.color);
+    }
+    if (box.style.text_decoration_underline) {
+        Rect underline = line_rect_base;
+        underline.y = rect.y + std::max(0, rect.height - std::max(thickness + 1, box.style.font_size / 5));
+        push_fill_rect(display_list, underline, box.style.color);
+    }
+}
+
 TextCommandAlign text_command_align(TextAlign align) {
     switch (align) {
     case TextAlign::Center:
@@ -691,6 +718,7 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                   box.style.font_weight,
                   text_command_align(box.style.text_align),
                   single_line);
+        push_text_decorations(display_list, box, box.rect);
     }
 }
 
