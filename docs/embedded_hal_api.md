@@ -73,8 +73,8 @@ Suggested ESP32-S3 watch starting point:
 - even when network is enabled, keep `network.allows_remote_page_resources =
   false` and expose only runtime app data APIs;
 - expose MP3, small-image and MJPEG services as optional host capabilities;
-  keep H.264 or high-resolution video disabled by default or experimental on
-  ESP32-S3.
+  keep H.264 or high-resolution video disabled by default, enabling it only
+  when the target profile explicitly marks it experimental.
 
 ## Async Work API
 
@@ -120,9 +120,10 @@ The ESP32-S3 decode experiments support a conservative optional-service design:
 - The GMF video bench is MJPEG -> RGB565, not H.264. A 240x240, 30-frame sample
   reports roughly 46-49fps with about 115 KiB decoded output per frame. This is
   useful evidence for small image/lightweight animation decode.
-- The H.264 bench reports `esp_cache_msync` invalid-address errors and open
-  failures under QEMU, so it should not be treated as a stable ESP32-S3
-  JellyFrame capability.
+- The 2026-06-20 H.264 retest succeeds with ESP32-S3 QEMU 9.2.2 and the Octal
+  PSRAM option: a 320x192 baseline, 4-frame sample reports about 14.7-16.5fps
+  across 8/16/32MB PSRAM, roughly 0.49-0.55x real-time. This proves an
+  experimental path, not a default real-time video capability.
 
 Current recommendation:
 
@@ -133,8 +134,9 @@ Current recommendation:
   receives ended/error events; PCM buffers, I2S, codecs and GMF/ADF pipelines
   remain host-owned.
 - **Video decode**: experimental. The first useful shape is a low-resolution
-  MJPEG frame provider. Do not promise `<video>` or make it required for normal
-  layout. H.264 is not in the default ESP32-S3 profile.
+  MJPEG frame provider. H.264 may be exposed only behind a `supports_h264`
+  target profile as optional frame decode; do not promise `<video>` or make it
+  required for normal layout. H.264 is not in the default ESP32-S3 profile.
 - **Images in pages**: before image decode is wired, `<img>` and CSS backgrounds
   may use placeholder boxes. Once wired, decoded surfaces can replace them on a
   later dirty repaint.

@@ -261,24 +261,68 @@ Rules:
 - App switches or lock-screen policy may stop or pause app audio.
 - Audio workers do not call JS; they post events for the UI task to dispatch.
 
-## Lightweight Video/MJPEG Service
+## Lightweight Video/MJPEG/H.264 Experimental Service
 
 This is experimental and should be treated as a frame provider, not a promised
-`<video>` implementation.
+`<video>` implementation or a required part of normal page layout.
 
 Recommended scope:
 
 - low-resolution MJPEG;
+- low-resolution H.264 baseline frame decode only when the target profile
+  explicitly enables it;
 - RGB565 output;
 - fixed or low fps, such as 10-15fps;
 - drop frames rather than block UI.
 
+Recommended request:
+
+```cpp
+enum class HostVideoCodecKind {
+    Mjpeg,
+    H264Baseline,
+};
+
+struct HostVideoFrameRequest {
+    uint32_t app_instance_id;
+    HostVideoCodecKind codec;
+    const char* resource_path;
+    HostPixelFormat output_format; // usually Rgb565
+    uint16_t max_width;
+    uint16_t max_height;
+    uint8_t max_fps;
+    uint32_t max_frame_bytes;
+    uint32_t timeout_ms;
+};
+```
+
+Recommended result handle points to a latest-frame surface:
+
+```cpp
+struct HostVideoFrame {
+    uint16_t width;
+    uint16_t height;
+    uint16_t stride_pixels;
+    HostPixelFormat pixel_format;
+    const void* pixels;
+    uint32_t pts_ms;
+    bool dropped_previous;
+};
+```
+
 Rules:
 
-- H.264 is not in the default ESP32-S3 profile.
+- H.264 is not in the default ESP32-S3 profile. The 2026-06-20 retest proves it
+  can run under QEMU + Octal PSRAM, but the 320x192 baseline sample remains
+  below real-time, so it is only an experimental profile.
 - Video frame buffers are host-owned; UI references the latest frame handle.
+- If `supports_h264` is false, packaging/installation tools should reject apps
+  declaring H.264 or emit an explicit degradation diagnostic.
 - If decode is backlogged, drop old frames.
 - If dirty repaint cannot keep up, pause video or lower fps.
+- H.264 decode, YUV-to-RGB565 conversion, PSRAM/cache details and task
+  scheduling belong to the host; core receives only frame handles/completions,
+  never compressed streams or large pixel buffers.
 
 ## Network Data Service
 
@@ -505,6 +549,13 @@ Rules:
 - The queue does not call JS, mutate DOM, read RTC/network/battery hardware or
   trigger layout by itself. Bindings decide how an accepted event becomes an app
   callback later.
+- The current JerryScript binding maps network state to `navigator.onLine` and
+  visibility state to `document.hidden`, `document.visibilityState` and
+  `document` `visibilitychange`. `window` `online`/`offline` events and battery
+  JavaScript APIs remain out of V0.
+- The Win32 debug shell can inject fake events with `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8`
+  for app testing. Hardware ports should use the same queue from their own
+  host state provider.
 
 ## Implementation Order
 

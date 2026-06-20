@@ -1,6 +1,7 @@
 ﻿#include "script/jerryscript_runtime.h"
 
 #include "app_runtime/app_services.h"
+#include "app_runtime/system_events.h"
 #include "render_core/document_script.h"
 #include "render_core/dom.h"
 #include "render_core/form_control.h"
@@ -567,6 +568,40 @@ void javascript_runtime_respects_timer_and_listener_budgets() {
     check(runtime.eval("String(fired)").value == "101", "listener budget keeps only first listener");
 }
 
+void javascript_system_state_exposes_web_adjacent_subset() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>ready</p></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result =
+        runtime.eval("String(document.hidden) + ':' + document.visibilityState + ':' + String(navigator.onLine)");
+    check(result.ok, "system state initial script succeeds");
+    check(result.value == "false:visible:false", "system state defaults are exposed");
+
+    AppSystemStateSnapshot network_snapshot;
+    network_snapshot.network_online = true;
+    check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::NetworkStatusChanged, network_snapshot}),
+          "network system event handled");
+    result = runtime.eval("String(navigator.onLine)");
+    check(result.ok && result.value == "true", "navigator.onLine reflects system event");
+
+    result = runtime.eval(
+        "var visibilityEvents = 0;"
+        "document.addEventListener('visibilitychange', function () {"
+        "  visibilityEvents += document.hidden ? 1 : 10;"
+        "});"
+        "'armed'");
+    check(result.ok, "visibility listener installs");
+
+    AppSystemStateSnapshot hidden_snapshot;
+    hidden_snapshot.screen_on = false;
+    check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::ScreenStateChanged, hidden_snapshot}),
+          "screen system event handled");
+    result = runtime.eval("String(document.hidden) + ':' + document.visibilityState + ':' + String(visibilityEvents)");
+    check(result.ok && result.value == "true:hidden:1", "document visibility state updates");
+}
+
 } // namespace
 
 int main() {
@@ -596,6 +631,7 @@ int main() {
         javascript_local_storage_subset_uses_bound_shadow();
         javascript_local_storage_quota_error_is_reported();
         javascript_runtime_respects_timer_and_listener_budgets();
+        javascript_system_state_exposes_web_adjacent_subset();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

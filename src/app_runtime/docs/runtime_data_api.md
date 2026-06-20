@@ -144,6 +144,21 @@ chooses a compatible surface.
 The platform-neutral source remains `AppSystemEventQueue`. JS bindings should
 map accepted events to the standard subset above when possible.
 
+Current V0 implementation:
+
+- `navigator.onLine` is exposed as a read-only snapshot.
+- `document.hidden` is exposed as a read-only snapshot.
+- `document.visibilityState` is exposed as read-only `"visible"` / `"hidden"`.
+- Accepted `ScreenStateChanged` and `LowPowerModeChanged` events dispatch
+  `visibilitychange` on `document` when the hidden state changes.
+- The Win32 scripting shell provides manual debug injection: `Ctrl+F6` toggles
+  network online/offline, `Ctrl+F7` toggles screen visibility, and `Ctrl+F8`
+  toggles low-power visibility. These shortcuts do not read real Windows
+  hardware state.
+
+Not implemented yet: `window.addEventListener`, `online` / `offline` events,
+battery JS APIs and custom JellyFrame-specific system state objects.
+
 ## Error Names
 
 Internal host status can still map to stable small strings for diagnostics:

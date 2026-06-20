@@ -292,7 +292,7 @@ JerryScript 源码树时可用。
 | 中文文本 | 壳层相关 | 用 Win32 壳或未来平台 text backend。伪浏览器 fallback 会显示占位 glyph。 |
 | 图片 | 宿主可选/调试可用 | 已有平台无关 `ImageDecodeMock`、`AppImageSurfaceCache`、`Surface` handle 生命周期和尺寸/decoded bytes/pending 预算检查。render core 支持 `ImageHandleResolver` + image display command + `ImagePainter`；Win32 debug 壳可让 `<img src="app://icon">` / `app://photo` 自动提交 mock decode 并重绘，并可从 `.jfapp`/源码包加载无压缩 24/32-bit BMP 作为包内图片 V0。`AppImageSurfaceCache` 可按 ready surface 数量和 decoded bytes 回收未被当前 display list 引用的 LRU surface；图片命令携带 `object-fit` 子集；Win32 diagnostics 会报告 request 拒绝和 completion 失败。PNG/JPEG/WebP、复杂 `object-position` 和产品级 MCU codec 仍待接入。 |
 | 音频播放 | 延后/宿主可选 | 核心不处理 PCM/I2S/codec。ESP32-S3 MP3 实验结果支持把 MP3 playback 作为可选 host-owned pipeline，JS/核心只拿句柄和状态事件。 |
-| 轻量视频/MJPEG | 实验/宿主可选 | 可作为低分辨率 frame provider 规划；不承诺 `<video>`。ESP32-S3 H.264 当前不在默认 profile。 |
+| 轻量视频/MJPEG/H.264 | 实验/宿主可选 | 可作为低分辨率 frame provider 规划；不承诺 `<video>`。ESP32-S3 H.264 复测已跑通但低于实时，只能放在显式实验 profile，不在默认 profile。 |
 | Canvas/SVG | 延后 | 无 canvas API 或 SVG renderer。 |
 | 真实 shadow blur | 延后 | `box-shadow` blur 只近似。 |
 | Filter/blend modes | 延后 | 仅 normal source-over。 |

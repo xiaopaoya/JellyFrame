@@ -72,7 +72,8 @@ JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显
 decode 或 HTTP request 卡住。
 
 ESP32-S3 解码实验包的结论应映射为 profile，而不是核心默认功能：MP3 音频播放和小尺寸
-MJPEG/图片 decode 可以作为可选 host service；H.264 在当前 QEMU 结果中失败，应保持实验性或关闭。
+MJPEG/图片 decode 可以作为可选 host service；H.264 在 2026-06-20 QEMU + Octal PSRAM 复测中
+已能跑通，但低分辨率 baseline 样本仍低于实时，应保持显式实验性或关闭。
 
 ## 资源加载
 

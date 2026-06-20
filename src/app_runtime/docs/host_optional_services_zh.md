@@ -229,23 +229,63 @@ completion event：
 - app 切换或锁屏策略触发时，系统 shell 可以停止或暂停 app audio。
 - worker/audio task 不得调用 JS；只投递事件，由 UI task 派发 `ended`/`error` 等回调。
 
-## 轻量视频/MJPEG 服务
+## 轻量视频/MJPEG/H.264 实验服务
 
-当前只建议作为实验性 frame provider，不承诺 `<video>`。
+当前只建议作为实验性 frame provider，不承诺 `<video>`，也不把视频作为普通页面 layout 的必需能力。
 
 推荐范围：
 
 - 低分辨率 MJPEG。
+- 目标 profile 明确开启时的低分辨率 H.264 baseline frame decode。
 - 帧输出 RGB565。
 - 固定或较低 fps，例如 10-15fps。
 - 不与主 UI 帧率绑定；掉帧优先于阻塞 UI。
 
+推荐 request：
+
+```cpp
+enum class HostVideoCodecKind {
+    Mjpeg,
+    H264Baseline,
+};
+
+struct HostVideoFrameRequest {
+    uint32_t app_instance_id;
+    HostVideoCodecKind codec;
+    const char* resource_path;
+    HostPixelFormat output_format; // usually Rgb565
+    uint16_t max_width;
+    uint16_t max_height;
+    uint8_t max_fps;
+    uint32_t max_frame_bytes;
+    uint32_t timeout_ms;
+};
+```
+
+推荐 result handle 指向 latest-frame surface：
+
+```cpp
+struct HostVideoFrame {
+    uint16_t width;
+    uint16_t height;
+    uint16_t stride_pixels;
+    HostPixelFormat pixel_format;
+    const void* pixels;
+    uint32_t pts_ms;
+    bool dropped_previous;
+};
+```
+
 规则：
 
-- H.264 不进入 ESP32-S3 默认 profile。
+- H.264 不进入 ESP32-S3 默认 profile。2026-06-20 复测证明它在 QEMU + Octal PSRAM 下可跑通，
+  但 320x192 baseline 样本仍低于实时，只能作为实验 profile。
 - video frame buffer 由宿主持有，UI 只拿最新 frame handle。
+- 如果 `supports_h264` 为 false，打包/安装工具应拒绝声明 H.264 的 app，或给出降级诊断。
 - 如果解码积压，丢弃旧帧，不追赶历史帧。
 - 若 dirty repaint 无法跟上，暂停视频或降低 fps。
+- H.264 decoder、YUV->RGB565 转换、PSRAM/cache 细节和任务调度都属于宿主；核心只接收 frame
+  handle/completion，不接触码流或大像素 buffer。
 
 ## 网络数据服务
 
@@ -451,6 +491,11 @@ struct AppSystemStateSnapshot {
 - 旧 app instance 的事件会被消费并丢弃。
 - 队列本身不调用 JS、不修改 DOM、不读取 RTC/network/battery 硬件，也不直接触发 layout；后续 binding
   决定 accepted event 如何变成 app callback。
+- 当前 JerryScript binding 将网络状态映射到 `navigator.onLine`，将 visibility 映射到
+  `document.hidden`、`document.visibilityState` 和 `document` 的 `visibilitychange`。
+  `window` 的 `online`/`offline` 事件和 battery JavaScript API 不进入 V0。
+- Win32 debug 壳可以通过 `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8` 注入 fake event，方便 app 调试；
+  硬件 port 应从自己的 host state provider 使用同一个队列。
 
 ## 实现顺序
 

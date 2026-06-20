@@ -60,7 +60,8 @@ ESP32-S3 手表起步建议：
 - 按开发板实际硬件设置 `touch`、`crown`/`focus_buttons`，或二者都启用；
 - 除非产品宿主明确向 app 暴露有界网络/数据层，否则保持 `has_network = false`；
 - 如果启用网络，也应保持 `network.allows_remote_page_resources = false`，只允许 app runtime data API；
-- MP3/小图/MJPEG 可以声明为可选 host service；H.264 或高分辨率视频在 ESP32-S3 上应默认关闭或实验性开启。
+- MP3/小图/MJPEG 可以声明为可选 host service；H.264 或高分辨率视频在 ESP32-S3 上仍应默认关闭，
+  只在目标 profile 明确标记实验能力时开启。
 
 ## 异步工作 API
 
@@ -100,8 +101,9 @@ ESP32-S3 解码实验包给出的方向可以接受，但要明确边界：
 - GMF MP3 bench 在 QEMU 中约 27x real-time，heap 余量稳定；适合作为可选音频播放 host service。
 - GMF video bench 实际是 MJPEG -> RGB565，240x240、30 帧样本约 46-49fps，输出 buffer 约 115 KiB。
   它适合作为小尺寸图片/轻量动态图解码能力的依据。
-- H.264 bench 在 QEMU 中出现 `esp_cache_msync` invalid address 和 decoder/encoder open 失败，不能视为
-  ESP32-S3 上可稳定使用的 JellyFrame 能力。
+- 2026-06-20 的 H.264 复测使用正确 ESP32-S3 QEMU 9.2.2 和 Octal PSRAM 参数后已能跑通：
+  320x192 baseline、4 帧样本在 8/16/32MB PSRAM 下约 14.7-16.5fps，约 0.49-0.55x real-time。
+  这足以证明“可实验”，但还不足以作为默认实时视频能力。
 
 因此当前建议：
 
@@ -109,8 +111,9 @@ ESP32-S3 解码实验包给出的方向可以接受，但要明确边界：
   必须有最大宽高、最大 decoded bytes、最大并发数；大图应在打包期缩放或拒绝。
 - **音频 playback**：可选加入。核心/JS 只控制 play/pause/stop/volume 和接收 ended/error 事件；
   PCM buffer、I2S、codec、GMF/ADF pipeline 由宿主持有。
-- **视频 decode**：只作为实验性 host service。第一阶段最多支持低分辨率 MJPEG frame provider；
-  不承诺 `<video>`，不进入常规 layout 必需能力。H.264 不列入默认 ESP32-S3 profile。
+- **视频 decode**：只作为实验性 host service。第一阶段优先支持低分辨率 MJPEG frame provider；
+  H.264 可以作为 `supports_h264` 标记下的可选 frame decode profile，但不承诺 `<video>`，
+  不进入常规 layout 必需能力，也不列入默认 ESP32-S3 profile。
 - **图像作为页面资源**：可以先让 `<img>`/CSS background 使用固定占位盒；接入 image decode 后再替换为真实 surface。
 
 worker 产出的 decoded surface 必须受宿主资源表/缓存管理。UI task 只能引用句柄并在下一帧 dirty repaint；

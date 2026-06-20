@@ -1,6 +1,7 @@
 ﻿#include "script/jerryscript_runtime.h"
 
 #include "app_runtime/app_services.h"
+#include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
 #include "render_core/form_control.h"
 #include "render_core/style.h"
@@ -96,6 +97,10 @@ struct ScriptRuntimeAccess {
 
     static NetworkFetchMock* network_fetch(JerryScriptRuntime& runtime) {
         return runtime.network_fetch_;
+    }
+
+    static ScriptSystemState system_state(const JerryScriptRuntime& runtime) {
+        return runtime.system_state_;
     }
 
 };
@@ -853,6 +858,12 @@ jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
 jerry_value_t document_create_text_node(const jerry_call_info_t* call_info_p,
                                         const jerry_value_t args_p[],
                                         const jerry_length_t args_count);
+jerry_value_t document_get_hidden(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count);
+jerry_value_t document_get_visibility_state(const jerry_call_info_t* call_info_p,
+                                            const jerry_value_t args_p[],
+                                            const jerry_length_t args_count);
 jerry_value_t node_add_event_listener(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count);
@@ -910,6 +921,20 @@ void define_accessor(jerry_value_t object,
     JerryValue result(jerry_object_define_own_prop(object, name.get(), &descriptor));
     (void) result;
     jerry_property_descriptor_free(&descriptor);
+}
+
+jerry_value_t navigator_get_on_line(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    return jerry_boolean(runtime != nullptr && ScriptRuntimeAccess::system_state(*runtime).navigator_online);
+}
+
+jerry_value_t make_navigator_object(JerryScriptRuntime& runtime) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    define_accessor(object.get(), "onLine", navigator_get_on_line, node_ignore_setter);
+    return object.release();
 }
 
 jerry_value_t make_xhr_event_object(ScriptXmlHttpRequest& xhr, AppXhrEventKind kind) {
@@ -1358,6 +1383,8 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     }
 
     if (document_methods) {
+        define_accessor(object.get(), "hidden", document_get_hidden, node_ignore_setter);
+        define_accessor(object.get(), "visibilityState", document_get_visibility_state, node_ignore_setter);
         set_method(object.get(), "getElementById", document_get_element_by_id);
         set_method(object.get(), "createElement", document_create_element);
         set_method(object.get(), "createTextNode", document_create_text_node);
@@ -1546,6 +1573,21 @@ jerry_value_t document_create_text_node(const jerry_call_info_t* call_info_p,
     return make_node_wrapper(*runtime, *node, false);
 }
 
+jerry_value_t document_get_hidden(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    return jerry_boolean(runtime != nullptr && ScriptRuntimeAccess::system_state(*runtime).document_hidden);
+}
+
+jerry_value_t document_get_visibility_state(const jerry_call_info_t* call_info_p,
+                                            const jerry_value_t[],
+                                            const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    const bool hidden = runtime != nullptr && ScriptRuntimeAccess::system_state(*runtime).document_hidden;
+    return jerry_string_sz(hidden ? "hidden" : "visible");
+}
+
 jerry_value_t node_add_event_listener(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count) {
@@ -1614,17 +1656,21 @@ void JerryScriptRuntime::bind_document(Node& document) {
     clear_script_event_listeners();
     clear_timers();
     detached_nodes_.clear_detached_nodes();
+    bound_document_ = &document;
 
     JerryValue global(jerry_current_realm());
     jerry_object_set_native_ptr(global.get(), &kRuntimeNativeInfo, this);
     JerryValue document_object(make_node_wrapper(*this, document, true));
     JerryValue window_object(jerry_object());
+    JerryValue navigator_object(make_navigator_object(*this));
     jerry_object_set_native_ptr(window_object.get(), &kRuntimeNativeInfo, this);
 
     set_property(window_object.get(), "document", document_object.get());
     set_property(window_object.get(), "window", window_object.get());
+    set_property(window_object.get(), "navigator", navigator_object.get());
     set_property(global.get(), "document", document_object.get());
     set_property(global.get(), "window", window_object.get());
+    set_property(global.get(), "navigator", navigator_object.get());
     set_runtime_method(window_object.get(), "setTimeout", script_set_timeout, *this);
     set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(window_object.get(), "setInterval", script_set_interval, *this);
@@ -1681,6 +1727,23 @@ void JerryScriptRuntime::set_host_time_ms(std::uint64_t now_ms) {
     current_time_ms_ = now_ms;
 }
 
+void JerryScriptRuntime::set_system_state(ScriptSystemState state) {
+    system_state_ = state;
+}
+
+ScriptSystemState JerryScriptRuntime::system_state() const {
+    return system_state_;
+}
+
+bool JerryScriptRuntime::dispatch_visibility_change() {
+    if (bound_document_ == nullptr) {
+        return false;
+    }
+    Event event("visibilitychange", false, false);
+    dispatch_event(*bound_document_, event);
+    return true;
+}
+
 std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t max_callbacks) {
     current_time_ms_ = now_ms;
     std::size_t callbacks = 0;
@@ -1729,6 +1792,38 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
         }
     }
     return false;
+}
+
+bool JerryScriptRuntime::handle_system_event(const AppSystemEvent& event) {
+    ScriptSystemState next = system_state_;
+    bool handled = true;
+    bool visibility_changed = false;
+    switch (event.kind) {
+    case AppSystemEventKind::NetworkStatusChanged:
+        next.navigator_online = event.snapshot.network_online;
+        break;
+    case AppSystemEventKind::ScreenStateChanged:
+        next.document_hidden = event.snapshot.low_power_mode || !event.snapshot.screen_on;
+        visibility_changed = next.document_hidden != system_state_.document_hidden;
+        break;
+    case AppSystemEventKind::LowPowerModeChanged:
+        next.document_hidden = event.snapshot.low_power_mode || !event.snapshot.screen_on;
+        visibility_changed = next.document_hidden != system_state_.document_hidden;
+        break;
+    case AppSystemEventKind::TimeChanged:
+    case AppSystemEventKind::TimezoneChanged:
+    case AppSystemEventKind::BatteryChanged:
+        handled = false;
+        break;
+    }
+    if (!handled) {
+        return false;
+    }
+    system_state_ = next;
+    if (visibility_changed) {
+        dispatch_visibility_change();
+    }
+    return true;
 }
 
 bool JerryScriptRuntime::has_pending_timers() const {

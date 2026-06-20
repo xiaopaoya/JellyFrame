@@ -16,6 +16,7 @@ namespace jellyframe {
 class AppRuntimeHost;
 class AppLocalStorageShadow;
 class NetworkFetchMock;
+struct AppSystemEvent;
 struct HostServiceCompletion;
 struct ScriptRuntimeAccess;
 struct ScriptEventListener;
@@ -42,6 +43,11 @@ struct ScriptRuntimeStatistics {
     DetachedDomStatistics detached_nodes;
 };
 
+struct ScriptSystemState {
+    bool document_hidden = false;
+    bool navigator_online = false;
+};
+
 class JerryScriptRuntime {
 public:
     explicit JerryScriptRuntime(JerryScriptRuntimeOptions options = {});
@@ -57,8 +63,12 @@ public:
     void clear_app_services();
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
     void set_host_time_ms(std::uint64_t now_ms);
+    void set_system_state(ScriptSystemState state);
+    ScriptSystemState system_state() const;
+    bool dispatch_visibility_change();
     std::size_t pump_timers(std::uint64_t now_ms, std::size_t max_callbacks = 32);
     bool handle_host_completion(const HostServiceCompletion& completion);
+    bool handle_system_event(const AppSystemEvent& event);
     bool has_pending_timers() const;
     std::uint64_t next_timer_due_ms() const;
     std::size_t detached_node_count() const;
@@ -78,6 +88,8 @@ private:
     AppRuntimeHost* app_host_ = nullptr;
     NetworkFetchMock* network_fetch_ = nullptr;
     AppLocalStorageShadow* local_storage_ = nullptr;
+    Node* bound_document_ = nullptr;
+    ScriptSystemState system_state_;
 
     bool can_adopt_detached_node() const;
     Node* adopt_detached_node(std::unique_ptr<Node> node);

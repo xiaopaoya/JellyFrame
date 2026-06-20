@@ -95,8 +95,9 @@ from blocking the system/app main process.
 
 The ESP32-S3 decode experiments should map into target profiles, not default
 core features: MP3 playback and small MJPEG/image decode can be optional host
-services; H.264 failed under the observed QEMU run and should remain
-experimental or disabled.
+services; the 2026-06-20 H.264 QEMU + Octal PSRAM retest succeeds, but the
+low-resolution baseline sample is still below real-time, so H.264 should remain
+explicitly experimental or disabled.
 
 ## Resource Loading
 

@@ -89,8 +89,11 @@ API 表面。
 - 已暴露：宿主显式绑定非阻塞 `AppLocalStorageShadow` 时提供极小 `localStorage` 子集：
   `getItem`、`setItem`、`removeItem`、`clear`、`key` 和 `length`。未绑定 shadow 时不暴露
   `localStorage`。
-- `fetch()` 等 Promise/microtask 有界后再考虑；系统状态尽量映射到 `online`、`offline`
-  和 `visibilitychange` 等 Web 邻近事件。
+- 已暴露：`navigator.onLine`、`document.hidden`、`document.visibilityState` 和 `document`
+  的 `visibilitychange`，用于 accepted host system events。Win32 壳可用
+  `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8` 注入 fake event。
+- `fetch()` 等 Promise/microtask 有界后再考虑；`window` 的 `online`/`offline` 和 battery API
+  不进入 V0。
 
 ## Embedded-App DOM Helpers
 
@@ -115,7 +118,7 @@ API 表面。
 - 完整 selector API，例如 `querySelector` / `querySelectorAll`。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
-- `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、system-status JS callback、
+- `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、`window` system-status event target、
   canvas 和 Web Components。
 
 ## 嵌入式策略

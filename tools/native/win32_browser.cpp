@@ -4,6 +4,7 @@
 
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_services.h"
+#include "app_runtime/system_events.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
 #include "render_core/display_invalidation.h"
@@ -1366,6 +1367,8 @@ private:
     bool system_shell_mode_ = false;
     std::string active_app_id_;
     AppRuntimeHost app_runtime_{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
+    AppSystemEventQueue system_events_{32, 8};
+    AppSystemStateSnapshot debug_system_state_;
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
     ImageDecodeMock debug_images_{ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4}};
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
@@ -1499,6 +1502,41 @@ private:
                   << " image_handled=" << image_handled
                   << " script_handled=" << script_handled << '\n';
         return script_handled != 0 || image_handled != 0;
+    }
+
+    bool drain_system_events() {
+        std::vector<AppSystemEvent> accepted;
+        const AppSystemEventPumpResult result = system_events_.pump_current(app_runtime_, accepted);
+        if (result.consumed == 0) {
+            return false;
+        }
+        std::size_t script_handled = 0;
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr &&
+            script_runtime_instance_id_ == app_runtime_.current_app_instance_id()) {
+            for (const AppSystemEvent& event : accepted) {
+                if (script_runtime_->handle_system_event(event)) {
+                    ++script_handled;
+                }
+            }
+        }
+#endif
+        std::cout << "system events consumed=" << result.consumed
+                  << " accepted=" << result.accepted
+                  << " stale=" << result.stale
+                  << " script_handled=" << script_handled << '\n';
+        return script_handled != 0;
+    }
+
+    void queue_system_event(AppSystemEventKind kind, const char* status) {
+        if (!system_events_.push_current(app_runtime_, kind, debug_system_state_)) {
+            set_title(std::string("system event rejected: ") + status);
+            return;
+        }
+        if (drain_system_events()) {
+            rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
+        }
+        set_title(std::string("system ") + status);
     }
 
     void evict_unused_image_surfaces() {
@@ -1684,6 +1722,10 @@ private:
                 }
                 script_runtime_->bind_app_services(app_runtime_, debug_network_);
                 script_runtime_->bind_local_storage(debug_local_storage_);
+                script_runtime_->set_system_state(ScriptSystemState{
+                    !debug_system_state_.screen_on || debug_system_state_.low_power_mode,
+                    debug_system_state_.network_online,
+                });
                 script_runtime_->set_host_time_ms(GetTickCount64());
                 script_runtime_->bind_document(*document_);
                 for (const DocumentScript& script : document_scripts) {
@@ -1731,6 +1773,7 @@ private:
             return;
         }
         drain_host_completions();
+        drain_system_events();
         style_resolver_->set_interaction_state(hovered_node, active_node, focused_node);
         const DomDirtyFlags dirty_flags = document_->dirty_flags;
         const int current_content_height = layout_tree_ != nullptr
@@ -2050,6 +2093,26 @@ private:
     }
 
     void handle_key_down(WPARAM wparam) {
+        if ((GetKeyState(VK_CONTROL) & 0x8000) != 0) {
+            if (wparam == VK_F6) {
+                debug_system_state_.network_online = !debug_system_state_.network_online;
+                queue_system_event(AppSystemEventKind::NetworkStatusChanged,
+                                   debug_system_state_.network_online ? "network online" : "network offline");
+                return;
+            }
+            if (wparam == VK_F7) {
+                debug_system_state_.screen_on = !debug_system_state_.screen_on;
+                queue_system_event(AppSystemEventKind::ScreenStateChanged,
+                                   debug_system_state_.screen_on ? "screen visible" : "screen hidden");
+                return;
+            }
+            if (wparam == VK_F8) {
+                debug_system_state_.low_power_mode = !debug_system_state_.low_power_mode;
+                queue_system_event(AppSystemEventKind::LowPowerModeChanged,
+                                   debug_system_state_.low_power_mode ? "low power on" : "low power off");
+                return;
+            }
+        }
         if (!input_ || !accepts_ui_events()) {
             return;
         }
@@ -2086,10 +2149,11 @@ private:
         }
         const bool completed_image = debug_images_.complete_next(app_runtime_);
         bool handled_completion = drain_host_completions();
+        const bool handled_system_event = drain_system_events();
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr || !accepts_ui_events() ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
-            if (completed_image || handled_completion) {
+            if (completed_image || handled_completion || handled_system_event) {
                 rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
             }
             return;
@@ -2097,11 +2161,11 @@ private:
         const bool completed_network = debug_network_.complete_next(app_runtime_);
         handled_completion = drain_host_completions() || handled_completion;
         const std::size_t callbacks = script_runtime_->pump_timers(GetTickCount64(), 8);
-        if (callbacks != 0 || completed_network || completed_image || handled_completion) {
+        if (callbacks != 0 || completed_network || completed_image || handled_completion || handled_system_event) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #else
-        if (completed_image || handled_completion) {
+        if (completed_image || handled_completion || handled_system_event) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #endif

@@ -122,6 +122,20 @@ V0 支持面应限制在：
 
 平台无关来源仍是 `AppSystemEventQueue`。JS binding 应尽量把 accepted events 映射到上述标准子集。
 
+当前 V0 已实现：
+
+- `navigator.onLine` 作为只读快照暴露。
+- `document.hidden` 作为只读快照暴露。
+- `document.visibilityState` 作为只读 `"visible"` / `"hidden"` 暴露。
+- accepted `ScreenStateChanged` / `LowPowerModeChanged` 在 hidden 状态变化时向 `document`
+  派发 `visibilitychange`。
+- Win32 scripting 壳提供手动调试注入：`Ctrl+F6` 切换 network online/offline，`Ctrl+F7`
+  切换 screen visibility，`Ctrl+F8` 切换 low-power visibility。这些快捷键不读取真实 Windows
+  硬件状态。
+
+尚未实现：`window.addEventListener`、`online` / `offline` 事件、battery JS API，以及 JellyFrame
+专有 system state 对象。
+
 ## 错误名
 
 内部 host status 仍可映射成稳定短字符串，用于 diagnostics：
