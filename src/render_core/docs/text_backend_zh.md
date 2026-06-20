@@ -124,6 +124,11 @@ jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pac
 生成器通过 `BitmapFontGlyph::bytes_per_row` 支持宽度超过 8px 的 glyph，这是实用中文 bitmap
 字体必须具备的能力。
 
+如需字体级抗锯齿，可用 `--coverage-bits 2` 或 `--coverage-bits 4` 生成 `.jffont` 或 C++
+bitmap pack。Coverage 字体保持同一 glyph advance 和 line-height metrics，但每个 glyph
+像素存储 alpha coverage，而不是单个开/关 bit。运行时成本只由使用这类字体的 app 支付；
+V0/1bpp 字体仍走紧凑路径。
+
 ## 字体子集
 
 `jellyframe_font_resource_check` 可以辅助准备嵌入式字体包：

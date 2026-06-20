@@ -20,6 +20,7 @@ struct Options {
     std::string output_binary_path;
     std::string symbol = "jellyframe_embedded_font";
     bool allow_missing = false;
+    int coverage_bits = 1;
 };
 
 struct Glyph {
@@ -83,6 +84,8 @@ Options parse_options(int argc, char** argv) {
             options.output_binary_path = require_value("--output-binary");
         } else if (arg == "--name") {
             options.symbol = sanitize_symbol(require_value("--name"));
+        } else if (arg == "--coverage-bits") {
+            options.coverage_bits = std::stoi(require_value("--coverage-bits"));
         } else if (arg == "--allow-missing") {
             options.allow_missing = true;
         } else {
@@ -93,7 +96,10 @@ Options parse_options(int argc, char** argv) {
         (options.output_path.empty() && options.output_binary_path.empty())) {
         throw std::runtime_error("usage: jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt "
                                  "[--output font_pack.h] [--output-binary font.jffont] "
-                                 "[--name symbol] [--allow-missing]");
+                                 "[--name symbol] [--coverage-bits 1|2|4] [--allow-missing]");
+    }
+    if (!(options.coverage_bits == 1 || options.coverage_bits == 2 || options.coverage_bits == 4)) {
+        throw std::runtime_error("--coverage-bits must be 1, 2 or 4");
     }
     return options;
 }
@@ -275,22 +281,89 @@ void validate_glyph_for_pack(const Glyph& glyph) {
     checked_u8(glyph.bytes_per_row, "bytes_per_row");
 }
 
-std::size_t selected_row_bytes(const BdfFont& font, const std::vector<std::uint32_t>& selected) {
+bool glyph_bit(const Glyph& glyph, int row, int col) {
+    if (row < 0 || col < 0 || row >= glyph.height || col >= glyph.width || glyph.rows.empty()) {
+        return false;
+    }
+    const std::uint8_t byte = glyph.rows[static_cast<std::size_t>(row * glyph.bytes_per_row + col / 8)];
+    return (byte & (1U << (7 - (col % 8)))) != 0U;
+}
+
+int coverage_level_for_pixel(const Glyph& glyph, int row, int col, int max_level) {
+    if (glyph_bit(glyph, row, col)) {
+        return max_level;
+    }
+    int neighbors = 0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            if (dx == 0 && dy == 0) {
+                continue;
+            }
+            if (glyph_bit(glyph, row + dy, col + dx)) {
+                ++neighbors;
+            }
+        }
+    }
+    if (neighbors == 0) {
+        return 0;
+    }
+    if (max_level == 3) {
+        return neighbors >= 3 ? 2 : 1;
+    }
+    return std::min(max_level - 1, std::max(1, (neighbors * max_level + 4) / 8));
+}
+
+std::vector<std::uint8_t> glyph_rows_for_output(const Glyph& glyph, int coverage_bits, int* bytes_per_row_out) {
+    if (coverage_bits == 1) {
+        if (bytes_per_row_out != nullptr) {
+            *bytes_per_row_out = glyph.bytes_per_row;
+        }
+        return glyph.rows;
+    }
+    const int bytes_per_row = std::max(1, (glyph.width * coverage_bits + 7) / 8);
+    const int max_level = (1 << coverage_bits) - 1;
+    std::vector<std::uint8_t> rows(static_cast<std::size_t>(glyph.height * bytes_per_row), 0);
+    for (int row = 0; row < glyph.height; ++row) {
+        for (int col = 0; col < glyph.width; ++col) {
+            const int level = coverage_level_for_pixel(glyph, row, col, max_level);
+            if (level == 0) {
+                continue;
+            }
+            const int bit_index = col * coverage_bits;
+            const int byte_index = row * bytes_per_row + bit_index / 8;
+            const int shift = 8 - coverage_bits - (bit_index % 8);
+            rows[static_cast<std::size_t>(byte_index)] |=
+                static_cast<std::uint8_t>(level << shift);
+        }
+    }
+    if (bytes_per_row_out != nullptr) {
+        *bytes_per_row_out = bytes_per_row;
+    }
+    return rows;
+}
+
+std::size_t selected_row_bytes(const BdfFont& font,
+                               const std::vector<std::uint32_t>& selected,
+                               int coverage_bits) {
     std::size_t row_bytes = 0;
     for (std::uint32_t codepoint : selected) {
-        row_bytes += font.glyphs.at(codepoint).rows.size();
+        int bytes_per_row = 0;
+        (void)glyph_rows_for_output(font.glyphs.at(codepoint), coverage_bits, &bytes_per_row);
+        row_bytes += static_cast<std::size_t>(font.glyphs.at(codepoint).height * bytes_per_row);
     }
     return row_bytes;
 }
 
 void print_summary(const BdfFont& font,
                    const std::set<std::uint32_t>& requested,
-                   const std::vector<std::uint32_t>& selected) {
+                   const std::vector<std::uint32_t>& selected,
+                   int coverage_bits) {
     constexpr std::size_t glyph_metadata_bytes = 16;
-    const std::size_t row_bytes = selected_row_bytes(font, selected);
+    const std::size_t row_bytes = selected_row_bytes(font, selected, coverage_bits);
     const std::size_t glyph_table_bytes = selected.size() * glyph_metadata_bytes;
     std::cerr << "requested=" << requested.size()
               << " emitted=" << selected.size()
+              << " coverage_bits=" << coverage_bits
               << " rows_bytes=" << row_bytes
               << " glyph_table_estimated_bytes=" << glyph_table_bytes
               << " total_estimated_bytes=" << (row_bytes + glyph_table_bytes)
@@ -312,14 +385,16 @@ void write_font_header(const Options& options,
     for (std::uint32_t codepoint : selected) {
         const Glyph& glyph = font.glyphs.at(codepoint);
         validate_glyph_for_pack(glyph);
+        int output_bytes_per_row = 0;
+        const std::vector<std::uint8_t> rows = glyph_rows_for_output(glyph, options.coverage_bits, &output_bytes_per_row);
         output << "static constexpr std::uint8_t " << options.symbol << "_rows_"
                << codepoint_name(codepoint) << "[] = {";
-        for (std::size_t index = 0; index < glyph.rows.size(); ++index) {
+        for (std::size_t index = 0; index < rows.size(); ++index) {
             if (index % 12 == 0) {
                 output << "\n    ";
             }
             output << "0x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
-                   << static_cast<int>(glyph.rows[index]) << std::dec << ", ";
+                   << static_cast<int>(rows[index]) << std::dec << ", ";
         }
         output << "\n};\n\n";
     }
@@ -327,10 +402,12 @@ void write_font_header(const Options& options,
     output << "static constexpr jellyframe::BitmapFontGlyph " << options.symbol << "_glyphs[] = {\n";
     for (std::uint32_t codepoint : selected) {
         const Glyph& glyph = font.glyphs.at(codepoint);
+        int output_bytes_per_row = 0;
+        (void)glyph_rows_for_output(glyph, options.coverage_bits, &output_bytes_per_row);
         output << "    jellyframe::BitmapFontGlyph{0x" << std::hex << std::uppercase << codepoint << std::dec
                << "U, " << glyph.width << ", " << glyph.height << ", " << glyph.advance << ", "
-               << glyph.bytes_per_row << ", " << options.symbol << "_rows_" << codepoint_name(codepoint)
-               << "},\n";
+               << output_bytes_per_row << ", " << options.symbol << "_rows_" << codepoint_name(codepoint)
+               << ", " << options.coverage_bits << "},\n";
     }
     output << "};\n\n";
     output << "static constexpr jellyframe::BitmapFont " << options.symbol << "{"
@@ -343,12 +420,13 @@ void write_font_binary(const Options& options,
                        const BdfFont& font,
                        const std::vector<std::uint32_t>& selected) {
     constexpr std::uint16_t header_size = 32;
-    constexpr std::uint16_t version = 0;
+    const std::uint16_t version = options.coverage_bits == 1 ? 0 : 1;
     constexpr std::uint32_t glyph_entry_size = 16;
     const std::uint32_t glyph_count = static_cast<std::uint32_t>(selected.size());
     const std::uint32_t glyph_table_offset = header_size;
     const std::uint32_t row_data_offset = glyph_table_offset + glyph_count * glyph_entry_size;
-    const std::uint32_t row_data_size = static_cast<std::uint32_t>(selected_row_bytes(font, selected));
+    const std::uint32_t row_data_size = static_cast<std::uint32_t>(
+        selected_row_bytes(font, selected, options.coverage_bits));
 
     std::vector<std::uint8_t> data;
     data.reserve(static_cast<std::size_t>(row_data_offset) + row_data_size);
@@ -359,7 +437,7 @@ void write_font_binary(const Options& options,
     append_u32(data, glyph_count);
     data.push_back(checked_u8(std::max(1, font.line_height), "line_height"));
     data.push_back(checked_u8(std::max(1, font.fallback_advance), "fallback_advance"));
-    append_u16(data, 0);
+    append_u16(data, static_cast<std::uint16_t>(options.coverage_bits == 1 ? 0 : options.coverage_bits));
     append_u32(data, glyph_table_offset);
     append_u32(data, row_data_offset);
     append_u32(data, row_data_size);
@@ -368,17 +446,21 @@ void write_font_binary(const Options& options,
     for (std::uint32_t codepoint : selected) {
         const Glyph& glyph = font.glyphs.at(codepoint);
         validate_glyph_for_pack(glyph);
+        int output_bytes_per_row = 0;
+        const std::vector<std::uint8_t> rows = glyph_rows_for_output(glyph, options.coverage_bits, &output_bytes_per_row);
         append_u32(data, codepoint);
         append_u32(data, row_offset);
-        append_u32(data, static_cast<std::uint32_t>(glyph.rows.size()));
+        append_u32(data, static_cast<std::uint32_t>(rows.size()));
         data.push_back(static_cast<std::uint8_t>(glyph.width));
         data.push_back(static_cast<std::uint8_t>(glyph.height));
         data.push_back(static_cast<std::uint8_t>(glyph.advance));
-        data.push_back(static_cast<std::uint8_t>(glyph.bytes_per_row));
-        row_offset += static_cast<std::uint32_t>(glyph.rows.size());
+        data.push_back(static_cast<std::uint8_t>(output_bytes_per_row));
+        row_offset += static_cast<std::uint32_t>(rows.size());
     }
     for (std::uint32_t codepoint : selected) {
-        const std::vector<std::uint8_t>& rows = font.glyphs.at(codepoint).rows;
+        int output_bytes_per_row = 0;
+        const std::vector<std::uint8_t> rows =
+            glyph_rows_for_output(font.glyphs.at(codepoint), options.coverage_bits, &output_bytes_per_row);
         data.insert(data.end(), rows.begin(), rows.end());
     }
 
@@ -395,7 +477,7 @@ int main(int argc, char** argv) {
     if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         std::cout << "usage: jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt "
                      "[--output font_pack.h] [--output-binary font.jffont] "
-                     "[--name symbol] [--allow-missing]\n";
+                     "[--name symbol] [--coverage-bits 1|2|4] [--allow-missing]\n";
         return 0;
     }
     try {
@@ -425,7 +507,7 @@ int main(int argc, char** argv) {
         if (!options.output_binary_path.empty()) {
             write_font_binary(options, font, selected);
         }
-        print_summary(font, requested, selected);
+        print_summary(font, requested, selected, options.coverage_bits);
         if (!missing.empty()) {
             std::cerr << "missing=" << missing.size() << " (allowed)\n";
         }

@@ -428,8 +428,13 @@ can expose generated glyph arrays through `BitmapFont`, then wire
 The desktop generator accepts BDF input:
 
 ```text
-jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font --coverage-bits 1
 ```
+
+Use `--coverage-bits 2` or `--coverage-bits 4` only when the product profile can
+spend the extra glyph row storage for font-level antialiasing. This remains an
+offline bitmap path; do not add MCU-side vector rasterization to the default
+HAL.
 
 Use `jellyframe_font_resource_check --emit-used-chars` first, then generate a BDF
 from the licensed source font with your preferred offline toolchain.

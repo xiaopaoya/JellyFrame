@@ -54,13 +54,21 @@ bool BitmapFontResource::load_jffont(const std::uint8_t* data, std::size_t size)
     const std::uint32_t glyph_count = read_u32(data + 12);
     const std::uint8_t line_height = data[16];
     const std::uint8_t fallback_advance = data[17];
-    const std::uint16_t reserved = read_u16(data + 18);
+    const std::uint16_t flags = read_u16(data + 18);
     const std::uint32_t glyph_table_offset = read_u32(data + 20);
     const std::uint32_t row_data_offset = read_u32(data + 24);
     const std::uint32_t row_data_size = read_u32(data + 28);
 
-    if (header_size != kJfFontHeaderSize || version != 0 || reserved != 0 ||
+    if (header_size != kJfFontHeaderSize || version > 1 ||
         line_height == 0 || fallback_advance == 0) {
+        return false;
+    }
+    if ((version == 0 && flags != 0) || (version == 1 && (flags & 0xff00U) != 0)) {
+        return false;
+    }
+    const std::uint8_t bits_per_pixel =
+        version == 0 ? 1 : static_cast<std::uint8_t>(flags & 0x00ffU);
+    if (!(bits_per_pixel == 1 || bits_per_pixel == 2 || bits_per_pixel == 4)) {
         return false;
     }
     std::size_t glyph_table_bytes = 0;
@@ -88,7 +96,8 @@ bool BitmapFontResource::load_jffont(const std::uint8_t* data, std::size_t size)
         const std::uint8_t bytes_per_row = entry[15];
         const std::size_t minimum_row_size =
             static_cast<std::size_t>(height) * static_cast<std::size_t>(bytes_per_row);
-        const std::uint8_t minimum_bytes_per_row = static_cast<std::uint8_t>((width + 7U) / 8U);
+        const std::uint8_t minimum_bytes_per_row =
+            static_cast<std::uint8_t>((static_cast<int>(width) * bits_per_pixel + 7) / 8);
         if (codepoint == 0 || (index > 0 && codepoint <= previous_codepoint) ||
             width == 0 || height == 0 || bytes_per_row < minimum_bytes_per_row ||
             row_size < minimum_row_size ||
@@ -103,6 +112,7 @@ bool BitmapFontResource::load_jffont(const std::uint8_t* data, std::size_t size)
             advance,
             bytes_per_row,
             data + row_data_offset + row_offset,
+            bits_per_pixel,
         });
         previous_codepoint = codepoint;
     }

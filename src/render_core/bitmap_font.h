@@ -17,6 +17,7 @@ struct BitmapFontGlyph {
     std::uint8_t advance = 0;
     std::uint8_t bytes_per_row = 0;
     const std::uint8_t* rows = nullptr;
+    std::uint8_t bits_per_pixel = 1;
 };
 
 struct BitmapFont {

@@ -675,6 +675,51 @@ void jffont_resource_loads_bitmap_font_view() {
     check(!resource.load_jffont(corrupted.data(), corrupted.size()), "jffont rejects short glyph row data");
 }
 
+void jffont_v1_coverage_glyphs_antialias_text_edges() {
+    const std::vector<std::uint8_t> bytes = {
+        'J', 'F', 'F', 'O', 'N', 'T', '0', 0,
+        0x20, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00,
+        0x03, 0x03, 0x04, 0x00, 0x20, 0x00, 0x00, 0x00,
+        0x30, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+        0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x06, 0x00, 0x00, 0x00, 0x03, 0x03, 0x04, 0x02,
+        0xf0, 0x00, 0x70, 0x00, 0xf0, 0x00,
+    };
+
+    BitmapFontResource resource;
+    check(resource.load_jffont(bytes.data(), bytes.size()), "jffont v1 coverage resource loads");
+    const BitmapFontGlyph* glyph = find_bitmap_glyph(resource.font(), 0x41);
+    check(glyph != nullptr && glyph->bits_per_pixel == 4, "jffont v1 exposes 4bpp glyph");
+
+    std::vector<std::uint8_t> corrupted = bytes;
+    corrupted[19] = 0x01;
+    BitmapFontResource rejected_resource;
+    check(!rejected_resource.load_jffont(corrupted.data(), corrupted.size()), "jffont v1 rejects unknown flags");
+
+    BitmapFontContext context{&resource.font(), 1};
+    FrameBuffer frame_buffer(8, 6, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer(TextPainter{bitmap_font_paint_callback, &context});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 8, 6};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "A";
+    command.font_size = 3;
+    command.text_single_line = true;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 8, 6});
+
+    bool has_gray_edge = false;
+    for (int y = 0; y < frame_buffer.height; ++y) {
+        for (int x = 0; x < frame_buffer.width; ++x) {
+            const Color pixel = frame_buffer.pixel(x, y);
+            if (pixel.r > 0 && pixel.r < 255) {
+                has_gray_edge = true;
+            }
+        }
+    }
+    check(has_gray_edge, "coverage glyph paints intermediate edge pixels");
+}
+
 } // namespace
 
 int main() {
@@ -702,6 +747,7 @@ int main() {
         bitmap_font_scaling_bold_and_missing_glyphs_are_stable();
         bitmap_font_bold_metrics_include_extra_stroke();
         jffont_resource_loads_bitmap_font_view();
+        jffont_v1_coverage_glyphs_antialias_text_edges();
     } catch (const std::exception& error) {
         std::cerr << "software renderer test failed: " << error.what() << '\n';
         return 1;

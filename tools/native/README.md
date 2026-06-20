@@ -32,3 +32,10 @@ builds.
 
 Native tools may use desktop file I/O. The embedded core does not depend on these
 entry points.
+
+`jellyframe_font_pack_gen` generates offline bitmap font packs from BDF input.
+It can emit both a firmware C++ `BitmapFont` header and a runtime `.jffont`
+supplement. Use `--coverage-bits 1` for the compact monochrome path, or
+`--coverage-bits 2|4` for opt-in glyph coverage antialiasing. Coverage fonts
+increase glyph row storage and paint-time alpha blending only for apps that
+ship or link those fonts.

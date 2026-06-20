@@ -18,6 +18,10 @@ JellyFrame Engine 的重要变更记录在这里。
   composited layer scale 默认使用双线性采样，`image-rendering: auto | pixelated | crisp-edges`
   会传给 image painter，RGB565/BGR565 embedded framebuffer target 可选择 4x4 ordered dithering。
   普通不透明直角矩形仍保留快速填充路径。
+- 通过 `.jffont` V1 coverage glyph 添加显式 opt-in 的 bitmap 字体抗锯齿路径。
+  `jellyframe_font_pack_gen --coverage-bits 2|4` 可把 2bpp/4bpp glyph coverage 输出到
+  C++ `BitmapFont` header 或 `.jffont` 资源；V0/1bpp 字体仍保留紧凑且无额外成本的路径。
+  Package diagnostics 现在会报告 manifest `.jffont` 资源解析出的 coverage depth。
 - 添加便宜的 `text-decoration` / `text-decoration-line` 子集，支持
   `underline`、`line-through` 和 `none`。
 - 添加第一版有界 CSS `@keyframes` / `animation-*` 子集。Parser 会保存

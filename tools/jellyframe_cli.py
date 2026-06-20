@@ -392,6 +392,7 @@ def cmd_font(args: argparse.Namespace) -> int:
     if args.output_binary:
         args.output_binary.parent.mkdir(parents=True, exist_ok=True)
         font_command.extend(["--output-binary", str(args.output_binary)])
+    font_command.extend(["--coverage-bits", str(args.coverage_bits)])
     if args.allow_missing:
         font_command.append("--allow-missing")
     return run_command(font_command)
@@ -586,7 +587,12 @@ def main() -> int:
     font.add_argument("--output-header", type=Path, help="Generated C++ BitmapFont header path.")
     font.add_argument("--output-binary", type=Path, help="Generated .jffont bitmap font supplement path.")
     font.add_argument("--name", default="jellyframe_embedded_font", help="Generated C++ font symbol name.")
-    font.add_argument("--allow-missing", action="store_true", help="Allow missing BDF glyphs when generating a header.")
+    font.add_argument("--coverage-bits",
+                      type=int,
+                      default=1,
+                      choices=[1, 2, 4],
+                      help="Glyph coverage depth for generated bitmap fonts: 1, 2 or 4 bits per pixel.")
+    font.add_argument("--allow-missing", action="store_true", help="Allow missing BDF glyphs when generating font packs.")
     font.set_defaults(func=cmd_font)
 
     schema = subparsers.add_parser("schema", help="Print the JellyFrame app manifest JSON schema.")

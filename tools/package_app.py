@@ -560,12 +560,17 @@ def parse_jffont(data: bytes) -> dict:
     glyph_count = struct.unpack_from("<I", data, 12)[0]
     line_height = data[16]
     fallback_advance = data[17]
-    reserved = struct.unpack_from("<H", data, 18)[0]
+    flags = struct.unpack_from("<H", data, 18)[0]
     glyph_table_offset, row_data_offset, row_data_size = struct.unpack_from("<III", data, 20)
-    if header_size != JFFONT_HEADER_SIZE or version != 0 or reserved != 0:
+    if header_size != JFFONT_HEADER_SIZE or version not in {0, 1}:
         return {"ok": False, "error": "unsupported-header"}
     if line_height == 0 or fallback_advance == 0:
         return {"ok": False, "error": "invalid-metrics"}
+    if (version == 0 and flags != 0) or (version == 1 and (flags & 0xff00) != 0):
+        return {"ok": False, "error": "unsupported-header"}
+    coverage_bits = 1 if version == 0 else flags & 0xff
+    if coverage_bits not in {1, 2, 4}:
+        return {"ok": False, "error": "unsupported-coverage-bits"}
     glyph_table_size = glyph_count * JFFONT_GLYPH_ENTRY_SIZE
     if glyph_table_offset > len(data) or glyph_table_size > len(data) - glyph_table_offset:
         return {"ok": False, "error": "glyph-table-out-of-range"}
@@ -581,7 +586,7 @@ def parse_jffont(data: bytes) -> dict:
         height = data[offset + 13]
         advance = data[offset + 14]
         bytes_per_row = data[offset + 15]
-        minimum_bytes_per_row = (width + 7) // 8
+        minimum_bytes_per_row = (width * coverage_bits + 7) // 8
         minimum_row_size = height * bytes_per_row
         if (
             codepoint == 0 or
@@ -600,7 +605,8 @@ def parse_jffont(data: bytes) -> dict:
 
     return {
         "ok": True,
-        "format": "jffont-v0",
+        "format": f"jffont-v{version}",
+        "coverageBits": coverage_bits,
         "glyphCount": glyph_count,
         "lineHeight": line_height,
         "fallbackAdvance": fallback_advance,
@@ -659,12 +665,12 @@ def collect_font_diagnostics(manifest: dict,
         parsed = parse_jffont(resource["file"].read_bytes())
         if not parsed.get("ok"):
             font_entry["status"] = "invalid"
-            font_entry["format"] = "jffont-v0"
+            font_entry["format"] = "jffont-v0/v1"
             font_entry["error"] = parsed.get("error", "invalid")
             warnings.append({
                 "level": "warning",
                 "code": "invalid-jffont-resource",
-                "message": f"manifest font source is not a valid .jffont V0 resource: {source}",
+                "message": f"manifest font source is not a valid .jffont resource: {source}",
                 "source": "jellyframe.app.json",
             })
             manifest_fonts.append(font_entry)
@@ -675,6 +681,7 @@ def collect_font_diagnostics(manifest: dict,
         font_entry.update({
             "status": "usable",
             "format": parsed["format"],
+            "coverageBits": parsed["coverageBits"],
             "glyphCount": parsed["glyphCount"],
             "lineHeight": parsed["lineHeight"],
             "fallbackAdvance": parsed["fallbackAdvance"],

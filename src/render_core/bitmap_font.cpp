@@ -134,7 +134,35 @@ int glyph_advance(const BitmapFont& font, const BitmapFontGlyph* glyph) {
 }
 
 int glyph_bytes_per_row(const BitmapFontGlyph& glyph) {
-    return glyph.bytes_per_row > 0 ? glyph.bytes_per_row : (glyph.width + 7) / 8;
+    const int bits_per_pixel = glyph.bits_per_pixel == 2 || glyph.bits_per_pixel == 4 ? glyph.bits_per_pixel : 1;
+    return glyph.bytes_per_row > 0 ? glyph.bytes_per_row : (glyph.width * bits_per_pixel + 7) / 8;
+}
+
+int glyph_bits_per_pixel(const BitmapFontGlyph& glyph) {
+    return glyph.bits_per_pixel == 2 || glyph.bits_per_pixel == 4 ? glyph.bits_per_pixel : 1;
+}
+
+int glyph_sample_coverage(const BitmapFontGlyph& glyph, int row, int col, int bits_per_pixel, int bytes_per_row) {
+    const int bit_index = col * bits_per_pixel;
+    const std::uint8_t byte =
+        glyph.rows[static_cast<std::size_t>(row * bytes_per_row + bit_index / 8)];
+    if (bits_per_pixel == 1) {
+        return (byte & (1U << (7 - (bit_index % 8)))) != 0U ? 255 : 0;
+    }
+    if (bits_per_pixel == 2) {
+        const int shift = 6 - (bit_index % 8);
+        const int value = (byte >> shift) & 0x03;
+        return (value * 255 + 1) / 3;
+    }
+    const int shift = 4 - (bit_index % 8);
+    const int value = (byte >> shift) & 0x0f;
+    return (value * 255 + 7) / 15;
+}
+
+Color with_alpha_coverage(Color color, int coverage) {
+    coverage = std::max(0, std::min(255, coverage));
+    color.a = static_cast<std::uint8_t>((static_cast<int>(color.a) * coverage + 127) / 255);
+    return color;
 }
 
 void draw_glyph(FrameBuffer& target,
@@ -147,18 +175,37 @@ void draw_glyph(FrameBuffer& target,
     if (glyph.rows == nullptr || glyph.width == 0 || glyph.height == 0) {
         return;
     }
+    const int bits_per_pixel = glyph_bits_per_pixel(glyph);
     const int bytes_per_row = glyph_bytes_per_row(glyph);
+    if (bits_per_pixel == 1) {
+        for (int row = 0; row < glyph.height; ++row) {
+            const std::uint8_t* row_data = glyph.rows + static_cast<std::size_t>(row * bytes_per_row);
+            for (int col = 0; col < glyph.width; ++col) {
+                if ((row_data[col / 8] & (1U << (7 - (col % 8)))) == 0U) {
+                    continue;
+                }
+                for (int pass = 0; pass < stroke_passes; ++pass) {
+                    for (int py = 0; py < scale; ++py) {
+                        for (int px = 0; px < scale; ++px) {
+                            blend_pixel(target, x + col * scale + px + pass, y + row * scale + py, color);
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
     for (int row = 0; row < glyph.height; ++row) {
         for (int col = 0; col < glyph.width; ++col) {
-            const std::uint8_t bits =
-                glyph.rows[static_cast<std::size_t>(row * bytes_per_row + col / 8)];
-            if ((bits & (1U << (7 - (col % 8)))) == 0U) {
+            const int coverage = glyph_sample_coverage(glyph, row, col, bits_per_pixel, bytes_per_row);
+            if (coverage <= 0) {
                 continue;
             }
+            const Color covered = coverage == 255 ? color : with_alpha_coverage(color, coverage);
             for (int pass = 0; pass < stroke_passes; ++pass) {
                 for (int py = 0; py < scale; ++py) {
                     for (int px = 0; px < scale; ++px) {
-                        blend_pixel(target, x + col * scale + px + pass, y + row * scale + py, color);
+                        blend_pixel(target, x + col * scale + px + pass, y + row * scale + py, covered);
                     }
                 }
             }

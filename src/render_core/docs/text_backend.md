@@ -139,6 +139,12 @@ The generator supports glyphs wider than 8 pixels through
 `BitmapFontGlyph::bytes_per_row`, which is required for practical Chinese
 bitmap fonts.
 
+For font-level antialiasing, generate a `.jffont` or C++ bitmap pack with
+`--coverage-bits 2` or `--coverage-bits 4`. Coverage fonts keep the same glyph
+advance and line-height metrics, but each glyph pixel stores alpha coverage
+instead of a single on/off bit. Runtime cost is paid only by apps that use such
+fonts; V0/1bpp fonts remain on the compact path.
+
 ## Font Subsetting
 
 `jellyframe_font_resource_check` can help prepare embedded font packs:

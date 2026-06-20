@@ -371,8 +371,12 @@ core 现在提供 `src/render_core/bitmap_font.h` 支撑这条默认路线。开
 桌面生成器接受 BDF 输入：
 
 ```text
-jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font
+jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt --output font_pack.h --name app_font --coverage-bits 1
 ```
+
+只有在产品 profile 可以接受额外 glyph row 存储时，才使用 `--coverage-bits 2` 或
+`--coverage-bits 4` 获得字体级抗锯齿。这仍然是离线 bitmap 路径；默认 HAL 不应加入 MCU 端
+矢量字体 rasterizer。
 
 先用 `jellyframe_font_resource_check --emit-used-chars` 收集字符，再用你偏好的离线工具链从授权源字体生成 BDF。
 

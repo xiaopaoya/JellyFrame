@@ -21,6 +21,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   crisp-edges` is passed to image painters, and RGB565/BGR565 embedded
   framebuffer targets can enable 4x4 ordered dithering. Ordinary opaque square
   rectangles keep the fast fill path.
+- Added opt-in bitmap-font antialiasing through `.jffont` V1 coverage glyphs.
+  `jellyframe_font_pack_gen --coverage-bits 2|4` can emit 2bpp/4bpp glyph
+  coverage into C++ `BitmapFont` headers or `.jffont` resources, while V0/1bpp
+  fonts keep the compact no-extra-cost path. Package diagnostics now report the
+  parsed font coverage depth for manifest `.jffont` resources.
 - Added a cheap `text-decoration` / `text-decoration-line` subset for
   `underline`, `line-through` and `none`.
 - Added the first bounded CSS `@keyframes` / `animation-*` subset. The parser
