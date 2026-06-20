@@ -193,6 +193,11 @@ paint/compositor 属性：`opacity`、`background-color`、`color` 和 `transfor
 layout 属性动画仍不逐帧重排；如果动画改变了 DOM 结构或 layout，仍应走普通 dirty-region/full-frame
 路径。
 
+CSS `@keyframes` / `animation-*` 使用同一条 timeline 和 dirty-region 路径。第一版子集只从已经解析的
+render-tree style 启动动画，采样同一组 paint/compositor 属性的 `from`/`to` declarations，并让
+transition 与 keyframe animation 共享 `max_active_animations` 预算。不支持的 keyframe 属性通过
+diagnostics 报告并忽略，不触发逐帧 layout。
+
 ## 边界
 
 当前核心仍不做：

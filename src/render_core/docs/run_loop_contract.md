@@ -253,6 +253,13 @@ paint/compositor property set: `opacity`, `background-color`, `color` and
 reflow every frame; structural or layout-changing animation should use the
 normal dirty-region/full-frame path.
 
+CSS `@keyframes` / `animation-*` uses the same timeline and dirty-region path.
+The first supported subset only starts animations from resolved render-tree
+styles, samples `from`/`to` declarations for the same paint/compositor property
+set, and keeps transition plus keyframe animations under the shared
+`max_active_animations` budget. Unsupported keyframe properties are reported
+through diagnostics and ignored; they do not trigger per-frame layout.
+
 ## Boundaries
 
 The current core still does not implement:

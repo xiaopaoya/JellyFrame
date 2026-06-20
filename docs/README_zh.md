@@ -48,6 +48,7 @@
 ### 面向开发者的功能契约
 
 - [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)：最主要的 can-do/cannot-do 契约。
+- [jelly_ui_design_system_zh.md](jelly_ui_design_system_zh.md)：胶体/水母质感的控件与动效设计体系。
 - [versioning_zh.md](versioning_zh.md)：版本和发布纪律。
 
 ## 双语维护

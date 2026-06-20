@@ -8,6 +8,14 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 添加第一版有界 CSS `@keyframes` / `animation-*` 子集。Parser 会保存
+  `from`/`to` 或 `0%`/`100%` keyframes，style resolution 每个 style 最多保留四条
+  animation entry，`AnimationTimeline` 在共享 active-animation 预算内采样
+  `opacity`、`transform: translate()/scale()`、`background-color` 和 `color`。
+- 添加不支持 keyframe 属性、缺失 keyframe 名称和有界 keyframe 采样的 diagnostics 与测试，
+  并在 render-core microbench 中新增 `keyframe_animation_sample`。
+- `watch_weather` 加入一个标准 CSS keyframe pulse，让包式 app 示例能展示受支持动画，
+  不需要自定义 API。
 - 添加可选数据服务的 manifest/profile policy 合成：`AppServiceManifestCapabilities`、
   `AppServiceHostProfile` 和 `app_service_policies_for_app(...)` 现在会在 runtime mock
   或 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。

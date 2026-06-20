@@ -1914,9 +1914,19 @@ private:
         render_options.diagnostics = &diagnostics_;
         RenderTreeBuilder render_builder(*style_resolver_, render_options);
         auto target_render_tree = render_builder.build(*document_);
-        if (!previous_styles.empty() &&
-            start_transitions_from_previous_styles(previous_styles, *target_render_tree, GetTickCount64())) {
-            animation_timeline_.sample(GetTickCount64(), style_overrides_);
+        const std::uint64_t now_ms = GetTickCount64();
+        bool animation_started = false;
+        if (!previous_styles.empty()) {
+            animation_started =
+                start_transitions_from_previous_styles(previous_styles, *target_render_tree, now_ms);
+        }
+        std::vector<KeyframeAnimationKey> live_keyframe_animations;
+        animation_started =
+            ensure_keyframe_animations_for_render_tree(*target_render_tree, now_ms, live_keyframe_animations) ||
+            animation_started;
+        animation_timeline_.retain_keyframe_animations(live_keyframe_animations);
+        if (animation_started || !animation_timeline_.empty()) {
+            animation_timeline_.sample(now_ms, style_overrides_);
             render_options.style_overrides = style_overrides_.empty() ? nullptr : &style_overrides_;
         }
         RenderTreeBuilder sampled_render_builder(*style_resolver_, render_options);
@@ -1997,6 +2007,37 @@ private:
         }
         for (const auto& child : object.children) {
             started = start_transitions_from_previous_styles(previous_styles, *child, now_ms) || started;
+        }
+        return started;
+    }
+
+    bool ensure_keyframe_animations_for_render_tree(const RenderObject& object,
+                                                    std::uint64_t now_ms,
+                                                    std::vector<KeyframeAnimationKey>& live_keys) {
+        bool started = false;
+        if (object.node != nullptr && object.style.animation_count != 0 && style_resolver_ != nullptr) {
+            for (std::size_t index = 0; index < object.style.animation_count; ++index) {
+                const StyleAnimation& animation = object.style.animations[index];
+                if (animation.name.empty() || animation.duration_ms == 0) {
+                    continue;
+                }
+                const CssKeyframesRule* keyframes = style_resolver_->keyframes(animation.name);
+                if (keyframes == nullptr) {
+                    report_diagnostic(&diagnostics_,
+                                      DiagnosticStage::Style,
+                                      DiagnosticSeverity::Warning,
+                                      "animation-keyframes-missing",
+                                      "CSS animation referenced a missing @keyframes rule",
+                                      animation.name);
+                    continue;
+                }
+                live_keys.push_back(KeyframeAnimationKey{object.node, animation.name});
+                started = animation_timeline_.ensure_keyframe_animation(
+                    *object.node, object.style, animation, *keyframes, now_ms) || started;
+            }
+        }
+        for (const auto& child : object.children) {
+            started = ensure_keyframe_animations_for_render_tree(*child, now_ms, live_keys) || started;
         }
         return started;
     }

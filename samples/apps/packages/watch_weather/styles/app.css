@@ -51,6 +51,7 @@ body {
   border-radius: 18px;
   overflow: hidden;
   background: #124f5d;
+  animation: weather-pulse 1800ms ease-in-out infinite alternate;
 }
 
 .weather-art img {
@@ -143,6 +144,17 @@ body {
 .tile:active,
 .tile:focus {
   background: #19738a;
+}
+
+@keyframes weather-pulse {
+  from {
+    opacity: .86;
+    transform: scale(.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.03);
+  }
 }
 
 .statusline {

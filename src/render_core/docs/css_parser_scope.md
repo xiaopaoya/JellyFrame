@@ -66,13 +66,16 @@ layout behavior.
   `bottom`, `left`, `grid-template-columns` with a `minmax()` minimum track,
   `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))`, `grid-auto-rows` with a
   minimum track, and `grid-column`/`grid-row: span N`.
+- `@keyframes` from/to subset. Named blocks keep `from`/`to` or `0%`/`100%`
+  declarations for the animation timeline. Intermediate percentages are
+  diagnosed and ignored, not partially interpolated.
 
 ## Phase 1: Lazy Handling
 
 - Unsupported/complex `@media`, unsupported/complex `@supports`, `@container`,
   `@scope`: skip the full block.
-- `@font-face`, `@keyframes`, `@page`, `@property`: parse their balanced block
-  boundaries but do not expose declarations to style resolution yet.
+- `@font-face`, `@page`, `@property`: parse their balanced block boundaries
+  but do not expose declarations to style resolution yet.
 - Unknown at-rules: skip statement or balanced block.
 - Unsupported selectors such as `:has()`, `::part()` and `::slotted()` are
   skipped as full rules for now.
@@ -91,7 +94,8 @@ layout behavior.
   invalid-at-computed-value-time semantics.
 - CSS nesting semantics.
 - Shadow DOM selectors.
-- Animation/keyframe model.
+- Full animation/keyframe model, including intermediate keyframes,
+  fill/play-state/composition and layout-property animation.
 - Full grid value grammar, named lines, explicit placement and dense packing.
 - Container query evaluation. This is intentionally deferred until layout/style
   feedback can be bounded without cycles.

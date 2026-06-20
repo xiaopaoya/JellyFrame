@@ -209,6 +209,25 @@ int main(int argc, char** argv) {
         (void)sampled;
     }));
 
+    StyleAnimation keyframe_animation;
+    keyframe_animation.name = "pulse";
+    keyframe_animation.duration_ms = 180;
+    keyframe_animation.timing = AnimationTimingFunction::EaseOut;
+    keyframe_animation.infinite = true;
+    CssKeyframesRule keyframes;
+    keyframes.name = "pulse";
+    keyframes.from_declarations.push_back(CssDeclaration{"opacity", ".25", false});
+    keyframes.from_declarations.push_back(CssDeclaration{"transform", "translate(0px,0px) scale(1)", false});
+    keyframes.to_declarations.push_back(CssDeclaration{"opacity", "1", false});
+    keyframes.to_declarations.push_back(CssDeclaration{"transform", "translate(12px,6px) scale(1.08)", false});
+    print_result("keyframe_animation_sample", iterations, average_microseconds(iterations, [&] {
+        frame_scratch.begin_frame();
+        AnimationTimeline timeline(AnimationTimelineOptions{4, nullptr});
+        timeline.ensure_keyframe_animation(animation_node, from_style, keyframe_animation, keyframes, 0);
+        const bool sampled = timeline.sample(90, frame_scratch.style_overrides);
+        (void)sampled;
+    }));
+
     const LayoutBox* animated_box = find_first_layout_by_class(*layout_tree, "metric-card");
     if (animated_box != nullptr && animated_box->node != nullptr) {
         StyleOverride previous;

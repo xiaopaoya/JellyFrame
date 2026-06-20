@@ -68,6 +68,8 @@ interfaces and host contracts. These docs should stay close to the code.
 
 - [developer_capability_matrix.md](developer_capability_matrix.md): the primary
   can-do/cannot-do contract.
+- [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish
+  control and motion design system.
 - [versioning.md](versioning.md): versioning and release discipline.
 
 ## Bilingual Maintenance

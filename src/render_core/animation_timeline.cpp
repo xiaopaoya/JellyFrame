@@ -111,19 +111,20 @@ AnimationTimeline::AnimationTimeline(AnimationTimelineOptions options)
 
 void AnimationTimeline::clear() {
     active_.clear();
+    keyframes_.clear();
 }
 
 bool AnimationTimeline::empty() const {
-    return active_.empty();
+    return active_.empty() && keyframes_.empty();
 }
 
 std::size_t AnimationTimeline::active_count() const {
-    return active_.size();
+    return active_.size() + keyframes_.size();
 }
 
 AnimationTimelineStatistics AnimationTimeline::statistics() const {
     AnimationTimelineStatistics statistics;
-    statistics.active_animations = active_.size();
+    statistics.active_animations = active_count();
     statistics.rejected_animations = rejected_animations_;
     return statistics;
 }
@@ -138,7 +139,7 @@ bool AnimationTimeline::start_transitions(const Node& node,
         active_.erase(std::remove_if(active_.begin(), active_.end(), [&](const ActiveTransition& existing) {
             return existing.node == transition.node && existing.property == transition.property;
         }), active_.end());
-        if (active_.size() >= max_active) {
+        if (active_count() >= max_active) {
             ++rejected_animations_;
             report_diagnostic(options_.diagnostics,
                               DiagnosticStage::Style,
@@ -213,9 +214,90 @@ bool AnimationTimeline::start_transitions(const Node& node,
     return started;
 }
 
+bool AnimationTimeline::ensure_keyframe_animation(const Node& node,
+                                                  const Style& base_style,
+                                                  const StyleAnimation& animation,
+                                                  const CssKeyframesRule& keyframes,
+                                                  std::uint64_t now_ms) {
+    if (animation.name.empty() || animation.duration_ms == 0) {
+        return false;
+    }
+    const auto existing = std::find_if(keyframes_.begin(), keyframes_.end(), [&](const ActiveKeyframeAnimation& active) {
+        return active.node == &node && active.name == animation.name;
+    });
+    if (existing != keyframes_.end()) {
+        return false;
+    }
+
+    const std::size_t max_active = std::max<std::size_t>(1, options_.max_active_animations);
+    if (active_count() >= max_active) {
+        ++rejected_animations_;
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::Style,
+                          DiagnosticSeverity::Warning,
+                          "animation-active-limit",
+                          "Active animation budget was reached; keyframe animation was skipped",
+                          animation.name);
+        return false;
+    }
+
+    ActiveKeyframeAnimation active;
+    active.node = &node;
+    active.name = animation.name;
+    active.start_ms = now_ms;
+    active.duration_ms = animation.duration_ms;
+    active.delay_ms = animation.delay_ms;
+    active.timing = animation.timing;
+    active.iteration_count = std::max<std::uint16_t>(1, animation.iteration_count);
+    active.infinite = animation.infinite;
+    active.direction = animation.direction;
+    active.from_style = base_style;
+    active.to_style = base_style;
+
+    bool applied = false;
+    for (const CssDeclaration& declaration : keyframes.from_declarations) {
+        applied = apply_keyframe_declaration(active.from_style, declaration, options_.diagnostics) || applied;
+    }
+    for (const CssDeclaration& declaration : keyframes.to_declarations) {
+        applied = apply_keyframe_declaration(active.to_style, declaration, options_.diagnostics) || applied;
+    }
+    if (!applied) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::Style,
+                          DiagnosticSeverity::Info,
+                          "animation-keyframes-empty",
+                          "Keyframe animation had no supported animatable declarations",
+                          animation.name);
+        return false;
+    }
+
+    active.animates_opacity = std::abs(active.from_style.opacity - active.to_style.opacity) >= 0.001F;
+    active.animates_background_color = !color_equal(active.from_style.background_color, active.to_style.background_color);
+    active.animates_color = !color_equal(active.from_style.color, active.to_style.color);
+    active.animates_transform =
+        parse_css_transform_2d(active.from_style.transform, active.from_transform) &&
+        parse_css_transform_2d(active.to_style.transform, active.to_transform) &&
+        !transform_equal(active.from_transform, active.to_transform);
+    if (!active.animates_opacity && !active.animates_background_color && !active.animates_color &&
+        !active.animates_transform) {
+        return false;
+    }
+
+    keyframes_.push_back(std::move(active));
+    return true;
+}
+
+void AnimationTimeline::retain_keyframe_animations(const std::vector<KeyframeAnimationKey>& keys) {
+    keyframes_.erase(std::remove_if(keyframes_.begin(), keyframes_.end(), [&](const ActiveKeyframeAnimation& active) {
+        return std::find_if(keys.begin(), keys.end(), [&](const KeyframeAnimationKey& key) {
+            return key.node == active.node && key.name == active.name;
+        }) == keys.end();
+    }), keyframes_.end());
+}
+
 bool AnimationTimeline::sample(std::uint64_t now_ms, std::vector<StyleOverride>& overrides) {
     overrides.clear();
-    if (active_.empty()) {
+    if (empty()) {
         return false;
     }
     std::vector<ActiveTransition> remaining;
@@ -251,6 +333,50 @@ bool AnimationTimeline::sample(std::uint64_t now_ms, std::vector<StyleOverride>&
         }
     }
     active_.swap(remaining);
+    std::vector<ActiveKeyframeAnimation> remaining_keyframes;
+    remaining_keyframes.reserve(keyframes_.size());
+    for (const ActiveKeyframeAnimation& active : keyframes_) {
+        const std::uint64_t begin = active.start_ms + active.delay_ms;
+        const std::uint64_t elapsed = now_ms <= begin ? 0 : now_ms - begin;
+        const std::uint32_t duration = std::max<std::uint32_t>(1, active.duration_ms);
+        std::uint64_t cycle = elapsed / duration;
+        if (!active.infinite && cycle >= active.iteration_count) {
+            cycle = static_cast<std::uint64_t>(active.iteration_count - 1);
+        }
+        float progress = elapsed == 0
+            ? 0.0F
+            : static_cast<float>(elapsed % duration) / static_cast<float>(duration);
+        const bool finished = !active.infinite && elapsed >=
+            static_cast<std::uint64_t>(duration) * static_cast<std::uint64_t>(active.iteration_count);
+        if (finished) {
+            progress = 1.0F;
+        }
+        if (active.direction == AnimationDirection::Alternate && (cycle % 2U) == 1U) {
+            progress = 1.0F - progress;
+        }
+        const float eased = apply_timing(active.timing, progress);
+        StyleOverride& override = override_for(overrides, active.node);
+        if (active.animates_opacity) {
+            override.has_opacity = true;
+            override.opacity = mix_float(active.from_style.opacity, active.to_style.opacity, eased);
+        }
+        if (active.animates_background_color) {
+            override.has_background_color = true;
+            override.background_color = mix_color(active.from_style.background_color, active.to_style.background_color, eased);
+        }
+        if (active.animates_color) {
+            override.has_color = true;
+            override.color = mix_color(active.from_style.color, active.to_style.color, eased);
+        }
+        if (active.animates_transform) {
+            override.has_transform = true;
+            override.transform = serialize_css_transform_2d(mix_transform(active.from_transform, active.to_transform, eased));
+        }
+        if (!finished) {
+            remaining_keyframes.push_back(active);
+        }
+    }
+    keyframes_.swap(remaining_keyframes);
     return !overrides.empty();
 }
 

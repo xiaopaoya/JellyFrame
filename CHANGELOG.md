@@ -8,6 +8,16 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added the first bounded CSS `@keyframes` / `animation-*` subset. The parser
+  stores `from`/`to` or `0%`/`100%` keyframes, style resolution keeps up to four
+  animation entries per style, and `AnimationTimeline` samples `opacity`,
+  `transform: translate()/scale()`, `background-color` and `color` under the
+  shared active-animation budget.
+- Added diagnostics and tests for unsupported keyframe properties, missing
+  keyframe names and bounded keyframe sampling, plus a render-core
+  `keyframe_animation_sample` microbenchmark.
+- Updated `watch_weather` with a small standard CSS keyframe pulse so packaged
+  app samples demonstrate supported animation without custom APIs.
 - Added manifest/profile policy merging for optional data services:
   `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
   `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`

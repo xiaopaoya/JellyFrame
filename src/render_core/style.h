@@ -77,6 +77,21 @@ struct StyleTransition {
     AnimationTimingFunction timing = AnimationTimingFunction::Ease;
 };
 
+enum class AnimationDirection {
+    Normal,
+    Alternate,
+};
+
+struct StyleAnimation {
+    std::string name;
+    std::uint32_t duration_ms = 0;
+    std::uint32_t delay_ms = 0;
+    AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+    std::uint16_t iteration_count = 1;
+    bool infinite = false;
+    AnimationDirection direction = AnimationDirection::Normal;
+};
+
 struct Transform2D {
     float translate_x = 0.0F;
     float translate_y = 0.0F;
@@ -158,6 +173,8 @@ struct Style {
     AlignItems align_items = AlignItems::Stretch;
     std::array<StyleTransition, 4> transitions{};
     std::size_t transition_count = 0;
+    std::array<StyleAnimation, 4> animations{};
+    std::size_t animation_count = 0;
 };
 
 struct CssDeclaration {
@@ -206,14 +223,24 @@ struct CssRule {
     std::size_t source_order = 0;
 };
 
+struct CssKeyframesRule {
+    std::string name;
+    std::vector<CssDeclaration> from_declarations;
+    std::vector<CssDeclaration> to_declarations;
+    std::size_t source_order = 0;
+};
+
 class CssStyleSheet {
 public:
     using RuleList = std::vector<CssRule>;
+    using KeyframesList = std::vector<CssKeyframesRule>;
     using iterator = RuleList::iterator;
     using const_iterator = RuleList::const_iterator;
 
     void push_back(CssRule rule);
+    void push_keyframes(CssKeyframesRule rule);
     std::size_t size() const;
+    std::size_t keyframes_size() const;
     bool empty() const;
     CssRule& operator[](std::size_t index);
     const CssRule& operator[](std::size_t index) const;
@@ -222,9 +249,12 @@ public:
     const_iterator begin() const;
     const_iterator end() const;
     const RuleList& rules() const;
+    const KeyframesList& keyframes() const;
+    const CssKeyframesRule* find_keyframes(std::string_view name) const;
 
 private:
     RuleList rules_;
+    KeyframesList keyframes_;
 };
 
 using Stylesheet = CssStyleSheet;
@@ -233,6 +263,7 @@ std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector)
 CssRuleIndexKey build_css_rule_index_key(const std::vector<CssSelectorPart>& selector_parts);
 bool parse_css_transform_2d(std::string_view value, Transform2D& output);
 std::string serialize_css_transform_2d(const Transform2D& transform);
+bool apply_keyframe_declaration(Style& style, const CssDeclaration& declaration, DiagnosticSink* diagnostics = nullptr);
 
 struct StyleResolverOptions {
     std::size_t max_candidate_cache_entries = 128;
@@ -255,6 +286,7 @@ public:
     explicit StyleResolver(Stylesheet stylesheet, StyleResolverOptions options = {});
 
     Style resolve(const Node& node) const;
+    const CssKeyframesRule* keyframes(std::string_view name) const;
     StyleResolverStatistics statistics() const;
     void set_interaction_state(const Node* hovered_node, const Node* active_node, const Node* focused_node);
 

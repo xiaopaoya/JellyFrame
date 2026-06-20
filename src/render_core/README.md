@@ -9,7 +9,7 @@ It owns:
 - Lightweight DOM, events, input, form controls and dirty flags.
 - CSS parser, CSSOM data, style resolution and diagnostics.
 - Bounded animation timeline support for paint/compositor-safe CSS transition
-  subsets.
+  and `@keyframes` / `animation-*` subsets.
 - Render tree, layout tree, layer tree, display list and frame update planning.
 - CPU software rasterization/compositing and embedded framebuffer conversion.
 - Text measurement/painting contracts and bitmap font helpers.

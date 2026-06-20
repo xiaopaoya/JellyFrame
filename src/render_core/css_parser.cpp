@@ -419,6 +419,16 @@ bool supported_keyword(std::string_view value, const std::initializer_list<std::
     return std::find(keywords.begin(), keywords.end(), std::string_view(text)) != keywords.end();
 }
 
+bool is_positive_integer_value(std::string_view raw_value) {
+    const std::string value = ascii_lowercase(trim(raw_value));
+    if (value.empty()) {
+        return false;
+    }
+    return std::all_of(value.begin(), value.end(), [](char ch) {
+        return std::isdigit(static_cast<unsigned char>(ch)) != 0;
+    }) && value != "0";
+}
+
 bool is_supported_declaration_feature(std::string_view feature) {
     const std::size_t colon = find_top_level_colon(feature);
     if (colon == std::string_view::npos) {
@@ -516,6 +526,26 @@ bool is_supported_declaration_feature(std::string_view feature) {
                value.find("color") != std::string::npos ||
                value.find("ms") != std::string::npos ||
                value.find('s') != std::string::npos;
+    }
+    if (property == "animation-name") {
+        return !value.empty();
+    }
+    if (property == "animation-iteration-count") {
+        return value == "infinite" || is_positive_integer_value(value);
+    }
+    if (property == "animation" ||
+        property == "animation-duration" || property == "animation-delay" ||
+        property == "animation-timing-function" ||
+        property == "animation-direction") {
+        return value == "none" ||
+               value == "infinite" ||
+               value == "normal" ||
+               value == "alternate" ||
+               value.find("linear") != std::string::npos ||
+               value.find("ease") != std::string::npos ||
+               value.find("ms") != std::string::npos ||
+               value.find('s') != std::string::npos ||
+               is_number_with_suffix(value, {""}, false);
     }
     if (property == "justify-content") {
         return supported_keyword(value, {"start", "flex-start", "normal", "center",
@@ -836,7 +866,7 @@ private:
                 consume();
                 return;
             }
-            if (stylesheet_.size() >= options_.max_rules) {
+            if (total_rule_count() >= options_.max_rules) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Css,
                                   DiagnosticSeverity::Warning,
@@ -886,6 +916,10 @@ private:
         }
 
         consume();
+        if (name == "keyframes") {
+            parse_keyframes_rule(prelude);
+            return;
+        }
         if (depth + 1 <= options_.max_nesting_depth && is_supported_group_at_rule(name, prelude, options_)) {
             parse_rule_list(depth + 1, true);
         } else {
@@ -938,7 +972,7 @@ private:
         }
 
         for (std::string selector : split_selector_list(selector_text)) {
-            if (stylesheet_.size() >= options_.max_rules) {
+            if (total_rule_count() >= options_.max_rules) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Css,
                                   DiagnosticSeverity::Warning,
@@ -976,6 +1010,83 @@ private:
             rule.source_order = next_source_order_++;
             stylesheet_.push_back(std::move(rule));
         }
+    }
+
+    void parse_keyframes_rule(const std::string& prelude) {
+        CssKeyframesRule rule;
+        rule.name = trim(prelude);
+        rule.source_order = next_source_order_++;
+        if (rule.name.empty()) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-keyframes-malformed",
+                              "CSS @keyframes rule without a name was skipped",
+                              {});
+            skip_balanced_block();
+            return;
+        }
+        if (total_rule_count() >= options_.max_rules) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-rule-limit",
+                              "CSS rule budget was reached; @keyframes was skipped",
+                              rule.name);
+            skip_balanced_block();
+            return;
+        }
+
+        while (!eof()) {
+            skip_whitespace_and_comments();
+            if (eof()) {
+                break;
+            }
+            if (peek() == '}') {
+                consume();
+                break;
+            }
+            const std::size_t selector_begin = index_;
+            const char delimiter = consume_component_until_rule_delimiter();
+            const std::string selector = ascii_lowercase(trim(source_.substr(selector_begin, index_ - selector_begin)));
+            if (delimiter != '{') {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-keyframe-malformed",
+                                  "Malformed CSS keyframe selector was skipped",
+                                  selector);
+                if (delimiter == ';') {
+                    consume();
+                }
+                continue;
+            }
+            consume();
+            std::vector<CssDeclaration> declarations = parse_declaration_block();
+            if (selector == "from" || selector == "0%") {
+                rule.from_declarations = std::move(declarations);
+            } else if (selector == "to" || selector == "100%") {
+                rule.to_declarations = std::move(declarations);
+            } else {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Info,
+                                  "css-keyframe-selector-ignored",
+                                  "Only from/to or 0%/100% keyframes are supported; intermediate keyframe was ignored",
+                                  selector);
+            }
+        }
+
+        if (rule.from_declarations.empty() && rule.to_declarations.empty()) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Info,
+                              "css-keyframes-empty",
+                              "CSS @keyframes rule had no usable from/to declarations",
+                              rule.name);
+            return;
+        }
+        stylesheet_.push_keyframes(std::move(rule));
     }
 
     std::vector<CssDeclaration> parse_declaration_block() {
@@ -1258,6 +1369,10 @@ private:
         }
         selectors.push_back(trim(selector_text.substr(begin)));
         return selectors;
+    }
+
+    std::size_t total_rule_count() const {
+        return stylesheet_.size() + stylesheet_.keyframes_size();
     }
 
     std::string_view source_;

@@ -86,8 +86,11 @@ surface.
   DOM/style and let dirty flags drive repaint.
 - Hosts can set animation callback/FPS budgets to zero while the app is
   backgrounded, suspended, screen-off or in low-power mode.
-- CSS `transition` and `@keyframes` behavior is Track D roadmap work. For now,
-  use rAF for explicit JS-driven motion.
+- Render core supports a CSS `transition` subset for `opacity`, `transform:
+  translate()/scale()`, `background-color` and `color`, advanced through
+  `AnimationTimeline` and animation dirty-region helpers. It also supports a
+  bounded `@keyframes` / `animation-*` from/to subset over the same property
+  set. Use rAF when explicit per-frame control is needed.
 
 ## Document Script Loading
 

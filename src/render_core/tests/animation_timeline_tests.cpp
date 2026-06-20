@@ -7,6 +7,7 @@
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -68,6 +69,38 @@ void css_transition_and_transform_subset_is_parsed() {
     check(transform.scale_x > 0.89F && transform.scale_x < 0.91F, "scale x parsed");
 }
 
+void css_keyframes_animation_subset_is_parsed() {
+    CssParser parser;
+    Stylesheet stylesheet = parser.parse(
+        "@keyframes pulse {"
+        "  from { opacity: .25; transform: translate(0px, 0px) scale(1); width: 20px; }"
+        "  50% { opacity: .5; }"
+        "  to { opacity: 1; transform: translate(8px, 2px) scale(1.1); }"
+        "}"
+        ".dot { animation: pulse 200ms linear infinite alternate; }");
+    check(stylesheet.keyframes_size() == 1, "@keyframes rule is stored");
+    check(stylesheet.keyframes().front().from_declarations.size() == 3, "from declarations are parsed");
+    check(stylesheet.keyframes().front().to_declarations.size() == 2, "to declarations are parsed");
+
+    auto element = make_element("div");
+    element->attributes["class"] = "dot";
+    StyleResolver resolver(stylesheet);
+    const Style style = resolver.resolve(*element);
+    check(style.animation_count == 1, "animation shorthand creates bounded animation entry");
+    check(style.animations[0].name == "pulse", "animation name parsed");
+    check(style.animations[0].duration_ms == 200, "animation duration parsed");
+    check(style.animations[0].infinite, "infinite iteration count parsed");
+    check(style.animations[0].direction == AnimationDirection::Alternate, "alternate direction parsed");
+    check(resolver.keyframes("pulse") != nullptr, "resolver exposes keyframes lookup");
+
+    StyleResolver longhand_resolver(parser.parse(
+        ".dot { animation-duration: 120ms; animation-name: pulse; animation-timing-function: linear; }"));
+    const Style longhand = longhand_resolver.resolve(*element);
+    check(longhand.animation_count == 1, "animation longhands keep partial entries");
+    check(longhand.animations[0].name == "pulse", "animation-name preserves earlier duration");
+    check(longhand.animations[0].duration_ms == 120, "animation-duration before name is preserved");
+}
+
 void animation_timeline_samples_paint_only_properties() {
     auto node = make_element("button");
     Style from;
@@ -96,6 +129,61 @@ void animation_timeline_samples_paint_only_properties() {
     check(overrides[0].has_color && overrides[0].color.g >= 127, "text color is interpolated");
     check(timeline.sample(100, overrides), "timeline samples final frame");
     check(timeline.empty(), "finished transition is removed");
+}
+
+void animation_timeline_samples_keyframes_subset() {
+    auto node = make_element("div");
+    Style base;
+    base.opacity = 1.0F;
+    base.background_color = Color{0, 0, 0, 255};
+    base.color = Color{255, 255, 255, 255};
+
+    StyleAnimation animation;
+    animation.name = "pulse";
+    animation.duration_ms = 100;
+    animation.timing = AnimationTimingFunction::Linear;
+
+    CssKeyframesRule keyframes;
+    keyframes.name = "pulse";
+    keyframes.from_declarations.push_back(CssDeclaration{"opacity", "0", false});
+    keyframes.from_declarations.push_back(CssDeclaration{"background-color", "#000000", false});
+    keyframes.to_declarations.push_back(CssDeclaration{"opacity", "1", false});
+    keyframes.to_declarations.push_back(CssDeclaration{"background-color", "#640000", false});
+    keyframes.to_declarations.push_back(CssDeclaration{"transform", "translate(10px, 0px) scale(1.1)", false});
+
+    AnimationTimeline timeline;
+    check(timeline.ensure_keyframe_animation(*node, base, animation, keyframes, 0), "keyframe animation starts");
+    check(!timeline.ensure_keyframe_animation(*node, base, animation, keyframes, 1), "existing keyframe animation is retained");
+    std::vector<StyleOverride> overrides;
+    check(timeline.sample(50, overrides), "timeline samples keyframe animation");
+    check(overrides.size() == 1, "keyframe overrides are grouped by node");
+    check(overrides[0].has_opacity && overrides[0].opacity > 0.45F && overrides[0].opacity < 0.55F,
+          "keyframe opacity interpolates");
+    check(overrides[0].has_background_color && overrides[0].background_color.r >= 49 &&
+              overrides[0].background_color.r <= 51,
+          "keyframe background color interpolates");
+    check(overrides[0].has_transform, "keyframe transform interpolates");
+    check(timeline.sample(100, overrides), "timeline samples keyframe final frame");
+    check(timeline.empty(), "finite keyframe animation is removed after final frame");
+}
+
+void keyframe_unsupported_properties_report_diagnostics() {
+    auto node = make_element("div");
+    Style base;
+    StyleAnimation animation;
+    animation.name = "resize";
+    animation.duration_ms = 100;
+    CssKeyframesRule keyframes;
+    keyframes.name = "resize";
+    keyframes.to_declarations.push_back(CssDeclaration{"width", "100px", false});
+    VectorDiagnosticSink diagnostics;
+    AnimationTimeline timeline(AnimationTimelineOptions{4, &diagnostics});
+    check(!timeline.ensure_keyframe_animation(*node, base, animation, keyframes, 0),
+          "unsupported-only keyframes do not start");
+    const auto& records = diagnostics.diagnostics();
+    check(std::any_of(records.begin(), records.end(), [](const Diagnostic& diagnostic) {
+        return diagnostic.code == "animation-keyframe-property-unsupported";
+    }), "unsupported keyframe property is diagnosed");
 }
 
 void render_tree_applies_animation_style_overrides() {
@@ -184,7 +272,10 @@ void animation_invalidation_covers_previous_and_current_transform_bounds() {
 int main() {
     try {
         css_transition_and_transform_subset_is_parsed();
+        css_keyframes_animation_subset_is_parsed();
         animation_timeline_samples_paint_only_properties();
+        animation_timeline_samples_keyframes_subset();
+        keyframe_unsupported_properties_report_diagnostics();
         render_tree_applies_animation_style_overrides();
         software_compositor_applies_translate_transform();
         animation_invalidation_covers_previous_and_current_transform_bounds();

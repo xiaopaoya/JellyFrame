@@ -73,7 +73,10 @@ API 表面。
   `JerryScriptRuntime::pump_animation_frame(now_ms, max_callbacks)` 由宿主泵动。
 - Callback 会收到宿主毫秒时间戳。它应修改 DOM/style，并让 dirty flags 驱动 repaint。
 - 当 app 处于后台、suspended、息屏或低功耗状态时，宿主可以把 animation callback/FPS 预算设为 0。
-- CSS `transition` 与 `@keyframes` 行为属于 Track D 路线图。当前需要显式动效时先使用 rAF。
+- Render core 已支持 CSS `transition` 子集：`opacity`、`transform:
+  translate()/scale()`、`background-color` 和 `color`，由 `AnimationTimeline`
+  与 animation dirty-region helper 推进。它也支持同一属性集合上的有界
+  `@keyframes` / `animation-*` from/to 子集。需要精确逐帧控制时使用 rAF。
 
 ## Document Script Loading
 

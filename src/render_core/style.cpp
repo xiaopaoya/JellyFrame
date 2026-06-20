@@ -596,6 +596,13 @@ void set_style_transitions(Style& style, const std::vector<StyleTransition>& tra
     }
 }
 
+void set_style_animations(Style& style, const std::vector<StyleAnimation>& animations) {
+    style.animation_count = std::min<std::size_t>(style.animations.size(), animations.size());
+    for (std::size_t index = 0; index < style.animation_count; ++index) {
+        style.animations[index] = animations[index];
+    }
+}
+
 bool parse_transition_shorthand(const std::string& raw_value, Style& style) {
     const std::string lowered = lowercase(trim(raw_value));
     if (lowered == "none") {
@@ -646,6 +653,200 @@ bool parse_transition_shorthand(const std::string& raw_value, Style& style) {
         }
     }
     set_style_transitions(style, parsed);
+    return true;
+}
+
+bool parse_iteration_count(const std::string& raw_value, std::uint16_t& count, bool& infinite) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "infinite") {
+        count = 1;
+        infinite = true;
+        return true;
+    }
+    int parsed = 0;
+    if (!parse_integer(value, parsed) || parsed < 1) {
+        return false;
+    }
+    count = static_cast<std::uint16_t>(std::min(65535, parsed));
+    infinite = false;
+    return true;
+}
+
+bool parse_animation_direction(const std::string& raw_value, AnimationDirection& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "normal") {
+        output = AnimationDirection::Normal;
+        return true;
+    }
+    if (value == "alternate") {
+        output = AnimationDirection::Alternate;
+        return true;
+    }
+    return false;
+}
+
+bool is_animation_name_token(const std::string& raw_value) {
+    const std::string value = trim(raw_value);
+    if (value.empty()) {
+        return false;
+    }
+    const unsigned char first = static_cast<unsigned char>(value.front());
+    if (!(std::isalpha(first) != 0 || value.front() == '_' || value.front() == '-')) {
+        return false;
+    }
+    for (char ch : value) {
+        const unsigned char byte = static_cast<unsigned char>(ch);
+        if (!(std::isalnum(byte) != 0 || ch == '_' || ch == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool parse_animation_shorthand(const std::string& raw_value, Style& style) {
+    const std::string lowered = lowercase(trim(raw_value));
+    if (lowered == "none") {
+        style.animation_count = 0;
+        return true;
+    }
+    std::vector<StyleAnimation> parsed;
+    for (const std::string& component : split_comma_components(raw_value)) {
+        if (component.empty()) {
+            continue;
+        }
+        StyleAnimation animation;
+        bool have_name = false;
+        bool have_duration = false;
+        bool have_delay = false;
+        bool have_timing = false;
+        bool have_iteration_count = false;
+        bool have_direction = false;
+        for (const std::string& token : split_whitespace_components(component)) {
+            AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+            if (!have_timing && parse_timing_function(token, timing)) {
+                animation.timing = timing;
+                have_timing = true;
+                continue;
+            }
+            std::uint32_t time = 0;
+            if (parse_time_ms(token, time)) {
+                if (!have_duration) {
+                    animation.duration_ms = time;
+                    have_duration = true;
+                    continue;
+                }
+                if (!have_delay) {
+                    animation.delay_ms = time;
+                    have_delay = true;
+                    continue;
+                }
+                return false;
+            }
+            std::uint16_t iterations = 1;
+            bool infinite = false;
+            if (!have_iteration_count && parse_iteration_count(token, iterations, infinite)) {
+                animation.iteration_count = iterations;
+                animation.infinite = infinite;
+                have_iteration_count = true;
+                continue;
+            }
+            AnimationDirection direction = AnimationDirection::Normal;
+            if (!have_direction && parse_animation_direction(token, direction)) {
+                animation.direction = direction;
+                have_direction = true;
+                continue;
+            }
+            const std::string name = trim(token);
+            if (!have_name && name != "none" && is_animation_name_token(name)) {
+                animation.name = name;
+                have_name = true;
+                continue;
+            }
+            return false;
+        }
+        if (have_name && have_duration && animation.duration_ms > 0) {
+            parsed.push_back(std::move(animation));
+        }
+    }
+    set_style_animations(style, parsed);
+    return true;
+}
+
+void ensure_animation_entries(Style& style) {
+    if (style.animation_count == 0) {
+        StyleAnimation animation;
+        style.animations[0] = std::move(animation);
+        style.animation_count = 1;
+    }
+}
+
+bool parse_animation_longhand(const std::string& property, const std::string& raw_value, Style& style) {
+    if (property == "animation-name") {
+        const std::string lowered = lowercase(trim(raw_value));
+        if (lowered == "none") {
+            style.animation_count = 0;
+            return true;
+        }
+        std::vector<std::string> names;
+        for (const std::string& component : split_comma_components(raw_value)) {
+            const std::string name = trim(component);
+            if (!is_animation_name_token(name)) {
+                return false;
+            }
+            names.push_back(name);
+        }
+        if (names.empty()) {
+            return false;
+        }
+        const std::size_t old_count = style.animation_count;
+        style.animation_count = std::min<std::size_t>(style.animations.size(), std::max(old_count, names.size()));
+        for (std::size_t index = 0; index < style.animation_count; ++index) {
+            style.animations[index].name = names[std::min(index, names.size() - 1)];
+        }
+        return true;
+    }
+
+    ensure_animation_entries(style);
+    const std::vector<std::string> values = split_comma_components(raw_value);
+    if (values.empty()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < style.animation_count; ++index) {
+        const std::string& value = values[std::min(index, values.size() - 1)];
+        if (property == "animation-duration") {
+            std::uint32_t ms = 0;
+            if (!parse_time_ms(value, ms)) {
+                return false;
+            }
+            style.animations[index].duration_ms = ms;
+        } else if (property == "animation-delay") {
+            std::uint32_t ms = 0;
+            if (!parse_time_ms(value, ms)) {
+                return false;
+            }
+            style.animations[index].delay_ms = ms;
+        } else if (property == "animation-timing-function") {
+            AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+            if (!parse_timing_function(value, timing)) {
+                return false;
+            }
+            style.animations[index].timing = timing;
+        } else if (property == "animation-iteration-count") {
+            std::uint16_t iterations = 1;
+            bool infinite = false;
+            if (!parse_iteration_count(value, iterations, infinite)) {
+                return false;
+            }
+            style.animations[index].iteration_count = iterations;
+            style.animations[index].infinite = infinite;
+        } else if (property == "animation-direction") {
+            AnimationDirection direction = AnimationDirection::Normal;
+            if (!parse_animation_direction(value, direction)) {
+                return false;
+            }
+            style.animations[index].direction = direction;
+        }
+    }
     return true;
 }
 
@@ -1524,6 +1725,13 @@ enum class CascadeProperty : std::size_t {
     TransitionDuration,
     TransitionDelay,
     TransitionTimingFunction,
+    Animation,
+    AnimationName,
+    AnimationDuration,
+    AnimationDelay,
+    AnimationTimingFunction,
+    AnimationIterationCount,
+    AnimationDirection,
     BeforeContent,
     BeforeColor,
     BeforeFontWeight,
@@ -1738,6 +1946,27 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "transition-timing-function") {
         return &cascade_slot(slots, CascadeProperty::TransitionTimingFunction);
+    }
+    if (property == "animation") {
+        return &cascade_slot(slots, CascadeProperty::Animation);
+    }
+    if (property == "animation-name") {
+        return &cascade_slot(slots, CascadeProperty::AnimationName);
+    }
+    if (property == "animation-duration") {
+        return &cascade_slot(slots, CascadeProperty::AnimationDuration);
+    }
+    if (property == "animation-delay") {
+        return &cascade_slot(slots, CascadeProperty::AnimationDelay);
+    }
+    if (property == "animation-timing-function") {
+        return &cascade_slot(slots, CascadeProperty::AnimationTimingFunction);
+    }
+    if (property == "animation-iteration-count") {
+        return &cascade_slot(slots, CascadeProperty::AnimationIterationCount);
+    }
+    if (property == "animation-direction") {
+        return &cascade_slot(slots, CascadeProperty::AnimationDirection);
     }
     return nullptr;
 }
@@ -2289,6 +2518,15 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
                property == "transition-delay" ||
                property == "transition-timing-function") {
         return parse_transition_longhand(property, value, style);
+    } else if (property == "animation") {
+        return parse_animation_shorthand(value, style);
+    } else if (property == "animation-name" ||
+               property == "animation-duration" ||
+               property == "animation-delay" ||
+               property == "animation-timing-function" ||
+               property == "animation-iteration-count" ||
+               property == "animation-direction") {
+        return parse_animation_longhand(property, value, style);
     }
     return false;
 }
@@ -2994,12 +3232,20 @@ void CssStyleSheet::push_back(CssRule rule) {
     rules_.push_back(std::move(rule));
 }
 
+void CssStyleSheet::push_keyframes(CssKeyframesRule rule) {
+    keyframes_.push_back(std::move(rule));
+}
+
 std::size_t CssStyleSheet::size() const {
     return rules_.size();
 }
 
+std::size_t CssStyleSheet::keyframes_size() const {
+    return keyframes_.size();
+}
+
 bool CssStyleSheet::empty() const {
-    return rules_.empty();
+    return rules_.empty() && keyframes_.empty();
 }
 
 CssRule& CssStyleSheet::operator[](std::size_t index) {
@@ -3028,6 +3274,19 @@ CssStyleSheet::const_iterator CssStyleSheet::end() const {
 
 const CssStyleSheet::RuleList& CssStyleSheet::rules() const {
     return rules_;
+}
+
+const CssStyleSheet::KeyframesList& CssStyleSheet::keyframes() const {
+    return keyframes_;
+}
+
+const CssKeyframesRule* CssStyleSheet::find_keyframes(std::string_view name) const {
+    for (auto it = keyframes_.rbegin(); it != keyframes_.rend(); ++it) {
+        if (it->name == name) {
+            return &*it;
+        }
+    }
+    return nullptr;
 }
 
 bool parse_css_transform_2d(std::string_view raw_value, Transform2D& output) {
@@ -3067,6 +3326,32 @@ std::string serialize_css_transform_2d(const Transform2D& transform) {
         stream << "scale(" << transform.scale_x << ',' << transform.scale_y << ')';
     }
     return stream.str();
+}
+
+bool apply_keyframe_declaration(Style& style, const CssDeclaration& declaration, DiagnosticSink* diagnostics) {
+    if (declaration.property == "opacity" ||
+        declaration.property == "transform" ||
+        declaration.property == "color" ||
+        declaration.property == "background" ||
+        declaration.property == "background-color") {
+        if (apply_declaration(style, declaration.property, declaration.value)) {
+            return true;
+        }
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Style,
+                          DiagnosticSeverity::Warning,
+                          "animation-keyframe-declaration-ignored",
+                          "Keyframe declaration could not be applied by the supported animation subset",
+                          declaration.property + ": " + declaration.value);
+        return false;
+    }
+    report_diagnostic(diagnostics,
+                      DiagnosticStage::Style,
+                      DiagnosticSeverity::Info,
+                      "animation-keyframe-property-unsupported",
+                      "Keyframe property is outside the supported animation subset and was ignored",
+                      declaration.property);
+    return false;
 }
 
 StyleResolver::StyleResolver(Stylesheet stylesheet, StyleResolverOptions options)
@@ -3265,6 +3550,10 @@ Style StyleResolver::resolve(const Node& node) const {
                            options_.diagnostics);
     }
     return style;
+}
+
+const CssKeyframesRule* StyleResolver::keyframes(std::string_view name) const {
+    return stylesheet_.find_keyframes(name);
 }
 
 StyleResolverStatistics StyleResolver::statistics() const {
