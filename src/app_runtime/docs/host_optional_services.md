@@ -162,7 +162,8 @@ Current V0 helper:
   `HostServiceJobKind::ImageDecode` requests and completions.
 - `AppImageSurfaceCache` turns URLs into bounded decode requests, records ready
   `Surface` handles after completions and releases surfaces when a page/instance
-  changes.
+  changes. It can also evict LRU ready surfaces by surface-count and
+  decoded-byte budgets while protecting current display-list references.
 - Successful completions return `HostServiceHandleKind::Surface` handles;
   `AppDecodedSurfaceRecord` stores width, height, stride, pixel format and
   optional raw pixels.
@@ -206,12 +207,18 @@ Rules:
 - Prefer the format needed by the screen or compositor. ESP32-S3 should prefer
   RGB565.
 - Decoded surfaces are host-cache owned; UI only references handles.
-- A full cache may reclaim surfaces not referenced by the current display list.
+- A full cache may reclaim surfaces not referenced by the current display list;
+  if every ready surface is still visible, the cache may temporarily exceed the
+  budget until a later frame can release one.
 - On failure, keep the placeholder box and report diagnostics.
 - The Win32 debug shell can load uncompressed 24/32-bit BMP resources from
   `.jfapp`/source packages to validate the resource-to-surface-handle path.
-- PNG/JPEG/WebP, general cache eviction, `object-fit` and production MCU codecs
-  are not wired yet.
+- The Win32 debug shell reports image request rejections and completion
+  failures with the triggering `src`, submit/host status and host error code.
+- Render core passes the `object-fit` subset to the host painter. The Win32
+  debug painter supports `fill`, `contain`, `cover`, `none` and `scale-down`
+  with default centered positioning. Complex `object-position` is deferred.
+- PNG/JPEG/WebP and production MCU codecs are not wired yet.
 
 ## Audio Playback Service
 
@@ -511,8 +518,9 @@ Recommended order:
 3. The first image-decode mock/raw-surface fixture, `AppImageSurfaceCache` and
    render-core image display command passes are implemented. The Win32 debug
    shell can automatically submit mock decodes and repaint, and can load
-   uncompressed 24/32-bit BMP resources from `.jfapp`/source packages. Next,
-   wire general cache eviction, `object-fit` and production image codecs.
+   uncompressed 24/32-bit BMP resources from `.jfapp`/source packages. General
+   cache eviction and the `object-fit` subset are wired; next work is finer
+   image diagnostics and production image codecs.
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps after the desktop surface consumer path is stable.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.

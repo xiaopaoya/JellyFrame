@@ -41,6 +41,14 @@ enum class TextCommandAlign {
     End,
 };
 
+enum class ObjectFit {
+    Fill,
+    Contain,
+    Cover,
+    None,
+    ScaleDown,
+};
+
 struct DisplayCommand {
     DisplayCommandType type = DisplayCommandType::FillRect;
     Rect rect;
@@ -53,6 +61,7 @@ struct DisplayCommand {
     TextCommandAlign text_align = TextCommandAlign::Start;
     bool text_single_line = true;
     std::uint32_t image_handle = 0;
+    ObjectFit object_fit = ObjectFit::Fill;
 };
 
 using DisplayList = std::vector<DisplayCommand>;

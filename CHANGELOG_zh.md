@@ -24,8 +24,13 @@ JellyFrame Engine 的重要变更记录在这里。
   completion、ready surface handle 和 release；Win32 browser debug 壳已接入 `app://icon` /
   `app://photo` raw RGB565 fixture，可自动提交 mock decode 并在 completion 后 paint-dirty 重绘。
 - Win32 browser debug 壳可从 `.jfapp`/源码包资源加载无压缩 24/32-bit BMP 作为包内图片 V0，
-  复用 image surface cache 和重绘路径；PNG/JPEG/WebP、通用 cache eviction、`object-fit`
-  和产品级 MCU codec 仍留给后续。
+  复用 image surface cache 和重绘路径。
+- `AppImageSurfaceCache` 新增通用 ready surface eviction，可按 surface 数量和 decoded bytes
+  预算回收未被当前 display list 引用的 LRU surface；render core 新增 `object-fit` 子集
+  `fill`、`contain`、`cover`、`none`、`scale-down`，Win32 painter 已按默认居中位置绘制。
+  Win32 debug 壳会把图片 decode request 拒绝和 completion 失败写入 diagnostics，保留原始
+  `src` 和状态码，方便定位缺资源、预算拒绝或解码失败。
+  PNG/JPEG/WebP、复杂 `object-position` 和产品级 MCU codec 仍留给后续。
 - 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，记录标准子集优先 runtime data API
   方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界
   Promise/microtask 支持成熟后再考虑；只有存在非阻塞 app 私有内存 shadow 时才暴露极小

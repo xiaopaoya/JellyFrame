@@ -1170,6 +1170,7 @@ enum class CascadeProperty : std::size_t {
     GridAutoRows,
     GridColumn,
     GridRow,
+    ObjectFit,
     ListStyleType,
     BeforeContent,
     BeforeColor,
@@ -1364,6 +1365,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "grid-row") {
         return &cascade_slot(slots, CascadeProperty::GridRow);
+    }
+    if (property == "object-fit") {
+        return &cascade_slot(slots, CascadeProperty::ObjectFit);
     }
     if (property == "list-style" || property == "list-style-type") {
         return &cascade_slot(slots, CascadeProperty::ListStyleType);
@@ -1874,6 +1878,22 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             return false;
         }
         style.grid_row_span = span;
+        return true;
+    } else if (property == "object-fit") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "fill") {
+            style.object_fit = ObjectFit::Fill;
+        } else if (lowered == "contain") {
+            style.object_fit = ObjectFit::Contain;
+        } else if (lowered == "cover") {
+            style.object_fit = ObjectFit::Cover;
+        } else if (lowered == "none") {
+            style.object_fit = ObjectFit::None;
+        } else if (lowered == "scale-down") {
+            style.object_fit = ObjectFit::ScaleDown;
+        } else {
+            return false;
+        }
         return true;
     } else if (property == "list-style" || property == "list-style-type") {
         std::istringstream stream(lowercase(trim(value)));

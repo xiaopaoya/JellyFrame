@@ -451,7 +451,7 @@ void image_element_emits_image_display_command_when_surface_resolves() {
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse("<body><img src='app://icon.raw'></body>");
-    Stylesheet stylesheet = css_parser.parse("img { width: 32px; height: 24px; }");
+    Stylesheet stylesheet = css_parser.parse("img { width: 32px; height: 24px; object-fit: cover; }");
     StyleResolver resolver(stylesheet);
     RenderTreeBuilder render_tree_builder(resolver);
     auto render_tree = render_tree_builder.build(*document);
@@ -471,6 +471,7 @@ void image_element_emits_image_display_command_when_surface_resolves() {
             found_image = true;
             check(command.image_handle == 77, "image command carries resolved handle");
             check(command.rect.width == 32 && command.rect.height == 24, "image command uses content rect");
+            check(command.object_fit == ObjectFit::Cover, "image command carries object-fit");
         }
     }
     check(found_image, "resolved img emits image command");

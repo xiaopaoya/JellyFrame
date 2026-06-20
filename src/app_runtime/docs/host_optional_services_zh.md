@@ -134,7 +134,8 @@ Win32 参考壳的 A4 行为：
 - `ImageDecodeMock` 提供桌面/测试用 raw surface fixture，走 `HostServiceJobKind::ImageDecode`
   request/completion。
 - `AppImageSurfaceCache` 把 URL 变成有界 decode request，completion 后记录 ready `Surface`
-  handle，并在页面/实例切换时释放 surface。
+  handle，并在页面/实例切换时释放 surface。它也可按 ready surface 数量和 decoded bytes
+  预算回收未被当前 display list 引用的 LRU surface。
 - 成功 completion 返回 `HostServiceHandleKind::Surface` handle；`AppDecodedSurfaceRecord`
   保存 width、height、stride、pixel format 和可选 raw pixels。
 - `release_surface(...)` 必须由 UI/main task 在 surface 不再需要时调用，释放 record 和 host handle。
@@ -173,11 +174,17 @@ struct HostDecodedSurface {
 - 大图应在打包期缩放或拒绝。运行时不要为超大图片尝试“赌一把”。
 - 解码输出应优先匹配屏幕或 compositor 需要的格式。ESP32-S3 推荐 RGB565。
 - decoded surface 由宿主 cache 持有；UI 只引用 handle。
-- cache 满时可以 LRU 回收未被当前 display list 引用的 surface。
+- cache 满时可以 LRU 回收未被当前 display list 引用的 surface；如果当前画面引用了所有
+  ready surface，可以暂时超过预算，等待后续 frame 回收。
 - 如果解码失败，页面保留占位盒并报告 diagnostics。
 - Win32 debug 壳已接入 `.jfapp`/源码包无压缩 24/32-bit BMP loader，用于验证包内图片资源到
   surface handle/display list/repaint 的完整路径。
-- PNG/JPEG/WebP、通用 cache eviction、`object-fit` 和产品级 MCU codec 尚未接入。
+- Win32 debug 壳会报告图片 request 拒绝和 completion 失败，包括触发的 `src`、submit/host
+  状态和 host error code。
+- render core 会把 `object-fit` 子集传给宿主 painter；Win32 debug painter 已支持
+  `fill`、`contain`、`cover`、`none`、`scale-down`，默认居中。复杂 `object-position`
+  延后。
+- PNG/JPEG/WebP 和产品级 MCU codec 尚未接入。
 
 ## 音频播放服务
 
@@ -455,7 +462,8 @@ struct AppSystemStateSnapshot {
    安装、枚举、解析和删除 `.jfapp`，并用原子 JSON 提交模拟 installed-app registry。
 3. image decode mock/raw surface fixture、`AppImageSurfaceCache` 和 render-core image display command
    第一版已实现；Win32 debug 壳已能自动提交 mock decode 并重绘，并可从 `.jfapp`/源码包加载
-   无压缩 24/32-bit BMP。下一步接通用 cache eviction、`object-fit` 和产品级图片 codec。
+   无压缩 24/32-bit BMP。通用 cache eviction 和 `object-fit` 子集已接入；下一步补更细图片
+   diagnostics 和产品级图片 codec。
 4. 桌面 surface consumer 路径稳定后，在 ESP32-S3 port 中接 RGB565 小图/MJPEG decode，
    并严格限制尺寸和并发。
 5. 接 host-owned MP3 playback，只返回句柄和 ended/error 事件。

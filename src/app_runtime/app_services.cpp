@@ -390,6 +390,13 @@ void ImageDecodeMock::clear() {
     records_.clear();
 }
 
+AppImageSurfaceCache::AppImageSurfaceCache(AppImageSurfaceCacheOptions options)
+    : options_(options) {}
+
+void AppImageSurfaceCache::set_options(AppImageSurfaceCacheOptions options) {
+    options_ = options;
+}
+
 AppImageSurfaceCache::Entry* AppImageSurfaceCache::find_url(const std::string& url) {
     const auto found = std::find_if(entries_.begin(), entries_.end(), [&url](const Entry& entry) {
         return entry.url == url;
@@ -409,6 +416,52 @@ AppImageSurfaceCache::Entry* AppImageSurfaceCache::find_job(std::uint32_t job_id
         return entry.job_id == job_id && entry.state == AppImageSurfaceState::Pending;
     });
     return found == entries_.end() ? nullptr : &*found;
+}
+
+std::size_t AppImageSurfaceCache::ready_surface_count() const {
+    return static_cast<std::size_t>(std::count_if(entries_.begin(), entries_.end(), [](const Entry& entry) {
+        return entry.state == AppImageSurfaceState::Ready;
+    }));
+}
+
+std::size_t AppImageSurfaceCache::ready_byte_count() const {
+    std::size_t total = 0;
+    for (const Entry& entry : entries_) {
+        if (entry.state == AppImageSurfaceState::Ready) {
+            total += entry.decoded_bytes;
+        }
+    }
+    return total;
+}
+
+bool AppImageSurfaceCache::over_budget() const {
+    return (options_.max_ready_surfaces != 0 && ready_surface_count() > options_.max_ready_surfaces) ||
+           (options_.max_ready_bytes != 0 && ready_byte_count() > options_.max_ready_bytes);
+}
+
+AppImageSurfaceCache::Entry* AppImageSurfaceCache::least_recently_used_unprotected(
+    const std::uint32_t* protected_handles,
+    std::size_t protected_handle_count) {
+    Entry* candidate = nullptr;
+    for (Entry& entry : entries_) {
+        if (entry.state != AppImageSurfaceState::Ready || entry.handle == 0) {
+            continue;
+        }
+        bool protected_handle = false;
+        for (std::size_t i = 0; i < protected_handle_count; ++i) {
+            if (protected_handles != nullptr && protected_handles[i] == entry.handle) {
+                protected_handle = true;
+                break;
+            }
+        }
+        if (protected_handle) {
+            continue;
+        }
+        if (candidate == nullptr || entry.last_used_tick < candidate->last_used_tick) {
+            candidate = &entry;
+        }
+    }
+    return candidate;
 }
 
 bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
@@ -431,11 +484,13 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
                 if (handle != nullptr) {
                     *handle = entry->handle;
                 }
+                entry->last_used_tick = use_tick_++;
                 return true;
             }
             entry->state = AppImageSurfaceState::Missing;
             entry->handle = 0;
             entry->job_id = 0;
+            entry->decoded_bytes = 0;
         } else if (entry->state == AppImageSurfaceState::Pending ||
                    entry->state == AppImageSurfaceState::Failed) {
             return false;
@@ -444,18 +499,23 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
 
     const AppServiceSubmitResult submitted = decoder.submit_decode(host, url);
     if (!submitted.accepted()) {
-        if (submitted.status == AppServiceSubmitStatus::QueueFull ||
-            submitted.status == AppServiceSubmitStatus::BudgetExceeded) {
-            return false;
-        }
         if (entry == nullptr) {
             entries_.push_back(Entry{url});
             entry = &entries_.back();
         }
         entry->app_instance_id = host.current_app_instance_id();
         entry->state = AppImageSurfaceState::Failed;
+        entry->handle = 0;
+        entry->job_id = 0;
+        entry->decoded_bytes = 0;
+        entry->submit_status = submitted.status;
         entry->status = submitted.rejected_status;
         entry->error_code = 0;
+        if (submitted.status == AppServiceSubmitStatus::QueueFull ||
+            submitted.status == AppServiceSubmitStatus::BudgetExceeded) {
+            entry->state = AppImageSurfaceState::Missing;
+            return false;
+        }
         return false;
     }
 
@@ -466,6 +526,8 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
     entry->app_instance_id = host.current_app_instance_id();
     entry->job_id = submitted.job_id;
     entry->handle = 0;
+    entry->decoded_bytes = 0;
+    entry->submit_status = AppServiceSubmitStatus::Accepted;
     entry->status = HostServiceStatus::Failed;
     entry->error_code = 0;
     entry->state = AppImageSurfaceState::Pending;
@@ -483,14 +545,43 @@ bool AppImageSurfaceCache::handle_completion(const HostServiceCompletion& comple
     entry->status = completion.status;
     entry->error_code = completion.error_code;
     entry->app_instance_id = completion.app_instance_id;
+    entry->submit_status = AppServiceSubmitStatus::Accepted;
     if (completion.status == HostServiceStatus::Completed && completion.handle != 0) {
         entry->handle = completion.handle;
+        entry->decoded_bytes = completion.byte_count;
+        entry->last_used_tick = use_tick_++;
         entry->state = AppImageSurfaceState::Ready;
     } else {
         entry->handle = 0;
+        entry->decoded_bytes = 0;
         entry->state = AppImageSurfaceState::Failed;
     }
     return true;
+}
+
+std::size_t AppImageSurfaceCache::evict_unreferenced(AppRuntimeHost& host,
+                                                     ImageDecodeMock& decoder,
+                                                     const std::uint32_t* protected_handles,
+                                                     std::size_t protected_handle_count) {
+    std::size_t released = 0;
+    while (over_budget()) {
+        Entry* victim = least_recently_used_unprotected(protected_handles, protected_handle_count);
+        if (victim == nullptr) {
+            break;
+        }
+        const std::uint32_t handle = victim->handle;
+        if (handle == 0 || !decoder.release_surface(host, handle)) {
+            break;
+        }
+        ++released;
+        entries_.erase(std::remove_if(entries_.begin(),
+                                      entries_.end(),
+                                      [handle](const Entry& entry) {
+                                          return entry.state == AppImageSurfaceState::Ready && entry.handle == handle;
+                                      }),
+                       entries_.end());
+    }
+    return released;
 }
 
 std::size_t AppImageSurfaceCache::release_all(AppRuntimeHost& host, ImageDecodeMock& decoder) {
@@ -512,6 +603,28 @@ void AppImageSurfaceCache::clear() {
 AppImageSurfaceState AppImageSurfaceCache::state_for_url(const std::string& url) const {
     const Entry* entry = find_url(url);
     return entry == nullptr ? AppImageSurfaceState::Missing : entry->state;
+}
+
+std::string AppImageSurfaceCache::url_for_job(std::uint32_t job_id) const {
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [job_id](const Entry& entry) {
+        return entry.job_id == job_id;
+    });
+    return found == entries_.end() ? std::string{} : found->url;
+}
+
+AppServiceSubmitStatus AppImageSurfaceCache::last_submit_status_for_url(const std::string& url) const {
+    const Entry* entry = find_url(url);
+    return entry == nullptr ? AppServiceSubmitStatus::InvalidInput : entry->submit_status;
+}
+
+HostServiceStatus AppImageSurfaceCache::last_host_status_for_url(const std::string& url) const {
+    const Entry* entry = find_url(url);
+    return entry == nullptr ? HostServiceStatus::Failed : entry->status;
+}
+
+std::uint32_t AppImageSurfaceCache::last_error_code_for_url(const std::string& url) const {
+    const Entry* entry = find_url(url);
+    return entry == nullptr ? 0 : entry->error_code;
 }
 
 AppPrivateKvStorageMock::AppPrivateKvStorageMock(AppPrivateKvPolicy policy)

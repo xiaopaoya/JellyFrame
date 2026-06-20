@@ -45,6 +45,7 @@ struct TextPainter {
 using ImagePaintCallback = bool (*)(FrameBuffer& target,
                                     Rect rect,
                                     std::uint32_t image_handle,
+                                    ObjectFit object_fit,
                                     void* context);
 
 struct ImagePainter {

@@ -250,6 +250,40 @@ void bench_image_surface_cache(std::size_t capacity) {
     cache.release_all(host, images);
 }
 
+void bench_image_surface_cache_eviction(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
+    host.launch("org.example.image-cache-evict", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 32, 32, 32 * 32 * 2, capacity});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        images.add_fixture(ImageDecodeFixture{
+            "app://icon" + std::to_string(i),
+            16,
+            16,
+            16,
+            HostPixelFormat::Rgb565,
+            {},
+        });
+    }
+    AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{capacity / 2, 0});
+    std::uint32_t handle = 0;
+    for (std::size_t i = 0; i < capacity; ++i) {
+        cache.resolve_or_request(host, images, "app://icon" + std::to_string(i), &handle);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        images.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            cache.handle_completion(completion);
+        }
+    }
+    cache.evict_unreferenced(host, images);
+    cache.release_all(host, images);
+}
+
 void bench_system_event_queue(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
     host.launch("org.example.system-events", AppRole::App);
@@ -345,6 +379,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_image_surface_cache", iterations, average_microseconds(iterations, [&] {
         bench_image_surface_cache(capacity);
+    }));
+    print_result("app_runtime_image_surface_cache_eviction", iterations, average_microseconds(iterations, [&] {
+        bench_image_surface_cache_eviction(capacity);
     }));
     print_result("app_runtime_system_event_queue", iterations, average_microseconds(iterations, [&] {
         bench_system_event_queue(capacity);

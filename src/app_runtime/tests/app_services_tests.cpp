@@ -238,6 +238,132 @@ void image_surface_cache_records_failed_decodes_without_retry_loop() {
     check(host.requests().empty(), "image cache failed does not retry every frame");
 }
 
+void image_surface_cache_keeps_transient_budget_rejections_retryable() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
+    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache transient fixture a");
+    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache transient fixture b");
+    AppImageSurfaceCache cache;
+    std::uint32_t handle = 0;
+    check(!cache.resolve_or_request(host, images, "app://a", &handle), "image cache transient first pending");
+    check(!cache.resolve_or_request(host, images, "app://b", &handle), "image cache transient second rejected");
+    check(cache.state_for_url("app://b") == AppImageSurfaceState::Missing,
+          "image cache transient rejection remains retryable");
+    check(cache.last_submit_status_for_url("app://b") == AppServiceSubmitStatus::BudgetExceeded,
+          "image cache records transient rejection status");
+
+    check(images.complete_next(host), "image cache transient first completed");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image cache transient completion accepted");
+    check(cache.handle_completion(accepted.front()), "image cache transient first handled");
+    check(!cache.resolve_or_request(host, images, "app://b", &handle), "image cache transient retry submits later");
+    check(cache.state_for_url("app://b") == AppImageSurfaceState::Pending,
+          "image cache transient retry reaches pending state");
+}
+
+void image_surface_cache_records_permanent_request_rejections() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 4, 16, 16, 16 * 16 * 2, 1});
+    AppImageSurfaceCache cache;
+    std::uint32_t handle = 0;
+    check(!cache.resolve_or_request(host, images, "app://too-long", &handle), "image cache permanent reject");
+    check(cache.state_for_url("app://too-long") == AppImageSurfaceState::Failed,
+          "image cache permanent rejection records failed state");
+    check(cache.last_submit_status_for_url("app://too-long") == AppServiceSubmitStatus::InvalidInput,
+          "image cache permanent rejection records submit status");
+}
+
+std::uint32_t cache_ready_image(AppRuntimeHost& host,
+                                ImageDecodeMock& images,
+                                AppImageSurfaceCache& cache,
+                                const std::string& url) {
+    std::uint32_t handle = 0;
+    check(!cache.resolve_or_request(host, images, url, &handle), "image cache test submitted request");
+    check(images.complete_next(host), "image cache test completed decode");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image cache test completion accepted");
+    check(cache.handle_completion(accepted.front()), "image cache test handled completion");
+    check(cache.resolve_or_request(host, images, url, &handle), "image cache test resolved ready image");
+    check(handle != 0, "image cache test handle ready");
+    return handle;
+}
+
+void image_surface_cache_evicts_lru_ready_surfaces() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 3});
+    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache eviction fixture a");
+    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache eviction fixture b");
+    check(images.add_fixture(ImageDecodeFixture{"app://c", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache eviction fixture c");
+    AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{2, 0});
+
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://a");
+    const std::uint32_t handle_b = cache_ready_image(host, images, cache, "app://b");
+    const std::uint32_t handle_c = cache_ready_image(host, images, cache, "app://c");
+    check(cache.ready_surface_count() == 3, "image cache eviction starts over surface budget");
+    check(cache.evict_unreferenced(host, images) == 1, "image cache eviction releases one lru surface");
+    check(images.surface(handle_a) == nullptr, "image cache eviction drops oldest surface");
+    check(images.surface(handle_b) != nullptr, "image cache eviction keeps newer surface b");
+    check(images.surface(handle_c) != nullptr, "image cache eviction keeps newer surface c");
+    check(cache.ready_surface_count() == 2, "image cache eviction reaches surface budget");
+}
+
+void image_surface_cache_keeps_protected_display_list_surfaces() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 3});
+    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache protected fixture a");
+    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache protected fixture b");
+    AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{1, 0});
+
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://a");
+    const std::uint32_t handle_b = cache_ready_image(host, images, cache, "app://b");
+    const std::uint32_t protected_one[] = {handle_a};
+    check(cache.evict_unreferenced(host, images, protected_one, 1) == 1,
+          "image cache protected eviction releases unprotected surface");
+    check(images.surface(handle_a) != nullptr, "image cache protected keeps referenced surface");
+    check(images.surface(handle_b) == nullptr, "image cache protected drops unreferenced surface");
+    check(cache.ready_surface_count() == 1, "image cache protected reaches budget");
+
+    const std::uint32_t handle_c = cache_ready_image(host, images, cache, "app://b");
+    const std::uint32_t protected_both[] = {handle_a, handle_c};
+    check(cache.evict_unreferenced(host, images, protected_both, 2) == 0,
+          "image cache keeps over-budget surfaces when all are protected");
+    check(cache.ready_surface_count() == 2, "image cache remains over budget until a later frame can evict");
+    check(images.surface(handle_a) != nullptr, "image cache still keeps protected a");
+    check(images.surface(handle_c) != nullptr, "image cache still keeps protected c");
+}
+
+void image_surface_cache_evicts_by_decoded_bytes() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 3});
+    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache bytes fixture a");
+    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache bytes fixture b");
+    check(images.add_fixture(ImageDecodeFixture{"app://c", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache bytes fixture c");
+    AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{0, 8U * 8U * 2U * 2U});
+
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://a");
+    cache_ready_image(host, images, cache, "app://b");
+    cache_ready_image(host, images, cache, "app://c");
+    check(cache.ready_byte_count() == 8U * 8U * 2U * 3U, "image cache byte count tracks ready surfaces");
+    check(cache.evict_unreferenced(host, images) == 1, "image cache byte eviction releases one surface");
+    check(images.surface(handle_a) == nullptr, "image cache byte eviction drops oldest surface");
+    check(cache.ready_byte_count() == 8U * 8U * 2U * 2U, "image cache byte eviction reaches budget");
+}
+
 void kv_storage_is_app_private_and_async() {
     AppRuntimeHost host = make_host();
     AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 4, 96});
@@ -374,6 +500,11 @@ int main() {
     image_decode_enforces_surface_budgets();
     image_surface_cache_requests_resolves_and_releases_surfaces();
     image_surface_cache_records_failed_decodes_without_retry_loop();
+    image_surface_cache_keeps_transient_budget_rejections_retryable();
+    image_surface_cache_records_permanent_request_rejections();
+    image_surface_cache_evicts_lru_ready_surfaces();
+    image_surface_cache_keeps_protected_display_list_surfaces();
+    image_surface_cache_evicts_by_decoded_bytes();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();
     local_storage_shadow_follows_web_storage_subset();

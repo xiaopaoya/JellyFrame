@@ -45,14 +45,20 @@ bool rejecting_text_painter(FrameBuffer&,
 
 struct ImagePaintProbe {
     std::uint32_t expected_handle = 0;
+    ObjectFit fit = ObjectFit::Fill;
     int calls = 0;
 };
 
-bool probe_image_painter(FrameBuffer& target, Rect rect, std::uint32_t image_handle, void* raw_context) {
+bool probe_image_painter(FrameBuffer& target,
+                         Rect rect,
+                         std::uint32_t image_handle,
+                         ObjectFit object_fit,
+                         void* raw_context) {
     auto* probe = static_cast<ImagePaintProbe*>(raw_context);
     if (probe == nullptr || image_handle != probe->expected_handle) {
         return false;
     }
+    probe->fit = object_fit;
     ++probe->calls;
     for (int y = rect.y; y < rect.y + rect.height; ++y) {
         for (int x = rect.x; x < rect.x + rect.width; ++x) {
@@ -123,15 +129,17 @@ void clipping_limits_rasterization() {
 
 void image_command_uses_injected_painter() {
     FrameBuffer frame_buffer(8, 8, Color{255, 255, 255, 255});
-    ImagePaintProbe probe{42, 0};
+    ImagePaintProbe probe{42, ObjectFit::Fill, 0};
     SoftwareRasterizer rasterizer({}, ImagePainter{probe_image_painter, &probe});
     DisplayCommand command;
     command.type = DisplayCommandType::Image;
     command.rect = Rect{1, 2, 3, 2};
     command.image_handle = 42;
+    command.object_fit = ObjectFit::Contain;
     rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 8, 8});
 
     check(probe.calls == 1, "image painter called once");
+    check(probe.fit == ObjectFit::Contain, "image painter receives object-fit");
     check(frame_buffer.pixel(1, 2).r == 220 && frame_buffer.pixel(1, 2).g == 38,
           "image painter writes covered pixel");
     check(frame_buffer.pixel(0, 0).r == 255, "image painter leaves outside pixel");

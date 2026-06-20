@@ -227,7 +227,7 @@ void cascade_uses_specificity_and_importance() {
 
 void matches_descendant_and_attribute_selectors() {
     const Stylesheet stylesheet = parse(
-        ".story img { width: 240px; height: 120px; }"
+        ".story img { width: 240px; height: 120px; object-fit: contain; }"
         "dialog[open] { background: #ffffff; border: 2px solid #123456; }"
         "main > form { padding: 12px; }");
 
@@ -250,6 +250,7 @@ void matches_descendant_and_attribute_selectors() {
 
     check(form_style.padding.top == 12, "child selector applies");
     check(image_style.width == 240 && image_style.height == 120, "descendant selector applies");
+    check(image_style.object_fit == ObjectFit::Contain, "object-fit applies");
     check(dialog_style.border_width.top == 2, "attribute selector border applies");
     check(dialog_style.background_color.r == 255, "attribute selector background applies");
 }

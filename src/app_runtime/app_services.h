@@ -115,6 +115,11 @@ enum class AppImageSurfaceState {
     Failed,
 };
 
+struct AppImageSurfaceCacheOptions {
+    std::size_t max_ready_surfaces = 0;
+    std::size_t max_ready_bytes = 0;
+};
+
 std::size_t decoded_surface_byte_count(int width,
                                        int height,
                                        int stride_pixels,
@@ -153,18 +158,31 @@ private:
 
 class AppImageSurfaceCache {
 public:
+    explicit AppImageSurfaceCache(AppImageSurfaceCacheOptions options = {});
+
+    void set_options(AppImageSurfaceCacheOptions options);
     bool resolve_or_request(AppRuntimeHost& host,
                             ImageDecodeMock& decoder,
                             const std::string& url,
                             std::uint32_t* handle);
     bool handle_completion(const HostServiceCompletion& completion);
+    std::size_t evict_unreferenced(AppRuntimeHost& host,
+                                   ImageDecodeMock& decoder,
+                                   const std::uint32_t* protected_handles = nullptr,
+                                   std::size_t protected_handle_count = 0);
     std::size_t release_all(AppRuntimeHost& host, ImageDecodeMock& decoder);
     void clear();
 
     AppImageSurfaceState state_for_url(const std::string& url) const;
+    std::string url_for_job(std::uint32_t job_id) const;
+    AppServiceSubmitStatus last_submit_status_for_url(const std::string& url) const;
+    HostServiceStatus last_host_status_for_url(const std::string& url) const;
+    std::uint32_t last_error_code_for_url(const std::string& url) const;
     std::size_t size() const {
         return entries_.size();
     }
+    std::size_t ready_surface_count() const;
+    std::size_t ready_byte_count() const;
 
 private:
     struct Entry {
@@ -172,16 +190,24 @@ private:
         std::uint32_t app_instance_id = 0;
         std::uint32_t job_id = 0;
         std::uint32_t handle = 0;
+        std::size_t decoded_bytes = 0;
+        AppServiceSubmitStatus submit_status = AppServiceSubmitStatus::InvalidInput;
         HostServiceStatus status = HostServiceStatus::Failed;
         std::uint32_t error_code = 0;
+        std::uint32_t last_used_tick = 0;
         AppImageSurfaceState state = AppImageSurfaceState::Missing;
     };
 
     Entry* find_url(const std::string& url);
     const Entry* find_url(const std::string& url) const;
     Entry* find_job(std::uint32_t job_id);
+    bool over_budget() const;
+    Entry* least_recently_used_unprotected(const std::uint32_t* protected_handles,
+                                           std::size_t protected_handle_count);
 
+    AppImageSurfaceCacheOptions options_;
     std::vector<Entry> entries_;
+    std::uint32_t use_tick_ = 1;
 };
 
 struct AppPrivateKvPolicy {

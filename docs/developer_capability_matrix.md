@@ -187,7 +187,7 @@ clear older supported fallback declarations.
 | `list-style` / `list-style-type` | Subset | `none`, disc-like values and decimal-like values. Native-lite list markers are painted for `li`. |
 | `content` on `::before` | Subset | Plain text and `counter(name) "suffix"` for lightweight list counters. Full generated-content layout is deferred. |
 | `box-shadow` | Subset | First shadow becomes an approximate rounded translucent fill. Real blur and multiple shadows are not rasterized. |
-| `object-fit` | Deferred | Waits for image decode/replaced-element support. |
+| `object-fit` | Subset | Supports `fill`, `contain`, `cover`, `none` and `scale-down` with default centered positioning. Complex `object-position` is deferred. |
 | `font-family` | Deferred | Text backend decides the actual font. Win32 shell uses Microsoft YaHei UI. |
 | Animations/transitions | Deferred | Declarations skipped or stored without animation behavior. |
 | Filters/backdrop filters | Deferred | Not painted. |
@@ -297,7 +297,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Linear gradient | Subset | Simple vertical command support. |
 | Text | Subset | Core fallback is tiny ASCII bitmap painting with UTF-8 placeholder glyphs. Win32 shell injects GDI for UTF-8/Chinese validation. |
 | Chinese text | Shell-dependent | Use Win32 shell or future platform text backend. Pseudo-browser fallback will show placeholder glyphs. |
-| Images | Host-optional/debug usable | Platform-neutral `ImageDecodeMock`, `AppImageSurfaceCache`, `Surface` handle lifetime and width/height/decoded-byte/pending budgets now exist. Render core supports `ImageHandleResolver`, image display commands and `ImagePainter`; the Win32 debug shell can automatically submit mock decodes and repaint for `<img src="app://icon">` / `app://photo`, and can load uncompressed 24/32-bit BMP resources from `.jfapp`/source packages as the in-bundle image V0 path. PNG/JPEG/WebP, general cache eviction, `object-fit` and production MCU codecs are still pending. |
+| Images | Host-optional/debug usable | Platform-neutral `ImageDecodeMock`, `AppImageSurfaceCache`, `Surface` handle lifetime and width/height/decoded-byte/pending budgets now exist. Render core supports `ImageHandleResolver`, image display commands and `ImagePainter`; the Win32 debug shell can automatically submit mock decodes and repaint for `<img src="app://icon">` / `app://photo`, and can load uncompressed 24/32-bit BMP resources from `.jfapp`/source packages as the in-bundle image V0 path. `AppImageSurfaceCache` can evict LRU ready surfaces by surface-count and decoded-byte budgets while protecting current display-list references; image commands carry the `object-fit` subset; Win32 diagnostics report request rejections and completion failures. PNG/JPEG/WebP, complex `object-position` and production MCU codecs are still pending. |
 | Audio playback | Deferred/host-optional | Core does not own PCM/I2S/codecs. ESP32-S3 MP3 experiments justify an optional host-owned MP3 playback pipeline; JS/core should receive handles and state events only. |
 | Lightweight video/MJPEG | Experimental/host-optional | Planned only as a low-resolution frame provider. `<video>` is not promised. H.264 is not in the default ESP32-S3 profile. |
 | Canvas/SVG | Deferred | No canvas API or SVG renderer. |

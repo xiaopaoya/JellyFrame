@@ -439,7 +439,7 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         break;
     case DisplayCommandType::Image:
         if (image_painter_.paint == nullptr ||
-            !image_painter_.paint(target, rect, command.image_handle, image_painter_.context)) {
+            !image_painter_.paint(target, rect, command.image_handle, command.object_fit, image_painter_.context)) {
             report_diagnostic(diagnostics_,
                               DiagnosticStage::Paint,
                               DiagnosticSeverity::Warning,

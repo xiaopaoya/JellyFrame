@@ -250,6 +250,106 @@ void add_package_image_fixtures(const Node& document,
     }
 }
 
+void collect_image_handles(const LayerNode& layer, std::vector<std::uint32_t>& handles) {
+    for (const DisplayCommand& command : layer.display_list) {
+        if (command.type != DisplayCommandType::Image || command.image_handle == 0) {
+            continue;
+        }
+        if (std::find(handles.begin(), handles.end(), command.image_handle) == handles.end()) {
+            handles.push_back(command.image_handle);
+        }
+    }
+    for (const auto& child : layer.children) {
+        collect_image_handles(*child, handles);
+    }
+}
+
+const char* app_submit_status_name(AppServiceSubmitStatus status) {
+    switch (status) {
+    case AppServiceSubmitStatus::Accepted:
+        return "accepted";
+    case AppServiceSubmitStatus::EmptyInstance:
+        return "empty-instance";
+    case AppServiceSubmitStatus::CapabilityDenied:
+        return "capability-denied";
+    case AppServiceSubmitStatus::InvalidInput:
+        return "invalid-input";
+    case AppServiceSubmitStatus::QueueFull:
+        return "queue-full";
+    case AppServiceSubmitStatus::BudgetExceeded:
+        return "budget-exceeded";
+    }
+    return "unknown";
+}
+
+const char* host_service_status_name(HostServiceStatus status) {
+    switch (status) {
+    case HostServiceStatus::Completed:
+        return "completed";
+    case HostServiceStatus::Failed:
+        return "failed";
+    case HostServiceStatus::Cancelled:
+        return "cancelled";
+    case HostServiceStatus::Unsupported:
+        return "unsupported";
+    case HostServiceStatus::BudgetExceeded:
+        return "budget-exceeded";
+    case HostServiceStatus::Timeout:
+        return "timeout";
+    }
+    return "unknown";
+}
+
+std::string image_diagnostic_detail(const std::string& src,
+                                    const char* status_kind,
+                                    const char* status,
+                                    HostServiceStatus host_status = HostServiceStatus::Completed,
+                                    std::uint32_t error_code = 0) {
+    std::ostringstream stream;
+    stream << "src=" << src << "; " << status_kind << '=' << status;
+    if (host_status != HostServiceStatus::Completed) {
+        stream << "; host=" << host_service_status_name(host_status);
+    }
+    if (error_code != 0) {
+        stream << "; error=" << error_code;
+    }
+    return stream.str();
+}
+
+void report_image_request_failure(DiagnosticSink* diagnostics,
+                                  const std::string& src,
+                                  AppServiceSubmitStatus submit_status,
+                                  HostServiceStatus host_status) {
+    report_diagnostic(diagnostics,
+                      DiagnosticStage::Package,
+                      DiagnosticSeverity::Warning,
+                      "image-decode-request",
+                      "Image decode request was rejected",
+                      image_diagnostic_detail(src,
+                                              "submit",
+                                              app_submit_status_name(submit_status),
+                                              host_status));
+}
+
+void report_image_completion_failure(DiagnosticSink* diagnostics,
+                                     const HostServiceCompletion& completion,
+                                     const std::string& src) {
+    if (completion.kind != HostServiceJobKind::ImageDecode ||
+        completion.status == HostServiceStatus::Completed) {
+        return;
+    }
+    report_diagnostic(diagnostics,
+                      DiagnosticStage::Package,
+                      DiagnosticSeverity::Warning,
+                      "image-decode-completion",
+                      "Image decode did not produce a drawable surface",
+                      image_diagnostic_detail(src.empty() ? "unknown" : src,
+                                              "status",
+                                              host_service_status_name(completion.status),
+                                              completion.status,
+                                              completion.error_code));
+}
+
 struct BrowserOptions {
     bool capture = false;
     std::string output_path;
@@ -528,6 +628,7 @@ struct BrowserImageResolveContext {
     AppRuntimeHost* runtime = nullptr;
     ImageDecodeMock* images = nullptr;
     AppImageSurfaceCache* cache = nullptr;
+    DiagnosticSink* diagnostics = nullptr;
 };
 
 bool resolve_browser_image_handle(const Node& node, std::uint32_t& handle, void* raw_context) {
@@ -536,7 +637,20 @@ bool resolve_browser_image_handle(const Node& node, std::uint32_t& handle, void*
         context->cache == nullptr || node.type != NodeType::Element || node.tag_name != "img") {
         return false;
     }
-    return context->cache->resolve_or_request(*context->runtime, *context->images, node.attribute("src"), &handle);
+    const std::string src = node.attribute("src");
+    const AppImageSurfaceState previous_state = context->cache->state_for_url(src);
+    const bool resolved = context->cache->resolve_or_request(*context->runtime, *context->images, src, &handle);
+    const AppServiceSubmitStatus submit_status = context->cache->last_submit_status_for_url(src);
+    const AppImageSurfaceState current_state = context->cache->state_for_url(src);
+    if (!resolved && submit_status != AppServiceSubmitStatus::Accepted &&
+        previous_state != AppImageSurfaceState::Failed &&
+        current_state != AppImageSurfaceState::Pending) {
+        report_image_request_failure(context->diagnostics,
+                                     src,
+                                     submit_status,
+                                     context->cache->last_host_status_for_url(src));
+    }
+    return resolved;
 }
 
 Color read_surface_pixel(const AppDecodedSurfaceRecord& surface, int x, int y) {
@@ -578,7 +692,67 @@ Color read_surface_pixel(const AppDecodedSurfaceRecord& surface, int x, int y) {
     return Color{0, 0, 0, 0};
 }
 
-bool paint_image_surface(FrameBuffer& target, Rect rect, std::uint32_t image_handle, void* raw_context) {
+struct ImageDrawMapping {
+    Rect dst;
+    Rect src;
+};
+
+ImageDrawMapping map_image_draw_rect(Rect rect, int source_width, int source_height, ObjectFit fit) {
+    if (rect.width <= 0 || rect.height <= 0 || source_width <= 0 || source_height <= 0) {
+        return ImageDrawMapping{};
+    }
+    if (fit == ObjectFit::Fill) {
+        return ImageDrawMapping{rect, Rect{0, 0, source_width, source_height}};
+    }
+
+    auto centered = [](Rect outer, int width, int height) {
+        return Rect{
+            outer.x + (outer.width - width) / 2,
+            outer.y + (outer.height - height) / 2,
+            width,
+            height,
+        };
+    };
+
+    if (fit == ObjectFit::None ||
+        (fit == ObjectFit::ScaleDown && source_width <= rect.width && source_height <= rect.height)) {
+        const int dst_width = std::min(source_width, rect.width);
+        const int dst_height = std::min(source_height, rect.height);
+        const int src_x = std::max(0, (source_width - dst_width) / 2);
+        const int src_y = std::max(0, (source_height - dst_height) / 2);
+        return ImageDrawMapping{
+            centered(rect, dst_width, dst_height),
+            Rect{src_x, src_y, dst_width, dst_height},
+        };
+    }
+
+    const bool contain = fit == ObjectFit::Contain || fit == ObjectFit::ScaleDown;
+    const long long lhs = static_cast<long long>(rect.width) * source_height;
+    const long long rhs = static_cast<long long>(rect.height) * source_width;
+    const bool limit_by_width = contain ? lhs <= rhs : lhs >= rhs;
+    if (limit_by_width) {
+        const int dst_width = rect.width;
+        const int dst_height = std::max(1, static_cast<int>(
+            (static_cast<long long>(source_height) * rect.width + source_width / 2) / source_width));
+        return ImageDrawMapping{
+            centered(rect, dst_width, dst_height),
+            Rect{0, 0, source_width, source_height},
+        };
+    }
+    const int dst_height = rect.height;
+    const int dst_width = std::max(1, static_cast<int>(
+        (static_cast<long long>(source_width) * rect.height + source_height / 2) / source_height));
+    return ImageDrawMapping{
+        centered(rect, dst_width, dst_height),
+        Rect{0, 0, source_width, source_height},
+    };
+}
+
+bool paint_image_surface(FrameBuffer& target,
+                         Rect rect,
+                         std::uint32_t image_handle,
+                         ObjectFit object_fit,
+                         void* raw_context) {
     auto* context = static_cast<BrowserImageContext*>(raw_context);
     if (context == nullptr || context->images == nullptr || rect.width <= 0 || rect.height <= 0) {
         return false;
@@ -587,15 +761,32 @@ bool paint_image_surface(FrameBuffer& target, Rect rect, std::uint32_t image_han
     if (surface == nullptr || surface->width <= 0 || surface->height <= 0 || surface->pixels.empty()) {
         return false;
     }
-    for (int y = 0; y < rect.height; ++y) {
-        const int src_y = std::min(surface->height - 1, (y * surface->height) / std::max(1, rect.height));
-        for (int x = 0; x < rect.width; ++x) {
-            const int dst_x = rect.x + x;
-            const int dst_y = rect.y + y;
+    const ImageDrawMapping mapping = map_image_draw_rect(rect, surface->width, surface->height, object_fit);
+    if (mapping.dst.width <= 0 || mapping.dst.height <= 0 || mapping.src.width <= 0 || mapping.src.height <= 0) {
+        return false;
+    }
+    const Rect clip{
+        std::max(rect.x, mapping.dst.x),
+        std::max(rect.y, mapping.dst.y),
+        std::min(rect.x + rect.width, mapping.dst.x + mapping.dst.width) - std::max(rect.x, mapping.dst.x),
+        std::min(rect.y + rect.height, mapping.dst.y + mapping.dst.height) - std::max(rect.y, mapping.dst.y),
+    };
+    if (clip.width <= 0 || clip.height <= 0) {
+        return true;
+    }
+    for (int y = 0; y < clip.height; ++y) {
+        const int dst_y = clip.y + y;
+        const int local_y = dst_y - mapping.dst.y;
+        const int src_y = std::min(surface->height - 1,
+                                   mapping.src.y + (local_y * mapping.src.height) / std::max(1, mapping.dst.height));
+        for (int x = 0; x < clip.width; ++x) {
+            const int dst_x = clip.x + x;
             if (!target.contains(dst_x, dst_y)) {
                 continue;
             }
-            const int src_x = std::min(surface->width - 1, (x * surface->width) / std::max(1, rect.width));
+            const int local_x = dst_x - mapping.dst.x;
+            const int src_x = std::min(surface->width - 1,
+                                       mapping.src.x + (local_x * mapping.src.width) / std::max(1, mapping.dst.width));
             blend_pixel(target, dst_x, dst_y, read_surface_pixel(*surface, src_x, src_y));
         }
     }
@@ -1018,8 +1209,8 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     if (page.package_mode) {
         add_package_image_fixtures(*page.document, page.package_context, debug_images, &diagnostics);
     }
-    AppImageSurfaceCache image_cache;
-    BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache};
+    AppImageSurfaceCache image_cache(AppImageSurfaceCacheOptions{8, 512 * 1024});
+    BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache, &diagnostics};
     BrowserImageContext image_context{&debug_images};
     StyleResolverOptions style_options;
     style_options.diagnostics = &diagnostics;
@@ -1043,10 +1234,18 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
         app_runtime.pump_frame_completions(accepted);
         bool image_ready = false;
         for (const HostServiceCompletion& completion : accepted) {
+            const std::string image_src = image_cache.url_for_job(completion.job_id);
+            report_image_completion_failure(&diagnostics, completion, image_src);
             image_ready = image_cache.handle_completion(completion) || image_ready;
         }
         if (image_ready) {
             layer_tree = layer_builder.build(*layout_tree);
+            std::vector<std::uint32_t> protected_handles;
+            collect_image_handles(*layer_tree, protected_handles);
+            image_cache.evict_unreferenced(app_runtime,
+                                           debug_images,
+                                           protected_handles.data(),
+                                           protected_handles.size());
         }
     }
 
@@ -1169,7 +1368,7 @@ private:
     AppRuntimeHost app_runtime_{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
     ImageDecodeMock debug_images_{ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4}};
-    AppImageSurfaceCache image_cache_;
+    AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
     std::uint32_t debug_local_storage_instance_id_ = 0;
@@ -1271,6 +1470,8 @@ private:
         }
         std::size_t image_handled = 0;
         for (const HostServiceCompletion& completion : accepted) {
+            const std::string image_src = image_cache_.url_for_job(completion.job_id);
+            report_image_completion_failure(&diagnostics_, completion, image_src);
             if (image_cache_.handle_completion(completion)) {
                 ++image_handled;
             } else if (completion.kind == HostServiceJobKind::ImageDecode && completion.handle != 0) {
@@ -1298,6 +1499,19 @@ private:
                   << " image_handled=" << image_handled
                   << " script_handled=" << script_handled << '\n';
         return script_handled != 0 || image_handled != 0;
+    }
+
+    void evict_unused_image_surfaces() {
+        if (layer_tree_ == nullptr) {
+            image_cache_.evict_unreferenced(app_runtime_, debug_images_);
+            return;
+        }
+        std::vector<std::uint32_t> protected_handles;
+        collect_image_handles(*layer_tree_, protected_handles);
+        image_cache_.evict_unreferenced(app_runtime_,
+                                        debug_images_,
+                                        protected_handles.data(),
+                                        protected_handles.size());
     }
 
     void configure_system_shell(std::string status) {
@@ -1540,7 +1754,7 @@ private:
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
-        BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_};
+        BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &diagnostics_};
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
@@ -1561,6 +1775,7 @@ private:
                 dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             layer_tree_ = std::move(next_layer_tree);
+            evict_unused_image_surfaces();
             if (!dirty_rects.empty() &&
                 dirty_region_should_repaint_incrementally(dirty_region,
                                                           Rect{0, 0, viewport_width_, content_height},
@@ -1615,6 +1830,7 @@ private:
         render_tree_ = std::move(next_render_tree);
         layout_tree_ = std::move(next_layout_tree);
         layer_tree_ = std::move(next_layer_tree);
+        evict_unused_image_surfaces();
 
         if (can_repaint_incrementally && !dirty_rects.empty() &&
             dirty_region_should_repaint_incrementally(dirty_region,
