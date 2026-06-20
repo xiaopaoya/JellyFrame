@@ -54,6 +54,11 @@ enum class ObjectFit {
     ScaleDown,
 };
 
+struct ObjectPosition {
+    int x_percent = 50;
+    int y_percent = 50;
+};
+
 struct DisplayCommand {
     DisplayCommandType type = DisplayCommandType::FillRect;
     Rect rect;
@@ -69,6 +74,7 @@ struct DisplayCommand {
     GradientAxis gradient_axis = GradientAxis::Vertical;
     std::uint32_t image_handle = 0;
     ObjectFit object_fit = ObjectFit::Fill;
+    ObjectPosition object_position;
 };
 
 using DisplayList = std::vector<DisplayCommand>;

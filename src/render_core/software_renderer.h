@@ -46,6 +46,7 @@ using ImagePaintCallback = bool (*)(FrameBuffer& target,
                                     Rect rect,
                                     std::uint32_t image_handle,
                                     ObjectFit object_fit,
+                                    ObjectPosition object_position,
                                     void* context);
 
 struct ImagePainter {

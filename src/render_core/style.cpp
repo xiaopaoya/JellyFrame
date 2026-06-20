@@ -1389,6 +1389,103 @@ bool parse_transform_function(std::string_view function, Transform2D& output) {
     return false;
 }
 
+bool parse_object_position_percent_token(const std::string& token, int& percent) {
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(token.c_str(), &end);
+    if (end == token.c_str() || errno == ERANGE) {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || std::strncmp(end, "%", 1) != 0) {
+        return false;
+    }
+    ++end;
+    while (std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (*end != '\0') {
+        return false;
+    }
+    percent = std::max(0, std::min(100, static_cast<int>(parsed + (parsed >= 0.0F ? 0.5F : -0.5F))));
+    return true;
+}
+
+bool parse_object_position_component(const std::string& token,
+                                     bool& sets_x,
+                                     int& x_percent,
+                                     bool& sets_y,
+                                     int& y_percent) {
+    if (token == "left") {
+        sets_x = true;
+        x_percent = 0;
+        return true;
+    }
+    if (token == "right") {
+        sets_x = true;
+        x_percent = 100;
+        return true;
+    }
+    if (token == "top") {
+        sets_y = true;
+        y_percent = 0;
+        return true;
+    }
+    if (token == "bottom") {
+        sets_y = true;
+        y_percent = 100;
+        return true;
+    }
+    if (token == "center") {
+        if (!sets_x) {
+            sets_x = true;
+            x_percent = 50;
+            return true;
+        }
+        if (!sets_y) {
+            sets_y = true;
+            y_percent = 50;
+            return true;
+        }
+        return false;
+    }
+    int percent = 0;
+    if (parse_object_position_percent_token(token, percent)) {
+        if (!sets_x) {
+            sets_x = true;
+            x_percent = percent;
+            return true;
+        }
+        if (!sets_y) {
+            sets_y = true;
+            y_percent = percent;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool parse_object_position_value(const std::string& raw_value, ObjectPosition& output) {
+    const std::vector<std::string> tokens = split_whitespace_components(lowercase(trim(raw_value)));
+    if (tokens.empty() || tokens.size() > 2) {
+        return false;
+    }
+    bool sets_x = false;
+    bool sets_y = false;
+    int x_percent = 50;
+    int y_percent = 50;
+    for (const std::string& token : tokens) {
+        if (!parse_object_position_component(token, sets_x, x_percent, sets_y, y_percent)) {
+            return false;
+        }
+    }
+    output.x_percent = x_percent;
+    output.y_percent = y_percent;
+    return true;
+}
+
 std::vector<std::string> split_transform_functions(std::string_view value) {
     std::vector<std::string> functions;
     std::size_t begin = 0;
@@ -1770,6 +1867,7 @@ enum class CascadeProperty : std::size_t {
     GridColumn,
     GridRow,
     ObjectFit,
+    ObjectPosition,
     ListStyleType,
     Transition,
     TransitionProperty,
@@ -1994,6 +2092,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "object-fit") {
         return &cascade_slot(slots, CascadeProperty::ObjectFit);
+    }
+    if (property == "object-position") {
+        return &cascade_slot(slots, CascadeProperty::ObjectPosition);
     }
     if (property == "list-style" || property == "list-style-type") {
         return &cascade_slot(slots, CascadeProperty::ListStyleType);
@@ -2667,6 +2768,13 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         } else {
             return false;
         }
+        return true;
+    } else if (property == "object-position") {
+        ObjectPosition position;
+        if (!parse_object_position_value(value, position)) {
+            return false;
+        }
+        style.object_position = position;
         return true;
     } else if (property == "list-style" || property == "list-style-type") {
         std::istringstream stream(lowercase(trim(value)));

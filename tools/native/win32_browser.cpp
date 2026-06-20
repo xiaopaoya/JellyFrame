@@ -649,7 +649,28 @@ struct ImageDrawMapping {
     Rect src;
 };
 
-ImageDrawMapping map_image_draw_rect(Rect rect, int source_width, int source_height, ObjectFit fit) {
+int object_position_offset(int outer_size, int inner_size, int percent) {
+    if (outer_size == inner_size) {
+        return 0;
+    }
+    const int delta = outer_size - inner_size;
+    return (delta * std::max(0, std::min(100, percent)) + (delta >= 0 ? 50 : -50)) / 100;
+}
+
+Rect positioned_rect(Rect outer, int width, int height, ObjectPosition position) {
+    return Rect{
+        outer.x + object_position_offset(outer.width, width, position.x_percent),
+        outer.y + object_position_offset(outer.height, height, position.y_percent),
+        width,
+        height,
+    };
+}
+
+ImageDrawMapping map_image_draw_rect(Rect rect,
+                                     int source_width,
+                                     int source_height,
+                                     ObjectFit fit,
+                                     ObjectPosition position) {
     if (rect.width <= 0 || rect.height <= 0 || source_width <= 0 || source_height <= 0) {
         return ImageDrawMapping{};
     }
@@ -657,23 +678,14 @@ ImageDrawMapping map_image_draw_rect(Rect rect, int source_width, int source_hei
         return ImageDrawMapping{rect, Rect{0, 0, source_width, source_height}};
     }
 
-    auto centered = [](Rect outer, int width, int height) {
-        return Rect{
-            outer.x + (outer.width - width) / 2,
-            outer.y + (outer.height - height) / 2,
-            width,
-            height,
-        };
-    };
-
     if (fit == ObjectFit::None ||
         (fit == ObjectFit::ScaleDown && source_width <= rect.width && source_height <= rect.height)) {
         const int dst_width = std::min(source_width, rect.width);
         const int dst_height = std::min(source_height, rect.height);
-        const int src_x = std::max(0, (source_width - dst_width) / 2);
-        const int src_y = std::max(0, (source_height - dst_height) / 2);
+        const int src_x = std::max(0, -object_position_offset(rect.width, source_width, position.x_percent));
+        const int src_y = std::max(0, -object_position_offset(rect.height, source_height, position.y_percent));
         return ImageDrawMapping{
-            centered(rect, dst_width, dst_height),
+            positioned_rect(rect, dst_width, dst_height, position),
             Rect{src_x, src_y, dst_width, dst_height},
         };
     }
@@ -687,7 +699,7 @@ ImageDrawMapping map_image_draw_rect(Rect rect, int source_width, int source_hei
         const int dst_height = std::max(1, static_cast<int>(
             (static_cast<long long>(source_height) * rect.width + source_width / 2) / source_width));
         return ImageDrawMapping{
-            centered(rect, dst_width, dst_height),
+            positioned_rect(rect, dst_width, dst_height, position),
             Rect{0, 0, source_width, source_height},
         };
     }
@@ -695,7 +707,7 @@ ImageDrawMapping map_image_draw_rect(Rect rect, int source_width, int source_hei
     const int dst_width = std::max(1, static_cast<int>(
         (static_cast<long long>(source_width) * rect.height + source_height / 2) / source_height));
     return ImageDrawMapping{
-        centered(rect, dst_width, dst_height),
+        positioned_rect(rect, dst_width, dst_height, position),
         Rect{0, 0, source_width, source_height},
     };
 }
@@ -704,6 +716,7 @@ bool paint_image_surface(FrameBuffer& target,
                          Rect rect,
                          std::uint32_t image_handle,
                          ObjectFit object_fit,
+                         ObjectPosition object_position,
                          void* raw_context) {
     auto* context = static_cast<BrowserImageContext*>(raw_context);
     if (context == nullptr || context->images == nullptr || rect.width <= 0 || rect.height <= 0) {
@@ -713,7 +726,8 @@ bool paint_image_surface(FrameBuffer& target,
     if (surface == nullptr || surface->width <= 0 || surface->height <= 0 || surface->pixels.empty()) {
         return false;
     }
-    const ImageDrawMapping mapping = map_image_draw_rect(rect, surface->width, surface->height, object_fit);
+    const ImageDrawMapping mapping =
+        map_image_draw_rect(rect, surface->width, surface->height, object_fit, object_position);
     if (mapping.dst.width <= 0 || mapping.dst.height <= 0 || mapping.src.width <= 0 || mapping.src.height <= 0) {
         return false;
     }

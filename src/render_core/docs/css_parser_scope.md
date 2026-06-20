@@ -69,7 +69,8 @@ layout behavior.
   `flex-grow`, `flex-shrink`, `flex-basis`, `position`, `top`, `right`,
   `bottom`, `left`, `grid-template-columns` with a `minmax()` minimum track,
   `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))`, `grid-auto-rows` with a
-  minimum track, and `grid-column`/`grid-row: span N`.
+  minimum track, `grid-column`/`grid-row: span N`, plus `object-fit` and a
+  keyword/percentage one/two-value `object-position` subset.
 - `@keyframes` from/to subset. Named blocks keep `from`/`to` or `0%`/`100%`
   declarations for the animation timeline. Intermediate percentages are
   diagnosed and ignored, not partially interpolated.
@@ -101,6 +102,7 @@ layout behavior.
 - Full animation/keyframe model, including intermediate keyframes,
   fill/play-state/composition and layout-property animation.
 - Full grid value grammar, named lines, explicit placement and dense packing.
+- Complete `object-position` four-value syntax and length offsets.
 - Container query evaluation. This is intentionally deferred until layout/style
   feedback can be bounded without cycles.
 

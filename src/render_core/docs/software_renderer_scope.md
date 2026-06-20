@@ -41,6 +41,8 @@ DOM + CSSOM
 - Rounded rectangle clipping for filled backgrounds.
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.
+- Host image painters can draw decoded surfaces with `object-fit` and simple
+  `object-position`.
 - Offscreen compositing for opacity/composited layers.
 - `transform: translate()/scale()` for composited layers. Translation is rounded
   to integer pixels; scale uses nearest-neighbor sampling around the layer bounds

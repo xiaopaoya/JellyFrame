@@ -188,8 +188,8 @@ struct HostDecodedSurface {
 - Win32 debug 壳会报告图片 request 拒绝和 completion 失败，包括触发的 `src`、稳定失败原因、
   submit/host 状态和 host error code。
 - render core 会把 `object-fit` 子集传给宿主 painter；Win32 debug painter 已支持
-  `fill`、`contain`、`cover`、`none`、`scale-down`，默认居中。复杂 `object-position`
-  延后。
+  `fill`、`contain`、`cover`、`none`、`scale-down`，并支持关键词/百分比一二值
+  `object-position`。复杂四值和长度偏移延后。
 - PNG/JPEG/WebP 和产品级 MCU codec 尚未接入。
 
 ## 音频播放服务

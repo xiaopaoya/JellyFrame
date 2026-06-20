@@ -36,6 +36,7 @@ DOM + CSSOM
 - 背景填充的 rounded rectangle clipping。
 - Windows 下通过 GDI CPU mask 绘制文本。
 - 非 Windows 构建保留内置 tiny ASCII fallback text drawing。
+- 宿主 image painter 可按 `object-fit` 和简单 `object-position` 绘制已解码 surface。
 - 针对 opacity/composited layers 的离屏合成。
 - 对 composited layer 执行 `transform: translate()/scale()` 子集：平移为整数像素近似，缩放以 layer bounds
   中心为原点并采用最近邻采样，适合按钮反馈和卡片滑动，不追求浏览器级像素一致。

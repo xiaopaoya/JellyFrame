@@ -439,6 +439,54 @@ bool supported_keyword(std::string_view value, const std::initializer_list<std::
     return std::find(keywords.begin(), keywords.end(), std::string_view(text)) != keywords.end();
 }
 
+bool is_object_position_component(const std::string& token) {
+    if (token == "left" || token == "right" || token == "top" ||
+        token == "bottom" || token == "center") {
+        return true;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(token.c_str(), &end);
+    (void) parsed;
+    if (end == token.c_str() || errno == ERANGE) {
+        return false;
+    }
+    while (end != nullptr && is_ascii_space(*end)) {
+        ++end;
+    }
+    if (end == nullptr || *end != '%') {
+        return false;
+    }
+    ++end;
+    while (is_ascii_space(*end)) {
+        ++end;
+    }
+    return *end == '\0';
+}
+
+bool is_supported_object_position_value(const std::string& value) {
+    const std::string collapsed = collapse_ascii_space(value);
+    if (collapsed.empty()) {
+        return false;
+    }
+    std::vector<std::string> tokens;
+    std::size_t begin = 0;
+    while (begin < collapsed.size()) {
+        const std::size_t end = collapsed.find(' ', begin);
+        tokens.push_back(collapsed.substr(begin, end == std::string::npos ? std::string::npos : end - begin));
+        if (end == std::string::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+    if (tokens.empty() || tokens.size() > 2) {
+        return false;
+    }
+    return std::all_of(tokens.begin(), tokens.end(), [](const std::string& token) {
+        return is_object_position_component(token);
+    });
+}
+
 bool is_positive_integer_value(std::string_view raw_value) {
     const std::string value = ascii_lowercase(trim(raw_value));
     if (value.empty()) {
@@ -592,6 +640,12 @@ bool is_supported_declaration_feature(std::string_view feature) {
     }
     if (property == "list-style" || property == "list-style-type") {
         return supported_keyword(value, {"none", "disc", "decimal", "decimal-leading-zero"});
+    }
+    if (property == "object-fit") {
+        return supported_keyword(value, {"fill", "contain", "cover", "none", "scale-down"});
+    }
+    if (property == "object-position") {
+        return is_supported_object_position_value(value);
     }
     if (property == "box-shadow") {
         return value == "none" || value.find('#') != std::string::npos ||

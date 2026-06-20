@@ -223,9 +223,10 @@ Rules:
 - The Win32 debug shell reports image request rejections and completion
   failures with the triggering `src`, stable failure reason, submit/host status
   and host error code.
-- Render core passes the `object-fit` subset to the host painter. The Win32
-  debug painter supports `fill`, `contain`, `cover`, `none` and `scale-down`
-  with default centered positioning. Complex `object-position` is deferred.
+- Render core passes `object-fit` and simple `object-position` to the host
+  painter. The Win32 debug painter supports `fill`, `contain`, `cover`, `none`,
+  `scale-down` and one/two-value keyword/percentage positioning. Complex
+  four-value and length-offset positioning is deferred.
 - PNG/JPEG/WebP and production MCU codecs are not wired yet.
 
 ## Audio Playback Service

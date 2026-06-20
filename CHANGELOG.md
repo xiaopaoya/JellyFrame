@@ -62,16 +62,17 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - `AppImageSurfaceCache` now supports general ready-surface eviction by surface
   count and decoded-byte budgets while protecting surfaces referenced by the
   current display list. Render core now carries an `object-fit` subset
-  (`fill`, `contain`, `cover`, `none`, `scale-down`) through image display
-  commands; the Win32 painter draws it with default centered positioning.
+  (`fill`, `contain`, `cover`, `none`, `scale-down`) and a keyword/percentage
+  one/two-value `object-position` subset through image display commands; the
+  Win32 painter draws images using that position.
   The Win32 debug shell reports image-decode request rejections and completion
   failures through diagnostics, preserving the original `src`, stable failure
   reason and status for missing-resource, budget-rejection and decode-failure
   debugging. app-runtime now exposes `classify_app_image_failure(...)` /
   `app_image_failure_detail(...)` so desktop tools and future embedded
   diagnostic ports can share the same image failure categories.
-  PNG/JPEG/WebP, complex `object-position` and production MCU codecs remain
-  future work.
+  PNG/JPEG/WebP, complex four-value/length-offset `object-position` and
+  production MCU codecs remain future work.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
   standard-subset runtime data API direction: asynchronous `XMLHttpRequest`
   first, `fetch()` only after bounded Promise/microtask support, tiny

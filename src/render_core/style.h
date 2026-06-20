@@ -170,6 +170,7 @@ struct Style {
     int grid_column_span = 1;
     int grid_row_span = 1;
     ObjectFit object_fit = ObjectFit::Fill;
+    ObjectPosition object_position;
     ListStyleType list_style_type = ListStyleType::None;
     bool list_style_type_specified = false;
     GeneratedContentKind before_content_kind = GeneratedContentKind::None;
