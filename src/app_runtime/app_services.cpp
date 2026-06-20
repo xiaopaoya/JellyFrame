@@ -262,6 +262,124 @@ AppServiceSubmitResult AppPrivateKvStorageMock::submit_clear(AppRuntimeHost& hos
     return submit(host, AppPrivateKvOperation::Clear, {});
 }
 
+AppLocalStorageShadow::AppLocalStorageShadow(AppPrivateKvPolicy policy)
+    : policy_(policy) {}
+
+void AppLocalStorageShadow::set_policy(AppPrivateKvPolicy policy) {
+    policy_ = policy;
+    clear();
+}
+
+bool AppLocalStorageShadow::valid_key(const std::string& key) const {
+    return !key.empty() && key.size() <= policy_.max_key_bytes;
+}
+
+bool AppLocalStorageShadow::can_store(std::size_t existing_index,
+                                      const std::string& key,
+                                      const std::string& value) const {
+    if (value.size() > policy_.max_value_bytes) {
+        return false;
+    }
+    const bool exists = existing_index < entries_.size();
+    if (!exists && entries_.size() >= policy_.max_items_per_app) {
+        return false;
+    }
+    const std::size_t existing_bytes = exists
+        ? entries_[existing_index].key.size() + entries_[existing_index].value.size()
+        : 0;
+    const std::size_t next_bytes = bytes_ - existing_bytes + key.size() + value.size();
+    return next_bytes <= policy_.max_bytes_per_app;
+}
+
+AppLocalStorageStatus AppLocalStorageShadow::get_item(const std::string& key, std::string* value) const {
+    if (!policy_.enabled) {
+        return AppLocalStorageStatus::Disabled;
+    }
+    if (!valid_key(key)) {
+        return AppLocalStorageStatus::InvalidKey;
+    }
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&key](const Entry& entry) {
+        return entry.key == key;
+    });
+    if (found == entries_.end()) {
+        return AppLocalStorageStatus::NotFound;
+    }
+    if (value != nullptr) {
+        *value = found->value;
+    }
+    return AppLocalStorageStatus::Ok;
+}
+
+AppLocalStorageStatus AppLocalStorageShadow::set_item(const std::string& key, const std::string& value) {
+    if (!policy_.enabled) {
+        return AppLocalStorageStatus::Disabled;
+    }
+    if (!valid_key(key)) {
+        return AppLocalStorageStatus::InvalidKey;
+    }
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&key](const Entry& entry) {
+        return entry.key == key;
+    });
+    const std::size_t index = found == entries_.end()
+        ? entries_.size()
+        : static_cast<std::size_t>(found - entries_.begin());
+    if (!can_store(index, key, value)) {
+        return AppLocalStorageStatus::BudgetExceeded;
+    }
+    if (found == entries_.end()) {
+        entries_.push_back(Entry{key, value});
+    } else {
+        bytes_ -= found->key.size() + found->value.size();
+        found->value = value;
+    }
+    bytes_ += key.size() + value.size();
+    return AppLocalStorageStatus::Ok;
+}
+
+AppLocalStorageStatus AppLocalStorageShadow::remove_item(const std::string& key) {
+    if (!policy_.enabled) {
+        return AppLocalStorageStatus::Disabled;
+    }
+    if (!valid_key(key)) {
+        return AppLocalStorageStatus::InvalidKey;
+    }
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&key](const Entry& entry) {
+        return entry.key == key;
+    });
+    if (found == entries_.end()) {
+        return AppLocalStorageStatus::NotFound;
+    }
+    bytes_ -= found->key.size() + found->value.size();
+    entries_.erase(found);
+    return AppLocalStorageStatus::Ok;
+}
+
+void AppLocalStorageShadow::clear() {
+    entries_.clear();
+    bytes_ = 0;
+}
+
+std::size_t AppLocalStorageShadow::length() const {
+    return entries_.size();
+}
+
+AppLocalStorageStatus AppLocalStorageShadow::key(std::size_t index, std::string* key) const {
+    if (!policy_.enabled) {
+        return AppLocalStorageStatus::Disabled;
+    }
+    if (index >= entries_.size()) {
+        return AppLocalStorageStatus::NotFound;
+    }
+    if (key != nullptr) {
+        *key = entries_[index].key;
+    }
+    return AppLocalStorageStatus::Ok;
+}
+
+std::size_t AppLocalStorageShadow::used_bytes() const {
+    return bytes_;
+}
+
 HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
                                                  AppRuntimeHost& host,
                                                  std::uint32_t& handle,

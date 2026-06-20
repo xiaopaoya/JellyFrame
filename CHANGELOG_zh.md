@@ -15,8 +15,11 @@ JellyFrame Engine 的重要变更记录在这里。
   时间、时区、网络、电量、屏幕和低功耗状态快照。
 - app-runtime microbench 新增可选 network fetch、KV storage 和 system-event pump 覆盖。
 - 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，在真正暴露前记录计划中的
-  callback 风格 `JellyFrame.fetchText`、`JellyFrame.storage` 和 `JellyFrame.system`
-  JavaScript API 形状。
+  标准子集优先 runtime data API 方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界
+  Promise/microtask 支持成熟后再考虑；只有存在非阻塞 app 私有内存 shadow 时才暴露极小
+  `localStorage` 子集；系统状态尽量映射到 Web 邻近事件。
+- 添加 `AppLocalStorageShadow`，作为未来标准 `localStorage` 子集的紧凑内存 helper；
+  它执行 app 私有 KV policy 限制，但不会在 UI task 上做宿主 I/O。
 - `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有
   `BitmapFont` glyph 数据模型，但去掉 C++ 指针和编译期符号，为后续 `.jfapp`
   动态包内字体资源打基础。

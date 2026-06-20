@@ -78,10 +78,11 @@ API 表面。
 ## 规划中的 Runtime Data APIs
 
 可选网络、app 私有 KV storage 和 system status events 的 JS 暴露形状记录在
-`src/app_runtime/docs/runtime_data_api_zh.md`。计划中的 V0 是一个小型 `JellyFrame`
-命名空间，使用 callback API，例如 `JellyFrame.fetchText(...)`、`JellyFrame.storage.get(...)`
-和 `JellyFrame.system.on(...)`。这些 API 尚未暴露；当前实现只提供平台无关 C++ request/completion
-队列、policy gate、mock 和 system-event queue。
+`src/app_runtime/docs/runtime_data_api_zh.md`。计划中的 V0 改为标准子集优先：先做异步
+`XMLHttpRequest` 子集，再等 Promise/microtask 有界后考虑 `fetch()`；只有在宿主能提供非阻塞
+app 私有内存 shadow 时才暴露极小 `localStorage` 子集；系统状态尽量映射到 `online`、`offline`
+和 `visibilitychange` 等已有 Web 邻近事件。这些 API 尚未暴露；当前实现只提供平台无关 C++
+request/completion 队列、policy gate、mock 和 system-event queue。
 
 ## Embedded-App DOM Helpers
 

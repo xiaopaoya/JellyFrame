@@ -330,6 +330,12 @@ requested `storage.kv` and the host profile supplies an enabled
 `AppPrivateKvPolicy`. The resulting key/value/item/byte budgets are copied into
 the concrete storage policy used by the mock or product worker.
 
+`AppLocalStorageShadow` is a small in-memory helper for a future standard
+`localStorage` subset. It uses the same `AppPrivateKvPolicy` limits, stores
+string keys/values in a compact sequential table and performs no host I/O. A JS
+binding may use it only when the target profile can keep `localStorage` calls
+non-blocking; persistence and recovery remain host-owned async storage work.
+
 Recommended namespace:
 
 ```text
@@ -379,8 +385,10 @@ Rules:
   loss does not corrupt existing keys.
 - On app deletion, system policy decides whether private storage is erased or
   retained as user data; the desktop mock should provide explicit cleanup.
-- Finish quotas, error codes, crash recovery and tests before exposing JS. Do
-  not implement synchronous blocking `localStorage`.
+- Finish quotas, error codes, crash recovery and tests before exposing JS.
+  User-facing storage should be a tiny `localStorage` subset only when the host
+  can keep calls non-blocking through an app-private RAM shadow; otherwise keep
+  storage unexposed.
 
 ## Bundle Installation Service
 
@@ -474,8 +482,9 @@ Recommended order:
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.
-6. Expose JS `fetch` or media APIs last, after manifest/profile checks can
-   reject unsupported targets.
+6. Expose user-facing JS APIs last. Prefer an asynchronous `XMLHttpRequest`
+   subset before `fetch()`; expose `fetch()` only after bounded Promise/microtask
+   support exists. Let manifest/profile checks reject unsupported targets.
 
 The point is to get lifetime and scheduling right first, then attach real
 hardware capabilities gradually.

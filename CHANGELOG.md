@@ -17,8 +17,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added app-runtime microbench coverage for optional network fetch, KV storage
   and system-event pumping.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
-  planned callback-based `JellyFrame.fetchText`, `JellyFrame.storage` and
-  `JellyFrame.system` JavaScript API shape before exposing it.
+  planned standard-subset runtime data API direction before exposing it:
+  asynchronous `XMLHttpRequest` first, `fetch()` only after bounded
+  Promise/microtask support, tiny `localStorage` only when backed by a
+  non-blocking app-private shadow, and system state mapped to web-adjacent
+  events where possible.
+- Added `AppLocalStorageShadow`, a compact in-memory helper for a future
+  standard `localStorage` subset that enforces the app-private KV policy without
+  performing host I/O on the UI task.
 - Added `.jffont` V0 binary font supplement output to
   `jellyframe_font_pack_gen`, reusing the existing `BitmapFont` glyph data model
   without C++ pointers or compile-time symbols as groundwork for future dynamic

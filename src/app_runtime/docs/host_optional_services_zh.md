@@ -296,6 +296,11 @@ struct HostFetchResponse {
 `AppPrivateKvPolicy` 时，`policies.storage.enabled` 才为 true。key/value/item/byte 预算会被复制到
 最终 mock 或产品 worker 使用的具体 storage policy 中。
 
+`AppLocalStorageShadow` 是面向未来标准 `localStorage` 子集的小型内存 helper。它复用
+`AppPrivateKvPolicy` 限制，用紧凑顺序表保存字符串 key/value，不执行任何宿主 I/O。只有当目标
+profile 能保证 `localStorage` 调用非阻塞时，JS binding 才应使用它；持久化和恢复仍属于宿主异步
+storage 工作。
+
 推荐命名空间：
 
 ```text
@@ -341,7 +346,8 @@ struct HostStorageResponse {
 - key 长度、单 value 大小、总 byte 配额、item 数量和每帧 completion 数必须有上限。
 - `Set` 应尽量使用宿主侧原子写或 journal，避免掉电后破坏已有 key。
 - app 删除时由系统策略决定删除私有 storage 或保留用户数据；开发 mock 应提供显式清理。
-- JS API 暴露前先完成配额、错误码、崩溃恢复和测试；不要实现同步阻塞式 `localStorage`。
+- JS API 暴露前先完成配额、错误码、崩溃恢复和测试。面向用户的 storage 应只在宿主能通过
+  app 私有内存 shadow 保证非阻塞时暴露极小 `localStorage` 子集；否则继续不暴露 storage。
 
 ## Bundle 安装服务
 
@@ -428,6 +434,7 @@ struct AppSystemStateSnapshot {
 3. 实现 image decode mock：用桌面库或预生成 raw surface 验证 `<img>`/图标生命周期。
 4. 在 ESP32-S3 port 中接 RGB565 小图/MJPEG decode，并严格限制尺寸和并发。
 5. 接 host-owned MP3 playback，只返回句柄和 ended/error 事件。
-6. 最后再暴露 JS `fetch` 或 media API，并让能力检查/manifest profile 拦截不支持目标。
+6. 最后再暴露面向用户的 JS API。网络优先做异步 `XMLHttpRequest` 子集，`fetch()` 等有界
+   Promise/microtask 支持存在后再考虑；让 manifest/profile 检查拦截不支持目标。
 
 这条顺序的核心目的很朴素：先把生命周期和调度做对，再逐步把真实硬件能力接进来。

@@ -210,6 +210,20 @@ void bench_system_event_queue(std::size_t capacity) {
     }
 }
 
+void bench_local_storage_shadow(std::size_t capacity) {
+    AppLocalStorageShadow storage(AppPrivateKvPolicy{true, 16, 32, capacity, capacity * 64});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        storage.set_item("k" + std::to_string(i), "value");
+    }
+    std::string value;
+    for (std::size_t i = 0; i < capacity; ++i) {
+        storage.get_item("k" + std::to_string(i), &value);
+    }
+    for (std::size_t i = 0; i < capacity; i += 2) {
+        storage.remove_item("k" + std::to_string(i));
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -239,6 +253,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_system_event_queue", iterations, average_microseconds(iterations, [&] {
         bench_system_event_queue(capacity);
+    }));
+    print_result("app_runtime_local_storage_shadow", iterations, average_microseconds(iterations, [&] {
+        bench_local_storage_shadow(capacity);
     }));
 
     return 0;

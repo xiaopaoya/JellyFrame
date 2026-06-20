@@ -123,6 +123,41 @@ enum class AppPrivateKvOperation {
     Clear,
 };
 
+enum class AppLocalStorageStatus {
+    Ok,
+    Disabled,
+    InvalidKey,
+    BudgetExceeded,
+    NotFound,
+};
+
+class AppLocalStorageShadow {
+public:
+    explicit AppLocalStorageShadow(AppPrivateKvPolicy policy = {});
+
+    void set_policy(AppPrivateKvPolicy policy);
+    AppLocalStorageStatus get_item(const std::string& key, std::string* value) const;
+    AppLocalStorageStatus set_item(const std::string& key, const std::string& value);
+    AppLocalStorageStatus remove_item(const std::string& key);
+    void clear();
+    std::size_t length() const;
+    AppLocalStorageStatus key(std::size_t index, std::string* key) const;
+    std::size_t used_bytes() const;
+
+private:
+    struct Entry {
+        std::string key;
+        std::string value;
+    };
+
+    bool valid_key(const std::string& key) const;
+    bool can_store(std::size_t existing_index, const std::string& key, const std::string& value) const;
+
+    AppPrivateKvPolicy policy_;
+    std::vector<Entry> entries_;
+    std::size_t bytes_ = 0;
+};
+
 struct AppPrivateKvRecord {
     std::uint32_t handle = 0;
     std::uint32_t app_instance_id = 0;

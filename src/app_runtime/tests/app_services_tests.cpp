@@ -176,6 +176,44 @@ void kv_storage_enforces_budgets() {
     check(accepted.front().status == HostServiceStatus::BudgetExceeded, "kv budget overflow status");
 }
 
+void local_storage_shadow_follows_web_storage_subset() {
+    AppLocalStorageShadow storage(AppPrivateKvPolicy{true, 8, 16, 3, 48});
+    check(storage.set_item("theme", "dark") == AppLocalStorageStatus::Ok, "localStorage set theme");
+    check(storage.set_item("mode", "compact") == AppLocalStorageStatus::Ok, "localStorage set mode");
+    check(storage.length() == 2, "localStorage length");
+    check(storage.used_bytes() == 20, "localStorage byte accounting");
+
+    std::string value;
+    check(storage.get_item("theme", &value) == AppLocalStorageStatus::Ok, "localStorage get theme");
+    check(value == "dark", "localStorage get value");
+
+    std::string key;
+    check(storage.key(0, &key) == AppLocalStorageStatus::Ok, "localStorage key 0");
+    check(key == "theme", "localStorage key insertion order");
+    check(storage.get_item("missing", &value) == AppLocalStorageStatus::NotFound, "localStorage missing key");
+
+    check(storage.set_item("theme", "light") == AppLocalStorageStatus::Ok, "localStorage update");
+    check(storage.length() == 2, "localStorage update keeps length");
+    check(storage.used_bytes() == 21, "localStorage update bytes");
+    check(storage.remove_item("mode") == AppLocalStorageStatus::Ok, "localStorage remove");
+    check(storage.length() == 1, "localStorage remove length");
+    storage.clear();
+    check(storage.length() == 0, "localStorage clear");
+}
+
+void local_storage_shadow_enforces_policy_without_host_io() {
+    AppLocalStorageShadow storage;
+    check(storage.set_item("k", "v") == AppLocalStorageStatus::Disabled, "localStorage disabled set");
+    check(storage.get_item("k", nullptr) == AppLocalStorageStatus::Disabled, "localStorage disabled get");
+
+    storage.set_policy(AppPrivateKvPolicy{true, 3, 4, 1, 8});
+    check(storage.set_item("", "v") == AppLocalStorageStatus::InvalidKey, "localStorage empty key");
+    check(storage.set_item("long", "v") == AppLocalStorageStatus::InvalidKey, "localStorage long key");
+    check(storage.set_item("k", "value") == AppLocalStorageStatus::BudgetExceeded, "localStorage large value");
+    check(storage.set_item("k", "v") == AppLocalStorageStatus::Ok, "localStorage budget set");
+    check(storage.set_item("k2", "v") == AppLocalStorageStatus::BudgetExceeded, "localStorage item budget");
+}
+
 void service_workers_do_not_consume_other_service_requests() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.mixed", AppRole::App);
@@ -208,6 +246,8 @@ int main() {
     network_fetch_pending_request_is_cancelled_on_app_switch();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();
+    local_storage_shadow_follows_web_storage_subset();
+    local_storage_shadow_enforces_policy_without_host_io();
     service_workers_do_not_consume_other_service_requests();
     return 0;
 }

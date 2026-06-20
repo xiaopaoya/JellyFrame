@@ -1,123 +1,143 @@
 # Runtime Data API Plan
 
-This document defines the intended JavaScript-facing shape for optional runtime
-data services. The APIs are not exposed yet. It exists so the C++ host-service
-contract, Win32 shell and future JerryScript binding converge on one small,
-bounded model.
+This document defines how optional runtime data services should eventually be
+exposed to JavaScript. The APIs are not exposed yet. User-facing syntax should
+stay a documented subset of Web platform APIs whenever practical, so app authors
+do not need to learn JellyFrame-only data APIs.
 
 ## Principles
 
-- No service performs work on the UI/main task.
+- Prefer standard names, object shapes and event names.
+- If a standard API cannot be honored predictably, do not expose it yet.
+- JellyFrame-specific C++ helpers may exist internally, but app JavaScript
+  should not depend on custom `JellyFrame.*` data APIs for common web concepts.
+- No service performs slow work on the UI/main task.
 - Every operation is tied to the active `app_instance_id`.
 - Manifest capability and host/profile policy must both allow the service.
 - Results are dispatched only after the UI/main task pumps accepted completions
   or system events.
-- No Promise/microtask dependency in V0. Callback APIs are easier to bound on
-  JerryScript and tiny RTOS hosts.
-- Large data stays host-owned behind handles. JS receives small copied strings,
-  status codes and short error names.
+- Large data stays host-owned behind handles. JS receives bounded copied
+  strings, status codes and short error names.
 - Stale-instance completions release handles and never call app callbacks.
-
-## Proposed Global Object
-
-The binding should expose one small namespace:
-
-```js
-JellyFrame.fetchText(url, callback)
-JellyFrame.storage.get(key, callback)
-JellyFrame.storage.set(key, value, callback)
-JellyFrame.storage.remove(key, callback)
-JellyFrame.storage.clear(callback)
-JellyFrame.system.on(type, callback)
-JellyFrame.system.off(type, callback)
-JellyFrame.system.snapshot()
-```
-
-`window.fetch`, synchronous `localStorage`, IndexedDB and browser storage events
-remain out of scope.
 
 ## Network
 
-`JellyFrame.fetchText(url, callback)` submits `HostServiceJobKind::NetworkFetch`.
+Preferred V0 user-facing API: an asynchronous `XMLHttpRequest` subset.
 
-Callback:
+`fetch()` should wait until JellyFrame has a bounded Promise/microtask story.
+A custom callback helper would be easier to implement, but it would create
+non-standard authoring habits and is therefore rejected.
+
+Planned XHR subset:
 
 ```js
-function callback(error, response) {
-  // error is null or { code, message }
-  // response is { status, contentType, text }
-}
+var xhr = new XMLHttpRequest();
+xhr.open("GET", "https://api.example.com/weather", true);
+xhr.timeout = 3000;
+xhr.onload = function () {
+  console.log(xhr.status, xhr.responseText);
+};
+xhr.onerror = function () {};
+xhr.ontimeout = function () {};
+xhr.send();
 ```
+
+Supported V0 surface should be limited to:
+
+- `new XMLHttpRequest()`
+- `open(method, url, async)` with async `GET` only
+- `send()`
+- `abort()`
+- `timeout`
+- `readyState`
+- `status`
+- `responseText`
+- `responseURL`
+- `onreadystatechange`
+- `onload`
+- `onerror`
+- `ontimeout`
+- `onabort`
+- `getResponseHeader("content-type")`
 
 Rules:
 
-- Only GET is planned for V0.
-- Remote HTML/CSS/script/image resources are still forbidden as page resources.
+- `network.fetch` remains the manifest capability name for the host service,
+  but the JS authoring API should be XHR first.
+- Remote HTML/CSS/script/image resources remain forbidden as page resources.
 - URL length, response bytes, timeout and in-flight request count come from the
   merged `NetworkFetchPolicy`.
-- Non-2xx HTTP status is not automatically a transport error; the host reports
-  transport/TLS/DNS/timeout failures through `error`.
+- Non-2xx HTTP status is not automatically a transport error.
+- POST, custom headers, credentials, redirects, streaming, binary response
+  types and upload progress are deferred.
 
-## App-Private KV Storage
+## App-Private Storage
 
-Storage remains asynchronous and app-private:
+Preferred V0 user-facing API: a tiny `localStorage` subset, but only if the host
+can provide an app-private RAM shadow or otherwise guarantee that getters and
+setters do not block on flash/filesystem I/O.
+
+If that guarantee is unavailable for a target profile, storage should remain
+unexposed rather than adding a custom async API.
+
+Planned subset:
 
 ```js
-JellyFrame.storage.get("theme", function (error, value) {})
-JellyFrame.storage.set("theme", "dark", function (error) {})
-JellyFrame.storage.remove("theme", function (error) {})
-JellyFrame.storage.clear(function (error) {})
+localStorage.setItem("theme", "dark");
+var theme = localStorage.getItem("theme");
+localStorage.removeItem("theme");
+localStorage.clear();
 ```
+
+Supported V0 surface should be limited to:
+
+- `localStorage.getItem(key)`
+- `localStorage.setItem(key, value)`
+- `localStorage.removeItem(key)`
+- `localStorage.clear()`
+- `localStorage.length`
+- `localStorage.key(index)`
 
 Rules:
 
-- Values are V0 strings or UTF-8 bytes converted to strings by the binding.
-- Key length, single value bytes, item count and total bytes come from the
-  merged `AppPrivateKvPolicy`.
-- Missing keys should call back with `null` value and no fatal exception. The
-  C++ completion may still use `Failed`; the binding maps that to a documented
-  miss result.
-- No synchronous `localStorage`; flash/NVS/filesystem writes must never block
-  the UI task.
+- Values are strings, matching the Web Storage model.
+- Storage is app-private; apps cannot access another app's namespace.
+- Key length, value bytes, item count and total bytes come from the merged
+  `AppPrivateKvPolicy`.
+- Synchronous calls must hit a small in-memory shadow. Host flash/NVS/filesystem
+  writes are scheduled through the async service path and reconciled by host
+  policy.
+- Quota failures should throw a small `QuotaExceededError`-like exception when
+  possible; otherwise return a documented diagnostics warning during early
+  bring-up.
+- `sessionStorage`, storage events, IndexedDB, cookies and Cache API are not in
+  V0.
 
-## System Events
+## System State
 
-System state is host-injected through `AppSystemEventQueue`.
+System state should use existing web-adjacent concepts where they fit:
 
-```js
-JellyFrame.system.on("battery", function (snapshot) {})
-JellyFrame.system.on("network", function (snapshot) {})
-JellyFrame.system.on("time", function (snapshot) {})
-var snapshot = JellyFrame.system.snapshot()
-```
+- `navigator.onLine`
+- `window` `online` / `offline` events
+- `document.hidden`
+- `document.visibilityState`
+- `document` `visibilitychange` event
+- `pagehide` / `pageshow` for lifecycle-like transitions, if needed later
 
-Snapshot fields:
+Battery and low-power state do not have a broadly safe modern baseline. The
+Battery Status API exists historically but is privacy-sensitive and not a good
+default. For V0, keep battery/charging/low-power snapshots in the C++ host event
+queue and do not expose them to app JavaScript until a product profile explicitly
+chooses a compatible surface.
 
-```js
-{
-  unixTimeMs,
-  timezoneOffsetMinutes,
-  batteryPercent,
-  charging,
-  networkOnline,
-  screenOn,
-  lowPowerMode
-}
-```
-
-Rules:
-
-- `snapshot()` returns the latest host-approved snapshot copied into the runtime
-  binding, not a live hardware object.
-- Event callbacks are budgeted per frame.
-- App code cannot directly read RTC, Wi-Fi, battery gauge or power-management
-  drivers.
+The platform-neutral source remains `AppSystemEventQueue`. JS bindings should
+map accepted events to the standard subset above when possible.
 
 ## Error Names
 
-The binding should map host status to stable small strings:
+Internal host status can still map to stable small strings for diagnostics:
 
-| Host status | JS error code |
+| Host status | Diagnostic code |
 | --- | --- |
 | `Unsupported` | `unsupported` |
 | `BudgetExceeded` | `budget-exceeded` |
@@ -125,5 +145,5 @@ The binding should map host status to stable small strings:
 | `Cancelled` | `cancelled` |
 | `Failed` | `failed` |
 
-This mapping is intentionally small. Detailed platform error codes can remain
-in diagnostics or optional `hostCode` fields during desktop debugging.
+Detailed platform error codes can remain in diagnostics or optional host debug
+fields. They should not become required app-author syntax.

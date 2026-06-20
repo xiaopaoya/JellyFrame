@@ -93,11 +93,12 @@ surface.
 
 Optional network, app-private KV storage and system status events are being
 designed under `src/app_runtime/docs/runtime_data_api.md`. The intended V0 shape
-is a small `JellyFrame` namespace with callback-based APIs such as
-`JellyFrame.fetchText(...)`, `JellyFrame.storage.get(...)` and
-`JellyFrame.system.on(...)`. These APIs are not exposed yet; the current
-implementation only provides the platform-neutral C++ request/completion queues,
-policy gates, mocks and system-event queue.
+is standard-subset first: asynchronous `XMLHttpRequest` before `fetch()`,
+a tiny `localStorage` subset only when a non-blocking app-private RAM shadow is
+available, and system state mapped to existing web-adjacent events such as
+`online`, `offline` and `visibilitychange` where possible. These APIs are not
+exposed yet; the current implementation only provides the platform-neutral C++
+request/completion queues, policy gates, mocks and system-event queue.
 
 ## Embedded-App DOM Helpers
 
