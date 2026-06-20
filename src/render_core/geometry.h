@@ -32,6 +32,7 @@ enum class DisplayCommandType {
     StrokeRect,
     LinearGradient,
     Text,
+    Image,
 };
 
 enum class TextCommandAlign {
@@ -51,6 +52,7 @@ struct DisplayCommand {
     int font_weight = 400;
     TextCommandAlign text_align = TextCommandAlign::Start;
     bool text_single_line = true;
+    std::uint32_t image_handle = 0;
 };
 
 using DisplayList = std::vector<DisplayCommand>;

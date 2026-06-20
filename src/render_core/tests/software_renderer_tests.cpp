@@ -7,6 +7,7 @@
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -40,6 +41,27 @@ bool rejecting_text_painter(FrameBuffer&,
                             bool,
                             void*) {
     return false;
+}
+
+struct ImagePaintProbe {
+    std::uint32_t expected_handle = 0;
+    int calls = 0;
+};
+
+bool probe_image_painter(FrameBuffer& target, Rect rect, std::uint32_t image_handle, void* raw_context) {
+    auto* probe = static_cast<ImagePaintProbe*>(raw_context);
+    if (probe == nullptr || image_handle != probe->expected_handle) {
+        return false;
+    }
+    ++probe->calls;
+    for (int y = rect.y; y < rect.y + rect.height; ++y) {
+        for (int x = rect.x; x < rect.x + rect.width; ++x) {
+            if (target.contains(x, y)) {
+                target.pixel(x, y) = Color{220, 38, 38, 255};
+            }
+        }
+    }
+    return true;
 }
 
 const LayoutBox* find_first_text_box(const LayoutBox& box) {
@@ -97,6 +119,37 @@ void clipping_limits_rasterization() {
     check(frame_buffer.pixel(1, 1).r == 0, "clip paints inside pixel");
     check(frame_buffer.pixel(2, 2).r == 0, "clip paints opposite inside pixel");
     check(frame_buffer.pixel(3, 3).r == 255, "clip keeps far outside pixel");
+}
+
+void image_command_uses_injected_painter() {
+    FrameBuffer frame_buffer(8, 8, Color{255, 255, 255, 255});
+    ImagePaintProbe probe{42, 0};
+    SoftwareRasterizer rasterizer({}, ImagePainter{probe_image_painter, &probe});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Image;
+    command.rect = Rect{1, 2, 3, 2};
+    command.image_handle = 42;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 8, 8});
+
+    check(probe.calls == 1, "image painter called once");
+    check(frame_buffer.pixel(1, 2).r == 220 && frame_buffer.pixel(1, 2).g == 38,
+          "image painter writes covered pixel");
+    check(frame_buffer.pixel(0, 0).r == 255, "image painter leaves outside pixel");
+}
+
+void image_command_falls_back_without_painter() {
+    VectorDiagnosticSink diagnostics;
+    FrameBuffer frame_buffer(4, 4, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer({}, &diagnostics);
+    DisplayCommand command;
+    command.type = DisplayCommandType::Image;
+    command.rect = Rect{1, 1, 2, 2};
+    command.image_handle = 9;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 4, 4});
+
+    check(frame_buffer.pixel(1, 1).r == 226 && frame_buffer.pixel(1, 1).g == 232,
+          "image fallback paints placeholder");
+    check(has_diagnostic_code(diagnostics, "paint-image-fallback"), "image fallback diagnostic");
 }
 
 void compositor_renders_pipeline_non_empty() {
@@ -481,6 +534,8 @@ int main() {
         fill_rect_rasterizes_pixels();
         source_over_alpha_composites();
         clipping_limits_rasterization();
+        image_command_uses_injected_painter();
+        image_command_falls_back_without_painter();
         compositor_renders_pipeline_non_empty();
         wrapped_text_layout_keeps_descent_padding();
         layout_uses_injected_text_measurement();

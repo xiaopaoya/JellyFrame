@@ -5,6 +5,7 @@
 #include "render_core/render_tree.h"
 
 #include <iostream>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -432,6 +433,49 @@ void flex_wrap_places_items_on_new_lines() {
     check(third->rect.y > first->rect.y, "flex-wrap places overflowing item on next line");
 }
 
+struct ImageResolveContext {
+    std::string url;
+    std::uint32_t handle = 0;
+};
+
+bool resolve_test_image(const Node& node, std::uint32_t& handle, void* raw_context) {
+    auto* context = static_cast<ImageResolveContext*>(raw_context);
+    if (context == nullptr || node.attribute("src") != context->url) {
+        return false;
+    }
+    handle = context->handle;
+    return true;
+}
+
+void image_element_emits_image_display_command_when_surface_resolves() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><img src='app://icon.raw'></body>");
+    Stylesheet stylesheet = css_parser.parse("img { width: 32px; height: 24px; }");
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 120);
+
+    ImageResolveContext context{"app://icon.raw", 77};
+    LayerTreeBuilderOptions options;
+    options.image_resolver = ImageHandleResolver{resolve_test_image, &context};
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    DisplayList flattened = layer_tree_builder.flatten(*layer_tree);
+
+    bool found_image = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::Image) {
+            found_image = true;
+            check(command.image_handle == 77, "image command carries resolved handle");
+            check(command.rect.width == 32 && command.rect.height == 24, "image command uses content rect");
+        }
+    }
+    check(found_image, "resolved img emits image command");
+}
+
 } // namespace
 
 int main() {
@@ -452,6 +496,7 @@ int main() {
         unbreakable_symbol_stays_single_line();
         grid_item_auto_width_reflows_centered_text();
         flex_wrap_places_items_on_new_lines();
+        image_element_emits_image_display_command_when_surface_resolves();
         layer_builder_respects_layer_and_display_command_budgets();
         layer_tree_can_use_monotonic_arena();
     } catch (const std::exception& error) {

@@ -41,6 +41,13 @@ enum LayerReason : std::uint32_t {
 
 using LayerReasons = std::uint32_t;
 
+using ImageHandleResolveCallback = bool (*)(const Node& node, std::uint32_t& handle, void* context);
+
+struct ImageHandleResolver {
+    ImageHandleResolveCallback resolve = nullptr;
+    void* context = nullptr;
+};
+
 struct LayerNode {
     LayerType type = LayerType::Paint;
     LayerReasons reasons = LayerReasonNone;
@@ -59,6 +66,7 @@ struct LayerTreeBuilderOptions {
     std::size_t max_layers = 1024;
     std::size_t max_display_commands = 8192;
     DiagnosticSink* diagnostics = nullptr;
+    ImageHandleResolver image_resolver;
 };
 
 class LayerTreeBuilder {

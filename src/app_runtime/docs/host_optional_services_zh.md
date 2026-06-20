@@ -136,6 +136,8 @@ Win32 参考壳的 A4 行为：
 - 成功 completion 返回 `HostServiceHandleKind::Surface` handle；`AppDecodedSurfaceRecord`
   保存 width、height、stride、pixel format 和可选 raw pixels。
 - `release_surface(...)` 必须由 UI/main task 在 surface 不再需要时调用，释放 record 和 host handle。
+- render core 已提供 `ImageHandleResolver`、image display command 和 `ImagePainter`。宿主可以在
+  layer tree 构建时把 `<img src>` 映射到 decoded surface handle，在 paint 阶段用 painter 绘制。
 
 未来宿主 request 可以映射为：
 
@@ -169,8 +171,8 @@ struct HostDecodedSurface {
 - decoded surface 由宿主 cache 持有；UI 只引用 handle。
 - cache 满时可以 LRU 回收未被当前 display list 引用的 surface。
 - 如果解码失败，页面保留占位盒并报告 diagnostics。
-- `<img>`/app icon 尚未自动消费 decoded surface；下一步需要资源 loader、layout invalidation、
-  display-list image command 和 surface cache 一起接入。
+- `<img>`/app icon 尚未自动提交 decode 或管理 surface cache；下一步需要资源 loader、layout
+  invalidation、异步 repaint 和 cache eviction 一起接入。
 
 ## 音频播放服务
 
@@ -446,8 +448,8 @@ struct AppSystemStateSnapshot {
    第一版 `app_runtime` helper 已完成。
 2. bundle staging/registry 的桌面 mock 已实现，可通过 `jellyframe_cli.py registry`
    安装、枚举、解析和删除 `.jfapp`，并用原子 JSON 提交模拟 installed-app registry。
-3. image decode mock/raw surface fixture 第一版已实现；下一步把 decoded surface handle
-   接入 `<img>`/图标生命周期与重绘。
+3. image decode mock/raw surface fixture 和 render-core image display command 第一版已实现；
+   下一步把自动 decode 提交、surface cache、`<img>`/图标生命周期与重绘串起来。
 4. 桌面 surface consumer 路径稳定后，在 ESP32-S3 port 中接 RGB565 小图/MJPEG decode，
    并严格限制尺寸和并发。
 5. 接 host-owned MP3 playback，只返回句柄和 ended/error 事件。

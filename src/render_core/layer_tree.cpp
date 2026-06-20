@@ -111,6 +111,19 @@ void push_text(DisplayList& display_list,
     display_list.push_back(std::move(command));
 }
 
+void push_image(DisplayList& display_list, Rect rect, std::uint32_t image_handle) {
+    if (rect.width <= 0 || rect.height <= 0 || image_handle == 0) {
+        return;
+    }
+    DisplayCommand command;
+    command.type = DisplayCommandType::Image;
+    command.rect = rect;
+    command.image_handle = image_handle;
+    command.color = Color{255, 255, 255, 255};
+    command.color2 = command.color;
+    display_list.push_back(std::move(command));
+}
+
 TextCommandAlign text_command_align(TextAlign align) {
     switch (align) {
     case TextAlign::Center:
@@ -509,7 +522,31 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
     }
 }
 
-void paint_box_self(const LayoutBox& box, DisplayList& display_list) {
+bool resolve_image_handle(const LayoutBox& box,
+                          const LayerTreeBuilderOptions& options,
+                          std::uint32_t& image_handle) {
+    image_handle = 0;
+    if (box.node == nullptr || box.node->type != NodeType::Element || box.node->tag_name != "img") {
+        return false;
+    }
+    if (box.node->attribute("src").empty() || options.image_resolver.resolve == nullptr) {
+        return false;
+    }
+    return options.image_resolver.resolve(*box.node, image_handle, options.image_resolver.context) && image_handle != 0;
+}
+
+Rect content_rect_for(const LayoutBox& box) {
+    return Rect{
+        box.rect.x + box.style.border_width.left + box.style.padding.left,
+        box.rect.y + box.style.border_width.top + box.style.padding.top,
+        std::max(0, box.rect.width - box.style.border_width.left - box.style.border_width.right -
+                    box.style.padding.left - box.style.padding.right),
+        std::max(0, box.rect.height - box.style.border_width.top - box.style.border_width.bottom -
+                    box.style.padding.top - box.style.padding.bottom),
+    };
+}
+
+void paint_box_self(const LayoutBox& box, DisplayList& display_list, const LayerTreeBuilderOptions& options) {
     const Rect paint_rect = paint_rect_for(box);
     paint_approximate_box_shadow(box, display_list);
     if (is_visible_background(box.style.background_color)) {
@@ -523,6 +560,11 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list) {
     paint_meter_bar(box, display_list);
     paint_form_control(box, display_list);
     paint_list_marker(box, display_list);
+
+    std::uint32_t image_handle = 0;
+    if (resolve_image_handle(box, options, image_handle)) {
+        push_image(display_list, content_rect_for(box), image_handle);
+    }
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
         const std::string text = normalized_render_text(*box.node);
@@ -743,7 +785,7 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->z_index = root.style.z_index;
     root_layer->source_order = next_source_order++;
 
-    paint_box_self(root, root_layer->display_list);
+    paint_box_self(root, root_layer->display_list, options_);
     trim_display_list(root_layer->display_list);
     bool layer_budget_reported = false;
     build_children(root, *root_layer, next_source_order, layer_count, layer_budget_reported, arena);
@@ -805,7 +847,7 @@ void LayerTreeBuilder::build_box(const LayoutBox& box,
         child_layer->opacity = box.style.opacity;
         child_layer->z_index = box.style.z_index_auto ? 0 : box.style.z_index;
         child_layer->source_order = next_source_order++;
-        paint_box_self(box, child_layer->display_list);
+        paint_box_self(box, child_layer->display_list, options_);
         trim_display_list(child_layer->display_list);
         build_children(box, *child_layer, next_source_order, layer_count, layer_budget_reported, arena);
         parent_layer.children.push_back(std::move(child_layer));
@@ -821,7 +863,7 @@ void LayerTreeBuilder::build_box(const LayoutBox& box,
         layer_budget_reported = true;
     }
 
-    paint_box_self(box, parent_layer.display_list);
+    paint_box_self(box, parent_layer.display_list, options_);
     trim_display_list(parent_layer.display_list);
     build_children(box, parent_layer, next_source_order, layer_count, layer_budget_reported, arena);
 }

@@ -382,7 +382,12 @@ const Color& FrameBuffer::pixel(int x, int y) const {
 }
 
 SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter, DiagnosticSink* diagnostics)
-    : text_painter_(text_painter), diagnostics_(diagnostics) {}
+    : SoftwareRasterizer(text_painter, {}, diagnostics) {}
+
+SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter,
+                                       ImagePainter image_painter,
+                                       DiagnosticSink* diagnostics)
+    : text_painter_(text_painter), image_painter_(image_painter), diagnostics_(diagnostics) {}
 
 void SoftwareRasterizer::rasterize(const DisplayList& display_list,
                                    FrameBuffer& target,
@@ -432,11 +437,26 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                   text_painter_,
                   diagnostics_);
         break;
+    case DisplayCommandType::Image:
+        if (image_painter_.paint == nullptr ||
+            !image_painter_.paint(target, rect, command.image_handle, image_painter_.context)) {
+            report_diagnostic(diagnostics_,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "paint-image-fallback",
+                              "Image command could not be painted; placeholder was used",
+                              std::to_string(command.image_handle));
+            fill_rect(target, rect, Color{226, 232, 240, 255});
+        }
+        break;
     }
 }
 
 SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, Options options)
-    : rasterizer_(text_painter, options.diagnostics), options_(options) {}
+    : SoftwareCompositor(text_painter, {}, options) {}
+
+SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter image_painter, Options options)
+    : rasterizer_(text_painter, image_painter, options.diagnostics), options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,
                                        int viewport_width,

@@ -6,6 +6,7 @@
 #include "render_core/layer_tree.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -41,15 +42,27 @@ struct TextPainter {
     void* context = nullptr;
 };
 
+using ImagePaintCallback = bool (*)(FrameBuffer& target,
+                                    Rect rect,
+                                    std::uint32_t image_handle,
+                                    void* context);
+
+struct ImagePainter {
+    ImagePaintCallback paint = nullptr;
+    void* context = nullptr;
+};
+
 class SoftwareRasterizer {
 public:
     explicit SoftwareRasterizer(TextPainter text_painter = {}, DiagnosticSink* diagnostics = nullptr);
+    SoftwareRasterizer(TextPainter text_painter, ImagePainter image_painter, DiagnosticSink* diagnostics = nullptr);
 
     void rasterize(const DisplayList& display_list, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
     void rasterize(const DisplayCommand& command, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
 
 private:
     TextPainter text_painter_;
+    ImagePainter image_painter_;
     DiagnosticSink* diagnostics_ = nullptr;
 };
 
@@ -62,6 +75,7 @@ public:
     };
 
     explicit SoftwareCompositor(TextPainter text_painter = {}, Options options = {});
+    SoftwareCompositor(TextPainter text_painter, ImagePainter image_painter, Options options = {});
 
     FrameBuffer render(const LayerNode& root, int viewport_width, int viewport_height, Color background) const;
     void render_into(const LayerNode& root, FrameBuffer& target, Color background) const;

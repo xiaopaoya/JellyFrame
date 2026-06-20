@@ -16,8 +16,11 @@ JellyFrame Engine 的重要变更记录在这里。
 - app-runtime microbench 新增可选 network fetch、KV storage、image decode mock 和 system-event pump 覆盖。
 - 添加 B1 图片解码 V0 helper：`ImageDecodePolicy`、`ImageDecodeMock` 与
   `AppDecodedSurfaceRecord` 定义平台无关 raw surface fixture、`Surface` handle 生命周期、
-  尺寸/decoded bytes/pending 预算和 release 规则。`<img>` 自动绘制仍留给后续资源 loader/display-list
-  接入。
+  尺寸/decoded bytes/pending 预算和 release 规则。自动资源加载、surface cache 和异步 repaint
+  仍留给后续接入。
+- render core 新增轻量 image display command、`ImageHandleResolver` 和 `ImagePainter`；
+  `<img src>` 在宿主提供 surface handle resolver 时可进入 display list，并由宿主 painter 绘制。
+  自动资源加载、surface cache 和异步 repaint 仍是后续工作。
 - 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，记录标准子集优先 runtime data API
   方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界
   Promise/microtask 支持成熟后再考虑；只有存在非阻塞 app 私有内存 shadow 时才暴露极小

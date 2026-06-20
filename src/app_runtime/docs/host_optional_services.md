@@ -165,6 +165,9 @@ Current V0 helper:
   optional raw pixels.
 - `release_surface(...)` must be called by the UI/main task when a surface is no
   longer referenced so the record and host handle are released.
+- Render core provides `ImageHandleResolver`, image display commands and
+  `ImagePainter`. A host can map `<img src>` to decoded surface handles during
+  layer-tree construction and paint them through the painter.
 
 Future host requests can map to:
 
@@ -199,9 +202,9 @@ Rules:
 - Decoded surfaces are host-cache owned; UI only references handles.
 - A full cache may reclaim surfaces not referenced by the current display list.
 - On failure, keep the placeholder box and report diagnostics.
-- `<img>`/app icons do not automatically consume decoded surfaces yet; the next
-  step is wiring the resource loader, layout invalidation, display-list image
-  command and surface cache together.
+- `<img>`/app icons do not automatically submit decodes or manage the surface
+  cache yet; the next step is wiring resource loading, layout invalidation,
+  async repaint and cache eviction together.
 
 ## Audio Playback Service
 
@@ -498,8 +501,9 @@ Recommended order:
 2. The desktop bundle staging/registry mock is implemented. Use
    `jellyframe_cli.py registry` to install, list, resolve and remove `.jfapp`
    bundles with an atomically committed installed-app registry JSON.
-3. The first image-decode mock/raw-surface fixture pass is implemented. Next,
-   wire decoded surface handles into `<img>`/icon lifetime and repaint.
+3. The first image-decode mock/raw-surface fixture and render-core image display
+   command passes are implemented. Next, wire automatic decode submission,
+   surface cache, `<img>`/icon lifetime and repaint together.
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps after the desktop surface consumer path is stable.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.
