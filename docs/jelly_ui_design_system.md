@@ -19,8 +19,9 @@ shippable, testable and degradable on the current engine.
 
 This system must match current project capabilities:
 
-- Safe: `rgba()`, hex colors, named basics, `background-color`, simple
-  `background` color extraction, single-value `border-radius`, borders,
+- Safe: `rgba()`, hex colors, named basics, `background-color`, and simple
+  `background: linear-gradient(<color>, <color>)` vertical gel surfaces,
+  single-value `border-radius`, borders,
   padding, margin, approximate `box-shadow`, `opacity`, `transform:
   translate()/scale()`, CSS `transition`, and dynamic states such as `:hover`,
   `:active`, `:focus`, `:focus-within`, `:checked` and `:disabled`.

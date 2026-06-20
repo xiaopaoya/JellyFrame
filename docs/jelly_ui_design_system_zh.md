@@ -19,8 +19,9 @@
 
 设计系统必须以当前项目能力为准：
 
-- 可依赖：`rgba()`、hex、基础命名色、`background-color`、简单 `background`
-  颜色提取、单值 `border-radius`、border、padding、margin、`box-shadow`
+- 可依赖：`rgba()`、hex、基础命名色、`background-color`，以及简单
+  `background: linear-gradient(<color>, <color>)` 垂直胶体表面、单值
+  `border-radius`、border、padding、margin、`box-shadow`
   近似、`opacity`、`transform: translate()/scale()`、`transition` 子集、
   `:hover`、`:active`、`:focus`、`:focus-within`、`:checked` 和 `:disabled`。
 - 可依赖：CSS custom properties 的直接 `var(--token)` 和 fallback。

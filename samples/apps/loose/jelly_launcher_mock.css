@@ -13,6 +13,7 @@ body {
   height: 300px;
   padding: 16px;
   background-color: #092633;
+  background: linear-gradient(#0b2b38, #071923);
 }
 
 .top {
@@ -46,6 +47,7 @@ body {
   padding: 50px 10px 10px;
   color: #f6fbff;
   background-color: rgba(74, 190, 218, 0.22);
+  background: linear-gradient(rgba(130, 230, 242, 0.28), rgba(38, 132, 174, 0.18));
   border: 1px solid rgba(122, 232, 238, 0.68);
   border-radius: 24px;
   overflow: hidden;
@@ -65,26 +67,32 @@ body {
 .app strong {
   display: block;
   font-size: 14px;
+  text-align: left;
 }
 
 .weather {
   background-color: rgba(74, 190, 218, 0.28);
+  background: linear-gradient(rgba(134, 234, 246, 0.34), rgba(42, 142, 184, 0.20));
 }
 
 .timer {
   background-color: rgba(184, 244, 118, 0.26);
+  background: linear-gradient(rgba(214, 252, 160, 0.30), rgba(88, 194, 170, 0.18));
 }
 
 .notes {
   background-color: rgba(255, 132, 112, 0.25);
+  background: linear-gradient(rgba(255, 178, 160, 0.28), rgba(182, 108, 150, 0.16));
 }
 
 .setup {
   background-color: rgba(154, 137, 255, 0.22);
+  background: linear-gradient(rgba(186, 178, 255, 0.26), rgba(86, 144, 210, 0.16));
 }
 
 .app:focus,
 .app:active {
   transform: translate(0px, 2px) scale(0.96);
   background-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(rgba(220, 255, 255, 0.28), rgba(80, 186, 216, 0.14));
 }

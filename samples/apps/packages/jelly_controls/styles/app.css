@@ -25,6 +25,7 @@ body {
   height: 300px;
   padding: 12px;
   background-color: #092633;
+  background: linear-gradient(#0b2b38, #071923);
 }
 
 .top {
@@ -52,6 +53,7 @@ body {
   margin-bottom: 8px;
   padding: 14px 12px 8px;
   background-color: var(--gel);
+  background: linear-gradient(rgba(114, 226, 240, 0.36), rgba(42, 142, 184, 0.22));
   border: 1px solid var(--edge);
   border-radius: 20px;
   overflow: hidden;
@@ -83,6 +85,7 @@ label {
   padding: 6px 10px;
   color: var(--ink);
   background-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(rgba(255, 255, 255, 0.23), rgba(142, 220, 238, 0.12));
   border: 1px solid var(--edge);
   border-radius: 17px;
 }
@@ -100,6 +103,7 @@ label {
   height: 32px;
   padding: 4px;
   background-color: rgba(82, 170, 204, 0.22);
+  background: linear-gradient(rgba(118, 229, 240, 0.28), rgba(57, 150, 190, 0.16));
   border: 1px solid var(--edge);
   border-radius: 16px;
   transition: background-color 180ms ease-out;
@@ -116,6 +120,7 @@ label {
 
 .switch.is-on {
   background-color: var(--lime);
+  background: linear-gradient(rgba(204, 250, 144, 0.46), rgba(108, 210, 180, 0.24));
 }
 
 .switch.is-on span {
@@ -128,6 +133,7 @@ label {
   margin-bottom: 8px;
   padding: 9px 12px;
   background-color: rgba(6, 34, 46, 0.88);
+  background: linear-gradient(rgba(16, 58, 74, 0.88), rgba(6, 34, 46, 0.88));
   border: 1px solid rgba(122, 232, 238, 0.42);
   border-radius: 18px;
 }
@@ -136,6 +142,7 @@ label {
   height: 10px;
   margin-bottom: 8px;
   background-color: rgba(82, 170, 204, 0.20);
+  background: linear-gradient(rgba(116, 212, 230, 0.16), rgba(38, 104, 132, 0.18));
   border-radius: 99px;
   overflow: hidden;
 }
@@ -145,6 +152,7 @@ label {
   width: 64%;
   height: 10px;
   background-color: var(--edge);
+  background: linear-gradient(rgba(220, 255, 255, 0.78), rgba(92, 211, 223, 0.72));
   border-radius: 99px;
   transition: background-color 180ms ease-out;
 }
@@ -172,14 +180,17 @@ label {
   height: 34px;
   color: var(--ink);
   background-color: rgba(74, 190, 218, 0.22);
+  background: linear-gradient(rgba(112, 224, 238, 0.28), rgba(42, 142, 184, 0.18));
   border: 1px solid var(--edge);
   border-radius: 18px;
   font-weight: 700;
+  text-align: center;
   transition: transform 160ms ease-out, background-color 160ms ease-out, opacity 160ms ease-out;
 }
 
 .button.primary {
   background-color: var(--gel-strong);
+  background: linear-gradient(rgba(176, 245, 252, 0.46), rgba(78, 190, 214, 0.28));
 }
 
 .button:active,
@@ -187,7 +198,8 @@ label {
 .switch:active,
 .switch:focus {
   transform: translate(0px, 1px) scale(0.96);
-  background-color: rgba(255, 132, 112, 0.34);
+  background-color: rgba(134, 226, 238, 0.26);
+  background: linear-gradient(rgba(190, 250, 255, 0.38), rgba(74, 190, 218, 0.20));
 }
 
 .toast {
@@ -195,6 +207,7 @@ label {
   padding: 5px 8px;
   color: var(--muted);
   background-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(rgba(255, 255, 255, 0.12), rgba(86, 178, 210, 0.10));
   border: 1px solid rgba(122, 232, 238, 0.34);
   border-radius: 14px;
   font-size: 11px;

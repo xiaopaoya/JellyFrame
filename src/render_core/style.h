@@ -54,6 +54,11 @@ enum class GeneratedContentKind {
     Counter,
 };
 
+enum class BackgroundPaintKind {
+    Solid,
+    LinearGradient,
+};
+
 enum class AnimatableProperty {
     All,
     Opacity,
@@ -103,7 +108,9 @@ struct Style {
     Display display = Display::Inline;
     Color color{0, 0, 0, 255};
     bool color_specified = false;
+    BackgroundPaintKind background_paint = BackgroundPaintKind::Solid;
     Color background_color{0, 0, 0, 0};
+    Color background_color2{0, 0, 0, 0};
     EdgeSizes margin;
     bool margin_left_auto = false;
     bool margin_right_auto = false;

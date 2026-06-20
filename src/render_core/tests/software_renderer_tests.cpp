@@ -96,6 +96,21 @@ void fill_rect_rasterizes_pixels() {
     check(frame_buffer.pixel(0, 0).r == 255, "fill rect leaves outside pixel");
 }
 
+void linear_gradient_rasterizes_top_and_bottom_colors() {
+    FrameBuffer frame_buffer(3, 4, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::LinearGradient;
+    command.rect = Rect{0, 0, 3, 4};
+    command.color = Color{0, 0, 0, 255};
+    command.color2 = Color{120, 60, 30, 255};
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 3, 4});
+
+    check(frame_buffer.pixel(1, 0).r == 0, "gradient top row uses first color");
+    check(frame_buffer.pixel(1, 3).r == 120, "gradient bottom row uses second color");
+    check(frame_buffer.pixel(1, 2).r > frame_buffer.pixel(1, 1).r, "gradient interpolates rows");
+}
+
 void rounded_stroke_keeps_corner_pixels_clear() {
     FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -589,6 +604,7 @@ void jffont_resource_loads_bitmap_font_view() {
 int main() {
     try {
         fill_rect_rasterizes_pixels();
+        linear_gradient_rasterizes_top_and_bottom_colors();
         rounded_stroke_keeps_corner_pixels_clear();
         source_over_alpha_composites();
         clipping_limits_rasterization();

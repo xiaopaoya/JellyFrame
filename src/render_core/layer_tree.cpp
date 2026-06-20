@@ -94,6 +94,19 @@ void push_fill_rect(DisplayList& display_list, Rect rect, Color color, int borde
     display_list.push_back(std::move(command));
 }
 
+void push_linear_gradient(DisplayList& display_list, Rect rect, Color top, Color bottom, int border_radius = 0) {
+    if (rect.width <= 0 || rect.height <= 0 || (top.a == 0 && bottom.a == 0)) {
+        return;
+    }
+    DisplayCommand command;
+    command.type = DisplayCommandType::LinearGradient;
+    command.rect = rect;
+    command.color = top;
+    command.color2 = bottom;
+    command.border_radius = border_radius;
+    display_list.push_back(std::move(command));
+}
+
 bool equal_border_widths(const EdgeSizes& border) {
     return border.top == border.right && border.top == border.bottom && border.top == border.left;
 }
@@ -589,7 +602,13 @@ Rect content_rect_for(const LayoutBox& box) {
 void paint_box_self(const LayoutBox& box, DisplayList& display_list, const LayerTreeBuilderOptions& options) {
     const Rect paint_rect = paint_rect_for(box);
     paint_approximate_box_shadow(box, display_list);
-    if (is_visible_background(box.style.background_color)) {
+    if (box.style.background_paint == BackgroundPaintKind::LinearGradient) {
+        push_linear_gradient(display_list,
+                             paint_rect,
+                             box.style.background_color,
+                             box.style.background_color2,
+                             box.style.border_radius);
+    } else if (is_visible_background(box.style.background_color)) {
         push_fill_rect(display_list, paint_rect, box.style.background_color, box.style.border_radius);
     }
 
@@ -719,7 +738,8 @@ void append_flattened_command(DisplayList& output,
     }
     flattened.color = with_opacity(flattened.color, opacity);
     flattened.color2 = with_opacity(flattened.color2, opacity);
-    if (flattened.color.a == 0) {
+    if (flattened.color.a == 0 &&
+        (flattened.type != DisplayCommandType::LinearGradient || flattened.color2.a == 0)) {
         return;
     }
     output.push_back(std::move(flattened));

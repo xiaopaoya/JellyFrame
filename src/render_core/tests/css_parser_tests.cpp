@@ -190,6 +190,46 @@ void resolves_simple_css_custom_properties() {
     check(button_style.width == -1, "unresolved var keeps property fallback");
 }
 
+void linear_gradient_background_applies_without_breaking_fallbacks() {
+    VectorDiagnosticSink diagnostics;
+    CssParser parser;
+    CssParserOptions css_options;
+    css_options.diagnostics = &diagnostics;
+    Stylesheet stylesheet = parser.parse(
+        ".gel { background: #102030; background: linear-gradient(#102030, rgba(80, 120, 160, 0.5)); }"
+        ".bad-color { color: #123456; color: linear-gradient(#ffffff, #000000); }"
+        ".fallback { background: #111111; background: linear-gradient(45deg, #ffffff, #000000); }",
+        css_options);
+
+    auto gel = make_element("div");
+    gel->attributes["class"] = "gel";
+    auto bad_color = make_element("div");
+    bad_color->attributes["class"] = "bad-color";
+    auto fallback = make_element("div");
+    fallback->attributes["class"] = "fallback";
+
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    StyleResolver resolver(std::move(stylesheet), options);
+    const Style gel_style = resolver.resolve(*gel);
+    const Style bad_color_style = resolver.resolve(*bad_color);
+    const Style fallback_style = resolver.resolve(*fallback);
+
+    check(gel_style.background_paint == BackgroundPaintKind::LinearGradient,
+          "linear-gradient background selects gradient paint");
+    check(gel_style.background_color.r == 0x10 && gel_style.background_color2.r == 80,
+          "linear-gradient stores both colors");
+    check(gel_style.background_color2.a >= 126 && gel_style.background_color2.a <= 128,
+          "linear-gradient stores rgba alpha");
+    check(bad_color_style.color.r == 0x12 && bad_color_style.color.g == 0x34,
+          "gradient is not accepted as text color");
+    check(fallback_style.background_paint == BackgroundPaintKind::Solid &&
+              fallback_style.background_color.r == 0x11,
+          "unsupported gradient does not replace earlier solid fallback");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
+          "unsupported gradient value is diagnosed by style resolver");
+}
+
 void matches_simple_compound_selectors() {
     const Stylesheet stylesheet = parse("button.primary.large { color: #abcdef; }");
     auto element = make_element("button");
@@ -723,6 +763,7 @@ int main() {
         conditional_media_queries_respect_viewport();
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
+        linear_gradient_background_applies_without_breaking_fallbacks();
         matches_simple_compound_selectors();
         builds_cssom_metadata();
         cascade_uses_specificity_and_importance();

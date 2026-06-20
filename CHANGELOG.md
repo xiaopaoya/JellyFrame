@@ -8,6 +8,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added a low-cost CSS `background: linear-gradient(...)` paint subset. Two
+  color vertical gradients now flow from style resolution into the layer display
+  list and software rasterizer, while unsupported angles/stops keep earlier
+  solid fallbacks alive.
 - Added the first bounded CSS `@keyframes` / `animation-*` subset. The parser
   stores `from`/`to` or `0%`/`100%` keyframes, style resolution keeps up to four
   animation entries per style, and `AnimationTimeline` samples `opacity`,

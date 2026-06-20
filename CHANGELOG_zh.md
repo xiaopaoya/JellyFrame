@@ -8,6 +8,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 添加低成本 CSS `background: linear-gradient(...)` 绘制子集。两色垂直渐变现在会从
+  style resolution 进入 layer display list 和软件栅格器；不支持的角度或 stop 不会覆盖
+  之前的纯色 fallback。
 - 添加第一版有界 CSS `@keyframes` / `animation-*` 子集。Parser 会保存
   `from`/`to` 或 `0%`/`100%` keyframes，style resolution 每个 style 最多保留四条
   animation entry，`AnimationTimeline` 在共享 active-animation 预算内采样

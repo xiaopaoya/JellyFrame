@@ -146,8 +146,8 @@ clear older supported fallback declarations.
 | --- | --- | --- |
 | `display` | Subset | `block`, `inline`, `inline-block`, `flex`, `inline-flex`, `grid`, `inline-grid`, `none`. Inline flex/grid map to the same simplified layout modes. |
 | `color` | Subset | Named basics, hex, `rgb()`, `rgba()`. Unsupported color functions such as `oklch()` do not override fallbacks. |
-| `background-color` | Subset | Same color parser as `color`. |
-| `background` | Subset | Color extraction for common color backgrounds. Images are ignored. |
+| `background-color` | Subset | Same color parser as `color`; gradients are intentionally not accepted here because CSS treats them as background images. |
+| `background` | Subset | Solid colors plus `linear-gradient(<color>, <color>)`, `linear-gradient(to bottom, ...)` and `linear-gradient(to top, ...)` as a cheap vertical paint command. Images and complex stops/angles are ignored or diagnosed without clearing earlier fallbacks. |
 | `margin` | Works | 1-4 length values plus horizontal `auto`. |
 | `margin-top/right/bottom/left` | Works | Physical longhands. `margin-left/right:auto` works for horizontal centering paths. |
 | `padding` | Works | 1-4 length values. |

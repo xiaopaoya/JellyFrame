@@ -12,6 +12,7 @@ body {
   margin: 0;
   padding: 16px;
   background-color: var(--surface);
+  background: linear-gradient(#0b2b38, #071923);
   color: var(--ink);
   font-size: 14px;
 }
@@ -26,6 +27,7 @@ body {
   gap: 4px;
   padding: 12px;
   background-color: rgba(74, 190, 218, 0.12);
+  background: linear-gradient(rgba(90, 198, 222, 0.18), rgba(20, 70, 92, 0.12));
   border: 1px solid rgba(122, 232, 238, 0.42);
   border-radius: 18px;
 }
@@ -53,6 +55,7 @@ h1 {
   margin: 0;
   padding: 9px 11px;
   background-color: rgba(184, 244, 118, 0.16);
+  background: linear-gradient(rgba(206, 252, 150, 0.24), rgba(90, 184, 164, 0.12));
   color: var(--ink);
   border: 1px solid rgba(184, 244, 118, 0.52);
   border-radius: 16px;
@@ -69,6 +72,7 @@ h1 {
   gap: 8px;
   padding: 14px 12px 12px;
   background-color: var(--gel);
+  background: linear-gradient(rgba(124, 228, 240, 0.30), rgba(42, 142, 184, 0.18));
   border: 1px solid var(--edge);
   border-radius: 20px;
   overflow: hidden;
@@ -80,6 +84,7 @@ h1 {
 .app:active {
   transform: translate(0px, 1px) scale(0.99);
   background-color: rgba(74, 190, 218, 0.34);
+  background: linear-gradient(rgba(182, 246, 252, 0.36), rgba(72, 184, 210, 0.20));
 }
 
 .name {
@@ -104,9 +109,11 @@ button {
   padding: 0 12px;
   color: var(--ink);
   background-color: rgba(74, 190, 218, 0.18);
+  background: linear-gradient(rgba(112, 224, 238, 0.26), rgba(42, 142, 184, 0.16));
   border: 1px solid var(--edge);
   border-radius: 17px;
   font-weight: 700;
+  text-align: center;
   transition: transform 160ms ease-out, background-color 160ms ease-out, opacity 160ms ease-out;
 }
 
@@ -114,14 +121,17 @@ button:focus,
 button:active {
   transform: translate(0px, 1px) scale(0.96);
   background-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(rgba(220, 255, 255, 0.30), rgba(80, 186, 216, 0.14));
 }
 
 button.primary {
   background-color: rgba(184, 244, 118, 0.26);
+  background: linear-gradient(rgba(214, 252, 160, 0.34), rgba(104, 206, 186, 0.18));
   border-color: rgba(184, 244, 118, 0.62);
 }
 
 button.danger {
   background-color: rgba(255, 132, 112, 0.20);
+  background: linear-gradient(rgba(255, 178, 160, 0.24), rgba(182, 108, 150, 0.14));
   border-color: var(--coral);
 }

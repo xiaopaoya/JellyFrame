@@ -53,6 +53,10 @@ layout behavior.
   `var(--token)` / `var(--token, fallback)`. Values inherit along the DOM path,
   `:root` tokens and inline tokens work, and unresolved values keep earlier
   fallback declarations alive.
+- `background` accepts solid colors and a style-resolution subset of
+  `linear-gradient(<color>, <color>)`, `linear-gradient(to bottom, ...)` and
+  `linear-gradient(to top, ...)`. Unsupported angles, stops or image values are
+  reported without replacing earlier supported fallbacks.
 - Type/class/id/attribute compound selectors, descendant and child combinators,
   and adjacent/general sibling combinators.
 - Dynamic pseudo-classes `:hover`, `:active`, `:focus`, `:focus-within`,

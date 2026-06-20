@@ -140,6 +140,25 @@ void rounded_equal_border_emits_stroke_command() {
     check(found_rounded_stroke, "rounded equal-width border uses stroke command");
 }
 
+void linear_gradient_background_emits_gradient_command() {
+    auto pipeline = build_pipeline("<body><section class='gel'>Gel</section></body>",
+                                   ".gel { display: block; width: 60px; height: 30px; "
+                                   "background: linear-gradient(#102030, rgba(80, 120, 160, 0.5)); "
+                                   "border-radius: 8px; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_gradient = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::LinearGradient) {
+            found_gradient = true;
+            check(command.color.r == 0x10 && command.color2.r == 80, "gradient command carries colors");
+            check(command.border_radius == 8, "gradient command carries radius");
+        }
+    }
+    check(found_gradient, "linear-gradient background emits gradient command");
+}
+
 void z_index_orders_child_layers() {
     auto pipeline = build_pipeline("<body><div class='back'>Back</div><div class='front'>Front</div></body>",
                                    ".back { position: relative; z-index: 5; }"
@@ -517,6 +536,7 @@ int main() {
         overflow_hidden_creates_clip_layer();
         opacity_layer_flattens_alpha();
         rounded_equal_border_emits_stroke_command();
+        linear_gradient_background_emits_gradient_command();
         z_index_orders_child_layers();
         progress_and_meter_emit_value_fill();
         inline_mark_background_shrinks_to_text();

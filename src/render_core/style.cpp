@@ -1237,15 +1237,48 @@ bool parse_color(const std::string& raw_value, Color& output) {
     if (value.rfind("rgb(", 0) == 0 && value.back() == ')') {
         return parse_rgb_function(std::string_view(value).substr(4, value.size() - 5), false);
     }
-    if (value.rfind("linear-gradient(", 0) == 0) {
-        const std::size_t hash = value.find('#');
-        if (hash != std::string::npos) {
-            std::size_t end = hash + 1;
-            while (end < value.size() && std::isxdigit(static_cast<unsigned char>(value[end])) != 0) {
-                ++end;
-            }
-            return parse_color(value.substr(hash, end - hash), output);
+    return false;
+}
+
+bool parse_linear_gradient_background(const std::string& raw_value, Color& top, Color& bottom) {
+    const std::string value = lowercase(trim(raw_value));
+    constexpr std::string_view prefix = "linear-gradient(";
+    if (value.rfind(prefix, 0) != 0 || value.back() != ')') {
+        return false;
+    }
+
+    std::vector<std::string> args =
+        split_function_arguments(std::string_view(value).substr(prefix.size(), value.size() - prefix.size() - 1));
+    if (args.size() == 3) {
+        const std::string direction = trim(args[0]);
+        if (direction == "to bottom") {
+            args.erase(args.begin());
+        } else if (direction == "to top") {
+            args.erase(args.begin());
+            std::swap(args[0], args[1]);
+        } else {
+            return false;
         }
+    }
+    if (args.size() != 2) {
+        return false;
+    }
+    return parse_color(args[0], top) && parse_color(args[1], bottom);
+}
+
+bool parse_background_paint(const std::string& value, BackgroundPaintKind& kind, Color& color, Color& color2) {
+    Color top;
+    Color bottom;
+    if (parse_linear_gradient_background(value, top, bottom)) {
+        kind = BackgroundPaintKind::LinearGradient;
+        color = top;
+        color2 = bottom;
+        return true;
+    }
+    if (parse_color(value, color)) {
+        kind = BackgroundPaintKind::Solid;
+        color2 = color;
+        return true;
     }
     return false;
 }
@@ -2061,12 +2094,25 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.color = parsed;
         style.color_specified = true;
         return true;
-    } else if (property == "background" || property == "background-color") {
+    } else if (property == "background-color") {
         Color parsed;
         if (!parse_color(value, parsed)) {
             return false;
         }
+        style.background_paint = BackgroundPaintKind::Solid;
         style.background_color = parsed;
+        style.background_color2 = parsed;
+        return true;
+    } else if (property == "background") {
+        BackgroundPaintKind kind = BackgroundPaintKind::Solid;
+        Color color;
+        Color color2;
+        if (!parse_background_paint(value, kind, color, color2)) {
+            return false;
+        }
+        style.background_paint = kind;
+        style.background_color = color;
+        style.background_color2 = color2;
         return true;
     } else if (property == "margin") {
         return parse_margin_edge_px(value, style.margin, style.margin_left_auto, style.margin_right_auto, style.font_size);

@@ -72,7 +72,9 @@ void apply_style_override(Style& style, const Node& node, const std::vector<Styl
             style.color_specified = true;
         }
         if (override.has_background_color) {
+            style.background_paint = BackgroundPaintKind::Solid;
             style.background_color = override.background_color;
+            style.background_color2 = override.background_color;
         }
         if (override.has_transform) {
             style.transform = override.transform;
