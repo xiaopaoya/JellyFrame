@@ -20,6 +20,9 @@ JellyFrame Engine 的重要变更记录在这里。
   `localStorage` 子集；系统状态尽量映射到 Web 邻近事件。
 - 添加 `AppLocalStorageShadow`，作为未来标准 `localStorage` 子集的紧凑内存 helper；
   它执行 app 私有 KV policy 限制，但不会在 UI task 上做宿主 I/O。
+- 添加 `AppXmlHttpRequest`，在 `NetworkFetchMock`/host completion 之上提供平台无关异步
+  XHR V0 状态机，覆盖 GET、abort、readyState/status、响应文本和标准事件顺序，为后续 JS
+  binding 做准备。
 - `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有
   `BitmapFont` glyph 数据模型，但去掉 C++ 指针和编译期符号，为后续 `.jfapp`
   动态包内字体资源打基础。

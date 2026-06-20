@@ -77,6 +77,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_services.cpp
     src/app_runtime/host_services.cpp
     src/app_runtime/system_events.cpp
+    src/app_runtime/xml_http_request.cpp
 )
 
 target_link_libraries(jellyframe_app_runtime PUBLIC jellyframe_render_core)
@@ -198,6 +199,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_services_tests.cpp
         src/app_runtime/tests/host_services_tests.cpp
         src/app_runtime/tests/system_events_tests.cpp
+        src/app_runtime/tests/xml_http_request_tests.cpp
     )
     foreach(test_source IN LISTS JELLYFRAME_APP_RUNTIME_TEST_SOURCES)
         get_filename_component(test_name ${test_source} NAME_WE)

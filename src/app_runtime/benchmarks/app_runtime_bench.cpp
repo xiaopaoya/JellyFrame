@@ -2,6 +2,7 @@
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
+#include "app_runtime/xml_http_request.h"
 #include "app_runtime/host_services.h"
 
 #include <algorithm>
@@ -224,6 +225,35 @@ void bench_local_storage_shadow(std::size_t capacity) {
     }
 }
 
+void bench_xml_http_request_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
+    host.launch("org.example.xhr", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
+    network.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"t\":21}"});
+    std::vector<AppXmlHttpRequest> requests(capacity);
+    for (AppXmlHttpRequest& xhr : requests) {
+        xhr.open("GET", "app://weather", true);
+        xhr.send(host, network, 1000);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        network.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    AppXhrEventKind events[AppXmlHttpRequest::kMaxQueuedEvents];
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            for (AppXmlHttpRequest& xhr : requests) {
+                if (xhr.handle_completion(host, network, completion)) {
+                    xhr.take_events(events, AppXmlHttpRequest::kMaxQueuedEvents);
+                    break;
+                }
+            }
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -256,6 +286,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_local_storage_shadow", iterations, average_microseconds(iterations, [&] {
         bench_local_storage_shadow(capacity);
+    }));
+    print_result("app_runtime_xml_http_request_mock", iterations, average_microseconds(iterations, [&] {
+        bench_xml_http_request_mock(capacity);
     }));
 
     return 0;

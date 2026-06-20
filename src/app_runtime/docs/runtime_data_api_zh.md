@@ -23,6 +23,9 @@ V0 首选用户 API：异步 `XMLHttpRequest` 子集。
 `fetch()` 应等待 JellyFrame 具备有界 Promise/microtask 方案后再暴露。自定义 callback helper
 更容易实现，但会制造非标准写法，因此弃用该方向。
 
+当前平台无关地基：`AppXmlHttpRequest` 已在 `NetworkFetchMock`/host completion 之上实现 V0 XHR
+状态机。它还不是 JS binding；它提供了未来 `XMLHttpRequest` 构造器可以包装的已测试生命周期。
+
 计划中的 XHR 子集：
 
 ```js

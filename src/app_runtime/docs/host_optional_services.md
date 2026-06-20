@@ -259,6 +259,11 @@ response byte budget and request-queue capacity. The response body is owned by
 the mock; the UI/main task can only inspect it through a handle and explicitly
 release it.
 
+`AppXmlHttpRequest` maps this service into a platform-neutral asynchronous XHR
+V0 state machine: `open("GET", url, true)`, `send()`, `abort()`,
+`readyState`, `status`, `responseText`, `responseURL`, content type and the
+standard event sequence needed by a later JS binding.
+
 Policy gate:
 
 ```cpp

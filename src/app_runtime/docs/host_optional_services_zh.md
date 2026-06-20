@@ -231,6 +231,10 @@ completion event：
 它会检查 capability、URL 长度、响应 byte budget 和 request queue 上限。响应 body 由 mock
 持有，UI/main task 只能通过 handle 查询并显式释放。
 
+`AppXmlHttpRequest` 会把这个服务映射成平台无关的异步 XHR V0 状态机：`open("GET", url, true)`、
+`send()`、`abort()`、`readyState`、`status`、`responseText`、`responseURL`、content type，以及后续
+JS binding 需要的标准事件序列。
+
 能力 gate：
 
 ```cpp

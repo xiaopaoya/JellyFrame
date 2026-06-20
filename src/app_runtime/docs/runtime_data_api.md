@@ -28,6 +28,11 @@ Preferred V0 user-facing API: an asynchronous `XMLHttpRequest` subset.
 A custom callback helper would be easier to implement, but it would create
 non-standard authoring habits and is therefore rejected.
 
+Current platform-neutral groundwork: `AppXmlHttpRequest` implements the V0 XHR
+state machine over `NetworkFetchMock`/host completions. It is not a JS binding
+yet; it provides the tested lifecycle that a future `XMLHttpRequest` constructor
+can wrap.
+
 Planned XHR subset:
 
 ```js
