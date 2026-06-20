@@ -1,4 +1,4 @@
 # Clock Template
 
-Clock app template for validating timers, simple text updates and small-screen
-typography.
+Dayline clock app template for validating timers, simple text updates,
+small-screen typography and compact metric cards.

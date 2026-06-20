@@ -3,114 +3,84 @@ body {
   margin: 0;
   width: 300px;
   height: 300px;
-  background: #05080c;
-  color: #f2fbff;
-  font-family: sans-serif;
+  background: #05070a;
+  color: #f8fafc;
 }
 
 .screen {
   box-sizing: border-box;
   width: 300px;
   height: 300px;
-  padding: 10px 16px;
-  background: #14202c;
-}
-
-.topbar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  box-sizing: border-box;
-  height: 26px;
-  margin-bottom: 7px;
-  padding: 6px 10px;
-  border: 1px solid #2d4052;
-  border-radius: 16px;
-  background: #1b2a38;
-  text-transform: uppercase;
-}
-
-.status {
-  text-align: right;
-}
-
-.app-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #c7e8ff;
+  padding: 12px;
+  background: #05070a;
 }
 
 .display-panel {
   box-sizing: border-box;
-  height: 52px;
+  height: 62px;
   margin-bottom: 7px;
-  padding: 7px 12px;
-  border: 1px solid #3f6078;
-  border-radius: 22px;
-  background: #0c141b;
+  padding: 8px 12px;
+  border-radius: 24px;
+  background: #101820;
 }
 
-.hint {
+#status {
   display: block;
-  color: #9ac0d7;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+  color: #8fd6c8;
+  font-size: 14px;
 }
 
 input {
   box-sizing: border-box;
   display: block;
-  width: 240px;
-  height: 26px;
+  width: 244px;
+  height: 32px;
   margin: 0;
-  padding: 2px 0;
+  padding: 0;
   border: 0;
-  background: #0c141b;
-  color: #f8fbff;
-  font-size: 22px;
-  font-weight: 700;
+  background: #101820;
+  color: #ffffff;
+  font-size: 32px;
   text-align: right;
 }
 
 .keys {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
-  grid-auto-rows: 28px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
 }
 
 button {
-  box-sizing: border-box;
-  height: 28px;
-  border: 1px solid #3b5368;
-  border-radius: 16px;
-  background: #203547;
-  color: #eef7ff;
-  font-size: 14px;
-  font-weight: 700;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 17px;
+  background: #1d2732;
+  color: #ffffff;
+  font-size: 19px;
+  text-align: center;
 }
 
-.op {
-  background: #245b84;
-  color: #ffffff;
+button span {
+  display: block;
+  padding-top: 6px;
+  text-align: center;
+}
+
+.soft {
+  background: #334155;
+  color: #e2e8f0;
 }
 
 .equals {
-  background: #2f8f6b;
-  color: #ffffff;
-}
-
-.danger {
-  background: #72414b;
-  color: #ffffff;
+  background: #0f766e;
 }
 
 .wide {
   grid-column: span 2;
-  background: #2a465b;
 }
 
 button:active,
 button:focus {
-  background: #3d5870;
+  background: #475569;
 }

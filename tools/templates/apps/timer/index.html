@@ -7,25 +7,28 @@
 </head>
 <body>
   <main class="screen" id="app">
-    <section class="topbar">
-      <span>Focus Timer</span>
+    <section class="topline">
+      <span>Focus</span>
       <span id="round" class="meta">1/4</span>
     </section>
-    <section class="display">
-      <span class="capsule">Session</span>
-      <strong id="time">00:00</strong>
-      <span id="state">Stopped</span>
+    <section class="dial">
+      <div class="track">
+        <div class="inside">
+          <span id="state">Stopped</span>
+          <strong id="time">00:00</strong>
+        </div>
+      </div>
     </section>
-    <section class="rings">
-      <div class="ring active"></div>
-      <div class="ring"></div>
-      <div class="ring"></div>
-      <div class="ring"></div>
+    <section class="segments">
+      <div class="seg active"></div>
+      <div class="seg"></div>
+      <div class="seg"></div>
+      <div class="seg"></div>
     </section>
     <section class="actions">
-      <button data-action="tick">+1s</button>
-      <button data-action="toggle" id="toggle">Start</button>
-      <button data-action="reset">Reset</button>
+      <button data-action="tick"><span>+1s</span></button>
+      <button data-action="toggle" id="toggle"><span>Start</span></button>
+      <button data-action="reset"><span>Reset</span></button>
     </section>
   </main>
   <script src="scripts/app.js"></script>

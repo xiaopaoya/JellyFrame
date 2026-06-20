@@ -3,131 +3,123 @@ body {
   margin: 0;
   width: 300px;
   height: 300px;
-  background: #05090d;
-  color: #f5fff9;
-  font-family: sans-serif;
+  background: #061014;
+  color: #f7fbff;
 }
 
 .screen {
   box-sizing: border-box;
   width: 300px;
   height: 300px;
-  padding: 12px 16px;
-  background: #08222c;
-}
-
-.soft-card {
-  border: 1px solid #28545e;
-  border-radius: 16px;
-  background: #0d3039;
-}
-
-.topbar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  box-sizing: border-box;
-  height: 26px;
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  color: #bdecef;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.meta {
-  text-align: right;
+  padding: 12px;
+  background: #061014;
 }
 
 .hero {
   box-sizing: border-box;
-  height: 104px;
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  border: 1px solid #3b7c83;
-  border-radius: 24px;
-  background: #103f48;
-  text-align: center;
+  height: 118px;
+  padding: 12px 14px;
+  border-radius: 28px;
+  background: linear-gradient(#126b81, #10283c);
 }
 
-.sky-dot {
-  width: 26px;
-  height: 26px;
-  margin: 0 auto 1px;
-  border-radius: 14px;
-  background: #f7d36a;
+.topline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  color: #d9f7ff;
+  font-size: 15px;
+}
+
+.meta {
+  text-align: right;
+  color: #a9d9e6;
 }
 
 .label {
-  color: #aee6dd;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  margin-top: 6px;
+  color: #a9d9e6;
+  font-size: 14px;
 }
 
 .temp {
-  margin-top: 1px;
-  font-size: 42px;
+  font-size: 48px;
   font-weight: 700;
   line-height: 1;
 }
 
-.temp::after {
-  content: "°";
-  font-size: 26px;
+.summary {
+  color: #d3f6e5;
+  font-size: 15px;
 }
 
-.summary {
-  color: #c8f1dc;
+.hours {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  margin: 6px 0;
+}
+
+.hour {
+  box-sizing: border-box;
+  height: 54px;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 20px;
+  background: #111a22;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.hour span,
+.hour strong {
+  display: block;
+}
+
+.hour span {
   font-size: 12px;
+}
+
+.hour strong {
+  margin-top: 5px;
+  color: #ffffff;
+  font-size: 21px;
+}
+
+.active {
+  background: #213246;
 }
 
 .stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  height: 42px;
-  margin-bottom: 8px;
 }
 
-.stats div {
+.metric {
   box-sizing: border-box;
-  padding: 5px 4px;
-  text-align: center;
+  height: 44px;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: #111a22;
 }
 
-.stats strong,
-.stats span {
+.metric span,
+.metric strong {
   display: block;
 }
 
-.stats strong {
-  font-size: 17px;
+.metric span {
+  color: #91a3b7;
+  font-size: 13px;
 }
 
-.stats span {
-  color: #aee4d4;
-  font-size: 11px;
+.metric strong {
+  margin-top: 3px;
+  color: #ffffff;
+  font-size: 19px;
 }
 
-.actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.tile {
-  box-sizing: border-box;
-  height: 32px;
-  border: 1px solid #78d9b0;
-  border-radius: 18px;
-  background: #165f68;
-  color: #f7fff6;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.tile:active,
-.tile:focus {
-  background: #19738a;
+button:active,
+button:focus {
+  background: #27445a;
 }

@@ -31,15 +31,16 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 ## 应用截图
 
 下面这些 300x300 截图通过 Win32 capture shell 从 `tools/templates/apps`
-中的 source package 实际渲染生成。
+中的品牌中性 source package 实际渲染生成。它们是 JellyFrame 自己的可穿戴 UI
+示例，不是一比一复刻任何商业手表界面。
 
-| Weather | Clock |
+| Weather | Dayline |
 | --- | --- |
 | ![JellyFrame 渲染的 Weather app](docs/assets/screenshots/weather.png) | ![JellyFrame 渲染的 Clock app](docs/assets/screenshots/clock.png) |
 
-| Timer | Pocket Math |
+| Focus Timer | Quick Math |
 | --- | --- |
-| ![JellyFrame 渲染的 Timer app](docs/assets/screenshots/timer.png) | ![JellyFrame 渲染的 Pocket Math app](docs/assets/screenshots/calculator.png) |
+| ![JellyFrame 渲染的 Focus Timer app](docs/assets/screenshots/timer.png) | ![JellyFrame 渲染的 Quick Math app](docs/assets/screenshots/calculator.png) |
 
 ## 典型用途
 

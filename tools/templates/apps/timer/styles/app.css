@@ -3,94 +3,83 @@ body {
   margin: 0;
   width: 300px;
   height: 300px;
-  background: #08050d;
-  color: #fff9f1;
-  font-family: sans-serif;
+  background: #09090b;
+  color: #fff8ec;
 }
 
 .screen {
   box-sizing: border-box;
   width: 300px;
   height: 300px;
-  padding: 14px 18px;
-  text-align: center;
-  background: #251735;
+  padding: 13px;
+  background: #09090b;
 }
 
-.topbar {
+.topline {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  box-sizing: border-box;
-  height: 28px;
-  margin-bottom: 10px;
-  padding: 6px 10px;
-  border: 1px solid #4c3a64;
-  border-radius: 16px;
-  background: #1b1129;
-  color: #d9c7ef;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  height: 23px;
+  color: #cbd5e1;
+  font-size: 14px;
 }
 
 .meta {
   text-align: right;
 }
 
-.display {
+.dial {
+  height: 152px;
+  text-align: center;
+}
+
+.track {
   box-sizing: border-box;
-  height: 116px;
-  margin: 0 0 10px;
-  padding: 11px 6px;
-  border: 1px solid #65507f;
-  border-radius: 26px;
-  background: #181226;
+  width: 146px;
+  height: 146px;
+  margin: 3px auto 0;
+  padding: 8px;
+  border-radius: 76px;
+  background: #2dd4bf;
 }
 
-.capsule {
-  display: block;
-  width: 72px;
-  height: 18px;
-  margin: 0 auto 7px;
-  border-radius: 10px;
-  background: #3d2b55;
-  color: #f2d08a;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-#time {
-  display: block;
-  font-size: 42px;
-  line-height: 1;
+.inside {
+  box-sizing: border-box;
+  width: 130px;
+  height: 130px;
+  padding-top: 34px;
+  border-radius: 68px;
+  background: #111827;
 }
 
 #state {
   display: block;
-  margin-top: 10px;
-  color: #f2c879;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
+  color: #99f6e4;
+  font-size: 15px;
 }
 
-.rings {
+#time {
+  display: block;
+  margin-top: 7px;
+  color: #ffffff;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.segments {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  height: 10px;
-  margin: 0 28px 14px;
+  gap: 7px;
+  margin: 4px 30px 12px;
 }
 
-.ring {
+.seg {
   height: 10px;
   border-radius: 8px;
-  background: #44345f;
+  background: #27272a;
 }
 
-.ring.active {
-  background: #f2c879;
+.active {
+  background: #facc15;
 }
 
 .actions {
@@ -100,17 +89,21 @@ body {
 }
 
 button {
-  box-sizing: border-box;
-  height: 36px;
-  border: 1px solid #c99cf0;
-  border-radius: 18px;
-  background: #3a2a4c;
-  color: #fff8ec;
-  font-size: 12px;
-  font-weight: 700;
+  height: 42px;
+  border: 0;
+  border-radius: 22px;
+  background: #1f2937;
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+button span {
+  display: block;
+  padding-top: 12px;
+  text-align: center;
 }
 
 button:active,
 button:focus {
-  background: #513b69;
+  background: #334155;
 }

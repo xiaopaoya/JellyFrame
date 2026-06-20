@@ -7,24 +7,24 @@
 </head>
 <body>
   <main class="screen" id="app">
-    <section class="topbar soft-card">
-      <span>Shenzhen</span>
-      <span id="updated" class="meta">Now</span>
-    </section>
     <section class="hero">
-      <div class="sky-dot"></div>
+      <div class="topline">
+        <span id="place">Harbor</span>
+        <span id="updated" class="meta">Now</span>
+      </div>
       <div class="label">Weather</div>
-      <div class="temp" id="temp">26</div>
-      <div class="summary" id="summary">Cloudy AQI 42</div>
+      <div class="temp" id="temp">24</div>
+      <div class="summary" id="summary">Bright breaks</div>
+    </section>
+    <section class="hours">
+      <button class="hour active" data-mode="now"><span>Now</span><strong>24</strong></button>
+      <button class="hour" data-mode="hourly"><span>14</span><strong>26</strong></button>
+      <button class="hour" data-mode="daily"><span>15</span><strong>25</strong></button>
+      <button class="hour" data-mode="air"><span>AQI</span><strong>38</strong></button>
     </section>
     <section class="stats">
-      <div class="soft-card"><strong id="wind">8</strong><span>KMH</span></div>
-      <div class="soft-card"><strong id="rain">20</strong><span>RAIN</span></div>
-    </section>
-    <section class="actions">
-      <button class="tile" data-mode="hourly">Hourly</button>
-      <button class="tile" data-mode="daily">Daily</button>
-      <button class="tile" data-mode="air">Air</button>
+      <div class="metric"><span>Wind</span><strong id="wind">7</strong></div>
+      <div class="metric"><span>Rain</span><strong id="rain">12%</strong></div>
     </section>
   </main>
   <script src="scripts/app.js"></script>

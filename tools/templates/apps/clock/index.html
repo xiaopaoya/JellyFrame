@@ -7,22 +7,22 @@
 </head>
 <body>
   <main class="screen">
-    <section class="topbar">
-      <span>Today</span>
-      <span id="zone" class="meta">Local</span>
+    <section class="topline">
+      <span>Dayline</span>
+      <span id="zone" class="meta">08</span>
     </section>
-    <section class="face">
-      <span class="orbit"></span>
+    <section class="time-card">
+      <span id="phase" class="phase">Morning</span>
       <strong id="time">07:30</strong>
-      <span id="note">Morning routine</span>
+      <span id="note">Start steady</span>
     </section>
     <section class="metrics">
-      <div><strong id="steps">6.4k</strong><span>steps</span></div>
-      <div><strong id="heart">72</strong><span>bpm</span></div>
+      <div><span>Move</span><strong id="steps">6.4k</strong></div>
+      <div><span>Pulse</span><strong id="heart">72</strong></div>
     </section>
     <section class="actions">
-      <button id="refresh">Next</button>
-      <button id="zoneButton">Zone</button>
+      <button id="refresh"><span>Next</span></button>
+      <button id="zoneButton"><span>Zone</span></button>
     </section>
   </main>
   <script src="scripts/app.js"></script>

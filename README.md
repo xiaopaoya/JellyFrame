@@ -37,16 +37,18 @@ For the exact supported/degraded/deferred feature set, read
 
 ## App Gallery
 
-These 300x300 screenshots are rendered through the Win32 capture shell from the
-source packages in `tools/templates/apps`.
+These 300x300 screenshots are rendered through the Win32 capture shell from
+brand-neutral source packages in `tools/templates/apps`. They are intentionally
+JellyFrame-specific wearable UI examples, not replicas of any commercial watch
+interface.
 
-| Weather | Clock |
+| Weather | Dayline |
 | --- | --- |
 | ![Weather app rendered by JellyFrame](docs/assets/screenshots/weather.png) | ![Clock app rendered by JellyFrame](docs/assets/screenshots/clock.png) |
 
-| Timer | Pocket Math |
+| Focus Timer | Quick Math |
 | --- | --- |
-| ![Timer app rendered by JellyFrame](docs/assets/screenshots/timer.png) | ![Pocket Math app rendered by JellyFrame](docs/assets/screenshots/calculator.png) |
+| ![Focus Timer app rendered by JellyFrame](docs/assets/screenshots/timer.png) | ![Quick Math app rendered by JellyFrame](docs/assets/screenshots/calculator.png) |
 
 ## Typical Uses
 

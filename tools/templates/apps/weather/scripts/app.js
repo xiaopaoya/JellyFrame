@@ -1,13 +1,14 @@
+var app = document.getElementById("app");
 var temp = document.getElementById("temp");
 var summary = document.getElementById("summary");
 var wind = document.getElementById("wind");
 var rain = document.getElementById("rain");
 var updated = document.getElementById("updated");
-var app = document.getElementById("app");
 var modes = {
-  hourly: ["27", "Next: light rain", "9", "35", "1h"],
-  daily: ["26", "High 29 Low 22", "8", "20", "Today"],
-  air: ["42", "AQI good", "5", "10", "AQI"]
+  now: ["24", "Bright breaks", "7", "12%", "Now"],
+  hourly: ["26", "Clear next hour", "8", "8%", "14:00"],
+  daily: ["25", "Soft evening", "6", "20%", "Today"],
+  air: ["38", "Air is clean", "5", "4%", "AQI"]
 };
 
 app.addEventListener("click", function (event) {

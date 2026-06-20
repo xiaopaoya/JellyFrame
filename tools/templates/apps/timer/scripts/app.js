@@ -11,12 +11,21 @@ function twoDigits(value) {
   return value < 10 ? "0" + String(value) : String(value);
 }
 
+function setButtonText(button, text) {
+  var label = button.children[0];
+  if (label) {
+    label.textContent = text;
+  } else {
+    button.textContent = text;
+  }
+}
+
 function renderTimer() {
   var minutes = Math.floor(seconds / 60);
   var rest = seconds - minutes * 60;
   time.textContent = twoDigits(minutes) + ":" + twoDigits(rest);
   state.textContent = running ? "Running" : "Stopped";
-  toggle.textContent = running ? "Stop" : "Start";
+  setButtonText(toggle, running ? "Stop" : "Start");
   round.textContent = String(Math.floor(seconds / 60) + 1) + "/4";
 }
 

@@ -3,102 +3,86 @@ body {
   margin: 0;
   width: 300px;
   height: 300px;
-  background: #05070b;
+  background: #07090d;
   color: #f7fbff;
-  font-family: sans-serif;
 }
 
 .screen {
   box-sizing: border-box;
   width: 300px;
   height: 300px;
-  padding: 12px 18px;
-  text-align: center;
-  background: #111821;
+  padding: 10px;
+  background: #07090d;
 }
 
-.topbar {
+.topline {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  box-sizing: border-box;
-  height: 26px;
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  border: 1px solid #293847;
-  border-radius: 16px;
-  background: #182431;
-  color: #b3c9dc;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  height: 22px;
+  color: #9fb5c8;
+  font-size: 14px;
 }
 
 .meta {
-  text-align: right;
+  text-align: center;
 }
 
-.face {
+.time-card {
   box-sizing: border-box;
-  height: 100px;
-  margin: 0 0 8px;
-  padding: 9px 8px;
-  border: 1px solid #37506a;
-  border-radius: 26px;
-  background: #0c141e;
+  height: 112px;
+  padding: 13px;
+  border-radius: 28px;
+  background: #111923;
 }
 
-.orbit {
+.phase {
   display: block;
-  width: 36px;
-  height: 8px;
-  margin: 0 auto 5px;
-  border-radius: 8px;
-  background: #7bd6ff;
+  color: #67e8f9;
+  font-size: 15px;
 }
 
 #time {
   display: block;
-  font-size: 38px;
+  margin-top: 6px;
+  font-size: 50px;
   line-height: 1;
 }
 
 #note {
   display: block;
-  margin-top: 8px;
-  color: #8bd7ff;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
+  margin-top: 6px;
+  color: #a7f3d0;
+  font-size: 16px;
 }
 
 .metrics {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  height: 44px;
-  margin-bottom: 8px;
+  margin: 7px 0;
 }
 
 .metrics div {
   box-sizing: border-box;
-  border: 1px solid #314760;
-  border-radius: 18px;
-  background: #18283a;
-  padding: 5px 4px;
+  height: 56px;
+  padding: 8px 12px;
+  border-radius: 22px;
+  background: #12161d;
 }
 
-.metrics strong,
-.metrics span {
+.metrics span,
+.metrics strong {
   display: block;
 }
 
-.metrics strong {
-  font-size: 17px;
+.metrics span {
+  color: #91a3b7;
+  font-size: 13px;
 }
 
-.metrics span {
-  color: #9eb8cc;
-  font-size: 11px;
+.metrics strong {
+  margin-top: 4px;
+  font-size: 23px;
 }
 
 .actions {
@@ -108,18 +92,21 @@ body {
 }
 
 button {
-  box-sizing: border-box;
-  width: 128px;
-  height: 32px;
-  border: 1px solid #4fa5d6;
-  border-radius: 18px;
-  background: #174a67;
-  color: #f2f7fb;
-  font-size: 12px;
-  font-weight: 700;
+  height: 38px;
+  border: 0;
+  border-radius: 22px;
+  background: #183044;
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+button span {
+  display: block;
+  padding-top: 10px;
+  text-align: center;
 }
 
 button:active,
 button:focus {
-  background: #22678f;
+  background: #24506d;
 }
