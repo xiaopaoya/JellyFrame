@@ -97,4 +97,13 @@ AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(std::vector<HostS
     return lifecycle_.pump_completions(completions_, max_completion_events_per_frame_, accepted, &handles_);
 }
 
+AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(AppFrameScratch& scratch) {
+    scratch.begin_frame();
+    return lifecycle_.pump_completions(completions_,
+                                       max_completion_events_per_frame_,
+                                       scratch.accepted_completions,
+                                       scratch.completion_batch,
+                                       &handles_);
+}
+
 } // namespace jellyframe

@@ -111,12 +111,15 @@ void bench_lifecycle_teardown(std::size_t capacity) {
 }
 
 void bench_runtime_host_completion_pump(std::size_t capacity) {
-    AppRuntimeHost host(AppRuntimeHostOptions{
+    AppRuntimeHostOptions options{
         capacity,
         8,
         capacity,
         capacity * 256,
-    });
+    };
+    AppRuntimeHost host(options);
+    AppFrameScratch scratch;
+    scratch.reserve_from_options(options);
     const AppInstance app = host.launch("org.example.bench", AppRole::App);
     for (std::size_t i = 0; i < capacity; ++i) {
         host.push_completion(HostServiceCompletion{
@@ -129,10 +132,8 @@ void bench_runtime_host_completion_pump(std::size_t capacity) {
             128,
         });
     }
-    std::vector<HostServiceCompletion> accepted;
     while (!host.completions().empty()) {
-        accepted.clear();
-        host.pump_frame_completions(accepted);
+        host.pump_frame_completions(scratch);
     }
 }
 

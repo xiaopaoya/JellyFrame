@@ -23,6 +23,8 @@ These interfaces exist now and can be used as porting entry points:
   dirty-rectangle and scripting limits.
 - `src/render_core/embedded_framebuffer.h`: converts the core RGBA framebuffer into a
   host-owned RGB565, grayscale, monochrome or similar target buffer.
+- `src/render_core/frame_scratch.h`: reusable frame scratch for dirty-region
+  work and animation overrides, with explicit release on memory pressure.
 - `src/render_core/input.h`: touch, pointer, wheel, key, text input, focus navigation
   and activation.
 - `src/render_core/text_backend.h` and `src/render_core/bitmap_font.h`: host text measurement
@@ -31,6 +33,8 @@ These interfaces exist now and can be used as porting entry points:
   for linked CSS and classic scripts.
 - `src/script/jerryscript_runtime.h`: optional JerryScript runtime and DOM,
   event, form and timer bridges.
+- `src/app_runtime/app_host.h`: `AppRuntimeHost` and `AppFrameScratch` for app
+  lifecycle, per-frame host-completion pumping and reusable completion batches.
 
 The first board port should not call Win32, filesystem or desktop shell code
 directly. Use `ports/embedded_host_demo` as the reference shape: it wires
@@ -255,6 +259,17 @@ Internal RAM pressure guidance:
 - Dirty-rect temporary arrays, completion-event scratch arrays and resource-read
   buffers should be released at the frame boundary or reused as small static
   buffers.
+- Prefer holding `FrameScratch frame_scratch; AppFrameScratch app_scratch;` in
+  the UI loop context and reserving them from budgets/options at startup. Use
+  `compute_dirty_region_into(..., frame_scratch.dirty_region,
+  &frame_scratch.dirty_region_scratch)` for dirty regions and
+  `app_runtime.pump_frame_completions(app_scratch)` for host completions. This
+  reuses dirty bounds, dirty rects, completion batches and accepted lists.
+- `FrameScratch::release()` and `AppFrameScratch::release()` are safe on
+  screen-off, app switch, app exit or memory pressure. JellyFrame can own these
+  pure software scratch containers; real DMA buffers, panel draw buffers and
+  strip buffers still depend on the port's flush-done/transfer-done ownership
+  boundary.
 
 ### P4: Text And Chinese Fonts
 
@@ -414,16 +429,20 @@ loop:
   if display present is still in flight:
       sleep or process non-render work that cannot touch frame buffers
       continue
+  frame_scratch.begin_frame()
+  app_scratch.begin_frame()
   poll bounded hardware events
   dispatch input through InputController
   pump bounded timers if scripting is enabled
-  pump bounded host completions
+  pump bounded host completions through app_scratch
   if tree/style/layout dirty:
       rebuild conservative pipeline
   else if paint dirty:
       compute dirty rects
   repaint dirty/full regions
   present through HostFrameSink
+  frame_scratch.end_frame()
+  app_scratch.end_frame()
   mark display present in flight if panel DMA is asynchronous
   sleep until next tick or hardware event
 ```

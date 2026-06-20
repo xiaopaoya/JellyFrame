@@ -114,11 +114,6 @@ bool has_local_tree_dirty(const Node& node) {
     return false;
 }
 
-struct DirtyNodeBounds {
-    const Node* node = nullptr;
-    Rect bounds;
-};
-
 void merge_dirty_bounds(std::vector<DirtyNodeBounds>& output, const Node* node, Rect bounds) {
     if (node == nullptr || empty_rect(bounds)) {
         return;
@@ -165,14 +160,18 @@ void append_coalesced(std::vector<Rect>& rects, Rect rect, Rect viewport, std::s
     rects.push_back(rect);
 }
 
-DirtyRegionResult full_frame_result(Rect viewport, DirtyRegionFallbackReason reason) {
-    DirtyRegionResult result;
+void reset_result(DirtyRegionResult& result) {
+    result.rects.clear();
+    result.mode = DirtyRegionMode::Clean;
+    result.fallback_reason = DirtyRegionFallbackReason::None;
+}
+
+void set_full_frame_result(DirtyRegionResult& result, Rect viewport, DirtyRegionFallbackReason reason) {
     result.mode = DirtyRegionMode::FullFrame;
     result.fallback_reason = reason;
     if (!empty_rect(viewport)) {
         result.rects.push_back(viewport);
     }
-    return result;
 }
 
 } // namespace
@@ -308,24 +307,43 @@ DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* current_layout,
                                        const DirtyRegionOptions& options) {
     DirtyRegionResult result;
+    DirtyRegionScratch scratch;
+    compute_dirty_region_into(document, previous_layout, current_layout, options, result, &scratch);
+    return result;
+}
+
+void compute_dirty_region_into(const Node& document,
+                               const LayoutBox* previous_layout,
+                               const LayoutBox* current_layout,
+                               const DirtyRegionOptions& options,
+                               DirtyRegionResult& result,
+                               DirtyRegionScratch* scratch) {
+    reset_result(result);
     if (document.dirty_flags == DomDirtyNone) {
-        return result;
+        return;
     }
     if (empty_rect(options.viewport)) {
-        return full_frame_result(options.viewport, DirtyRegionFallbackReason::InvalidViewport);
+        set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::InvalidViewport);
+        return;
     }
     if (has_local_tree_dirty(document)) {
-        return full_frame_result(options.viewport, DirtyRegionFallbackReason::TreeDirty);
+        set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::TreeDirty);
+        return;
     }
     if (previous_layout == nullptr || current_layout == nullptr) {
-        return full_frame_result(options.viewport, DirtyRegionFallbackReason::MissingLayout);
+        set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::MissingLayout);
+        return;
     }
 
-    std::vector<DirtyNodeBounds> dirty_bounds;
+    DirtyRegionScratch local_scratch;
+    DirtyRegionScratch& active_scratch = scratch == nullptr ? local_scratch : *scratch;
+    active_scratch.clear();
+    std::vector<DirtyNodeBounds>& dirty_bounds = active_scratch.node_bounds;
     append_dirty_bounds_from_layout(*previous_layout, dirty_bounds);
     append_dirty_bounds_from_layout(*current_layout, dirty_bounds);
     if (dirty_bounds.empty()) {
-        return full_frame_result(options.viewport, DirtyRegionFallbackReason::NoDirtyBounds);
+        set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::NoDirtyBounds);
+        return;
     }
 
     const std::size_t max_rects = std::max<std::size_t>(1, options.max_rects);
@@ -333,11 +351,11 @@ DirtyRegionResult compute_dirty_region(const Node& document,
         append_coalesced(result.rects, expand_rect(bounds.bounds, options.expansion_px), options.viewport, max_rects);
     }
     if (result.rects.empty()) {
-        return full_frame_result(options.viewport, DirtyRegionFallbackReason::EmptyAfterClipping);
+        set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::EmptyAfterClipping);
+        return;
     }
 
     result.mode = DirtyRegionMode::DirtyRects;
-    return result;
 }
 
 std::vector<Rect> compute_dirty_rects(const Node& document,

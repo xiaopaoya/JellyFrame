@@ -256,6 +256,45 @@ void frame_pump_limits_completions_and_filters_stale_instances() {
     assert(accepted.front().job_id == 3);
 }
 
+void frame_scratch_pump_reuses_completion_storage() {
+    AppRuntimeHostOptions options{
+        4,
+        2,
+        4,
+        4096,
+        1,
+    };
+    AppRuntimeHost host(options);
+    AppFrameScratch scratch;
+    scratch.reserve_from_options(options);
+
+    const AppInstance app = host.launch("org.example.scratch", AppRole::App);
+    assert(host.push_completion(HostServiceCompletion{1,
+                                                      HostServiceJobKind::NetworkFetch,
+                                                      HostServiceStatus::Completed,
+                                                      app.id}));
+    assert(host.push_completion(HostServiceCompletion{2,
+                                                      HostServiceJobKind::StorageKv,
+                                                      HostServiceStatus::Completed,
+                                                      app.id}));
+
+    const AppCompletionPumpResult pumped = host.pump_frame_completions(scratch);
+    assert(pumped.accepted == 2);
+    assert(scratch.accepted_completions.size() == 2);
+    assert(scratch.accepted_completions.capacity() >= 2);
+    assert(scratch.completion_batch.size() == 2);
+    assert(scratch.completion_batch.capacity() >= 2);
+
+    scratch.end_frame();
+    assert(scratch.accepted_completions.empty());
+    assert(scratch.completion_batch.empty());
+    assert(scratch.accepted_completions.capacity() >= 2);
+    assert(scratch.completion_batch.capacity() >= 2);
+    scratch.release();
+    assert(scratch.accepted_completions.capacity() == 0);
+    assert(scratch.completion_batch.capacity() == 0);
+}
+
 void options_follow_host_capabilities() {
     HostDeviceCapabilities caps;
     caps.async.max_in_flight_jobs = 7;
@@ -285,6 +324,7 @@ int main() {
     app_font_set_can_attach_borrowed_jffont_view();
     crash_current_tears_down_active_instance_state();
     frame_pump_limits_completions_and_filters_stale_instances();
+    frame_scratch_pump_reuses_completion_storage();
     options_follow_host_capabilities();
     return 0;
 }

@@ -32,6 +32,9 @@
   它不分配、不持有，也不自行 flush 设备内存。
 - `HostFrameSink::present` 被定义为 frame-lifetime 边界；如果底层 DMA 异步刷新，宿主必须在返回前确保
   buffer 已可复用，或在 UI loop 中等待 flush-done 后再进入下一帧。
+- `FrameScratch` 和 `AppFrameScratch` 提供帧级临时容器复用。dirty-region bounds、dirty rectangles、
+  animation style overrides 和 host completion batch/accepted list 可以跨帧保留 capacity，每帧清空；
+  睡眠、切换 app 或内存告急时可显式 `release()` 归还容量。
 - 响应式 grid 子集使用有界整数 auto-placement、clamped span 和紧凑的逐行
   occupancy bit mask，而不是完整 track-sizing engine。
 - `MonotonicArena` 已可用于文档生命周期分配。Render tree、layout tree 和 layer tree builder
@@ -52,6 +55,10 @@
 - 区分跨帧保留和帧内临时内存：DOM、stylesheet、form state、decoded surface cache、持久 framebuffer、
   retained layout/layer tree 会跨帧保留；parser scratch、dirty rect 临时列表、host completion 临时列表、
   offscreen compositing buffer 和 strip conversion buffer 应在帧边界释放或复用。
+- 推荐 UI loop 持有一个 `FrameScratch` 和一个 `AppFrameScratch`。常规帧调用 `begin_frame()` / `end_frame()`
+  复用容器；息屏、app exit、system shell 切换或 heap watermark 过低时调用 `release()`。
+- JellyFrame 可以主动释放/复用上述纯软件临时容器，但不能安全释放真实 panel DMA buffer、
+  driver-owned bounce buffer 或屏幕控制器仍在读取的内存；这些对象必须由 port 在 flush-done 边界管理。
 
 ## CPU/指令集建议
 

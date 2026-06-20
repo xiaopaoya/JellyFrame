@@ -67,6 +67,15 @@ AppCompletionPumpResult AppLifecycleController::pump_completions(HostServiceComp
                                                                  std::vector<HostServiceCompletion>& accepted,
                                                                  HostHandleTable* handles) const {
     std::vector<HostServiceCompletion> batch;
+    return pump_completions(completions, max_count, accepted, batch, handles);
+}
+
+AppCompletionPumpResult AppLifecycleController::pump_completions(HostServiceCompletionQueue& completions,
+                                                                 std::size_t max_count,
+                                                                 std::vector<HostServiceCompletion>& accepted,
+                                                                 std::vector<HostServiceCompletion>& batch,
+                                                                 HostHandleTable* handles) const {
+    batch.clear();
     AppCompletionPumpResult result;
     result.consumed = completions.pop(max_count, batch);
     accepted.reserve(accepted.size() + batch.size());

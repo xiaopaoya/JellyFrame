@@ -193,6 +193,13 @@ missing dirty-node bounds or clipping that removed every local rect. This is a
 diagnostic contract for hosts and tests; it does not mean retained subtree reuse
 is complete.
 
+Embedded run loops should prefer `compute_dirty_region_into(...)`, writing the
+result into a long-lived `FrameScratch::dirty_region` and the internal bounds
+work area into `FrameScratch::dirty_region_scratch`. That lets dirty rectangles
+and dirty-node bounds keep capacity across frames. Call `FrameScratch::release()`
+on memory pressure, screen-off or app switches. The older return-by-value API is
+kept for simple tools and compatibility call sites.
+
 `dirty_region_mode_name(...)` and `dirty_region_fallback_reason_name(...)`
 provide stable short names for shell diagnostics. The Win32 validation shell
 uses them in the window title after incremental repaints, so fallback causes can

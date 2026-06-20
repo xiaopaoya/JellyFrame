@@ -47,6 +47,11 @@ small wearable devices.
   path uses asynchronous DMA, the host must make buffers reusable before
   returning, or the UI loop must wait for a flush-done event before starting the
   next render.
+- `FrameScratch` and `AppFrameScratch` provide reusable frame-scratch storage.
+  Dirty-region bounds, dirty rectangles, animation style overrides and host
+  completion batch/accepted lists can keep capacity across frames and be cleared
+  each frame. Sleep, app switching and memory-pressure paths can call
+  `release()` to return that capacity.
 - The responsive grid subset is computed with bounded integer auto-placement,
   clamped spans and compact per-row occupancy bit masks rather than a full
   track-sizing engine.
@@ -75,6 +80,14 @@ small wearable devices.
   live across frames. Parser scratch, dirty-rect lists, host completion scratch,
   offscreen compositing buffers and strip conversion buffers should be released
   or reused at frame boundaries.
+- A UI loop should normally own one `FrameScratch` and one `AppFrameScratch`.
+  Call `begin_frame()` / `end_frame()` on regular frames to reuse storage, and
+  call `release()` on screen-off, app exit, system-shell switches or low heap
+  watermarks.
+- JellyFrame can release or reuse the pure software scratch containers above,
+  but it cannot safely free real panel DMA buffers, driver-owned bounce buffers
+  or memory still being read by a display controller. Those objects must remain
+  port-owned and obey the flush-done boundary.
 
 ## CPU/Instruction-Set Guidance
 

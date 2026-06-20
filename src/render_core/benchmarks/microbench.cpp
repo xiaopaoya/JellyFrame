@@ -1,4 +1,6 @@
 ﻿#include "render_core/css_parser.h"
+#include "render_core/animation_timeline.h"
+#include "render_core/frame_scratch.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
@@ -60,6 +62,33 @@ void print_style_statistics(const StyleResolverStatistics& statistics) {
               << " hits=" << statistics.candidate_cache_hits
               << " misses=" << statistics.candidate_cache_misses
               << " clears=" << statistics.candidate_cache_clears << '\n';
+}
+
+Style animated_style(float opacity, const char* transform, Color background) {
+    Style style;
+    style.opacity = opacity;
+    style.transform = transform;
+    style.background_color = background;
+    style.transitions[0] = StyleTransition{
+        AnimatableProperty::Opacity,
+        180,
+        0,
+        AnimationTimingFunction::EaseOut,
+    };
+    style.transitions[1] = StyleTransition{
+        AnimatableProperty::Transform,
+        180,
+        0,
+        AnimationTimingFunction::EaseOut,
+    };
+    style.transitions[2] = StyleTransition{
+        AnimatableProperty::BackgroundColor,
+        180,
+        0,
+        AnimationTimingFunction::Linear,
+    };
+    style.transition_count = 3;
+    return style;
 }
 
 } // namespace
@@ -141,6 +170,30 @@ int main(int argc, char** argv) {
         auto local_layer_tree = local_layer_tree_builder.build(*local_layout_tree, local_layer_arena);
         DisplayList display_list = local_layer_tree_builder.flatten(*local_layer_tree);
         (void)display_list;
+    }));
+
+    Node animation_node(NodeType::Element);
+    animation_node.tag_name = "div";
+    const Style from_style = animated_style(0.25F, "translate(0px, 0px) scale(1)", Color{30, 64, 175, 255});
+    const Style to_style = animated_style(1.0F, "translate(12px, 6px) scale(1.08)", Color{59, 130, 246, 255});
+    FrameScratch frame_scratch;
+    HostBudgets budgets;
+    budgets.max_active_animations = 4;
+    frame_scratch.reserve_from_budgets(budgets);
+
+    print_result("animation_timeline_empty_sample", iterations, average_microseconds(iterations, [&] {
+        frame_scratch.begin_frame();
+        AnimationTimeline timeline(AnimationTimelineOptions{4, nullptr});
+        const bool sampled = timeline.sample(90, frame_scratch.style_overrides);
+        (void)sampled;
+    }));
+
+    print_result("animation_timeline_active_sample", iterations, average_microseconds(iterations, [&] {
+        frame_scratch.begin_frame();
+        AnimationTimeline timeline(AnimationTimelineOptions{4, nullptr});
+        timeline.start_transitions(animation_node, from_style, to_style, 0);
+        const bool sampled = timeline.sample(90, frame_scratch.style_overrides);
+        (void)sampled;
     }));
     print_style_statistics(resolver.statistics());
 

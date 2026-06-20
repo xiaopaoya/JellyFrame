@@ -1,5 +1,7 @@
 ﻿#include "render_core/frame_loop.h"
 
+#include "render_core/frame_scratch.h"
+
 #include <iostream>
 #include <stdexcept>
 
@@ -102,6 +104,34 @@ void animation_frame_request_is_idle_when_absent() {
     check(animated_plan.needs_animation_frame, "active animation requests frame scheduling");
 }
 
+void frame_scratch_reuses_and_releases_frame_storage() {
+    HostBudgets budgets;
+    budgets.max_dirty_rects = 3;
+    budgets.max_active_animations = 2;
+
+    FrameScratch scratch;
+    scratch.reserve_from_budgets(budgets);
+    check(scratch.dirty_region.rects.capacity() >= 3, "dirty rect capacity follows budget");
+    check(scratch.dirty_region_scratch.node_bounds.capacity() >= 6, "dirty bounds capacity follows budget");
+    check(scratch.style_overrides.capacity() >= 2, "style override capacity follows budget");
+
+    scratch.dirty_region.mode = DirtyRegionMode::DirtyRects;
+    scratch.dirty_region.rects.push_back(Rect{0, 0, 10, 10});
+    scratch.dirty_region_scratch.node_bounds.push_back(DirtyNodeBounds{nullptr, Rect{0, 0, 4, 4}});
+    scratch.style_overrides.push_back(StyleOverride{});
+    scratch.begin_frame();
+    check(scratch.dirty_region.mode == DirtyRegionMode::Clean, "begin frame resets dirty result mode");
+    check(scratch.dirty_region.rects.empty(), "begin frame clears dirty rects");
+    check(scratch.dirty_region_scratch.node_bounds.empty(), "begin frame clears dirty bounds scratch");
+    check(scratch.style_overrides.empty(), "begin frame clears style overrides");
+    check(scratch.dirty_region.rects.capacity() >= 3, "begin frame keeps dirty rect capacity");
+
+    scratch.release();
+    check(scratch.dirty_region.rects.capacity() == 0, "release drops dirty rect storage");
+    check(scratch.dirty_region_scratch.node_bounds.capacity() == 0, "release drops dirty bounds storage");
+    check(scratch.style_overrides.capacity() == 0, "release drops animation override storage");
+}
+
 void long_running_frame_loop_keeps_backlog_and_dirty_work_bounded() {
     FrameLoopPendingWork pending;
     pending.pending_input_events = 125;
@@ -169,6 +199,7 @@ int main() {
         frame_loop_work_allows_zero_budget_frames();
         frame_loop_combines_work_budget_and_update_plan();
         animation_frame_request_is_idle_when_absent();
+        frame_scratch_reuses_and_releases_frame_storage();
         long_running_frame_loop_keeps_backlog_and_dirty_work_bounded();
     } catch (const std::exception& error) {
         std::cerr << "frame loop test failed: " << error.what() << '\n';

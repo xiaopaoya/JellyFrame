@@ -314,6 +314,7 @@ JerryScript 源码树时可用。
 | Host frame sink | 子集 | `present_frame` 可以通过 `HostFrameSink` 暴露 `FrameBuffer`，并携带可选 dirty rects。成功 `present` 是 frame buffer 可复用边界：异步 panel/DMA 宿主必须等待、复制到 driver-owned 内存，或阻止下一帧 render 直到 flush 完成。`embedded_framebuffer` 已提供可移植像素转换；真实显示 I/O 仍由宿主负责。 |
 | Host device capabilities | 草案 | `HostDeviceCapabilities` 记录开发板 port 的显示、输入、内存、budget 和服务 flags。当前核心把它作为契约/策略输入文档；更深的自动适配仍延后。 |
 | Host budgets | 子集 | `HostBudgets` 已接入 HTML/CSS parsing、render/layout/layer tree 上限、display-list 上限、dirty rect 数量、frame-loop input/timer/animation 上限、JerryScript timer/rAF/listener 限制、detached DOM node 限制和软件 compositor 的主/offscreen pixel 上限。Render/layout/layer tree 已有 arena-backed 构建路径；完整 mutable DOM arena 仍是后续工作。 |
+| Frame scratch | 可用 | `FrameScratch` 复用 dirty-region bounds、dirty rectangles 和 animation overrides；`AppFrameScratch` 复用 host completion batch/accepted list。常规帧清空复用，息屏、切 app 或内存压力时显式 `release()`。真实 DMA/panel buffer 仍由 port 管理。 |
 
 实际含义：脚本中多次 DOM mutation 应尽量放在同一次事件或 timer callback 内。宿主会观察到一次
 dirty 并重绘一次。paint-only 表单控件变化在 Win32 验证壳中可以避免 render/layout 重建；其他变化仍会走简化管线

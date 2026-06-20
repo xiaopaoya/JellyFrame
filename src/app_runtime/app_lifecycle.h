@@ -76,6 +76,11 @@ public:
                                              std::size_t max_count,
                                              std::vector<HostServiceCompletion>& accepted,
                                              HostHandleTable* handles = nullptr) const;
+    AppCompletionPumpResult pump_completions(HostServiceCompletionQueue& completions,
+                                             std::size_t max_count,
+                                             std::vector<HostServiceCompletion>& accepted,
+                                             std::vector<HostServiceCompletion>& batch,
+                                             HostHandleTable* handles = nullptr) const;
 
 private:
     static std::uint32_t next_nonzero_instance_id(std::uint32_t value);

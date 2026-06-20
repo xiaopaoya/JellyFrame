@@ -149,6 +149,11 @@ framebuffer，并执行 full frame repaint。
 layout、结构性 tree dirty、找不到 dirty node bounds，或局部 rect 被裁剪后全部为空。这个接口是给宿主和测试观察边界用的诊断契约；
 它不表示 retained subtree reuse 已经完整实现。
 
+嵌入式运行循环应优先使用 `compute_dirty_region_into(...)`，把输出写入长期持有的
+`FrameScratch::dirty_region`，并把内部 bounds 工作区写入 `FrameScratch::dirty_region_scratch`。
+这样 dirty rectangles 和 dirty-node bounds 的 capacity 可以跨帧复用；内存压力、息屏或切换 app 时再调用
+`FrameScratch::release()`。旧的返回值 API 主要用于简单工具和兼容调用点。
+
 `dirty_region_mode_name(...)` 和 `dirty_region_fallback_reason_name(...)` 提供稳定的短名称，
 供壳层诊断使用。Win32 验证壳会在增量重绘后把这些信息显示在窗口标题中，交互时可以直接看到 fallback 原因。
 

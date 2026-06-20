@@ -12,10 +12,13 @@
 - `src/render_core/host.h`：设备能力、资源请求、时钟、frame sink、预算。
 - `src/render_core/budget.h`：把 `HostBudgets` 映射到 parser、render/layout/layer、dirty rect 和 scripting 限制。
 - `src/render_core/embedded_framebuffer.h`：把核心 RGBA framebuffer 转换到宿主持有的 RGB565、灰度、单色等目标 buffer。
+- `src/render_core/frame_scratch.h`：帧级 dirty-region、动画 override 等临时容器复用与显式释放。
 - `src/render_core/input.h`：触摸、指针、滚轮、按键、文本输入、焦点导航和激活。
 - `src/render_core/text_backend.h`、`src/render_core/bitmap_font.h`：宿主文本测量与 bitmap 字体绘制。
 - `src/render_core/document_style.h`、`src/render_core/document_script.h`：外链 CSS 和 classic script 的宿主加载 callback。
 - `src/script/jerryscript_runtime.h`：可选 JerryScript runtime、DOM/event/form/timer bridge。
+- `src/app_runtime/app_host.h`：`AppRuntimeHost` 和 `AppFrameScratch`，用于 app lifecycle、host completion
+  每帧泵动与临时 completion batch 复用。
 
 第一版开发板 port 不应直接调用 Win32、文件系统或桌面壳代码。参考结构是
 `ports/embedded_host_demo`，它已经证明核心可在无窗口、无文件、无网络、无 Win32
@@ -196,6 +199,14 @@ internal RAM 压力处理建议：
 - 离屏合成 buffer 是 `SoftwareCompositor::render_into` 内部临时对象，函数返回后释放；应通过
   `max_offscreen_pixels` 限制它，避免大 opacity/transform layer 临时吃光 internal heap。
 - dirty rect 临时数组、completion event 临时数组、资源读取临时 buffer 都应在帧边界后释放或复用为静态小 buffer。
+- 主循环建议持有 `FrameScratch frame_scratch; AppFrameScratch app_scratch;`，启动时按预算 reserve。
+  计算 dirty region 时优先用 `compute_dirty_region_into(..., frame_scratch.dirty_region,
+  &frame_scratch.dirty_region_scratch)`；泵 host completion 时用
+  `app_runtime.pump_frame_completions(app_scratch)`。这会复用 dirty bounds、dirty rects、completion batch
+  和 accepted list。
+- `FrameScratch::release()` / `AppFrameScratch::release()` 可在息屏、切 app、退出当前 app 或内存压力回调中调用。
+  这部分可以由 JellyFrame 平台无关层安全释放；真实 DMA buffer、panel draw buffer、strip buffer 是否可释放，
+  仍取决于 port 是否已经收到 flush-done/transfer-done。
 
 ### P4：文本与中文字库
 
@@ -331,16 +342,20 @@ loop:
   if display present is still in flight:
       sleep or process non-render work that cannot touch frame buffers
       continue
+  frame_scratch.begin_frame()
+  app_scratch.begin_frame()
   poll bounded hardware events
   dispatch input through InputController
   pump bounded timers if scripting is enabled
-  pump bounded host completions
+  pump bounded host completions through app_scratch
   if tree/style/layout dirty:
       rebuild conservative pipeline
   else if paint dirty:
       compute dirty rects
   repaint dirty/full regions
   present through HostFrameSink
+  frame_scratch.end_frame()
+  app_scratch.end_frame()
   mark display present in flight if panel DMA is asynchronous
   sleep until next tick or hardware event
 ```

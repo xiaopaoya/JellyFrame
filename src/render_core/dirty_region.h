@@ -45,6 +45,23 @@ struct DirtyRegionResult {
     DirtyRegionFallbackReason fallback_reason = DirtyRegionFallbackReason::None;
 };
 
+struct DirtyNodeBounds {
+    const Node* node = nullptr;
+    Rect bounds;
+};
+
+struct DirtyRegionScratch {
+    std::vector<DirtyNodeBounds> node_bounds;
+
+    void clear() {
+        node_bounds.clear();
+    }
+
+    void release() {
+        std::vector<DirtyNodeBounds>().swap(node_bounds);
+    }
+};
+
 struct DirtyRegionStatistics {
     std::size_t clean_frames = 0;
     std::size_t dirty_rect_frames = 0;
@@ -68,6 +85,13 @@ DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* previous_layout,
                                        const LayoutBox* current_layout,
                                        const DirtyRegionOptions& options);
+
+void compute_dirty_region_into(const Node& document,
+                               const LayoutBox* previous_layout,
+                               const LayoutBox* current_layout,
+                               const DirtyRegionOptions& options,
+                               DirtyRegionResult& result,
+                               DirtyRegionScratch* scratch = nullptr);
 
 std::vector<Rect> compute_dirty_rects(const Node& document,
                                       const LayoutBox* previous_layout,

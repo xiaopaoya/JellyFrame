@@ -13,6 +13,7 @@
 #include "render_core/dirty_region.h"
 #include "render_core/document_script.h"
 #include "render_core/document_style.h"
+#include "render_core/frame_scratch.h"
 #include "render_core/frame_update.h"
 #include "render_core/html_parser.h"
 #include "render_core/input.h"
@@ -423,6 +424,10 @@ HostBudgets desktop_browser_budgets() {
     budgets.max_timer_callbacks_per_frame = 32;
     budgets.max_framebuffer_pixels = 2400 * 2400;
     return budgets;
+}
+
+AppRuntimeHostOptions desktop_app_runtime_options() {
+    return AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4};
 }
 
 std::string read_file_limited(const std::string& path) {
@@ -1211,7 +1216,10 @@ LoadedPage load_page(const BrowserOptions& options,
 FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     const HostBudgets budgets = desktop_browser_budgets();
     VectorDiagnosticSink diagnostics;
-    AppRuntimeHost app_runtime{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
+    const AppRuntimeHostOptions app_runtime_options = desktop_app_runtime_options();
+    AppRuntimeHost app_runtime{app_runtime_options};
+    AppFrameScratch app_frame_scratch;
+    app_frame_scratch.reserve_from_options(app_runtime_options);
     AppRuntimeHost* runtime = nullptr;
     if (!options.app_path.empty()) {
         app_runtime.launch(options.app_path, AppRole::App);
@@ -1248,10 +1256,9 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     LayerTreeBuilder layer_builder(layer_options);
     auto layer_tree = layer_builder.build(*layout_tree);
     for (int pass = 0; pass < 4 && debug_images.complete_next(app_runtime); ++pass) {
-        std::vector<HostServiceCompletion> accepted;
-        app_runtime.pump_frame_completions(accepted);
+        app_runtime.pump_frame_completions(app_frame_scratch);
         bool image_ready = false;
-        for (const HostServiceCompletion& completion : accepted) {
+        for (const HostServiceCompletion& completion : app_frame_scratch.accepted_completions) {
             const std::string image_src = image_cache.url_for_job(completion.job_id);
             report_image_completion_failure(&diagnostics, completion, image_src);
             image_ready = image_cache.handle_completion(completion) || image_ready;
@@ -1298,6 +1305,8 @@ public:
     explicit BrowserApp(BrowserOptions options)
         : options_(std::move(options)),
           active_app_id_(options_.launch_app_id) {
+        frame_scratch_.reserve_from_budgets(budgets_);
+        app_frame_scratch_.reserve_from_options(desktop_app_runtime_options());
         if (!options_.launch_app_id.empty()) {
             app_runtime_.launch(options_.launch_app_id, AppRole::App);
         } else if (!options_.app_path.empty()) {
@@ -1383,6 +1392,7 @@ private:
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
     bool clear_animation_overrides_after_render_ = false;
+    FrameScratch frame_scratch_;
     FrameBuffer frame_buffer_;
     Color page_background_{255, 255, 255, 255};
     std::vector<std::uint32_t> blit_pixels_;
@@ -1395,7 +1405,8 @@ private:
     VectorDiagnosticSink diagnostics_;
     bool system_shell_mode_ = false;
     std::string active_app_id_;
-    AppRuntimeHost app_runtime_{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
+    AppRuntimeHost app_runtime_{desktop_app_runtime_options()};
+    AppFrameScratch app_frame_scratch_;
     AppSystemEventQueue system_events_{32, 8};
     AppSystemStateSnapshot debug_system_state_;
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
@@ -1495,13 +1506,12 @@ private:
     }
 
     bool drain_host_completions() {
-        std::vector<HostServiceCompletion> accepted;
-        const AppCompletionPumpResult result = app_runtime_.pump_frame_completions(accepted);
+        const AppCompletionPumpResult result = app_runtime_.pump_frame_completions(app_frame_scratch_);
         if (result.consumed == 0) {
             return false;
         }
         std::size_t image_handled = 0;
-        for (const HostServiceCompletion& completion : accepted) {
+        for (const HostServiceCompletion& completion : app_frame_scratch_.accepted_completions) {
             const std::string image_src = image_cache_.url_for_job(completion.job_id);
             report_image_completion_failure(&diagnostics_, completion, image_src);
             if (image_cache_.handle_completion(completion)) {
@@ -1517,7 +1527,7 @@ private:
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ != nullptr &&
             script_runtime_instance_id_ == app_runtime_.current_app_instance_id()) {
-            for (const HostServiceCompletion& completion : accepted) {
+            for (const HostServiceCompletion& completion : app_frame_scratch_.accepted_completions) {
                 if (script_runtime_->handle_host_completion(completion)) {
                     ++script_handled;
                 }
@@ -1830,6 +1840,7 @@ private:
             record_dirty_region(DirtyRegionResult{});
             return;
         }
+        frame_scratch_.begin_frame();
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
@@ -1848,11 +1859,14 @@ private:
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
             apply_animation_overrides_to_cached_trees();
             auto next_layer_tree = layer_builder.build(*layout_tree_);
-            const DirtyRegionResult dirty_region = compute_dirty_region(
+            compute_dirty_region_into(
                 *document_,
                 layout_tree_.get(),
                 layout_tree_.get(),
-                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
+                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
+                frame_scratch_.dirty_region,
+                &frame_scratch_.dirty_region_scratch);
+            const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             layer_tree_ = std::move(next_layer_tree);
             evict_unused_image_surfaces();
@@ -1901,19 +1915,20 @@ private:
         const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);
         const FrameRepaintPlan repaint_plan = plan_frame_repaint(update_state, update_plan, content_height);
         scroll_y_ = std::max(0, std::min(scroll_y_, std::max(0, content_height - viewport_height_)));
-        std::vector<Rect> dirty_rects;
-        DirtyRegionResult dirty_region;
+        DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
         const bool can_repaint_incrementally = repaint_plan.can_repaint_dirty_rects &&
             repaint_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout &&
             previous_layout != nullptr;
         if (can_repaint_incrementally && rebuild_dirty_flags != DomDirtyNone) {
-            dirty_region = compute_dirty_region(*document_,
-                                                previous_layout.get(),
-                                                next_layout_tree.get(),
-                                                dirty_region_options_from_budgets(
-                                                    budgets_, Rect{0, 0, viewport_width_, content_height}, 3));
-            dirty_rects = dirty_region.rects;
+            compute_dirty_region_into(*document_,
+                                      previous_layout.get(),
+                                      next_layout_tree.get(),
+                                      dirty_region_options_from_budgets(
+                                          budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
+                                      dirty_region,
+                                      &frame_scratch_.dirty_region_scratch);
         }
+        const std::vector<Rect>& dirty_rects = dirty_region.rects;
 
         render_tree_ = std::move(next_render_tree);
         layout_tree_ = std::move(next_layout_tree);

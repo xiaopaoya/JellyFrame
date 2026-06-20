@@ -19,6 +19,33 @@ struct AppRuntimeHostOptions {
     std::size_t max_app_fonts = 0;
 };
 
+struct AppFrameScratch {
+    std::vector<HostServiceCompletion> accepted_completions;
+    std::vector<HostServiceCompletion> completion_batch;
+
+    void reserve_from_options(const AppRuntimeHostOptions& options) {
+        if (options.max_completion_events_per_frame != 0) {
+            accepted_completions.reserve(options.max_completion_events_per_frame);
+            completion_batch.reserve(options.max_completion_events_per_frame);
+        }
+    }
+
+    void begin_frame() {
+        accepted_completions.clear();
+        completion_batch.clear();
+    }
+
+    void end_frame() {
+        accepted_completions.clear();
+        completion_batch.clear();
+    }
+
+    void release() {
+        std::vector<HostServiceCompletion>().swap(accepted_completions);
+        std::vector<HostServiceCompletion>().swap(completion_batch);
+    }
+};
+
 class AppRuntimeHost {
 public:
     explicit AppRuntimeHost(const AppRuntimeHostOptions& options = {});
@@ -58,6 +85,7 @@ public:
     bool pop_worker_request(HostServiceJobKind kind, HostServiceRequest& request);
 
     AppCompletionPumpResult pump_frame_completions(std::vector<HostServiceCompletion>& accepted);
+    AppCompletionPumpResult pump_frame_completions(AppFrameScratch& scratch);
 
     HostServiceRequestQueue& requests() {
         return requests_;
