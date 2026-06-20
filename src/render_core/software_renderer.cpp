@@ -126,6 +126,40 @@ void fill_rect(FrameBuffer& target, Rect rect, Color color, int border_radius = 
     }
 }
 
+void stroke_rect(FrameBuffer& target, Rect rect, Color color, int stroke_width, int border_radius = 0) {
+    Rect clipped = intersect_rect(rect, target_rect(target));
+    if (empty_rect(clipped) || color.a == 0 || stroke_width <= 0) {
+        return;
+    }
+    stroke_width = std::min(stroke_width, std::max(1, std::min(rect.width, rect.height) / 2));
+    if (border_radius <= 0) {
+        fill_rect(target, Rect{rect.x, rect.y, rect.width, stroke_width}, color);
+        fill_rect(target, Rect{rect.x, rect.y + rect.height - stroke_width, rect.width, stroke_width}, color);
+        fill_rect(target, Rect{rect.x, rect.y, stroke_width, rect.height}, color);
+        fill_rect(target, Rect{rect.x + rect.width - stroke_width, rect.y, stroke_width, rect.height}, color);
+        return;
+    }
+
+    const Rect inner{
+        rect.x + stroke_width,
+        rect.y + stroke_width,
+        std::max(0, rect.width - stroke_width * 2),
+        std::max(0, rect.height - stroke_width * 2),
+    };
+    const int inner_radius = std::max(0, border_radius - stroke_width);
+    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+            if (!inside_rounded_rect(rect, border_radius, x, y)) {
+                continue;
+            }
+            if (!empty_rect(inner) && inside_rounded_rect(inner, inner_radius, x, y)) {
+                continue;
+            }
+            blend_pixel(target, x, y, color);
+        }
+    }
+}
+
 void fill_linear_gradient(FrameBuffer& target, Rect rect, Color top, Color bottom, int border_radius = 0) {
     Rect clipped = intersect_rect(rect, target_rect(target));
     if (empty_rect(clipped)) {
@@ -420,10 +454,7 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         fill_linear_gradient(target, rect, command.color, command.color2, command.border_radius);
         break;
     case DisplayCommandType::StrokeRect:
-        fill_rect(target, Rect{rect.x, rect.y, rect.width, 1}, command.color);
-        fill_rect(target, Rect{rect.x, rect.y + rect.height - 1, rect.width, 1}, command.color);
-        fill_rect(target, Rect{rect.x, rect.y, 1, rect.height}, command.color);
-        fill_rect(target, Rect{rect.x + rect.width - 1, rect.y, 1, rect.height}, command.color);
+        stroke_rect(target, rect, command.color, command.stroke_width, command.border_radius);
         break;
     case DisplayCommandType::Text:
         draw_text(target,

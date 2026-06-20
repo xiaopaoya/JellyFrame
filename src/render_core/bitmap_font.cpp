@@ -182,6 +182,9 @@ TextMetrics measure_bitmap_text(const BitmapFontContext& context,
         const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
         width += glyph_advance(font, find_bitmap_glyph(font, codepoint)) * scale;
     }
+    if (!text.empty() && font_weight >= 600) {
+        width += 1;
+    }
     return TextMetrics{
         width,
         std::max(1, static_cast<int>(font.line_height)) * scale,

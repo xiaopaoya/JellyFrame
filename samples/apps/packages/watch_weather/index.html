@@ -9,12 +9,17 @@
   <main class="screen" id="app">
     <section class="topbar">
       <span>Shanghai</span>
-      <span id="updated" class="meta">Now</span>
+      <span id="updated" class="meta">Local</span>
     </section>
     <section class="hero">
-      <div class="label">Weather</div>
-      <div class="temp" id="temp">26</div>
-      <div class="summary" id="summary">Cloudy AQI 42</div>
+      <div class="weather-art">
+        <img id="icon" src="assets/cloudy.bmp" alt="Cloudy">
+      </div>
+      <div class="weather-copy">
+        <div class="label" id="condition">Cloudy</div>
+        <div class="temp" id="temp">26</div>
+        <div class="summary" id="summary">AQI 42 Good</div>
+      </div>
     </section>
     <section class="stats">
       <div><strong id="wind">8</strong><span>KMH</span></div>
@@ -24,6 +29,15 @@
       <button class="tile" data-mode="hourly">Hourly</button>
       <button class="tile" data-mode="daily">Daily</button>
       <button class="tile" data-mode="air">Air</button>
+    </section>
+    <section class="statusline">
+      <span id="net">Offline</span>
+      <span id="visible">Visible</span>
+    </section>
+    <section hidden>
+      <img src="assets/sunny.bmp" alt="">
+      <img src="assets/rain.bmp" alt="">
+      <img src="assets/haze.bmp" alt="">
     </section>
   </main>
   <script src="scripts/app.js"></script>

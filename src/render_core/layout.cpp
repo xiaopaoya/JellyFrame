@@ -19,6 +19,23 @@ int vertical_edges(const EdgeSizes& edges) {
     return edges.top + edges.bottom;
 }
 
+int specified_content_height(const Style& style) {
+    if (style.height < 0) {
+        return -1;
+    }
+    if (!style.box_sizing_border_box) {
+        return style.height;
+    }
+    return std::max(0, style.height - vertical_edges(style.border_width) - vertical_edges(style.padding));
+}
+
+int specified_content_min_height(const Style& style) {
+    if (!style.box_sizing_border_box) {
+        return style.min_height;
+    }
+    return std::max(0, style.min_height - vertical_edges(style.border_width) - vertical_edges(style.padding));
+}
+
 bool has_aspect_ratio(const Style& style) {
     return style.aspect_ratio_width > 0 && style.aspect_ratio_height > 0;
 }
@@ -271,14 +288,15 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
         const int raw_text_width = metrics.width;
         const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
         const int usable_text_width = std::max(0, content_width - text_indent);
-        const int text_width = std::max(box.style.min_width, std::min(usable_text_width, raw_text_width));
+        const int text_width = std::max(box.style.min_width, std::min(usable_text_width, raw_text_width + 1));
         const int line_height = box.style.line_height > 0 ? box.style.line_height : metrics.line_height;
         const bool can_wrap = has_text_wrap_opportunity(text);
         const int line_count = can_wrap && usable_text_width > 0
             ? std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width)
             : 1;
-        const int text_height = std::max(box.style.min_height,
-            box.style.height >= 0 ? box.style.height : line_height * line_count);
+        const int fixed_text_height = specified_content_height(box.style);
+        const int text_height = std::max(specified_content_min_height(box.style),
+            fixed_text_height >= 0 ? fixed_text_height : line_height * line_count);
         int text_x = border_box_x + text_indent;
         if (box.style.text_align == TextAlign::Center) {
             text_x += std::max(0, (usable_text_width - text_width) / 2);
@@ -347,8 +365,11 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width) const {
         ? std::max(1, (content_width * box.style.aspect_ratio_height + box.style.aspect_ratio_width / 2) /
                          box.style.aspect_ratio_width)
         : 0;
-    const int content_height = std::max(box.style.min_height,
-        box.style.height >= 0 ? box.style.height : std::max({children_height, intrinsic_control_height, aspect_ratio_height}));
+    const int fixed_content_height = specified_content_height(box.style);
+    const int content_height = std::max(specified_content_min_height(box.style),
+        fixed_content_height >= 0
+            ? fixed_content_height
+            : std::max({children_height, intrinsic_control_height, aspect_ratio_height}));
     const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
     const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};

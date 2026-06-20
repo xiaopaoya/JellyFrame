@@ -196,6 +196,22 @@ void relative_layout_offsets_visual_box_only() {
     check(b->rect.y == 10, "relative offset does not change following flow position");
 }
 
+void border_box_sizing_keeps_declared_width_and_height() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main id='panel'><span>Text</span></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#panel { box-sizing: border-box; width: 144px; height: 144px; padding: 8px; border: 2px solid #000; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 200);
+
+    const LayoutBox* panel = find_first_by_id(*layout_tree, "panel");
+    check(panel != nullptr, "border-box fixture exists");
+    check(panel->rect.width == 144, "border-box width keeps declared border box");
+    check(panel->rect.height == 144, "border-box height keeps declared border box");
+}
+
 } // namespace
 
 int main() {
@@ -207,6 +223,7 @@ int main() {
         flex_row_shrinks_basis_widths();
         positioned_layout_offsets_without_flow_space();
         relative_layout_offsets_visual_box_only();
+        border_box_sizing_keeps_declared_width_and_height();
     } catch (const std::exception& error) {
         std::cerr << "layout test failed: " << error.what() << '\n';
         return 1;

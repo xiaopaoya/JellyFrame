@@ -96,6 +96,21 @@ void fill_rect_rasterizes_pixels() {
     check(frame_buffer.pixel(0, 0).r == 255, "fill rect leaves outside pixel");
 }
 
+void rounded_stroke_keeps_corner_pixels_clear() {
+    FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::StrokeRect;
+    command.rect = Rect{1, 1, 10, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.border_radius = 5;
+    command.stroke_width = 2;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 12, 12});
+
+    check(frame_buffer.pixel(1, 1).r == 255, "rounded stroke leaves outer corner clear");
+    check(frame_buffer.pixel(6, 2).r == 0, "rounded stroke paints top edge");
+}
+
 void source_over_alpha_composites() {
     FrameBuffer frame_buffer(1, 1, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -221,7 +236,7 @@ void layout_uses_injected_text_measurement() {
 
     const LayoutBox* text_box = find_first_text_box(*layout_tree);
     check(text_box != nullptr, "measured text box exists");
-    check(text_box->rect.width == 32, "layout uses injected text width");
+    check(text_box->rect.width == 33, "layout uses injected text width with paint safety pad");
     check(text_box->rect.height == 21, "layout uses injected line height");
 }
 
@@ -454,7 +469,7 @@ void bitmap_font_scaling_bold_and_missing_glyphs_are_stable() {
     BitmapFontContext context{&font, 3};
 
     const TextMetrics metrics = measure_bitmap_text(context, "A\xef\xbc\x8c?", 18, 700);
-    check(metrics.width == 45, "bitmap font metrics include scale, wide punctuation and fallback advance");
+    check(metrics.width == 46, "bitmap font metrics include scale, wide punctuation, fallback and bold stroke");
     check(metrics.line_height == 12, "bitmap font metrics scale line height");
 
     SoftwareRasterizer rasterizer(TextPainter{bitmap_font_paint_callback, &context});
@@ -485,6 +500,40 @@ void bitmap_font_scaling_bold_and_missing_glyphs_are_stable() {
     rasterizer.rasterize(missing, missing_frame, Rect{0, 0, 64, 24});
     check(count_non_background_pixels(missing_frame, Color{255, 255, 255, 255}) > 8,
           "missing high-codepoint glyph draws a visible fallback box");
+}
+
+void bitmap_font_bold_metrics_include_extra_stroke() {
+    static constexpr std::uint8_t rows_w[] = {
+        0b10001000,
+        0b10001000,
+        0b10101000,
+        0b10101000,
+        0b01010000,
+    };
+    static constexpr BitmapFontGlyph glyphs[] = {
+        BitmapFontGlyph{0x57, 5, 5, 6, 1, rows_w},
+    };
+    static constexpr BitmapFont font{glyphs, 1, 6, 5};
+    BitmapFontContext context{&font, 1};
+
+    const TextMetrics normal = measure_bitmap_text(context, "W", 12, 400);
+    const TextMetrics bold = measure_bitmap_text(context, "W", 12, 700);
+    check(bold.width == normal.width + 1, "bold bitmap metrics reserve the synthetic stroke");
+
+    SoftwareRasterizer rasterizer(TextPainter{bitmap_font_paint_callback, &context});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, bold.width, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "W";
+    command.font_size = 12;
+    command.font_weight = 700;
+    command.text_single_line = true;
+
+    FrameBuffer frame_buffer(bold.width, 10, Color{255, 255, 255, 255});
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, bold.width, 10});
+    check(count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) > 0,
+          "bold synthetic stroke paints inside measured text rect");
 }
 
 void jffont_resource_loads_bitmap_font_view() {
@@ -540,6 +589,7 @@ void jffont_resource_loads_bitmap_font_view() {
 int main() {
     try {
         fill_rect_rasterizes_pixels();
+        rounded_stroke_keeps_corner_pixels_clear();
         source_over_alpha_composites();
         clipping_limits_rasterization();
         image_command_uses_injected_painter();
@@ -555,6 +605,7 @@ int main() {
         bitmap_font_backend_measures_and_paints();
         bitmap_font_lookup_uses_sorted_codepoints();
         bitmap_font_scaling_bold_and_missing_glyphs_are_stable();
+        bitmap_font_bold_metrics_include_extra_stroke();
         jffont_resource_loads_bitmap_font_view();
     } catch (const std::exception& error) {
         std::cerr << "software renderer test failed: " << error.what() << '\n';

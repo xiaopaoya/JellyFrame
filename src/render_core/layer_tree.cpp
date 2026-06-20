@@ -77,8 +77,30 @@ void push_fill_rect(DisplayList& display_list, Rect rect, Color color, int borde
     display_list.push_back(std::move(command));
 }
 
-void push_border_rects(DisplayList& display_list, Rect rect, const EdgeSizes& border, Color color) {
+bool equal_border_widths(const EdgeSizes& border) {
+    return border.top == border.right && border.top == border.bottom && border.top == border.left;
+}
+
+void push_stroke_rect(DisplayList& display_list, Rect rect, Color color, int stroke_width, int border_radius) {
+    if (rect.width <= 0 || rect.height <= 0 || stroke_width <= 0 || color.a == 0) {
+        return;
+    }
+    DisplayCommand command;
+    command.type = DisplayCommandType::StrokeRect;
+    command.rect = rect;
+    command.color = color;
+    command.color2 = color;
+    command.stroke_width = stroke_width;
+    command.border_radius = border_radius;
+    display_list.push_back(std::move(command));
+}
+
+void push_border_rects(DisplayList& display_list, Rect rect, const EdgeSizes& border, Color color, int border_radius) {
     if (!has_border(border) || rect.width <= 0 || rect.height <= 0 || color.a == 0) {
+        return;
+    }
+    if (border_radius > 0 && equal_border_widths(border)) {
+        push_stroke_rect(display_list, rect, color, border.top, border_radius);
         return;
     }
     push_fill_rect(display_list, Rect{rect.x, rect.y, rect.width, border.top}, color);
@@ -555,7 +577,11 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
     }
 
     if (has_border(box.style.border_width)) {
-        push_border_rects(display_list, paint_rect, box.style.border_width, box.style.border_color);
+        push_border_rects(display_list,
+                          paint_rect,
+                          box.style.border_width,
+                          box.style.border_color,
+                          box.style.border_radius);
     }
 
     paint_meter_bar(box, display_list);

@@ -56,6 +56,7 @@ struct DisplayCommand {
     Color color2;
     std::string text;
     int border_radius = 0;
+    int stroke_width = 1;
     int font_size = 14;
     int font_weight = 400;
     TextCommandAlign text_align = TextCommandAlign::Start;

@@ -567,7 +567,7 @@ bool draw_text_with_gdi(FrameBuffer& target,
     }
 
     HGDIOBJ old_bitmap = SelectObject(memory_dc, bitmap);
-    RECT bounds{0, 0, bitmap_width, rect.height};
+    RECT bounds{0, 0, rect.width, rect.height};
     HBRUSH black = CreateSolidBrush(RGB(0, 0, 0));
     FillRect(memory_dc, &bounds, black);
     DeleteObject(black);
@@ -1291,7 +1291,16 @@ public:
             app_runtime_.launch("org.jellyframe.debug.page", AppRole::App);
         }
         debug_network_.add_fixture(NetworkFetchFixture{"app://ping", 200, "text/plain", "pong"});
-        debug_network_.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"temp\":21}"});
+        debug_network_.add_fixture(NetworkFetchFixture{
+            "app://weather",
+            200,
+            "application/json",
+            "{\"modes\":{"
+            "\"hourly\":{\"temp\":\"27\",\"condition\":\"Rain soon\",\"summary\":\"Next hour 35%\",\"wind\":\"9\",\"rain\":\"35\",\"updated\":\"Live\",\"icon\":\"rain\"},"
+            "\"daily\":{\"temp\":\"24\",\"condition\":\"Cloudy\",\"summary\":\"AQI 42 Good\",\"wind\":\"8\",\"rain\":\"20\",\"updated\":\"Live\",\"icon\":\"cloudy\"},"
+            "\"air\":{\"temp\":\"42\",\"condition\":\"Air\",\"summary\":\"AQI good\",\"wind\":\"5\",\"rain\":\"10\",\"updated\":\"Live\",\"icon\":\"haze\"}"
+            "}}",
+        });
         add_debug_image_fixtures(debug_images_);
     }
 

@@ -11,16 +11,17 @@ body {
   box-sizing: border-box;
   width: 300px;
   height: 300px;
-  padding: 13px;
+  padding: 12px;
   background: #09090b;
 }
 
 .topline {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: 23px;
+  height: 26px;
   color: #cbd5e1;
   font-size: 14px;
+  line-height: 1.4;
 }
 
 .meta {
@@ -28,26 +29,26 @@ body {
 }
 
 .dial {
-  height: 152px;
+  height: 164px;
   text-align: center;
 }
 
 .track {
   box-sizing: border-box;
-  width: 146px;
-  height: 146px;
+  width: 160px;
+  height: 160px;
   margin: 3px auto 0;
   padding: 8px;
-  border-radius: 76px;
+  border-radius: 80px;
   background: #2dd4bf;
 }
 
 .inside {
   box-sizing: border-box;
-  width: 130px;
-  height: 130px;
-  padding-top: 34px;
-  border-radius: 68px;
+  width: 144px;
+  height: 144px;
+  padding-top: 29px;
+  border-radius: 72px;
   background: #111827;
 }
 
@@ -59,9 +60,9 @@ body {
 
 #time {
   display: block;
-  margin-top: 7px;
+  margin-top: 5px;
   color: #ffffff;
-  font-size: 42px;
+  font-size: 44px;
   line-height: 1;
 }
 
@@ -69,11 +70,11 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 7px;
-  margin: 4px 30px 12px;
+  margin: 8px 30px 12px;
 }
 
 .seg {
-  height: 10px;
+  height: 9px;
   border-radius: 8px;
   background: #27272a;
 }
@@ -89,7 +90,7 @@ body {
 }
 
 button {
-  height: 42px;
+  height: 41px;
   border: 0;
   border-radius: 22px;
   background: #1f2937;
@@ -99,7 +100,7 @@ button {
 
 button span {
   display: block;
-  padding-top: 12px;
+  padding-top: 11px;
   text-align: center;
 }
 

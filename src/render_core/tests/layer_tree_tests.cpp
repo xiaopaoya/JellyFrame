@@ -123,6 +123,23 @@ void opacity_layer_flattens_alpha() {
     check(found_translucent_fill, "flatten applies layer opacity");
 }
 
+void rounded_equal_border_emits_stroke_command() {
+    auto pipeline = build_pipeline("<body><section class='pill'>Rounded</section></body>",
+                                   ".pill { width: 80px; height: 24px; border: 2px solid #ffffff; "
+                                   "border-radius: 12px; background: #000000; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_rounded_stroke = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::StrokeRect && command.border_radius == 12 &&
+            command.stroke_width == 2) {
+            found_rounded_stroke = true;
+        }
+    }
+    check(found_rounded_stroke, "rounded equal-width border uses stroke command");
+}
+
 void z_index_orders_child_layers() {
     auto pipeline = build_pipeline("<body><div class='back'>Back</div><div class='front'>Front</div></body>",
                                    ".back { position: relative; z-index: 5; }"
@@ -483,6 +500,7 @@ int main() {
     try {
         overflow_hidden_creates_clip_layer();
         opacity_layer_flattens_alpha();
+        rounded_equal_border_emits_stroke_command();
         z_index_orders_child_layers();
         progress_and_meter_emit_value_fill();
         inline_mark_background_shrinks_to_text();

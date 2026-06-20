@@ -12,19 +12,18 @@ body {
   box-sizing: border-box;
   width: 300px;
   height: 300px;
-  padding: 12px 16px;
+  padding: 12px 14px;
   background: #0b3442;
 }
 
 .topbar {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: 18px;
-  margin-bottom: 8px;
+  height: 22px;
+  margin-bottom: 6px;
   color: #bde8ee;
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .meta {
@@ -33,27 +32,50 @@ body {
 
 .hero {
   box-sizing: border-box;
-  height: 104px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 10px;
+  height: 112px;
+  margin-bottom: 10px;
+  padding: 10px;
   border: 1px solid #3d7b86;
-  border-radius: 14px;
+  border-radius: 18px;
   background: #0b2a36;
-  text-align: center;
+}
+
+.weather-art {
+  box-sizing: border-box;
+  width: 76px;
+  height: 76px;
+  margin-top: 7px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #124f5d;
+}
+
+.weather-art img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 2px;
+  object-fit: contain;
+}
+
+.weather-copy {
+  text-align: left;
 }
 
 .label {
   color: #aee4d4;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .temp {
-  margin-top: 4px;
-  font-size: 44px;
+  margin-top: 2px;
+  font-size: 40px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.15;
 }
 
 .temp::after {
@@ -64,20 +86,21 @@ body {
 .summary {
   color: #b7dbc9;
   font-size: 12px;
+  line-height: 1.25;
 }
 
 .stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  height: 42px;
-  margin-bottom: 8px;
+  height: 44px;
+  margin-bottom: 10px;
 }
 
 .stats div {
   box-sizing: border-box;
   border: 1px solid #3d7b86;
-  border-radius: 10px;
+  border-radius: 14px;
   background: #0b2a36;
   padding: 4px 4px;
   text-align: center;
@@ -101,13 +124,14 @@ body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  margin-bottom: 9px;
 }
 
 .tile {
   box-sizing: border-box;
-  height: 32px;
+  height: 34px;
   border: 1px solid #7fc9a3;
-  border-radius: 9px;
+  border-radius: 17px;
   background: #125464;
   color: #f7fff6;
   font-size: 12px;
@@ -117,4 +141,16 @@ body {
 .tile:active,
 .tile:focus {
   background: #19738a;
+}
+
+.statusline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 18px;
+  color: #8fd7d8;
+  font-size: 11px;
+}
+
+.statusline span:last-child {
+  text-align: right;
 }
