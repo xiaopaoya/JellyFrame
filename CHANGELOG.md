@@ -19,8 +19,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added the B1 image-decode V0 helper: `ImageDecodePolicy`, `ImageDecodeMock`
   and `AppDecodedSurfaceRecord` define platform-neutral raw-surface fixtures,
   `Surface` handle lifetime, width/height/decoded-byte/pending budgets and
-  release rules. Real in-bundle image loading, general cache eviction and
-  `object-fit` remain future integration work.
+  release rules.
 - Added a lightweight render-core image display command, `ImageHandleResolver`
   and `ImagePainter`; `<img src>` can now enter the display list when the host
   supplies a surface-handle resolver, and the host painter owns actual drawing.
@@ -31,6 +30,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   Win32 browser debug shell now wires `app://icon` / `app://photo` raw RGB565
   fixtures, automatically submits mock decodes and schedules paint-dirty rerender
   after completion.
+- The Win32 browser debug shell can load uncompressed 24/32-bit BMP resources
+  from `.jfapp`/source packages as the in-bundle image V0 path, reusing the image
+  surface cache and repaint flow. PNG/JPEG/WebP, general cache eviction,
+  `object-fit` and production MCU codecs remain future work.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
   standard-subset runtime data API direction: asynchronous `XMLHttpRequest`
   first, `fetch()` only after bounded Promise/microtask support, tiny

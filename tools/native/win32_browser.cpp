@@ -32,10 +32,12 @@
 #include <windowsx.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -55,6 +57,10 @@ constexpr int kIncrementalDirtyAreaLimitPercent = 70;
 constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_launcher";
 constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
+constexpr int kMaxDebugPackageImageWidth = 256;
+constexpr int kMaxDebugPackageImageHeight = 256;
+constexpr std::size_t kMaxDebugPackageImageDecodedBytes =
+    static_cast<std::size_t>(kMaxDebugPackageImageWidth) * kMaxDebugPackageImageHeight * 4U;
 
 std::uint16_t pack_rgb565(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     return static_cast<std::uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
@@ -102,6 +108,146 @@ void add_debug_image_fixtures(ImageDecodeMock& images) {
         HostPixelFormat::Rgb565,
         make_debug_rgb565_surface(120, 80, Color{251, 191, 36, 255}, Color{244, 63, 94, 255}),
     });
+}
+
+std::int32_t read_i32_le(const std::uint8_t* data) {
+    return static_cast<std::int32_t>(
+        static_cast<std::uint32_t>(data[0]) |
+        (static_cast<std::uint32_t>(data[1]) << 8U) |
+        (static_cast<std::uint32_t>(data[2]) << 16U) |
+        (static_cast<std::uint32_t>(data[3]) << 24U));
+}
+
+bool decode_bmp_to_fixture(const std::string& url,
+                           const std::string& bytes,
+                           ImageDecodeFixture& fixture,
+                           DiagnosticSink* diagnostics) {
+    const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
+    const std::size_t size = bytes.size();
+    if (size < 54 || data[0] != 'B' || data[1] != 'M') {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Package,
+                          DiagnosticSeverity::Warning,
+                          "image-decode-unsupported",
+                          "Package image is not a supported BMP file",
+                          url);
+        return false;
+    }
+    const std::uint32_t pixel_offset = jellyframe_example::read_le32(data + 10);
+    const std::uint32_t dib_size = jellyframe_example::read_le32(data + 14);
+    if (dib_size < 40 || size < 14U + dib_size || pixel_offset >= size) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Package,
+                          DiagnosticSeverity::Warning,
+                          "image-decode-invalid",
+                          "BMP header is truncated or invalid",
+                          url);
+        return false;
+    }
+    const std::int32_t width = read_i32_le(data + 18);
+    const std::int32_t signed_height = read_i32_le(data + 22);
+    const std::uint16_t planes = jellyframe_example::read_le16(data + 26);
+    const std::uint16_t bits_per_pixel = jellyframe_example::read_le16(data + 28);
+    const std::uint32_t compression = jellyframe_example::read_le32(data + 30);
+    if (width <= 0 || signed_height == 0 || signed_height == std::numeric_limits<std::int32_t>::min() ||
+        planes != 1 || compression != 0 ||
+        (bits_per_pixel != 24 && bits_per_pixel != 32)) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Package,
+                          DiagnosticSeverity::Warning,
+                          "image-decode-unsupported",
+                          "Only uncompressed 24-bit and 32-bit BMP package images are supported in the Win32 debug shell",
+                          url);
+        return false;
+    }
+    const int height = std::abs(signed_height);
+    if (width > kMaxDebugPackageImageWidth || height > kMaxDebugPackageImageHeight) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Package,
+                          DiagnosticSeverity::Warning,
+                          "image-decode-budget",
+                          "Package BMP exceeds the Win32 debug shell image budget",
+                          url);
+        return false;
+    }
+    const std::size_t decoded_bytes = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U;
+    if (decoded_bytes > kMaxDebugPackageImageDecodedBytes) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Package,
+                          DiagnosticSeverity::Warning,
+                          "image-decode-budget",
+                          "Package BMP decoded bytes exceed the Win32 debug shell image budget",
+                          url);
+        return false;
+    }
+    const bool top_down = signed_height < 0;
+    const std::size_t bytes_per_pixel = bits_per_pixel / 8;
+    const std::size_t row_stride = ((static_cast<std::size_t>(width) * bits_per_pixel + 31U) / 32U) * 4U;
+    if (!jellyframe_example::byte_range_is_valid(size, pixel_offset, row_stride * static_cast<std::size_t>(height))) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Package,
+                          DiagnosticSeverity::Warning,
+                          "image-decode-invalid",
+                          "BMP pixel data is truncated",
+                          url);
+        return false;
+    }
+
+    std::vector<std::uint8_t> pixels;
+    pixels.resize(decoded_bytes);
+    for (int y = 0; y < height; ++y) {
+        const int source_y = top_down ? y : height - 1 - y;
+        const std::uint8_t* source_row = data + pixel_offset + static_cast<std::size_t>(source_y) * row_stride;
+        for (int x = 0; x < width; ++x) {
+            const std::uint8_t* source = source_row + static_cast<std::size_t>(x) * bytes_per_pixel;
+            const std::size_t output_index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                                             static_cast<std::size_t>(x)) * 4U;
+            pixels[output_index] = source[2];
+            pixels[output_index + 1] = source[1];
+            pixels[output_index + 2] = source[0];
+            pixels[output_index + 3] = bits_per_pixel == 32 ? source[3] : 255;
+        }
+    }
+
+    fixture = ImageDecodeFixture{
+        url,
+        width,
+        height,
+        width,
+        HostPixelFormat::Rgba8888,
+        std::move(pixels),
+    };
+    return true;
+}
+
+void collect_image_sources(const Node& node, std::vector<std::string>& sources) {
+    if (node.type == NodeType::Element && node.tag_name == "img") {
+        const std::string& src = node.attribute("src");
+        if (!src.empty() && std::find(sources.begin(), sources.end(), src) == sources.end()) {
+            sources.push_back(src);
+        }
+    }
+    for (const auto& child : node.children) {
+        collect_image_sources(*child, sources);
+    }
+}
+
+void add_package_image_fixtures(const Node& document,
+                                jellyframe_example::PackageResourceContext& package_context,
+                                ImageDecodeMock& images,
+                                DiagnosticSink* diagnostics) {
+    std::vector<std::string> sources;
+    collect_image_sources(document, sources);
+    for (const std::string& source : sources) {
+        std::string bytes;
+        if (!jellyframe_example::load_package_resource(source, package_context.base_url, bytes, &package_context)) {
+            continue;
+        }
+        ImageDecodeFixture fixture;
+        if (decode_bmp_to_fixture(source, bytes, fixture, diagnostics)) {
+            images.add_fixture(std::move(fixture));
+        }
+    }
 }
 
 struct BrowserOptions {
@@ -869,6 +1015,9 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     BrowserTextBackend text_backend = make_browser_text_backend(options, runtime);
     ImageDecodeMock debug_images(ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4});
     add_debug_image_fixtures(debug_images);
+    if (page.package_mode) {
+        add_package_image_fixtures(*page.document, page.package_context, debug_images, &diagnostics);
+    }
     AppImageSurfaceCache image_cache;
     BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache};
     BrowserImageContext image_context{&debug_images};
@@ -1108,8 +1257,10 @@ private:
         return !runtime_controls_page() || app_runtime_.current().state == AppLifecycleState::Foreground;
     }
 
-    void reset_image_surfaces() {
+    void reset_image_services() {
         image_cache_.release_all(app_runtime_, debug_images_);
+        debug_images_.clear();
+        add_debug_image_fixtures(debug_images_);
     }
 
     bool drain_host_completions() {
@@ -1155,7 +1306,7 @@ private:
         }
         system_shell_mode_ = true;
         active_app_id_.clear();
-        reset_image_surfaces();
+        reset_image_services();
         app_runtime_.launch("org.jellyframe.system.launcher", AppRole::Launcher);
         options_.app_path.clear();
         options_.script_path.clear();
@@ -1179,7 +1330,7 @@ private:
             options_.inline_html.clear();
             options_.inline_css.clear();
             active_app_id_ = app_id;
-            reset_image_surfaces();
+            reset_image_services();
             app_runtime_.launch(app_id, AppRole::App);
             system_shell_mode_ = false;
             scroll_y_ = 0;
@@ -1204,7 +1355,7 @@ private:
     void delete_installed_app(const std::string& app_id) {
         try {
             if (!active_app_id_.empty() && active_app_id_ == app_id) {
-                reset_image_surfaces();
+                reset_image_services();
                 app_runtime_.exit_current();
                 configure_system_shell("Cannot delete the active app; returned to shell first.");
             }
@@ -1238,7 +1389,7 @@ private:
     void recover_active_app_after_failure(const std::exception& error) {
         std::cerr << "rebuild failed: " << error.what() << '\n';
         if (!options_.registry_store_path.empty() && !system_shell_mode_) {
-            reset_image_surfaces();
+            reset_image_services();
             const AppTeardownResult teardown = app_runtime_.crash_current();
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
             configure_system_shell(
@@ -1259,13 +1410,16 @@ private:
     bool rebuild() {
         try {
             diagnostics_.clear();
-            reset_image_surfaces();
+            reset_image_services();
             KillTimer(hwnd_, kScriptTimerId);
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
             script_runtime_.reset();
             script_runtime_instance_id_ = 0;
 #endif
             LoadedPage page = load_page(options_, budgets_, &diagnostics_, &app_runtime_);
+            if (page.package_mode) {
+                add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_);
+            }
             document_ = std::move(page.document);
             StyleResolverOptions style_options;
             style_options.diagnostics = &diagnostics_;

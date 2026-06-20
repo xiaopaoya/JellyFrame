@@ -175,7 +175,9 @@ struct HostDecodedSurface {
 - decoded surface 由宿主 cache 持有；UI 只引用 handle。
 - cache 满时可以 LRU 回收未被当前 display list 引用的 surface。
 - 如果解码失败，页面保留占位盒并报告 diagnostics。
-- 真实 `.jfapp` 包内图片资源 loader、通用 cache eviction、`object-fit` 和产品级 codec 尚未接入。
+- Win32 debug 壳已接入 `.jfapp`/源码包无压缩 24/32-bit BMP loader，用于验证包内图片资源到
+  surface handle/display list/repaint 的完整路径。
+- PNG/JPEG/WebP、通用 cache eviction、`object-fit` 和产品级 MCU codec 尚未接入。
 
 ## 音频播放服务
 
@@ -452,8 +454,8 @@ struct AppSystemStateSnapshot {
 2. bundle staging/registry 的桌面 mock 已实现，可通过 `jellyframe_cli.py registry`
    安装、枚举、解析和删除 `.jfapp`，并用原子 JSON 提交模拟 installed-app registry。
 3. image decode mock/raw surface fixture、`AppImageSurfaceCache` 和 render-core image display command
-   第一版已实现；Win32 debug 壳已能自动提交 mock decode 并重绘。
-   下一步接真实 package image resource loader、cache eviction 和 `object-fit`。
+   第一版已实现；Win32 debug 壳已能自动提交 mock decode 并重绘，并可从 `.jfapp`/源码包加载
+   无压缩 24/32-bit BMP。下一步接通用 cache eviction、`object-fit` 和产品级图片 codec。
 4. 桌面 surface consumer 路径稳定后，在 ESP32-S3 port 中接 RGB565 小图/MJPEG decode，
    并严格限制尺寸和并发。
 5. 接 host-owned MP3 playback，只返回句柄和 ended/error 事件。

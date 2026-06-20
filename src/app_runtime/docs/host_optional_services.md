@@ -208,8 +208,10 @@ Rules:
 - Decoded surfaces are host-cache owned; UI only references handles.
 - A full cache may reclaim surfaces not referenced by the current display list.
 - On failure, keep the placeholder box and report diagnostics.
-- Real `.jfapp` in-bundle image resource loading, general cache eviction,
-  `object-fit` and production codecs are not wired yet.
+- The Win32 debug shell can load uncompressed 24/32-bit BMP resources from
+  `.jfapp`/source packages to validate the resource-to-surface-handle path.
+- PNG/JPEG/WebP, general cache eviction, `object-fit` and production MCU codecs
+  are not wired yet.
 
 ## Audio Playback Service
 
@@ -508,8 +510,9 @@ Recommended order:
    bundles with an atomically committed installed-app registry JSON.
 3. The first image-decode mock/raw-surface fixture, `AppImageSurfaceCache` and
    render-core image display command passes are implemented. The Win32 debug
-   shell can automatically submit mock decodes and repaint. Next, wire real
-   package image resource loading, cache eviction and `object-fit`.
+   shell can automatically submit mock decodes and repaint, and can load
+   uncompressed 24/32-bit BMP resources from `.jfapp`/source packages. Next,
+   wire general cache eviction, `object-fit` and production image codecs.
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps after the desktop surface consumer path is stable.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.
