@@ -1,0 +1,90 @@
+html,
+body {
+  margin: 0;
+  width: 300px;
+  height: 300px;
+  background-color: #071923;
+  color: #f6fbff;
+}
+
+.launcher {
+  box-sizing: border-box;
+  width: 300px;
+  height: 300px;
+  padding: 16px;
+  background-color: #092633;
+}
+
+.top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 32px;
+  margin-bottom: 12px;
+}
+
+.top span {
+  color: rgba(210, 245, 255, 0.72);
+  font-size: 12px;
+  line-height: 24px;
+}
+
+.top strong {
+  font-size: 22px;
+  text-align: right;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.app {
+  position: relative;
+  box-sizing: border-box;
+  height: 108px;
+  padding: 50px 10px 10px;
+  color: #f6fbff;
+  background-color: rgba(74, 190, 218, 0.22);
+  border: 1px solid rgba(122, 232, 238, 0.68);
+  border-radius: 24px;
+  overflow: hidden;
+  transition: transform 160ms ease-out, background-color 160ms ease-out, opacity 160ms ease-out;
+}
+
+.app span {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 16px;
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.24);
+  border-radius: 99px;
+}
+
+.app strong {
+  display: block;
+  font-size: 14px;
+}
+
+.weather {
+  background-color: rgba(74, 190, 218, 0.28);
+}
+
+.timer {
+  background-color: rgba(184, 244, 118, 0.26);
+}
+
+.notes {
+  background-color: rgba(255, 132, 112, 0.25);
+}
+
+.setup {
+  background-color: rgba(154, 137, 255, 0.22);
+}
+
+.app:focus,
+.app:active {
+  transform: translate(0px, 2px) scale(0.96);
+  background-color: rgba(255, 255, 255, 0.16);
+}

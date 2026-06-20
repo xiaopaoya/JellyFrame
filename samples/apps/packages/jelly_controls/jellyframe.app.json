@@ -1,0 +1,41 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.examples.jelly_controls",
+  "name": "Jelly Controls",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 65536,
+    "maxDomNodes": 256,
+    "maxCssRules": 160,
+    "maxDisplayCommands": 384,
+    "maxTimers": 2,
+    "maxEventListeners": 16
+  },
+  "capabilities": [],
+  "targets": {
+    "round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp"
+    }
+  }
+}

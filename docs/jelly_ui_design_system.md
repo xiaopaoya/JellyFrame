@@ -41,6 +41,38 @@ This system must match current project capabilities:
   texture, Canvas-rendered widgets, layout-property animation, rotate, skew,
   matrix, perspective and full `transform-origin`.
 
+## Feasibility Analysis
+
+This direction is feasible on the current engine because it treats JellyFrame as
+a small HTML/CSS app runtime, not as a browser trying to imitate desktop visual
+effects.
+
+- Visual identity comes from cheap primitives: color, opacity, border,
+  single-value radius, approximate shadow and small highlight children.
+- Motion stays on paint/compositor properties, so static apps do not pay a
+  layout-animation cost.
+- Controls remain ordinary HTML controls or button-like elements, so event,
+  focus, disabled state and script bindings continue to work.
+- Low-power products can reduce `animation_frame_rate` or set animation budgets
+  to zero; the UI remains readable because every animated state has a static
+  equivalent.
+
+The risky parts are intentionally kept out of the standard: blur, blend modes,
+canvas widgets, arbitrary SVG structure, matrix transforms and layout motion.
+They can appear in design mockups only when the implementation includes a
+JellyFrame-safe fallback.
+
+## Implemented Samples
+
+- `samples/apps/packages/jelly_controls`: installable source package showing
+  gel buttons, input, switch, progress and a small keyframe pulse.
+- `samples/apps/loose/jelly_motion.html`: focused motion fixture using only
+  transition and from/to keyframes.
+- `samples/apps/loose/jelly_launcher_mock.html`: small launcher-style grid for
+  app icon cards.
+- `samples/apps/system/sample_launcher`: the actual sample launcher follows the
+  same gel panel/button direction.
+
 ## Design Kernel
 
 The gel language has four core ideas:

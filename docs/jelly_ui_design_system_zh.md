@@ -38,6 +38,29 @@
   Canvas 绘制、layout 属性动画、rotate、skew、matrix、perspective、完整
   `transform-origin`。
 
+## 可行性分析
+
+这条方向在当前引擎上是可行的，因为它把 JellyFrame 当作小型 HTML/CSS app runtime，
+而不是试图复刻桌面浏览器的复杂视觉效果。
+
+- 视觉识别主要来自便宜原语：颜色、opacity、border、单值圆角、近似 shadow 和少量
+  子元素高光。
+- 动效只落在 paint/compositor 属性上，静态 app 不需要为 layout animation 付费。
+- 控件仍是普通 HTML 控件或 button-like 元素，因此事件、focus、disabled 状态和脚本绑定可以继续工作。
+- 低功耗产品可以降低 `animation_frame_rate`，甚至把 animation budget 设为 0；每个动效状态都有静态等价形态，
+  因此 UI 仍保持可读。
+
+需要警惕的部分被刻意排除在标准之外：blur、blend mode、canvas 控件、任意 SVG 结构、matrix transform 和
+layout motion。它们可以出现在设计稿中，但实现必须提供 JellyFrame 安全降级。
+
+## 已落地示例
+
+- `samples/apps/packages/jelly_controls`：完整可安装 source package，展示胶体按钮、输入框、
+  switch、进度条和小型 keyframe pulse。
+- `samples/apps/loose/jelly_motion.html`：聚焦动效 fixture，只使用 transition 和 from/to keyframes。
+- `samples/apps/loose/jelly_launcher_mock.html`：小型启动器风格 app grid。
+- `samples/apps/system/sample_launcher`：真实 sample launcher 已按同一胶体 panel/button 方向调整。
+
 ## 设计内核
 
 JellyFrame 的胶体语言由四个概念组成：

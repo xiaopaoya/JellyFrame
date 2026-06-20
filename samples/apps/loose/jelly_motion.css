@@ -1,0 +1,89 @@
+html,
+body {
+  margin: 0;
+  width: 300px;
+  height: 300px;
+  background-color: #071923;
+  color: #f6fbff;
+}
+
+.screen {
+  box-sizing: border-box;
+  width: 300px;
+  height: 300px;
+  padding: 22px;
+  background-color: #092633;
+}
+
+.orb {
+  position: relative;
+  box-sizing: border-box;
+  height: 190px;
+  padding: 48px 18px 18px;
+  background-color: rgba(74, 190, 218, 0.24);
+  border: 1px solid rgba(122, 232, 238, 0.72);
+  border-radius: 28px;
+  text-align: center;
+  overflow: hidden;
+  animation: gel-float 1600ms ease-in-out infinite alternate;
+}
+
+.orb span {
+  position: absolute;
+  left: 55px;
+  right: 55px;
+  top: 15px;
+  height: 20px;
+  background-color: rgba(255, 255, 255, 0.24);
+  border-radius: 99px;
+}
+
+.orb strong {
+  display: block;
+  font-size: 34px;
+}
+
+.orb p {
+  margin: 12px 0 0;
+  color: rgba(210, 245, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chip {
+  height: 36px;
+  color: #f6fbff;
+  background-color: rgba(74, 190, 218, 0.18);
+  border: 1px solid rgba(122, 232, 238, 0.62);
+  border-radius: 18px;
+  font-weight: 700;
+  transition: transform 160ms ease-out, background-color 160ms ease-out;
+}
+
+.chip.active {
+  background-color: rgba(184, 244, 118, 0.40);
+}
+
+.chip:active,
+.chip:focus {
+  transform: translate(0px, 1px) scale(0.96);
+  background-color: rgba(255, 132, 112, 0.34);
+}
+
+@keyframes gel-float {
+  from {
+    opacity: .84;
+    transform: translate(0px, 3px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0px, 0px) scale(1.02);
+  }
+}

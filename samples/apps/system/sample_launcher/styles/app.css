@@ -1,46 +1,61 @@
+:root {
+  --surface: #071923;
+  --ink: #f6fbff;
+  --muted: rgba(210, 245, 255, 0.72);
+  --gel: rgba(74, 190, 218, 0.24);
+  --edge: rgba(122, 232, 238, 0.70);
+  --lime: rgba(184, 244, 118, 0.58);
+  --coral: rgba(255, 132, 112, 0.62);
+}
+
 body {
   margin: 0;
-  padding: 18px;
-  background: #101418;
-  color: #f6f8fb;
+  padding: 16px;
+  background-color: var(--surface);
+  color: var(--ink);
   font-size: 14px;
 }
 
 .launcher {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .top {
   display: grid;
   gap: 4px;
+  padding: 12px;
+  background-color: rgba(74, 190, 218, 0.12);
+  border: 1px solid rgba(122, 232, 238, 0.42);
+  border-radius: 18px;
 }
 
 .eyebrow {
   margin: 0;
-  color: #86efac;
+  color: var(--lime);
   font-size: 12px;
+  font-weight: 700;
 }
 
 h1 {
   margin: 0;
-  color: #ffffff;
+  color: var(--ink);
   font-size: 28px;
 }
 
 .hint {
   margin: 0;
-  color: #a9b2c3;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .status {
   margin: 0;
-  padding: 9px;
-  background: #152238;
-  color: #bfdbfe;
-  border: 1px solid #3b82f6;
-  border-radius: 8px;
+  padding: 9px 11px;
+  background-color: rgba(184, 244, 118, 0.16);
+  color: var(--ink);
+  border: 1px solid rgba(184, 244, 118, 0.52);
+  border-radius: 16px;
 }
 
 .apps {
@@ -52,21 +67,30 @@ h1 {
 .app {
   display: grid;
   gap: 8px;
-  padding: 12px;
-  background: #171d24;
-  border: 1px solid #344154;
-  border-radius: 12px;
+  padding: 14px 12px 12px;
+  background-color: var(--gel);
+  border: 1px solid var(--edge);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 0 14px rgba(74, 190, 218, 0.18);
+  transition: transform 180ms ease-out, background-color 180ms ease-out, opacity 180ms ease-out;
+}
+
+.app:focus-within,
+.app:active {
+  transform: translate(0px, 1px) scale(0.99);
+  background-color: rgba(74, 190, 218, 0.34);
 }
 
 .name {
   margin: 0;
-  color: #ffffff;
+  color: var(--ink);
   font-size: 18px;
 }
 
 .meta {
   margin: 0;
-  color: #a7c4ff;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -78,18 +102,26 @@ h1 {
 button {
   height: 34px;
   padding: 0 12px;
-  color: #f8fafc;
-  background: #222b37;
-  border: 1px solid #64748b;
-  border-radius: 8px;
+  color: var(--ink);
+  background-color: rgba(74, 190, 218, 0.18);
+  border: 1px solid var(--edge);
+  border-radius: 17px;
+  font-weight: 700;
+  transition: transform 160ms ease-out, background-color 160ms ease-out, opacity 160ms ease-out;
+}
+
+button:focus,
+button:active {
+  transform: translate(0px, 1px) scale(0.96);
+  background-color: rgba(255, 255, 255, 0.16);
 }
 
 button.primary {
-  background: #2563eb;
-  border-color: #60a5fa;
+  background-color: rgba(184, 244, 118, 0.26);
+  border-color: rgba(184, 244, 118, 0.62);
 }
 
 button.danger {
-  background: #7f1d1d;
-  border-color: #ef4444;
+  background-color: rgba(255, 132, 112, 0.20);
+  border-color: var(--coral);
 }

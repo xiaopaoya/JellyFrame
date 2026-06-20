@@ -10,6 +10,12 @@ Native desktop tools live in `../tools/native`.
 - `apps/loose/`: small loose-file app fixtures used for focused runtime,
   scripting and rendering checks.
 
+Current visual-system samples:
+
+- `apps/packages/jelly_controls`: installable Jelly UI controls package.
+- `apps/loose/jelly_motion.html`: transition/keyframe motion fixture.
+- `apps/loose/jelly_launcher_mock.html`: launcher grid visual fixture.
+
 Render-core-only pages now live under `../src/render_core/samples`.
 JerryScript probes now live under `../src/script/samples`.
 App-author starting points belong in `../tools/templates/apps`; samples are for

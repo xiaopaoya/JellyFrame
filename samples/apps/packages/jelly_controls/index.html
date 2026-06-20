@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Jelly Controls</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <main class="screen">
+    <section class="top">
+      <span class="eyebrow">Native Jelly</span>
+      <strong>Controls</strong>
+    </section>
+    <section class="panel">
+      <span class="core"></span>
+      <label for="goal">Focus</label>
+      <input id="goal" class="input" value="Deep work">
+      <button id="switch" class="switch is-on" role="switch" aria-checked="true">
+        <span></span>
+      </button>
+    </section>
+    <section class="progress">
+      <div class="bar"><span id="fill"></span></div>
+      <p><strong id="pct">64</strong><span>% ready</span></p>
+    </section>
+    <section class="actions">
+      <button id="less" class="button">Less</button>
+      <button id="more" class="button primary">More</button>
+    </section>
+    <p id="toast" class="toast">Motion uses paint-safe CSS only.</p>
+  </main>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

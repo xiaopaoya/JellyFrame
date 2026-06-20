@@ -18,6 +18,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `keyframe_animation_sample` microbenchmark.
 - Updated `watch_weather` with a small standard CSS keyframe pulse so packaged
   app samples demonstrate supported animation without custom APIs.
+- Added Jelly UI visual-system samples: the installable `jelly_controls`
+  package, a focused `jelly_motion` fixture and a `jelly_launcher_mock` fixture.
+  The sample launcher now follows the same gel panel/button style without
+  relying on unsupported pseudo-element drawing.
 - Added manifest/profile policy merging for optional data services:
   `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
   `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`
