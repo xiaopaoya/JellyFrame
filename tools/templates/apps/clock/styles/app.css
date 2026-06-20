@@ -29,8 +29,8 @@ body {
 
 .time-card {
   box-sizing: border-box;
-  height: 106px;
-  padding: 12px;
+  height: 112px;
+  padding: 13px 14px;
   border-radius: 28px;
   background: #111923;
 }
@@ -43,23 +43,23 @@ body {
 
 #time {
   display: block;
-  margin-top: 5px;
-  font-size: 46px;
+  margin-top: 4px;
+  font-size: 44px;
   line-height: 1;
 }
 
 #note {
   display: block;
-  margin-top: 5px;
+  margin-top: 4px;
   color: #a7f3d0;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .metrics {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  margin: 10px 0;
+  margin: 8px 0;
 }
 
 .metrics div {
@@ -98,11 +98,13 @@ button {
   background: #183044;
   color: #f8fafc;
   font-size: 16px;
+  line-height: 38px;
 }
 
 button span {
   display: block;
-  padding-top: 10px;
+  height: 38px;
+  line-height: 38px;
   text-align: center;
 }
 

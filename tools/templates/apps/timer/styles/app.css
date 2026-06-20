@@ -96,11 +96,13 @@ button {
   background: #1f2937;
   color: #f8fafc;
   font-size: 14px;
+  line-height: 41px;
 }
 
 button span {
   display: block;
-  padding-top: 11px;
+  height: 41px;
+  line-height: 41px;
   text-align: center;
 }
 

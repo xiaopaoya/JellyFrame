@@ -35,8 +35,8 @@ body {
   display: grid;
   grid-template-columns: 78px 1fr;
   gap: 10px;
-  height: 112px;
-  margin-bottom: 10px;
+  height: 108px;
+  margin-bottom: 11px;
   padding: 10px;
   border: 1px solid #3d7b86;
   border-radius: 18px;
@@ -47,7 +47,7 @@ body {
   box-sizing: border-box;
   width: 76px;
   height: 76px;
-  margin-top: 7px;
+  margin-top: 5px;
   border-radius: 18px;
   overflow: hidden;
   background: #124f5d;
@@ -93,8 +93,8 @@ body {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  height: 44px;
-  margin-bottom: 10px;
+  height: 40px;
+  margin-bottom: 16px;
 }
 
 .stats div {
@@ -102,7 +102,7 @@ body {
   border: 1px solid #3d7b86;
   border-radius: 14px;
   background: #0b2a36;
-  padding: 4px 4px;
+  padding: 3px 4px;
   text-align: center;
 }
 
@@ -112,12 +112,12 @@ body {
 }
 
 .stats strong {
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .stats span {
   color: #aee4d4;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .actions {
@@ -129,13 +129,14 @@ body {
 
 .tile {
   box-sizing: border-box;
-  height: 34px;
+  height: 32px;
   border: 1px solid #7fc9a3;
-  border-radius: 17px;
+  border-radius: 16px;
   background: #125464;
   color: #f7fff6;
   font-size: 12px;
   font-weight: 700;
+  line-height: 30px;
 }
 
 .tile:active,
