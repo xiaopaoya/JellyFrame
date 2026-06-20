@@ -65,7 +65,7 @@ def load_target_config(target: str) -> dict:
     path = target_presets_dir() / f"{target}.json"
     if not path.is_file():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def merge_dict(base: dict, overlay: dict) -> dict:
@@ -84,7 +84,7 @@ def load_manifest_target(root: Path, target: str) -> dict:
     manifest_path = root / "jellyframe.app.json"
     if not manifest_path.is_file():
         return {}
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     manifest_targets = manifest.get("targets", {})
     if not isinstance(manifest_targets, dict):
         return {}
@@ -109,7 +109,7 @@ def list_target_presets() -> list[dict]:
         return []
     presets = []
     for path in sorted(directory.glob("*.json")):
-        presets.append(json.loads(path.read_text(encoding="utf-8")))
+        presets.append(json.loads(path.read_text(encoding="utf-8-sig")))
     return presets
 
 
@@ -171,7 +171,7 @@ def effective_font_budget(args: argparse.Namespace) -> str:
 def load_json_if_exists(path: Path) -> dict:
     if not path.is_file():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def write_json_report(path: Path, report: dict) -> None:
@@ -223,7 +223,7 @@ def run_pipeline_check(args: argparse.Namespace) -> int:
     pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
     ensure_tool(pseudo_browser)
     manifest_path = args.root / "jellyframe.app.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     entry = str(manifest.get("entry", "/index.html"))
     entry_path = args.root / Path(*entry.lstrip("/").split("/"))
     target = getattr(args, "target", None)
@@ -309,9 +309,11 @@ def cmd_preview(args: argparse.Namespace) -> int:
 
 
 def resource_files_from_report(root: Path, report_path: Path) -> list[str]:
-    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report = json.loads(report_path.read_text(encoding="utf-8-sig"))
     files = []
     for resource in report.get("resources", []):
+        if resource.get("kind") not in {"Stylesheet", "ClassicScript", "Other"}:
+            continue
         resource_path = resource.get("path", "")
         if not resource_path:
             continue
@@ -417,7 +419,7 @@ def cmd_targets(args: argparse.Namespace) -> int:
 
 
 def update_template_manifest(manifest_path: Path, args: argparse.Namespace) -> None:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     if args.app_id:
         validate_app_id(args.app_id)
         manifest["id"] = args.app_id

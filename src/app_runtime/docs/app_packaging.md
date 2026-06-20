@@ -548,6 +548,14 @@ The CLI merges render-core pseudo-browser output into the selected JSON report a
 default; pass `--strict` when CI or release packaging should reject warnings as
 well.
 
+Package reports also include `fontDiagnostics`. This is a tooling estimate, not
+a runtime font loader: it scans package text resources for codepoints, applies
+the selected target `fontProfile`, parses manifest-declared `.jffont` V0 glyph
+tables and reports remaining missing non-ASCII glyphs as warnings. `.ttf`,
+`.otf`, `.woff`, `.bdf` and other font files may be packaged for documentation
+or future tooling, but they are not runtime-loadable font supplements yet and
+will be reported as unsupported manifest font formats.
+
 For human app authoring on Windows, prefer the interactive Win32 browser shell:
 
 ```powershell

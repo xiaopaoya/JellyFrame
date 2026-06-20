@@ -15,6 +15,9 @@ JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
 JFAPP_ENTRY_FORMAT = "<IIHHIIII"
 JFAPP_ENTRY_SIZE = struct.calcsize(JFAPP_ENTRY_FORMAT)
 JFAPP_ALIGNMENT = 4
+JFFONT_MAGIC = b"JFFONT0\0"
+JFFONT_HEADER_SIZE = 32
+JFFONT_GLYPH_ENTRY_SIZE = 16
 
 KIND_BY_SUFFIX = {
     ".css": "jellyframe::HostResourceKind::Stylesheet",
@@ -125,7 +128,7 @@ def read_manifest(root: Path) -> dict:
     if not manifest_path.is_file():
         fail("missing jellyframe.app.json")
     try:
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        return json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         fail(f"invalid manifest JSON: {error}")
 
@@ -306,7 +309,7 @@ def load_target_preset(target: str) -> dict:
     if not path.is_file():
         return {}
     try:
-        preset = json.loads(path.read_text(encoding="utf-8"))
+        preset = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         fail(f"invalid target preset {target}: {error}")
     if preset.get("id") != target:
@@ -490,19 +493,221 @@ def collect_reference_diagnostics(root: Path, resources: list[dict], entry: str)
     return warnings, references
 
 
-def collect_manifest_font_diagnostics(manifest: dict, resources: list[dict]) -> list[dict]:
-    resources_by_path = {resource["path"] for resource in resources}
+def is_text_resource(resource: dict) -> bool:
+    return resource["kind"] in {
+        "jellyframe::HostResourceKind::Stylesheet",
+        "jellyframe::HostResourceKind::ClassicScript",
+        "jellyframe::HostResourceKind::Other",
+    }
+
+
+def collect_source_codepoints(resources: list[dict]) -> set[int]:
+    codepoints = set()
+    for resource in resources:
+        if not is_text_resource(resource):
+            continue
+        try:
+            text = resource["file"].read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for char in text:
+            codepoint = ord(char)
+            if codepoint >= 0x20 and codepoint not in {0x7f, 0xfeff}:
+                codepoints.add(codepoint)
+    return codepoints
+
+
+def codepoint_record(codepoint: int) -> dict:
+    char = chr(codepoint)
+    return {
+        "codepoint": f"U+{codepoint:04X}",
+        "char": char if char.strip() else "",
+    }
+
+
+def codepoint_sample(codepoints: set[int], limit: int = 48) -> list[dict]:
+    return [codepoint_record(codepoint) for codepoint in sorted(codepoints)[:limit]]
+
+
+def is_common_symbol_codepoint(codepoint: int) -> bool:
+    return (
+        0x00a0 <= codepoint <= 0x00bf or
+        0x2010 <= codepoint <= 0x203a or
+        0x2190 <= codepoint <= 0x21ff or
+        0x25a0 <= codepoint <= 0x27bf
+    )
+
+
+def profile_covers_codepoint(profile: str, codepoint: int) -> bool:
+    if 0x20 <= codepoint <= 0x7e:
+        return True
+    if profile in {"tiny-plus-symbols", "app-subset-cn", "cn-standard", "global-product"} and \
+            is_common_symbol_codepoint(codepoint):
+        return True
+    if profile == "cn-standard" and 0x4e00 <= codepoint <= 0x9fff:
+        return True
+    if profile == "global-product" and codepoint >= 0x80:
+        return True
+    return False
+
+
+def parse_jffont(data: bytes) -> dict:
+    if len(data) < JFFONT_HEADER_SIZE:
+        return {"ok": False, "error": "short-header"}
+    if data[:8] != JFFONT_MAGIC:
+        return {"ok": False, "error": "bad-magic"}
+    header_size, version = struct.unpack_from("<HH", data, 8)
+    glyph_count = struct.unpack_from("<I", data, 12)[0]
+    line_height = data[16]
+    fallback_advance = data[17]
+    reserved = struct.unpack_from("<H", data, 18)[0]
+    glyph_table_offset, row_data_offset, row_data_size = struct.unpack_from("<III", data, 20)
+    if header_size != JFFONT_HEADER_SIZE or version != 0 or reserved != 0:
+        return {"ok": False, "error": "unsupported-header"}
+    if line_height == 0 or fallback_advance == 0:
+        return {"ok": False, "error": "invalid-metrics"}
+    glyph_table_size = glyph_count * JFFONT_GLYPH_ENTRY_SIZE
+    if glyph_table_offset > len(data) or glyph_table_size > len(data) - glyph_table_offset:
+        return {"ok": False, "error": "glyph-table-out-of-range"}
+    if row_data_offset > len(data) or row_data_size > len(data) - row_data_offset:
+        return {"ok": False, "error": "row-data-out-of-range"}
+
+    glyphs = set()
+    previous = 0
+    for index in range(glyph_count):
+        offset = glyph_table_offset + index * JFFONT_GLYPH_ENTRY_SIZE
+        codepoint, row_offset, row_size = struct.unpack_from("<III", data, offset)
+        width = data[offset + 12]
+        height = data[offset + 13]
+        advance = data[offset + 14]
+        bytes_per_row = data[offset + 15]
+        minimum_bytes_per_row = (width + 7) // 8
+        minimum_row_size = height * bytes_per_row
+        if (
+            codepoint == 0 or
+            (index > 0 and codepoint <= previous) or
+            width == 0 or
+            height == 0 or
+            advance == 0 or
+            bytes_per_row < minimum_bytes_per_row or
+            row_size < minimum_row_size or
+            row_offset > row_data_size or
+            row_size > row_data_size - row_offset
+        ):
+            return {"ok": False, "error": "invalid-glyph-entry", "glyphIndex": index}
+        glyphs.add(codepoint)
+        previous = codepoint
+
+    return {
+        "ok": True,
+        "format": "jffont-v0",
+        "glyphCount": glyph_count,
+        "lineHeight": line_height,
+        "fallbackAdvance": fallback_advance,
+        "glyphs": glyphs,
+    }
+
+
+def collect_font_diagnostics(manifest: dict,
+                             resources: list[dict],
+                             target_config: dict) -> tuple[dict, list[dict]]:
+    resources_by_path = {resource["path"]: resource for resource in resources}
+    source_codepoints = collect_source_codepoints(resources)
+    target_profile = target_config.get("fontProfile", "")
+    if not isinstance(target_profile, str) or not target_profile:
+        target_profile = "tiny"
+    system_covered = {
+        codepoint for codepoint in source_codepoints
+        if profile_covers_codepoint(target_profile, codepoint)
+    }
+    app_covered = set()
+    manifest_fonts = []
     warnings = []
     for font in manifest.get("fonts", []):
         source = font.get("source", "") if isinstance(font, dict) else ""
-        if source and source not in resources_by_path:
+        font_entry = {
+            "id": font.get("id", "") if isinstance(font, dict) else "",
+            "source": source,
+            "profile": font.get("profile", "") if isinstance(font, dict) else "",
+            "packaged": source in resources_by_path,
+            "status": "missing",
+        }
+        resource = resources_by_path.get(source)
+        if source and resource is None:
             warnings.append({
                 "level": "warning",
                 "code": "missing-font-resource",
                 "message": f"manifest font source is not packaged: {source}",
                 "source": "jellyframe.app.json",
             })
-    return warnings
+            manifest_fonts.append(font_entry)
+            continue
+
+        suffix = resource["file"].suffix.lower() if resource is not None else ""
+        if suffix != ".jffont":
+            font_entry["status"] = "packaged-unsupported-runtime-format"
+            font_entry["format"] = suffix[1:] if suffix else "unknown"
+            warnings.append({
+                "level": "warning",
+                "code": "unsupported-font-resource-format",
+                "message": f"manifest font source is packaged but not runtime-loadable yet: {source}",
+                "source": "jellyframe.app.json",
+            })
+            manifest_fonts.append(font_entry)
+            continue
+
+        parsed = parse_jffont(resource["file"].read_bytes())
+        if not parsed.get("ok"):
+            font_entry["status"] = "invalid"
+            font_entry["format"] = "jffont-v0"
+            font_entry["error"] = parsed.get("error", "invalid")
+            warnings.append({
+                "level": "warning",
+                "code": "invalid-jffont-resource",
+                "message": f"manifest font source is not a valid .jffont V0 resource: {source}",
+                "source": "jellyframe.app.json",
+            })
+            manifest_fonts.append(font_entry)
+            continue
+
+        glyphs = parsed["glyphs"]
+        app_covered.update(source_codepoints & glyphs)
+        font_entry.update({
+            "status": "usable",
+            "format": parsed["format"],
+            "glyphCount": parsed["glyphCount"],
+            "lineHeight": parsed["lineHeight"],
+            "fallbackAdvance": parsed["fallbackAdvance"],
+            "usedGlyphCount": len(source_codepoints & glyphs),
+            "usedGlyphSample": codepoint_sample(source_codepoints & glyphs, 24),
+        })
+        manifest_fonts.append(font_entry)
+
+    missing = source_codepoints - system_covered - app_covered
+    missing_non_ascii = {codepoint for codepoint in missing if codepoint >= 0x80}
+    if missing_non_ascii:
+        sample = ", ".join(item["codepoint"] for item in codepoint_sample(missing_non_ascii, 8))
+        warnings.append({
+            "level": "warning",
+            "code": "font-missing-glyphs",
+            "message": f"source text uses codepoints not covered by target profile or app .jffont supplements: {sample}",
+            "source": "jellyframe.app.json",
+        })
+
+    diagnostics = {
+        "targetFontProfile": target_profile,
+        "coverageModel": "target-profile-estimate-plus-jffont-glyph-table",
+        "sourceCodepointCount": len(source_codepoints),
+        "sourceNonAsciiCodepointCount": len({codepoint for codepoint in source_codepoints if codepoint >= 0x80}),
+        "sourceNonAsciiSample": codepoint_sample({codepoint for codepoint in source_codepoints if codepoint >= 0x80}),
+        "systemProfileCoveredCount": len(system_covered),
+        "appFontCoveredCount": len(app_covered),
+        "missingCodepointCount": len(missing),
+        "missingNonAsciiCodepointCount": len(missing_non_ascii),
+        "missingNonAsciiSample": codepoint_sample(missing_non_ascii),
+        "manifestFonts": manifest_fonts,
+    }
+    return diagnostics, warnings
 
 
 def write_cpp(resources: list[dict], output: Path, namespace: str, include: str) -> None:
@@ -696,7 +901,8 @@ def main() -> int:
     resources = discover_resources(root, max_resource_bytes)
     reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
     warnings.extend(reference_warnings)
-    warnings.extend(collect_manifest_font_diagnostics(manifest, resources))
+    font_diagnostics, font_warnings = collect_font_diagnostics(manifest, resources, target_config)
+    warnings.extend(font_warnings)
 
     if not args.validate_only:
         if not args.output_cpp and not args.output_bundle and not args.debug_dir:
@@ -725,6 +931,7 @@ def main() -> int:
             for resource in resources
         ],
         "references": references,
+        "fontDiagnostics": font_diagnostics,
         "warnings": warnings,
     }
     if bundle_report is not None:

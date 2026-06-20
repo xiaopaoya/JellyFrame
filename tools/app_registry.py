@@ -48,7 +48,7 @@ def sanitize_filename(value: str) -> str:
 
 def read_json(path: Path) -> dict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         fail(f"invalid JSON {path}: {error}")
 

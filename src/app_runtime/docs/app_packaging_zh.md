@@ -468,6 +468,12 @@ CLI 会把 render-core 伪浏览器输出合并进指定 JSON report 的 `pipeli
 `error` 的诊断都会使 `check`、`preview` 和 `package` 失败。warning 默认写入报告但不阻断；
 CI 或发布打包希望 warning 也失败时，传入 `--strict`。
 
+Package report 还包含 `fontDiagnostics`。这是工具层估算，不是运行时字体加载器：它会扫描
+package 文本资源中出现的 codepoints，套用目标 `fontProfile`，解析 manifest 声明的 `.jffont`
+V0 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。`.ttf`、`.otf`、`.woff`、
+`.bdf` 等字体文件可以作为文档或未来工具资源被打包，但当前不是 runtime-loadable font
+supplement；如果写进 manifest `fonts`，会被报告为不支持的字体资源格式。
+
 Windows 上做人类 app 开发时，应优先使用交互式 Win32 browser 壳：
 
 ```powershell
