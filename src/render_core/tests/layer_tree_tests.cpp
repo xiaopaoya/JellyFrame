@@ -438,6 +438,22 @@ void grid_item_auto_width_reflows_centered_text() {
     check(first_text.x > first_button.x + 20, "grid button text is centered after stretch");
 }
 
+void text_input_respects_text_align() {
+    auto pipeline = build_pipeline("<body><input class='display' value='42'></body>",
+                                   ".display { width: 120px; height: 32px; padding: 0; "
+                                   "border: 0; text-align: right; font-size: 20px; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::Text && command.text == "42") {
+            check(command.text_align == TextCommandAlign::End, "input text follows text-align right");
+            return;
+        }
+    }
+    check(false, "input text command exists");
+}
+
 void flex_wrap_places_items_on_new_lines() {
     auto pipeline = build_pipeline(
         "<body><section class='row'><div class='item a'>A</div><div class='item b'>B</div><div class='item c'>C</div></section></body>",
@@ -514,6 +530,7 @@ int main() {
         fixed_grid_places_description_list_in_columns();
         unbreakable_symbol_stays_single_line();
         grid_item_auto_width_reflows_centered_text();
+        text_input_respects_text_align();
         flex_wrap_places_items_on_new_lines();
         image_element_emits_image_display_command_when_surface_resolves();
         layer_builder_respects_layer_and_display_command_budgets();

@@ -29,8 +29,8 @@ body {
 
 .time-card {
   box-sizing: border-box;
-  height: 112px;
-  padding: 13px 14px;
+  height: 106px;
+  padding: 12px 14px;
   border-radius: 28px;
   background: #111923;
 }
@@ -44,7 +44,7 @@ body {
 #time {
   display: block;
   margin-top: 4px;
-  font-size: 44px;
+  font-size: 42px;
   line-height: 1;
 }
 
@@ -59,14 +59,14 @@ body {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  margin: 8px 0;
+  margin: 12px 0 10px;
 }
 
 .metrics div {
   box-sizing: border-box;
-  height: 56px;
-  padding: 8px 12px;
-  border-radius: 22px;
+  height: 44px;
+  padding: 4px 12px;
+  border-radius: 16px;
   background: #12161d;
 }
 
@@ -81,8 +81,8 @@ body {
 }
 
 .metrics strong {
-  margin-top: 4px;
-  font-size: 23px;
+  margin-top: 1px;
+  font-size: 18px;
 }
 
 .actions {

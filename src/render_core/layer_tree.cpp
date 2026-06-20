@@ -530,7 +530,7 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
                   text,
                   box.style.font_size,
                   box.style.font_weight,
-                  TextCommandAlign::Start,
+                  text_command_align(box.style.text_align),
                   true);
         if (state.kind == FormControlKind::Select) {
             push_text(display_list,

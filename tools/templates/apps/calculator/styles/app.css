@@ -19,7 +19,7 @@ body {
   box-sizing: border-box;
   height: 62px;
   margin-bottom: 7px;
-  padding: 8px 12px;
+  padding: 9px 12px 7px;
   border-radius: 24px;
   background: #101820;
 }
@@ -34,13 +34,14 @@ input {
   box-sizing: border-box;
   display: block;
   width: 244px;
-  height: 32px;
-  margin: 0;
+  height: 28px;
+  margin: 3px 0 0;
   padding: 0;
   border: 0;
   background: #101820;
   color: #ffffff;
-  font-size: 32px;
+  font-size: 30px;
+  line-height: 28px;
   text-align: right;
 }
 
