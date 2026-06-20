@@ -23,13 +23,15 @@ table 放进同一个有界容器，并提供“当前 app 提交 job / 分配 h
 它仍然不执行网络、文件、解码或 flash I/O；真实工作由桌面壳、RTOS worker 或 port 层完成。
 
 `src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` 提供第一版平台无关 mock：
-`NetworkFetchMock` 和 `AppPrivateKvStorageMock`。它们用于桌面验证和端到端契约测试，仍不访问真实网络、
-文件系统或 flash；真实产品 host 应以相同 request/completion/handle 语义替换其 worker 实现。
+`NetworkFetchMock`、`ImageDecodeMock`、`AppPrivateKvStorageMock` 和 `AudioCommandMock`。
+它们用于桌面验证和端到端契约测试，仍不访问真实网络、文件系统、codec、音频设备或 flash；真实产品
+host 应以相同 request/completion/handle 语义替换其 worker 实现。
 
 同一组文件还提供第一版 manifest/profile gate：`AppServiceManifestCapabilities`、
 `AppServiceHostProfile` 和 `app_service_policies_for_app(...)`。manifest 中的
-`network.fetch` 或 `storage.kv` 只表示 app 请求能力；只有被选中的 host/profile 同时允许该服务，
-并提供有界预算时，最终 runtime policy 才会启用。这样 JS binding 和 worker 实现都不需要各自散落权限判断。
+`network.fetch`、`storage.kv` 或 `media.audio.mp3` 只表示 app 请求能力；只有被选中的
+host/profile 同时允许该服务，并提供有界预算时，最终 runtime policy 才会启用。这样 JS binding 和
+worker 实现都不需要各自散落权限判断。
 
 ## 总体模型
 
@@ -220,13 +222,18 @@ completion event：
 
 - `Open` 成功返回 `audio_handle`。
 - `Play`、`Pause`、`Stop` 返回状态。
+- `Close` 释放 `AudioStream` handle。
+- `SetVolume` 会把音量限制在 0-100。
 - 播放自然结束时投递 `Completed`。
 - 错误时投递 `Failed` 和 host error code。
 
 规则：
 
+- 当前平台无关代码提供 `AudioCommandMock`，用于验证 request/completion/handle 生命周期；它不真正播放音频。
 - `HostMediaCapabilities::max_audio_streams` 通常在手表上设为 1。
 - app 切换或锁屏策略触发时，系统 shell 可以停止或暂停 app audio。
+- app teardown 会释放 host handles；具体服务实现也应在自己的生命周期 hook 中清掉 stale stream record，
+  mock 通过 `collect_released_streams(...)` 覆盖这一路径。
 - worker/audio task 不得调用 JS；只投递事件，由 UI task 派发 `ended`/`error` 等回调。
 
 ## 轻量视频/MJPEG/H.264 实验服务

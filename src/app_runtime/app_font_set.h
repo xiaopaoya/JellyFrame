@@ -48,6 +48,8 @@ public:
         return fonts_.empty();
     }
 
+    void set_system_font(const BitmapFont* font);
+
     std::uint32_t app_instance_id() const {
         return app_instance_id_;
     }
@@ -62,10 +64,15 @@ private:
         BitmapFontResource resource;
     };
 
+    void refresh_context();
+
     std::size_t capacity_ = 1;
     std::uint32_t app_instance_id_ = 0;
+    const BitmapFont* system_font_ = nullptr;
     std::vector<LoadedFont> fonts_;
     BitmapFontContext primary_context_{};
+    std::vector<const BitmapFont*> fallback_fonts_;
+    BitmapFontFallbackContext fallback_context_{};
 };
 
 } // namespace jellyframe

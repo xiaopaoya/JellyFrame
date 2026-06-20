@@ -80,6 +80,8 @@ void service_policy_requires_manifest_and_host_approval() {
     capabilities.media.max_image_width = 80;
     capabilities.media.max_image_height = 80;
     capabilities.media.max_decoded_image_bytes = 80 * 80 * 2;
+    capabilities.media.supports_audio_playback = true;
+    capabilities.media.max_audio_streams = 2;
     AppServiceHostProfile profile = app_service_host_profile_from_capabilities(
         capabilities, AppPrivateKvPolicy{true, 12, 24, 3, 64});
     check(profile.allow_network_fetch, "profile network allowed");
@@ -89,27 +91,34 @@ void service_policy_requires_manifest_and_host_approval() {
     check(profile.allow_image_decode, "profile image allowed");
     check(profile.max_image_width == 80, "profile image width budget");
     check(profile.max_pending_image_decodes == 5, "profile image pending budget");
+    check(profile.allow_audio_playback, "profile audio allowed");
+    check(profile.max_audio_streams == 2, "profile audio stream budget");
 
     AppServicePolicies policies = app_service_policies_for_app(AppServiceManifestCapabilities{}, profile);
     check(!policies.network.enabled, "network denied without manifest capability");
     check(!policies.storage.enabled, "storage denied without manifest capability");
     check(!policies.image.enabled, "image denied without manifest capability");
+    check(!policies.audio.enabled, "audio denied without manifest capability");
 
-    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true}, profile);
+    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true, true}, profile);
     check(policies.network.enabled, "network allowed with manifest and host");
     check(policies.network.max_response_bytes == 512, "network response budget carried");
     check(policies.storage.enabled, "storage allowed with manifest and host");
     check(policies.storage.max_items_per_app == 3, "storage item budget carried");
     check(policies.image.enabled, "image allowed with manifest and host");
     check(policies.image.max_decoded_bytes == 80 * 80 * 2, "image decoded budget carried");
+    check(policies.audio.enabled, "audio allowed with manifest and host");
+    check(policies.audio.max_audio_streams == 2, "audio stream budget carried");
 
     capabilities.has_network = false;
     capabilities.media.supports_image_decode = false;
+    capabilities.media.supports_audio_playback = false;
     profile = app_service_host_profile_from_capabilities(capabilities, AppPrivateKvPolicy{});
-    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true}, profile);
+    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true, true}, profile);
     check(!policies.network.enabled, "network denied without host network");
     check(!policies.storage.enabled, "storage denied without host storage");
     check(!policies.image.enabled, "image denied without host image decode");
+    check(!policies.audio.enabled, "audio denied without host playback");
 }
 
 void network_fetch_pending_request_is_cancelled_on_app_switch() {
@@ -364,6 +373,97 @@ void image_surface_cache_evicts_by_decoded_bytes() {
     check(cache.ready_byte_count() == 8U * 8U * 2U * 2U, "image cache byte eviction reaches budget");
 }
 
+void audio_command_mock_opens_controls_and_closes_streams() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.timer", AppRole::App);
+
+    AudioCommandMock audio;
+    check(audio.submit_open(host, "app://alarm.mp3").status == AppServiceSubmitStatus::CapabilityDenied,
+          "audio capability gate");
+
+    audio.set_policy(AudioPlaybackPolicy{true, 64, 1});
+    check(audio.add_source(AudioSourceFixture{"app://alarm.mp3", 3000}), "audio source fixture accepted");
+    const AppServiceSubmitResult open = audio.submit_open(host, "app://alarm.mp3", 80);
+    check(open.accepted(), "audio open submitted");
+    check(audio.complete_next(host), "audio open completed");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "audio open completion accepted");
+    check(accepted.front().kind == HostServiceJobKind::AudioCommand, "audio open completion kind");
+    check(accepted.front().status == HostServiceStatus::Completed, "audio open completion status");
+    const std::uint32_t handle = accepted.front().handle;
+    check(handle != 0, "audio open returns handle");
+    const AudioStreamRecord* stream = audio.stream(handle);
+    check(stream != nullptr, "audio stream lookup");
+    check(stream->app_instance_id == host.current_app_instance_id(), "audio stream instance");
+    check(stream->state == AudioStreamState::Open, "audio stream starts open");
+    check(stream->volume == 80, "audio open volume carried");
+    check(stream->duration_ms == 3000, "audio duration carried");
+
+    check(audio.submit_play(host, handle).accepted(), "audio play submitted");
+    check(audio.complete_next(host), "audio play completed");
+    accepted = pump(host);
+    check(accepted.size() == 1, "audio play completion accepted");
+    stream = audio.stream(handle);
+    check(stream != nullptr && stream->state == AudioStreamState::Playing, "audio stream playing");
+
+    check(audio.submit_set_volume(host, handle, 42).accepted(), "audio volume submitted");
+    check(audio.complete_next(host), "audio volume completed");
+    accepted = pump(host);
+    check(accepted.size() == 1, "audio volume completion accepted");
+    stream = audio.stream(handle);
+    check(stream != nullptr && stream->volume == 42, "audio volume updated");
+
+    check(audio.post_ended(host, handle), "audio ended event posted");
+    accepted = pump(host);
+    check(accepted.size() == 1, "audio ended completion accepted");
+    check(accepted.front().job_id == 0, "audio ended is unsolicited event");
+    check(accepted.front().status == HostServiceStatus::Completed, "audio ended status");
+    stream = audio.stream(handle);
+    check(stream != nullptr && stream->state == AudioStreamState::Ended, "audio stream ended");
+
+    check(audio.submit_close(host, handle).accepted(), "audio close submitted");
+    check(audio.complete_next(host), "audio close completed");
+    accepted = pump(host);
+    check(accepted.size() == 1, "audio close completion accepted");
+    check(accepted.front().handle == handle, "audio close completion reports closed handle");
+    check(audio.stream(handle) == nullptr, "audio close drops stream record");
+    check(host.handles().lookup(handle) == nullptr, "audio close releases handle");
+}
+
+void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.music", AppRole::App);
+    AudioCommandMock audio(AudioPlaybackPolicy{true, 64, 1});
+    check(audio.add_source(AudioSourceFixture{"app://tone-a.mp3", 100}), "audio budget fixture a");
+    check(audio.add_source(AudioSourceFixture{"app://tone-b.mp3", 100}), "audio budget fixture b");
+
+    const AppServiceSubmitResult first = audio.submit_open(host, "app://tone-a.mp3");
+    check(first.accepted(), "audio first open accepted");
+    const AppServiceSubmitResult second = audio.submit_open(host, "app://tone-b.mp3");
+    check(second.status == AppServiceSubmitStatus::BudgetExceeded, "audio pending open counts against budget");
+    check(audio.complete_next(host), "audio budget first completed");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1 && accepted.front().handle != 0, "audio budget first handle");
+    const std::uint32_t old_handle = accepted.front().handle;
+
+    check(audio.submit_open(host, "app://tone-b.mp3").status == AppServiceSubmitStatus::BudgetExceeded,
+          "audio active stream counts against budget");
+    host.launch("org.example.next", AppRole::App);
+    check(host.handles().lookup(old_handle) == nullptr, "audio lifecycle releases old app handle");
+    check(audio.collect_released_streams(host) == 1, "audio mock collects stale stream records");
+    check(audio.stream(old_handle) == nullptr, "audio stale stream removed");
+
+    const AppServiceSubmitResult next = audio.submit_open(host, "app://tone-b.mp3");
+    check(next.accepted(), "audio next app open accepted after cleanup");
+    check(audio.complete_next(host), "audio next app open completed");
+    accepted = pump(host);
+    check(accepted.size() == 1 && accepted.front().handle != 0, "audio next app handle");
+    const std::uint32_t next_handle = accepted.front().handle;
+    check(audio.release_app_streams(host, host.current_app_instance_id()) == 1, "audio release app streams");
+    check(audio.stream(next_handle) == nullptr, "audio release app stream record");
+    check(host.handles().lookup(next_handle) == nullptr, "audio release app handle");
+}
+
 void kv_storage_is_app_private_and_async() {
     AppRuntimeHost host = make_host();
     AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 4, 96});
@@ -505,6 +605,8 @@ int main() {
     image_surface_cache_evicts_lru_ready_surfaces();
     image_surface_cache_keeps_protected_display_list_surfaces();
     image_surface_cache_evicts_by_decoded_bytes();
+    audio_command_mock_opens_controls_and_closes_streams();
+    audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();
     local_storage_shadow_follows_web_storage_subset();

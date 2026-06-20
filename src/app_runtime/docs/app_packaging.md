@@ -88,6 +88,9 @@ Runtime data and storage boundary:
   runtime data requests only.
 - `capabilities: ["storage.kv"]` declares small app-private async KV storage
   only.
+- `capabilities: ["media.audio.mp3"]` declares optional host-owned MP3
+  playback. Current runtime code has command/handle/completion validation, but
+  no user-facing JS audio API or built-in codec.
 - Apps may request weather/account data, small JSON sync or download a `.jfapp`
   for the system installer to verify.
 - Remote HTML/CSS/script/image resources are still forbidden as page resources.
@@ -95,8 +98,8 @@ Runtime data and storage boundary:
   Cache API and general filesystem access are still absent. A tiny
   `localStorage` V0 subset is exposed only when the host binds a non-blocking
   app-private shadow.
-- Target profiles may reject network/storage apps or cap response bytes,
-  concurrency, timeouts, KV item counts and byte quotas.
+- Target profiles may reject network/storage/audio apps or cap response bytes,
+  concurrency, timeouts, KV item counts, byte quotas and stream counts.
 
 This keeps installable third-party apps viable without turning the MCU runtime
 into an uncontrolled general-purpose browser loader.
@@ -203,15 +206,17 @@ python tools/jellyframe_cli.py schema --print-path
 itself; authorization belongs to the host/profile policy.
 
 `fonts` is currently a deployment/tooling declaration, not runtime CSS font
-loading. The packer records `.jffont`, `.bdf`, `.ttf`, `.otf`, `.woff` and related files as
-ordinary `Font` resources in resource tables or `.jfapp` bundles. `.jffont` V0
-can now be parsed by runtime code and held per app instance; the Win32 shell can
-explicitly switch to the in-bundle bitmap font validation path with
+loading. The packer records `.jffont`, `.bdf`, `.ttf`, `.otf`, `.woff` and
+related files as ordinary `Font` resources in resource tables or `.jfapp`
+bundles. `.jffont` V0 can now be parsed by runtime code and held per app
+instance. `AppFontSet` provides a bitmap fallback chain where the system font
+profile is tried first and app `.jffont` supplements fill missing glyphs; the
+Win32 shell can explicitly switch to this validation path with
 `--use-app-fonts`. `@font-face` and `font-family` still do not automatically
-select text backends, and the product fallback chain remains roadmap work. The
-stable production path is still: collect used characters during package/check,
-generate bitmap glyph data offline from a licensed font, compile the generated
-`BitmapFont` into the port/firmware and inject it through
+select text backends, and multi-family/multi-size product policy remains future
+work. The stable production path is still: collect used characters during
+package/check, generate bitmap glyph data offline from a licensed font, compile
+the generated `BitmapFont` into the port/firmware and inject it through
 `TextMeasureProvider`/`TextPainter`.
 
 Built-in target presets live under `tools/presets/targets`. List them with:
@@ -382,8 +387,9 @@ vector font rasterization; it stores monochrome bitmap glyphs that were subset
 and rasterized offline. The tool can generate this file now, render core
 provides a read-only memory view parser and app runtime provides `AppFontSet`,
 which binds `.jffont` bytes to `app_instance_id` and releases them on app
-exit/switch. The complete fallback chain, CSS/runtime activation semantics and
-product text-backend selection remain Track C work.
+exit/switch. The first bitmap fallback chain is implemented: system font first,
+then app supplements. CSS/runtime activation semantics and product text-backend
+selection remain Track C work.
 
 File layout:
 

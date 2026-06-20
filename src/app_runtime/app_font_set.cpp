@@ -5,6 +5,7 @@ namespace jellyframe {
 AppFontSet::AppFontSet(std::size_t capacity)
     : capacity_(capacity) {
     fonts_.reserve(capacity_);
+    fallback_fonts_.reserve(capacity_ + 1);
 }
 
 AppFontLoadResult AppFontSet::load_jffont(std::uint32_t app_instance_id,
@@ -29,8 +30,7 @@ AppFontLoadResult AppFontSet::load_jffont(std::uint32_t app_instance_id,
     }
     app_instance_id_ = app_instance_id;
     fonts_.push_back(std::move(loaded));
-    primary_context_.font = primary_font();
-    primary_context_.scale = 1;
+    refresh_context();
     return AppFontLoadResult{AppFontLoadStatus::Loaded, fonts_.size()};
 }
 
@@ -46,10 +46,18 @@ std::size_t AppFontSet::clear_app_instance(std::uint32_t app_instance_id) {
 void AppFontSet::clear() {
     fonts_.clear();
     app_instance_id_ = 0;
-    primary_context_ = BitmapFontContext{};
+    refresh_context();
+}
+
+void AppFontSet::set_system_font(const BitmapFont* font) {
+    system_font_ = font;
+    refresh_context();
 }
 
 const BitmapFont* AppFontSet::primary_font() const {
+    if (system_font_ != nullptr) {
+        return system_font_;
+    }
     if (fonts_.empty() || !fonts_.front().resource.valid()) {
         return nullptr;
     }
@@ -57,13 +65,30 @@ const BitmapFont* AppFontSet::primary_font() const {
 }
 
 TextMeasureProvider AppFontSet::measure_provider() {
-    primary_context_.font = primary_font();
-    return TextMeasureProvider{bitmap_font_measure_callback, &primary_context_};
+    refresh_context();
+    return TextMeasureProvider{bitmap_font_fallback_measure_callback, &fallback_context_};
 }
 
 TextPainter AppFontSet::painter() {
+    refresh_context();
+    return TextPainter{bitmap_font_fallback_paint_callback, &fallback_context_};
+}
+
+void AppFontSet::refresh_context() {
+    fallback_fonts_.clear();
+    if (system_font_ != nullptr) {
+        fallback_fonts_.push_back(system_font_);
+    }
+    for (const LoadedFont& loaded : fonts_) {
+        if (loaded.resource.valid()) {
+            fallback_fonts_.push_back(&loaded.resource.font());
+        }
+    }
     primary_context_.font = primary_font();
-    return TextPainter{bitmap_font_paint_callback, &primary_context_};
+    primary_context_.scale = 1;
+    fallback_context_.fonts = fallback_fonts_.empty() ? nullptr : fallback_fonts_.data();
+    fallback_context_.font_count = fallback_fonts_.size();
+    fallback_context_.scale = 1;
 }
 
 } // namespace jellyframe

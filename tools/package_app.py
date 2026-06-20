@@ -194,6 +194,7 @@ def validate_manifest(manifest: dict) -> dict:
         fail("manifest role must be one of: app, launcher, watchface, settings")
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     storage_kv_allowed = "storage.kv" in capabilities
+    audio_playback_allowed = "media.audio.mp3" in capabilities
     return {
         "id": app_id,
         "name": manifest.get("name", app_id),
@@ -211,6 +212,7 @@ def validate_manifest(manifest: dict) -> dict:
         "capabilities": capabilities,
         "networkAllowed": network_allowed,
         "storageKvAllowed": storage_kv_allowed,
+        "audioPlaybackAllowed": audio_playback_allowed,
     }
 
 
@@ -241,7 +243,13 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
                 "message": f"manifest field is not recognized by this JellyFrame toolchain: {key}",
                 "source": "jellyframe.app.json",
             })
-    known_capabilities = {"network.fetch", "storage.kv", "system.launcher", "system.appManager"}
+    known_capabilities = {
+        "network.fetch",
+        "storage.kv",
+        "media.audio.mp3",
+        "system.launcher",
+        "system.appManager",
+    }
     capabilities = manifest.get("capabilities", [])
     if isinstance(capabilities, list):
         for capability in capabilities:
@@ -731,6 +739,7 @@ def main() -> int:
         f"packaged {manifest['id']} resources={len(resources)} "
         f"bytes={report['totalResourceBytes']} network_allowed={manifest['networkAllowed']} "
         f"storage_kv_allowed={manifest['storageKvAllowed']} "
+        f"audio_playback_allowed={manifest['audioPlaybackAllowed']} "
         f"warnings={len(warnings)}"
     )
     for warning in warnings:

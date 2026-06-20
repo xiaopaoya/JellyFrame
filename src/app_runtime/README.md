@@ -9,8 +9,8 @@ It owns contracts and small bounded data structures for:
   queues and host handles together without performing platform I/O.
 - App-instance-scoped async requests and completions.
 - Host-owned resource handles with generation checks.
-- Future app lifecycle, package install/update/delete, network fetch, private
-  storage, media and system-event plumbing.
+- App lifecycle, package install/update/delete, network fetch, private storage,
+  image/audio host-service mocks and system-event plumbing.
 
 It may depend on `render_core` for shared host capability and budget types.
 It must not depend on JerryScript directly, filesystem/network implementations,

@@ -214,6 +214,44 @@ void bench_image_decode_mock(std::size_t capacity) {
     }
 }
 
+void bench_audio_command_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity * 4, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.audio", AppRole::App);
+    AudioCommandMock audio(AudioPlaybackPolicy{true, 64, capacity});
+    audio.add_source(AudioSourceFixture{"app://tone.mp3", 1000});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        audio.submit_open(host, "app://tone.mp3", 80);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        audio.complete_next(host);
+    }
+    std::vector<std::uint32_t> handles;
+    handles.reserve(capacity);
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            if (completion.handle != 0) {
+                handles.push_back(completion.handle);
+            }
+        }
+    }
+    for (std::uint32_t handle : handles) {
+        audio.submit_play(host, handle);
+        audio.submit_set_volume(host, handle, 40);
+        audio.submit_stop(host, handle);
+        audio.submit_close(host, handle);
+    }
+    for (std::size_t i = 0; i < handles.size() * 4; ++i) {
+        audio.complete_next(host);
+    }
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+}
+
 void bench_image_surface_cache(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
     host.launch("org.example.image-cache", AppRole::App);
@@ -376,6 +414,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_image_decode_mock", iterations, average_microseconds(iterations, [&] {
         bench_image_decode_mock(capacity);
+    }));
+    print_result("app_runtime_audio_command_mock", iterations, average_microseconds(iterations, [&] {
+        bench_audio_command_mock(capacity);
     }));
     print_result("app_runtime_image_surface_cache", iterations, average_microseconds(iterations, [&] {
         bench_image_surface_cache(capacity);

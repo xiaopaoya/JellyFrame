@@ -34,6 +34,21 @@ const std::vector<std::uint8_t>& tiny_jffont_bytes() {
     return bytes;
 }
 
+const BitmapFont& tiny_system_font() {
+    static const std::uint8_t glyph_a_rows[] = {
+        0x40,
+        0xa0,
+        0xe0,
+        0xa0,
+        0xa0,
+    };
+    static const BitmapFontGlyph glyphs[] = {
+        BitmapFontGlyph{0x41, 3, 5, 4, 1, glyph_a_rows},
+    };
+    static const BitmapFont font{glyphs, 1, 8, 4};
+    return font;
+}
+
 void current_instance_submission_and_handles_are_scoped() {
     AppRuntimeHost host = make_host();
     assert(!host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
@@ -116,6 +131,32 @@ void app_fonts_follow_active_instance_lifecycle() {
     assert(teardown.app_instance_id == second.id);
     assert(teardown.released_font_resources == 1);
     assert(host.fonts().empty());
+}
+
+void app_font_set_uses_system_font_before_app_supplement() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.fonts", AppRole::App);
+    host.fonts().set_system_font(&tiny_system_font());
+    assert(host.load_current_jffont(tiny_jffont_bytes().data(), tiny_jffont_bytes().size()).loaded());
+
+    TextMetrics metrics;
+    TextMeasureProvider provider = host.fonts().measure_provider();
+    assert(provider.measure("A\xe4\xb8\xad", 8, 400, &metrics, provider.context));
+    assert(metrics.width == 12);
+    assert(metrics.line_height == 8);
+
+    FrameBuffer frame(24, 16, Color{255, 255, 255, 255});
+    TextPainter painter = host.fonts().painter();
+    assert(painter.paint(frame,
+                         Rect{0, 0, 24, 16},
+                         Color{0, 0, 0, 255},
+                         "A\xe4\xb8\xad",
+                         8,
+                         400,
+                         TextCommandAlign::Start,
+                         true,
+                         painter.context));
+    assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
 }
 
 void crash_current_tears_down_active_instance_state() {
@@ -221,6 +262,7 @@ int main() {
     current_instance_submission_and_handles_are_scoped();
     launch_cleans_previous_instance_state();
     app_fonts_follow_active_instance_lifecycle();
+    app_font_set_uses_system_font_before_app_supplement();
     crash_current_tears_down_active_instance_state();
     frame_pump_limits_completions_and_filters_stale_instances();
     options_follow_host_capabilities();

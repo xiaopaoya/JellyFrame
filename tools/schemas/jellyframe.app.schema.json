@@ -189,7 +189,7 @@
     "capabilities": {
       "type": "array",
       "items": {
-        "enum": ["network.fetch", "storage.kv", "system.launcher", "system.appManager"]
+        "enum": ["network.fetch", "storage.kv", "media.audio.mp3", "system.launcher", "system.appManager"]
       },
       "uniqueItems": true
     }

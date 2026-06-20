@@ -32,17 +32,33 @@ struct BitmapFontContext {
     int scale = 1;
 };
 
+struct BitmapFontFallbackContext {
+    const BitmapFont* const* fonts = nullptr;
+    std::size_t font_count = 0;
+    int scale = 1;
+};
+
 const BitmapFontGlyph* find_bitmap_glyph(const BitmapFont& font, std::uint32_t codepoint);
 TextMetrics measure_bitmap_text(const BitmapFontContext& context,
                                 const std::string& text,
                                 int font_size,
                                 int font_weight);
+TextMetrics measure_bitmap_text_with_fallback(const BitmapFontFallbackContext& context,
+                                              const std::string& text,
+                                              int font_size,
+                                              int font_weight);
 
 bool bitmap_font_measure_callback(const std::string& text,
                                   int font_size,
                                   int font_weight,
                                   TextMetrics* metrics,
                                   void* context);
+
+bool bitmap_font_fallback_measure_callback(const std::string& text,
+                                           int font_size,
+                                           int font_weight,
+                                           TextMetrics* metrics,
+                                           void* context);
 
 bool bitmap_font_paint_callback(FrameBuffer& target,
                                 Rect rect,
@@ -53,5 +69,15 @@ bool bitmap_font_paint_callback(FrameBuffer& target,
                                 TextCommandAlign align,
                                 bool single_line,
                                 void* context);
+
+bool bitmap_font_fallback_paint_callback(FrameBuffer& target,
+                                         Rect rect,
+                                         Color color,
+                                         const std::string& text,
+                                         int font_size,
+                                         int font_weight,
+                                         TextCommandAlign align,
+                                         bool single_line,
+                                         void* context);
 
 } // namespace jellyframe

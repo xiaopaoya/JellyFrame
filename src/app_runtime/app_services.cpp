@@ -50,6 +50,11 @@ AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDevic
     profile.max_pending_image_decodes = capabilities.async.max_in_flight_jobs == 0
         ? profile.max_pending_image_decodes
         : capabilities.async.max_in_flight_jobs;
+
+    profile.allow_audio_playback = capabilities.media.supports_audio_playback;
+    profile.max_audio_streams = capabilities.media.max_audio_streams == 0
+        ? profile.max_audio_streams
+        : capabilities.media.max_audio_streams;
     return profile;
 }
 
@@ -75,6 +80,11 @@ AppServicePolicies app_service_policies_for_app(const AppServiceManifestCapabili
         profile.max_image_height,
         profile.max_decoded_image_bytes,
         profile.max_pending_image_decodes,
+    };
+    policies.audio = AudioPlaybackPolicy{
+        manifest.audio_playback && profile.allow_audio_playback,
+        profile.max_audio_source_url_bytes,
+        profile.max_audio_streams,
     };
     return policies;
 }
@@ -388,6 +398,324 @@ void ImageDecodeMock::clear() {
     fixtures_.clear();
     pending_.clear();
     records_.clear();
+}
+
+AudioCommandMock::AudioCommandMock(AudioPlaybackPolicy policy)
+    : policy_(policy) {}
+
+void AudioCommandMock::set_policy(AudioPlaybackPolicy policy) {
+    policy_ = policy;
+}
+
+bool AudioCommandMock::add_source(AudioSourceFixture fixture) {
+    if (fixture.url.empty() || fixture.url.size() > policy_.max_source_url_bytes) {
+        return false;
+    }
+    sources_.push_back(std::move(fixture));
+    return true;
+}
+
+std::size_t AudioCommandMock::active_stream_count(std::uint32_t app_instance_id) const {
+    return static_cast<std::size_t>(std::count_if(streams_.begin(), streams_.end(), [app_instance_id](const AudioStreamRecord& stream) {
+        return app_instance_id == 0 || stream.app_instance_id == app_instance_id;
+    }));
+}
+
+std::size_t AudioCommandMock::pending_open_count(std::uint32_t app_instance_id) const {
+    return static_cast<std::size_t>(std::count_if(pending_.begin(), pending_.end(), [app_instance_id](const PendingCommand& pending) {
+        return pending.command == AudioCommandKind::Open &&
+               (app_instance_id == 0 || pending.app_instance_id == app_instance_id);
+    }));
+}
+
+AudioStreamRecord* AudioCommandMock::find_stream(std::uint32_t audio_handle) {
+    const auto found = std::find_if(streams_.begin(), streams_.end(), [audio_handle](const AudioStreamRecord& stream) {
+        return stream.handle == audio_handle;
+    });
+    return found == streams_.end() ? nullptr : &*found;
+}
+
+const AudioStreamRecord* AudioCommandMock::find_stream(std::uint32_t audio_handle) const {
+    const auto found = std::find_if(streams_.begin(), streams_.end(), [audio_handle](const AudioStreamRecord& stream) {
+        return stream.handle == audio_handle;
+    });
+    return found == streams_.end() ? nullptr : &*found;
+}
+
+bool AudioCommandMock::valid_handle_for_current_app(const AppRuntimeHost& host, std::uint32_t audio_handle) const {
+    const HostHandleInfo* info = host.handles().lookup(audio_handle);
+    return info != nullptr && info->kind == HostServiceHandleKind::AudioStream &&
+           info->app_instance_id == host.current_app_instance_id() &&
+           find_stream(audio_handle) != nullptr;
+}
+
+AppServiceSubmitResult AudioCommandMock::submit_command(AppRuntimeHost& host,
+                                                        AudioCommandKind command,
+                                                        std::uint32_t audio_handle,
+                                                        std::string url,
+                                                        std::uint8_t volume,
+                                                        std::uint32_t timeout_ms) {
+    if (host.current_app_instance_id() == 0) {
+        return rejected(AppServiceSubmitStatus::EmptyInstance, HostServiceStatus::Cancelled);
+    }
+    if (!policy_.enabled) {
+        return rejected(AppServiceSubmitStatus::CapabilityDenied, HostServiceStatus::Unsupported);
+    }
+    if (command == AudioCommandKind::Open) {
+        if (url.empty() || url.size() > policy_.max_source_url_bytes) {
+            return rejected(AppServiceSubmitStatus::InvalidInput, HostServiceStatus::Failed);
+        }
+        if (policy_.max_audio_streams != 0 &&
+            active_stream_count(host.current_app_instance_id()) + pending_open_count(host.current_app_instance_id()) >=
+                policy_.max_audio_streams) {
+            return rejected(AppServiceSubmitStatus::BudgetExceeded, HostServiceStatus::BudgetExceeded);
+        }
+    } else if (!valid_handle_for_current_app(host, audio_handle)) {
+        return rejected(AppServiceSubmitStatus::InvalidInput, HostServiceStatus::Failed);
+    }
+
+    const HostServiceSubmitResult submitted =
+        host.submit_current(HostServiceJobKind::AudioCommand, audio_handle, 0, timeout_ms);
+    AppServiceSubmitResult result = from_submit(submitted);
+    if (!result.accepted()) {
+        return result;
+    }
+
+    PendingCommand pending;
+    pending.job_id = result.job_id;
+    pending.app_instance_id = host.current_app_instance_id();
+    pending.command = command;
+    pending.audio_handle = audio_handle;
+    pending.url = std::move(url);
+    pending.volume = volume > 100 ? 100 : volume;
+    pending.status = HostServiceStatus::Completed;
+
+    if (command == AudioCommandKind::Open) {
+        const auto source = std::find_if(sources_.begin(), sources_.end(), [&pending](const AudioSourceFixture& fixture) {
+            return fixture.url == pending.url;
+        });
+        if (source == sources_.end()) {
+            pending.status = HostServiceStatus::Failed;
+            pending.error_code = 404;
+        } else {
+            pending.duration_ms = source->duration_ms;
+        }
+    }
+
+    pending_.push_back(std::move(pending));
+    return result;
+}
+
+AppServiceSubmitResult AudioCommandMock::submit_open(AppRuntimeHost& host,
+                                                     const std::string& url,
+                                                     std::uint8_t volume,
+                                                     std::uint32_t timeout_ms) {
+    return submit_command(host, AudioCommandKind::Open, 0, url, volume, timeout_ms);
+}
+
+AppServiceSubmitResult AudioCommandMock::submit_play(AppRuntimeHost& host, std::uint32_t audio_handle) {
+    return submit_command(host, AudioCommandKind::Play, audio_handle);
+}
+
+AppServiceSubmitResult AudioCommandMock::submit_pause(AppRuntimeHost& host, std::uint32_t audio_handle) {
+    return submit_command(host, AudioCommandKind::Pause, audio_handle);
+}
+
+AppServiceSubmitResult AudioCommandMock::submit_stop(AppRuntimeHost& host, std::uint32_t audio_handle) {
+    return submit_command(host, AudioCommandKind::Stop, audio_handle);
+}
+
+AppServiceSubmitResult AudioCommandMock::submit_close(AppRuntimeHost& host, std::uint32_t audio_handle) {
+    return submit_command(host, AudioCommandKind::Close, audio_handle);
+}
+
+AppServiceSubmitResult AudioCommandMock::submit_set_volume(AppRuntimeHost& host,
+                                                           std::uint32_t audio_handle,
+                                                           std::uint8_t volume) {
+    return submit_command(host, AudioCommandKind::SetVolume, audio_handle, {}, volume);
+}
+
+bool AudioCommandMock::push_state_completion(AppRuntimeHost& host,
+                                             std::uint32_t job_id,
+                                             std::uint32_t app_instance_id,
+                                             HostServiceStatus status,
+                                             std::uint32_t audio_handle,
+                                             AudioStreamState state,
+                                             std::uint32_t error_code) {
+    return host.push_completion(HostServiceCompletion{
+        job_id,
+        HostServiceJobKind::AudioCommand,
+        status,
+        app_instance_id,
+        audio_handle,
+        error_code,
+        static_cast<std::uint32_t>(state),
+    });
+}
+
+bool AudioCommandMock::complete_next(AppRuntimeHost& host) {
+    HostServiceRequest request;
+    if (!host.pop_worker_request(HostServiceJobKind::AudioCommand, request)) {
+        return false;
+    }
+    const auto pending = find_job(pending_, request.job_id);
+    if (pending == pending_.end()) {
+        return host.push_completion(make_cancelled_completion(request));
+    }
+
+    HostServiceStatus status = pending->status;
+    std::uint32_t handle = pending->audio_handle;
+    std::uint32_t error_code = pending->error_code;
+    AudioStreamState state = AudioStreamState::Error;
+
+    if (status == HostServiceStatus::Completed && pending->command == AudioCommandKind::Open) {
+        handle = host.handles().allocate(HostServiceHandleKind::AudioStream, request.app_instance_id, 0);
+        if (handle == 0) {
+            status = HostServiceStatus::BudgetExceeded;
+            error_code = 507;
+        } else {
+            streams_.push_back(AudioStreamRecord{
+                handle,
+                request.app_instance_id,
+                pending->url,
+                AudioStreamState::Open,
+                pending->volume,
+                pending->duration_ms,
+            });
+            state = AudioStreamState::Open;
+        }
+    } else if (status == HostServiceStatus::Completed) {
+        AudioStreamRecord* record = find_stream(handle);
+        const HostHandleInfo* info = host.handles().lookup(handle);
+        if (record == nullptr || info == nullptr || info->kind != HostServiceHandleKind::AudioStream ||
+            info->app_instance_id != request.app_instance_id) {
+            status = HostServiceStatus::Failed;
+            error_code = 410;
+            handle = 0;
+        } else {
+            switch (pending->command) {
+            case AudioCommandKind::Play:
+                record->state = AudioStreamState::Playing;
+                break;
+            case AudioCommandKind::Pause:
+                record->state = AudioStreamState::Paused;
+                break;
+            case AudioCommandKind::Stop:
+                record->state = AudioStreamState::Stopped;
+                break;
+            case AudioCommandKind::SetVolume:
+                record->volume = pending->volume;
+                break;
+            case AudioCommandKind::Close:
+                state = AudioStreamState::Stopped;
+                release_stream(host, handle);
+                pending_.erase(pending);
+                return push_state_completion(host,
+                                             request.job_id,
+                                             request.app_instance_id,
+                                             HostServiceStatus::Completed,
+                                             handle,
+                                             state);
+            case AudioCommandKind::Open:
+                break;
+            }
+            state = record->state;
+        }
+    }
+
+    const bool pushed = push_state_completion(host, request.job_id, request.app_instance_id, status, handle, state, error_code);
+    pending_.erase(pending);
+    return pushed;
+}
+
+bool AudioCommandMock::post_ended(AppRuntimeHost& host, std::uint32_t audio_handle) {
+    AudioStreamRecord* record = find_stream(audio_handle);
+    const HostHandleInfo* info = host.handles().lookup(audio_handle);
+    if (record == nullptr || info == nullptr || info->kind != HostServiceHandleKind::AudioStream) {
+        return false;
+    }
+    record->state = AudioStreamState::Ended;
+    return push_state_completion(host,
+                                 0,
+                                 record->app_instance_id,
+                                 HostServiceStatus::Completed,
+                                 audio_handle,
+                                 AudioStreamState::Ended);
+}
+
+bool AudioCommandMock::post_error(AppRuntimeHost& host, std::uint32_t audio_handle, std::uint32_t error_code) {
+    AudioStreamRecord* record = find_stream(audio_handle);
+    const HostHandleInfo* info = host.handles().lookup(audio_handle);
+    if (record == nullptr || info == nullptr || info->kind != HostServiceHandleKind::AudioStream) {
+        return false;
+    }
+    record->state = AudioStreamState::Error;
+    return push_state_completion(host,
+                                 0,
+                                 record->app_instance_id,
+                                 HostServiceStatus::Failed,
+                                 audio_handle,
+                                 AudioStreamState::Error,
+                                 error_code);
+}
+
+const AudioStreamRecord* AudioCommandMock::stream(std::uint32_t audio_handle) const {
+    return find_stream(audio_handle);
+}
+
+bool AudioCommandMock::release_stream(AppRuntimeHost& host, std::uint32_t audio_handle) {
+    const auto found = std::find_if(streams_.begin(), streams_.end(), [audio_handle](const AudioStreamRecord& stream) {
+        return stream.handle == audio_handle;
+    });
+    if (found == streams_.end()) {
+        return false;
+    }
+    streams_.erase(found);
+    HostHandleInfo* info = host.handles().lookup(audio_handle);
+    if (info == nullptr) {
+        return true;
+    }
+    if (info->kind != HostServiceHandleKind::AudioStream) {
+        return false;
+    }
+    return host.handles().release(audio_handle);
+}
+
+std::size_t AudioCommandMock::release_app_streams(AppRuntimeHost& host, std::uint32_t app_instance_id) {
+    std::size_t released = 0;
+    for (auto it = streams_.begin(); it != streams_.end();) {
+        if (it->app_instance_id != app_instance_id) {
+            ++it;
+            continue;
+        }
+        const std::uint32_t handle = it->handle;
+        it = streams_.erase(it);
+        HostHandleInfo* info = host.handles().lookup(handle);
+        if (info != nullptr && info->kind == HostServiceHandleKind::AudioStream) {
+            host.handles().release(handle);
+        }
+        ++released;
+    }
+    return released;
+}
+
+std::size_t AudioCommandMock::collect_released_streams(const AppRuntimeHost& host) {
+    const auto old_size = streams_.size();
+    streams_.erase(std::remove_if(streams_.begin(),
+                                  streams_.end(),
+                                  [&host](const AudioStreamRecord& stream) {
+                                      const HostHandleInfo* info = host.handles().lookup(stream.handle);
+                                      return info == nullptr || info->kind != HostServiceHandleKind::AudioStream ||
+                                             info->app_instance_id != stream.app_instance_id;
+                                  }),
+                   streams_.end());
+    return old_size - streams_.size();
+}
+
+void AudioCommandMock::clear() {
+    sources_.clear();
+    pending_.clear();
+    streams_.clear();
 }
 
 AppImageSurfaceCache::AppImageSurfaceCache(AppImageSurfaceCacheOptions options)

@@ -210,6 +210,108 @@ private:
     std::uint32_t use_tick_ = 1;
 };
 
+enum class AudioCommandKind {
+    Open,
+    Play,
+    Pause,
+    Stop,
+    Close,
+    SetVolume,
+};
+
+enum class AudioStreamState {
+    Open,
+    Playing,
+    Paused,
+    Stopped,
+    Ended,
+    Error,
+};
+
+struct AudioPlaybackPolicy {
+    bool enabled = false;
+    std::size_t max_source_url_bytes = 256;
+    std::size_t max_audio_streams = 1;
+};
+
+struct AudioSourceFixture {
+    std::string url;
+    std::uint32_t duration_ms = 0;
+};
+
+struct AudioStreamRecord {
+    std::uint32_t handle = 0;
+    std::uint32_t app_instance_id = 0;
+    std::string url;
+    AudioStreamState state = AudioStreamState::Open;
+    std::uint8_t volume = 100;
+    std::uint32_t duration_ms = 0;
+};
+
+class AudioCommandMock {
+public:
+    explicit AudioCommandMock(AudioPlaybackPolicy policy = {});
+
+    void set_policy(AudioPlaybackPolicy policy);
+    bool add_source(AudioSourceFixture fixture);
+    AppServiceSubmitResult submit_open(AppRuntimeHost& host,
+                                       const std::string& url,
+                                       std::uint8_t volume = 100,
+                                       std::uint32_t timeout_ms = 0);
+    AppServiceSubmitResult submit_play(AppRuntimeHost& host, std::uint32_t audio_handle);
+    AppServiceSubmitResult submit_pause(AppRuntimeHost& host, std::uint32_t audio_handle);
+    AppServiceSubmitResult submit_stop(AppRuntimeHost& host, std::uint32_t audio_handle);
+    AppServiceSubmitResult submit_close(AppRuntimeHost& host, std::uint32_t audio_handle);
+    AppServiceSubmitResult submit_set_volume(AppRuntimeHost& host,
+                                             std::uint32_t audio_handle,
+                                             std::uint8_t volume);
+    bool complete_next(AppRuntimeHost& host);
+    bool post_ended(AppRuntimeHost& host, std::uint32_t audio_handle);
+    bool post_error(AppRuntimeHost& host, std::uint32_t audio_handle, std::uint32_t error_code);
+    const AudioStreamRecord* stream(std::uint32_t audio_handle) const;
+    bool release_stream(AppRuntimeHost& host, std::uint32_t audio_handle);
+    std::size_t release_app_streams(AppRuntimeHost& host, std::uint32_t app_instance_id);
+    std::size_t collect_released_streams(const AppRuntimeHost& host);
+    void clear();
+
+private:
+    struct PendingCommand {
+        std::uint32_t job_id = 0;
+        std::uint32_t app_instance_id = 0;
+        AudioCommandKind command = AudioCommandKind::Open;
+        std::uint32_t audio_handle = 0;
+        std::string url;
+        std::uint8_t volume = 100;
+        HostServiceStatus status = HostServiceStatus::Failed;
+        std::uint32_t error_code = 0;
+        std::uint32_t duration_ms = 0;
+    };
+
+    AppServiceSubmitResult submit_command(AppRuntimeHost& host,
+                                          AudioCommandKind command,
+                                          std::uint32_t audio_handle = 0,
+                                          std::string url = {},
+                                          std::uint8_t volume = 100,
+                                          std::uint32_t timeout_ms = 0);
+    AudioStreamRecord* find_stream(std::uint32_t audio_handle);
+    const AudioStreamRecord* find_stream(std::uint32_t audio_handle) const;
+    std::size_t active_stream_count(std::uint32_t app_instance_id = 0) const;
+    std::size_t pending_open_count(std::uint32_t app_instance_id = 0) const;
+    bool valid_handle_for_current_app(const AppRuntimeHost& host, std::uint32_t audio_handle) const;
+    bool push_state_completion(AppRuntimeHost& host,
+                               std::uint32_t job_id,
+                               std::uint32_t app_instance_id,
+                               HostServiceStatus status,
+                               std::uint32_t audio_handle,
+                               AudioStreamState state,
+                               std::uint32_t error_code = 0);
+
+    AudioPlaybackPolicy policy_;
+    std::vector<AudioSourceFixture> sources_;
+    std::vector<PendingCommand> pending_;
+    std::vector<AudioStreamRecord> streams_;
+};
+
 struct AppPrivateKvPolicy {
     bool enabled = false;
     std::size_t max_key_bytes = 64;
@@ -222,6 +324,7 @@ struct AppServiceManifestCapabilities {
     bool network_fetch = false;
     bool storage_kv = false;
     bool image_decode = false;
+    bool audio_playback = false;
 };
 
 struct AppServiceHostProfile {
@@ -241,12 +344,17 @@ struct AppServiceHostProfile {
     int max_image_height = 0;
     std::size_t max_decoded_image_bytes = 0;
     std::size_t max_pending_image_decodes = 1;
+
+    bool allow_audio_playback = false;
+    std::size_t max_audio_source_url_bytes = 256;
+    std::size_t max_audio_streams = 1;
 };
 
 struct AppServicePolicies {
     NetworkFetchPolicy network;
     AppPrivateKvPolicy storage;
     ImageDecodePolicy image;
+    AudioPlaybackPolicy audio;
 };
 
 AppServiceHostProfile app_service_host_profile_from_capabilities(

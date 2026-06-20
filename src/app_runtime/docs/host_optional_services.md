@@ -32,19 +32,20 @@ load or runtime failures. It still does not perform network, file, decode or
 flash I/O; real work belongs to desktop shells, RTOS workers or board ports.
 
 `src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` provide
-the first platform-neutral mocks: `NetworkFetchMock` and
-`AppPrivateKvStorageMock`. They exist for desktop validation and end-to-end
-contract tests. They still do not access real networking, filesystems or flash;
-product hosts should replace their worker implementation while keeping the same
-request/completion/handle semantics.
+the first platform-neutral mocks: `NetworkFetchMock`, `ImageDecodeMock`,
+`AppPrivateKvStorageMock` and `AudioCommandMock`. They exist for desktop
+validation and end-to-end contract tests. They still do not access real
+networking, filesystems, codecs, audio devices or flash; product hosts should
+replace their worker implementation while keeping the same request/completion/
+handle semantics.
 
 The same files also provide the first manifest/profile gate:
 `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
 `app_service_policies_for_app(...)`. A manifest request such as
-`network.fetch` or `storage.kv` is only an app request. It becomes an enabled
-runtime policy only when the selected host/profile also allows that service and
-provides bounded budgets. This keeps policy decisions out of JS bindings and
-worker implementations.
+`network.fetch`, `storage.kv` or `media.audio.mp3` is only an app request. It
+becomes an enabled runtime policy only when the selected host/profile also
+allows that service and provides bounded budgets. This keeps policy decisions
+out of JS bindings and worker implementations.
 
 ## Overall Model
 
@@ -252,13 +253,20 @@ Completion behavior:
 
 - `Open` returns an `audio_handle`.
 - `Play`, `Pause` and `Stop` return state.
+- `Close` releases the `AudioStream` handle.
+- `SetVolume` clamps the stored volume to 0-100.
 - Natural end posts `Completed`.
 - Errors post `Failed` and a host error code.
 
 Rules:
 
+- Current platform-neutral code provides `AudioCommandMock` for request/
+  completion/handle validation. It does not play audio.
 - `HostMediaCapabilities::max_audio_streams` is usually 1 on watches.
 - App switches or lock-screen policy may stop or pause app audio.
+- App teardown releases host handles; service implementations should also drop
+  stale stream records through their own lifecycle hook, as the mock does with
+  `collect_released_streams(...)`.
 - Audio workers do not call JS; they post events for the UI task to dispatch.
 
 ## Lightweight Video/MJPEG/H.264 Experimental Service

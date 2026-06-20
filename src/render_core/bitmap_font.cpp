@@ -71,6 +71,61 @@ int context_scale(const BitmapFontContext& context) {
     return std::max(1, context.scale);
 }
 
+int context_scale(const BitmapFontFallbackContext& context) {
+    return std::max(1, context.scale);
+}
+
+const BitmapFont* fallback_base_font(const BitmapFontFallbackContext& context) {
+    if (context.fonts == nullptr) {
+        return nullptr;
+    }
+    for (std::size_t i = 0; i < context.font_count; ++i) {
+        if (context.fonts[i] != nullptr && context.fonts[i]->glyphs != nullptr) {
+            return context.fonts[i];
+        }
+    }
+    return nullptr;
+}
+
+const BitmapFontGlyph* find_fallback_glyph(const BitmapFontFallbackContext& context,
+                                           std::uint32_t codepoint,
+                                           const BitmapFont** owner) {
+    if (owner != nullptr) {
+        *owner = nullptr;
+    }
+    if (context.fonts == nullptr) {
+        return nullptr;
+    }
+    for (std::size_t i = 0; i < context.font_count; ++i) {
+        const BitmapFont* font = context.fonts[i];
+        if (font == nullptr) {
+            continue;
+        }
+        const BitmapFontGlyph* glyph = find_bitmap_glyph(*font, codepoint);
+        if (glyph != nullptr) {
+            if (owner != nullptr) {
+                *owner = font;
+            }
+            return glyph;
+        }
+    }
+    return nullptr;
+}
+
+int fallback_line_height(const BitmapFontFallbackContext& context) {
+    int line_height = 0;
+    if (context.fonts == nullptr) {
+        return 0;
+    }
+    for (std::size_t i = 0; i < context.font_count; ++i) {
+        const BitmapFont* font = context.fonts[i];
+        if (font != nullptr) {
+            line_height = std::max(line_height, static_cast<int>(font->line_height));
+        }
+    }
+    return line_height;
+}
+
 int glyph_advance(const BitmapFont& font, const BitmapFontGlyph* glyph) {
     if (glyph != nullptr) {
         return glyph->advance > 0 ? glyph->advance : glyph->width;
@@ -191,6 +246,29 @@ TextMetrics measure_bitmap_text(const BitmapFontContext& context,
     };
 }
 
+TextMetrics measure_bitmap_text_with_fallback(const BitmapFontFallbackContext& context,
+                                              const std::string& text,
+                                              int font_size,
+                                              int font_weight) {
+    const BitmapFont* base_font = fallback_base_font(context);
+    if (base_font == nullptr) {
+        return fallback_text_metrics(text, font_size, font_weight);
+    }
+    const int scale = context_scale(context);
+    int width = 0;
+    for (std::size_t index = 0; index < text.size();) {
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
+        const BitmapFont* owner = nullptr;
+        const BitmapFontGlyph* glyph = find_fallback_glyph(context, codepoint, &owner);
+        width += glyph_advance(owner != nullptr ? *owner : *base_font, glyph) * scale;
+    }
+    if (!text.empty() && font_weight >= 600) {
+        width += 1;
+    }
+    const int line_height = std::max(1, fallback_line_height(context));
+    return TextMetrics{width, line_height * scale};
+}
+
 bool bitmap_font_measure_callback(const std::string& text,
                                   int font_size,
                                   int font_weight,
@@ -200,6 +278,22 @@ bool bitmap_font_measure_callback(const std::string& text,
         return false;
     }
     *metrics = measure_bitmap_text(*static_cast<const BitmapFontContext*>(context), text, font_size, font_weight);
+    return true;
+}
+
+bool bitmap_font_fallback_measure_callback(const std::string& text,
+                                           int font_size,
+                                           int font_weight,
+                                           TextMetrics* metrics,
+                                           void* context) {
+    if (metrics == nullptr || context == nullptr) {
+        return false;
+    }
+    *metrics = measure_bitmap_text_with_fallback(
+        *static_cast<const BitmapFontFallbackContext*>(context),
+        text,
+        font_size,
+        font_weight);
     return true;
 }
 
@@ -249,6 +343,62 @@ bool bitmap_font_paint_callback(FrameBuffer& target,
                                stroke_passes);
         }
         cursor_x += glyph_advance(font, glyph) * scale;
+        if (cursor_x >= rect.x + rect.width) {
+            break;
+        }
+    }
+    return true;
+}
+
+bool bitmap_font_fallback_paint_callback(FrameBuffer& target,
+                                         Rect rect,
+                                         Color color,
+                                         const std::string& text,
+                                         int font_size,
+                                         int font_weight,
+                                         TextCommandAlign align,
+                                         bool single_line,
+                                         void* context) {
+    (void)single_line;
+    if (context == nullptr || color.a == 0 || rect.width <= 0 || rect.height <= 0) {
+        return false;
+    }
+    const auto& fallback_context = *static_cast<const BitmapFontFallbackContext*>(context);
+    const BitmapFont* base_font = fallback_base_font(fallback_context);
+    if (base_font == nullptr) {
+        return false;
+    }
+    const int scale = context_scale(fallback_context);
+    const TextMetrics metrics = measure_bitmap_text_with_fallback(fallback_context, text, font_size, font_weight);
+    int cursor_x = rect.x;
+    if (align == TextCommandAlign::Center) {
+        cursor_x += std::max(0, (rect.width - metrics.width) / 2);
+    } else if (align == TextCommandAlign::End) {
+        cursor_x += std::max(0, rect.width - metrics.width);
+    }
+    const int line_height = std::max(1, fallback_line_height(fallback_context));
+    const int glyph_height = line_height * scale;
+    const int cursor_y = rect.y + std::max(0, (rect.height - glyph_height) / 2);
+    const int stroke_passes = font_weight >= 600 ? 2 : 1;
+
+    for (std::size_t index = 0; index < text.size();) {
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
+        const BitmapFont* owner = nullptr;
+        const BitmapFontGlyph* glyph = find_fallback_glyph(fallback_context, codepoint, &owner);
+        if (glyph != nullptr && owner != nullptr) {
+            draw_glyph(target, cursor_x, cursor_y, color, *glyph, scale, stroke_passes);
+            cursor_x += glyph_advance(*owner, glyph) * scale;
+        } else {
+            draw_missing_glyph(target,
+                               cursor_x,
+                               cursor_y,
+                               color,
+                               base_font->fallback_advance,
+                               line_height,
+                               scale,
+                               stroke_passes);
+            cursor_x += glyph_advance(*base_font, nullptr) * scale;
+        }
         if (cursor_x >= rect.x + rect.width) {
             break;
         }
