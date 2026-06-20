@@ -15,12 +15,18 @@ set(JERRYSCRIPT_ROOT "" CACHE PATH "JerryScript source or install root")
 set(JERRYSCRIPT_INCLUDE_DIR "" CACHE PATH "JerryScript include directory")
 set(JERRYSCRIPT_LIBRARIES "" CACHE STRING "JerryScript libraries")
 
-if(JERRYSCRIPT_ROOT AND NOT JERRYSCRIPT_INCLUDE_DIR)
+if(JERRYSCRIPT_ROOT)
+    set(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR "")
     if(EXISTS "${JERRYSCRIPT_ROOT}/jerry-core/include/jerryscript.h")
-        set(JERRYSCRIPT_INCLUDE_DIR "${JERRYSCRIPT_ROOT}/jerry-core/include" CACHE PATH
-            "JerryScript include directory" FORCE)
+        set(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR "${JERRYSCRIPT_ROOT}/jerry-core/include")
     elseif(EXISTS "${JERRYSCRIPT_ROOT}/include/jerryscript.h")
-        set(JERRYSCRIPT_INCLUDE_DIR "${JERRYSCRIPT_ROOT}/include" CACHE PATH
+        set(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR "${JERRYSCRIPT_ROOT}/include")
+    endif()
+
+    if(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR AND
+            (NOT JERRYSCRIPT_INCLUDE_DIR OR
+             NOT EXISTS "${JERRYSCRIPT_INCLUDE_DIR}/jerryscript.h"))
+        set(JERRYSCRIPT_INCLUDE_DIR "${_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR}" CACHE PATH
             "JerryScript include directory" FORCE)
     endif()
 endif()
@@ -100,6 +106,18 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         message(FATAL_ERROR
             "JELLYFRAME_BUILD_SCRIPTING requires JERRYSCRIPT_INCLUDE_DIR and JERRYSCRIPT_LIBRARIES")
     endif()
+    if(NOT EXISTS "${JERRYSCRIPT_INCLUDE_DIR}/jerryscript.h")
+        message(FATAL_ERROR
+            "JERRYSCRIPT_INCLUDE_DIR does not contain jerryscript.h: ${JERRYSCRIPT_INCLUDE_DIR}\n"
+            "If configuring from PowerShell, use $PWD instead of cmd.exe-only %CD%.")
+    endif()
+    foreach(_JELLYFRAME_JERRYSCRIPT_LIBRARY IN LISTS JERRYSCRIPT_LIBRARIES)
+        if(NOT EXISTS "${_JELLYFRAME_JERRYSCRIPT_LIBRARY}")
+            message(FATAL_ERROR
+                "JerryScript library does not exist: ${_JELLYFRAME_JERRYSCRIPT_LIBRARY}\n"
+                "If configuring from PowerShell, use $PWD instead of cmd.exe-only %CD%.")
+        endif()
+    endforeach()
 
     add_library(jellyframe_script
         src/script/jerryscript_runtime.cpp

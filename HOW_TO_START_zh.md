@@ -257,10 +257,11 @@ python third_party\jerryscript\tools\build.py --clean
 启用 JellyFrame scripting：
 
 ```powershell
+$jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build-script `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
-  -DJERRYSCRIPT_ROOT="%CD%\third_party\jerryscript" `
-  -DJERRYSCRIPT_LIBRARIES="%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-core.lib;%CD%\third_party\jerryscript\build\lib\MinSizeRel\jerry-port.lib"
+  -DJERRYSCRIPT_ROOT="$jerryRoot" `
+  -DJERRYSCRIPT_LIBRARIES="$jerryRoot\build\lib\MinSizeRel\jerry-core.lib;$jerryRoot\build\lib\MinSizeRel\jerry-port.lib"
 cmake --build build-script --config Release
 ```
 
