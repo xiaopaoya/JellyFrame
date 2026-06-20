@@ -81,6 +81,10 @@ bool has_shadow(const Style& style) {
     return !style.box_shadow.empty() && style.box_shadow != "none";
 }
 
+bool has_text_shadow(const Style& style) {
+    return !style.text_shadow.empty() && style.text_shadow != "none";
+}
+
 void push_fill_rect(DisplayList& display_list, Rect rect, Color color, int border_radius = 0) {
     if (rect.width <= 0 || rect.height <= 0 || color.a == 0) {
         return;
@@ -94,15 +98,21 @@ void push_fill_rect(DisplayList& display_list, Rect rect, Color color, int borde
     display_list.push_back(std::move(command));
 }
 
-void push_linear_gradient(DisplayList& display_list, Rect rect, Color top, Color bottom, int border_radius = 0) {
-    if (rect.width <= 0 || rect.height <= 0 || (top.a == 0 && bottom.a == 0)) {
+void push_linear_gradient(DisplayList& display_list,
+                          Rect rect,
+                          Color first,
+                          Color second,
+                          GradientAxis axis,
+                          int border_radius = 0) {
+    if (rect.width <= 0 || rect.height <= 0 || (first.a == 0 && second.a == 0)) {
         return;
     }
     DisplayCommand command;
     command.type = DisplayCommandType::LinearGradient;
     command.rect = rect;
-    command.color = top;
-    command.color2 = bottom;
+    command.color = first;
+    command.color2 = second;
+    command.gradient_axis = axis;
     command.border_radius = border_radius;
     display_list.push_back(std::move(command));
 }
@@ -439,6 +449,24 @@ void paint_approximate_box_shadow(const LayoutBox& box, DisplayList& display_lis
     push_fill_rect(display_list, shadow_rect, approximate_shadow_color(box.style.box_shadow), box.style.border_radius);
 }
 
+void paint_outline(const LayoutBox& box, DisplayList& display_list) {
+    if (box.style.outline_width <= 0 || box.style.outline_color.a == 0) {
+        return;
+    }
+    const int width = box.style.outline_width;
+    const Rect outline_rect{
+        box.rect.x - width,
+        box.rect.y - width,
+        box.rect.width + width * 2,
+        box.rect.height + width * 2,
+    };
+    push_stroke_rect(display_list,
+                     outline_rect,
+                     box.style.outline_color,
+                     width,
+                     box.style.border_radius + width);
+}
+
 void paint_meter_bar(const LayoutBox& box, DisplayList& display_list) {
     if (box.node == nullptr || box.node->type != NodeType::Element) {
         return;
@@ -607,6 +635,7 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                              paint_rect,
                              box.style.background_color,
                              box.style.background_color2,
+                             box.style.background_gradient_axis,
                              box.style.border_radius);
     } else if (is_visible_background(box.style.background_color)) {
         push_fill_rect(display_list, paint_rect, box.style.background_color, box.style.border_radius);
@@ -619,6 +648,7 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                           box.style.border_color,
                           box.style.border_radius);
     }
+    paint_outline(box, display_list);
 
     paint_meter_bar(box, display_list);
     paint_form_control(box, display_list);
@@ -635,6 +665,24 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
             ? box.style.line_height
             : box.style.font_size + std::max(6, box.style.font_size / 3);
         const bool single_line = !has_text_wrap_opportunity(text) || box.rect.height <= line_height;
+        if (has_text_shadow(box.style)) {
+            int shadow_x = 0;
+            int shadow_y = 0;
+            int shadow_blur = 0;
+            if (parse_shadow_lengths(box.style.text_shadow, shadow_x, shadow_y, shadow_blur)) {
+                Rect shadow_rect = box.rect;
+                shadow_rect.x += shadow_x;
+                shadow_rect.y += shadow_y;
+                push_text(display_list,
+                          shadow_rect,
+                          approximate_shadow_color(box.style.text_shadow),
+                          text,
+                          box.style.font_size,
+                          box.style.font_weight,
+                          text_command_align(box.style.text_align),
+                          single_line);
+            }
+        }
         push_text(display_list,
                   box.rect,
                   box.style.color,

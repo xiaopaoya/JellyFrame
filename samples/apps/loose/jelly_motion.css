@@ -42,6 +42,7 @@ body {
 .orb strong {
   display: block;
   font-size: 34px;
+  text-shadow: 0 2px 3px rgba(0,0,0,0.30);
 }
 
 .orb p {
@@ -62,17 +63,18 @@ body {
   height: 36px;
   color: #f6fbff;
   background-color: rgba(74, 190, 218, 0.18);
-  background: linear-gradient(rgba(118, 228, 240, 0.26), rgba(42, 142, 184, 0.16));
+  background: linear-gradient(to right, rgba(118, 228, 240, 0.26), rgba(42, 142, 184, 0.16));
   border: 1px solid rgba(122, 232, 238, 0.62);
   border-radius: 18px;
   font-weight: 700;
   text-align: center;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.30);
   transition: transform 160ms ease-out, background-color 160ms ease-out;
 }
 
 .chip.active {
   background-color: rgba(184, 244, 118, 0.40);
-  background: linear-gradient(rgba(214, 252, 160, 0.42), rgba(104, 206, 186, 0.22));
+  background: linear-gradient(to right, rgba(214, 252, 160, 0.42), rgba(104, 206, 186, 0.22));
 }
 
 .chip:active,
@@ -80,6 +82,7 @@ body {
   transform: translate(0px, 1px) scale(0.96);
   background-color: rgba(134, 226, 238, 0.24);
   background: linear-gradient(rgba(190, 250, 255, 0.34), rgba(74, 190, 218, 0.18));
+  outline: 1px solid rgba(220,255,255,0.48);
 }
 
 @keyframes gel-float {

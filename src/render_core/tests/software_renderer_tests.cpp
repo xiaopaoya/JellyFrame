@@ -111,6 +111,22 @@ void linear_gradient_rasterizes_top_and_bottom_colors() {
     check(frame_buffer.pixel(1, 2).r > frame_buffer.pixel(1, 1).r, "gradient interpolates rows");
 }
 
+void horizontal_linear_gradient_rasterizes_left_and_right_colors() {
+    FrameBuffer frame_buffer(4, 3, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::LinearGradient;
+    command.rect = Rect{0, 0, 4, 3};
+    command.color = Color{0, 0, 0, 255};
+    command.color2 = Color{90, 45, 15, 255};
+    command.gradient_axis = GradientAxis::Horizontal;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 4, 3});
+
+    check(frame_buffer.pixel(0, 1).r == 0, "horizontal gradient left column uses first color");
+    check(frame_buffer.pixel(3, 1).r == 90, "horizontal gradient right column uses second color");
+    check(frame_buffer.pixel(2, 1).r > frame_buffer.pixel(1, 1).r, "horizontal gradient interpolates columns");
+}
+
 void rounded_stroke_keeps_corner_pixels_clear() {
     FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -605,6 +621,7 @@ int main() {
     try {
         fill_rect_rasterizes_pixels();
         linear_gradient_rasterizes_top_and_bottom_colors();
+        horizontal_linear_gradient_rasterizes_left_and_right_colors();
         rounded_stroke_keeps_corner_pixels_clear();
         source_over_alpha_composites();
         clipping_limits_rasterization();

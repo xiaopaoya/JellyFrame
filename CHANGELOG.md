@@ -12,6 +12,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   color vertical gradients now flow from style resolution into the layer display
   list and software rasterizer, while unsupported angles/stops keep earlier
   solid fallbacks alive.
+- Extended the opt-in visual CSS subset with horizontal `linear-gradient(...)`,
+  first-shadow `text-shadow` painting and non-layout `outline` strokes, and
+  documented the standard-subset/opt-in-cost policy for future visual features.
 - Added the first bounded CSS `@keyframes` / `animation-*` subset. The parser
   stores `from`/`to` or `0%`/`100%` keyframes, style resolution keeps up to four
   animation entries per style, and `AnimationTimeline` samples `opacity`,

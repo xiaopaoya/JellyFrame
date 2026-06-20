@@ -1240,7 +1240,7 @@ bool parse_color(const std::string& raw_value, Color& output) {
     return false;
 }
 
-bool parse_linear_gradient_background(const std::string& raw_value, Color& top, Color& bottom) {
+bool parse_linear_gradient_background(const std::string& raw_value, Color& first, Color& second, GradientAxis& axis) {
     const std::string value = lowercase(trim(raw_value));
     constexpr std::string_view prefix = "linear-gradient(";
     if (value.rfind(prefix, 0) != 0 || value.back() != ')') {
@@ -1249,11 +1249,19 @@ bool parse_linear_gradient_background(const std::string& raw_value, Color& top, 
 
     std::vector<std::string> args =
         split_function_arguments(std::string_view(value).substr(prefix.size(), value.size() - prefix.size() - 1));
+    axis = GradientAxis::Vertical;
     if (args.size() == 3) {
         const std::string direction = trim(args[0]);
         if (direction == "to bottom") {
             args.erase(args.begin());
         } else if (direction == "to top") {
+            args.erase(args.begin());
+            std::swap(args[0], args[1]);
+        } else if (direction == "to right") {
+            axis = GradientAxis::Horizontal;
+            args.erase(args.begin());
+        } else if (direction == "to left") {
+            axis = GradientAxis::Horizontal;
             args.erase(args.begin());
             std::swap(args[0], args[1]);
         } else {
@@ -1263,20 +1271,25 @@ bool parse_linear_gradient_background(const std::string& raw_value, Color& top, 
     if (args.size() != 2) {
         return false;
     }
-    return parse_color(args[0], top) && parse_color(args[1], bottom);
+    return parse_color(args[0], first) && parse_color(args[1], second);
 }
 
-bool parse_background_paint(const std::string& value, BackgroundPaintKind& kind, Color& color, Color& color2) {
-    Color top;
-    Color bottom;
-    if (parse_linear_gradient_background(value, top, bottom)) {
+bool parse_background_paint(const std::string& value,
+                            BackgroundPaintKind& kind,
+                            GradientAxis& axis,
+                            Color& color,
+                            Color& color2) {
+    Color first;
+    Color second;
+    if (parse_linear_gradient_background(value, first, second, axis)) {
         kind = BackgroundPaintKind::LinearGradient;
-        color = top;
-        color2 = bottom;
+        color = first;
+        color2 = second;
         return true;
     }
     if (parse_color(value, color)) {
         kind = BackgroundPaintKind::Solid;
+        axis = GradientAxis::Vertical;
         color2 = color;
         return true;
     }
@@ -1739,6 +1752,10 @@ enum class CascadeProperty : std::size_t {
     JustifyContent,
     AlignItems,
     BoxSizing,
+    TextShadow,
+    Outline,
+    OutlineWidth,
+    OutlineColor,
     Flex,
     FlexGrow,
     FlexShrink,
@@ -1881,8 +1898,20 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "text-indent") {
         return &cascade_slot(slots, CascadeProperty::TextIndent);
     }
+    if (property == "text-shadow") {
+        return &cascade_slot(slots, CascadeProperty::TextShadow);
+    }
     if (property == "box-shadow") {
         return &cascade_slot(slots, CascadeProperty::BoxShadow);
+    }
+    if (property == "outline") {
+        return &cascade_slot(slots, CascadeProperty::Outline);
+    }
+    if (property == "outline-width") {
+        return &cascade_slot(slots, CascadeProperty::OutlineWidth);
+    }
+    if (property == "outline-color") {
+        return &cascade_slot(slots, CascadeProperty::OutlineColor);
     }
     if (property == "overflow") {
         return &cascade_slot(slots, CascadeProperty::Overflow);
@@ -2100,17 +2129,20 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             return false;
         }
         style.background_paint = BackgroundPaintKind::Solid;
+        style.background_gradient_axis = GradientAxis::Vertical;
         style.background_color = parsed;
         style.background_color2 = parsed;
         return true;
     } else if (property == "background") {
         BackgroundPaintKind kind = BackgroundPaintKind::Solid;
+        GradientAxis axis = GradientAxis::Vertical;
         Color color;
         Color color2;
-        if (!parse_background_paint(value, kind, color, color2)) {
+        if (!parse_background_paint(value, kind, axis, color, color2)) {
             return false;
         }
         style.background_paint = kind;
+        style.background_gradient_axis = axis;
         style.background_color = color;
         style.background_color2 = color2;
         return true;
@@ -2301,9 +2333,71 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.text_indent = px;
         style.text_indent_specified = true;
         return true;
+    } else if (property == "text-shadow") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "none") {
+            style.text_shadow.clear();
+            style.text_shadow_specified = true;
+            return true;
+        }
+        style.text_shadow = trim(value);
+        style.text_shadow_specified = true;
+        return !style.text_shadow.empty();
     } else if (property == "box-shadow") {
         style.box_shadow = trim(value);
         return !style.box_shadow.empty();
+    } else if (property == "outline-width") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        style.outline_width = std::max(0, px);
+        return true;
+    } else if (property == "outline-color") {
+        Color parsed;
+        if (!parse_color(value, parsed)) {
+            return false;
+        }
+        style.outline_color = parsed;
+        return true;
+    } else if (property == "outline") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "none" || lowered == "0" || lowered == "0px") {
+            style.outline_width = 0;
+            return true;
+        }
+        int width = 0;
+        Color color;
+        bool has_width = false;
+        bool has_color = false;
+        std::size_t index = 0;
+        while (index < value.size()) {
+            while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) != 0) {
+                ++index;
+            }
+            const std::size_t begin = index;
+            while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) == 0) {
+                ++index;
+            }
+            const std::string token = value.substr(begin, index - begin);
+            if (!token.empty() && !has_width && parse_length_px(token, width, style.font_size)) {
+                has_width = true;
+            } else if (!token.empty() && !has_color && parse_color(token, color)) {
+                has_color = true;
+            }
+        }
+        if (!has_width && !has_color) {
+            return false;
+        }
+        if (has_width) {
+            style.outline_width = std::max(0, width);
+        } else if (style.outline_width == 0) {
+            style.outline_width = 1;
+        }
+        if (has_color) {
+            style.outline_color = color;
+        }
+        return true;
     } else if (property == "overflow") {
         const std::string lowered = lowercase(trim(value));
         if (lowered != "visible" && lowered != "hidden" && lowered != "scroll" &&

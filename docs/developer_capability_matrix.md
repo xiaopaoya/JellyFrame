@@ -147,7 +147,7 @@ clear older supported fallback declarations.
 | `display` | Subset | `block`, `inline`, `inline-block`, `flex`, `inline-flex`, `grid`, `inline-grid`, `none`. Inline flex/grid map to the same simplified layout modes. |
 | `color` | Subset | Named basics, hex, `rgb()`, `rgba()`. Unsupported color functions such as `oklch()` do not override fallbacks. |
 | `background-color` | Subset | Same color parser as `color`; gradients are intentionally not accepted here because CSS treats them as background images. |
-| `background` | Subset | Solid colors plus `linear-gradient(<color>, <color>)`, `linear-gradient(to bottom, ...)` and `linear-gradient(to top, ...)` as a cheap vertical paint command. Images and complex stops/angles are ignored or diagnosed without clearing earlier fallbacks. |
+| `background` | Subset | Solid colors plus `linear-gradient(<color>, <color>)` and `linear-gradient(to bottom/top/right/left, ...)` as cheap two-color linear paint commands. Images and complex stops/angles are ignored or diagnosed without clearing earlier fallbacks. |
 | `margin` | Works | 1-4 length values plus horizontal `auto`. |
 | `margin-top/right/bottom/left` | Works | Physical longhands. `margin-left/right:auto` works for horizontal centering paths. |
 | `padding` | Works | 1-4 length values. |
@@ -157,6 +157,7 @@ clear older supported fallback declarations.
 | `border-top/right/bottom/left-width` | Works | Physical width longhands. |
 | `border-color` | Subset | Single color for all borders. |
 | `border-radius` | Subset | Single length radius. Rounded fills are supported; complex corner radii are not. |
+| `outline` / `outline-width` / `outline-color` | Subset | Painted as a non-layout outer stroke. Simple width/color shorthand is supported; `outline-offset` and complex style semantics are deferred. |
 | `width` / `height` | Works | Length values in supported units. |
 | `min-width` / `min-height` | Works | Length values. |
 | `max-width` | Works | Length value; used by block layout. |
@@ -166,6 +167,7 @@ clear older supported fallback declarations.
 | `line-height` | Works | Unitless multiplier or length. |
 | `text-align` | Works | `left`, `right`, `start`, `end`, `center`. |
 | `text-indent` | Works | Length value. |
+| `text-shadow` | Subset | First shadow is painted as offset text; blur is parsed for compatibility but not rasterized, and multiple shadows are not painted yet. |
 | `box-sizing` | Works | `content-box`, `border-box`. |
 | `overflow` | Subset | `visible`, `hidden`, `clip`, `auto`, `scroll`; clipping creates layer boundaries, but native scroll containers are not complete. |
 | `opacity` | Subset | 0..1; creates composited layer in software compositor. |
@@ -296,7 +298,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Opacity layers | Subset | Offscreen compositing for opacity/composited layers. Embedded hosts can cap offscreen pixels; oversized layers degrade to direct per-command opacity instead of allocating a large temporary buffer. |
 | Rounded fills | Subset | Rounded rectangle fill clipping for backgrounds/shadows. |
 | Border painting | Works | Borders emitted as fill rectangles. |
-| Linear gradient | Subset | Simple vertical command support. |
+| Linear gradient | Subset | Two-color horizontal or vertical command support. |
 | Text | Subset | Core fallback is tiny ASCII bitmap painting with UTF-8 placeholder glyphs. Win32 shell injects GDI for UTF-8/Chinese validation. |
 | Chinese text | Shell-dependent | Use Win32 shell or future platform text backend. Pseudo-browser fallback will show placeholder glyphs. |
 | Images | Host-optional/debug usable | Platform-neutral `ImageDecodeMock`, `AppImageSurfaceCache`, `Surface` handle lifetime and width/height/decoded-byte/pending budgets now exist. Render core supports `ImageHandleResolver`, image display commands and `ImagePainter`; the Win32 debug shell can automatically submit mock decodes and repaint for `<img src="app://icon">` / `app://photo`, and can load uncompressed 24/32-bit BMP resources from `.jfapp`/source packages as the in-bundle image V0 path. `AppImageSurfaceCache` can evict LRU ready surfaces by surface-count and decoded-byte budgets while protecting current display-list references; image commands carry the `object-fit` subset; Win32 diagnostics report request rejections and completion failures. PNG/JPEG/WebP, complex `object-position` and production MCU codecs are still pending. |

@@ -54,9 +54,9 @@ layout behavior.
   `:root` tokens and inline tokens work, and unresolved values keep earlier
   fallback declarations alive.
 - `background` accepts solid colors and a style-resolution subset of
-  `linear-gradient(<color>, <color>)`, `linear-gradient(to bottom, ...)` and
-  `linear-gradient(to top, ...)`. Unsupported angles, stops or image values are
-  reported without replacing earlier supported fallbacks.
+  `linear-gradient(<color>, <color>)` and
+  `linear-gradient(to bottom/top/right/left, ...)`. Unsupported angles, stops
+  or image values are reported without replacing earlier supported fallbacks.
 - Type/class/id/attribute compound selectors, descendant and child combinators,
   and adjacent/general sibling combinators.
 - Dynamic pseudo-classes `:hover`, `:active`, `:focus`, `:focus-within`,
@@ -65,7 +65,7 @@ layout behavior.
   subset; `:where()` contributes zero specificity.
 - UI-oriented declarations for the embedded app subset, including
   physical `margin-*`/`padding-*`/`border-*-width` longhands,
-  `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `flex`,
+  `outline`, `text-shadow`, `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `flex`,
   `flex-grow`, `flex-shrink`, `flex-basis`, `position`, `top`, `right`,
   `bottom`, `left`, `grid-template-columns` with a `minmax()` minimum track,
   `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))`, `grid-auto-rows` with a

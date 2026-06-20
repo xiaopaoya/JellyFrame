@@ -160,25 +160,50 @@ void stroke_rect(FrameBuffer& target, Rect rect, Color color, int stroke_width, 
     }
 }
 
-void fill_linear_gradient(FrameBuffer& target, Rect rect, Color top, Color bottom, int border_radius = 0) {
+void fill_linear_gradient(FrameBuffer& target,
+                          Rect rect,
+                          Color first,
+                          Color second,
+                          GradientAxis axis,
+                          int border_radius = 0) {
     Rect clipped = intersect_rect(rect, target_rect(target));
     if (empty_rect(clipped)) {
         return;
     }
-    const int denom = std::max(1, rect.height - 1);
+    if (axis == GradientAxis::Vertical) {
+        const int denom = std::max(1, rect.height - 1);
+        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+            const int t = std::max(0, std::min(255, ((y - rect.y) * 255) / denom));
+            Color row{
+                clamp_u8((static_cast<int>(first.r) * (255 - t) + static_cast<int>(second.r) * t + 127) / 255),
+                clamp_u8((static_cast<int>(first.g) * (255 - t) + static_cast<int>(second.g) * t + 127) / 255),
+                clamp_u8((static_cast<int>(first.b) * (255 - t) + static_cast<int>(second.b) * t + 127) / 255),
+                clamp_u8((static_cast<int>(first.a) * (255 - t) + static_cast<int>(second.a) * t + 127) / 255),
+            };
+            for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+                if (!inside_rounded_rect(rect, border_radius, x, y)) {
+                    continue;
+                }
+                blend_pixel(target, x, y, row);
+            }
+        }
+        return;
+    }
+
+    const int denom = std::max(1, rect.width - 1);
     for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-        const int t = std::max(0, std::min(255, ((y - rect.y) * 255) / denom));
-        Color row{
-            clamp_u8((static_cast<int>(top.r) * (255 - t) + static_cast<int>(bottom.r) * t + 127) / 255),
-            clamp_u8((static_cast<int>(top.g) * (255 - t) + static_cast<int>(bottom.g) * t + 127) / 255),
-            clamp_u8((static_cast<int>(top.b) * (255 - t) + static_cast<int>(bottom.b) * t + 127) / 255),
-            clamp_u8((static_cast<int>(top.a) * (255 - t) + static_cast<int>(bottom.a) * t + 127) / 255),
-        };
         for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
             if (!inside_rounded_rect(rect, border_radius, x, y)) {
                 continue;
             }
-            blend_pixel(target, x, y, row);
+            const int t = std::max(0, std::min(255, ((x - rect.x) * 255) / denom));
+            Color color{
+                clamp_u8((static_cast<int>(first.r) * (255 - t) + static_cast<int>(second.r) * t + 127) / 255),
+                clamp_u8((static_cast<int>(first.g) * (255 - t) + static_cast<int>(second.g) * t + 127) / 255),
+                clamp_u8((static_cast<int>(first.b) * (255 - t) + static_cast<int>(second.b) * t + 127) / 255),
+                clamp_u8((static_cast<int>(first.a) * (255 - t) + static_cast<int>(second.a) * t + 127) / 255),
+            };
+            blend_pixel(target, x, y, color);
         }
     }
 }
@@ -480,7 +505,7 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         fill_rect(target, rect, command.color, command.border_radius);
         break;
     case DisplayCommandType::LinearGradient:
-        fill_linear_gradient(target, rect, command.color, command.color2, command.border_radius);
+        fill_linear_gradient(target, rect, command.color, command.color2, command.gradient_axis, command.border_radius);
         break;
     case DisplayCommandType::StrokeRect:
         stroke_rect(target, rect, command.color, command.stroke_width, command.border_radius);

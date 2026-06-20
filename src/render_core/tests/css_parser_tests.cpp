@@ -196,9 +196,10 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
     CssParserOptions css_options;
     css_options.diagnostics = &diagnostics;
     Stylesheet stylesheet = parser.parse(
-        ".gel { background: #102030; background: linear-gradient(#102030, rgba(80, 120, 160, 0.5)); }"
+        ".gel { background: #102030; background: linear-gradient(to right, #102030, rgba(80, 120, 160, 0.5)); }"
         ".bad-color { color: #123456; color: linear-gradient(#ffffff, #000000); }"
-        ".fallback { background: #111111; background: linear-gradient(45deg, #ffffff, #000000); }",
+        ".fallback { background: #111111; background: linear-gradient(45deg, #ffffff, #000000); }"
+        ".fx { text-shadow: 0 1px 2px rgba(0,0,0,0.35); outline: 2px solid rgba(255,255,255,0.5); }",
         css_options);
 
     auto gel = make_element("div");
@@ -207,6 +208,8 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
     bad_color->attributes["class"] = "bad-color";
     auto fallback = make_element("div");
     fallback->attributes["class"] = "fallback";
+    auto fx = make_element("div");
+    fx->attributes["class"] = "fx";
 
     StyleResolverOptions options;
     options.diagnostics = &diagnostics;
@@ -214,9 +217,12 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
     const Style gel_style = resolver.resolve(*gel);
     const Style bad_color_style = resolver.resolve(*bad_color);
     const Style fallback_style = resolver.resolve(*fallback);
+    const Style fx_style = resolver.resolve(*fx);
 
     check(gel_style.background_paint == BackgroundPaintKind::LinearGradient,
           "linear-gradient background selects gradient paint");
+    check(gel_style.background_gradient_axis == GradientAxis::Horizontal,
+          "linear-gradient direction stores horizontal axis");
     check(gel_style.background_color.r == 0x10 && gel_style.background_color2.r == 80,
           "linear-gradient stores both colors");
     check(gel_style.background_color2.a >= 126 && gel_style.background_color2.a <= 128,
@@ -226,6 +232,9 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
     check(fallback_style.background_paint == BackgroundPaintKind::Solid &&
               fallback_style.background_color.r == 0x11,
           "unsupported gradient does not replace earlier solid fallback");
+    check(!fx_style.text_shadow.empty() && fx_style.outline_width == 2 &&
+              fx_style.outline_color.a >= 126 && fx_style.outline_color.a <= 128,
+          "text-shadow and outline subset apply");
     check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
           "unsupported gradient value is diagnosed by style resolver");
 }

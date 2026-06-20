@@ -109,6 +109,7 @@ struct Style {
     Color color{0, 0, 0, 255};
     bool color_specified = false;
     BackgroundPaintKind background_paint = BackgroundPaintKind::Solid;
+    GradientAxis background_gradient_axis = GradientAxis::Vertical;
     Color background_color{0, 0, 0, 0};
     Color background_color2{0, 0, 0, 0};
     EdgeSizes margin;
@@ -133,7 +134,11 @@ struct Style {
     bool line_height_specified = false;
     int text_indent = 0;
     bool text_indent_specified = false;
+    std::string text_shadow;
+    bool text_shadow_specified = false;
     std::string box_shadow;
+    int outline_width = 0;
+    Color outline_color{0, 0, 0, 255};
     std::string overflow;
     float opacity = 1.0F;
     std::string transform;

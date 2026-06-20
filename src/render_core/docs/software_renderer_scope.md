@@ -35,8 +35,9 @@ DOM + CSSOM
 - Optional primary framebuffer pixel budget for `SoftwareCompositor::render()`;
   oversized renders return an empty framebuffer before allocating pixels.
 - Source-over alpha compositing.
-- Rectangle fills, stroke rectangles, cheap approximate `box-shadow` fills and
-  simple vertical linear-gradient command support.
+- Rectangle fills, stroke rectangles, non-layout outline strokes, cheap
+  approximate `box-shadow`/`text-shadow` commands and two-color horizontal or
+  vertical linear-gradient command support.
 - Rounded rectangle clipping for filled backgrounds.
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.

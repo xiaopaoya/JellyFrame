@@ -425,7 +425,8 @@ bool is_supported_background_value(std::string_view value) {
         split_top_level_commas(std::string_view(text).substr(16, text.size() - 17));
     if (args.size() == 3) {
         const std::string direction = trim(args[0]);
-        if (direction != "to bottom" && direction != "to top") {
+        if (direction != "to bottom" && direction != "to top" &&
+            direction != "to right" && direction != "to left") {
             return false;
         }
         args.erase(args.begin());
@@ -595,6 +596,20 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "box-shadow") {
         return value == "none" || value.find('#') != std::string::npos ||
                value.find("rgb(") != std::string::npos || value.find("px") != std::string::npos;
+    }
+    if (property == "text-shadow") {
+        return value == "none" || value.find('#') != std::string::npos ||
+               value.find("rgb(") != std::string::npos || value.find("px") != std::string::npos;
+    }
+    if (property == "outline") {
+        return value == "none" || value.find('#') != std::string::npos ||
+               value.find("rgb(") != std::string::npos || value.find("px") != std::string::npos;
+    }
+    if (property == "outline-width") {
+        return is_supported_length_value(value);
+    }
+    if (property == "outline-color") {
+        return is_supported_color_value(value);
     }
     return false;
 }

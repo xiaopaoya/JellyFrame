@@ -35,6 +35,11 @@ enum class DisplayCommandType {
     Image,
 };
 
+enum class GradientAxis {
+    Vertical,
+    Horizontal,
+};
+
 enum class TextCommandAlign {
     Start,
     Center,
@@ -61,6 +66,7 @@ struct DisplayCommand {
     int font_weight = 400;
     TextCommandAlign text_align = TextCommandAlign::Start;
     bool text_single_line = true;
+    GradientAxis gradient_axis = GradientAxis::Vertical;
     std::uint32_t image_handle = 0;
     ObjectFit object_fit = ObjectFit::Fill;
 };
