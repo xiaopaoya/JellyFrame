@@ -75,6 +75,10 @@ void print_rule(const CssRule& rule, std::size_t index) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_cssom_dump [style.css]\n";
+        return 0;
+    }
     try {
         const std::string input = argc > 1 ? read_file_limited(argv[1]) : sample_css();
         CssParser parser;
@@ -96,4 +100,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-

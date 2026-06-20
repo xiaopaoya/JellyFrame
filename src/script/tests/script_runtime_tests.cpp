@@ -643,10 +643,30 @@ void javascript_system_state_exposes_web_adjacent_subset() {
 
     AppSystemStateSnapshot network_snapshot;
     network_snapshot.network_online = true;
+    result = runtime.eval(
+        "var networkEvents = '';"
+        "function removedNetworkListener() { networkEvents += 'x'; }"
+        "window.addEventListener('online', function (event) {"
+        "  networkEvents += event.type + ':' + String(event.target === window) + ';';"
+        "});"
+        "addEventListener('offline', function (event) { networkEvents += event.type + ';'; }, { once: true });"
+        "window.addEventListener('online', removedNetworkListener);"
+        "window.removeEventListener('online', removedNetworkListener);"
+        "'armed'");
+    check(result.ok, "window network listeners install");
     check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::NetworkStatusChanged, network_snapshot}),
           "network system event handled");
-    result = runtime.eval("String(navigator.onLine)");
-    check(result.ok && result.value == "true", "navigator.onLine reflects system event");
+    result = runtime.eval("String(navigator.onLine) + ':' + networkEvents");
+    check(result.ok && result.value == "true:online:true;", "navigator.onLine and window online event update");
+
+    network_snapshot.network_online = false;
+    check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::NetworkStatusChanged, network_snapshot}),
+          "offline system event handled");
+    check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::NetworkStatusChanged, network_snapshot}),
+          "unchanged offline event handled without redispatch");
+    result = runtime.eval("String(navigator.onLine) + ':' + networkEvents");
+    check(result.ok && result.value == "false:online:true;offline;",
+          "window offline event fires once and only on state change");
 
     result = runtime.eval(
         "var visibilityEvents = 0;"

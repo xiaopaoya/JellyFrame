@@ -106,6 +106,12 @@ private:
                                    std::uint32_t callback_value,
                                    EventListenerOptions options);
     void remove_script_event_listener(Node& node, std::string type, std::uint32_t callback_value);
+    void add_window_event_listener(std::string type,
+                                   std::uint32_t callback_value,
+                                   std::uint32_t target_value,
+                                   EventListenerOptions options);
+    void remove_window_event_listener(std::string type, std::uint32_t callback_value);
+    void dispatch_window_event(const char* type);
     void clear_script_event_listeners();
     std::uint32_t add_timer(std::uint32_t callback_value, std::uint32_t delay_ms, bool repeat);
     void clear_timer(std::uint32_t id);

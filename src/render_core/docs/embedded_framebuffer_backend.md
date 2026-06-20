@@ -23,6 +23,10 @@ display buffer and reports the same dirty rectangles back to the host.
 Alpha is flattened before conversion. In normal rendering the source
 framebuffer is already composited over an opaque background, so this is mostly
 a safety path.
+`Rgb565` / `Bgr565` targets can enable `ordered_dither` for 4x4 ordered
+dithering to reduce low-color-depth gradient banding. It does not blur text or
+geometry edges and is not rounded-geometry antialiasing; rounded and scale
+quality are handled earlier by the software renderer in the RGBA path.
 
 ## Host Contract
 
@@ -45,7 +49,8 @@ EmbeddedFrameBufferSink embedded{
                               EmbeddedPixelFormat::Rgb565,
                               display.data(),
                               display.size(),
-                              0},
+                              0,
+                              true},
     flush_rect_to_panel,
     panel_context};
 

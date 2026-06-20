@@ -279,6 +279,20 @@ std::size_t decoded_surface_byte_count(int width,
     return 0;
 }
 
+const char* app_image_surface_state_name(AppImageSurfaceState state) {
+    switch (state) {
+    case AppImageSurfaceState::Missing:
+        return "missing";
+    case AppImageSurfaceState::Pending:
+        return "pending";
+    case AppImageSurfaceState::Ready:
+        return "ready";
+    case AppImageSurfaceState::Failed:
+        return "failed";
+    }
+    return "missing";
+}
+
 const char* app_image_failure_reason_name(AppImageFailureReason reason) {
     switch (reason) {
     case AppImageFailureReason::None:
@@ -1088,6 +1102,50 @@ HostServiceStatus AppImageSurfaceCache::last_host_status_for_url(const std::stri
 std::uint32_t AppImageSurfaceCache::last_error_code_for_url(const std::string& url) const {
     const Entry* entry = find_url(url);
     return entry == nullptr ? 0 : entry->error_code;
+}
+
+AppImageFailureReason AppImageSurfaceCache::last_failure_reason_for_url(const std::string& url) const {
+    const Entry* entry = find_url(url);
+    if (entry == nullptr) {
+        return AppImageFailureReason::InvalidSource;
+    }
+    if (entry->state == AppImageSurfaceState::Ready) {
+        return AppImageFailureReason::None;
+    }
+    return classify_app_image_failure(entry->submit_status, entry->status, entry->error_code);
+}
+
+std::string AppImageSurfaceCache::diagnostic_detail_for_url(const std::string& url) const {
+    const Entry* entry = find_url(url);
+    if (entry == nullptr) {
+        return app_image_failure_detail(url, AppServiceSubmitStatus::InvalidInput, HostServiceStatus::Failed, 0) +
+            "; state=missing";
+    }
+
+    std::ostringstream stream;
+    stream << "src=" << (entry->url.empty() ? "unknown" : entry->url)
+           << "; state=" << app_image_surface_state_name(entry->state)
+           << "; reason="
+           << app_image_failure_reason_name(classify_app_image_failure(entry->submit_status,
+                                                                       entry->status,
+                                                                       entry->error_code))
+           << "; submit=" << app_service_submit_status_name(entry->submit_status);
+    if (entry->status != HostServiceStatus::Completed) {
+        stream << "; host=" << host_service_status_name(entry->status);
+    }
+    if (entry->error_code != 0) {
+        stream << "; error=" << entry->error_code;
+    }
+    if (entry->job_id != 0) {
+        stream << "; job=" << entry->job_id;
+    }
+    if (entry->handle != 0) {
+        stream << "; handle=" << entry->handle;
+    }
+    if (entry->decoded_bytes != 0) {
+        stream << "; bytes=" << entry->decoded_bytes;
+    }
+    return stream.str();
 }
 
 AppPrivateKvStorageMock::AppPrivateKvStorageMock(AppPrivateKvPolicy policy)

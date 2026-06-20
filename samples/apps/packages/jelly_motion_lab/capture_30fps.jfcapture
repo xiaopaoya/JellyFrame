@@ -1,0 +1,15 @@
+# JellyFrame deterministic Win32 frame-capture script.
+# Run with:
+#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_motion_lab --frame-script samples/apps/packages/jelly_motion_lab/capture_30fps.jfcapture
+
+output-dir out/motion_lab_frames
+montage out/motion_lab_montage.bmp
+frames 30
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 6
+gap 6
+
+# Tap the bottom affordance after the opening animation has started.
+event 8 click 150 260

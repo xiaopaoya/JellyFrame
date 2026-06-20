@@ -15,6 +15,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Extended the opt-in visual CSS subset with horizontal `linear-gradient(...)`,
   first-shadow `text-shadow` painting and non-layout `outline` strokes, and
   documented the standard-subset/opt-in-cost policy for future visual features.
+- Added the first visual-quality/antialiasing path: rounded
+  fill/stroke/linear-gradient commands use local coverage AA, composited layer
+  scale defaults to bilinear sampling, `image-rendering: auto | pixelated |
+  crisp-edges` is passed to image painters, and RGB565/BGR565 embedded
+  framebuffer targets can enable 4x4 ordered dithering. Ordinary opaque square
+  rectangles keep the fast fill path.
 - Added a cheap `text-decoration` / `text-decoration-line` subset for
   `underline`, `line-through` and `none`.
 - Added the first bounded CSS `@keyframes` / `animation-*` subset. The parser
@@ -31,6 +37,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   package, a focused `jelly_motion` fixture and a `jelly_launcher_mock` fixture.
   The sample launcher now follows the same gel panel/button style without
   relying on unsupported pseudo-element drawing.
+- Added the installable `jelly_motion_lab` sample for LVGL/watch-style motion:
+  icon-to-window expansion, bottom-sheet rise and jelly button feedback. It also
+  updates a frame counter through `requestAnimationFrame` to validate JS/rAF.
+- The Win32 browser shell now supports hidden deterministic frame capture with
+  `--capture-frames DIR --frame-count 30 --frame-step-ms 33`, plus
+  `--frame-event FRAME:kind[:x:y]` for click, pointer and system-state injection.
+  The same path can now be driven by `--frame-script PATH`, including frame
+  count, viewport, events, per-frame output and contact-sheet montage output.
+- Main native command-line tools now accept `--help` / `-h`.
 - Added manifest/profile policy merging for optional data services:
   `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
   `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`
@@ -40,6 +55,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - `AppSystemEventQueue` now exposes `try_push_current(...)` and stable push
   status names so hosts/the Win32 shell can report system-event injection
   failures such as `empty-instance` and `queue-full` through diagnostics.
+- The JerryScript bridge now maps accepted network status changes to the
+  standard `window` `online`/`offline` event subset, with bounded function
+  listeners, `removeEventListener` and `once` support.
 - Added app-runtime microbench coverage for optional network fetch, KV storage,
   image-decode mock and system-event pumping.
 - Added the B1 image-decode V0 helper: `ImageDecodePolicy`, `ImageDecodeMock`
@@ -69,8 +87,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   failures through diagnostics, preserving the original `src`, stable failure
   reason and status for missing-resource, budget-rejection and decode-failure
   debugging. app-runtime now exposes `classify_app_image_failure(...)` /
-  `app_image_failure_detail(...)` so desktop tools and future embedded
-  diagnostic ports can share the same image failure categories.
+  `app_image_failure_detail(...)` plus
+  `AppImageSurfaceCache::diagnostic_detail_for_url(...)` so desktop tools and
+  future embedded diagnostic ports can share the same image failure categories
+  and stable cache-state fields after request or completion failures.
   PNG/JPEG/WebP, complex four-value/length-offset `object-position` and
   production MCU codecs remain future work.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the

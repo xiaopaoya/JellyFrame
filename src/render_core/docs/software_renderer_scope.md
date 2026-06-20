@@ -38,14 +38,16 @@ DOM + CSSOM
 - Rectangle fills, stroke rectangles, non-layout outline strokes, cheap
   approximate `box-shadow`/`text-shadow` commands, solid text-decoration lines
   and two-color horizontal or vertical linear-gradient command support.
-- Rounded rectangle clipping for filled backgrounds.
+- Rounded rectangle clipping for filled backgrounds, borders and gradients.
+  Rounded edges use local coverage antialiasing, while ordinary opaque square
+  rectangles keep the fast fill path.
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.
-- Host image painters can draw decoded surfaces with `object-fit` and simple
-  `object-position`.
+- Host image painters can draw decoded surfaces with `object-fit`, simple
+  `object-position` and `image-rendering`.
 - Offscreen compositing for opacity/composited layers.
 - `transform: translate()/scale()` for composited layers. Translation is rounded
-  to integer pixels; scale uses nearest-neighbor sampling around the layer bounds
+  to integer pixels; scale defaults to bilinear sampling around the layer bounds
   center. This is intended for button feedback and card motion, not browser-level
   pixel parity.
 - Optional offscreen pixel budget: oversized composited layers degrade to direct
@@ -59,7 +61,9 @@ DOM + CSSOM
 - No filters, backdrop filters or real blur shadows.
 - No real text shaping, bidi or font fallback stack.
 - No image decode.
-- No subpixel layout or antialiased geometry.
+- No subpixel layout, arbitrary path antialiasing or browser-level glyph
+  rasterization. Current antialiasing covers rounded geometry edges and scale
+  sampling only.
 - No rotate/skew/matrix/perspective and no full `transform-origin`.
 
 ## Current Compatibility Notes
@@ -73,4 +77,5 @@ padding, basic multiline text drawing, `box-sizing:border-box`, common
 `rgb()/rgba()` colors, four-value box edges, minimal flex centering/row layout,
 responsive grid-card layout, `aspect-ratio` sizing and cheap rounded
 `box-shadow` approximations, plus the first `opacity`/2D-transform compositing
-foundation for animation.
+foundation for animation and the rounded-coverage AA / layer-scale bilinear
+quality paths.

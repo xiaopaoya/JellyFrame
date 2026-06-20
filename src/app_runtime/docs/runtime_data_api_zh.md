@@ -127,6 +127,9 @@ V0 支持面应限制在：
 当前 V0 已实现：
 
 - `navigator.onLine` 作为只读快照暴露。
+- accepted `NetworkStatusChanged` 会在状态真的变化时向 `window` 派发 `online` / `offline`。
+  该 target 刻意保持很小：支持 `addEventListener`、`removeEventListener`、函数 listener
+  和 `once` 选项。
 - `document.hidden` 作为只读快照暴露。
 - `document.visibilityState` 作为只读 `"visible"` / `"hidden"` 暴露。
 - accepted `ScreenStateChanged` / `LowPowerModeChanged` 在 hidden 状态变化时向 `document`
@@ -135,8 +138,8 @@ V0 支持面应限制在：
   切换 screen visibility，`Ctrl+F8` 切换 low-power visibility。这些快捷键不读取真实 Windows
   硬件状态。
 
-尚未实现：`window.addEventListener`、`online` / `offline` 事件、battery JS API，以及 JellyFrame
-专有 system state 对象。
+尚未实现：battery JS API、JellyFrame 专有 system state 对象，以及超出 `online` / `offline`
+子集的完整 `Window`/`EventTarget` 语义。
 
 ## 错误名
 

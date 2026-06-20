@@ -70,7 +70,8 @@ layout behavior.
   `bottom`, `left`, `grid-template-columns` with a `minmax()` minimum track,
   `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))`, `grid-auto-rows` with a
   minimum track, `grid-column`/`grid-row: span N`, plus `object-fit` and a
-  keyword/percentage one/two-value `object-position` subset.
+  keyword/percentage one/two-value `object-position` subset, and the
+  `image-rendering` `auto`/`pixelated`/`crisp-edges` subset.
 - `@keyframes` from/to subset. Named blocks keep `from`/`to` or `0%`/`100%`
   declarations for the animation timeline. Intermediate percentages are
   diagnosed and ignored, not partially interpolated.

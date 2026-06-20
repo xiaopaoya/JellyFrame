@@ -160,6 +160,7 @@ jellyframe::EmbeddedFrameBufferTarget target {
     reinterpret_cast<std::uint8_t*>(rgb565_pixels),
     rgb565_size_bytes,
     width * sizeof(std::uint16_t),
+    true, // ordered_dither，可按产品显示效果关闭
 };
 
 jellyframe::EmbeddedFrameBufferSink sink { target, flush_dirty_rect, panel_context };
@@ -198,6 +199,9 @@ internal RAM 压力处理建议：
   rebuild，可在 present 后 reset 这些 arena，但会牺牲 CPU。不要把这类 arena 放 internal RAM，除非测量证明必要。
 - 离屏合成 buffer 是 `SoftwareCompositor::render_into` 内部临时对象，函数返回后释放；应通过
   `max_offscreen_pixels` 限制它，避免大 opacity/transform layer 临时吃光 internal heap。
+- RGB565/BGR565 屏幕如出现渐变色带，可在 `EmbeddedFrameBufferTarget::ordered_dither` 开启 4x4
+  ordered dithering。它只影响最终颜色量化，不解决几何锯齿；圆角和缩放抗锯齿由 render core 在 RGBA
+  framebuffer 阶段处理。
 - dirty rect 临时数组、completion event 临时数组、资源读取临时 buffer 都应在帧边界后释放或复用为静态小 buffer。
 - 主循环建议持有 `FrameScratch frame_scratch; AppFrameScratch app_scratch;`，启动时按预算 reserve。
   计算 dirty region 时优先用 `compute_dirty_region_into(..., frame_scratch.dirty_region,

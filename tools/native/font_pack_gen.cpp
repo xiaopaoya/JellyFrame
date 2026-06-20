@@ -392,6 +392,12 @@ void write_font_binary(const Options& options,
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt "
+                     "[--output font_pack.h] [--output-binary font.jffont] "
+                     "[--name symbol] [--allow-missing]\n";
+        return 0;
+    }
     try {
         const Options options = parse_options(argc, argv);
         const std::set<std::uint32_t> requested = load_chars(options.chars_path);

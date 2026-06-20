@@ -201,6 +201,7 @@ jellyframe::EmbeddedFrameBufferTarget target {
     reinterpret_cast<std::uint8_t*>(rgb565_pixels),
     rgb565_size_bytes,
     width * sizeof(std::uint16_t),
+    true, // ordered_dither; disable per product display tuning if needed
 };
 
 jellyframe::EmbeddedFrameBufferSink sink { target, flush_dirty_rect, panel_context };
@@ -256,6 +257,11 @@ Internal RAM pressure guidance:
   `SoftwareCompositor::render_into` and is released when the call returns. Keep
   `max_offscreen_pixels` low enough that large opacity/transform layers cannot
   consume internal heap.
+- If RGB565/BGR565 screens show gradient banding, enable
+  `EmbeddedFrameBufferTarget::ordered_dither` for 4x4 ordered dithering. This
+  only changes final color quantization; it does not solve geometry jaggies.
+  Rounded geometry and scale antialiasing happen earlier in the render core's
+  RGBA framebuffer path.
 - Dirty-rect temporary arrays, completion-event scratch arrays and resource-read
   buffers should be released at the frame boundary or reused as small static
   buffers.

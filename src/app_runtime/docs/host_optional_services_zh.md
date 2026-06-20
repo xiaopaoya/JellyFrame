@@ -142,6 +142,10 @@ Win32 参考壳的 A4 行为：
   completion 失败归类为 `capability-denied`、`resource-not-found`、
   `decode-budget-exceeded`、`surface-budget-exceeded`、`pending-budget` 等稳定原因。
   桌面工具和未来串口/包校验 diagnostics 应消费这个分类，而不是只显示模糊的 `failed`。
+- `AppImageSurfaceCache::diagnostic_detail_for_url(...)` 暴露稳定调试字符串，包含
+  `src`、`state`、`reason`、`submit`，以及可选的 `host`、`error`、`job`、`handle`、
+  `bytes` 字段。工具应在 request 拒绝或 decode completion 后使用它，把异步失败定位回
+  触发问题的 cache entry。
 - 成功 completion 返回 `HostServiceHandleKind::Surface` handle；`AppDecodedSurfaceRecord`
   保存 width、height、stride、pixel format 和可选 raw pixels。
 - `release_surface(...)` 必须由 UI/main task 在 surface 不再需要时调用，释放 record 和 host handle。
@@ -513,9 +517,10 @@ enum class AppSystemEventPushStatus {
 - 旧 app instance 的事件会被消费并丢弃。
 - 队列本身不调用 JS、不修改 DOM、不读取 RTC/network/battery 硬件，也不直接触发 layout；后续 binding
   决定 accepted event 如何变成 app callback。
-- 当前 JerryScript binding 将网络状态映射到 `navigator.onLine`，将 visibility 映射到
-  `document.hidden`、`document.visibilityState` 和 `document` 的 `visibilitychange`。
-  `window` 的 `online`/`offline` 事件和 battery JavaScript API 不进入 V0。
+- 当前 JerryScript binding 将网络状态映射到 `navigator.onLine` 和 `window` 的
+  `online`/`offline` 事件子集，将 visibility 映射到 `document.hidden`、
+  `document.visibilityState` 和 `document` 的 `visibilitychange`。battery JavaScript API
+  不进入 V0。
 - Win32 debug 壳可以通过 `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8` 注入 fake event，方便 app 调试；
   注入失败会报告 `system-event-rejected` diagnostics。硬件 port 应从自己的 host state provider
   使用同一个队列。

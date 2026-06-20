@@ -54,6 +54,12 @@ enum class ObjectFit {
     ScaleDown,
 };
 
+enum class ImageRendering {
+    Auto,
+    Pixelated,
+    CrispEdges,
+};
+
 struct ObjectPosition {
     int x_percent = 50;
     int y_percent = 50;
@@ -75,6 +81,7 @@ struct DisplayCommand {
     std::uint32_t image_handle = 0;
     ObjectFit object_fit = ObjectFit::Fill;
     ObjectPosition object_position;
+    ImageRendering image_rendering = ImageRendering::Auto;
 };
 
 using DisplayList = std::vector<DisplayCommand>;

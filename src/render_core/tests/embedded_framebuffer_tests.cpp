@@ -68,6 +68,30 @@ void rgb565_present_respects_dirty_rect() {
     check(target_bytes[row + 4] == 0xe0 && target_bytes[row + 5] == 0x07, "green packs to rgb565");
 }
 
+void rgb565_ordered_dither_varies_quantization() {
+    FrameBuffer source(4, 1, Color{127, 127, 127, 255});
+    std::vector<std::uint8_t> target_bytes(embedded_framebuffer_min_size(4, 1, EmbeddedPixelFormat::Rgb565),
+                                           0);
+    EmbeddedFrameBufferSink sink{
+        EmbeddedFrameBufferTarget{4,
+                                  1,
+                                  EmbeddedPixelFormat::Rgb565,
+                                  target_bytes.data(),
+                                  target_bytes.size(),
+                                  0,
+                                  true},
+        nullptr,
+        nullptr};
+
+    check(present_to_embedded_framebuffer(frame_buffer_view(source), nullptr, 0, sink),
+          "rgb565 dither present succeeds");
+    bool differs = false;
+    for (std::size_t index = 2; index < target_bytes.size(); index += 2) {
+        differs = differs || target_bytes[index] != target_bytes[0] || target_bytes[index + 1] != target_bytes[1];
+    }
+    check(differs, "ordered dither varies packed rgb565 values");
+}
+
 void mono_present_packs_bits() {
     FrameBuffer source(8, 1, Color{0, 0, 0, 255});
     for (int x = 0; x < 8; x += 2) {
@@ -132,6 +156,7 @@ int main() {
     try {
         stride_and_size_are_bounded();
         rgb565_present_respects_dirty_rect();
+        rgb565_ordered_dither_varies_quantization();
         mono_present_packs_bits();
         host_frame_sink_wrapper_presents();
         invalid_target_fails_cleanly();

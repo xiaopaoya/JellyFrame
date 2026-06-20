@@ -26,6 +26,7 @@ struct EmbeddedFrameBufferTarget {
     std::uint8_t* pixels = nullptr;
     std::size_t byte_size = 0;
     std::size_t stride_bytes = 0;
+    bool ordered_dither = false;
 };
 
 using EmbeddedFlushCallback = bool (*)(Rect dirty_rect, void* context);

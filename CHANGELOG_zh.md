@@ -14,6 +14,10 @@ JellyFrame Engine 的重要变更记录在这里。
 - 扩展“可选付费”的视觉 CSS 子集：加入水平 `linear-gradient(...)`、第一条
   `text-shadow` 近似绘制，以及不参与布局的 `outline` stroke；并把后续视觉能力按
   标准子集和可选成本评估的原则写入路线图。
+- 添加第一版视觉质量/抗锯齿路径：圆角 fill/stroke/linear-gradient 使用局部 coverage AA，
+  composited layer scale 默认使用双线性采样，`image-rendering: auto | pixelated | crisp-edges`
+  会传给 image painter，RGB565/BGR565 embedded framebuffer target 可选择 4x4 ordered dithering。
+  普通不透明直角矩形仍保留快速填充路径。
 - 添加便宜的 `text-decoration` / `text-decoration-line` 子集，支持
   `underline`、`line-through` 和 `none`。
 - 添加第一版有界 CSS `@keyframes` / `animation-*` 子集。Parser 会保存
@@ -27,6 +31,12 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 Jelly UI 视觉系统示例：可安装 `jelly_controls` package、聚焦动效的
   `jelly_motion` fixture 和 `jelly_launcher_mock` fixture。sample launcher 也调整为同一胶体
   panel/button 风格，且不依赖当前不支持的 pseudo-element 绘制。
+- 添加 `jelly_motion_lab` 可安装样例，覆盖图标展开为窗口、底部 sheet 弹出和按钮果冻反馈等
+  LVGL/手表 UI 常见动效，并用 `requestAnimationFrame` 输出帧计数以验证 JS/rAF 正常运行。
+- Win32 browser 壳新增隐藏逐帧 capture：`--capture-frames DIR --frame-count 30 --frame-step-ms 33`，
+  并可通过 `--frame-event FRAME:kind[:x:y]` 注入 click、pointer 和系统状态事件。调试入口进一步扩展为
+  `--frame-script PATH`，可从脚本统一设置帧数、视口、事件、逐帧输出目录和 contact-sheet 拼图输出。
+- 主要 native 命令行工具新增 `--help` / `-h` 快速帮助输出。
 - 添加可选数据服务的 manifest/profile policy 合成：`AppServiceManifestCapabilities`、
   `AppServiceHostProfile` 和 `app_service_policies_for_app(...)` 现在会在 runtime mock
   或 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。
@@ -34,6 +44,8 @@ JellyFrame Engine 的重要变更记录在这里。
   时间、时区、网络、电量、屏幕和低功耗状态快照。
 - `AppSystemEventQueue` 新增 `try_push_current(...)` 和稳定 push 状态名，宿主/Win32 壳可把
   `empty-instance`、`queue-full` 等系统事件注入失败原因写入 diagnostics。
+- JerryScript bridge 现在会把 accepted network status 变化映射到标准 `window`
+  `online`/`offline` 事件子集，支持有界函数 listener、`removeEventListener` 和 `once`。
 - app-runtime microbench 新增可选 network fetch、KV storage、image decode mock 和 system-event pump 覆盖。
 - 添加 B1 图片解码 V0 helper：`ImageDecodePolicy`、`ImageDecodeMock` 与
   `AppDecodedSurfaceRecord` 定义平台无关 raw surface fixture、`Surface` handle 生命周期、
@@ -53,7 +65,8 @@ JellyFrame Engine 的重要变更记录在这里。
   Win32 debug 壳会把图片 decode request 拒绝和 completion 失败写入 diagnostics，保留原始
   `src`、稳定失败原因和状态码，方便定位缺资源、预算拒绝或解码失败。
   app-runtime 新增 `classify_app_image_failure(...)` / `app_image_failure_detail(...)`，
-  供桌面工具和未来嵌入式诊断口复用同一套图片失败分类。
+  以及 `AppImageSurfaceCache::diagnostic_detail_for_url(...)`，供桌面工具和未来
+  嵌入式诊断口在 request 或 completion 失败后复用同一套图片失败分类和稳定 cache-state 字段。
   PNG/JPEG/WebP、复杂四值/长度偏移 `object-position` 和产品级 MCU codec 仍留给后续。
 - 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，记录标准子集优先 runtime data API
   方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界

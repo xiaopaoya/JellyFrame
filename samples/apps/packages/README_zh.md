@@ -10,3 +10,4 @@
 
 - `watch_weather`：包含 package 资源和可选数据能力的手表天气 app。
 - `jelly_controls`：Jelly UI 控件和动效风格示例。
+- `jelly_motion_lab`：参考 LVGL 常见动效的验收 app，包含图标展开窗口、sheet 弹出和按钮果冻反馈。

@@ -535,7 +535,7 @@ void image_element_emits_image_display_command_when_surface_resolves() {
     CssParser css_parser;
     auto document = html_parser.parse("<body><img src='app://icon.raw'></body>");
     Stylesheet stylesheet = css_parser.parse(
-        "img { width: 32px; height: 24px; object-fit: cover; object-position: right top; }");
+        "img { width: 32px; height: 24px; object-fit: cover; object-position: right top; image-rendering: crisp-edges; }");
     StyleResolver resolver(stylesheet);
     RenderTreeBuilder render_tree_builder(resolver);
     auto render_tree = render_tree_builder.build(*document);
@@ -558,6 +558,8 @@ void image_element_emits_image_display_command_when_surface_resolves() {
             check(command.object_fit == ObjectFit::Cover, "image command carries object-fit");
             check(command.object_position.x_percent == 100 && command.object_position.y_percent == 0,
                   "image command carries object-position");
+            check(command.image_rendering == ImageRendering::CrispEdges,
+                  "image command carries image-rendering");
         }
     }
     check(found_image, "resolved img emits image command");

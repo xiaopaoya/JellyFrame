@@ -74,6 +74,10 @@ void print_command(const DisplayCommand& command, std::size_t index) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_pipeline_dump page.html style.css [viewport_width]\n";
+        return 0;
+    }
     if (argc < 3) {
         std::cerr << "usage: jellyframe_pipeline_dump page.html style.css [viewport_width]\n";
         return 1;

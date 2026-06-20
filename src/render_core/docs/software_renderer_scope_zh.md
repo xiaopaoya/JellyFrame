@@ -33,13 +33,13 @@ DOM + CSSOM
 - Source-over alpha compositing。
 - Rectangle fills、stroke rectangles、不参与布局的 outline stroke、便宜近似
   `box-shadow`/`text-shadow` 命令、实线 text-decoration，以及两色水平/垂直 linear-gradient command。
-- 背景填充的 rounded rectangle clipping。
+- 背景填充、边框和渐变 rounded rectangle clipping；圆角边缘使用局部 coverage 抗锯齿，普通不透明直角矩形仍走快速填充路径。
 - Windows 下通过 GDI CPU mask 绘制文本。
 - 非 Windows 构建保留内置 tiny ASCII fallback text drawing。
-- 宿主 image painter 可按 `object-fit` 和简单 `object-position` 绘制已解码 surface。
+- 宿主 image painter 可按 `object-fit`、简单 `object-position` 和 `image-rendering` 绘制已解码 surface。
 - 针对 opacity/composited layers 的离屏合成。
 - 对 composited layer 执行 `transform: translate()/scale()` 子集：平移为整数像素近似，缩放以 layer bounds
-  中心为原点并采用最近邻采样，适合按钮反馈和卡片滑动，不追求浏览器级像素一致。
+  中心为原点并默认采用双线性采样，适合按钮反馈和卡片滑动，不追求浏览器级像素一致。
 - 可选 offscreen pixel budget：过大的 composited layer 会降级为逐命令透明绘制，
   避免分配大块临时 RGBA framebuffer。
 - 用于 pseudo-browser 验收的 BMP 和 PPM 图片写出。
@@ -51,7 +51,7 @@ DOM + CSSOM
 - 不支持 filters、backdrop filters 或真实 blur shadow。
 - 不做完整 text shaping、bidi 或 font fallback stack。
 - 不做 image decode。
-- 不做 subpixel layout 或 antialiased geometry。
+- 不做 subpixel layout、任意路径抗锯齿或浏览器级 glyph rasterization；当前抗锯齿只覆盖圆角几何边缘和缩放采样。
 - 不做 rotate/skew/matrix/perspective，也不做完整 transform-origin。
 
 ## 当前兼容性说明
@@ -62,4 +62,4 @@ DOM + CSSOM
 近期修复包括 Windows UTF-8 文本输出、保守文本 overhang padding、基础多行文本绘制、
 `box-sizing:border-box`、常见 `rgb()/rgba()` 颜色、四值 box edges，以及最小 flex
 居中/横向布局、响应式 grid card layout、`aspect-ratio` 尺寸计算和便宜圆角
-`box-shadow` 近似，以及第一版 `opacity`/2D transform 合成动画基础。
+`box-shadow` 近似，第一版 `opacity`/2D transform 合成动画基础，以及圆角 coverage AA / layer scale bilinear 质量路径。

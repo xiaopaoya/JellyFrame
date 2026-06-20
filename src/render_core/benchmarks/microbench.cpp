@@ -6,6 +6,7 @@
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
+#include "render_core/software_renderer.h"
 
 #include <chrono>
 #include <iostream>
@@ -104,9 +105,22 @@ Style animated_style(float opacity, const char* transform, Color background) {
     return style;
 }
 
+DisplayCommand fill_command(Rect rect, Color color, int radius = 0) {
+    DisplayCommand command;
+    command.type = DisplayCommandType::FillRect;
+    command.rect = rect;
+    command.color = color;
+    command.border_radius = radius;
+    return command;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_render_core_microbench [card_count=80] [iterations=200]\n";
+        return 0;
+    }
     const int card_count = argc >= 2 ? std::stoi(argv[1]) : 80;
     const int iterations = argc >= 3 ? std::stoi(argv[2]) : 200;
     const std::string html = make_card_html(card_count);
@@ -183,6 +197,36 @@ int main(int argc, char** argv) {
         auto local_layer_tree = local_layer_tree_builder.build(*local_layout_tree, local_layer_arena);
         DisplayList display_list = local_layer_tree_builder.flatten(*local_layer_tree);
         (void)display_list;
+    }));
+
+    DisplayList rounded_commands;
+    for (int row = 0; row < 6; ++row) {
+        for (int column = 0; column < 6; ++column) {
+            rounded_commands.push_back(fill_command(Rect{column * 52, row * 42, 44, 34},
+                                                    Color{20, 184, 166, 255},
+                                                    12));
+        }
+    }
+    print_result("rounded_rect_aa_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(rounded_commands, target, Rect{0, 0, 320, 260});
+    }));
+
+    LayerNode scale_root;
+    scale_root.type = LayerType::Root;
+    scale_root.bounds = Rect{0, 0, 160, 160};
+    auto scale_child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    scale_child->type = LayerType::Composited;
+    scale_child->bounds = Rect{40, 40, 64, 64};
+    scale_child->transform.scale_x = 1.35F;
+    scale_child->transform.scale_y = 1.35F;
+    scale_child->display_list.push_back(fill_command(Rect{40, 40, 64, 64}, Color{255, 255, 255, 255}, 10));
+    scale_child->display_list.push_back(fill_command(Rect{40, 40, 32, 64}, Color{14, 165, 233, 255}, 10));
+    scale_root.children.push_back(std::move(scale_child));
+    print_result("scaled_layer_bilinear", iterations, average_microseconds(iterations, [&] {
+        const FrameBuffer target = SoftwareCompositor().render(scale_root, 160, 160, Color{15, 23, 42, 255});
+        (void)target;
     }));
 
     Node animation_node(NodeType::Element);

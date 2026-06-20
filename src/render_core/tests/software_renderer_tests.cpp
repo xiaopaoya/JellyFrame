@@ -47,6 +47,7 @@ struct ImagePaintProbe {
     std::uint32_t expected_handle = 0;
     ObjectFit fit = ObjectFit::Fill;
     ObjectPosition position;
+    ImageRendering rendering = ImageRendering::Auto;
     int calls = 0;
 };
 
@@ -55,6 +56,7 @@ bool probe_image_painter(FrameBuffer& target,
                          std::uint32_t image_handle,
                          ObjectFit object_fit,
                          ObjectPosition object_position,
+                         ImageRendering image_rendering,
                          void* raw_context) {
     auto* probe = static_cast<ImagePaintProbe*>(raw_context);
     if (probe == nullptr || image_handle != probe->expected_handle) {
@@ -62,6 +64,7 @@ bool probe_image_painter(FrameBuffer& target,
     }
     probe->fit = object_fit;
     probe->position = object_position;
+    probe->rendering = image_rendering;
     ++probe->calls;
     for (int y = rect.y; y < rect.y + rect.height; ++y) {
         for (int x = rect.x; x < rect.x + rect.width; ++x) {
@@ -145,6 +148,22 @@ void rounded_stroke_keeps_corner_pixels_clear() {
     check(frame_buffer.pixel(6, 2).r == 0, "rounded stroke paints top edge");
 }
 
+void rounded_fill_antialiases_edge_pixels() {
+    FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::FillRect;
+    command.rect = Rect{1, 1, 10, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.border_radius = 5;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 12, 12});
+
+    const Color edge = frame_buffer.pixel(3, 1);
+    check(edge.r > 0 && edge.r < 255, "rounded fill edge is partially covered");
+    check(frame_buffer.pixel(6, 6).r == 0, "rounded fill center remains sharp");
+    check(frame_buffer.pixel(1, 1).r == 255, "rounded fill outer corner remains clear");
+}
+
 void source_over_alpha_composites() {
     FrameBuffer frame_buffer(1, 1, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -178,7 +197,7 @@ void clipping_limits_rasterization() {
 
 void image_command_uses_injected_painter() {
     FrameBuffer frame_buffer(8, 8, Color{255, 255, 255, 255});
-    ImagePaintProbe probe{42, ObjectFit::Fill, {}, 0};
+    ImagePaintProbe probe{42, ObjectFit::Fill, {}, ImageRendering::Auto, 0};
     SoftwareRasterizer rasterizer({}, ImagePainter{probe_image_painter, &probe});
     DisplayCommand command;
     command.type = DisplayCommandType::Image;
@@ -186,12 +205,14 @@ void image_command_uses_injected_painter() {
     command.image_handle = 42;
     command.object_fit = ObjectFit::Contain;
     command.object_position = ObjectPosition{100, 0};
+    command.image_rendering = ImageRendering::Pixelated;
     rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 8, 8});
 
     check(probe.calls == 1, "image painter called once");
     check(probe.fit == ObjectFit::Contain, "image painter receives object-fit");
     check(probe.position.x_percent == 100 && probe.position.y_percent == 0,
           "image painter receives object-position");
+    check(probe.rendering == ImageRendering::Pixelated, "image painter receives image-rendering");
     check(frame_buffer.pixel(1, 2).r == 220 && frame_buffer.pixel(1, 2).g == 38,
           "image painter writes covered pixel");
     check(frame_buffer.pixel(0, 0).r == 255, "image painter leaves outside pixel");
@@ -305,6 +326,39 @@ DisplayCommand black_fill(Rect rect) {
     command.rect = rect;
     command.color = Color{0, 0, 0, 255};
     return command;
+}
+
+DisplayCommand white_fill(Rect rect) {
+    DisplayCommand command;
+    command.type = DisplayCommandType::FillRect;
+    command.rect = rect;
+    command.color = Color{255, 255, 255, 255};
+    return command;
+}
+
+void compositor_smooths_scaled_layers() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 4, 4};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->bounds = Rect{1, 1, 2, 2};
+    child->transform.scale_x = 2.0F;
+    child->transform.scale_y = 2.0F;
+    child->display_list.push_back(white_fill(Rect{1, 1, 2, 2}));
+    child->display_list.push_back(black_fill(Rect{1, 1, 1, 2}));
+    root.children.push_back(std::move(child));
+
+    const FrameBuffer smooth = SoftwareCompositor().render(root, 4, 4, Color{255, 255, 255, 255});
+    SoftwareCompositor::Options nearest_options;
+    nearest_options.smooth_scaled_layers = false;
+    const FrameBuffer nearest =
+        SoftwareCompositor({}, nearest_options).render(root, 4, 4, Color{255, 255, 255, 255});
+
+    check(smooth.pixel(1, 1).r > 0 && smooth.pixel(1, 1).r < 255,
+          "scaled layer has bilinear intermediate pixel");
+    check(nearest.pixel(1, 1).r == 0, "nearest scaled layer keeps hard edge");
 }
 
 void compositor_degrades_oversized_offscreen_layers_without_crashing() {
@@ -629,6 +683,7 @@ int main() {
         linear_gradient_rasterizes_top_and_bottom_colors();
         horizontal_linear_gradient_rasterizes_left_and_right_colors();
         rounded_stroke_keeps_corner_pixels_clear();
+        rounded_fill_antialiases_edge_pixels();
         source_over_alpha_composites();
         clipping_limits_rasterization();
         image_command_uses_injected_painter();
@@ -638,6 +693,7 @@ int main() {
         layout_uses_injected_text_measurement();
         dirty_render_only_updates_requested_clip();
         rasterizer_reports_text_fallback();
+        compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
         compositor_rejects_oversized_framebuffer_before_allocation();
         frame_sink_receives_framebuffer_view_and_dirty_rects();

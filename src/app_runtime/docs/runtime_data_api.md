@@ -149,6 +149,10 @@ report `empty-instance` / `queue-full` through tool or serial diagnostics.
 Current V0 implementation:
 
 - `navigator.onLine` is exposed as a read-only snapshot.
+- Accepted `NetworkStatusChanged` events dispatch `online` / `offline` on
+  `window` only when the state changes. The supported target is intentionally
+  small: `addEventListener`, `removeEventListener`, function listeners and the
+  `once` option.
 - `document.hidden` is exposed as a read-only snapshot.
 - `document.visibilityState` is exposed as read-only `"visible"` / `"hidden"`.
 - Accepted `ScreenStateChanged` and `LowPowerModeChanged` events dispatch
@@ -158,8 +162,9 @@ Current V0 implementation:
   toggles low-power visibility. These shortcuts do not read real Windows
   hardware state.
 
-Not implemented yet: `window.addEventListener`, `online` / `offline` events,
-battery JS APIs and custom JellyFrame-specific system state objects.
+Not implemented yet: battery JS APIs, custom JellyFrame-specific system state
+objects and full `Window`/`EventTarget` semantics beyond the `online` /
+`offline` subset.
 
 ## Error Names
 

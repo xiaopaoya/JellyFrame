@@ -177,7 +177,8 @@ void push_image(DisplayList& display_list,
                 Rect rect,
                 std::uint32_t image_handle,
                 ObjectFit object_fit,
-                ObjectPosition object_position) {
+                ObjectPosition object_position,
+                ImageRendering image_rendering) {
     if (rect.width <= 0 || rect.height <= 0 || image_handle == 0) {
         return;
     }
@@ -187,6 +188,7 @@ void push_image(DisplayList& display_list,
     command.image_handle = image_handle;
     command.object_fit = object_fit;
     command.object_position = object_position;
+    command.image_rendering = image_rendering;
     command.color = Color{255, 255, 255, 255};
     command.color2 = command.color;
     display_list.push_back(std::move(command));
@@ -688,7 +690,12 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
 
     std::uint32_t image_handle = 0;
     if (resolve_image_handle(box, options, image_handle)) {
-        push_image(display_list, content_rect_for(box), image_handle, box.style.object_fit, box.style.object_position);
+        push_image(display_list,
+                   content_rect_for(box),
+                   image_handle,
+                   box.style.object_fit,
+                   box.style.object_position,
+                   box.style.image_rendering);
     }
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {

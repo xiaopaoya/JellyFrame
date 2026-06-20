@@ -11,3 +11,5 @@ Current packages:
 
 - `watch_weather`: watch weather app with package resources and optional data.
 - `jelly_controls`: Jelly UI controls and motion style sample.
+- `jelly_motion_lab`: LVGL-style motion validation app with icon-to-window,
+  sheet and button jelly animations.

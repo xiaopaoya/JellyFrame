@@ -34,11 +34,27 @@ Color opaque_color(Color color) {
                  255};
 }
 
-std::uint16_t pack_565(Color color, bool bgr) {
+int bayer4_threshold(int x, int y) {
+    static constexpr std::uint8_t kBayer4[4][4] = {
+        {0, 8, 2, 10},
+        {12, 4, 14, 6},
+        {3, 11, 1, 9},
+        {15, 7, 13, 5},
+    };
+    return static_cast<int>(kBayer4[y & 3][x & 3]);
+}
+
+std::uint8_t quantize_channel(std::uint8_t channel, int bits, int x, int y, bool ordered_dither) {
+    const int max_value = (1 << bits) - 1;
+    const int bias = ordered_dither ? bayer4_threshold(x, y) * 16 : 127;
+    return static_cast<std::uint8_t>(std::min(max_value, (static_cast<int>(channel) * max_value + bias) / 255));
+}
+
+std::uint16_t pack_565(Color color, bool bgr, int x, int y, bool ordered_dither) {
     color = opaque_color(color);
-    const std::uint16_t r = static_cast<std::uint16_t>(color.r >> 3);
-    const std::uint16_t g = static_cast<std::uint16_t>(color.g >> 2);
-    const std::uint16_t b = static_cast<std::uint16_t>(color.b >> 3);
+    const std::uint16_t r = quantize_channel(color.r, 5, x, y, ordered_dither);
+    const std::uint16_t g = quantize_channel(color.g, 6, x, y, ordered_dither);
+    const std::uint16_t b = quantize_channel(color.b, 5, x, y, ordered_dither);
     if (bgr) {
         return static_cast<std::uint16_t>((b << 11) | (g << 5) | r);
     }
@@ -94,7 +110,7 @@ void write_pixel(EmbeddedFrameBufferTarget& target, int x, int y, Color color) {
     case EmbeddedPixelFormat::Rgb565:
     case EmbeddedPixelFormat::Bgr565: {
         const bool bgr = target.format == EmbeddedPixelFormat::Bgr565;
-        const std::uint16_t packed = pack_565(color, bgr);
+        const std::uint16_t packed = pack_565(color, bgr, x, y, target.ordered_dither);
         std::uint8_t* pixel = row + static_cast<std::size_t>(x) * 2U;
         pixel[0] = static_cast<std::uint8_t>(packed & 0xffU);
         pixel[1] = static_cast<std::uint8_t>(packed >> 8);

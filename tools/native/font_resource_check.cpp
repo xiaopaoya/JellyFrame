@@ -408,6 +408,12 @@ Options parse_options(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_font_resource_check [--font-coverage chars.txt] "
+                     "[--emit-used-chars used_chars.txt] [--font-budget WxH] "
+                     "<file.html> [style.css] [script.js...]\n";
+        return 0;
+    }
     Options options;
     try {
         options = parse_options(argc, argv);

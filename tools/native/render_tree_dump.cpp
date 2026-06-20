@@ -120,6 +120,10 @@ void dump_render_tree(const RenderObject& object, std::size_t depth = 0) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_render_tree_dump page.html style.css\n";
+        return 0;
+    }
     if (argc < 3) {
         std::cerr << "usage: jellyframe_render_tree_dump page.html style.css\n";
         return 1;

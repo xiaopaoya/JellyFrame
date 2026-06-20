@@ -389,6 +389,10 @@ void bench_xml_http_request_mock(std::size_t capacity) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_app_runtime_microbench [iterations=10000] [capacity=32]\n";
+        return 0;
+    }
     const int iterations = argc >= 2 ? std::max(1, std::atoi(argv[1])) : 10000;
     const std::size_t capacity = argc >= 3 ? static_cast<std::size_t>(std::max(1, std::atoi(argv[2]))) : 32;
 

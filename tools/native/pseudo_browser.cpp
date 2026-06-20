@@ -13,6 +13,7 @@
 #include "example_css_io.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -231,6 +232,11 @@ void write_diagnostics_json(const std::string& path,
 }
 
 BrowserOptions parse_options(int argc, char** argv) {
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "usage: jellyframe_pseudo_browser page.html style.css output.ppm "
+                     "[viewport_width] [viewport_height] [--diagnostics-json report.json]\n";
+        std::exit(0);
+    }
     if (argc < 4) {
         throw std::runtime_error(
             "usage: jellyframe_pseudo_browser page.html style.css output.ppm "

@@ -171,6 +171,11 @@ Current V0 helper:
   `surface-budget-exceeded` and `pending-budget`. Desktop tools and future
   serial/package diagnostics should consume this classification instead of
   showing a vague `failed` status only.
+- `AppImageSurfaceCache::diagnostic_detail_for_url(...)` exposes a stable
+  debug string with `src`, `state`, `reason`, `submit`, and optional
+  `host`/`error`/`job`/`handle`/`bytes` fields. Tooling should use it after
+  request rejection or decode completion so asynchronous failures are tied back
+  to the cache entry that caused them.
 - Successful completions return `HostServiceHandleKind::Surface` handles;
   `AppDecodedSurfaceRecord` stores width, height, stride, pixel format and
   optional raw pixels.
@@ -578,9 +583,9 @@ Rules:
   trigger layout by itself. Bindings decide how an accepted event becomes an app
   callback later.
 - The current JerryScript binding maps network state to `navigator.onLine` and
-  visibility state to `document.hidden`, `document.visibilityState` and
-  `document` `visibilitychange`. `window` `online`/`offline` events and battery
-  JavaScript APIs remain out of V0.
+  the `window` `online`/`offline` event subset, and maps visibility state to
+  `document.hidden`, `document.visibilityState` and `document`
+  `visibilitychange`. Battery JavaScript APIs remain out of V0.
 - The Win32 debug shell can inject fake events with `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8`
   for app testing; failed injection reports `system-event-rejected`
   diagnostics. Hardware ports should use the same queue from their own host

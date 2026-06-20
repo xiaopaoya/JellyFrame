@@ -647,6 +647,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "object-position") {
         return is_supported_object_position_value(value);
     }
+    if (property == "image-rendering") {
+        return supported_keyword(value, {"auto", "pixelated", "crisp-edges"});
+    }
     if (property == "box-shadow") {
         return value == "none" || value.find('#') != std::string::npos ||
                value.find("rgb(") != std::string::npos || value.find("px") != std::string::npos;

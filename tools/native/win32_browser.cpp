@@ -36,10 +36,13 @@
 #include <windowsx.h>
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -298,9 +301,51 @@ void report_image_completion_failure(DiagnosticSink* diagnostics,
                                                completion.error_code));
 }
 
+void report_image_cache_state(DiagnosticSink* diagnostics,
+                              const AppImageSurfaceCache& cache,
+                              const std::string& src) {
+    if (src.empty()) {
+        return;
+    }
+    report_diagnostic(diagnostics,
+                      DiagnosticStage::Package,
+                      DiagnosticSeverity::Info,
+                      "image-cache-state",
+                      "Image cache state after decode",
+                      cache.diagnostic_detail_for_url(src));
+}
+
+enum class ScriptedFrameEventKind {
+    NetworkOnline,
+    NetworkOffline,
+    ScreenVisible,
+    ScreenHidden,
+    LowPowerOn,
+    LowPowerOff,
+    PointerMove,
+    PointerDown,
+    PointerUp,
+    Click,
+};
+
+struct ScriptedFrameEvent {
+    int frame_index = 0;
+    ScriptedFrameEventKind kind = ScriptedFrameEventKind::PointerMove;
+    int x = 0;
+    int y = 0;
+};
+
+struct ParsedFrameEvent {
+    bool ok = false;
+    ScriptedFrameEvent event;
+    std::string error;
+};
+
 struct BrowserOptions {
     bool capture = false;
+    bool capture_frames = false;
     std::string output_path;
+    std::string frame_output_dir;
     std::string html_path = "src/render_core/samples/pages/modern/app_shell.html";
     std::string css_path = "src/render_core/samples/pages/modern/app_shell.css";
     std::string inline_html;
@@ -318,6 +363,14 @@ struct BrowserOptions {
     bool viewport_width_set = false;
     bool viewport_height_set = false;
     bool use_app_fonts = false;
+    int frame_count = 30;
+    std::uint32_t frame_step_ms = 33;
+    std::uint64_t frame_start_ms = 1000;
+    std::string frame_script_path;
+    std::string frame_montage_path;
+    int frame_montage_columns = 0;
+    int frame_montage_gap = 6;
+    std::vector<ScriptedFrameEvent> frame_events;
 };
 
 struct LoadedPage {
@@ -601,6 +654,14 @@ bool resolve_browser_image_handle(const Node& node, std::uint32_t& handle, void*
                                      src,
                                      submit_status,
                                      context->cache->last_host_status_for_url(src));
+        if (context->diagnostics != nullptr) {
+            report_diagnostic(context->diagnostics,
+                              DiagnosticStage::Package,
+                              DiagnosticSeverity::Info,
+                              "image-cache-state",
+                              "Image cache state after request failure",
+                              context->cache->diagnostic_detail_for_url(src));
+        }
     }
     return resolved;
 }
@@ -642,6 +703,47 @@ Color read_surface_pixel(const AppDecodedSurfaceRecord& surface, int x, int y) {
         };
     }
     return Color{0, 0, 0, 0};
+}
+
+Color lerp_color_fixed(Color a, Color b, int t256) {
+    return Color{
+        static_cast<std::uint8_t>((static_cast<int>(a.r) * (256 - t256) + static_cast<int>(b.r) * t256 + 128) >> 8),
+        static_cast<std::uint8_t>((static_cast<int>(a.g) * (256 - t256) + static_cast<int>(b.g) * t256 + 128) >> 8),
+        static_cast<std::uint8_t>((static_cast<int>(a.b) * (256 - t256) + static_cast<int>(b.b) * t256 + 128) >> 8),
+        static_cast<std::uint8_t>((static_cast<int>(a.a) * (256 - t256) + static_cast<int>(b.a) * t256 + 128) >> 8),
+    };
+}
+
+Color sample_surface_bilinear(const AppDecodedSurfaceRecord& surface,
+                              Rect source_rect,
+                              int local_x,
+                              int local_y,
+                              int dst_width,
+                              int dst_height) {
+    if (source_rect.width <= 1 || source_rect.height <= 1 || dst_width <= 1 || dst_height <= 1) {
+        const int src_x = std::min(surface.width - 1,
+                                   source_rect.x + (local_x * source_rect.width) / std::max(1, dst_width));
+        const int src_y = std::min(surface.height - 1,
+                                   source_rect.y + (local_y * source_rect.height) / std::max(1, dst_height));
+        return read_surface_pixel(surface, src_x, src_y);
+    }
+
+    const int fx = (local_x * (source_rect.width - 1) * 256) / std::max(1, dst_width - 1);
+    const int fy = (local_y * (source_rect.height - 1) * 256) / std::max(1, dst_height - 1);
+    const int base_x = std::min(source_rect.width - 1, fx >> 8);
+    const int base_y = std::min(source_rect.height - 1, fy >> 8);
+    const int next_x = std::min(source_rect.width - 1, base_x + 1);
+    const int next_y = std::min(source_rect.height - 1, base_y + 1);
+    const int tx = fx & 0xff;
+    const int ty = fy & 0xff;
+
+    const Color top = lerp_color_fixed(read_surface_pixel(surface, source_rect.x + base_x, source_rect.y + base_y),
+                                       read_surface_pixel(surface, source_rect.x + next_x, source_rect.y + base_y),
+                                       tx);
+    const Color bottom = lerp_color_fixed(read_surface_pixel(surface, source_rect.x + base_x, source_rect.y + next_y),
+                                          read_surface_pixel(surface, source_rect.x + next_x, source_rect.y + next_y),
+                                          tx);
+    return lerp_color_fixed(top, bottom, ty);
 }
 
 struct ImageDrawMapping {
@@ -717,6 +819,7 @@ bool paint_image_surface(FrameBuffer& target,
                          std::uint32_t image_handle,
                          ObjectFit object_fit,
                          ObjectPosition object_position,
+                         ImageRendering image_rendering,
                          void* raw_context) {
     auto* context = static_cast<BrowserImageContext*>(raw_context);
     if (context == nullptr || context->images == nullptr || rect.width <= 0 || rect.height <= 0) {
@@ -740,20 +843,35 @@ bool paint_image_surface(FrameBuffer& target,
     if (clip.width <= 0 || clip.height <= 0) {
         return true;
     }
+    const bool smooth = image_rendering == ImageRendering::Auto;
     for (int y = 0; y < clip.height; ++y) {
         const int dst_y = clip.y + y;
         const int local_y = dst_y - mapping.dst.y;
-        const int src_y = std::min(surface->height - 1,
-                                   mapping.src.y + (local_y * mapping.src.height) / std::max(1, mapping.dst.height));
         for (int x = 0; x < clip.width; ++x) {
             const int dst_x = clip.x + x;
             if (!target.contains(dst_x, dst_y)) {
                 continue;
             }
             const int local_x = dst_x - mapping.dst.x;
-            const int src_x = std::min(surface->width - 1,
-                                       mapping.src.x + (local_x * mapping.src.width) / std::max(1, mapping.dst.width));
-            blend_pixel(target, dst_x, dst_y, read_surface_pixel(*surface, src_x, src_y));
+            if (smooth) {
+                blend_pixel(target,
+                            dst_x,
+                            dst_y,
+                            sample_surface_bilinear(*surface,
+                                                    mapping.src,
+                                                    local_x,
+                                                    local_y,
+                                                    mapping.dst.width,
+                                                    mapping.dst.height));
+            } else {
+                const int src_y = std::min(surface->height - 1,
+                                           mapping.src.y + (local_y * mapping.src.height) /
+                                               std::max(1, mapping.dst.height));
+                const int src_x = std::min(surface->width - 1,
+                                           mapping.src.x + (local_x * mapping.src.width) /
+                                               std::max(1, mapping.dst.width));
+                blend_pixel(target, dst_x, dst_y, read_surface_pixel(*surface, src_x, src_y));
+            }
         }
     }
     return true;
@@ -866,12 +984,323 @@ std::uint32_t color_to_bgrx(Color pixel) {
            static_cast<std::uint32_t>(pixel.b);
 }
 
+void append_to_montage(FrameBuffer& montage,
+                       const FrameBuffer& frame,
+                       int frame_index,
+                       int columns,
+                       int cell_width,
+                       int cell_height,
+                       int gap) {
+    if (columns <= 0 || cell_width <= 0 || cell_height <= 0 ||
+        frame.width <= 0 || frame.height <= 0) {
+        return;
+    }
+    const int column = frame_index % columns;
+    const int row = frame_index / columns;
+    const int dst_x0 = column * (cell_width + gap);
+    const int dst_y0 = row * (cell_height + gap);
+    const int copy_width = std::min(cell_width, frame.width);
+    const int copy_height = std::min(cell_height, frame.height);
+    for (int y = 0; y < copy_height; ++y) {
+        const int dst_y = dst_y0 + y;
+        if (dst_y < 0 || dst_y >= montage.height) {
+            continue;
+        }
+        for (int x = 0; x < copy_width; ++x) {
+            const int dst_x = dst_x0 + x;
+            if (dst_x < 0 || dst_x >= montage.width) {
+                continue;
+            }
+            montage.pixel(dst_x, dst_y) = frame.pixel(x, y);
+        }
+    }
+}
+
 int parse_int_arg(const char* value, int fallback) {
     try {
         return std::max(1, std::stoi(value));
     } catch (...) {
         return fallback;
     }
+}
+
+int parse_int_unclamped(const char* value, int fallback) {
+    try {
+        return std::stoi(value);
+    } catch (...) {
+        return fallback;
+    }
+}
+
+std::uint64_t parse_u64_arg(const char* value, std::uint64_t fallback) {
+    try {
+        return std::max<std::uint64_t>(1, static_cast<std::uint64_t>(std::stoull(value)));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+std::vector<std::string> split_colon_fields(const std::string& text) {
+    std::vector<std::string> fields;
+    std::size_t begin = 0;
+    while (begin <= text.size()) {
+        const std::size_t end = text.find(':', begin);
+        fields.push_back(text.substr(begin, end == std::string::npos ? std::string::npos : end - begin));
+        if (end == std::string::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+    return fields;
+}
+
+std::string ascii_lowercase_local(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return value;
+}
+
+std::string trim_ascii(std::string value) {
+    const auto not_space = [](unsigned char ch) {
+        return std::isspace(ch) == 0;
+    };
+    const auto begin = std::find_if(value.begin(), value.end(), not_space);
+    const auto end = std::find_if(value.rbegin(), value.rend(), not_space).base();
+    if (begin >= end) {
+        return {};
+    }
+    return std::string(begin, end);
+}
+
+std::vector<std::string> split_whitespace(const std::string& text) {
+    std::vector<std::string> fields;
+    std::istringstream input(text);
+    std::string field;
+    while (input >> field) {
+        fields.push_back(field);
+    }
+    return fields;
+}
+
+ParsedFrameEvent parse_frame_event(const std::string& spec) {
+    ParsedFrameEvent parsed;
+    const std::vector<std::string> fields = split_colon_fields(spec);
+    if (fields.size() < 2) {
+        parsed.error = "expected FRAME:kind[:x:y]";
+        return parsed;
+    }
+    parsed.event.frame_index = parse_int_unclamped(fields[0].c_str(), -1);
+    if (fields[0].empty() || parsed.event.frame_index < 0) {
+        parsed.error = "frame index must be non-negative";
+        return parsed;
+    }
+    const std::string kind = ascii_lowercase_local(fields[1]);
+    if (kind == "network-online") {
+        parsed.event.kind = ScriptedFrameEventKind::NetworkOnline;
+    } else if (kind == "network-offline") {
+        parsed.event.kind = ScriptedFrameEventKind::NetworkOffline;
+    } else if (kind == "screen-visible") {
+        parsed.event.kind = ScriptedFrameEventKind::ScreenVisible;
+    } else if (kind == "screen-hidden") {
+        parsed.event.kind = ScriptedFrameEventKind::ScreenHidden;
+    } else if (kind == "low-power-on") {
+        parsed.event.kind = ScriptedFrameEventKind::LowPowerOn;
+    } else if (kind == "low-power-off") {
+        parsed.event.kind = ScriptedFrameEventKind::LowPowerOff;
+    } else if (kind == "pointer-move" || kind == "pointer-down" ||
+               kind == "pointer-up" || kind == "click") {
+        if (fields.size() != 4) {
+            parsed.error = "pointer/click events require FRAME:kind:x:y";
+            return parsed;
+        }
+        parsed.event.x = parse_int_unclamped(fields[2].c_str(), 0);
+        parsed.event.y = parse_int_unclamped(fields[3].c_str(), 0);
+        if (kind == "pointer-move") {
+            parsed.event.kind = ScriptedFrameEventKind::PointerMove;
+        } else if (kind == "pointer-down") {
+            parsed.event.kind = ScriptedFrameEventKind::PointerDown;
+        } else if (kind == "pointer-up") {
+            parsed.event.kind = ScriptedFrameEventKind::PointerUp;
+        } else {
+            parsed.event.kind = ScriptedFrameEventKind::Click;
+        }
+    } else {
+        parsed.error = "unknown frame event kind: " + fields[1];
+        return parsed;
+    }
+    parsed.ok = true;
+    return parsed;
+}
+
+std::string event_spec_from_fields(const std::vector<std::string>& fields) {
+    if (fields.size() < 3) {
+        return {};
+    }
+    std::ostringstream spec;
+    spec << fields[1] << ':' << fields[2];
+    if (fields.size() >= 5) {
+        spec << ':' << fields[3] << ':' << fields[4];
+    }
+    return spec.str();
+}
+
+bool apply_frame_script(BrowserOptions& options, const std::string& path, std::string& error) {
+    std::ifstream input(path);
+    if (!input) {
+        error = "failed to open frame script: " + path;
+        return false;
+    }
+
+    std::string line;
+    int line_number = 0;
+    while (std::getline(input, line)) {
+        ++line_number;
+        const std::size_t comment = line.find('#');
+        if (comment != std::string::npos) {
+            line.resize(comment);
+        }
+        line = trim_ascii(line);
+        if (line.empty()) {
+            continue;
+        }
+
+        std::vector<std::string> fields = split_whitespace(line);
+        if (fields.empty()) {
+            continue;
+        }
+        const std::string command = ascii_lowercase_local(fields[0]);
+        const auto require_count = [&](std::size_t count) -> bool {
+            if (fields.size() == count) {
+                return true;
+            }
+            std::ostringstream message;
+            message << path << ':' << line_number << ": " << fields[0]
+                    << " expects " << (count - 1) << " argument(s)";
+            error = message.str();
+            return false;
+        };
+
+        if (command == "capture-frames" || command == "output-dir") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.capture_frames = true;
+            options.frame_output_dir = fields[1];
+        } else if (command == "montage" || command == "contact-sheet") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.frame_montage_path = fields[1];
+        } else if (command == "montage-columns" || command == "columns") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.frame_montage_columns = std::min(30, parse_int_arg(fields[1].c_str(), 0));
+        } else if (command == "montage-gap" || command == "gap") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.frame_montage_gap = std::min(64, parse_int_arg(fields[1].c_str(), options.frame_montage_gap));
+        } else if (command == "frame-count" || command == "frames") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.frame_count = std::min(600, parse_int_arg(fields[1].c_str(), options.frame_count));
+        } else if (command == "frame-step-ms" || command == "step-ms") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.frame_step_ms = static_cast<std::uint32_t>(
+                std::min<std::uint64_t>(1000, parse_u64_arg(fields[1].c_str(), options.frame_step_ms)));
+        } else if (command == "frame-start-ms" || command == "start-ms") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.frame_start_ms = parse_u64_arg(fields[1].c_str(), options.frame_start_ms);
+        } else if (command == "viewport") {
+            if (!require_count(3)) {
+                return false;
+            }
+            options.viewport_width = parse_int_arg(fields[1].c_str(), options.viewport_width);
+            options.viewport_height = parse_int_arg(fields[2].c_str(), options.viewport_height);
+            options.viewport_width_set = true;
+            options.viewport_height_set = true;
+        } else if (command == "viewport-width") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.viewport_width = parse_int_arg(fields[1].c_str(), options.viewport_width);
+            options.viewport_width_set = true;
+        } else if (command == "viewport-height") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.viewport_height = parse_int_arg(fields[1].c_str(), options.viewport_height);
+            options.viewport_height_set = true;
+        } else if (command == "event") {
+            std::string event_spec;
+            if (fields.size() == 2) {
+                event_spec = fields[1];
+            } else if (fields.size() == 3 || fields.size() == 5) {
+                event_spec = event_spec_from_fields(fields);
+            } else {
+                std::ostringstream message;
+                message << path << ':' << line_number
+                        << ": event expects FRAME:kind[:x:y] or FRAME kind [x y]";
+                error = message.str();
+                return false;
+            }
+            ParsedFrameEvent parsed = parse_frame_event(event_spec);
+            if (!parsed.ok) {
+                std::ostringstream message;
+                message << path << ':' << line_number << ": invalid event: " << parsed.error;
+                error = message.str();
+                return false;
+            }
+            options.frame_events.push_back(parsed.event);
+        } else {
+            std::ostringstream message;
+            message << path << ':' << line_number << ": unknown frame script command: " << fields[0];
+            error = message.str();
+            return false;
+        }
+    }
+
+    if (!options.frame_montage_path.empty()) {
+        options.capture_frames = true;
+    }
+    return true;
+}
+
+void print_win32_browser_usage(std::ostream& output) {
+    output
+        << "usage: jellyframe_win32_browser [options] [page.html style.css [width height]]\n"
+        << "\n"
+        << "Options:\n"
+        << "  --help                         Show this help and exit.\n"
+        << "  --app PATH                     Load a JellyFrame app package directory or .jfapp.\n"
+        << "  --script PATH                  Load an extra classic script file.\n"
+        << "  --capture PATH                 Render one frame to BMP/PPM by extension.\n"
+        << "  --capture-frames DIR           Hidden deterministic frame capture directory.\n"
+        << "  --frame-script PATH            Apply a deterministic frame script file.\n"
+        << "  --capture-montage PATH         Write a BMP/PPM contact sheet for captured frames.\n"
+        << "  --montage-columns N            Contact sheet columns, default auto.\n"
+        << "  --frame-count N                Frames for --capture-frames, default 30.\n"
+        << "  --frame-step-ms N              Fixed frame step, default 33 ms.\n"
+        << "  --frame-start-ms N             First scripted timestamp, default 1000 ms.\n"
+        << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y].\n"
+        << "                                 Kinds: click, pointer-move, pointer-down,\n"
+        << "                                 pointer-up, network-online/offline,\n"
+        << "                                 screen-visible/hidden, low-power-on/off.\n"
+        << "  --viewport-width N             Override viewport width.\n"
+        << "  --viewport-height N            Override viewport height.\n"
+        << "  --use-app-fonts                Use package .jffont resources when available.\n"
+        << "  --registry-store DIR           Run system-shell/app-manager mode.\n"
+        << "  --launcher-app PATH            Launcher app used with --registry-store.\n"
+        << "  --install-bundle PATH          Install .jfapp into registry store.\n"
+        << "  --launch-app ID                Launch installed app id.\n"
+        << "  --remove-app ID                Remove installed app id.\n";
 }
 
 const Node* find_first_element(const Node& node, const char* tag_name) {
@@ -1220,7 +1649,12 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
         for (const HostServiceCompletion& completion : app_frame_scratch.accepted_completions) {
             const std::string image_src = image_cache.url_for_job(completion.job_id);
             report_image_completion_failure(&diagnostics, completion, image_src);
-            image_ready = image_cache.handle_completion(completion) || image_ready;
+            const bool handled_image = image_cache.handle_completion(completion);
+            if (handled_image && completion.kind == HostServiceJobKind::ImageDecode &&
+                completion.status != HostServiceStatus::Completed) {
+                report_image_cache_state(&diagnostics, image_cache, image_src);
+            }
+            image_ready = handled_image || image_ready;
         }
         if (image_ready) {
             layer_tree = layer_builder.build(*layout_tree);
@@ -1290,6 +1724,11 @@ public:
     }
 
     bool initialize(HINSTANCE instance, int show_command) {
+        if (options_.capture_frames) {
+            scripted_time_enabled_ = true;
+            scripted_now_ms_ = options_.frame_start_ms;
+        }
+
         WNDCLASSW window_class{};
         window_class.lpfnWndProc = BrowserApp::window_proc;
         window_class.hInstance = instance;
@@ -1330,6 +1769,104 @@ public:
         return static_cast<int>(message.wParam);
     }
 
+    int capture_frames() {
+        if (hwnd_ == nullptr ||
+            (options_.frame_output_dir.empty() && options_.frame_montage_path.empty())) {
+            return 1;
+        }
+        if (!options_.frame_output_dir.empty()) {
+            std::filesystem::create_directories(options_.frame_output_dir);
+        }
+
+        FrameBuffer montage;
+        bool montage_enabled = false;
+        int montage_columns = 0;
+        int montage_cell_width = 0;
+        int montage_cell_height = 0;
+        int montage_rows = 0;
+        scripted_time_enabled_ = true;
+        for (int frame = 0; frame < options_.frame_count; ++frame) {
+            scripted_now_ms_ = options_.frame_start_ms +
+                static_cast<std::uint64_t>(frame) * options_.frame_step_ms;
+            dispatch_scripted_frame_events(frame);
+            handle_timer(kScriptTimerId);
+            if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+                render_current(input_ ? input_->hovered_node() : nullptr,
+                               nullptr,
+                               input_ ? input_->focused_node() : nullptr);
+            }
+            if (!options_.frame_montage_path.empty() && frame == 0) {
+                montage_columns = options_.frame_montage_columns > 0
+                    ? options_.frame_montage_columns
+                    : std::max(1, static_cast<int>(std::ceil(std::sqrt(
+                          static_cast<double>(options_.frame_count) *
+                          static_cast<double>(std::max(1, frame_buffer_.width)) /
+                          static_cast<double>(std::max(1, frame_buffer_.height))))));
+                montage_columns = std::max(1, std::min(options_.frame_count, montage_columns));
+                montage_rows = (options_.frame_count + montage_columns - 1) / montage_columns;
+                montage_cell_width = std::max(1, frame_buffer_.width);
+                montage_cell_height = std::max(1, frame_buffer_.height);
+                const int gap = std::max(0, options_.frame_montage_gap);
+                const std::uint64_t sheet_width =
+                    static_cast<std::uint64_t>(montage_columns) * static_cast<std::uint64_t>(montage_cell_width) +
+                    static_cast<std::uint64_t>(std::max(0, montage_columns - 1)) * static_cast<std::uint64_t>(gap);
+                const std::uint64_t sheet_height =
+                    static_cast<std::uint64_t>(montage_rows) * static_cast<std::uint64_t>(montage_cell_height) +
+                    static_cast<std::uint64_t>(std::max(0, montage_rows - 1)) * static_cast<std::uint64_t>(gap);
+                constexpr std::uint64_t kMaxMontagePixels = 16ULL * 1024ULL * 1024ULL;
+                if (sheet_width > static_cast<std::uint64_t>(std::numeric_limits<int>::max()) ||
+                    sheet_height > static_cast<std::uint64_t>(std::numeric_limits<int>::max()) ||
+                    sheet_width * sheet_height > kMaxMontagePixels) {
+                    std::cerr << "capture montage skipped: contact sheet would exceed "
+                              << kMaxMontagePixels << " pixels\n";
+                } else {
+                    montage.resize(static_cast<int>(sheet_width),
+                                   static_cast<int>(sheet_height),
+                                   Color{18, 20, 24, 255});
+                    montage_enabled = true;
+                }
+            }
+            if (montage_enabled) {
+                append_to_montage(montage,
+                                  frame_buffer_,
+                                  frame,
+                                  montage_columns,
+                                  montage_cell_width,
+                                  montage_cell_height,
+                                  std::max(0, options_.frame_montage_gap));
+            }
+            if (!options_.frame_output_dir.empty()) {
+                std::ostringstream name;
+                name << "frame_" << std::setw(3) << std::setfill('0') << frame << ".bmp";
+                const std::filesystem::path output =
+                    std::filesystem::path(options_.frame_output_dir) / name.str();
+                write_image(frame_buffer_, output.string());
+            }
+        }
+        if (montage_enabled) {
+            std::filesystem::path montage_path(options_.frame_montage_path);
+            if (montage_path.has_parent_path()) {
+                std::filesystem::create_directories(montage_path.parent_path());
+            }
+            write_image(montage, options_.frame_montage_path);
+        }
+        std::cout << "JellyFrame Win32 browser frame capture\n"
+                  << "  output_dir=" << options_.frame_output_dir << '\n'
+                  << "  montage=" << options_.frame_montage_path << '\n'
+                  << "  frames=" << options_.frame_count << '\n'
+                  << "  frame_step_ms=" << options_.frame_step_ms << '\n'
+                  << "  viewport=" << viewport_width_ << "x" << viewport_height_ << '\n'
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+                  << "  scripting=on\n"
+#else
+                  << "  scripting=off\n"
+#endif
+                  << "  dirty_local=" << dirty_region_statistics_.dirty_rect_frames
+                  << " full=" << dirty_region_statistics_.full_frame_frames
+                  << " clean=" << dirty_region_statistics_.clean_frames << '\n';
+        return 0;
+    }
+
 private:
     HWND hwnd_ = nullptr;
     BrowserOptions options_;
@@ -1352,6 +1889,8 @@ private:
     std::vector<StyleOverride> style_overrides_;
     std::vector<StyleOverride> previous_style_overrides_;
     bool clear_animation_overrides_after_render_ = false;
+    bool scripted_time_enabled_ = false;
+    std::uint64_t scripted_now_ms_ = 0;
     FrameScratch frame_scratch_;
     FrameBuffer frame_buffer_;
     Color page_background_{255, 255, 255, 255};
@@ -1393,6 +1932,62 @@ private:
             return DefWindowProcW(hwnd, message, wparam, lparam);
         }
         return app->handle_message(message, wparam, lparam);
+    }
+
+    std::uint64_t current_time_ms() const {
+        return scripted_time_enabled_ ? scripted_now_ms_ : GetTickCount64();
+    }
+
+    LPARAM pointer_lparam(int x, int y) const {
+        return MAKELPARAM(static_cast<SHORT>(x), static_cast<SHORT>(y));
+    }
+
+    void dispatch_scripted_frame_events(int frame_index) {
+        for (const ScriptedFrameEvent& event : options_.frame_events) {
+            if (event.frame_index != frame_index) {
+                continue;
+            }
+            switch (event.kind) {
+            case ScriptedFrameEventKind::NetworkOnline:
+                debug_system_state_.network_online = true;
+                queue_system_event(AppSystemEventKind::NetworkStatusChanged, "network online");
+                break;
+            case ScriptedFrameEventKind::NetworkOffline:
+                debug_system_state_.network_online = false;
+                queue_system_event(AppSystemEventKind::NetworkStatusChanged, "network offline");
+                break;
+            case ScriptedFrameEventKind::ScreenVisible:
+                debug_system_state_.screen_on = true;
+                queue_system_event(AppSystemEventKind::ScreenStateChanged, "screen visible");
+                break;
+            case ScriptedFrameEventKind::ScreenHidden:
+                debug_system_state_.screen_on = false;
+                queue_system_event(AppSystemEventKind::ScreenStateChanged, "screen hidden");
+                break;
+            case ScriptedFrameEventKind::LowPowerOn:
+                debug_system_state_.low_power_mode = true;
+                queue_system_event(AppSystemEventKind::LowPowerModeChanged, "low power on");
+                break;
+            case ScriptedFrameEventKind::LowPowerOff:
+                debug_system_state_.low_power_mode = false;
+                queue_system_event(AppSystemEventKind::LowPowerModeChanged, "low power off");
+                break;
+            case ScriptedFrameEventKind::PointerMove:
+                handle_pointer_move(0, pointer_lparam(event.x, event.y));
+                break;
+            case ScriptedFrameEventKind::PointerDown:
+                handle_pointer_down(0, pointer_lparam(event.x, event.y));
+                break;
+            case ScriptedFrameEventKind::PointerUp:
+                handle_pointer_up(MK_LBUTTON, pointer_lparam(event.x, event.y));
+                break;
+            case ScriptedFrameEventKind::Click:
+                handle_pointer_move(0, pointer_lparam(event.x, event.y));
+                handle_pointer_down(0, pointer_lparam(event.x, event.y));
+                handle_pointer_up(MK_LBUTTON, pointer_lparam(event.x, event.y));
+                break;
+            }
+        }
     }
 
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -1476,6 +2071,10 @@ private:
             report_image_completion_failure(&diagnostics_, completion, image_src);
             if (image_cache_.handle_completion(completion)) {
                 ++image_handled;
+                if (completion.kind == HostServiceJobKind::ImageDecode &&
+                    completion.status != HostServiceStatus::Completed) {
+                    report_image_cache_state(&diagnostics_, image_cache_, image_src);
+                }
             } else if (completion.kind == HostServiceJobKind::ImageDecode && completion.handle != 0) {
                 debug_images_.release_surface(app_runtime_, completion.handle);
             }
@@ -1738,7 +2337,7 @@ private:
                     !debug_system_state_.screen_on || debug_system_state_.low_power_mode,
                     debug_system_state_.network_online,
                 });
-                script_runtime_->set_host_time_ms(GetTickCount64());
+                script_runtime_->set_host_time_ms(current_time_ms());
                 script_runtime_->bind_document(*document_);
                 for (const DocumentScript& script : document_scripts) {
                     const ScriptEvaluationResult result = script_runtime_->eval(script.source, script.name);
@@ -1881,7 +2480,7 @@ private:
         render_options.diagnostics = &diagnostics_;
         RenderTreeBuilder render_builder(*style_resolver_, render_options);
         auto target_render_tree = render_builder.build(*document_);
-        const std::uint64_t now_ms = GetTickCount64();
+        const std::uint64_t now_ms = current_time_ms();
         bool animation_started = false;
         if (!previous_styles.empty()) {
             animation_started =
@@ -2320,7 +2919,7 @@ private:
         const bool completed_image = debug_images_.complete_next(app_runtime_);
         bool handled_completion = drain_host_completions();
         const bool handled_system_event = drain_system_events();
-        const bool advanced_animation = advance_animation_timeline(GetTickCount64());
+        const bool advanced_animation = advance_animation_timeline(current_time_ms());
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr || !accepts_ui_events() ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
@@ -2331,7 +2930,7 @@ private:
         }
         const bool completed_network = debug_network_.complete_next(app_runtime_);
         handled_completion = drain_host_completions() || handled_completion;
-        const std::uint64_t now_ms = GetTickCount64();
+        const std::uint64_t now_ms = current_time_ms();
         const std::size_t callbacks = script_runtime_->pump_timers(now_ms, 8);
         const std::size_t animation_callbacks = script_runtime_->pump_animation_frame(now_ms, 4);
         if (callbacks != 0 || animation_callbacks != 0 || completed_network || advanced_animation ||
@@ -2418,6 +3017,10 @@ int main(int argc, char** argv) {
     std::vector<std::string> positional;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            print_win32_browser_usage(std::cout);
+            return 0;
+        }
         if (arg == "--capture") {
             options.capture = true;
             if (i + 1 >= argc) {
@@ -2425,6 +3028,83 @@ int main(int argc, char** argv) {
                 return 1;
             }
             options.output_path = argv[++i];
+            continue;
+        }
+        if (arg == "--capture-frames") {
+            options.capture_frames = true;
+            if (i + 1 >= argc) {
+                std::cerr << "--capture-frames requires an output directory\n";
+                return 1;
+            }
+            options.frame_output_dir = argv[++i];
+            continue;
+        }
+        if (arg == "--frame-script") {
+            if (i + 1 >= argc) {
+                std::cerr << "--frame-script requires a script file path\n";
+                return 1;
+            }
+            options.frame_script_path = argv[++i];
+            std::string error;
+            if (!apply_frame_script(options, options.frame_script_path, error)) {
+                std::cerr << error << '\n';
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "--capture-montage") {
+            options.capture_frames = true;
+            if (i + 1 >= argc) {
+                std::cerr << "--capture-montage requires an output image path\n";
+                return 1;
+            }
+            options.frame_montage_path = argv[++i];
+            continue;
+        }
+        if (arg == "--montage-columns") {
+            if (i + 1 >= argc) {
+                std::cerr << "--montage-columns requires a number\n";
+                return 1;
+            }
+            options.frame_montage_columns = std::min(30, parse_int_arg(argv[++i], options.frame_montage_columns));
+            continue;
+        }
+        if (arg == "--frame-count") {
+            if (i + 1 >= argc) {
+                std::cerr << "--frame-count requires a number\n";
+                return 1;
+            }
+            options.frame_count = std::min(600, parse_int_arg(argv[++i], options.frame_count));
+            continue;
+        }
+        if (arg == "--frame-step-ms") {
+            if (i + 1 >= argc) {
+                std::cerr << "--frame-step-ms requires a number\n";
+                return 1;
+            }
+            options.frame_step_ms =
+                static_cast<std::uint32_t>(std::min<std::uint64_t>(1000, parse_u64_arg(argv[++i], options.frame_step_ms)));
+            continue;
+        }
+        if (arg == "--frame-start-ms") {
+            if (i + 1 >= argc) {
+                std::cerr << "--frame-start-ms requires a number\n";
+                return 1;
+            }
+            options.frame_start_ms = parse_u64_arg(argv[++i], options.frame_start_ms);
+            continue;
+        }
+        if (arg == "--frame-event") {
+            if (i + 1 >= argc) {
+                std::cerr << "--frame-event requires FRAME:kind[:x:y]\n";
+                return 1;
+            }
+            ParsedFrameEvent parsed = parse_frame_event(argv[++i]);
+            if (!parsed.ok) {
+                std::cerr << "invalid --frame-event: " << parsed.error << '\n';
+                return 1;
+            }
+            options.frame_events.push_back(parsed.event);
             continue;
         }
         if (arg == "--app") {
@@ -2510,6 +3190,15 @@ int main(int argc, char** argv) {
 
     if (options.registry_store_path.empty() && options.app_path.empty() && positional.empty()) {
         options.app_path = "samples/apps/packages/watch_weather";
+    }
+
+    if (options.capture && options.capture_frames) {
+        std::cerr << "--capture and --capture-frames are mutually exclusive\n";
+        return 1;
+    }
+    if (options.capture_frames && options.frame_output_dir.empty() && options.frame_montage_path.empty()) {
+        std::cerr << "--capture-frames/--frame-script requires an output directory or --capture-montage\n";
+        return 1;
     }
 
     if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() || !options.launch_app_id.empty()) {
@@ -2653,11 +3342,16 @@ int main(int argc, char** argv) {
         }
     }
 
+    const bool capture_frames_mode = options.capture_frames;
     BrowserApp app(std::move(options));
     HINSTANCE instance = GetModuleHandleW(nullptr);
-    if (!app.initialize(instance, SW_SHOWNORMAL)) {
+    const int show_command = capture_frames_mode ? SW_HIDE : SW_SHOWNORMAL;
+    if (!app.initialize(instance, show_command)) {
         std::cerr << "failed to create Win32 browser window\n";
         return 1;
+    }
+    if (capture_frames_mode) {
+        return app.capture_frames();
     }
     return app.run();
 }

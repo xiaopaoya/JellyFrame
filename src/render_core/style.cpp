@@ -1868,6 +1868,7 @@ enum class CascadeProperty : std::size_t {
     GridRow,
     ObjectFit,
     ObjectPosition,
+    ImageRendering,
     ListStyleType,
     Transition,
     TransitionProperty,
@@ -2095,6 +2096,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "object-position") {
         return &cascade_slot(slots, CascadeProperty::ObjectPosition);
+    }
+    if (property == "image-rendering") {
+        return &cascade_slot(slots, CascadeProperty::ImageRendering);
     }
     if (property == "list-style" || property == "list-style-type") {
         return &cascade_slot(slots, CascadeProperty::ListStyleType);
@@ -2775,6 +2779,18 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             return false;
         }
         style.object_position = position;
+        return true;
+    } else if (property == "image-rendering") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "auto") {
+            style.image_rendering = ImageRendering::Auto;
+        } else if (lowered == "pixelated") {
+            style.image_rendering = ImageRendering::Pixelated;
+        } else if (lowered == "crisp-edges") {
+            style.image_rendering = ImageRendering::CrispEdges;
+        } else {
+            return false;
+        }
         return true;
     } else if (property == "list-style" || property == "list-style-type") {
         std::istringstream stream(lowercase(trim(value)));

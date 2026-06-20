@@ -144,6 +144,7 @@ std::size_t decoded_surface_byte_count(int width,
                                        int height,
                                        int stride_pixels,
                                        HostPixelFormat pixel_format);
+const char* app_image_surface_state_name(AppImageSurfaceState state);
 const char* app_image_failure_reason_name(AppImageFailureReason reason);
 AppImageFailureReason classify_app_image_failure(AppServiceSubmitStatus submit_status,
                                                  HostServiceStatus host_status,
@@ -206,6 +207,8 @@ public:
     AppServiceSubmitStatus last_submit_status_for_url(const std::string& url) const;
     HostServiceStatus last_host_status_for_url(const std::string& url) const;
     std::uint32_t last_error_code_for_url(const std::string& url) const;
+    AppImageFailureReason last_failure_reason_for_url(const std::string& url) const;
+    std::string diagnostic_detail_for_url(const std::string& url) const;
     std::size_t size() const {
         return entries_.size();
     }

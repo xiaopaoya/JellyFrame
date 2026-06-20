@@ -243,6 +243,13 @@ void image_surface_cache_records_failed_decodes_without_retry_loop() {
     check(accepted.size() == 1, "image cache missing completion accepted");
     check(cache.handle_completion(accepted.front()), "image cache records failed completion");
     check(cache.state_for_url("app://missing") == AppImageSurfaceState::Failed, "image cache failed state");
+    const std::string detail = cache.diagnostic_detail_for_url("app://missing");
+    check(detail.find("state=failed") != std::string::npos,
+          "image cache failed completion diagnostic includes failed state");
+    check(detail.find("reason=resource-not-found") != std::string::npos,
+          "image cache failed completion diagnostic includes stable reason");
+    check(detail.find("job=") != std::string::npos,
+          "image cache failed completion diagnostic includes job id");
     check(!cache.resolve_or_request(host, images, "app://missing", &handle), "image cache failed does not resolve");
     check(host.requests().empty(), "image cache failed does not retry every frame");
 }
@@ -284,6 +291,13 @@ void image_surface_cache_records_permanent_request_rejections() {
           "image cache permanent rejection records failed state");
     check(cache.last_submit_status_for_url("app://too-long") == AppServiceSubmitStatus::InvalidInput,
           "image cache permanent rejection records submit status");
+    check(cache.last_failure_reason_for_url("app://too-long") == AppImageFailureReason::InvalidSource,
+          "image cache permanent rejection exposes failure reason");
+    const std::string detail = cache.diagnostic_detail_for_url("app://too-long");
+    check(detail.find("state=failed") != std::string::npos,
+          "image cache diagnostic includes failed state");
+    check(detail.find("reason=invalid-source") != std::string::npos,
+          "image cache diagnostic includes stable reason");
 }
 
 void image_failure_classification_is_specific() {
@@ -295,6 +309,14 @@ void image_failure_classification_is_specific() {
                                      HostServiceStatus::BudgetExceeded,
                                      0) == AppImageFailureReason::PendingBudget,
           "image failure classification pending budget");
+    check(classify_app_image_failure(AppServiceSubmitStatus::QueueFull,
+                                     HostServiceStatus::Failed,
+                                     0) == AppImageFailureReason::QueueFull,
+          "image failure classification queue full");
+    check(classify_app_image_failure(AppServiceSubmitStatus::EmptyInstance,
+                                     HostServiceStatus::Cancelled,
+                                     0) == AppImageFailureReason::EmptyInstance,
+          "image failure classification empty instance");
     check(classify_app_image_failure(AppServiceSubmitStatus::Accepted,
                                      HostServiceStatus::Failed,
                                      404) == AppImageFailureReason::ResourceNotFound,
@@ -307,6 +329,18 @@ void image_failure_classification_is_specific() {
                                      HostServiceStatus::BudgetExceeded,
                                      507) == AppImageFailureReason::SurfaceBudgetExceeded,
           "image failure classification surface budget");
+    check(classify_app_image_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Unsupported,
+                                     0) == AppImageFailureReason::Unsupported,
+          "image failure classification unsupported");
+    check(classify_app_image_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Timeout,
+                                     0) == AppImageFailureReason::DecodeTimeout,
+          "image failure classification timeout");
+    check(classify_app_image_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Cancelled,
+                                     0) == AppImageFailureReason::DecodeCancelled,
+          "image failure classification cancelled");
 
     const std::string detail = app_image_failure_detail("app://missing",
                                                         AppServiceSubmitStatus::Accepted,
@@ -316,6 +350,37 @@ void image_failure_classification_is_specific() {
           "image failure detail carries reason");
     check(detail.find("src=app://missing") != std::string::npos,
           "image failure detail carries src");
+}
+
+void image_surface_cache_diagnostic_reports_pending_and_ready() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
+    check(images.add_fixture(ImageDecodeFixture{"app://icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache diagnostic fixture accepted");
+    AppImageSurfaceCache cache;
+    std::uint32_t handle = 0;
+    check(!cache.resolve_or_request(host, images, "app://icon", &handle),
+          "image cache diagnostic submits request");
+    const std::string pending = cache.diagnostic_detail_for_url("app://icon");
+    check(pending.find("state=pending") != std::string::npos,
+          "image cache diagnostic includes pending state");
+    check(pending.find("job=") != std::string::npos,
+          "image cache diagnostic includes job id");
+
+    check(images.complete_next(host), "image cache diagnostic completes decode");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image cache diagnostic completion accepted");
+    check(cache.handle_completion(accepted.front()), "image cache diagnostic handles completion");
+    check(cache.resolve_or_request(host, images, "app://icon", &handle),
+          "image cache diagnostic resolves ready handle");
+    const std::string ready = cache.diagnostic_detail_for_url("app://icon");
+    check(ready.find("state=ready") != std::string::npos,
+          "image cache diagnostic includes ready state");
+    check(ready.find("reason=none") != std::string::npos,
+          "image cache diagnostic includes no-failure reason");
+    check(ready.find("handle=") != std::string::npos && ready.find("bytes=") != std::string::npos,
+          "image cache diagnostic includes handle and byte count");
 }
 
 std::uint32_t cache_ready_image(AppRuntimeHost& host,
@@ -635,6 +700,7 @@ int main() {
     image_surface_cache_keeps_transient_budget_rejections_retryable();
     image_surface_cache_records_permanent_request_rejections();
     image_failure_classification_is_specific();
+    image_surface_cache_diagnostic_reports_pending_and_ready();
     image_surface_cache_evicts_lru_ready_surfaces();
     image_surface_cache_keeps_protected_display_list_surfaces();
     image_surface_cache_evicts_by_decoded_bytes();

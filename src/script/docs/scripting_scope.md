@@ -123,12 +123,13 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Exposed now: a tiny `localStorage` subset when the host explicitly binds a
   non-blocking `AppLocalStorageShadow`: `getItem`, `setItem`, `removeItem`,
   `clear`, `key` and `length`. `localStorage` is absent when no shadow is bound.
-- Exposed now: `navigator.onLine`, `document.hidden`,
-  `document.visibilityState` and `document` `visibilitychange` for accepted
-  host system events. The Win32 shell can fake these events with
-  `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8`.
-- `fetch()` should wait for bounded Promise/microtask support. `window`
-  `online`/`offline` and battery APIs remain out of V0.
+- Exposed now: `navigator.onLine`, `window.addEventListener` /
+  `removeEventListener` for the `online` and `offline` system-status events,
+  `document.hidden`, `document.visibilityState` and `document`
+  `visibilitychange` for accepted host system events. The Win32 shell can fake
+  these events with `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8`.
+- `fetch()` should wait for bounded Promise/microtask support. Battery APIs
+  remain out of V0.
 
 ## Embedded-App DOM Helpers
 
@@ -157,7 +158,8 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
 - `fetch()`, modules, dynamic import, `sessionStorage`, IndexedDB, cookies,
-  `window` system-status event targets, canvas and Web Components.
+  full `Window`/`EventTarget` semantics beyond `online`/`offline`, canvas and
+  Web Components.
 
 ## Embedded Policy
 

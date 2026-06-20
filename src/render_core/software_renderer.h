@@ -47,6 +47,7 @@ using ImagePaintCallback = bool (*)(FrameBuffer& target,
                                     std::uint32_t image_handle,
                                     ObjectFit object_fit,
                                     ObjectPosition object_position,
+                                    ImageRendering image_rendering,
                                     void* context);
 
 struct ImagePainter {
@@ -74,6 +75,7 @@ public:
         std::size_t max_framebuffer_pixels = 0;
         std::size_t max_offscreen_pixels = 0;
         DiagnosticSink* diagnostics = nullptr;
+        bool smooth_scaled_layers = true;
     };
 
     explicit SoftwareCompositor(TextPainter text_painter = {}, Options options = {});
