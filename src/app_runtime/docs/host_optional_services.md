@@ -160,6 +160,9 @@ Current V0 helper:
   byte and pending-decode budgets.
 - `ImageDecodeMock` provides desktop/test raw-surface fixtures through
   `HostServiceJobKind::ImageDecode` requests and completions.
+- `AppImageSurfaceCache` turns URLs into bounded decode requests, records ready
+  `Surface` handles after completions and releases surfaces when a page/instance
+  changes.
 - Successful completions return `HostServiceHandleKind::Surface` handles;
   `AppDecodedSurfaceRecord` stores width, height, stride, pixel format and
   optional raw pixels.
@@ -168,6 +171,9 @@ Current V0 helper:
 - Render core provides `ImageHandleResolver`, image display commands and
   `ImagePainter`. A host can map `<img src>` to decoded surface handles during
   layer-tree construction and paint them through the painter.
+- The Win32 browser debug shell wires `app://icon` / `app://photo` raw RGB565
+  fixtures: the first paint submits a decode, the completion returns to the
+  UI/main task, marks `DomDirtyPaint` and repaints.
 
 Future host requests can map to:
 
@@ -202,9 +208,8 @@ Rules:
 - Decoded surfaces are host-cache owned; UI only references handles.
 - A full cache may reclaim surfaces not referenced by the current display list.
 - On failure, keep the placeholder box and report diagnostics.
-- `<img>`/app icons do not automatically submit decodes or manage the surface
-  cache yet; the next step is wiring resource loading, layout invalidation,
-  async repaint and cache eviction together.
+- Real `.jfapp` in-bundle image resource loading, general cache eviction,
+  `object-fit` and production codecs are not wired yet.
 
 ## Audio Playback Service
 
@@ -501,9 +506,10 @@ Recommended order:
 2. The desktop bundle staging/registry mock is implemented. Use
    `jellyframe_cli.py registry` to install, list, resolve and remove `.jfapp`
    bundles with an atomically committed installed-app registry JSON.
-3. The first image-decode mock/raw-surface fixture and render-core image display
-   command passes are implemented. Next, wire automatic decode submission,
-   surface cache, `<img>`/icon lifetime and repaint together.
+3. The first image-decode mock/raw-surface fixture, `AppImageSurfaceCache` and
+   render-core image display command passes are implemented. The Win32 debug
+   shell can automatically submit mock decodes and repaint. Next, wire real
+   package image resource loading, cache eviction and `object-fit`.
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps after the desktop surface consumer path is stable.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.

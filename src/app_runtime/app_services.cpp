@@ -390,6 +390,130 @@ void ImageDecodeMock::clear() {
     records_.clear();
 }
 
+AppImageSurfaceCache::Entry* AppImageSurfaceCache::find_url(const std::string& url) {
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&url](const Entry& entry) {
+        return entry.url == url;
+    });
+    return found == entries_.end() ? nullptr : &*found;
+}
+
+const AppImageSurfaceCache::Entry* AppImageSurfaceCache::find_url(const std::string& url) const {
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&url](const Entry& entry) {
+        return entry.url == url;
+    });
+    return found == entries_.end() ? nullptr : &*found;
+}
+
+AppImageSurfaceCache::Entry* AppImageSurfaceCache::find_job(std::uint32_t job_id) {
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [job_id](const Entry& entry) {
+        return entry.job_id == job_id && entry.state == AppImageSurfaceState::Pending;
+    });
+    return found == entries_.end() ? nullptr : &*found;
+}
+
+bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
+                                              ImageDecodeMock& decoder,
+                                              const std::string& url,
+                                              std::uint32_t* handle) {
+    if (handle != nullptr) {
+        *handle = 0;
+    }
+    if (url.empty()) {
+        return false;
+    }
+
+    Entry* entry = find_url(url);
+    if (entry != nullptr) {
+        if (entry->state == AppImageSurfaceState::Ready) {
+            const HostHandleInfo* info = host.handles().lookup(entry->handle);
+            if (info != nullptr && info->kind == HostServiceHandleKind::Surface &&
+                info->app_instance_id == host.current_app_instance_id()) {
+                if (handle != nullptr) {
+                    *handle = entry->handle;
+                }
+                return true;
+            }
+            entry->state = AppImageSurfaceState::Missing;
+            entry->handle = 0;
+            entry->job_id = 0;
+        } else if (entry->state == AppImageSurfaceState::Pending ||
+                   entry->state == AppImageSurfaceState::Failed) {
+            return false;
+        }
+    }
+
+    const AppServiceSubmitResult submitted = decoder.submit_decode(host, url);
+    if (!submitted.accepted()) {
+        if (submitted.status == AppServiceSubmitStatus::QueueFull ||
+            submitted.status == AppServiceSubmitStatus::BudgetExceeded) {
+            return false;
+        }
+        if (entry == nullptr) {
+            entries_.push_back(Entry{url});
+            entry = &entries_.back();
+        }
+        entry->app_instance_id = host.current_app_instance_id();
+        entry->state = AppImageSurfaceState::Failed;
+        entry->status = submitted.rejected_status;
+        entry->error_code = 0;
+        return false;
+    }
+
+    if (entry == nullptr) {
+        entries_.push_back(Entry{url});
+        entry = &entries_.back();
+    }
+    entry->app_instance_id = host.current_app_instance_id();
+    entry->job_id = submitted.job_id;
+    entry->handle = 0;
+    entry->status = HostServiceStatus::Failed;
+    entry->error_code = 0;
+    entry->state = AppImageSurfaceState::Pending;
+    return false;
+}
+
+bool AppImageSurfaceCache::handle_completion(const HostServiceCompletion& completion) {
+    if (completion.kind != HostServiceJobKind::ImageDecode) {
+        return false;
+    }
+    Entry* entry = find_job(completion.job_id);
+    if (entry == nullptr) {
+        return false;
+    }
+    entry->status = completion.status;
+    entry->error_code = completion.error_code;
+    entry->app_instance_id = completion.app_instance_id;
+    if (completion.status == HostServiceStatus::Completed && completion.handle != 0) {
+        entry->handle = completion.handle;
+        entry->state = AppImageSurfaceState::Ready;
+    } else {
+        entry->handle = 0;
+        entry->state = AppImageSurfaceState::Failed;
+    }
+    return true;
+}
+
+std::size_t AppImageSurfaceCache::release_all(AppRuntimeHost& host, ImageDecodeMock& decoder) {
+    std::size_t released = 0;
+    for (Entry& entry : entries_) {
+        if (entry.state == AppImageSurfaceState::Ready && entry.handle != 0 &&
+            decoder.release_surface(host, entry.handle)) {
+            ++released;
+        }
+    }
+    clear();
+    return released;
+}
+
+void AppImageSurfaceCache::clear() {
+    entries_.clear();
+}
+
+AppImageSurfaceState AppImageSurfaceCache::state_for_url(const std::string& url) const {
+    const Entry* entry = find_url(url);
+    return entry == nullptr ? AppImageSurfaceState::Missing : entry->state;
+}
+
 AppPrivateKvStorageMock::AppPrivateKvStorageMock(AppPrivateKvPolicy policy)
     : policy_(policy) {}
 

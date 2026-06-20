@@ -191,6 +191,53 @@ void image_decode_enforces_surface_budgets() {
     check(accepted.front().error_code == 404, "image missing error");
 }
 
+void image_surface_cache_requests_resolves_and_releases_surfaces() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 2});
+    check(images.add_fixture(ImageDecodeFixture{"app://icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache fixture accepted");
+    AppImageSurfaceCache cache;
+
+    std::uint32_t handle = 99;
+    check(!cache.resolve_or_request(host, images, "app://icon", &handle), "image cache miss submits decode");
+    check(handle == 0, "image cache miss clears output handle");
+    check(cache.state_for_url("app://icon") == AppImageSurfaceState::Pending, "image cache pending state");
+    check(host.requests().size() == 1, "image cache queued one request");
+    check(!cache.resolve_or_request(host, images, "app://icon", &handle), "image cache pending does not duplicate request");
+    check(host.requests().size() == 1, "image cache still has one request");
+
+    check(images.complete_next(host), "image cache decode completed");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image cache completion accepted");
+    check(cache.handle_completion(accepted.front()), "image cache handles completion");
+    check(cache.state_for_url("app://icon") == AppImageSurfaceState::Ready, "image cache ready state");
+    check(cache.resolve_or_request(host, images, "app://icon", &handle), "image cache resolves ready surface");
+    check(handle == accepted.front().handle, "image cache returns surface handle");
+    check(images.surface(handle) != nullptr, "image cache surface exists before release");
+
+    check(cache.release_all(host, images) == 1, "image cache releases one surface");
+    check(images.surface(handle) == nullptr, "image cache release drops surface record");
+    check(cache.size() == 0, "image cache clear after release");
+}
+
+void image_surface_cache_records_failed_decodes_without_retry_loop() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 2});
+    AppImageSurfaceCache cache;
+
+    std::uint32_t handle = 0;
+    check(!cache.resolve_or_request(host, images, "app://missing", &handle), "image cache missing submitted");
+    check(images.complete_next(host), "image cache missing completed");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image cache missing completion accepted");
+    check(cache.handle_completion(accepted.front()), "image cache records failed completion");
+    check(cache.state_for_url("app://missing") == AppImageSurfaceState::Failed, "image cache failed state");
+    check(!cache.resolve_or_request(host, images, "app://missing", &handle), "image cache failed does not resolve");
+    check(host.requests().empty(), "image cache failed does not retry every frame");
+}
+
 void kv_storage_is_app_private_and_async() {
     AppRuntimeHost host = make_host();
     AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 4, 96});
@@ -325,6 +372,8 @@ int main() {
     network_fetch_pending_request_is_cancelled_on_app_switch();
     image_decode_requires_capability_and_returns_surface_handle();
     image_decode_enforces_surface_budgets();
+    image_surface_cache_requests_resolves_and_releases_surfaces();
+    image_surface_cache_records_failed_decodes_without_retry_loop();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();
     local_storage_shadow_follows_web_storage_subset();

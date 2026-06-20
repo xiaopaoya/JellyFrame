@@ -290,7 +290,7 @@ JerryScript 源码树时可用。
 | Linear gradient | 子集 | 简单垂直渐变命令。 |
 | 文本 | 子集 | 核心 fallback 是极小 ASCII bitmap 绘制，并为 UTF-8 非 ASCII 码点显示占位 glyph。Win32 壳注入 GDI，可验证 UTF-8/中文。 |
 | 中文文本 | 壳层相关 | 用 Win32 壳或未来平台 text backend。伪浏览器 fallback 会显示占位 glyph。 |
-| 图片 | 宿主可选/手动接入 | 已有平台无关 `ImageDecodeMock`、`Surface` handle 生命周期和尺寸/decoded bytes/pending 预算检查。render core 支持 `ImageHandleResolver` + image display command + `ImagePainter`，宿主可把 `<img src>` 映射到 decoded surface 绘制；自动资源加载、surface cache 和异步 repaint 仍待接入。 |
+| 图片 | 宿主可选/调试可用 | 已有平台无关 `ImageDecodeMock`、`AppImageSurfaceCache`、`Surface` handle 生命周期和尺寸/decoded bytes/pending 预算检查。render core 支持 `ImageHandleResolver` + image display command + `ImagePainter`；Win32 debug 壳可让 `<img src="app://icon">` / `app://photo` 自动提交 mock decode 并重绘。真实包内图片资源 loader、通用 cache eviction 和产品级 codec 仍待接入。 |
 | 音频播放 | 延后/宿主可选 | 核心不处理 PCM/I2S/codec。ESP32-S3 MP3 实验结果支持把 MP3 playback 作为可选 host-owned pipeline，JS/核心只拿句柄和状态事件。 |
 | 轻量视频/MJPEG | 实验/宿主可选 | 可作为低分辨率 frame provider 规划；不承诺 `<video>`。ESP32-S3 H.264 当前不在默认 profile。 |
 | Canvas/SVG | 延后 | 无 canvas API 或 SVG renderer。 |

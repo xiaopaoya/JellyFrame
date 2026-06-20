@@ -19,13 +19,18 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added the B1 image-decode V0 helper: `ImageDecodePolicy`, `ImageDecodeMock`
   and `AppDecodedSurfaceRecord` define platform-neutral raw-surface fixtures,
   `Surface` handle lifetime, width/height/decoded-byte/pending budgets and
-  release rules. Automatic resource loading, surface caching and async repaint
-  remain future integration work.
+  release rules. Real in-bundle image loading, general cache eviction and
+  `object-fit` remain future integration work.
 - Added a lightweight render-core image display command, `ImageHandleResolver`
   and `ImagePainter`; `<img src>` can now enter the display list when the host
   supplies a surface-handle resolver, and the host painter owns actual drawing.
-  Automatic resource loading, surface caching and async repaint remain future
+  Real resource loading and production codecs remain host/runtime integration
   work.
+- Added `AppImageSurfaceCache` to map `<img src>`/icon URLs to bounded async
+  image-decode requests, completions, ready surface handles and release. The
+  Win32 browser debug shell now wires `app://icon` / `app://photo` raw RGB565
+  fixtures, automatically submits mock decodes and schedules paint-dirty rerender
+  after completion.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
   standard-subset runtime data API direction: asynchronous `XMLHttpRequest`
   first, `fetch()` only after bounded Promise/microtask support, tiny

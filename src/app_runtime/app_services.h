@@ -108,6 +108,13 @@ struct AppDecodedSurfaceRecord {
     std::vector<std::uint8_t> pixels;
 };
 
+enum class AppImageSurfaceState {
+    Missing,
+    Pending,
+    Ready,
+    Failed,
+};
+
 std::size_t decoded_surface_byte_count(int width,
                                        int height,
                                        int stride_pixels,
@@ -142,6 +149,39 @@ private:
     std::vector<ImageDecodeFixture> fixtures_;
     std::vector<PendingDecode> pending_;
     std::vector<AppDecodedSurfaceRecord> records_;
+};
+
+class AppImageSurfaceCache {
+public:
+    bool resolve_or_request(AppRuntimeHost& host,
+                            ImageDecodeMock& decoder,
+                            const std::string& url,
+                            std::uint32_t* handle);
+    bool handle_completion(const HostServiceCompletion& completion);
+    std::size_t release_all(AppRuntimeHost& host, ImageDecodeMock& decoder);
+    void clear();
+
+    AppImageSurfaceState state_for_url(const std::string& url) const;
+    std::size_t size() const {
+        return entries_.size();
+    }
+
+private:
+    struct Entry {
+        std::string url;
+        std::uint32_t app_instance_id = 0;
+        std::uint32_t job_id = 0;
+        std::uint32_t handle = 0;
+        HostServiceStatus status = HostServiceStatus::Failed;
+        std::uint32_t error_code = 0;
+        AppImageSurfaceState state = AppImageSurfaceState::Missing;
+    };
+
+    Entry* find_url(const std::string& url);
+    const Entry* find_url(const std::string& url) const;
+    Entry* find_job(std::uint32_t job_id);
+
+    std::vector<Entry> entries_;
 };
 
 struct AppPrivateKvPolicy {

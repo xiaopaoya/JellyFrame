@@ -56,6 +56,54 @@ constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_laun
 constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
 
+std::uint16_t pack_rgb565(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+    return static_cast<std::uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+}
+
+void append_rgb565(std::vector<std::uint8_t>& output, std::uint16_t value) {
+    output.push_back(static_cast<std::uint8_t>(value & 0xffU));
+    output.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xffU));
+}
+
+std::vector<std::uint8_t> make_debug_rgb565_surface(int width, int height, Color top, Color bottom) {
+    std::vector<std::uint8_t> pixels;
+    if (width <= 0 || height <= 0) {
+        return pixels;
+    }
+    pixels.reserve(static_cast<std::size_t>(width * height * 2));
+    const int denom = std::max(1, height - 1);
+    for (int y = 0; y < height; ++y) {
+        const int t = (y * 255) / denom;
+        const auto lerp = [&](std::uint8_t a, std::uint8_t b) {
+            return static_cast<std::uint8_t>((static_cast<int>(a) * (255 - t) + static_cast<int>(b) * t + 127) / 255);
+        };
+        const std::uint16_t color = pack_rgb565(lerp(top.r, bottom.r), lerp(top.g, bottom.g), lerp(top.b, bottom.b));
+        for (int x = 0; x < width; ++x) {
+            append_rgb565(pixels, color);
+        }
+    }
+    return pixels;
+}
+
+void add_debug_image_fixtures(ImageDecodeMock& images) {
+    images.add_fixture(ImageDecodeFixture{
+        "app://icon",
+        48,
+        48,
+        48,
+        HostPixelFormat::Rgb565,
+        make_debug_rgb565_surface(48, 48, Color{37, 99, 235, 255}, Color{14, 165, 233, 255}),
+    });
+    images.add_fixture(ImageDecodeFixture{
+        "app://photo",
+        120,
+        80,
+        120,
+        HostPixelFormat::Rgb565,
+        make_debug_rgb565_surface(120, 80, Color{251, 191, 36, 255}, Color{244, 63, 94, 255}),
+    });
+}
+
 struct BrowserOptions {
     bool capture = false;
     std::string output_path;
@@ -323,6 +371,88 @@ bool draw_text_with_gdi(FrameBuffer& target,
     SelectObject(memory_dc, old_bitmap);
     DeleteObject(bitmap);
     DeleteDC(memory_dc);
+    return true;
+}
+
+struct BrowserImageContext {
+    ImageDecodeMock* images = nullptr;
+};
+
+struct BrowserImageResolveContext {
+    AppRuntimeHost* runtime = nullptr;
+    ImageDecodeMock* images = nullptr;
+    AppImageSurfaceCache* cache = nullptr;
+};
+
+bool resolve_browser_image_handle(const Node& node, std::uint32_t& handle, void* raw_context) {
+    auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
+    if (context == nullptr || context->runtime == nullptr || context->images == nullptr ||
+        context->cache == nullptr || node.type != NodeType::Element || node.tag_name != "img") {
+        return false;
+    }
+    return context->cache->resolve_or_request(*context->runtime, *context->images, node.attribute("src"), &handle);
+}
+
+Color read_surface_pixel(const AppDecodedSurfaceRecord& surface, int x, int y) {
+    if (x < 0 || y < 0 || x >= surface.width || y >= surface.height ||
+        surface.stride_pixels < surface.width) {
+        return Color{0, 0, 0, 0};
+    }
+    const std::size_t index = static_cast<std::size_t>(y * surface.stride_pixels + x);
+    if (surface.pixel_format == HostPixelFormat::Rgb565) {
+        const std::size_t byte_index = index * 2;
+        if (byte_index + 1 >= surface.pixels.size()) {
+            return Color{0, 0, 0, 0};
+        }
+        const std::uint16_t packed =
+            static_cast<std::uint16_t>(surface.pixels[byte_index] |
+                                      (static_cast<std::uint16_t>(surface.pixels[byte_index + 1]) << 8U));
+        const std::uint8_t r5 = static_cast<std::uint8_t>((packed >> 11U) & 0x1fU);
+        const std::uint8_t g6 = static_cast<std::uint8_t>((packed >> 5U) & 0x3fU);
+        const std::uint8_t b5 = static_cast<std::uint8_t>(packed & 0x1fU);
+        return Color{
+            static_cast<std::uint8_t>((r5 << 3U) | (r5 >> 2U)),
+            static_cast<std::uint8_t>((g6 << 2U) | (g6 >> 4U)),
+            static_cast<std::uint8_t>((b5 << 3U) | (b5 >> 2U)),
+            255,
+        };
+    }
+    if (surface.pixel_format == HostPixelFormat::Rgba8888) {
+        const std::size_t byte_index = index * 4;
+        if (byte_index + 3 >= surface.pixels.size()) {
+            return Color{0, 0, 0, 0};
+        }
+        return Color{
+            surface.pixels[byte_index],
+            surface.pixels[byte_index + 1],
+            surface.pixels[byte_index + 2],
+            surface.pixels[byte_index + 3],
+        };
+    }
+    return Color{0, 0, 0, 0};
+}
+
+bool paint_image_surface(FrameBuffer& target, Rect rect, std::uint32_t image_handle, void* raw_context) {
+    auto* context = static_cast<BrowserImageContext*>(raw_context);
+    if (context == nullptr || context->images == nullptr || rect.width <= 0 || rect.height <= 0) {
+        return false;
+    }
+    const AppDecodedSurfaceRecord* surface = context->images->surface(image_handle);
+    if (surface == nullptr || surface->width <= 0 || surface->height <= 0 || surface->pixels.empty()) {
+        return false;
+    }
+    for (int y = 0; y < rect.height; ++y) {
+        const int src_y = std::min(surface->height - 1, (y * surface->height) / std::max(1, rect.height));
+        for (int x = 0; x < rect.width; ++x) {
+            const int dst_x = rect.x + x;
+            const int dst_y = rect.y + y;
+            if (!target.contains(dst_x, dst_y)) {
+                continue;
+            }
+            const int src_x = std::min(surface->width - 1, (x * surface->width) / std::max(1, rect.width));
+            blend_pixel(target, dst_x, dst_y, read_surface_pixel(*surface, src_x, src_y));
+        }
+    }
     return true;
 }
 
@@ -731,9 +861,17 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     if (!options.app_path.empty()) {
         app_runtime.launch(options.app_path, AppRole::App);
         runtime = &app_runtime;
+    } else {
+        app_runtime.launch("org.jellyframe.debug.capture", AppRole::App);
+        runtime = &app_runtime;
     }
     LoadedPage page = load_page(options, budgets, &diagnostics, runtime);
     BrowserTextBackend text_backend = make_browser_text_backend(options, runtime);
+    ImageDecodeMock debug_images(ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4});
+    add_debug_image_fixtures(debug_images);
+    AppImageSurfaceCache image_cache;
+    BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache};
+    BrowserImageContext image_context{&debug_images};
     StyleResolverOptions style_options;
     style_options.diagnostics = &diagnostics;
     StyleResolver resolver(std::move(page.stylesheet), style_options);
@@ -748,12 +886,24 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
+    layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
     LayerTreeBuilder layer_builder(layer_options);
     auto layer_tree = layer_builder.build(*layout_tree);
+    for (int pass = 0; pass < 4 && debug_images.complete_next(app_runtime); ++pass) {
+        std::vector<HostServiceCompletion> accepted;
+        app_runtime.pump_frame_completions(accepted);
+        bool image_ready = false;
+        for (const HostServiceCompletion& completion : accepted) {
+            image_ready = image_cache.handle_completion(completion) || image_ready;
+        }
+        if (image_ready) {
+            layer_tree = layer_builder.build(*layout_tree);
+        }
+    }
 
     SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
     compositor_options.diagnostics = &diagnostics;
-    SoftwareCompositor compositor(text_backend.painter, compositor_options);
+    SoftwareCompositor compositor(text_backend.painter, ImagePainter{paint_image_surface, &image_context}, compositor_options);
     FrameBuffer frame_buffer = compositor.render(*layer_tree,
                                                  options.viewport_width,
                                                  options.viewport_height,
@@ -793,6 +943,7 @@ public:
         }
         debug_network_.add_fixture(NetworkFetchFixture{"app://ping", 200, "text/plain", "pong"});
         debug_network_.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"temp\":21}"});
+        add_debug_image_fixtures(debug_images_);
     }
 
     bool initialize(HINSTANCE instance, int show_command) {
@@ -868,6 +1019,9 @@ private:
     std::string active_app_id_;
     AppRuntimeHost app_runtime_{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
+    ImageDecodeMock debug_images_{ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4}};
+    AppImageSurfaceCache image_cache_;
+    BrowserImageContext image_context_{&debug_images_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
     std::uint32_t debug_local_storage_instance_id_ = 0;
     std::string pending_shell_action_;
@@ -931,9 +1085,7 @@ private:
             handle_timer(wparam);
             return 0;
         case WM_DESTROY:
-#if defined(JELLYFRAME_ENABLE_SCRIPTING)
             KillTimer(hwnd_, kScriptTimerId);
-#endif
             PostQuitMessage(0);
             return 0;
         default:
@@ -956,11 +1108,26 @@ private:
         return !runtime_controls_page() || app_runtime_.current().state == AppLifecycleState::Foreground;
     }
 
+    void reset_image_surfaces() {
+        image_cache_.release_all(app_runtime_, debug_images_);
+    }
+
     bool drain_host_completions() {
         std::vector<HostServiceCompletion> accepted;
         const AppCompletionPumpResult result = app_runtime_.pump_frame_completions(accepted);
         if (result.consumed == 0) {
             return false;
+        }
+        std::size_t image_handled = 0;
+        for (const HostServiceCompletion& completion : accepted) {
+            if (image_cache_.handle_completion(completion)) {
+                ++image_handled;
+            } else if (completion.kind == HostServiceJobKind::ImageDecode && completion.handle != 0) {
+                debug_images_.release_surface(app_runtime_, completion.handle);
+            }
+        }
+        if (image_handled != 0 && document_ != nullptr) {
+            mark_dirty(*document_, DomDirtyPaint);
         }
         std::size_t script_handled = 0;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
@@ -977,8 +1144,9 @@ private:
                   << " accepted=" << result.accepted
                   << " stale=" << result.stale
                   << " released_stale_handles=" << result.released_stale_handles
+                  << " image_handled=" << image_handled
                   << " script_handled=" << script_handled << '\n';
-        return script_handled != 0;
+        return script_handled != 0 || image_handled != 0;
     }
 
     void configure_system_shell(std::string status) {
@@ -987,6 +1155,7 @@ private:
         }
         system_shell_mode_ = true;
         active_app_id_.clear();
+        reset_image_surfaces();
         app_runtime_.launch("org.jellyframe.system.launcher", AppRole::Launcher);
         options_.app_path.clear();
         options_.script_path.clear();
@@ -1010,6 +1179,7 @@ private:
             options_.inline_html.clear();
             options_.inline_css.clear();
             active_app_id_ = app_id;
+            reset_image_surfaces();
             app_runtime_.launch(app_id, AppRole::App);
             system_shell_mode_ = false;
             scroll_y_ = 0;
@@ -1034,6 +1204,7 @@ private:
     void delete_installed_app(const std::string& app_id) {
         try {
             if (!active_app_id_.empty() && active_app_id_ == app_id) {
+                reset_image_surfaces();
                 app_runtime_.exit_current();
                 configure_system_shell("Cannot delete the active app; returned to shell first.");
             }
@@ -1067,6 +1238,7 @@ private:
     void recover_active_app_after_failure(const std::exception& error) {
         std::cerr << "rebuild failed: " << error.what() << '\n';
         if (!options_.registry_store_path.empty() && !system_shell_mode_) {
+            reset_image_surfaces();
             const AppTeardownResult teardown = app_runtime_.crash_current();
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
             configure_system_shell(
@@ -1087,8 +1259,9 @@ private:
     bool rebuild() {
         try {
             diagnostics_.clear();
-#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+            reset_image_surfaces();
             KillTimer(hwnd_, kScriptTimerId);
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
             script_runtime_.reset();
             script_runtime_instance_id_ = 0;
 #endif
@@ -1173,10 +1346,10 @@ private:
                         set_title("script error: " + result.error);
                     }
                 }
-                SetTimer(hwnd_, kScriptTimerId, kScriptTimerPeriodMs, nullptr);
             }
 #endif
             render_current(nullptr, nullptr, nullptr);
+            SetTimer(hwnd_, kScriptTimerId, kScriptTimerPeriodMs, nullptr);
             print_diagnostics(diagnostics_);
             return true;
         } catch (const std::exception& error) {
@@ -1213,11 +1386,15 @@ private:
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
+        BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_};
+        layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
         BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
-        SoftwareCompositor compositor(text_backend.painter, compositor_options);
+        SoftwareCompositor compositor(text_backend.painter,
+                                      ImagePainter{paint_image_surface, &image_context_},
+                                      compositor_options);
         if (update_plan.action == FrameUpdateAction::RepaintExisting &&
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {
@@ -1537,15 +1714,24 @@ private:
         if (timer_id != kScriptTimerId) {
             return;
         }
+        const bool completed_image = debug_images_.complete_next(app_runtime_);
+        bool handled_completion = drain_host_completions();
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr || !accepts_ui_events() ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
+            if (completed_image || handled_completion) {
+                rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
+            }
             return;
         }
         const bool completed_network = debug_network_.complete_next(app_runtime_);
-        const bool handled_completion = drain_host_completions();
+        handled_completion = drain_host_completions() || handled_completion;
         const std::size_t callbacks = script_runtime_->pump_timers(GetTickCount64(), 8);
-        if (callbacks != 0 || completed_network || handled_completion) {
+        if (callbacks != 0 || completed_network || completed_image || handled_completion) {
+            rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
+        }
+#else
+        if (completed_image || handled_completion) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #endif
