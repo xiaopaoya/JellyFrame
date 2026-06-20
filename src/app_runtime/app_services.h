@@ -79,6 +79,71 @@ private:
     std::vector<NetworkFetchRecord> records_;
 };
 
+struct ImageDecodePolicy {
+    bool enabled = false;
+    std::size_t max_url_bytes = 256;
+    int max_width = 0;
+    int max_height = 0;
+    std::size_t max_decoded_bytes = 0;
+    std::size_t max_pending_decodes = 1;
+};
+
+struct ImageDecodeFixture {
+    std::string url;
+    int width = 0;
+    int height = 0;
+    int stride_pixels = 0;
+    HostPixelFormat pixel_format = HostPixelFormat::Unknown;
+    std::vector<std::uint8_t> pixels;
+};
+
+struct AppDecodedSurfaceRecord {
+    std::uint32_t handle = 0;
+    std::uint32_t app_instance_id = 0;
+    std::string url;
+    int width = 0;
+    int height = 0;
+    int stride_pixels = 0;
+    HostPixelFormat pixel_format = HostPixelFormat::Unknown;
+    std::vector<std::uint8_t> pixels;
+};
+
+std::size_t decoded_surface_byte_count(int width,
+                                       int height,
+                                       int stride_pixels,
+                                       HostPixelFormat pixel_format);
+
+class ImageDecodeMock {
+public:
+    explicit ImageDecodeMock(ImageDecodePolicy policy = {});
+
+    void set_policy(ImageDecodePolicy policy);
+    bool add_fixture(ImageDecodeFixture fixture);
+    AppServiceSubmitResult submit_decode(AppRuntimeHost& host,
+                                         const std::string& url,
+                                         std::uint32_t timeout_ms = 0);
+    bool complete_next(AppRuntimeHost& host);
+    const AppDecodedSurfaceRecord* surface(std::uint32_t handle) const;
+    bool release_surface(AppRuntimeHost& host, std::uint32_t handle);
+    void clear();
+
+private:
+    struct PendingDecode {
+        std::uint32_t job_id = 0;
+        std::uint32_t app_instance_id = 0;
+        HostServiceStatus status = HostServiceStatus::Failed;
+        std::uint32_t error_code = 0;
+        std::size_t fixture_index = 0;
+    };
+
+    bool valid_fixture(const ImageDecodeFixture& fixture) const;
+
+    ImageDecodePolicy policy_;
+    std::vector<ImageDecodeFixture> fixtures_;
+    std::vector<PendingDecode> pending_;
+    std::vector<AppDecodedSurfaceRecord> records_;
+};
+
 struct AppPrivateKvPolicy {
     bool enabled = false;
     std::size_t max_key_bytes = 64;
@@ -90,6 +155,7 @@ struct AppPrivateKvPolicy {
 struct AppServiceManifestCapabilities {
     bool network_fetch = false;
     bool storage_kv = false;
+    bool image_decode = false;
 };
 
 struct AppServiceHostProfile {
@@ -102,11 +168,19 @@ struct AppServiceHostProfile {
     std::size_t max_storage_value_bytes = 1024;
     std::size_t max_storage_items_per_app = 32;
     std::size_t max_storage_bytes_per_app = 4096;
+
+    bool allow_image_decode = false;
+    std::size_t max_image_url_bytes = 256;
+    int max_image_width = 0;
+    int max_image_height = 0;
+    std::size_t max_decoded_image_bytes = 0;
+    std::size_t max_pending_image_decodes = 1;
 };
 
 struct AppServicePolicies {
     NetworkFetchPolicy network;
     AppPrivateKvPolicy storage;
+    ImageDecodePolicy image;
 };
 
 AppServiceHostProfile app_service_host_profile_from_capabilities(

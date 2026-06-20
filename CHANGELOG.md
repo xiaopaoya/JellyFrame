@@ -14,8 +14,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   before runtime mocks or JS bindings can submit work.
 - Added `AppSystemEventQueue`, a bounded app-instance-scoped queue for
   host-injected time, timezone, network, battery, screen and low-power snapshots.
-- Added app-runtime microbench coverage for optional network fetch, KV storage
-  and system-event pumping.
+- Added app-runtime microbench coverage for optional network fetch, KV storage,
+  image-decode mock and system-event pumping.
+- Added the B1 image-decode V0 helper: `ImageDecodePolicy`, `ImageDecodeMock`
+  and `AppDecodedSurfaceRecord` define platform-neutral raw-surface fixtures,
+  `Surface` handle lifetime, width/height/decoded-byte/pending budgets and
+  release rules. Automatic `<img>` painting is still left to the later resource
+  loader/display-list integration.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
   standard-subset runtime data API direction: asynchronous `XMLHttpRequest`
   first, `fetch()` only after bounded Promise/microtask support, tiny

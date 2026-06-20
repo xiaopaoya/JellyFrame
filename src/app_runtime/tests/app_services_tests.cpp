@@ -75,28 +75,41 @@ void service_policy_requires_manifest_and_host_approval() {
     capabilities.network.supports_fetch = true;
     capabilities.network.max_request_bytes = 96;
     capabilities.network.max_response_bytes = 512;
+    capabilities.async.max_in_flight_jobs = 5;
+    capabilities.media.supports_image_decode = true;
+    capabilities.media.max_image_width = 80;
+    capabilities.media.max_image_height = 80;
+    capabilities.media.max_decoded_image_bytes = 80 * 80 * 2;
     AppServiceHostProfile profile = app_service_host_profile_from_capabilities(
         capabilities, AppPrivateKvPolicy{true, 12, 24, 3, 64});
     check(profile.allow_network_fetch, "profile network allowed");
     check(profile.max_network_url_bytes == 96, "profile network url budget");
     check(profile.allow_storage_kv, "profile storage allowed");
     check(profile.max_storage_value_bytes == 24, "profile storage value budget");
+    check(profile.allow_image_decode, "profile image allowed");
+    check(profile.max_image_width == 80, "profile image width budget");
+    check(profile.max_pending_image_decodes == 5, "profile image pending budget");
 
     AppServicePolicies policies = app_service_policies_for_app(AppServiceManifestCapabilities{}, profile);
     check(!policies.network.enabled, "network denied without manifest capability");
     check(!policies.storage.enabled, "storage denied without manifest capability");
+    check(!policies.image.enabled, "image denied without manifest capability");
 
-    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true}, profile);
+    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true}, profile);
     check(policies.network.enabled, "network allowed with manifest and host");
     check(policies.network.max_response_bytes == 512, "network response budget carried");
     check(policies.storage.enabled, "storage allowed with manifest and host");
     check(policies.storage.max_items_per_app == 3, "storage item budget carried");
+    check(policies.image.enabled, "image allowed with manifest and host");
+    check(policies.image.max_decoded_bytes == 80 * 80 * 2, "image decoded budget carried");
 
     capabilities.has_network = false;
+    capabilities.media.supports_image_decode = false;
     profile = app_service_host_profile_from_capabilities(capabilities, AppPrivateKvPolicy{});
-    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true}, profile);
+    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true}, profile);
     check(!policies.network.enabled, "network denied without host network");
     check(!policies.storage.enabled, "storage denied without host storage");
+    check(!policies.image.enabled, "image denied without host image decode");
 }
 
 void network_fetch_pending_request_is_cancelled_on_app_switch() {
@@ -110,6 +123,72 @@ void network_fetch_pending_request_is_cancelled_on_app_switch() {
     host.launch("org.example.second", AppRole::App);
     check(host.requests().empty(), "network pending request cancelled");
     check(!network.complete_next(host), "network cancelled request not completed");
+}
+
+void image_decode_requires_capability_and_returns_surface_handle() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+
+    ImageDecodeMock images;
+    check(images.submit_decode(host, "app://icon.raw").status == AppServiceSubmitStatus::CapabilityDenied,
+          "image decode capability gate");
+
+    images.set_policy(ImageDecodePolicy{true, 64, 32, 32, 32 * 32 * 2, 2});
+    std::vector<std::uint8_t> pixels(16 * 16 * 2, 0x7f);
+    check(images.add_fixture(ImageDecodeFixture{
+              "app://icon.raw",
+              16,
+              16,
+              16,
+              HostPixelFormat::Rgb565,
+              pixels,
+          }),
+          "image fixture accepted");
+
+    const AppServiceSubmitResult submitted = images.submit_decode(host, "app://icon.raw", 1000);
+    check(submitted.accepted(), "image decode submit accepted");
+    check(images.complete_next(host), "image decode complete next");
+
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image decode completion accepted");
+    check(accepted.front().kind == HostServiceJobKind::ImageDecode, "image decode completion kind");
+    check(accepted.front().status == HostServiceStatus::Completed, "image decode completion status");
+    check(accepted.front().handle != 0, "image decode surface handle");
+    check(accepted.front().byte_count == pixels.size(), "image decode byte count");
+
+    const AppDecodedSurfaceRecord* surface = images.surface(accepted.front().handle);
+    check(surface != nullptr, "image surface lookup");
+    check(surface->app_instance_id == host.current_app_instance_id(), "image surface instance");
+    check(surface->width == 16 && surface->height == 16, "image surface size");
+    check(surface->stride_pixels == 16, "image surface stride");
+    check(surface->pixel_format == HostPixelFormat::Rgb565, "image surface format");
+    check(surface->pixels.size() == pixels.size(), "image surface pixels carried");
+    check(images.release_surface(host, accepted.front().handle), "image surface release");
+}
+
+void image_decode_enforces_surface_budgets() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 32, 8, 8, 8 * 8 * 2, 1});
+
+    check(!images.add_fixture(ImageDecodeFixture{"app://large", 16, 8, 16, HostPixelFormat::Rgb565, {}}),
+          "image fixture rejects wide surface");
+    check(!images.add_fixture(ImageDecodeFixture{"app://badstride", 8, 8, 7, HostPixelFormat::Rgb565, {}}),
+          "image fixture rejects invalid stride");
+    check(!images.add_fixture(ImageDecodeFixture{"app://badbytes", 8, 8, 8, HostPixelFormat::Rgb565, {1, 2, 3}}),
+          "image fixture rejects inconsistent raw bytes");
+    check(images.add_fixture(ImageDecodeFixture{"app://ok", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image fixture accepts metadata-only host surface");
+
+    const AppServiceSubmitResult first = images.submit_decode(host, "app://missing");
+    check(first.accepted(), "image missing submit accepted");
+    const AppServiceSubmitResult second = images.submit_decode(host, "app://ok");
+    check(second.status == AppServiceSubmitStatus::BudgetExceeded, "image pending budget enforced");
+    check(images.complete_next(host), "image missing completion produced");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image missing completion accepted");
+    check(accepted.front().status == HostServiceStatus::Failed, "image missing status");
+    check(accepted.front().error_code == 404, "image missing error");
 }
 
 void kv_storage_is_app_private_and_async() {
@@ -244,6 +323,8 @@ int main() {
     network_fetch_requires_capability_and_returns_fixture_handle();
     service_policy_requires_manifest_and_host_approval();
     network_fetch_pending_request_is_cancelled_on_app_switch();
+    image_decode_requires_capability_and_returns_surface_handle();
+    image_decode_enforces_surface_budgets();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();
     local_storage_shadow_follows_web_storage_subset();

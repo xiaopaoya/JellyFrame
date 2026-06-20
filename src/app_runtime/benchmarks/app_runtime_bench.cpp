@@ -191,6 +191,29 @@ void bench_kv_storage_mock(std::size_t capacity) {
     }
 }
 
+void bench_image_decode_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
+    host.launch("org.example.images", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 32, 32, 32 * 32 * 2, capacity});
+    images.add_fixture(ImageDecodeFixture{"app://icon", 16, 16, 16, HostPixelFormat::Rgb565, {}});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        images.submit_decode(host, "app://icon", 1000);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        images.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            if (completion.handle != 0) {
+                images.release_surface(host, completion.handle);
+            }
+        }
+    }
+}
+
 void bench_system_event_queue(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
     host.launch("org.example.system-events", AppRole::App);
@@ -280,6 +303,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_kv_storage_mock", iterations, average_microseconds(iterations, [&] {
         bench_kv_storage_mock(capacity);
+    }));
+    print_result("app_runtime_image_decode_mock", iterations, average_microseconds(iterations, [&] {
+        bench_image_decode_mock(capacity);
     }));
     print_result("app_runtime_system_event_queue", iterations, average_microseconds(iterations, [&] {
         bench_system_event_queue(capacity);

@@ -154,7 +154,19 @@ Use cases:
 Input should come from local packages, installed bundles or system resources.
 Remote images still do not enter the page loader.
 
-Recommended request:
+Current V0 helper:
+
+- `ImageDecodePolicy` gates the service and carries URL, width, height, decoded
+  byte and pending-decode budgets.
+- `ImageDecodeMock` provides desktop/test raw-surface fixtures through
+  `HostServiceJobKind::ImageDecode` requests and completions.
+- Successful completions return `HostServiceHandleKind::Surface` handles;
+  `AppDecodedSurfaceRecord` stores width, height, stride, pixel format and
+  optional raw pixels.
+- `release_surface(...)` must be called by the UI/main task when a surface is no
+  longer referenced so the record and host handle are released.
+
+Future host requests can map to:
 
 ```cpp
 struct HostImageDecodeRequest {
@@ -167,7 +179,7 @@ struct HostImageDecodeRequest {
 };
 ```
 
-Recommended result handle points to:
+The result handle points to:
 
 ```cpp
 struct HostDecodedSurface {
@@ -187,6 +199,9 @@ Rules:
 - Decoded surfaces are host-cache owned; UI only references handles.
 - A full cache may reclaim surfaces not referenced by the current display list.
 - On failure, keep the placeholder box and report diagnostics.
+- `<img>`/app icons do not automatically consume decoded surfaces yet; the next
+  step is wiring the resource loader, layout invalidation, display-list image
+  command and surface cache together.
 
 ## Audio Playback Service
 
@@ -483,10 +498,10 @@ Recommended order:
 2. The desktop bundle staging/registry mock is implemented. Use
    `jellyframe_cli.py registry` to install, list, resolve and remove `.jfapp`
    bundles with an atomically committed installed-app registry JSON.
-3. Implement an image-decode mock with desktop libraries or pregenerated raw
-   surfaces to validate `<img>`/icon lifetime.
+3. The first image-decode mock/raw-surface fixture pass is implemented. Next,
+   wire decoded surface handles into `<img>`/icon lifetime and repaint.
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
-   caps.
+   caps after the desktop surface consumer path is stable.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.
 6. Expose user-facing JS APIs only after the lifetime boundary is stable. The
    asynchronous `XMLHttpRequest` GET V0 subset is now exposed; `fetch()` waits

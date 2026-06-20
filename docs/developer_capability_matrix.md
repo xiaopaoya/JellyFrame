@@ -297,7 +297,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Linear gradient | Subset | Simple vertical command support. |
 | Text | Subset | Core fallback is tiny ASCII bitmap painting with UTF-8 placeholder glyphs. Win32 shell injects GDI for UTF-8/Chinese validation. |
 | Chinese text | Shell-dependent | Use Win32 shell or future platform text backend. Pseudo-browser fallback will show placeholder glyphs. |
-| Images | Deferred/host-optional | Core does not decode images yet. `img`/media nodes get usable boxes/fallback only. A target may declare an optional host image decode service; decoded output must still obey size, byte and concurrency budgets. |
+| Images | Host-optional/not painted yet | Platform-neutral `ImageDecodeMock`, `Surface` handle lifetime and width/height/decoded-byte/pending budgets now exist. `img`/media nodes still get usable boxes/fallback only; the next step is wiring resource loading, surface cache and display-list image commands. |
 | Audio playback | Deferred/host-optional | Core does not own PCM/I2S/codecs. ESP32-S3 MP3 experiments justify an optional host-owned MP3 playback pipeline; JS/core should receive handles and state events only. |
 | Lightweight video/MJPEG | Experimental/host-optional | Planned only as a low-resolution frame provider. `<video>` is not promised. H.264 is not in the default ESP32-S3 profile. |
 | Canvas/SVG | Deferred | No canvas API or SVG renderer. |
