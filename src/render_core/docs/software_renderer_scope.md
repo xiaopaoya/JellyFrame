@@ -41,6 +41,10 @@ DOM + CSSOM
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.
 - Offscreen compositing for opacity/composited layers.
+- `transform: translate()/scale()` for composited layers. Translation is rounded
+  to integer pixels; scale uses nearest-neighbor sampling around the layer bounds
+  center. This is intended for button feedback and card motion, not browser-level
+  pixel parity.
 - Optional offscreen pixel budget: oversized composited layers degrade to direct
   per-command opacity instead of allocating a large temporary RGBA framebuffer.
 - BMP and PPM image writers for pseudo-browser validation.
@@ -53,6 +57,7 @@ DOM + CSSOM
 - No real text shaping, bidi or font fallback stack.
 - No image decode.
 - No subpixel layout or antialiased geometry.
+- No rotate/skew/matrix/perspective and no full `transform-origin`.
 
 ## Current Compatibility Notes
 
@@ -64,4 +69,5 @@ Recent fixes added UTF-8 text output on Windows, conservative text overhang
 padding, basic multiline text drawing, `box-sizing:border-box`, common
 `rgb()/rgba()` colors, four-value box edges, minimal flex centering/row layout,
 responsive grid-card layout, `aspect-ratio` sizing and cheap rounded
-`box-shadow` approximations.
+`box-shadow` approximations, plus the first `opacity`/2D-transform compositing
+foundation for animation.

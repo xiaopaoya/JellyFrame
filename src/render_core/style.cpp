@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <cerrno>
 #include <cstring>
@@ -257,6 +258,40 @@ bool parse_float(const std::string& raw_value, float& output) {
     return true;
 }
 
+bool parse_time_ms(const std::string& raw_value, std::uint32_t& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(value.c_str(), &end);
+    if (end == value.c_str() || errno == ERANGE || parsed < 0.0F) {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    float milliseconds = parsed;
+    if (end != nullptr && std::strncmp(end, "ms", 2) == 0) {
+        milliseconds = parsed;
+        end += 2;
+    } else if (end != nullptr && *end == 's') {
+        milliseconds = parsed * 1000.0F;
+        ++end;
+    } else {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || *end != '\0') {
+        return false;
+    }
+    output = static_cast<std::uint32_t>(std::min(60000.0F, milliseconds + 0.5F));
+    return true;
+}
+
 bool parse_integer(const std::string& raw_value, int& output) {
     const std::string value = trim(raw_value);
     if (value.empty()) {
@@ -472,6 +507,204 @@ bool parse_list_style_type(const std::string& raw_value, ListStyleType& output) 
         return true;
     }
     return false;
+}
+
+bool parse_animatable_property(const std::string& raw_value, AnimatableProperty& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "all") {
+        output = AnimatableProperty::All;
+        return true;
+    }
+    if (value == "opacity") {
+        output = AnimatableProperty::Opacity;
+        return true;
+    }
+    if (value == "transform") {
+        output = AnimatableProperty::Transform;
+        return true;
+    }
+    if (value == "background-color" || value == "background") {
+        output = AnimatableProperty::BackgroundColor;
+        return true;
+    }
+    if (value == "color") {
+        output = AnimatableProperty::Color;
+        return true;
+    }
+    return false;
+}
+
+bool parse_timing_function(const std::string& raw_value, AnimationTimingFunction& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value == "linear") {
+        output = AnimationTimingFunction::Linear;
+        return true;
+    }
+    if (value == "ease") {
+        output = AnimationTimingFunction::Ease;
+        return true;
+    }
+    if (value == "ease-in") {
+        output = AnimationTimingFunction::EaseIn;
+        return true;
+    }
+    if (value == "ease-out") {
+        output = AnimationTimingFunction::EaseOut;
+        return true;
+    }
+    if (value == "ease-in-out") {
+        output = AnimationTimingFunction::EaseInOut;
+        return true;
+    }
+    return false;
+}
+
+std::vector<std::string> split_comma_components(std::string_view value) {
+    std::vector<std::string> components;
+    std::size_t begin = 0;
+    int depth = 0;
+    char quote = '\0';
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        const char ch = value[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < value.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '"' || ch == '\'') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++depth;
+        } else if (ch == ')' && depth > 0) {
+            --depth;
+        } else if (ch == ',' && depth == 0) {
+            components.push_back(trim(value.substr(begin, index - begin)));
+            begin = index + 1;
+        }
+    }
+    components.push_back(trim(value.substr(begin)));
+    return components;
+}
+
+void set_style_transitions(Style& style, const std::vector<StyleTransition>& transitions) {
+    style.transition_count = std::min<std::size_t>(style.transitions.size(), transitions.size());
+    for (std::size_t index = 0; index < style.transition_count; ++index) {
+        style.transitions[index] = transitions[index];
+    }
+}
+
+bool parse_transition_shorthand(const std::string& raw_value, Style& style) {
+    const std::string lowered = lowercase(trim(raw_value));
+    if (lowered == "none") {
+        style.transition_count = 0;
+        return true;
+    }
+    std::vector<StyleTransition> parsed;
+    for (const std::string& component : split_comma_components(raw_value)) {
+        if (component.empty()) {
+            continue;
+        }
+        StyleTransition transition;
+        bool have_property = false;
+        bool have_duration = false;
+        bool have_delay = false;
+        bool have_timing = false;
+        for (const std::string& token : split_whitespace_components(component)) {
+            AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+            if (!have_timing && parse_timing_function(token, timing)) {
+                transition.timing = timing;
+                have_timing = true;
+                continue;
+            }
+            std::uint32_t time = 0;
+            if (parse_time_ms(token, time)) {
+                if (!have_duration) {
+                    transition.duration_ms = time;
+                    have_duration = true;
+                    continue;
+                }
+                if (!have_delay) {
+                    transition.delay_ms = time;
+                    have_delay = true;
+                    continue;
+                }
+                return false;
+            }
+            AnimatableProperty property = AnimatableProperty::All;
+            if (!have_property && parse_animatable_property(token, property)) {
+                transition.property = property;
+                have_property = true;
+                continue;
+            }
+            return false;
+        }
+        if (have_duration && transition.duration_ms > 0) {
+            parsed.push_back(transition);
+        }
+    }
+    set_style_transitions(style, parsed);
+    return true;
+}
+
+bool parse_transition_longhand(const std::string& property, const std::string& raw_value, Style& style) {
+    if (property == "transition-property") {
+        std::vector<StyleTransition> parsed;
+        for (const std::string& component : split_comma_components(raw_value)) {
+            AnimatableProperty animatable = AnimatableProperty::All;
+            if (!parse_animatable_property(component, animatable)) {
+                return false;
+            }
+            StyleTransition transition;
+            transition.property = animatable;
+            parsed.push_back(transition);
+        }
+        set_style_transitions(style, parsed);
+        return true;
+    }
+
+    if (style.transition_count == 0) {
+        StyleTransition transition;
+        transition.property = AnimatableProperty::All;
+        style.transitions[0] = transition;
+        style.transition_count = 1;
+    }
+    const std::vector<std::string> values = split_comma_components(raw_value);
+    if (values.empty()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < style.transition_count; ++index) {
+        const std::string& value = values[std::min(index, values.size() - 1)];
+        if (property == "transition-duration") {
+            std::uint32_t ms = 0;
+            if (!parse_time_ms(value, ms)) {
+                return false;
+            }
+            style.transitions[index].duration_ms = ms;
+        } else if (property == "transition-delay") {
+            std::uint32_t ms = 0;
+            if (!parse_time_ms(value, ms)) {
+                return false;
+            }
+            style.transitions[index].delay_ms = ms;
+        } else if (property == "transition-timing-function") {
+            AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+            if (!parse_timing_function(value, timing)) {
+                return false;
+            }
+            style.transitions[index].timing = timing;
+        }
+    }
+    std::size_t output = 0;
+    for (std::size_t index = 0; index < style.transition_count; ++index) {
+        if (style.transitions[index].duration_ms > 0) {
+            style.transitions[output++] = style.transitions[index];
+        }
+    }
+    style.transition_count = output;
+    return true;
 }
 
 bool parse_simple_grid_template_columns(const std::string& raw_value,
@@ -814,6 +1047,120 @@ bool parse_color(const std::string& raw_value, Color& output) {
         }
     }
     return false;
+}
+
+bool parse_number_or_length_for_transform(const std::string& value, float& output, int em_base = kRootFontSizePx) {
+    int px = 0;
+    if (parse_length_px(value, px, em_base)) {
+        output = static_cast<float>(px);
+        return true;
+    }
+    return parse_float(value, output);
+}
+
+bool parse_scale_value(const std::string& value, float& output) {
+    if (!parse_float(value, output)) {
+        return false;
+    }
+    output = std::max(0.01F, std::min(16.0F, output));
+    return true;
+}
+
+bool parse_transform_function(std::string_view function, Transform2D& output) {
+    const std::size_t open = function.find('(');
+    if (open == std::string_view::npos || function.empty() || function.back() != ')') {
+        return false;
+    }
+    const std::string name = lowercase(trim(function.substr(0, open)));
+    const std::vector<std::string> args =
+        split_function_arguments(function.substr(open + 1, function.size() - open - 2));
+    if (name == "translate" || name == "translate3d") {
+        if (args.empty() || args.size() > 3) {
+            return false;
+        }
+        float x = 0.0F;
+        float y = 0.0F;
+        if (!parse_number_or_length_for_transform(args[0], x)) {
+            return false;
+        }
+        if (args.size() >= 2 && !parse_number_or_length_for_transform(args[1], y)) {
+            return false;
+        }
+        output.translate_x += x;
+        output.translate_y += y;
+        return true;
+    }
+    if (name == "translatex") {
+        float x = 0.0F;
+        if (args.size() != 1 || !parse_number_or_length_for_transform(args[0], x)) {
+            return false;
+        }
+        output.translate_x += x;
+        return true;
+    }
+    if (name == "translatey") {
+        float y = 0.0F;
+        if (args.size() != 1 || !parse_number_or_length_for_transform(args[0], y)) {
+            return false;
+        }
+        output.translate_y += y;
+        return true;
+    }
+    if (name == "scale" || name == "scale3d") {
+        if (args.empty() || args.size() > 3) {
+            return false;
+        }
+        float x = 1.0F;
+        float y = 1.0F;
+        if (!parse_scale_value(args[0], x)) {
+            return false;
+        }
+        y = x;
+        if (args.size() >= 2 && !parse_scale_value(args[1], y)) {
+            return false;
+        }
+        output.scale_x *= x;
+        output.scale_y *= y;
+        return true;
+    }
+    if (name == "scalex") {
+        float x = 1.0F;
+        if (args.size() != 1 || !parse_scale_value(args[0], x)) {
+            return false;
+        }
+        output.scale_x *= x;
+        return true;
+    }
+    if (name == "scaley") {
+        float y = 1.0F;
+        if (args.size() != 1 || !parse_scale_value(args[0], y)) {
+            return false;
+        }
+        output.scale_y *= y;
+        return true;
+    }
+    return false;
+}
+
+std::vector<std::string> split_transform_functions(std::string_view value) {
+    std::vector<std::string> functions;
+    std::size_t begin = 0;
+    int depth = 0;
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        const char ch = value[index];
+        if (ch == '(') {
+            ++depth;
+        } else if (ch == ')' && depth > 0) {
+            --depth;
+            if (depth == 0) {
+                functions.push_back(trim(value.substr(begin, index + 1 - begin)));
+                begin = index + 1;
+            }
+        } else if (depth == 0 && std::isspace(static_cast<unsigned char>(ch)) != 0) {
+            begin = index + 1;
+        }
+    }
+    return functions;
 }
 
 bool is_identifier_char(char ch) {
@@ -1172,6 +1519,11 @@ enum class CascadeProperty : std::size_t {
     GridRow,
     ObjectFit,
     ListStyleType,
+    Transition,
+    TransitionProperty,
+    TransitionDuration,
+    TransitionDelay,
+    TransitionTimingFunction,
     BeforeContent,
     BeforeColor,
     BeforeFontWeight,
@@ -1371,6 +1723,21 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "list-style" || property == "list-style-type") {
         return &cascade_slot(slots, CascadeProperty::ListStyleType);
+    }
+    if (property == "transition") {
+        return &cascade_slot(slots, CascadeProperty::Transition);
+    }
+    if (property == "transition-property") {
+        return &cascade_slot(slots, CascadeProperty::TransitionProperty);
+    }
+    if (property == "transition-duration") {
+        return &cascade_slot(slots, CascadeProperty::TransitionDuration);
+    }
+    if (property == "transition-delay") {
+        return &cascade_slot(slots, CascadeProperty::TransitionDelay);
+    }
+    if (property == "transition-timing-function") {
+        return &cascade_slot(slots, CascadeProperty::TransitionTimingFunction);
     }
     return nullptr;
 }
@@ -1682,7 +2049,15 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         if (transformed.empty()) {
             return false;
         }
-        style.transform = lowercase(transformed) == "none" ? std::string{} : transformed;
+        if (lowercase(transformed) == "none") {
+            style.transform.clear();
+            return true;
+        }
+        Transform2D parsed;
+        if (!parse_css_transform_2d(transformed, parsed)) {
+            return false;
+        }
+        style.transform = serialize_css_transform_2d(parsed);
         return true;
     } else if (property == "position") {
         const std::string lowered = lowercase(trim(value));
@@ -1907,6 +2282,13 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             }
         }
         return false;
+    } else if (property == "transition") {
+        return parse_transition_shorthand(value, style);
+    } else if (property == "transition-property" ||
+               property == "transition-duration" ||
+               property == "transition-delay" ||
+               property == "transition-timing-function") {
+        return parse_transition_longhand(property, value, style);
     }
     return false;
 }
@@ -2646,6 +3028,45 @@ CssStyleSheet::const_iterator CssStyleSheet::end() const {
 
 const CssStyleSheet::RuleList& CssStyleSheet::rules() const {
     return rules_;
+}
+
+bool parse_css_transform_2d(std::string_view raw_value, Transform2D& output) {
+    const std::string value = lowercase(trim(raw_value));
+    output = Transform2D{};
+    if (value.empty() || value == "none") {
+        return true;
+    }
+    const std::vector<std::string> functions = split_transform_functions(value);
+    if (functions.empty()) {
+        return false;
+    }
+    for (const std::string& function : functions) {
+        if (!parse_transform_function(function, output)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string serialize_css_transform_2d(const Transform2D& transform) {
+    if (std::abs(transform.translate_x) < 0.01F &&
+        std::abs(transform.translate_y) < 0.01F &&
+        std::abs(transform.scale_x - 1.0F) < 0.001F &&
+        std::abs(transform.scale_y - 1.0F) < 0.001F) {
+        return {};
+    }
+    std::ostringstream stream;
+    if (std::abs(transform.translate_x) >= 0.01F || std::abs(transform.translate_y) >= 0.01F) {
+        stream << "translate(" << transform.translate_x << "px," << transform.translate_y << "px)";
+    }
+    if (std::abs(transform.scale_x - 1.0F) >= 0.001F ||
+        std::abs(transform.scale_y - 1.0F) >= 0.001F) {
+        if (stream.tellp() > 0) {
+            stream << ' ';
+        }
+        stream << "scale(" << transform.scale_x << ',' << transform.scale_y << ')';
+    }
+    return stream.str();
 }
 
 StyleResolver::StyleResolver(Stylesheet stylesheet, StyleResolverOptions options)

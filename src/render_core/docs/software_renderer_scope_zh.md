@@ -37,6 +37,8 @@ DOM + CSSOM
 - Windows 下通过 GDI CPU mask 绘制文本。
 - 非 Windows 构建保留内置 tiny ASCII fallback text drawing。
 - 针对 opacity/composited layers 的离屏合成。
+- 对 composited layer 执行 `transform: translate()/scale()` 子集：平移为整数像素近似，缩放以 layer bounds
+  中心为原点并采用最近邻采样，适合按钮反馈和卡片滑动，不追求浏览器级像素一致。
 - 可选 offscreen pixel budget：过大的 composited layer 会降级为逐命令透明绘制，
   避免分配大块临时 RGBA framebuffer。
 - 用于 pseudo-browser 验收的 BMP 和 PPM 图片写出。
@@ -49,6 +51,7 @@ DOM + CSSOM
 - 不做完整 text shaping、bidi 或 font fallback stack。
 - 不做 image decode。
 - 不做 subpixel layout 或 antialiased geometry。
+- 不做 rotate/skew/matrix/perspective，也不做完整 transform-origin。
 
 ## 当前兼容性说明
 
@@ -58,4 +61,4 @@ DOM + CSSOM
 近期修复包括 Windows UTF-8 文本输出、保守文本 overhang padding、基础多行文本绘制、
 `box-sizing:border-box`、常见 `rgb()/rgba()` 颜色、四值 box edges，以及最小 flex
 居中/横向布局、响应式 grid card layout、`aspect-ratio` 尺寸计算和便宜圆角
-`box-shadow` 近似。
+`box-shadow` 近似，以及第一版 `opacity`/2D transform 合成动画基础。

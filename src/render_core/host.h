@@ -62,6 +62,9 @@ struct HostBudgets {
     std::size_t max_detached_dom_nodes = 256;
     std::size_t max_input_events_per_frame = 8;
     std::size_t max_timer_callbacks_per_frame = 8;
+    std::size_t max_animation_callbacks_per_frame = 4;
+    std::size_t max_active_animations = 16;
+    std::size_t animation_frame_rate = 30;
     std::size_t max_event_listeners = 512;
     std::size_t max_resource_bytes = 512 * 1024;
     std::size_t max_framebuffer_pixels = 480 * 480;

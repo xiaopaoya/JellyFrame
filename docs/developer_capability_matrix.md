@@ -111,7 +111,7 @@ JellyFrame is not ready for:
 | Font coverage check | Default tooling preflight | `package`, `check`, `preview` and source-package `install` run `jellyframe_font_resource_check` by default; `--font-coverage` reports missing codepoints before embedding, and `--no-font-check` skips it explicitly. |
 | Font profile and budget estimate | Default tooling preflight | Defaults to a `16x16` bitmap-font byte estimate; `--font-budget WxH` overrides it and recommends `tiny`, `tiny-plus-symbols`, `app-subset-cn`, `cn-standard` or `global-product` from scanned codepoints. |
 | Bitmap font pack generation | Tool/runtime/explicit validation works | `jellyframe_font_pack_gen` subsets BDF bitmap fonts into C++ `BitmapFont` headers for embedded builds and can also emit `.jffont` V0 binary supplements; `BitmapFontResource` can parse `.jffont` bytes, `AppFontSet` can hold them per app instance, and the Win32 shell `--use-app-fonts` path can use in-bundle fonts for layout/paint. Product automatic fallback drawing is still roadmap work. |
-| `@keyframes` | Lazy | Balanced block skipped; no animation model. |
+| `@keyframes` | Roadmap/Lazy | Balanced block currently skipped. Track D will add a small from/to subset over compositor/paint-only properties. |
 | Unknown at-rules | Lazy | Statement or balanced block skipped. |
 | CSS custom properties | Subset | Direct `var(--token)` and `var(--token, fallback)` are resolved from inherited `:root`/ancestor/current/inline custom property declarations. Unresolved `var()` values do not override earlier supported fallbacks. Full dependency graph, case-sensitive custom names and complete invalid-at-computed-value-time semantics are absent. |
 | CSS nesting | Deferred | Do not rely on nested selectors. |
@@ -189,7 +189,9 @@ clear older supported fallback declarations.
 | `box-shadow` | Subset | First shadow becomes an approximate rounded translucent fill. Real blur and multiple shadows are not rasterized. |
 | `object-fit` | Subset | Supports `fill`, `contain`, `cover`, `none` and `scale-down` with default centered positioning. Complex `object-position` is deferred. |
 | `font-family` | Deferred | Text backend decides the actual font. Win32 shell uses Microsoft YaHei UI. |
-| Animations/transitions | Deferred | Declarations skipped or stored without animation behavior. |
+| `requestAnimationFrame` | Scripting subset | Available in JerryScript builds. The host pumps callbacks with a per-frame budget and timestamp. Background/low-power profiles may set the animation callback/FPS budget to zero. |
+| CSS `transition` | Subset | Supports bounded `transition` and `transition-*` lists. Current animatable properties are `opacity`, `transform: translate()/scale()`, `background-color` and `color`. The Win32 debug shell advances the timeline on interaction state changes; layout-property animation does not reflow every frame. |
+| `@keyframes` / `animation-*` | Roadmap/lazy | Not executed yet. Planned as a small from/to subset over the same paint/compositor property set. |
 | Filters/backdrop filters | Deferred | Not painted. |
 
 Supported length units are currently `px`, unitless px-like numbers, `rem`,
@@ -318,7 +320,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Display invalidation diagnostics | Works | `analyze_display_invalidation(...)` reports dirty-rectangle coverage over layers and display commands. This is diagnostic only; retained display-list reuse is still deferred. |
 | Host frame sink | Subset | `present_frame` exposes `FrameBuffer` through `HostFrameSink` with optional dirty rects. `embedded_framebuffer` supplies portable pixel conversion; real display I/O remains host-owned. |
 | Host device capabilities | Draft | `HostDeviceCapabilities` records display, input, memory, budget and service flags for board ports. Current core code treats it as a contract/documented policy input; deeper automatic adaptation is deferred. |
-| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count, frame-loop input/timer caps, JerryScript timer/listener limits, detached DOM node limits and software-compositor primary/offscreen pixel caps. Render, layout and layer trees now have arena-backed build paths; full mutable DOM arenas remain future work. |
+| Host budgets | Subset | `HostBudgets` feeds HTML/CSS parsing, render/layout/layer tree caps, display-list caps, dirty-rect count, frame-loop input/timer/animation caps, JerryScript timer/rAF/listener limits, detached DOM node limits and software-compositor primary/offscreen pixel caps. Render, layout and layer trees now have arena-backed build paths; full mutable DOM arenas remain future work. |
 
 Practical implication: repeated script mutations should be batched in one event
 or timer callback. The host will see one dirty document and rerender once.

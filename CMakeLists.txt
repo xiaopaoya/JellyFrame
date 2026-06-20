@@ -26,6 +26,7 @@ if(JERRYSCRIPT_ROOT AND NOT JERRYSCRIPT_INCLUDE_DIR)
 endif()
 
 add_library(jellyframe_render_core
+    src/render_core/animation_timeline.cpp
     src/render_core/arena.cpp
     src/render_core/bitmap_font.cpp
     src/render_core/bitmap_font_resource.cpp
@@ -159,6 +160,7 @@ if(JELLYFRAME_BUILD_TESTS)
     set(JELLYFRAME_RENDER_CORE_TEST_SOURCES
         src/render_core/tests/tokenizer_tests.cpp
         src/render_core/tests/arena_tests.cpp
+        src/render_core/tests/animation_timeline_tests.cpp
         src/render_core/tests/budget_stress_tests.cpp
         src/render_core/tests/dom_mutation_tests.cpp
         src/render_core/tests/dom_owner_tests.cpp

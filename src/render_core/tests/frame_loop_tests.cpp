@@ -30,32 +30,42 @@ void frame_loop_work_respects_per_frame_limits() {
     FrameLoopPendingWork pending;
     pending.pending_input_events = 20;
     pending.pending_timer_callbacks = 13;
+    pending.pending_animation_callbacks = 9;
 
     FrameLoopOptions options;
     options.max_input_events_per_frame = 6;
     options.max_timer_callbacks_per_frame = 4;
+    options.max_animation_callbacks_per_frame = 2;
 
     const FrameLoopWorkPlan plan = plan_frame_loop_work(pending, options);
     check(plan.input_events_to_dispatch == 6, "input dispatch is capped");
     check(plan.timer_callbacks_to_pump == 4, "timer pump is capped");
+    check(plan.animation_callbacks_to_pump == 2, "animation frame callbacks are capped");
     check(plan.has_more_input_events, "input backlog is reported");
     check(plan.has_more_timer_callbacks, "timer backlog is reported");
+    check(plan.has_more_animation_callbacks, "animation backlog is reported");
+    check(plan.needs_animation_frame, "animation backlog requests another frame");
 }
 
 void frame_loop_work_allows_zero_budget_frames() {
     FrameLoopPendingWork pending;
     pending.pending_input_events = 3;
     pending.pending_timer_callbacks = 2;
+    pending.pending_animation_callbacks = 1;
 
     FrameLoopOptions options;
     options.max_input_events_per_frame = 0;
     options.max_timer_callbacks_per_frame = 0;
+    options.max_animation_callbacks_per_frame = 0;
 
     const FrameLoopWorkPlan plan = plan_frame_loop_work(pending, options);
     check(plan.input_events_to_dispatch == 0, "zero input budget dispatches nothing");
     check(plan.timer_callbacks_to_pump == 0, "zero timer budget pumps nothing");
+    check(plan.animation_callbacks_to_pump == 0, "zero animation budget pumps nothing");
     check(plan.has_more_input_events, "zero input budget preserves backlog");
     check(plan.has_more_timer_callbacks, "zero timer budget preserves backlog");
+    check(plan.has_more_animation_callbacks, "zero animation budget preserves backlog");
+    check(!plan.needs_animation_frame, "zero frame-rate suppresses animation frame scheduling");
 }
 
 void frame_loop_combines_work_budget_and_update_plan() {
@@ -66,6 +76,7 @@ void frame_loop_combines_work_budget_and_update_plan() {
     FrameLoopOptions options;
     options.max_input_events_per_frame = 4;
     options.max_timer_callbacks_per_frame = 4;
+    options.max_animation_callbacks_per_frame = 4;
 
     const FrameLoopPlan plan = plan_frame_loop(pending, DomDirtyPaint, cached_frame(), options);
     check(plan.work.input_events_to_dispatch == 2, "frame loop dispatches available input");
@@ -76,6 +87,19 @@ void frame_loop_combines_work_budget_and_update_plan() {
           "paint dirty frame reuses existing pipeline");
     check(plan.update.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout,
           "paint dirty frame uses current-layout dirty rects");
+}
+
+void animation_frame_request_is_idle_when_absent() {
+    FrameLoopPendingWork pending;
+    FrameLoopOptions options;
+    const FrameLoopWorkPlan clean_plan = plan_frame_loop_work(pending, options);
+    check(clean_plan.animation_callbacks_to_pump == 0, "no animation callbacks are pumped when absent");
+    check(!clean_plan.needs_animation_frame, "static frame loop does not request animation frames");
+
+    pending.pending_animation_callbacks = 1;
+    const FrameLoopWorkPlan animated_plan = plan_frame_loop_work(pending, options);
+    check(animated_plan.animation_callbacks_to_pump == 1, "one animation callback is pumped");
+    check(animated_plan.needs_animation_frame, "active animation requests frame scheduling");
 }
 
 void long_running_frame_loop_keeps_backlog_and_dirty_work_bounded() {
@@ -144,6 +168,7 @@ int main() {
         frame_loop_work_respects_per_frame_limits();
         frame_loop_work_allows_zero_budget_frames();
         frame_loop_combines_work_budget_and_update_plan();
+        animation_frame_request_is_idle_when_absent();
         long_running_frame_loop_keeps_backlog_and_dirty_work_bounded();
     } catch (const std::exception& error) {
         std::cerr << "frame loop test failed: " << error.what() << '\n';

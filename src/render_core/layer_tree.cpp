@@ -60,6 +60,23 @@ bool has_transform(const Style& style) {
     return !style.transform.empty();
 }
 
+Transform2D parsed_transform_or_identity(const Style& style, DiagnosticSink* diagnostics) {
+    Transform2D transform;
+    if (style.transform.empty()) {
+        return transform;
+    }
+    if (!parse_css_transform_2d(style.transform, transform)) {
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::LayerTree,
+                          DiagnosticSeverity::Warning,
+                          "layer-transform-unsupported",
+                          "Transform could not be applied by the supported 2D subset",
+                          style.transform);
+        return Transform2D{};
+    }
+    return transform;
+}
+
 bool has_shadow(const Style& style) {
     return !style.box_shadow.empty() && style.box_shadow != "none";
 }
@@ -685,11 +702,15 @@ void append_flattened_command(DisplayList& output,
                               Rect clip,
                               bool has_clip,
                               float opacity,
+                              int translate_x,
+                              int translate_y,
                               std::size_t max_display_commands) {
     if (output.size() >= max_display_commands) {
         return;
     }
     DisplayCommand flattened = command;
+    flattened.rect.x += translate_x;
+    flattened.rect.y += translate_y;
     if (has_clip) {
         flattened.rect = intersect_rect(flattened.rect, clip);
         if (empty_rect(flattened.rect)) {
@@ -709,6 +730,8 @@ void flatten_layer(const LayerNode& layer,
                    Rect clip,
                    bool has_clip,
                    float opacity,
+                   int translate_x,
+                   int translate_y,
                    std::size_t max_display_commands,
                    DiagnosticSink* diagnostics,
                    bool& display_budget_reported) {
@@ -733,8 +756,21 @@ void flatten_layer(const LayerNode& layer,
     }
 
     const float layer_opacity = opacity * layer.opacity;
+    const int layer_translate_x = translate_x + static_cast<int>(layer.transform.translate_x >= 0.0F
+        ? layer.transform.translate_x + 0.5F
+        : layer.transform.translate_x - 0.5F);
+    const int layer_translate_y = translate_y + static_cast<int>(layer.transform.translate_y >= 0.0F
+        ? layer.transform.translate_y + 0.5F
+        : layer.transform.translate_y - 0.5F);
     for (const DisplayCommand& command : layer.display_list) {
-        append_flattened_command(output, command, clip, has_clip, layer_opacity, max_display_commands);
+        append_flattened_command(output,
+                                 command,
+                                 clip,
+                                 has_clip,
+                                 layer_opacity,
+                                 layer_translate_x,
+                                 layer_translate_y,
+                                 max_display_commands);
         if (output.size() >= max_display_commands) {
             if (!display_budget_reported) {
                 report_diagnostic(diagnostics,
@@ -749,7 +785,14 @@ void flatten_layer(const LayerNode& layer,
         }
     }
     for (const auto& child : layer.children) {
-        flatten_layer(*child, output, clip, has_clip, layer_opacity, max_display_commands,
+        flatten_layer(*child,
+                      output,
+                      clip,
+                      has_clip,
+                      layer_opacity,
+                      layer_translate_x,
+                      layer_translate_y,
+                      max_display_commands,
                       diagnostics, display_budget_reported);
         if (output.size() >= max_display_commands) {
             if (!display_budget_reported) {
@@ -809,6 +852,8 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->clip_rect = root.rect;
     root_layer->has_clip = has_overflow_clip(root.style);
     root_layer->opacity = root.style.opacity;
+    root_layer->transform = parsed_transform_or_identity(root.style, options_.diagnostics);
+    root_layer->has_transform = has_transform(root.style);
     root_layer->z_index = root.style.z_index;
     root_layer->source_order = next_source_order++;
 
@@ -825,7 +870,7 @@ DisplayList LayerTreeBuilder::flatten(const LayerNode& root) const {
     const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
     output.reserve(std::min(count_layer_display_commands(root), max_display_commands));
     bool display_budget_reported = false;
-    flatten_layer(root, output, Rect{}, false, 1.0F, max_display_commands,
+    flatten_layer(root, output, Rect{}, false, 1.0F, 0, 0, max_display_commands,
                   options_.diagnostics, display_budget_reported);
     return output;
 }
@@ -872,6 +917,8 @@ void LayerTreeBuilder::build_box(const LayoutBox& box,
         child_layer->clip_rect = box.rect;
         child_layer->has_clip = (reasons & LayerReasonOverflowClip) != 0U;
         child_layer->opacity = box.style.opacity;
+        child_layer->transform = parsed_transform_or_identity(box.style, options_.diagnostics);
+        child_layer->has_transform = has_transform(box.style);
         child_layer->z_index = box.style.z_index_auto ? 0 : box.style.z_index;
         child_layer->source_order = next_source_order++;
         paint_box_self(box, child_layer->display_list, options_);

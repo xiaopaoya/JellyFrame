@@ -345,6 +345,35 @@ void composite_buffer(FrameBuffer& target, const FrameBuffer& source, int dst_x,
     }
 }
 
+void composite_scaled_buffer(FrameBuffer& target,
+                             const FrameBuffer& source,
+                             Rect destination,
+                             float opacity) {
+    const Rect target_bounds = target_rect(target);
+    Rect copy_rect = intersect_rect(destination, target_bounds);
+    if (empty_rect(copy_rect) || source.width <= 0 || source.height <= 0) {
+        return;
+    }
+    for (int y = 0; y < copy_rect.height; ++y) {
+        const int src_y = std::min(source.height - 1,
+                                   ((copy_rect.y + y - destination.y) * source.height) /
+                                       std::max(1, destination.height));
+        for (int x = 0; x < copy_rect.width; ++x) {
+            const int src_x = std::min(source.width - 1,
+                                       ((copy_rect.x + x - destination.x) * source.width) /
+                                           std::max(1, destination.width));
+            blend_pixel(target,
+                        copy_rect.x + x,
+                        copy_rect.y + y,
+                        with_opacity(source.pixel(src_x, src_y), opacity));
+        }
+    }
+}
+
+int round_transform_offset(float value) {
+    return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
+}
+
 bool offscreen_fits_budget(Rect bounds, SoftwareCompositor::Options options) {
     if (bounds.width <= 0 || bounds.height <= 0) {
         return false;
@@ -540,11 +569,15 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                          int offset_x,
                                          int offset_y,
                                          float inherited_opacity) const {
+    const int transform_x = round_transform_offset(layer.transform.translate_x);
+    const int transform_y = round_transform_offset(layer.transform.translate_y);
+    const int layer_offset_x = offset_x + transform_x;
+    const int layer_offset_y = offset_y + transform_y;
     Rect layer_clip = clip;
     if (layer.has_clip) {
         Rect translated_clip = layer.clip_rect;
-        translated_clip.x += offset_x;
-        translated_clip.y += offset_y;
+        translated_clip.x += layer_offset_x;
+        translated_clip.y += layer_offset_y;
         layer_clip = intersect_rect(layer_clip, translated_clip);
         if (empty_rect(layer_clip)) {
             return;
@@ -555,8 +588,8 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
     const bool needs_offscreen = layer.type == LayerType::Composited || layer.opacity < 0.999F;
     if (needs_offscreen) {
         Rect bounds = layer.bounds;
-        bounds.x += offset_x;
-        bounds.y += offset_y;
+        bounds.x += layer_offset_x;
+        bounds.y += layer_offset_y;
         bounds = intersect_rect(bounds, layer_clip);
         bounds = intersect_rect(bounds, target_rect(target));
         if (empty_rect(bounds)) {
@@ -573,30 +606,45 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                    layer.display_list,
                                    target,
                                    layer_clip,
-                                   offset_x,
-                                   offset_y,
+                                   layer_offset_x,
+                                   layer_offset_y,
                                    layer_opacity);
             for (const auto& child : layer.children) {
-                composite_layer(*child, target, layer_clip, offset_x, offset_y, layer_opacity);
+                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity);
             }
             return;
         }
 
         FrameBuffer offscreen(bounds.width, bounds.height, Color{0, 0, 0, 0});
-        const int child_offset_x = offset_x - bounds.x;
-        const int child_offset_y = offset_y - bounds.y;
+        const int child_offset_x = layer_offset_x - bounds.x;
+        const int child_offset_y = layer_offset_y - bounds.y;
         const Rect offscreen_clip{0, 0, bounds.width, bounds.height};
         rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y);
         for (const auto& child : layer.children) {
             composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F);
         }
-        composite_buffer(target, offscreen, bounds.x, bounds.y, layer_opacity);
+        if (std::abs(layer.transform.scale_x - 1.0F) >= 0.001F ||
+            std::abs(layer.transform.scale_y - 1.0F) >= 0.001F) {
+            const int scaled_width =
+                std::max(1, static_cast<int>(static_cast<float>(bounds.width) * layer.transform.scale_x + 0.5F));
+            const int scaled_height =
+                std::max(1, static_cast<int>(static_cast<float>(bounds.height) * layer.transform.scale_y + 0.5F));
+            const Rect destination{
+                bounds.x + (bounds.width - scaled_width) / 2,
+                bounds.y + (bounds.height - scaled_height) / 2,
+                scaled_width,
+                scaled_height,
+            };
+            composite_scaled_buffer(target, offscreen, destination, layer_opacity);
+        } else {
+            composite_buffer(target, offscreen, bounds.x, bounds.y, layer_opacity);
+        }
         return;
     }
 
-    rasterize_with_opacity(rasterizer_, layer.display_list, target, layer_clip, offset_x, offset_y, layer_opacity);
+    rasterize_with_opacity(rasterizer_, layer.display_list, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity);
     for (const auto& child : layer.children) {
-        composite_layer(*child, target, layer_clip, offset_x, offset_y, layer_opacity);
+        composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity);
     }
 }
 

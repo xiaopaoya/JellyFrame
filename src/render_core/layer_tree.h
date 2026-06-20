@@ -3,6 +3,7 @@
 #include "render_core/arena.h"
 #include "render_core/geometry.h"
 #include "render_core/layout.h"
+#include "render_core/style.h"
 
 #include <cstdint>
 #include <memory>
@@ -56,6 +57,8 @@ struct LayerNode {
     Rect clip_rect;
     bool has_clip = false;
     float opacity = 1.0F;
+    Transform2D transform;
+    bool has_transform = false;
     int z_index = 0;
     std::size_t source_order = 0;
     DisplayList display_list;

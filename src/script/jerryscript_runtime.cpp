@@ -40,6 +40,12 @@ struct ScriptTimer {
     bool active = false;
 };
 
+struct ScriptAnimationFrameCallback {
+    std::uint32_t id = 0;
+    jerry_value_t callback = 0;
+    bool active = false;
+};
+
 struct ScriptXmlHttpRequest {
     JerryScriptRuntime* runtime = nullptr;
     AppXmlHttpRequest request;
@@ -85,6 +91,15 @@ struct ScriptRuntimeAccess {
 
     static void clear_timer(JerryScriptRuntime& runtime, std::uint32_t id) {
         runtime.clear_timer(id);
+    }
+
+    static std::uint32_t add_animation_frame_callback(JerryScriptRuntime& runtime,
+                                                      jerry_value_t callback) {
+        return runtime.add_animation_frame_callback(callback);
+    }
+
+    static void cancel_animation_frame_callback(JerryScriptRuntime& runtime, std::uint32_t id) {
+        runtime.cancel_animation_frame_callback(id);
     }
 
     static ScriptXmlHttpRequest* create_xml_http_request(JerryScriptRuntime& runtime) {
@@ -617,6 +632,27 @@ jerry_value_t script_clear_timer(const jerry_call_info_t* call_info_p,
     JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
     if (runtime != nullptr && args_count > 0) {
         ScriptRuntimeAccess::clear_timer(*runtime, timer_id_from_value(args_p[0]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t script_request_animation_frame(const jerry_call_info_t* call_info_p,
+                                             const jerry_value_t args_p[],
+                                             const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr || args_count < 1 || !jerry_value_is_function(args_p[0])) {
+        return throw_type_error("requestAnimationFrame requires a function callback");
+    }
+    const std::uint32_t id = ScriptRuntimeAccess::add_animation_frame_callback(*runtime, args_p[0]);
+    return jerry_number(id);
+}
+
+jerry_value_t script_cancel_animation_frame(const jerry_call_info_t* call_info_p,
+                                            const jerry_value_t args_p[],
+                                            const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime != nullptr && args_count > 0) {
+        ScriptRuntimeAccess::cancel_animation_frame_callback(*runtime, timer_id_from_value(args_p[0]));
     }
     return jerry_undefined();
 }
@@ -1638,12 +1674,14 @@ JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
           std::max<std::size_t>(1, budgets.max_event_listeners),
           std::max<std::size_t>(1, budgets.max_detached_dom_nodes),
           16,
+          std::max<std::size_t>(1, budgets.max_active_animations),
       }) {}
 
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
         clear_xml_http_requests();
         clear_script_event_listeners();
+        clear_animation_frame_callbacks();
         clear_timers();
         jerry_cleanup();
         initialized_ = false;
@@ -1654,6 +1692,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 void JerryScriptRuntime::bind_document(Node& document) {
     clear_xml_http_requests();
     clear_script_event_listeners();
+    clear_animation_frame_callbacks();
     clear_timers();
     detached_nodes_.clear_detached_nodes();
     bound_document_ = &document;
@@ -1675,10 +1714,14 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(window_object.get(), "setInterval", script_set_interval, *this);
     set_runtime_method(window_object.get(), "clearInterval", script_clear_timer, *this);
+    set_runtime_method(window_object.get(), "requestAnimationFrame", script_request_animation_frame, *this);
+    set_runtime_method(window_object.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_runtime_method(global.get(), "setTimeout", script_set_timeout, *this);
     set_runtime_method(global.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(global.get(), "setInterval", script_set_interval, *this);
     set_runtime_method(global.get(), "clearInterval", script_clear_timer, *this);
+    set_runtime_method(global.get(), "requestAnimationFrame", script_request_animation_frame, *this);
+    set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
     set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
     set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
@@ -1778,6 +1821,45 @@ std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t ma
     return callbacks;
 }
 
+std::size_t JerryScriptRuntime::pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks) {
+    current_time_ms_ = now_ms;
+    if (animation_frame_callbacks_.empty() || max_callbacks == 0) {
+        return 0;
+    }
+    std::vector<jerry_value_t> callbacks;
+    callbacks.reserve(std::min(max_callbacks, animation_frame_callbacks_.size()));
+    std::size_t pumped = 0;
+    for (const auto& entry : animation_frame_callbacks_) {
+        if (pumped >= max_callbacks || !entry->active || entry->callback == 0) {
+            continue;
+        }
+        callbacks.push_back(jerry_value_copy(entry->callback));
+        entry->active = false;
+        jerry_value_free(entry->callback);
+        entry->callback = 0;
+        ++pumped;
+    }
+    animation_frame_callbacks_.erase(
+        std::remove_if(animation_frame_callbacks_.begin(),
+                       animation_frame_callbacks_.end(),
+                       [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
+                           return !callback->active;
+                       }),
+        animation_frame_callbacks_.end());
+
+    const jerry_value_t timestamp = jerry_number(static_cast<double>(now_ms));
+    for (jerry_value_t raw_callback : callbacks) {
+        JerryValue callback(raw_callback);
+        JerryValue result(jerry_call(callback.get(), jerry_undefined(), &timestamp, 1));
+        if (jerry_value_is_exception(result.get())) {
+            JerryValue exception_value(jerry_exception_value(result.release(), true));
+            (void) exception_value;
+        }
+    }
+    jerry_value_free(timestamp);
+    return pumped;
+}
+
 bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& completion) {
     if (app_host_ == nullptr || network_fetch_ == nullptr) {
         return false;
@@ -1835,6 +1917,15 @@ bool JerryScriptRuntime::has_pending_timers() const {
     return false;
 }
 
+bool JerryScriptRuntime::has_pending_animation_frames() const {
+    for (const auto& callback : animation_frame_callbacks_) {
+        if (callback->active) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::uint64_t JerryScriptRuntime::next_timer_due_ms() const {
     std::uint64_t due = std::numeric_limits<std::uint64_t>::max();
     for (const auto& timer : timers_) {
@@ -1852,6 +1943,7 @@ std::size_t JerryScriptRuntime::detached_node_count() const {
 ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
     ScriptRuntimeStatistics output;
     output.timer_count = timers_.size();
+    output.animation_frame_callback_count = animation_frame_callbacks_.size();
     output.event_listener_count = event_listeners_.size();
     output.xml_http_request_count = xml_http_requests_.size();
     output.detached_nodes = detached_nodes_.detached_statistics();
@@ -1997,6 +2089,64 @@ void JerryScriptRuntime::clear_timers() {
         }
     }
     timers_.clear();
+}
+
+std::uint32_t JerryScriptRuntime::add_animation_frame_callback(std::uint32_t callback_value) {
+    animation_frame_callbacks_.erase(
+        std::remove_if(animation_frame_callbacks_.begin(),
+                       animation_frame_callbacks_.end(),
+                       [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
+                           return !callback->active;
+                       }),
+        animation_frame_callbacks_.end());
+    if (animation_frame_callbacks_.size() >= std::max<std::size_t>(1, options_.max_animation_frame_callbacks)) {
+        return 0;
+    }
+    auto callback = std::make_unique<ScriptAnimationFrameCallback>();
+    callback->id = next_animation_frame_id_++;
+    if (next_animation_frame_id_ == 0) {
+        next_animation_frame_id_ = 1;
+    }
+    callback->callback = jerry_value_copy(callback_value);
+    callback->active = true;
+    const std::uint32_t id = callback->id;
+    animation_frame_callbacks_.push_back(std::move(callback));
+    return id;
+}
+
+void JerryScriptRuntime::cancel_animation_frame_callback(std::uint32_t id) {
+    if (id == 0) {
+        return;
+    }
+    for (const auto& callback : animation_frame_callbacks_) {
+        if (!callback->active || callback->id != id) {
+            continue;
+        }
+        callback->active = false;
+        if (callback->callback != 0) {
+            jerry_value_free(callback->callback);
+            callback->callback = 0;
+        }
+        break;
+    }
+    animation_frame_callbacks_.erase(
+        std::remove_if(animation_frame_callbacks_.begin(),
+                       animation_frame_callbacks_.end(),
+                       [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
+                           return !callback->active;
+                       }),
+        animation_frame_callbacks_.end());
+}
+
+void JerryScriptRuntime::clear_animation_frame_callbacks() {
+    for (const auto& callback : animation_frame_callbacks_) {
+        callback->active = false;
+        if (callback->callback != 0) {
+            jerry_value_free(callback->callback);
+            callback->callback = 0;
+        }
+    }
+    animation_frame_callbacks_.clear();
 }
 
 ScriptXmlHttpRequest* JerryScriptRuntime::create_xml_http_request() {

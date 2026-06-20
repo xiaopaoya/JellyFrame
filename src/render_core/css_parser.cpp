@@ -505,7 +505,17 @@ bool is_supported_declaration_feature(std::string_view feature) {
         return value == "auto" || is_number_with_suffix(value, {""}, false);
     }
     if (property == "transform") {
-        return value == "none";
+        return value == "none" || value.find("translate") != std::string::npos ||
+               value.find("scale") != std::string::npos;
+    }
+    if (property == "transition" || property == "transition-property" ||
+        property == "transition-duration" || property == "transition-delay" ||
+        property == "transition-timing-function") {
+        return value.find("opacity") != std::string::npos ||
+               value.find("transform") != std::string::npos ||
+               value.find("color") != std::string::npos ||
+               value.find("ms") != std::string::npos ||
+               value.find('s') != std::string::npos;
     }
     if (property == "justify-content") {
         return supported_keyword(value, {"start", "flex-start", "normal", "center",

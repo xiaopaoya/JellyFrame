@@ -55,6 +55,8 @@ inline FrameLoopOptions frame_loop_options_from_budgets(const HostBudgets& budge
     return FrameLoopOptions{
         budgets.max_input_events_per_frame,
         budgets.max_timer_callbacks_per_frame,
+        budgets.max_animation_callbacks_per_frame,
+        budgets.animation_frame_rate,
     };
 }
 

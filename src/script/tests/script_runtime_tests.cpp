@@ -392,6 +392,68 @@ void javascript_interval_repeats_and_can_clear_itself() {
     check(runtime.eval("count").value == "2", "interval callback updates JS state twice");
 }
 
+void javascript_request_animation_frame_is_host_pumped() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>0</p></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var status = document.getElementById('status');"
+        "var stamp = 0;"
+        "var id = requestAnimationFrame(function (time) {"
+        "  stamp = time;"
+        "  status.textContent = 'frame';"
+        "});"
+        "String(id > 0)");
+    check(result.ok && result.value == "true", "requestAnimationFrame registration succeeds");
+    check(runtime.has_pending_animation_frames(), "animation frame callback is pending");
+    check(runtime.statistics().animation_frame_callback_count == 1, "animation callback is counted");
+    check(runtime.pump_timers(16) == 0, "timer pump does not run animation frame callbacks");
+    check(runtime.pump_animation_frame(32, 4) == 1, "animation frame pump runs callback");
+    check(!runtime.has_pending_animation_frames(), "one-shot animation frame callback is cleared");
+    check(document->text_content().find("frame") != std::string::npos, "animation callback mutates DOM");
+    check(runtime.eval("String(stamp)").value == "32", "animation callback receives host timestamp");
+}
+
+void javascript_cancel_animation_frame_cancels_callback() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var fired = 0;"
+        "var id = requestAnimationFrame(function () { fired = 1; });"
+        "cancelAnimationFrame(id);"
+        "String(id > 0)");
+    check(result.ok && result.value == "true", "cancelAnimationFrame setup succeeds");
+    check(!runtime.has_pending_animation_frames(), "cancelled animation callback is removed");
+    check(runtime.pump_animation_frame(16, 4) == 0, "cancelled animation callback does not run");
+    check(runtime.eval("String(fired)").value == "0", "cancelled animation leaves JS state unchanged");
+}
+
+void javascript_animation_frame_budget_is_bounded() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{64, 512, 256, 16, 2});
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var fired = 0;"
+        "var a = requestAnimationFrame(function () { fired += 1; });"
+        "var b = requestAnimationFrame(function () { fired += 10; });"
+        "var c = requestAnimationFrame(function () { fired += 100; });"
+        "String(a > 0) + ':' + String(b > 0) + ':' + String(c)");
+    check(result.ok, "animation budget script succeeds");
+    check(result.value == "true:true:0", "animation callback budget rejects third callback");
+    check(runtime.pump_animation_frame(16, 1) == 1, "animation frame pump respects per-frame callback cap");
+    check(runtime.has_pending_animation_frames(), "remaining animation callback stays pending");
+    check(runtime.eval("String(fired)").value == "1", "only first animation callback ran");
+    check(runtime.pump_animation_frame(32, 1) == 1, "second animation callback runs on later frame");
+    check(runtime.eval("String(fired)").value == "11", "second animation callback updates state");
+}
+
 std::size_t complete_network_and_dispatch(AppRuntimeHost& host,
                                           NetworkFetchMock& network,
                                           JerryScriptRuntime& runtime) {
@@ -623,6 +685,9 @@ int main() {
         javascript_timeout_runs_when_host_pumps_time();
         javascript_clear_timeout_cancels_callback();
         javascript_interval_repeats_and_can_clear_itself();
+        javascript_request_animation_frame_is_host_pumped();
+        javascript_cancel_animation_frame_cancels_callback();
+        javascript_animation_frame_budget_is_bounded();
         javascript_xml_http_request_get_completes_from_host_service();
         javascript_xml_http_request_error_callback_runs_on_missing_fixture();
         javascript_xml_http_request_budget_is_bounded();

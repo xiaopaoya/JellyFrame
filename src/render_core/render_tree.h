@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "render_core/arena.h"
+#include "render_core/animation_timeline.h"
 #include "render_core/dom.h"
 #include "render_core/style.h"
 
@@ -36,6 +37,7 @@ struct RenderObject {
 struct RenderTreeOptions {
     std::size_t max_render_objects = 4096;
     DiagnosticSink* diagnostics = nullptr;
+    const std::vector<StyleOverride>* style_overrides = nullptr;
 };
 
 class RenderTreeBuilder {

@@ -66,6 +66,8 @@ int main() {
     caps.budgets.max_detached_dom_nodes = 5;
     caps.budgets.max_input_events_per_frame = 4;
     caps.budgets.max_timer_callbacks_per_frame = 2;
+    caps.budgets.max_animation_callbacks_per_frame = 3;
+    caps.budgets.animation_frame_rate = 24;
     caps.budgets.max_framebuffer_pixels = 240 * 240;
     assert(caps.has_monotonic_clock);
     assert(!caps.has_filesystem);
@@ -81,6 +83,8 @@ int main() {
     assert(caps.budgets.max_detached_dom_nodes == 5);
     assert(frame_loop_options_from_budgets(caps.budgets).max_input_events_per_frame == 4);
     assert(frame_loop_options_from_budgets(caps.budgets).max_timer_callbacks_per_frame == 2);
+    assert(frame_loop_options_from_budgets(caps.budgets).max_animation_callbacks_per_frame == 3);
+    assert(frame_loop_options_from_budgets(caps.budgets).animation_frame_rate == 24);
     assert(framebuffer_size_fits_budget(240, 240, caps.budgets));
     assert(!framebuffer_size_fits_budget(241, 241, caps.budgets));
 

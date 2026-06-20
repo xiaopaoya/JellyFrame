@@ -19,6 +19,7 @@ class NetworkFetchMock;
 struct AppSystemEvent;
 struct HostServiceCompletion;
 struct ScriptRuntimeAccess;
+struct ScriptAnimationFrameCallback;
 struct ScriptEventListener;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
@@ -34,10 +35,12 @@ struct JerryScriptRuntimeOptions {
     std::size_t max_event_listeners = 512;
     std::size_t max_detached_nodes = 256;
     std::size_t max_xml_http_requests = 16;
+    std::size_t max_animation_frame_callbacks = 16;
 };
 
 struct ScriptRuntimeStatistics {
     std::size_t timer_count = 0;
+    std::size_t animation_frame_callback_count = 0;
     std::size_t event_listener_count = 0;
     std::size_t xml_http_request_count = 0;
     DetachedDomStatistics detached_nodes;
@@ -67,9 +70,11 @@ public:
     ScriptSystemState system_state() const;
     bool dispatch_visibility_change();
     std::size_t pump_timers(std::uint64_t now_ms, std::size_t max_callbacks = 32);
+    std::size_t pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks = 4);
     bool handle_host_completion(const HostServiceCompletion& completion);
     bool handle_system_event(const AppSystemEvent& event);
     bool has_pending_timers() const;
+    bool has_pending_animation_frames() const;
     std::uint64_t next_timer_due_ms() const;
     std::size_t detached_node_count() const;
     ScriptRuntimeStatistics statistics() const;
@@ -79,10 +84,12 @@ private:
 
     bool initialized_ = false;
     std::uint32_t next_timer_id_ = 1;
+    std::uint32_t next_animation_frame_id_ = 1;
     std::uint64_t current_time_ms_ = 0;
     DomOwner detached_nodes_;
     std::vector<std::unique_ptr<ScriptEventListener>> event_listeners_;
     std::vector<std::unique_ptr<ScriptTimer>> timers_;
+    std::vector<std::unique_ptr<ScriptAnimationFrameCallback>> animation_frame_callbacks_;
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
     JerryScriptRuntimeOptions options_;
     AppRuntimeHost* app_host_ = nullptr;
@@ -103,6 +110,9 @@ private:
     std::uint32_t add_timer(std::uint32_t callback_value, std::uint32_t delay_ms, bool repeat);
     void clear_timer(std::uint32_t id);
     void clear_timers();
+    std::uint32_t add_animation_frame_callback(std::uint32_t callback_value);
+    void cancel_animation_frame_callback(std::uint32_t id);
+    void clear_animation_frame_callbacks();
     ScriptXmlHttpRequest* create_xml_http_request();
     void clear_xml_http_requests();
 };

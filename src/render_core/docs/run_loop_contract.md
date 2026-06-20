@@ -25,17 +25,18 @@ Loop frame:
 3. Drain a bounded number of host completion events, such as resource, image
    decode, audio state, network response or installation results.
 4. If JerryScript is enabled, pump a bounded number of timer callbacks.
-5. Read root `subtree_dirty_flags(document)`.
-6. Fill `FramePipelineCacheState`, call `make_frame_update_state(...)`, then
+5. If animation is active, pump a bounded number of animation frame callbacks.
+6. Read root `subtree_dirty_flags(document)`.
+7. Fill `FramePipelineCacheState`, call `make_frame_update_state(...)`, then
    call `plan_frame_update(...)` to choose an update path.
-7. Reuse existing layout/layers or rebuild the pipeline according to the plan.
-8. After layout is known, call `plan_frame_repaint(...)` with the resolved
+8. Reuse existing layout/layers or rebuild the pipeline according to the plan.
+9. After layout is known, call `plan_frame_repaint(...)` with the resolved
    content height to confirm whether the existing framebuffer still matches.
-9. Generate dirty rectangles with `compute_dirty_rects(...)`, or fall back to a
+10. Generate dirty rectangles with `compute_dirty_rects(...)`, or fall back to a
    full frame.
-10. Call `SoftwareCompositor::render_into(...)` or full `render(...)`.
-11. Present dirty rectangles through `HostFrameSink`.
-12. Clear DOM dirty flags.
+11. Call `SoftwareCompositor::render_into(...)` or full `render(...)`.
+12. Present dirty rectangles through `HostFrameSink`.
+13. Clear DOM dirty flags.
 
 Hosts may place these steps in a UI task, desktop message loop or validation
 shell, but scripts, layout and rendering should not run inside an ISR or display
@@ -47,14 +48,20 @@ post completion events.
 Header: `src/render_core/frame_loop.h`
 
 `plan_frame_loop_work(...)` is a tiny helper for host UI tasks. It does not own
-an input queue or a timer queue. The host reports pending input events and due
-timer callbacks through `FrameLoopPendingWork`, then receives a bounded
+an input queue, timer queue or animation queue. The host reports pending input
+events, due timer callbacks and pending animation frame callbacks through
+`FrameLoopPendingWork`, then receives a bounded
 `FrameLoopWorkPlan`:
 
 - `input_events_to_dispatch`: how many host input events to drain this frame.
 - `timer_callbacks_to_pump`: how many script timer callbacks to run this frame.
-- `has_more_input_events` / `has_more_timer_callbacks`: whether the host should
-  schedule another frame or keep the UI task awake.
+- `animation_callbacks_to_pump`: how many animation frame callbacks to run this
+  frame.
+- `has_more_input_events` / `has_more_timer_callbacks` /
+  `has_more_animation_callbacks`: whether the host should schedule another
+  frame or keep the UI task awake.
+- `needs_animation_frame`: whether active animation work should request another
+  frame at the host's animation cadence.
 
 `FrameLoopOptions` carries the per-frame caps. A zero cap is valid and means the
 host deliberately pauses that class of work, for example while throttling a
@@ -62,10 +69,14 @@ screen-off device. The helper never drops work; it only tells the host how much
 to consume. Hosts can derive these caps from `HostBudgets` with
 `frame_loop_options_from_budgets(...)`.
 
+Animation caps are separate from timer caps so a page with motion cannot starve
+input, network completions or ordinary timers. A no-animation page reports zero
+pending animation callbacks and does not request animation frames.
+
 `plan_frame_loop(...)` combines that bounded work plan with
 `plan_frame_update(...)` for hosts that want one shared planning call. It still
-does not dispatch input, pump timers, mutate DOM, rebuild layout or present
-pixels.
+does not dispatch input, pump timers or animation callbacks, mutate DOM, rebuild
+layout or present pixels.
 
 ## Async Completion Events
 

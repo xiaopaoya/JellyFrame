@@ -21,16 +21,17 @@
 2. 通过 `InputController` 派发 pointer/wheel/key/text/focus 操作。
 3. 从宿主异步队列取有限个 completion events，例如资源、图片 decode、音频状态、网络响应或安装结果。
 4. 如果启用 JerryScript，泵动有限个 timer callback。
-5. 读取根节点 `subtree_dirty_flags(document)`。
-6. 填充 `FramePipelineCacheState`，调用 `make_frame_update_state(...)`，再调用
+5. 如果有活动动画，泵动有限个 animation frame callback。
+6. 读取根节点 `subtree_dirty_flags(document)`。
+7. 填充 `FramePipelineCacheState`，调用 `make_frame_update_state(...)`，再调用
    `plan_frame_update(...)` 决定更新路径。
-7. 按计划复用现有 layout/layer，或重建管线。
-8. 新 layout 已知后，用解析出的内容高度调用 `plan_frame_repaint(...)`，确认现有
+8. 按计划复用现有 layout/layer，或重建管线。
+9. 新 layout 已知后，用解析出的内容高度调用 `plan_frame_repaint(...)`，确认现有
    framebuffer 尺寸是否仍匹配。
-9. 用 `compute_dirty_rects(...)` 生成 dirty rectangles，或保守全帧。
-10. 调用 `SoftwareCompositor::render_into(...)` 或完整 `render(...)`。
-11. 通过 `HostFrameSink` 提交 dirty rectangles。
-12. 清理 DOM dirty flags。
+10. 用 `compute_dirty_rects(...)` 生成 dirty rectangles，或保守全帧。
+11. 调用 `SoftwareCompositor::render_into(...)` 或完整 `render(...)`。
+12. 通过 `HostFrameSink` 提交 dirty rectangles。
+13. 清理 DOM dirty flags。
 
 宿主可以把这些步骤放进一个 UI task、桌面消息循环或测试壳中，但不应在 ISR 或屏幕 flush callback 内执行脚本、layout 或渲染。
 异步 worker 也不应直接执行这些步骤；它只能投递 completion event。
@@ -39,21 +40,26 @@
 
 头文件：`src/render_core/frame_loop.h`
 
-`plan_frame_loop_work(...)` 是一个很薄的宿主 UI task 辅助函数。它不拥有输入队列，也不拥有
-timer 队列。宿主通过 `FrameLoopPendingWork` 告诉核心当前有多少待处理输入事件和到期 timer
-callback，然后得到一个有界的 `FrameLoopWorkPlan`：
+`plan_frame_loop_work(...)` 是一个很薄的宿主 UI task 辅助函数。它不拥有输入队列、timer 队列或
+animation 队列。宿主通过 `FrameLoopPendingWork` 告诉核心当前有多少待处理输入事件、到期 timer
+callback 和 pending animation frame callback，然后得到一个有界的 `FrameLoopWorkPlan`：
 
 - `input_events_to_dispatch`：本帧最多取多少个宿主输入事件。
 - `timer_callbacks_to_pump`：本帧最多泵动多少个脚本 timer callback。
-- `has_more_input_events` / `has_more_timer_callbacks`：是否还有积压，宿主可据此继续调度下一帧或保持
-  UI task 唤醒。
+- `animation_callbacks_to_pump`：本帧最多泵动多少个 animation frame callback。
+- `has_more_input_events` / `has_more_timer_callbacks` /
+  `has_more_animation_callbacks`：是否还有积压，宿主可据此继续调度下一帧或保持 UI task 唤醒。
+- `needs_animation_frame`：是否应按宿主 animation cadence 请求下一帧。
 
 `FrameLoopOptions` 保存每帧上限。上限为 0 是合法的，表示宿主刻意暂停该类工作，例如息屏低功耗节流。
 这个 helper 不会丢弃工作，只告诉宿主本帧应消费多少。宿主可以用
 `frame_loop_options_from_budgets(...)` 从 `HostBudgets` 派生这些上限。
 
+Animation caps 与 timer caps 分开，因此带动效的页面不能饿死输入、网络 completion 或普通 timer。
+无动画页面会报告 0 个 pending animation callback，也不会请求 animation frame。
+
 `plan_frame_loop(...)` 会把上述有界工作计划和 `plan_frame_update(...)` 合成一次调用，适合希望统一规划的宿主。
-它仍然不派发输入、不泵动 timer、不修改 DOM、不重建 layout，也不提交像素。
+它仍然不派发输入、不泵动 timer/animation callback、不修改 DOM、不重建 layout，也不提交像素。
 
 ## 异步 Completion Events
 

@@ -76,6 +76,19 @@ surface.
 - The Win32 browser shell pumps timers through a desktop `WM_TIMER` and rerenders
   if callbacks dirty the DOM.
 
+## Animation Frames
+
+- `requestAnimationFrame(callback)` and `cancelAnimationFrame(id)` are exposed
+  in JerryScript builds.
+- Callbacks are one-shot and host-pumped through
+  `JerryScriptRuntime::pump_animation_frame(now_ms, max_callbacks)`.
+- The callback receives the host timestamp in milliseconds. It should update
+  DOM/style and let dirty flags drive repaint.
+- Hosts can set animation callback/FPS budgets to zero while the app is
+  backgrounded, suspended, screen-off or in low-power mode.
+- CSS `transition` and `@keyframes` behavior is Track D roadmap work. For now,
+  use rAF for explicit JS-driven motion.
+
 ## Document Script Loading
 
 - Classic inline `<script>` elements are collected from the parsed document and

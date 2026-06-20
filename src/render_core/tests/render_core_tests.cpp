@@ -2,6 +2,7 @@
 
 int tokenizer_tests_main();
 int arena_tests_main();
+int animation_timeline_tests_main();
 int dom_mutation_tests_main();
 int document_script_tests_main();
 int dirty_region_tests_main();
@@ -39,6 +40,7 @@ int main() {
     int failed = 0;
     failed += run_test("tokenizer", tokenizer_tests_main);
     failed += run_test("arena", arena_tests_main);
+    failed += run_test("animation_timeline", animation_timeline_tests_main);
     failed += run_test("dom_mutation", dom_mutation_tests_main);
     failed += run_test("document_script", document_script_tests_main);
     failed += run_test("dirty_region", dirty_region_tests_main);

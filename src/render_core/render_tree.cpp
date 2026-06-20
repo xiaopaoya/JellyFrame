@@ -56,6 +56,31 @@ bool is_replaced_control(const Node& node) {
         node.tag_name == "audio" || node.tag_name == "iframe";
 }
 
+void apply_style_override(Style& style, const Node& node, const std::vector<StyleOverride>* overrides) {
+    if (overrides == nullptr || overrides->empty()) {
+        return;
+    }
+    for (const StyleOverride& override : *overrides) {
+        if (override.node != &node) {
+            continue;
+        }
+        if (override.has_opacity) {
+            style.opacity = override.opacity;
+        }
+        if (override.has_color) {
+            style.color = override.color;
+            style.color_specified = true;
+        }
+        if (override.has_background_color) {
+            style.background_color = override.background_color;
+        }
+        if (override.has_transform) {
+            style.transform = override.transform;
+        }
+        return;
+    }
+}
+
 } // namespace
 
 void RenderObjectDeleter::operator()(RenderObject* object) const {
@@ -81,6 +106,7 @@ RenderObjectPtr RenderTreeBuilder::build_with_arena(const Node& document, Monoto
     view->type = RenderObjectType::View;
     view->node = &document;
     view->style = style_resolver_.resolve(document);
+    apply_style_override(view->style, document, options_.style_overrides);
 
     std::size_t render_object_count = 1;
     bool budget_reported = false;
@@ -118,6 +144,7 @@ RenderObjectPtr RenderTreeBuilder::build_object(const Node& node,
             ? inherit_text_style(style, *parent_style)
             : inherit_element_style(style, *parent_style);
     }
+    apply_style_override(style, node, options_.style_overrides);
 
     if (!creates_render_object(node, style)) {
         return nullptr;

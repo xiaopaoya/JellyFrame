@@ -5,6 +5,7 @@
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
+#include "render_core/animation_timeline.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
 #include "render_core/display_invalidation.h"
@@ -1363,6 +1364,9 @@ private:
     LayoutBoxPtr layout_tree_;
     LayerNodePtr layer_tree_;
     std::unique_ptr<InputController> input_;
+    AnimationTimeline animation_timeline_;
+    std::vector<StyleOverride> style_overrides_;
+    bool clear_animation_overrides_after_render_ = false;
     FrameBuffer frame_buffer_;
     Color page_background_{255, 255, 255, 255};
     std::vector<std::uint32_t> blit_pixels_;
@@ -1690,6 +1694,9 @@ private:
             layout_tree_.reset();
             layer_tree_.reset();
             input_.reset();
+            animation_timeline_ = AnimationTimeline(AnimationTimelineOptions{budgets_.max_active_animations, &diagnostics_});
+            style_overrides_.clear();
+            clear_animation_overrides_after_render_ = false;
             pending_shell_action_.clear();
             pending_shell_app_id_.clear();
             dirty_region_statistics_ = DirtyRegionStatistics{};
@@ -1783,6 +1790,10 @@ private:
         }
         drain_host_completions();
         drain_system_events();
+        std::vector<std::pair<const Node*, Style>> previous_styles;
+        if ((document_->dirty_flags & DomDirtyStyle) != 0U && render_tree_ != nullptr) {
+            collect_transition_candidate_styles(*render_tree_, previous_styles);
+        }
         style_resolver_->set_interaction_state(hovered_node, active_node, focused_node);
         const DomDirtyFlags dirty_flags = document_->dirty_flags;
         const int current_content_height = layout_tree_ != nullptr
@@ -1819,6 +1830,7 @@ private:
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+            apply_animation_overrides_to_cached_trees();
             auto next_layer_tree = layer_builder.build(*layout_tree_);
             const DirtyRegionResult dirty_region = compute_dirty_region(
                 *document_,
@@ -1847,6 +1859,7 @@ private:
             input_->set_interaction_state(hovered_node, active_node, focused_node);
             update_blit_pixels();
             clear_dirty_flags(*document_);
+            clear_finished_animation_overrides();
             return;
         }
 
@@ -1855,7 +1868,14 @@ private:
         RenderTreeOptions render_options = render_tree_options_from_budgets(budgets_);
         render_options.diagnostics = &diagnostics_;
         RenderTreeBuilder render_builder(*style_resolver_, render_options);
-        auto next_render_tree = render_builder.build(*document_);
+        auto target_render_tree = render_builder.build(*document_);
+        if (!previous_styles.empty() &&
+            start_transitions_from_previous_styles(previous_styles, *target_render_tree, GetTickCount64())) {
+            animation_timeline_.sample(GetTickCount64(), style_overrides_);
+            render_options.style_overrides = style_overrides_.empty() ? nullptr : &style_overrides_;
+        }
+        RenderTreeBuilder sampled_render_builder(*style_resolver_, render_options);
+        auto next_render_tree = sampled_render_builder.build(*document_);
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
         layout_options.diagnostics = &diagnostics_;
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
@@ -1903,6 +1923,92 @@ private:
         input_->set_interaction_state(hovered_node, active_node, focused_node);
         update_blit_pixels();
         clear_dirty_flags(*document_);
+        clear_finished_animation_overrides();
+    }
+
+    void collect_transition_candidate_styles(const RenderObject& object,
+                                             std::vector<std::pair<const Node*, Style>>& output) const {
+        if (object.node != nullptr && object.style.transition_count != 0) {
+            output.push_back({object.node, object.style});
+        }
+        for (const auto& child : object.children) {
+            collect_transition_candidate_styles(*child, output);
+        }
+    }
+
+    bool start_transitions_from_previous_styles(const std::vector<std::pair<const Node*, Style>>& previous_styles,
+                                                const RenderObject& object,
+                                                std::uint64_t now_ms) {
+        bool started = false;
+        if (object.node != nullptr && object.style.transition_count != 0) {
+            for (const auto& entry : previous_styles) {
+                if (entry.first == object.node) {
+                    started = animation_timeline_.start_transitions(*object.node, entry.second, object.style, now_ms) ||
+                        started;
+                    break;
+                }
+            }
+        }
+        for (const auto& child : object.children) {
+            started = start_transitions_from_previous_styles(previous_styles, *child, now_ms) || started;
+        }
+        return started;
+    }
+
+    void apply_override_to_style(Style& style, const StyleOverride& override) const {
+        if (override.has_opacity) {
+            style.opacity = override.opacity;
+        }
+        if (override.has_color) {
+            style.color = override.color;
+            style.color_specified = true;
+        }
+        if (override.has_background_color) {
+            style.background_color = override.background_color;
+        }
+        if (override.has_transform) {
+            style.transform = override.transform;
+        }
+    }
+
+    void apply_animation_overrides(RenderObject& object) const {
+        if (object.node != nullptr) {
+            for (const StyleOverride& override : style_overrides_) {
+                if (override.node == object.node) {
+                    apply_override_to_style(object.style, override);
+                    break;
+                }
+            }
+        }
+        for (const auto& child : object.children) {
+            apply_animation_overrides(*child);
+        }
+    }
+
+    void apply_animation_overrides(LayoutBox& box) const {
+        if (box.node != nullptr) {
+            for (const StyleOverride& override : style_overrides_) {
+                if (override.node == box.node) {
+                    apply_override_to_style(box.style, override);
+                    break;
+                }
+            }
+        }
+        for (const auto& child : box.children) {
+            apply_animation_overrides(*child);
+        }
+    }
+
+    void apply_animation_overrides_to_cached_trees() {
+        if (style_overrides_.empty()) {
+            return;
+        }
+        if (render_tree_ != nullptr) {
+            apply_animation_overrides(*render_tree_);
+        }
+        if (layout_tree_ != nullptr) {
+            apply_animation_overrides(*layout_tree_);
+        }
     }
 
     int max_scroll_y() const {
@@ -2159,25 +2265,49 @@ private:
         const bool completed_image = debug_images_.complete_next(app_runtime_);
         bool handled_completion = drain_host_completions();
         const bool handled_system_event = drain_system_events();
+        const bool advanced_animation = advance_animation_timeline(GetTickCount64());
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr || !accepts_ui_events() ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
-            if (completed_image || handled_completion || handled_system_event) {
+            if (completed_image || handled_completion || handled_system_event || advanced_animation) {
                 rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
             }
             return;
         }
         const bool completed_network = debug_network_.complete_next(app_runtime_);
         handled_completion = drain_host_completions() || handled_completion;
-        const std::size_t callbacks = script_runtime_->pump_timers(GetTickCount64(), 8);
-        if (callbacks != 0 || completed_network || completed_image || handled_completion || handled_system_event) {
+        const std::uint64_t now_ms = GetTickCount64();
+        const std::size_t callbacks = script_runtime_->pump_timers(now_ms, 8);
+        const std::size_t animation_callbacks = script_runtime_->pump_animation_frame(now_ms, 4);
+        if (callbacks != 0 || animation_callbacks != 0 || completed_network || advanced_animation ||
+            completed_image || handled_completion || handled_system_event) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #else
-        if (completed_image || handled_completion || handled_system_event) {
+        if (completed_image || handled_completion || handled_system_event || advanced_animation) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #endif
+    }
+
+    bool advance_animation_timeline(std::uint64_t now_ms) {
+        if (document_ == nullptr || animation_timeline_.empty()) {
+            return false;
+        }
+        if (!animation_timeline_.sample(now_ms, style_overrides_)) {
+            return false;
+        }
+        clear_animation_overrides_after_render_ = animation_timeline_.empty();
+        mark_dirty(*document_, DomDirtyPaint);
+        return true;
+    }
+
+    void clear_finished_animation_overrides() {
+        if (!clear_animation_overrides_after_render_) {
+            return;
+        }
+        style_overrides_.clear();
+        clear_animation_overrides_after_render_ = false;
     }
 
     void rerender_if_dirty(const Node* focused_node) {

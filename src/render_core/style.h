@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -51,6 +52,36 @@ enum class GeneratedContentKind {
     None,
     Text,
     Counter,
+};
+
+enum class AnimatableProperty {
+    All,
+    Opacity,
+    Transform,
+    BackgroundColor,
+    Color,
+};
+
+enum class AnimationTimingFunction {
+    Linear,
+    Ease,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+};
+
+struct StyleTransition {
+    AnimatableProperty property = AnimatableProperty::All;
+    std::uint32_t duration_ms = 0;
+    std::uint32_t delay_ms = 0;
+    AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+};
+
+struct Transform2D {
+    float translate_x = 0.0F;
+    float translate_y = 0.0F;
+    float scale_x = 1.0F;
+    float scale_y = 1.0F;
 };
 
 struct Style {
@@ -125,6 +156,8 @@ struct Style {
     bool text_align_specified = false;
     JustifyContent justify_content = JustifyContent::Start;
     AlignItems align_items = AlignItems::Stretch;
+    std::array<StyleTransition, 4> transitions{};
+    std::size_t transition_count = 0;
 };
 
 struct CssDeclaration {
@@ -198,6 +231,8 @@ using Stylesheet = CssStyleSheet;
 
 std::vector<CssSelectorPart> parse_css_selector_parts(std::string_view selector);
 CssRuleIndexKey build_css_rule_index_key(const std::vector<CssSelectorPart>& selector_parts);
+bool parse_css_transform_2d(std::string_view value, Transform2D& output);
+std::string serialize_css_transform_2d(const Transform2D& transform);
 
 struct StyleResolverOptions {
     std::size_t max_candidate_cache_entries = 128;
