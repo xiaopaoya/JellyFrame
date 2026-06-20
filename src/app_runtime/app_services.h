@@ -29,6 +29,9 @@ struct AppServiceSubmitResult {
     }
 };
 
+const char* app_service_submit_status_name(AppServiceSubmitStatus status);
+const char* host_service_status_name(HostServiceStatus status);
+
 struct NetworkFetchPolicy {
     bool enabled = false;
     std::size_t max_url_bytes = 256;
@@ -115,6 +118,23 @@ enum class AppImageSurfaceState {
     Failed,
 };
 
+enum class AppImageFailureReason {
+    None,
+    EmptyInstance,
+    CapabilityDenied,
+    InvalidSource,
+    QueueFull,
+    PendingBudget,
+    ResourceNotFound,
+    DecodeBudgetExceeded,
+    SurfaceBudgetExceeded,
+    DecodeFailed,
+    DecodeCancelled,
+    DecodeTimeout,
+    Unsupported,
+    Unknown,
+};
+
 struct AppImageSurfaceCacheOptions {
     std::size_t max_ready_surfaces = 0;
     std::size_t max_ready_bytes = 0;
@@ -124,6 +144,14 @@ std::size_t decoded_surface_byte_count(int width,
                                        int height,
                                        int stride_pixels,
                                        HostPixelFormat pixel_format);
+const char* app_image_failure_reason_name(AppImageFailureReason reason);
+AppImageFailureReason classify_app_image_failure(AppServiceSubmitStatus submit_status,
+                                                 HostServiceStatus host_status,
+                                                 std::uint32_t error_code);
+std::string app_image_failure_detail(const std::string& url,
+                                     AppServiceSubmitStatus submit_status,
+                                     HostServiceStatus host_status,
+                                     std::uint32_t error_code);
 
 class ImageDecodeMock {
 public:

@@ -165,6 +165,12 @@ Current V0 helper:
   `Surface` handles after completions and releases surfaces when a page/instance
   changes. It can also evict LRU ready surfaces by surface-count and
   decoded-byte budgets while protecting current display-list references.
+- `classify_app_image_failure(...)` / `app_image_failure_detail(...)` classify
+  request rejections and completion failures into stable reasons such as
+  `capability-denied`, `resource-not-found`, `decode-budget-exceeded`,
+  `surface-budget-exceeded` and `pending-budget`. Desktop tools and future
+  serial/package diagnostics should consume this classification instead of
+  showing a vague `failed` status only.
 - Successful completions return `HostServiceHandleKind::Surface` handles;
   `AppDecodedSurfaceRecord` stores width, height, stride, pixel format and
   optional raw pixels.
@@ -215,7 +221,8 @@ Rules:
 - The Win32 debug shell can load uncompressed 24/32-bit BMP resources from
   `.jfapp`/source packages to validate the resource-to-surface-handle path.
 - The Win32 debug shell reports image request rejections and completion
-  failures with the triggering `src`, submit/host status and host error code.
+  failures with the triggering `src`, stable failure reason, submit/host status
+  and host error code.
 - Render core passes the `object-fit` subset to the host painter. The Win32
   debug painter supports `fill`, `contain`, `cover`, `none` and `scale-down`
   with default centered positioning. Complex `object-position` is deferred.

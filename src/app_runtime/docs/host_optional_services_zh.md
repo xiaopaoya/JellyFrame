@@ -138,6 +138,10 @@ Win32 参考壳的 A4 行为：
 - `AppImageSurfaceCache` 把 URL 变成有界 decode request，completion 后记录 ready `Surface`
   handle，并在页面/实例切换时释放 surface。它也可按 ready surface 数量和 decoded bytes
   预算回收未被当前 display list 引用的 LRU surface。
+- `classify_app_image_failure(...)` / `app_image_failure_detail(...)` 把 request 拒绝和
+  completion 失败归类为 `capability-denied`、`resource-not-found`、
+  `decode-budget-exceeded`、`surface-budget-exceeded`、`pending-budget` 等稳定原因。
+  桌面工具和未来串口/包校验 diagnostics 应消费这个分类，而不是只显示模糊的 `failed`。
 - 成功 completion 返回 `HostServiceHandleKind::Surface` handle；`AppDecodedSurfaceRecord`
   保存 width、height、stride、pixel format 和可选 raw pixels。
 - `release_surface(...)` 必须由 UI/main task 在 surface 不再需要时调用，释放 record 和 host handle。
@@ -181,8 +185,8 @@ struct HostDecodedSurface {
 - 如果解码失败，页面保留占位盒并报告 diagnostics。
 - Win32 debug 壳已接入 `.jfapp`/源码包无压缩 24/32-bit BMP loader，用于验证包内图片资源到
   surface handle/display list/repaint 的完整路径。
-- Win32 debug 壳会报告图片 request 拒绝和 completion 失败，包括触发的 `src`、submit/host
-  状态和 host error code。
+- Win32 debug 壳会报告图片 request 拒绝和 completion 失败，包括触发的 `src`、稳定失败原因、
+  submit/host 状态和 host error code。
 - render core 会把 `object-fit` 子集传给宿主 painter；Win32 debug painter 已支持
   `fill`、`contain`、`cover`、`none`、`scale-down`，默认居中。复杂 `object-position`
   延后。

@@ -286,6 +286,38 @@ void image_surface_cache_records_permanent_request_rejections() {
           "image cache permanent rejection records submit status");
 }
 
+void image_failure_classification_is_specific() {
+    check(classify_app_image_failure(AppServiceSubmitStatus::CapabilityDenied,
+                                     HostServiceStatus::Unsupported,
+                                     0) == AppImageFailureReason::CapabilityDenied,
+          "image failure classification capability denied");
+    check(classify_app_image_failure(AppServiceSubmitStatus::BudgetExceeded,
+                                     HostServiceStatus::BudgetExceeded,
+                                     0) == AppImageFailureReason::PendingBudget,
+          "image failure classification pending budget");
+    check(classify_app_image_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Failed,
+                                     404) == AppImageFailureReason::ResourceNotFound,
+          "image failure classification resource not found");
+    check(classify_app_image_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Failed,
+                                     413) == AppImageFailureReason::DecodeBudgetExceeded,
+          "image failure classification decode budget");
+    check(classify_app_image_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::BudgetExceeded,
+                                     507) == AppImageFailureReason::SurfaceBudgetExceeded,
+          "image failure classification surface budget");
+
+    const std::string detail = app_image_failure_detail("app://missing",
+                                                        AppServiceSubmitStatus::Accepted,
+                                                        HostServiceStatus::Failed,
+                                                        404);
+    check(detail.find("reason=resource-not-found") != std::string::npos,
+          "image failure detail carries reason");
+    check(detail.find("src=app://missing") != std::string::npos,
+          "image failure detail carries src");
+}
+
 std::uint32_t cache_ready_image(AppRuntimeHost& host,
                                 ImageDecodeMock& images,
                                 AppImageSurfaceCache& cache,
@@ -602,6 +634,7 @@ int main() {
     image_surface_cache_records_failed_decodes_without_retry_loop();
     image_surface_cache_keeps_transient_budget_rejections_retryable();
     image_surface_cache_records_permanent_request_rejections();
+    image_failure_classification_is_specific();
     image_surface_cache_evicts_lru_ready_surfaces();
     image_surface_cache_keeps_protected_display_list_surfaces();
     image_surface_cache_evicts_by_decoded_bytes();

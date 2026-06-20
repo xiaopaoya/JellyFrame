@@ -268,58 +268,6 @@ void collect_image_handles(const LayerNode& layer, std::vector<std::uint32_t>& h
     }
 }
 
-const char* app_submit_status_name(AppServiceSubmitStatus status) {
-    switch (status) {
-    case AppServiceSubmitStatus::Accepted:
-        return "accepted";
-    case AppServiceSubmitStatus::EmptyInstance:
-        return "empty-instance";
-    case AppServiceSubmitStatus::CapabilityDenied:
-        return "capability-denied";
-    case AppServiceSubmitStatus::InvalidInput:
-        return "invalid-input";
-    case AppServiceSubmitStatus::QueueFull:
-        return "queue-full";
-    case AppServiceSubmitStatus::BudgetExceeded:
-        return "budget-exceeded";
-    }
-    return "unknown";
-}
-
-const char* host_service_status_name(HostServiceStatus status) {
-    switch (status) {
-    case HostServiceStatus::Completed:
-        return "completed";
-    case HostServiceStatus::Failed:
-        return "failed";
-    case HostServiceStatus::Cancelled:
-        return "cancelled";
-    case HostServiceStatus::Unsupported:
-        return "unsupported";
-    case HostServiceStatus::BudgetExceeded:
-        return "budget-exceeded";
-    case HostServiceStatus::Timeout:
-        return "timeout";
-    }
-    return "unknown";
-}
-
-std::string image_diagnostic_detail(const std::string& src,
-                                    const char* status_kind,
-                                    const char* status,
-                                    HostServiceStatus host_status = HostServiceStatus::Completed,
-                                    std::uint32_t error_code = 0) {
-    std::ostringstream stream;
-    stream << "src=" << src << "; " << status_kind << '=' << status;
-    if (host_status != HostServiceStatus::Completed) {
-        stream << "; host=" << host_service_status_name(host_status);
-    }
-    if (error_code != 0) {
-        stream << "; error=" << error_code;
-    }
-    return stream.str();
-}
-
 void report_image_request_failure(DiagnosticSink* diagnostics,
                                   const std::string& src,
                                   AppServiceSubmitStatus submit_status,
@@ -329,10 +277,7 @@ void report_image_request_failure(DiagnosticSink* diagnostics,
                       DiagnosticSeverity::Warning,
                       "image-decode-request",
                       "Image decode request was rejected",
-                      image_diagnostic_detail(src,
-                                              "submit",
-                                              app_submit_status_name(submit_status),
-                                              host_status));
+                      app_image_failure_detail(src, submit_status, host_status, 0));
 }
 
 void report_image_completion_failure(DiagnosticSink* diagnostics,
@@ -347,11 +292,10 @@ void report_image_completion_failure(DiagnosticSink* diagnostics,
                       DiagnosticSeverity::Warning,
                       "image-decode-completion",
                       "Image decode did not produce a drawable surface",
-                      image_diagnostic_detail(src.empty() ? "unknown" : src,
-                                              "status",
-                                              host_service_status_name(completion.status),
-                                              completion.status,
-                                              completion.error_code));
+                      app_image_failure_detail(src,
+                                               AppServiceSubmitStatus::Accepted,
+                                               completion.status,
+                                               completion.error_code));
 }
 
 struct BrowserOptions {

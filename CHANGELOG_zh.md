@@ -48,7 +48,9 @@ JellyFrame Engine 的重要变更记录在这里。
   预算回收未被当前 display list 引用的 LRU surface；render core 新增 `object-fit` 子集
   `fill`、`contain`、`cover`、`none`、`scale-down`，Win32 painter 已按默认居中位置绘制。
   Win32 debug 壳会把图片 decode request 拒绝和 completion 失败写入 diagnostics，保留原始
-  `src` 和状态码，方便定位缺资源、预算拒绝或解码失败。
+  `src`、稳定失败原因和状态码，方便定位缺资源、预算拒绝或解码失败。
+  app-runtime 新增 `classify_app_image_failure(...)` / `app_image_failure_detail(...)`，
+  供桌面工具和未来嵌入式诊断口复用同一套图片失败分类。
   PNG/JPEG/WebP、复杂 `object-position` 和产品级 MCU codec 仍留给后续。
 - 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，记录标准子集优先 runtime data API
   方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界

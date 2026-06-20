@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <sstream>
 
 namespace jellyframe {
 namespace {
@@ -25,6 +26,42 @@ typename std::vector<T>::iterator find_job(std::vector<T>& items, std::uint32_t 
 }
 
 } // namespace
+
+const char* app_service_submit_status_name(AppServiceSubmitStatus status) {
+    switch (status) {
+    case AppServiceSubmitStatus::Accepted:
+        return "accepted";
+    case AppServiceSubmitStatus::EmptyInstance:
+        return "empty-instance";
+    case AppServiceSubmitStatus::CapabilityDenied:
+        return "capability-denied";
+    case AppServiceSubmitStatus::InvalidInput:
+        return "invalid-input";
+    case AppServiceSubmitStatus::QueueFull:
+        return "queue-full";
+    case AppServiceSubmitStatus::BudgetExceeded:
+        return "budget-exceeded";
+    }
+    return "unknown";
+}
+
+const char* host_service_status_name(HostServiceStatus status) {
+    switch (status) {
+    case HostServiceStatus::Completed:
+        return "completed";
+    case HostServiceStatus::Failed:
+        return "failed";
+    case HostServiceStatus::Cancelled:
+        return "cancelled";
+    case HostServiceStatus::Unsupported:
+        return "unsupported";
+    case HostServiceStatus::BudgetExceeded:
+        return "budget-exceeded";
+    case HostServiceStatus::Timeout:
+        return "timeout";
+    }
+    return "unknown";
+}
 
 AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDeviceCapabilities& capabilities,
                                                                  const AppPrivateKvPolicy& storage_policy) {
@@ -240,6 +277,104 @@ std::size_t decoded_surface_byte_count(int width,
         break;
     }
     return 0;
+}
+
+const char* app_image_failure_reason_name(AppImageFailureReason reason) {
+    switch (reason) {
+    case AppImageFailureReason::None:
+        return "none";
+    case AppImageFailureReason::EmptyInstance:
+        return "empty-instance";
+    case AppImageFailureReason::CapabilityDenied:
+        return "capability-denied";
+    case AppImageFailureReason::InvalidSource:
+        return "invalid-source";
+    case AppImageFailureReason::QueueFull:
+        return "queue-full";
+    case AppImageFailureReason::PendingBudget:
+        return "pending-budget";
+    case AppImageFailureReason::ResourceNotFound:
+        return "resource-not-found";
+    case AppImageFailureReason::DecodeBudgetExceeded:
+        return "decode-budget-exceeded";
+    case AppImageFailureReason::SurfaceBudgetExceeded:
+        return "surface-budget-exceeded";
+    case AppImageFailureReason::DecodeFailed:
+        return "decode-failed";
+    case AppImageFailureReason::DecodeCancelled:
+        return "decode-cancelled";
+    case AppImageFailureReason::DecodeTimeout:
+        return "decode-timeout";
+    case AppImageFailureReason::Unsupported:
+        return "unsupported";
+    case AppImageFailureReason::Unknown:
+        return "unknown";
+    }
+    return "unknown";
+}
+
+AppImageFailureReason classify_app_image_failure(AppServiceSubmitStatus submit_status,
+                                                 HostServiceStatus host_status,
+                                                 std::uint32_t error_code) {
+    if (submit_status != AppServiceSubmitStatus::Accepted) {
+        switch (submit_status) {
+        case AppServiceSubmitStatus::Accepted:
+            break;
+        case AppServiceSubmitStatus::EmptyInstance:
+            return AppImageFailureReason::EmptyInstance;
+        case AppServiceSubmitStatus::CapabilityDenied:
+            return AppImageFailureReason::CapabilityDenied;
+        case AppServiceSubmitStatus::InvalidInput:
+            return AppImageFailureReason::InvalidSource;
+        case AppServiceSubmitStatus::QueueFull:
+            return AppImageFailureReason::QueueFull;
+        case AppServiceSubmitStatus::BudgetExceeded:
+            return AppImageFailureReason::PendingBudget;
+        }
+    }
+
+    switch (host_status) {
+    case HostServiceStatus::Completed:
+        return AppImageFailureReason::None;
+    case HostServiceStatus::Unsupported:
+        return AppImageFailureReason::Unsupported;
+    case HostServiceStatus::Cancelled:
+        return AppImageFailureReason::DecodeCancelled;
+    case HostServiceStatus::Timeout:
+        return AppImageFailureReason::DecodeTimeout;
+    case HostServiceStatus::BudgetExceeded:
+        if (error_code == 507) {
+            return AppImageFailureReason::SurfaceBudgetExceeded;
+        }
+        return AppImageFailureReason::DecodeBudgetExceeded;
+    case HostServiceStatus::Failed:
+        if (error_code == 404) {
+            return AppImageFailureReason::ResourceNotFound;
+        }
+        if (error_code == 413) {
+            return AppImageFailureReason::DecodeBudgetExceeded;
+        }
+        return AppImageFailureReason::DecodeFailed;
+    }
+    return AppImageFailureReason::Unknown;
+}
+
+std::string app_image_failure_detail(const std::string& url,
+                                     AppServiceSubmitStatus submit_status,
+                                     HostServiceStatus host_status,
+                                     std::uint32_t error_code) {
+    std::ostringstream stream;
+    stream << "src=" << (url.empty() ? "unknown" : url)
+           << "; reason="
+           << app_image_failure_reason_name(classify_app_image_failure(submit_status, host_status, error_code))
+           << "; submit=" << app_service_submit_status_name(submit_status);
+    if (host_status != HostServiceStatus::Completed) {
+        stream << "; host=" << host_service_status_name(host_status);
+    }
+    if (error_code != 0) {
+        stream << "; error=" << error_code;
+    }
+    return stream.str();
 }
 
 ImageDecodeMock::ImageDecodeMock(ImageDecodePolicy policy)

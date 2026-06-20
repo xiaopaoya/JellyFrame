@@ -62,8 +62,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   (`fill`, `contain`, `cover`, `none`, `scale-down`) through image display
   commands; the Win32 painter draws it with default centered positioning.
   The Win32 debug shell reports image-decode request rejections and completion
-  failures through diagnostics, preserving the original `src` and status for
-  missing-resource, budget-rejection and decode-failure debugging.
+  failures through diagnostics, preserving the original `src`, stable failure
+  reason and status for missing-resource, budget-rejection and decode-failure
+  debugging. app-runtime now exposes `classify_app_image_failure(...)` /
+  `app_image_failure_detail(...)` so desktop tools and future embedded
+  diagnostic ports can share the same image failure categories.
   PNG/JPEG/WebP, complex `object-position` and production MCU codecs remain
   future work.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
