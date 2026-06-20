@@ -117,6 +117,8 @@ HostResourceLoadCallback(kind=Stylesheet or ClassicScript)
 - `HostFrameBufferView` 指向 RGBA pixels。
 - `dirty_rects` 可选；为空表示全帧提交。
 - 宿主负责把像素转成显示格式、DMA 或硬件 layer。
+- 成功返回表示相关 frame buffer 可以安全复用。使用异步 panel DMA 的宿主必须等待完成、复制到
+  driver-owned 内存，或阻止 UI loop 在 flush 完成前渲染下一帧。
 
 `SoftwareCompositor::render_into` 可以把调用方提供的 dirty rectangles 重绘进已有 framebuffer。
 这是第一条面向嵌入式的 presentation 路径：宿主可以保留持久 framebuffer，请核心重绘有界区域，
@@ -130,7 +132,8 @@ range/select 状态变化和小型脚本更新避免整帧清空。
 `embedded_framebuffer` 是第一版可部署的宿主侧 adapter。它消费 `HostFrameBufferView`，
 把 dirty rectangles 转换到调用方持有的 target buffer，并对每个 rectangle 调用可选 flush
 callback。支持的 target 格式包括 RGBA8888、BGRA8888、RGB565、BGR565、RGB332、Gray8
-和 1-bit 单色打包。
+和 1-bit 单色打包。它不调度 DMA，也不拥有 flush completion；真实 port 仍必须遵守
+`HostFrameSink` 的 buffer 生命周期边界。
 
 仍然缺少：
 

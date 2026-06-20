@@ -16,10 +16,29 @@ A minimal embedded host should perform this loop:
 1. Load HTML/CSS/script bytes from flash, partition, ROM bundle or host storage.
 2. Build DOM, style, render, layout and layer trees.
 3. Render into a persistent `FrameBuffer`.
-4. Present dirty rectangles through `HostFrameSink` or `embedded_framebuffer`.
+4. Present dirty rectangles through `HostFrameSink` or `embedded_framebuffer`;
+   this is the display synchronization boundary for the frame.
 5. Convert hardware input into `InputController` calls.
 6. Pump JerryScript timers if scripting is enabled.
 7. If DOM dirty flags changed, rebuild the simplified pipeline and repaint.
+
+JellyFrame should not treat panel refresh as an unrelated background process.
+Rendering a frame, submitting dirty rectangles and waiting for the display
+driver/DMA to finish or safely take ownership of the buffers are one frame
+transaction. A host may use asynchronous LCD DMA, but while DMA is reading a
+framebuffer or conversion buffer, the UI task must not start the next frame and
+write the same memory. Valid implementation strategies are:
+
+- block inside `present()` until the panel driver flush completes, which is the
+  simplest path for low frame rates or small dirty rectangles;
+- copy pixels into a driver-owned DMA buffer, then return once JellyFrame's
+  buffers are reusable;
+- keep `present_in_flight` in the UI task and only render the next frame after
+  the panel driver's flush-done callback.
+
+This mirrors LVGL's display flush lifetime rule: the framework may submit work
+asynchronously, but draw buffers are reusable only after the driver reports
+ready/completion.
 
 ## Device Capability API
 
@@ -278,6 +297,30 @@ using EmbeddedFlushCallback = bool (*)(Rect dirty_rect, void* context);
 
 `flush` should send only the dirty rectangle to the panel driver.
 
+`HostFrameSink::present` return value is a buffer-lifetime promise. Returning
+`true` means the caller may render into, or convert from, the same frame-related
+buffers again. If the SPI/8080/RGB panel path uses asynchronous DMA, the host
+must either wait in `present`, copy into a DMA-owned buffer that will not be
+overwritten by the next frame, or keep the outer frame loop from starting
+another render until the flush-done event arrives. Do not let the render task
+and panel DMA access the same in-flight RGB565/framebuffer memory.
+
+`embedded_framebuffer` is a convenience adapter. It converts dirty rectangles
+from the RGBA8888 `FrameBuffer` into the full caller-provided target buffer and
+then calls `flush(Rect)`. It does not allocate, retain memory, schedule DMA or
+know when a device flush is complete. Therefore:
+
+- do not keep a full-screen RGB565 target in internal RAM unless heap
+  watermark measurements prove it is safe;
+- if PSRAM is display-DMA capable, keep the persistent RGB565 target in PSRAM
+  and avoid writing it until flush completion;
+- if the display can read only internal DMA-capable RAM, implement a custom
+  `HostFrameSink` that converts dirty rectangles by strip/tile into a small
+  internal DMA scratch buffer, submits it, waits for that strip to finish, then
+  reuses the scratch buffer;
+- if even the RGBA framebuffer does not fit, the current core is not enough yet;
+  add a tiled/scanline compositor first.
+
 LVGL is optional here. It is reasonable to reuse LVGL or a vendor BSP to
 initialize the panel, touch controller or backlight, or to forward a dirty
 rectangle into a vendor flush primitive. It is not recommended to translate
@@ -435,6 +478,9 @@ struct HostBudgets {
     std::size_t max_detached_dom_nodes;
     std::size_t max_input_events_per_frame;
     std::size_t max_timer_callbacks_per_frame;
+    std::size_t max_animation_callbacks_per_frame;
+    std::size_t max_active_animations;
+    std::size_t animation_frame_rate;
     std::size_t max_event_listeners;
     std::size_t max_resource_bytes;
     std::size_t max_framebuffer_pixels;
@@ -456,6 +502,9 @@ node limits. Suggested ESP32-S3 starting point:
 - display commands: 1024-4096
 - dirty rects: 4-16
 - timers: 16-32
+- animation callbacks per frame: 0-4, depending on product profile
+- active animations: 0-16
+- animation frame rate: 0, 15 or 30 Hz depending on power policy
 - event listeners: 128-256
 - single resource: 64-256 KiB
 - framebuffer pixels: physical screen area, or smaller if using tiled output

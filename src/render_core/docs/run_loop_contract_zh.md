@@ -13,28 +13,36 @@
 4. 构建 render tree、layout tree、layer tree。
 5. 渲染完整 framebuffer。
 6. 通过 `HostFrameSink` 或 `embedded_framebuffer` 提交 full dirty rect。
-7. 清理 DOM dirty flags。
+7. 等待或确认 present 已完成，确保下一帧可以安全复用 frame buffer。
+8. 清理 DOM dirty flags。
 
 循环帧：
 
-1. 从宿主队列取有限个输入事件。
-2. 通过 `InputController` 派发 pointer/wheel/key/text/focus 操作。
-3. 从宿主异步队列取有限个 completion events，例如资源、图片 decode、音频状态、网络响应或安装结果。
-4. 如果启用 JerryScript，泵动有限个 timer callback。
-5. 如果有活动动画，泵动有限个 animation frame callback。
-6. 读取根节点 `subtree_dirty_flags(document)`。
-7. 填充 `FramePipelineCacheState`，调用 `make_frame_update_state(...)`，再调用
+1. 如果上一帧 display present 仍在进行，且它仍持有 framebuffer/target buffer，宿主只应 sleep
+   或处理不会触碰这些 buffer 的非渲染工作。
+2. 从宿主队列取有限个输入事件。
+3. 通过 `InputController` 派发 pointer/wheel/key/text/focus 操作。
+4. 从宿主异步队列取有限个 completion events，例如资源、图片 decode、音频状态、网络响应或安装结果。
+5. 如果启用 JerryScript，泵动有限个 timer callback。
+6. 如果有活动动画，泵动有限个 animation frame callback。
+7. 读取根节点 `subtree_dirty_flags(document)`。
+8. 填充 `FramePipelineCacheState`，调用 `make_frame_update_state(...)`，再调用
    `plan_frame_update(...)` 决定更新路径。
-8. 按计划复用现有 layout/layer，或重建管线。
-9. 新 layout 已知后，用解析出的内容高度调用 `plan_frame_repaint(...)`，确认现有
+9. 按计划复用现有 layout/layer，或重建管线。
+10. 新 layout 已知后，用解析出的内容高度调用 `plan_frame_repaint(...)`，确认现有
    framebuffer 尺寸是否仍匹配。
-10. 用 `compute_dirty_rects(...)` 生成 dirty rectangles，或保守全帧。
-11. 调用 `SoftwareCompositor::render_into(...)` 或完整 `render(...)`。
-12. 通过 `HostFrameSink` 提交 dirty rectangles。
-13. 清理 DOM dirty flags。
+11. 用 `compute_dirty_rects(...)` 生成 dirty rectangles，或保守全帧。
+12. 调用 `SoftwareCompositor::render_into(...)` 或完整 `render(...)`。
+13. 通过 `HostFrameSink` 提交 dirty rectangles。
+14. 如果 panel driver 使用异步 DMA，标记 present in flight，直到 flush-done 事件到达。
+15. 清理 DOM dirty flags。
 
 宿主可以把这些步骤放进一个 UI task、桌面消息循环或测试壳中，但不应在 ISR 或屏幕 flush callback 内执行脚本、layout 或渲染。
 异步 worker 也不应直接执行这些步骤；它只能投递 completion event。
+
+`HostFrameSink::present` 是帧生命周期边界。它成功返回意味着宿主已经完成屏幕 flush、已经把像素复制到
+driver-owned 内存，或已经让 UI loop 在复用同一 framebuffer/target buffer 前等待 flush-done。JellyFrame
+不应在 panel DMA 仍读取会被下一帧覆盖的内存时开始下一轮 render。
 
 ## `plan_frame_loop`
 

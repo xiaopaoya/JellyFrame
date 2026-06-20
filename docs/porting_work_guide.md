@@ -111,6 +111,9 @@ budgets.max_display_commands = 2048;
 budgets.max_dirty_rects = 8;
 budgets.max_timers = 24;
 budgets.max_event_listeners = 192;
+budgets.max_animation_callbacks_per_frame = 2;
+budgets.max_active_animations = 8;
+budgets.animation_frame_rate = 30;
 budgets.max_resource_bytes = 128 * 1024;
 budgets.max_framebuffer_pixels = width * height;
 ```
@@ -174,11 +177,15 @@ Requirements:
 - Start with an RGB565 target buffer.
 - Keep one persistent `FrameBuffer` for dirty repaint.
 - If memory permits, keep one persistent RGB565 target buffer to avoid per-frame
-  allocation.
+  allocation; when internal RAM is tight, do not put a full-screen RGB565 target
+  in internal RAM.
 - `flush` must submit dirty rectangles, not always full frames.
 - If the display driver requires tightly packed rows and a dirty rect is not
   full-width, pack rows into a static or stack scratch buffer before calling the
   driver.
+- `present`/`flush` is a frame synchronization boundary: once it returns,
+  JellyFrame must be allowed to safely start the next frame and write the same
+  framebuffer or target buffer.
 
 Implementation:
 
@@ -197,6 +204,20 @@ jellyframe::HostFrameSink frame_sink = jellyframe::embedded_frame_sink(sink);
 jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 ```
 
+If the real panel driver uses asynchronous DMA, `flush_dirty_rect` must not
+simply start DMA and return while the next frame is allowed to write the same
+buffer. Choose one policy:
+
+- wait for the panel flush-done/transfer-done signal inside `flush_dirty_rect`;
+- use double buffering or a driver-owned bounce buffer so JellyFrame's target is
+  no longer read when `present` returns;
+- keep `present_in_flight` in the outer UI loop and render/present the next
+  frame only after a flush-done event.
+
+This is the same lifetime rule as LVGL's draw-buffer/flush-ready model: work
+may be submitted asynchronously, but draw-buffer reuse must wait for explicit
+driver completion.
+
 Acceptance:
 
 - Solid backgrounds, borders, text, buttons, range/select/checkbox controls draw
@@ -212,6 +233,28 @@ Not directly supported yet:
 - If the device only has a very small DMA buffer, the host may shrink the RGB565
   target, but the core still needs the source RGBA framebuffer. Removing the
   source framebuffer is future core work.
+
+Internal RAM pressure guidance:
+
+- Prefer PSRAM for the RGBA `FrameBuffer`. It is not the DMA target; it is
+  mostly read/written by the CPU renderer.
+- Prefer PSRAM for the full-screen RGB565 target if the target panel driver can
+  DMA or safely read from PSRAM; otherwise do not keep a full-screen internal
+  RGB565 target.
+- If DMA-capable internal RAM is required, keep only one or two small strip/tile
+  buffers, for example 8-32 rows, convert each dirty region chunk, flush it,
+  wait for completion and reuse the scratch buffer.
+- Render/layout/layer `MonotonicArena` storage is retained across frames when
+  used for retained trees. A product may reset those arenas after `present` only
+  if it chooses full rebuilds every frame, trading RAM for CPU. Do not put those
+  arenas in internal RAM unless measurements prove it is necessary.
+- The offscreen compositing buffer is temporary inside
+  `SoftwareCompositor::render_into` and is released when the call returns. Keep
+  `max_offscreen_pixels` low enough that large opacity/transform layers cannot
+  consume internal heap.
+- Dirty-rect temporary arrays, completion-event scratch arrays and resource-read
+  buffers should be released at the frame boundary or reused as small static
+  buffers.
 
 ### P4: Text And Chinese Fonts
 
@@ -365,17 +408,23 @@ load resources once
 build first document and style
 render first frame
 present dirty/full frame
+wait/certify present completion before reusing frame buffers
 
 loop:
+  if display present is still in flight:
+      sleep or process non-render work that cannot touch frame buffers
+      continue
   poll bounded hardware events
   dispatch input through InputController
   pump bounded timers if scripting is enabled
+  pump bounded host completions
   if tree/style/layout dirty:
       rebuild conservative pipeline
   else if paint dirty:
       compute dirty rects
   repaint dirty/full regions
   present through HostFrameSink
+  mark display present in flight if panel DMA is asynchronous
   sleep until next tick or hardware event
 ```
 
@@ -385,6 +434,9 @@ Acceptance:
 - Control state changes do not always clear the full screen.
 - Timer-driven clock and timer examples do not slow down over time.
 - Every queue has a hard limit.
+- Display flush completion is respected before the same framebuffer/target
+  buffer is written by the next frame; asynchronous DMA does not tear or corrupt
+  the panel.
 - The ESP32-S3 bring-up currently validates P4/P5/P6 from `app_main` and raises
   the default main-task stack to 32 KB. Product ports should move this into a
   measured UI task, keep persistent buffers and reduce stack usage where the

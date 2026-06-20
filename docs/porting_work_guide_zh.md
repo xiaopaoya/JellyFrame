@@ -85,6 +85,9 @@ budgets.max_display_commands = 2048;
 budgets.max_dirty_rects = 8;
 budgets.max_timers = 24;
 budgets.max_event_listeners = 192;
+budgets.max_animation_callbacks_per_frame = 2;
+budgets.max_active_animations = 8;
+budgets.animation_frame_rate = 30;
 budgets.max_resource_bytes = 128 * 1024;
 budgets.max_framebuffer_pixels = width * height;
 ```
@@ -137,9 +140,12 @@ budgets.max_framebuffer_pixels = width * height;
 
 - 优先实现 RGB565 target buffer。
 - 保留一个持久 `FrameBuffer`，用于 dirty repaint。
-- 如内存允许，再保留一个持久 RGB565 target buffer，避免每帧临时分配。
+- 如内存允许，再保留一个持久 RGB565 target buffer，避免每帧临时分配；internal RAM 紧张时不要把整屏
+  RGB565 target 放 internal RAM。
 - `flush` 只提交 dirty rectangle，不做整屏无条件刷新。
 - 若屏幕驱动 API 要求紧凑行缓冲，而 dirty rect 不是整行，宿主应在栈或静态 scratch buffer 中逐行打包。
+- `present`/`flush` 必须是帧同步边界：返回后，JellyFrame 才能安全开始下一帧写入同一 framebuffer 或
+  target buffer。
 
 实现方式：
 
@@ -158,6 +164,15 @@ jellyframe::HostFrameSink frame_sink = jellyframe::embedded_frame_sink(sink);
 jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 ```
 
+如果实际屏幕驱动使用异步 DMA，`flush_dirty_rect` 不能简单“发起 DMA 后立即返回”并允许下一帧继续写同一
+buffer。必须选择一种策略：
+
+- 在 `flush_dirty_rect` 中等待 panel 的 flush-done/transfer-done 信号；
+- 使用双 buffer 或 driver-owned bounce buffer，让返回时 JellyFrame 的 target 已不再被 DMA 读取；
+- 在外层 UI loop 维护 `present_in_flight`，只有收到 flush-done 事件后才进入下一轮 render/present。
+
+这和 LVGL 的 draw buffer/flush ready 语义一致：框架可以异步提交，但 draw buffer 的复用必须等驱动明确完成。
+
 验收：
 
 - 纯色背景、边框、文本、按钮、range/select/checkbox 的静态绘制正确。
@@ -168,6 +183,19 @@ jellyframe::present_frame(framebuffer, frame_sink, dirty_rects, dirty_count);
 
 - 如果设备无法容纳完整 RGBA framebuffer，不能硬接。必须先回核心实现 tiled rendering 或 scanline/tile compositor。
 - 如果硬件只支持极小 DMA buffer，宿主可以压缩 RGB565 target，但核心仍需要源 RGBA framebuffer。真正无源 framebuffer 需要新核心工作。
+
+internal RAM 压力处理建议：
+
+- RGBA `FrameBuffer` 优先放 PSRAM；它不是 DMA target，主要由 CPU renderer 读写。
+- RGB565 整屏 target 优先放 PSRAM，前提是目标 panel driver 支持从 PSRAM DMA 或能安全读取；否则不要保留整屏
+  internal RGB565 target。
+- 需要 DMA-capable internal RAM 时，只保留 1-2 个小 strip/tile buffer，例如 8-32 行，按 dirty rect 转换、
+  flush、等待完成，再复用。
+- render/layout/layer 的 `MonotonicArena` 如果用于 retained tree，就会跨帧保留；如果产品选择每次全量
+  rebuild，可在 present 后 reset 这些 arena，但会牺牲 CPU。不要把这类 arena 放 internal RAM，除非测量证明必要。
+- 离屏合成 buffer 是 `SoftwareCompositor::render_into` 内部临时对象，函数返回后释放；应通过
+  `max_offscreen_pixels` 限制它，避免大 opacity/transform layer 临时吃光 internal heap。
+- dirty rect 临时数组、completion event 临时数组、资源读取临时 buffer 都应在帧边界后释放或复用为静态小 buffer。
 
 ### P4：文本与中文字库
 
@@ -297,17 +325,23 @@ load resources once
 build first document and style
 render first frame
 present dirty/full frame
+wait/certify present completion before reusing frame buffers
 
 loop:
+  if display present is still in flight:
+      sleep or process non-render work that cannot touch frame buffers
+      continue
   poll bounded hardware events
   dispatch input through InputController
   pump bounded timers if scripting is enabled
+  pump bounded host completions
   if tree/style/layout dirty:
       rebuild conservative pipeline
   else if paint dirty:
       compute dirty rects
   repaint dirty/full regions
   present through HostFrameSink
+  mark display present in flight if panel DMA is asynchronous
   sleep until next tick or hardware event
 ```
 
@@ -317,6 +351,7 @@ loop:
 - 控件状态变化不强制每次清空整屏。
 - timer 驱动时钟/计时器示例不会越跑越慢。
 - 所有队列都有上限。
+- display flush 未完成时不会开始下一帧写同一 framebuffer/target buffer；异步 DMA 不撕裂、不花屏。
 - ESP32-S3 bring-up 当前在 `app_main` 中验证 P4/P5/P6，并把默认主任务栈提高到 32 KB。
   产品 port 应将其移动到可测量的 UI task，复用持久 buffer，并在目标板允许时继续压低栈使用。
 

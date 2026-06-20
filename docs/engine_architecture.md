@@ -47,6 +47,7 @@ DOM + StyleResolver
   -> DisplayList
   -> SoftwareRasterizer / SoftwareCompositor
   -> FrameBuffer / platform renderer
+  -> HostFrameSink present / panel flush completion
 ```
 
 ## Browser-Like Layers
@@ -65,6 +66,9 @@ DOM + StyleResolver
 - `SoftwareRasterizer` / `SoftwareCompositor`: CPU validation renderer using
   source-over alpha compositing, optional platform text painting and BMP/PPM
   output.
+- `HostFrameSink`: display submission boundary for the frame. Embedded hosts
+  should allow framebuffer/target-buffer reuse only after the panel flush is
+  complete or the pixels have been safely handed to driver-owned memory.
 - `HitTester`: maps viewport coordinates to DOM event targets through layout and
   layer geometry.
 - `InputController`: turns platform-neutral pointer/wheel input into mouse-like

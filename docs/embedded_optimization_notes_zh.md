@@ -30,6 +30,8 @@
 - offscreen compositing 在像素循环前裁剪 source/destination rectangles。
 - `embedded_framebuffer` 只把裁剪后的 dirty rectangles 转换到调用方持有的显示 buffer；
   它不分配、不持有，也不自行 flush 设备内存。
+- `HostFrameSink::present` 被定义为 frame-lifetime 边界；如果底层 DMA 异步刷新，宿主必须在返回前确保
+  buffer 已可复用，或在 UI loop 中等待 flush-done 后再进入下一帧。
 - 响应式 grid 子集使用有界整数 auto-placement、clamped span 和紧凑的逐行
   occupancy bit mask，而不是完整 track-sizing engine。
 - `MonotonicArena` 已可用于文档生命周期分配。Render tree、layout tree 和 layer tree builder
@@ -45,6 +47,11 @@
 - CSS rules 已按 id/class/tag/universal bucket 建索引，并复用有界候选规则缓存；完整 computed-style
   sharing 仍延后到继承和 mutation invalidation 能保持简单之后。
 - 在小 RAM 系统上限制 layer/display-list 输出，或按 dirty region 分块生成。
+- 不要把整屏 RGB565 target 固定放进 internal RAM，除非硬件和 heap watermark 证明足够。优先使用 PSRAM
+  持久 framebuffer/target，或用小 DMA-capable strip buffer 做按 dirty rect 分段转换。
+- 区分跨帧保留和帧内临时内存：DOM、stylesheet、form state、decoded surface cache、持久 framebuffer、
+  retained layout/layer tree 会跨帧保留；parser scratch、dirty rect 临时列表、host completion 临时列表、
+  offscreen compositing buffer 和 strip conversion buffer 应在帧边界释放或复用。
 
 ## CPU/指令集建议
 
@@ -61,6 +68,8 @@
 - 显示刷新使用 dirty rectangles。
 - 显示 buffer 保持由宿主持有；当屏幕使用 RGB565、RGB332、灰度或单色格式时，
   通过 `embedded_framebuffer` 转换。
+- 若屏幕驱动只接受 internal DMA buffer，写自定义 `HostFrameSink`，按条带从 RGBA framebuffer 转换并等待
+  每段 flush 完成；不要为了使用通用 adapter 而常驻一个 internal 整屏 RGB565 target。
 
 ## Release 微基准基线
 

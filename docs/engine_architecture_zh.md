@@ -43,6 +43,7 @@ DOM + StyleResolver
   -> DisplayList
   -> SoftwareRasterizer / SoftwareCompositor
   -> FrameBuffer / platform renderer
+  -> HostFrameSink present / panel flush completion
 ```
 
 ## 类浏览器分层
@@ -57,6 +58,7 @@ DOM + StyleResolver
 - `LayerTreeBuilder`：把绘制命令组织进稀疏 clip、stacking、composite layers，并可为简单后端 flatten。
 - `DisplayList`：面向 framebuffer backend 的简单 rectangle/text command list。
 - `SoftwareRasterizer` / `SoftwareCompositor`：CPU 验证 renderer，支持 source-over alpha compositing、可选平台文本绘制和 BMP/PPM 输出。
+- `HostFrameSink`：本帧显示提交边界。嵌入式宿主应在 panel flush 完成或缓冲区安全移交后，才允许下一帧重用同一 framebuffer/target buffer。
 - `HitTester`：通过 layout 和 layer geometry 将 viewport 坐标映射到 DOM event target。
 - `InputController`：将平台无关 pointer/wheel input 转成类 mouse events、hover/active/focus state 和 click synthesis。
 - `EventTarget`：保存 C++ listeners，并执行类 DOM 的 capture、target 和 bubble phases。

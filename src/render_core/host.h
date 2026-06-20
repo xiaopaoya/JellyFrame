@@ -40,6 +40,11 @@ struct HostFrameBufferView {
 };
 
 struct HostFrameSink {
+    // Presentation is a frame-lifetime boundary. When this callback returns
+    // true, the caller may render into or convert from the same framebuffer
+    // again. Hosts using asynchronous DMA must either block/wait here, copy
+    // into a DMA-owned buffer, or keep the UI frame loop from starting the next
+    // render until the panel driver reports completion.
     bool (*present)(const HostFrameBufferView& frame,
                     const Rect* dirty_rects,
                     std::size_t dirty_rect_count,

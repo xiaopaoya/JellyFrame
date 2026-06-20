@@ -53,10 +53,23 @@ present_frame(frame_buffer, sink, dirty_rects, dirty_rect_count);
 如果 `dirty_rects` 为空，则转换整帧。否则只转换并 flush 裁剪后的 dirty rectangles。
 这些 rectangles 外的像素保持不变。
 
+`embedded_framebuffer` 不知道 `flush_rect_to_panel` 是同步写屏，还是异步 DMA。由于
+`HostFrameSink::present` 是帧生命周期边界，宿主在成功返回前必须满足以下条件之一：
+
+- 屏幕传输已经完成；
+- 像素已经复制到 driver-owned 内存，不会被下一帧 JellyFrame 写入覆盖；
+- 外层 UI loop 会把 present 视为 in flight，并在 flush 完成前不向同一 framebuffer/target buffer
+  渲染下一帧。
+
+在 ESP32-S3 这类目标上，除非测量证明安全，否则不要把整屏 RGB565 target 放进 internal RAM。
+优先在 panel path 可读取时使用 PSRAM target；否则编写自定义 `HostFrameSink`，把每个 dirty
+rectangle 按 strip/tile 转换到很小的 internal DMA buffer，并等待每段 flush 完成。
+
 ## 限制
 
 - source 和 target 尺寸必须完全一致。
 - adapter 不分配也不持有内存。
+- adapter 不会等待异步 panel DMA，除非宿主提供的 `flush` callback 自己等待。
 - adapter 不合并 dirty rectangles；上游 `dirty_region` 决定 rectangle list。
 - adapter 不执行硬件滚动 layer，也不设置局刷 address window；这些由宿主在 `flush` 中完成。
 - 文本质量仍取决于 renderer 的 `TextPainter`，不由该 adapter 决定。

@@ -311,7 +311,7 @@ JerryScript 源码树时可用。
 | 增量 style/layout | 子集 | paint-only 表单控件状态变化可在 Win32 验证壳中复用 render/layout，只重建 layer/display commands。文本、style 和树结构变化仍重建 render/layout。 |
 | Dirty rectangle repaint | 子集 | `dirty_region` 会通过对比旧/新 layout box，或对 paint-only 变化复用同一份 layout，为直接文本、属性、表单控件绘制变化计算有界重绘区域。树结构变化保守重绘 viewport。若估算 dirty area 过大，宿主也可以选择全帧重绘，避免局部 flush 反而更贵。 |
 | Display invalidation 诊断 | 可用 | `analyze_display_invalidation(...)` 会报告 dirty rectangles 对 layer 和 display command 的覆盖情况。它只提供诊断；retained display-list reuse 仍延后。 |
-| Host frame sink | 子集 | `present_frame` 可以通过 `HostFrameSink` 暴露 `FrameBuffer`，并携带可选 dirty rects。`embedded_framebuffer` 已提供可移植像素转换；真实显示 I/O 仍由宿主负责。 |
+| Host frame sink | 子集 | `present_frame` 可以通过 `HostFrameSink` 暴露 `FrameBuffer`，并携带可选 dirty rects。成功 `present` 是 frame buffer 可复用边界：异步 panel/DMA 宿主必须等待、复制到 driver-owned 内存，或阻止下一帧 render 直到 flush 完成。`embedded_framebuffer` 已提供可移植像素转换；真实显示 I/O 仍由宿主负责。 |
 | Host device capabilities | 草案 | `HostDeviceCapabilities` 记录开发板 port 的显示、输入、内存、budget 和服务 flags。当前核心把它作为契约/策略输入文档；更深的自动适配仍延后。 |
 | Host budgets | 子集 | `HostBudgets` 已接入 HTML/CSS parsing、render/layout/layer tree 上限、display-list 上限、dirty rect 数量、frame-loop input/timer/animation 上限、JerryScript timer/rAF/listener 限制、detached DOM node 限制和软件 compositor 的主/offscreen pixel 上限。Render/layout/layer tree 已有 arena-backed 构建路径；完整 mutable DOM arena 仍是后续工作。 |
 

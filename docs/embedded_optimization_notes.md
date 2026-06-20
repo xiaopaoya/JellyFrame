@@ -43,6 +43,10 @@ small wearable devices.
 - `embedded_framebuffer` converts only clipped dirty rectangles into
   caller-owned display buffers and does not allocate, retain or flush device
   memory itself.
+- `HostFrameSink::present` is a frame-lifetime boundary. If the underlying panel
+  path uses asynchronous DMA, the host must make buffers reusable before
+  returning, or the UI loop must wait for a flush-done event before starting the
+  next render.
 - The responsive grid subset is computed with bounded integer auto-placement,
   clamped spans and compact per-row occupancy bit masks rather than a full
   track-sizing engine.
@@ -63,6 +67,14 @@ small wearable devices.
   inheritance and mutation invalidation can be kept simple.
 - Keep layer/display-list output bounded or tile it by dirty region on small RAM
   systems.
+- Do not pin a full-screen RGB565 target in internal RAM unless measurements
+  prove the product can afford it. Prefer PSRAM for persistent framebuffers and
+  targets, or use a small DMA-capable strip buffer per dirty region.
+- Separate retained and per-frame memory. DOM, stylesheets, form state, decoded
+  surface caches, persistent framebuffers and retained layout/layer trees may
+  live across frames. Parser scratch, dirty-rect lists, host completion scratch,
+  offscreen compositing buffers and strip conversion buffers should be released
+  or reused at frame boundaries.
 
 ## CPU/Instruction-Set Guidance
 
@@ -81,6 +93,10 @@ small wearable devices.
 - Use dirty rectangles for display flushes.
 - Keep display buffers host-owned and convert through `embedded_framebuffer`
   when the panel is RGB565, RGB332, grayscale or monochrome.
+- If the panel driver only accepts internal DMA buffers, write a custom
+  `HostFrameSink` that converts from the RGBA framebuffer by strip, waits for
+  each strip flush to complete and reuses a small scratch buffer. Do not keep a
+  full-screen internal RGB565 target just to use the generic adapter.
 
 ## Release Microbenchmark Baseline
 

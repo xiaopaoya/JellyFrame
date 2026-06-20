@@ -57,10 +57,28 @@ If `dirty_rects` is empty, the full frame is converted. Otherwise only clipped
 dirty rectangles are converted and flushed. Pixels outside those rectangles are
 left untouched.
 
+`embedded_framebuffer` does not know whether `flush_rect_to_panel` is
+synchronous or backed by asynchronous DMA. Because `HostFrameSink::present` is a
+frame-lifetime boundary, the host must make one of these true before returning
+success:
+
+- the panel transfer has completed;
+- the pixels were copied into driver-owned memory that the next JellyFrame frame
+  cannot overwrite;
+- the outer UI loop will treat present as in flight and will not render into the
+  same framebuffer/target buffer until flush completion.
+
+On ESP32-S3-like targets, avoid a full-screen RGB565 target in internal RAM
+unless measurements prove it is safe. Prefer a PSRAM target when the panel path
+can read it, or write a custom `HostFrameSink` that converts each dirty
+rectangle into a small internal DMA strip/tile buffer and waits for each flush.
+
 ## Limits
 
 - Source and target dimensions must match exactly.
 - The adapter does not allocate or retain memory.
+- The adapter does not wait for asynchronous panel DMA unless the host-provided
+  `flush` callback waits.
 - The adapter does not coalesce dirty rectangles; upstream `dirty_region`
   chooses the rectangle list.
 - The adapter does not scroll hardware layers or perform partial framebuffer

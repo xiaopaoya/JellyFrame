@@ -16,32 +16,44 @@ First paint:
 4. Build the render tree, layout tree and layer tree.
 5. Render the full framebuffer.
 6. Present a full dirty rect through `HostFrameSink` or `embedded_framebuffer`.
-7. Clear DOM dirty flags.
+7. Wait for, or certify, present completion before reusing frame buffers.
+8. Clear DOM dirty flags.
 
 Loop frame:
 
-1. Drain a bounded number of host input events.
-2. Dispatch pointer/wheel/key/text/focus operations through `InputController`.
-3. Drain a bounded number of host completion events, such as resource, image
+1. If a previous display present is still in flight and it still owns the
+   framebuffer/target buffer, sleep or process only non-render work that cannot
+   touch those buffers.
+2. Drain a bounded number of host input events.
+3. Dispatch pointer/wheel/key/text/focus operations through `InputController`.
+4. Drain a bounded number of host completion events, such as resource, image
    decode, audio state, network response or installation results.
-4. If JerryScript is enabled, pump a bounded number of timer callbacks.
-5. If animation is active, pump a bounded number of animation frame callbacks.
-6. Read root `subtree_dirty_flags(document)`.
-7. Fill `FramePipelineCacheState`, call `make_frame_update_state(...)`, then
+5. If JerryScript is enabled, pump a bounded number of timer callbacks.
+6. If animation is active, pump a bounded number of animation frame callbacks.
+7. Read root `subtree_dirty_flags(document)`.
+8. Fill `FramePipelineCacheState`, call `make_frame_update_state(...)`, then
    call `plan_frame_update(...)` to choose an update path.
-8. Reuse existing layout/layers or rebuild the pipeline according to the plan.
-9. After layout is known, call `plan_frame_repaint(...)` with the resolved
+9. Reuse existing layout/layers or rebuild the pipeline according to the plan.
+10. After layout is known, call `plan_frame_repaint(...)` with the resolved
    content height to confirm whether the existing framebuffer still matches.
-10. Generate dirty rectangles with `compute_dirty_rects(...)`, or fall back to a
+11. Generate dirty rectangles with `compute_dirty_rects(...)`, or fall back to a
    full frame.
-11. Call `SoftwareCompositor::render_into(...)` or full `render(...)`.
-12. Present dirty rectangles through `HostFrameSink`.
-13. Clear DOM dirty flags.
+12. Call `SoftwareCompositor::render_into(...)` or full `render(...)`.
+13. Present dirty rectangles through `HostFrameSink`.
+14. If the panel driver uses asynchronous DMA, mark present in flight until the
+    flush-done event arrives.
+15. Clear DOM dirty flags.
 
 Hosts may place these steps in a UI task, desktop message loop or validation
 shell, but scripts, layout and rendering should not run inside an ISR or display
 flush callback. Async workers also must not run these steps directly; they only
 post completion events.
+
+`HostFrameSink::present` is the frame-lifetime boundary. Returning success means
+the host has either finished the panel flush, copied pixels into memory owned by
+the display driver, or arranged for the UI loop to wait before reusing the same
+framebuffer/target buffer. JellyFrame should not run the next render while a
+panel DMA transfer is still reading memory that render would overwrite.
 
 ## `plan_frame_loop`
 

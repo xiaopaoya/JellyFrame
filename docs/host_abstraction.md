@@ -143,6 +143,9 @@ through a frame sink or blit through Win32/GDI.
 - `HostFrameBufferView` points to RGBA pixels.
 - `dirty_rects` is optional; empty means full-frame present.
 - The host maps pixels to display format or DMA/layer hardware.
+- A successful return means the frame buffers are safe to reuse. Hosts using
+  asynchronous panel DMA must wait, copy into driver-owned memory or keep the UI
+  loop from rendering the next frame until flush completion.
 
 `SoftwareCompositor::render_into` can repaint caller-supplied dirty rectangles
 into an existing framebuffer. This is the first embedded-oriented presentation
@@ -161,7 +164,8 @@ framebuffer clears in the Win32 validation shell.
 `HostFrameBufferView`, converts dirty rectangles into a caller-owned target
 buffer and invokes an optional flush callback per rectangle. Supported target
 formats are RGBA8888, BGRA8888, RGB565, BGR565, RGB332, Gray8 and 1-bit
-monochrome packing.
+monochrome packing. It does not schedule DMA or own flush completion; a real
+port must still respect the `HostFrameSink` buffer-lifetime boundary.
 
 Still missing:
 

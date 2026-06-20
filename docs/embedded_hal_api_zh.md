@@ -14,10 +14,21 @@
 1. 从 flash、partition、ROM bundle 或宿主存储加载 HTML/CSS/script 字节。
 2. 构建 DOM、style、render、layout 和 layer tree。
 3. 渲染到持久 `FrameBuffer`。
-4. 通过 `HostFrameSink` 或 `embedded_framebuffer` 提交 dirty rectangles。
+4. 通过 `HostFrameSink` 或 `embedded_framebuffer` 提交 dirty rectangles，并把这一步当作本帧的显示同步边界。
 5. 把硬件输入转换成 `InputController` 调用。
 6. 如果启用 scripting，泵动 JerryScript timers。
 7. 如果 DOM dirty flags 发生变化，重建简化管线并重绘。
+
+JellyFrame 不应把屏幕刷新当作与渲染管线无关的后台进程。渲染一帧、提交 dirty rectangles、等待
+屏幕驱动/DMA 完成或确认缓冲区已安全移交，这三步属于同一个 frame transaction。宿主可以异步使用
+LCD DMA，但在 DMA 仍读取同一块 framebuffer/转换 buffer 时，UI task 不得开始下一帧写入这些 buffer。
+可选实现方式有三种：
+
+- `present()` 阻塞到屏幕 driver flush 完成，最简单，适合低 fps 或小 dirty rect；
+- `present()` 把像素复制到 driver-owned DMA buffer 后立即返回，JellyFrame buffer 可复用；
+- UI task 记录 `present_in_flight`，只在 panel driver 的 flush-done 回调后进入下一轮 render。
+
+这与 LVGL 的 display flush 模型一致：flush callback 提交像素，driver 完成后通知 ready/wait，框架再继续安全复用 draw buffer。
 
 ## 设备能力 API
 
@@ -246,6 +257,21 @@ using EmbeddedFlushCallback = bool (*)(Rect dirty_rect, void* context);
 
 `flush` 应只把 dirty rectangle 发送给屏幕驱动。
 
+`HostFrameSink::present` 的返回语义非常重要：返回 `true` 表示调用方可以再次写入或转换同一帧相关
+buffer。如果底层 SPI/8080/RGB panel flush 是异步 DMA，宿主必须在 `present` 内等待完成、复制到
+不会被下一帧覆盖的 DMA buffer，或者在外层 frame loop 中等待 flush-done 事件后再启动下一帧。
+不要让 render task 和 panel DMA 同时访问同一块仍在传输的 RGB565/Framebuffer 内存。
+
+`embedded_framebuffer` 是便利用 adapter：它把 RGBA8888 `FrameBuffer` 的 dirty rect 转换到
+调用方提供的完整 target buffer，再调用 `flush(Rect)`。它不分配、不持有、不调度 DMA，也不知道 flush
+何时完成。因此：
+
+- 如果完整 RGB565 target buffer 放在 internal RAM 会挤爆系统，不要使用整屏 internal target；
+- 如果 PSRAM 可被屏幕 DMA 直接读取，可把持久 RGB565 target 放 PSRAM，并在 flush 完成前保持不写；
+- 如果屏幕只能从 internal DMA-capable RAM 读，推荐写自定义 `HostFrameSink`：按 dirty rect 分行或分 tile
+  从 RGBA framebuffer 转换到一个很小的 internal DMA scratch buffer，提交并等待该 strip 完成，再处理下一段；
+- 如果连 RGBA framebuffer 本身也放不下，当前核心还不能满足，需要先实现 tiled/scanline compositor。
+
 这里的 LVGL 是可选项。可以复用 LVGL 或厂商 BSP 初始化屏幕、触摸控制器、背光，
 也可以把 dirty rectangle 转交给厂商 flush primitive；但不建议把 JellyFrame 节点翻译成
 LVGL widgets 作为主渲染器。核心 pipeline 和 framebuffer 路径应保持权威，只在最终 I/O
@@ -390,6 +416,9 @@ struct HostBudgets {
     std::size_t max_detached_dom_nodes;
     std::size_t max_input_events_per_frame;
     std::size_t max_timer_callbacks_per_frame;
+    std::size_t max_animation_callbacks_per_frame;
+    std::size_t max_active_animations;
+    std::size_t animation_frame_rate;
     std::size_t max_event_listeners;
     std::size_t max_resource_bytes;
     std::size_t max_framebuffer_pixels;
@@ -410,6 +439,9 @@ detached DOM node 上限。ESP32-S3 初始建议：
 - display commands：1024-4096
 - dirty rects：4-16
 - timers：16-32
+- animation callbacks per frame：0-4，按产品功耗策略决定
+- active animations：0-16
+- animation frame rate：0、15 或 30 Hz，按前台/后台/息屏策略决定
 - event listeners：128-256
 - single resource：64-256 KiB
 - framebuffer pixels：物理屏幕面积；如果使用 tiled output，可以更小
