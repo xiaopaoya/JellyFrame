@@ -143,6 +143,8 @@ chooses a compatible surface.
 
 The platform-neutral source remains `AppSystemEventQueue`. JS bindings should
 map accepted events to the standard subset above when possible.
+Hosts that need injection diagnostics should call `try_push_current(...)` and
+report `empty-instance` / `queue-full` through tool or serial diagnostics.
 
 Current V0 implementation:
 

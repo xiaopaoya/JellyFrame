@@ -17,6 +17,14 @@ enum class AppSystemEventKind {
     LowPowerModeChanged,
 };
 
+enum class AppSystemEventPushStatus {
+    Accepted,
+    EmptyInstance,
+    QueueFull,
+};
+
+const char* app_system_event_push_status_name(AppSystemEventPushStatus status);
+
 struct AppSystemStateSnapshot {
     std::uint64_t unix_time_ms = 0;
     std::int16_t timezone_offset_minutes = 0;
@@ -43,6 +51,9 @@ class AppSystemEventQueue {
 public:
     AppSystemEventQueue(std::size_t capacity = 0, std::size_t max_events_per_frame = 0);
 
+    AppSystemEventPushStatus try_push_current(const AppRuntimeHost& host,
+                                              AppSystemEventKind kind,
+                                              const AppSystemStateSnapshot& snapshot);
     bool push_current(const AppRuntimeHost& host,
                       AppSystemEventKind kind,
                       const AppSystemStateSnapshot& snapshot);

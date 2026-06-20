@@ -37,6 +37,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   before runtime mocks or JS bindings can submit work.
 - Added `AppSystemEventQueue`, a bounded app-instance-scoped queue for
   host-injected time, timezone, network, battery, screen and low-power snapshots.
+- `AppSystemEventQueue` now exposes `try_push_current(...)` and stable push
+  status names so hosts/the Win32 shell can report system-event injection
+  failures such as `empty-instance` and `queue-full` through diagnostics.
 - Added app-runtime microbench coverage for optional network fetch, KV storage,
   image-decode mock and system-event pumping.
 - Added the B1 image-decode V0 helper: `ImageDecodePolicy`, `ImageDecodeMock`

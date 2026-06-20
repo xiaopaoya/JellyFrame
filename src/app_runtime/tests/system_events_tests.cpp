@@ -1,6 +1,7 @@
 #include "app_runtime/system_events.h"
 
 #include <cassert>
+#include <string>
 #include <vector>
 
 using namespace jellyframe;
@@ -26,11 +27,17 @@ void queue_requires_active_instance_and_capacity() {
     AppRuntimeHost host = make_host();
     AppSystemEventQueue queue(1, 1);
     assert(!queue.push_current(host, AppSystemEventKind::TimeChanged, make_snapshot(1, true)));
+    assert(queue.try_push_current(host, AppSystemEventKind::TimeChanged, make_snapshot(1, true)) ==
+           AppSystemEventPushStatus::EmptyInstance);
+    assert(std::string(app_system_event_push_status_name(AppSystemEventPushStatus::EmptyInstance)) ==
+           "empty-instance");
 
     const AppInstance app = host.launch("org.example.clock", AppRole::App);
     assert(queue.push_current(host, AppSystemEventKind::TimeChanged, make_snapshot(2, true)));
     assert(queue.full());
     assert(!queue.push_current(host, AppSystemEventKind::BatteryChanged, make_snapshot(3, true)));
+    assert(queue.try_push_current(host, AppSystemEventKind::BatteryChanged, make_snapshot(3, true)) ==
+           AppSystemEventPushStatus::QueueFull);
 
     std::vector<AppSystemEvent> accepted;
     const AppSystemEventPumpResult result = queue.pump_current(host, accepted);

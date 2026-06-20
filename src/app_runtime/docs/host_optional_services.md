@@ -555,9 +555,21 @@ struct AppSystemStateSnapshot {
 };
 ```
 
+Push status:
+
+```cpp
+enum class AppSystemEventPushStatus {
+    Accepted,
+    EmptyInstance,
+    QueueFull,
+};
+```
+
 Rules:
 
-- The host pushes events for the current app instance with `push_current(...)`.
+- The host pushes events for the current app instance with `push_current(...)`;
+  diagnostic paths should call `try_push_current(...)`, which distinguishes
+  `empty-instance` from `queue-full`.
 - The UI/main task consumes events with `pump_current(...)` at frame boundaries.
 - `max_events_per_frame` bounds event work per frame.
 - Events for stale app instances are consumed and dropped.
@@ -569,8 +581,9 @@ Rules:
   `document` `visibilitychange`. `window` `online`/`offline` events and battery
   JavaScript APIs remain out of V0.
 - The Win32 debug shell can inject fake events with `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8`
-  for app testing. Hardware ports should use the same queue from their own
-  host state provider.
+  for app testing; failed injection reports `system-event-rejected`
+  diagnostics. Hardware ports should use the same queue from their own host
+  state provider.
 
 ## Implementation Order
 
@@ -585,8 +598,8 @@ Recommended order:
    render-core image display command passes are implemented. The Win32 debug
    shell can automatically submit mock decodes and repaint, and can load
    uncompressed 24/32-bit BMP resources from `.jfapp`/source packages. General
-   cache eviction and the `object-fit` subset are wired; next work is finer
-   image diagnostics and production image codecs.
+   cache eviction, the `object-fit` subset and stable failure-reason
+   diagnostics are wired; next work is production image codecs.
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps after the desktop surface consumer path is stable.
 5. Add host-owned MP3 playback, returning only handles and ended/error events.

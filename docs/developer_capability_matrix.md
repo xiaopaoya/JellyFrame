@@ -50,7 +50,7 @@ JellyFrame is not ready for:
 | Linked CSS loading | Shell-only | Example tools can load local `<link rel="stylesheet">`; core exposes callback-style helpers only. |
 | Network loading | Host-optional XHR V0 | Core still has no HTTP, WebSocket or remote resource loading, and remote HTML/CSS/script/image resources cannot enter the page loader. `NetworkFetchMock` provides a fixture/handle/completion contract; `JerryScriptRuntime` exposes an async `XMLHttpRequest` GET subset in scripting builds. Real networking belongs to host services/workers, and JS callbacks run only after UI/main task completion pumping. |
 | Storage | Host-optional localStorage V0 | No cookies, IndexedDB or filesystem API in core. `AppPrivateKvStorageMock` provides app-id-isolated async KV semantics and budget checks. `JerryScriptRuntime` exposes a tiny `localStorage` subset when the host binds a non-blocking `AppLocalStorageShadow`; it is absent when no shadow is bound. |
-| System status events | Host-optional V0 queue | `AppSystemEventQueue` lets the host inject bounded time/timezone/network/battery/screen/low-power snapshots for the current app instance. Stale-instance events are dropped at frame boundaries. JS callback binding is still deferred. |
+| System status events | Host-optional V0 queue | `AppSystemEventQueue` lets the host inject bounded time/timezone/network/battery/screen/low-power snapshots for the current app instance. Stale-instance events are dropped at frame boundaries; `try_push_current(...)` can diagnose `empty-instance` / `queue-full`. JerryScript V0 maps `navigator.onLine`, `document.hidden`, `document.visibilityState` and `visibilitychange`. |
 
 ## HTML Parsing
 

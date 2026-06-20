@@ -494,9 +494,20 @@ struct AppSystemStateSnapshot {
 };
 ```
 
+注入状态：
+
+```cpp
+enum class AppSystemEventPushStatus {
+    Accepted,
+    EmptyInstance,
+    QueueFull,
+};
+```
+
 规则：
 
-- 宿主使用 `push_current(...)` 为当前 app instance 注入事件。
+- 宿主使用 `push_current(...)` 为当前 app instance 注入事件；需要诊断原因时使用
+  `try_push_current(...)`，它会区分 `empty-instance` 和 `queue-full`。
 - UI/main task 在帧边界通过 `pump_current(...)` 消费事件。
 - `max_events_per_frame` 限制每帧事件处理量。
 - 旧 app instance 的事件会被消费并丢弃。
@@ -506,7 +517,8 @@ struct AppSystemStateSnapshot {
   `document.hidden`、`document.visibilityState` 和 `document` 的 `visibilitychange`。
   `window` 的 `online`/`offline` 事件和 battery JavaScript API 不进入 V0。
 - Win32 debug 壳可以通过 `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8` 注入 fake event，方便 app 调试；
-  硬件 port 应从自己的 host state provider 使用同一个队列。
+  注入失败会报告 `system-event-rejected` diagnostics。硬件 port 应从自己的 host state provider
+  使用同一个队列。
 
 ## 实现顺序
 
@@ -518,8 +530,8 @@ struct AppSystemStateSnapshot {
    安装、枚举、解析和删除 `.jfapp`，并用原子 JSON 提交模拟 installed-app registry。
 3. image decode mock/raw surface fixture、`AppImageSurfaceCache` 和 render-core image display command
    第一版已实现；Win32 debug 壳已能自动提交 mock decode 并重绘，并可从 `.jfapp`/源码包加载
-   无压缩 24/32-bit BMP。通用 cache eviction 和 `object-fit` 子集已接入；下一步补更细图片
-   diagnostics 和产品级图片 codec。
+   无压缩 24/32-bit BMP。通用 cache eviction、`object-fit` 子集和稳定失败原因 diagnostics
+   已接入；下一步补产品级图片 codec。
 4. 桌面 surface consumer 路径稳定后，在 ESP32-S3 port 中接 RGB565 小图/MJPEG decode，
    并严格限制尺寸和并发。
 5. 接 host-owned MP3 playback，只返回句柄和 ended/error 事件。

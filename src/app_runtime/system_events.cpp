@@ -4,19 +4,40 @@
 
 namespace jellyframe {
 
+const char* app_system_event_push_status_name(AppSystemEventPushStatus status) {
+    switch (status) {
+    case AppSystemEventPushStatus::Accepted:
+        return "accepted";
+    case AppSystemEventPushStatus::EmptyInstance:
+        return "empty-instance";
+    case AppSystemEventPushStatus::QueueFull:
+        return "queue-full";
+    }
+    return "unknown";
+}
+
 AppSystemEventQueue::AppSystemEventQueue(std::size_t capacity, std::size_t max_events_per_frame)
     : capacity_(capacity),
       max_events_per_frame_(max_events_per_frame) {}
 
+AppSystemEventPushStatus AppSystemEventQueue::try_push_current(const AppRuntimeHost& host,
+                                                               AppSystemEventKind kind,
+                                                               const AppSystemStateSnapshot& snapshot) {
+    const std::uint32_t app_instance_id = host.current_app_instance_id();
+    if (app_instance_id == 0) {
+        return AppSystemEventPushStatus::EmptyInstance;
+    }
+    if (full()) {
+        return AppSystemEventPushStatus::QueueFull;
+    }
+    events_.push_back(AppSystemEvent{app_instance_id, kind, snapshot});
+    return AppSystemEventPushStatus::Accepted;
+}
+
 bool AppSystemEventQueue::push_current(const AppRuntimeHost& host,
                                        AppSystemEventKind kind,
                                        const AppSystemStateSnapshot& snapshot) {
-    const std::uint32_t app_instance_id = host.current_app_instance_id();
-    if (app_instance_id == 0 || full()) {
-        return false;
-    }
-    events_.push_back(AppSystemEvent{app_instance_id, kind, snapshot});
-    return true;
+    return try_push_current(host, kind, snapshot) == AppSystemEventPushStatus::Accepted;
 }
 
 AppSystemEventPumpResult AppSystemEventQueue::pump_current(const AppRuntimeHost& host,

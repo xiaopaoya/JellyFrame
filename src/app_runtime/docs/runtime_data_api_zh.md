@@ -121,6 +121,8 @@ V0 支持面应限制在：
 明确选择兼容 surface 时，才考虑暴露给 app JavaScript。
 
 平台无关来源仍是 `AppSystemEventQueue`。JS binding 应尽量把 accepted events 映射到上述标准子集。
+宿主需要诊断注入失败时应使用 `try_push_current(...)`，并把 `empty-instance` / `queue-full`
+写入工具或串口 diagnostics。
 
 当前 V0 已实现：
 

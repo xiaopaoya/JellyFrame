@@ -1514,7 +1514,16 @@ private:
     }
 
     void queue_system_event(AppSystemEventKind kind, const char* status) {
-        if (!system_events_.push_current(app_runtime_, kind, debug_system_state_)) {
+        const AppSystemEventPushStatus pushed =
+            system_events_.try_push_current(app_runtime_, kind, debug_system_state_);
+        if (pushed != AppSystemEventPushStatus::Accepted) {
+            report_diagnostic(&diagnostics_,
+                              DiagnosticStage::Script,
+                              DiagnosticSeverity::Warning,
+                              "system-event-rejected",
+                              "Host system event was rejected",
+                              std::string("event=") + status +
+                                  "; reason=" + app_system_event_push_status_name(pushed));
             set_title(std::string("system event rejected: ") + status);
             return;
         }

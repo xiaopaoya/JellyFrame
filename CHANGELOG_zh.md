@@ -32,6 +32,8 @@ JellyFrame Engine 的重要变更记录在这里。
   或 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。
 - 添加 `AppSystemEventQueue`，这是一个有界、绑定 app instance 的系统事件队列，用于宿主注入
   时间、时区、网络、电量、屏幕和低功耗状态快照。
+- `AppSystemEventQueue` 新增 `try_push_current(...)` 和稳定 push 状态名，宿主/Win32 壳可把
+  `empty-instance`、`queue-full` 等系统事件注入失败原因写入 diagnostics。
 - app-runtime microbench 新增可选 network fetch、KV storage、image decode mock 和 system-event pump 覆盖。
 - 添加 B1 图片解码 V0 helper：`ImageDecodePolicy`、`ImageDecodeMock` 与
   `AppDecodedSurfaceRecord` 定义平台无关 raw surface fixture、`Surface` handle 生命周期、
