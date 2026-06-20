@@ -33,6 +33,9 @@ public:
     AppFontLoadResult load_jffont(std::uint32_t app_instance_id,
                                   const std::uint8_t* data,
                                   std::size_t size);
+    AppFontLoadResult attach_jffont_view(std::uint32_t app_instance_id,
+                                         const std::uint8_t* data,
+                                         std::size_t size);
     std::size_t clear_app_instance(std::uint32_t app_instance_id);
     void clear();
 
@@ -64,6 +67,10 @@ private:
         BitmapFontResource resource;
     };
 
+    AppFontLoadResult add_jffont(std::uint32_t app_instance_id,
+                                 const std::uint8_t* data,
+                                 std::size_t size,
+                                 bool copy_bytes);
     void refresh_context();
 
     std::size_t capacity_ = 1;

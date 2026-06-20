@@ -159,6 +159,25 @@ void app_font_set_uses_system_font_before_app_supplement() {
     assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
 }
 
+void app_font_set_can_attach_borrowed_jffont_view() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.borrowed-fonts", AppRole::App);
+    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
+    const AppFontLoadResult loaded = host.attach_current_jffont_view(bytes.data(), bytes.size());
+    assert(loaded.loaded());
+    assert(host.fonts().size() == 1);
+
+    TextMetrics metrics;
+    TextMeasureProvider provider = host.fonts().measure_provider();
+    assert(provider.measure("\xe4\xb8\xad", 8, 400, &metrics, provider.context));
+    assert(metrics.width == 8);
+    assert(metrics.line_height == 8);
+
+    const AppTeardownResult teardown = host.exit_current();
+    assert(teardown.released_font_resources == 1);
+    assert(host.fonts().empty());
+}
+
 void crash_current_tears_down_active_instance_state() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.crashy", AppRole::App);
@@ -263,6 +282,7 @@ int main() {
     launch_cleans_previous_instance_state();
     app_fonts_follow_active_instance_lifecycle();
     app_font_set_uses_system_font_before_app_supplement();
+    app_font_set_can_attach_borrowed_jffont_view();
     crash_current_tears_down_active_instance_state();
     frame_pump_limits_completions_and_filters_stale_instances();
     options_follow_host_capabilities();

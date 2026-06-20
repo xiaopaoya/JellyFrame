@@ -62,6 +62,12 @@ struct PackageResourceStats {
     std::size_t loaded_bytes = 0;
 };
 
+struct PackageResourceView {
+    const std::uint8_t* data = nullptr;
+    std::size_t size = 0;
+    bool stable = false;
+};
+
 struct PackageResourceContext {
     std::filesystem::path root;
     std::string base_url = "/index.html";
@@ -351,6 +357,72 @@ inline bool load_package_resource(std::string_view url,
     }
     record_package_success(context, output.size());
     return true;
+}
+
+inline bool load_package_resource_view(std::string_view url,
+                                       std::string_view base_url,
+                                       PackageResourceView& output,
+                                       PackageResourceContext* context) {
+    output = PackageResourceView{};
+    if (context == nullptr || !context->bundle_mode()) {
+        return false;
+    }
+    std::string resolved;
+    if (!resolve_package_url(url, base_url.empty() ? context->base_url : std::string(base_url), resolved)) {
+        record_package_rejected(context);
+        jellyframe::report_diagnostic(context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "package-resource-rejected",
+                                      "Package resource URL was rejected because it is not a local app path",
+                                      url);
+        return false;
+    }
+    const std::uint32_t resolved_hash = fnv1a_32(resolved);
+    for (const BundleResourceEntry& entry : context->bundle_entries) {
+        if (entry.path_hash != resolved_hash || entry.path != resolved) {
+            continue;
+        }
+        const std::size_t absolute_payload_offset =
+            static_cast<std::size_t>(context->bundle_payload_offset) + entry.payload_offset;
+        if (entry.payload_size > context->max_input_bytes ||
+            !byte_range_is_valid(context->bundle_bytes.size(), absolute_payload_offset, entry.payload_size)) {
+            record_package_rejected(context);
+            jellyframe::report_diagnostic(context->diagnostics,
+                                          jellyframe::DiagnosticStage::Package,
+                                          jellyframe::DiagnosticSeverity::Warning,
+                                          "package-resource-rejected",
+                                          "Bundle resource exceeds the loader budget or points outside the payload",
+                                          resolved);
+            return false;
+        }
+        const std::uint8_t* begin = context->bundle_bytes.data() + absolute_payload_offset;
+        if (crc32_bytes(begin, entry.payload_size) != entry.crc32) {
+            record_package_rejected(context);
+            jellyframe::report_diagnostic(context->diagnostics,
+                                          jellyframe::DiagnosticStage::Package,
+                                          jellyframe::DiagnosticSeverity::Warning,
+                                          "package-resource-crc-mismatch",
+                                          "Bundle resource checksum did not match its index entry",
+                                          resolved);
+            return false;
+        }
+        if (entry.payload_size == 0) {
+            record_package_missing(context);
+            return false;
+        }
+        output = PackageResourceView{begin, entry.payload_size, true};
+        record_package_success(context, entry.payload_size);
+        return true;
+    }
+    record_package_missing(context);
+    jellyframe::report_diagnostic(context->diagnostics,
+                                  jellyframe::DiagnosticStage::Package,
+                                  jellyframe::DiagnosticSeverity::Warning,
+                                  "package-resource-missing",
+                                  "Bundle resource was not present in the package index",
+                                  resolved);
+    return false;
 }
 
 inline bool load_package_stylesheet(std::string_view href, std::string& output, void* raw_context) {

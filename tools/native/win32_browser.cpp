@@ -1104,6 +1104,22 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
     }
     app_runtime->clear_current_fonts();
     for (const std::string& source : manifest.font_sources) {
+        jellyframe_example::PackageResourceView view;
+        if (jellyframe_example::load_package_resource_view(source, manifest.entry, view, &package_context) &&
+            view.stable) {
+            const AppFontLoadResult result = app_runtime->attach_current_jffont_view(view.data, view.size);
+            if (result.loaded()) {
+                continue;
+            }
+            report_diagnostic(diagnostics,
+                              DiagnosticStage::Package,
+                              DiagnosticSeverity::Warning,
+                              "app-font-resource-invalid",
+                              "Manifest font resource is not a supported .jffont supplement",
+                              source);
+            continue;
+        }
+
         std::string bytes;
         if (!jellyframe_example::load_package_resource(source, manifest.entry, bytes, &package_context)) {
             report_diagnostic(diagnostics,

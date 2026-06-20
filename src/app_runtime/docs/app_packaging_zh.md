@@ -365,8 +365,10 @@ uint8_t  bytes_per_row;
 这基本复用 `BitmapFontGlyph`/`BitmapFont` 的数据模型，但去掉了 C++ 指针和编译期符号。
 `BitmapFontResource` 可以把 `.jffont` bytes 解析成只读 view，并复用现有二分 codepoint lookup
 和 bitmap painter。低层 view 要求调用方保证 `.jffont` bytes 在 view 生命周期内保持有效；
-`AppFontSet` 会为当前 app instance 持有一份 bytes 拷贝，便于桌面 package loader 和普通 runtime
-路径安全接入。后续嵌入式 flash/memory-map 路径可以在同一接口旁增加零拷贝 view。
+`AppFontSet::load_jffont` 会为当前 app instance 持有一份 bytes 拷贝，适合桌面/source-package
+安全路径；`AppFontSet::attach_jffont_view` 和 `AppRuntimeHost::attach_current_jffont_view`
+可直接挂载稳定的 flash/mmapped 或 `.jfapp` bundle payload，不复制字体 bytes。Win32 壳对可安装
+`.jfapp` bundle 使用该 view 路径，对源目录仍回退到复制路径。
 当前 `jellyframe_font_pack_gen` 支持同时生成固件静态 header 和 `.jffont`：
 
 ```powershell

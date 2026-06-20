@@ -50,6 +50,7 @@ public:
                                           std::uint32_t bytes = 0,
                                           void* payload = nullptr);
     AppFontLoadResult load_current_jffont(const std::uint8_t* data, std::size_t size);
+    AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size);
     std::size_t clear_current_fonts();
 
     bool push_completion(const HostServiceCompletion& completion);

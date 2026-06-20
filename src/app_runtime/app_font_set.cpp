@@ -11,6 +11,19 @@ AppFontSet::AppFontSet(std::size_t capacity)
 AppFontLoadResult AppFontSet::load_jffont(std::uint32_t app_instance_id,
                                           const std::uint8_t* data,
                                           std::size_t size) {
+    return add_jffont(app_instance_id, data, size, true);
+}
+
+AppFontLoadResult AppFontSet::attach_jffont_view(std::uint32_t app_instance_id,
+                                                 const std::uint8_t* data,
+                                                 std::size_t size) {
+    return add_jffont(app_instance_id, data, size, false);
+}
+
+AppFontLoadResult AppFontSet::add_jffont(std::uint32_t app_instance_id,
+                                         const std::uint8_t* data,
+                                         std::size_t size,
+                                         bool copy_bytes) {
     if (app_instance_id == 0) {
         return AppFontLoadResult{AppFontLoadStatus::EmptyInstance, fonts_.size()};
     }
@@ -22,10 +35,12 @@ AppFontLoadResult AppFontSet::load_jffont(std::uint32_t app_instance_id,
     }
 
     LoadedFont loaded;
-    if (data != nullptr && size > 0) {
+    if (copy_bytes && data != nullptr && size > 0) {
         loaded.bytes.assign(data, data + size);
     }
-    if (!loaded.resource.load_jffont(loaded.bytes.data(), loaded.bytes.size())) {
+    const std::uint8_t* view_data = copy_bytes ? loaded.bytes.data() : data;
+    const std::size_t view_size = copy_bytes ? loaded.bytes.size() : size;
+    if (!loaded.resource.load_jffont(view_data, view_size)) {
         return AppFontLoadResult{AppFontLoadStatus::InvalidFont, fonts_.size()};
     }
     app_instance_id_ = app_instance_id;

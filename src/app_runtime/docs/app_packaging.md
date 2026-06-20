@@ -430,11 +430,13 @@ This reuses the `BitmapFontGlyph`/`BitmapFont` data model but removes C++
 pointers and compile-time symbols. `BitmapFontResource` can parse `.jffont`
 bytes into a read-only view and keep using the existing binary codepoint lookup
 and bitmap painter. The low-level view requires the caller to keep the
-`.jffont` bytes alive for the view lifetime; `AppFontSet` owns a bytes copy for
-the current app instance so desktop package loaders and normal runtime paths can
-attach it safely. A future embedded flash/memory-map path can add a zero-copy
-view beside this interface. `jellyframe_font_pack_gen` can now emit the
-firmware static header and the `.jffont` supplement in one run:
+`.jffont` bytes alive for the view lifetime. `AppFontSet::load_jffont` owns a
+bytes copy for safe desktop/source-package paths; `AppFontSet::attach_jffont_view`
+and `AppRuntimeHost::attach_current_jffont_view` attach a stable flash/mmapped
+or `.jfapp` bundle payload without copying. The Win32 shell uses that view path
+for installable `.jfapp` bundles and falls back to the copying path for source
+directories. `jellyframe_font_pack_gen` can now emit the firmware static header
+and the `.jffont` supplement in one run:
 
 ```powershell
 jellyframe_font_pack_gen `
