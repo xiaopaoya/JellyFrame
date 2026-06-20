@@ -73,7 +73,11 @@ getter/setter 不阻塞 flash/filesystem I/O。
 
 如果目标 profile 无法保证这一点，storage 应继续不暴露，而不是新增自定义 async API。
 
-计划子集：
+当前已实现：`JerryScriptRuntime` 在宿主绑定 `AppLocalStorageShadow` 时暴露同步 `localStorage`
+V0；未绑定非阻塞 shadow 的 profile 不暴露 `localStorage`。Win32 browser scripting 构建提供
+按 active `app_instance_id` 清理的 debug shadow，用于桌面调试，不代表核心会访问 flash/NVS。
+
+当前子集：
 
 ```js
 localStorage.setItem("theme", "dark");
@@ -98,8 +102,7 @@ V0 支持面应限制在：
 - key 长度、value 字节数、item 数和总字节数来自合成后的 `AppPrivateKvPolicy`。
 - 同步调用必须命中小型内存 shadow。宿主 flash/NVS/filesystem 写入通过 async service path 调度，
   并由宿主策略完成落盘/恢复。
-- quota 失败应尽量抛小型 `QuotaExceededError` 类异常；早期 bring-up 无法完整异常化时，至少提供
-  diagnostics warning。
+- quota 失败当前抛小型 range exception；未来可进一步靠近 `QuotaExceededError`。
 - `sessionStorage`、storage events、IndexedDB、cookie 和 Cache API 不进入 V0。
 
 ## System State

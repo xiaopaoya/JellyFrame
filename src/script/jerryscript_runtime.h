@@ -14,6 +14,7 @@
 namespace jellyframe {
 
 class AppRuntimeHost;
+class AppLocalStorageShadow;
 class NetworkFetchMock;
 struct HostServiceCompletion;
 struct ScriptRuntimeAccess;
@@ -52,6 +53,7 @@ public:
 
     void bind_document(Node& document);
     void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network);
+    void bind_local_storage(AppLocalStorageShadow& storage);
     void clear_app_services();
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
     void set_host_time_ms(std::uint64_t now_ms);
@@ -75,6 +77,7 @@ private:
     JerryScriptRuntimeOptions options_;
     AppRuntimeHost* app_host_ = nullptr;
     NetworkFetchMock* network_fetch_ = nullptr;
+    AppLocalStorageShadow* local_storage_ = nullptr;
 
     bool can_adopt_detached_node() const;
     Node* adopt_detached_node(std::unique_ptr<Node> node);

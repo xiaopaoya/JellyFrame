@@ -288,7 +288,7 @@ struct HostFetchResponse {
 
 ## App 私有 KV Storage 服务
 
-存储只用于 app 私有小数据，不提供浏览器级同步 `localStorage`、cookie、IndexedDB、Cache API
+存储只用于 app 私有小数据，不提供浏览器级持久同步 `localStorage`、cookie、IndexedDB、Cache API
 或通用文件系统。目标是支持设置、token、小型 JSON 状态、离线缓存索引等常见嵌入式 app 需求。
 
 当前 V0 mock：`AppPrivateKvStorageMock` 使用 app id 隔离命名空间，通过
@@ -300,10 +300,10 @@ struct HostFetchResponse {
 `AppPrivateKvPolicy` 时，`policies.storage.enabled` 才为 true。key/value/item/byte 预算会被复制到
 最终 mock 或产品 worker 使用的具体 storage policy 中。
 
-`AppLocalStorageShadow` 是面向未来标准 `localStorage` 子集的小型内存 helper。它复用
-`AppPrivateKvPolicy` 限制，用紧凑顺序表保存字符串 key/value，不执行任何宿主 I/O。只有当目标
-profile 能保证 `localStorage` 调用非阻塞时，JS binding 才应使用它；持久化和恢复仍属于宿主异步
-storage 工作。
+`AppLocalStorageShadow` 是标准 `localStorage` V0 子集的小型内存 helper。它复用
+`AppPrivateKvPolicy` 限制，用紧凑顺序表保存字符串 key/value，不执行任何宿主 I/O。当前
+JerryScript binding 只有在宿主绑定这个非阻塞 shadow 时才暴露 `localStorage`；持久化、恢复和
+flush/drop 策略仍属于宿主异步 storage 工作。
 
 推荐命名空间：
 

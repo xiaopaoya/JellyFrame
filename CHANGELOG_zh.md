@@ -18,12 +18,14 @@ JellyFrame Engine 的重要变更记录在这里。
   方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界
   Promise/microtask 支持成熟后再考虑；只有存在非阻塞 app 私有内存 shadow 时才暴露极小
   `localStorage` 子集；系统状态尽量映射到 Web 邻近事件。
-- 添加 `AppLocalStorageShadow`，作为未来标准 `localStorage` 子集的紧凑内存 helper；
+- 添加 `AppLocalStorageShadow`，作为标准 `localStorage` V0 子集的紧凑内存 helper；
   它执行 app 私有 KV policy 限制，但不会在 UI task 上做宿主 I/O。
 - 添加 `AppXmlHttpRequest`，在 `NetworkFetchMock`/host completion 之上提供平台无关异步
   XHR V0 状态机，覆盖 GET、abort、readyState/status、响应文本和 JS binding 使用的标准事件顺序。
 - JerryScript bridge 暴露异步 `XMLHttpRequest` GET V0 子集，并让 Win32 browser scripting 构建
   通过 debug network mock 验证 host completion 到 JS callback 的主线程分发路径。
+- JerryScript bridge 在宿主绑定非阻塞 `AppLocalStorageShadow` 时暴露极小 `localStorage` V0
+  子集；Win32 browser scripting 构建提供按 active app instance 清理的 debug shadow。
 - `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有
   `BitmapFont` glyph 数据模型，但去掉 C++ 指针和编译期符号，为后续 `.jfapp`
   动态包内字体资源打基础。

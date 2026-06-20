@@ -91,8 +91,10 @@ Runtime data and storage boundary:
 - Apps may request weather/account data, small JSON sync or download a `.jfapp`
   for the system installer to verify.
 - Remote HTML/CSS/script/image resources are still forbidden as page resources.
-- Cookies, synchronous `localStorage`, IndexedDB, Cache API and general
-  filesystem access are still absent.
+- Cookies, browser-style persistent synchronous `localStorage`, IndexedDB,
+  Cache API and general filesystem access are still absent. A tiny
+  `localStorage` V0 subset is exposed only when the host binds a non-blocking
+  app-private shadow.
 - Target profiles may reject network/storage apps or cap response bytes,
   concurrency, timeouts, KV item counts and byte quotas.
 

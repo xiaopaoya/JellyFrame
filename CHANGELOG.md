@@ -21,8 +21,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   first, `fetch()` only after bounded Promise/microtask support, tiny
   `localStorage` only when backed by a non-blocking app-private shadow, and
   system state mapped to web-adjacent events where possible.
-- Added `AppLocalStorageShadow`, a compact in-memory helper for a future
-  standard `localStorage` subset that enforces the app-private KV policy without
+- Added `AppLocalStorageShadow`, a compact in-memory helper for the standard
+  `localStorage` V0 subset that enforces the app-private KV policy without
   performing host I/O on the UI task.
 - Added `AppXmlHttpRequest`, a platform-neutral async XHR V0 state machine over
   `NetworkFetchMock`/host completions, covering GET, abort, readyState/status,
@@ -30,6 +30,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Exposed an async `XMLHttpRequest` GET V0 subset through the JerryScript bridge
   and wired Win32 browser scripting builds to a debug network mock so host
   completions dispatch JavaScript callbacks on the main task.
+- Exposed a tiny `localStorage` V0 subset through the JerryScript bridge when a
+  host binds a non-blocking `AppLocalStorageShadow`; Win32 browser scripting
+  builds provide a debug shadow cleared on active app instance changes.
 - Added `.jffont` V0 binary font supplement output to
   `jellyframe_font_pack_gen`, reusing the existing `BitmapFont` glyph data model
   without C++ pointers or compile-time symbols as groundwork for future dynamic

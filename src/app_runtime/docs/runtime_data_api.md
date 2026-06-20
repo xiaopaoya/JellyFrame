@@ -86,7 +86,13 @@ setters do not block on flash/filesystem I/O.
 If that guarantee is unavailable for a target profile, storage should remain
 unexposed rather than adding a custom async API.
 
-Planned subset:
+Current implementation: `JerryScriptRuntime` exposes synchronous `localStorage`
+V0 when the host binds an `AppLocalStorageShadow`. Profiles that cannot provide
+a non-blocking shadow do not expose `localStorage`. Win32 browser scripting
+builds provide a debug shadow cleared on active `app_instance_id` changes for
+desktop validation; the core still does not touch flash/NVS.
+
+Current subset:
 
 ```js
 localStorage.setItem("theme", "dark");
@@ -113,9 +119,8 @@ Rules:
 - Synchronous calls must hit a small in-memory shadow. Host flash/NVS/filesystem
   writes are scheduled through the async service path and reconciled by host
   policy.
-- Quota failures should throw a small `QuotaExceededError`-like exception when
-  possible; otherwise return a documented diagnostics warning during early
-  bring-up.
+- Quota failures currently throw a small range exception; future builds may move
+  closer to `QuotaExceededError`.
 - `sessionStorage`, storage events, IndexedDB, cookies and Cache API are not in
   V0.
 

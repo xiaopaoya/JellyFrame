@@ -868,6 +868,8 @@ private:
     std::string active_app_id_;
     AppRuntimeHost app_runtime_{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
+    AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
+    std::uint32_t debug_local_storage_instance_id_ = 0;
     std::string pending_shell_action_;
     std::string pending_shell_app_id_;
 
@@ -1135,7 +1137,12 @@ private:
             if (!document_scripts.empty() || !options_.script_path.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
                 script_runtime_instance_id_ = app_runtime_.current_app_instance_id();
+                if (debug_local_storage_instance_id_ != script_runtime_instance_id_) {
+                    debug_local_storage_.clear();
+                    debug_local_storage_instance_id_ = script_runtime_instance_id_;
+                }
                 script_runtime_->bind_app_services(app_runtime_, debug_network_);
+                script_runtime_->bind_local_storage(debug_local_storage_);
                 script_runtime_->set_host_time_ms(GetTickCount64());
                 script_runtime_->bind_document(*document_);
                 for (const DocumentScript& script : document_scripts) {

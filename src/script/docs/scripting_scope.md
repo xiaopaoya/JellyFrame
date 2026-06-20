@@ -104,10 +104,12 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - The Win32 browser shell binds a debug `NetworkFetchMock` in scripting builds
   for desktop validation of the completion-dispatch model. It does not mean the
   core contains a real network stack.
-- `fetch()` should wait for bounded Promise/microtask support. A tiny
-  `localStorage` subset should be exposed only when a host can provide a
-  non-blocking app-private RAM shadow. System state should map to web-adjacent
-  `online`, `offline` and `visibilitychange` events where possible.
+- Exposed now: a tiny `localStorage` subset when the host explicitly binds a
+  non-blocking `AppLocalStorageShadow`: `getItem`, `setItem`, `removeItem`,
+  `clear`, `key` and `length`. `localStorage` is absent when no shadow is bound.
+- `fetch()` should wait for bounded Promise/microtask support. System state
+  should map to web-adjacent `online`, `offline` and `visibilitychange` events
+  where possible.
 
 ## Embedded-App DOM Helpers
 
@@ -135,8 +137,8 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Dynamic `dataset` property creation or native mutation through new arbitrary keys.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
-- `fetch()`, modules, dynamic import, storage, system-status JS callbacks,
-  canvas and Web Components.
+- `fetch()`, modules, dynamic import, `sessionStorage`, IndexedDB, cookies,
+  system-status JS callbacks, canvas and Web Components.
 
 ## Embedded Policy
 

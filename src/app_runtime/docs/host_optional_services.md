@@ -319,10 +319,10 @@ Rules:
 
 ## App Private KV Storage Service
 
-Storage is for small app-private data only. It is not browser-style synchronous
-`localStorage`, cookies, IndexedDB, Cache API or a general filesystem. The goal
-is to support settings, tokens, small JSON state and offline-cache indexes for
-embedded apps.
+Storage is for small app-private data only. It is not browser-style persistent
+synchronous `localStorage`, cookies, IndexedDB, Cache API or a general
+filesystem. The goal is to support settings, tokens, small JSON state and
+offline-cache indexes for embedded apps.
 
 Current V0 mock: `AppPrivateKvStorageMock` isolates namespaces by app id and
 completes `get/set/remove/clear` asynchronously through
@@ -335,11 +335,12 @@ requested `storage.kv` and the host profile supplies an enabled
 `AppPrivateKvPolicy`. The resulting key/value/item/byte budgets are copied into
 the concrete storage policy used by the mock or product worker.
 
-`AppLocalStorageShadow` is a small in-memory helper for a future standard
-`localStorage` subset. It uses the same `AppPrivateKvPolicy` limits, stores
-string keys/values in a compact sequential table and performs no host I/O. A JS
-binding may use it only when the target profile can keep `localStorage` calls
-non-blocking; persistence and recovery remain host-owned async storage work.
+`AppLocalStorageShadow` is a small in-memory helper for the standard
+`localStorage` V0 subset. It uses the same `AppPrivateKvPolicy` limits, stores
+string keys/values in a compact sequential table and performs no host I/O. The
+current JerryScript binding exposes `localStorage` only when the host binds this
+non-blocking shadow; persistence, recovery and flush/drop policy remain
+host-owned async storage work.
 
 Recommended namespace:
 

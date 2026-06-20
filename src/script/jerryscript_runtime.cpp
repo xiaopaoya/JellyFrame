@@ -1,5 +1,6 @@
 ﻿#include "script/jerryscript_runtime.h"
 
+#include "app_runtime/app_services.h"
 #include "app_runtime/xml_http_request.h"
 #include "render_core/form_control.h"
 #include "render_core/style.h"
@@ -107,6 +108,7 @@ const jerry_object_native_info_t kNodeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kRuntimeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kEventNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kXhrNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kLocalStorageNativeInfo = {nullptr, 0, 0};
 
 class JerryValue {
 public:
@@ -467,6 +469,13 @@ ScriptXmlHttpRequest* native_xhr(const jerry_value_t object) {
         return nullptr;
     }
     return static_cast<ScriptXmlHttpRequest*>(jerry_object_get_native_ptr(object, &kXhrNativeInfo));
+}
+
+AppLocalStorageShadow* native_local_storage(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    return static_cast<AppLocalStorageShadow*>(jerry_object_get_native_ptr(object, &kLocalStorageNativeInfo));
 }
 
 std::size_t xhr_event_index(AppXhrEventKind kind) {
@@ -1112,6 +1121,116 @@ jerry_value_t make_xml_http_request_constructor(JerryScriptRuntime& runtime) {
     return constructor.release();
 }
 
+jerry_value_t local_storage_error(AppLocalStorageStatus status) {
+    switch (status) {
+    case AppLocalStorageStatus::Ok:
+    case AppLocalStorageStatus::NotFound:
+        return jerry_undefined();
+    case AppLocalStorageStatus::Disabled:
+        return jerry_throw_sz(JERRY_ERROR_TYPE, "localStorage is disabled");
+    case AppLocalStorageStatus::InvalidKey:
+        return jerry_throw_sz(JERRY_ERROR_TYPE, "localStorage key is invalid");
+    case AppLocalStorageStatus::BudgetExceeded:
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "localStorage quota exceeded");
+    }
+    return jerry_throw_sz(JERRY_ERROR_TYPE, "localStorage operation failed");
+}
+
+jerry_value_t local_storage_get_item(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t args_p[],
+                                     const jerry_length_t args_count) {
+    AppLocalStorageShadow* storage = native_local_storage(call_info_p->this_value);
+    if (storage == nullptr || args_count < 1) {
+        return throw_type_error("localStorage.getItem requires a key");
+    }
+    std::string value;
+    const AppLocalStorageStatus status = storage->get_item(value_to_string(args_p[0]), &value);
+    if (status == AppLocalStorageStatus::NotFound) {
+        return jerry_null();
+    }
+    return status == AppLocalStorageStatus::Ok ? jerry_string_sz(value.c_str()) : local_storage_error(status);
+}
+
+jerry_value_t local_storage_set_item(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t args_p[],
+                                     const jerry_length_t args_count) {
+    AppLocalStorageShadow* storage = native_local_storage(call_info_p->this_value);
+    if (storage == nullptr || args_count < 1) {
+        return throw_type_error("localStorage.setItem requires a key");
+    }
+    const AppLocalStorageStatus status = storage->set_item(
+        value_to_string(args_p[0]),
+        args_count > 1 ? value_to_string(args_p[1]) : std::string());
+    return status == AppLocalStorageStatus::Ok ? jerry_undefined() : local_storage_error(status);
+}
+
+jerry_value_t local_storage_remove_item(const jerry_call_info_t* call_info_p,
+                                        const jerry_value_t args_p[],
+                                        const jerry_length_t args_count) {
+    AppLocalStorageShadow* storage = native_local_storage(call_info_p->this_value);
+    if (storage == nullptr || args_count < 1) {
+        return throw_type_error("localStorage.removeItem requires a key");
+    }
+    const AppLocalStorageStatus status = storage->remove_item(value_to_string(args_p[0]));
+    if (status == AppLocalStorageStatus::Ok || status == AppLocalStorageStatus::NotFound) {
+        return jerry_undefined();
+    }
+    return local_storage_error(status);
+}
+
+jerry_value_t local_storage_clear(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    AppLocalStorageShadow* storage = native_local_storage(call_info_p->this_value);
+    if (storage != nullptr) {
+        storage->clear();
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t local_storage_key(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    AppLocalStorageShadow* storage = native_local_storage(call_info_p->this_value);
+    if (storage == nullptr || args_count < 1) {
+        return jerry_null();
+    }
+    JerryValue number_value(jerry_value_to_number(args_p[0]));
+    if (jerry_value_is_exception(number_value.get())) {
+        return jerry_null();
+    }
+    const double number = jerry_value_as_number(number_value.get());
+    if (!std::isfinite(number) || number < 0.0) {
+        return jerry_null();
+    }
+    const double index = std::floor(number);
+    if (index > static_cast<double>(std::numeric_limits<std::size_t>::max())) {
+        return jerry_null();
+    }
+    std::string key;
+    const AppLocalStorageStatus status = storage->key(static_cast<std::size_t>(index), &key);
+    return status == AppLocalStorageStatus::Ok ? jerry_string_sz(key.c_str()) : jerry_null();
+}
+
+jerry_value_t local_storage_get_length(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t[],
+                                       const jerry_length_t) {
+    AppLocalStorageShadow* storage = native_local_storage(call_info_p->this_value);
+    return jerry_number(static_cast<double>(storage != nullptr ? storage->length() : 0));
+}
+
+jerry_value_t make_local_storage_object(AppLocalStorageShadow& storage) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kLocalStorageNativeInfo, &storage);
+    define_accessor(object.get(), "length", local_storage_get_length, node_ignore_setter);
+    set_method(object.get(), "getItem", local_storage_get_item);
+    set_method(object.get(), "setItem", local_storage_set_item);
+    set_method(object.get(), "removeItem", local_storage_remove_item);
+    set_method(object.get(), "clear", local_storage_clear);
+    set_method(object.get(), "key", local_storage_key);
+    return object.release();
+}
+
 jerry_value_t make_dataset_object(JerryScriptRuntime& runtime, Node& node) {
     (void) runtime;
     JerryValue object(jerry_object());
@@ -1517,6 +1636,11 @@ void JerryScriptRuntime::bind_document(Node& document) {
     JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
     set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
     set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
+    if (local_storage_ != nullptr) {
+        JerryValue local_storage(make_local_storage_object(*local_storage_));
+        set_property(window_object.get(), "localStorage", local_storage.get());
+        set_property(global.get(), "localStorage", local_storage.get());
+    }
 }
 
 void JerryScriptRuntime::bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) {
@@ -1524,9 +1648,14 @@ void JerryScriptRuntime::bind_app_services(AppRuntimeHost& host, NetworkFetchMoc
     network_fetch_ = &network;
 }
 
+void JerryScriptRuntime::bind_local_storage(AppLocalStorageShadow& storage) {
+    local_storage_ = &storage;
+}
+
 void JerryScriptRuntime::clear_app_services() {
     app_host_ = nullptr;
     network_fetch_ = nullptr;
+    local_storage_ = nullptr;
 }
 
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {

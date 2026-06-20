@@ -86,9 +86,11 @@ API 表面。
 - 回调只在宿主把 network completion 泵回 UI/main task 后执行；worker 不直接调用 JS。
 - scripting 构建中的 Win32 browser shell 绑定 debug `NetworkFetchMock`，用于桌面验证 completion
   分发模型，不代表核心包含真实网络栈。
-- `fetch()` 等 Promise/microtask 有界后再考虑；只有在宿主能提供非阻塞 app 私有内存 shadow 时才暴露
-  极小 `localStorage` 子集；系统状态尽量映射到 `online`、`offline` 和 `visibilitychange` 等
-  Web 邻近事件。
+- 已暴露：宿主显式绑定非阻塞 `AppLocalStorageShadow` 时提供极小 `localStorage` 子集：
+  `getItem`、`setItem`、`removeItem`、`clear`、`key` 和 `length`。未绑定 shadow 时不暴露
+  `localStorage`。
+- `fetch()` 等 Promise/microtask 有界后再考虑；系统状态尽量映射到 `online`、`offline`
+  和 `visibilitychange` 等 Web 邻近事件。
 
 ## Embedded-App DOM Helpers
 
@@ -113,7 +115,8 @@ API 表面。
 - 完整 selector API，例如 `querySelector` / `querySelectorAll`。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
-- `fetch()`、模块、dynamic import、storage、system-status JS callback、canvas 和 Web Components。
+- `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、system-status JS callback、
+  canvas 和 Web Components。
 
 ## 嵌入式策略
 

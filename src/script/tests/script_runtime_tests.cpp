@@ -492,6 +492,56 @@ void javascript_xml_http_request_constructor_is_shared_with_window() {
     check(result.value == "true", "global and window share the XHR constructor");
 }
 
+void javascript_local_storage_is_exposed_only_when_bound() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval("typeof localStorage");
+    check(result.ok, "localStorage absence script evaluates");
+    check(result.value == "undefined", "localStorage is absent when no non-blocking shadow is bound");
+}
+
+void javascript_local_storage_subset_uses_bound_shadow() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    AppLocalStorageShadow storage(AppPrivateKvPolicy{true, 16, 32, 4, 128});
+    JerryScriptRuntime runtime;
+    runtime.bind_local_storage(storage);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "localStorage.setItem('theme', 'dark');"
+        "localStorage.setItem('mode', 42);"
+        "var first = localStorage.key(0.9);"
+        "var missing = localStorage.getItem('missing');"
+        "var before = localStorage.length + ':' + first + ':' + localStorage.getItem('mode') + ':' + missing;"
+        "localStorage.removeItem('mode');"
+        "var afterRemove = localStorage.length + ':' + localStorage.getItem('mode');"
+        "localStorage.clear();"
+        "before + '|' + afterRemove + '|' + localStorage.length");
+    check(result.ok, "localStorage subset script evaluates");
+    check(result.value == "2:theme:42:null|1:null|0", "localStorage subset follows expected Web Storage shape");
+    check(storage.length() == 0, "localStorage JS writes through to bound shadow");
+}
+
+void javascript_local_storage_quota_error_is_reported() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    AppLocalStorageShadow storage(AppPrivateKvPolicy{true, 4, 4, 1, 8});
+    JerryScriptRuntime runtime;
+    runtime.bind_local_storage(storage);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var quotaOk = true;"
+        "try { localStorage.setItem('k', 'value-too-large'); } catch (e) { quotaOk = false; }"
+        "String(quotaOk) + ':' + localStorage.length");
+    check(result.ok, "localStorage quota script evaluates");
+    check(result.value == "false:0", "localStorage quota rejects oversized value");
+}
+
 void javascript_runtime_respects_timer_and_listener_budgets() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>Go</button></body>");
@@ -542,6 +592,9 @@ int main() {
         javascript_xml_http_request_error_callback_runs_on_missing_fixture();
         javascript_xml_http_request_budget_is_bounded();
         javascript_xml_http_request_constructor_is_shared_with_window();
+        javascript_local_storage_is_exposed_only_when_bound();
+        javascript_local_storage_subset_uses_bound_shadow();
+        javascript_local_storage_quota_error_is_reported();
         javascript_runtime_respects_timer_and_listener_budgets();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
