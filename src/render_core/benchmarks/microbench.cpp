@@ -1,5 +1,6 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/animation_timeline.h"
+#include "render_core/animation_invalidation.h"
 #include "render_core/frame_scratch.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
@@ -62,6 +63,18 @@ void print_style_statistics(const StyleResolverStatistics& statistics) {
               << " hits=" << statistics.candidate_cache_hits
               << " misses=" << statistics.candidate_cache_misses
               << " clears=" << statistics.candidate_cache_clears << '\n';
+}
+
+const LayoutBox* find_first_layout_by_class(const LayoutBox& box, const char* class_name) {
+    if (box.node != nullptr && box.node->type == NodeType::Element && box.node->has_class(class_name)) {
+        return &box;
+    }
+    for (const auto& child : box.children) {
+        if (const LayoutBox* found = find_first_layout_by_class(*child, class_name)) {
+            return found;
+        }
+    }
+    return nullptr;
 }
 
 Style animated_style(float opacity, const char* transform, Color background) {
@@ -195,6 +208,30 @@ int main(int argc, char** argv) {
         const bool sampled = timeline.sample(90, frame_scratch.style_overrides);
         (void)sampled;
     }));
+
+    const LayoutBox* animated_box = find_first_layout_by_class(*layout_tree, "metric-card");
+    if (animated_box != nullptr && animated_box->node != nullptr) {
+        StyleOverride previous;
+        previous.node = animated_box->node;
+        previous.has_transform = true;
+        previous.transform = "translate(0px,0px) scale(1)";
+        StyleOverride current;
+        current.node = animated_box->node;
+        current.has_transform = true;
+        current.transform = "translate(12px,6px) scale(1.08)";
+        std::vector<StyleOverride> previous_overrides{previous};
+        std::vector<StyleOverride> current_overrides{current};
+        print_result("animation_dirty_region", iterations, average_microseconds(iterations, [&] {
+            frame_scratch.begin_frame();
+            compute_animation_dirty_region_into(*layout_tree,
+                                                previous_overrides,
+                                                current_overrides,
+                                                AnimationInvalidationOptions{Rect{0, 0, 360, layout_tree->rect.height},
+                                                                             budgets.max_dirty_rects,
+                                                                             3},
+                                                frame_scratch.dirty_region);
+        }));
+    }
     print_style_statistics(resolver.statistics());
 
     return 0;

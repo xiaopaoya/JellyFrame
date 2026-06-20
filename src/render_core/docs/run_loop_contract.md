@@ -236,6 +236,23 @@ replays commands inside each dirty clip. The value is that hosts and tests can
 see whether a page interaction genuinely narrows paint work before the project
 adds heavier retained layer/display-command structures.
 
+## Animation Invalidation
+
+Header: `src/render_core/animation_invalidation.h`
+
+`compute_animation_dirty_region(...)` /
+`compute_animation_dirty_region_into(...)` are for animation frames. They use
+the previous and current `StyleOverride` lists, find matching nodes in the
+current layout tree, and union the node subtree bounds with previous/current
+transform bounds.
+
+This path avoids falling back to full-frame repaint just because an animation
+frame marks the root as `DomDirtyPaint`. It is intended for the Track D
+paint/compositor property set: `opacity`, `background-color`, `color` and
+`transform: translate()/scale()`. Layout-property animation still does not
+reflow every frame; structural or layout-changing animation should use the
+normal dirty-region/full-frame path.
+
 ## Boundaries
 
 The current core still does not implement:

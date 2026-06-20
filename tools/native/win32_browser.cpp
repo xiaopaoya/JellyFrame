@@ -5,6 +5,7 @@
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
+#include "render_core/animation_invalidation.h"
 #include "render_core/animation_timeline.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
@@ -1391,6 +1392,7 @@ private:
     std::unique_ptr<InputController> input_;
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
+    std::vector<StyleOverride> previous_style_overrides_;
     bool clear_animation_overrides_after_render_ = false;
     FrameScratch frame_scratch_;
     FrameBuffer frame_buffer_;
@@ -1722,6 +1724,7 @@ private:
             input_.reset();
             animation_timeline_ = AnimationTimeline(AnimationTimelineOptions{budgets_.max_active_animations, &diagnostics_});
             style_overrides_.clear();
+            previous_style_overrides_.clear();
             clear_animation_overrides_after_render_ = false;
             pending_shell_action_.clear();
             pending_shell_app_id_.clear();
@@ -1857,15 +1860,27 @@ private:
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+            const bool animation_only_dirty =
+                !style_overrides_.empty() && dirty_flags == DomDirtyPaint;
+            if (animation_only_dirty) {
+                compute_animation_dirty_region_into(
+                    *layout_tree_,
+                    previous_style_overrides_,
+                    style_overrides_,
+                    AnimationInvalidationOptions{Rect{0, 0, viewport_width_, content_height}, budgets_.max_dirty_rects, 3},
+                    frame_scratch_.dirty_region);
+            }
             apply_animation_overrides_to_cached_trees();
             auto next_layer_tree = layer_builder.build(*layout_tree_);
-            compute_dirty_region_into(
-                *document_,
-                layout_tree_.get(),
-                layout_tree_.get(),
-                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
-                frame_scratch_.dirty_region,
-                &frame_scratch_.dirty_region_scratch);
+            if (!animation_only_dirty) {
+                compute_dirty_region_into(
+                    *document_,
+                    layout_tree_.get(),
+                    layout_tree_.get(),
+                    dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
+                    frame_scratch_.dirty_region,
+                    &frame_scratch_.dirty_region_scratch);
+            }
             const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             layer_tree_ = std::move(next_layer_tree);
@@ -2034,6 +2049,7 @@ private:
         if (style_overrides_.empty()) {
             return;
         }
+        previous_style_overrides_ = style_overrides_;
         if (render_tree_ != nullptr) {
             apply_animation_overrides(*render_tree_);
         }
@@ -2325,6 +2341,7 @@ private:
         if (document_ == nullptr || animation_timeline_.empty()) {
             return false;
         }
+        previous_style_overrides_ = style_overrides_;
         if (!animation_timeline_.sample(now_ms, style_overrides_)) {
             return false;
         }
@@ -2338,6 +2355,7 @@ private:
             return;
         }
         style_overrides_.clear();
+        previous_style_overrides_.clear();
         clear_animation_overrides_after_render_ = false;
     }
 

@@ -180,6 +180,19 @@ command 覆盖情况。
 它的价值是让宿主和测试能看到一次页面交互是否真的缩小了 paint 工作，然后再决定是否值得加入更重的
 retained layer/display-command 结构。
 
+## Animation Invalidation
+
+头文件：`src/render_core/animation_invalidation.h`
+
+`compute_animation_dirty_region(...)` / `compute_animation_dirty_region_into(...)` 面向 animation frame。
+它们使用上一帧和当前帧的 `StyleOverride` 列表，在当前 layout tree 中找到对应节点，并把节点 subtree
+的基础 bounds、上一帧 transform bounds 和当前帧 transform bounds 合并为 dirty rectangles。
+
+这条路径专门避免动画帧因为 root `DomDirtyPaint` 退回全帧。适用范围是当前 D 主线承诺的
+paint/compositor 属性：`opacity`、`background-color`、`color` 和 `transform: translate()/scale()`。
+layout 属性动画仍不逐帧重排；如果动画改变了 DOM 结构或 layout，仍应走普通 dirty-region/full-frame
+路径。
+
 ## 边界
 
 当前核心仍不做：

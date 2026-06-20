@@ -1,3 +1,4 @@
+#include "render_core/animation_invalidation.h"
 #include "render_core/animation_timeline.h"
 #include "render_core/css_parser.h"
 #include "render_core/html_parser.h"
@@ -143,6 +144,41 @@ void software_compositor_applies_translate_transform() {
     check(frame.pixel(12, 2).r > 200 && frame.pixel(12, 2).g < 80, "translated box is painted");
 }
 
+void animation_invalidation_covers_previous_and_current_transform_bounds() {
+    HtmlParser html;
+    CssParser css;
+    auto document = html.parse("<body><div class='box'></div></body>");
+    Node* box_node = find_first_by_class(*document, "box");
+    check(box_node != nullptr, "animated node exists");
+    StyleResolver resolver(css.parse(
+        "body { margin: 0; }"
+        ".box { width: 20px; height: 20px; background: #ff0000; transform: translate(0px, 0px); }"));
+    RenderTreeBuilder render_builder(resolver);
+    auto render_tree = render_builder.build(*document);
+    LayoutEngine layout(resolver);
+    auto layout_tree = layout.layout(*render_tree, 120);
+
+    StyleOverride previous;
+    previous.node = box_node;
+    previous.has_transform = true;
+    previous.transform = "translate(0px,0px)";
+    StyleOverride current;
+    current.node = box_node;
+    current.has_transform = true;
+    current.transform = "translate(30px,0px)";
+    const DirtyRegionResult region = compute_animation_dirty_region(
+        *layout_tree,
+        std::vector<StyleOverride>{previous},
+        std::vector<StyleOverride>{current},
+        AnimationInvalidationOptions{Rect{0, 0, 120, 80}, 4, 0});
+
+    check(region.mode == DirtyRegionMode::DirtyRects, "animation invalidation produces dirty rects");
+    check(region.rects.size() == 1, "single animated box stays one dirty rect");
+    check(region.rects.front().width >= 50 && region.rects.front().width < 80,
+          "dirty rect covers previous and current transform bounds without full viewport");
+    check(region.rects.front().height == 20, "dirty rect keeps box height");
+}
+
 } // namespace
 
 int main() {
@@ -151,6 +187,7 @@ int main() {
         animation_timeline_samples_paint_only_properties();
         render_tree_applies_animation_style_overrides();
         software_compositor_applies_translate_transform();
+        animation_invalidation_covers_previous_and_current_transform_bounds();
     } catch (const std::exception& error) {
         std::cerr << "animation timeline test failed: " << error.what() << '\n';
         return 1;

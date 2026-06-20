@@ -26,6 +26,7 @@ if(JERRYSCRIPT_ROOT AND NOT JERRYSCRIPT_INCLUDE_DIR)
 endif()
 
 add_library(jellyframe_render_core
+    src/render_core/animation_invalidation.cpp
     src/render_core/animation_timeline.cpp
     src/render_core/arena.cpp
     src/render_core/bitmap_font.cpp
