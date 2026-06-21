@@ -4,6 +4,7 @@
 `../tools/native`。
 
 - `apps/packages/`：带 `jellyframe.app.json` 的完整 JellyFrame source package。
+- `apps/system/`：特权系统 app 样例，例如 Win32 app-manager host path 使用的示例启动器。
 - `apps/loose/`：用于聚焦检查 runtime、scripting 和 rendering 的小型散文件 app fixture。
 
 当前视觉系统示例：

@@ -2,29 +2,42 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Weather</title>
+  <title>Watch Weather</title>
   <link rel="stylesheet" href="styles/app.css">
 </head>
 <body>
   <main class="screen" id="app">
-    <section class="hero">
-      <div class="topline">
-        <span id="place">Harbor</span>
-        <span id="updated" class="meta">Now</span>
-      </div>
-      <div class="label">Weather</div>
-      <div class="temp" id="temp">24</div>
-      <div class="summary" id="summary">Bright breaks</div>
+    <section class="topbar">
+      <span>Shanghai</span>
+      <span id="updated" class="meta">Local</span>
     </section>
-    <section class="hours">
-      <button class="hour active" data-mode="now"><span>Now</span><strong>24</strong></button>
-      <button class="hour" data-mode="hourly"><span>14</span><strong>26</strong></button>
-      <button class="hour" data-mode="daily"><span>15</span><strong>25</strong></button>
-      <button class="hour" data-mode="air"><span>AQI</span><strong>38</strong></button>
+    <section class="hero">
+      <div class="weather-art">
+        <img id="icon" src="assets/cloudy.bmp" alt="Cloudy">
+      </div>
+      <div class="weather-copy">
+        <div class="label" id="condition">Cloudy</div>
+        <div class="temp" id="temp">26</div>
+        <div class="summary" id="summary">AQI 42 Good</div>
+      </div>
     </section>
     <section class="stats">
-      <div class="metric"><span>Wind</span><strong id="wind">7</strong></div>
-      <div class="metric"><span>Rain</span><strong id="rain">12%</strong></div>
+      <div><strong id="wind">8</strong><span>KMH</span></div>
+      <div><strong id="rain">20</strong><span>RAIN</span></div>
+    </section>
+    <section class="actions">
+      <button class="tile" data-mode="hourly">Hourly</button>
+      <button class="tile" data-mode="daily">Daily</button>
+      <button class="tile" data-mode="air">Air</button>
+    </section>
+    <section class="statusline">
+      <span id="net">Offline</span>
+      <span id="visible">Visible</span>
+    </section>
+    <section hidden>
+      <img src="assets/sunny.bmp" alt="">
+      <img src="assets/rain.bmp" alt="">
+      <img src="assets/haze.bmp" alt="">
     </section>
   </main>
   <script src="scripts/app.js"></script>
