@@ -138,6 +138,11 @@ Win32 参考壳的 A4 行为：
 - `AppImageSurfaceCache` 把 URL 变成有界 decode request，completion 后记录 ready `Surface`
   handle，并在页面/实例切换时释放 surface。它也可按 ready surface 数量和 decoded bytes
   预算回收未被当前 display list 引用的 LRU surface。
+- 直接调用 `AppImageSurfaceCache::handle_completion(...)` 时会拒绝旧 app instance 的 completion。
+  正常 `AppRuntimeHost` completion pump 本来已经会过滤 stale completion 并释放返回的 handle；
+  这里额外兜底是为了避免宿主/调试代码误把旧 surface 挂到新 app 上。
+- `evict_unreferenced_with_result(...)` 会同时报告释放的 surface 数和预算清理中丢弃的 stale cache
+  entry 数。stale drop 非零通常说明某个 surface handle 在 cache 生命周期之外被释放，宿主应记录日志。
 - `classify_app_image_failure(...)` / `app_image_failure_detail(...)` 把 request 拒绝和
   completion 失败归类为 `capability-denied`、`resource-not-found`、
   `decode-budget-exceeded`、`surface-budget-exceeded`、`pending-budget` 等稳定原因。

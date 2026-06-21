@@ -165,6 +165,15 @@ Current V0 helper:
   `Surface` handles after completions and releases surfaces when a page/instance
   changes. It can also evict LRU ready surfaces by surface-count and
   decoded-byte budgets while protecting current display-list references.
+- `AppImageSurfaceCache::handle_completion(...)` rejects stale app-instance
+  completions when called directly. The normal `AppRuntimeHost` completion pump
+  already filters stale completions and releases returned handles, but this
+  extra check keeps host/debug code from accidentally attaching an old surface
+  to a new app.
+- `evict_unreferenced_with_result(...)` reports both released surfaces and
+  stale cache entries dropped during budget cleanup. Hosts should log non-zero
+  stale drops because they usually mean a surface handle was released outside
+  the cache lifecycle.
 - `classify_app_image_failure(...)` / `app_image_failure_detail(...)` classify
   request rejections and completion failures into stable reasons such as
   `capability-denied`, `resource-not-found`, `decode-budget-exceeded`,

@@ -140,6 +140,11 @@ struct AppImageSurfaceCacheOptions {
     std::size_t max_ready_bytes = 0;
 };
 
+struct AppImageSurfaceEvictionResult {
+    std::size_t released_surfaces = 0;
+    std::size_t dropped_stale_entries = 0;
+};
+
 std::size_t decoded_surface_byte_count(int width,
                                        int height,
                                        int stride_pixels,
@@ -195,6 +200,10 @@ public:
                             const std::string& url,
                             std::uint32_t* handle);
     bool handle_completion(const HostServiceCompletion& completion);
+    AppImageSurfaceEvictionResult evict_unreferenced_with_result(AppRuntimeHost& host,
+                                                                 ImageDecodeMock& decoder,
+                                                                 const std::uint32_t* protected_handles = nullptr,
+                                                                 std::size_t protected_handle_count = 0);
     std::size_t evict_unreferenced(AppRuntimeHost& host,
                                    ImageDecodeMock& decoder,
                                    const std::uint32_t* protected_handles = nullptr,

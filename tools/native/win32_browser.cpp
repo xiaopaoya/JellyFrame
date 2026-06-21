@@ -315,6 +315,20 @@ void report_image_cache_state(DiagnosticSink* diagnostics,
                       cache.diagnostic_detail_for_url(src));
 }
 
+void report_image_eviction_result(DiagnosticSink* diagnostics,
+                                  const AppImageSurfaceEvictionResult& result) {
+    if (result.dropped_stale_entries == 0) {
+        return;
+    }
+    report_diagnostic(diagnostics,
+                      DiagnosticStage::Package,
+                      DiagnosticSeverity::Warning,
+                      "image-cache-stale-entry",
+                      "Image cache dropped stale surface entries during eviction",
+                      "released=" + std::to_string(result.released_surfaces) +
+                          "; dropped_stale=" + std::to_string(result.dropped_stale_entries));
+}
+
 enum class ScriptedFrameEventKind {
     NetworkOnline,
     NetworkOffline,
@@ -1660,10 +1674,12 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
             layer_tree = layer_builder.build(*layout_tree);
             std::vector<std::uint32_t> protected_handles;
             collect_image_handles(*layer_tree, protected_handles);
-            image_cache.evict_unreferenced(app_runtime,
-                                           debug_images,
-                                           protected_handles.data(),
-                                           protected_handles.size());
+            const AppImageSurfaceEvictionResult evicted =
+                image_cache.evict_unreferenced_with_result(app_runtime,
+                                                           debug_images,
+                                                           protected_handles.data(),
+                                                           protected_handles.size());
+            report_image_eviction_result(&diagnostics, evicted);
         }
     }
 
@@ -2147,16 +2163,18 @@ private:
     }
 
     void evict_unused_image_surfaces() {
+        AppImageSurfaceEvictionResult evicted;
         if (layer_tree_ == nullptr) {
-            image_cache_.evict_unreferenced(app_runtime_, debug_images_);
-            return;
+            evicted = image_cache_.evict_unreferenced_with_result(app_runtime_, debug_images_);
+        } else {
+            std::vector<std::uint32_t> protected_handles;
+            collect_image_handles(*layer_tree_, protected_handles);
+            evicted = image_cache_.evict_unreferenced_with_result(app_runtime_,
+                                                                  debug_images_,
+                                                                  protected_handles.data(),
+                                                                  protected_handles.size());
         }
-        std::vector<std::uint32_t> protected_handles;
-        collect_image_handles(*layer_tree_, protected_handles);
-        image_cache_.evict_unreferenced(app_runtime_,
-                                        debug_images_,
-                                        protected_handles.data(),
-                                        protected_handles.size());
+        report_image_eviction_result(&diagnostics_, evicted);
     }
 
     void configure_system_shell(std::string status) {

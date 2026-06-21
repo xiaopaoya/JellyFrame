@@ -72,6 +72,9 @@ JellyFrame Engine 的重要变更记录在这里。
   以及 `AppImageSurfaceCache::diagnostic_detail_for_url(...)`，供桌面工具和未来
   嵌入式诊断口在 request 或 completion 失败后复用同一套图片失败分类和稳定 cache-state 字段。
   PNG/JPEG/WebP、复杂四值/长度偏移 `object-position` 和产品级 MCU codec 仍留给后续。
+- 加固图片 cache 生命周期：直接调用 `AppImageSurfaceCache` completion 处理时会拒绝旧 app instance
+  的 completion；eviction 可丢弃并报告 stale ready entry，避免被无效 handle 卡住；Win32 debug 壳会把
+  stale image-cache drop 写入 diagnostics。
 - 添加 `runtime_data_api.md` / `runtime_data_api_zh.md`，记录标准子集优先 runtime data API
   方向：先做异步 `XMLHttpRequest`，`fetch()` 等有界
   Promise/microtask 支持成熟后再考虑；只有存在非阻塞 app 私有内存 shadow 时才暴露极小

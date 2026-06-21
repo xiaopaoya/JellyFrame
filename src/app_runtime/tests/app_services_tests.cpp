@@ -470,6 +470,51 @@ void image_surface_cache_evicts_by_decoded_bytes() {
     check(cache.ready_byte_count() == 8U * 8U * 2U * 2U, "image cache byte eviction reaches budget");
 }
 
+void image_surface_cache_rejects_stale_completion_instances() {
+    AppRuntimeHost host = make_host();
+    const AppInstance first = host.launch("org.example.first-gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
+    check(images.add_fixture(ImageDecodeFixture{"app://stale", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache stale fixture");
+    AppImageSurfaceCache cache;
+    std::uint32_t handle = 0;
+    check(!cache.resolve_or_request(host, images, "app://stale", &handle),
+          "image cache stale request submitted");
+    const std::string pending = cache.diagnostic_detail_for_url("app://stale");
+    check(pending.find("state=pending") != std::string::npos, "image cache stale test has pending entry");
+
+    check(images.complete_next(host), "image cache stale decode completed");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1, "image cache stale completion accepted before mutation");
+    HostServiceCompletion stale_completion = accepted.front();
+    stale_completion.app_instance_id = first.id + 1;
+    check(!cache.handle_completion(stale_completion), "image cache rejects stale completion instance");
+    check(cache.state_for_url("app://stale") == AppImageSurfaceState::Pending,
+          "image cache stale completion keeps pending entry unchanged");
+    if (stale_completion.handle != 0) {
+        images.release_surface(host, stale_completion.handle);
+    }
+}
+
+void image_surface_cache_drops_stale_ready_entries_during_eviction() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 2});
+    check(images.add_fixture(ImageDecodeFixture{"app://stale-a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache stale eviction fixture a");
+    check(images.add_fixture(ImageDecodeFixture{"app://stale-b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image cache stale eviction fixture b");
+    AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{1, 0});
+
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://stale-a");
+    cache_ready_image(host, images, cache, "app://stale-b");
+    check(images.release_surface(host, handle_a), "image cache stale eviction simulates external handle release");
+    const AppImageSurfaceEvictionResult evicted = cache.evict_unreferenced_with_result(host, images);
+    check(evicted.dropped_stale_entries == 1, "image cache eviction drops stale ready entry");
+    check(evicted.released_surfaces == 0, "image cache stale eviction does not release live protected count");
+    check(cache.ready_surface_count() == 1, "image cache stale eviction reaches budget after stale drop");
+}
+
 void audio_command_mock_opens_controls_and_closes_streams() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.timer", AppRole::App);
@@ -704,6 +749,8 @@ int main() {
     image_surface_cache_evicts_lru_ready_surfaces();
     image_surface_cache_keeps_protected_display_list_surfaces();
     image_surface_cache_evicts_by_decoded_bytes();
+    image_surface_cache_rejects_stale_completion_instances();
+    image_surface_cache_drops_stale_ready_entries_during_eviction();
     audio_command_mock_opens_controls_and_closes_streams();
     audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup();
     kv_storage_is_app_private_and_async();

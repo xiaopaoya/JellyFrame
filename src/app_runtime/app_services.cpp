@@ -1019,6 +1019,9 @@ bool AppImageSurfaceCache::handle_completion(const HostServiceCompletion& comple
     if (entry == nullptr) {
         return false;
     }
+    if (entry->app_instance_id != 0 && completion.app_instance_id != entry->app_instance_id) {
+        return false;
+    }
     entry->status = completion.status;
     entry->error_code = completion.error_code;
     entry->app_instance_id = completion.app_instance_id;
@@ -1036,21 +1039,39 @@ bool AppImageSurfaceCache::handle_completion(const HostServiceCompletion& comple
     return true;
 }
 
-std::size_t AppImageSurfaceCache::evict_unreferenced(AppRuntimeHost& host,
-                                                     ImageDecodeMock& decoder,
-                                                     const std::uint32_t* protected_handles,
-                                                     std::size_t protected_handle_count) {
-    std::size_t released = 0;
+AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_result(
+    AppRuntimeHost& host,
+    ImageDecodeMock& decoder,
+    const std::uint32_t* protected_handles,
+    std::size_t protected_handle_count) {
+    AppImageSurfaceEvictionResult result;
     while (over_budget()) {
         Entry* victim = least_recently_used_unprotected(protected_handles, protected_handle_count);
         if (victim == nullptr) {
             break;
         }
         const std::uint32_t handle = victim->handle;
-        if (handle == 0 || !decoder.release_surface(host, handle)) {
-            break;
+        if (handle == 0) {
+            entries_.erase(std::remove_if(entries_.begin(),
+                                          entries_.end(),
+                                          [](const Entry& entry) {
+                                              return entry.state == AppImageSurfaceState::Ready && entry.handle == 0;
+                                          }),
+                           entries_.end());
+            ++result.dropped_stale_entries;
+            continue;
         }
-        ++released;
+        if (!decoder.release_surface(host, handle)) {
+            entries_.erase(std::remove_if(entries_.begin(),
+                                          entries_.end(),
+                                          [handle](const Entry& entry) {
+                                              return entry.state == AppImageSurfaceState::Ready && entry.handle == handle;
+                                          }),
+                           entries_.end());
+            ++result.dropped_stale_entries;
+            continue;
+        }
+        ++result.released_surfaces;
         entries_.erase(std::remove_if(entries_.begin(),
                                       entries_.end(),
                                       [handle](const Entry& entry) {
@@ -1058,7 +1079,14 @@ std::size_t AppImageSurfaceCache::evict_unreferenced(AppRuntimeHost& host,
                                       }),
                        entries_.end());
     }
-    return released;
+    return result;
+}
+
+std::size_t AppImageSurfaceCache::evict_unreferenced(AppRuntimeHost& host,
+                                                     ImageDecodeMock& decoder,
+                                                     const std::uint32_t* protected_handles,
+                                                     std::size_t protected_handle_count) {
+    return evict_unreferenced_with_result(host, decoder, protected_handles, protected_handle_count).released_surfaces;
 }
 
 std::size_t AppImageSurfaceCache::release_all(AppRuntimeHost& host, ImageDecodeMock& decoder) {

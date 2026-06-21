@@ -98,6 +98,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   and stable cache-state fields after request or completion failures.
   PNG/JPEG/WebP, complex four-value/length-offset `object-position` and
   production MCU codecs remain future work.
+- Hardened image cache lifecycle behavior: direct `AppImageSurfaceCache`
+  completion handling now rejects stale app-instance completions, eviction can
+  drop/report stale ready entries instead of stalling behind invalid handles,
+  and the Win32 debug shell reports stale image-cache drops through diagnostics.
 - Added `runtime_data_api.md` / `runtime_data_api_zh.md`, documenting the
   standard-subset runtime data API direction: asynchronous `XMLHttpRequest`
   first, `fetch()` only after bounded Promise/microtask support, tiny
