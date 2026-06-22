@@ -76,6 +76,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   listeners, `removeEventListener` and `once` support.
 - Added app-runtime microbench coverage for optional network fetch, KV storage,
   image-decode mock and system-event pumping.
+- Added a static-table app host service worker group pump so cooperative MCU
+  loops can pump network, storage and audio workers with per-service budgets
+  without dynamic allocation or cross-service request consumption.
 - Added the B1 image-decode V0 helper: `ImageDecodePolicy`, `ImageDecodeMock`
   and `AppDecodedSurfaceRecord` define platform-neutral raw-surface fixtures,
   `Surface` handle lifetime, width/height/decoded-byte/pending budgets and

@@ -45,4 +45,44 @@ AppHostServiceWorkerPumpResult pump_app_host_service_worker(
     return result;
 }
 
+AppHostServiceWorkerGroupPumpResult pump_app_host_service_workers(
+    AppRuntimeHost& host,
+    const AppHostServiceWorkerSlot* slots,
+    std::size_t slot_count) {
+    AppHostServiceWorkerGroupPumpResult result;
+    if (slots == nullptr || slot_count == 0) {
+        return result;
+    }
+
+    for (std::size_t index = 0; index < slot_count; ++index) {
+        const AppHostServiceWorkerSlot& slot = slots[index];
+        if (slot.worker == nullptr || slot.max_requests == 0) {
+            continue;
+        }
+        ++result.workers_considered;
+        if (host.completions().full()) {
+            result.completion_queue_full = true;
+            break;
+        }
+
+        const AppHostServiceWorkerPumpResult pumped = pump_app_host_service_worker(
+            host,
+            AppHostServiceWorkerPumpOptions{slot.kind, slot.max_requests},
+            *slot.worker);
+        if (pumped.requests_processed != 0 || pumped.completions_posted != 0) {
+            ++result.workers_pumped;
+        }
+        if (pumped.request_queue_empty) {
+            ++result.empty_workers;
+        }
+        result.requests_processed += pumped.requests_processed;
+        result.completions_posted += pumped.completions_posted;
+        if (pumped.completion_queue_full) {
+            result.completion_queue_full = true;
+            break;
+        }
+    }
+    return result;
+}
+
 } // namespace jellyframe

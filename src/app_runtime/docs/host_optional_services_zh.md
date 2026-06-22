@@ -68,6 +68,8 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
   MCU host 接入可选服务的推荐状态容器。
 - `pump_app_host_service_worker(...)`：可选的真实 host worker helper，用固定预算处理一个 service kind，
   并把归一化 completion 投回 UI queue。
+- `pump_app_host_service_workers(...)`：可选的静态 service worker 表 helper。它按每个非空 slot 自己的
+  固定 request budget 泵送，并在 UI completion queue 已满时停止，避免继续弹出工作。
 - `HostServiceRequestQueue`：有界 request FIFO，支持 priority 选择、pending job 取消和按
   `app_instance_id` 批量取消。只负责单一 service kind 的 worker 应使用按 kind 过滤的 pop，
   避免 network、storage、image、media job 彼此误消费。
@@ -191,6 +193,22 @@ Storage worker:
 Audio worker:
   pump_app_host_service_worker(host, { AudioCommand, 1 }, audio_worker)
 ```
+
+对协作式 MCU loop，也可以不用动态分配地表达同一策略：
+
+```cpp
+AppHostServiceWorkerSlot workers[] = {
+    { HostServiceJobKind::NetworkFetch, 1, &network_worker },
+    { HostServiceJobKind::StorageKv, 1, &storage_worker },
+    { HostServiceJobKind::AudioCommand, 1, &audio_worker },
+};
+
+AppHostServiceWorkerGroupPumpResult pumped =
+    pump_app_host_service_workers(host, workers, 3);
+```
+
+group helper 只是调度便利层。它不创建线程，不无限重试，也不会在 completion queue 已满时继续运行
+service 代码。
 
 MCU port 不必真的创建三个线程；可以是 RTOS task、事件循环分支，甚至一个协作式后台循环。关键是：
 

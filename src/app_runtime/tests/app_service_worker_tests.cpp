@@ -204,6 +204,92 @@ void worker_pump_remains_stable_across_many_ticks() {
     assert(worker.calls == static_cast<int>(kRequestCount));
 }
 
+void worker_group_pump_processes_multiple_services_with_fixed_budgets() {
+    AppRuntimeHost host = make_host(8, 4);
+    host.launch("org.example.group", AppRole::App);
+    assert(host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, 10).accepted);
+    assert(host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, 20).accepted);
+    assert(host.submit_current(HostServiceJobKind::StorageKv, 0, 0, 30).accepted);
+
+    EchoWorker network;
+    EchoWorker storage;
+    AppHostServiceWorkerSlot slots[] = {
+        AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 1, &network},
+        AppHostServiceWorkerSlot{HostServiceJobKind::StorageKv, 1, &storage},
+    };
+    const AppHostServiceWorkerGroupPumpResult result =
+        pump_app_host_service_workers(host, slots, 2);
+
+    assert(result.workers_considered == 2);
+    assert(result.workers_pumped == 2);
+    assert(result.empty_workers == 0);
+    assert(result.requests_processed == 2);
+    assert(result.completions_posted == 2);
+    assert(!result.completion_queue_full);
+    assert(network.calls == 1);
+    assert(storage.calls == 1);
+    assert(host.requests().size() == 1);
+
+    HostServiceRequest remaining;
+    assert(host.pop_worker_request(HostServiceJobKind::NetworkFetch, remaining));
+    assert(remaining.timeout_ms == 20);
+}
+
+void worker_group_pump_stops_before_next_worker_when_completion_queue_is_full() {
+    AppRuntimeHost host = make_host(4, 1);
+    host.launch("org.example.group-full", AppRole::App);
+    assert(host.push_completion(HostServiceCompletion{
+        99,
+        HostServiceJobKind::Other,
+        HostServiceStatus::Completed,
+        host.current_app_instance_id(),
+        0,
+        0,
+        0,
+    }));
+    assert(host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
+    assert(host.submit_current(HostServiceJobKind::StorageKv).accepted);
+
+    EchoWorker network;
+    EchoWorker storage;
+    AppHostServiceWorkerSlot slots[] = {
+        AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 1, &network},
+        AppHostServiceWorkerSlot{HostServiceJobKind::StorageKv, 1, &storage},
+    };
+    const AppHostServiceWorkerGroupPumpResult result =
+        pump_app_host_service_workers(host, slots, 2);
+
+    assert(result.workers_considered == 1);
+    assert(result.workers_pumped == 0);
+    assert(result.requests_processed == 0);
+    assert(result.completions_posted == 0);
+    assert(result.completion_queue_full);
+    assert(network.calls == 0);
+    assert(storage.calls == 0);
+    assert(host.requests().size() == 2);
+}
+
+void worker_group_pump_ignores_empty_slots_without_allocation_or_side_effects() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.group-empty", AppRole::App);
+    assert(host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
+
+    EchoWorker network;
+    AppHostServiceWorkerSlot slots[] = {
+        AppHostServiceWorkerSlot{HostServiceJobKind::StorageKv, 1, nullptr},
+        AppHostServiceWorkerSlot{HostServiceJobKind::AudioCommand, 0, &network},
+    };
+    const AppHostServiceWorkerGroupPumpResult result =
+        pump_app_host_service_workers(host, slots, 2);
+
+    assert(result.workers_considered == 0);
+    assert(result.workers_pumped == 0);
+    assert(result.requests_processed == 0);
+    assert(result.completions_posted == 0);
+    assert(network.calls == 0);
+    assert(host.requests().size() == 1);
+}
+
 } // namespace
 
 int main() {
@@ -212,5 +298,8 @@ int main() {
     worker_pump_does_not_pop_when_completion_queue_is_full();
     worker_pump_respects_per_tick_request_budget();
     worker_pump_remains_stable_across_many_ticks();
+    worker_group_pump_processes_multiple_services_with_fixed_budgets();
+    worker_group_pump_stops_before_next_worker_when_completion_queue_is_full();
+    worker_group_pump_ignores_empty_slots_without_allocation_or_side_effects();
     return 0;
 }

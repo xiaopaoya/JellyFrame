@@ -166,6 +166,31 @@ void bench_service_worker_pump(std::size_t capacity) {
     }
 }
 
+void bench_service_worker_group_pump(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity * 3, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.worker-group", AppRole::App);
+    for (std::size_t i = 0; i < capacity; ++i) {
+        host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, static_cast<std::uint32_t>(i + 1));
+        host.submit_current(HostServiceJobKind::StorageKv, 0, 0, static_cast<std::uint32_t>(i + 1));
+        host.submit_current(HostServiceJobKind::AudioCommand, 0, 0, static_cast<std::uint32_t>(i + 1));
+    }
+    BenchServiceWorker network;
+    BenchServiceWorker storage;
+    BenchServiceWorker audio;
+    AppHostServiceWorkerSlot slots[] = {
+        AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 1, &network},
+        AppHostServiceWorkerSlot{HostServiceJobKind::StorageKv, 1, &storage},
+        AppHostServiceWorkerSlot{HostServiceJobKind::AudioCommand, 1, &audio},
+    };
+    std::vector<HostServiceCompletion> accepted;
+    accepted.reserve(8);
+    while (!host.requests().empty()) {
+        pump_app_host_service_workers(host, slots, 3);
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+}
+
 void bench_network_fetch_mock(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
     host.launch("org.example.network", AppRole::App);
@@ -487,6 +512,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_service_worker_pump", iterations, average_microseconds(iterations, [&] {
         bench_service_worker_pump(capacity);
+    }));
+    print_result("app_runtime_service_worker_group_pump", iterations, average_microseconds(iterations, [&] {
+        bench_service_worker_group_pump(capacity);
     }));
     print_result("app_runtime_network_fetch_mock", iterations, average_microseconds(iterations, [&] {
         bench_network_fetch_mock(capacity);

@@ -59,6 +59,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - JerryScript bridge 现在会把 accepted network status 变化映射到标准 `window`
   `online`/`offline` 事件子集，支持有界函数 listener、`removeEventListener` 和 `once`。
 - app-runtime microbench 新增可选 network fetch、KV storage、image decode mock 和 system-event pump 覆盖。
+- 添加静态表 app host service worker group pump，协作式 MCU loop 可按每个服务自己的预算泵送
+  network、storage、audio worker，不需要动态分配，也避免跨服务误消费 request。
 - 添加 B1 图片解码 V0 helper：`ImageDecodePolicy`、`ImageDecodeMock` 与
   `AppDecodedSurfaceRecord` 定义平台无关 raw surface fixture、`Surface` handle 生命周期、
   尺寸/decoded bytes/pending 预算和 release 规则。

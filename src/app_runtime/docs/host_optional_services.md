@@ -89,6 +89,9 @@ Current core helpers:
 - `pump_app_host_service_worker(...)`: optional helper for real host workers
   that process one service kind at a bounded cadence and post normalized
   completions back to the UI queue.
+- `pump_app_host_service_workers(...)`: optional helper for a static table of
+  service workers. It pumps each non-null slot with its own fixed request budget
+  and stops before popping more work when the UI completion queue is full.
 - `HostServiceRequestQueue`: bounded request queue with priority selection,
   pending-job cancellation and bulk cancellation by `app_instance_id`.
   Workers that own only one service kind should use kind-filtered popping so
@@ -229,6 +232,24 @@ Storage worker:
 Audio worker:
   pump_app_host_service_worker(host, { AudioCommand, 1 }, audio_worker)
 ```
+
+For a cooperative MCU loop, the same policy can be expressed without dynamic
+allocation:
+
+```cpp
+AppHostServiceWorkerSlot workers[] = {
+    { HostServiceJobKind::NetworkFetch, 1, &network_worker },
+    { HostServiceJobKind::StorageKv, 1, &storage_worker },
+    { HostServiceJobKind::AudioCommand, 1, &audio_worker },
+};
+
+AppHostServiceWorkerGroupPumpResult pumped =
+    pump_app_host_service_workers(host, workers, 3);
+```
+
+The group helper is only a scheduler convenience. It does not create threads,
+does not retry indefinitely and does not run service code when the completion
+queue is already full.
 
 MCU ports do not need three literal threads. These can be RTOS tasks, event-loop
 branches or one cooperative background loop. The important parts are:
