@@ -126,8 +126,11 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Exposed now: a tiny host-optional `Audio` subset. App code may construct
   `new Audio(src)`, set `src`/`volume`, call `play()` and call no-op `pause()`.
   `play()` throws when no host audio adapter is bound or the host rejects the
-  source. It intentionally does not expose full `HTMLAudioElement`, Promises,
-  streaming state or `ended/error` events yet.
+  source and dispatches `error` for registered handlers. `onended`/`onerror`
+  and `addEventListener`/`removeEventListener` for `ended` and `error` are
+  supported as the first status-event subset. V0 keeps one function listener
+  per event type plus the `on*` property slot. It intentionally does not expose
+  full `HTMLAudioElement`, Promises or streaming state yet.
 - Exposed now: `navigator.onLine`, `window.addEventListener` /
   `removeEventListener` for the `online` and `offline` system-status events,
   `document.hidden`, `document.visibilityState` and `document`

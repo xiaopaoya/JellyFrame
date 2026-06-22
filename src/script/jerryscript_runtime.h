@@ -31,7 +31,13 @@ struct ScriptEvaluationResult {
     std::string error;
 };
 
+enum class ScriptAudioEventKind {
+    Ended,
+    Error,
+};
+
 using ScriptAudioPlayCallback = bool (*)(void* user,
+                                         std::uint32_t audio_id,
                                          std::string_view src,
                                          double volume,
                                          std::string* error);
@@ -83,6 +89,7 @@ public:
     void set_system_state(ScriptSystemState state);
     ScriptSystemState system_state() const;
     bool dispatch_visibility_change();
+    bool dispatch_audio_event(std::uint32_t audio_id, ScriptAudioEventKind kind);
     std::size_t pump_timers(std::uint64_t now_ms, std::size_t max_callbacks = 32);
     std::size_t pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks = 4);
     bool handle_host_completion(const HostServiceCompletion& completion);
@@ -99,6 +106,7 @@ private:
     bool initialized_ = false;
     std::uint32_t next_timer_id_ = 1;
     std::uint32_t next_animation_frame_id_ = 1;
+    std::uint32_t next_audio_id_ = 1;
     std::uint64_t current_time_ms_ = 0;
     DomOwner detached_nodes_;
     std::vector<std::unique_ptr<ScriptEventListener>> event_listeners_;

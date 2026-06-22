@@ -804,11 +804,13 @@ Recommended order:
    diagnostics are wired; next work is production image codecs.
 4. Add ESP32-S3 RGB565 small-image/MJPEG decode with strict size/concurrency
    caps after the desktop surface consumer path is stable.
-5. Add host-owned MP3 playback, returning only handles and ended/error events.
-6. Expose user-facing JS APIs only after the lifetime boundary is stable. The
-   asynchronous `XMLHttpRequest` GET V0 subset is now exposed; `fetch()` waits
-   for bounded Promise/microtask support. Let manifest/profile checks reject
-   unsupported targets.
+5. Add product host-owned MP3 playback backends, still returning only handles
+   and ended/error events to the UI task. The mock and tiny `Audio()` JS status
+   event subset are already available for desktop validation.
+6. Expose further user-facing JS APIs only after the lifetime boundary is
+   stable. The asynchronous `XMLHttpRequest` GET V0 subset is now exposed;
+   `fetch()` waits for bounded Promise/microtask support. Let manifest/profile
+   checks reject unsupported targets.
 
 The point is to get lifetime and scheduling right first, then attach real
 hardware capabilities gradually.

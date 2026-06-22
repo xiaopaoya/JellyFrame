@@ -694,8 +694,9 @@ enum class AppSystemEventPushStatus {
    已接入；下一步补产品级图片 codec。
 4. 桌面 surface consumer 路径稳定后，在 ESP32-S3 port 中接 RGB565 小图/MJPEG decode，
    并严格限制尺寸和并发。
-5. 接 host-owned MP3 playback，只返回句柄和 ended/error 事件。
-6. 面向用户的 JS API 必须在上述边界稳定后暴露。当前已暴露异步 `XMLHttpRequest` GET V0；
+5. 接产品级 host-owned MP3 playback backend，仍只向 UI task 返回句柄和 ended/error 事件。mock 与极小
+   `Audio()` JS 状态事件子集已经可用于桌面验证。
+6. 更多面向用户的 JS API 必须在上述边界稳定后暴露。当前已暴露异步 `XMLHttpRequest` GET V0；
    `fetch()` 等有界 Promise/microtask 支持存在后再考虑；让 manifest/profile 检查拦截不支持目标。
 
 这条顺序的核心目的很朴素：先把生命周期和调度做对，再逐步把真实硬件能力接进来。

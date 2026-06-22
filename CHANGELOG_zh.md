@@ -96,6 +96,9 @@ JellyFrame Engine 的重要变更记录在这里。
   通过 debug network mock 验证 host completion 到 JS callback 的主线程分发路径。
 - JerryScript bridge 在宿主绑定非阻塞 `AppLocalStorageShadow` 时暴露极小 `localStorage` V0
   子集；Win32 browser scripting 构建提供按 active app instance 清理的 debug shadow。
+- 扩展宿主可选 JerryScript `Audio()` V0 子集：新增 `onended`/`onerror`、面向 `ended` 和
+  `error` 的 `addEventListener`/`removeEventListener`、供宿主状态事件回到脚本的 runtime
+  dispatch hook，以及 Win32 debug 壳在本地/包内播放后派发 `ended` 的调试路径。
 - `jellyframe_font_pack_gen` 新增 `.jffont` V0 二进制字体补充包输出，复用现有
   `BitmapFont` glyph 数据模型，但去掉 C++ 指针和编译期符号，为后续 `.jfapp`
   动态包内字体资源打基础。

@@ -58,8 +58,12 @@ struct ScriptXmlHttpRequest {
 
 struct ScriptAudioElement {
     JerryScriptRuntime* runtime = nullptr;
+    std::uint32_t id = 0;
     std::string src;
     double volume = 1.0;
+    jerry_value_t object = 0;
+    std::array<jerry_value_t, 2> property_callbacks{};
+    std::array<jerry_value_t, 2> event_listeners{};
     bool active = false;
 };
 
@@ -556,6 +560,33 @@ const char* xhr_event_type(AppXhrEventKind kind) {
         return "loadend";
     }
     return "event";
+}
+
+std::size_t audio_event_index(ScriptAudioEventKind kind) {
+    return kind == ScriptAudioEventKind::Error ? 1U : 0U;
+}
+
+ScriptAudioEventKind audio_event_kind_from_type(const std::string& type, bool* known = nullptr) {
+    if (type == "ended") {
+        if (known != nullptr) {
+            *known = true;
+        }
+        return ScriptAudioEventKind::Ended;
+    }
+    if (type == "error") {
+        if (known != nullptr) {
+            *known = true;
+        }
+        return ScriptAudioEventKind::Error;
+    }
+    if (known != nullptr) {
+        *known = false;
+    }
+    return ScriptAudioEventKind::Error;
+}
+
+const char* audio_event_type(ScriptAudioEventKind kind) {
+    return kind == ScriptAudioEventKind::Error ? "error" : "ended";
 }
 
 bool same_js_value(jerry_value_t left, jerry_value_t right) {
@@ -1097,6 +1128,72 @@ jerry_value_t get_xhr_callback(const ScriptXmlHttpRequest& xhr, AppXhrEventKind 
     return jerry_value_copy(xhr.callbacks[index]);
 }
 
+jerry_value_t make_audio_event_object(ScriptAudioElement& audio, ScriptAudioEventKind kind) {
+    JerryValue object(jerry_object());
+    set_property(object.get(), "type", string_to_value(audio_event_type(kind)).get());
+    if (audio.object != 0) {
+        JerryValue target(jerry_value_copy(audio.object));
+        set_property(object.get(), "target", target.get());
+        set_property(object.get(), "currentTarget", target.get());
+    } else {
+        set_property(object.get(), "target", jerry_null());
+        set_property(object.get(), "currentTarget", jerry_null());
+    }
+    return object.release();
+}
+
+bool call_audio_callback(ScriptAudioElement& audio, jerry_value_t callback, ScriptAudioEventKind kind) {
+    if (callback == 0 || !jerry_value_is_function(callback)) {
+        return false;
+    }
+    JerryValue callback_copy(jerry_value_copy(callback));
+    JerryValue event_object(make_audio_event_object(audio, kind));
+    const jerry_value_t event_arg = event_object.get();
+    JerryValue this_value(audio.object != 0 ? jerry_value_copy(audio.object) : jerry_undefined());
+    JerryValue result(jerry_call(callback_copy.get(), this_value.get(), &event_arg, 1));
+    if (jerry_value_is_exception(result.get())) {
+        JerryValue exception_value(jerry_exception_value(result.release(), true));
+        (void) exception_value;
+    }
+    return true;
+}
+
+bool dispatch_audio_event_to_element(ScriptAudioElement& audio, ScriptAudioEventKind kind) {
+    const std::size_t index = audio_event_index(kind);
+    if (index >= audio.property_callbacks.size()) {
+        return false;
+    }
+    bool handled = false;
+    handled = call_audio_callback(audio, audio.property_callbacks[index], kind) || handled;
+    handled = call_audio_callback(audio, audio.event_listeners[index], kind) || handled;
+    return handled;
+}
+
+void set_audio_callback(std::array<jerry_value_t, 2>& callbacks,
+                        ScriptAudioEventKind kind,
+                        jerry_value_t value) {
+    const std::size_t index = audio_event_index(kind);
+    if (index >= callbacks.size()) {
+        return;
+    }
+    if (callbacks[index] != 0) {
+        jerry_value_free(callbacks[index]);
+        callbacks[index] = 0;
+    }
+    if (jerry_value_is_function(value)) {
+        callbacks[index] = jerry_value_copy(value);
+    }
+}
+
+jerry_value_t get_audio_callback(const std::array<jerry_value_t, 2>& callbacks,
+                                 ScriptAudioEventKind kind) {
+    const std::size_t index = audio_event_index(kind);
+    if (index >= callbacks.size() || callbacks[index] == 0) {
+        return jerry_null();
+    }
+    return jerry_value_copy(callbacks[index]);
+}
+
 jerry_value_t xhr_construct(const jerry_call_info_t* call_info_p,
                             const jerry_value_t[],
                             const jerry_length_t) {
@@ -1367,6 +1464,7 @@ jerry_value_t audio_construct(const jerry_call_info_t* call_info_p,
     if (audio == nullptr) {
         return jerry_throw_sz(JERRY_ERROR_RANGE, "Audio element budget exceeded");
     }
+    audio->object = jerry_value_copy(call_info_p->this_value);
     jerry_object_set_native_ptr(call_info_p->this_value, &kAudioNativeInfo, audio);
     jerry_object_set_native_ptr(call_info_p->this_value, &kRuntimeNativeInfo, runtime);
     return jerry_undefined();
@@ -1430,10 +1528,11 @@ jerry_value_t audio_play(const jerry_call_info_t* call_info_p,
         return throw_type_error("Audio host is not bound");
     }
     std::string error;
-    if (!host.play(host.user, audio->src, audio->volume, &error)) {
+    if (!host.play(host.user, audio->id, audio->src, audio->volume, &error)) {
         if (error.empty()) {
             error = "Audio playback failed";
         }
+        dispatch_audio_event_to_element(*audio, ScriptAudioEventKind::Error);
         return jerry_throw_sz(JERRY_ERROR_TYPE, error.c_str());
     }
     return jerry_undefined();
@@ -1448,11 +1547,67 @@ jerry_value_t audio_pause(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t audio_add_event_listener(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count) {
+    ScriptAudioElement* audio = native_audio(call_info_p->this_value);
+    if (audio == nullptr || args_count < 2 || !jerry_value_is_function(args_p[1])) {
+        return throw_type_error("Audio.addEventListener requires an event type and function");
+    }
+    bool known = false;
+    const ScriptAudioEventKind kind = audio_event_kind_from_type(value_to_string(args_p[0]), &known);
+    if (known) {
+        set_audio_callback(audio->event_listeners, kind, args_p[1]);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t audio_remove_event_listener(const jerry_call_info_t* call_info_p,
+                                          const jerry_value_t args_p[],
+                                          const jerry_length_t args_count) {
+    ScriptAudioElement* audio = native_audio(call_info_p->this_value);
+    if (audio == nullptr || args_count < 2 || !jerry_value_is_function(args_p[1])) {
+        return jerry_undefined();
+    }
+    bool known = false;
+    const ScriptAudioEventKind kind = audio_event_kind_from_type(value_to_string(args_p[0]), &known);
+    const std::size_t index = audio_event_index(kind);
+    if (!known || index >= audio->event_listeners.size() || audio->event_listeners[index] == 0 ||
+        !same_js_value(audio->event_listeners[index], args_p[1])) {
+        return jerry_undefined();
+    }
+    jerry_value_free(audio->event_listeners[index]);
+    audio->event_listeners[index] = 0;
+    return jerry_undefined();
+}
+
+#define JELLYFRAME_AUDIO_CALLBACK_ACCESSOR(js_name, event_kind) \
+    jerry_value_t audio_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        ScriptAudioElement* audio = native_audio(call_info_p->this_value); \
+        return audio != nullptr ? get_audio_callback(audio->property_callbacks, event_kind) : jerry_null(); \
+    } \
+    jerry_value_t audio_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        ScriptAudioElement* audio = native_audio(call_info_p->this_value); \
+        if (audio != nullptr) { \
+            set_audio_callback(audio->property_callbacks, event_kind, args_count > 0 ? args_p[0] : jerry_null()); \
+        } \
+        return jerry_undefined(); \
+    }
+
+JELLYFRAME_AUDIO_CALLBACK_ACCESSOR(onended, ScriptAudioEventKind::Ended)
+JELLYFRAME_AUDIO_CALLBACK_ACCESSOR(onerror, ScriptAudioEventKind::Error)
+
+#undef JELLYFRAME_AUDIO_CALLBACK_ACCESSOR
+
 void install_audio_members(jerry_value_t object) {
     define_accessor(object, "src", audio_get_src, audio_set_src);
     define_accessor(object, "volume", audio_get_volume, audio_set_volume);
+    define_accessor(object, "onended", audio_get_onended, audio_set_onended);
+    define_accessor(object, "onerror", audio_get_onerror, audio_set_onerror);
     set_method(object, "play", audio_play);
     set_method(object, "pause", audio_pause);
+    set_method(object, "addEventListener", audio_add_event_listener);
+    set_method(object, "removeEventListener", audio_remove_event_listener);
 }
 
 jerry_value_t make_audio_constructor(JerryScriptRuntime& runtime) {
@@ -2012,6 +2167,18 @@ bool JerryScriptRuntime::dispatch_visibility_change() {
     return true;
 }
 
+bool JerryScriptRuntime::dispatch_audio_event(std::uint32_t audio_id, ScriptAudioEventKind kind) {
+    if (audio_id == 0) {
+        return false;
+    }
+    for (const auto& audio : audio_elements_) {
+        if (audio->active && audio->id == audio_id) {
+            return dispatch_audio_event_to_element(*audio, kind);
+        }
+    }
+    return false;
+}
+
 std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t max_callbacks) {
     current_time_ms_ = now_ms;
     std::size_t callbacks = 0;
@@ -2507,6 +2674,10 @@ ScriptAudioElement* JerryScriptRuntime::create_audio_element(std::string src) {
     }
     auto audio = std::make_unique<ScriptAudioElement>();
     audio->runtime = this;
+    audio->id = next_audio_id_++;
+    if (next_audio_id_ == 0) {
+        next_audio_id_ = 1;
+    }
     audio->src = std::move(src);
     audio->active = true;
     ScriptAudioElement* raw = audio.get();
@@ -2516,6 +2687,22 @@ ScriptAudioElement* JerryScriptRuntime::create_audio_element(std::string src) {
 
 void JerryScriptRuntime::clear_audio_elements() {
     for (const auto& audio : audio_elements_) {
+        if (audio->object != 0) {
+            jerry_value_free(audio->object);
+            audio->object = 0;
+        }
+        for (jerry_value_t& callback : audio->property_callbacks) {
+            if (callback != 0) {
+                jerry_value_free(callback);
+                callback = 0;
+            }
+        }
+        for (jerry_value_t& callback : audio->event_listeners) {
+            if (callback != 0) {
+                jerry_value_free(callback);
+                callback = 0;
+            }
+        }
         audio->active = false;
     }
     audio_elements_.clear();

@@ -38,8 +38,10 @@
 #include <mmsystem.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
@@ -672,6 +674,87 @@ bool play_win32_audio_file_async(const std::filesystem::path& path, std::string&
         error = exception.what();
         return false;
     }
+}
+
+std::uint32_t read_le_u32(const std::array<unsigned char, 4>& bytes) {
+    return static_cast<std::uint32_t>(bytes[0]) |
+           (static_cast<std::uint32_t>(bytes[1]) << 8U) |
+           (static_cast<std::uint32_t>(bytes[2]) << 16U) |
+           (static_cast<std::uint32_t>(bytes[3]) << 24U);
+}
+
+std::uint16_t read_le_u16(const std::array<unsigned char, 2>& bytes) {
+    return static_cast<std::uint16_t>(bytes[0]) |
+           static_cast<std::uint16_t>(static_cast<std::uint16_t>(bytes[1]) << 8U);
+}
+
+bool read_exact(std::ifstream& input, unsigned char* data, std::size_t size) {
+    input.read(reinterpret_cast<char*>(data), static_cast<std::streamsize>(size));
+    return input.good();
+}
+
+std::uint32_t estimate_wav_duration_ms(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        return 0;
+    }
+    char riff[4] = {};
+    char wave[4] = {};
+    std::array<unsigned char, 4> u32{};
+    if (!read_exact(input, reinterpret_cast<unsigned char*>(riff), 4) ||
+        !read_exact(input, u32.data(), u32.size()) ||
+        !read_exact(input, reinterpret_cast<unsigned char*>(wave), 4) ||
+        std::strncmp(riff, "RIFF", 4) != 0 ||
+        std::strncmp(wave, "WAVE", 4) != 0) {
+        return 0;
+    }
+
+    std::uint16_t channels = 0;
+    std::uint32_t sample_rate = 0;
+    std::uint16_t bits_per_sample = 0;
+    std::uint32_t data_bytes = 0;
+    while (input && (!sample_rate || !data_bytes)) {
+        char chunk_id[4] = {};
+        if (!read_exact(input, reinterpret_cast<unsigned char*>(chunk_id), 4) ||
+            !read_exact(input, u32.data(), u32.size())) {
+            break;
+        }
+        const std::uint32_t chunk_size = read_le_u32(u32);
+        const std::streampos payload_begin = input.tellg();
+        if (std::strncmp(chunk_id, "fmt ", 4) == 0 && chunk_size >= 16) {
+            std::array<unsigned char, 2> u16{};
+            if (!read_exact(input, u16.data(), u16.size())) {
+                return 0;
+            }
+            const std::uint16_t audio_format = read_le_u16(u16);
+            if (!read_exact(input, u16.data(), u16.size())) {
+                return 0;
+            }
+            channels = read_le_u16(u16);
+            if (!read_exact(input, u32.data(), u32.size())) {
+                return 0;
+            }
+            sample_rate = read_le_u32(u32);
+            input.seekg(6, std::ios::cur);
+            if (!read_exact(input, u16.data(), u16.size())) {
+                return 0;
+            }
+            bits_per_sample = read_le_u16(u16);
+            if (audio_format != 1) {
+                return 0;
+            }
+        } else if (std::strncmp(chunk_id, "data", 4) == 0) {
+            data_bytes = chunk_size;
+        }
+        input.seekg(payload_begin + static_cast<std::streamoff>(chunk_size + (chunk_size & 1U)));
+    }
+    const std::uint32_t bytes_per_second =
+        sample_rate * std::max<std::uint16_t>(1, channels) * std::max<std::uint16_t>(1, bits_per_sample) / 8U;
+    if (bytes_per_second == 0 || data_bytes == 0) {
+        return 0;
+    }
+    return std::max<std::uint32_t>(1, static_cast<std::uint32_t>(
+        (static_cast<std::uint64_t>(data_bytes) * 1000ULL) / bytes_per_second));
 }
 
 bool run_win32_audio_smoke_file(const std::filesystem::path& path,
@@ -2090,6 +2173,7 @@ public:
         stop_win32_audio_playback();
         cleanup_temp_audio_files();
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        pending_script_audio_events_.clear();
         script_runtime_.reset();
         script_runtime_instance_id_ = 0;
 #endif
@@ -2284,6 +2368,11 @@ private:
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
     std::unique_ptr<JerryScriptRuntime> script_runtime_;
     std::uint32_t script_runtime_instance_id_ = 0;
+    struct PendingScriptAudioEvent {
+        std::uint32_t audio_id = 0;
+        std::uint64_t due_ms = 0;
+        ScriptAudioEventKind kind = ScriptAudioEventKind::Ended;
+    };
 #endif
     std::unique_ptr<Node> document_;
     std::unique_ptr<StyleResolver> style_resolver_;
@@ -2321,6 +2410,9 @@ private:
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
     std::uint32_t debug_local_storage_instance_id_ = 0;
     std::vector<std::filesystem::path> temp_audio_files_;
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+    std::vector<PendingScriptAudioEvent> pending_script_audio_events_;
+#endif
     HostServiceDebugCounters host_service_counters_;
     AppBackgroundServicePolicy background_service_policy_;
     FramePolicyDebugCounters frame_policy_counters_;
@@ -2523,15 +2615,39 @@ private:
     }
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
+    bool pump_script_audio_events(std::uint64_t now_ms) {
+        if (script_runtime_ == nullptr || pending_script_audio_events_.empty() ||
+            script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
+            return false;
+        }
+        bool handled = false;
+        for (PendingScriptAudioEvent& event : pending_script_audio_events_) {
+            if (event.audio_id == 0 || event.due_ms > now_ms) {
+                continue;
+            }
+            handled = script_runtime_->dispatch_audio_event(event.audio_id, event.kind) || handled;
+            event.audio_id = 0;
+        }
+        pending_script_audio_events_.erase(
+            std::remove_if(pending_script_audio_events_.begin(),
+                           pending_script_audio_events_.end(),
+                           [](const PendingScriptAudioEvent& event) {
+                               return event.audio_id == 0;
+                           }),
+            pending_script_audio_events_.end());
+        return handled;
+    }
+
     static bool play_script_audio_callback(void* user,
+                                           std::uint32_t audio_id,
                                            std::string_view src,
                                            double volume,
                                            std::string* error) {
         auto* app = static_cast<BrowserApp*>(user);
-        return app != nullptr && app->play_script_audio(src, volume, error);
+        return app != nullptr && app->play_script_audio(audio_id, src, volume, error);
     }
 
-    bool play_script_audio(std::string_view src, double volume, std::string* error) {
+    bool play_script_audio(std::uint32_t audio_id, std::string_view src, double volume, std::string* error) {
         (void) volume;
         const std::string source(src);
         std::filesystem::path audio_path;
@@ -2543,6 +2659,16 @@ private:
             }
             return false;
         }
+        std::uint32_t duration_ms = 0;
+        const std::string extension = audio_path.extension().string();
+        std::string lower_extension;
+        lower_extension.reserve(extension.size());
+        for (char ch : extension) {
+            lower_extension.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        if (lower_extension == ".wav") {
+            duration_ms = estimate_wav_duration_ms(audio_path);
+        }
         if (temporary) {
             temp_audio_files_.push_back(audio_path);
         }
@@ -2552,6 +2678,11 @@ private:
             }
             return false;
         }
+        pending_script_audio_events_.push_back(PendingScriptAudioEvent{
+            audio_id,
+            current_time_ms() + std::max<std::uint32_t>(duration_ms, 1000U),
+            ScriptAudioEventKind::Ended,
+        });
         return true;
     }
 
@@ -2827,6 +2958,7 @@ private:
             cleanup_temp_audio_files();
             KillTimer(hwnd_, kScriptTimerId);
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
+            pending_script_audio_events_.clear();
             script_runtime_.reset();
             script_runtime_instance_id_ = 0;
 #endif
@@ -3502,11 +3634,12 @@ private:
         const std::uint64_t now_ms = current_time_ms();
         const std::size_t callbacks =
             script_runtime_->pump_timers(now_ms, frame_options.max_timer_callbacks_per_frame);
+        const bool audio_event_handled = pump_script_audio_events(now_ms);
         const std::size_t animation_callbacks = animation_budget_enabled
             ? script_runtime_->pump_animation_frame(now_ms, frame_options.max_animation_callbacks_per_frame)
             : 0;
         if (frame_policy.presents_frames &&
-            (callbacks != 0 || animation_callbacks != 0 || completed_network || advanced_animation ||
+            (callbacks != 0 || animation_callbacks != 0 || audio_event_handled || completed_network || advanced_animation ||
              completed_image || handled_completion || handled_system_event)) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }

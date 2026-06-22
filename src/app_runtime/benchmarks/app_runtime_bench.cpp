@@ -271,9 +271,26 @@ void bench_audio_command_mock(std::size_t capacity) {
         audio.submit_play(host, handle);
         audio.submit_set_volume(host, handle, 40);
         audio.submit_stop(host, handle);
+    }
+    for (std::size_t i = 0; i < handles.size() * 3; ++i) {
+        audio.complete_next(host);
+    }
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+    for (std::uint32_t handle : handles) {
+        audio.post_ended(host, handle);
+    }
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+    for (std::uint32_t handle : handles) {
+        audio.post_error(host, handle, 500);
         audio.submit_close(host, handle);
     }
-    for (std::size_t i = 0; i < handles.size() * 4; ++i) {
+    for (std::size_t i = 0; i < handles.size(); ++i) {
         audio.complete_next(host);
     }
     while (!host.completions().empty()) {

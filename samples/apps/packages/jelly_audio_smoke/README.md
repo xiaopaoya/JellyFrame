@@ -5,7 +5,9 @@ Small package used to validate the Win32 host-owned audio path.
 The app carries a roughly one-second PCM WAV package audio resource. It does
 not declare the MCU MP3 capability. Its button uses the standards-shaped V0
 subset `new Audio("/audio/tone.wav").play()`, which the Win32 shell maps to the
-desktop host audio adapter.
+desktop host audio adapter. The sample also installs `onended` and `onerror`
+handlers so the shell can validate status events without exposing a private
+audio API.
 
 The command-line smoke path is still available when you want to test only the
 host handoff without opening the interactive shell:

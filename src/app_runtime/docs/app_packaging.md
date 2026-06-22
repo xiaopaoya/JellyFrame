@@ -92,8 +92,8 @@ Runtime data and storage boundary:
   playback. Current runtime code has command/handle/completion validation, but
   the Win32 shell can also validate desktop host-adapter handoff with
   `--audio-smoke` from a local or in-package resource. JerryScript builds expose
-  a tiny host-optional `Audio()` V0 subset, but there is still no built-in MCU
-  codec.
+  a tiny host-optional `Audio()` V0 subset with `ended`/`error` status events,
+  but there is still no built-in MCU codec.
 - Apps may request weather/account data, small JSON sync or download a `.jfapp`
   for the system installer to verify.
 - Remote HTML/CSS/script/image resources are still forbidden as page resources.

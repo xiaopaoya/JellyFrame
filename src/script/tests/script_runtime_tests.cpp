@@ -7,6 +7,7 @@
 #include "render_core/form_control.h"
 #include "render_core/html_parser.h"
 
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -606,16 +607,22 @@ void javascript_local_storage_quota_error_is_reported() {
 }
 
 struct FakeAudioHost {
+    std::uint32_t audio_id = 0;
     std::string src;
     double volume = -1.0;
     int calls = 0;
+    bool fail = false;
 };
 
-bool fake_audio_play(void* user, std::string_view src, double volume, std::string*) {
+bool fake_audio_play(void* user, std::uint32_t audio_id, std::string_view src, double volume, std::string*) {
     auto* host = static_cast<FakeAudioHost*>(user);
     if (host == nullptr) {
         return false;
     }
+    if (host->fail) {
+        return false;
+    }
+    host->audio_id = audio_id;
     host->src = std::string(src);
     host->volume = volume;
     ++host->calls;
@@ -639,25 +646,55 @@ void javascript_audio_subset_uses_bound_host() {
         check(result.value == "function:false:false", "Audio requires new and bound host for play");
     }
 
-    FakeAudioHost host;
-    JerryScriptRuntime runtime_with_audio;
-    runtime_with_audio.bind_audio_host(ScriptAudioHost{fake_audio_play, &host});
-    runtime_with_audio.bind_document(*document);
-    ScriptEvaluationResult result = runtime_with_audio.eval(
-        "var tone = new Audio('/audio/tone.wav');"
-        "tone.volume = 2;"
-        "var high = tone.volume;"
-        "tone.volume = -1;"
-        "var low = tone.volume;"
-        "tone.volume = 0.35;"
-        "tone.play();"
-        "tone.src + ':' + high + ':' + low + ':' + tone.volume");
-    check(result.ok, "Audio host script evaluates");
-    check(result.value == "/audio/tone.wav:1:0:0.35", "Audio src/volume subset follows expected shape");
-    check(host.calls == 1, "Audio host was called once");
-    check(host.src == "/audio/tone.wav", "Audio host receives src");
-    check(host.volume > 0.34 && host.volume < 0.36, "Audio host receives clamped volume");
-    check(runtime_with_audio.statistics().audio_element_count == 1, "Audio statistics count one element");
+    {
+        FakeAudioHost host;
+        JerryScriptRuntime runtime_with_audio;
+        runtime_with_audio.bind_audio_host(ScriptAudioHost{fake_audio_play, &host});
+        runtime_with_audio.bind_document(*document);
+        ScriptEvaluationResult result = runtime_with_audio.eval(
+            "var tone = new Audio('/audio/tone.wav');"
+            "tone.volume = 2;"
+            "var high = tone.volume;"
+            "tone.volume = -1;"
+            "var low = tone.volume;"
+            "tone.volume = 0.35;"
+            "tone.play();"
+            "tone.src + ':' + high + ':' + low + ':' + tone.volume");
+        check(result.ok, "Audio host script evaluates");
+        check(result.value == "/audio/tone.wav:1:0:0.35", "Audio src/volume subset follows expected shape");
+        check(host.calls == 1, "Audio host was called once");
+        check(host.src == "/audio/tone.wav", "Audio host receives src");
+        check(host.volume > 0.34 && host.volume < 0.36, "Audio host receives clamped volume");
+        check(runtime_with_audio.statistics().audio_element_count == 1, "Audio statistics count one element");
+
+        result = runtime_with_audio.eval(
+            "var eventLog = '';"
+            "function removed() { eventLog += 'x'; }"
+            "tone.onended = function (event) { eventLog += event.type + ':' + String(event.target === tone) + ';'; };"
+            "tone.addEventListener('ended', function (event) { eventLog += event.type + ':' + String(this === tone) + ';'; });"
+            "tone.addEventListener('error', removed);"
+            "tone.removeEventListener('error', removed);"
+            "'armed'");
+        check(result.ok, "Audio event callbacks install");
+        check(runtime_with_audio.dispatch_audio_event(host.audio_id, ScriptAudioEventKind::Ended),
+              "Audio ended event dispatch reports handled");
+        result = runtime_with_audio.eval("eventLog");
+        check(result.ok && result.value == "ended:true;ended:true;",
+              "Audio ended dispatches property and listener callbacks");
+    }
+
+    FakeAudioHost failing_host;
+    failing_host.fail = true;
+    JerryScriptRuntime runtime_with_error_audio;
+    runtime_with_error_audio.bind_audio_host(ScriptAudioHost{fake_audio_play, &failing_host});
+    runtime_with_error_audio.bind_document(*document);
+    ScriptEvaluationResult result = runtime_with_error_audio.eval(
+        "var failed = '';"
+        "var missing = new Audio('/missing.wav');"
+        "missing.onerror = function (event) { failed += event.type + ':' + String(event.currentTarget === missing); };"
+        "try { missing.play(); } catch (error) { failed += ':thrown'; }"
+        "failed");
+    check(result.ok && result.value == "error:true:thrown", "Audio play rejection dispatches error before throwing");
 }
 
 void javascript_runtime_respects_timer_and_listener_budgets() {

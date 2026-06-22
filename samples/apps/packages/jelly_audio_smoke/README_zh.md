@@ -4,7 +4,8 @@
 
 这个 app 携带一个 1 秒左右的 PCM WAV 包内音频资源。它不声明 MCU MP3 capability。页面按钮使用
 接近 Web 标准形状的 V0 子集：`new Audio("/audio/tone.wav").play()`，Win32 壳会把它映射到桌面
-宿主音频 adapter。
+宿主音频 adapter。示例也绑定 `onended` 与 `onerror`，用于验证状态事件链路，仍不暴露私有音频
+API。
 
 如果只想验证 host handoff，不打开交互窗口，仍可用命令行 smoke 路径：
 

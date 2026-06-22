@@ -130,6 +130,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Exposed a tiny `localStorage` V0 subset through the JerryScript bridge when a
   host binds a non-blocking `AppLocalStorageShadow`; Win32 browser scripting
   builds provide a debug shadow cleared on active app instance changes.
+- Extended the host-optional JerryScript `Audio()` V0 subset with
+  `onended`/`onerror`, `addEventListener`/`removeEventListener` for `ended` and
+  `error`, a public runtime dispatch hook for host status events and Win32
+  debug-shell `ended` dispatch after local/package playback.
 - Added `.jffont` V0 binary font supplement output to
   `jellyframe_font_pack_gen`, reusing the existing `BitmapFont` glyph data model
   without C++ pointers or compile-time symbols as groundwork for future dynamic

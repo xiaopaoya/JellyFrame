@@ -104,8 +104,10 @@ API 表面。
   `localStorage`。
 - 已暴露：宿主可选的极小 `Audio` 子集。App 可写 `new Audio(src)`，读写 `src`/`volume`，
   调用 `play()`，以及调用第一版 no-op 的 `pause()`。未绑定 host audio adapter 或宿主拒绝 source
-  时，`play()` 会抛错。暂不承诺完整 `HTMLAudioElement`、Promise、streaming 状态或 `ended/error`
-  事件。
+  时，`play()` 会抛错并向已注册 handler 派发 `error`。`onended`/`onerror` 以及面向 `ended` 和
+  `error` 的 `addEventListener`/`removeEventListener` 已作为第一版状态事件子集支持。V0 每种事件保留
+  一个函数 listener 加一个 `on*` property slot。暂不承诺完整 `HTMLAudioElement`、Promise 或
+  streaming 状态。
 - 已暴露：`navigator.onLine`、`window.addEventListener` / `removeEventListener`
   的 `online` / `offline` 系统状态事件子集、`document.hidden`、`document.visibilityState`
   和 `document` 的 `visibilitychange`，用于 accepted host system events。Win32 壳可用
