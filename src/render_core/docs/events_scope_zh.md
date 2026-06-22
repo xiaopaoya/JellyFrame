@@ -55,10 +55,11 @@ JellyFrame 将输入接线和核心引擎分开：
 - 输入状态变化只会为样式表中实际出现的受支持动态 pseudo-classes 标记 style/layout dirty。
   脚本/事件产生的 DOM mutation 使用普通 DOM dirty flags。
 
-## 下一步
+## 尚未覆盖
 
-1. 添加 keyboard event objects 和 dispatch。
-2. 继续细化动态 pseudo-class 变化中的 paint-only dirty rectangles。
-3. 添加 event callbacks 后的 invalidation/re-render scheduling。
-4. 添加 anchors、buttons、forms 和 editable controls 的 default-action hooks。
-5. 后续将 event listeners 桥接到 JerryScript functions。
+上文的事件范围才是当前支持契约。不要依赖以下行为：
+
+- Keyboard event objects 和 dispatch。
+- 所有动态 pseudo-class 变化都具备 paint-only dirty rectangles。
+- anchors、forms 和 editable controls 的浏览器级 default actions。
+- Pointer capture、transform 后坐标 hit testing 或完整 Pointer Events。

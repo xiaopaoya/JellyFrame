@@ -15,13 +15,11 @@ interaction.
 The project was developed under the early codename `WearWeb`; current code,
 targets and documentation use `JellyFrame`.
 
-> **Pre-1.0 compatibility policy:** JellyFrame is still before its first stable
-> release and has no vendor-locked compatibility contract. Until 1.0, and until
-> a real vendor integration explicitly requires otherwise, undocumented private
-> HTML/CSS/JS syntax and debug shortcuts may be removed instead of preserved.
-> App-authored pages should stay inside the documented Web-compatible subset;
-> JellyFrame-specific configuration belongs in the manifest, tools or host
-> interfaces.
+> **Pre-1.0 API stability:** JellyFrame has not reached its first stable
+> release yet. App authors should rely only on the documented Web-compatible
+> subset and documented manifest/tool/host interfaces. Undocumented private
+> HTML/CSS/JS shortcuts are not part of the app contract and may change before
+> 1.0.
 
 ## Highlights
 

@@ -14,15 +14,16 @@ MAJOR.MINOR.PATCH[-stage]
   maintenance.
 - `-dev`: active development before a stable tagged release.
 
-## Release discipline
+## Release Expectations
 
-- Keep the current version in `VERSION`.
-- Update both `CHANGELOG.md` and `CHANGELOG_zh.md` for user-visible changes.
-- Public documentation should be maintained in English and Chinese. The Chinese
-  file uses a `_zh` suffix.
-- Licensing changes must update `LICENSE`, `COMMERCIAL.md`, both README files
-  and both changelog files in the same release batch.
-- Prefer small, milestone-based releases over large untracked batches.
+- The current source version is recorded in `VERSION`.
+- User-visible changes are summarized in `CHANGELOG.md` and
+  `CHANGELOG_zh.md`.
+- Public documentation is provided in English and Chinese. Chinese files use a
+  `_zh` suffix.
+- Licensing terms are described by `LICENSE`, `COMMERCIAL.md` and the README
+  licensing section.
+- Early releases are expected to stay small and milestone-based.
 
 ## Early project version map
 

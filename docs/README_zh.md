@@ -8,7 +8,7 @@
 2. [engine_architecture_zh.md](engine_architecture_zh.md)
 3. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
 4. 如果要构建本地 app package，读 [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)。
-5. 你要修改哪个模块，就读对应模块文档。
+5. 根据要使用、移植或检查的模块，继续阅读对应模块文档。
 
 ## 技术文档
 
@@ -51,7 +51,7 @@
 - [jelly_ui_design_system_zh.md](jelly_ui_design_system_zh.md)：胶体/水母质感的控件与动效设计体系。
 - [versioning_zh.md](versioning_zh.md)：版本和发布纪律。
 
-## 双语维护
+## 文件命名
 
 英文文档使用原文件名，中文文档使用 `_zh` 后缀，例如 `engine_architecture.md` 和
-`engine_architecture_zh.md`。面向用户、架构、状态、发布和上手的文档应在同一次改动中维护双语版本。
+`engine_architecture_zh.md`。

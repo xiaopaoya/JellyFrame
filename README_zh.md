@@ -11,10 +11,9 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 
 项目早期代号是 `WearWeb`；当前代码、target 和文档均使用 `JellyFrame`。
 
-> **1.0 前兼容策略：** JellyFrame 仍处于首个稳定版之前，也没有厂商锁定的兼容契约。
-> 在 1.0 正式版发布前，且没有真实厂商集成明确要求前，未文档化的私有 HTML/CSS/JS
-> 语法和调试捷径可以直接删除，而不是保留兼容补救。App 页面应停留在文档化的
-> Web 兼容子集内；JellyFrame 自有配置应放在 manifest、工具或宿主接口中。
+> **1.0 前 API 稳定性：** JellyFrame 尚未到达第一个稳定版。App 作者应只依赖文档化的
+> Web 兼容子集，以及文档化的 manifest、工具和宿主接口。未文档化的私有 HTML/CSS/JS
+> 捷径不属于 app 契约，可能在 1.0 前变化。
 
 ## 亮点
 
@@ -118,7 +117,7 @@ python tools\jellyframe_cli.py check `
   --report build\my_calculator_responsive_report.json
 ```
 
-第一次接触项目时，请继续读 [HOW_TO_START_zh.md](HOW_TO_START_zh.md)。
+第一次接触项目时，建议继续阅读 [HOW_TO_START_zh.md](HOW_TO_START_zh.md)。
 
 ## 可选脚本构建
 

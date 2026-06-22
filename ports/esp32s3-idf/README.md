@@ -295,7 +295,7 @@ to the mainline core. It is not yet the final board run loop: a real port still
 needs persistent frame buffers, real panel/touch drivers, timer pumping,
 low-power policy and product-level resource packaging.
 
-## Next Porting Steps
+## Board Bring-Up Checklist
 
 1. Replace the no-op `Rgb565Panel` path with your board's panel driver.
 2. Add touch/crown/button input and translate it into `InputController` calls.

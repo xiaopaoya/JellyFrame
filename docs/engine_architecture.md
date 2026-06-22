@@ -127,15 +127,16 @@ source order, then runs selector matching and cascade comparison.
 - Event dispatch is platform-neutral and currently uses C++ callbacks, not
   JavaScript functions.
 
-## Next Professionalization Steps
+## Deferred Engineering Areas
 
-1. Move selector parsing into a dedicated `selector.*` module.
-2. Tighten the run-loop and dirty-update contract.
-3. Use dirty-region and display-invalidation diagnostics to decide which
-   retained render/layout/layer subtrees are worth adding.
-4. Add style sharing or computed-style cache for repeated class patterns.
-5. Evaluate DOM node allocation policy through a `DomOwner` prototype and
-   detached-node instrumentation.
-6. Organize local resource bundles, app packaging and release artifacts.
-7. Continue allocator work and refine tile/scanline presentation only when real
-   hardware pressure proves the extra ownership complexity is worthwhile.
+The current public contract is the architecture described above. The following
+areas are not required knowledge for app authors or port authors today, and
+should not be treated as available behavior until they appear in the capability
+matrix:
+
+- Dedicated selector-module internals.
+- Finer retained subtree and retained display-list reuse.
+- Computed-style sharing for repeated class patterns.
+- A broader DOM ownership/arena policy.
+- Tile or scanline presentation paths for targets that cannot keep the chosen
+  framebuffer representation.

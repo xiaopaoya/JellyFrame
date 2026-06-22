@@ -70,11 +70,12 @@ controllers and UI driver libraries.
   pseudo-classes that actually appear in the stylesheet. Script/event DOM
   mutations use the normal DOM dirty flags.
 
-## Next Steps
+## Not Yet Covered
 
-1. Add keyboard event objects and dispatch.
-2. Refine dirty rectangles for dynamic pseudo-class changes that affect paint
-   only.
-3. Add invalidation/re-render scheduling after event callbacks.
-4. Add default-action hooks for anchors, buttons, forms and editable controls.
-5. Later bridge event listeners to JerryScript functions.
+The event scope above is the supported contract. Do not rely on the following
+behaviors yet:
+
+- Keyboard event objects and dispatch.
+- Paint-only dirty rectangles for every dynamic pseudo-class change.
+- Browser-like default actions for anchors, forms and editable controls.
+- Pointer capture, transformed-coordinate hit testing or full Pointer Events.

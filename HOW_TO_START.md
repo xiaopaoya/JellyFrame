@@ -19,8 +19,8 @@ it, and what every generated desktop executable is for.
 - [11. What The Release EXEs Do](#11-what-the-release-exes-do)
 - [12. Useful Example Pages](#12-useful-example-pages)
 - [13. Documentation Map](#13-documentation-map)
-- [14. Common Development Workflows](#14-common-development-workflows)
-- [15. Rules For Updating This Guide](#15-rules-for-updating-this-guide)
+- [14. Common Inspection Workflows](#14-common-inspection-workflows)
+- [15. Further Reading](#15-further-reading)
 
 ## 1. What JellyFrame Is
 
@@ -70,7 +70,7 @@ For a first pass:
    the pipeline.
 4. Read [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md)
    before writing pages for the engine.
-5. Read the module scope document for the area you want to change:
+5. Read the module scope document for the area you want to use, port or inspect:
    tokenizer, tree builder, CSS parser, CSSOM, render tree, layer tree,
    renderer, events, scripting, text backend or HAL.
 6. Use the dump tools to inspect what the engine actually produced.
@@ -559,40 +559,39 @@ Other useful project documents:
 - [src/render_core/docs/run_loop_contract.md](src/render_core/docs/run_loop_contract.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
-## 14. Common Development Workflows
+## 14. Common Inspection Workflows
 
-When adding HTML parser behavior:
+When checking whether an app package is portable:
 
-1. Update tokenizer/tree-builder tests.
-2. Run `jellyframe_dom_dump` on a reduced page.
-3. Update the relevant scope docs if the supported subset changes.
+1. Run `jellyframe_cli.py check --root package_dir --target round-300 --report report.json`.
+2. Add `--targets round-300,rect-320x240` when responsive behavior matters.
+3. Inspect `pipelineDiagnostics`, `fontDiagnostics`, `serviceIntent` and
+   `responsiveProfiles` in the report.
+4. Open the same package in `jellyframe_win32_browser --app package_dir` for
+   interaction and text validation.
 
-When adding CSS support:
+When a page renders differently from expectation:
 
-1. Keep unsupported values from overwriting supported fallbacks.
-2. Add parser/style resolver tests.
-3. Run `jellyframe_cssom_dump` and `jellyframe_style_dump`.
-4. Update the capability matrix and pipeline diagnostics or font resource checker.
+1. Capture the Win32 output first if text, input or package resources are
+   involved.
+2. Use `jellyframe_pipeline_dump` for a compact whole-pipeline view.
+3. Use the more specific dump tool for the stage that looks wrong: DOM, CSSOM,
+   style, render tree or layer tree.
+4. Check the capability matrix before assuming a browser feature should work.
 
-When changing layout or rendering:
+When preparing a board port:
 
-1. Add a focused regression test.
-2. Compare `render_tree_dump`, `layer_tree_dump` and `pipeline_dump`.
-3. Render a BMP through `jellyframe_pseudo_browser`.
-4. Use Win32 capture when text quality matters.
+1. Start with the platform-neutral examples and `ports/embedded_host_demo`.
+2. Use `ports/virtual_board` to estimate framebuffer and dirty-rectangle costs.
+3. Read the HAL, host abstraction, text backend and run-loop documents before
+   wiring real panel, input, clock or font callbacks.
 
-When adding scripting APIs:
+## 15. Further Reading
 
-1. Ensure the C++ core can honor the behavior without browser services.
-2. Keep wrappers as non-owning views over native DOM nodes.
-3. Retain and release every JerryScript value deliberately.
-4. Add scripting tests and update [src/script/docs/scripting_scope.md](src/script/docs/scripting_scope.md).
-
-## 15. Rules For Updating This Guide
-
-- Keep this file practical. It should help a new developer run and inspect the
-  project without reading the entire repository first.
-- Update the executable table whenever CMake targets change.
-- Update the documentation map when docs are moved, archived or added.
-- Maintain the Chinese version, [HOW_TO_START_zh.md](HOW_TO_START_zh.md), in the
-  same change.
+- App authors: start from `samples/apps/packages` and the capability matrix.
+- Port authors: read `docs/embedded_hal_api.md`,
+  `docs/host_abstraction.md` and `docs/porting_work_guide.md`.
+- Tool users: use `tools/jellyframe_cli.py check`, `preview` and `package`
+  before trying board hardware.
+- Runtime users: check `src/script/docs/scripting_scope.md` before relying on
+  a JavaScript API.

@@ -9,7 +9,7 @@ interfaces and host contracts. These docs should stay close to the code.
 2. [engine_architecture.md](engine_architecture.md)
 3. [developer_capability_matrix.md](developer_capability_matrix.md)
 4. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
-5. The module document for the area you want to change.
+5. The module document for the area you want to use, port or inspect.
 
 ## Technical Documents
 
@@ -72,9 +72,7 @@ interfaces and host contracts. These docs should stay close to the code.
   control and motion design system.
 - [versioning.md](versioning.md): versioning and release discipline.
 
-## Bilingual Maintenance
+## File Naming
 
 English docs use the base filename. Chinese docs use `_zh`, for example
-`engine_architecture.md` and `engine_architecture_zh.md`. User-facing,
-architecture, status, release and onboarding docs should be updated in both
-languages in the same change.
+`engine_architecture.md` and `engine_architecture_zh.md`.
