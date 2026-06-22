@@ -445,9 +445,14 @@ bool NetworkFetchMock::complete_next(AppRuntimeHost& host) {
     if (!host.pop_worker_request(HostServiceJobKind::NetworkFetch, request)) {
         return false;
     }
+    return host.push_completion(complete_request(host, request));
+}
+
+HostServiceCompletion NetworkFetchMock::complete_request(AppRuntimeHost& host,
+                                                         const HostServiceRequest& request) {
     const auto pending = find_job(pending_, request.job_id);
     if (pending == pending_.end()) {
-        return host.push_completion(make_cancelled_completion(request));
+        return make_cancelled_completion(request);
     }
 
     HostServiceCompletion completion{
@@ -479,7 +484,7 @@ bool NetworkFetchMock::complete_next(AppRuntimeHost& host) {
         }
     }
     pending_.erase(pending);
-    return host.push_completion(completion);
+    return completion;
 }
 
 const NetworkFetchRecord* NetworkFetchMock::response(std::uint32_t handle) const {
@@ -871,9 +876,14 @@ bool ImageDecodeMock::complete_next(AppRuntimeHost& host) {
     if (!host.pop_worker_request(HostServiceJobKind::ImageDecode, request)) {
         return false;
     }
+    return host.push_completion(complete_request(host, request));
+}
+
+HostServiceCompletion ImageDecodeMock::complete_request(AppRuntimeHost& host,
+                                                        const HostServiceRequest& request) {
     const auto pending = find_job(pending_, request.job_id);
     if (pending == pending_.end()) {
-        return host.push_completion(make_cancelled_completion(request));
+        return make_cancelled_completion(request);
     }
 
     HostServiceCompletion completion{
@@ -911,7 +921,7 @@ bool ImageDecodeMock::complete_next(AppRuntimeHost& host) {
         }
     }
     pending_.erase(pending);
-    return host.push_completion(completion);
+    return completion;
 }
 
 const AppDecodedSurfaceRecord* ImageDecodeMock::surface(std::uint32_t handle) const {

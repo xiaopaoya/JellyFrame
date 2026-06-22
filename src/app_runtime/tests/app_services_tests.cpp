@@ -134,6 +134,24 @@ void network_fetch_pending_request_is_cancelled_on_app_switch() {
     check(!network.complete_next(host), "network cancelled request not completed");
 }
 
+void network_fetch_can_complete_worker_popped_request() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.network-worker", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    check(network.add_fixture(NetworkFetchFixture{"/data.json", 200, "application/json", "{\"ok\":true}"}),
+          "network worker fixture accepted");
+
+    check(network.submit_fetch(host, "/data.json").accepted(), "network worker submit accepted");
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request), "network worker request popped");
+    const HostServiceCompletion completion = network.complete_request(host, request);
+    check(completion.kind == HostServiceJobKind::NetworkFetch, "network worker completion kind");
+    check(completion.status == HostServiceStatus::Completed, "network worker completion status");
+    check(completion.handle != 0, "network worker response handle");
+    check(network.response(completion.handle) != nullptr, "network worker response stored");
+    check(network.release_response(host, completion.handle), "network worker response release");
+}
+
 void network_failure_classification_is_specific() {
     check(classify_app_network_failure(AppServiceSubmitStatus::CapabilityDenied,
                                        HostServiceStatus::Unsupported,
@@ -248,6 +266,24 @@ void image_decode_enforces_surface_budgets() {
     check(accepted.size() == 1, "image missing completion accepted");
     check(accepted.front().status == HostServiceStatus::Failed, "image missing status");
     check(accepted.front().error_code == 404, "image missing error");
+}
+
+void image_decode_can_complete_worker_popped_request() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.image-worker", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
+    check(images.add_fixture(ImageDecodeFixture{"/icon.raw", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image worker fixture accepted");
+
+    check(images.submit_decode(host, "/icon.raw").accepted(), "image worker submit accepted");
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::ImageDecode, request), "image worker request popped");
+    const HostServiceCompletion completion = images.complete_request(host, request);
+    check(completion.kind == HostServiceJobKind::ImageDecode, "image worker completion kind");
+    check(completion.status == HostServiceStatus::Completed, "image worker completion status");
+    check(completion.handle != 0, "image worker surface handle");
+    check(images.surface(completion.handle) != nullptr, "image worker surface stored");
+    check(images.release_surface(host, completion.handle), "image worker surface release");
 }
 
 void image_surface_cache_requests_resolves_and_releases_surfaces() {
@@ -924,9 +960,11 @@ int main() {
     network_fetch_requires_capability_and_returns_fixture_handle();
     service_policy_requires_manifest_and_host_approval();
     network_fetch_pending_request_is_cancelled_on_app_switch();
+    network_fetch_can_complete_worker_popped_request();
     network_failure_classification_is_specific();
     image_decode_requires_capability_and_returns_surface_handle();
     image_decode_enforces_surface_budgets();
+    image_decode_can_complete_worker_popped_request();
     image_surface_cache_requests_resolves_and_releases_surfaces();
     image_surface_cache_records_failed_decodes_without_retry_loop();
     image_surface_cache_keeps_transient_budget_rejections_retryable();

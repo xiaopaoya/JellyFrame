@@ -4,6 +4,7 @@
 
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_frame_policy.h"
+#include "app_runtime/app_service_worker.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "render_core/animation_invalidation.h"
@@ -436,6 +437,36 @@ struct FramePolicyDebugCounters {
     std::size_t sensor_active_frames = 0;
     std::size_t pause_audio_frames = 0;
     std::size_t throttle_sensor_frames = 0;
+};
+
+class NetworkFetchMockWorker final : public AppHostServiceWorker {
+public:
+    NetworkFetchMockWorker(AppRuntimeHost& host, NetworkFetchMock& network)
+        : host_(host),
+          network_(network) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        return network_.complete_request(host_, request);
+    }
+
+private:
+    AppRuntimeHost& host_;
+    NetworkFetchMock& network_;
+};
+
+class ImageDecodeMockWorker final : public AppHostServiceWorker {
+public:
+    ImageDecodeMockWorker(AppRuntimeHost& host, ImageDecodeMock& images)
+        : host_(host),
+          images_(images) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        return images_.complete_request(host_, request);
+    }
+
+private:
+    AppRuntimeHost& host_;
+    ImageDecodeMock& images_;
 };
 
 void count_host_completion_kind(HostServiceDebugCounters& counters, HostServiceJobKind kind) {
@@ -3613,7 +3644,13 @@ private:
         }
         const AppFramePolicy frame_policy = current_frame_policy();
         const FrameLoopOptions frame_options = current_frame_loop_options();
-        const bool completed_image = debug_images_.complete_next(app_runtime_);
+        ImageDecodeMockWorker image_worker(app_runtime_, debug_images_);
+        AppHostServiceWorkerSlot image_slot[] = {
+            AppHostServiceWorkerSlot{HostServiceJobKind::ImageDecode, 1, &image_worker},
+        };
+        const AppHostServiceWorkerGroupPumpResult image_pump =
+            pump_app_host_service_workers(app_runtime_, image_slot, 1);
+        const bool completed_image = image_pump.completions_posted != 0;
         bool handled_completion = drain_host_completions();
         const bool handled_system_event = drain_system_events();
         const bool animation_budget_enabled = frame_options.animation_frame_rate > 0 &&
@@ -3629,7 +3666,13 @@ private:
             }
             return;
         }
-        const bool completed_network = debug_network_.complete_next(app_runtime_);
+        NetworkFetchMockWorker network_worker(app_runtime_, debug_network_);
+        AppHostServiceWorkerSlot network_slot[] = {
+            AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 1, &network_worker},
+        };
+        const AppHostServiceWorkerGroupPumpResult network_pump =
+            pump_app_host_service_workers(app_runtime_, network_slot, 1);
+        const bool completed_network = network_pump.completions_posted != 0;
         handled_completion = drain_host_completions() || handled_completion;
         const std::uint64_t now_ms = current_time_ms();
         const std::size_t callbacks =

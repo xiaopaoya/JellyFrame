@@ -63,6 +63,8 @@ JellyFrame Engine 的重要变更记录在这里。
   network、storage、audio worker，不需要动态分配，也避免跨服务误消费 request。
 - package `serviceIntent` report 现在会在 target preset 声明 `hostServices` 时输出可选宿主服务的
   `targetSupport`；没有 profile 数据时保持 `unknown`。
+- Win32 debug 壳现在通过与 port 相同的 host worker pump 边界驱动 mock image decode 和 debug
+  network fetch，真实资源和回调仍只通过 UI completion 路径回到页面。
 - 添加 B1 图片解码 V0 helper：`ImageDecodePolicy`、`ImageDecodeMock` 与
   `AppDecodedSurfaceRecord` 定义平台无关 raw surface fixture、`Surface` handle 生命周期、
   尺寸/decoded bytes/pending 预算和 release 规则。

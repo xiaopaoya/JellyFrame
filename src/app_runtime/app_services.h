@@ -89,6 +89,10 @@ public:
     AppServiceSubmitResult submit_fetch(AppRuntimeHost& host,
                                         const std::string& url,
                                         std::uint32_t timeout_ms = 0);
+    // Converts a worker-popped request into a completion and allocates the
+    // response handle through host budgets. The caller still owns completion
+    // queue posting.
+    HostServiceCompletion complete_request(AppRuntimeHost& host, const HostServiceRequest& request);
     bool complete_next(AppRuntimeHost& host);
     const NetworkFetchRecord* response(std::uint32_t handle) const;
     bool release_response(AppRuntimeHost& host, std::uint32_t handle);
@@ -193,8 +197,12 @@ public:
     void set_policy(ImageDecodePolicy policy);
     bool add_fixture(ImageDecodeFixture fixture);
     AppServiceSubmitResult submit_decode(AppRuntimeHost& host,
-                                         const std::string& url,
-                                         std::uint32_t timeout_ms = 0);
+                                          const std::string& url,
+                                          std::uint32_t timeout_ms = 0);
+    // Converts a worker-popped request into a completion and allocates the
+    // surface handle through host budgets. The caller still owns completion
+    // queue posting.
+    HostServiceCompletion complete_request(AppRuntimeHost& host, const HostServiceRequest& request);
     bool complete_next(AppRuntimeHost& host);
     const AppDecodedSurfaceRecord* surface(std::uint32_t handle) const;
     bool release_surface(AppRuntimeHost& host, std::uint32_t handle);
