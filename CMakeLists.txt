@@ -273,6 +273,17 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_cli_check_font_policy_package
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        check
+                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_font_policy
+                        --target round-300
+                        --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_font_policy.report.json
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
                 NAME jellyframe_cli_check_watch_weather_responsive
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py

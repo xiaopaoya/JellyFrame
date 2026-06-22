@@ -13,3 +13,4 @@
 - `jelly_motion_lab`：参考 LVGL 常见动效的验收 app，包含图标展开窗口、sheet 弹出和按钮果冻反馈。
 - `jelly_service_status`：用于说明网络、音频、传感器后台策略的 runtime service 边界示例。
 - `jelly_audio_smoke`：用于 Win32 host-owned audio smoke 路径的包内音频资源示例。
+- `jelly_font_policy`：用于说明 CSS `font-family` 与 `.jffont` 补充包策略的示例。

@@ -658,38 +658,72 @@ inline std::vector<std::string> json_collect_object_string_values(const std::str
         return values;
     }
 
-    std::size_t cursor = open + 1;
-    while (cursor < close) {
-        const std::size_t field_pos = json.find(field_needle, cursor);
-        if (field_pos == std::string::npos || field_pos >= close) {
-            break;
+    int object_depth = 0;
+    bool object_in_string = false;
+    bool object_escaped = false;
+    std::size_t object_open = std::string::npos;
+    for (std::size_t index = open + 1; index < close; ++index) {
+        const char ch = json[index];
+        if (object_in_string) {
+            if (object_escaped) {
+                object_escaped = false;
+            } else if (ch == '\\') {
+                object_escaped = true;
+            } else if (ch == '"') {
+                object_in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            object_in_string = true;
+            continue;
+        }
+        if (ch == '{') {
+            if (object_depth == 0) {
+                object_open = index;
+            }
+            ++object_depth;
+            continue;
+        }
+        if (ch != '}' || object_depth <= 0) {
+            continue;
+        }
+        --object_depth;
+        if (object_depth != 0 || object_open == std::string::npos) {
+            continue;
+        }
+
+        const std::size_t object_close = index + 1;
+        const std::size_t field_pos = json.find(field_needle, object_open);
+        if (field_pos == std::string::npos || field_pos >= object_close) {
+            object_open = std::string::npos;
+            continue;
         }
         const std::size_t colon = json.find(':', field_pos + field_needle.size());
-        if (colon == std::string::npos || colon >= close) {
-            break;
+        if (colon == std::string::npos || colon >= object_close) {
+            object_open = std::string::npos;
+            continue;
         }
         std::size_t quote = json.find('"', colon + 1);
-        if (quote == std::string::npos || quote >= close) {
-            break;
+        if (quote == std::string::npos || quote >= object_close) {
+            object_open = std::string::npos;
+            continue;
         }
         std::string parsed;
-        for (++quote; quote < close; ++quote) {
+        for (++quote; quote < object_close; ++quote) {
             const char ch = json[quote];
             if (ch == '"') {
                 values.push_back(std::move(parsed));
-                cursor = quote + 1;
                 break;
             }
-            if (ch == '\\' && quote + 1 < close) {
+            if (ch == '\\' && quote + 1 < object_close) {
                 const char escaped_ch = json[++quote];
                 parsed.push_back(escaped_ch == 'n' ? '\n' : escaped_ch);
                 continue;
             }
             parsed.push_back(ch);
         }
-        if (quote >= close) {
-            break;
-        }
+        object_open = std::string::npos;
     }
     return values;
 }

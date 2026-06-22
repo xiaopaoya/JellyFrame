@@ -45,6 +45,10 @@ JellyFrame Engine 的重要变更记录在这里。
   可显式传 `--targets` 或 `--all-targets`，按多个 target preset 跑 render-core pseudo browser，并在
   JSON report 写入 `responsiveProfiles[]`，包含 viewport、content height、layout bounds、横向/纵向
   overflow、pipeline 计数和 diagnostics 摘要。单 target 路径保持旧 report 形状。
+- 添加 package 字体 family 策略 diagnostics。`fontDiagnostics` 现在包含 `fontFamilyUsage`，
+  会把显式 CSS `font-family` declaration 与 manifest `.jffont` family 元数据、generic fallback 名称
+  和未匹配首选自定义 family 对照。新增 `jelly_font_policy` 示例 package 和 app-runtime 字体 fallback
+  微基准。
 - 添加可选数据服务的 manifest/profile policy 合成：`AppServiceManifestCapabilities`、
   `AppServiceHostProfile` 和 `app_service_policies_for_app(...)` 现在会在 runtime mock
   或 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。

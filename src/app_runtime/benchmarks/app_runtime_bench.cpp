@@ -415,6 +415,34 @@ void bench_xml_http_request_mock(std::size_t capacity) {
     }
 }
 
+const std::vector<std::uint8_t>& tiny_jffont_bytes() {
+    static const std::vector<std::uint8_t> bytes = {
+        'J', 'F', 'F', 'O', 'N', 'T', '0', 0,
+        0x20, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+        0x08, 0x08, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00,
+        0x40, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00,
+        0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x07, 0x00, 0x00, 0x00, 0x05, 0x07, 0x06, 0x01,
+        0x2d, 0x4e, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
+        0x08, 0x00, 0x00, 0x00, 0x08, 0x08, 0x08, 0x01,
+        0x20, 0x50, 0x88, 0xf8, 0x88, 0x88, 0x88,
+        0x10, 0x10, 0xfe, 0x92, 0x92, 0xfe, 0x10, 0x10,
+    };
+    return bytes;
+}
+
+void bench_font_fallback_measure(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 128, 1});
+    host.launch("org.example.fonts", AppRole::App);
+    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
+    host.load_current_jffont(bytes.data(), bytes.size());
+    TextMeasureProvider provider = host.fonts().measure_provider();
+    TextMetrics metrics;
+    for (std::size_t i = 0; i < capacity; ++i) {
+        provider.measure("A\xe4\xb8\xad", 8, 400, &metrics, provider.context);
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -469,6 +497,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_xml_http_request_mock", iterations, average_microseconds(iterations, [&] {
         bench_xml_http_request_mock(capacity);
+    }));
+    print_result("app_runtime_font_fallback_measure", iterations, average_microseconds(iterations, [&] {
+        bench_font_fallback_measure(capacity);
     }));
 
     return 0;

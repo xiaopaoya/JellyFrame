@@ -162,6 +162,34 @@ class PackagePreflightTests(unittest.TestCase):
         Args.targets = "round-300, rect-320x240,round-300"
         self.assertEqual(jellyframe_cli.requested_targets(Args()), ["round-300", "rect-320x240"])
 
+    def test_font_family_usage_matches_manifest_fonts(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-font-family-") as directory:
+            root = Path(directory)
+            css = root / "styles" / "app.css"
+            css.parent.mkdir(parents=True, exist_ok=True)
+            css.write_text(
+                '.title { font-family: "Jelly Tiny", system-ui, sans-serif; }\n'
+                '.body { font-family: MissingFace, serif; }\n',
+                encoding="utf-8")
+            resources = [{
+                "path": "/styles/app.css",
+                "kind": "jellyframe::HostResourceKind::Stylesheet",
+                "file": css,
+                "size": css.stat().st_size,
+            }]
+
+            usage = package_app.collect_font_family_usage(resources, [{
+                "id": "tiny",
+                "source": "/fonts/tiny.jffont",
+                "family": "Jelly Tiny",
+            }])
+
+        statuses = {entry["family"]: entry["status"] for entry in usage["entries"]}
+        self.assertEqual(statuses["Jelly Tiny"], "manifest-runtime-font")
+        self.assertEqual(statuses["system-ui"], "generic")
+        self.assertEqual(statuses["MissingFace"], "unmatched-primary")
+        self.assertEqual(usage["unmatchedPrimaryCount"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

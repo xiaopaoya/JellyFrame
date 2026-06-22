@@ -190,12 +190,17 @@ manifest 中的每个 font 条目可以写：
 }
 ```
 
-`family`、`sizes`、`weights` 现在主要用于打包报告和后续产品策略；当前 `font-family`
-仍不会自动切换文本后端。`license.name` 和 `license.source` 是推荐字段；缺失时 pack/check
+`family` 会被 package diagnostics 用来把显式 CSS `font-family` declaration 与 manifest runtime
+font 匹配。`system-ui`、`sans-serif` 等 generic family 会报告为 generic fallback；未匹配的首选自定义
+family 会产生 `font-family-unmatched`。`sizes`、`weights` 目前仍是产品策略元数据；runtime 文本后端选择
+仍不实现完整浏览器 font-family cascade。`license.name` 和 `license.source` 是推荐字段；缺失时 pack/check
 会给出 `font-license-missing` 或 `font-license-incomplete`，便于发布前确认字体来源。
 `budgets.maxAppFonts`、`budgets.maxAppFontBytes`、`budgets.maxAppFontGlyphs` 会限制可用
 runtime `.jffont` 数量、总字节和总 glyph 数；超过时会报告 `font-budget-exceeded`。这些检查只发生在工具层，
 不会增加 MCU 渲染热路径成本。
+
+`samples/apps/packages/jelly_font_policy` 是这条路径的最小验收样例：它在 CSS 和 manifest 元数据中声明
+`"Jelly Tiny"`，并包含由仓库 BDF fixture 生成的极小 `.jffont` supplement。
 
 当前稳定生产路径仍是：打包/检查阶段收集 used chars，离线从授权字体生成 bitmap glyph 数据，
 再把生成的 `BitmapFont` 编译进 port/firmware 或作为 `.jffont` supplement 随 `.jfapp`

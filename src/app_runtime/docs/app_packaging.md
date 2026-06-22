@@ -235,15 +235,24 @@ Each manifest font entry may declare:
 }
 ```
 
-`family`, `sizes` and `weights` are currently report/product-policy metadata;
-`font-family` still does not automatically select text backends. `license.name`
-and `license.source` are recommended for redistributed font supplements.
+`family` is used by package diagnostics to match explicit CSS `font-family`
+declarations against manifest runtime fonts. Generic families such as
+`system-ui` and `sans-serif` are reported as generic fallback, while an
+unmatched primary custom family produces `font-family-unmatched`. `sizes` and
+`weights` remain product-policy metadata for now; runtime text backend selection
+still does not implement full browser font-family cascade. `license.name` and
+`license.source` are recommended for redistributed font supplements.
 Missing metadata produces `font-license-missing` or
 `font-license-incomplete` diagnostics. `budgets.maxAppFonts`,
 `budgets.maxAppFontBytes` and `budgets.maxAppFontGlyphs` cap usable runtime
 `.jffont` count, bytes and glyphs; exceeding them produces
 `font-budget-exceeded`. These checks run only in tooling and add no MCU render
 hot-path cost.
+
+The `samples/apps/packages/jelly_font_policy` package is the minimal acceptance
+sample for this path: it declares `"Jelly Tiny"` in CSS and manifest metadata,
+then includes a tiny `.jffont` supplement generated from the repository BDF
+fixture.
 
 The stable production path is still: collect used characters during
 package/check, generate bitmap glyph data offline from a licensed font, compile

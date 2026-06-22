@@ -107,6 +107,23 @@ def resource_kind_name(kind: str) -> str:
     return kind.split("::")[-1]
 
 
+GENERIC_FONT_FAMILIES = {
+    "serif",
+    "sans-serif",
+    "monospace",
+    "cursive",
+    "fantasy",
+    "system-ui",
+    "ui-serif",
+    "ui-sans-serif",
+    "ui-monospace",
+    "ui-rounded",
+    "emoji",
+    "math",
+    "fangsong",
+}
+
+
 def fnv1a_32(value: str) -> int:
     result = 0x811c9dc5
     for byte in value.encode("utf-8"):
@@ -141,6 +158,113 @@ def int_field(mapping: dict, key: str, default: int = 0) -> int:
 def bool_field(mapping: dict, key: str, default: bool = False) -> bool:
     value = mapping.get(key, default)
     return value if isinstance(value, bool) else default
+
+
+def strip_css_comments(text: str) -> str:
+    return re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+
+
+def split_css_top_level(value: str, separator: str) -> list[str]:
+    parts = []
+    begin = 0
+    depth = 0
+    quote = ""
+    index = 0
+    while index < len(value):
+        ch = value[index]
+        if quote:
+            if ch == "\\":
+                index += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in {"'", '"'}:
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")" and depth > 0:
+            depth -= 1
+        elif ch == separator and depth == 0:
+            parts.append(value[begin:index].strip())
+            begin = index + 1
+        index += 1
+    tail = value[begin:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def normalize_font_family_name(value: str) -> str:
+    family = value.strip()
+    if len(family) >= 2 and family[0] == family[-1] and family[0] in {"'", '"'}:
+        family = family[1:-1]
+    family = re.sub(r"\s+", " ", family.strip())
+    return family
+
+
+def collect_font_family_usage(resources: list[dict], manifest_fonts: list[dict]) -> dict:
+    manifest_by_family = {}
+    for font in manifest_fonts:
+        family = font.get("family", "") if isinstance(font, dict) else ""
+        normalized = normalize_font_family_name(family).lower()
+        if normalized:
+            manifest_by_family[normalized] = {
+                "id": font.get("id", ""),
+                "source": font.get("source", ""),
+                "family": normalize_font_family_name(family),
+            }
+
+    entries = []
+    seen = set()
+    for resource in resources:
+        kind = resource_kind_name(resource["kind"])
+        suffix = resource["file"].suffix.lower()
+        if kind != "Stylesheet" and suffix not in {".html", ".htm"}:
+            continue
+        try:
+            text = resource["file"].read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            continue
+        css_sources = []
+        if kind == "Stylesheet":
+            css_sources.append(text)
+        else:
+            css_sources.extend(match.group(1) for match in re.finditer(r"<style[^>]*>(.*?)</style>", text, flags=re.I | re.S))
+            css_sources.extend(match.group(1) for match in re.finditer(r"style\s*=\s*\"([^\"]*)\"", text, flags=re.I | re.S))
+            css_sources.extend(match.group(1) for match in re.finditer(r"style\s*=\s*'([^']*)'", text, flags=re.I | re.S))
+
+        for css_text in css_sources:
+            for match in re.finditer(r"font-family\s*:\s*([^;{}]+)", strip_css_comments(css_text), flags=re.I):
+                for index, family in enumerate(split_css_top_level(match.group(1), ",")):
+                    normalized = normalize_font_family_name(family)
+                    if not normalized:
+                        continue
+                    lowered = normalized.lower()
+                    key = (resource["path"], lowered)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    manifest_font = manifest_by_family.get(lowered)
+                    if lowered in GENERIC_FONT_FAMILIES:
+                        status = "generic"
+                    elif manifest_font is not None:
+                        status = "manifest-runtime-font"
+                    elif index == 0:
+                        status = "unmatched-primary"
+                    else:
+                        status = "unmatched-fallback"
+                    entries.append({
+                        "family": normalized,
+                        "status": status,
+                        "source": resource["path"],
+                        "manifestFont": manifest_font if manifest_font is not None else {},
+                    })
+    return {
+        "model": "css-font-family-declarations-plus-manifest-fonts",
+        "entries": entries,
+        "entryCount": len(entries),
+        "unmatchedPrimaryCount": len([entry for entry in entries if entry["status"] == "unmatched-primary"]),
+    }
 
 
 def parse_background_service_policy(manifest: dict) -> dict:
@@ -869,8 +993,19 @@ def collect_font_diagnostics(manifest: dict,
             "fallbackAdvance": parsed["fallbackAdvance"],
             "usedGlyphCount": len(source_codepoints & glyphs),
             "usedGlyphSample": codepoint_sample(source_codepoints & glyphs, 24),
-        })
+            })
         manifest_fonts.append(font_entry)
+
+    font_family_usage = collect_font_family_usage(resources, manifest_fonts)
+    for entry in font_family_usage["entries"]:
+        if entry["status"] != "unmatched-primary":
+            continue
+        warnings.append({
+            "level": "warning",
+            "code": "font-family-unmatched",
+            "message": f"CSS primary font-family is not declared as a manifest runtime font: {entry['family']}",
+            "source": entry["source"],
+        })
 
     missing = source_codepoints - system_covered - app_covered
     missing_non_ascii = {codepoint for codepoint in missing if codepoint >= 0x80}
@@ -928,6 +1063,7 @@ def collect_font_diagnostics(manifest: dict,
         "missingNonAsciiCodepointCount": len(missing_non_ascii),
         "missingNonAsciiSample": codepoint_sample(missing_non_ascii),
         "manifestFonts": manifest_fonts,
+        "fontFamilyUsage": font_family_usage,
     }
     return diagnostics, warnings
 

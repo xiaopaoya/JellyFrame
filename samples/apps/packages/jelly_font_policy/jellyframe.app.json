@@ -1,0 +1,48 @@
+{
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.examples.font_policy",
+  "name": "Font Policy",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "none"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300
+  },
+  "budgets": {
+    "maxResourceBytes": 16384,
+    "maxAppFonts": 1,
+    "maxAppFontBytes": 1024,
+    "maxAppFontGlyphs": 8
+  },
+  "fonts": [
+    {
+      "id": "tiny",
+      "source": "/fonts/tiny.jffont",
+      "profile": "app-subset-cn",
+      "family": "Jelly Tiny",
+      "license": {
+        "name": "JellyFrame sample font",
+        "source": "src/render_core/samples/fonts/bitmap/tiny.bdf"
+      },
+      "sizes": [8],
+      "weights": [400]
+    }
+  ],
+  "targets": {
+    "round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      }
+    }
+  }
+}

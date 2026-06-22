@@ -57,6 +57,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `responsiveProfiles[]` into JSON reports, including viewport, content height,
   layout bounds, horizontal/vertical overflow, pipeline counts and diagnostic
   summaries. Single-target commands keep the older report shape.
+- Added font-family policy diagnostics for packages. `fontDiagnostics` now
+  includes `fontFamilyUsage`, matching explicit CSS `font-family` declarations
+  against manifest `.jffont` family metadata, generic fallback names and
+  unmatched primary custom families. Added the `jelly_font_policy` sample
+  package and an app-runtime font fallback microbenchmark.
 - Added manifest/profile policy merging for optional data services:
   `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
   `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`
