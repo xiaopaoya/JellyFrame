@@ -298,6 +298,12 @@ struct StyleResolverStatistics {
     std::size_t candidate_cache_clears = 0;
 };
 
+struct InteractionInvalidationHints {
+    bool hover = false;
+    bool active = false;
+    bool focus = false;
+};
+
 class StyleResolver {
 public:
     explicit StyleResolver(Stylesheet stylesheet, StyleResolverOptions options = {});
@@ -305,6 +311,7 @@ public:
     Style resolve(const Node& node) const;
     const CssKeyframesRule* keyframes(std::string_view name) const;
     StyleResolverStatistics statistics() const;
+    InteractionInvalidationHints interaction_invalidation_hints() const;
     void set_interaction_state(const Node* hovered_node, const Node* active_node, const Node* focused_node);
 
 private:
@@ -316,6 +323,7 @@ private:
     std::vector<const CssRule*> universal_rules_;
     mutable std::unordered_map<std::string, std::vector<const CssRule*>> candidate_cache_;
     mutable StyleResolverStatistics statistics_;
+    InteractionInvalidationHints interaction_hints_;
     bool has_custom_property_declarations_ = false;
 
     void build_rule_index();

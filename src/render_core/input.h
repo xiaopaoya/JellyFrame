@@ -53,9 +53,16 @@ struct KeyInput {
     InputModifiers modifiers;
 };
 
+struct InteractionInvalidationOptions {
+    bool hover_style = true;
+    bool active_style = true;
+    bool focus_style = true;
+};
+
 class InputController {
 public:
-    explicit InputController(const LayerNode& layer_tree);
+    explicit InputController(const LayerNode& layer_tree,
+                             InteractionInvalidationOptions invalidation_options = {});
 
     const Node* hovered_node() const;
     const Node* active_node() const;
@@ -77,6 +84,7 @@ public:
 private:
     const LayerNode& layer_tree_;
     HitTester hit_tester_;
+    InteractionInvalidationOptions invalidation_options_;
     const Node* hovered_node_ = nullptr;
     const Node* active_node_ = nullptr;
     const Node* focused_node_ = nullptr;

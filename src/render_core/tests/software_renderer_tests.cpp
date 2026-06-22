@@ -43,6 +43,23 @@ bool rejecting_text_painter(FrameBuffer&,
     return false;
 }
 
+bool center_pixel_text_painter(FrameBuffer& target,
+                               Rect rect,
+                               Color color,
+                               const std::string&,
+                               int,
+                               int,
+                               TextCommandAlign,
+                               bool,
+                               void*) {
+    const int x = rect.x + rect.width / 2;
+    const int y = rect.y + rect.height / 2;
+    if (target.contains(x, y)) {
+        target.pixel(x, y) = color;
+    }
+    return true;
+}
+
 struct ImagePaintProbe {
     std::uint32_t expected_handle = 0;
     ObjectFit fit = ObjectFit::Fill;
@@ -328,6 +345,23 @@ DisplayCommand black_fill(Rect rect) {
     return command;
 }
 
+void dirty_render_preserves_original_rounded_geometry() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 80, 40};
+    root.display_list.push_back(black_fill(Rect{10, 4, 60, 28}));
+    root.display_list.back().border_radius = 12;
+
+    FrameBuffer frame_buffer(80, 40, Color{255, 255, 255, 255});
+    SoftwareCompositor compositor;
+    const Rect dirty{35, 0, 10, 40};
+    compositor.render_into(root, frame_buffer, Color{255, 255, 255, 255}, &dirty, 1);
+
+    check(frame_buffer.pixel(35, 5).r == 0, "dirty clip does not create a new left rounded edge");
+    check(frame_buffer.pixel(44, 5).r == 0, "dirty clip does not create a new right rounded edge");
+    check(frame_buffer.pixel(20, 5).r == 255, "outside dirty clip remains untouched");
+}
+
 DisplayCommand white_fill(Rect rect) {
     DisplayCommand command;
     command.type = DisplayCommandType::FillRect;
@@ -432,6 +466,23 @@ void rasterizer_reports_text_fallback() {
     rejecting_rasterizer.rasterize(command, frame, Rect{0, 0, 80, 20});
     check(has_diagnostic_code(backend_diagnostics, "paint-text-backend-failed"),
           "text backend rejection is reported");
+}
+
+void dirty_text_clip_preserves_original_text_geometry() {
+    FrameBuffer frame_buffer(40, 10, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer(TextPainter{center_pixel_text_painter, nullptr});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 40, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "center";
+    command.font_size = 10;
+    command.text_single_line = true;
+
+    rasterizer.rasterize(command, frame_buffer, Rect{20, 0, 5, 10});
+
+    check(frame_buffer.pixel(20, 5).r == 0, "partial text clip keeps original command geometry");
+    check(frame_buffer.pixel(22, 5).r == 255, "partial text clip does not recenter text inside dirty rect");
 }
 
 struct FrameSinkProbe {
@@ -737,7 +788,9 @@ int main() {
         wrapped_text_layout_keeps_descent_padding();
         layout_uses_injected_text_measurement();
         dirty_render_only_updates_requested_clip();
+        dirty_render_preserves_original_rounded_geometry();
         rasterizer_reports_text_fallback();
+        dirty_text_clip_preserves_original_text_geometry();
         compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
         compositor_rejects_oversized_framebuffer_before_allocation();

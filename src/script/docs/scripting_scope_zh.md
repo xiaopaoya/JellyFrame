@@ -102,6 +102,10 @@ API 表面。
 - 已暴露：宿主显式绑定非阻塞 `AppLocalStorageShadow` 时提供极小 `localStorage` 子集：
   `getItem`、`setItem`、`removeItem`、`clear`、`key` 和 `length`。未绑定 shadow 时不暴露
   `localStorage`。
+- 已暴露：宿主可选的极小 `Audio` 子集。App 可写 `new Audio(src)`，读写 `src`/`volume`，
+  调用 `play()`，以及调用第一版 no-op 的 `pause()`。未绑定 host audio adapter 或宿主拒绝 source
+  时，`play()` 会抛错。暂不承诺完整 `HTMLAudioElement`、Promise、streaming 状态或 `ended/error`
+  事件。
 - 已暴露：`navigator.onLine`、`window.addEventListener` / `removeEventListener`
   的 `online` / `offline` 系统状态事件子集、`document.hidden`、`document.visibilityState`
   和 `document` 的 `visibilitychange`，用于 accepted host system events。Win32 壳可用
@@ -131,8 +135,9 @@ API 表面。
 - 完整 selector API，例如 `querySelector` / `querySelectorAll`。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
-- `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、超出
-  `online`/`offline` 的完整 `Window`/`EventTarget` 语义、canvas 和 Web Components。
+- `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、完整
+  `HTMLAudioElement`、超出 `online`/`offline` 的完整 `Window`/`EventTarget` 语义、canvas 和
+  Web Components。
 
 ## 嵌入式策略
 

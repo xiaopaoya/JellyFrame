@@ -56,6 +56,13 @@ struct ScriptXmlHttpRequest {
     bool active = false;
 };
 
+struct ScriptAudioElement {
+    JerryScriptRuntime* runtime = nullptr;
+    std::string src;
+    double volume = 1.0;
+    bool active = false;
+};
+
 struct ScriptRuntimeAccess {
     static bool can_adopt_detached_node(const JerryScriptRuntime& runtime) {
         return runtime.can_adopt_detached_node();
@@ -122,6 +129,10 @@ struct ScriptRuntimeAccess {
         return runtime.create_xml_http_request();
     }
 
+    static ScriptAudioElement* create_audio_element(JerryScriptRuntime& runtime, std::string src) {
+        return runtime.create_audio_element(std::move(src));
+    }
+
     static AppRuntimeHost* app_host(JerryScriptRuntime& runtime) {
         return runtime.app_host_;
     }
@@ -134,6 +145,9 @@ struct ScriptRuntimeAccess {
         return runtime.system_state_;
     }
 
+    static ScriptAudioHost audio_host(const JerryScriptRuntime& runtime) {
+        return runtime.audio_host_;
+    }
 };
 
 namespace {
@@ -145,6 +159,7 @@ const jerry_object_native_info_t kRuntimeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kEventNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kXhrNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kLocalStorageNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kAudioNativeInfo = {nullptr, 0, 0};
 
 class JerryValue {
 public:
@@ -512,6 +527,13 @@ AppLocalStorageShadow* native_local_storage(const jerry_value_t object) {
         return nullptr;
     }
     return static_cast<AppLocalStorageShadow*>(jerry_object_get_native_ptr(object, &kLocalStorageNativeInfo));
+}
+
+ScriptAudioElement* native_audio(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    return static_cast<ScriptAudioElement*>(jerry_object_get_native_ptr(object, &kAudioNativeInfo));
 }
 
 std::size_t xhr_event_index(AppXhrEventKind kind) {
@@ -1332,6 +1354,116 @@ jerry_value_t make_local_storage_object(AppLocalStorageShadow& storage) {
     return object.release();
 }
 
+jerry_value_t audio_construct(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t args_p[],
+                              const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr || jerry_value_is_undefined(call_info_p->new_target) ||
+        !jerry_value_is_object(call_info_p->this_value)) {
+        return throw_type_error("Audio must be constructed with new");
+    }
+    ScriptAudioElement* audio =
+        ScriptRuntimeAccess::create_audio_element(*runtime, args_count > 0 ? value_to_string(args_p[0]) : "");
+    if (audio == nullptr) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "Audio element budget exceeded");
+    }
+    jerry_object_set_native_ptr(call_info_p->this_value, &kAudioNativeInfo, audio);
+    jerry_object_set_native_ptr(call_info_p->this_value, &kRuntimeNativeInfo, runtime);
+    return jerry_undefined();
+}
+
+jerry_value_t audio_get_src(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t[],
+                            const jerry_length_t) {
+    ScriptAudioElement* audio = native_audio(call_info_p->this_value);
+    return jerry_string_sz(audio != nullptr ? audio->src.c_str() : "");
+}
+
+jerry_value_t audio_set_src(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t args_p[],
+                            const jerry_length_t args_count) {
+    ScriptAudioElement* audio = native_audio(call_info_p->this_value);
+    if (audio != nullptr) {
+        audio->src = args_count > 0 ? value_to_string(args_p[0]) : std::string();
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t audio_get_volume(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t[],
+                               const jerry_length_t) {
+    ScriptAudioElement* audio = native_audio(call_info_p->this_value);
+    return jerry_number(audio != nullptr ? audio->volume : 1.0);
+}
+
+jerry_value_t audio_set_volume(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count) {
+    ScriptAudioElement* audio = native_audio(call_info_p->this_value);
+    if (audio == nullptr || args_count == 0) {
+        return jerry_undefined();
+    }
+    JerryValue number_value(jerry_value_to_number(args_p[0]));
+    if (jerry_value_is_exception(number_value.get())) {
+        return jerry_undefined();
+    }
+    const double volume = jerry_value_as_number(number_value.get());
+    if (std::isfinite(volume)) {
+        audio->volume = std::max(0.0, std::min(1.0, volume));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t audio_play(const jerry_call_info_t* call_info_p,
+                         const jerry_value_t[],
+                         const jerry_length_t) {
+    ScriptAudioElement* audio = native_audio(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (audio == nullptr || runtime == nullptr) {
+        return throw_type_error("Audio.play called on invalid object");
+    }
+    if (audio->src.empty()) {
+        return throw_type_error("Audio.play requires a non-empty src");
+    }
+    const ScriptAudioHost host = ScriptRuntimeAccess::audio_host(*runtime);
+    if (host.play == nullptr) {
+        return throw_type_error("Audio host is not bound");
+    }
+    std::string error;
+    if (!host.play(host.user, audio->src, audio->volume, &error)) {
+        if (error.empty()) {
+            error = "Audio playback failed";
+        }
+        return jerry_throw_sz(JERRY_ERROR_TYPE, error.c_str());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t audio_pause(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t[],
+                          const jerry_length_t) {
+    if (native_audio(call_info_p->this_value) == nullptr) {
+        return throw_type_error("Audio.pause called on invalid object");
+    }
+    return jerry_undefined();
+}
+
+void install_audio_members(jerry_value_t object) {
+    define_accessor(object, "src", audio_get_src, audio_set_src);
+    define_accessor(object, "volume", audio_get_volume, audio_set_volume);
+    set_method(object, "play", audio_play);
+    set_method(object, "pause", audio_pause);
+}
+
+jerry_value_t make_audio_constructor(JerryScriptRuntime& runtime) {
+    JerryValue constructor(jerry_function_external(audio_construct));
+    jerry_object_set_native_ptr(constructor.get(), &kRuntimeNativeInfo, &runtime);
+    JerryValue prototype(jerry_object());
+    install_audio_members(prototype.get());
+    set_property(constructor.get(), "prototype", prototype.get());
+    return constructor.release();
+}
+
 jerry_value_t make_dataset_object(JerryScriptRuntime& runtime, Node& node) {
     (void) runtime;
     JerryValue object(jerry_object());
@@ -1753,11 +1885,13 @@ JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
           std::max<std::size_t>(1, budgets.max_detached_dom_nodes),
           16,
           std::max<std::size_t>(1, budgets.max_active_animations),
+          8,
       }) {}
 
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
         clear_xml_http_requests();
+        clear_audio_elements();
         clear_script_event_listeners();
         clear_animation_frame_callbacks();
         clear_timers();
@@ -1769,6 +1903,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 
 void JerryScriptRuntime::bind_document(Node& document) {
     clear_xml_http_requests();
+    clear_audio_elements();
     clear_script_event_listeners();
     clear_animation_frame_callbacks();
     clear_timers();
@@ -1807,6 +1942,9 @@ void JerryScriptRuntime::bind_document(Node& document) {
     JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
     set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
     set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
+    JerryValue audio_constructor(make_audio_constructor(*this));
+    set_property(window_object.get(), "Audio", audio_constructor.get());
+    set_property(global.get(), "Audio", audio_constructor.get());
     if (local_storage_ != nullptr) {
         JerryValue local_storage(make_local_storage_object(*local_storage_));
         set_property(window_object.get(), "localStorage", local_storage.get());
@@ -1823,10 +1961,15 @@ void JerryScriptRuntime::bind_local_storage(AppLocalStorageShadow& storage) {
     local_storage_ = &storage;
 }
 
+void JerryScriptRuntime::bind_audio_host(ScriptAudioHost host) {
+    audio_host_ = host;
+}
+
 void JerryScriptRuntime::clear_app_services() {
     app_host_ = nullptr;
     network_fetch_ = nullptr;
     local_storage_ = nullptr;
+    audio_host_ = {};
 }
 
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {
@@ -2033,6 +2176,7 @@ ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
     output.animation_frame_callback_count = animation_frame_callbacks_.size();
     output.event_listener_count = event_listeners_.size();
     output.xml_http_request_count = xml_http_requests_.size();
+    output.audio_element_count = audio_elements_.size();
     output.detached_nodes = detached_nodes_.detached_statistics();
     return output;
 }
@@ -2351,6 +2495,30 @@ void JerryScriptRuntime::clear_xml_http_requests() {
         xhr->active = false;
     }
     xml_http_requests_.clear();
+}
+
+ScriptAudioElement* JerryScriptRuntime::create_audio_element(std::string src) {
+    audio_elements_.erase(std::remove_if(audio_elements_.begin(), audio_elements_.end(),
+        [](const std::unique_ptr<ScriptAudioElement>& audio) {
+            return !audio->active;
+        }), audio_elements_.end());
+    if (audio_elements_.size() >= std::max<std::size_t>(1, options_.max_audio_elements)) {
+        return nullptr;
+    }
+    auto audio = std::make_unique<ScriptAudioElement>();
+    audio->runtime = this;
+    audio->src = std::move(src);
+    audio->active = true;
+    ScriptAudioElement* raw = audio.get();
+    audio_elements_.push_back(std::move(audio));
+    return raw;
+}
+
+void JerryScriptRuntime::clear_audio_elements() {
+    for (const auto& audio : audio_elements_) {
+        audio->active = false;
+    }
+    audio_elements_.clear();
 }
 
 } // namespace jellyframe

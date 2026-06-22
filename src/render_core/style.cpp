@@ -39,6 +39,38 @@ constexpr int kDefaultViewportHeightPx = 240;
 std::string lowercase(std::string value);
 bool parse_length_px(const std::string& raw_value, int& output, int em_base = kRootFontSizePx);
 
+bool is_css_ident_char(char ch) {
+    const unsigned char value = static_cast<unsigned char>(ch);
+    return std::isalnum(value) != 0 || ch == '_' || ch == '-';
+}
+
+bool selector_contains_pseudo(std::string_view selector, std::string_view pseudo) {
+    std::size_t index = 0;
+    while ((index = selector.find(':', index)) != std::string_view::npos) {
+        if (index + 1 < selector.size() && selector[index + 1] == ':') {
+            index += 2;
+            continue;
+        }
+        const std::size_t name_begin = index + 1;
+        if (selector.substr(name_begin, pseudo.size()) == pseudo) {
+            const std::size_t after = name_begin + pseudo.size();
+            if (after >= selector.size() || !is_css_ident_char(selector[after])) {
+                return true;
+            }
+        }
+        ++index;
+    }
+    return false;
+}
+
+void add_interaction_hints_for_selector(std::string_view selector, InteractionInvalidationHints& hints) {
+    hints.hover = hints.hover || selector_contains_pseudo(selector, "hover");
+    hints.active = hints.active || selector_contains_pseudo(selector, "active");
+    hints.focus = hints.focus ||
+        selector_contains_pseudo(selector, "focus") ||
+        selector_contains_pseudo(selector, "focus-within");
+}
+
 std::vector<std::string> split_function_arguments(std::string_view body) {
     std::vector<std::string> args;
     std::size_t begin = 0;
@@ -3655,6 +3687,7 @@ StyleResolver::StyleResolver(Stylesheet stylesheet, StyleResolverOptions options
 
 void StyleResolver::build_rule_index() {
     for (const CssRule& rule : stylesheet_) {
+        add_interaction_hints_for_selector(rule.selector, interaction_hints_);
         for (const CssDeclaration& declaration : rule.declarations) {
             if (is_custom_property_name(declaration.property)) {
                 has_custom_property_declarations_ = true;
@@ -3853,6 +3886,10 @@ StyleResolverStatistics StyleResolver::statistics() const {
     StyleResolverStatistics snapshot = statistics_;
     snapshot.candidate_cache_entries = candidate_cache_.size();
     return snapshot;
+}
+
+InteractionInvalidationHints StyleResolver::interaction_invalidation_hints() const {
+    return interaction_hints_;
 }
 
 void StyleResolver::set_interaction_state(const Node* hovered_node,

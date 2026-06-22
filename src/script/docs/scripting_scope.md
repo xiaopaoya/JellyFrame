@@ -123,6 +123,11 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Exposed now: a tiny `localStorage` subset when the host explicitly binds a
   non-blocking `AppLocalStorageShadow`: `getItem`, `setItem`, `removeItem`,
   `clear`, `key` and `length`. `localStorage` is absent when no shadow is bound.
+- Exposed now: a tiny host-optional `Audio` subset. App code may construct
+  `new Audio(src)`, set `src`/`volume`, call `play()` and call no-op `pause()`.
+  `play()` throws when no host audio adapter is bound or the host rejects the
+  source. It intentionally does not expose full `HTMLAudioElement`, Promises,
+  streaming state or `ended/error` events yet.
 - Exposed now: `navigator.onLine`, `window.addEventListener` /
   `removeEventListener` for the `online` and `offline` system-status events,
   `document.hidden`, `document.visibilityState` and `document`
@@ -158,8 +163,8 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
 - `fetch()`, modules, dynamic import, `sessionStorage`, IndexedDB, cookies,
-  full `Window`/`EventTarget` semantics beyond `online`/`offline`, canvas and
-  Web Components.
+  full `HTMLAudioElement`, full `Window`/`EventTarget` semantics beyond
+  `online`/`offline`, canvas and Web Components.
 
 ## Embedded Policy
 

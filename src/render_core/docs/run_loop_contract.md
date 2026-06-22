@@ -80,6 +80,14 @@ host deliberately pauses that class of work, for example while throttling a
 screen-off device. The helper never drops work; it only tells the host how much
 to consume. Hosts can derive these caps from `HostBudgets` with
 `frame_loop_options_from_budgets(...)`.
+The app runtime also provides `AppFramePolicy`, which maps
+foreground/suspended, screen-on and low-power state into these budgets:
+low-power may keep input/timers while stopping animation, while screen-off or
+suspended state pauses foreground input, timers, rAF and presentation and
+recommends a first repaint when the app becomes visible again.
+The Win32 validation shell exposes the animation budget through
+`--animation-fps`, `--animation-callbacks` and matching frame-script commands,
+so low-power behavior can be tested without changing app source.
 
 Animation caps are separate from timer caps so a page with motion cannot starve
 input, network completions or ordinary timers. A no-animation page reports zero

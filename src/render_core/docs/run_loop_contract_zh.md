@@ -62,6 +62,11 @@ callback 和 pending animation frame callback，然后得到一个有界的 `Fra
 `FrameLoopOptions` 保存每帧上限。上限为 0 是合法的，表示宿主刻意暂停该类工作，例如息屏低功耗节流。
 这个 helper 不会丢弃工作，只告诉宿主本帧应消费多少。宿主可以用
 `frame_loop_options_from_budgets(...)` 从 `HostBudgets` 派生这些上限。
+App runtime 还提供 `AppFramePolicy`，可把 foreground/suspended、screen-on 和 low-power 状态转换为
+这些预算：低功耗可保留输入/timer 但关闭动画，息屏或 suspended 会把前台输入、timer、rAF 和 present
+停掉，并在恢复可见时建议首帧 repaint。
+Win32 验证壳通过 `--animation-fps`、`--animation-callbacks` 和对应 frame-script 命令暴露动画预算，
+因此可以在不修改 app 源码的情况下验收低功耗行为。
 
 Animation caps 与 timer caps 分开，因此带动效的页面不能饿死输入、网络 completion 或普通 timer。
 无动画页面会报告 0 个 pending animation callback，也不会请求 animation frame。

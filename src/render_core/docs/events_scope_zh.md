@@ -37,6 +37,9 @@ JellyFrame 将输入接线和核心引擎分开：
   - 命中文本节点时归一化为最近的 element target
 - 输入合成：`mouseover`、`mouseout`、`mousemove`、`mousedown`、`mouseup`、`click` 和 `wheel`。
 - 核心 input controller 内部追踪 hover、active 和 focus state。
+- `StyleResolver` 会从样式表中提取动态 pseudo-class 提示。只有出现
+  `:hover`、`:active`、`:focus` 或 `:focus-within` 时，对应输入状态变化才会标记
+  style/layout dirty；没有相关选择器的页面仍派发事件，但不会因为鼠标掠过触发重绘。
 - Windows 验证壳会把 Win32 mouse/wheel messages 转换为 `InputController` 调用。
 - Windows 壳在 wheel dispatch 后执行简单 viewport scroll 默认行为。核心仍保持平台无关，不持有 OS scroll state。
 
@@ -49,8 +52,8 @@ JellyFrame 将输入接线和核心引擎分开：
 - 不支持 touch 或 pointer capture。
 - 不支持 transform 后坐标 hit testing。
 - 暂无 keyboard dispatch。
-- 输入状态变化会为受支持的动态 pseudo-classes 标记 style/layout dirty。脚本/事件产生的
-  DOM mutation 使用普通 DOM dirty flags。
+- 输入状态变化只会为样式表中实际出现的受支持动态 pseudo-classes 标记 style/layout dirty。
+  脚本/事件产生的 DOM mutation 使用普通 DOM dirty flags。
 
 ## 下一步
 

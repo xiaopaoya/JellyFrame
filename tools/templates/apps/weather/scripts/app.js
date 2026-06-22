@@ -68,7 +68,7 @@ function fetchWeather() {
     return;
   }
   var xhr = new XMLHttpRequest();
-  xhr.open("GET", "app://weather", true);
+  xhr.open("GET", "/data/weather.json", true);
   xhr.onload = function () {
     var payload = parseWeatherPayload(xhr.responseText);
     if (payload && payload.modes) {

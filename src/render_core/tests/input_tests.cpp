@@ -154,6 +154,56 @@ void pointer_hover_down_up_and_click() {
     check(events[8] == "click", "click synthesized");
 }
 
+void pointer_events_without_dynamic_style_keep_document_clean() {
+    auto pipeline = build_pipeline();
+    Node* one = find_by_id(*pipeline.document, "one");
+    check(one != nullptr, "button one exists");
+
+    std::vector<std::string> events;
+    one->add_event_listener("mouseover", [&](Event&) { events.push_back("over"); });
+    one->add_event_listener("mousemove", [&](Event&) { events.push_back("move"); });
+    one->add_event_listener("mousedown", [&](Event&) { events.push_back("down"); });
+    one->add_event_listener("mouseup", [&](Event&) { events.push_back("up"); });
+    one->add_event_listener("click", [&](Event&) { events.push_back("click"); });
+
+    InteractionInvalidationOptions invalidation;
+    invalidation.hover_style = false;
+    invalidation.active_style = false;
+    invalidation.focus_style = false;
+    InputController input(*pipeline.layer_tree, invalidation);
+    clear_dirty_flags(*pipeline.document);
+
+    PointerInput pointer;
+    pointer.x = 4;
+    pointer.y = 4;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+
+    check(input.pointer_move(pointer) == one, "move still hits first button");
+    check(input.hovered_node() == one, "hover state still updates");
+    check(subtree_dirty_flags(*pipeline.document) == DomDirtyNone,
+          "hover without matching dynamic CSS keeps document clean");
+
+    check(input.pointer_down(pointer) == one, "down still hits first button");
+    check(input.active_node() == one, "active state still updates");
+    check(input.focused_node() == one, "focus state still updates");
+    check(subtree_dirty_flags(*pipeline.document) == DomDirtyNone,
+          "active/focus without matching dynamic CSS keeps document clean");
+
+    pointer.buttons = 0;
+    check(input.pointer_up(pointer) == one, "up still hits first button");
+    check(input.active_node() == nullptr, "active state still clears");
+    check(subtree_dirty_flags(*pipeline.document) == DomDirtyNone,
+          "active clear without matching dynamic CSS keeps document clean");
+
+    check(events.size() == 5, "mouse events still dispatched");
+    check(events[0] == "over", "mouseover still dispatched");
+    check(events[1] == "move", "mousemove still dispatched");
+    check(events[2] == "down", "mousedown still dispatched");
+    check(events[3] == "up", "mouseup still dispatched");
+    check(events[4] == "click", "click still dispatched");
+}
+
 void click_requires_same_active_target() {
     auto pipeline = build_pipeline();
     Node* one = find_by_id(*pipeline.document, "one");
@@ -497,6 +547,7 @@ void focus_navigation_skips_disabled_and_activates() {
 int main() {
     try {
         pointer_hover_down_up_and_click();
+        pointer_events_without_dynamic_style_keep_document_clean();
         click_requires_same_active_target();
         wheel_dispatches_to_hit_target();
         text_input_updates_focused_control_value();

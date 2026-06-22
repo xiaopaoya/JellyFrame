@@ -15,3 +15,17 @@ Win32 逐帧验收示例：
 ```powershell
 .\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_30fps.jfcapture
 ```
+
+更长的 30fps soak 回归：
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_soak_30fps.jfcapture
+```
+
+低功耗预算冒烟测试：
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_low_power_static.jfcapture
+```
+
+帧脚本也可以设置 `animation-fps` 和 `animation-callbacks`，用于在不修改 app 源码的情况下验证宿主预算行为。

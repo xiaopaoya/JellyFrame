@@ -27,6 +27,14 @@ bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
 }
 
+bool contains_rect(Rect outer, Rect inner) {
+    return !empty_rect(inner) &&
+        inner.x >= outer.x &&
+        inner.y >= outer.y &&
+        inner.x + inner.width <= outer.x + outer.width &&
+        inner.y + inner.height <= outer.y + outer.height;
+}
+
 Rect target_rect(const FrameBuffer& target) {
     return Rect{0, 0, target.width, target.height};
 }
@@ -51,6 +59,16 @@ Color with_coverage(Color color, int coverage) {
     }
     color.a = clamp_u8((static_cast<int>(color.a) * coverage + 127) / 255);
     return color;
+}
+
+Color lerp_color_255(Color first, Color second, int t) {
+    t = std::max(0, std::min(255, t));
+    return Color{
+        clamp_u8((static_cast<int>(first.r) * (255 - t) + static_cast<int>(second.r) * t + 127) / 255),
+        clamp_u8((static_cast<int>(first.g) * (255 - t) + static_cast<int>(second.g) * t + 127) / 255),
+        clamp_u8((static_cast<int>(first.b) * (255 - t) + static_cast<int>(second.b) * t + 127) / 255),
+        clamp_u8((static_cast<int>(first.a) * (255 - t) + static_cast<int>(second.a) * t + 127) / 255),
+    };
 }
 
 void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
@@ -83,6 +101,14 @@ void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
         blend_channel(source.b, destination.b),
         clamp_u8(out_a),
     };
+}
+
+Rect clipped_target_rect(const FrameBuffer& target, Rect rect) {
+    return intersect_rect(rect, target_rect(target));
+}
+
+Rect clipped_target_rect(const FrameBuffer& target, Rect rect, Rect clip) {
+    return intersect_rect(clipped_target_rect(target, rect), clip);
 }
 
 int rounded_rect_coverage(Rect rect, int radius, int x, int y) {
@@ -137,7 +163,30 @@ int rounded_rect_coverage(Rect rect, int radius, int x, int y) {
 }
 
 void fill_rect(FrameBuffer& target, Rect rect, Color color, int border_radius = 0) {
-    Rect clipped = intersect_rect(rect, target_rect(target));
+    Rect clipped = clipped_target_rect(target, rect);
+    if (empty_rect(clipped) || color.a == 0) {
+        return;
+    }
+    if (color.a == 255 && border_radius <= 0) {
+        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+            Color* row = target.pixels.data() + static_cast<std::size_t>(y * target.width + clipped.x);
+            std::fill(row, row + clipped.width, color);
+        }
+        return;
+    }
+    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+            const int coverage = rounded_rect_coverage(rect, border_radius, x, y);
+            if (coverage <= 0) {
+                continue;
+            }
+            blend_pixel(target, x, y, with_coverage(color, coverage));
+        }
+    }
+}
+
+void fill_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color, int border_radius = 0) {
+    Rect clipped = clipped_target_rect(target, rect, clip);
     if (empty_rect(clipped) || color.a == 0) {
         return;
     }
@@ -160,7 +209,7 @@ void fill_rect(FrameBuffer& target, Rect rect, Color color, int border_radius = 
 }
 
 void stroke_rect(FrameBuffer& target, Rect rect, Color color, int stroke_width, int border_radius = 0) {
-    Rect clipped = intersect_rect(rect, target_rect(target));
+    Rect clipped = clipped_target_rect(target, rect);
     if (empty_rect(clipped) || color.a == 0 || stroke_width <= 0) {
         return;
     }
@@ -196,26 +245,57 @@ void stroke_rect(FrameBuffer& target, Rect rect, Color color, int stroke_width, 
     }
 }
 
+void stroke_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color, int stroke_width, int border_radius = 0) {
+    Rect clipped = clipped_target_rect(target, rect, clip);
+    if (empty_rect(clipped) || color.a == 0 || stroke_width <= 0) {
+        return;
+    }
+    stroke_width = std::min(stroke_width, std::max(1, std::min(rect.width, rect.height) / 2));
+    if (border_radius <= 0) {
+        fill_rect_clipped(target, Rect{rect.x, rect.y, rect.width, stroke_width}, clip, color);
+        fill_rect_clipped(target, Rect{rect.x, rect.y + rect.height - stroke_width, rect.width, stroke_width}, clip, color);
+        fill_rect_clipped(target, Rect{rect.x, rect.y, stroke_width, rect.height}, clip, color);
+        fill_rect_clipped(target, Rect{rect.x + rect.width - stroke_width, rect.y, stroke_width, rect.height}, clip, color);
+        return;
+    }
+
+    const Rect inner{
+        rect.x + stroke_width,
+        rect.y + stroke_width,
+        std::max(0, rect.width - stroke_width * 2),
+        std::max(0, rect.height - stroke_width * 2),
+    };
+    const int inner_radius = std::max(0, border_radius - stroke_width);
+    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+            const int outer_coverage = rounded_rect_coverage(rect, border_radius, x, y);
+            if (outer_coverage <= 0) {
+                continue;
+            }
+            const int inner_coverage = empty_rect(inner) ? 0 : rounded_rect_coverage(inner, inner_radius, x, y);
+            const int stroke_coverage = std::max(0, outer_coverage - inner_coverage);
+            if (stroke_coverage <= 0) {
+                continue;
+            }
+            blend_pixel(target, x, y, with_coverage(color, stroke_coverage));
+        }
+    }
+}
+
 void fill_linear_gradient(FrameBuffer& target,
                           Rect rect,
                           Color first,
                           Color second,
                           GradientAxis axis,
                           int border_radius = 0) {
-    Rect clipped = intersect_rect(rect, target_rect(target));
+    Rect clipped = clipped_target_rect(target, rect);
     if (empty_rect(clipped)) {
         return;
     }
     if (axis == GradientAxis::Vertical) {
         const int denom = std::max(1, rect.height - 1);
         for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-            const int t = std::max(0, std::min(255, ((y - rect.y) * 255) / denom));
-            Color row{
-                clamp_u8((static_cast<int>(first.r) * (255 - t) + static_cast<int>(second.r) * t + 127) / 255),
-                clamp_u8((static_cast<int>(first.g) * (255 - t) + static_cast<int>(second.g) * t + 127) / 255),
-                clamp_u8((static_cast<int>(first.b) * (255 - t) + static_cast<int>(second.b) * t + 127) / 255),
-                clamp_u8((static_cast<int>(first.a) * (255 - t) + static_cast<int>(second.a) * t + 127) / 255),
-            };
+            const Color row = lerp_color_255(first, second, ((y - rect.y) * 255) / denom);
             for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
                 const int coverage = rounded_rect_coverage(rect, border_radius, x, y);
                 if (coverage <= 0) {
@@ -234,13 +314,46 @@ void fill_linear_gradient(FrameBuffer& target,
             if (coverage <= 0) {
                 continue;
             }
-            const int t = std::max(0, std::min(255, ((x - rect.x) * 255) / denom));
-            Color color{
-                clamp_u8((static_cast<int>(first.r) * (255 - t) + static_cast<int>(second.r) * t + 127) / 255),
-                clamp_u8((static_cast<int>(first.g) * (255 - t) + static_cast<int>(second.g) * t + 127) / 255),
-                clamp_u8((static_cast<int>(first.b) * (255 - t) + static_cast<int>(second.b) * t + 127) / 255),
-                clamp_u8((static_cast<int>(first.a) * (255 - t) + static_cast<int>(second.a) * t + 127) / 255),
-            };
+            const Color color = lerp_color_255(first, second, ((x - rect.x) * 255) / denom);
+            blend_pixel(target, x, y, with_coverage(color, coverage));
+        }
+    }
+}
+
+void fill_linear_gradient_clipped(FrameBuffer& target,
+                                  Rect rect,
+                                  Rect clip,
+                                  Color first,
+                                  Color second,
+                                  GradientAxis axis,
+                                  int border_radius = 0) {
+    Rect clipped = clipped_target_rect(target, rect, clip);
+    if (empty_rect(clipped)) {
+        return;
+    }
+    if (axis == GradientAxis::Vertical) {
+        const int denom = std::max(1, rect.height - 1);
+        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+            const Color row = lerp_color_255(first, second, ((y - rect.y) * 255) / denom);
+            for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+                const int coverage = rounded_rect_coverage(rect, border_radius, x, y);
+                if (coverage <= 0) {
+                    continue;
+                }
+                blend_pixel(target, x, y, with_coverage(row, coverage));
+            }
+        }
+        return;
+    }
+
+    const int denom = std::max(1, rect.width - 1);
+    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+            const int coverage = rounded_rect_coverage(rect, border_radius, x, y);
+            if (coverage <= 0) {
+                continue;
+            }
+            const Color color = lerp_color_255(first, second, ((x - rect.x) * 255) / denom);
             blend_pixel(target, x, y, with_coverage(color, coverage));
         }
     }
@@ -393,6 +506,25 @@ void draw_text(FrameBuffer& target,
 void composite_buffer(FrameBuffer& target, const FrameBuffer& source, int dst_x, int dst_y, float opacity) {
     const Rect target_bounds = target_rect(target);
     Rect copy_rect = intersect_rect(Rect{dst_x, dst_y, source.width, source.height}, target_bounds);
+    if (empty_rect(copy_rect)) {
+        return;
+    }
+    const int src_x = copy_rect.x - dst_x;
+    const int src_y = copy_rect.y - dst_y;
+    for (int y = 0; y < copy_rect.height; ++y) {
+        for (int x = 0; x < copy_rect.width; ++x) {
+            blend_pixel(target,
+                        copy_rect.x + x,
+                        copy_rect.y + y,
+                        with_opacity(source.pixel(src_x + x, src_y + y), opacity));
+        }
+    }
+}
+
+void composite_buffer_clipped(FrameBuffer& target, const FrameBuffer& source, int dst_x, int dst_y, Rect clip, float opacity) {
+    const Rect target_bounds = target_rect(target);
+    Rect copy_rect = intersect_rect(Rect{dst_x, dst_y, source.width, source.height}, target_bounds);
+    copy_rect = intersect_rect(copy_rect, clip);
     if (empty_rect(copy_rect)) {
         return;
     }
@@ -570,24 +702,64 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
     Rect rect = command.rect;
     rect.x += offset_x;
     rect.y += offset_y;
-    rect = intersect_rect(rect, clip);
-    if (empty_rect(rect)) {
+    const Rect clipped = intersect_rect(rect, clip);
+    if (empty_rect(clipped)) {
         return;
     }
 
     switch (command.type) {
     case DisplayCommandType::FillRect:
-        fill_rect(target, rect, command.color, command.border_radius);
+        if (contains_rect(clip, rect)) {
+            fill_rect(target, rect, command.color, command.border_radius);
+        } else {
+            fill_rect_clipped(target, rect, clip, command.color, command.border_radius);
+        }
         break;
     case DisplayCommandType::LinearGradient:
-        fill_linear_gradient(target, rect, command.color, command.color2, command.gradient_axis, command.border_radius);
+        if (contains_rect(clip, rect)) {
+            fill_linear_gradient(target,
+                                 rect,
+                                 command.color,
+                                 command.color2,
+                                 command.gradient_axis,
+                                 command.border_radius);
+        } else {
+            fill_linear_gradient_clipped(target,
+                                         rect,
+                                         clip,
+                                         command.color,
+                                         command.color2,
+                                         command.gradient_axis,
+                                         command.border_radius);
+        }
         break;
     case DisplayCommandType::StrokeRect:
-        stroke_rect(target, rect, command.color, command.stroke_width, command.border_radius);
+        if (contains_rect(clip, rect)) {
+            stroke_rect(target, rect, command.color, command.stroke_width, command.border_radius);
+        } else {
+            stroke_rect_clipped(target, rect, clip, command.color, command.stroke_width, command.border_radius);
+        }
         break;
-    case DisplayCommandType::Text:
-        draw_text(target,
-                  rect,
+    case DisplayCommandType::Text: {
+        if (rect.width <= 0 || rect.height <= 0) {
+            break;
+        }
+        if (contains_rect(clip, rect)) {
+            draw_text(target,
+                      rect,
+                      command.color,
+                      command.text,
+                      command.font_size,
+                      command.font_weight,
+                      command.text_align,
+                      command.text_single_line,
+                      text_painter_,
+                      diagnostics_);
+            break;
+        }
+        FrameBuffer text_buffer(rect.width, rect.height, Color{0, 0, 0, 0});
+        draw_text(text_buffer,
+                  Rect{0, 0, rect.width, rect.height},
                   command.color,
                   command.text,
                   command.font_size,
@@ -596,11 +768,43 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                   command.text_single_line,
                   text_painter_,
                   diagnostics_);
+        composite_buffer_clipped(target, text_buffer, rect.x, rect.y, clip, 1.0F);
         break;
-    case DisplayCommandType::Image:
+    }
+    case DisplayCommandType::Image: {
         if (image_painter_.paint == nullptr ||
-            !image_painter_.paint(target,
-                                  rect,
+            rect.width <= 0 ||
+            rect.height <= 0) {
+            report_diagnostic(diagnostics_,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "paint-image-fallback",
+                              "Image command could not be painted; placeholder was used",
+                              std::to_string(command.image_handle));
+            fill_rect_clipped(target, rect, clip, Color{226, 232, 240, 255});
+            break;
+        }
+        if (contains_rect(clip, rect)) {
+            if (!image_painter_.paint(target,
+                                      rect,
+                                      command.image_handle,
+                                      command.object_fit,
+                                      command.object_position,
+                                      command.image_rendering,
+                                      image_painter_.context)) {
+                report_diagnostic(diagnostics_,
+                                  DiagnosticStage::Paint,
+                                  DiagnosticSeverity::Warning,
+                                  "paint-image-fallback",
+                                  "Image command could not be painted; placeholder was used",
+                                  std::to_string(command.image_handle));
+                fill_rect(target, rect, Color{226, 232, 240, 255});
+            }
+            break;
+        }
+        FrameBuffer image_buffer(rect.width, rect.height, Color{0, 0, 0, 0});
+        if (!image_painter_.paint(image_buffer,
+                                  Rect{0, 0, rect.width, rect.height},
                                   command.image_handle,
                                   command.object_fit,
                                   command.object_position,
@@ -612,9 +816,11 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                               "paint-image-fallback",
                               "Image command could not be painted; placeholder was used",
                               std::to_string(command.image_handle));
-            fill_rect(target, rect, Color{226, 232, 240, 255});
+            fill_rect(image_buffer, Rect{0, 0, rect.width, rect.height}, Color{226, 232, 240, 255});
         }
+        composite_buffer_clipped(target, image_buffer, rect.x, rect.y, clip, 1.0F);
         break;
+    }
     }
 }
 

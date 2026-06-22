@@ -358,10 +358,10 @@ per-frame control.
 
 | Token | Duration | Properties | Use |
 | --- | --- | --- | --- |
-| `jelly.press` | 140-180ms | `transform`, `background-color`, `opacity` | buttons, keys, switch thumb |
-| `jelly.float-in` | 200-260ms | `opacity`, `transform` | dialog, toast, popover |
-| `jelly.settle` | 180-240ms | `transform` | switch, slider, small card settle |
-| `jelly.pulse-core` | 900-1400ms | `opacity`, `background-color` | rare active/loading state |
+| `--jf-motion-press` | 140-180ms | `transform`, `background-color`, `opacity` | buttons, keys, switch thumb |
+| `--jf-motion-float-in` | 200-260ms | `opacity`, `transform` | dialog, toast, popover |
+| `--jf-motion-settle` | 180-240ms | `transform` | switch, slider, small card settle |
+| `--jf-motion-pulse-core` | 900-1400ms | `opacity`, `background-color` | rare active/loading state |
 
 Supported timing functions are `linear`, `ease`, `ease-in`, `ease-out` and
 `ease-in-out`. Do not require `cubic-bezier()` in v1.

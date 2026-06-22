@@ -11,6 +11,13 @@
   `--frame-script PATH`。脚本可以统一指定 deterministic time、逐帧 BMP 输出目录、拼图输出和事件注入。
   底层的 `--capture-frames DIR --frame-count 30 --frame-step-ms 33` 与多个
   `--frame-event FRAME:kind[:x:y]` 仍可用于快速 smoke test。
+- `win32_browser.cpp` 还提供 Win32-only host audio smoke 路径：
+  `--audio-smoke local.wav`，或 `--app package --audio-smoke /audio/tone.wav`。
+  这只验证 package resource 到桌面宿主 adapter 的交接，不代表嵌入式端内置 audio codec，
+  也不代表已经暴露公开 JavaScript 音频 API。
+- 隐藏逐帧 capture 会输出 host completion、system event、frame policy 和 service activity
+  统计。可以用这些计数验证 `backgroundServices`、息屏和低功耗策略是否按预期暂停或保留
+  network/audio/sensor 工作，而不需要让 render core 了解硬件。
 
 帧脚本是按行解析的极小格式：
 
@@ -21,10 +28,16 @@ frames 30
 step-ms 33
 viewport 300 300
 event 8 click 150 260
+animation-fps 30
+animation-callbacks 4
 ```
 
 JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来的构建；
 非 scripting 构建仍可验证 CSS animation。
+
+在帧脚本中使用 `animation-fps 0` 和 `animation-callbacks 0`，或命令行传入
+`--animation-fps 0 --animation-callbacks 0`，可以验证低功耗 profile：宿主应停止非必要动效，
+但不需要修改 app 源码。
 
 这些 native 工具可以使用桌面文件 I/O；嵌入式核心不依赖这些入口。
 

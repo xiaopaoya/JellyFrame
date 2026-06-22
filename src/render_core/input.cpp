@@ -37,8 +37,8 @@ bool focusable_node(const Node* node) {
         (node->tag_name == "a" && !node->attribute("href").empty());
 }
 
-void mark_interaction_style_dirty(const Node* node) {
-    if (node != nullptr) {
+void mark_interaction_style_dirty(const Node* node, bool enabled) {
+    if (enabled && node != nullptr) {
         mark_dirty(*mutable_node(node), DomDirtyStyle | DomDirtyLayout);
     }
 }
@@ -71,8 +71,10 @@ const LayoutBox* find_layout_box_for_node(const LayoutBox* box, const Node* node
 
 } // namespace
 
-InputController::InputController(const LayerNode& layer_tree)
-    : layer_tree_(layer_tree) {}
+InputController::InputController(const LayerNode& layer_tree,
+                                 InteractionInvalidationOptions invalidation_options)
+    : layer_tree_(layer_tree),
+      invalidation_options_(invalidation_options) {}
 
 const Node* InputController::hovered_node() const {
     return hovered_node_;
@@ -88,8 +90,8 @@ const Node* InputController::focused_node() const {
 
 void InputController::set_focused_node(const Node* node) {
     if (focused_node_ != node) {
-        mark_interaction_style_dirty(focused_node_);
-        mark_interaction_style_dirty(node);
+        mark_interaction_style_dirty(focused_node_, invalidation_options_.focus_style);
+        mark_interaction_style_dirty(node, invalidation_options_.focus_style);
     }
     focused_node_ = node;
 }
@@ -303,16 +305,16 @@ const Node* InputController::hit_node(int x, int y) const {
 
 void InputController::set_hovered_node(const Node* node) {
     if (hovered_node_ != node) {
-        mark_interaction_style_dirty(hovered_node_);
-        mark_interaction_style_dirty(node);
+        mark_interaction_style_dirty(hovered_node_, invalidation_options_.hover_style);
+        mark_interaction_style_dirty(node, invalidation_options_.hover_style);
     }
     hovered_node_ = node;
 }
 
 void InputController::set_active_node(const Node* node, const LayoutBox* box) {
     if (active_node_ != node) {
-        mark_interaction_style_dirty(active_node_);
-        mark_interaction_style_dirty(node);
+        mark_interaction_style_dirty(active_node_, invalidation_options_.active_style);
+        mark_interaction_style_dirty(node, invalidation_options_.active_style);
     }
     active_node_ = node;
     active_box_ = box;

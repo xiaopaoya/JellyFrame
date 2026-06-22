@@ -3,6 +3,7 @@
 #endif
 
 #include "app_runtime/app_host.h"
+#include "app_runtime/app_frame_policy.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "render_core/animation_invalidation.h"
@@ -34,6 +35,7 @@
 
 #include <windows.h>
 #include <windowsx.h>
+#include <mmsystem.h>
 
 #include <algorithm>
 #include <cctype>
@@ -66,8 +68,18 @@ constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
 constexpr int kMaxDebugPackageImageWidth = 256;
 constexpr int kMaxDebugPackageImageHeight = 256;
+constexpr const wchar_t* kWin32AudioAlias = L"jellyframe_audio_smoke";
 constexpr std::size_t kMaxDebugPackageImageDecodedBytes =
     static_cast<std::size_t>(kMaxDebugPackageImageWidth) * kMaxDebugPackageImageHeight * 4U;
+
+InteractionInvalidationOptions input_invalidation_options_from_style(const StyleResolver& resolver) {
+    const InteractionInvalidationHints hints = resolver.interaction_invalidation_hints();
+    InteractionInvalidationOptions options;
+    options.hover_style = hints.hover;
+    options.active_style = hints.active;
+    options.focus_style = hints.focus;
+    return options;
+}
 
 std::uint16_t pack_rgb565(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     return static_cast<std::uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
@@ -100,7 +112,7 @@ std::vector<std::uint8_t> make_debug_rgb565_surface(int width, int height, Color
 
 void add_debug_image_fixtures(ImageDecodeMock& images) {
     images.add_fixture(ImageDecodeFixture{
-        "app://icon",
+        "/debug/icon.raw",
         48,
         48,
         48,
@@ -108,7 +120,7 @@ void add_debug_image_fixtures(ImageDecodeMock& images) {
         make_debug_rgb565_surface(48, 48, Color{37, 99, 235, 255}, Color{14, 165, 233, 255}),
     });
     images.add_fixture(ImageDecodeFixture{
-        "app://photo",
+        "/debug/photo.raw",
         120,
         80,
         120,
@@ -371,6 +383,8 @@ struct BrowserOptions {
     std::string install_bundle_path;
     std::string launch_app_id;
     std::string remove_app_id;
+    std::string audio_smoke_source;
+    int audio_smoke_ms = 1000;
     std::string startup_status;
     int viewport_width = 390;
     int viewport_height = 640;
@@ -384,8 +398,75 @@ struct BrowserOptions {
     std::string frame_montage_path;
     int frame_montage_columns = 0;
     int frame_montage_gap = 6;
+    int animation_frame_rate = -1;
+    int animation_callbacks_per_frame = -1;
     std::vector<ScriptedFrameEvent> frame_events;
 };
+
+struct HostServiceDebugCounters {
+    std::size_t completion_batches = 0;
+    std::size_t completions_consumed = 0;
+    std::size_t completions_accepted = 0;
+    std::size_t completions_stale = 0;
+    std::size_t released_stale_handles = 0;
+    std::size_t network_completions = 0;
+    std::size_t storage_completions = 0;
+    std::size_t image_completions = 0;
+    std::size_t audio_completions = 0;
+    std::size_t other_completions = 0;
+    std::size_t image_handled = 0;
+    std::size_t script_host_completions_handled = 0;
+    std::size_t system_event_batches = 0;
+    std::size_t system_events_consumed = 0;
+    std::size_t system_events_accepted = 0;
+    std::size_t system_events_stale = 0;
+    std::size_t script_system_events_handled = 0;
+};
+
+struct FramePolicyDebugCounters {
+    std::size_t sampled_frames = 0;
+    std::size_t accepts_input_frames = 0;
+    std::size_t timer_frames = 0;
+    std::size_t animation_frames = 0;
+    std::size_t present_frames = 0;
+    std::size_t network_active_frames = 0;
+    std::size_t audio_active_frames = 0;
+    std::size_t sensor_active_frames = 0;
+    std::size_t pause_audio_frames = 0;
+    std::size_t throttle_sensor_frames = 0;
+};
+
+void count_host_completion_kind(HostServiceDebugCounters& counters, HostServiceJobKind kind) {
+    switch (kind) {
+    case HostServiceJobKind::NetworkFetch:
+        ++counters.network_completions;
+        break;
+    case HostServiceJobKind::StorageKv:
+        ++counters.storage_completions;
+        break;
+    case HostServiceJobKind::ImageDecode:
+        ++counters.image_completions;
+        break;
+    case HostServiceJobKind::AudioCommand:
+        ++counters.audio_completions;
+        break;
+    case HostServiceJobKind::Other:
+        ++counters.other_completions;
+        break;
+    }
+}
+
+AppBackgroundServicePolicy background_policy_from_manifest(const jellyframe_example::AppPackageManifest& manifest) {
+    AppBackgroundServicePolicy policy;
+    policy.network_while_suspended = manifest.background_network_while_suspended;
+    policy.network_while_screen_off = manifest.background_network_while_screen_off;
+    policy.audio_while_suspended = manifest.background_audio_while_suspended;
+    policy.audio_while_screen_off = manifest.background_audio_while_screen_off;
+    policy.sensors_while_suspended = manifest.background_sensors_while_suspended;
+    policy.sensors_while_screen_off = manifest.background_sensors_while_screen_off;
+    policy.sensors_in_low_power = manifest.background_sensors_in_low_power;
+    return policy;
+}
 
 struct LoadedPage {
     std::unique_ptr<Node> document;
@@ -393,6 +474,7 @@ struct LoadedPage {
     std::filesystem::path script_base_dir;
     jellyframe_example::PackageResourceContext package_context;
     jellyframe_example::PackageResourceStats package_stats;
+    jellyframe_example::AppPackageManifest package_manifest;
     bool package_mode = false;
 
     LoadedPage() = default;
@@ -405,6 +487,7 @@ struct LoadedPage {
           script_base_dir(std::move(other.script_base_dir)),
           package_context(std::move(other.package_context)),
           package_stats(other.package_stats),
+          package_manifest(std::move(other.package_manifest)),
           package_mode(other.package_mode) {
         if (package_context.stats == &other.package_stats) {
             package_context.stats = &package_stats;
@@ -419,6 +502,7 @@ struct LoadedPage {
             script_base_dir = std::move(other.script_base_dir);
             package_context = std::move(other.package_context);
             package_stats = other.package_stats;
+            package_manifest = std::move(other.package_manifest);
             package_mode = other.package_mode;
             if (package_context.stats == &other.package_stats) {
                 package_context.stats = &package_stats;
@@ -478,6 +562,229 @@ std::wstring utf8_to_wide(const std::string& text) {
     MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()),
                         wide.data(), required);
     return wide;
+}
+
+std::string extension_for_audio_source(const std::string& source) {
+    std::string cleaned = source;
+    const std::size_t query = cleaned.find_first_of("?#");
+    if (query != std::string::npos) {
+        cleaned.resize(query);
+    }
+    const std::filesystem::path path(cleaned);
+    std::string extension = path.extension().string();
+    if (extension.empty() || extension.size() > 8) {
+        extension = ".dat";
+    }
+    return extension;
+}
+
+std::filesystem::path write_temp_audio_resource(const std::string& source,
+                                                const std::string& bytes) {
+    wchar_t temp_dir[MAX_PATH + 1]{};
+    if (GetTempPathW(MAX_PATH, temp_dir) == 0) {
+        throw std::runtime_error("failed to locate temp directory for audio smoke");
+    }
+    wchar_t temp_name[MAX_PATH + 1]{};
+    if (GetTempFileNameW(temp_dir, L"jfa", 0, temp_name) == 0) {
+        throw std::runtime_error("failed to create temp file for audio smoke");
+    }
+    std::filesystem::path path(temp_name);
+    const std::filesystem::path renamed =
+        path.replace_extension(extension_for_audio_source(source));
+    std::error_code error;
+    std::filesystem::rename(temp_name, renamed, error);
+    path = error ? std::filesystem::path(temp_name) : renamed;
+
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        throw std::runtime_error("failed to write temp audio resource");
+    }
+    file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    if (!file) {
+        throw std::runtime_error("failed while writing temp audio resource");
+    }
+    return path;
+}
+
+std::string mci_error_text(MCIERROR error) {
+    wchar_t buffer[256]{};
+    if (mciGetErrorStringW(error, buffer, static_cast<UINT>(std::size(buffer)))) {
+        const int required = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, nullptr, 0, nullptr, nullptr);
+        if (required > 1) {
+            std::string text(static_cast<std::size_t>(required - 1), '\0');
+            WideCharToMultiByte(CP_UTF8, 0, buffer, -1, text.data(), required, nullptr, nullptr);
+            return text;
+        }
+    }
+    return "MCI error " + std::to_string(static_cast<unsigned long>(error));
+}
+
+void throw_mci_error(const std::string& operation, MCIERROR error) {
+    if (error == 0) {
+        return;
+    }
+    throw std::runtime_error(operation + " failed: " + mci_error_text(error));
+}
+
+std::wstring mci_quote_path(const std::filesystem::path& path) {
+    std::wstring wide = path.wstring();
+    for (wchar_t& ch : wide) {
+        if (ch == L'"') {
+            ch = L'\'';
+        }
+    }
+    return L"\"" + wide + L"\"";
+}
+
+void stop_win32_audio_playback() {
+    PlaySoundW(nullptr, nullptr, 0);
+    const std::wstring stop = std::wstring(L"stop ") + kWin32AudioAlias;
+    mciSendStringW(stop.c_str(), nullptr, 0, nullptr);
+    const std::wstring close = std::wstring(L"close ") + kWin32AudioAlias;
+    mciSendStringW(close.c_str(), nullptr, 0, nullptr);
+}
+
+bool play_win32_audio_file_async(const std::filesystem::path& path, std::string& error) {
+    const std::string extension = path.extension().string();
+    std::string lower_extension;
+    lower_extension.reserve(extension.size());
+    for (char ch : extension) {
+        lower_extension.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (lower_extension == ".wav") {
+        const bool played = PlaySoundW(path.wstring().c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+        if (!played) {
+            error = "PlaySoundW failed for WAV source";
+            return false;
+        }
+        return true;
+    }
+
+    try {
+        stop_win32_audio_playback();
+        const std::wstring open = L"open " + mci_quote_path(path) + L" alias " + kWin32AudioAlias;
+        throw_mci_error("audio open", mciSendStringW(open.c_str(), nullptr, 0, nullptr));
+        const std::wstring play = std::wstring(L"play ") + kWin32AudioAlias;
+        throw_mci_error("audio play", mciSendStringW(play.c_str(), nullptr, 0, nullptr));
+        return true;
+    } catch (const std::exception& exception) {
+        stop_win32_audio_playback();
+        error = exception.what();
+        return false;
+    }
+}
+
+bool run_win32_audio_smoke_file(const std::filesystem::path& path,
+                                int duration_ms,
+                                std::string& error) {
+    duration_ms = std::max(0, std::min(duration_ms, 10000));
+    const std::string extension = path.extension().string();
+    std::string lower_extension;
+    lower_extension.reserve(extension.size());
+    for (char ch : extension) {
+        lower_extension.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (lower_extension == ".wav") {
+        if (duration_ms == 0) {
+            const bool played = PlaySoundW(path.wstring().c_str(), nullptr, SND_FILENAME | SND_SYNC | SND_NODEFAULT);
+            if (!played) {
+                error = "PlaySoundW failed for WAV source";
+                return false;
+            }
+            return true;
+        }
+        const bool played = PlaySoundW(path.wstring().c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+        if (!played) {
+            error = "PlaySoundW failed for WAV source";
+            return false;
+        }
+        Sleep(static_cast<DWORD>(duration_ms));
+        PlaySoundW(nullptr, nullptr, 0);
+        return true;
+    }
+
+    try {
+        stop_win32_audio_playback();
+        const std::wstring open = L"open " + mci_quote_path(path) + L" alias " + kWin32AudioAlias;
+        throw_mci_error("audio open", mciSendStringW(open.c_str(), nullptr, 0, nullptr));
+        const std::wstring play = std::wstring(L"play ") + kWin32AudioAlias;
+        throw_mci_error("audio play", mciSendStringW(play.c_str(), nullptr, 0, nullptr));
+        if (duration_ms > 0) {
+            Sleep(static_cast<DWORD>(duration_ms));
+        }
+        stop_win32_audio_playback();
+        return true;
+    } catch (const std::exception& exception) {
+        stop_win32_audio_playback();
+        error = exception.what();
+        return false;
+    }
+}
+
+bool resolve_audio_smoke_source(const BrowserOptions& options,
+                                std::filesystem::path& audio_path,
+                                bool& temporary,
+                                std::string& error) {
+    temporary = false;
+    if (options.audio_smoke_source.empty()) {
+        error = "missing audio source";
+        return false;
+    }
+    const std::string& source = options.audio_smoke_source;
+    if (!options.app_path.empty() && !source.empty() && source.front() == '/') {
+        const std::string package_source = source;
+        try {
+            const auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
+            jellyframe_example::PackageResourceStats stats;
+            jellyframe_example::PackageResourceContext context;
+            context.root = package.root;
+            context.base_url = package.manifest.entry;
+            context.max_input_bytes = kMaxInputBytes;
+            context.stats = &stats;
+            context.bundle_bytes = package.bundle_bytes;
+            context.bundle_entries = package.bundle_entries;
+            context.bundle_payload_offset = package.bundle_payload_offset;
+            std::string bytes;
+            if (!jellyframe_example::load_package_resource(package_source, package.manifest.entry, bytes, &context)) {
+                error = "package audio resource not found: " + package_source;
+                return false;
+            }
+            audio_path = write_temp_audio_resource(package_source, bytes);
+            temporary = true;
+            return true;
+        } catch (const std::exception& exception) {
+            error = exception.what();
+            return false;
+        }
+    }
+    audio_path = std::filesystem::path(source);
+    if (!std::filesystem::is_regular_file(audio_path)) {
+        error = "audio file does not exist: " + source;
+        return false;
+    }
+    return true;
+}
+
+int run_win32_audio_smoke(const BrowserOptions& options) {
+    std::filesystem::path audio_path;
+    bool temporary = false;
+    std::string error;
+    if (!resolve_audio_smoke_source(options, audio_path, temporary, error)) {
+        std::cerr << "audio smoke failed: " << error << '\n';
+        return 1;
+    }
+    const bool ok = run_win32_audio_smoke_file(audio_path, options.audio_smoke_ms, error);
+    if (temporary) {
+        std::error_code ignored;
+        std::filesystem::remove(audio_path, ignored);
+    }
+    if (!ok) {
+        std::cerr << "audio smoke failed: " << error << '\n';
+        return 1;
+    }
+    std::cout << "audio smoke ok source=" << options.audio_smoke_source
+              << " duration_ms=" << options.audio_smoke_ms << '\n';
+    return 0;
 }
 
 std::string wide_char_to_utf8(wchar_t ch) {
@@ -1232,6 +1539,19 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
                 return false;
             }
             options.frame_start_ms = parse_u64_arg(fields[1].c_str(), options.frame_start_ms);
+        } else if (command == "animation-fps" || command == "animation-frame-rate") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.animation_frame_rate =
+                std::min(240, std::max(0, parse_int_unclamped(fields[1].c_str(), options.animation_frame_rate)));
+        } else if (command == "animation-callbacks" || command == "animation-callbacks-per-frame") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.animation_callbacks_per_frame =
+                std::min(1024,
+                         std::max(0, parse_int_unclamped(fields[1].c_str(), options.animation_callbacks_per_frame)));
         } else if (command == "viewport") {
             if (!require_count(3)) {
                 return false;
@@ -1303,6 +1623,8 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --frame-count N                Frames for --capture-frames, default 30.\n"
         << "  --frame-step-ms N              Fixed frame step, default 33 ms.\n"
         << "  --frame-start-ms N             First scripted timestamp, default 1000 ms.\n"
+        << "  --animation-fps N              Override host animation frame rate budget.\n"
+        << "  --animation-callbacks N        Override animation callbacks pumped per frame.\n"
         << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y].\n"
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
         << "                                 pointer-up, network-online/offline,\n"
@@ -1310,6 +1632,9 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
         << "  --use-app-fonts                Use package .jffont resources when available.\n"
+        << "  --audio-smoke SOURCE           Win32-only host audio smoke test. SOURCE can\n"
+        << "                                 be a local file, or /path in --app package.\n"
+        << "  --audio-smoke-ms N             Playback duration for --audio-smoke, default 1000.\n"
         << "  --registry-store DIR           Run system-shell/app-manager mode.\n"
         << "  --launcher-app PATH            Launcher app used with --registry-store.\n"
         << "  --install-bundle PATH          Install .jfapp into registry store.\n"
@@ -1349,7 +1674,12 @@ Color page_background_color(const Node& document, const StyleResolver& resolver)
 }
 
 void print_diagnostics(const VectorDiagnosticSink& diagnostics) {
+    static bool printed_empty_diagnostics = false;
     if (diagnostics.empty()) {
+        if (printed_empty_diagnostics) {
+            return;
+        }
+        printed_empty_diagnostics = true;
         std::cout << "diagnostics: 0\n";
         return;
     }
@@ -1570,6 +1900,7 @@ LoadedPage load_page(const BrowserOptions& options,
     if (!options.app_path.empty()) {
         auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
         page.package_mode = true;
+        page.package_manifest = package.manifest;
         page.package_stats = {};
         page.package_context.root = package.root;
         page.package_context.base_url = package.manifest.entry;
@@ -1714,6 +2045,13 @@ public:
     explicit BrowserApp(BrowserOptions options)
         : options_(std::move(options)),
           active_app_id_(options_.launch_app_id) {
+        if (options_.animation_frame_rate >= 0) {
+            budgets_.animation_frame_rate = static_cast<std::size_t>(options_.animation_frame_rate);
+        }
+        if (options_.animation_callbacks_per_frame >= 0) {
+            budgets_.max_animation_callbacks_per_frame =
+                static_cast<std::size_t>(options_.animation_callbacks_per_frame);
+        }
         frame_scratch_.reserve_from_budgets(budgets_);
         app_frame_scratch_.reserve_from_options(desktop_app_runtime_options());
         if (!options_.launch_app_id.empty()) {
@@ -1725,18 +2063,42 @@ public:
         } else {
             app_runtime_.launch("org.jellyframe.debug.page", AppRole::App);
         }
-        debug_network_.add_fixture(NetworkFetchFixture{"app://ping", 200, "text/plain", "pong"});
-        debug_network_.add_fixture(NetworkFetchFixture{
-            "app://weather",
-            200,
-            "application/json",
+        const char* weather_json =
             "{\"modes\":{"
             "\"hourly\":{\"temp\":\"27\",\"condition\":\"Rain soon\",\"summary\":\"Next hour 35%\",\"wind\":\"9\",\"rain\":\"35\",\"updated\":\"Live\",\"icon\":\"rain\"},"
             "\"daily\":{\"temp\":\"24\",\"condition\":\"Cloudy\",\"summary\":\"AQI 42 Good\",\"wind\":\"8\",\"rain\":\"20\",\"updated\":\"Live\",\"icon\":\"cloudy\"},"
             "\"air\":{\"temp\":\"42\",\"condition\":\"Air\",\"summary\":\"AQI good\",\"wind\":\"5\",\"rain\":\"10\",\"updated\":\"Live\",\"icon\":\"haze\"}"
-            "}}",
+            "}}";
+        const char* service_status_json = "{\"data\":\"Live\",\"audio\":\"Host owned\",\"sensors\":\"FG only\"}";
+        debug_network_.add_fixture(NetworkFetchFixture{"/debug/ping.txt", 200, "text/plain", "pong"});
+        debug_network_.add_fixture(NetworkFetchFixture{
+            "/data/weather.json",
+            200,
+            "application/json",
+            weather_json,
+        });
+        debug_network_.add_fixture(NetworkFetchFixture{
+            "/data/service-status.json",
+            200,
+            "application/json",
+            service_status_json,
         });
         add_debug_image_fixtures(debug_images_);
+    }
+
+    ~BrowserApp() {
+        stop_win32_audio_playback();
+        cleanup_temp_audio_files();
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        script_runtime_.reset();
+        script_runtime_instance_id_ = 0;
+#endif
+        if (hwnd_ != nullptr) {
+            HWND hwnd = hwnd_;
+            hwnd_ = nullptr;
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            DestroyWindow(hwnd);
+        }
     }
 
     bool initialize(HINSTANCE instance, int show_command) {
@@ -1806,6 +2168,7 @@ public:
                 static_cast<std::uint64_t>(frame) * options_.frame_step_ms;
             dispatch_scripted_frame_events(frame);
             handle_timer(kScriptTimerId);
+            record_frame_policy_sample();
             if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
                 render_current(input_ ? input_->hovered_node() : nullptr,
                                nullptr,
@@ -1879,7 +2242,34 @@ public:
 #endif
                   << "  dirty_local=" << dirty_region_statistics_.dirty_rect_frames
                   << " full=" << dirty_region_statistics_.full_frame_frames
-                  << " clean=" << dirty_region_statistics_.clean_frames << '\n';
+                  << " clean=" << dirty_region_statistics_.clean_frames << '\n'
+                  << "  host_completion_batches=" << host_service_counters_.completion_batches
+                  << " consumed=" << host_service_counters_.completions_consumed
+                  << " accepted=" << host_service_counters_.completions_accepted
+                  << " stale=" << host_service_counters_.completions_stale
+                  << " released_stale_handles=" << host_service_counters_.released_stale_handles << '\n'
+                  << "  host_completion_kinds network=" << host_service_counters_.network_completions
+                  << " storage=" << host_service_counters_.storage_completions
+                  << " image=" << host_service_counters_.image_completions
+                  << " audio=" << host_service_counters_.audio_completions
+                  << " other=" << host_service_counters_.other_completions << '\n'
+                  << "  host_completion_handlers image=" << host_service_counters_.image_handled
+                  << " script=" << host_service_counters_.script_host_completions_handled << '\n'
+                  << "  system_event_batches=" << host_service_counters_.system_event_batches
+                  << " consumed=" << host_service_counters_.system_events_consumed
+                  << " accepted=" << host_service_counters_.system_events_accepted
+                  << " stale=" << host_service_counters_.system_events_stale
+                  << " script=" << host_service_counters_.script_system_events_handled << '\n'
+                  << "  frame_policy_samples=" << frame_policy_counters_.sampled_frames
+                  << " input=" << frame_policy_counters_.accepts_input_frames
+                  << " timers=" << frame_policy_counters_.timer_frames
+                  << " animation=" << frame_policy_counters_.animation_frames
+                  << " present=" << frame_policy_counters_.present_frames << '\n'
+                  << "  service_activity network=" << frame_policy_counters_.network_active_frames
+                  << " audio=" << frame_policy_counters_.audio_active_frames
+                  << " sensors=" << frame_policy_counters_.sensor_active_frames
+                  << " pause_audio=" << frame_policy_counters_.pause_audio_frames
+                  << " throttle_sensors=" << frame_policy_counters_.throttle_sensor_frames << '\n';
         return 0;
     }
 
@@ -1930,6 +2320,10 @@ private:
     BrowserImageContext image_context_{&debug_images_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
     std::uint32_t debug_local_storage_instance_id_ = 0;
+    std::vector<std::filesystem::path> temp_audio_files_;
+    HostServiceDebugCounters host_service_counters_;
+    AppBackgroundServicePolicy background_service_policy_;
+    FramePolicyDebugCounters frame_policy_counters_;
     std::string pending_shell_action_;
     std::string pending_shell_app_id_;
 
@@ -2050,6 +2444,13 @@ private:
             KillTimer(hwnd_, kScriptTimerId);
             PostQuitMessage(0);
             return 0;
+        case WM_NCDESTROY:
+            {
+                HWND destroyed = hwnd_;
+                SetWindowLongPtrW(destroyed, GWLP_USERDATA, 0);
+                hwnd_ = nullptr;
+                return DefWindowProcW(destroyed, message, wparam, lparam);
+            }
         default:
             return DefWindowProcW(hwnd_, message, wparam, lparam);
         }
@@ -2067,7 +2468,44 @@ private:
     }
 
     bool accepts_ui_events() const {
-        return !runtime_controls_page() || app_runtime_.current().state == AppLifecycleState::Foreground;
+        return !runtime_controls_page() ||
+            app_frame_policy_for(app_runtime_.current(), debug_system_state_).accepts_input;
+    }
+
+    AppFramePolicy current_frame_policy() const {
+        if (!runtime_controls_page()) {
+            return AppFramePolicy{true, true, true, true, false};
+        }
+        return app_frame_policy_for(app_runtime_.current(), debug_system_state_);
+    }
+
+    AppServiceActivityPolicy current_service_activity_policy() const {
+        if (!runtime_controls_page()) {
+            return AppServiceActivityPolicy{true, true, true, false, false};
+        }
+        return app_service_activity_policy_for(app_runtime_.current(),
+                                               debug_system_state_,
+                                               background_service_policy_);
+    }
+
+    void record_frame_policy_sample() {
+        const AppFramePolicy frame_policy = current_frame_policy();
+        const AppServiceActivityPolicy service_policy = current_service_activity_policy();
+        ++frame_policy_counters_.sampled_frames;
+        frame_policy_counters_.accepts_input_frames += frame_policy.accepts_input ? 1 : 0;
+        frame_policy_counters_.timer_frames += frame_policy.pumps_timers ? 1 : 0;
+        frame_policy_counters_.animation_frames += frame_policy.pumps_animation ? 1 : 0;
+        frame_policy_counters_.present_frames += frame_policy.presents_frames ? 1 : 0;
+        frame_policy_counters_.network_active_frames += service_policy.network_fetch ? 1 : 0;
+        frame_policy_counters_.audio_active_frames += service_policy.audio_playback ? 1 : 0;
+        frame_policy_counters_.sensor_active_frames += service_policy.sensor_sampling ? 1 : 0;
+        frame_policy_counters_.pause_audio_frames += service_policy.should_pause_audio ? 1 : 0;
+        frame_policy_counters_.throttle_sensor_frames += service_policy.should_throttle_sensors ? 1 : 0;
+    }
+
+    FrameLoopOptions current_frame_loop_options() const {
+        return apply_app_frame_policy(frame_loop_options_from_budgets(budgets_),
+                                      current_frame_policy());
     }
 
     void reset_image_services() {
@@ -2076,13 +2514,101 @@ private:
         add_debug_image_fixtures(debug_images_);
     }
 
+    void cleanup_temp_audio_files() {
+        for (const std::filesystem::path& path : temp_audio_files_) {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+        temp_audio_files_.clear();
+    }
+
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+    static bool play_script_audio_callback(void* user,
+                                           std::string_view src,
+                                           double volume,
+                                           std::string* error) {
+        auto* app = static_cast<BrowserApp*>(user);
+        return app != nullptr && app->play_script_audio(src, volume, error);
+    }
+
+    bool play_script_audio(std::string_view src, double volume, std::string* error) {
+        (void) volume;
+        const std::string source(src);
+        std::filesystem::path audio_path;
+        bool temporary = false;
+        std::string local_error;
+        if (!resolve_script_audio_source(source, audio_path, temporary, local_error)) {
+            if (error != nullptr) {
+                *error = local_error;
+            }
+            return false;
+        }
+        if (temporary) {
+            temp_audio_files_.push_back(audio_path);
+        }
+        if (!play_win32_audio_file_async(audio_path, local_error)) {
+            if (error != nullptr) {
+                *error = local_error;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    bool resolve_script_audio_source(const std::string& source,
+                                     std::filesystem::path& audio_path,
+                                     bool& temporary,
+                                     std::string& error) {
+        temporary = false;
+        if (source.empty()) {
+            error = "empty audio source";
+            return false;
+        }
+        if (!options_.app_path.empty()) {
+            try {
+                const auto package = jellyframe_example::load_app_package(options_.app_path, kMaxInputBytes);
+                jellyframe_example::PackageResourceStats stats;
+                jellyframe_example::PackageResourceContext context;
+                context.root = package.root;
+                context.base_url = package.manifest.entry;
+                context.max_input_bytes = kMaxInputBytes;
+                context.stats = &stats;
+                context.bundle_bytes = package.bundle_bytes;
+                context.bundle_entries = package.bundle_entries;
+                context.bundle_payload_offset = package.bundle_payload_offset;
+                std::string bytes;
+                if (jellyframe_example::load_package_resource(source, package.manifest.entry, bytes, &context)) {
+                    audio_path = write_temp_audio_resource(source, bytes);
+                    temporary = true;
+                    return true;
+                }
+            } catch (const std::exception& exception) {
+                error = exception.what();
+                return false;
+            }
+        }
+        audio_path = std::filesystem::path(source);
+        if (!std::filesystem::is_regular_file(audio_path)) {
+            error = "audio source not found: " + source;
+            return false;
+        }
+        return true;
+    }
+#endif
+
     bool drain_host_completions() {
         const AppCompletionPumpResult result = app_runtime_.pump_frame_completions(app_frame_scratch_);
         if (result.consumed == 0) {
             return false;
         }
+        ++host_service_counters_.completion_batches;
+        host_service_counters_.completions_consumed += result.consumed;
+        host_service_counters_.completions_accepted += result.accepted;
+        host_service_counters_.completions_stale += result.stale;
+        host_service_counters_.released_stale_handles += result.released_stale_handles;
         std::size_t image_handled = 0;
         for (const HostServiceCompletion& completion : app_frame_scratch_.accepted_completions) {
+            count_host_completion_kind(host_service_counters_, completion.kind);
             const std::string image_src = image_cache_.url_for_job(completion.job_id);
             report_image_completion_failure(&diagnostics_, completion, image_src);
             if (image_cache_.handle_completion(completion)) {
@@ -2098,6 +2624,7 @@ private:
         if (image_handled != 0 && document_ != nullptr) {
             mark_dirty(*document_, DomDirtyPaint);
         }
+        host_service_counters_.image_handled += image_handled;
         std::size_t script_handled = 0;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ != nullptr &&
@@ -2109,6 +2636,7 @@ private:
             }
         }
 #endif
+        host_service_counters_.script_host_completions_handled += script_handled;
         std::cout << "host completions consumed=" << result.consumed
                   << " accepted=" << result.accepted
                   << " stale=" << result.stale
@@ -2124,6 +2652,10 @@ private:
         if (result.consumed == 0) {
             return false;
         }
+        ++host_service_counters_.system_event_batches;
+        host_service_counters_.system_events_consumed += result.consumed;
+        host_service_counters_.system_events_accepted += result.accepted;
+        host_service_counters_.system_events_stale += result.stale;
         std::size_t script_handled = 0;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ != nullptr &&
@@ -2135,6 +2667,7 @@ private:
             }
         }
 #endif
+        host_service_counters_.script_system_events_handled += script_handled;
         std::cout << "system events consumed=" << result.consumed
                   << " accepted=" << result.accepted
                   << " stale=" << result.stale
@@ -2156,7 +2689,7 @@ private:
             set_title(std::string("system event rejected: ") + status);
             return;
         }
-        if (drain_system_events()) {
+        if (drain_system_events() && current_frame_policy().presents_frames) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
         set_title(std::string("system ") + status);
@@ -2183,6 +2716,7 @@ private:
         }
         system_shell_mode_ = true;
         active_app_id_.clear();
+        background_service_policy_ = AppBackgroundServicePolicy{};
         reset_image_services();
         app_runtime_.launch("org.jellyframe.system.launcher", AppRole::Launcher);
         options_.app_path.clear();
@@ -2207,6 +2741,7 @@ private:
             options_.inline_html.clear();
             options_.inline_css.clear();
             active_app_id_ = app_id;
+            background_service_policy_ = background_policy_from_manifest(package.manifest);
             reset_image_services();
             app_runtime_.launch(app_id, AppRole::App);
             system_shell_mode_ = false;
@@ -2288,12 +2823,17 @@ private:
         try {
             diagnostics_.clear();
             reset_image_services();
+            stop_win32_audio_playback();
+            cleanup_temp_audio_files();
             KillTimer(hwnd_, kScriptTimerId);
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
             script_runtime_.reset();
             script_runtime_instance_id_ = 0;
 #endif
             LoadedPage page = load_page(options_, budgets_, &diagnostics_, &app_runtime_);
+            background_service_policy_ = page.package_mode
+                ? background_policy_from_manifest(page.package_manifest)
+                : AppBackgroundServicePolicy{};
             if (page.package_mode) {
                 add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_);
             }
@@ -2351,6 +2891,7 @@ private:
                 }
                 script_runtime_->bind_app_services(app_runtime_, debug_network_);
                 script_runtime_->bind_local_storage(debug_local_storage_);
+                script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
                 script_runtime_->set_system_state(ScriptSystemState{
                     !debug_system_state_.screen_on || debug_system_state_.low_power_mode,
                     debug_system_state_.network_online,
@@ -2484,7 +3025,9 @@ private:
             } else {
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
-            input_ = std::make_unique<InputController>(*layer_tree_);
+            input_ = std::make_unique<InputController>(
+                *layer_tree_,
+                input_invalidation_options_from_style(*style_resolver_));
             input_->set_interaction_state(hovered_node, active_node, focused_node);
             update_blit_pixels();
             clear_dirty_flags(*document_);
@@ -2559,7 +3102,9 @@ private:
         } else {
             render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
         }
-        input_ = std::make_unique<InputController>(*layer_tree_);
+        input_ = std::make_unique<InputController>(
+            *layer_tree_,
+            input_invalidation_options_from_style(*style_resolver_));
         input_->set_interaction_state(hovered_node, active_node, focused_node);
         update_blit_pixels();
         clear_dirty_flags(*document_);
@@ -2934,14 +3479,20 @@ private:
         if (timer_id != kScriptTimerId) {
             return;
         }
+        const AppFramePolicy frame_policy = current_frame_policy();
+        const FrameLoopOptions frame_options = current_frame_loop_options();
         const bool completed_image = debug_images_.complete_next(app_runtime_);
         bool handled_completion = drain_host_completions();
         const bool handled_system_event = drain_system_events();
-        const bool advanced_animation = advance_animation_timeline(current_time_ms());
+        const bool animation_budget_enabled = frame_options.animation_frame_rate > 0 &&
+            frame_options.max_animation_callbacks_per_frame > 0;
+        const bool advanced_animation = frame_policy.presents_frames &&
+            animation_budget_enabled && advance_animation_timeline(current_time_ms());
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
-        if (script_runtime_ == nullptr || !accepts_ui_events() ||
+        if (script_runtime_ == nullptr || !frame_policy.pumps_timers ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
-            if (completed_image || handled_completion || handled_system_event || advanced_animation) {
+            if (frame_policy.presents_frames &&
+                (completed_image || handled_completion || handled_system_event || advanced_animation)) {
                 rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
             }
             return;
@@ -2949,14 +3500,19 @@ private:
         const bool completed_network = debug_network_.complete_next(app_runtime_);
         handled_completion = drain_host_completions() || handled_completion;
         const std::uint64_t now_ms = current_time_ms();
-        const std::size_t callbacks = script_runtime_->pump_timers(now_ms, 8);
-        const std::size_t animation_callbacks = script_runtime_->pump_animation_frame(now_ms, 4);
-        if (callbacks != 0 || animation_callbacks != 0 || completed_network || advanced_animation ||
-            completed_image || handled_completion || handled_system_event) {
+        const std::size_t callbacks =
+            script_runtime_->pump_timers(now_ms, frame_options.max_timer_callbacks_per_frame);
+        const std::size_t animation_callbacks = animation_budget_enabled
+            ? script_runtime_->pump_animation_frame(now_ms, frame_options.max_animation_callbacks_per_frame)
+            : 0;
+        if (frame_policy.presents_frames &&
+            (callbacks != 0 || animation_callbacks != 0 || completed_network || advanced_animation ||
+             completed_image || handled_completion || handled_system_event)) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #else
-        if (completed_image || handled_completion || handled_system_event || advanced_animation) {
+        if (frame_policy.presents_frames &&
+            (completed_image || handled_completion || handled_system_event || advanced_animation)) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #endif
@@ -3112,6 +3668,24 @@ int main(int argc, char** argv) {
             options.frame_start_ms = parse_u64_arg(argv[++i], options.frame_start_ms);
             continue;
         }
+        if (arg == "--animation-fps") {
+            if (i + 1 >= argc) {
+                std::cerr << "--animation-fps requires a number\n";
+                return 1;
+            }
+            options.animation_frame_rate =
+                std::min(240, std::max(0, parse_int_unclamped(argv[++i], options.animation_frame_rate)));
+            continue;
+        }
+        if (arg == "--animation-callbacks") {
+            if (i + 1 >= argc) {
+                std::cerr << "--animation-callbacks requires a number\n";
+                return 1;
+            }
+            options.animation_callbacks_per_frame =
+                std::min(1024, std::max(0, parse_int_unclamped(argv[++i], options.animation_callbacks_per_frame)));
+            continue;
+        }
         if (arg == "--frame-event") {
             if (i + 1 >= argc) {
                 std::cerr << "--frame-event requires FRAME:kind[:x:y]\n";
@@ -3203,10 +3777,27 @@ int main(int argc, char** argv) {
             options.use_app_fonts = true;
             continue;
         }
+        if (arg == "--audio-smoke") {
+            if (i + 1 >= argc) {
+                std::cerr << "--audio-smoke requires a local file path or package /path resource\n";
+                return 1;
+            }
+            options.audio_smoke_source = argv[++i];
+            continue;
+        }
+        if (arg == "--audio-smoke-ms") {
+            if (i + 1 >= argc) {
+                std::cerr << "--audio-smoke-ms requires a number\n";
+                return 1;
+            }
+            options.audio_smoke_ms = std::min(10000, std::max(0, parse_int_unclamped(argv[++i], options.audio_smoke_ms)));
+            continue;
+        }
         positional.push_back(arg);
     }
 
-    if (options.registry_store_path.empty() && options.app_path.empty() && positional.empty()) {
+    if (options.registry_store_path.empty() && options.app_path.empty() && positional.empty() &&
+        options.audio_smoke_source.empty()) {
         options.app_path = "samples/apps/packages/watch_weather";
     }
 
@@ -3246,6 +3837,16 @@ int main(int argc, char** argv) {
     } catch (const std::exception& error) {
         std::cerr << "app manager command failed: " << error.what() << '\n';
             return 1;
+    }
+
+    if (!options.audio_smoke_source.empty()) {
+        const int audio_result = run_win32_audio_smoke(options);
+        if (audio_result != 0) {
+            return audio_result;
+        }
+        if (!options.capture && !options.capture_frames && options.registry_store_path.empty() && positional.empty()) {
+            return 0;
+        }
     }
 
     if (!options.registry_store_path.empty() && options.app_path.empty() && positional.empty()) {

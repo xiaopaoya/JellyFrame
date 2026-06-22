@@ -45,6 +45,11 @@ controllers and UI driver libraries.
 - Input synthesis for `mouseover`, `mouseout`, `mousemove`, `mousedown`,
   `mouseup`, `click` and `wheel`.
 - Hover, active and focus state tracking inside the core input controller.
+- `StyleResolver` extracts dynamic pseudo-class hints from the stylesheet.
+  Input state changes mark style/layout dirty only when selectors use the
+  matching `:hover`, `:active`, `:focus` or `:focus-within` subset. Pages
+  without those selectors still receive events, but pointer hover alone does
+  not repaint them.
 - A Windows validation shell that translates Win32 mouse/wheel messages into
   `InputController` calls.
 - The Windows shell performs a simple viewport scroll default action after
@@ -61,8 +66,9 @@ controllers and UI driver libraries.
 - No touch or pointer capture.
 - No transformed coordinate hit testing.
 - No keyboard dispatch yet.
-- Input state changes mark style/layout dirty for supported dynamic
-  pseudo-classes. Script/event DOM mutations use the normal DOM dirty flags.
+- Input state changes mark style/layout dirty only for supported dynamic
+  pseudo-classes that actually appear in the stylesheet. Script/event DOM
+  mutations use the normal DOM dirty flags.
 
 ## Next Steps
 

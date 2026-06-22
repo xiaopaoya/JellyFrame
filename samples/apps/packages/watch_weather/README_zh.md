@@ -5,5 +5,5 @@
 预览路径的一致性。
 
 该示例保持 local-first，但会通过 JellyFrame `XMLHttpRequest` V0 子集向宿主数据服务请求
-`app://weather`。Win32 debug 壳提供 mock response；硬件 port 应提供自己的有界数据服务。
+`/data/weather.json`。Win32 debug 壳提供 mock response；硬件 port 应提供自己的有界数据服务。
 renderer 仍不加载远程页面。

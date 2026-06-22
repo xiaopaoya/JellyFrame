@@ -533,7 +533,7 @@ bool resolve_test_image(const Node& node, std::uint32_t& handle, void* raw_conte
 void image_element_emits_image_display_command_when_surface_resolves() {
     HtmlParser html_parser;
     CssParser css_parser;
-    auto document = html_parser.parse("<body><img src='app://icon.raw'></body>");
+    auto document = html_parser.parse("<body><img src='/debug/icon.raw'></body>");
     Stylesheet stylesheet = css_parser.parse(
         "img { width: 32px; height: 24px; object-fit: cover; object-position: right top; image-rendering: crisp-edges; }");
     StyleResolver resolver(stylesheet);
@@ -542,7 +542,7 @@ void image_element_emits_image_display_command_when_surface_resolves() {
     LayoutEngine layout_engine(resolver);
     auto layout_tree = layout_engine.layout(*render_tree, 120);
 
-    ImageResolveContext context{"app://icon.raw", 77};
+    ImageResolveContext context{"/debug/icon.raw", 77};
     LayerTreeBuilderOptions options;
     options.image_resolver = ImageHandleResolver{resolve_test_image, &context};
     LayerTreeBuilder layer_tree_builder(options);

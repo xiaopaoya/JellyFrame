@@ -20,6 +20,7 @@ struct AppSystemEvent;
 struct HostServiceCompletion;
 struct ScriptRuntimeAccess;
 struct ScriptAnimationFrameCallback;
+struct ScriptAudioElement;
 struct ScriptEventListener;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
@@ -30,12 +31,23 @@ struct ScriptEvaluationResult {
     std::string error;
 };
 
+using ScriptAudioPlayCallback = bool (*)(void* user,
+                                         std::string_view src,
+                                         double volume,
+                                         std::string* error);
+
+struct ScriptAudioHost {
+    ScriptAudioPlayCallback play = nullptr;
+    void* user = nullptr;
+};
+
 struct JerryScriptRuntimeOptions {
     std::size_t max_timers = 64;
     std::size_t max_event_listeners = 512;
     std::size_t max_detached_nodes = 256;
     std::size_t max_xml_http_requests = 16;
     std::size_t max_animation_frame_callbacks = 16;
+    std::size_t max_audio_elements = 8;
 };
 
 struct ScriptRuntimeStatistics {
@@ -43,6 +55,7 @@ struct ScriptRuntimeStatistics {
     std::size_t animation_frame_callback_count = 0;
     std::size_t event_listener_count = 0;
     std::size_t xml_http_request_count = 0;
+    std::size_t audio_element_count = 0;
     DetachedDomStatistics detached_nodes;
 };
 
@@ -63,6 +76,7 @@ public:
     void bind_document(Node& document);
     void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network);
     void bind_local_storage(AppLocalStorageShadow& storage);
+    void bind_audio_host(ScriptAudioHost host);
     void clear_app_services();
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
     void set_host_time_ms(std::uint64_t now_ms);
@@ -91,10 +105,12 @@ private:
     std::vector<std::unique_ptr<ScriptTimer>> timers_;
     std::vector<std::unique_ptr<ScriptAnimationFrameCallback>> animation_frame_callbacks_;
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
+    std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
     JerryScriptRuntimeOptions options_;
     AppRuntimeHost* app_host_ = nullptr;
     NetworkFetchMock* network_fetch_ = nullptr;
     AppLocalStorageShadow* local_storage_ = nullptr;
+    ScriptAudioHost audio_host_;
     Node* bound_document_ = nullptr;
     ScriptSystemState system_state_;
 
@@ -121,6 +137,8 @@ private:
     void clear_animation_frame_callbacks();
     ScriptXmlHttpRequest* create_xml_http_request();
     void clear_xml_http_requests();
+    ScriptAudioElement* create_audio_element(std::string src);
+    void clear_audio_elements();
 };
 
 } // namespace jellyframe

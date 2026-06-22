@@ -392,6 +392,27 @@ void matches_dynamic_pseudo_classes() {
     check(disabled_style.color.r == 0x77, "disabled style matches");
 }
 
+void reports_interaction_invalidation_hints_from_selectors() {
+    StyleResolver static_resolver(parse(
+        ".card { color: #111111; }"
+        "input:checked { background: #101010; }"
+        "button:disabled { opacity: .5; }"));
+    InteractionInvalidationHints static_hints = static_resolver.interaction_invalidation_hints();
+    check(!static_hints.hover && !static_hints.active && !static_hints.focus,
+          "static selectors do not request interaction invalidation");
+
+    StyleResolver dynamic_resolver(parse(
+        ".card:hover { color: #222222; }"
+        "button:active { color: #333333; }"
+        ".panel:focus-within { padding: 4px; }"
+        "article:is(.selected, :hover) { background: #444444; }"
+        "input:where(:focus) { width: 120px; }"));
+    InteractionInvalidationHints dynamic_hints = dynamic_resolver.interaction_invalidation_hints();
+    check(dynamic_hints.hover, "hover selector requests hover invalidation");
+    check(dynamic_hints.active, "active selector requests active invalidation");
+    check(dynamic_hints.focus, "focus selector requests focus invalidation");
+}
+
 void matches_is_where_with_specificity() {
     auto card = make_element("article");
     card->attributes["class"] = "card selected";
@@ -785,6 +806,7 @@ int main() {
         matches_descendant_and_attribute_selectors();
         matches_sibling_selectors();
         matches_dynamic_pseudo_classes();
+        reports_interaction_invalidation_hints_from_selectors();
         matches_is_where_with_specificity();
         controls_have_usable_default_boxes();
         embedded_styles_and_common_lengths_apply();

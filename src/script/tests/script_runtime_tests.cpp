@@ -477,7 +477,7 @@ void javascript_xml_http_request_get_completes_from_host_service() {
     AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
     host.launch("org.example.xhr", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
-    check(network.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"temp\":21}"}),
+    check(network.add_fixture(NetworkFetchFixture{"/data/weather.json", 200, "application/json", "{\"temp\":21}"}),
           "XHR fixture added");
 
     JerryScriptRuntime runtime;
@@ -490,7 +490,7 @@ void javascript_xml_http_request_get_completes_from_host_service() {
         "xhr.onreadystatechange = function () { if (xhr.readyState == 4) log += 'done:' + xhr.status + ';'; };"
         "xhr.onload = function (event) { status.textContent = event.type + ':' + xhr.responseText; };"
         "xhr.onloadend = function () { log += 'end'; };"
-        "xhr.open('GET', 'app://weather', true);"
+        "xhr.open('GET', '/data/weather.json', true);"
         "xhr.send();"
         "'sent'");
     check(result.ok, "XHR script evaluates");
@@ -517,7 +517,7 @@ void javascript_xml_http_request_error_callback_runs_on_missing_fixture() {
         "var status = document.getElementById('status');"
         "var xhr = new XMLHttpRequest();"
         "xhr.onerror = function (event) { status.textContent = event.type + ':' + xhr.status; };"
-        "xhr.open('GET', 'app://missing', true);"
+        "xhr.open('GET', '/data/missing.json', true);"
         "xhr.send();"
         "'sent'");
     check(result.ok, "XHR error script evaluates");
@@ -603,6 +603,61 @@ void javascript_local_storage_quota_error_is_reported() {
         "String(quotaOk) + ':' + localStorage.length");
     check(result.ok, "localStorage quota script evaluates");
     check(result.value == "false:0", "localStorage quota rejects oversized value");
+}
+
+struct FakeAudioHost {
+    std::string src;
+    double volume = -1.0;
+    int calls = 0;
+};
+
+bool fake_audio_play(void* user, std::string_view src, double volume, std::string*) {
+    auto* host = static_cast<FakeAudioHost*>(user);
+    if (host == nullptr) {
+        return false;
+    }
+    host->src = std::string(src);
+    host->volume = volume;
+    ++host->calls;
+    return true;
+}
+
+void javascript_audio_subset_uses_bound_host() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    {
+        JerryScriptRuntime runtime;
+        runtime.bind_document(*document);
+        ScriptEvaluationResult result = runtime.eval(
+            "var bareOk = true;"
+            "var unboundOk = true;"
+            "try { Audio('/audio/tone.wav'); } catch (e) { bareOk = false; }"
+            "try { new Audio('/audio/tone.wav').play(); } catch (e) { unboundOk = false; }"
+            "String(typeof Audio) + ':' + String(bareOk) + ':' + String(unboundOk)");
+        check(result.ok, "Audio constructor absence/host test evaluates");
+        check(result.value == "function:false:false", "Audio requires new and bound host for play");
+    }
+
+    FakeAudioHost host;
+    JerryScriptRuntime runtime_with_audio;
+    runtime_with_audio.bind_audio_host(ScriptAudioHost{fake_audio_play, &host});
+    runtime_with_audio.bind_document(*document);
+    ScriptEvaluationResult result = runtime_with_audio.eval(
+        "var tone = new Audio('/audio/tone.wav');"
+        "tone.volume = 2;"
+        "var high = tone.volume;"
+        "tone.volume = -1;"
+        "var low = tone.volume;"
+        "tone.volume = 0.35;"
+        "tone.play();"
+        "tone.src + ':' + high + ':' + low + ':' + tone.volume");
+    check(result.ok, "Audio host script evaluates");
+    check(result.value == "/audio/tone.wav:1:0:0.35", "Audio src/volume subset follows expected shape");
+    check(host.calls == 1, "Audio host was called once");
+    check(host.src == "/audio/tone.wav", "Audio host receives src");
+    check(host.volume > 0.34 && host.volume < 0.36, "Audio host receives clamped volume");
+    check(runtime_with_audio.statistics().audio_element_count == 1, "Audio statistics count one element");
 }
 
 void javascript_runtime_respects_timer_and_listener_budgets() {
@@ -715,6 +770,7 @@ int main() {
         javascript_local_storage_is_exposed_only_when_bound();
         javascript_local_storage_subset_uses_bound_shadow();
         javascript_local_storage_quota_error_is_reported();
+        javascript_audio_subset_uses_bound_host();
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_system_state_exposes_web_adjacent_subset();
     } catch (const std::exception& error) {

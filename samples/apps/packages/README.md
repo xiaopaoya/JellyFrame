@@ -13,3 +13,7 @@ Current packages:
 - `jelly_controls`: Jelly UI controls and motion style sample.
 - `jelly_motion_lab`: LVGL-style motion validation app with icon-to-window,
   sheet and button jelly animations.
+- `jelly_service_status`: optional network/audio/sensor background policy
+  sample for app runtime service boundaries.
+- `jelly_audio_smoke`: package audio resource used by the Win32 host-owned
+  audio smoke path.

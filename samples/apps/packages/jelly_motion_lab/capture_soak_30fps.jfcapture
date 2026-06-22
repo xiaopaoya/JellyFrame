@@ -1,0 +1,21 @@
+# JellyFrame deterministic Win32 animation soak script.
+# Run with:
+#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_motion_lab --frame-script samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+
+output-dir out/motion_lab_soak_frames
+montage out/motion_lab_soak_montage.bmp
+frames 90
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 10
+gap 6
+animation-fps 30
+animation-callbacks 4
+
+# Exercise pointer feedback while the CSS keyframes keep running.
+event 8 click 150 260
+event 30 pointer-move 150 260
+event 31 pointer-down 150 260
+event 34 pointer-up 150 260
+event 60 pointer-move 40 42
