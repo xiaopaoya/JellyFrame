@@ -82,6 +82,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Package `serviceIntent` reports now include `targetSupport` for optional
   host services when a target preset declares `hostServices`; absent profile
   data remains `unknown`.
+- Built-in target presets now declare conservative `hostServices` support, and
+  packaging warns with `service-target-unsupported` when a requested service is
+  explicitly unavailable on the selected target.
 - The Win32 debug shell now drives mock image decode and debug network fetch
   through the same host worker pump boundary used by ports, while keeping real
   resources and callbacks on the UI completion path.

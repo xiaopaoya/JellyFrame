@@ -36,4 +36,12 @@ Optional host services may be described with `hostServices`:
 
 This feeds package-report `serviceIntent.targetSupport` as
 `supported`/`unsupported`/`unknown`. It is a developer compatibility signal, not
-an app permission grant.
+an app permission grant. When an app requests a service that a selected preset
+explicitly marks `false`, packaging also emits a `service-target-unsupported`
+warning. Missing keys stay `unknown` rather than failing, because product ports
+may define optional services outside the generic preset.
+
+The built-in wearable presets currently mark bounded runtime network fetch and
+app-private KV storage as supported, and audio playback as unsupported. Product
+ports with a real codec/speaker path should override `audioPlayback` in their
+own preset rather than relying on the generic display-shape preset.

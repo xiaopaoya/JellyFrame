@@ -33,3 +33,10 @@ height、横向溢出、是否需要滚动以及 diagnostics 计数，帮助 app
 
 这会进入 package report 的 `serviceIntent.targetSupport`，取值为
 `supported` / `unsupported` / `unknown`。它只是开发期兼容性信号，不是 app 权限授予。
+当 app 请求了所选 preset 明确标记为 `false` 的服务时，package 还会输出
+`service-target-unsupported` warning。缺失字段保持 `unknown`，不直接失败，因为产品 port
+可能会在通用 preset 之外定义可选服务。
+
+当前内置可穿戴 preset 把有界 runtime network fetch 和 app 私有 KV storage 标为 supported，
+把 audio playback 保守标为 unsupported。具有真实 codec/扬声器路径的产品 port 应在自己的
+preset 中覆盖 `audioPlayback`，不要依赖通用显示形态 preset。

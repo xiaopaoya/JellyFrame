@@ -16,6 +16,11 @@
     "maxAppFontGlyphs": 512
   },
   "fontProfile": "app-subset-cn",
+  "hostServices": {
+    "networkFetch": true,
+    "storageKv": true,
+    "audioPlayback": false
+  },
   "output": "cpp",
   "framebuffer": {
     "preferredPixelFormat": "rgb565",

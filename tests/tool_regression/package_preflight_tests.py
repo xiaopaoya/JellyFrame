@@ -128,6 +128,17 @@ class PackagePreflightTests(unittest.TestCase):
             {"networkFetch": "supported", "storageKv": "supported", "audioPlayback": "unsupported"},
         )
 
+        warnings = package_app.collect_service_target_warnings(manifest, {
+            "id": "round-300",
+            "hostServices": {
+                "networkFetch": True,
+                "storageKv": False,
+                "audioPlayback": False,
+            },
+        })
+        self.assertEqual([warning["service"] for warning in warnings], ["storageKv", "audioPlayback"])
+        self.assertTrue(all(warning["code"] == "service-target-unsupported" for warning in warnings))
+
     def test_responsive_profile_status_and_report_merge(self):
         pipeline_report = {
             "viewport": {"width": 320, "height": 240},

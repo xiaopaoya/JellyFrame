@@ -427,6 +427,33 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
     }
 
 
+def collect_service_target_warnings(manifest: dict, target_config: dict) -> list[dict]:
+    host_services = target_config.get("hostServices", {})
+    if not isinstance(host_services, dict):
+        return []
+    target_id = target_config.get("id", "")
+    source = f"target:{target_id}" if isinstance(target_id, str) and target_id else "target"
+    requests = [
+        ("networkFetch", bool(manifest.get("networkAllowed")), "network.fetch"),
+        ("storageKv", bool(manifest.get("storageKvAllowed")), "storage.kv"),
+        ("audioPlayback", bool(manifest.get("audioPlaybackAllowed")), "media.audio.mp3"),
+    ]
+    warnings = []
+    for key, requested, capability in requests:
+        if not requested or key not in host_services or bool(host_services.get(key)):
+            continue
+        warnings.append({
+            "level": "warning",
+            "code": "service-target-unsupported",
+            "message": f"manifest requests {capability}, but target {target_id or '<custom>'} marks {key} unsupported",
+            "source": source,
+            "service": key,
+            "capability": capability,
+            "target": target_id if isinstance(target_id, str) else "",
+        })
+    return warnings
+
+
 def collect_manifest_warnings(manifest: dict) -> list[dict]:
     warnings = []
     allowed_top_level = {
@@ -1272,6 +1299,7 @@ def main() -> int:
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
     warnings.extend(collect_audio_resource_warnings(manifest, resources))
+    warnings.extend(collect_service_target_warnings(manifest, target_config))
     reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
     warnings.extend(reference_warnings)
     font_diagnostics, font_warnings = collect_font_diagnostics(manifest, resources, target_config, budgets)
