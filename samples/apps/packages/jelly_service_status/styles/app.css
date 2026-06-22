@@ -1,0 +1,140 @@
+:root {
+  --bg: #07171f;
+  --ink: #f5fbff;
+  --muted: rgba(216, 244, 255, 0.72);
+  --edge: rgba(139, 238, 237, 0.56);
+  --aqua: rgba(95, 218, 234, 0.36);
+  --violet: rgba(149, 126, 255, 0.24);
+  --lime: rgba(190, 246, 124, 0.72);
+  --amber: rgba(255, 199, 104, 0.78);
+  --rose: rgba(255, 127, 142, 0.74);
+}
+
+html,
+body {
+  margin: 0;
+  width: 300px;
+  height: 300px;
+  color: var(--ink);
+  background-color: var(--bg);
+}
+
+.screen {
+  box-sizing: border-box;
+  width: 300px;
+  height: 300px;
+  padding: 14px;
+  background-color: #092330;
+  background: linear-gradient(#0c2b38, #07171f);
+}
+
+.hero {
+  box-sizing: border-box;
+  height: 84px;
+  padding: 14px 16px 10px;
+  background-color: rgba(96, 214, 232, 0.26);
+  background: linear-gradient(rgba(122, 231, 238, 0.34), rgba(55, 145, 190, 0.18));
+  border: 1px solid var(--edge);
+  border-radius: 22px;
+  box-shadow: 0 0 16px rgba(82, 196, 218, 0.22);
+}
+
+.label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.hero strong {
+  display: block;
+  height: 26px;
+  font-size: 24px;
+  line-height: 26px;
+}
+
+.hero p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.card {
+  box-sizing: border-box;
+  height: 80px;
+  padding: 10px 8px 8px;
+  background-color: rgba(255, 255, 255, 0.13);
+  background: linear-gradient(rgba(255, 255, 255, 0.18), rgba(116, 210, 232, 0.10));
+  border: 1px solid rgba(196, 248, 255, 0.34);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin-bottom: 8px;
+  background-color: var(--lime);
+  border-radius: 9px;
+}
+
+.audio .dot {
+  background-color: var(--amber);
+}
+
+.sensor .dot {
+  background-color: var(--rose);
+}
+
+.card strong {
+  display: block;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.card small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.policy {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.policy div {
+  box-sizing: border-box;
+  height: 66px;
+  padding: 10px 12px;
+  background-color: rgba(149, 126, 255, 0.18);
+  background: linear-gradient(var(--violet), rgba(74, 190, 218, 0.12));
+  border: 1px solid rgba(206, 220, 255, 0.30);
+  border-radius: 18px;
+}
+
+.policy span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.policy strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 18px;
+}

@@ -22,6 +22,12 @@ table 放进同一个有界容器，并提供“当前 app 提交 job / 分配 h
 它还提供 `crash_current()`，用于宿主捕获 app 加载或运行错误后执行同一套资源释放规则。
 它仍然不执行网络、文件、解码或 flash I/O；真实工作由桌面壳、RTOS worker 或 port 层完成。
 
+`src/app_runtime/app_service_worker.h` / `src/app_runtime/app_service_worker.cpp`
+提供极薄的平台无关 worker pump。`pump_app_host_service_worker(...)` 不创建线程；它只按一个
+`HostServiceJobKind` 弹出 request，调用宿主持有的 `AppHostServiceWorker`，归一化返回 completion
+的身份字段，并推回 UI completion queue。这样真实 Wi-Fi、flash、codec 或 package-install worker
+可以共享同一个边界，同时 DOM、JS、layout 和 framebuffer 仍只属于 UI task。
+
 `src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` 提供第一版平台无关 mock：
 `NetworkFetchMock`、`ImageDecodeMock`、`AppPrivateKvStorageMock` 和 `AudioCommandMock`。
 它们用于桌面验证和端到端契约测试，仍不访问真实网络、文件系统、codec、音频设备或 flash；真实产品
@@ -60,6 +66,8 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
   launch/exit/crash 时的 request/completion/handle teardown。
 - `AppRuntimeHost`：组合 lifecycle、request/completion queue 与 handle table，作为桌面壳和
   MCU host 接入可选服务的推荐状态容器。
+- `pump_app_host_service_worker(...)`：可选的真实 host worker helper，用固定预算处理一个 service kind，
+  并把归一化 completion 投回 UI queue。
 - `HostServiceRequestQueue`：有界 request FIFO，支持 priority 选择、pending job 取消和按
   `app_instance_id` 批量取消。只负责单一 service kind 的 worker 应使用按 kind 过滤的 pop，
   避免 network、storage、image、media job 彼此误消费。
@@ -120,6 +128,78 @@ Win32 参考壳的 A4 行为：
 - 旧实例或非 foreground 实例不会接收输入，也不会泵动脚本 timer。
 - app rebuild/load 失败时，壳调用 `AppRuntimeHost::crash_current()` 释放资源，然后回到 system shell。
 
+suspend/resume 策略：
+
+- `suspend_current()` 是状态切换，不是 teardown。它用于息屏、后台和低功耗等后续可能恢复的状态。
+- `AppFramePolicy` 是第一版代码化策略入口：foreground + screen-on 正常消费输入、timer、rAF 和 present；
+  low-power + screen-on 保留输入/timer/present 但关闭 animation；screen-off 或 suspended 会暂停前台输入、
+  timer、rAF 和 present。
+- suspended 期间，宿主应停止 foreground 输入、脚本 timer、`requestAnimationFrame` callback 和非必要
+  CSS animation sampling；实现方式可以是把对应 frame-loop/animation budget 置 0，或直接不泵这些队列。
+- 慢速 host job 是否继续由产品策略决定。completion 必须继续带原始 `app_instance_id`；宿主可以把业务投递缓存到
+  resume 后，但旧实例 completion 绝不能修改后续新 app。
+- resume 后，宿主应在第一帧可交互前调度 repaint；如果产品需要确定性状态，可重新注入 network/visibility
+  这类小型状态快照。
+- `exit_current()` / `crash_current()` 仍是 teardown 边界：取消旧 request、丢弃 completion、释放 handle，
+  并清理 app-local resource。
+
+## Worker Pump Helper
+
+宿主可以用桌面线程、RTOS task、协作式循环或测试 harness 跑 worker。JellyFrame 只要求
+request/completion 边界一致：
+
+```cpp
+class AppHostServiceWorker {
+public:
+    virtual HostServiceCompletion process(const HostServiceRequest& request) = 0;
+};
+
+AppHostServiceWorkerPumpResult result =
+    pump_app_host_service_worker(host,
+                                 AppHostServiceWorkerPumpOptions{
+                                     HostServiceJobKind::NetworkFetch,
+                                     1,
+                                 },
+                                 network_worker);
+```
+
+规则：
+
+- 每个 worker 只 pump 一个 service kind，避免 image、network、storage 和 audio job 互相消费。
+- `max_requests` 保持很小。MCU 目标通常每个 worker tick 只处理 `1` 个，或使用产品固定预算。
+- helper 会用原 request 的 `job_id`、`kind` 和 `app_instance_id` 覆盖 completion 身份；
+  stale-instance 保护仍由 UI completion pump 负责。
+- 如果 UI completion queue 已满，helper 会在弹出 request 前返回 `completion_queue_full`。
+  宿主应稍后重试，而不是忙等。
+- worker 实现不得调用 DOM、JS、style、layout、render 或 framebuffer API。它只返回小型 completion
+  和宿主持有的 handle。
+
+推荐 port 结构：
+
+```text
+UI/main task:
+  1. 处理输入/timer/system event。
+  2. pump_frame_completions(...)，只把 accepted completion 派发给当前 app。
+  3. 根据 dirty 标记决定是否 layout/render/present。
+
+Network worker:
+  pump_app_host_service_worker(host, { NetworkFetch, 1 }, network_worker)
+
+Storage worker:
+  pump_app_host_service_worker(host, { StorageKv, 1 }, storage_worker)
+
+Audio worker:
+  pump_app_host_service_worker(host, { AudioCommand, 1 }, audio_worker)
+```
+
+MCU port 不必真的创建三个线程；可以是 RTOS task、事件循环分支，甚至一个协作式后台循环。关键是：
+
+- 慢服务不要在 UI/main task 中同步执行。
+- completion queue 满时停止提交 completion，等待下一帧 UI task 消费后再继续。
+- request queue 满、completion queue 满、timeout、capability denied 都应进入 port 日志或桌面 diagnostics。
+- Win32 壳 frame capture 会输出 `host_completion_*`、`system_event_*`、`frame_policy_*` 和
+  `service_activity` 汇总，可作为 port 日志字段的参考。
+
 ## 图片解码服务
 
 用途：
@@ -156,8 +236,9 @@ Win32 参考壳的 A4 行为：
 - `release_surface(...)` 必须由 UI/main task 在 surface 不再需要时调用，释放 record 和 host handle。
 - render core 已提供 `ImageHandleResolver`、image display command 和 `ImagePainter`。宿主可以在
   layer tree 构建时把 `<img src>` 映射到 decoded surface handle，在 paint 阶段用 painter 绘制。
-- Win32 browser debug 壳已接入 `app://icon` / `app://photo` raw RGB565 fixture：第一次 paint
-  会提交 decode，completion 回到 UI/main task 后标记 `DomDirtyPaint` 并重绘。
+- Win32 browser debug 壳已接入 `/debug/icon.raw` 和 `/debug/photo.raw` raw RGB565 fixture：
+  第一次 paint 会提交 decode，completion 回到 UI/main task 后标记 `DomDirtyPaint` 并重绘。
+  app 页面应使用 package-local 标准路径。
 
 未来宿主 request 可以映射为：
 
@@ -243,11 +324,45 @@ completion event：
 规则：
 
 - 当前平台无关代码提供 `AudioCommandMock`，用于验证 request/completion/handle 生命周期；它不真正播放音频。
+- Win32 壳提供 `--audio-smoke`，可用本地文件或 `--app` 包内 `/audio/...` 资源验证桌面 host adapter。
+  这仍是宿主验证路径，不改变核心，也不表示 MCU 端内置 codec。
 - `HostMediaCapabilities::max_audio_streams` 通常在手表上设为 1。
 - app 切换或锁屏策略触发时，系统 shell 可以停止或暂停 app audio。
 - app teardown 会释放 host handles；具体服务实现也应在自己的生命周期 hook 中清掉 stale stream record，
   mock 通过 `collect_released_streams(...)` 覆盖这一路径。
+- `classify_app_audio_failure(...)` / `app_audio_failure_detail(...)` 会把 request 拒绝和
+  completion 失败归类为稳定诊断：`capability-denied`、`invalid-source`、`source-not-found`、
+  `invalid-handle`、`stream-budget-exceeded`、`command-timeout`、`command-cancelled`
+  等原因。
 - worker/audio task 不得调用 JS；只投递事件，由 UI task 派发 `ended`/`error` 等回调。
+
+## 后台服务活动策略
+
+`jellyframe.app.json` 中的 `backgroundServices` 是意图声明，不是权限授予：
+
+```json
+{
+  "backgroundServices": {
+    "network": { "whileSuspended": true, "whileScreenOff": false },
+    "audio": { "whileSuspended": true, "whileScreenOff": true },
+    "sensors": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false }
+  }
+}
+```
+
+宿主会把这个意图与产品策略、用户设置和系统状态合并，然后写入
+`AppBackgroundServicePolicy`。平台无关 helper `app_service_activity_policy_for(...)`
+会返回：
+
+- `network_fetch`：网络 service worker 是否还能接受新的 app fetch；
+- `audio_playback`：app audio 是否可以继续播放；
+- `sensor_sampling`：传感器采样是否可以继续；
+- `should_pause_audio`：shell 是否应暂停/停止当前音频流；
+- `should_throttle_sensors`：传感器采样是否应降频或停止。
+
+默认策略刻意保守：前台 app 可以使用已批准服务，但 suspended app 和 screen-off 状态会暂停后台工作，
+除非宿主明确允许。低功耗模式默认节流传感器，除非宿主设置 `sensors_in_low_power`。completion
+仍必须带原始 `app_instance_id`；后台工作可能在 app 不再 active 后完成，但 stale completion 不得修改新实例。
 
 ## 轻量视频/MJPEG/H.264 实验服务
 
@@ -370,6 +485,12 @@ struct HostFetchResponse {
 - 目标 profile 可以限制域名、scheme、并发数、响应大小和超时。
 - TLS 证书、DNS、重试、缓存策略都属于宿主，不属于核心。
 - response buffer 不能直接暴露为可长期持有的大 JS 对象；JS binding 应复制小数据或提供有界读取。
+- `classify_app_network_failure(...)` / `app_network_failure_detail(...)` 会把 request 拒绝和
+  completion 失败归类为稳定 diagnostics：`capability-denied`、`invalid-url`、
+  `resource-not-found`、`offline`、`response-budget-exceeded`、
+  `response-handle-budget-exceeded`、`request-timeout`、`request-cancelled` 等原因。
+- XHR 仍保持接近 Web 且很小的表面：app JavaScript 只看到 `error`、`timeout` 或 `abort`；
+  更细 reason 用于 CLI、Win32 diagnostics、串口日志和宿主验收。
 
 ## App 私有 KV Storage 服务
 
@@ -389,6 +510,17 @@ struct HostFetchResponse {
 `AppPrivateKvPolicy` 限制，用紧凑顺序表保存字符串 key/value，不执行任何宿主 I/O。当前
 JerryScript binding 只有在宿主绑定这个非阻塞 shadow 时才暴露 `localStorage`；持久化、恢复和
 flush/drop 策略仍属于宿主异步 storage 工作。
+
+存储 diagnostics：
+
+- `classify_app_storage_failure(...)` / `app_storage_failure_detail(...)` 会把异步 storage
+  rejection 和 completion failure 归类为稳定原因：`capability-denied`、`invalid-key`、
+  `value-budget`、`quota-exceeded`、`not-found`、`handle-budget-exceeded`、
+  `operation-timeout`、`operation-cancelled`。
+- `classify_app_local_storage_failure(...)` 会把内存型 `AppLocalStorageShadow` 的状态映射到同一组
+  reason。
+- mock completion 使用少量约定 error code，仅用于 diagnostics：`404` 表示 key/resource 缺失，
+  `413` 表示单 payload/value 超预算，`507` 表示 quota 或 handle budget 耗尽。
 
 推荐命名空间：
 
@@ -437,6 +569,23 @@ struct HostStorageResponse {
 - app 删除时由系统策略决定删除私有 storage 或保留用户数据；开发 mock 应提供显式清理。
 - JS API 暴露前先完成配额、错误码、崩溃恢复和测试。面向用户的 storage 应只在宿主能通过
   app 私有内存 shadow 保证非阻塞时暴露极小 `localStorage` 子集；否则继续不暴露 storage。
+
+生命周期策略：
+
+- `AppStorageLifecyclePolicy` 和 `app_storage_lifecycle_decision_for(...)` 描述 pending writes
+  与持久化 app data 的平台无关策略边界。
+- 默认行为刻意保守：正常 app exit 会 flush pending writes；crash 和 memory pressure 会 drop pending
+  writes；uninstall 会 drop pending work 并删除持久数据；update replacement 会 flush pending writes
+  并保留数据。
+- `drop_pending_writes` 优先于 `flush_pending_writes`。如果产品策略要求丢弃崩溃实例的数据，宿主不应再尝试
+  flush 来自崩溃 JS/DOM 实例的 pending 数据。
+- `AppPrivateKvStorageMock::drop_pending_app_instance(...)` 和 `drop_pending_app(...)` 提供桌面验收路径。
+  真实 port 应实现等价的 worker queue cancellation 或 journal discard。
+- `AppPrivateKvStorageMock::flush_pending(...)` 和
+  `apply_app_storage_lifecycle_decision(...)` 提供第一版平台无关参考实现：宿主可按 frame/事件预算分批
+  flush pending writes，并获得 flushed、dropped、deleted、remaining 等统计。真实 port 可以复用同样的
+  决策结构，但具体 flash/NVS/filesystem 写入仍必须在 host worker 中完成。
+- flush work 必须是有界 host job。不要让 UI/main task 阻塞在 flash、NVS 或 filesystem 写入上。
 
 ## Bundle 安装服务
 
@@ -526,9 +675,10 @@ enum class AppSystemEventPushStatus {
   `online`/`offline` 事件子集，将 visibility 映射到 `document.hidden`、
   `document.visibilityState` 和 `document` 的 `visibilitychange`。battery JavaScript API
   不进入 V0。
-- Win32 debug 壳可以通过 `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8` 注入 fake event，方便 app 调试；
-  注入失败会报告 `system-event-rejected` diagnostics。硬件 port 应从自己的 host state provider
-  使用同一个队列。
+- Win32 debug 壳可以通过 `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8` 和 frame script
+  （`network-online/offline`、`screen-visible/hidden`、`low-power-on/off`）注入 fake event，
+  方便 app 调试；注入失败会报告 `system-event-rejected` diagnostics。硬件 port 应从自己的
+  host state provider 使用同一个队列。
 
 ## 实现顺序
 

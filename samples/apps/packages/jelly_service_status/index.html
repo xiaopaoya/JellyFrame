@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Service Status</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <main class="screen">
+    <section class="hero">
+      <span class="label">Runtime</span>
+      <strong id="state">Active</strong>
+      <p id="line">Foreground services are live.</p>
+    </section>
+
+    <section class="grid" aria-label="service policy">
+      <article class="card network">
+        <span class="dot"></span>
+        <strong>Network</strong>
+        <small id="net">Online</small>
+      </article>
+      <article class="card audio">
+        <span class="dot"></span>
+        <strong>Audio</strong>
+        <small id="audio">BG allowed</small>
+      </article>
+      <article class="card sensor">
+        <span class="dot"></span>
+        <strong>Sensors</strong>
+        <small id="sensors">FG only</small>
+      </article>
+    </section>
+
+    <section class="policy">
+      <div>
+        <span>Data</span>
+        <strong id="data">Pending</strong>
+      </div>
+      <div>
+        <span>Stored</span>
+        <strong id="store">None</strong>
+      </div>
+    </section>
+  </main>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

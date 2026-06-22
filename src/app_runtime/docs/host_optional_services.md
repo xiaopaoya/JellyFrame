@@ -31,6 +31,14 @@ current-app handles and pumping frame completions. It also exposes
 load or runtime failures. It still does not perform network, file, decode or
 flash I/O; real work belongs to desktop shells, RTOS workers or board ports.
 
+`src/app_runtime/app_service_worker.h` / `src/app_runtime/app_service_worker.cpp`
+provide a tiny platform-neutral worker pump. `pump_app_host_service_worker(...)`
+does not create a thread. It pops requests for one `HostServiceJobKind`, calls a
+host-owned `AppHostServiceWorker`, normalizes the returned completion identity
+and pushes it back to the UI completion queue. This gives real Wi-Fi, flash,
+codec or package-install workers a shared boundary while keeping DOM, JS, layout
+and framebuffer ownership on the UI task.
+
 `src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` provide
 the first platform-neutral mocks: `NetworkFetchMock`, `ImageDecodeMock`,
 `AppPrivateKvStorageMock` and `AudioCommandMock`. They exist for desktop
@@ -78,6 +86,9 @@ Current core helpers:
   suspend/resume and request/completion/handle teardown during launch/exit/crash.
 - `AppRuntimeHost`: combined lifecycle, request/completion queue and handle
   table state for desktop shells and MCU hosts wiring optional services.
+- `pump_app_host_service_worker(...)`: optional helper for real host workers
+  that process one service kind at a bounded cadence and post normalized
+  completions back to the UI queue.
 - `HostServiceRequestQueue`: bounded request queue with priority selection,
   pending-job cancellation and bulk cancellation by `app_instance_id`.
   Workers that own only one service kind should use kind-filtered popping so
@@ -144,6 +155,93 @@ The Win32 reference shell follows the A4 rule set:
 - app rebuild/load failures call `AppRuntimeHost::crash_current()` and return to
   the system shell.
 
+Suspend/resume policy:
+
+- `suspend_current()` is a state transition, not teardown. It is for screen-off,
+  background and low-power states where the app may later resume.
+- `AppFramePolicy` is the first coded policy entry point: foreground +
+  screen-on consumes input, timers, rAF and presentation normally; low-power +
+  screen-on keeps input/timers/presentation but disables animation; screen-off
+  or suspended state pauses foreground input, timers, rAF and presentation.
+- While suspended, the host should stop foreground input, script timers,
+  `requestAnimationFrame` callbacks and nonessential CSS animation sampling by
+  setting the relevant frame-loop/animation budgets to zero or by not pumping
+  those queues.
+- Slow host jobs may continue or pause by product policy. Completions must stay
+  tagged with the original `app_instance_id`; a host may cache business delivery
+  until resume, but stale completions must never mutate a later app instance.
+- On resume, schedule a repaint before the first interactive frame and re-emit
+  small state snapshots such as network and visibility when product policy needs
+  deterministic app state.
+- `exit_current()` / `crash_current()` remain teardown boundaries: cancel old
+  requests, discard completions, release handles and clear app-local resources.
+
+## Worker Pump Helper
+
+Hosts may run workers in a desktop thread, an RTOS task, a cooperative loop or a
+test harness. JellyFrame only requires the request/completion boundary:
+
+```cpp
+class AppHostServiceWorker {
+public:
+    virtual HostServiceCompletion process(const HostServiceRequest& request) = 0;
+};
+
+AppHostServiceWorkerPumpResult result =
+    pump_app_host_service_worker(host,
+                                 AppHostServiceWorkerPumpOptions{
+                                     HostServiceJobKind::NetworkFetch,
+                                     1,
+                                 },
+                                 network_worker);
+```
+
+Rules:
+
+- Pump one service kind per worker so image, network, storage and audio queues
+  cannot consume each other's jobs.
+- Keep `max_requests` small. On MCU targets this is normally `1` per worker
+  tick, or a product-specific fixed budget.
+- The helper overwrites completion identity with the original request's
+  `job_id`, `kind` and `app_instance_id`; stale-instance protection therefore
+  remains in the UI completion pump.
+- If the UI completion queue is full, the helper returns
+  `completion_queue_full` before popping a request. The host should retry later
+  instead of spinning.
+- The worker implementation must not call DOM, JS, style, layout, render or
+  framebuffer APIs. It returns a small completion and host-owned handles only.
+
+Recommended port structure:
+
+```text
+UI/main task:
+  1. Process input/timers/system events.
+  2. Call pump_frame_completions(...), dispatching only accepted completions to
+     the current app.
+  3. Use dirty flags to decide whether layout/render/present is needed.
+
+Network worker:
+  pump_app_host_service_worker(host, { NetworkFetch, 1 }, network_worker)
+
+Storage worker:
+  pump_app_host_service_worker(host, { StorageKv, 1 }, storage_worker)
+
+Audio worker:
+  pump_app_host_service_worker(host, { AudioCommand, 1 }, audio_worker)
+```
+
+MCU ports do not need three literal threads. These can be RTOS tasks, event-loop
+branches or one cooperative background loop. The important parts are:
+
+- Slow services must not run synchronously on the UI/main task.
+- If the completion queue is full, stop posting completions and retry after the
+  UI task has consumed a frame's completions.
+- Request-queue full, completion-queue full, timeout and capability-denied
+  states should be visible in port logs or desktop diagnostics.
+- The Win32 shell frame-capture output now reports `host_completion_*`,
+  `system_event_*`, `frame_policy_*` and `service_activity` summary counters;
+  use those fields as a reference for port log shape.
+
 ## Image Decode Service
 
 Use cases:
@@ -193,9 +291,10 @@ Current V0 helper:
 - Render core provides `ImageHandleResolver`, image display commands and
   `ImagePainter`. A host can map `<img src>` to decoded surface handles during
   layer-tree construction and paint them through the painter.
-- The Win32 browser debug shell wires `app://icon` / `app://photo` raw RGB565
-  fixtures: the first paint submits a decode, the completion returns to the
-  UI/main task, marks `DomDirtyPaint` and repaints.
+- The Win32 browser debug shell wires `/debug/icon.raw` and `/debug/photo.raw`
+  raw RGB565 fixtures: the first paint submits a decode, the completion returns
+  to the UI/main task, marks `DomDirtyPaint` and repaints. App-authored pages
+  should use package-local standard paths.
 
 Future host requests can map to:
 
@@ -284,12 +383,54 @@ Rules:
 
 - Current platform-neutral code provides `AudioCommandMock` for request/
   completion/handle validation. It does not play audio.
+- The Win32 shell provides `--audio-smoke` for local files or `--app`
+  in-package `/audio/...` resources to validate the desktop host adapter. This
+  remains a host validation path; it does not change the core or imply an MCU
+  codec.
 - `HostMediaCapabilities::max_audio_streams` is usually 1 on watches.
 - App switches or lock-screen policy may stop or pause app audio.
 - App teardown releases host handles; service implementations should also drop
   stale stream records through their own lifecycle hook, as the mock does with
   `collect_released_streams(...)`.
+- `classify_app_audio_failure(...)` / `app_audio_failure_detail(...)` classify
+  request rejection and completion failure into stable diagnostics:
+  `capability-denied`, `invalid-source`, `source-not-found`, `invalid-handle`,
+  `stream-budget-exceeded`, `command-timeout`, `command-cancelled` and related
+  reasons.
 - Audio workers do not call JS; they post events for the UI task to dispatch.
+
+## Background Service Activity Policy
+
+`backgroundServices` in `jellyframe.app.json` is an intent declaration, not a
+permission grant:
+
+```json
+{
+  "backgroundServices": {
+    "network": { "whileSuspended": true, "whileScreenOff": false },
+    "audio": { "whileSuspended": true, "whileScreenOff": true },
+    "sensors": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false }
+  }
+}
+```
+
+The host combines that intent with product policy, user settings and system
+state, then feeds the result into `AppBackgroundServicePolicy`. The platform-
+neutral helper `app_service_activity_policy_for(...)` returns:
+
+- `network_fetch`: whether network service workers may accept new app fetches;
+- `audio_playback`: whether app audio may keep playing;
+- `sensor_sampling`: whether sensor sampling may continue;
+- `should_pause_audio`: whether the shell should pause/stop active streams;
+- `should_throttle_sensors`: whether sensor cadence should be reduced or
+  stopped.
+
+Defaults are intentionally conservative: foreground apps may use approved
+services, but suspended apps and screen-off state pause background work unless
+the host explicitly allows it. Low-power mode throttles sensors unless the host
+sets `sensors_in_low_power`. Completions must still carry the original
+`app_instance_id`; background work may finish after an app is no longer active,
+but stale completions must not mutate a newer app instance.
 
 ## Lightweight Video/MJPEG/H.264 Experimental Service
 
@@ -422,6 +563,14 @@ Rules:
 - TLS, DNS, retry and cache policy belong to the host.
 - Response buffers should not become long-lived large JavaScript objects; JS
   bindings should copy small data or expose bounded reads.
+- `classify_app_network_failure(...)` / `app_network_failure_detail(...)`
+  classify request rejection and completion failure into stable diagnostics:
+  `capability-denied`, `invalid-url`, `resource-not-found`, `offline`,
+  `response-budget-exceeded`, `response-handle-budget-exceeded`,
+  `request-timeout`, `request-cancelled` and related reasons.
+- XHR remains Web-near and small: app JavaScript sees `error`, `timeout` or
+  `abort`; the detailed reason is for CLI, Win32 diagnostics, serial logs and
+  host validation.
 
 ## App Private KV Storage Service
 
@@ -447,6 +596,19 @@ string keys/values in a compact sequential table and performs no host I/O. The
 current JerryScript binding exposes `localStorage` only when the host binds this
 non-blocking shadow; persistence, recovery and flush/drop policy remain
 host-owned async storage work.
+
+Storage diagnostics:
+
+- `classify_app_storage_failure(...)` / `app_storage_failure_detail(...)`
+  classify async storage rejection and completion failure into stable reasons:
+  `capability-denied`, `invalid-key`, `value-budget`, `quota-exceeded`,
+  `not-found`, `handle-budget-exceeded`, `operation-timeout` and
+  `operation-cancelled`.
+- `classify_app_local_storage_failure(...)` maps the in-memory
+  `AppLocalStorageShadow` status values into the same reason family.
+- Mock completions use small conventional error codes for diagnostics only:
+  `404` for missing keys/resources, `413` for single payload/value budget and
+  `507` for quota or handle budget exhaustion.
 
 Recommended namespace:
 
@@ -501,6 +663,30 @@ Rules:
   User-facing storage should be a tiny `localStorage` subset only when the host
   can keep calls non-blocking through an app-private RAM shadow; otherwise keep
   storage unexposed.
+
+Lifecycle policy:
+
+- `AppStorageLifecyclePolicy` and `app_storage_lifecycle_decision_for(...)`
+  describe the platform-neutral policy boundary for pending writes and
+  persistent app data.
+- Default behavior is conservative: normal app exit flushes pending writes;
+  crashes and memory pressure drop pending writes; uninstall drops pending work
+  and deletes persistent data; update replacement flushes pending writes and
+  keeps data.
+- `drop_pending_writes` always wins over `flush_pending_writes`. A host should
+  never try to flush data from a crashed JS/DOM instance if product policy says
+  to drop it.
+- `AppPrivateKvStorageMock::drop_pending_app_instance(...)` and
+  `drop_pending_app(...)` provide the desktop validation path. Real ports should
+  implement equivalent worker-queue cancellation or journal discard.
+- `AppPrivateKvStorageMock::flush_pending(...)` and
+  `apply_app_storage_lifecycle_decision(...)` provide the first
+  platform-neutral reference path. Hosts can flush pending writes in bounded
+  frame/event slices and receive flushed, dropped, deleted and remaining-work
+  counters. Real ports may reuse the same decision shape, but flash/NVS/
+  filesystem writes still belong in host workers.
+- Flush work must be a bounded host job. Do not block the UI/main task on flash,
+  NVS or filesystem writes.
 
 ## Bundle Installation Service
 
@@ -596,9 +782,10 @@ Rules:
   `document.hidden`, `document.visibilityState` and `document`
   `visibilitychange`. Battery JavaScript APIs remain out of V0.
 - The Win32 debug shell can inject fake events with `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8`
-  for app testing; failed injection reports `system-event-rejected`
-  diagnostics. Hardware ports should use the same queue from their own host
-  state provider.
+  and through frame scripts (`network-online/offline`, `screen-visible/hidden`,
+  `low-power-on/off`) for app testing; failed injection reports
+  `system-event-rejected` diagnostics. Hardware ports should use the same queue
+  from their own host state provider.
 
 ## Implementation Order
 

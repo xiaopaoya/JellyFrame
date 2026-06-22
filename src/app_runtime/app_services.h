@@ -23,6 +23,7 @@ struct AppServiceSubmitResult {
     AppServiceSubmitStatus status = AppServiceSubmitStatus::InvalidInput;
     std::uint32_t job_id = 0;
     HostServiceStatus rejected_status = HostServiceStatus::Failed;
+    std::uint32_t error_code = 0;
 
     bool accepted() const {
         return status == AppServiceSubmitStatus::Accepted;
@@ -52,6 +53,32 @@ struct NetworkFetchRecord {
     std::string content_type;
     std::string body;
 };
+
+enum class AppNetworkFailureReason {
+    None,
+    EmptyInstance,
+    CapabilityDenied,
+    InvalidUrl,
+    QueueFull,
+    ResourceNotFound,
+    Offline,
+    ResponseBudgetExceeded,
+    ResponseHandleBudgetExceeded,
+    RequestFailed,
+    RequestCancelled,
+    RequestTimeout,
+    Unsupported,
+    Unknown,
+};
+
+const char* app_network_failure_reason_name(AppNetworkFailureReason reason);
+AppNetworkFailureReason classify_app_network_failure(AppServiceSubmitStatus submit_status,
+                                                     HostServiceStatus host_status,
+                                                     std::uint32_t error_code);
+std::string app_network_failure_detail(const std::string& url,
+                                       AppServiceSubmitStatus submit_status,
+                                       HostServiceStatus host_status,
+                                       std::uint32_t error_code);
 
 class NetworkFetchMock {
 public:
@@ -268,6 +295,23 @@ enum class AudioStreamState {
     Error,
 };
 
+enum class AppAudioFailureReason {
+    None,
+    EmptyInstance,
+    CapabilityDenied,
+    InvalidSource,
+    InvalidHandle,
+    QueueFull,
+    StreamBudget,
+    SourceNotFound,
+    StreamBudgetExceeded,
+    CommandFailed,
+    CommandCancelled,
+    CommandTimeout,
+    Unsupported,
+    Unknown,
+};
+
 struct AudioPlaybackPolicy {
     bool enabled = false;
     std::size_t max_source_url_bytes = 256;
@@ -287,6 +331,17 @@ struct AudioStreamRecord {
     std::uint8_t volume = 100;
     std::uint32_t duration_ms = 0;
 };
+
+const char* audio_command_kind_name(AudioCommandKind kind);
+const char* audio_stream_state_name(AudioStreamState state);
+const char* app_audio_failure_reason_name(AppAudioFailureReason reason);
+AppAudioFailureReason classify_app_audio_failure(AppServiceSubmitStatus submit_status,
+                                                 HostServiceStatus host_status,
+                                                 std::uint32_t error_code);
+std::string app_audio_failure_detail(const std::string& source,
+                                     AppServiceSubmitStatus submit_status,
+                                     HostServiceStatus host_status,
+                                     std::uint32_t error_code);
 
 class AudioCommandMock {
 public:
@@ -411,6 +466,23 @@ enum class AppPrivateKvOperation {
     Clear,
 };
 
+enum class AppStorageFailureReason {
+    None,
+    EmptyInstance,
+    CapabilityDenied,
+    InvalidKey,
+    QueueFull,
+    ValueBudget,
+    QuotaExceeded,
+    NotFound,
+    HandleBudgetExceeded,
+    OperationFailed,
+    OperationCancelled,
+    OperationTimeout,
+    Unsupported,
+    Unknown,
+};
+
 enum class AppLocalStorageStatus {
     Ok,
     Disabled,
@@ -418,6 +490,19 @@ enum class AppLocalStorageStatus {
     BudgetExceeded,
     NotFound,
 };
+
+const char* app_private_kv_operation_name(AppPrivateKvOperation operation);
+const char* app_local_storage_status_name(AppLocalStorageStatus status);
+const char* app_storage_failure_reason_name(AppStorageFailureReason reason);
+AppStorageFailureReason classify_app_storage_failure(AppServiceSubmitStatus submit_status,
+                                                     HostServiceStatus host_status,
+                                                     std::uint32_t error_code);
+AppStorageFailureReason classify_app_local_storage_failure(AppLocalStorageStatus status);
+std::string app_storage_failure_detail(AppPrivateKvOperation operation,
+                                       const std::string& key,
+                                       AppServiceSubmitStatus submit_status,
+                                       HostServiceStatus host_status,
+                                       std::uint32_t error_code);
 
 class AppLocalStorageShadow {
 public:
@@ -454,6 +539,12 @@ struct AppPrivateKvRecord {
     std::string value;
 };
 
+struct AppPrivateKvFlushResult {
+    std::size_t flushed = 0;
+    std::size_t remaining_pending = 0;
+    bool stopped_before_empty = false;
+};
+
 class AppPrivateKvStorageMock {
 public:
     explicit AppPrivateKvStorageMock(AppPrivateKvPolicy policy = {});
@@ -468,6 +559,12 @@ public:
     bool complete_next(AppRuntimeHost& host);
     const AppPrivateKvRecord* value(std::uint32_t handle) const;
     bool release_value(AppRuntimeHost& host, std::uint32_t handle);
+    AppPrivateKvFlushResult flush_pending(AppRuntimeHost& host, std::size_t max_ops = 0);
+    std::size_t pending_count() const;
+    std::size_t pending_count_app_instance(std::uint32_t app_instance_id) const;
+    std::size_t pending_count_app(const std::string& app_id) const;
+    std::size_t drop_pending_app_instance(std::uint32_t app_instance_id);
+    std::size_t drop_pending_app(const std::string& app_id);
     std::size_t clear_app(const std::string& app_id);
 
 private:
@@ -489,7 +586,11 @@ private:
                                   AppPrivateKvOperation operation,
                                   std::string key,
                                   std::string value = {});
-    HostServiceStatus apply(const PendingOp& op, AppRuntimeHost& host, std::uint32_t& handle, std::uint32_t& byte_count);
+    HostServiceStatus apply(const PendingOp& op,
+                            AppRuntimeHost& host,
+                            std::uint32_t& handle,
+                            std::uint32_t& byte_count,
+                            std::uint32_t& error_code);
     bool valid_key(const std::string& key) const;
     bool can_store(const AppSpace& space, const std::string& key, const std::string& value) const;
 

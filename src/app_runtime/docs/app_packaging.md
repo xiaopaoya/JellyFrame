@@ -90,7 +90,10 @@ Runtime data and storage boundary:
   only.
 - `capabilities: ["media.audio.mp3"]` declares optional host-owned MP3
   playback. Current runtime code has command/handle/completion validation, but
-  no user-facing JS audio API or built-in codec.
+  the Win32 shell can also validate desktop host-adapter handoff with
+  `--audio-smoke` from a local or in-package resource. JerryScript builds expose
+  a tiny host-optional `Audio()` V0 subset, but there is still no built-in MCU
+  codec.
 - Apps may request weather/account data, small JSON sync or download a `.jfapp`
   for the system installer to verify.
 - Remote HTML/CSS/script/image resources are still forbidden as page resources.
@@ -205,19 +208,48 @@ python tools/jellyframe_cli.py schema --print-path
 `system.launcher`/`system.appManager` capability does not grant privileges by
 itself; authorization belongs to the host/profile policy.
 
-`fonts` is currently a deployment/tooling declaration, not runtime CSS font
-loading. The packer records `.jffont`, `.bdf`, `.ttf`, `.otf`, `.woff` and
-related files as ordinary `Font` resources in resource tables or `.jfapp`
-bundles. `.jffont` V0 can now be parsed by runtime code and held per app
+`fonts` is currently a deployment/tooling declaration, not a full runtime CSS
+font-loading system. The packer records `.jffont`, `.bdf`, `.ttf`, `.otf`,
+`.woff` and related files as ordinary `Font` resources in resource tables or
+`.jfapp` bundles. `.jffont` V0/V1 can be parsed by runtime code and held per app
 instance. `AppFontSet` provides a bitmap fallback chain where the system font
 profile is tried first and app `.jffont` supplements fill missing glyphs; the
 Win32 shell can explicitly switch to this validation path with
-`--use-app-fonts`. `@font-face` and `font-family` still do not automatically
-select text backends, and multi-family/multi-size product policy remains future
-work. The stable production path is still: collect used characters during
+`--use-app-fonts`.
+
+Each manifest font entry may declare:
+
+```json
+{
+  "id": "ui-cn",
+  "source": "fonts/ui-cn.jffont",
+  "profile": "app-subset-cn",
+  "family": "Jelly UI CN",
+  "license": {
+    "name": "OFL-1.1",
+    "source": "Noto Sans SC subset",
+    "url": "https://fonts.google.com/noto/specimen/Noto+Sans+SC"
+  },
+  "sizes": [16],
+  "weights": [400, 700]
+}
+```
+
+`family`, `sizes` and `weights` are currently report/product-policy metadata;
+`font-family` still does not automatically select text backends. `license.name`
+and `license.source` are recommended for redistributed font supplements.
+Missing metadata produces `font-license-missing` or
+`font-license-incomplete` diagnostics. `budgets.maxAppFonts`,
+`budgets.maxAppFontBytes` and `budgets.maxAppFontGlyphs` cap usable runtime
+`.jffont` count, bytes and glyphs; exceeding them produces
+`font-budget-exceeded`. These checks run only in tooling and add no MCU render
+hot-path cost.
+
+The stable production path is still: collect used characters during
 package/check, generate bitmap glyph data offline from a licensed font, compile
-the generated `BitmapFont` into the port/firmware and inject it through
-`TextMeasureProvider`/`TextPainter`.
+the generated `BitmapFont` into the port/firmware or install it as a `.jffont`
+supplement inside `.jfapp`, then inject it through `TextMeasureProvider`/
+`TextPainter` or `AppFontSet`.
 
 Built-in target presets live under `tools/presets/targets`. List them with:
 
@@ -688,16 +720,19 @@ python tools/jellyframe_cli.py font `
   --output-binary build/watch_weather_font.jffont
 ```
 
-The package report records whether the manifest requested network or app-private
-KV storage capability. The desktop app-runtime mocks can validate the
+The package report records manifest service intent in `serviceIntent`. This
+stable summary includes requested `network.fetch`, `storage.kv` and
+`media.audio.mp3` capabilities, declared `backgroundServices` and policy notes
+that remind tools and authors that host profile/product policy remain
+authoritative. The desktop app-runtime mocks can validate the
 request/completion/handle contract, and `app_service_policies_for_app(...)`
 combines those requests with host/profile policy. No real network or filesystem
 I/O is performed by the core.
 
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
-CRC32/SHA-256 checksums, local/remote reference diagnostics, package-resource
-warnings and `pipelineDiagnostics`. Pipeline diagnostics include the
+CRC32/SHA-256 checksums, service intent, local/remote reference diagnostics,
+package-resource warnings and `pipelineDiagnostics`. Pipeline diagnostics include the
 pseudo-browser format/version marker, output viewport, memory-oriented pipeline
 statistics, a severity summary and the concrete diagnostics emitted by parser,
 style, layout, layer and renderer code. Known unsupported/degraded features

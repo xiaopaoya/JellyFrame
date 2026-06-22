@@ -102,6 +102,11 @@ V0 支持面应限制在：
 - key 长度、value 字节数、item 数和总字节数来自合成后的 `AppPrivateKvPolicy`。
 - 同步调用必须命中小型内存 shadow。宿主 flash/NVS/filesystem 写入通过 async service path 调度，
   并由宿主策略完成落盘/恢复。
+- `localStorage.setItem(...)` 成功只表示 app 私有 shadow 已更新，不保证 flash/NVS/filesystem
+  持久化已经完成。`AppStorageLifecyclePolicy` 定义宿主应在何时 flush、drop 或 delete pending
+  storage work。
+- C++ 层提供 `apply_app_storage_lifecycle_decision(...)` 作为宿主参考路径，可在 exit、crash、
+  uninstall、memory pressure 等事件中按预算 flush/drop/delete；这不是新的 JS API。
 - quota 失败当前抛小型 range exception；未来可进一步靠近 `QuotaExceededError`。
 - `sessionStorage`、storage events、IndexedDB、cookie 和 Cache API 不进入 V0。
 
@@ -137,20 +142,42 @@ V0 支持面应限制在：
 - Win32 scripting 壳提供手动调试注入：`Ctrl+F6` 切换 network online/offline，`Ctrl+F7`
   切换 screen visibility，`Ctrl+F8` 切换 low-power visibility。这些快捷键不读取真实 Windows
   硬件状态。
+- 确定性的 Win32 frame script 也能注入同类状态：`event FRAME network-online/offline`、
+  `event FRAME screen-visible/hidden` 和 `event FRAME low-power-on/off`。
 
 尚未实现：battery JS API、JellyFrame 专有 system state 对象，以及超出 `online` / `offline`
 子集的完整 `Window`/`EventTarget` 语义。
 
 ## 错误名
 
-内部 host status 仍可映射成稳定短字符串，用于 diagnostics：
+XHR 和 `localStorage` 对 app JavaScript 仍保持接近 Web 的小表面。细节失败原因通过 diagnostics
+报告，而不是发明更多 app 可见异常类。
 
-| Host status | Diagnostic code |
+网络 diagnostics 使用 `classify_app_network_failure(...)` 和 `app_network_failure_detail(...)`：
+
+| Reason | 含义 |
 | --- | --- |
-| `Unsupported` | `unsupported` |
-| `BudgetExceeded` | `budget-exceeded` |
-| `Timeout` | `timeout` |
-| `Cancelled` | `cancelled` |
-| `Failed` | `failed` |
+| `capability-denied` | manifest/profile 未允许 network fetch。 |
+| `invalid-url` | URL 为空、过大或在 submit 前被拒绝。 |
+| `resource-not-found` | 宿主/mock 找不到对应有界数据资源。 |
+| `offline` | 宿主网络离线。 |
+| `response-budget-exceeded` | 响应超过配置的 byte budget。 |
+| `response-handle-budget-exceeded` | host handle/response buffer 预算耗尽。 |
+| `request-timeout` | 宿主请求超时。 |
+| `request-cancelled` | 请求被取消，通常来自 app 切换或 abort。 |
+
+存储 diagnostics 使用 `classify_app_storage_failure(...)`、
+`classify_app_local_storage_failure(...)` 和 `app_storage_failure_detail(...)`：
+
+| Reason | 含义 |
+| --- | --- |
+| `capability-denied` | manifest/profile 未允许 storage。 |
+| `invalid-key` | key 为空或超过 policy。 |
+| `value-budget` | 单个 value 过大。 |
+| `quota-exceeded` | 每 app item 或 byte quota 耗尽。 |
+| `not-found` | 请求的 key 不存在。 |
+| `handle-budget-exceeded` | host response handle 预算耗尽。 |
+| `operation-timeout` | 宿主 storage 操作超时。 |
+| `operation-cancelled` | lifecycle teardown 取消了操作。 |
 
 详细平台错误码可以留在 diagnostics 中，或作为可选 host debug 字段。它们不应成为 app 作者必须学习的语法。

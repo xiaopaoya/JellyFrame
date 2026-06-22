@@ -7,8 +7,10 @@
 namespace jellyframe {
 namespace {
 
-AppServiceSubmitResult rejected(AppServiceSubmitStatus status, HostServiceStatus host_status) {
-    return AppServiceSubmitResult{status, 0, host_status};
+AppServiceSubmitResult rejected(AppServiceSubmitStatus status,
+                                HostServiceStatus host_status,
+                                std::uint32_t error_code = 0) {
+    return AppServiceSubmitResult{status, 0, host_status, error_code};
 }
 
 AppServiceSubmitResult from_submit(const HostServiceSubmitResult& result) {
@@ -24,6 +26,11 @@ typename std::vector<T>::iterator find_job(std::vector<T>& items, std::uint32_t 
         return item.job_id == job_id;
     });
 }
+
+constexpr std::uint32_t kServiceErrorNotFound = 404;
+constexpr std::uint32_t kServiceErrorPayloadTooLarge = 413;
+constexpr std::uint32_t kServiceErrorBudgetExceeded = 507;
+constexpr std::uint32_t kServiceErrorOffline = 1001;
 
 } // namespace
 
@@ -61,6 +68,257 @@ const char* host_service_status_name(HostServiceStatus status) {
         return "timeout";
     }
     return "unknown";
+}
+
+const char* app_network_failure_reason_name(AppNetworkFailureReason reason) {
+    switch (reason) {
+    case AppNetworkFailureReason::None:
+        return "none";
+    case AppNetworkFailureReason::EmptyInstance:
+        return "empty-instance";
+    case AppNetworkFailureReason::CapabilityDenied:
+        return "capability-denied";
+    case AppNetworkFailureReason::InvalidUrl:
+        return "invalid-url";
+    case AppNetworkFailureReason::QueueFull:
+        return "queue-full";
+    case AppNetworkFailureReason::ResourceNotFound:
+        return "resource-not-found";
+    case AppNetworkFailureReason::Offline:
+        return "offline";
+    case AppNetworkFailureReason::ResponseBudgetExceeded:
+        return "response-budget-exceeded";
+    case AppNetworkFailureReason::ResponseHandleBudgetExceeded:
+        return "response-handle-budget-exceeded";
+    case AppNetworkFailureReason::RequestFailed:
+        return "request-failed";
+    case AppNetworkFailureReason::RequestCancelled:
+        return "request-cancelled";
+    case AppNetworkFailureReason::RequestTimeout:
+        return "request-timeout";
+    case AppNetworkFailureReason::Unsupported:
+        return "unsupported";
+    case AppNetworkFailureReason::Unknown:
+        return "unknown";
+    }
+    return "unknown";
+}
+
+AppNetworkFailureReason classify_app_network_failure(AppServiceSubmitStatus submit_status,
+                                                     HostServiceStatus host_status,
+                                                     std::uint32_t error_code) {
+    if (submit_status != AppServiceSubmitStatus::Accepted) {
+        switch (submit_status) {
+        case AppServiceSubmitStatus::Accepted:
+            break;
+        case AppServiceSubmitStatus::EmptyInstance:
+            return AppNetworkFailureReason::EmptyInstance;
+        case AppServiceSubmitStatus::CapabilityDenied:
+            return AppNetworkFailureReason::CapabilityDenied;
+        case AppServiceSubmitStatus::InvalidInput:
+            return AppNetworkFailureReason::InvalidUrl;
+        case AppServiceSubmitStatus::QueueFull:
+            return AppNetworkFailureReason::QueueFull;
+        case AppServiceSubmitStatus::BudgetExceeded:
+            return AppNetworkFailureReason::ResponseBudgetExceeded;
+        }
+    }
+
+    switch (host_status) {
+    case HostServiceStatus::Completed:
+        return AppNetworkFailureReason::None;
+    case HostServiceStatus::Unsupported:
+        return AppNetworkFailureReason::Unsupported;
+    case HostServiceStatus::Cancelled:
+        return AppNetworkFailureReason::RequestCancelled;
+    case HostServiceStatus::Timeout:
+        return AppNetworkFailureReason::RequestTimeout;
+    case HostServiceStatus::BudgetExceeded:
+        return error_code == kServiceErrorBudgetExceeded
+            ? AppNetworkFailureReason::ResponseHandleBudgetExceeded
+            : AppNetworkFailureReason::ResponseBudgetExceeded;
+    case HostServiceStatus::Failed:
+        if (error_code == kServiceErrorNotFound) {
+            return AppNetworkFailureReason::ResourceNotFound;
+        }
+        if (error_code == kServiceErrorPayloadTooLarge) {
+            return AppNetworkFailureReason::ResponseBudgetExceeded;
+        }
+        if (error_code == kServiceErrorBudgetExceeded) {
+            return AppNetworkFailureReason::ResponseHandleBudgetExceeded;
+        }
+        if (error_code == kServiceErrorOffline) {
+            return AppNetworkFailureReason::Offline;
+        }
+        return AppNetworkFailureReason::RequestFailed;
+    }
+    return AppNetworkFailureReason::Unknown;
+}
+
+std::string app_network_failure_detail(const std::string& url,
+                                       AppServiceSubmitStatus submit_status,
+                                       HostServiceStatus host_status,
+                                       std::uint32_t error_code) {
+    std::ostringstream stream;
+    stream << "url=" << (url.empty() ? "unknown" : url)
+           << "; reason="
+           << app_network_failure_reason_name(classify_app_network_failure(submit_status, host_status, error_code))
+           << "; submit=" << app_service_submit_status_name(submit_status);
+    if (host_status != HostServiceStatus::Completed) {
+        stream << "; host=" << host_service_status_name(host_status);
+    }
+    if (error_code != 0) {
+        stream << "; error=" << error_code;
+    }
+    return stream.str();
+}
+
+const char* app_private_kv_operation_name(AppPrivateKvOperation operation) {
+    switch (operation) {
+    case AppPrivateKvOperation::Get:
+        return "get";
+    case AppPrivateKvOperation::Set:
+        return "set";
+    case AppPrivateKvOperation::Remove:
+        return "remove";
+    case AppPrivateKvOperation::Clear:
+        return "clear";
+    }
+    return "unknown";
+}
+
+const char* app_local_storage_status_name(AppLocalStorageStatus status) {
+    switch (status) {
+    case AppLocalStorageStatus::Ok:
+        return "ok";
+    case AppLocalStorageStatus::Disabled:
+        return "disabled";
+    case AppLocalStorageStatus::InvalidKey:
+        return "invalid-key";
+    case AppLocalStorageStatus::BudgetExceeded:
+        return "budget-exceeded";
+    case AppLocalStorageStatus::NotFound:
+        return "not-found";
+    }
+    return "unknown";
+}
+
+const char* app_storage_failure_reason_name(AppStorageFailureReason reason) {
+    switch (reason) {
+    case AppStorageFailureReason::None:
+        return "none";
+    case AppStorageFailureReason::EmptyInstance:
+        return "empty-instance";
+    case AppStorageFailureReason::CapabilityDenied:
+        return "capability-denied";
+    case AppStorageFailureReason::InvalidKey:
+        return "invalid-key";
+    case AppStorageFailureReason::QueueFull:
+        return "queue-full";
+    case AppStorageFailureReason::ValueBudget:
+        return "value-budget";
+    case AppStorageFailureReason::QuotaExceeded:
+        return "quota-exceeded";
+    case AppStorageFailureReason::NotFound:
+        return "not-found";
+    case AppStorageFailureReason::HandleBudgetExceeded:
+        return "handle-budget-exceeded";
+    case AppStorageFailureReason::OperationFailed:
+        return "operation-failed";
+    case AppStorageFailureReason::OperationCancelled:
+        return "operation-cancelled";
+    case AppStorageFailureReason::OperationTimeout:
+        return "operation-timeout";
+    case AppStorageFailureReason::Unsupported:
+        return "unsupported";
+    case AppStorageFailureReason::Unknown:
+        return "unknown";
+    }
+    return "unknown";
+}
+
+AppStorageFailureReason classify_app_storage_failure(AppServiceSubmitStatus submit_status,
+                                                     HostServiceStatus host_status,
+                                                     std::uint32_t error_code) {
+    if (submit_status != AppServiceSubmitStatus::Accepted) {
+        switch (submit_status) {
+        case AppServiceSubmitStatus::Accepted:
+            break;
+        case AppServiceSubmitStatus::EmptyInstance:
+            return AppStorageFailureReason::EmptyInstance;
+        case AppServiceSubmitStatus::CapabilityDenied:
+            return AppStorageFailureReason::CapabilityDenied;
+        case AppServiceSubmitStatus::InvalidInput:
+            return AppStorageFailureReason::InvalidKey;
+        case AppServiceSubmitStatus::QueueFull:
+            return AppStorageFailureReason::QueueFull;
+        case AppServiceSubmitStatus::BudgetExceeded:
+            return AppStorageFailureReason::ValueBudget;
+        }
+    }
+
+    switch (host_status) {
+    case HostServiceStatus::Completed:
+        return AppStorageFailureReason::None;
+    case HostServiceStatus::Unsupported:
+        return AppStorageFailureReason::Unsupported;
+    case HostServiceStatus::Cancelled:
+        return AppStorageFailureReason::OperationCancelled;
+    case HostServiceStatus::Timeout:
+        return AppStorageFailureReason::OperationTimeout;
+    case HostServiceStatus::BudgetExceeded:
+        return error_code == kServiceErrorBudgetExceeded
+            ? AppStorageFailureReason::HandleBudgetExceeded
+            : AppStorageFailureReason::QuotaExceeded;
+    case HostServiceStatus::Failed:
+        if (error_code == kServiceErrorNotFound) {
+            return AppStorageFailureReason::NotFound;
+        }
+        if (error_code == kServiceErrorPayloadTooLarge) {
+            return AppStorageFailureReason::ValueBudget;
+        }
+        if (error_code == kServiceErrorBudgetExceeded) {
+            return AppStorageFailureReason::QuotaExceeded;
+        }
+        return AppStorageFailureReason::OperationFailed;
+    }
+    return AppStorageFailureReason::Unknown;
+}
+
+AppStorageFailureReason classify_app_local_storage_failure(AppLocalStorageStatus status) {
+    switch (status) {
+    case AppLocalStorageStatus::Ok:
+        return AppStorageFailureReason::None;
+    case AppLocalStorageStatus::Disabled:
+        return AppStorageFailureReason::CapabilityDenied;
+    case AppLocalStorageStatus::InvalidKey:
+        return AppStorageFailureReason::InvalidKey;
+    case AppLocalStorageStatus::BudgetExceeded:
+        return AppStorageFailureReason::QuotaExceeded;
+    case AppLocalStorageStatus::NotFound:
+        return AppStorageFailureReason::NotFound;
+    }
+    return AppStorageFailureReason::Unknown;
+}
+
+std::string app_storage_failure_detail(AppPrivateKvOperation operation,
+                                       const std::string& key,
+                                       AppServiceSubmitStatus submit_status,
+                                       HostServiceStatus host_status,
+                                       std::uint32_t error_code) {
+    std::ostringstream stream;
+    stream << "operation=" << app_private_kv_operation_name(operation)
+           << "; key=" << (key.empty() ? "none" : key)
+           << "; reason="
+           << app_storage_failure_reason_name(classify_app_storage_failure(submit_status, host_status, error_code))
+           << "; submit=" << app_service_submit_status_name(submit_status);
+    if (host_status != HostServiceStatus::Completed) {
+        stream << "; host=" << host_service_status_name(host_status);
+    }
+    if (error_code != 0) {
+        stream << "; error=" << error_code;
+    }
+    return stream.str();
 }
 
 AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDeviceCapabilities& capabilities,
@@ -170,10 +428,10 @@ AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
     });
     if (found == fixtures_.end()) {
         pending.status = HostServiceStatus::Failed;
-        pending.error_code = 404;
+        pending.error_code = kServiceErrorNotFound;
     } else if (found->body.size() > policy_.max_response_bytes) {
         pending.status = HostServiceStatus::BudgetExceeded;
-        pending.error_code = 413;
+        pending.error_code = kServiceErrorPayloadTooLarge;
     } else {
         pending.status = HostServiceStatus::Completed;
         pending.fixture = *found;
@@ -207,7 +465,7 @@ bool NetworkFetchMock::complete_next(AppRuntimeHost& host) {
                                                             static_cast<std::uint32_t>(pending->fixture.body.size()));
         if (handle == 0) {
             completion.status = HostServiceStatus::BudgetExceeded;
-            completion.error_code = 507;
+            completion.error_code = kServiceErrorBudgetExceeded;
         } else {
             completion.handle = handle;
             completion.byte_count = static_cast<std::uint32_t>(pending->fixture.body.size());
@@ -381,6 +639,141 @@ std::string app_image_failure_detail(const std::string& url,
     stream << "src=" << (url.empty() ? "unknown" : url)
            << "; reason="
            << app_image_failure_reason_name(classify_app_image_failure(submit_status, host_status, error_code))
+           << "; submit=" << app_service_submit_status_name(submit_status);
+    if (host_status != HostServiceStatus::Completed) {
+        stream << "; host=" << host_service_status_name(host_status);
+    }
+    if (error_code != 0) {
+        stream << "; error=" << error_code;
+    }
+    return stream.str();
+}
+
+const char* audio_command_kind_name(AudioCommandKind kind) {
+    switch (kind) {
+    case AudioCommandKind::Open:
+        return "open";
+    case AudioCommandKind::Play:
+        return "play";
+    case AudioCommandKind::Pause:
+        return "pause";
+    case AudioCommandKind::Stop:
+        return "stop";
+    case AudioCommandKind::Close:
+        return "close";
+    case AudioCommandKind::SetVolume:
+        return "set-volume";
+    }
+    return "unknown";
+}
+
+const char* audio_stream_state_name(AudioStreamState state) {
+    switch (state) {
+    case AudioStreamState::Open:
+        return "open";
+    case AudioStreamState::Playing:
+        return "playing";
+    case AudioStreamState::Paused:
+        return "paused";
+    case AudioStreamState::Stopped:
+        return "stopped";
+    case AudioStreamState::Ended:
+        return "ended";
+    case AudioStreamState::Error:
+        return "error";
+    }
+    return "unknown";
+}
+
+const char* app_audio_failure_reason_name(AppAudioFailureReason reason) {
+    switch (reason) {
+    case AppAudioFailureReason::None:
+        return "none";
+    case AppAudioFailureReason::EmptyInstance:
+        return "empty-instance";
+    case AppAudioFailureReason::CapabilityDenied:
+        return "capability-denied";
+    case AppAudioFailureReason::InvalidSource:
+        return "invalid-source";
+    case AppAudioFailureReason::InvalidHandle:
+        return "invalid-handle";
+    case AppAudioFailureReason::QueueFull:
+        return "queue-full";
+    case AppAudioFailureReason::StreamBudget:
+        return "stream-budget";
+    case AppAudioFailureReason::SourceNotFound:
+        return "source-not-found";
+    case AppAudioFailureReason::StreamBudgetExceeded:
+        return "stream-budget-exceeded";
+    case AppAudioFailureReason::CommandFailed:
+        return "command-failed";
+    case AppAudioFailureReason::CommandCancelled:
+        return "command-cancelled";
+    case AppAudioFailureReason::CommandTimeout:
+        return "command-timeout";
+    case AppAudioFailureReason::Unsupported:
+        return "unsupported";
+    case AppAudioFailureReason::Unknown:
+        return "unknown";
+    }
+    return "unknown";
+}
+
+AppAudioFailureReason classify_app_audio_failure(AppServiceSubmitStatus submit_status,
+                                                 HostServiceStatus host_status,
+                                                 std::uint32_t error_code) {
+    if (submit_status != AppServiceSubmitStatus::Accepted) {
+        switch (submit_status) {
+        case AppServiceSubmitStatus::Accepted:
+            break;
+        case AppServiceSubmitStatus::EmptyInstance:
+            return AppAudioFailureReason::EmptyInstance;
+        case AppServiceSubmitStatus::CapabilityDenied:
+            return AppAudioFailureReason::CapabilityDenied;
+        case AppServiceSubmitStatus::InvalidInput:
+            return error_code == 410 ? AppAudioFailureReason::InvalidHandle
+                                     : AppAudioFailureReason::InvalidSource;
+        case AppServiceSubmitStatus::QueueFull:
+            return AppAudioFailureReason::QueueFull;
+        case AppServiceSubmitStatus::BudgetExceeded:
+            return AppAudioFailureReason::StreamBudget;
+        }
+    }
+
+    switch (host_status) {
+    case HostServiceStatus::Completed:
+        return AppAudioFailureReason::None;
+    case HostServiceStatus::Unsupported:
+        return AppAudioFailureReason::Unsupported;
+    case HostServiceStatus::Cancelled:
+        return AppAudioFailureReason::CommandCancelled;
+    case HostServiceStatus::Timeout:
+        return AppAudioFailureReason::CommandTimeout;
+    case HostServiceStatus::BudgetExceeded:
+        return AppAudioFailureReason::StreamBudgetExceeded;
+    case HostServiceStatus::Failed:
+        if (error_code == 404) {
+            return AppAudioFailureReason::SourceNotFound;
+        }
+        if (error_code == 410) {
+            return AppAudioFailureReason::InvalidHandle;
+        }
+        if (error_code == 507) {
+            return AppAudioFailureReason::StreamBudgetExceeded;
+        }
+        return AppAudioFailureReason::CommandFailed;
+    }
+    return AppAudioFailureReason::Unknown;
+}
+
+std::string app_audio_failure_detail(const std::string& source,
+                                     AppServiceSubmitStatus submit_status,
+                                     HostServiceStatus host_status,
+                                     std::uint32_t error_code) {
+    std::ostringstream stream;
+    stream << "source=" << (source.empty() ? "unknown" : source)
+           << "; reason="
+           << app_audio_failure_reason_name(classify_app_audio_failure(submit_status, host_status, error_code))
            << "; submit=" << app_service_submit_status_name(submit_status);
     if (host_status != HostServiceStatus::Completed) {
         stream << "; host=" << host_service_status_name(host_status);
@@ -620,7 +1013,7 @@ AppServiceSubmitResult AudioCommandMock::submit_command(AppRuntimeHost& host,
             return rejected(AppServiceSubmitStatus::BudgetExceeded, HostServiceStatus::BudgetExceeded);
         }
     } else if (!valid_handle_for_current_app(host, audio_handle)) {
-        return rejected(AppServiceSubmitStatus::InvalidInput, HostServiceStatus::Failed);
+        return rejected(AppServiceSubmitStatus::InvalidInput, HostServiceStatus::Failed, 410);
     }
 
     const HostServiceSubmitResult submitted =
@@ -987,7 +1380,7 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
         entry->decoded_bytes = 0;
         entry->submit_status = submitted.status;
         entry->status = submitted.rejected_status;
-        entry->error_code = 0;
+        entry->error_code = submitted.error_code;
         if (submitted.status == AppServiceSubmitStatus::QueueFull ||
             submitted.status == AppServiceSubmitStatus::BudgetExceeded) {
             entry->state = AppImageSurfaceState::Missing;
@@ -1217,7 +1610,9 @@ AppServiceSubmitResult AppPrivateKvStorageMock::submit(AppRuntimeHost& host,
         return rejected(AppServiceSubmitStatus::InvalidInput, HostServiceStatus::Failed);
     }
     if (operation == AppPrivateKvOperation::Set && value.size() > policy_.max_value_bytes) {
-        return rejected(AppServiceSubmitStatus::BudgetExceeded, HostServiceStatus::BudgetExceeded);
+        return rejected(AppServiceSubmitStatus::BudgetExceeded,
+                        HostServiceStatus::BudgetExceeded,
+                        kServiceErrorPayloadTooLarge);
     }
 
     const HostServiceSubmitResult submitted = host.submit_current(HostServiceJobKind::StorageKv);
@@ -1375,10 +1770,12 @@ std::size_t AppLocalStorageShadow::used_bytes() const {
 HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
                                                  AppRuntimeHost& host,
                                                  std::uint32_t& handle,
-                                                 std::uint32_t& byte_count) {
+                                                 std::uint32_t& byte_count,
+                                                 std::uint32_t& error_code) {
     if (op.operation == AppPrivateKvOperation::Set) {
         AppSpace& space = spaces_[op.app_id];
         if (!can_store(space, op.key, op.value)) {
+            error_code = kServiceErrorBudgetExceeded;
             return HostServiceStatus::BudgetExceeded;
         }
         const auto existing = space.values.find(op.key);
@@ -1392,18 +1789,23 @@ HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
     }
     const auto space_found = spaces_.find(op.app_id);
     if (space_found == spaces_.end()) {
+        if (op.operation == AppPrivateKvOperation::Get) {
+            error_code = kServiceErrorNotFound;
+        }
         return op.operation == AppPrivateKvOperation::Get ? HostServiceStatus::Failed : HostServiceStatus::Completed;
     }
     AppSpace& space = space_found->second;
     if (op.operation == AppPrivateKvOperation::Get) {
         const auto found = space.values.find(op.key);
         if (found == space.values.end()) {
+            error_code = kServiceErrorNotFound;
             return HostServiceStatus::Failed;
         }
         handle = host.handles().allocate(HostServiceHandleKind::StorageValue,
                                          op.app_instance_id,
                                          static_cast<std::uint32_t>(found->second.size()));
         if (handle == 0) {
+            error_code = kServiceErrorBudgetExceeded;
             return HostServiceStatus::BudgetExceeded;
         }
         byte_count = static_cast<std::uint32_t>(found->second.size());
@@ -1439,14 +1841,15 @@ bool AppPrivateKvStorageMock::complete_next(AppRuntimeHost& host) {
     }
     std::uint32_t handle = 0;
     std::uint32_t byte_count = 0;
-    const HostServiceStatus status = apply(*pending, host, handle, byte_count);
+    std::uint32_t error_code = 0;
+    const HostServiceStatus status = apply(*pending, host, handle, byte_count, error_code);
     const bool pushed = host.push_completion(HostServiceCompletion{
         request.job_id,
         HostServiceJobKind::StorageKv,
         status,
         request.app_instance_id,
         handle,
-        0,
+        error_code,
         byte_count,
     });
     pending_.erase(pending);
@@ -1469,6 +1872,64 @@ bool AppPrivateKvStorageMock::release_value(AppRuntimeHost& host, std::uint32_t 
     }
     records_.erase(found);
     return host.handles().release(handle);
+}
+
+AppPrivateKvFlushResult AppPrivateKvStorageMock::flush_pending(AppRuntimeHost& host, std::size_t max_ops) {
+    AppPrivateKvFlushResult result;
+    while (!pending_.empty() && (max_ops == 0 || result.flushed < max_ops)) {
+        if (!complete_next(host)) {
+            result.stopped_before_empty = true;
+            break;
+        }
+        ++result.flushed;
+    }
+    result.remaining_pending = pending_.size();
+    if (result.remaining_pending != 0 && max_ops != 0 && result.flushed >= max_ops) {
+        result.stopped_before_empty = true;
+    }
+    return result;
+}
+
+std::size_t AppPrivateKvStorageMock::pending_count() const {
+    return pending_.size();
+}
+
+std::size_t AppPrivateKvStorageMock::pending_count_app_instance(std::uint32_t app_instance_id) const {
+    return static_cast<std::size_t>(std::count_if(pending_.begin(),
+                                                  pending_.end(),
+                                                  [app_instance_id](const PendingOp& op) {
+                                                      return op.app_instance_id == app_instance_id;
+                                                  }));
+}
+
+std::size_t AppPrivateKvStorageMock::pending_count_app(const std::string& app_id) const {
+    return static_cast<std::size_t>(std::count_if(pending_.begin(),
+                                                  pending_.end(),
+                                                  [&app_id](const PendingOp& op) {
+                                                      return op.app_id == app_id;
+                                                  }));
+}
+
+std::size_t AppPrivateKvStorageMock::drop_pending_app_instance(std::uint32_t app_instance_id) {
+    const auto old_size = pending_.size();
+    pending_.erase(std::remove_if(pending_.begin(),
+                                  pending_.end(),
+                                  [app_instance_id](const PendingOp& op) {
+                                      return op.app_instance_id == app_instance_id;
+                                  }),
+                   pending_.end());
+    return old_size - pending_.size();
+}
+
+std::size_t AppPrivateKvStorageMock::drop_pending_app(const std::string& app_id) {
+    const auto old_size = pending_.size();
+    pending_.erase(std::remove_if(pending_.begin(),
+                                  pending_.end(),
+                                  [&app_id](const PendingOp& op) {
+                                      return op.app_id == app_id;
+                                  }),
+                   pending_.end());
+    return old_size - pending_.size();
 }
 
 std::size_t AppPrivateKvStorageMock::clear_app(const std::string& app_id) {

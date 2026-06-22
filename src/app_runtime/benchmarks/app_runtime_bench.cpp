@@ -1,5 +1,6 @@
-#include "app_runtime/app_host.h"
+﻿#include "app_runtime/app_host.h"
 #include "app_runtime/app_lifecycle.h"
+#include "app_runtime/app_service_worker.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
@@ -137,13 +138,41 @@ void bench_runtime_host_completion_pump(std::size_t capacity) {
     }
 }
 
+class BenchServiceWorker final : public AppHostServiceWorker {
+public:
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        HostServiceCompletion completion;
+        completion.status = HostServiceStatus::Completed;
+        completion.byte_count = request.timeout_ms;
+        return completion;
+    }
+};
+
+void bench_service_worker_pump(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.worker", AppRole::App);
+    for (std::size_t i = 0; i < capacity; ++i) {
+        host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, static_cast<std::uint32_t>(i + 1));
+    }
+    BenchServiceWorker worker;
+    std::vector<HostServiceCompletion> accepted;
+    accepted.reserve(8);
+    while (!host.requests().empty()) {
+        pump_app_host_service_worker(host,
+                                     AppHostServiceWorkerPumpOptions{HostServiceJobKind::NetworkFetch, 1},
+                                     worker);
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+}
+
 void bench_network_fetch_mock(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
     host.launch("org.example.network", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
-    network.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"t\":21}"});
+    network.add_fixture(NetworkFetchFixture{"/data/weather.json", 200, "application/json", "{\"t\":21}"});
     for (std::size_t i = 0; i < capacity; ++i) {
-        network.submit_fetch(host, "app://weather", 1000);
+        network.submit_fetch(host, "/data/weather.json", 1000);
     }
     for (std::size_t i = 0; i < capacity; ++i) {
         network.complete_next(host);
@@ -196,9 +225,9 @@ void bench_image_decode_mock(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
     host.launch("org.example.images", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 32, 32, 32 * 32 * 2, capacity});
-    images.add_fixture(ImageDecodeFixture{"app://icon", 16, 16, 16, HostPixelFormat::Rgb565, {}});
+    images.add_fixture(ImageDecodeFixture{"/icon", 16, 16, 16, HostPixelFormat::Rgb565, {}});
     for (std::size_t i = 0; i < capacity; ++i) {
-        images.submit_decode(host, "app://icon", 1000);
+        images.submit_decode(host, "/icon", 1000);
     }
     for (std::size_t i = 0; i < capacity; ++i) {
         images.complete_next(host);
@@ -219,9 +248,9 @@ void bench_audio_command_mock(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity * 4, 8, capacity, capacity * 64, 1});
     host.launch("org.example.audio", AppRole::App);
     AudioCommandMock audio(AudioPlaybackPolicy{true, 64, capacity});
-    audio.add_source(AudioSourceFixture{"app://tone.mp3", 1000});
+    audio.add_source(AudioSourceFixture{"/tone.mp3", 1000});
     for (std::size_t i = 0; i < capacity; ++i) {
-        audio.submit_open(host, "app://tone.mp3", 80);
+        audio.submit_open(host, "/tone.mp3", 80);
     }
     for (std::size_t i = 0; i < capacity; ++i) {
         audio.complete_next(host);
@@ -259,7 +288,7 @@ void bench_image_surface_cache(std::size_t capacity) {
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 32, 32, 32 * 32 * 2, capacity});
     for (std::size_t i = 0; i < capacity; ++i) {
         images.add_fixture(ImageDecodeFixture{
-            "app://icon" + std::to_string(i),
+            "/icon" + std::to_string(i),
             16,
             16,
             16,
@@ -270,7 +299,7 @@ void bench_image_surface_cache(std::size_t capacity) {
     AppImageSurfaceCache cache;
     std::uint32_t handle = 0;
     for (std::size_t i = 0; i < capacity; ++i) {
-        cache.resolve_or_request(host, images, "app://icon" + std::to_string(i), &handle);
+        cache.resolve_or_request(host, images, "/icon" + std::to_string(i), &handle);
     }
     for (std::size_t i = 0; i < capacity; ++i) {
         images.complete_next(host);
@@ -284,7 +313,7 @@ void bench_image_surface_cache(std::size_t capacity) {
         }
     }
     for (std::size_t i = 0; i < capacity; ++i) {
-        cache.resolve_or_request(host, images, "app://icon" + std::to_string(i), &handle);
+        cache.resolve_or_request(host, images, "/icon" + std::to_string(i), &handle);
     }
     cache.release_all(host, images);
 }
@@ -295,7 +324,7 @@ void bench_image_surface_cache_eviction(std::size_t capacity) {
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 32, 32, 32 * 32 * 2, capacity});
     for (std::size_t i = 0; i < capacity; ++i) {
         images.add_fixture(ImageDecodeFixture{
-            "app://icon" + std::to_string(i),
+            "/icon" + std::to_string(i),
             16,
             16,
             16,
@@ -306,7 +335,7 @@ void bench_image_surface_cache_eviction(std::size_t capacity) {
     AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{capacity / 2, 0});
     std::uint32_t handle = 0;
     for (std::size_t i = 0; i < capacity; ++i) {
-        cache.resolve_or_request(host, images, "app://icon" + std::to_string(i), &handle);
+        cache.resolve_or_request(host, images, "/icon" + std::to_string(i), &handle);
     }
     for (std::size_t i = 0; i < capacity; ++i) {
         images.complete_next(host);
@@ -361,10 +390,10 @@ void bench_xml_http_request_mock(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
     host.launch("org.example.xhr", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
-    network.add_fixture(NetworkFetchFixture{"app://weather", 200, "application/json", "{\"t\":21}"});
+    network.add_fixture(NetworkFetchFixture{"/data/weather.json", 200, "application/json", "{\"t\":21}"});
     std::vector<AppXmlHttpRequest> requests(capacity);
     for (AppXmlHttpRequest& xhr : requests) {
-        xhr.open("GET", "app://weather", true);
+        xhr.open("GET", "/data/weather.json", true);
         xhr.send(host, network, 1000);
     }
     for (std::size_t i = 0; i < capacity; ++i) {
@@ -410,6 +439,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_host_completion_pump", iterations, average_microseconds(iterations, [&] {
         bench_runtime_host_completion_pump(capacity);
+    }));
+    print_result("app_runtime_service_worker_pump", iterations, average_microseconds(iterations, [&] {
+        bench_service_worker_pump(capacity);
     }));
     print_result("app_runtime_network_fetch_mock", iterations, average_microseconds(iterations, [&] {
         bench_network_fetch_mock(capacity);

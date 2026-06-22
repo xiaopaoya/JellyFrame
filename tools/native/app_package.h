@@ -34,6 +34,13 @@ struct AppPackageManifest {
     bool network_allowed = false;
     bool storage_kv_allowed = false;
     bool audio_playback_allowed = false;
+    bool background_network_while_suspended = false;
+    bool background_network_while_screen_off = false;
+    bool background_audio_while_suspended = false;
+    bool background_audio_while_screen_off = false;
+    bool background_sensors_while_suspended = false;
+    bool background_sensors_while_screen_off = false;
+    bool background_sensors_in_low_power = false;
     std::vector<std::string> font_sources;
 };
 
@@ -510,6 +517,100 @@ inline bool json_array_contains_string(const std::string& json, std::string_view
     return json.substr(open, close - open).find("\"" + std::string(expected) + "\"") != std::string::npos;
 }
 
+inline bool json_find_object_range(std::string_view json,
+                                   std::string_view key,
+                                   std::size_t& object_open,
+                                   std::size_t& object_close) {
+    const std::string needle = "\"" + std::string(key) + "\"";
+    const std::size_t key_pos = json.find(needle);
+    if (key_pos == std::string_view::npos) {
+        return false;
+    }
+    const std::size_t colon = json.find(':', key_pos + needle.size());
+    if (colon == std::string_view::npos) {
+        return false;
+    }
+    const std::size_t open = json.find('{', colon + 1);
+    if (open == std::string_view::npos) {
+        return false;
+    }
+
+    int depth = 0;
+    bool in_string = false;
+    bool escaped = false;
+    for (std::size_t index = open; index < json.size(); ++index) {
+        const char ch = json[index];
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '{') {
+            ++depth;
+        } else if (ch == '}') {
+            --depth;
+            if (depth == 0) {
+                object_open = open;
+                object_close = index + 1;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+inline bool json_find_bool(std::string_view json, std::string_view key, bool& value) {
+    const std::string needle = "\"" + std::string(key) + "\"";
+    const std::size_t key_pos = json.find(needle);
+    if (key_pos == std::string_view::npos) {
+        return false;
+    }
+    const std::size_t colon = json.find(':', key_pos + needle.size());
+    if (colon == std::string_view::npos) {
+        return false;
+    }
+    std::size_t index = colon + 1;
+    while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
+        ++index;
+    }
+    if (json.substr(index, 4) == "true") {
+        value = true;
+        return true;
+    }
+    if (json.substr(index, 5) == "false") {
+        value = false;
+        return true;
+    }
+    return false;
+}
+
+inline bool json_find_nested_bool(const std::string& json,
+                                  std::string_view object_key,
+                                  std::string_view child_key,
+                                  std::string_view field_key,
+                                  bool& value) {
+    std::size_t object_open = 0;
+    std::size_t object_close = 0;
+    if (!json_find_object_range(json, object_key, object_open, object_close)) {
+        return false;
+    }
+    const std::string_view object(json.data() + object_open, object_close - object_open);
+    std::size_t child_open = 0;
+    std::size_t child_close = 0;
+    if (!json_find_object_range(object, child_key, child_open, child_close)) {
+        return false;
+    }
+    const std::string_view child(object.data() + child_open, child_close - child_open);
+    return json_find_bool(child, field_key, value);
+}
+
 inline std::vector<std::string> json_collect_object_string_values(const std::string& json,
                                                                   std::string_view array_key,
                                                                   std::string_view field_key) {
@@ -618,6 +719,41 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
         json_array_contains_string(json, "capabilities", "network.fetch");
     manifest.storage_kv_allowed = json_array_contains_string(json, "capabilities", "storage.kv");
     manifest.audio_playback_allowed = json_array_contains_string(json, "capabilities", "media.audio.mp3");
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "network",
+                          "whileSuspended",
+                          manifest.background_network_while_suspended);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "network",
+                          "whileScreenOff",
+                          manifest.background_network_while_screen_off);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "audio",
+                          "whileSuspended",
+                          manifest.background_audio_while_suspended);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "audio",
+                          "whileScreenOff",
+                          manifest.background_audio_while_screen_off);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "sensors",
+                          "whileSuspended",
+                          manifest.background_sensors_while_suspended);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "sensors",
+                          "whileScreenOff",
+                          manifest.background_sensors_while_screen_off);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "sensors",
+                          "inLowPower",
+                          manifest.background_sensors_in_low_power);
     manifest.font_sources = json_collect_object_string_values(json, "fonts", "source");
     for (std::string& source : manifest.font_sources) {
         std::string normalized;

@@ -1,0 +1,21 @@
+# JellyFrame deterministic service-state script.
+# Run with:
+#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_service_status --frame-script samples/apps/packages/jelly_service_status/capture_system_events.jfcapture
+
+output-dir out/service_status_frames
+montage out/service_status_montage.bmp
+frames 36
+step-ms 100
+start-ms 1000
+viewport 300 300
+columns 6
+gap 6
+
+# Validate that the Win32 shell can inject host/system state without giving the
+# app direct access to platform APIs.
+event 6 network-offline
+event 12 screen-hidden
+event 18 low-power-on
+event 24 network-online
+event 30 screen-visible
+event 32 low-power-off

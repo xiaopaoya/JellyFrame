@@ -1,0 +1,72 @@
+(function () {
+  var state = document.getElementById("state");
+  var line = document.getElementById("line");
+  var net = document.getElementById("net");
+  var audio = document.getElementById("audio");
+  var sensors = document.getElementById("sensors");
+  var data = document.getElementById("data");
+  var store = document.getElementById("store");
+
+  function hasStorage() {
+    return typeof localStorage != "undefined";
+  }
+
+  function refresh() {
+    var hidden = !!document.hidden;
+    var online = navigator.onLine !== false;
+    state.textContent = hidden ? "Hidden" : "Active";
+    line.textContent = hidden ? "UI is paused; approved services may continue." : "Foreground services are live.";
+    net.textContent = online ? "Online" : "Offline";
+  }
+
+  function rememberStatus(value) {
+    if (!hasStorage()) {
+      store.textContent = "No shadow";
+      return;
+    }
+    localStorage.setItem("serviceStatus", value);
+    store.textContent = localStorage.getItem("serviceStatus") || "None";
+  }
+
+  function applyServicePayload(payload) {
+    if (!payload) {
+      return;
+    }
+    data.textContent = payload.data || "Ready";
+    audio.textContent = payload.audio || audio.textContent;
+    sensors.textContent = payload.sensors || sensors.textContent;
+    rememberStatus(data.textContent);
+  }
+
+  function fetchStatus() {
+    if (typeof XMLHttpRequest == "undefined") {
+      data.textContent = "Local";
+      rememberStatus("Local");
+      return;
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "/data/service-status.json", true);
+    xhr.onload = function () {
+      try {
+        applyServicePayload(JSON.parse(xhr.responseText));
+      } catch (error) {
+        data.textContent = "Bad data";
+        rememberStatus("Bad data");
+      }
+    };
+    xhr.onerror = function () {
+      data.textContent = "Error";
+      rememberStatus("Error");
+    };
+    xhr.send();
+  }
+
+  document.addEventListener("visibilitychange", refresh);
+  window.addEventListener("online", refresh);
+  window.addEventListener("offline", refresh);
+  refresh();
+  if (hasStorage() && localStorage.getItem("serviceStatus")) {
+    store.textContent = localStorage.getItem("serviceStatus");
+  }
+  fetchStatus();
+}());

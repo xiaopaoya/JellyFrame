@@ -138,6 +138,39 @@ def int_field(mapping: dict, key: str, default: int = 0) -> int:
     return value if isinstance(value, int) else default
 
 
+def bool_field(mapping: dict, key: str, default: bool = False) -> bool:
+    value = mapping.get(key, default)
+    return value if isinstance(value, bool) else default
+
+
+def parse_background_service_policy(manifest: dict) -> dict:
+    services = manifest.get("backgroundServices", {})
+    if services and not isinstance(services, dict):
+        fail("manifest backgroundServices must be an object")
+    if not isinstance(services, dict):
+        services = {}
+
+    def service(name: str, sensor: bool = False) -> dict:
+        raw = services.get(name, {})
+        if raw and not isinstance(raw, dict):
+            fail(f"manifest backgroundServices.{name} must be an object")
+        if not isinstance(raw, dict):
+            raw = {}
+        parsed = {
+            "whileSuspended": bool_field(raw, "whileSuspended"),
+            "whileScreenOff": bool_field(raw, "whileScreenOff"),
+        }
+        if sensor:
+            parsed["inLowPower"] = bool_field(raw, "inLowPower")
+        return parsed
+
+    return {
+        "network": service("network"),
+        "audio": service("audio"),
+        "sensors": service("sensors", sensor=True),
+    }
+
+
 def validate_manifest(manifest: dict) -> dict:
     if manifest.get("format") != "jellyframe.app":
         fail('manifest format must be "jellyframe.app"')
@@ -182,10 +215,14 @@ def validate_manifest(manifest: dict) -> dict:
                 fail(f"manifest fonts[{index}].source is required")
             if not isinstance(profile, str) or not profile:
                 fail(f"manifest fonts[{index}].profile is required")
+            family = font.get("family", "")
+            license_info = font.get("license", {})
             fonts.append({
                 "id": font_id,
                 "source": normalize_app_path(source),
                 "profile": profile,
+                "family": family if isinstance(family, str) else "",
+                "license": license_info if isinstance(license_info, dict) else {},
                 "sizes": font.get("sizes", []),
                 "weights": font.get("weights", []),
             })
@@ -198,6 +235,7 @@ def validate_manifest(manifest: dict) -> dict:
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     storage_kv_allowed = "storage.kv" in capabilities
     audio_playback_allowed = "media.audio.mp3" in capabilities
+    background_services = parse_background_service_policy(manifest)
     return {
         "id": app_id,
         "name": manifest.get("name", app_id),
@@ -216,6 +254,38 @@ def validate_manifest(manifest: dict) -> dict:
         "networkAllowed": network_allowed,
         "storageKvAllowed": storage_kv_allowed,
         "audioPlaybackAllowed": audio_playback_allowed,
+        "backgroundServices": background_services,
+    }
+
+
+def service_intent_report(manifest: dict, target_config: dict) -> dict:
+    capabilities = manifest.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        capabilities = []
+    permissions = manifest.get("permissions", [])
+    if not isinstance(permissions, list):
+        permissions = []
+    background_services = manifest.get("backgroundServices", {})
+    if not isinstance(background_services, dict):
+        background_services = parse_background_service_policy({})
+
+    target_id = target_config.get("id", "")
+    return {
+        "target": target_id if isinstance(target_id, str) else "",
+        "requested": {
+            "networkFetch": bool(manifest.get("networkAllowed")),
+            "storageKv": bool(manifest.get("storageKvAllowed")),
+            "audioPlayback": bool(manifest.get("audioPlaybackAllowed")),
+        },
+        "permissions": list(permissions),
+        "capabilities": list(capabilities),
+        "backgroundServices": background_services,
+        "policyNotes": [
+            "Manifest capabilities describe app intent only; host profile and product policy remain authoritative.",
+            "Network fetch is runtime data only; remote HTML, CSS, script and image loaders remain disabled.",
+            "Storage is app-private KV only; cookies, IndexedDB, Cache API and general filesystem access are absent.",
+            "Audio playback is host-owned; Audio() V0 is available only when the host binds an audio adapter.",
+        ],
     }
 
 
@@ -236,6 +306,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "fonts",
         "permissions",
         "capabilities",
+        "backgroundServices",
         "targets",
     }
     for key in sorted(manifest.keys()):
@@ -285,8 +356,79 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
             "maxTimerCallbacksPerFrame",
             "maxEventListeners",
             "maxFramebufferPixels",
+            "maxAppFonts",
+            "maxAppFontBytes",
+            "maxAppFontGlyphs",
         },
+        "backgroundServices": {"network", "audio", "sensors"},
     }
+    raw_fonts = manifest.get("fonts", [])
+    if isinstance(raw_fonts, list):
+        allowed_font_fields = {"id", "source", "profile", "family", "license", "sizes", "weights"}
+        allowed_license_fields = {"name", "url", "source"}
+        for index, font in enumerate(raw_fonts):
+            if not isinstance(font, dict):
+                continue
+            for key in sorted(font.keys()):
+                if key not in allowed_font_fields:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "manifest-field-unknown",
+                        "message": f"manifest field is not recognized by this JellyFrame toolchain: fonts[{index}].{key}",
+                        "source": "jellyframe.app.json",
+                    })
+            license_info = font.get("license")
+            if license_info is None:
+                continue
+            if not isinstance(license_info, dict):
+                warnings.append({
+                    "level": "warning",
+                    "code": "font-license-incomplete",
+                    "message": f"manifest fonts[{index}].license should be an object with name/source metadata",
+                    "source": "jellyframe.app.json",
+                })
+                continue
+            for key in sorted(license_info.keys()):
+                if key not in allowed_license_fields:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "manifest-field-unknown",
+                        "message": f"manifest field is not recognized by this JellyFrame toolchain: fonts[{index}].license.{key}",
+                        "source": "jellyframe.app.json",
+                    })
+            if not isinstance(license_info.get("name"), str) or not license_info.get("name"):
+                warnings.append({
+                    "level": "warning",
+                    "code": "font-license-incomplete",
+                    "message": f"manifest fonts[{index}].license.name is recommended for redistributed font supplements",
+                    "source": "jellyframe.app.json",
+                })
+            if not isinstance(license_info.get("source"), str) or not license_info.get("source"):
+                warnings.append({
+                    "level": "warning",
+                    "code": "font-license-incomplete",
+                    "message": f"manifest fonts[{index}].license.source is recommended for redistributed font supplements",
+                    "source": "jellyframe.app.json",
+                })
+    background_services = manifest.get("backgroundServices")
+    if isinstance(background_services, dict):
+        background_allowed = {
+            "network": {"whileSuspended", "whileScreenOff"},
+            "audio": {"whileSuspended", "whileScreenOff"},
+            "sensors": {"whileSuspended", "whileScreenOff", "inLowPower"},
+        }
+        for service, allowed in background_allowed.items():
+            value = background_services.get(service)
+            if not isinstance(value, dict):
+                continue
+            for key in sorted(value.keys()):
+                if key not in allowed:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "manifest-field-unknown",
+                        "message": f"manifest field is not recognized by this JellyFrame toolchain: backgroundServices.{service}.{key}",
+                        "source": "jellyframe.app.json",
+                    })
     for parent, allowed in nested_allowed.items():
         value = manifest.get(parent)
         if not isinstance(value, dict):
@@ -300,6 +442,29 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
                     "source": "jellyframe.app.json",
                 })
     return warnings
+
+
+def collect_audio_resource_warnings(manifest: dict, resources: list[dict]) -> list[dict]:
+    capabilities = manifest.get("capabilities", [])
+    if not isinstance(capabilities, list) or "media.audio.mp3" not in capabilities:
+        return []
+    audio_suffixes = {".mp3", ".wav", ".ogg", ".m4a", ".aac"}
+    audio_resources = [
+        resource for resource in resources
+        if Path(resource.get("path", "")).suffix.lower() in audio_suffixes
+    ]
+    if not audio_resources:
+        return []
+    if any(Path(resource.get("path", "")).suffix.lower() == ".mp3" for resource in audio_resources):
+        return []
+    sources = ", ".join(resource["path"] for resource in audio_resources)
+    return [{
+        "level": "warning",
+        "code": "audio-capability-resource-mismatch",
+        "message": "manifest declares media.audio.mp3, but packaged audio resources are not MP3: "
+                   f"{sources}. A real MCU host MP3 pipeline will not play these resources.",
+        "source": "jellyframe.app.json",
+    }]
 
 
 def load_target_preset(target: str) -> dict:
@@ -616,7 +781,8 @@ def parse_jffont(data: bytes) -> dict:
 
 def collect_font_diagnostics(manifest: dict,
                              resources: list[dict],
-                             target_config: dict) -> tuple[dict, list[dict]]:
+                             target_config: dict,
+                             budgets: dict) -> tuple[dict, list[dict]]:
     resources_by_path = {resource["path"]: resource for resource in resources}
     source_codepoints = collect_source_codepoints(resources)
     target_profile = target_config.get("fontProfile", "")
@@ -629,15 +795,28 @@ def collect_font_diagnostics(manifest: dict,
     app_covered = set()
     manifest_fonts = []
     warnings = []
+    total_runtime_font_bytes = 0
+    total_runtime_font_glyphs = 0
+    usable_runtime_fonts = 0
     for font in manifest.get("fonts", []):
         source = font.get("source", "") if isinstance(font, dict) else ""
+        license_info = font.get("license", {}) if isinstance(font, dict) else {}
         font_entry = {
             "id": font.get("id", "") if isinstance(font, dict) else "",
             "source": source,
             "profile": font.get("profile", "") if isinstance(font, dict) else "",
+            "family": font.get("family", "") if isinstance(font, dict) else "",
+            "license": license_info if isinstance(license_info, dict) else {},
             "packaged": source in resources_by_path,
             "status": "missing",
         }
+        if not isinstance(license_info, dict) or not license_info.get("name") or not license_info.get("source"):
+            warnings.append({
+                "level": "warning",
+                "code": "font-license-missing",
+                "message": f"manifest font should declare license.name and license.source before redistribution: {source or font_entry['id']}",
+                "source": "jellyframe.app.json",
+            })
         resource = resources_by_path.get(source)
         if source and resource is None:
             warnings.append({
@@ -662,6 +841,7 @@ def collect_font_diagnostics(manifest: dict,
             manifest_fonts.append(font_entry)
             continue
 
+        total_runtime_font_bytes += resource["size"]
         parsed = parse_jffont(resource["file"].read_bytes())
         if not parsed.get("ok"):
             font_entry["status"] = "invalid"
@@ -677,6 +857,8 @@ def collect_font_diagnostics(manifest: dict,
             continue
 
         glyphs = parsed["glyphs"]
+        usable_runtime_fonts += 1
+        total_runtime_font_glyphs += parsed["glyphCount"]
         app_covered.update(source_codepoints & glyphs)
         font_entry.update({
             "status": "usable",
@@ -701,9 +883,42 @@ def collect_font_diagnostics(manifest: dict,
             "source": "jellyframe.app.json",
         })
 
+    max_app_fonts = int_field(budgets, "maxAppFonts", 0)
+    max_app_font_bytes = int_field(budgets, "maxAppFontBytes", 0)
+    max_app_font_glyphs = int_field(budgets, "maxAppFontGlyphs", 0)
+    if max_app_fonts > 0 and usable_runtime_fonts > max_app_fonts:
+        warnings.append({
+            "level": "warning",
+            "code": "font-budget-exceeded",
+            "message": f"manifest declares {usable_runtime_fonts} usable runtime fonts, over maxAppFonts={max_app_fonts}",
+            "source": "jellyframe.app.json",
+        })
+    if max_app_font_bytes > 0 and total_runtime_font_bytes > max_app_font_bytes:
+        warnings.append({
+            "level": "warning",
+            "code": "font-budget-exceeded",
+            "message": f"runtime font payload uses {total_runtime_font_bytes} bytes, over maxAppFontBytes={max_app_font_bytes}",
+            "source": "jellyframe.app.json",
+        })
+    if max_app_font_glyphs > 0 and total_runtime_font_glyphs > max_app_font_glyphs:
+        warnings.append({
+            "level": "warning",
+            "code": "font-budget-exceeded",
+            "message": f"runtime font payload has {total_runtime_font_glyphs} glyphs, over maxAppFontGlyphs={max_app_font_glyphs}",
+            "source": "jellyframe.app.json",
+        })
+
     diagnostics = {
         "targetFontProfile": target_profile,
         "coverageModel": "target-profile-estimate-plus-jffont-glyph-table",
+        "runtimeFontBudget": {
+            "maxAppFonts": max_app_fonts,
+            "maxAppFontBytes": max_app_font_bytes,
+            "maxAppFontGlyphs": max_app_font_glyphs,
+        },
+        "usableRuntimeFontCount": usable_runtime_fonts,
+        "runtimeFontBytes": total_runtime_font_bytes,
+        "runtimeFontGlyphs": total_runtime_font_glyphs,
         "sourceCodepointCount": len(source_codepoints),
         "sourceNonAsciiCodepointCount": len({codepoint for codepoint in source_codepoints if codepoint >= 0x80}),
         "sourceNonAsciiSample": codepoint_sample({codepoint for codepoint in source_codepoints if codepoint >= 0x80}),
@@ -906,9 +1121,10 @@ def main() -> int:
     budgets = effective_budgets(manifest, target_config)
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
+    warnings.extend(collect_audio_resource_warnings(manifest, resources))
     reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
     warnings.extend(reference_warnings)
-    font_diagnostics, font_warnings = collect_font_diagnostics(manifest, resources, target_config)
+    font_diagnostics, font_warnings = collect_font_diagnostics(manifest, resources, target_config, budgets)
     warnings.extend(font_warnings)
 
     if not args.validate_only:
@@ -938,6 +1154,7 @@ def main() -> int:
             for resource in resources
         ],
         "references": references,
+        "serviceIntent": service_intent_report(manifest, target_config),
         "fontDiagnostics": font_diagnostics,
         "warnings": warnings,
     }
@@ -954,6 +1171,7 @@ def main() -> int:
         f"bytes={report['totalResourceBytes']} network_allowed={manifest['networkAllowed']} "
         f"storage_kv_allowed={manifest['storageKvAllowed']} "
         f"audio_playback_allowed={manifest['audioPlaybackAllowed']} "
+        f"background_services={json.dumps(manifest['backgroundServices'], separators=(',', ':'))} "
         f"warnings={len(warnings)}"
     )
     for warning in warnings:

@@ -119,6 +119,13 @@ Rules:
 - Synchronous calls must hit a small in-memory shadow. Host flash/NVS/filesystem
   writes are scheduled through the async service path and reconciled by host
   policy.
+- A successful `localStorage.setItem(...)` updates the app-private shadow. It
+  does not guarantee that flash/NVS/filesystem persistence has completed.
+  `AppStorageLifecyclePolicy` defines when the host should flush, drop or delete
+  pending storage work.
+- The C++ layer provides `apply_app_storage_lifecycle_decision(...)` as a host
+  reference path for bounded flush/drop/delete on exit, crash, uninstall and
+  memory-pressure events. It is not a new JavaScript API.
 - Quota failures currently throw a small range exception; future builds may move
   closer to `QuotaExceededError`.
 - `sessionStorage`, storage events, IndexedDB, cookies and Cache API are not in
@@ -161,6 +168,9 @@ Current V0 implementation:
   network online/offline, `Ctrl+F7` toggles screen visibility, and `Ctrl+F8`
   toggles low-power visibility. These shortcuts do not read real Windows
   hardware state.
+- Deterministic Win32 frame scripts can inject the same states with
+  `event FRAME network-online/offline`, `event FRAME screen-visible/hidden` and
+  `event FRAME low-power-on/off`.
 
 Not implemented yet: battery JS APIs, custom JellyFrame-specific system state
 objects and full `Window`/`EventTarget` semantics beyond the `online` /
@@ -168,15 +178,37 @@ objects and full `Window`/`EventTarget` semantics beyond the `online` /
 
 ## Error Names
 
-Internal host status can still map to stable small strings for diagnostics:
+XHR and `localStorage` keep a small Web-near surface for app JavaScript. Detailed
+failures are reported through diagnostics, not extra app-visible exception
+classes.
 
-| Host status | Diagnostic code |
+Network diagnostics use `classify_app_network_failure(...)` and
+`app_network_failure_detail(...)`:
+
+| Reason | Meaning |
 | --- | --- |
-| `Unsupported` | `unsupported` |
-| `BudgetExceeded` | `budget-exceeded` |
-| `Timeout` | `timeout` |
-| `Cancelled` | `cancelled` |
-| `Failed` | `failed` |
+| `capability-denied` | Manifest/profile did not allow network fetch. |
+| `invalid-url` | URL was empty, too large or otherwise rejected before submit. |
+| `resource-not-found` | The host/mock could not find the bounded data resource. |
+| `offline` | Host networking is offline. |
+| `response-budget-exceeded` | The response exceeded the configured byte budget. |
+| `response-handle-budget-exceeded` | Host handle/response-buffer budget was exhausted. |
+| `request-timeout` | The host timed out the request. |
+| `request-cancelled` | The request was cancelled, usually by app switch or abort. |
+
+Storage diagnostics use `classify_app_storage_failure(...)`,
+`classify_app_local_storage_failure(...)` and `app_storage_failure_detail(...)`:
+
+| Reason | Meaning |
+| --- | --- |
+| `capability-denied` | Manifest/profile did not allow storage. |
+| `invalid-key` | Key was empty or exceeded policy. |
+| `value-budget` | A single value was too large. |
+| `quota-exceeded` | Per-app item or byte quota was exhausted. |
+| `not-found` | Requested key was missing. |
+| `handle-budget-exceeded` | Host response handle budget was exhausted. |
+| `operation-timeout` | The host timed out a storage operation. |
+| `operation-cancelled` | The operation was cancelled during lifecycle teardown. |
 
 Detailed platform error codes can remain in diagnostics or optional host debug
 fields. They should not become required app-author syntax.

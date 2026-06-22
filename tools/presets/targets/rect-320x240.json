@@ -10,7 +10,10 @@
     "maxResourceBytes": 131072,
     "maxDomNodes": 640,
     "maxCssRules": 320,
-    "maxDisplayCommands": 640
+    "maxDisplayCommands": 640,
+    "maxAppFonts": 1,
+    "maxAppFontBytes": 32768,
+    "maxAppFontGlyphs": 512
   },
   "fontProfile": "app-subset-cn",
   "output": "cpp",

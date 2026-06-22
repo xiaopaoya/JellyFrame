@@ -1,0 +1,57 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.examples.service_status",
+  "name": "Service Status",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 65536,
+    "maxDomNodes": 220,
+    "maxCssRules": 140,
+    "maxDisplayCommands": 360,
+    "maxTimers": 2,
+    "maxEventListeners": 8
+  },
+  "permissions": ["network"],
+  "capabilities": ["network.fetch", "storage.kv", "media.audio.mp3"],
+  "backgroundServices": {
+    "network": {
+      "whileSuspended": true,
+      "whileScreenOff": false
+    },
+    "audio": {
+      "whileSuspended": true,
+      "whileScreenOff": true
+    },
+    "sensors": {
+      "whileSuspended": false,
+      "whileScreenOff": false,
+      "inLowPower": false
+    }
+  },
+  "targets": {
+    "round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp"
+    }
+  }
+}

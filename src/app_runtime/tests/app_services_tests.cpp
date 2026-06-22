@@ -1,4 +1,4 @@
-#include "app_runtime/app_services.h"
+﻿#include "app_runtime/app_services.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -125,13 +125,63 @@ void network_fetch_pending_request_is_cancelled_on_app_switch() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.first", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
-    const bool fixture_added = network.add_fixture(NetworkFetchFixture{"app://fixture", 200, "application/json", "{}"});
+    const bool fixture_added = network.add_fixture(NetworkFetchFixture{"/fixture", 200, "application/json", "{}"});
     check(fixture_added, "network cancel fixture");
-    const AppServiceSubmitResult submitted = network.submit_fetch(host, "app://fixture");
+    const AppServiceSubmitResult submitted = network.submit_fetch(host, "/fixture");
     check(submitted.accepted(), "network cancel submit");
     host.launch("org.example.second", AppRole::App);
     check(host.requests().empty(), "network pending request cancelled");
     check(!network.complete_next(host), "network cancelled request not completed");
+}
+
+void network_failure_classification_is_specific() {
+    check(classify_app_network_failure(AppServiceSubmitStatus::CapabilityDenied,
+                                       HostServiceStatus::Unsupported,
+                                       0) == AppNetworkFailureReason::CapabilityDenied,
+          "network failure classification capability denied");
+    check(classify_app_network_failure(AppServiceSubmitStatus::InvalidInput,
+                                       HostServiceStatus::Failed,
+                                       0) == AppNetworkFailureReason::InvalidUrl,
+          "network failure classification invalid url");
+    check(classify_app_network_failure(AppServiceSubmitStatus::QueueFull,
+                                       HostServiceStatus::BudgetExceeded,
+                                       0) == AppNetworkFailureReason::QueueFull,
+          "network failure classification queue full");
+    check(classify_app_network_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::Failed,
+                                       404) == AppNetworkFailureReason::ResourceNotFound,
+          "network failure classification missing resource");
+    check(classify_app_network_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::Failed,
+                                       1001) == AppNetworkFailureReason::Offline,
+          "network failure classification offline");
+    check(classify_app_network_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::BudgetExceeded,
+                                       413) == AppNetworkFailureReason::ResponseBudgetExceeded,
+          "network failure classification response budget");
+    check(classify_app_network_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::BudgetExceeded,
+                                       507) == AppNetworkFailureReason::ResponseHandleBudgetExceeded,
+          "network failure classification response handle budget");
+    check(classify_app_network_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::Timeout,
+                                       0) == AppNetworkFailureReason::RequestTimeout,
+          "network failure classification timeout");
+
+    const std::string detail = app_network_failure_detail("/missing",
+                                                          AppServiceSubmitStatus::Accepted,
+                                                          HostServiceStatus::Failed,
+                                                          404);
+    check(detail.find("url=/missing") != std::string::npos,
+          "network failure detail carries url");
+    check(detail.find("reason=resource-not-found") != std::string::npos,
+          "network failure detail carries reason");
+    check(detail.find("submit=accepted") != std::string::npos,
+          "network failure detail carries submit status");
+    check(detail.find("host=failed") != std::string::npos,
+          "network failure detail carries host status");
+    check(detail.find("error=404") != std::string::npos,
+          "network failure detail carries error code");
 }
 
 void image_decode_requires_capability_and_returns_surface_handle() {
@@ -139,13 +189,13 @@ void image_decode_requires_capability_and_returns_surface_handle() {
     host.launch("org.example.gallery", AppRole::App);
 
     ImageDecodeMock images;
-    check(images.submit_decode(host, "app://icon.raw").status == AppServiceSubmitStatus::CapabilityDenied,
+    check(images.submit_decode(host, "/icon.raw").status == AppServiceSubmitStatus::CapabilityDenied,
           "image decode capability gate");
 
     images.set_policy(ImageDecodePolicy{true, 64, 32, 32, 32 * 32 * 2, 2});
     std::vector<std::uint8_t> pixels(16 * 16 * 2, 0x7f);
     check(images.add_fixture(ImageDecodeFixture{
-              "app://icon.raw",
+              "/icon.raw",
               16,
               16,
               16,
@@ -154,7 +204,7 @@ void image_decode_requires_capability_and_returns_surface_handle() {
           }),
           "image fixture accepted");
 
-    const AppServiceSubmitResult submitted = images.submit_decode(host, "app://icon.raw", 1000);
+    const AppServiceSubmitResult submitted = images.submit_decode(host, "/icon.raw", 1000);
     check(submitted.accepted(), "image decode submit accepted");
     check(images.complete_next(host), "image decode complete next");
 
@@ -180,18 +230,18 @@ void image_decode_enforces_surface_budgets() {
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 32, 8, 8, 8 * 8 * 2, 1});
 
-    check(!images.add_fixture(ImageDecodeFixture{"app://large", 16, 8, 16, HostPixelFormat::Rgb565, {}}),
+    check(!images.add_fixture(ImageDecodeFixture{"/large", 16, 8, 16, HostPixelFormat::Rgb565, {}}),
           "image fixture rejects wide surface");
-    check(!images.add_fixture(ImageDecodeFixture{"app://badstride", 8, 8, 7, HostPixelFormat::Rgb565, {}}),
+    check(!images.add_fixture(ImageDecodeFixture{"/badstride", 8, 8, 7, HostPixelFormat::Rgb565, {}}),
           "image fixture rejects invalid stride");
-    check(!images.add_fixture(ImageDecodeFixture{"app://badbytes", 8, 8, 8, HostPixelFormat::Rgb565, {1, 2, 3}}),
+    check(!images.add_fixture(ImageDecodeFixture{"/badbytes", 8, 8, 8, HostPixelFormat::Rgb565, {1, 2, 3}}),
           "image fixture rejects inconsistent raw bytes");
-    check(images.add_fixture(ImageDecodeFixture{"app://ok", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/ok", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image fixture accepts metadata-only host surface");
 
-    const AppServiceSubmitResult first = images.submit_decode(host, "app://missing");
+    const AppServiceSubmitResult first = images.submit_decode(host, "/missing");
     check(first.accepted(), "image missing submit accepted");
-    const AppServiceSubmitResult second = images.submit_decode(host, "app://ok");
+    const AppServiceSubmitResult second = images.submit_decode(host, "/ok");
     check(second.status == AppServiceSubmitStatus::BudgetExceeded, "image pending budget enforced");
     check(images.complete_next(host), "image missing completion produced");
     std::vector<HostServiceCompletion> accepted = pump(host);
@@ -204,24 +254,24 @@ void image_surface_cache_requests_resolves_and_releases_surfaces() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 2});
-    check(images.add_fixture(ImageDecodeFixture{"app://icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache fixture accepted");
     AppImageSurfaceCache cache;
 
     std::uint32_t handle = 99;
-    check(!cache.resolve_or_request(host, images, "app://icon", &handle), "image cache miss submits decode");
+    check(!cache.resolve_or_request(host, images, "/icon", &handle), "image cache miss submits decode");
     check(handle == 0, "image cache miss clears output handle");
-    check(cache.state_for_url("app://icon") == AppImageSurfaceState::Pending, "image cache pending state");
+    check(cache.state_for_url("/icon") == AppImageSurfaceState::Pending, "image cache pending state");
     check(host.requests().size() == 1, "image cache queued one request");
-    check(!cache.resolve_or_request(host, images, "app://icon", &handle), "image cache pending does not duplicate request");
+    check(!cache.resolve_or_request(host, images, "/icon", &handle), "image cache pending does not duplicate request");
     check(host.requests().size() == 1, "image cache still has one request");
 
     check(images.complete_next(host), "image cache decode completed");
     std::vector<HostServiceCompletion> accepted = pump(host);
     check(accepted.size() == 1, "image cache completion accepted");
     check(cache.handle_completion(accepted.front()), "image cache handles completion");
-    check(cache.state_for_url("app://icon") == AppImageSurfaceState::Ready, "image cache ready state");
-    check(cache.resolve_or_request(host, images, "app://icon", &handle), "image cache resolves ready surface");
+    check(cache.state_for_url("/icon") == AppImageSurfaceState::Ready, "image cache ready state");
+    check(cache.resolve_or_request(host, images, "/icon", &handle), "image cache resolves ready surface");
     check(handle == accepted.front().handle, "image cache returns surface handle");
     check(images.surface(handle) != nullptr, "image cache surface exists before release");
 
@@ -237,20 +287,20 @@ void image_surface_cache_records_failed_decodes_without_retry_loop() {
     AppImageSurfaceCache cache;
 
     std::uint32_t handle = 0;
-    check(!cache.resolve_or_request(host, images, "app://missing", &handle), "image cache missing submitted");
+    check(!cache.resolve_or_request(host, images, "/missing", &handle), "image cache missing submitted");
     check(images.complete_next(host), "image cache missing completed");
     std::vector<HostServiceCompletion> accepted = pump(host);
     check(accepted.size() == 1, "image cache missing completion accepted");
     check(cache.handle_completion(accepted.front()), "image cache records failed completion");
-    check(cache.state_for_url("app://missing") == AppImageSurfaceState::Failed, "image cache failed state");
-    const std::string detail = cache.diagnostic_detail_for_url("app://missing");
+    check(cache.state_for_url("/missing") == AppImageSurfaceState::Failed, "image cache failed state");
+    const std::string detail = cache.diagnostic_detail_for_url("/missing");
     check(detail.find("state=failed") != std::string::npos,
           "image cache failed completion diagnostic includes failed state");
     check(detail.find("reason=resource-not-found") != std::string::npos,
           "image cache failed completion diagnostic includes stable reason");
     check(detail.find("job=") != std::string::npos,
           "image cache failed completion diagnostic includes job id");
-    check(!cache.resolve_or_request(host, images, "app://missing", &handle), "image cache failed does not resolve");
+    check(!cache.resolve_or_request(host, images, "/missing", &handle), "image cache failed does not resolve");
     check(host.requests().empty(), "image cache failed does not retry every frame");
 }
 
@@ -258,25 +308,25 @@ void image_surface_cache_keeps_transient_budget_rejections_retryable() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
-    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache transient fixture a");
-    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache transient fixture b");
     AppImageSurfaceCache cache;
     std::uint32_t handle = 0;
-    check(!cache.resolve_or_request(host, images, "app://a", &handle), "image cache transient first pending");
-    check(!cache.resolve_or_request(host, images, "app://b", &handle), "image cache transient second rejected");
-    check(cache.state_for_url("app://b") == AppImageSurfaceState::Missing,
+    check(!cache.resolve_or_request(host, images, "/a", &handle), "image cache transient first pending");
+    check(!cache.resolve_or_request(host, images, "/b", &handle), "image cache transient second rejected");
+    check(cache.state_for_url("/b") == AppImageSurfaceState::Missing,
           "image cache transient rejection remains retryable");
-    check(cache.last_submit_status_for_url("app://b") == AppServiceSubmitStatus::BudgetExceeded,
+    check(cache.last_submit_status_for_url("/b") == AppServiceSubmitStatus::BudgetExceeded,
           "image cache records transient rejection status");
 
     check(images.complete_next(host), "image cache transient first completed");
     std::vector<HostServiceCompletion> accepted = pump(host);
     check(accepted.size() == 1, "image cache transient completion accepted");
     check(cache.handle_completion(accepted.front()), "image cache transient first handled");
-    check(!cache.resolve_or_request(host, images, "app://b", &handle), "image cache transient retry submits later");
-    check(cache.state_for_url("app://b") == AppImageSurfaceState::Pending,
+    check(!cache.resolve_or_request(host, images, "/b", &handle), "image cache transient retry submits later");
+    check(cache.state_for_url("/b") == AppImageSurfaceState::Pending,
           "image cache transient retry reaches pending state");
 }
 
@@ -286,14 +336,14 @@ void image_surface_cache_records_permanent_request_rejections() {
     ImageDecodeMock images(ImageDecodePolicy{true, 4, 16, 16, 16 * 16 * 2, 1});
     AppImageSurfaceCache cache;
     std::uint32_t handle = 0;
-    check(!cache.resolve_or_request(host, images, "app://too-long", &handle), "image cache permanent reject");
-    check(cache.state_for_url("app://too-long") == AppImageSurfaceState::Failed,
+    check(!cache.resolve_or_request(host, images, "/too-long", &handle), "image cache permanent reject");
+    check(cache.state_for_url("/too-long") == AppImageSurfaceState::Failed,
           "image cache permanent rejection records failed state");
-    check(cache.last_submit_status_for_url("app://too-long") == AppServiceSubmitStatus::InvalidInput,
+    check(cache.last_submit_status_for_url("/too-long") == AppServiceSubmitStatus::InvalidInput,
           "image cache permanent rejection records submit status");
-    check(cache.last_failure_reason_for_url("app://too-long") == AppImageFailureReason::InvalidSource,
+    check(cache.last_failure_reason_for_url("/too-long") == AppImageFailureReason::InvalidSource,
           "image cache permanent rejection exposes failure reason");
-    const std::string detail = cache.diagnostic_detail_for_url("app://too-long");
+    const std::string detail = cache.diagnostic_detail_for_url("/too-long");
     check(detail.find("state=failed") != std::string::npos,
           "image cache diagnostic includes failed state");
     check(detail.find("reason=invalid-source") != std::string::npos,
@@ -342,27 +392,90 @@ void image_failure_classification_is_specific() {
                                      0) == AppImageFailureReason::DecodeCancelled,
           "image failure classification cancelled");
 
-    const std::string detail = app_image_failure_detail("app://missing",
+    const std::string detail = app_image_failure_detail("/missing",
                                                         AppServiceSubmitStatus::Accepted,
                                                         HostServiceStatus::Failed,
                                                         404);
     check(detail.find("reason=resource-not-found") != std::string::npos,
           "image failure detail carries reason");
-    check(detail.find("src=app://missing") != std::string::npos,
+    check(detail.find("src=/missing") != std::string::npos,
           "image failure detail carries src");
+}
+
+void audio_failure_classification_is_specific() {
+    check(classify_app_audio_failure(AppServiceSubmitStatus::CapabilityDenied,
+                                     HostServiceStatus::Unsupported,
+                                     0) == AppAudioFailureReason::CapabilityDenied,
+          "audio failure classification capability denied");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::BudgetExceeded,
+                                     HostServiceStatus::BudgetExceeded,
+                                     0) == AppAudioFailureReason::StreamBudget,
+          "audio failure classification stream budget");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::QueueFull,
+                                     HostServiceStatus::Failed,
+                                     0) == AppAudioFailureReason::QueueFull,
+          "audio failure classification queue full");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::EmptyInstance,
+                                     HostServiceStatus::Cancelled,
+                                     0) == AppAudioFailureReason::EmptyInstance,
+          "audio failure classification empty instance");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Failed,
+                                     404) == AppAudioFailureReason::SourceNotFound,
+          "audio failure classification source not found");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Failed,
+                                     410) == AppAudioFailureReason::InvalidHandle,
+          "audio failure classification invalid handle");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::BudgetExceeded,
+                                     507) == AppAudioFailureReason::StreamBudgetExceeded,
+          "audio failure classification stream budget exceeded");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Unsupported,
+                                     0) == AppAudioFailureReason::Unsupported,
+          "audio failure classification unsupported");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Timeout,
+                                     0) == AppAudioFailureReason::CommandTimeout,
+          "audio failure classification timeout");
+    check(classify_app_audio_failure(AppServiceSubmitStatus::Accepted,
+                                     HostServiceStatus::Cancelled,
+                                     0) == AppAudioFailureReason::CommandCancelled,
+          "audio failure classification cancelled");
+
+    check(std::string(audio_command_kind_name(AudioCommandKind::SetVolume)) == "set-volume",
+          "audio command kind name");
+    check(std::string(audio_stream_state_name(AudioStreamState::Playing)) == "playing",
+          "audio stream state name");
+
+    const std::string detail = app_audio_failure_detail("/tone.wav",
+                                                        AppServiceSubmitStatus::Accepted,
+                                                        HostServiceStatus::Failed,
+                                                        404);
+    check(detail.find("reason=source-not-found") != std::string::npos,
+          "audio failure detail carries reason");
+    check(detail.find("source=/tone.wav") != std::string::npos,
+          "audio failure detail carries source");
+    check(detail.find("submit=accepted") != std::string::npos,
+          "audio failure detail carries submit status");
+    check(detail.find("host=failed") != std::string::npos,
+          "audio failure detail carries host status");
+    check(detail.find("error=404") != std::string::npos,
+          "audio failure detail carries error code");
 }
 
 void image_surface_cache_diagnostic_reports_pending_and_ready() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
-    check(images.add_fixture(ImageDecodeFixture{"app://icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache diagnostic fixture accepted");
     AppImageSurfaceCache cache;
     std::uint32_t handle = 0;
-    check(!cache.resolve_or_request(host, images, "app://icon", &handle),
+    check(!cache.resolve_or_request(host, images, "/icon", &handle),
           "image cache diagnostic submits request");
-    const std::string pending = cache.diagnostic_detail_for_url("app://icon");
+    const std::string pending = cache.diagnostic_detail_for_url("/icon");
     check(pending.find("state=pending") != std::string::npos,
           "image cache diagnostic includes pending state");
     check(pending.find("job=") != std::string::npos,
@@ -372,9 +485,9 @@ void image_surface_cache_diagnostic_reports_pending_and_ready() {
     std::vector<HostServiceCompletion> accepted = pump(host);
     check(accepted.size() == 1, "image cache diagnostic completion accepted");
     check(cache.handle_completion(accepted.front()), "image cache diagnostic handles completion");
-    check(cache.resolve_or_request(host, images, "app://icon", &handle),
+    check(cache.resolve_or_request(host, images, "/icon", &handle),
           "image cache diagnostic resolves ready handle");
-    const std::string ready = cache.diagnostic_detail_for_url("app://icon");
+    const std::string ready = cache.diagnostic_detail_for_url("/icon");
     check(ready.find("state=ready") != std::string::npos,
           "image cache diagnostic includes ready state");
     check(ready.find("reason=none") != std::string::npos,
@@ -402,17 +515,17 @@ void image_surface_cache_evicts_lru_ready_surfaces() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 3});
-    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache eviction fixture a");
-    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache eviction fixture b");
-    check(images.add_fixture(ImageDecodeFixture{"app://c", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/c", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache eviction fixture c");
     AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{2, 0});
 
-    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://a");
-    const std::uint32_t handle_b = cache_ready_image(host, images, cache, "app://b");
-    const std::uint32_t handle_c = cache_ready_image(host, images, cache, "app://c");
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "/a");
+    const std::uint32_t handle_b = cache_ready_image(host, images, cache, "/b");
+    const std::uint32_t handle_c = cache_ready_image(host, images, cache, "/c");
     check(cache.ready_surface_count() == 3, "image cache eviction starts over surface budget");
     check(cache.evict_unreferenced(host, images) == 1, "image cache eviction releases one lru surface");
     check(images.surface(handle_a) == nullptr, "image cache eviction drops oldest surface");
@@ -425,14 +538,14 @@ void image_surface_cache_keeps_protected_display_list_surfaces() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 3});
-    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache protected fixture a");
-    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache protected fixture b");
     AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{1, 0});
 
-    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://a");
-    const std::uint32_t handle_b = cache_ready_image(host, images, cache, "app://b");
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "/a");
+    const std::uint32_t handle_b = cache_ready_image(host, images, cache, "/b");
     const std::uint32_t protected_one[] = {handle_a};
     check(cache.evict_unreferenced(host, images, protected_one, 1) == 1,
           "image cache protected eviction releases unprotected surface");
@@ -440,7 +553,7 @@ void image_surface_cache_keeps_protected_display_list_surfaces() {
     check(images.surface(handle_b) == nullptr, "image cache protected drops unreferenced surface");
     check(cache.ready_surface_count() == 1, "image cache protected reaches budget");
 
-    const std::uint32_t handle_c = cache_ready_image(host, images, cache, "app://b");
+    const std::uint32_t handle_c = cache_ready_image(host, images, cache, "/b");
     const std::uint32_t protected_both[] = {handle_a, handle_c};
     check(cache.evict_unreferenced(host, images, protected_both, 2) == 0,
           "image cache keeps over-budget surfaces when all are protected");
@@ -453,17 +566,17 @@ void image_surface_cache_evicts_by_decoded_bytes() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 3});
-    check(images.add_fixture(ImageDecodeFixture{"app://a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache bytes fixture a");
-    check(images.add_fixture(ImageDecodeFixture{"app://b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache bytes fixture b");
-    check(images.add_fixture(ImageDecodeFixture{"app://c", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/c", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache bytes fixture c");
     AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{0, 8U * 8U * 2U * 2U});
 
-    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://a");
-    cache_ready_image(host, images, cache, "app://b");
-    cache_ready_image(host, images, cache, "app://c");
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "/a");
+    cache_ready_image(host, images, cache, "/b");
+    cache_ready_image(host, images, cache, "/c");
     check(cache.ready_byte_count() == 8U * 8U * 2U * 3U, "image cache byte count tracks ready surfaces");
     check(cache.evict_unreferenced(host, images) == 1, "image cache byte eviction releases one surface");
     check(images.surface(handle_a) == nullptr, "image cache byte eviction drops oldest surface");
@@ -474,13 +587,13 @@ void image_surface_cache_rejects_stale_completion_instances() {
     AppRuntimeHost host = make_host();
     const AppInstance first = host.launch("org.example.first-gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
-    check(images.add_fixture(ImageDecodeFixture{"app://stale", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/stale", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache stale fixture");
     AppImageSurfaceCache cache;
     std::uint32_t handle = 0;
-    check(!cache.resolve_or_request(host, images, "app://stale", &handle),
+    check(!cache.resolve_or_request(host, images, "/stale", &handle),
           "image cache stale request submitted");
-    const std::string pending = cache.diagnostic_detail_for_url("app://stale");
+    const std::string pending = cache.diagnostic_detail_for_url("/stale");
     check(pending.find("state=pending") != std::string::npos, "image cache stale test has pending entry");
 
     check(images.complete_next(host), "image cache stale decode completed");
@@ -489,7 +602,7 @@ void image_surface_cache_rejects_stale_completion_instances() {
     HostServiceCompletion stale_completion = accepted.front();
     stale_completion.app_instance_id = first.id + 1;
     check(!cache.handle_completion(stale_completion), "image cache rejects stale completion instance");
-    check(cache.state_for_url("app://stale") == AppImageSurfaceState::Pending,
+    check(cache.state_for_url("/stale") == AppImageSurfaceState::Pending,
           "image cache stale completion keeps pending entry unchanged");
     if (stale_completion.handle != 0) {
         images.release_surface(host, stale_completion.handle);
@@ -500,14 +613,14 @@ void image_surface_cache_drops_stale_ready_entries_during_eviction() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.gallery", AppRole::App);
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 2});
-    check(images.add_fixture(ImageDecodeFixture{"app://stale-a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/stale-a", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache stale eviction fixture a");
-    check(images.add_fixture(ImageDecodeFixture{"app://stale-b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+    check(images.add_fixture(ImageDecodeFixture{"/stale-b", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
           "image cache stale eviction fixture b");
     AppImageSurfaceCache cache(AppImageSurfaceCacheOptions{1, 0});
 
-    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "app://stale-a");
-    cache_ready_image(host, images, cache, "app://stale-b");
+    const std::uint32_t handle_a = cache_ready_image(host, images, cache, "/stale-a");
+    cache_ready_image(host, images, cache, "/stale-b");
     check(images.release_surface(host, handle_a), "image cache stale eviction simulates external handle release");
     const AppImageSurfaceEvictionResult evicted = cache.evict_unreferenced_with_result(host, images);
     check(evicted.dropped_stale_entries == 1, "image cache eviction drops stale ready entry");
@@ -520,12 +633,12 @@ void audio_command_mock_opens_controls_and_closes_streams() {
     host.launch("org.example.timer", AppRole::App);
 
     AudioCommandMock audio;
-    check(audio.submit_open(host, "app://alarm.mp3").status == AppServiceSubmitStatus::CapabilityDenied,
+    check(audio.submit_open(host, "/alarm.mp3").status == AppServiceSubmitStatus::CapabilityDenied,
           "audio capability gate");
 
     audio.set_policy(AudioPlaybackPolicy{true, 64, 1});
-    check(audio.add_source(AudioSourceFixture{"app://alarm.mp3", 3000}), "audio source fixture accepted");
-    const AppServiceSubmitResult open = audio.submit_open(host, "app://alarm.mp3", 80);
+    check(audio.add_source(AudioSourceFixture{"/alarm.mp3", 3000}), "audio source fixture accepted");
+    const AppServiceSubmitResult open = audio.submit_open(host, "/alarm.mp3", 80);
     check(open.accepted(), "audio open submitted");
     check(audio.complete_next(host), "audio open completed");
     std::vector<HostServiceCompletion> accepted = pump(host);
@@ -576,26 +689,26 @@ void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.music", AppRole::App);
     AudioCommandMock audio(AudioPlaybackPolicy{true, 64, 1});
-    check(audio.add_source(AudioSourceFixture{"app://tone-a.mp3", 100}), "audio budget fixture a");
-    check(audio.add_source(AudioSourceFixture{"app://tone-b.mp3", 100}), "audio budget fixture b");
+    check(audio.add_source(AudioSourceFixture{"/tone-a.mp3", 100}), "audio budget fixture a");
+    check(audio.add_source(AudioSourceFixture{"/tone-b.mp3", 100}), "audio budget fixture b");
 
-    const AppServiceSubmitResult first = audio.submit_open(host, "app://tone-a.mp3");
+    const AppServiceSubmitResult first = audio.submit_open(host, "/tone-a.mp3");
     check(first.accepted(), "audio first open accepted");
-    const AppServiceSubmitResult second = audio.submit_open(host, "app://tone-b.mp3");
+    const AppServiceSubmitResult second = audio.submit_open(host, "/tone-b.mp3");
     check(second.status == AppServiceSubmitStatus::BudgetExceeded, "audio pending open counts against budget");
     check(audio.complete_next(host), "audio budget first completed");
     std::vector<HostServiceCompletion> accepted = pump(host);
     check(accepted.size() == 1 && accepted.front().handle != 0, "audio budget first handle");
     const std::uint32_t old_handle = accepted.front().handle;
 
-    check(audio.submit_open(host, "app://tone-b.mp3").status == AppServiceSubmitStatus::BudgetExceeded,
+    check(audio.submit_open(host, "/tone-b.mp3").status == AppServiceSubmitStatus::BudgetExceeded,
           "audio active stream counts against budget");
     host.launch("org.example.next", AppRole::App);
     check(host.handles().lookup(old_handle) == nullptr, "audio lifecycle releases old app handle");
     check(audio.collect_released_streams(host) == 1, "audio mock collects stale stream records");
     check(audio.stream(old_handle) == nullptr, "audio stale stream removed");
 
-    const AppServiceSubmitResult next = audio.submit_open(host, "app://tone-b.mp3");
+    const AppServiceSubmitResult next = audio.submit_open(host, "/tone-b.mp3");
     check(next.accepted(), "audio next app open accepted after cleanup");
     check(audio.complete_next(host), "audio next app open completed");
     accepted = pump(host);
@@ -604,6 +717,21 @@ void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
     check(audio.release_app_streams(host, host.current_app_instance_id()) == 1, "audio release app streams");
     check(audio.stream(next_handle) == nullptr, "audio release app stream record");
     check(host.handles().lookup(next_handle) == nullptr, "audio release app handle");
+}
+
+void audio_command_mock_reports_invalid_handle_at_submit_time() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.audio", AppRole::App);
+    AudioCommandMock audio(AudioPlaybackPolicy{true, 128, 1});
+
+    const AppServiceSubmitResult play = audio.submit_play(host, 999);
+    check(play.status == AppServiceSubmitStatus::InvalidInput, "audio invalid handle rejected");
+    check(play.error_code == 410, "audio invalid handle carries stable error code");
+
+    const std::string detail =
+        app_audio_failure_detail("handle:999", play.status, play.rejected_status, play.error_code);
+    check(detail.find("reason=invalid-handle") != std::string::npos,
+          "audio invalid handle submit detail is specific");
 }
 
 void kv_storage_is_app_private_and_async() {
@@ -668,6 +796,64 @@ void kv_storage_enforces_budgets() {
     accepted = pump(host);
     check(accepted.size() == 1, "kv budget overflow completion");
     check(accepted.front().status == HostServiceStatus::BudgetExceeded, "kv budget overflow status");
+    check(accepted.front().error_code == 507, "kv budget overflow carries stable error code");
+}
+
+void storage_failure_classification_is_specific() {
+    check(classify_app_storage_failure(AppServiceSubmitStatus::CapabilityDenied,
+                                       HostServiceStatus::Unsupported,
+                                       0) == AppStorageFailureReason::CapabilityDenied,
+          "storage failure classification capability denied");
+    check(classify_app_storage_failure(AppServiceSubmitStatus::InvalidInput,
+                                       HostServiceStatus::Failed,
+                                       0) == AppStorageFailureReason::InvalidKey,
+          "storage failure classification invalid key");
+    check(classify_app_storage_failure(AppServiceSubmitStatus::BudgetExceeded,
+                                       HostServiceStatus::BudgetExceeded,
+                                       413) == AppStorageFailureReason::ValueBudget,
+          "storage failure classification submit value budget");
+    check(classify_app_storage_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::Failed,
+                                       404) == AppStorageFailureReason::NotFound,
+          "storage failure classification not found");
+    check(classify_app_storage_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::BudgetExceeded,
+                                       507) == AppStorageFailureReason::HandleBudgetExceeded,
+          "storage failure classification handle budget");
+    check(classify_app_storage_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::BudgetExceeded,
+                                       413) == AppStorageFailureReason::QuotaExceeded,
+          "storage failure classification quota exceeded");
+    check(classify_app_storage_failure(AppServiceSubmitStatus::Accepted,
+                                       HostServiceStatus::Timeout,
+                                       0) == AppStorageFailureReason::OperationTimeout,
+          "storage failure classification timeout");
+    check(classify_app_local_storage_failure(AppLocalStorageStatus::Disabled) ==
+              AppStorageFailureReason::CapabilityDenied,
+          "localStorage disabled maps to capability denied");
+    check(classify_app_local_storage_failure(AppLocalStorageStatus::BudgetExceeded) ==
+              AppStorageFailureReason::QuotaExceeded,
+          "localStorage budget maps to quota exceeded");
+    check(std::string(app_private_kv_operation_name(AppPrivateKvOperation::Set)) == "set",
+          "storage operation name");
+    check(std::string(app_local_storage_status_name(AppLocalStorageStatus::InvalidKey)) == "invalid-key",
+          "localStorage status name");
+
+    const std::string detail = app_storage_failure_detail(AppPrivateKvOperation::Get,
+                                                          "theme",
+                                                          AppServiceSubmitStatus::Accepted,
+                                                          HostServiceStatus::Failed,
+                                                          404);
+    check(detail.find("operation=get") != std::string::npos,
+          "storage failure detail carries operation");
+    check(detail.find("key=theme") != std::string::npos,
+          "storage failure detail carries key");
+    check(detail.find("reason=not-found") != std::string::npos,
+          "storage failure detail carries reason");
+    check(detail.find("host=failed") != std::string::npos,
+          "storage failure detail carries host status");
+    check(detail.find("error=404") != std::string::npos,
+          "storage failure detail carries error code");
 }
 
 void local_storage_shadow_follows_web_storage_subset() {
@@ -713,11 +899,11 @@ void service_workers_do_not_consume_other_service_requests() {
     host.launch("org.example.mixed", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
     AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 4, 96});
-    check(network.add_fixture(NetworkFetchFixture{"app://mixed", 200, "application/json", "{}"}),
+    check(network.add_fixture(NetworkFetchFixture{"/mixed", 200, "application/json", "{}"}),
           "mixed fixture accepted");
 
     const AppServiceSubmitResult set = storage.submit_set(host, "theme", "dark");
-    const AppServiceSubmitResult fetch = network.submit_fetch(host, "app://mixed");
+    const AppServiceSubmitResult fetch = network.submit_fetch(host, "/mixed");
     check(set.accepted(), "mixed kv submitted");
     check(fetch.accepted(), "mixed network submitted");
     check(network.complete_next(host), "mixed network completed first");
@@ -738,6 +924,7 @@ int main() {
     network_fetch_requires_capability_and_returns_fixture_handle();
     service_policy_requires_manifest_and_host_approval();
     network_fetch_pending_request_is_cancelled_on_app_switch();
+    network_failure_classification_is_specific();
     image_decode_requires_capability_and_returns_surface_handle();
     image_decode_enforces_surface_budgets();
     image_surface_cache_requests_resolves_and_releases_surfaces();
@@ -745,6 +932,7 @@ int main() {
     image_surface_cache_keeps_transient_budget_rejections_retryable();
     image_surface_cache_records_permanent_request_rejections();
     image_failure_classification_is_specific();
+    audio_failure_classification_is_specific();
     image_surface_cache_diagnostic_reports_pending_and_ready();
     image_surface_cache_evicts_lru_ready_surfaces();
     image_surface_cache_keeps_protected_display_list_surfaces();
@@ -753,8 +941,10 @@ int main() {
     image_surface_cache_drops_stale_ready_entries_during_eviction();
     audio_command_mock_opens_controls_and_closes_streams();
     audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup();
+    audio_command_mock_reports_invalid_handle_at_submit_time();
     kv_storage_is_app_private_and_async();
     kv_storage_enforces_budgets();
+    storage_failure_classification_is_specific();
     local_storage_shadow_follows_web_storage_subset();
     local_storage_shadow_enforces_policy_without_host_io();
     service_workers_do_not_consume_other_service_requests();

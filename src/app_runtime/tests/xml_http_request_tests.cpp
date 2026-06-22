@@ -102,10 +102,10 @@ void xhr_abort_cancels_pending_request() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.abort", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
-    check(network.add_fixture(NetworkFetchFixture{"app://slow", 200, "text/plain", "ok"}), "abort fixture");
+    check(network.add_fixture(NetworkFetchFixture{"/data/slow.txt", 200, "text/plain", "ok"}), "abort fixture");
 
     AppXmlHttpRequest xhr;
-    check(xhr.open("GET", "app://slow", true) == AppXhrStatus::Ok, "xhr abort open");
+    check(xhr.open("GET", "/data/slow.txt", true) == AppXhrStatus::Ok, "xhr abort open");
     take_events(xhr);
     check(xhr.send(host, network) == AppXhrStatus::Ok, "xhr abort send");
     check(host.requests().size() == 1, "xhr request queued");
@@ -127,7 +127,7 @@ void xhr_missing_response_record_releases_handle() {
     NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
 
     AppXmlHttpRequest xhr;
-    check(xhr.open("GET", "app://missing-record", true) == AppXhrStatus::Ok, "xhr missing-record open");
+    check(xhr.open("GET", "/data/missing-record.json", true) == AppXhrStatus::Ok, "xhr missing-record open");
     take_events(xhr);
     check(xhr.send(host, network) == AppXhrStatus::Ok, "xhr missing-record send");
     const std::uint32_t handle = host.handles().allocate(

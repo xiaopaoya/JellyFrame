@@ -102,6 +102,18 @@
         "maxEventListeners": {
           "type": "integer",
           "minimum": 0
+        },
+        "maxAppFonts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontGlyphs": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -127,6 +139,30 @@
               "cn-standard",
               "global-product"
             ]
+          },
+          "family": {
+            "description": "Optional product font family label. Current runtime uses system-profile-first bitmap fallback; this label is packaged for future family selection and diagnostics.",
+            "type": "string",
+            "minLength": 1
+          },
+          "license": {
+            "description": "Recommended redistribution metadata for bundled font supplements.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           },
           "sizes": {
             "type": "array",
@@ -192,6 +228,22 @@
         "enum": ["network.fetch", "storage.kv", "media.audio.mp3", "system.launcher", "system.appManager"]
       },
       "uniqueItems": true
+    },
+    "backgroundServices": {
+      "description": "Optional background activity intent. The host profile must still approve every item.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "$ref": "#/$defs/backgroundService"
+        },
+        "audio": {
+          "$ref": "#/$defs/backgroundService"
+        },
+        "sensors": {
+          "$ref": "#/$defs/backgroundSensorService"
+        }
+      }
     }
   },
   "$defs": {
@@ -282,6 +334,18 @@
         "maxEventListeners": {
           "type": "integer",
           "minimum": 0
+        },
+        "maxAppFonts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontGlyphs": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -296,6 +360,33 @@
           "type": "boolean"
         },
         "partialPresent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "backgroundService": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whileSuspended": {
+          "type": "boolean"
+        },
+        "whileScreenOff": {
+          "type": "boolean"
+        }
+      }
+    },
+    "backgroundSensorService": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whileSuspended": {
+          "type": "boolean"
+        },
+        "whileScreenOff": {
+          "type": "boolean"
+        },
+        "inLowPower": {
           "type": "boolean"
         }
       }
