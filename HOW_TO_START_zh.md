@@ -44,14 +44,16 @@ classic script -> JerryScriptRuntime -> DOM/event/form/timer bindings
 
 JellyFrame 明确不提供：
 
-- 网络加载、`fetch`、XHR、WebSocket；
-- cookie、localStorage、IndexedDB 等浏览器存储；
+- 远程 HTML/CSS/script/image 页面加载、`fetch`、WebSocket；
+- cookie、IndexedDB 或通用文件系统 API；
 - 完整 DOM、query selector APIs、Shadow DOM、Web Components；
 - ES modules 或完整浏览器加载算法；
-- Canvas、SVG、图片解码、视频；
+- Canvas、SVG 或浏览器级图片/视频栈；
 - 完整 Flexbox/Grid/positioning/animation/filter 行为；
 - GPU 合成或像素级浏览器兼容渲染。
 
+宿主可选的异步 `XMLHttpRequest` GET V0、`localStorage` V0、包内 BMP 图片和 `Audio` V0
+已经存在，但它们不是浏览器完整实现，必须按 capability matrix 和 manifest 能力声明使用。
 依赖某个功能前，请先查
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
 
@@ -244,6 +246,22 @@ layout 和 paint：
   samples\apps\loose\weather.css `
   samples\apps\loose\weather.js
 ```
+
+发布前建议对多个设备 profile 跑 responsive 检查。它不会打开窗口，也不会启用完整浏览器级
+responsive engine；它会对每个 target preset 运行同一条 render-core 管线，并在 report 中写入
+`responsiveProfiles[]`，包含 viewport、content height、横向溢出、滚动需求和 diagnostics 摘要：
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root samples\apps\packages\watch_weather `
+  --target round-300 `
+  --targets round-300,rect-320x240 `
+  --report build\watch_weather.responsive.report.json `
+  --build-dir build\Release
+```
+
+普通单 target 检查仍保持原行为；只有显式传 `--targets` 或 `--all-targets` 时才生成
+`responsiveProfiles[]`。
 
 ## 10. 可选 JerryScript 构建
 

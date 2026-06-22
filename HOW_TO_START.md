@@ -46,14 +46,17 @@ even when expensive web-platform features are skipped.
 
 JellyFrame deliberately does not provide:
 
-- network loading, `fetch`, XHR or WebSocket;
-- browser storage such as cookies, localStorage or IndexedDB;
+- remote HTML/CSS/script/image page loading, `fetch` or WebSocket;
+- cookies, IndexedDB or a general filesystem API;
 - full DOM, query selector APIs, Shadow DOM or Web Components;
 - ES modules or browser loading algorithms;
-- Canvas, SVG, image decoding or video;
+- Canvas, SVG or a browser-grade image/video stack;
 - full Flexbox/Grid/positioning/animation/filter behavior;
 - GPU compositing or pixel-compatible browser rendering.
 
+Host-optional async `XMLHttpRequest` GET V0, `localStorage` V0, packaged BMP
+images and `Audio` V0 exist, but they are not full browser APIs. Use them only
+within the capability matrix and manifest declarations.
 Before relying on a feature, check
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
 
@@ -260,6 +263,24 @@ Collect text resources before embedding a font pack:
   samples\apps\loose\weather.css `
   samples\apps\loose\weather.js
 ```
+
+Before release, run a responsive check across the device profiles you care
+about. This does not open a window and does not enable a full browser-grade
+responsive engine. It runs the same render-core pipeline once per target preset
+and writes `responsiveProfiles[]` into the report, including viewport, content
+height, horizontal overflow, scroll need and diagnostic counts:
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root samples\apps\packages\watch_weather `
+  --target round-300 `
+  --targets round-300,rect-320x240 `
+  --report build\watch_weather.responsive.report.json `
+  --build-dir build\Release
+```
+
+Single-target checks keep the previous behavior. `responsiveProfiles[]` is only
+emitted when `--targets` or `--all-targets` is passed explicitly.
 
 ## 10. Optional JerryScript Build
 

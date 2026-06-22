@@ -113,6 +113,32 @@ def list_target_presets() -> list[dict]:
     return presets
 
 
+def list_target_ids() -> list[str]:
+    ids = []
+    for preset in list_target_presets():
+        target_id = preset.get("id")
+        if isinstance(target_id, str) and target_id:
+            ids.append(target_id)
+    return ids
+
+
+def parse_targets_arg(value: str) -> list[str]:
+    targets = []
+    for item in value.split(","):
+        target = item.strip()
+        if target and target not in targets:
+            targets.append(target)
+    return targets
+
+
+def requested_targets(args: argparse.Namespace) -> list[str]:
+    if getattr(args, "all_targets", False):
+        targets = list_target_ids()
+    else:
+        targets = parse_targets_arg(getattr(args, "targets", "") or "")
+    return targets
+
+
 def list_app_templates() -> list[str]:
     directory = app_templates_dir()
     if not directory.is_dir():
@@ -191,21 +217,104 @@ def merge_pipeline_report(package_report_path: Path, pipeline_report: dict) -> N
     write_json_report(package_report_path, report)
 
 
+def merge_responsive_profiles(package_report_path: Path, profiles: list[dict]) -> None:
+    if not profiles:
+        return
+    report = load_json_if_exists(package_report_path)
+    if not report:
+        report = {
+            "format": "jellyframe.package.report",
+        }
+    report["responsiveProfiles"] = profiles
+    write_json_report(package_report_path, report)
+
+
 def remember_pipeline_report(args: argparse.Namespace, pipeline_report_path: Path) -> None:
     args._pipeline_report = load_json_if_exists(pipeline_report_path)
     merge_pipeline_report(args.report, args._pipeline_report)
 
 
+def diagnostic_counts(report: dict) -> tuple[int, int, int]:
+    summary = report.get("summary", {}) if isinstance(report, dict) else {}
+    errors = int(summary.get("error", 0) or 0)
+    warnings = int(summary.get("warning", 0) or 0)
+    infos = int(summary.get("info", 0) or 0)
+    return errors, warnings, infos
+
+
+def responsive_status(pipeline_report: dict) -> str:
+    errors, warnings, _ = diagnostic_counts(pipeline_report)
+    layout = pipeline_report.get("layout", {}) if isinstance(pipeline_report, dict) else {}
+    pipeline = pipeline_report.get("pipeline", {}) if isinstance(pipeline_report, dict) else {}
+    if errors > 0:
+        return "diagnostics-error"
+    if bool(layout.get("horizontalOverflow", False)):
+        return "horizontal-overflow"
+    if warnings > 0:
+        return "diagnostics-warning"
+    if bool(layout.get("verticalOverflow", False)):
+        return "scroll-needed"
+    if int(pipeline.get("framebufferBytes", 0) or 0) <= 0:
+        return "budget-warning"
+    return "fits"
+
+
+def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_report: dict) -> dict:
+    viewport = pipeline_report.get("viewport", {}) if isinstance(pipeline_report, dict) else {}
+    layout = pipeline_report.get("layout", {}) if isinstance(pipeline_report, dict) else {}
+    pipeline = pipeline_report.get("pipeline", {}) if isinstance(pipeline_report, dict) else {}
+    summary = pipeline_report.get("summary", {}) if isinstance(pipeline_report, dict) else {}
+    target_viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
+    shape = target_viewport.get("shape", "")
+    return {
+        "target": target,
+        "status": responsive_status(pipeline_report),
+        "viewport": {
+            "width": int(viewport.get("width", 0) or 0),
+            "height": int(viewport.get("height", 0) or 0),
+            "shape": shape if isinstance(shape, str) else "",
+        },
+        "layout": {
+            "contentHeight": int(layout.get("contentHeight", viewport.get("height", 0)) or 0),
+            "horizontalOverflow": bool(layout.get("horizontalOverflow", False)),
+            "verticalOverflow": bool(layout.get("verticalOverflow", False)),
+            "bounds": layout.get("bounds", {}) if isinstance(layout.get("bounds", {}), dict) else {},
+        },
+        "pipeline": {
+            "domNodes": int(pipeline.get("domNodes", 0) or 0),
+            "renderObjects": int(pipeline.get("renderObjects", 0) or 0),
+            "layoutBoxes": int(pipeline.get("layoutBoxes", 0) or 0),
+            "layers": int(pipeline.get("layers", 0) or 0),
+            "displayCommands": int(pipeline.get("displayCommands", 0) or 0),
+            "framebufferBytes": int(pipeline.get("framebufferBytes", 0) or 0),
+            "estimatedHeapBytes": int(pipeline.get("estimatedHeapBytes", 0) or 0),
+        },
+        "diagnostics": {
+            "total": int(summary.get("total", 0) or 0),
+            "info": int(summary.get("info", 0) or 0),
+            "warning": int(summary.get("warning", 0) or 0),
+            "error": int(summary.get("error", 0) or 0),
+        },
+    }
+
+
 def diagnostic_status_from_report(package_report_path: Path) -> tuple[int, int, int]:
     report = load_json_if_exists(package_report_path)
     pipeline = report.get("pipelineDiagnostics", {})
-    summary = pipeline.get("summary", {}) if isinstance(pipeline, dict) else {}
-    errors = int(summary.get("error", 0) or 0)
-    warnings = int(summary.get("warning", 0) or 0)
+    errors, warnings, infos = diagnostic_counts(pipeline)
     package_warnings = report.get("warnings", [])
     if isinstance(package_warnings, list):
         warnings += len(package_warnings)
-    infos = int(summary.get("info", 0) or 0)
+    responsive_profiles = report.get("responsiveProfiles", [])
+    if isinstance(responsive_profiles, list):
+        for profile in responsive_profiles:
+            if not isinstance(profile, dict):
+                continue
+            diagnostics = profile.get("diagnostics", {})
+            if isinstance(diagnostics, dict):
+                errors += int(diagnostics.get("error", 0) or 0)
+                warnings += int(diagnostics.get("warning", 0) or 0)
+                infos += int(diagnostics.get("info", 0) or 0)
     return errors, warnings, infos
 
 
@@ -219,14 +328,14 @@ def enforce_diagnostics_policy(args: argparse.Namespace) -> int:
     return 0
 
 
-def run_pipeline_check(args: argparse.Namespace) -> int:
+def run_pipeline_check(args: argparse.Namespace, target_override: str | None = None) -> tuple[int, dict]:
     pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
     ensure_tool(pseudo_browser)
     manifest_path = args.root / "jellyframe.app.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     entry = str(manifest.get("entry", "/index.html"))
     entry_path = args.root / Path(*entry.lstrip("/").split("/"))
-    target = getattr(args, "target", None)
+    target = target_override if target_override is not None else getattr(args, "target", None)
     target_config = effective_target_config(args.root, target) if target else {}
     viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
     width = int(viewport.get("width", 0) or 0)
@@ -249,8 +358,44 @@ def run_pipeline_check(args: argparse.Namespace) -> int:
         command.extend(["--diagnostics-json", str(diagnostics_json)])
         result = run_command(command)
         if result == 0:
-            remember_pipeline_report(args, diagnostics_json)
-        return result
+            return result, load_json_if_exists(diagnostics_json)
+        return result, {}
+
+
+def run_single_pipeline_check(args: argparse.Namespace) -> int:
+    result, pipeline_report = run_pipeline_check(args)
+    if result == 0:
+        args._pipeline_report = pipeline_report
+        merge_pipeline_report(args.report, pipeline_report)
+    return result
+
+
+def run_responsive_profile_checks(args: argparse.Namespace) -> int:
+    targets = requested_targets(args)
+    if not targets:
+        return run_single_pipeline_check(args)
+    profiles = []
+    for target in targets:
+        result, pipeline_report = run_pipeline_check(args, target)
+        if result != 0:
+            return result
+        target_config = effective_target_config(args.root, target)
+        profile = responsive_profile_from_pipeline(target, target_config, pipeline_report)
+        profiles.append(profile)
+        print(
+            "responsive "
+            f"{target}: {profile['status']} "
+            f"viewport={profile['viewport']['width']}x{profile['viewport']['height']} "
+            f"content={profile['layout']['contentHeight']} "
+            f"overflowX={profile['layout']['horizontalOverflow']} "
+            f"diagnostics={profile['diagnostics']['error']}/"
+            f"{profile['diagnostics']['warning']}/"
+            f"{profile['diagnostics']['info']}"
+        )
+    args._responsive_profiles = profiles
+    if profiles:
+        merge_responsive_profiles(args.report, profiles)
+    return 0
 
 
 def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> int:
@@ -258,7 +403,7 @@ def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> i
     if validate_result != 0 or getattr(args, "skip_check", False):
         return validate_result
     if include_pipeline:
-        pipeline_result = run_pipeline_check(args)
+        pipeline_result = run_responsive_profile_checks(args)
         if pipeline_result != 0:
             return pipeline_result
     if should_run_font_resource_check(args):
@@ -276,6 +421,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     if package_result != 0:
         return package_result
     merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
+    merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
     return enforce_diagnostics_policy(args)
 
 
@@ -311,11 +457,24 @@ def cmd_preview(args: argparse.Namespace) -> int:
 def resource_files_from_report(root: Path, report_path: Path) -> list[str]:
     report = json.loads(report_path.read_text(encoding="utf-8-sig"))
     files = []
+    text_other_suffixes = {
+        ".html",
+        ".htm",
+        ".json",
+        ".md",
+        ".svg",
+        ".txt",
+        ".xml",
+        ".jfcapture",
+    }
     for resource in report.get("resources", []):
-        if resource.get("kind") not in {"Stylesheet", "ClassicScript", "Other"}:
+        kind = resource.get("kind")
+        if kind not in {"Stylesheet", "ClassicScript", "Other"}:
             continue
         resource_path = resource.get("path", "")
         if not resource_path:
+            continue
+        if kind == "Other" and Path(resource_path).suffix.lower() not in text_other_suffixes:
             continue
         relative = resource_path[1:] if resource_path.startswith("/") else resource_path
         files.append(str(root / Path(*relative.split("/"))))
@@ -343,7 +502,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     if validate_result != 0:
         return validate_result
     if not getattr(args, "skip_check", False):
-        pipeline_result = run_pipeline_check(args)
+        pipeline_result = run_responsive_profile_checks(args)
         if pipeline_result != 0:
             return pipeline_result
     if should_run_font_resource_check(args):
@@ -542,6 +701,13 @@ def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:
                         help="Optional output file for used non-ASCII characters.")
 
 
+def add_responsive_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--targets",
+                        help="Comma-separated target preset ids for responsive profile validation.")
+    parser.add_argument("--all-targets", action="store_true",
+                        help="Run responsive profile validation for every target preset.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="JellyFrame developer CLI.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -556,6 +722,7 @@ def main() -> int:
     package.add_argument("--output-bundle", type=Path, help="Generated installable .jfapp bundle.")
     package.add_argument("--debug-dir", type=Path, help="Optional copied debug package directory.")
     add_font_preflight_args(package)
+    add_responsive_args(package)
     package.set_defaults(func=cmd_package)
 
     preview = subparsers.add_parser("preview", help="Render an app package through the Win32 shell capture path.")
@@ -567,6 +734,7 @@ def main() -> int:
     preview.add_argument("--width", type=int, default=0, help="Optional viewport width override.")
     preview.add_argument("--height", type=int, default=0, help="Optional viewport height override.")
     add_font_preflight_args(preview)
+    add_responsive_args(preview)
     preview.add_argument("--namespace", default="jellyframe_esp32s3", help=argparse.SUPPRESS)
     preview.add_argument("--include", default="jellyframe_esp32s3_resources.h", help=argparse.SUPPRESS)
     preview.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
@@ -576,6 +744,7 @@ def main() -> int:
     check = subparsers.add_parser("check", help="Validate package and run pipeline/font preflight.")
     add_common_package_args(check)
     add_font_preflight_args(check)
+    add_responsive_args(check)
     check.set_defaults(func=cmd_check)
 
     font = subparsers.add_parser("font", help="Collect package characters and optionally generate bitmap font packs.")
@@ -627,6 +796,7 @@ def main() -> int:
     install.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
     install.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
     add_font_preflight_args(install)
+    add_responsive_args(install)
     install.set_defaults(func=cmd_install)
 
     registry = subparsers.add_parser("registry", help="Manage a desktop installed-app registry mock.")

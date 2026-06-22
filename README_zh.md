@@ -11,6 +11,11 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 
 项目早期代号是 `WearWeb`；当前代码、target 和文档均使用 `JellyFrame`。
 
+> **1.0 前兼容策略：** JellyFrame 仍处于首个稳定版之前，也没有厂商锁定的兼容契约。
+> 在 1.0 正式版发布前，且没有真实厂商集成明确要求前，未文档化的私有 HTML/CSS/JS
+> 语法和调试捷径可以直接删除，而不是保留兼容补救。App 页面应停留在文档化的
+> Web 兼容子集内；JellyFrame 自有配置应放在 manifest、工具或宿主接口中。
+
 ## 亮点
 
 - 平台无关 C++ 核心，不依赖文件系统、网络或窗口系统。
@@ -103,6 +108,16 @@ python tools\jellyframe_cli.py package `
   --report build\my_calculator_report.json
 ```
 
+发布前可以显式跑多设备 profile 检查，确认同一个 package 在多个常见手表视口上是否仍然可用：
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root build\my_calculator `
+  --target round-300 `
+  --targets round-300,rect-320x240 `
+  --report build\my_calculator_responsive_report.json
+```
+
 第一次接触项目时，请继续读 [HOW_TO_START_zh.md](HOW_TO_START_zh.md)。
 
 ## 可选脚本构建
@@ -123,7 +138,8 @@ cmake --build build-script --config Release
 ```
 
 脚本壳支持 classic inline/local scripts、小型 DOM mutation API、event listeners、
-表单属性和宿主泵动 timers。ES modules、网络加载、浏览器存储和完整浏览器加载算法不属于嵌入式核心。
+表单属性、宿主泵动 timers、宿主可选 XHR V0 和极小 `localStorage` V0。ES modules、远程页面加载、
+完整浏览器存储和完整浏览器加载算法不属于嵌入式核心。
 
 ## 仓库结构
 

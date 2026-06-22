@@ -41,6 +41,10 @@ JellyFrame Engine 的重要变更记录在这里。
   并可通过 `--frame-event FRAME:kind[:x:y]` 注入 click、pointer 和系统状态事件。调试入口进一步扩展为
   `--frame-script PATH`，可从脚本统一设置帧数、视口、事件、逐帧输出目录和 contact-sheet 拼图输出。
 - 主要 native 命令行工具新增 `--help` / `-h` 快速帮助输出。
+- 添加 R1 responsive profile report：`jellyframe_cli.py check`/`preview`/`package`/`install`
+  可显式传 `--targets` 或 `--all-targets`，按多个 target preset 跑 render-core pseudo browser，并在
+  JSON report 写入 `responsiveProfiles[]`，包含 viewport、content height、layout bounds、横向/纵向
+  overflow、pipeline 计数和 diagnostics 摘要。单 target 路径保持旧 report 形状。
 - 添加可选数据服务的 manifest/profile policy 合成：`AppServiceManifestCapabilities`、
   `AppServiceHostProfile` 和 `app_service_policies_for_app(...)` 现在会在 runtime mock
   或 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。
@@ -58,8 +62,9 @@ JellyFrame Engine 的重要变更记录在这里。
   `<img src>` 在宿主提供 surface handle resolver 时可进入 display list，并由宿主 painter 绘制。
   真实资源加载和产品级 codec 仍由宿主/runtime 接入。
 - 添加 `AppImageSurfaceCache`，用于把 `<img src>`/图标 URL 映射到有界异步 image decode request、
-  completion、ready surface handle 和 release；Win32 browser debug 壳已接入 `app://icon` /
-  `app://photo` raw RGB565 fixture，可自动提交 mock decode 并在 completion 后 paint-dirty 重绘。
+  completion、ready surface handle 和 release；Win32 browser debug 壳已接入 `/debug/icon.raw`
+  和 `/debug/photo.raw` raw RGB565 fixture，可自动提交 mock decode 并在 completion 后
+  paint-dirty 重绘。
 - Win32 browser debug 壳可从 `.jfapp`/源码包资源加载无压缩 24/32-bit BMP 作为包内图片 V0，
   复用 image surface cache 和重绘路径。
 - `AppImageSurfaceCache` 新增通用 ready surface eviction，可按 surface 数量和 decoded bytes
@@ -148,6 +153,12 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 公开 samples、templates 和 script/runtime 测试现在使用 `/data/weather.json`、
+  `/debug/icon.raw`、`/audio/tone.wav` 这样的 package-local 标准路径，不再教 app
+  作者使用旧的 debug-only `app://...` fixture scheme。该私有 scheme 已删除；在 1.0
+  之前，JellyFrame 不为未纳入文档化 Web 子集的私有语法保留兼容 shim。
+- Package report 新增稳定的 `serviceIntent` 摘要，用于记录 manifest 请求的网络、存储、音频和
+  后台服务意图，但不暗示宿主已经授权。
 - Host service worker 现在可以按 `HostServiceJobKind` 弹出 request，避免 network、
   storage、image 和 media worker 误消费彼此的队列任务。
 - 根据 ESP32-S3 解码实验审计更新 HAL、宿主抽象、运行循环、app packaging 和路线图：

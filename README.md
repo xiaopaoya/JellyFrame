@@ -15,6 +15,14 @@ interaction.
 The project was developed under the early codename `WearWeb`; current code,
 targets and documentation use `JellyFrame`.
 
+> **Pre-1.0 compatibility policy:** JellyFrame is still before its first stable
+> release and has no vendor-locked compatibility contract. Until 1.0, and until
+> a real vendor integration explicitly requires otherwise, undocumented private
+> HTML/CSS/JS syntax and debug shortcuts may be removed instead of preserved.
+> App-authored pages should stay inside the documented Web-compatible subset;
+> JellyFrame-specific configuration belongs in the manifest, tools or host
+> interfaces.
+
 ## Highlights
 
 - Platform-neutral C++ core with no file-system, network or windowing
@@ -112,6 +120,17 @@ python tools\jellyframe_cli.py package `
   --report build\my_calculator_report.json
 ```
 
+Before release, explicitly run a multi-device profile check to see whether the
+same package remains usable on common watch viewports:
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root build\my_calculator `
+  --target round-300 `
+  --targets round-300,rect-320x240 `
+  --report build\my_calculator_responsive_report.json
+```
+
 For a full first-time walkthrough, read [HOW_TO_START.md](HOW_TO_START.md).
 
 ## Optional Scripting Build
@@ -132,9 +151,9 @@ cmake --build build-script --config Release
 ```
 
 The scripting shell supports classic inline/local scripts, small DOM mutation
-APIs, event listeners, form properties and host-pumped timers. ES modules,
-network loading, browser storage and full browser loading algorithms are outside
-the embedded core.
+APIs, event listeners, form properties, host-pumped timers, host-optional XHR V0
+and tiny `localStorage` V0. ES modules, remote page loading, full browser
+storage and full browser loading algorithms are outside the embedded core.
 
 ## Repository Map
 

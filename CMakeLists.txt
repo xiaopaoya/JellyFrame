@@ -80,9 +80,12 @@ endif()
 
 add_library(jellyframe_app_runtime
     src/app_runtime/app_font_set.cpp
+    src/app_runtime/app_frame_policy.cpp
     src/app_runtime/app_host.cpp
     src/app_runtime/app_lifecycle.cpp
+    src/app_runtime/app_service_worker.cpp
     src/app_runtime/app_services.cpp
+    src/app_runtime/app_storage_lifecycle_policy.cpp
     src/app_runtime/host_services.cpp
     src/app_runtime/system_events.cpp
     src/app_runtime/xml_http_request.cpp
@@ -160,7 +163,7 @@ if(JELLYFRAME_BUILD_EXAMPLES)
     endif()
     if(WIN32)
         add_jellyframe_tool(jellyframe_win32_browser tools/native/win32_browser.cpp)
-        target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_app_runtime gdi32 user32)
+        target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_app_runtime gdi32 user32 winmm)
         if(JELLYFRAME_BUILD_SCRIPTING)
             target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_script)
         endif()
@@ -176,6 +179,7 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    find_package(Python3 COMPONENTS Interpreter QUIET)
     set(JELLYFRAME_RENDER_CORE_TEST_SOURCES
         src/render_core/tests/tokenizer_tests.cpp
         src/render_core/tests/arena_tests.cpp
@@ -215,9 +219,12 @@ if(JELLYFRAME_BUILD_TESTS)
     add_test(NAME jellyframe_render_core_tests COMMAND jellyframe_render_core_tests)
 
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
+        src/app_runtime/tests/app_frame_policy_tests.cpp
         src/app_runtime/tests/app_host_tests.cpp
         src/app_runtime/tests/app_lifecycle_tests.cpp
+        src/app_runtime/tests/app_service_worker_tests.cpp
         src/app_runtime/tests/app_services_tests.cpp
+        src/app_runtime/tests/app_storage_lifecycle_policy_tests.cpp
         src/app_runtime/tests/host_services_tests.cpp
         src/app_runtime/tests/system_events_tests.cpp
         src/app_runtime/tests/xml_http_request_tests.cpp
@@ -234,6 +241,62 @@ if(JELLYFRAME_BUILD_TESTS)
     )
     target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_app_runtime)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
+
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME jellyframe_tool_package_preflight_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        if(JELLYFRAME_BUILD_EXAMPLES)
+            add_test(
+                NAME jellyframe_cli_check_audio_smoke_package
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        check
+                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_audio_smoke
+                        --target esp32s3-round-300
+                        --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_audio_smoke.report.json
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
+                NAME jellyframe_cli_check_service_status_package
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        check
+                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status
+                        --target esp32s3-round-300
+                        --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_service_status.report.json
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
+                NAME jellyframe_cli_check_watch_weather_responsive
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        check
+                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/watch_weather
+                        --target round-300
+                        --targets round-300,rect-320x240
+                        --report ${CMAKE_BINARY_DIR}/test_outputs/watch_weather.responsive.report.json
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        endif()
+    endif()
+
+    if(WIN32 AND JELLYFRAME_BUILD_EXAMPLES)
+        add_test(
+            NAME jellyframe_win32_service_status_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status/capture_system_events.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_service_status_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "service_activity network=18 audio=36 sensors=16 pause_audio=0 throttle_sensors=20")
+    endif()
 
     if(JELLYFRAME_BUILD_SCRIPTING)
         set(JELLYFRAME_SCRIPT_TEST_SOURCES

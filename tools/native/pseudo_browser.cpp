@@ -45,6 +45,14 @@ struct ImageFrameSinkContext {
     bool ok = false;
 };
 
+struct LayoutBounds {
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+    bool valid = false;
+};
+
 HostBudgets desktop_validation_budgets() {
     HostBudgets budgets;
     budgets.max_resource_bytes = kMaxInputBytes;
@@ -89,6 +97,26 @@ Color page_background_color(const Node& document, const StyleResolver& resolver)
         }
     }
     return Color{255, 255, 255, 255};
+}
+
+void accumulate_layout_bounds(const LayoutBox& box, LayoutBounds& bounds) {
+    const int left = box.rect.x;
+    const int top = box.rect.y;
+    const int right = box.rect.x + box.rect.width;
+    const int bottom = box.rect.y + box.rect.height;
+    if (!bounds.valid) {
+        bounds = LayoutBounds{left, top, right, bottom, true};
+    } else {
+        bounds.left = std::min(bounds.left, left);
+        bounds.top = std::min(bounds.top, top);
+        bounds.right = std::max(bounds.right, right);
+        bounds.bottom = std::max(bounds.bottom, bottom);
+    }
+    for (const auto& child : box.children) {
+        if (child) {
+            accumulate_layout_bounds(*child, bounds);
+        }
+    }
 }
 
 bool write_image_frame_sink(const HostFrameBufferView& frame,
@@ -166,6 +194,7 @@ std::string json_escape(const std::string& value) {
 void write_diagnostics_json(const std::string& path,
                             const BrowserOptions& options,
                             const PipelineStatistics& statistics,
+                            const LayoutBounds& layout_bounds,
                             const VectorDiagnosticSink& diagnostics) {
     if (path.empty()) {
         return;
@@ -198,6 +227,21 @@ void write_diagnostics_json(const std::string& path,
     output << "  \"output\": \"" << json_escape(options.output_path) << "\",\n";
     output << "  \"viewport\": {\"width\": " << options.viewport_width
            << ", \"height\": " << options.viewport_height << "},\n";
+    const int content_height = layout_bounds.valid
+        ? std::max(options.viewport_height, layout_bounds.bottom)
+        : options.viewport_height;
+    const bool horizontal_overflow = layout_bounds.valid &&
+        (layout_bounds.left < 0 || layout_bounds.right > options.viewport_width);
+    const bool vertical_overflow = content_height > options.viewport_height;
+    output << "  \"layout\": {\n";
+    output << "    \"contentHeight\": " << content_height << ",\n";
+    output << "    \"bounds\": {\"left\": " << (layout_bounds.valid ? layout_bounds.left : 0)
+           << ", \"top\": " << (layout_bounds.valid ? layout_bounds.top : 0)
+           << ", \"right\": " << (layout_bounds.valid ? layout_bounds.right : 0)
+           << ", \"bottom\": " << (layout_bounds.valid ? layout_bounds.bottom : 0) << "},\n";
+    output << "    \"horizontalOverflow\": " << (horizontal_overflow ? "true" : "false") << ",\n";
+    output << "    \"verticalOverflow\": " << (vertical_overflow ? "true" : "false") << "\n";
+    output << "  },\n";
     output << "  \"pipeline\": {\n";
     output << "    \"domNodes\": " << statistics.dom.node_count << ",\n";
     output << "    \"renderObjects\": " << statistics.render_objects << ",\n";
@@ -381,7 +425,9 @@ int main(int argc, char** argv) {
             std::cout << '\n';
         }
 
-        write_diagnostics_json(options.diagnostics_json_path, options, pipeline_statistics, diagnostics);
+        LayoutBounds layout_bounds;
+        accumulate_layout_bounds(*layout_tree, layout_bounds);
+        write_diagnostics_json(options.diagnostics_json_path, options, pipeline_statistics, layout_bounds, diagnostics);
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';
         return 1;

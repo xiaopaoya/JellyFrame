@@ -51,6 +51,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   The same path can now be driven by `--frame-script PATH`, including frame
   count, viewport, events, per-frame output and contact-sheet montage output.
 - Main native command-line tools now accept `--help` / `-h`.
+- Added the R1 responsive profile report: `jellyframe_cli.py check`/`preview`/
+  `package`/`install` can explicitly pass `--targets` or `--all-targets`, run
+  the render-core pseudo browser across multiple target presets and write
+  `responsiveProfiles[]` into JSON reports, including viewport, content height,
+  layout bounds, horizontal/vertical overflow, pipeline counts and diagnostic
+  summaries. Single-target commands keep the older report shape.
 - Added manifest/profile policy merging for optional data services:
   `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
   `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`
@@ -76,9 +82,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   work.
 - Added `AppImageSurfaceCache` to map `<img src>`/icon URLs to bounded async
   image-decode requests, completions, ready surface handles and release. The
-  Win32 browser debug shell now wires `app://icon` / `app://photo` raw RGB565
-  fixtures, automatically submits mock decodes and schedules paint-dirty rerender
-  after completion.
+  Win32 browser debug shell now wires `/debug/icon.raw` and `/debug/photo.raw`
+  raw RGB565 fixtures, automatically submits mock decodes and schedules
+  paint-dirty rerender after completion.
 - The Win32 browser debug shell can load uncompressed 24/32-bit BMP resources
   from `.jfapp`/source packages as the in-bundle image V0 path, reusing the image
   surface cache and repaint flow.
@@ -203,6 +209,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Public samples, templates and script/runtime tests now use package-local
+  standard paths such as `/data/weather.json`, `/debug/icon.raw` and
+  `/audio/tone.wav`. The old debug-only `app://...` fixture scheme was removed;
+  before 1.0, JellyFrame intentionally avoids compatibility shims for private
+  syntax that was never part of the documented Web subset.
+- Package reports now include a stable `serviceIntent` summary for requested
+  network, storage, audio and background-service manifest intent without
+  implying host authorization.
 - Host service workers can now pop requests by `HostServiceJobKind`, preventing
   network, storage, image and media workers from accidentally consuming each
   other's queued jobs.
