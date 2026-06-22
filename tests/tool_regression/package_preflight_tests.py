@@ -218,6 +218,41 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(statuses["MissingFace"], "unmatched-primary")
         self.assertEqual(usage["unmatchedPrimaryCount"], 1)
 
+    def test_font_axis_metadata_is_diagnostic_only(self):
+        warnings = package_app.collect_manifest_warnings({
+            "format": "jellyframe.app",
+            "formatVersion": 0,
+            "id": "org.example.fonts",
+            "version": {"name": "1.0.0", "code": 1},
+            "entry": "/index.html",
+            "runtime": {"minJellyFrame": "0.4.0", "script": "none"},
+            "viewport": {"designWidth": 300, "designHeight": 300},
+            "budgets": {"maxResourceBytes": 4096},
+            "fonts": [
+                {
+                    "id": "missing-axis",
+                    "source": "/fonts/missing.jffont",
+                    "profile": "tiny",
+                    "license": {"name": "Example", "source": "example.bdf"},
+                },
+                {
+                    "id": "bad-axis",
+                    "source": "/fonts/bad.jffont",
+                    "profile": "tiny",
+                    "license": {"name": "Example", "source": "example.bdf"},
+                    "sizes": [0, 12],
+                    "weights": [400, 1200],
+                },
+            ],
+            "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
+        })
+        codes = [warning["code"] for warning in warnings]
+        self.assertEqual(codes.count("font-axis-metadata-missing"), 2)
+        self.assertEqual(codes.count("font-axis-metadata-invalid"), 2)
+
+        self.assertEqual(package_app.normalized_int_list([8, True, "12", 16], 1), [8, 16])
+        self.assertEqual(package_app.normalized_int_list([400, 1200], 1, 1000), [400])
+
 
 if __name__ == "__main__":
     unittest.main()

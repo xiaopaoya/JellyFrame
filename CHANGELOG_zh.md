@@ -65,6 +65,9 @@ JellyFrame Engine 的重要变更记录在这里。
   `targetSupport`；没有 profile 数据时保持 `unknown`。
 - 内置 target preset 现在会声明保守的 `hostServices` 支持状态；如果 app 请求了所选 target 明确不支持的
   服务，package 会输出 `service-target-unsupported` warning。
+- Manifest font `sizes` 和 `weights` 元数据现在会产生稳定 diagnostics：缺失数组报告
+  `font-axis-metadata-missing`，非法数组报告 `font-axis-metadata-invalid`，规范化结果写入
+  `fontDiagnostics.manifestFonts[]`。
 - Win32 debug 壳现在通过与 port 相同的 host worker pump 边界驱动 mock image decode 和 debug
   network fetch，真实资源和回调仍只通过 UI completion 路径回到页面。
 - 添加 B1 图片解码 V0 helper：`ImageDecodePolicy`、`ImageDecodeMock` 与

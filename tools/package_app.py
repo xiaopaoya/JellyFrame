@@ -155,6 +155,21 @@ def int_field(mapping: dict, key: str, default: int = 0) -> int:
     return value if isinstance(value, int) else default
 
 
+def normalized_int_list(value, minimum: int, maximum: int | None = None) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    result = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, int):
+            continue
+        if item < minimum:
+            continue
+        if maximum is not None and item > maximum:
+            continue
+        result.append(item)
+    return result
+
+
 def bool_field(mapping: dict, key: str, default: bool = False) -> bool:
     value = mapping.get(key, default)
     return value if isinstance(value, bool) else default
@@ -540,6 +555,24 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
                         "level": "warning",
                         "code": "manifest-field-unknown",
                         "message": f"manifest field is not recognized by this JellyFrame toolchain: fonts[{index}].{key}",
+                        "source": "jellyframe.app.json",
+                    })
+            for field, minimum, maximum in (("sizes", 1, None), ("weights", 1, 1000)):
+                value = font.get(field)
+                if value is None:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "font-axis-metadata-missing",
+                        "message": f"manifest fonts[{index}].{field} is recommended for product font policy",
+                        "source": "jellyframe.app.json",
+                    })
+                    continue
+                normalized = normalized_int_list(value, minimum, maximum)
+                if not isinstance(value, list) or len(normalized) != len(value) or not normalized:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "font-axis-metadata-invalid",
+                        "message": f"manifest fonts[{index}].{field} should be a non-empty integer array",
                         "source": "jellyframe.app.json",
                     })
             license_info = font.get("license")
@@ -972,6 +1005,8 @@ def collect_font_diagnostics(manifest: dict,
             "profile": font.get("profile", "") if isinstance(font, dict) else "",
             "family": font.get("family", "") if isinstance(font, dict) else "",
             "license": license_info if isinstance(license_info, dict) else {},
+            "sizes": normalized_int_list(font.get("sizes", []) if isinstance(font, dict) else [], 1),
+            "weights": normalized_int_list(font.get("weights", []) if isinstance(font, dict) else [], 1, 1000),
             "packaged": source in resources_by_path,
             "status": "missing",
         }

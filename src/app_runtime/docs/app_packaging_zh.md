@@ -193,8 +193,10 @@ manifest 中的每个 font 条目可以写：
 `family` 会被 package diagnostics 用来把显式 CSS `font-family` declaration 与 manifest runtime
 font 匹配。`system-ui`、`sans-serif` 等 generic family 会报告为 generic fallback；未匹配的首选自定义
 family 会产生 `font-family-unmatched`。`sizes`、`weights` 目前仍是产品策略元数据；runtime 文本后端选择
-仍不实现完整浏览器 font-family cascade。`license.name` 和 `license.source` 是推荐字段；缺失时 pack/check
-会给出 `font-license-missing` 或 `font-license-incomplete`，便于发布前确认字体来源。
+仍不实现完整浏览器 font-family cascade。工具仍会检查这些数组是否存在且合法，发布前可报告
+`font-axis-metadata-missing` 或 `font-axis-metadata-invalid`。`license.name` 和 `license.source`
+是推荐字段；缺失时 pack/check 会给出 `font-license-missing` 或 `font-license-incomplete`，
+便于发布前确认字体来源。
 `budgets.maxAppFonts`、`budgets.maxAppFontBytes`、`budgets.maxAppFontGlyphs` 会限制可用
 runtime `.jffont` 数量、总字节和总 glyph 数；超过时会报告 `font-budget-exceeded`。这些检查只发生在工具层，
 不会增加 MCU 渲染热路径成本。

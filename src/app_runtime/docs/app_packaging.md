@@ -240,10 +240,12 @@ declarations against manifest runtime fonts. Generic families such as
 `system-ui` and `sans-serif` are reported as generic fallback, while an
 unmatched primary custom family produces `font-family-unmatched`. `sizes` and
 `weights` remain product-policy metadata for now; runtime text backend selection
-still does not implement full browser font-family cascade. `license.name` and
-`license.source` are recommended for redistributed font supplements.
-Missing metadata produces `font-license-missing` or
-`font-license-incomplete` diagnostics. `budgets.maxAppFonts`,
+still does not implement full browser font-family cascade. Tooling still checks
+that these arrays are present and valid, reporting `font-axis-metadata-missing`
+or `font-axis-metadata-invalid` before release. `license.name` and
+`license.source` are recommended for redistributed font supplements. Missing
+metadata produces `font-license-missing` or `font-license-incomplete`
+diagnostics. `budgets.maxAppFonts`,
 `budgets.maxAppFontBytes` and `budgets.maxAppFontGlyphs` cap usable runtime
 `.jffont` count, bytes and glyphs; exceeding them produces
 `font-budget-exceeded`. These checks run only in tooling and add no MCU render
