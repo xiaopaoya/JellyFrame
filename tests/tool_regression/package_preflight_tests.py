@@ -108,8 +108,25 @@ class PackagePreflightTests(unittest.TestCase):
             intent["requested"],
             {"networkFetch": True, "storageKv": True, "audioPlayback": True},
         )
+        self.assertEqual(
+            intent["targetSupport"],
+            {"networkFetch": "unknown", "storageKv": "unknown", "audioPlayback": "unknown"},
+        )
         self.assertTrue(intent["backgroundServices"]["audio"]["whileScreenOff"])
         self.assertTrue(any("remote HTML" in note for note in intent["policyNotes"]))
+
+        supported_intent = package_app.service_intent_report(manifest, {
+            "id": "round-300",
+            "hostServices": {
+                "networkFetch": True,
+                "storageKv": True,
+                "audioPlayback": False,
+            },
+        })
+        self.assertEqual(
+            supported_intent["targetSupport"],
+            {"networkFetch": "supported", "storageKv": "supported", "audioPlayback": "unsupported"},
+        )
 
     def test_responsive_profile_status_and_report_merge(self):
         pipeline_report = {

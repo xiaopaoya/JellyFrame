@@ -733,7 +733,9 @@ The package report records manifest service intent in `serviceIntent`. This
 stable summary includes requested `network.fetch`, `storage.kv` and
 `media.audio.mp3` capabilities, declared `backgroundServices` and policy notes
 that remind tools and authors that host profile/product policy remain
-authoritative. The desktop app-runtime mocks can validate the
+authoritative. If a target preset declares optional `hostServices`, the report
+also includes `targetSupport` as `supported`, `unsupported` or `unknown` for
+network fetch, app-private KV and audio playback. The desktop app-runtime mocks can validate the
 request/completion/handle contract, and `app_service_policies_for_app(...)`
 combines those requests with host/profile policy. No real network or filesystem
 I/O is performed by the core.

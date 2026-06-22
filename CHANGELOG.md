@@ -79,6 +79,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added a static-table app host service worker group pump so cooperative MCU
   loops can pump network, storage and audio workers with per-service budgets
   without dynamic allocation or cross-service request consumption.
+- Package `serviceIntent` reports now include `targetSupport` for optional
+  host services when a target preset declares `hostServices`; absent profile
+  data remains `unknown`.
 - Added the B1 image-decode V0 helper: `ImageDecodePolicy`, `ImageDecodeMock`
   and `AppDecodedSurfaceRecord` define platform-neutral raw-surface fixtures,
   `Surface` handle lifetime, width/height/decoded-byte/pending budgets and

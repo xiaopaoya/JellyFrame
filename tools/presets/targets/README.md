@@ -21,3 +21,19 @@ Font budgets (`maxAppFonts`, `maxAppFontBytes`, `maxAppFontGlyphs`) are tooling
 limits for installable `.jffont` supplements. They should reflect flash/storage
 and install-policy expectations, not the system firmware font that every app
 already shares.
+
+Optional host services may be described with `hostServices`:
+
+```json
+{
+  "hostServices": {
+    "networkFetch": true,
+    "storageKv": true,
+    "audioPlayback": false
+  }
+}
+```
+
+This feeds package-report `serviceIntent.targetSupport` as
+`supported`/`unsupported`/`unknown`. It is a developer compatibility signal, not
+an app permission grant.

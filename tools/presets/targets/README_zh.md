@@ -18,3 +18,18 @@ height、横向溢出、是否需要滚动以及 diagnostics 计数，帮助 app
 字体预算字段（`maxAppFonts`、`maxAppFontBytes`、`maxAppFontGlyphs`）是 installable
 `.jffont` 补充包的工具限制。它们应反映 flash/storage 和安装策略预期，而不是每个 app 都共享的
 系统固件字体。
+
+可选宿主服务可以用 `hostServices` 描述：
+
+```json
+{
+  "hostServices": {
+    "networkFetch": true,
+    "storageKv": true,
+    "audioPlayback": false
+  }
+}
+```
+
+这会进入 package report 的 `serviceIntent.targetSupport`，取值为
+`supported` / `unsupported` / `unknown`。它只是开发期兼容性信号，不是 app 权限授予。

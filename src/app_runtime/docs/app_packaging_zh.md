@@ -631,9 +631,11 @@ python tools/jellyframe_cli.py font `
 
 package report 会在 `serviceIntent` 中记录 manifest service intent。这个稳定摘要包含
 `network.fetch`、`storage.kv`、`media.audio.mp3` 请求、`backgroundServices` 声明，以及提醒
-工具和作者“最终授权仍由 host profile/product policy 决定”的 policy notes。桌面 app-runtime mock
-可以验证 request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这些请求与
-host/profile 策略合成。核心不会执行真实网络或文件系统 I/O。
+工具和作者“最终授权仍由 host profile/product policy 决定”的 policy notes。如果 target preset 声明了
+可选 `hostServices`，report 还会用 `targetSupport` 按 `supported`、`unsupported` 或 `unknown`
+报告 network fetch、app 私有 KV 和 audio playback 的目标支持状态。桌面 app-runtime mock 可以验证
+request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这些请求与 host/profile
+策略合成。核心不会执行真实网络或文件系统 I/O。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、local/remote reference 诊断、package-resource

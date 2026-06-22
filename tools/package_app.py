@@ -394,12 +394,26 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
         background_services = parse_background_service_policy({})
 
     target_id = target_config.get("id", "")
+    host_services = target_config.get("hostServices", {})
+    if not isinstance(host_services, dict):
+        host_services = {}
+
+    def support_state(key: str) -> str:
+        if key not in host_services:
+            return "unknown"
+        return "supported" if bool(host_services.get(key)) else "unsupported"
+
     return {
         "target": target_id if isinstance(target_id, str) else "",
         "requested": {
             "networkFetch": bool(manifest.get("networkAllowed")),
             "storageKv": bool(manifest.get("storageKvAllowed")),
             "audioPlayback": bool(manifest.get("audioPlaybackAllowed")),
+        },
+        "targetSupport": {
+            "networkFetch": support_state("networkFetch"),
+            "storageKv": support_state("storageKv"),
+            "audioPlayback": support_state("audioPlayback"),
         },
         "permissions": list(permissions),
         "capabilities": list(capabilities),
