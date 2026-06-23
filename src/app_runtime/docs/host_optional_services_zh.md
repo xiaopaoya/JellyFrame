@@ -14,12 +14,14 @@
 `src/app_runtime/app_lifecycle.h` / `src/app_runtime/app_lifecycle.cpp` 提供第一版
 app 实例生命周期 helper。它只负责生成 `app_instance_id`、记录 foreground/suspended 状态、
 在 app 切换、退出或 crash recovery 时取消旧 request、丢弃旧 completion、释放旧 host handles，并在每帧消费
-completion 时过滤 stale instance。它不拥有 DOM、JS runtime、framebuffer 或平台线程。
+completion 时过滤 stale instance；同时会记录稳定 teardown reason。它不拥有 DOM、JS runtime、
+framebuffer 或平台线程。
 
 `src/app_runtime/app_host.h` / `src/app_runtime/app_host.cpp` 提供更高一层的
 `AppRuntimeHost`：把 lifecycle controller、request queue、completion queue 和 host handle
 table 放进同一个有界容器，并提供“当前 app 提交 job / 分配 handle / 每帧 pump completion”的固定入口。
-它还提供 `crash_current()`，用于宿主捕获 app 加载或运行错误后执行同一套资源释放规则。
+它还提供 `terminate_current(reason)` / `crash_current()`，用于宿主在用户关闭、watchdog 中断、
+app 加载失败或运行错误后执行同一套资源释放规则。
 它仍然不执行网络、文件、解码或 flash I/O；真实工作由桌面壳、RTOS worker 或 port 层完成。
 
 `src/app_runtime/app_service_worker.h` / `src/app_runtime/app_service_worker.cpp`
@@ -128,7 +130,9 @@ Win32 参考壳的 A4 行为：
 - package loader、JerryScript runtime、timer pump、输入派发和 completion pump 都绑定当前 active
   `app_instance_id`。
 - 旧实例或非 foreground 实例不会接收输入，也不会泵动脚本 timer。
-- app rebuild/load 失败时，壳调用 `AppRuntimeHost::crash_current()` 释放资源，然后回到 system shell。
+- app rebuild/load 失败时，壳释放资源并回到 system shell。新代码优先使用
+  `terminate_current(AppTeardownReason::LoadFailure)` 保留精确原因；`crash_current()` 仍保留为
+  runtime error 的便捷入口。
 
 suspend/resume 策略：
 
@@ -142,8 +146,11 @@ suspend/resume 策略：
   resume 后，但旧实例 completion 绝不能修改后续新 app。
 - resume 后，宿主应在第一帧可交互前调度 repaint；如果产品需要确定性状态，可重新注入 network/visibility
   这类小型状态快照。
-- `exit_current()` / `crash_current()` 仍是 teardown 边界：取消旧 request、丢弃 completion、释放 handle，
-  并清理 app-local resource。
+- `exit_current()` / `terminate_current(reason)` / `crash_current()` 仍是 teardown 边界：取消旧 request、
+  丢弃 completion、释放 handle，并清理 app-local resource。稳定 reason 名称包括
+  `normal-exit`、`app-switch`、`user-kill`、`runtime-error`、`script-watchdog`、
+  `budget-exceeded`、`load-failure` 和 `system-policy`；其中 `runtime-error`、
+  `script-watchdog`、`budget-exceeded` 和 `load-failure` 会被归为 crash-like。
 
 ## Worker Pump Helper
 

@@ -21,6 +21,18 @@ enum class AppLifecycleState {
     Suspended,
 };
 
+enum class AppTeardownReason {
+    None,
+    NormalExit,
+    AppSwitch,
+    UserKill,
+    RuntimeError,
+    ScriptWatchdog,
+    BudgetExceeded,
+    LoadFailure,
+    SystemPolicy,
+};
+
 struct AppInstance {
     std::uint32_t id = 0;
     std::string app_id;
@@ -39,6 +51,7 @@ struct AppTeardownResult {
     std::size_t released_handles = 0;
     std::size_t released_font_resources = 0;
     bool crashed = false;
+    AppTeardownReason reason = AppTeardownReason::None;
 };
 
 struct AppCompletionPumpResult {
@@ -67,6 +80,10 @@ public:
     AppTeardownResult exit_current(HostServiceRequestQueue* requests = nullptr,
                                    HostServiceCompletionQueue* completions = nullptr,
                                    HostHandleTable* handles = nullptr);
+    AppTeardownResult terminate_current(AppTeardownReason reason,
+                                        HostServiceRequestQueue* requests = nullptr,
+                                        HostServiceCompletionQueue* completions = nullptr,
+                                        HostHandleTable* handles = nullptr);
 
     bool suspend_current();
     bool resume_current();
@@ -91,5 +108,7 @@ private:
 
 const char* app_role_name(AppRole role);
 const char* app_lifecycle_state_name(AppLifecycleState state);
+const char* app_teardown_reason_name(AppTeardownReason reason);
+bool app_teardown_reason_is_crash(AppTeardownReason reason);
 
 } // namespace jellyframe

@@ -29,15 +29,17 @@ AppInstance AppRuntimeHost::launch(std::string app_id, AppRole role) {
 }
 
 AppTeardownResult AppRuntimeHost::exit_current() {
-    AppTeardownResult result = lifecycle_.exit_current(&requests_, &completions_, &handles_);
+    return terminate_current(AppTeardownReason::NormalExit);
+}
+
+AppTeardownResult AppRuntimeHost::terminate_current(AppTeardownReason reason) {
+    AppTeardownResult result = lifecycle_.terminate_current(reason, &requests_, &completions_, &handles_);
     result.released_font_resources = fonts_.clear_app_instance(result.app_instance_id);
     return result;
 }
 
 AppTeardownResult AppRuntimeHost::crash_current() {
-    AppTeardownResult result = exit_current();
-    result.crashed = result.app_instance_id != 0;
-    return result;
+    return terminate_current(AppTeardownReason::RuntimeError);
 }
 
 bool AppRuntimeHost::suspend_current() {

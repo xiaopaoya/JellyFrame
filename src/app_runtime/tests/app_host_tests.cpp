@@ -196,6 +196,7 @@ void crash_current_tears_down_active_instance_state() {
 
     const AppTeardownResult result = host.crash_current();
     assert(result.crashed);
+    assert(result.reason == AppTeardownReason::RuntimeError);
     assert(result.app_instance_id == app.id);
     assert(result.cancelled_requests == 1);
     assert(result.discarded_completions == 1);
@@ -206,6 +207,40 @@ void crash_current_tears_down_active_instance_state() {
     assert(host.completions().empty());
     assert(host.handles().active_count() == 0);
     assert(host.fonts().empty());
+}
+
+void terminate_current_supports_watchdog_and_user_kill_reasons() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.loop", AppRole::App);
+    const auto request = host.submit_current(HostServiceJobKind::NetworkFetch);
+    assert(request.accepted);
+    const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
+    assert(handle != 0);
+    assert(host.push_completion(HostServiceCompletion{request.job_id,
+                                                      HostServiceJobKind::NetworkFetch,
+                                                      HostServiceStatus::Completed,
+                                                      app.id,
+                                                      handle,
+                                                      0,
+                                                      64}));
+
+    const AppTeardownResult watchdog = host.terminate_current(AppTeardownReason::ScriptWatchdog);
+    assert(watchdog.app_instance_id == app.id);
+    assert(watchdog.reason == AppTeardownReason::ScriptWatchdog);
+    assert(watchdog.crashed);
+    assert(watchdog.cancelled_requests == 1);
+    assert(watchdog.discarded_completions == 1);
+    assert(watchdog.released_handles == 1);
+    assert(host.current_app_instance_id() == 0);
+    assert(host.requests().empty());
+    assert(host.completions().empty());
+    assert(host.handles().active_count() == 0);
+
+    const AppInstance user_app = host.launch("org.example.user-close", AppRole::App);
+    const AppTeardownResult user_kill = host.terminate_current(AppTeardownReason::UserKill);
+    assert(user_kill.app_instance_id == user_app.id);
+    assert(user_kill.reason == AppTeardownReason::UserKill);
+    assert(!user_kill.crashed);
 }
 
 void frame_pump_limits_completions_and_filters_stale_instances() {
@@ -323,6 +358,7 @@ int main() {
     app_font_set_uses_system_font_before_app_supplement();
     app_font_set_can_attach_borrowed_jffont_view();
     crash_current_tears_down_active_instance_state();
+    terminate_current_supports_watchdog_and_user_kill_reasons();
     frame_pump_limits_completions_and_filters_stale_instances();
     frame_scratch_pump_reuses_completion_storage();
     options_follow_host_capabilities();

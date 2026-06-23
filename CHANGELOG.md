@@ -13,6 +13,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   against a JerryScript library built with `JERRY_VM_HALT=ON`, runaway evals,
   timers, rAF and event callbacks are interrupted with a stable
   `script execution budget exceeded` exception.
+- Added stable app teardown reasons and `AppRuntimeHost::terminate_current(...)`
+  so hosts can distinguish normal exit, app switch, user kill, runtime error,
+  script watchdog, budget exceeded, load failure and system policy recovery
+  while reusing the same bounded request/completion/handle/font cleanup path.
 - Added a low-cost CSS `background: linear-gradient(...)` paint subset. Two
   color vertical gradients now flow from style resolution into the layer display
   list and software rasterizer, while unsupported angles/stops keep earlier

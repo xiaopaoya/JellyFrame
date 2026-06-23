@@ -74,6 +74,8 @@ void exit_current_cleans_only_active_instance() {
 
     const AppTeardownResult result = lifecycle.exit_current(&requests, &completions, &handles);
     assert(result.app_instance_id == active.id);
+    assert(result.reason == AppTeardownReason::NormalExit);
+    assert(!result.crashed);
     assert(result.cancelled_requests == 1);
     assert(result.discarded_completions == 1);
     assert(result.released_handles == 1);
@@ -82,6 +84,35 @@ void exit_current_cleans_only_active_instance() {
     assert(completions.size() == 1);
     assert(handles.lookup(active_handle) == nullptr);
     assert(handles.lookup(other_handle) != nullptr);
+}
+
+void terminate_current_reports_stable_reasons() {
+    AppLifecycleController lifecycle;
+    HostServiceRequestQueue requests(2);
+    HostServiceCompletionQueue completions(2);
+    HostHandleTable handles(2, 1024);
+
+    const AppInstance script_app = lifecycle.launch("org.example.loop", AppRole::App);
+    assert(requests.submit(HostServiceJobKind::NetworkFetch, script_app.id).accepted);
+    const AppTeardownResult script_result =
+        lifecycle.terminate_current(AppTeardownReason::ScriptWatchdog, &requests, &completions, &handles);
+    assert(script_result.app_instance_id == script_app.id);
+    assert(script_result.reason == AppTeardownReason::ScriptWatchdog);
+    assert(script_result.crashed);
+    assert(script_result.cancelled_requests == 1);
+    assert(app_teardown_reason_name(script_result.reason) == std::string("script-watchdog"));
+
+    lifecycle.launch("org.example.user", AppRole::App);
+    const AppTeardownResult user_result =
+        lifecycle.terminate_current(AppTeardownReason::UserKill, &requests, &completions, &handles);
+    assert(user_result.reason == AppTeardownReason::UserKill);
+    assert(!user_result.crashed);
+    assert(app_teardown_reason_name(user_result.reason) == std::string("user-kill"));
+
+    assert(app_teardown_reason_is_crash(AppTeardownReason::RuntimeError));
+    assert(app_teardown_reason_is_crash(AppTeardownReason::BudgetExceeded));
+    assert(app_teardown_reason_is_crash(AppTeardownReason::LoadFailure));
+    assert(!app_teardown_reason_is_crash(AppTeardownReason::SystemPolicy));
 }
 
 void completion_pump_accepts_current_and_releases_stale_handles() {
@@ -162,6 +193,7 @@ int main() {
     launch_assigns_foreground_instances();
     launch_tears_down_previous_instance_resources();
     exit_current_cleans_only_active_instance();
+    terminate_current_reports_stable_reasons();
     completion_pump_accepts_current_and_releases_stale_handles();
     stale_completion_cannot_release_current_instance_handle();
     suspend_resume_are_explicit_state_transitions();

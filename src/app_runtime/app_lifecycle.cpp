@@ -12,7 +12,7 @@ AppInstance AppLifecycleController::launch(std::string app_id,
                                            HostServiceRequestQueue* requests,
                                            HostServiceCompletionQueue* completions,
                                            HostHandleTable* handles) {
-    exit_current(requests, completions, handles);
+    terminate_current(AppTeardownReason::AppSwitch, requests, completions, handles);
     const std::uint32_t instance_id = next_instance_id_;
     next_instance_id_ = next_nonzero_instance_id(next_instance_id_);
     current_ = AppInstance{instance_id, std::move(app_id), role, AppLifecycleState::Foreground};
@@ -22,13 +22,22 @@ AppInstance AppLifecycleController::launch(std::string app_id,
 AppTeardownResult AppLifecycleController::exit_current(HostServiceRequestQueue* requests,
                                                        HostServiceCompletionQueue* completions,
                                                        HostHandleTable* handles) {
+    return terminate_current(AppTeardownReason::NormalExit, requests, completions, handles);
+}
+
+AppTeardownResult AppLifecycleController::terminate_current(AppTeardownReason reason,
+                                                            HostServiceRequestQueue* requests,
+                                                            HostServiceCompletionQueue* completions,
+                                                            HostHandleTable* handles) {
     AppTeardownResult result;
+    result.reason = reason;
     if (!current_.active()) {
         current_ = {};
         return result;
     }
 
     result.app_instance_id = current_.id;
+    result.crashed = app_teardown_reason_is_crash(reason);
     if (requests != nullptr) {
         result.cancelled_requests = requests->cancel_app_instance(current_.id);
     }
@@ -121,6 +130,47 @@ const char* app_lifecycle_state_name(AppLifecycleState state) {
         return "suspended";
     }
     return "empty";
+}
+
+const char* app_teardown_reason_name(AppTeardownReason reason) {
+    switch (reason) {
+    case AppTeardownReason::None:
+        return "none";
+    case AppTeardownReason::NormalExit:
+        return "normal-exit";
+    case AppTeardownReason::AppSwitch:
+        return "app-switch";
+    case AppTeardownReason::UserKill:
+        return "user-kill";
+    case AppTeardownReason::RuntimeError:
+        return "runtime-error";
+    case AppTeardownReason::ScriptWatchdog:
+        return "script-watchdog";
+    case AppTeardownReason::BudgetExceeded:
+        return "budget-exceeded";
+    case AppTeardownReason::LoadFailure:
+        return "load-failure";
+    case AppTeardownReason::SystemPolicy:
+        return "system-policy";
+    }
+    return "none";
+}
+
+bool app_teardown_reason_is_crash(AppTeardownReason reason) {
+    switch (reason) {
+    case AppTeardownReason::RuntimeError:
+    case AppTeardownReason::ScriptWatchdog:
+    case AppTeardownReason::BudgetExceeded:
+    case AppTeardownReason::LoadFailure:
+        return true;
+    case AppTeardownReason::None:
+    case AppTeardownReason::NormalExit:
+    case AppTeardownReason::AppSwitch:
+    case AppTeardownReason::UserKill:
+    case AppTeardownReason::SystemPolicy:
+        return false;
+    }
+    return false;
 }
 
 } // namespace jellyframe

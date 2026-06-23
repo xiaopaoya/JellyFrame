@@ -2930,7 +2930,7 @@ private:
         try {
             if (!active_app_id_.empty() && active_app_id_ == app_id) {
                 reset_image_services();
-                app_runtime_.exit_current();
+                app_runtime_.terminate_current(AppTeardownReason::UserKill);
                 configure_system_shell("Cannot delete the active app; returned to shell first.");
             }
             const auto removed = jellyframe_example::remove_bundle_from_registry(options_.registry_store_path, app_id);
@@ -2964,10 +2964,11 @@ private:
         std::cerr << "rebuild failed: " << error.what() << '\n';
         if (!options_.registry_store_path.empty() && !system_shell_mode_) {
             reset_image_services();
-            const AppTeardownResult teardown = app_runtime_.crash_current();
+            const AppTeardownResult teardown = app_runtime_.terminate_current(AppTeardownReason::LoadFailure);
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
             configure_system_shell(
-                "Recovered from " + crashed_app + " after an error; released instance " +
+                "Recovered from " + crashed_app + " after " +
+                app_teardown_reason_name(teardown.reason) + "; released instance " +
                 std::to_string(teardown.app_instance_id) + ".");
             try {
                 rebuild();

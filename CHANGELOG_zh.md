@@ -12,6 +12,9 @@ JellyFrame Engine 的重要变更记录在这里。
   script execution-check 预算；当链接的 JerryScript 使用 `JERRY_VM_HALT=ON` 构建时，
   失控的 eval、timer、rAF 和事件 callback 会被中断，并给出稳定的
   `script execution budget exceeded` 异常。
+- 添加稳定 app teardown reason 和 `AppRuntimeHost::terminate_current(...)`，宿主现在可区分
+  normal exit、app switch、user kill、runtime error、script watchdog、budget exceeded、
+  load failure 和 system policy recovery，同时复用同一套有界 request/completion/handle/font 清理路径。
 - 添加低成本 CSS `background: linear-gradient(...)` 绘制子集。两色垂直渐变现在会从
   style resolution 进入 layer display list 和软件栅格器；不支持的角度或 stop 不会覆盖
   之前的纯色 fallback。

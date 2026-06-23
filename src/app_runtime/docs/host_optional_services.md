@@ -18,18 +18,19 @@ create threads, perform I/O or own platform resources.
 `src/app_runtime/app_lifecycle.h` / `src/app_runtime/app_lifecycle.cpp` provide
 the first app-instance lifecycle helper. It only assigns `app_instance_id`,
 tracks foreground/suspended state, cancels old requests, discards old
-completions, releases old host handles on app switch, exit or crash recovery, and filters stale
-completions at frame boundaries. It does not own DOM, a JS runtime, framebuffers
-or platform threads.
+completions, releases old host handles on app switch, exit or crash recovery,
+records a stable teardown reason and filters stale completions at frame
+boundaries. It does not own DOM, a JS runtime, framebuffers or platform threads.
 
 `src/app_runtime/app_host.h` / `src/app_runtime/app_host.cpp` provide the
 higher-level `AppRuntimeHost`: a bounded state container that keeps the lifecycle
 controller, request queue, completion queue and host handle table together. It
 offers fixed entry points for submitting jobs from the current app, allocating
 current-app handles and pumping frame completions. It also exposes
-`crash_current()` so hosts can apply the same resource-release rule after app
-load or runtime failures. It still does not perform network, file, decode or
-flash I/O; real work belongs to desktop shells, RTOS workers or board ports.
+`terminate_current(reason)` / `crash_current()` so hosts can apply the same
+resource-release rule after user kills, watchdog interrupts, app load failures
+or runtime failures. It still does not perform network, file, decode or flash
+I/O; real work belongs to desktop shells, RTOS workers or board ports.
 
 `src/app_runtime/app_service_worker.h` / `src/app_runtime/app_service_worker.cpp`
 provide a tiny platform-neutral worker pump. `pump_app_host_service_worker(...)`
@@ -156,7 +157,8 @@ The Win32 reference shell follows the A4 rule set:
   and completion pumping are bound to the active `app_instance_id`;
 - stale or non-foreground instances do not receive input or script timer pumps;
 - app rebuild/load failures call `AppRuntimeHost::crash_current()` and return to
-  the system shell.
+  the system shell. New code should prefer `terminate_current(AppTeardownReason::LoadFailure)`
+  when it can preserve the precise reason.
 
 Suspend/resume policy:
 
@@ -176,8 +178,12 @@ Suspend/resume policy:
 - On resume, schedule a repaint before the first interactive frame and re-emit
   small state snapshots such as network and visibility when product policy needs
   deterministic app state.
-- `exit_current()` / `crash_current()` remain teardown boundaries: cancel old
-  requests, discard completions, release handles and clear app-local resources.
+- `exit_current()` / `terminate_current(reason)` / `crash_current()` remain
+  teardown boundaries: cancel old requests, discard completions, release handles
+  and clear app-local resources. Stable reason names include `normal-exit`,
+  `app-switch`, `user-kill`, `runtime-error`, `script-watchdog`,
+  `budget-exceeded`, `load-failure` and `system-policy`; the crash-like reasons
+  are `runtime-error`, `script-watchdog`, `budget-exceeded` and `load-failure`.
 
 ## Worker Pump Helper
 
