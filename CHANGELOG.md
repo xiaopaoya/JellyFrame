@@ -243,6 +243,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added ESP32-S3 N16R8 benchmark defaults and a 16 MB partition table, and
   recorded the 2026-06-19 real-chip baseline: 16 MB flash, 8 MB octal PSRAM and
   a passing 300x300 / 40 cards / 20 iterations full pipeline.
+- Added an optional ESP32-S3 Waveshare 1.47-inch bring-up profile for
+  `ESP32-S3-Touch-LCD-1.47`: Kconfig-selectable JD9853 SPI LCD initialization,
+  AXS5106L touch probing, packed RGB565 dirty-rectangle flush and a 172x320
+  timer resource fixture. The profile is disabled by default and remains a
+  validation adapter, not a product backend.
 
 ### Changed
 
@@ -292,6 +297,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   the selected package in the Win32 browser shell.
 - Removed the loose `watch_calculator` fixture to avoid shipping an app that was
   intentionally close to a proprietary watch calculator design.
+- ESP32-S3 resource bundle generation now runs as a build dependency instead of
+  configure-time process execution, so edited HTML/CSS/JS/manifest resources
+  can regenerate without forcing a full CMake reconfigure.
+- Split `SoftwareCompositor` constructors to keep ESP-IDF C++ toolchains away
+  from ambiguous/default aggregate option parameters while preserving the image
+  painter path.
 
 ## 0.3.0-dev - 2026-06-18
 

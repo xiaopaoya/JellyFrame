@@ -1,0 +1,44 @@
+body {
+  margin: 0;
+  padding: 0;
+  background: #f8fafc;
+  color: #111827;
+}
+
+.timer-shell {
+  display: block;
+  width: 172px;
+  height: 320px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.timer-face {
+  display: block;
+  margin: 32px 0 0 0;
+  padding: 18px;
+  width: 108px;
+  background: #ffffff;
+  border: 2px solid #111827;
+  border-radius: 8px;
+}
+
+.timer-label {
+  display: block;
+  margin: 0 0 18px 0;
+  color: #475569;
+}
+
+#time {
+  display: block;
+  margin: 0 0 18px 0;
+  color: #111827;
+}
+
+.state {
+  display: block;
+  padding: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #1e3a8a;
+}

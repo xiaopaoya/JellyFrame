@@ -19,6 +19,11 @@ shape described in `docs/embedded_hal_api.md`.
   presentation.
 - Prints timing and heap watermarks over the serial monitor.
 - Provides a thin RGB565 panel flush hook in `main/jellyframe_esp32s3_hal.*`.
+- Provides an optional Waveshare ESP32-S3-Touch-LCD-1.47 board adapter for the
+  172x320 JD9853 LCD and AXS5106L touch controller. It is disabled by default
+  and should be enabled only for physical-board bring-up. The adapter is a
+  validation profile, not yet a product backend: touch is still a probe task
+  and final input routing should go through the normal board input queue.
 
 JerryScript is intentionally not part of this first bring-up. Add it after the
 core pipeline and framebuffer path are stable on the board.
@@ -47,9 +52,15 @@ Useful `menuconfig` entries:
 - `JellyFrame ESP32-S3 benchmark -> Viewport width`
 - `JellyFrame ESP32-S3 benchmark -> Viewport height`
 - `JellyFrame ESP32-S3 benchmark -> Benchmark RGB565 framebuffer presentation`
+- `JellyFrame ESP32-S3 board support -> Enable physical board display/touch drivers`
+- `JellyFrame ESP32-S3 board support -> Waveshare ESP32-S3-Touch-LCD-1.47`
 
 The QEMU/bring-up defaults are `300x300`, `40` cards and `20` iterations. This
 configuration expects PSRAM for the framebuffer and full pipeline benchmark.
+The checked-in `sdkconfig.ws147_bringup.defaults` profile targets the Waveshare
+1.47 board with a `172x320` viewport, 16 MB flash layout and octal PSRAM.
+It expects ESP-IDF 5.x APIs, including the new `i2c_master` driver used by
+ESP-IDF 5.3.x.
 
 ## Flash Layout
 
@@ -194,7 +205,7 @@ real timing source.
 
 P2 resource loading is implemented in `main/jellyframe_esp32s3_resources.*`.
 The current bring-up stores source assets under `resources/app/` and generates
-a compile-time C++ table during ESP-IDF configure using the top-level
+a compile-time C++ table during the ESP-IDF build using the top-level
 `tools/package_app.py` packer.
 
 The smoke-test bundle contains:
@@ -202,6 +213,8 @@ The smoke-test bundle contains:
 - `/p2_smoke.html`
 - `/styles/benchmark.css`
 - `/scripts/benchmark.js`
+- `/timer.html`
+- `/styles/timer.css`
 
 The loader resolves relative URLs against the host-provided base URL, rejects
 non-local URLs, enforces `HostBudgets::max_resource_bytes` on every load, and
@@ -215,6 +228,12 @@ To replace the smoke-test resources, edit files under `resources/app/` and its
 not be committed.
 
 ## Display Hook
+
+The optional WS147 board adapter allocates its packed RGB565 DMA line buffer
+only when the physical board profile is initialized, then releases it from
+`release_board_runtime()`. Keep this pattern for new boards: internal/DMA RAM
+should be tied to the board runtime lifetime rather than hidden in global
+scratch buffers.
 
 `jellyframe_esp32s3::Rgb565Panel` owns the host-facing display contract:
 

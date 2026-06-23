@@ -824,6 +824,12 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
     }
 }
 
+SoftwareCompositor::SoftwareCompositor()
+    : SoftwareCompositor(TextPainter{}) {}
+
+SoftwareCompositor::SoftwareCompositor(TextPainter text_painter)
+    : SoftwareCompositor(text_painter, Options{}) {}
+
 SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, Options options)
     : SoftwareCompositor(text_painter, {}, options) {}
 

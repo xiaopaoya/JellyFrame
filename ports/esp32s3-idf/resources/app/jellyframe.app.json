@@ -35,6 +35,15 @@
       },
       "fontProfile": "tiny",
       "output": "cpp"
+    },
+    "esp32s3-waveshare-147": {
+      "viewport": {
+        "width": 172,
+        "height": 320,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny",
+      "output": "cpp"
     }
   }
 }

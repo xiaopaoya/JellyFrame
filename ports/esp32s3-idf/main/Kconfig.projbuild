@@ -33,3 +33,120 @@ config JELLYFRAME_BENCH_PRESENT_RGB565
         through the embedded framebuffer HAL adapter.
 
 endmenu
+
+menu "JellyFrame ESP32-S3 board support"
+
+config JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    bool "Enable physical board display/touch drivers"
+    default n
+    help
+        Enables board-local hardware drivers. Keep this disabled for QEMU and
+        generic benchmark runs.
+
+choice JELLYFRAME_ESP32S3_BOARD
+    prompt "Physical board profile"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    default JELLYFRAME_ESP32S3_BOARD_GENERIC
+
+config JELLYFRAME_ESP32S3_BOARD_GENERIC
+    bool "Generic/no physical panel"
+
+config JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    bool "Waveshare ESP32-S3-Touch-LCD-1.47"
+    help
+        Board-local adapter for the 172x320 JD9853 SPI LCD and AXS5106L I2C
+        touch controller.
+
+endchoice
+
+config JELLYFRAME_WS147_LCD_WIDTH
+    int "Waveshare 1.47 LCD width"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 172
+
+config JELLYFRAME_WS147_LCD_HEIGHT
+    int "Waveshare 1.47 LCD height"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 320
+
+config JELLYFRAME_WS147_LCD_SPI_SCLK_GPIO
+    int "Waveshare 1.47 LCD SPI SCLK GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 38
+
+config JELLYFRAME_WS147_LCD_SPI_MOSI_GPIO
+    int "Waveshare 1.47 LCD SPI MOSI GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 39
+
+config JELLYFRAME_WS147_LCD_CS_GPIO
+    int "Waveshare 1.47 LCD CS GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 21
+
+config JELLYFRAME_WS147_LCD_DC_GPIO
+    int "Waveshare 1.47 LCD DC GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 45
+
+config JELLYFRAME_WS147_LCD_RST_GPIO
+    int "Waveshare 1.47 LCD reset GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 40
+
+config JELLYFRAME_WS147_LCD_BL_GPIO
+    int "Waveshare 1.47 LCD backlight GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 46
+
+config JELLYFRAME_WS147_LCD_BL_ON_LEVEL
+    int "Waveshare 1.47 LCD backlight active level"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 1
+    range 0 1
+
+config JELLYFRAME_WS147_LCD_PIXEL_CLOCK_HZ
+    int "Waveshare 1.47 LCD SPI pixel clock"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 80000000
+
+config JELLYFRAME_WS147_LCD_DMA_ROWS
+    int "Waveshare 1.47 LCD DMA rows"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 40
+    range 1 320
+
+config JELLYFRAME_WS147_LCD_SWAP_RGB565_BYTES
+    bool "Swap RGB565 bytes before JD9853 SPI flush"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default y
+    help
+        JD9853 receives RGB565 over SPI in big-endian byte order. Enable this
+        when colors look shifted or red/blue/green components appear wrong.
+
+config JELLYFRAME_WS147_TOUCH_SDA_GPIO
+    int "Waveshare 1.47 touch I2C SDA GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 42
+
+config JELLYFRAME_WS147_TOUCH_SCL_GPIO
+    int "Waveshare 1.47 touch I2C SCL GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 41
+
+config JELLYFRAME_WS147_TOUCH_INT_GPIO
+    int "Waveshare 1.47 touch INT GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 47
+
+config JELLYFRAME_WS147_TOUCH_RST_GPIO
+    int "Waveshare 1.47 touch reset GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 48
+
+config JELLYFRAME_WS147_TOUCH_ADDR
+    hex "Waveshare 1.47 AXS5106L I2C address"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default 0x63
+
+endmenu

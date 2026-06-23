@@ -2,6 +2,7 @@
 #include "jellyframe_esp32s3_hal.h"
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
+#include "boards/waveshare_touch_lcd_boards.h"
 
 #include "render_core/bitmap_font.h"
 #include "render_core/budget.h"
@@ -185,14 +186,15 @@ HostBudgets make_budgets(int width, int height, int cards) {
 }
 
 HostDeviceCapabilities make_device_capabilities(int width, int height, int cards) {
+    const auto& board = jellyframe_esp32s3::boards::selected_board_profile();
     HostDeviceCapabilities capabilities;
-    capabilities.display.width = width;
-    capabilities.display.height = height;
+    capabilities.display.width = board.display.width > 0 ? board.display.width : width;
+    capabilities.display.height = board.display.height > 0 ? board.display.height : height;
     capabilities.display.preferred_pixel_format = HostPixelFormat::Rgb565;
     capabilities.display.supports_partial_present = true;
     capabilities.display.has_full_framebuffer = true;
     capabilities.input.pointer = true;
-    capabilities.input.touch = true;
+    capabilities.input.touch = board.display.has_touch;
     capabilities.memory.total_heap_bytes = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     capabilities.memory.max_single_allocation_bytes = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     capabilities.memory.preferred_framebuffer_bytes =
@@ -588,10 +590,13 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
 }
 
 void run_benchmark() {
+    jellyframe_esp32s3::boards::BoardRuntime board_runtime =
+        jellyframe_esp32s3::boards::initialize_selected_board();
+    const auto& board = board_runtime.profile;
     const int card_count = CONFIG_JELLYFRAME_BENCH_CARD_COUNT;
     const int iterations = CONFIG_JELLYFRAME_BENCH_ITERATIONS;
-    const int viewport_width = CONFIG_JELLYFRAME_BENCH_VIEWPORT_WIDTH;
-    const int viewport_height = CONFIG_JELLYFRAME_BENCH_VIEWPORT_HEIGHT;
+    const int viewport_width = board.display.width > 0 ? board.display.width : CONFIG_JELLYFRAME_BENCH_VIEWPORT_WIDTH;
+    const int viewport_height = board.display.height > 0 ? board.display.height : CONFIG_JELLYFRAME_BENCH_VIEWPORT_HEIGHT;
 
     const HostClock clock = jellyframe_esp32s3::make_clock();
     const HostDeviceCapabilities capabilities =
@@ -607,6 +612,18 @@ void run_benchmark() {
     jellyframe_esp32s3::ResourceLoadStats benchmark_resource_stats;
     jellyframe_esp32s3::ResourceBundleContext benchmark_resource_context =
         jellyframe_esp32s3::make_resource_context(budgets, kAppBaseUrl, &benchmark_resource_stats);
+
+    ESP_LOGI(tag,
+             "board profile=%s display=%dx%d controller=%s bus=%s touch=%d touch_controller=%s hardware_ready=%d status=%s",
+             board.name,
+             board.display.width,
+             board.display.height,
+             board.display.controller,
+             board.display.bus,
+             board.display.has_touch ? 1 : 0,
+             board.display.touch_controller,
+             board_runtime.hardware_display_ready ? 1 : 0,
+             board_runtime.hardware_status != nullptr ? board_runtime.hardware_status : "");
 
     ESP_LOGI(tag,
              "JellyFrame ESP32-S3 benchmark cards=%d iterations=%d viewport=%dx%d",
@@ -721,6 +738,8 @@ void run_benchmark() {
         panel.width = viewport_width;
         panel.height = viewport_height;
         panel.stride_pixels = viewport_width;
+        panel.packed_flush = board_runtime.packed_flush;
+        panel.flush_context = board_runtime.flush_context;
         jellyframe::EmbeddedFrameBufferSink embedded_sink = jellyframe_esp32s3::make_rgb565_sink(panel);
         const HostFrameSink frame_sink = embedded_frame_sink(embedded_sink);
         const Rect full_dirty{0, 0, viewport_width, viewport_height};
@@ -775,11 +794,15 @@ void run_benchmark() {
     }
 
     print_heap("after");
+    jellyframe_esp32s3::boards::release_board_runtime(board_runtime);
 }
 
 } // namespace
 
 extern "C" void app_main(void) {
+    if (jellyframe_esp32s3::boards::selected_board_probe_only_enabled()) {
+        jellyframe_esp32s3::boards::run_selected_board_probe_only();
+    }
     run_benchmark();
     ESP_LOGI(tag, "benchmark complete");
     while (true) {

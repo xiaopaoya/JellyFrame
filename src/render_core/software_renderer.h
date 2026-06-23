@@ -78,7 +78,9 @@ public:
         bool smooth_scaled_layers = true;
     };
 
-    explicit SoftwareCompositor(TextPainter text_painter = {}, Options options = {});
+    SoftwareCompositor();
+    explicit SoftwareCompositor(TextPainter text_painter);
+    SoftwareCompositor(TextPainter text_painter, Options options);
     SoftwareCompositor(TextPainter text_painter, ImagePainter image_painter, Options options = {});
 
     FrameBuffer render(const LayerNode& root, int viewport_width, int viewport_height, Color background) const;
