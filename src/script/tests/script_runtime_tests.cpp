@@ -41,6 +41,7 @@ void expression_returns_value() {
     const ScriptEvaluationResult result = runtime.eval("1 + 2", "expression.js");
 
     check(result.ok, "expression evaluates successfully");
+    check(result.status == ScriptEvaluationStatus::Ok, "expression status is ok");
     check(result.value == "3", "expression result is stringified");
 }
 
@@ -49,6 +50,7 @@ void exception_returns_error_text() {
     const ScriptEvaluationResult result = runtime.eval("throw new Error('boom')", "exception.js");
 
     check(!result.ok, "exception is reported as failure");
+    check(result.status == ScriptEvaluationStatus::Exception, "exception status is exception");
     check(!result.error.empty(), "exception has error text");
 }
 
@@ -74,11 +76,15 @@ void execution_watchdog_interrupts_infinite_eval_when_supported() {
 
     const ScriptEvaluationResult loop = runtime.eval("while (true) {}", "loop.js");
     check(!loop.ok, "watchdog interrupts infinite eval");
+    check(loop.status == ScriptEvaluationStatus::ExecutionBudgetExceeded,
+          "watchdog eval status is execution budget exceeded");
     check(loop.error.find("script execution budget exceeded") != std::string::npos,
           "watchdog reports stable budget error text");
+    check(runtime.take_execution_watchdog_interrupt(), "watchdog eval sets sticky interrupt flag");
 
     const ScriptEvaluationResult after = runtime.eval("1 + 1");
     check(after.ok && after.value == "2", "runtime remains usable after watchdog interrupt");
+    check(!runtime.take_execution_watchdog_interrupt(), "watchdog sticky flag is cleared after take");
 }
 
 void execution_watchdog_interrupts_timer_callback_when_supported() {
@@ -99,6 +105,7 @@ void execution_watchdog_interrupts_timer_callback_when_supported() {
         "'armed'");
     check(armed.ok, "watchdog timer script arms");
     check(runtime.pump_timers(0) == 1, "watchdog timer callback returns after interrupt");
+    check(runtime.take_execution_watchdog_interrupt(), "watchdog timer callback sets sticky interrupt flag");
 
     const ScriptEvaluationResult after = runtime.eval("alive = 7; alive");
     check(after.ok && after.value == "7", "runtime remains usable after interrupted timer callback");

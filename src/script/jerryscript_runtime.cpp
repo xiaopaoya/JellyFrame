@@ -168,6 +168,10 @@ struct ScriptRuntimeAccess {
     static bool& execution_watchdog_interrupted(JerryScriptRuntime& runtime) {
         return runtime.execution_watchdog_interrupted_;
     }
+
+    static bool& execution_watchdog_interrupt_pending(JerryScriptRuntime& runtime) {
+        return runtime.execution_watchdog_interrupt_pending_;
+    }
 };
 
 namespace {
@@ -294,6 +298,7 @@ jerry_value_t script_execution_halt_callback(void* user) {
     }
 
     ScriptRuntimeAccess::execution_watchdog_interrupted(*runtime) = true;
+    ScriptRuntimeAccess::execution_watchdog_interrupt_pending(*runtime) = true;
     return jerry_string_sz("script execution budget exceeded");
 }
 
@@ -2231,6 +2236,9 @@ ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::st
     if (jerry_value_is_exception(result.get())) {
         JerryValue exception_value(jerry_exception_value(result.release(), true));
         output.ok = false;
+        output.status = execution_watchdog_interrupted_
+            ? ScriptEvaluationStatus::ExecutionBudgetExceeded
+            : ScriptEvaluationStatus::Exception;
         output.error = value_to_string(exception_value.get());
         if (output.error.empty()) {
             output.error = "JavaScript exception";
@@ -2239,12 +2247,19 @@ ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::st
     }
 
     output.ok = true;
+    output.status = ScriptEvaluationStatus::Ok;
     output.value = value_to_string(result.get());
     return output;
 }
 
 bool JerryScriptRuntime::execution_watchdog_supported() const {
     return initialized_ && jerry_feature_enabled(JERRY_FEATURE_VM_EXEC_STOP);
+}
+
+bool JerryScriptRuntime::take_execution_watchdog_interrupt() {
+    const bool interrupted = execution_watchdog_interrupt_pending_;
+    execution_watchdog_interrupt_pending_ = false;
+    return interrupted;
 }
 
 void JerryScriptRuntime::set_host_time_ms(std::uint64_t now_ms) {

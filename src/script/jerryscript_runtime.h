@@ -25,10 +25,17 @@ struct ScriptEventListener;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
 
+enum class ScriptEvaluationStatus {
+    Ok,
+    Exception,
+    ExecutionBudgetExceeded,
+};
+
 struct ScriptEvaluationResult {
     bool ok = false;
     std::string value;
     std::string error;
+    ScriptEvaluationStatus status = ScriptEvaluationStatus::Exception;
 };
 
 enum class ScriptAudioEventKind {
@@ -88,6 +95,7 @@ public:
     void clear_app_services();
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
     bool execution_watchdog_supported() const;
+    bool take_execution_watchdog_interrupt();
     void set_host_time_ms(std::uint64_t now_ms);
     void set_system_state(ScriptSystemState state);
     ScriptSystemState system_state() const;
@@ -127,6 +135,7 @@ private:
     std::uint32_t execution_watchdog_depth_ = 0;
     std::uint32_t execution_watchdog_remaining_ = 0;
     bool execution_watchdog_interrupted_ = false;
+    bool execution_watchdog_interrupt_pending_ = false;
 
     bool can_adopt_detached_node() const;
     Node* adopt_detached_node(std::unique_ptr<Node> node);

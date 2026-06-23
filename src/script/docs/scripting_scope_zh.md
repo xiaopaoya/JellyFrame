@@ -17,6 +17,9 @@ API 表面。
   `JERRY_VM_HALT=ON` 构建时，失控的 eval 和 JS callback 会被中断，并抛出稳定的
   `script execution budget exceeded` 异常。若 JerryScript 未启用该特性，runtime 会报告
   watchdog 不可用，脚本按旧路径运行。
+- `ScriptEvaluationResult::status` 会报告 `Ok`、`Exception` 或
+  `ExecutionBudgetExceeded`。不返回 `ScriptEvaluationResult` 的 callback 路径会设置一个 sticky flag，
+  由 `take_execution_watchdog_interrupt()` 消费，宿主可据此 kill/recover 当前 app，而不需要解析错误字符串。
 
 ## DOM Binding
 

@@ -15,6 +15,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加稳定 app teardown reason 和 `AppRuntimeHost::terminate_current(...)`，宿主现在可区分
   normal exit、app switch、user kill、runtime error、script watchdog、budget exceeded、
   load failure 和 system policy recovery，同时复用同一套有界 request/completion/handle/font 清理路径。
+- `ScriptEvaluationResult` 现在携带稳定 status，scripting runtime 也为 callback 路径暴露 sticky
+  watchdog interrupt flag。Win32 壳会据此在 package app 脚本 watchdog 中断后恢复到 system shell。
 - 添加低成本 CSS `background: linear-gradient(...)` 绘制子集。两色垂直渐变现在会从
   style resolution 进入 layer display list 和软件栅格器；不支持的角度或 stop 不会覆盖
   之前的纯色 fallback。

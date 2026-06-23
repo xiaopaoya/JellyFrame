@@ -2982,6 +2982,54 @@ private:
         set_title(std::string("error: ") + error.what());
     }
 
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+    void recover_active_app_after_script_watchdog(const std::string& detail) {
+        std::cerr << "script watchdog interrupted app: " << detail << '\n';
+        if (!options_.registry_store_path.empty() && !system_shell_mode_) {
+            reset_image_services();
+            pending_script_audio_events_.clear();
+            script_runtime_.reset();
+            script_runtime_instance_id_ = 0;
+            KillTimer(hwnd_, kScriptTimerId);
+            const AppTeardownResult teardown = app_runtime_.terminate_current(AppTeardownReason::ScriptWatchdog);
+            const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
+            configure_system_shell(
+                "Recovered from " + crashed_app + " after " +
+                app_teardown_reason_name(teardown.reason) + "; released instance " +
+                std::to_string(teardown.app_instance_id) + ".");
+            try {
+                rebuild();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            } catch (const std::exception& shell_error) {
+                std::cerr << "system shell recovery failed: " << shell_error.what() << '\n';
+                set_title(std::string("error: ") + shell_error.what());
+            }
+            return;
+        }
+        set_title("script watchdog: " + detail);
+    }
+
+    bool handle_script_evaluation_failure(const ScriptEvaluationResult& result,
+                                          const char* title,
+                                          const std::string& detail) {
+        report_diagnostic(&diagnostics_,
+                          DiagnosticStage::Script,
+                          DiagnosticSeverity::Error,
+                          result.status == ScriptEvaluationStatus::ExecutionBudgetExceeded
+                              ? "script-execution-budget-exceeded"
+                              : "script-evaluation-failed",
+                          title,
+                          detail + ": " + result.error);
+        if (result.status == ScriptEvaluationStatus::ExecutionBudgetExceeded) {
+            recover_active_app_after_script_watchdog(detail + ": " + result.error);
+            return true;
+        }
+        std::cerr << "script failed: " << result.error << '\n';
+        set_title("script error: " + result.error);
+        return false;
+    }
+#endif
+
     bool rebuild() {
         try {
             diagnostics_.clear();
@@ -3065,14 +3113,11 @@ private:
                 for (const DocumentScript& script : document_scripts) {
                     const ScriptEvaluationResult result = script_runtime_->eval(script.source, script.name);
                     if (!result.ok) {
-                        report_diagnostic(&diagnostics_,
-                                          DiagnosticStage::Script,
-                                          DiagnosticSeverity::Error,
-                                          "script-evaluation-failed",
-                                          "Document script evaluation failed",
-                                          script.name + ": " + result.error);
-                        std::cerr << "document script failed: " << result.error << '\n';
-                        set_title("script error: " + result.error);
+                        if (handle_script_evaluation_failure(result,
+                                                             "Document script evaluation failed",
+                                                             script.name)) {
+                            return false;
+                        }
                         break;
                     }
                 }
@@ -3080,14 +3125,11 @@ private:
                     const ScriptEvaluationResult result =
                         script_runtime_->eval(read_file_limited(options_.script_path), options_.script_path);
                     if (!result.ok) {
-                        report_diagnostic(&diagnostics_,
-                                          DiagnosticStage::Script,
-                                          DiagnosticSeverity::Error,
-                                          "script-evaluation-failed",
-                                          "Standalone script evaluation failed",
-                                          options_.script_path + ": " + result.error);
-                        std::cerr << "script failed: " << result.error << '\n';
-                        set_title("script error: " + result.error);
+                        if (handle_script_evaluation_failure(result,
+                                                             "Standalone script evaluation failed",
+                                                             options_.script_path)) {
+                            return false;
+                        }
                     }
                 }
             }
@@ -3107,6 +3149,12 @@ private:
             return;
         }
         drain_host_completions();
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
+            recover_active_app_after_script_watchdog("script host-completion execution budget exceeded");
+            return;
+        }
+#endif
         drain_system_events();
         std::vector<std::pair<const Node*, Style>> previous_styles;
         if ((document_->dirty_flags & DomDirtyStyle) != 0U && render_tree_ != nullptr) {
@@ -3675,6 +3723,10 @@ private:
             pump_app_host_service_workers(app_runtime_, network_slot, 1);
         const bool completed_network = network_pump.completions_posted != 0;
         handled_completion = drain_host_completions() || handled_completion;
+        if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
+            recover_active_app_after_script_watchdog("script host-completion execution budget exceeded");
+            return;
+        }
         const std::uint64_t now_ms = current_time_ms();
         const std::size_t callbacks =
             script_runtime_->pump_timers(now_ms, frame_options.max_timer_callbacks_per_frame);
@@ -3682,6 +3734,10 @@ private:
         const std::size_t animation_callbacks = animation_budget_enabled
             ? script_runtime_->pump_animation_frame(now_ms, frame_options.max_animation_callbacks_per_frame)
             : 0;
+        if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
+            recover_active_app_after_script_watchdog("script callback execution budget exceeded");
+            return;
+        }
         if (frame_policy.presents_frames &&
             (callbacks != 0 || animation_callbacks != 0 || audio_event_handled || completed_network || advanced_animation ||
              completed_image || handled_completion || handled_system_event)) {
@@ -3718,6 +3774,12 @@ private:
     }
 
     void rerender_if_dirty(const Node* focused_node) {
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
+            recover_active_app_after_script_watchdog("script event execution budget exceeded");
+            return;
+        }
+#endif
         if (document_ == nullptr || subtree_dirty_flags(*document_) == DomDirtyNone) {
             return;
         }

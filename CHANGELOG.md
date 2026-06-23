@@ -17,6 +17,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   so hosts can distinguish normal exit, app switch, user kill, runtime error,
   script watchdog, budget exceeded, load failure and system policy recovery
   while reusing the same bounded request/completion/handle/font cleanup path.
+- `ScriptEvaluationResult` now carries a stable status, and the scripting
+  runtime exposes a sticky watchdog-interrupt flag for callback paths. The Win32
+  shell uses this to recover package apps after script watchdog interrupts.
 - Added a low-cost CSS `background: linear-gradient(...)` paint subset. Two
   color vertical gradients now flow from style resolution into the layer display
   list and software rasterizer, while unsupported angles/stops keep earlier

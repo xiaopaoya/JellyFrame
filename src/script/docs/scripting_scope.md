@@ -20,6 +20,11 @@ surface.
   callbacks are interrupted with a stable `script execution budget exceeded`
   exception. Without that JerryScript feature the watchdog is reported as
   unsupported and scripts run as before.
+- `ScriptEvaluationResult::status` reports `Ok`, `Exception` or
+  `ExecutionBudgetExceeded`. Callback paths that do not return a
+  `ScriptEvaluationResult` set a sticky flag consumed by
+  `take_execution_watchdog_interrupt()`, so hosts can kill or recover the active
+  app without parsing error strings.
 
 ## DOM Binding
 
