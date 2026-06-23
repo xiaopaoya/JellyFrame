@@ -307,6 +307,28 @@ if(JELLYFRAME_BUILD_TESTS)
         set_tests_properties(jellyframe_win32_service_status_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "service_activity network=18 audio=36 sensors=16 pause_audio=0 throttle_sensors=20")
+
+        if(JELLYFRAME_BUILD_SCRIPTING)
+            add_test(
+                NAME jellyframe_win32_motion_lab_low_power_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_low_power_static.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_motion_lab_low_power_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "frame_policy_samples=30 input=30 timers=30 animation=14 present=30")
+
+            add_test(
+                NAME jellyframe_win32_motion_lab_soak_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_motion_lab_soak_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "frame_policy_samples=90 input=90 timers=90 animation=90 present=90")
+        endif()
     endif()
 
     if(JELLYFRAME_BUILD_SCRIPTING)

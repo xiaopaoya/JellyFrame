@@ -57,6 +57,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added the installable `jelly_motion_lab` sample for LVGL/watch-style motion:
   icon-to-window expansion, bottom-sheet rise and jelly button feedback. It also
   updates a frame counter through `requestAnimationFrame` to validate JS/rAF.
+- Added scripting-build CTest coverage for `jelly_motion_lab` deterministic
+  captures: a 90-frame 30fps soak and a low-power budget run that verifies
+  animation work stops while presentation remains safe.
 - The Win32 browser shell now supports hidden deterministic frame capture with
   `--capture-frames DIR --frame-count 30 --frame-step-ms 33`, plus
   `--frame-event FRAME:kind[:x:y]` for click, pointer and system-state injection.
