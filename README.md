@@ -138,7 +138,7 @@ unless `JELLYFRAME_BUILD_SCRIPTING=ON` is requested.
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
-python third_party\jerryscript\tools\build.py --clean
+python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
 
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build-script `
@@ -152,6 +152,8 @@ The scripting shell supports classic inline/local scripts, small DOM mutation
 APIs, event listeners, form properties, host-pumped timers, host-optional XHR V0
 and tiny `localStorage` V0. ES modules, remote page loading, full browser
 storage and full browser loading algorithms are outside the embedded core.
+`JERRY_VM_HALT=ON` is recommended so JellyFrame can interrupt runaway scripts
+with the runtime execution budget.
 
 ## Repository Map
 

@@ -282,6 +282,7 @@ JerryScript 源码树时可用。
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |
 | 表单属性 | 子集 | 相关控件上的 `value`、`checked`、`selectedIndex`。 |
 | Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |
+| 脚本执行 watchdog | 宿主/runtime 可选 | 当链接的 JerryScript 使用 `JERRY_VM_HALT=ON` 构建时，`JerryScriptRuntimeOptions::max_execution_check_count` 与 `HostBudgets::max_script_execution_checks` 可中断失控 eval 和 callback，并给出 `script execution budget exceeded`。若 JerryScript 缺少该特性，JellyFrame 会报告 watchdog 不可用，不伪造抢占。 |
 | Promise/microtask | 延后 | 不要依赖浏览器 task 语义。 |
 | Modules/import | 延后 | `type="module"`、dynamic import 和 module loading 会跳过。 |
 | `querySelector` | 延后 | 现阶段使用 ID。 |

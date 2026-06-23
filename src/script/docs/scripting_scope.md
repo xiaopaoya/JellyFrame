@@ -14,6 +14,12 @@ surface.
 - Stringified success result and stringified exception result.
 - Repeated initialize/shutdown in one process, one active runtime at a time.
 - `jellyframe_win32_browser --script file.js` for desktop acceptance.
+- Optional execution watchdog: when `JerryScriptRuntimeOptions` or
+  `HostBudgets` set `max_execution_check_count` above zero and the linked
+  JerryScript library was built with `JERRY_VM_HALT=ON`, runaway evals and JS
+  callbacks are interrupted with a stable `script execution budget exceeded`
+  exception. Without that JerryScript feature the watchdog is reported as
+  unsupported and scripts run as before.
 
 ## DOM Binding
 
@@ -73,6 +79,7 @@ surface.
 - Timers are host-pumped through `JerryScriptRuntime::pump_timers(now_ms,
   max_callbacks)`, so embedded ports provide their own clock source and frame
   budget.
+- Timer callbacks use the same optional execution watchdog as direct eval.
 - The Win32 browser shell pumps timers through a desktop `WM_TIMER` and rerenders
   if callbacks dirty the DOM.
 
@@ -176,6 +183,8 @@ The scripting bridge must stay optional, explicit and bounded:
 - Core HTML/CSS/rendering must build without JerryScript.
 - Native wrappers must not own DOM nodes.
 - Every retained `jerry_value_t` must have a clear release path.
+- Product scripting builds should compile JerryScript with `JERRY_VM_HALT=ON`
+  and derive a finite execution budget from `HostBudgets`.
 - Detached DOM nodes must remain observable through runtime statistics so ports
   can audit script-heavy UI memory behavior.
 - Script-driven redraws should consume dirty flags and coalesce work.

@@ -152,6 +152,22 @@ struct ScriptRuntimeAccess {
     static ScriptAudioHost audio_host(const JerryScriptRuntime& runtime) {
         return runtime.audio_host_;
     }
+
+    static const JerryScriptRuntimeOptions& options(const JerryScriptRuntime& runtime) {
+        return runtime.options_;
+    }
+
+    static std::uint32_t& execution_watchdog_depth(JerryScriptRuntime& runtime) {
+        return runtime.execution_watchdog_depth_;
+    }
+
+    static std::uint32_t& execution_watchdog_remaining(JerryScriptRuntime& runtime) {
+        return runtime.execution_watchdog_remaining_;
+    }
+
+    static bool& execution_watchdog_interrupted(JerryScriptRuntime& runtime) {
+        return runtime.execution_watchdog_interrupted_;
+    }
 };
 
 namespace {
@@ -263,6 +279,75 @@ JerryValue evaluate_script(std::string_view source, std::string_view source_name
     }
 
     return JerryValue(jerry_run(parsed.get()));
+}
+
+jerry_value_t script_execution_halt_callback(void* user) {
+    auto* runtime = static_cast<JerryScriptRuntime*>(user);
+    if (runtime == nullptr) {
+        return jerry_string_sz("script execution budget exceeded");
+    }
+
+    std::uint32_t& remaining = ScriptRuntimeAccess::execution_watchdog_remaining(*runtime);
+    if (remaining > 0) {
+        --remaining;
+        return jerry_undefined();
+    }
+
+    ScriptRuntimeAccess::execution_watchdog_interrupted(*runtime) = true;
+    return jerry_string_sz("script execution budget exceeded");
+}
+
+class ScriptExecutionBudgetScope {
+public:
+    explicit ScriptExecutionBudgetScope(JerryScriptRuntime& runtime)
+        : runtime_(runtime) {
+        const JerryScriptRuntimeOptions& options = ScriptRuntimeAccess::options(runtime_);
+        if (options.max_execution_check_count == 0 ||
+            !jerry_feature_enabled(JERRY_FEATURE_VM_EXEC_STOP)) {
+            return;
+        }
+
+        std::uint32_t& depth = ScriptRuntimeAccess::execution_watchdog_depth(runtime_);
+        ++depth;
+        enabled_ = true;
+        if (depth != 1) {
+            return;
+        }
+
+        ScriptRuntimeAccess::execution_watchdog_remaining(runtime_) = options.max_execution_check_count;
+        ScriptRuntimeAccess::execution_watchdog_interrupted(runtime_) = false;
+        const std::uint32_t interval = std::max<std::uint32_t>(1, options.execution_check_interval);
+        jerry_halt_handler(interval, script_execution_halt_callback, &runtime_);
+        installed_ = true;
+    }
+
+    ~ScriptExecutionBudgetScope() {
+        if (!enabled_) {
+            return;
+        }
+
+        std::uint32_t& depth = ScriptRuntimeAccess::execution_watchdog_depth(runtime_);
+        if (depth > 0) {
+            --depth;
+        }
+        if (installed_ && depth == 0) {
+            jerry_halt_handler(1, nullptr, nullptr);
+        }
+    }
+
+    ScriptExecutionBudgetScope(const ScriptExecutionBudgetScope&) = delete;
+    ScriptExecutionBudgetScope& operator=(const ScriptExecutionBudgetScope&) = delete;
+
+private:
+    JerryScriptRuntime& runtime_;
+    bool enabled_ = false;
+    bool installed_ = false;
+};
+
+template <typename Callback>
+JerryValue run_with_execution_budget(JerryScriptRuntime& runtime, Callback&& callback) {
+    ScriptExecutionBudgetScope scope(runtime);
+    return JerryValue(callback());
 }
 
 Node* native_node(const jerry_value_t object) {
@@ -1097,7 +1182,9 @@ void dispatch_xhr_events(ScriptXmlHttpRequest& xhr) {
             JerryValue event_object(make_xhr_event_object(xhr, events[index]));
             const jerry_value_t event_arg = event_object.get();
             JerryValue this_value(xhr.object != 0 ? jerry_value_copy(xhr.object) : jerry_undefined());
-            JerryValue result(jerry_call(callback.get(), this_value.get(), &event_arg, 1));
+            JerryValue result(run_with_execution_budget(*xhr.runtime, [&]() {
+                return jerry_call(callback.get(), this_value.get(), &event_arg, 1);
+            }));
             if (jerry_value_is_exception(result.get())) {
                 JerryValue exception_value(jerry_exception_value(result.release(), true));
                 (void) exception_value;
@@ -1150,7 +1237,9 @@ bool call_audio_callback(ScriptAudioElement& audio, jerry_value_t callback, Scri
     JerryValue event_object(make_audio_event_object(audio, kind));
     const jerry_value_t event_arg = event_object.get();
     JerryValue this_value(audio.object != 0 ? jerry_value_copy(audio.object) : jerry_undefined());
-    JerryValue result(jerry_call(callback_copy.get(), this_value.get(), &event_arg, 1));
+    JerryValue result(run_with_execution_budget(*audio.runtime, [&]() {
+        return jerry_call(callback_copy.get(), this_value.get(), &event_arg, 1);
+    }));
     if (jerry_value_is_exception(result.get())) {
         JerryValue exception_value(jerry_exception_value(result.release(), true));
         (void) exception_value;
@@ -2041,6 +2130,12 @@ JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
           16,
           std::max<std::size_t>(1, budgets.max_active_animations),
           8,
+          static_cast<std::uint32_t>(std::min<std::size_t>(
+              budgets.max_script_execution_checks,
+              std::numeric_limits<std::uint32_t>::max())),
+          static_cast<std::uint32_t>(std::min<std::size_t>(
+              budgets.script_execution_check_interval,
+              std::numeric_limits<std::uint32_t>::max())),
       }) {}
 
 JerryScriptRuntime::~JerryScriptRuntime() {
@@ -2130,7 +2225,9 @@ void JerryScriptRuntime::clear_app_services() {
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {
     ScriptEvaluationResult output;
 
-    JerryValue result = evaluate_script(source, source_name);
+    JerryValue result(run_with_execution_budget(*this, [&]() {
+        return evaluate_script(source, source_name).release();
+    }));
     if (jerry_value_is_exception(result.get())) {
         JerryValue exception_value(jerry_exception_value(result.release(), true));
         output.ok = false;
@@ -2144,6 +2241,10 @@ ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::st
     output.ok = true;
     output.value = value_to_string(result.get());
     return output;
+}
+
+bool JerryScriptRuntime::execution_watchdog_supported() const {
+    return initialized_ && jerry_feature_enabled(JERRY_FEATURE_VM_EXEC_STOP);
 }
 
 void JerryScriptRuntime::set_host_time_ms(std::uint64_t now_ms) {
@@ -2199,7 +2300,9 @@ std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t ma
             timer.callback = 0;
         }
 
-        JerryValue result(jerry_call(callback.get(), jerry_undefined(), nullptr, 0));
+        JerryValue result(run_with_execution_budget(*this, [&]() {
+            return jerry_call(callback.get(), jerry_undefined(), nullptr, 0);
+        }));
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
@@ -2242,7 +2345,9 @@ std::size_t JerryScriptRuntime::pump_animation_frame(std::uint64_t now_ms, std::
     const jerry_value_t timestamp = jerry_number(static_cast<double>(now_ms));
     for (jerry_value_t raw_callback : callbacks) {
         JerryValue callback(raw_callback);
-        JerryValue result(jerry_call(callback.get(), jerry_undefined(), &timestamp, 1));
+        JerryValue result(run_with_execution_budget(*this, [&]() {
+            return jerry_call(callback.get(), jerry_undefined(), &timestamp, 1);
+        }));
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
@@ -2392,7 +2497,9 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
             : jerry_undefined());
         JerryValue event_object(make_event_object(*raw->runtime, event));
         const jerry_value_t event_arg = event_object.get();
-        JerryValue result(jerry_call(raw->callback, this_value.get(), &event_arg, 1));
+        JerryValue result(run_with_execution_budget(*raw->runtime, [&]() {
+            return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
+        }));
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
@@ -2474,7 +2581,9 @@ void JerryScriptRuntime::dispatch_window_event(const char* type) {
             : jerry_undefined());
         JerryValue event_object(make_window_event_object(type, this_value.get()));
         const jerry_value_t event_arg = event_object.get();
-        JerryValue result(jerry_call(callback.get(), this_value.get(), &event_arg, 1));
+        JerryValue result(run_with_execution_budget(*this, [&]() {
+            return jerry_call(callback.get(), this_value.get(), &event_arg, 1);
+        }));
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;

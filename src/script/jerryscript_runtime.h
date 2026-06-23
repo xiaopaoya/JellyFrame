@@ -54,6 +54,8 @@ struct JerryScriptRuntimeOptions {
     std::size_t max_xml_http_requests = 16;
     std::size_t max_animation_frame_callbacks = 16;
     std::size_t max_audio_elements = 8;
+    std::uint32_t max_execution_check_count = 0;
+    std::uint32_t execution_check_interval = 16;
 };
 
 struct ScriptRuntimeStatistics {
@@ -85,6 +87,7 @@ public:
     void bind_audio_host(ScriptAudioHost host);
     void clear_app_services();
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
+    bool execution_watchdog_supported() const;
     void set_host_time_ms(std::uint64_t now_ms);
     void set_system_state(ScriptSystemState state);
     ScriptSystemState system_state() const;
@@ -121,6 +124,9 @@ private:
     ScriptAudioHost audio_host_;
     Node* bound_document_ = nullptr;
     ScriptSystemState system_state_;
+    std::uint32_t execution_watchdog_depth_ = 0;
+    std::uint32_t execution_watchdog_remaining_ = 0;
+    bool execution_watchdog_interrupted_ = false;
 
     bool can_adopt_detached_node() const;
     Node* adopt_detached_node(std::unique_ptr<Node> node);

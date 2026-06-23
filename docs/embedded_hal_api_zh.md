@@ -447,6 +447,8 @@ detached DOM node 上限。ESP32-S3 初始建议：
 - active animations：0-16
 - animation frame rate：0、15 或 30 Hz，按前台/后台/息屏策略决定
 - event listeners：128-256
+- script execution checks：产品构建应使用有限值；JerryScript 库建议开启
+  `JERRY_VM_HALT=ON`，这样失控 app 脚本可以被中断
 - single resource：64-256 KiB
 - framebuffer pixels：物理屏幕面积；如果使用 tiled output，可以更小
 
@@ -459,7 +461,7 @@ core 暂不强制 logging，但板级 port 应提供：
 - 最大 heap watermark；
 - dirty rectangle 数量/面积；
 - resource load failures；
-- 启用 JerryScript 时的 script exception reporting。
+- 启用 JerryScript 时的 script exception 和 watchdog interrupt reporting。
 
 诊断应可在 release build 中裁掉。
 

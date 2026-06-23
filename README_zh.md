@@ -126,7 +126,7 @@ python tools\jellyframe_cli.py check `
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
-python third_party\jerryscript\tools\build.py --clean
+python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
 
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build-script `
@@ -139,6 +139,7 @@ cmake --build build-script --config Release
 脚本壳支持 classic inline/local scripts、小型 DOM mutation API、event listeners、
 表单属性、宿主泵动 timers、宿主可选 XHR V0 和极小 `localStorage` V0。ES modules、远程页面加载、
 完整浏览器存储和完整浏览器加载算法不属于嵌入式核心。
+建议打开 `JERRY_VM_HALT=ON` 构建 JerryScript，这样 JellyFrame 可以用 runtime 执行预算中断失控脚本。
 
 ## 仓库结构
 

@@ -511,6 +511,8 @@ node limits. Suggested ESP32-S3 starting point:
 - active animations: 0-16
 - animation frame rate: 0, 15 or 30 Hz depending on power policy
 - event listeners: 128-256
+- script execution checks: finite in product builds; use `JERRY_VM_HALT=ON`
+  JerryScript libraries so runaway app code can be interrupted
 - single resource: 64-256 KiB
 - framebuffer pixels: physical screen area, or smaller if using tiled output
 
@@ -523,7 +525,7 @@ The core does not require logging yet, but a board port should provide:
 - maximum heap watermark;
 - dirty rectangle count/area;
 - resource load failures;
-- script exception reporting if JerryScript is enabled.
+- script exception and watchdog-interrupt reporting if JerryScript is enabled.
 
 Keep diagnostics optional at runtime so release builds can compile them out.
 

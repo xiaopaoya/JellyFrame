@@ -8,6 +8,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added an optional JerryScript execution watchdog. Runtime options and
+  `HostBudgets` can now set a finite script execution-check budget; when linked
+  against a JerryScript library built with `JERRY_VM_HALT=ON`, runaway evals,
+  timers, rAF and event callbacks are interrupted with a stable
+  `script execution budget exceeded` exception.
 - Added a low-cost CSS `background: linear-gradient(...)` paint subset. Two
   color vertical gradients now flow from style resolution into the layer display
   list and software rasterizer, while unsupported angles/stops keep earlier

@@ -52,6 +52,71 @@ void exception_returns_error_text() {
     check(!result.error.empty(), "exception has error text");
 }
 
+void execution_watchdog_allows_normal_scripts() {
+    JerryScriptRuntimeOptions options;
+    options.max_execution_check_count = 64;
+    options.execution_check_interval = 1;
+    JerryScriptRuntime runtime(options);
+    const ScriptEvaluationResult result = runtime.eval("var total = 0; for (var i = 0; i < 8; ++i) total += i; total");
+
+    check(result.ok, "watchdog allows bounded script");
+    check(result.value == "28", "watchdog bounded script result");
+}
+
+void execution_watchdog_interrupts_infinite_eval_when_supported() {
+    JerryScriptRuntimeOptions options;
+    options.max_execution_check_count = 4;
+    options.execution_check_interval = 1;
+    JerryScriptRuntime runtime(options);
+    if (!runtime.execution_watchdog_supported()) {
+        return;
+    }
+
+    const ScriptEvaluationResult loop = runtime.eval("while (true) {}", "loop.js");
+    check(!loop.ok, "watchdog interrupts infinite eval");
+    check(loop.error.find("script execution budget exceeded") != std::string::npos,
+          "watchdog reports stable budget error text");
+
+    const ScriptEvaluationResult after = runtime.eval("1 + 1");
+    check(after.ok && after.value == "2", "runtime remains usable after watchdog interrupt");
+}
+
+void execution_watchdog_interrupts_timer_callback_when_supported() {
+    JerryScriptRuntimeOptions options;
+    options.max_execution_check_count = 64;
+    options.execution_check_interval = 1;
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+    JerryScriptRuntime runtime(options);
+    runtime.bind_document(*document);
+    if (!runtime.execution_watchdog_supported()) {
+        return;
+    }
+
+    const ScriptEvaluationResult armed = runtime.eval(
+        "var alive = 0;"
+        "setTimeout(function () { while (true) {} }, 0);"
+        "'armed'");
+    check(armed.ok, "watchdog timer script arms");
+    check(runtime.pump_timers(0) == 1, "watchdog timer callback returns after interrupt");
+
+    const ScriptEvaluationResult after = runtime.eval("alive = 7; alive");
+    check(after.ok && after.value == "7", "runtime remains usable after interrupted timer callback");
+}
+
+void host_budgets_enable_script_execution_watchdog_when_supported() {
+    HostBudgets budgets;
+    budgets.max_script_execution_checks = 64;
+    budgets.script_execution_check_interval = 1;
+    JerryScriptRuntime runtime(budgets);
+    if (!runtime.execution_watchdog_supported()) {
+        return;
+    }
+
+    const ScriptEvaluationResult loop = runtime.eval("for (;;) {}", "budget-loop.js");
+    check(!loop.ok, "HostBudgets script watchdog interrupts infinite eval");
+}
+
 void runtime_can_restart() {
     for (int i = 0; i < 3; ++i) {
         JerryScriptRuntime runtime;
@@ -782,6 +847,10 @@ int main() {
     try {
         expression_returns_value();
         exception_returns_error_text();
+        execution_watchdog_allows_normal_scripts();
+        execution_watchdog_interrupts_infinite_eval_when_supported();
+        execution_watchdog_interrupts_timer_callback_when_supported();
+        host_budgets_enable_script_execution_watchdog_when_supported();
         runtime_can_restart();
         inline_document_script_mutates_dom();
         document_get_element_by_id_updates_text_content();

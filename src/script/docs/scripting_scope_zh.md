@@ -12,6 +12,11 @@ API 表面。
 - 返回字符串化后的成功结果，或字符串化后的异常结果。
 - 同一进程内可重复初始化/清理；当前实现同一时间只允许一个 runtime 存活。
 - `jellyframe_win32_browser --script file.js` 用于桌面验收。
+- 可选执行 watchdog：当 `JerryScriptRuntimeOptions` 或 `HostBudgets` 将
+  `max_execution_check_count` 设为大于 0，且链接的 JerryScript 使用
+  `JERRY_VM_HALT=ON` 构建时，失控的 eval 和 JS callback 会被中断，并抛出稳定的
+  `script execution budget exceeded` 异常。若 JerryScript 未启用该特性，runtime 会报告
+  watchdog 不可用，脚本按旧路径运行。
 
 ## DOM Binding
 
@@ -63,6 +68,7 @@ API 表面。
 - Timer callback 必须是函数。字符串 eval timer 和额外 callback 参数被刻意排除。
 - Timer 通过 `JerryScriptRuntime::pump_timers(now_ms, max_callbacks)` 由宿主泵动，
   因此嵌入式移植层可以提供自己的时钟源和单帧预算。
+- Timer callback 使用与直接 eval 相同的可选执行 watchdog。
 - Win32 browser shell 通过桌面 `WM_TIMER` 泵动 timer，并在 callback 弄脏 DOM 后重绘。
 
 ## Animation Frames
@@ -148,6 +154,8 @@ API 表面。
 - 核心 HTML/CSS/rendering 必须能在没有 JerryScript 时构建。
 - native wrapper 不拥有 DOM node。
 - 每一个被保留的 `jerry_value_t` 都必须有清晰释放路径。
+- 产品级 scripting 构建建议用 `JERRY_VM_HALT=ON` 编译 JerryScript，并从
+  `HostBudgets` 派生有限执行预算。
 - detached DOM node 必须能通过 runtime statistics 观察，便于 port 审计脚本密集 UI 的内存行为。
 - 脚本触发的重绘应消费 dirty flags，并合并重复工作。
 - 只有当 C++ 核心能可预测地兑现行为时，才增加对应 API。
