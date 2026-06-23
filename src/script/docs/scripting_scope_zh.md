@@ -45,6 +45,8 @@ API 表面。
 - listener options：boolean capture，以及对象形式 `{ capture, once }`。
 - Event object 字段：`type`、`target`、`currentTarget`、`eventPhase`、`bubbles`、
   `cancelable`、`defaultPrevented`，以及适用时的鼠标坐标/按键、modifier keys 和滚轮 delta。
+- 基础 `Event` 不会伪装成 `MouseEvent`。只有 native input 事件以及真正的
+  `MouseEvent` / `WheelEvent` 才会暴露坐标、按键或滚轮字段。
 - Event object 方法：`preventDefault`、`stopPropagation` 和 `stopImmediatePropagation`。
 - JavaScript listener 复用现有 C++ capture/target/bubble 事件流，并可在 native input dispatch
   过程中修改 DOM。
@@ -102,21 +104,25 @@ API 表面。
 可选网络、app 私有 KV storage 和 system status events 的 JS 暴露形状记录在
 `src/app_runtime/docs/runtime_data_api_zh.md`。
 
-- 已暴露：异步 `XMLHttpRequest` V0 子集，包含 `new XMLHttpRequest()`、async `GET`
-  `open()`、`send()`、`abort()`、`readyState`、`status`、`responseText`、`responseURL`
-  和 `onreadystatechange/onload/onerror/ontimeout/onabort/onloadend` callback 属性。
+- 宿主绑定 network service 后暴露：异步 `XMLHttpRequest` V0 子集，包含
+  `new XMLHttpRequest()`、async `GET` `open()`、`send()`、`abort()`、`readyState`、
+  `status`、`responseText`、`responseURL` 和
+  `onreadystatechange/onload/onerror/ontimeout/onabort/onloadend` callback 属性。
+- 未绑定 host network service 时不暴露 `XMLHttpRequest`。App 应使用
+  `typeof XMLHttpRequest === "function"` 做能力检测。
 - 回调只在宿主把 network completion 泵回 UI/main task 后执行；worker 不直接调用 JS。
 - scripting 构建中的 Win32 browser shell 绑定 debug `NetworkFetchMock`，用于桌面验证 completion
   分发模型，不代表核心包含真实网络栈。
 - 已暴露：宿主显式绑定非阻塞 `AppLocalStorageShadow` 时提供极小 `localStorage` 子集：
   `getItem`、`setItem`、`removeItem`、`clear`、`key` 和 `length`。未绑定 shadow 时不暴露
   `localStorage`。
-- 已暴露：宿主可选的极小 `Audio` 子集。App 可写 `new Audio(src)`，读写 `src`/`volume`，
-  调用 `play()`，以及调用第一版 no-op 的 `pause()`。未绑定 host audio adapter 或宿主拒绝 source
-  时，`play()` 会抛错并向已注册 handler 派发 `error`。`onended`/`onerror` 以及面向 `ended` 和
-  `error` 的 `addEventListener`/`removeEventListener` 已作为第一版状态事件子集支持。V0 每种事件保留
-  一个函数 listener 加一个 `on*` property slot。暂不承诺完整 `HTMLAudioElement`、Promise 或
-  streaming 状态。
+- 宿主绑定 audio adapter 后暴露：宿主可选的极小 `Audio` 子集。App 可写
+  `new Audio(src)`，读写 `src`/`volume`，调用 `play()`，以及调用第一版 no-op 的
+  `pause()`。未绑定 host audio adapter 时不暴露 `Audio`。如果宿主拒绝 source，
+  `play()` 会抛错并向已注册 handler 派发 `error`。`onended`/`onerror` 以及面向
+  `ended` 和 `error` 的 `addEventListener`/`removeEventListener` 已作为第一版状态事件子集支持。
+  V0 每种事件保留一个函数 listener 加一个 `on*` property slot。暂不承诺完整
+  `HTMLAudioElement`、Promise 或 streaming 状态。
 - 已暴露：`navigator.onLine`、`window.addEventListener` / `removeEventListener`
   的 `online` / `offline` 系统状态事件子集、`document.hidden`、`document.visibilityState`
   和 `document` 的 `visibilitychange`，用于 accepted host system events。Win32 壳可用

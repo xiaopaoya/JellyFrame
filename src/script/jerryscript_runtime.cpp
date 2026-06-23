@@ -845,20 +845,22 @@ jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
         set_property(object.get(), "currentTarget", jerry_null());
     }
 
-    if (auto* mouse = dynamic_cast<MouseEvent*>(&event)) {
-        set_number_property(object.get(), "clientX", mouse->client_x);
-        set_number_property(object.get(), "clientY", mouse->client_y);
-        set_number_property(object.get(), "button", mouse->button);
-        set_number_property(object.get(), "buttons", mouse->buttons);
-        set_bool_property(object.get(), "altKey", mouse->alt_key);
-        set_bool_property(object.get(), "ctrlKey", mouse->ctrl_key);
-        set_bool_property(object.get(), "metaKey", mouse->meta_key);
-        set_bool_property(object.get(), "shiftKey", mouse->shift_key);
+    if (event.kind() == EventKind::Mouse || event.kind() == EventKind::Wheel) {
+        const auto& mouse = static_cast<const MouseEvent&>(event);
+        set_number_property(object.get(), "clientX", mouse.client_x);
+        set_number_property(object.get(), "clientY", mouse.client_y);
+        set_number_property(object.get(), "button", mouse.button);
+        set_number_property(object.get(), "buttons", mouse.buttons);
+        set_bool_property(object.get(), "altKey", mouse.alt_key);
+        set_bool_property(object.get(), "ctrlKey", mouse.ctrl_key);
+        set_bool_property(object.get(), "metaKey", mouse.meta_key);
+        set_bool_property(object.get(), "shiftKey", mouse.shift_key);
     }
-    if (auto* wheel = dynamic_cast<WheelEvent*>(&event)) {
-        set_number_property(object.get(), "deltaX", wheel->delta_x);
-        set_number_property(object.get(), "deltaY", wheel->delta_y);
-        set_number_property(object.get(), "deltaMode", wheel->delta_mode);
+    if (event.kind() == EventKind::Wheel) {
+        const auto& wheel = static_cast<const WheelEvent&>(event);
+        set_number_property(object.get(), "deltaX", wheel.delta_x);
+        set_number_property(object.get(), "deltaY", wheel.delta_y);
+        set_number_property(object.get(), "deltaMode", wheel.delta_mode);
     }
 
     set_method(object.get(), "preventDefault", event_prevent_default);
@@ -2194,12 +2196,16 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
-    JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
-    set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
-    set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
-    JerryValue audio_constructor(make_audio_constructor(*this));
-    set_property(window_object.get(), "Audio", audio_constructor.get());
-    set_property(global.get(), "Audio", audio_constructor.get());
+    if (network_fetch_ != nullptr) {
+        JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
+        set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
+        set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
+    }
+    if (audio_host_.play != nullptr) {
+        JerryValue audio_constructor(make_audio_constructor(*this));
+        set_property(window_object.get(), "Audio", audio_constructor.get());
+        set_property(global.get(), "Audio", audio_constructor.get());
+    }
     if (local_storage_ != nullptr) {
         JerryValue local_storage(make_local_storage_object(*local_storage_));
         set_property(window_object.get(), "localStorage", local_storage.get());

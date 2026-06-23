@@ -51,6 +51,9 @@ surface.
 - Event object fields: `type`, `target`, `currentTarget`, `eventPhase`,
   `bubbles`, `cancelable`, `defaultPrevented`, mouse coordinates/buttons,
   modifier keys and wheel deltas when applicable.
+- Base `Event` instances do not pretend to be `MouseEvent`s. Only native input
+  events and real `MouseEvent`/`WheelEvent` objects expose coordinate, button or
+  wheel fields.
 - Event object methods: `preventDefault`, `stopPropagation` and
   `stopImmediatePropagation`.
 - JavaScript listeners run through the existing C++ capture/target/bubble event
@@ -122,11 +125,14 @@ surface.
 Optional network, app-private KV storage and system status event shapes are
 documented under `src/app_runtime/docs/runtime_data_api.md`.
 
-- Exposed now: asynchronous `XMLHttpRequest` V0, including
+- Exposed now when the host binds a network service: asynchronous
+  `XMLHttpRequest` V0, including
   `new XMLHttpRequest()`, async `GET` `open()`, `send()`, `abort()`,
   `readyState`, `status`, `responseText`, `responseURL` and
   `onreadystatechange/onload/onerror/ontimeout/onabort/onloadend` callback
   properties.
+- `XMLHttpRequest` is absent when no host network service is bound. App code
+  should use `typeof XMLHttpRequest === "function"` as the capability check.
 - Callbacks run only after the host pumps network completions back to the
   UI/main task. Workers never call JavaScript directly.
 - The Win32 browser shell binds a debug `NetworkFetchMock` in scripting builds
@@ -135,11 +141,12 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Exposed now: a tiny `localStorage` subset when the host explicitly binds a
   non-blocking `AppLocalStorageShadow`: `getItem`, `setItem`, `removeItem`,
   `clear`, `key` and `length`. `localStorage` is absent when no shadow is bound.
-- Exposed now: a tiny host-optional `Audio` subset. App code may construct
-  `new Audio(src)`, set `src`/`volume`, call `play()` and call no-op `pause()`.
-  `play()` throws when no host audio adapter is bound or the host rejects the
-  source and dispatches `error` for registered handlers. `onended`/`onerror`
-  and `addEventListener`/`removeEventListener` for `ended` and `error` are
+- Exposed now when the host binds an audio adapter: a tiny host-optional
+  `Audio` subset. App code may construct `new Audio(src)`, set `src`/`volume`,
+  call `play()` and call no-op `pause()`. `Audio` is absent when no host audio
+  adapter is bound. If the host rejects the source, `play()` throws and
+  dispatches `error` for registered handlers. `onended`/`onerror` and
+  `addEventListener`/`removeEventListener` for `ended` and `error` are
   supported as the first status-event subset. V0 keeps one function listener
   per event type plus the `on*` property slot. It intentionally does not expose
   full `HTMLAudioElement`, Promises or streaming state yet.

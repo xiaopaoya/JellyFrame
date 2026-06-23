@@ -16,6 +16,12 @@ enum class EventPhase {
     Bubbling = 3,
 };
 
+enum class EventKind {
+    Generic,
+    Mouse,
+    Wheel,
+};
+
 struct EventListenerOptions {
     bool capture = false;
     bool once = false;
@@ -26,6 +32,7 @@ public:
     explicit Event(std::string type, bool bubbles = true, bool cancelable = true);
     virtual ~Event() = default;
 
+    virtual EventKind kind() const;
     const std::string& type() const;
     bool bubbles() const;
     bool cancelable() const;
@@ -65,6 +72,8 @@ class MouseEvent : public Event {
 public:
     MouseEvent(std::string type, int client_x, int client_y, int button = 0, int buttons = 0);
 
+    EventKind kind() const override;
+
     int client_x = 0;
     int client_y = 0;
     int button = 0;
@@ -78,6 +87,8 @@ public:
 class WheelEvent : public MouseEvent {
 public:
     WheelEvent(int client_x, int client_y, int delta_x, int delta_y);
+
+    EventKind kind() const override;
 
     int delta_x = 0;
     int delta_y = 0;

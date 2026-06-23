@@ -273,6 +273,27 @@ void javascript_click_listener_mutates_dom() {
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "JS event mutation marks layout dirty");
 }
 
+void javascript_generic_click_event_does_not_fake_mouse_coordinates() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "button exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "button.addEventListener('click', function (event) {"
+        "  button.textContent = event.type + ':' + String(event.clientX);"
+        "});"
+        "'listener-ready'");
+
+    check(result.ok, "generic click listener registration succeeds");
+    Event click("click");
+    dispatch_event(*button, click);
+    check(button->text_content() == "click:undefined", "generic click remains a base Event in JS");
+}
+
 void javascript_event_prevent_default_and_remove_listener_work() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>0</button></body>");
@@ -603,7 +624,11 @@ void javascript_xml_http_request_budget_is_bounded() {
     HtmlParser parser;
     auto document = parser.parse("<body></body>");
 
+    AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
+    host.launch("org.example.xhr-budget", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
     JerryScriptRuntime runtime(JerryScriptRuntimeOptions{64, 512, 256, 1});
+    runtime.bind_app_services(host, network);
     runtime.bind_document(*document);
     const ScriptEvaluationResult result = runtime.eval(
         "var bareOk = true;"
@@ -621,11 +646,23 @@ void javascript_xml_http_request_constructor_is_shared_with_window() {
     HtmlParser parser;
     auto document = parser.parse("<body></body>");
 
-    JerryScriptRuntime runtime;
-    runtime.bind_document(*document);
-    const ScriptEvaluationResult result = runtime.eval("String(XMLHttpRequest === window.XMLHttpRequest)");
+    {
+        JerryScriptRuntime runtime;
+        runtime.bind_document(*document);
+        ScriptEvaluationResult result = runtime.eval("typeof XMLHttpRequest");
+        check(result.ok, "XHR absence script evaluates");
+        check(result.value == "undefined", "XHR is absent when no network host is bound");
+    }
+
+    AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
+    host.launch("org.example.xhr-constructor", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    JerryScriptRuntime runtime_with_network;
+    runtime_with_network.bind_app_services(host, network);
+    runtime_with_network.bind_document(*document);
+    ScriptEvaluationResult result = runtime_with_network.eval("String(XMLHttpRequest === window.XMLHttpRequest)");
     check(result.ok, "XHR constructor identity script evaluates");
-    check(result.value == "true", "global and window share the XHR constructor");
+    check(result.value == "true", "global and window share the XHR constructor when bound");
 }
 
 void javascript_local_storage_is_exposed_only_when_bound() {
@@ -715,7 +752,7 @@ void javascript_audio_subset_uses_bound_host() {
             "try { new Audio('/audio/tone.wav').play(); } catch (e) { unboundOk = false; }"
             "String(typeof Audio) + ':' + String(bareOk) + ':' + String(unboundOk)");
         check(result.ok, "Audio constructor absence/host test evaluates");
-        check(result.value == "function:false:false", "Audio requires new and bound host for play");
+        check(result.value == "undefined:false:false", "Audio is absent without a bound host");
     }
 
     {
@@ -865,6 +902,7 @@ int main() {
         remove_child_keeps_wrapper_usable();
         javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
+        javascript_generic_click_event_does_not_fake_mouse_coordinates();
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_form_properties_mutate_control_state();
         javascript_embedded_ui_helpers_support_event_delegation();

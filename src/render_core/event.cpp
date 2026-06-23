@@ -11,6 +11,10 @@ namespace jellyframe {
 Event::Event(std::string type, bool bubbles, bool cancelable)
     : type_(std::move(type)), bubbles_(bubbles), cancelable_(cancelable) {}
 
+EventKind Event::kind() const {
+    return EventKind::Generic;
+}
+
 const std::string& Event::type() const {
     return type_;
 }
@@ -94,10 +98,18 @@ MouseEvent::MouseEvent(std::string type, int client_x_in, int client_y_in, int b
       button(button_in),
       buttons(buttons_in) {}
 
+EventKind MouseEvent::kind() const {
+    return EventKind::Mouse;
+}
+
 WheelEvent::WheelEvent(int client_x, int client_y, int delta_x_in, int delta_y_in)
     : MouseEvent("wheel", client_x, client_y, 0, 0),
       delta_x(delta_x_in),
       delta_y(delta_y_in) {}
+
+EventKind WheelEvent::kind() const {
+    return EventKind::Wheel;
+}
 
 struct EventTarget::ListenerStore {
     struct Listener {

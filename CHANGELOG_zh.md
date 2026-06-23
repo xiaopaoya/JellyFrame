@@ -212,6 +212,12 @@ JellyFrame Engine 的重要变更记录在这里。
 - VS Code 辅助扩展现在会在报告面板和 inline diagnostics 中消费 `pipelineDiagnostics`，
   `preview` 也会写出 report，并新增打开所选 package 的 Win32 browser 壳命令。
 - 删除 loose `watch_calculator` fixture，避免仓库发布一个刻意贴近专有手表计算器设计的 app。
+- JerryScript 的 `XMLHttpRequest` 与 `Audio` constructor 现在只会在宿主绑定对应 network
+  或 audio adapter 后暴露。App 可使用标准 `typeof` 能力检测，未支持目标不会暴露一个实际不可用的 API。
+- 脚本事件对象现在使用轻量 event-kind 标记投影 mouse/wheel 字段，避免在嵌入式构建中依赖 RTTI。
+  基础 `Event("click")` 仍是普通事件，不会被当作伪造的 mouse event。
+- 拆分 `SoftwareCompositor` constructor，避免 ESP-IDF C++ 工具链遇到带默认 aggregate options
+  的重载歧义，同时保留 image painter 路径。
 
 ## 0.3.0-dev - 2026-06-18
 

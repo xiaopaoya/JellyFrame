@@ -833,6 +833,9 @@ SoftwareCompositor::SoftwareCompositor(TextPainter text_painter)
 SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, Options options)
     : SoftwareCompositor(text_painter, {}, options) {}
 
+SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter image_painter)
+    : SoftwareCompositor(text_painter, image_painter, Options{}) {}
+
 SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter image_painter, Options options)
     : rasterizer_(text_painter, image_painter, options.diagnostics), options_(options) {}
 

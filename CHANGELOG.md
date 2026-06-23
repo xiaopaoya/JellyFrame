@@ -320,6 +320,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Split `SoftwareCompositor` constructors to keep ESP-IDF C++ toolchains away
   from ambiguous/default aggregate option parameters while preserving the image
   painter path.
+- JerryScript `XMLHttpRequest` and `Audio` constructors are now exposed only
+  when the host has bound the matching network or audio adapter, so apps can
+  use standard `typeof` capability checks and unsupported targets do not expose
+  unusable APIs.
+- Script event objects now use a lightweight event-kind tag instead of RTTI for
+  mouse/wheel field projection. Base `Event("click")` remains a generic event
+  and no longer risks being treated as a fake mouse event on embedded builds.
 
 ## 0.3.0-dev - 2026-06-18
 
