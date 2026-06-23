@@ -1,0 +1,30 @@
+{
+  "id": "rect-172x320",
+  "description": "172x320 portrait rectangular wearable display, matching Waveshare ESP32-S3-Touch-LCD-1.47 class panels.",
+  "viewport": {
+    "width": 172,
+    "height": 320,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 131072,
+    "maxDomNodes": 512,
+    "maxCssRules": 256,
+    "maxDisplayCommands": 512,
+    "maxAppFonts": 1,
+    "maxAppFontBytes": 32768,
+    "maxAppFontGlyphs": 512
+  },
+  "fontProfile": "app-subset-cn",
+  "hostServices": {
+    "networkFetch": true,
+    "storageKv": true,
+    "audioPlayback": false
+  },
+  "output": "cpp",
+  "framebuffer": {
+    "preferredPixelFormat": "rgb565",
+    "fullFramebuffer": true,
+    "partialPresent": true
+  }
+}

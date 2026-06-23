@@ -119,6 +119,27 @@ void accumulate_layout_bounds(const LayoutBox& box, LayoutBounds& bounds) {
     }
 }
 
+void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bounds) {
+    for (const DisplayCommand& command : display_list) {
+        const Rect& rect = command.rect;
+        if (rect.width <= 0 || rect.height <= 0) {
+            continue;
+        }
+        const int left = rect.x;
+        const int top = rect.y;
+        const int right = rect.x + rect.width;
+        const int bottom = rect.y + rect.height;
+        if (!bounds.valid) {
+            bounds = LayoutBounds{left, top, right, bottom, true};
+        } else {
+            bounds.left = std::min(bounds.left, left);
+            bounds.top = std::min(bounds.top, top);
+            bounds.right = std::max(bounds.right, right);
+            bounds.bottom = std::max(bounds.bottom, bottom);
+        }
+    }
+}
+
 bool write_image_frame_sink(const HostFrameBufferView& frame,
                             const Rect*,
                             std::size_t,
@@ -195,6 +216,7 @@ void write_diagnostics_json(const std::string& path,
                             const BrowserOptions& options,
                             const PipelineStatistics& statistics,
                             const LayoutBounds& layout_bounds,
+                            const LayoutBounds& paint_bounds,
                             const VectorDiagnosticSink& diagnostics) {
     if (path.empty()) {
         return;
@@ -230,8 +252,8 @@ void write_diagnostics_json(const std::string& path,
     const int content_height = layout_bounds.valid
         ? std::max(options.viewport_height, layout_bounds.bottom)
         : options.viewport_height;
-    const bool horizontal_overflow = layout_bounds.valid &&
-        (layout_bounds.left < 0 || layout_bounds.right > options.viewport_width);
+    const bool horizontal_overflow = paint_bounds.valid &&
+        (paint_bounds.left < 0 || paint_bounds.right > options.viewport_width);
     const bool vertical_overflow = content_height > options.viewport_height;
     output << "  \"layout\": {\n";
     output << "    \"contentHeight\": " << content_height << ",\n";
@@ -239,6 +261,10 @@ void write_diagnostics_json(const std::string& path,
            << ", \"top\": " << (layout_bounds.valid ? layout_bounds.top : 0)
            << ", \"right\": " << (layout_bounds.valid ? layout_bounds.right : 0)
            << ", \"bottom\": " << (layout_bounds.valid ? layout_bounds.bottom : 0) << "},\n";
+    output << "    \"paintBounds\": {\"left\": " << (paint_bounds.valid ? paint_bounds.left : 0)
+           << ", \"top\": " << (paint_bounds.valid ? paint_bounds.top : 0)
+           << ", \"right\": " << (paint_bounds.valid ? paint_bounds.right : 0)
+           << ", \"bottom\": " << (paint_bounds.valid ? paint_bounds.bottom : 0) << "},\n";
     output << "    \"horizontalOverflow\": " << (horizontal_overflow ? "true" : "false") << ",\n";
     output << "    \"verticalOverflow\": " << (vertical_overflow ? "true" : "false") << "\n";
     output << "  },\n";
@@ -347,6 +373,8 @@ int main(int argc, char** argv) {
 
         CssParser css_parser;
         CssParserOptions css_options = css_parser_options_from_budgets(budgets);
+        css_options.media_viewport_width = options.viewport_width;
+        css_options.media_viewport_height = options.viewport_height;
         css_options.diagnostics = &diagnostics;
         Stylesheet stylesheet = css_parser.parse(css, css_options);
         StyleResolverOptions style_options;
@@ -427,7 +455,14 @@ int main(int argc, char** argv) {
 
         LayoutBounds layout_bounds;
         accumulate_layout_bounds(*layout_tree, layout_bounds);
-        write_diagnostics_json(options.diagnostics_json_path, options, pipeline_statistics, layout_bounds, diagnostics);
+        LayoutBounds paint_bounds;
+        accumulate_display_bounds(display_list, paint_bounds);
+        write_diagnostics_json(options.diagnostics_json_path,
+                               options,
+                               pipeline_statistics,
+                               layout_bounds,
+                               paint_bounds,
+                               diagnostics);
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';
         return 1;

@@ -170,6 +170,21 @@ bool evaluate_media_feature(std::string_view condition, const CssParserOptions& 
     return false;
 }
 
+bool is_recognized_media_feature(std::string_view condition) {
+    const std::string text = ascii_lowercase(collapse_ascii_space(condition));
+    const std::size_t colon = text.find(':');
+    if (colon == std::string::npos) {
+        return false;
+    }
+    const std::string feature = trim(std::string_view(text).substr(0, colon));
+    if (feature != "min-width" && feature != "max-width" &&
+        feature != "min-height" && feature != "max-height") {
+        return false;
+    }
+    int expected = 0;
+    return parse_media_length_px(std::string_view(text).substr(colon + 1), expected);
+}
+
 bool consume_media_condition(std::string_view& rest, const CssParserOptions& options) {
     rest = std::string_view(rest).substr(std::min(rest.find_first_not_of(' '), rest.size()));
     if (rest.empty() || rest.front() != '(') {
@@ -186,6 +201,28 @@ bool consume_media_condition(std::string_view& rest, const CssParserOptions& opt
                 const std::string_view condition = rest.substr(1, index - 1);
                 rest = rest.substr(index + 1);
                 return evaluate_media_feature(condition, options);
+            }
+        }
+    }
+    return false;
+}
+
+bool consume_recognized_media_condition(std::string_view& rest) {
+    rest = std::string_view(rest).substr(std::min(rest.find_first_not_of(' '), rest.size()));
+    if (rest.empty() || rest.front() != '(') {
+        return false;
+    }
+    int depth = 0;
+    for (std::size_t index = 0; index < rest.size(); ++index) {
+        const char ch = rest[index];
+        if (ch == '(') {
+            ++depth;
+        } else if (ch == ')') {
+            --depth;
+            if (depth == 0) {
+                const std::string_view condition = rest.substr(1, index - 1);
+                rest = rest.substr(index + 1);
+                return is_recognized_media_feature(condition);
             }
         }
     }
@@ -248,6 +285,57 @@ bool evaluate_media_query_item(std::string_view item, const CssParserOptions& op
     }
 }
 
+bool is_recognized_media_query_item(std::string_view item) {
+    std::string media = ascii_lowercase(collapse_ascii_space(item));
+    if (media.empty() || media == "all" || media == "screen") {
+        return true;
+    }
+    if (starts_with_token(media, "not")) {
+        return false;
+    }
+    if (starts_with_token(media, "only")) {
+        media = trim(std::string_view(media).substr(4));
+    }
+
+    std::string_view rest(media);
+    if (!rest.empty() && rest.front() != '(') {
+        const std::size_t space = rest.find(' ');
+        const std::string_view type = space == std::string_view::npos ? rest : rest.substr(0, space);
+        if (type != "all" && type != "screen") {
+            return false;
+        }
+        if (space == std::string_view::npos) {
+            return true;
+        }
+        rest = rest.substr(space + 1);
+        rest = rest.substr(std::min(rest.find_first_not_of(' '), rest.size()));
+        if (!starts_with_token(rest, "and")) {
+            return false;
+        }
+        rest = rest.substr(3);
+    }
+
+    bool saw_condition = false;
+    while (true) {
+        rest = rest.substr(std::min(rest.find_first_not_of(' '), rest.size()));
+        if (rest.empty()) {
+            return saw_condition;
+        }
+        if (!consume_recognized_media_condition(rest)) {
+            return false;
+        }
+        saw_condition = true;
+        rest = rest.substr(std::min(rest.find_first_not_of(' '), rest.size()));
+        if (rest.empty()) {
+            return true;
+        }
+        if (!starts_with_token(rest, "and")) {
+            return false;
+        }
+        rest = rest.substr(3);
+    }
+}
+
 bool is_supported_media_query(std::string_view prelude, const CssParserOptions& options) {
     const std::string media = ascii_lowercase(collapse_ascii_space(prelude));
     for (const std::string& item : split_top_level_commas(media)) {
@@ -256,6 +344,18 @@ bool is_supported_media_query(std::string_view prelude, const CssParserOptions& 
         }
     }
     return false;
+}
+
+bool is_recognized_media_query_syntax(std::string_view prelude) {
+    const std::string media = ascii_lowercase(collapse_ascii_space(prelude));
+    bool saw_item = false;
+    for (const std::string& item : split_top_level_commas(media)) {
+        saw_item = true;
+        if (!is_recognized_media_query_item(item)) {
+            return false;
+        }
+    }
+    return saw_item;
 }
 
 bool starts_with_word(std::string_view value, std::string_view word) {
@@ -1046,6 +1146,16 @@ private:
         if (depth + 1 <= options_.max_nesting_depth && is_supported_group_at_rule(name, prelude, options_)) {
             parse_rule_list(depth + 1, true);
         } else {
+            if (name == "media" && is_recognized_media_query_syntax(prelude)) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Info,
+                                  "css-media-query-not-matched",
+                                  "CSS media block did not match the current viewport",
+                                  "@" + name + (prelude.empty() ? std::string{} : " " + prelude));
+                skip_balanced_block();
+                return;
+            }
             report_diagnostic(options_.diagnostics,
                               DiagnosticStage::Css,
                               DiagnosticSeverity::Warning,

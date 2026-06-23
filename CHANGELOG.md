@@ -72,6 +72,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `responsiveProfiles[]` into JSON reports, including viewport, content height,
   layout bounds, horizontal/vertical overflow, pipeline counts and diagnostic
   summaries. Single-target commands keep the older report shape.
+- Added the generic `rect-172x320` target preset for narrow portrait wearable
+  panels such as Waveshare ESP32-S3-Touch-LCD-1.47 class boards. The weather,
+  controls, motion-lab and service-status sample packages now declare and pass
+  `round-300`, `rect-320x240` and `rect-172x320` responsive profiles.
 - Added font-family policy diagnostics for packages. `fontDiagnostics` now
   includes `fontFamilyUsage`, matching explicit CSS `font-family` declarations
   against manifest `.jffont` family metadata, generic fallback names and
@@ -259,6 +263,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- CSS media query evaluation now receives the actual pseudo-browser/Win32
+  viewport at page load. Recognized but non-matching `@media` blocks are
+  reported as informational branch selection instead of warning-level skipped
+  CSS, and responsive reports now include `paintBounds` so clipped layout boxes
+  do not look like visible horizontal overflow.
 - Public samples, templates and script/runtime tests now use package-local
   standard paths such as `/data/weather.json`, `/debug/icon.raw` and
   `/audio/tone.wav`. The old debug-only `app://...` fixture scheme was removed;

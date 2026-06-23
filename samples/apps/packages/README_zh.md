@@ -6,6 +6,13 @@
 这些示例用于验证 runtime 行为和视觉验收。供开发者 CLI 复制的起始模板位于
 `../../../tools/templates/apps`。
 
+部分 package 声明了多个 target profile。可以用 CLI 的 responsive pass 检查同一个包在常见
+可穿戴屏幕形态上是否仍然可用：
+
+```powershell
+python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
+```
+
 当前 package：
 
 - `watch_weather`：包含 package 资源和可选数据能力的手表天气 app。

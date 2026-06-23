@@ -7,6 +7,13 @@ resources needed for preview or packaging.
 Use these examples to validate runtime behavior and visual acceptance. Starter
 templates copied by the developer CLI live under `../../../tools/templates/apps`.
 
+Several packages declare multiple target profiles. Use the CLI responsive pass
+to check whether a package remains usable on the common wearable shapes:
+
+```powershell
+python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
+```
+
 Current packages:
 
 - `watch_weather`: watch weather app with package resources and optional data.

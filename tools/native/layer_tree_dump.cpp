@@ -143,8 +143,10 @@ int main(int argc, char** argv) {
         HtmlParser html_parser;
         CssParser css_parser;
         auto document = html_parser.parse(html);
+        CssParserOptions css_options;
+        css_options.media_viewport_width = viewport_width;
         StyleResolver resolver(css_parser.parse(
-            jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes)));
+            jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes), css_options));
         RenderTreeBuilder render_tree_builder(resolver);
         auto render_tree = render_tree_builder.build(*document);
         LayoutEngine layout_engine(resolver);

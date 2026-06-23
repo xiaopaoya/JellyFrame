@@ -12,15 +12,12 @@
 html,
 body {
   margin: 0;
-  width: 300px;
-  height: 300px;
   color: var(--ink);
   background-color: var(--bg0);
 }
 
 .screen {
   box-sizing: border-box;
-  width: 300px;
   height: 300px;
   padding: 12px;
   background-color: var(--bg1);
@@ -190,5 +187,156 @@ body {
   to {
     opacity: 1;
     transform: translate(0px, 0px) scale(1);
+  }
+}
+
+@media (max-height: 260px) {
+  .screen {
+    height: 240px;
+    padding: 10px 12px;
+  }
+
+  .hero {
+    height: 24px;
+    margin-bottom: 4px;
+  }
+
+  .label {
+    font-size: 11px;
+    line-height: 18px;
+  }
+
+  .hero strong {
+    font-size: 16px;
+    line-height: 18px;
+  }
+
+  .stage {
+    height: 112px;
+  }
+
+  .window {
+    left: 46px;
+    top: 8px;
+    width: 204px;
+    height: 92px;
+    padding: 18px 14px 10px;
+    border-radius: 20px;
+  }
+
+  .window-gloss {
+    top: 6px;
+    height: 6px;
+  }
+
+  .window strong {
+    margin-bottom: 4px;
+    font-size: 16px;
+  }
+
+  .window p {
+    font-size: 11px;
+    line-height: 15px;
+  }
+
+  .app-icon {
+    left: 134px;
+    top: 66px;
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+    font-size: 22px;
+  }
+
+  .sheet {
+    height: 46px;
+    margin-bottom: 6px;
+    padding: 8px 12px;
+    border-radius: 17px;
+  }
+
+  .sheet strong {
+    font-size: 13px;
+  }
+
+  .sheet span {
+    font-size: 10px;
+  }
+
+  .dock {
+    gap: 6px;
+  }
+
+  .pill {
+    height: 30px;
+    border-radius: 15px;
+  }
+}
+
+@media (max-width: 200px) {
+  .screen {
+    height: 320px;
+    padding: 10px;
+  }
+
+  .hero {
+    grid-template-columns: 1fr 38px;
+    height: 26px;
+    margin-bottom: 6px;
+  }
+
+  .stage {
+    height: 166px;
+  }
+
+  .window {
+    left: 8px;
+    top: 12px;
+    width: 136px;
+    height: 118px;
+    padding: 20px 10px 8px;
+    border-radius: 20px;
+  }
+
+  .window-gloss {
+    left: 14px;
+    right: 14px;
+    top: 7px;
+    height: 6px;
+  }
+
+  .window strong {
+    margin-bottom: 5px;
+    font-size: 15px;
+  }
+
+  .window p {
+    font-size: 10px;
+    line-height: 15px;
+  }
+
+  .app-icon {
+    left: 50px;
+    top: 112px;
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    font-size: 23px;
+  }
+
+  .sheet {
+    height: 54px;
+    margin-bottom: 7px;
+    padding: 10px 12px;
+  }
+
+  .dock {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .pill {
+    height: 28px;
+    border-radius: 14px;
   }
 }

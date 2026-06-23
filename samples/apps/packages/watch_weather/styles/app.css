@@ -1,8 +1,6 @@
 html,
 body {
   margin: 0;
-  width: 300px;
-  height: 300px;
   background: #071d25;
   color: #f7fff6;
   font-family: sans-serif;
@@ -10,10 +8,10 @@ body {
 
 .screen {
   box-sizing: border-box;
-  width: 300px;
   height: 300px;
   padding: 12px 14px;
   background: #0b3442;
+  overflow: hidden;
 }
 
 .topbar {
@@ -80,8 +78,8 @@ body {
 }
 
 .temp::after {
-  content: "°";
-  font-size: 26px;
+  content: "deg";
+  font-size: 12px;
 }
 
 .summary {
@@ -167,4 +165,158 @@ body {
 
 .statusline span:last-child {
   text-align: right;
+}
+
+@media (max-height: 260px) {
+  .screen {
+    height: 240px;
+    padding: 10px 12px;
+  }
+
+  .topbar {
+    height: 18px;
+    margin-bottom: 4px;
+    font-size: 11px;
+  }
+
+  .hero {
+    grid-template-columns: 58px 1fr;
+    gap: 8px;
+    height: 74px;
+    margin-bottom: 6px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .weather-art {
+    width: 54px;
+    height: 54px;
+    margin-top: 1px;
+    border-radius: 14px;
+  }
+
+  .weather-art img {
+    width: 50px;
+    height: 50px;
+  }
+
+  .label {
+    font-size: 12px;
+  }
+
+  .temp {
+    margin-top: 0;
+    font-size: 28px;
+    line-height: 1.02;
+  }
+
+  .temp::after {
+    font-size: 10px;
+  }
+
+  .summary {
+    font-size: 11px;
+  }
+
+  .stats {
+    height: 32px;
+    gap: 7px;
+    margin-bottom: 7px;
+  }
+
+  .stats div {
+    padding: 1px 4px;
+    border-radius: 12px;
+  }
+
+  .stats strong {
+    font-size: 13px;
+  }
+
+  .actions {
+    gap: 7px;
+    margin-bottom: 6px;
+  }
+
+  .tile {
+    height: 30px;
+    border-radius: 15px;
+    font-size: 11px;
+    line-height: 27px;
+  }
+
+  .statusline {
+    height: 16px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 200px) {
+  .screen {
+    height: 320px;
+    padding: 10px;
+  }
+
+  .topbar {
+    height: 20px;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+
+  .hero {
+    grid-template-columns: 58px 1fr;
+    gap: 8px;
+    height: 94px;
+    margin-bottom: 8px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .weather-art {
+    width: 56px;
+    height: 56px;
+    margin-top: 8px;
+    border-radius: 14px;
+  }
+
+  .weather-art img {
+    width: 52px;
+    height: 52px;
+  }
+
+  .temp {
+    font-size: 32px;
+    line-height: 1.08;
+  }
+
+  .summary {
+    font-size: 11px;
+  }
+
+  .stats {
+    height: 36px;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .stats strong {
+    font-size: 13px;
+  }
+
+  .actions {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+
+  .tile {
+    height: 29px;
+    border-radius: 15px;
+    line-height: 26px;
+  }
+
+  .statusline {
+    height: 15px;
+    font-size: 10px;
+  }
 }

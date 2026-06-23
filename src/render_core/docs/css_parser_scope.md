@@ -44,7 +44,9 @@ layout behavior.
   bounded query list made from `screen`/`all` plus `min-width`, `max-width`,
   `min-height` and `max-height` conditions in `px` or unitless px-like values.
   Comma-separated media lists use ordinary OR semantics when at least one
-  supported item matches the configured parser viewport.
+  supported item matches the configured parser viewport. Tool and Win32 entry
+  points set that parser viewport from the actual render viewport at page load.
+  Recognized but non-matching media blocks are diagnostics info, not warnings.
 - `@supports` block flattening for conservative declaration feature queries.
   The supported subset accepts `(property: value)`, `not`, homogeneous `and` or
   `or` chains, and parentheses. `selector()` and unknown/unsafe feature queries
@@ -79,7 +81,9 @@ layout behavior.
 ## Phase 1: Lazy Handling
 
 - Unsupported/complex `@media`, unsupported/complex `@supports`, `@container`,
-  `@scope`: skip the full block.
+  `@scope`: skip the full block. Recognized width/height `@media` blocks that
+  simply do not match the current viewport are treated as normal branch
+  selection.
 - `@font-face`, `@page`, `@property`: parse their balanced block boundaries
   but do not expose declarations to style resolution yet.
 - Unknown at-rules: skip statement or balanced block.

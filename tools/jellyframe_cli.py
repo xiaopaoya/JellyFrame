@@ -279,6 +279,7 @@ def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_
             "horizontalOverflow": bool(layout.get("horizontalOverflow", False)),
             "verticalOverflow": bool(layout.get("verticalOverflow", False)),
             "bounds": layout.get("bounds", {}) if isinstance(layout.get("bounds", {}), dict) else {},
+            "paintBounds": layout.get("paintBounds", {}) if isinstance(layout.get("paintBounds", {}), dict) else {},
         },
         "pipeline": {
             "domNodes": int(pipeline.get("domNodes", 0) or 0),

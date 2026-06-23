@@ -14,8 +14,11 @@ inside the JSON report.
 A responsive profile is a desktop developer signal, not a runtime feature. It
 reports viewport size, shape, content height, horizontal overflow, scroll need
 and diagnostic counts so an app author can see whether one package remains
-usable on several wearable form factors. Single-target commands keep the older
-report shape and do not emit `responsiveProfiles[]`.
+usable on several wearable form factors. The pseudo-browser report also exposes
+`paintBounds` next to raw layout bounds; horizontal overflow is based on visible
+display-list bounds so clipped implementation boxes do not create false
+failures. Single-target commands keep the older report shape and do not emit
+`responsiveProfiles[]`.
 
 Font budgets (`maxAppFonts`, `maxAppFontBytes`, `maxAppFontGlyphs`) are tooling
 limits for installable `.jffont` supplements. They should reflect flash/storage
@@ -45,3 +48,8 @@ The built-in wearable presets currently mark bounded runtime network fetch and
 app-private KV storage as supported, and audio playback as unsupported. Product
 ports with a real codec/speaker path should override `audioPlayback` in their
 own preset rather than relying on the generic display-shape preset.
+
+Current generic display shapes include `round-300`, `rect-320x240` and
+`rect-172x320`; `esp32s3-round-300` adds an ESP32-S3-oriented RGB565 profile.
+The `rect-172x320` preset is intended for narrow portrait wearable panels such
+as Waveshare ESP32-S3-Touch-LCD-1.47 class boards.

@@ -36,6 +36,24 @@
       },
       "fontProfile": "tiny-plus-symbols",
       "output": "jfapp"
+    },
+    "rect-320x240": {
+      "viewport": {
+        "width": 320,
+        "height": 240,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp"
+    },
+    "rect-172x320": {
+      "viewport": {
+        "width": 172,
+        "height": 320,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp"
     }
   }
 }

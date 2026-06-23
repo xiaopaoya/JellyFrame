@@ -2003,6 +2003,8 @@ LoadedPage load_page(const BrowserOptions& options,
     HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
     html_options.diagnostics = diagnostics;
     CssParserOptions css_options = css_parser_options_from_budgets(budgets);
+    css_options.media_viewport_width = options.viewport_width;
+    css_options.media_viewport_height = options.viewport_height;
     css_options.diagnostics = diagnostics;
     LoadedPage page;
     if (!options.inline_html.empty()) {

@@ -13,19 +13,17 @@
 html,
 body {
   margin: 0;
-  width: 300px;
-  height: 300px;
   color: var(--ink);
   background-color: var(--bg);
 }
 
 .screen {
   box-sizing: border-box;
-  width: 300px;
   height: 300px;
   padding: 14px;
   background-color: #092330;
   background: linear-gradient(#0c2b38, #07171f);
+  overflow: hidden;
 }
 
 .hero {
@@ -137,4 +135,143 @@ body {
   margin-top: 4px;
   font-size: 13px;
   line-height: 18px;
+}
+
+@media (max-height: 260px) {
+  .screen {
+    height: 240px;
+    padding: 12px;
+  }
+
+  .hero {
+    height: 62px;
+    padding: 10px 14px 8px;
+    border-radius: 19px;
+  }
+
+  .hero strong {
+    height: 22px;
+    font-size: 20px;
+    line-height: 22px;
+  }
+
+  .hero p {
+    margin-top: 2px;
+    font-size: 10px;
+    line-height: 13px;
+  }
+
+  .grid {
+    gap: 7px;
+    margin-top: 8px;
+  }
+
+  .card {
+    height: 58px;
+    padding: 7px 7px 6px;
+    border-radius: 16px;
+  }
+
+  .dot {
+    width: 14px;
+    height: 14px;
+    margin-bottom: 5px;
+    border-radius: 7px;
+  }
+
+  .card strong {
+    font-size: 11px;
+    line-height: 15px;
+  }
+
+  .card small {
+    font-size: 9px;
+    line-height: 12px;
+  }
+
+  .policy {
+    gap: 7px;
+    margin-top: 8px;
+  }
+
+  .policy div {
+    height: 50px;
+    padding: 8px 10px;
+    border-radius: 16px;
+  }
+
+  .policy strong {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+}
+
+@media (max-width: 200px) {
+  .screen {
+    height: 320px;
+    padding: 10px;
+  }
+
+  .hero {
+    height: 74px;
+    padding: 11px 12px 8px;
+    border-radius: 18px;
+  }
+
+  .hero strong {
+    font-size: 21px;
+    line-height: 23px;
+  }
+
+  .hero p {
+    font-size: 10px;
+    line-height: 14px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .card {
+    height: 66px;
+    padding: 8px 7px 6px;
+    border-radius: 16px;
+  }
+
+  .dot {
+    width: 14px;
+    height: 14px;
+    margin-bottom: 6px;
+    border-radius: 7px;
+  }
+
+  .card strong {
+    font-size: 11px;
+    line-height: 15px;
+  }
+
+  .card small {
+    font-size: 9px;
+    line-height: 12px;
+  }
+
+  .policy {
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .policy div {
+    height: 56px;
+    padding: 8px 9px;
+    border-radius: 16px;
+  }
+
+  .policy strong {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 15px;
+  }
 }

@@ -91,7 +91,9 @@ int main(int argc, char** argv) {
         CssParser css_parser;
         auto document = html_parser.parse(html);
         const std::string css = jellyframe_example::read_author_css_for_document(argv[2], *document, kMaxInputBytes);
-        Stylesheet stylesheet = css_parser.parse(css);
+        CssParserOptions css_options;
+        css_options.media_viewport_width = viewport_width;
+        Stylesheet stylesheet = css_parser.parse(css, css_options);
         StyleResolver resolver(std::move(stylesheet));
 
         RenderTreeBuilder render_tree_builder(resolver);
