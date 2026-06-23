@@ -564,6 +564,9 @@ public:
                                       const std::string& value);
     AppServiceSubmitResult submit_remove(AppRuntimeHost& host, const std::string& key);
     AppServiceSubmitResult submit_clear(AppRuntimeHost& host);
+    // Converts a worker-popped request into a completion. The caller still owns
+    // completion queue posting, matching network/image worker integration.
+    HostServiceCompletion complete_request(AppRuntimeHost& host, const HostServiceRequest& request);
     bool complete_next(AppRuntimeHost& host);
     const AppPrivateKvRecord* value(std::uint32_t handle) const;
     bool release_value(AppRuntimeHost& host, std::uint32_t handle);

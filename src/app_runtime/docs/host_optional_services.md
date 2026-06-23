@@ -611,6 +611,11 @@ completes `get/set/remove/clear` asynchronously through
 `HostServiceJobKind::StorageKv`. Successful `get` operations return
 `StorageValue` handles; `set`, `remove` and `clear` return status only. The mock
 checks key length, single-value size, per-app item count and total byte budget.
+Like the network and image mocks, it exposes `complete_request(...)` for real
+host workers that have already popped a `StorageKv` request through
+`pump_app_host_service_worker(...)`; `complete_next(...)` remains the compact
+single-call helper for tests or cooperative loops that do not use the generic
+worker pump.
 
 Policy gate: `policies.storage.enabled` is true only when the app manifest
 requested `storage.kv` and the host profile supplies an enabled

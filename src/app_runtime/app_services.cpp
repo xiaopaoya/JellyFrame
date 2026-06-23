@@ -1845,15 +1845,20 @@ bool AppPrivateKvStorageMock::complete_next(AppRuntimeHost& host) {
     if (!host.pop_worker_request(HostServiceJobKind::StorageKv, request)) {
         return false;
     }
+    return host.push_completion(complete_request(host, request));
+}
+
+HostServiceCompletion AppPrivateKvStorageMock::complete_request(AppRuntimeHost& host,
+                                                                const HostServiceRequest& request) {
     const auto pending = find_job(pending_, request.job_id);
     if (pending == pending_.end()) {
-        return host.push_completion(make_cancelled_completion(request));
+        return make_cancelled_completion(request);
     }
     std::uint32_t handle = 0;
     std::uint32_t byte_count = 0;
     std::uint32_t error_code = 0;
     const HostServiceStatus status = apply(*pending, host, handle, byte_count, error_code);
-    const bool pushed = host.push_completion(HostServiceCompletion{
+    HostServiceCompletion completion{
         request.job_id,
         HostServiceJobKind::StorageKv,
         status,
@@ -1861,9 +1866,9 @@ bool AppPrivateKvStorageMock::complete_next(AppRuntimeHost& host) {
         handle,
         error_code,
         byte_count,
-    });
+    };
     pending_.erase(pending);
-    return pushed;
+    return completion;
 }
 
 const AppPrivateKvRecord* AppPrivateKvStorageMock::value(std::uint32_t handle) const {

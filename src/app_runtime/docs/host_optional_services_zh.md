@@ -526,6 +526,9 @@ struct HostFetchResponse {
 `HostServiceJobKind::StorageKv` 异步完成 `get/set/remove/clear`。`get` 成功时返回
 `StorageValue` handle；`set`、`remove` 和 `clear` 只返回状态。mock 会检查 key 长度、单 value
 大小、每 app item 数和总 byte budget。
+它现在和 network/image mock 一样提供 `complete_request(...)`：真实 host worker 可以先通过
+`pump_app_host_service_worker(...)` pop 出 `StorageKv` request，再生成 completion；`complete_next(...)`
+仍保留为不使用通用 worker pump 的测试或协作式循环的一步式 helper。
 
 能力 gate：只有 app manifest 请求了 `storage.kv`，并且 host profile 提供启用状态的
 `AppPrivateKvPolicy` 时，`policies.storage.enabled` 才为 true。key/value/item/byte 预算会被复制到

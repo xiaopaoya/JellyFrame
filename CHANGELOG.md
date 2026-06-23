@@ -94,6 +94,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added a static-table app host service worker group pump so cooperative MCU
   loops can pump network, storage and audio workers with per-service budgets
   without dynamic allocation or cross-service request consumption.
+- `AppPrivateKvStorageMock` now exposes `complete_request(...)`, matching the
+  network/image mock worker boundary so generic host workers can pop a
+  `StorageKv` request, produce a normalized completion and leave queue posting
+  to the shared pump. Regression coverage now soaks mixed network and storage
+  mock workers across many ticks and verifies handle release.
 - Package `serviceIntent` reports now include `targetSupport` for optional
   host services when a target preset declares `hostServices`; absent profile
   data remains `unknown`.

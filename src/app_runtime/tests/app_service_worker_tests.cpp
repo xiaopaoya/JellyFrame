@@ -2,6 +2,7 @@
 #include "app_runtime/app_services.h"
 
 #include <cassert>
+#include <string>
 #include <vector>
 
 using namespace jellyframe;
@@ -38,6 +39,40 @@ public:
     std::uint32_t handle = 0;
     std::uint32_t error_code = 0;
     std::uint32_t byte_count = 0;
+};
+
+class NetworkFetchWorker final : public AppHostServiceWorker {
+public:
+    NetworkFetchWorker(AppRuntimeHost& host, NetworkFetchMock& network)
+        : host_(host), network_(network) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        ++calls;
+        return network_.complete_request(host_, request);
+    }
+
+    int calls = 0;
+
+private:
+    AppRuntimeHost& host_;
+    NetworkFetchMock& network_;
+};
+
+class StorageKvWorker final : public AppHostServiceWorker {
+public:
+    StorageKvWorker(AppRuntimeHost& host, AppPrivateKvStorageMock& storage)
+        : host_(host), storage_(storage) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        ++calls;
+        return storage_.complete_request(host_, request);
+    }
+
+    int calls = 0;
+
+private:
+    AppRuntimeHost& host_;
+    AppPrivateKvStorageMock& storage_;
 };
 
 void worker_pump_processes_only_selected_service_kind() {
@@ -290,6 +325,76 @@ void worker_group_pump_ignores_empty_slots_without_allocation_or_side_effects() 
     assert(host.requests().size() == 1);
 }
 
+void worker_group_pump_handles_real_network_and_storage_mocks_across_ticks() {
+    constexpr std::size_t kIterations = 24;
+    AppRuntimeHost host = make_host(kIterations * 3, 6);
+    host.launch("org.example.real-workers", AppRole::App);
+
+    NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
+    assert(network.add_fixture(NetworkFetchFixture{"/data/status.json", 200, "application/json", "{\"ok\":true}"}));
+    AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, kIterations + 2, kIterations * 48});
+
+    for (std::size_t index = 0; index < kIterations; ++index) {
+        assert(network.submit_fetch(host, "/data/status.json", 1000).accepted());
+        const std::string key = "k" + std::to_string(index);
+        assert(storage.submit_set(host, key, "value").accepted());
+        assert(storage.submit_get(host, key).accepted());
+    }
+
+    NetworkFetchWorker network_worker(host, network);
+    StorageKvWorker storage_worker(host, storage);
+    AppHostServiceWorkerSlot slots[] = {
+        AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 2, &network_worker},
+        AppHostServiceWorkerSlot{HostServiceJobKind::StorageKv, 2, &storage_worker},
+    };
+    AppFrameScratch scratch;
+    scratch.reserve_from_options(AppRuntimeHostOptions{kIterations * 3, 6, 8, 4096, 1});
+
+    std::size_t network_completions = 0;
+    std::size_t storage_completions = 0;
+    std::size_t released_network_handles = 0;
+    std::size_t released_storage_handles = 0;
+    for (std::size_t tick = 0; tick < 128 && (network_completions < kIterations ||
+                                              storage_completions < kIterations * 2); ++tick) {
+        const AppHostServiceWorkerGroupPumpResult result = pump_app_host_service_workers(host, slots, 2);
+        assert(result.requests_processed <= 4);
+        assert(result.completions_posted == result.requests_processed);
+        assert(!result.completion_queue_full);
+
+        const AppCompletionPumpResult pumped = host.pump_frame_completions(scratch);
+        assert(pumped.dropped_stale == 0);
+        for (const HostServiceCompletion& completion : scratch.accepted_completions) {
+            assert(completion.status == HostServiceStatus::Completed);
+            if (completion.kind == HostServiceJobKind::NetworkFetch) {
+                ++network_completions;
+                assert(completion.handle != 0);
+                assert(network.response(completion.handle) != nullptr);
+                assert(network.release_response(host, completion.handle));
+                ++released_network_handles;
+            } else if (completion.kind == HostServiceJobKind::StorageKv) {
+                ++storage_completions;
+                if (completion.handle != 0) {
+                    assert(storage.value(completion.handle) != nullptr);
+                    assert(storage.release_value(host, completion.handle));
+                    ++released_storage_handles;
+                }
+            } else {
+                assert(false && "unexpected service completion kind");
+            }
+        }
+    }
+
+    assert(host.requests().empty());
+    assert(network_worker.calls == static_cast<int>(kIterations));
+    assert(storage_worker.calls == static_cast<int>(kIterations * 2));
+    assert(network_completions == kIterations);
+    assert(storage_completions == kIterations * 2);
+    assert(released_network_handles == kIterations);
+    assert(released_storage_handles == kIterations);
+    assert(host.handles().active_count() == 0);
+    assert(storage.pending_count() == 0);
+}
+
 } // namespace
 
 int main() {
@@ -301,5 +406,6 @@ int main() {
     worker_group_pump_processes_multiple_services_with_fixed_budgets();
     worker_group_pump_stops_before_next_worker_when_completion_queue_is_full();
     worker_group_pump_ignores_empty_slots_without_allocation_or_side_effects();
+    worker_group_pump_handles_real_network_and_storage_mocks_across_ticks();
     return 0;
 }
