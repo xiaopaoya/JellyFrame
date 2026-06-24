@@ -372,6 +372,41 @@ void bench_location_snapshot_mock(std::size_t capacity) {
     }
 }
 
+void bench_stale_pending_cleanup(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity * 5, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.old", AppRole::App);
+
+    NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
+    network.add_fixture(NetworkFetchFixture{"/data", 200, "application/json", "{}"});
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, capacity});
+    images.add_fixture(ImageDecodeFixture{"/icon", 8, 8, 8, HostPixelFormat::Rgb565, {}});
+    AudioCommandMock audio(AudioPlaybackPolicy{true, 64, capacity});
+    audio.add_source(AudioSourceFixture{"/tone.mp3", 100});
+    AppSensorSampleMock sensors(AppSensorSamplePolicy{true, false, false, false, capacity});
+    sensors.add_fixture(AppSensorSampleFixture{AppSensorKind::Accelerometer, 100});
+    AppLocationSnapshotMock location(AppLocationSnapshotPolicy{true, capacity});
+    location.set_fixture(AppLocationSnapshotFixture{100, 31.2304, 121.4737});
+
+    for (std::size_t i = 0; i < capacity; ++i) {
+        network.submit_fetch(host, "/data");
+        images.submit_decode(host, "/icon");
+        audio.submit_open(host, "/tone.mp3");
+        sensors.submit_sample(host, AppSensorKind::Accelerometer);
+        location.submit_position(host);
+    }
+
+    host.launch("org.example.new", AppRole::App);
+    const std::size_t collected =
+        network.collect_stale_pending_fetches(host) +
+        images.collect_stale_pending_decodes(host) +
+        audio.collect_stale_pending_commands(host) +
+        sensors.collect_stale_pending_samples(host) +
+        location.collect_stale_pending_snapshots(host);
+    if (collected != capacity * 5) {
+        std::abort();
+    }
+}
+
 void bench_image_surface_cache(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
     host.launch("org.example.image-cache", AppRole::App);
@@ -607,6 +642,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_location_snapshot_mock", iterations, average_microseconds(iterations, [&] {
         bench_location_snapshot_mock(capacity);
+    }));
+    print_result("app_runtime_stale_pending_cleanup", iterations, average_microseconds(iterations, [&] {
+        bench_stale_pending_cleanup(capacity);
     }));
     print_result("app_runtime_image_surface_cache", iterations, average_microseconds(iterations, [&] {
         bench_image_surface_cache(capacity);
