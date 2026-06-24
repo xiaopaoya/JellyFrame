@@ -118,6 +118,8 @@ cache snapshot 形状，减少各壳层手写状态转换的出错机会。
 - `FrameUpdateAction::None`：缓存完整且没有 dirty，无需工作。
 - `FrameUpdateAction::RepaintExisting`：只需复用现有 render/layout，重建 layer tree 并重绘当前 layout dirty rect。
 - `FrameUpdateAction::RebuildPipeline`：需要重建 render/layout/layer。
+- `FrameUpdateReason`：稳定诊断名称，用来说明 planner 为什么选择 idle、repaint 或 rebuild，
+  包括首帧、paint-only dirty、tree dirty、缺少缓存和 framebuffer 尺寸不匹配。
 - `FrameDirtyRectMode::CurrentLayout`：dirty rect 可从当前 layout 计算，适合 paint-only 变化。
 - `FrameDirtyRectMode::PreviousAndCurrentLayout`：重建后比较旧/新 layout，适合文本、样式或布局变化的增量重绘。
 - `FrameDirtyRectMode::FullFrame`：缺少缓存、尺寸不匹配或 viewport 无效时保守整帧。
@@ -137,7 +139,8 @@ framebuffer，并执行 full frame repaint。
   因为当前 dirty-region 逻辑会保守退回整 viewport/content rect。未来 retained-subtree
   工作可以继续细化。
 
-同值 `textContent`、未变化 attribute 等不应制造 dirty flags。
+同值 `textContent`、未变化 attribute 等不应制造 dirty flags。对已经只有一个 text child 的元素设置
+`textContent` 时，应原地更新该 text node 并避免 `DomDirtyTree`；替换混合子树或多 child 内容仍然是结构变化。
 
 ## Dirty Region 诊断
 
@@ -165,6 +168,8 @@ layout、结构性 tree dirty、找不到 dirty node bounds，或局部 rect 被
 `DirtyRegionStatistics` 可累计多次 `DirtyRegionResult` 样本。它会记录 clean frame、dirty-rect
 frame、full-frame frame、总 rect 数、总 dirty area 和 fallback reason 次数。它面向审计：
 先测出 full-frame fallback 主要来自哪里，再决定是否加入更重的 retained subtree reuse。
+它应和 `FrameUpdateStatistics` 配合看：frame-update reason 解释为什么选择 rebuild，dirty-region
+reason 解释为什么本来计划局部重绘却仍退回 full frame。
 
 宿主还可以使用 `dirty_region_area(...)`、`dirty_region_area_percent(...)`
 和 `dirty_region_should_repaint_incrementally(...)` 判断局部重绘是否仍然划算。面积估计会把裁剪后的

@@ -943,6 +943,26 @@ jerry_value_t node_set_text_content(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t node_get_class_name(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    return jerry_string_sz(node->attribute("class").c_str());
+}
+
+jerry_value_t node_set_class_name(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element) {
+        node->set_attribute("class", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t node_ignore_setter(const jerry_call_info_t*,
                                  const jerry_value_t[],
                                  const jerry_length_t) {
@@ -1813,6 +1833,7 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
 
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
+    define_accessor(object.get(), "className", node_get_class_name, node_set_class_name);
     define_accessor(object.get(), "parentElement", node_get_parent_element, node_ignore_setter);
     define_accessor(object.get(), "children", node_get_children, node_ignore_setter);
     define_accessor(object.get(), "dataset", node_get_dataset, node_ignore_setter);

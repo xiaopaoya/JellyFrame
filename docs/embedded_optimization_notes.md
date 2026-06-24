@@ -29,7 +29,9 @@ small wearable devices.
   not carry an empty listener table.
 - DOM dirty bits propagate to ancestors, so root dirty checks are O(1), clean
   subtrees are skipped during dirty clearing, and unchanged `textContent`
-  assignments do not trigger rerenders.
+  assignments do not trigger rerenders. Updating an element that already has a
+  single text child keeps that child in place, avoiding structural dirty work for
+  counters and timer labels.
 - DOM subtree teardown and whole-subtree `textContent` replacement use an
   explicit work list instead of recursive child destruction, reducing stack risk
   on very deep generated documents.

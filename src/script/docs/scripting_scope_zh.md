@@ -134,6 +134,7 @@ API 表面。
 - 面向嵌入式 app 的 DOM helpers：
   - `element.children`
   - `element.parentElement`
+  - 反射到 `class` attribute 的 `element.className`
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
   - 面向已有 `data-*` 属性的 `element.dataset` 快照 property

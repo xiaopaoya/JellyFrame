@@ -3,6 +3,9 @@
 #include "render_core/dom.h"
 #include "render_core/geometry.h"
 
+#include <array>
+#include <cstddef>
+
 namespace jellyframe {
 
 enum class FrameUpdateAction {
@@ -17,6 +20,23 @@ enum class FrameDirtyRectMode {
     PreviousAndCurrentLayout,
     FullFrame,
 };
+
+enum class FrameUpdateReason {
+    None,
+    CleanCached,
+    InvalidViewport,
+    FirstPaint,
+    PaintOnlyDirty,
+    LayoutDirtyWithPreviousLayout,
+    TreeDirty,
+    MissingPipelineCache,
+    MissingFramebuffer,
+    FramebufferSizeMismatch,
+    ResolvedFramebufferSizeMismatch,
+};
+
+constexpr std::size_t kFrameUpdateReasonCount =
+    static_cast<std::size_t>(FrameUpdateReason::ResolvedFramebufferSizeMismatch) + 1;
 
 struct FrameUpdateState {
     DomDirtyFlags dirty_flags = DomDirtyNone;
@@ -44,6 +64,7 @@ struct FramePipelineCacheState {
 struct FrameUpdatePlan {
     FrameUpdateAction action = FrameUpdateAction::None;
     FrameDirtyRectMode dirty_rect_mode = FrameDirtyRectMode::None;
+    FrameUpdateReason reason = FrameUpdateReason::None;
     bool can_reuse_render_and_layout = false;
     bool needs_previous_layout = false;
     bool needs_full_framebuffer = false;
@@ -51,11 +72,27 @@ struct FrameUpdatePlan {
 
 struct FrameRepaintPlan {
     FrameDirtyRectMode dirty_rect_mode = FrameDirtyRectMode::None;
+    FrameUpdateReason reason = FrameUpdateReason::None;
     int target_width = 0;
     int target_height = 0;
     bool can_repaint_dirty_rects = false;
     bool needs_full_framebuffer = false;
 };
+
+struct FrameUpdateStatistics {
+    std::size_t idle_frames = 0;
+    std::size_t repaint_existing_frames = 0;
+    std::size_t rebuild_pipeline_frames = 0;
+    std::array<std::size_t, kFrameUpdateReasonCount> reasons{};
+};
+
+const char* frame_update_action_name(FrameUpdateAction action);
+const char* frame_dirty_rect_mode_name(FrameDirtyRectMode mode);
+const char* frame_update_reason_name(FrameUpdateReason reason);
+std::size_t frame_update_reason_index(FrameUpdateReason reason);
+void record_frame_update_plan(FrameUpdateStatistics& statistics, const FrameUpdatePlan& plan);
+std::size_t frame_update_reason_count(const FrameUpdateStatistics& statistics,
+                                      FrameUpdateReason reason);
 
 FrameUpdateState make_frame_update_state(DomDirtyFlags dirty_flags,
                                          const FramePipelineCacheState& cache_state);

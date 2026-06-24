@@ -21,7 +21,8 @@
 - DOM attributes 使用紧凑顺序 `AttributeList`，不再为每个节点维护 attribute hash map。
 - DOM event listener storage 惰性分配，没有 listener 的节点不携带空 listener table。
 - DOM dirty bits 会向祖先传播，因此根节点 dirty 检查为 O(1)，dirty 清理会跳过干净子树，
-  且同值 `textContent` 赋值不会触发重绘。
+  且同值 `textContent` 赋值不会触发重绘。已有唯一 text child 的元素会原地更新该 child，
+  避免计数器、计时器标签等常见路径制造结构性 dirty。
 - DOM 子树销毁和整子树 `textContent` 替换使用显式工作列表，而不是递归销毁子节点，
   降低极深生成式文档在小栈设备上的风险。
 - 脚本 timer 由宿主泵动，带 callback budget，并有明确的 JerryScript reference 释放路径。

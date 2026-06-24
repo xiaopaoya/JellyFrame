@@ -327,6 +327,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Script event objects now use a lightweight event-kind tag instead of RTTI for
   mouse/wheel field projection. Base `Event("click")` remains a generic event
   and no longer risks being treated as a fake mouse event on embedded builds.
+- Added stable `FrameUpdateReason`/`FrameUpdateStatistics` diagnostics and
+  surfaced them in Win32 frame capture output, so full-frame fallback work can
+  be attributed before adding retained rendering structures.
+- `element.textContent` now updates an existing sole text child in place instead
+  of replacing the child node, avoiding unnecessary `DomDirtyTree` full-frame
+  planning for common timer/counter/rAF labels.
+- Added the standard-shaped `element.className` reflection to the JerryScript
+  DOM subset, backed by the existing `class` attribute and style/layout dirty
+  path.
 
 ## 0.3.0-dev - 2026-06-18
 

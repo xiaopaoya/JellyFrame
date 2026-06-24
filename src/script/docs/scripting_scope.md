@@ -163,6 +163,7 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Embedded-app DOM helpers:
   - `element.children`
   - `element.parentElement`
+  - `element.className` reflected to the `class` attribute
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
   - `element.dataset` snapshot properties for existing `data-*` attributes

@@ -155,6 +155,10 @@ void Node::set_text_content(std::string value) {
         children.front()->text == value) {
         return;
     }
+    if (children.size() == 1 && children.front()->type == NodeType::Text) {
+        children.front()->set_text(std::move(value));
+        return;
+    }
     destroy_node_list_iterative(children);
     if (!value.empty()) {
         auto child = make_text(std::move(value));

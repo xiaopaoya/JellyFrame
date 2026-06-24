@@ -84,6 +84,7 @@ void attributes_and_text_mark_specific_dirty_bits() {
     paragraph->set_text_content("New");
     flags = subtree_dirty_flags(*document);
     check(paragraph->text_content() == "New", "text content updated");
+    check((flags & DomDirtyTree) == 0U, "single text child update avoids tree dirty");
     check((flags & DomDirtyText) != 0U, "text content marks text dirty");
     check((flags & DomDirtyLayout) != 0U, "text content marks layout dirty");
     clear_dirty_flags(*document);

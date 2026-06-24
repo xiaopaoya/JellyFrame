@@ -273,7 +273,8 @@ JerryScript 源码树时可用。
 | `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |
 | `appendChild` / `removeChild` | 可用 | 移动节点、防止环、标记 dirty。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
 | `setAttribute` / `getAttribute` / `removeAttribute` | 可用 | 绑定层会 lowercase 属性名。 |
-| `textContent` | 可用 | getter/setter；同值设置不会触发 dirty。 |
+| `textContent` | 可用 | getter/setter；同值设置不会触发 dirty。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。 |
+| `className` | 可用 | 反射到 `class` attribute，并走现有 style/layout dirty 路径。 |
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
 | `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |

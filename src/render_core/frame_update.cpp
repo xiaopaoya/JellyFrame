@@ -25,10 +25,128 @@ bool framebuffer_matches_size(const FrameUpdateState& state, int target_height) 
         state.framebuffer_height == target_height;
 }
 
+FrameUpdateReason cache_miss_reason(const FrameUpdateState& state) {
+    if (!state.has_render_tree && !state.has_layout_tree && !state.has_layer_tree && !state.has_framebuffer) {
+        return FrameUpdateReason::FirstPaint;
+    }
+    if (!has_pipeline_cache(state)) {
+        return FrameUpdateReason::MissingPipelineCache;
+    }
+    if (!state.has_framebuffer) {
+        return FrameUpdateReason::MissingFramebuffer;
+    }
+    if (!framebuffer_matches_target(state)) {
+        return FrameUpdateReason::FramebufferSizeMismatch;
+    }
+    return FrameUpdateReason::FirstPaint;
+}
+
 } // namespace
 
 int frame_update_target_height(const FrameUpdateState& state) {
     return std::max(state.viewport.height, state.content_height);
+}
+
+const char* frame_update_action_name(FrameUpdateAction action) {
+    switch (action) {
+    case FrameUpdateAction::None:
+        return "none";
+    case FrameUpdateAction::RepaintExisting:
+        return "repaint-existing";
+    case FrameUpdateAction::RebuildPipeline:
+        return "rebuild-pipeline";
+    }
+    return "unknown";
+}
+
+const char* frame_dirty_rect_mode_name(FrameDirtyRectMode mode) {
+    switch (mode) {
+    case FrameDirtyRectMode::None:
+        return "none";
+    case FrameDirtyRectMode::CurrentLayout:
+        return "current-layout";
+    case FrameDirtyRectMode::PreviousAndCurrentLayout:
+        return "previous-and-current-layout";
+    case FrameDirtyRectMode::FullFrame:
+        return "full-frame";
+    }
+    return "unknown";
+}
+
+const char* frame_update_reason_name(FrameUpdateReason reason) {
+    switch (reason) {
+    case FrameUpdateReason::None:
+        return "none";
+    case FrameUpdateReason::CleanCached:
+        return "clean-cached";
+    case FrameUpdateReason::InvalidViewport:
+        return "invalid-viewport";
+    case FrameUpdateReason::FirstPaint:
+        return "first-paint";
+    case FrameUpdateReason::PaintOnlyDirty:
+        return "paint-only-dirty";
+    case FrameUpdateReason::LayoutDirtyWithPreviousLayout:
+        return "layout-dirty-with-previous-layout";
+    case FrameUpdateReason::TreeDirty:
+        return "tree-dirty";
+    case FrameUpdateReason::MissingPipelineCache:
+        return "missing-pipeline-cache";
+    case FrameUpdateReason::MissingFramebuffer:
+        return "missing-framebuffer";
+    case FrameUpdateReason::FramebufferSizeMismatch:
+        return "framebuffer-size-mismatch";
+    case FrameUpdateReason::ResolvedFramebufferSizeMismatch:
+        return "resolved-framebuffer-size-mismatch";
+    }
+    return "unknown";
+}
+
+std::size_t frame_update_reason_index(FrameUpdateReason reason) {
+    switch (reason) {
+    case FrameUpdateReason::None:
+        return 0;
+    case FrameUpdateReason::CleanCached:
+        return 1;
+    case FrameUpdateReason::InvalidViewport:
+        return 2;
+    case FrameUpdateReason::FirstPaint:
+        return 3;
+    case FrameUpdateReason::PaintOnlyDirty:
+        return 4;
+    case FrameUpdateReason::LayoutDirtyWithPreviousLayout:
+        return 5;
+    case FrameUpdateReason::TreeDirty:
+        return 6;
+    case FrameUpdateReason::MissingPipelineCache:
+        return 7;
+    case FrameUpdateReason::MissingFramebuffer:
+        return 8;
+    case FrameUpdateReason::FramebufferSizeMismatch:
+        return 9;
+    case FrameUpdateReason::ResolvedFramebufferSizeMismatch:
+        return 10;
+    }
+    return 0;
+}
+
+void record_frame_update_plan(FrameUpdateStatistics& statistics, const FrameUpdatePlan& plan) {
+    switch (plan.action) {
+    case FrameUpdateAction::None:
+        ++statistics.idle_frames;
+        break;
+    case FrameUpdateAction::RepaintExisting:
+        ++statistics.repaint_existing_frames;
+        break;
+    case FrameUpdateAction::RebuildPipeline:
+        ++statistics.rebuild_pipeline_frames;
+        break;
+    }
+    ++statistics.reasons[frame_update_reason_index(plan.reason)];
+}
+
+std::size_t frame_update_reason_count(const FrameUpdateStatistics& statistics,
+                                      FrameUpdateReason reason) {
+    return statistics.reasons[frame_update_reason_index(reason)];
 }
 
 FrameUpdateState make_frame_update_state(DomDirtyFlags dirty_flags,
@@ -51,6 +169,7 @@ FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
     if (!valid_viewport(state.viewport) || frame_update_target_height(state) <= 0) {
         plan.action = FrameUpdateAction::RebuildPipeline;
         plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+        plan.reason = FrameUpdateReason::InvalidViewport;
         plan.needs_full_framebuffer = true;
         return plan;
     }
@@ -58,11 +177,13 @@ FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
     const bool cache_ready = has_pipeline_cache(state);
     const bool framebuffer_ready = framebuffer_matches_target(state);
     if (state.dirty_flags == DomDirtyNone && cache_ready && framebuffer_ready) {
+        plan.reason = FrameUpdateReason::CleanCached;
         return plan;
     }
     if (state.dirty_flags == DomDirtyNone) {
         plan.action = FrameUpdateAction::RebuildPipeline;
         plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+        plan.reason = cache_miss_reason(state);
         plan.needs_full_framebuffer = true;
         return plan;
     }
@@ -72,6 +193,7 @@ FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
     if (paint_only && cache_ready && framebuffer_ready) {
         plan.action = FrameUpdateAction::RepaintExisting;
         plan.dirty_rect_mode = FrameDirtyRectMode::CurrentLayout;
+        plan.reason = FrameUpdateReason::PaintOnlyDirty;
         plan.can_reuse_render_and_layout = true;
         return plan;
     }
@@ -79,14 +201,17 @@ FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
     plan.action = FrameUpdateAction::RebuildPipeline;
     if ((state.dirty_flags & DomDirtyTree) != 0U) {
         plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+        plan.reason = FrameUpdateReason::TreeDirty;
         plan.needs_full_framebuffer = true;
         return plan;
     }
     if (cache_ready && framebuffer_ready) {
         plan.dirty_rect_mode = FrameDirtyRectMode::PreviousAndCurrentLayout;
+        plan.reason = FrameUpdateReason::LayoutDirtyWithPreviousLayout;
         plan.needs_previous_layout = true;
     } else {
         plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+        plan.reason = cache_miss_reason(state);
         plan.needs_full_framebuffer = true;
     }
     return plan;
@@ -97,6 +222,7 @@ FrameRepaintPlan plan_frame_repaint(const FrameUpdateState& state,
                                     int resolved_content_height) {
     FrameRepaintPlan repaint;
     if (!valid_viewport(state.viewport)) {
+        repaint.reason = FrameUpdateReason::InvalidViewport;
         repaint.needs_full_framebuffer = true;
         return repaint;
     }
@@ -105,6 +231,7 @@ FrameRepaintPlan plan_frame_repaint(const FrameUpdateState& state,
     repaint.target_height = std::max(state.viewport.height, resolved_content_height);
 
     if (update_plan.action == FrameUpdateAction::None) {
+        repaint.reason = update_plan.reason;
         return repaint;
     }
 
@@ -115,11 +242,15 @@ FrameRepaintPlan plan_frame_repaint(const FrameUpdateState& state,
 
     if (dirty_rect_mode && framebuffer_ready) {
         repaint.dirty_rect_mode = update_plan.dirty_rect_mode;
+        repaint.reason = update_plan.reason;
         repaint.can_repaint_dirty_rects = true;
         return repaint;
     }
 
     repaint.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+    repaint.reason = dirty_rect_mode
+        ? FrameUpdateReason::ResolvedFramebufferSizeMismatch
+        : update_plan.reason;
     repaint.needs_full_framebuffer = true;
     return repaint;
 }

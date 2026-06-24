@@ -2360,6 +2360,36 @@ public:
                   << "  dirty_local=" << dirty_region_statistics_.dirty_rect_frames
                   << " full=" << dirty_region_statistics_.full_frame_frames
                   << " clean=" << dirty_region_statistics_.clean_frames << '\n'
+                  << "  dirty_reasons none="
+                  << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::None)
+                  << " invalid_viewport="
+                  << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::InvalidViewport)
+                  << " missing_layout="
+                  << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::MissingLayout)
+                  << " tree_dirty="
+                  << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::TreeDirty)
+                  << " no_dirty_bounds="
+                  << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::NoDirtyBounds)
+                  << " empty_after_clipping="
+                  << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::EmptyAfterClipping)
+                  << " dirty_area_too_large="
+                  << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::DirtyAreaTooLarge)
+                  << '\n'
+                  << "  frame_update idle=" << frame_update_statistics_.idle_frames
+                  << " repaint=" << frame_update_statistics_.repaint_existing_frames
+                  << " rebuild=" << frame_update_statistics_.rebuild_pipeline_frames
+                  << " first_paint="
+                  << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::FirstPaint)
+                  << " paint_dirty="
+                  << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::PaintOnlyDirty)
+                  << " layout_previous="
+                  << frame_update_reason_count(frame_update_statistics_,
+                                               FrameUpdateReason::LayoutDirtyWithPreviousLayout)
+                  << " tree_dirty="
+                  << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::TreeDirty)
+                  << " framebuffer_mismatch="
+                  << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::FramebufferSizeMismatch)
+                  << '\n'
                   << "  host_completion_batches=" << host_service_counters_.completion_batches
                   << " consumed=" << host_service_counters_.completions_consumed
                   << " accepted=" << host_service_counters_.completions_accepted
@@ -2425,10 +2455,14 @@ private:
     std::vector<std::uint32_t> blit_pixels_;
     DirtyRegionMode last_dirty_region_mode_ = DirtyRegionMode::Clean;
     DirtyRegionFallbackReason last_dirty_region_reason_ = DirtyRegionFallbackReason::None;
+    FrameUpdateAction last_frame_update_action_ = FrameUpdateAction::None;
+    FrameUpdateReason last_frame_update_reason_ = FrameUpdateReason::None;
+    FrameUpdateReason last_frame_repaint_reason_ = FrameUpdateReason::None;
     std::size_t last_dirty_rect_count_ = 0;
     int last_dirty_area_percent_ = 0;
     DisplayInvalidationResult last_display_invalidation_;
     DirtyRegionStatistics dirty_region_statistics_;
+    FrameUpdateStatistics frame_update_statistics_;
     VectorDiagnosticSink diagnostics_;
     bool system_shell_mode_ = false;
     std::string active_app_id_;
@@ -3067,6 +3101,10 @@ private:
             pending_shell_action_.clear();
             pending_shell_app_id_.clear();
             dirty_region_statistics_ = DirtyRegionStatistics{};
+            frame_update_statistics_ = FrameUpdateStatistics{};
+            last_frame_update_action_ = FrameUpdateAction::None;
+            last_frame_update_reason_ = FrameUpdateReason::None;
+            last_frame_repaint_reason_ = FrameUpdateReason::None;
 
             if (system_shell_mode_) {
                 document_->add_event_listener("click", [this](Event& event) {
@@ -3178,6 +3216,7 @@ private:
         cache_state.content_height = current_content_height;
         const FrameUpdateState update_state = make_frame_update_state(dirty_flags, cache_state);
         const FrameUpdatePlan update_plan = plan_frame_update(update_state);
+        record_frame_update(update_plan);
         if (update_plan.action == FrameUpdateAction::None) {
             record_dirty_region(DirtyRegionResult{});
             return;
@@ -3280,6 +3319,7 @@ private:
 
         const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);
         const FrameRepaintPlan repaint_plan = plan_frame_repaint(update_state, update_plan, content_height);
+        last_frame_repaint_reason_ = repaint_plan.reason;
         scroll_y_ = std::max(0, std::min(scroll_y_, std::max(0, content_height - viewport_height_)));
         DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
         const bool can_repaint_incrementally = repaint_plan.can_repaint_dirty_rects &&
@@ -3803,7 +3843,10 @@ private:
         record_dirty_region_result(dirty_region_statistics_, region);
         if (hwnd_ != nullptr) {
             std::ostringstream status;
-            status << "dirty=" << dirty_region_mode_name(last_dirty_region_mode_)
+            status << "update=" << frame_update_action_name(last_frame_update_action_)
+                   << "/" << frame_update_reason_name(last_frame_update_reason_)
+                   << " repaint=" << frame_update_reason_name(last_frame_repaint_reason_)
+                   << " dirty=" << dirty_region_mode_name(last_dirty_region_mode_)
                    << " rects=" << last_dirty_rect_count_
                    << " area=" << last_dirty_area_percent_ << "%"
                    << " cmds=" << last_display_invalidation_.commands_intersecting
@@ -3816,6 +3859,13 @@ private:
             }
             set_title(status.str());
         }
+    }
+
+    void record_frame_update(const FrameUpdatePlan& plan) {
+        last_frame_update_action_ = plan.action;
+        last_frame_update_reason_ = plan.reason;
+        last_frame_repaint_reason_ = plan.reason;
+        record_frame_update_plan(frame_update_statistics_, plan);
     }
 
     void set_title(const std::string& status) {

@@ -218,6 +218,12 @@ JellyFrame Engine 的重要变更记录在这里。
   基础 `Event("click")` 仍是普通事件，不会被当作伪造的 mouse event。
 - 拆分 `SoftwareCompositor` constructor，避免 ESP-IDF C++ 工具链遇到带默认 aggregate options
   的重载歧义，同时保留 image painter 路径。
+- 新增稳定的 `FrameUpdateReason` / `FrameUpdateStatistics` 诊断，并在 Win32 frame capture
+  输出中展示，便于在增加 retained rendering 结构前先定位 full-frame fallback 来源。
+- `element.textContent` 现在会原地更新已有的唯一 text child，而不是替换子节点，避免计时器、计数器、
+  rAF label 等常见路径制造不必要的 `DomDirtyTree` full-frame planning。
+- JerryScript DOM 子集新增标准形状的 `element.className` 反射，底层仍使用已有 `class`
+  attribute 和 style/layout dirty 路径。
 
 ## 0.3.0-dev - 2026-06-18
 

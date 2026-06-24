@@ -154,6 +154,9 @@ Outputs:
 - `FrameUpdateAction::RepaintExisting`: reuse render/layout, rebuild layers and
   repaint dirty rects from the current layout.
 - `FrameUpdateAction::RebuildPipeline`: rebuild render/layout/layer.
+- `FrameUpdateReason`: stable diagnostic names for why the planner chose idle,
+  repaint or rebuild, including first paint, paint-only dirty, tree dirty,
+  missing cache and framebuffer-size mismatch.
 - `FrameDirtyRectMode::CurrentLayout`: dirty rects can be computed from the
   current layout, useful for paint-only changes.
 - `FrameDirtyRectMode::PreviousAndCurrentLayout`: compare old and new layouts
@@ -180,7 +183,10 @@ the host must resize or recreate the framebuffer and repaint the full frame.
   work can refine this.
 
 Unchanged `textContent`, unchanged attributes and similar no-op mutations should
-not create dirty flags.
+not create dirty flags. Updating `textContent` on an element that already owns a
+single text child should update that text node in place and avoid
+`DomDirtyTree`; replacing mixed or multi-child content remains a structural
+mutation.
 
 ## Dirty Region Diagnostics
 
@@ -218,6 +224,9 @@ tracks clean frames, dirty-rect frames, full-frame frames, total rect count,
 total dirty area and fallback reason counts. This is intended for audits:
 measure where full-frame fallback comes from before adding heavier retained
 subtree reuse.
+Use it together with `FrameUpdateStatistics`: frame-update reasons explain why
+a rebuild was chosen, while dirty-region reasons explain why a planned local
+repaint still fell back to a full frame.
 
 Hosts can also use `dirty_region_area(...)`,
 `dirty_region_area_percent(...)` and

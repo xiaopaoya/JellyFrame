@@ -281,7 +281,8 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `document.createTextNode` | Works | Creates a detached text node with the same detached-node budget. |
 | `appendChild` / `removeChild` | Works | Moves nodes, prevents cycles and marks dirty. `removeChild` keeps the returned node runtime-owned and reusable while it is detached. |
 | `setAttribute` / `getAttribute` / `removeAttribute` | Works | Attribute names are lowercased by binding. |
-| `textContent` | Works | Getter/setter; unchanged text avoids dirty work. |
+| `textContent` | Works | Getter/setter; unchanged text avoids dirty work. A sole existing text child is updated in place; replacing mixed children remains structural. |
+| `className` | Works | Reflected to the `class` attribute and uses the normal style/layout dirty path. |
 | `children` / `parentElement` | Subset | Snapshot element-child array and parent wrapper/null. |
 | `matches` / `closest` | Subset | Simple tag, `.class`, `#id`, `[attr]` and `[attr=value]` selectors. No combinators. |
 | `dataset` | Subset | Existing `data-*` attributes are exposed as camelCase snapshot properties for event delegation. Dynamic new keys are deferred. |

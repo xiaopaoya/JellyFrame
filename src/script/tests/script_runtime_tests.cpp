@@ -375,6 +375,25 @@ void javascript_embedded_ui_helpers_support_event_delegation() {
     check(result.value == "+:2:true:true", "dataset children parentElement matches closest work");
 }
 
+void javascript_class_name_reflects_class_attribute() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='save' class='idle'>Save</button></body>");
+    clear_dirty_flags(*document);
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var save = document.getElementById('save');"
+        "var before = save.className;"
+        "save.className = 'active primary';"
+        "before + ':' + save.getAttribute('class') + ':' + save.className");
+
+    check(result.ok, "className reflection script succeeds");
+    check(result.value == "idle:active primary:active primary", "className reflects class attribute");
+    check((subtree_dirty_flags(*document) & DomDirtyStyle) != 0U, "className marks style dirty");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "className marks layout dirty");
+}
+
 void javascript_element_style_hidden_and_disabled_properties_work() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='save'>Save</button><p id='panel'>Panel</p></body>");
@@ -906,6 +925,7 @@ int main() {
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_form_properties_mutate_control_state();
         javascript_embedded_ui_helpers_support_event_delegation();
+        javascript_class_name_reflects_class_attribute();
         javascript_element_style_hidden_and_disabled_properties_work();
         javascript_input_event_reads_live_value();
         javascript_timeout_runs_when_host_pumps_time();
