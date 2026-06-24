@@ -218,6 +218,14 @@ int main(int argc, char** argv) {
         layer_tree_builder.flatten_into(*layer_tree, reusable_display_list);
     }));
 
+    DisplayList retained_layout_display_list;
+    print_result("retained_layout_display_pipeline", iterations, average_microseconds(iterations, [&] {
+        LayerTreeBuilder retained_layer_builder;
+        MonotonicArena retained_layer_arena;
+        auto retained_layer_tree = retained_layer_builder.build(*layout_tree, retained_layer_arena);
+        retained_layer_builder.flatten_into(*retained_layer_tree, retained_layout_display_list);
+    }));
+
     print_result("full_pipeline", iterations, average_microseconds(iterations, [&] {
         auto local_document = html_parser.parse(html);
         auto local_stylesheet = css_parser.parse(css);
@@ -379,6 +387,23 @@ int main(int argc, char** argv) {
                                                                *style_reuse_layout_tree,
                                                                fixed_text_measure());
             (void)reusable;
+        }));
+        print_result("retained_style_apply_layout", iterations, average_microseconds(iterations, [&] {
+            const bool applied = apply_render_styles_to_layout(*next_style_render_tree, *style_reuse_layout_tree);
+            (void)applied;
+        }));
+        print_result("retained_style_layer_tree", iterations, average_microseconds(iterations, [&] {
+            LayerTreeBuilder retained_layer_builder;
+            MonotonicArena retained_layer_arena;
+            auto retained_layer_tree = retained_layer_builder.build(*style_reuse_layout_tree, retained_layer_arena);
+            (void)retained_layer_tree;
+        }));
+        DisplayList retained_display_list;
+        print_result("retained_style_display_pipeline", iterations, average_microseconds(iterations, [&] {
+            LayerTreeBuilder retained_layer_builder;
+            MonotonicArena retained_layer_arena;
+            auto retained_layer_tree = retained_layer_builder.build(*style_reuse_layout_tree, retained_layer_arena);
+            retained_layer_builder.flatten_into(*retained_layer_tree, retained_display_list);
         }));
     }
     print_style_statistics(resolver.statistics());
