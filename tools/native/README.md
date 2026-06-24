@@ -20,8 +20,9 @@ output. Sample pages and app packages live in `../../samples`.
   not add an embedded audio codec or a public JavaScript audio API.
 - Hidden frame capture prints host-completion, system-event, frame-policy and
   service-activity counters. Use those counters to validate that manifest
-  `backgroundServices`, screen-off and low-power policies pause or keep
-  network/audio/sensor work without making the render core hardware-aware.
+`backgroundServices`, screen-off and low-power policies pause or keep
+  network/audio/sensor/location work without making the render core
+  hardware-aware.
 - Debug image decode and debug network fetch are pumped through
   `pump_app_host_service_workers(...)`, matching the request/completion boundary
   recommended for MCU ports.

@@ -22,7 +22,10 @@ bool has_work_backlog(const FrameLoopWorkPlan& work) {
 }
 
 bool has_active_services(const AppServiceActivityPolicy& policy) {
-    return policy.network_fetch || policy.audio_playback || policy.sensor_sampling;
+    return policy.network_fetch ||
+        policy.audio_playback ||
+        policy.sensor_sampling ||
+        policy.location_snapshots;
 }
 
 } // namespace

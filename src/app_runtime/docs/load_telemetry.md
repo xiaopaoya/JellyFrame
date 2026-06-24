@@ -13,7 +13,7 @@ Header: `src/app_runtime/app_load_telemetry.h`
 
 - `AppFramePolicy`: whether this app currently accepts input, pumps timers,
   pumps animation and presents frames.
-- `AppServiceActivityPolicy`: whether network/audio/sensor activity is allowed.
+- `AppServiceActivityPolicy`: whether network/audio/sensor/location activity is allowed.
 - `FrameLoopWorkPlan`: bounded input/timer/rAF work for this frame.
 - `FrameUpdatePlan`: whether the render pipeline is idle, repainting or
   rebuilding.

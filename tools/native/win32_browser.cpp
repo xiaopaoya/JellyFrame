@@ -486,8 +486,10 @@ struct FramePolicyDebugCounters {
     std::size_t network_active_frames = 0;
     std::size_t audio_active_frames = 0;
     std::size_t sensor_active_frames = 0;
+    std::size_t location_active_frames = 0;
     std::size_t pause_audio_frames = 0;
     std::size_t throttle_sensor_frames = 0;
+    std::size_t throttle_location_frames = 0;
 };
 
 struct LoadTelemetryDebugCounters {
@@ -586,6 +588,9 @@ AppBackgroundServicePolicy background_policy_from_manifest(const jellyframe_exam
     policy.sensors_while_suspended = manifest.background_sensors_while_suspended;
     policy.sensors_while_screen_off = manifest.background_sensors_while_screen_off;
     policy.sensors_in_low_power = manifest.background_sensors_in_low_power;
+    policy.location_while_suspended = manifest.background_location_while_suspended;
+    policy.location_while_screen_off = manifest.background_location_while_screen_off;
+    policy.location_in_low_power = manifest.background_location_in_low_power;
     return policy;
 }
 
@@ -2558,8 +2563,10 @@ public:
                   << "  service_activity network=" << frame_policy_counters_.network_active_frames
                   << " audio=" << frame_policy_counters_.audio_active_frames
                   << " sensors=" << frame_policy_counters_.sensor_active_frames
+                  << " location=" << frame_policy_counters_.location_active_frames
                   << " pause_audio=" << frame_policy_counters_.pause_audio_frames
-                  << " throttle_sensors=" << frame_policy_counters_.throttle_sensor_frames << '\n'
+                  << " throttle_sensors=" << frame_policy_counters_.throttle_sensor_frames
+                  << " throttle_location=" << frame_policy_counters_.throttle_location_frames << '\n'
                   << "  load_telemetry samples=" << load_telemetry_counters_.sampled_frames
                   << " sleep=" << load_telemetry_counters_.sleep_ok_frames
                   << " lowfreq=" << load_telemetry_counters_.low_frequency_frames
@@ -2803,7 +2810,12 @@ private:
 
     AppServiceActivityPolicy current_service_activity_policy() const {
         if (!runtime_controls_page()) {
-            return AppServiceActivityPolicy{true, true, true, false, false};
+            AppServiceActivityPolicy policy;
+            policy.network_fetch = true;
+            policy.audio_playback = true;
+            policy.sensor_sampling = true;
+            policy.location_snapshots = true;
+            return policy;
         }
         return app_service_activity_policy_for(app_runtime_.current(),
                                                debug_system_state_,
@@ -2821,8 +2833,10 @@ private:
         frame_policy_counters_.network_active_frames += service_policy.network_fetch ? 1 : 0;
         frame_policy_counters_.audio_active_frames += service_policy.audio_playback ? 1 : 0;
         frame_policy_counters_.sensor_active_frames += service_policy.sensor_sampling ? 1 : 0;
+        frame_policy_counters_.location_active_frames += service_policy.location_snapshots ? 1 : 0;
         frame_policy_counters_.pause_audio_frames += service_policy.should_pause_audio ? 1 : 0;
         frame_policy_counters_.throttle_sensor_frames += service_policy.should_throttle_sensors ? 1 : 0;
+        frame_policy_counters_.throttle_location_frames += service_policy.should_throttle_location ? 1 : 0;
     }
 
     void record_load_telemetry_sample(const FrameUpdatePlan& update_plan,

@@ -11,7 +11,7 @@
 `AppLoadTelemetryInput` 复用 JellyFrame 已有契约：
 
 - `AppFramePolicy`：当前 app 是否接收输入、泵动 timer、泵动动画、提交画面。
-- `AppServiceActivityPolicy`：当前是否允许 network/audio/sensor 活动。
+- `AppServiceActivityPolicy`：当前是否允许 network/audio/sensor/location 活动。
 - `FrameLoopWorkPlan`：本帧有界 input/timer/rAF 工作。
 - `FrameUpdatePlan`：渲染管线是 idle、repaint 还是 rebuild。
 - dirty-region 摘要：可传 `DirtyRegionResult`，也可在宿主已经记录过时只传

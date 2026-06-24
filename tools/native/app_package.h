@@ -46,6 +46,9 @@ struct AppPackageManifest {
     bool background_sensors_while_suspended = false;
     bool background_sensors_while_screen_off = false;
     bool background_sensors_in_low_power = false;
+    bool background_location_while_suspended = false;
+    bool background_location_while_screen_off = false;
+    bool background_location_in_low_power = false;
     std::vector<std::string> font_sources;
 };
 
@@ -800,6 +803,21 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
                           "sensors",
                           "inLowPower",
                           manifest.background_sensors_in_low_power);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "location",
+                          "whileSuspended",
+                          manifest.background_location_while_suspended);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "location",
+                          "whileScreenOff",
+                          manifest.background_location_while_screen_off);
+    json_find_nested_bool(json,
+                          "backgroundServices",
+                          "location",
+                          "inLowPower",
+                          manifest.background_location_in_low_power);
     manifest.font_sources = json_collect_object_string_values(json, "fonts", "source");
     for (std::string& source : manifest.font_sources) {
         std::string normalized;

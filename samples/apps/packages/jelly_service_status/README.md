@@ -26,4 +26,5 @@ Deterministic Win32 validation:
 The capture summary should include non-zero network/location host completions,
 system events handled by script and `service_activity` counters. In the bundled
 script, network activity stops while the screen is hidden, audio remains
-allowed, and sensors are throttled during screen-off or low-power frames.
+allowed, and sensors/location are throttled during screen-off or low-power
+frames.

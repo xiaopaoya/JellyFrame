@@ -244,6 +244,9 @@
         },
         "sensors": {
           "$ref": "#/$defs/backgroundSensorService"
+        },
+        "location": {
+          "$ref": "#/$defs/backgroundSensorService"
         }
       }
     }

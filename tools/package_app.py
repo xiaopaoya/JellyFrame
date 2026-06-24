@@ -307,6 +307,7 @@ def parse_background_service_policy(manifest: dict) -> dict:
         "network": service("network"),
         "audio": service("audio"),
         "sensors": service("sensors", sensor=True),
+        "location": service("location", sensor=True),
     }
 
 
@@ -577,7 +578,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
             "maxAppFontBytes",
             "maxAppFontGlyphs",
         },
-        "backgroundServices": {"network", "audio", "sensors"},
+        "backgroundServices": {"network", "audio", "sensors", "location"},
     }
     raw_fonts = manifest.get("fonts", [])
     if isinstance(raw_fonts, list):
@@ -651,6 +652,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
             "network": {"whileSuspended", "whileScreenOff"},
             "audio": {"whileSuspended", "whileScreenOff"},
             "sensors": {"whileSuspended", "whileScreenOff", "inLowPower"},
+            "location": {"whileSuspended", "whileScreenOff", "inLowPower"},
         }
         for service, allowed in background_allowed.items():
             value = background_services.get(service)

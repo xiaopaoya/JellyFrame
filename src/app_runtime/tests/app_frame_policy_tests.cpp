@@ -94,11 +94,13 @@ void background_services_default_to_paused_outside_foreground() {
     assert(!policy.network_fetch);
     assert(!policy.audio_playback);
     assert(!policy.sensor_sampling);
+    assert(!policy.location_snapshots);
     assert(policy.should_pause_audio);
     assert(policy.should_throttle_sensors);
+    assert(policy.should_throttle_location);
 }
 
-void background_policy_can_allow_audio_network_and_sensors_separately() {
+void background_policy_can_allow_audio_network_sensors_and_location_separately() {
     AppInstance app{1, "org.example.tracker", AppRole::App, AppLifecycleState::Suspended};
     AppSystemStateSnapshot state = visible_state();
     state.screen_on = false;
@@ -110,16 +112,20 @@ void background_policy_can_allow_audio_network_and_sensors_separately() {
     background.audio_while_screen_off = true;
     background.sensors_while_suspended = true;
     background.sensors_while_screen_off = false;
+    background.location_while_suspended = true;
+    background.location_while_screen_off = true;
 
     AppServiceActivityPolicy policy = app_service_activity_policy_for(app, state, background);
     assert(policy.network_fetch);
     assert(policy.audio_playback);
     assert(!policy.sensor_sampling);
+    assert(policy.location_snapshots);
     assert(!policy.should_pause_audio);
     assert(policy.should_throttle_sensors);
+    assert(!policy.should_throttle_location);
 }
 
-void low_power_can_throttle_sensors_without_stopping_audio() {
+void low_power_can_throttle_sensors_and_location_without_stopping_audio() {
     AppInstance app{1, "org.example.tracker", AppRole::App, AppLifecycleState::Foreground};
     AppSystemStateSnapshot state = visible_state();
     state.low_power_mode = true;
@@ -130,13 +136,18 @@ void low_power_can_throttle_sensors_without_stopping_audio() {
     assert(policy.network_fetch);
     assert(policy.audio_playback);
     assert(!policy.sensor_sampling);
+    assert(!policy.location_snapshots);
     assert(!policy.should_pause_audio);
     assert(policy.should_throttle_sensors);
+    assert(policy.should_throttle_location);
 
     background.sensors_in_low_power = true;
+    background.location_in_low_power = true;
     policy = app_service_activity_policy_for(app, state, background);
     assert(policy.sensor_sampling);
+    assert(policy.location_snapshots);
     assert(policy.should_throttle_sensors);
+    assert(policy.should_throttle_location);
 }
 
 } // namespace
@@ -147,7 +158,7 @@ int main() {
     screen_off_pauses_ui_callbacks_and_presentation();
     suspended_instance_pauses_all_ui_work_until_resume();
     background_services_default_to_paused_outside_foreground();
-    background_policy_can_allow_audio_network_and_sensors_separately();
-    low_power_can_throttle_sensors_without_stopping_audio();
+    background_policy_can_allow_audio_network_sensors_and_location_separately();
+    low_power_can_throttle_sensors_and_location_without_stopping_audio();
     return 0;
 }

@@ -45,6 +45,7 @@ AppServiceActivityPolicy app_service_activity_policy_for(
     if (!instance.active()) {
         policy.should_pause_audio = true;
         policy.should_throttle_sensors = true;
+        policy.should_throttle_location = true;
         return policy;
     }
 
@@ -55,18 +56,25 @@ AppServiceActivityPolicy app_service_activity_policy_for(
         (background_policy.audio_while_suspended && instance.state == AppLifecycleState::Suspended);
     policy.sensor_sampling = foreground ||
         (background_policy.sensors_while_suspended && instance.state == AppLifecycleState::Suspended);
+    policy.location_snapshots = foreground ||
+        (background_policy.location_while_suspended && instance.state == AppLifecycleState::Suspended);
 
     if (!system_state.screen_on) {
         policy.network_fetch = policy.network_fetch && background_policy.network_while_screen_off;
         policy.audio_playback = policy.audio_playback && background_policy.audio_while_screen_off;
         policy.sensor_sampling = policy.sensor_sampling && background_policy.sensors_while_screen_off;
+        policy.location_snapshots = policy.location_snapshots && background_policy.location_while_screen_off;
     }
     if (system_state.low_power_mode && !background_policy.sensors_in_low_power) {
         policy.sensor_sampling = false;
     }
+    if (system_state.low_power_mode && !background_policy.location_in_low_power) {
+        policy.location_snapshots = false;
+    }
 
     policy.should_pause_audio = !policy.audio_playback;
     policy.should_throttle_sensors = !policy.sensor_sampling || system_state.low_power_mode;
+    policy.should_throttle_location = !policy.location_snapshots || system_state.low_power_mode;
     return policy;
 }
 

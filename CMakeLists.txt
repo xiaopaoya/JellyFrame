@@ -317,7 +317,7 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_service_status_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
-                "service_activity network=18 audio=36 sensors=16 pause_audio=0 throttle_sensors=20")
+                "service_activity network=18 audio=36 sensors=16 location=16 pause_audio=0 throttle_sensors=20 throttle_location=20")
 
         if(JELLYFRAME_BUILD_SCRIPTING)
             add_test(

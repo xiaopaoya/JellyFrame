@@ -565,7 +565,8 @@ permission grant:
   "backgroundServices": {
     "network": { "whileSuspended": true, "whileScreenOff": false },
     "audio": { "whileSuspended": true, "whileScreenOff": true },
-    "sensors": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false }
+    "sensors": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false },
+    "location": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false }
   }
 }
 ```
@@ -577,14 +578,18 @@ neutral helper `app_service_activity_policy_for(...)` returns:
 - `network_fetch`: whether network service workers may accept new app fetches;
 - `audio_playback`: whether app audio may keep playing;
 - `sensor_sampling`: whether sensor sampling may continue;
+- `location_snapshots`: whether location snapshot requests may continue;
 - `should_pause_audio`: whether the shell should pause/stop active streams;
 - `should_throttle_sensors`: whether sensor cadence should be reduced or
+  stopped;
+- `should_throttle_location`: whether location requests should be delayed or
   stopped.
 
 Defaults are intentionally conservative: foreground apps may use approved
 services, but suspended apps and screen-off state pause background work unless
 the host explicitly allows it. Low-power mode throttles sensors unless the host
-sets `sensors_in_low_power`. Completions must still carry the original
+sets `sensors_in_low_power`, and throttles location unless the host sets
+`location_in_low_power`. Completions must still carry the original
 `app_instance_id`; background work may finish after an app is no longer active,
 but stale completions must not mutate a newer app instance.
 

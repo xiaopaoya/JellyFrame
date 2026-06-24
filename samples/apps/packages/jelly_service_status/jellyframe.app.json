@@ -41,6 +41,11 @@
       "whileSuspended": false,
       "whileScreenOff": false,
       "inLowPower": false
+    },
+    "location": {
+      "whileSuspended": false,
+      "whileScreenOff": false,
+      "inLowPower": false
     }
   },
   "targets": {

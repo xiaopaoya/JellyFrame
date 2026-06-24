@@ -22,14 +22,19 @@ struct AppBackgroundServicePolicy {
     bool sensors_while_suspended = false;
     bool sensors_while_screen_off = false;
     bool sensors_in_low_power = false;
+    bool location_while_suspended = false;
+    bool location_while_screen_off = false;
+    bool location_in_low_power = false;
 };
 
 struct AppServiceActivityPolicy {
     bool network_fetch = false;
     bool audio_playback = false;
     bool sensor_sampling = false;
+    bool location_snapshots = false;
     bool should_pause_audio = false;
     bool should_throttle_sensors = false;
+    bool should_throttle_location = false;
 };
 
 AppFramePolicy app_frame_policy_for(const AppInstance& instance,

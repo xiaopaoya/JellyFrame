@@ -464,7 +464,8 @@ completion event：
   "backgroundServices": {
     "network": { "whileSuspended": true, "whileScreenOff": false },
     "audio": { "whileSuspended": true, "whileScreenOff": true },
-    "sensors": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false }
+    "sensors": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false },
+    "location": { "whileSuspended": false, "whileScreenOff": false, "inLowPower": false }
   }
 }
 ```
@@ -476,12 +477,15 @@ completion event：
 - `network_fetch`：网络 service worker 是否还能接受新的 app fetch；
 - `audio_playback`：app audio 是否可以继续播放；
 - `sensor_sampling`：传感器采样是否可以继续；
+- `location_snapshots`：定位快照请求是否可以继续；
 - `should_pause_audio`：shell 是否应暂停/停止当前音频流；
-- `should_throttle_sensors`：传感器采样是否应降频或停止。
+- `should_throttle_sensors`：传感器采样是否应降频或停止；
+- `should_throttle_location`：定位请求是否应延后或停止。
 
 默认策略刻意保守：前台 app 可以使用已批准服务，但 suspended app 和 screen-off 状态会暂停后台工作，
-除非宿主明确允许。低功耗模式默认节流传感器，除非宿主设置 `sensors_in_low_power`。completion
-仍必须带原始 `app_instance_id`；后台工作可能在 app 不再 active 后完成，但 stale completion 不得修改新实例。
+除非宿主明确允许。低功耗模式默认节流传感器和定位，除非宿主分别设置 `sensors_in_low_power` 和
+`location_in_low_power`。completion 仍必须带原始 `app_instance_id`；后台工作可能在 app 不再 active
+后完成，但 stale completion 不得修改新实例。
 
 ## 轻量视频/MJPEG/H.264 实验服务
 

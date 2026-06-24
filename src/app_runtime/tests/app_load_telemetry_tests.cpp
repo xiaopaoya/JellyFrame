@@ -93,7 +93,7 @@ void backlog_and_full_frame_animation_is_overloaded() {
 void service_queue_pressure_recommends_boost_without_frame_work() {
     AppLoadTelemetryInput input;
     input.frame_policy = visible_policy();
-    input.service_policy = AppServiceActivityPolicy{true, false, false, false, false};
+    input.service_policy.network_fetch = true;
     input.update = clean_update();
     input.pending_service_requests = 3;
     input.service_request_capacity = 4;
@@ -105,6 +105,19 @@ void service_queue_pressure_recommends_boost_without_frame_work() {
     assert(!telemetry.drop_animation_frame_recommended);
 }
 
+void active_location_service_keeps_runtime_awake() {
+    AppLoadTelemetryInput input;
+    input.frame_policy = AppFramePolicy{};
+    input.service_policy.location_snapshots = true;
+    input.update = clean_update();
+
+    const AppLoadTelemetry telemetry = analyze_app_load(input);
+    assert(telemetry.has_active_services);
+    assert(telemetry.level == AppLoadLevel::LowFrequencyOk);
+    assert(!telemetry.sleep_ok);
+    assert(telemetry.low_frequency_ok);
+}
+
 } // namespace
 
 int main() {
@@ -113,5 +126,6 @@ int main() {
     full_frame_rebuild_recommends_boost();
     backlog_and_full_frame_animation_is_overloaded();
     service_queue_pressure_recommends_boost_without_frame_work();
+    active_location_service_keeps_runtime_awake();
     return 0;
 }

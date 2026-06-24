@@ -98,6 +98,7 @@ class PackagePreflightTests(unittest.TestCase):
                 "network": {"whileSuspended": True, "whileScreenOff": False},
                 "audio": {"whileSuspended": True, "whileScreenOff": True},
                 "sensors": {"whileSuspended": False, "whileScreenOff": False, "inLowPower": False},
+                "location": {"whileSuspended": True, "whileScreenOff": False, "inLowPower": False},
             },
             "targets": {
                 "round-300": {
@@ -137,6 +138,7 @@ class PackagePreflightTests(unittest.TestCase):
             },
         )
         self.assertTrue(intent["backgroundServices"]["audio"]["whileScreenOff"])
+        self.assertTrue(intent["backgroundServices"]["location"]["whileSuspended"])
         self.assertTrue(any("remote HTML" in note for note in intent["policyNotes"]))
 
         supported_intent = package_app.service_intent_report(manifest, {

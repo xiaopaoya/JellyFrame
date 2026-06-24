@@ -575,7 +575,7 @@ void bench_load_telemetry(std::size_t capacity) {
 
     AppLoadTelemetryInput input;
     input.frame_policy = AppFramePolicy{true, true, true, true, false};
-    input.service_policy = AppServiceActivityPolicy{true, false, false, false, false};
+    input.service_policy.network_fetch = true;
     input.work.animation_callbacks_to_pump = 1;
     input.update.action = FrameUpdateAction::RepaintExisting;
     input.update.reason = FrameUpdateReason::PaintOnlyDirty;
