@@ -150,6 +150,16 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   supported as the first status-event subset. V0 keeps one function listener
   per event type plus the `on*` property slot. It intentionally does not expose
   full `HTMLAudioElement`, Promises or streaming state yet.
+- Exposed now when the host binds a location service:
+  `navigator.geolocation.getCurrentPosition(success, error)`. The callback is
+  asynchronous and runs only after the host pumps a `LocationSnapshot`
+  completion. The success object includes `coords.latitude`,
+  `coords.longitude`, `coords.accuracy`, `coords.altitude`,
+  `coords.altitudeAccuracy`, `coords.heading`, `coords.speed` and `timestamp`.
+  `altitudeAccuracy` and `heading` are currently `null`. Error callbacks use
+  the standard code shape: `1` permission denied, `2` position unavailable and
+  `3` timeout. `navigator.geolocation` is absent when no location service is
+  bound.
 - Exposed now: `navigator.onLine`, `window.addEventListener` /
   `removeEventListener` for the `online` and `offline` system-status events,
   `document.hidden`, `document.visibilityState` and `document`

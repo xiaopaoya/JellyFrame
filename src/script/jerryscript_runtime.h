@@ -15,6 +15,7 @@ namespace jellyframe {
 
 class AppRuntimeHost;
 class AppLocalStorageShadow;
+class AppLocationSnapshotMock;
 class NetworkFetchMock;
 struct AppSystemEvent;
 struct HostServiceCompletion;
@@ -22,6 +23,7 @@ struct ScriptRuntimeAccess;
 struct ScriptAnimationFrameCallback;
 struct ScriptAudioElement;
 struct ScriptEventListener;
+struct ScriptGeolocationRequest;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
 
@@ -61,6 +63,7 @@ struct JerryScriptRuntimeOptions {
     std::size_t max_xml_http_requests = 16;
     std::size_t max_animation_frame_callbacks = 16;
     std::size_t max_audio_elements = 8;
+    std::size_t max_geolocation_requests = 4;
     std::uint32_t max_execution_check_count = 0;
     std::uint32_t execution_check_interval = 16;
 };
@@ -71,6 +74,7 @@ struct ScriptRuntimeStatistics {
     std::size_t event_listener_count = 0;
     std::size_t xml_http_request_count = 0;
     std::size_t audio_element_count = 0;
+    std::size_t geolocation_request_count = 0;
     DetachedDomStatistics detached_nodes;
 };
 
@@ -90,6 +94,7 @@ public:
 
     void bind_document(Node& document);
     void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network);
+    void bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location);
     void bind_local_storage(AppLocalStorageShadow& storage);
     void bind_audio_host(ScriptAudioHost host);
     void clear_app_services();
@@ -125,9 +130,11 @@ private:
     std::vector<std::unique_ptr<ScriptAnimationFrameCallback>> animation_frame_callbacks_;
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
     std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
+    std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
     JerryScriptRuntimeOptions options_;
     AppRuntimeHost* app_host_ = nullptr;
     NetworkFetchMock* network_fetch_ = nullptr;
+    AppLocationSnapshotMock* location_snapshot_ = nullptr;
     AppLocalStorageShadow* local_storage_ = nullptr;
     ScriptAudioHost audio_host_;
     Node* bound_document_ = nullptr;
@@ -162,6 +169,10 @@ private:
     void clear_xml_http_requests();
     ScriptAudioElement* create_audio_element(std::string src);
     void clear_audio_elements();
+    ScriptGeolocationRequest* create_geolocation_request(std::uint32_t job_id,
+                                                         std::uint32_t success_callback,
+                                                         std::uint32_t error_callback);
+    void clear_geolocation_requests();
 };
 
 } // namespace jellyframe

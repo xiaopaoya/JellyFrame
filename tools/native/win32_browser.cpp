@@ -3,6 +3,7 @@
 #endif
 
 #include "app_runtime/app_host.h"
+#include "app_runtime/app_device_services.h"
 #include "app_runtime/app_frame_policy.h"
 #include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
@@ -465,6 +466,7 @@ struct HostServiceDebugCounters {
     std::size_t storage_completions = 0;
     std::size_t image_completions = 0;
     std::size_t audio_completions = 0;
+    std::size_t location_completions = 0;
     std::size_t other_completions = 0;
     std::size_t image_handled = 0;
     std::size_t script_host_completions_handled = 0;
@@ -531,6 +533,21 @@ private:
     ImageDecodeMock& images_;
 };
 
+class LocationSnapshotMockWorker final : public AppHostServiceWorker {
+public:
+    LocationSnapshotMockWorker(AppRuntimeHost& host, AppLocationSnapshotMock& location)
+        : host_(host),
+          location_(location) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        return location_.complete_request(host_, request);
+    }
+
+private:
+    AppRuntimeHost& host_;
+    AppLocationSnapshotMock& location_;
+};
+
 void count_host_completion_kind(HostServiceDebugCounters& counters, HostServiceJobKind kind) {
     switch (kind) {
     case HostServiceJobKind::NetworkFetch:
@@ -545,7 +562,16 @@ void count_host_completion_kind(HostServiceDebugCounters& counters, HostServiceJ
     case HostServiceJobKind::AudioCommand:
         ++counters.audio_completions;
         break;
+    case HostServiceJobKind::LocationSnapshot:
+        ++counters.location_completions;
+        break;
     case HostServiceJobKind::Other:
+        ++counters.other_completions;
+        break;
+    case HostServiceJobKind::SensorSample:
+    case HostServiceJobKind::VideoFrameDecode:
+    case HostServiceJobKind::BundleInstall:
+    case HostServiceJobKind::BundleRemove:
         ++counters.other_completions;
         break;
     }
@@ -2274,7 +2300,7 @@ public:
             "\"daily\":{\"temp\":\"24\",\"condition\":\"Cloudy\",\"summary\":\"AQI 42 Good\",\"wind\":\"8\",\"rain\":\"20\",\"updated\":\"Live\",\"icon\":\"cloudy\"},"
             "\"air\":{\"temp\":\"42\",\"condition\":\"Air\",\"summary\":\"AQI good\",\"wind\":\"5\",\"rain\":\"10\",\"updated\":\"Live\",\"icon\":\"haze\"}"
             "}}";
-        const char* service_status_json = "{\"data\":\"Live\",\"audio\":\"Host owned\",\"sensors\":\"FG only\"}";
+        const char* service_status_json = "{\"data\":\"Live\",\"audio\":\"Host owned\"}";
         debug_network_.add_fixture(NetworkFetchFixture{"/debug/ping.txt", 200, "text/plain", "pong"});
         debug_network_.add_fixture(NetworkFetchFixture{
             "/data/weather.json",
@@ -2288,6 +2314,7 @@ public:
             "application/json",
             service_status_json,
         });
+        debug_location_.set_fixture(AppLocationSnapshotFixture{1718798400000ULL, 31.2304, 121.4737, 4.0f, 8.0f, 0.2f});
         add_debug_image_fixtures(debug_images_);
     }
 
@@ -2514,6 +2541,7 @@ public:
                   << " storage=" << host_service_counters_.storage_completions
                   << " image=" << host_service_counters_.image_completions
                   << " audio=" << host_service_counters_.audio_completions
+                  << " location=" << host_service_counters_.location_completions
                   << " other=" << host_service_counters_.other_completions << '\n'
                   << "  host_completion_handlers image=" << host_service_counters_.image_handled
                   << " script=" << host_service_counters_.script_host_completions_handled << '\n'
@@ -2604,6 +2632,8 @@ private:
     AppSystemStateSnapshot debug_system_state_;
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
     ImageDecodeMock debug_images_{ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4}};
+    AppLocationSnapshotMock debug_location_{AppLocationSnapshotPolicy{false, 2}};
+    bool debug_location_enabled_ = false;
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
@@ -2988,6 +3018,7 @@ private:
         host_service_counters_.completions_accepted += result.accepted;
         host_service_counters_.completions_stale += result.stale;
         host_service_counters_.released_stale_handles += result.released_stale_handles;
+        host_service_counters_.released_stale_handles += debug_location_.collect_released_snapshots(app_runtime_);
         std::size_t image_handled = 0;
         for (const HostServiceCompletion& completion : app_frame_scratch_.accepted_completions) {
             count_host_completion_kind(host_service_counters_, completion.kind);
@@ -3271,6 +3302,8 @@ private:
             background_service_policy_ = page.package_mode
                 ? background_policy_from_manifest(page.package_manifest)
                 : AppBackgroundServicePolicy{};
+            debug_location_enabled_ = page.package_mode && page.package_manifest.location_position_allowed;
+            debug_location_.set_policy(AppLocationSnapshotPolicy{debug_location_enabled_, 2});
             if (page.package_mode) {
                 add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_);
             }
@@ -3341,6 +3374,9 @@ private:
                     debug_local_storage_instance_id_ = script_runtime_instance_id_;
                 }
                 script_runtime_->bind_app_services(app_runtime_, debug_network_);
+                if (debug_location_enabled_) {
+                    script_runtime_->bind_location_service(app_runtime_, debug_location_);
+                }
                 script_runtime_->bind_local_storage(debug_local_storage_);
                 script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
                 script_runtime_->set_system_state(ScriptSystemState{
@@ -4052,12 +4088,15 @@ private:
             return;
         }
         NetworkFetchMockWorker network_worker(app_runtime_, debug_network_);
-        AppHostServiceWorkerSlot network_slot[] = {
+        LocationSnapshotMockWorker location_worker(app_runtime_, debug_location_);
+        AppHostServiceWorkerSlot script_service_slots[] = {
             AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 1, &network_worker},
+            AppHostServiceWorkerSlot{HostServiceJobKind::LocationSnapshot, 1, &location_worker},
         };
-        const AppHostServiceWorkerGroupPumpResult network_pump =
-            pump_app_host_service_workers(app_runtime_, network_slot, 1);
-        const bool completed_network = network_pump.completions_posted != 0;
+        const std::size_t script_service_slot_count = debug_location_enabled_ ? 2 : 1;
+        const AppHostServiceWorkerGroupPumpResult script_service_pump =
+            pump_app_host_service_workers(app_runtime_, script_service_slots, script_service_slot_count);
+        const bool completed_script_service = script_service_pump.completions_posted != 0;
         handled_completion = drain_host_completions() || handled_completion;
         if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
             recover_active_app_after_script_watchdog("script host-completion execution budget exceeded");
@@ -4075,7 +4114,7 @@ private:
             return;
         }
         if (frame_policy.presents_frames &&
-            (callbacks != 0 || animation_callbacks != 0 || audio_event_handled || completed_network || advanced_animation ||
+            (callbacks != 0 || animation_callbacks != 0 || audio_event_handled || completed_script_service || advanced_animation ||
              completed_image || handled_completion || handled_system_event)) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }

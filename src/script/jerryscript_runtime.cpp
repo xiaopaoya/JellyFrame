@@ -1,5 +1,6 @@
 ﻿#include "script/jerryscript_runtime.h"
 
+#include "app_runtime/app_device_services.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
@@ -64,6 +65,13 @@ struct ScriptAudioElement {
     jerry_value_t object = 0;
     std::array<jerry_value_t, 2> property_callbacks{};
     std::array<jerry_value_t, 2> event_listeners{};
+    bool active = false;
+};
+
+struct ScriptGeolocationRequest {
+    std::uint32_t job_id = 0;
+    jerry_value_t success_callback = 0;
+    jerry_value_t error_callback = 0;
     bool active = false;
 };
 
@@ -137,12 +145,33 @@ struct ScriptRuntimeAccess {
         return runtime.create_audio_element(std::move(src));
     }
 
+    static ScriptGeolocationRequest* create_geolocation_request(JerryScriptRuntime& runtime,
+                                                                std::uint32_t job_id,
+                                                                jerry_value_t success_callback,
+                                                                jerry_value_t error_callback) {
+        return runtime.create_geolocation_request(job_id, success_callback, error_callback);
+    }
+
+    static bool can_create_geolocation_request(const JerryScriptRuntime& runtime) {
+        const auto active_requests =
+            static_cast<std::size_t>(std::count_if(runtime.geolocation_requests_.begin(),
+                                                   runtime.geolocation_requests_.end(),
+                                                   [](const std::unique_ptr<ScriptGeolocationRequest>& request) {
+                                                       return request->active;
+                                                   }));
+        return active_requests < runtime.options_.max_geolocation_requests;
+    }
+
     static AppRuntimeHost* app_host(JerryScriptRuntime& runtime) {
         return runtime.app_host_;
     }
 
     static NetworkFetchMock* network_fetch(JerryScriptRuntime& runtime) {
         return runtime.network_fetch_;
+    }
+
+    static AppLocationSnapshotMock* location_snapshot(JerryScriptRuntime& runtime) {
+        return runtime.location_snapshot_;
     }
 
     static ScriptSystemState system_state(const JerryScriptRuntime& runtime) {
@@ -1171,10 +1200,150 @@ jerry_value_t navigator_get_on_line(const jerry_call_info_t* call_info_p,
     return jerry_boolean(runtime != nullptr && ScriptRuntimeAccess::system_state(*runtime).navigator_online);
 }
 
+jerry_value_t make_geolocation_error_object(int code, const char* message) {
+    JerryValue object(jerry_object());
+    set_number_property(object.get(), "code", code);
+    set_property(object.get(), "message", string_to_value(message).get());
+    return object.release();
+}
+
+int geolocation_error_code(AppDeviceFailureReason reason) {
+    switch (reason) {
+    case AppDeviceFailureReason::CapabilityDenied:
+        return 1; // PERMISSION_DENIED
+    case AppDeviceFailureReason::RequestTimeout:
+        return 3; // TIMEOUT
+    case AppDeviceFailureReason::None:
+    case AppDeviceFailureReason::EmptyInstance:
+    case AppDeviceFailureReason::InvalidRequest:
+    case AppDeviceFailureReason::QueueFull:
+    case AppDeviceFailureReason::SampleUnavailable:
+    case AppDeviceFailureReason::RecordBudgetExceeded:
+    case AppDeviceFailureReason::HandleBudgetExceeded:
+    case AppDeviceFailureReason::RequestFailed:
+    case AppDeviceFailureReason::RequestCancelled:
+    case AppDeviceFailureReason::Unsupported:
+    case AppDeviceFailureReason::Unknown:
+        break;
+    }
+    return 2; // POSITION_UNAVAILABLE
+}
+
+const char* geolocation_error_message(AppDeviceFailureReason reason) {
+    switch (reason) {
+    case AppDeviceFailureReason::CapabilityDenied:
+        return "geolocation permission denied";
+    case AppDeviceFailureReason::RequestTimeout:
+        return "geolocation request timed out";
+    case AppDeviceFailureReason::SampleUnavailable:
+        return "geolocation position unavailable";
+    case AppDeviceFailureReason::QueueFull:
+    case AppDeviceFailureReason::RecordBudgetExceeded:
+    case AppDeviceFailureReason::HandleBudgetExceeded:
+        return "geolocation budget exceeded";
+    case AppDeviceFailureReason::RequestCancelled:
+        return "geolocation request cancelled";
+    case AppDeviceFailureReason::Unsupported:
+        return "geolocation unsupported";
+    case AppDeviceFailureReason::None:
+    case AppDeviceFailureReason::EmptyInstance:
+    case AppDeviceFailureReason::InvalidRequest:
+    case AppDeviceFailureReason::RequestFailed:
+    case AppDeviceFailureReason::Unknown:
+        break;
+    }
+    return "geolocation request failed";
+}
+
+void call_geolocation_error(JerryScriptRuntime& runtime,
+                            jerry_value_t callback,
+                            AppDeviceFailureReason reason) {
+    if (callback == 0 || !jerry_value_is_function(callback)) {
+        return;
+    }
+    JerryValue error(make_geolocation_error_object(geolocation_error_code(reason),
+                                                   geolocation_error_message(reason)));
+    const jerry_value_t arg = error.get();
+    JerryValue result(run_with_execution_budget(runtime, [&]() {
+        return jerry_call(callback, jerry_undefined(), &arg, 1);
+    }));
+    if (jerry_value_is_exception(result.get())) {
+        JerryValue exception_value(jerry_exception_value(result.release(), true));
+        (void) exception_value;
+    }
+}
+
+jerry_value_t make_geolocation_position_object(const AppLocationSnapshotRecord& snapshot) {
+    JerryValue coords(jerry_object());
+    set_number_property(coords.get(), "latitude", snapshot.latitude);
+    set_number_property(coords.get(), "longitude", snapshot.longitude);
+    set_number_property(coords.get(), "accuracy", snapshot.accuracy_m);
+    set_number_property(coords.get(), "altitude", snapshot.altitude_m);
+    set_property(coords.get(), "altitudeAccuracy", jerry_null());
+    set_property(coords.get(), "heading", jerry_null());
+    set_number_property(coords.get(), "speed", snapshot.speed_mps);
+
+    JerryValue position(jerry_object());
+    set_property(position.get(), "coords", coords.get());
+    set_number_property(position.get(), "timestamp", static_cast<double>(snapshot.timestamp_ms));
+    return position.release();
+}
+
+jerry_value_t geolocation_get_current_position(const jerry_call_info_t* call_info_p,
+                                               const jerry_value_t args_p[],
+                                               const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr || args_count < 1 || !jerry_value_is_function(args_p[0])) {
+        return throw_type_error("geolocation.getCurrentPosition requires a success callback");
+    }
+
+    AppRuntimeHost* host = ScriptRuntimeAccess::app_host(*runtime);
+    AppLocationSnapshotMock* location = ScriptRuntimeAccess::location_snapshot(*runtime);
+    const jerry_value_t error_callback =
+        (args_count > 1 && jerry_value_is_function(args_p[1])) ? args_p[1] : 0;
+    if (host == nullptr || location == nullptr) {
+        call_geolocation_error(*runtime, error_callback, AppDeviceFailureReason::Unsupported);
+        return jerry_undefined();
+    }
+    if (!ScriptRuntimeAccess::can_create_geolocation_request(*runtime)) {
+        call_geolocation_error(*runtime, error_callback, AppDeviceFailureReason::RecordBudgetExceeded);
+        return jerry_undefined();
+    }
+
+    const AppServiceSubmitResult submitted = location->submit_position(*host);
+    if (!submitted.accepted()) {
+        call_geolocation_error(*runtime,
+                               error_callback,
+                               classify_app_device_failure(submitted.status,
+                                                           submitted.rejected_status,
+                                                           submitted.error_code));
+        return jerry_undefined();
+    }
+    if (ScriptRuntimeAccess::create_geolocation_request(*runtime,
+                                                        submitted.job_id,
+                                                        args_p[0],
+                                                        error_callback) == nullptr) {
+        // Capacity was checked before submit; this is a defensive fallback.
+        call_geolocation_error(*runtime, error_callback, AppDeviceFailureReason::RecordBudgetExceeded);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t make_geolocation_object(JerryScriptRuntime& runtime) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    set_runtime_method(object.get(), "getCurrentPosition", geolocation_get_current_position, runtime);
+    return object.release();
+}
+
 jerry_value_t make_navigator_object(JerryScriptRuntime& runtime) {
     JerryValue object(jerry_object());
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
     define_accessor(object.get(), "onLine", navigator_get_on_line, node_ignore_setter);
+    if (ScriptRuntimeAccess::location_snapshot(runtime) != nullptr) {
+        JerryValue geolocation(make_geolocation_object(runtime));
+        set_property(object.get(), "geolocation", geolocation.get());
+    }
     return object.release();
 }
 
@@ -2158,6 +2327,7 @@ JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
           16,
           std::max<std::size_t>(1, budgets.max_active_animations),
           8,
+          4,
           static_cast<std::uint32_t>(std::min<std::size_t>(
               budgets.max_script_execution_checks,
               std::numeric_limits<std::uint32_t>::max())),
@@ -2170,6 +2340,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
         clear_xml_http_requests();
         clear_audio_elements();
+        clear_geolocation_requests();
         clear_script_event_listeners();
         clear_animation_frame_callbacks();
         clear_timers();
@@ -2182,6 +2353,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 void JerryScriptRuntime::bind_document(Node& document) {
     clear_xml_http_requests();
     clear_audio_elements();
+    clear_geolocation_requests();
     clear_script_event_listeners();
     clear_animation_frame_callbacks();
     clear_timers();
@@ -2239,6 +2411,11 @@ void JerryScriptRuntime::bind_app_services(AppRuntimeHost& host, NetworkFetchMoc
     network_fetch_ = &network;
 }
 
+void JerryScriptRuntime::bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location) {
+    app_host_ = &host;
+    location_snapshot_ = &location;
+}
+
 void JerryScriptRuntime::bind_local_storage(AppLocalStorageShadow& storage) {
     local_storage_ = &storage;
 }
@@ -2248,8 +2425,10 @@ void JerryScriptRuntime::bind_audio_host(ScriptAudioHost host) {
 }
 
 void JerryScriptRuntime::clear_app_services() {
+    clear_geolocation_requests();
     app_host_ = nullptr;
     network_fetch_ = nullptr;
+    location_snapshot_ = nullptr;
     local_storage_ = nullptr;
     audio_host_ = {};
 }
@@ -2400,7 +2579,61 @@ std::size_t JerryScriptRuntime::pump_animation_frame(std::uint64_t now_ms, std::
 }
 
 bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& completion) {
-    if (app_host_ == nullptr || network_fetch_ == nullptr) {
+    if (app_host_ == nullptr) {
+        return false;
+    }
+    if (completion.kind == HostServiceJobKind::LocationSnapshot && location_snapshot_ != nullptr) {
+        for (const auto& request : geolocation_requests_) {
+            if (!request->active || request->job_id != completion.job_id) {
+                continue;
+            }
+            if (completion.status == HostServiceStatus::Completed && completion.handle != 0) {
+                const AppLocationSnapshotRecord* snapshot = location_snapshot_->snapshot(completion.handle);
+                if (snapshot != nullptr && request->success_callback != 0 &&
+                    jerry_value_is_function(request->success_callback)) {
+                    JerryValue position(make_geolocation_position_object(*snapshot));
+                    const jerry_value_t arg = position.get();
+                    JerryValue callback(jerry_value_copy(request->success_callback));
+                    JerryValue result(run_with_execution_budget(*this, [&]() {
+                        return jerry_call(callback.get(), jerry_undefined(), &arg, 1);
+                    }));
+                    if (jerry_value_is_exception(result.get())) {
+                        JerryValue exception_value(jerry_exception_value(result.release(), true));
+                        (void) exception_value;
+                    }
+                } else {
+                    call_geolocation_error(*this,
+                                           request->error_callback,
+                                           AppDeviceFailureReason::SampleUnavailable);
+                }
+                location_snapshot_->release_snapshot(*app_host_, completion.handle);
+            } else {
+                call_geolocation_error(*this,
+                                       request->error_callback,
+                                       classify_app_device_failure(AppServiceSubmitStatus::Accepted,
+                                                                   completion.status,
+                                                                   completion.error_code));
+            }
+            if (request->success_callback != 0) {
+                jerry_value_free(request->success_callback);
+                request->success_callback = 0;
+            }
+            if (request->error_callback != 0) {
+                jerry_value_free(request->error_callback);
+                request->error_callback = 0;
+            }
+            request->active = false;
+            geolocation_requests_.erase(
+                std::remove_if(geolocation_requests_.begin(),
+                               geolocation_requests_.end(),
+                               [](const std::unique_ptr<ScriptGeolocationRequest>& entry) {
+                                   return !entry->active;
+                               }),
+                geolocation_requests_.end());
+            return true;
+        }
+    }
+    if (network_fetch_ == nullptr) {
         return false;
     }
     for (const auto& xhr : xml_http_requests_) {
@@ -2491,6 +2724,7 @@ ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
     output.event_listener_count = event_listeners_.size();
     output.xml_http_request_count = xml_http_requests_.size();
     output.audio_element_count = audio_elements_.size();
+    output.geolocation_request_count = geolocation_requests_.size();
     output.detached_nodes = detached_nodes_.detached_statistics();
     return output;
 }
@@ -2857,6 +3091,46 @@ void JerryScriptRuntime::clear_audio_elements() {
         audio->active = false;
     }
     audio_elements_.clear();
+}
+
+ScriptGeolocationRequest* JerryScriptRuntime::create_geolocation_request(std::uint32_t job_id,
+                                                                         std::uint32_t success_callback,
+                                                                         std::uint32_t error_callback) {
+    geolocation_requests_.erase(
+        std::remove_if(geolocation_requests_.begin(),
+                       geolocation_requests_.end(),
+                       [](const std::unique_ptr<ScriptGeolocationRequest>& request) {
+                           return !request->active;
+                       }),
+        geolocation_requests_.end());
+    if (geolocation_requests_.size() >= options_.max_geolocation_requests) {
+        return nullptr;
+    }
+    auto request = std::make_unique<ScriptGeolocationRequest>();
+    request->job_id = job_id;
+    request->success_callback = jerry_value_copy(success_callback);
+    if (error_callback != 0) {
+        request->error_callback = jerry_value_copy(error_callback);
+    }
+    request->active = true;
+    ScriptGeolocationRequest* raw = request.get();
+    geolocation_requests_.push_back(std::move(request));
+    return raw;
+}
+
+void JerryScriptRuntime::clear_geolocation_requests() {
+    for (const auto& request : geolocation_requests_) {
+        if (request->success_callback != 0) {
+            jerry_value_free(request->success_callback);
+            request->success_callback = 0;
+        }
+        if (request->error_callback != 0) {
+            jerry_value_free(request->error_callback);
+            request->error_callback = 0;
+        }
+        request->active = false;
+    }
+    geolocation_requests_.clear();
 }
 
 } // namespace jellyframe

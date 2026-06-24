@@ -1,5 +1,6 @@
 ﻿#include "script/jerryscript_runtime.h"
 
+#include "app_runtime/app_device_services.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "render_core/document_script.h"
@@ -904,6 +905,67 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     check(result.ok && result.value == "true:hidden:1", "document visibility state updates");
 }
 
+void javascript_geolocation_uses_bound_location_service() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='status'>ready</p></body>");
+
+    {
+        JerryScriptRuntime unbound;
+        unbound.bind_document(*document);
+        ScriptEvaluationResult result = unbound.eval("String(typeof navigator.geolocation)");
+        check(result.ok && result.value == "undefined", "geolocation is absent when no location service is bound");
+    }
+
+    AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
+    host.launch("org.example.geo", AppRole::App);
+    AppLocationSnapshotMock location(AppLocationSnapshotPolicy{true, 2});
+    check(location.set_fixture(AppLocationSnapshotFixture{1234, 31.2304, 121.4737, 4.0f, 8.0f, 0.2f}),
+          "geolocation fixture accepted");
+
+    {
+        JerryScriptRuntime runtime;
+        runtime.bind_location_service(host, location);
+        runtime.bind_document(*document);
+        ScriptEvaluationResult result = runtime.eval(
+            "var geoResult = 'pending';"
+            "navigator.geolocation.getCurrentPosition(function (pos) {"
+            "  geoResult = String(pos.coords.latitude) + ',' + String(pos.coords.longitude) + ',' +"
+            "    String(pos.coords.accuracy) + ',' + String(pos.timestamp);"
+            "}, function (error) { geoResult = 'error:' + error.code + ':' + error.message; });"
+            "geoResult");
+        check(result.ok && result.value == "pending", "geolocation request starts asynchronously");
+        check(location.complete_next(host), "geolocation host worker completes");
+        std::vector<HostServiceCompletion> completions;
+        host.pump_frame_completions(completions);
+        check(completions.size() == 1, "geolocation completion pumped");
+        check(runtime.handle_host_completion(completions.front()), "geolocation completion handled");
+        result = runtime.eval("geoResult");
+        check(result.ok && result.value == "31.2304,121.4737,8,1234", "geolocation success object shape");
+        check(host.handles().active_count() == 0, "geolocation completion releases host handle");
+        check(runtime.statistics().geolocation_request_count == 0, "geolocation request record is collected");
+    }
+
+    AppLocationSnapshotMock missing_location(AppLocationSnapshotPolicy{true, 1});
+    {
+        JerryScriptRuntime missing_runtime;
+        missing_runtime.bind_location_service(host, missing_location);
+        missing_runtime.bind_document(*document);
+        ScriptEvaluationResult result = missing_runtime.eval(
+            "var geoError = 'pending';"
+            "navigator.geolocation.getCurrentPosition(function () { geoError = 'success'; },"
+            "  function (error) { geoError = String(error.code) + ':' + error.message; });"
+            "geoError");
+        check(result.ok && result.value == "pending", "geolocation missing request starts asynchronously");
+        check(missing_location.complete_next(host), "geolocation missing host worker completes");
+        std::vector<HostServiceCompletion> completions;
+        host.pump_frame_completions(completions);
+        check(completions.size() == 1, "geolocation missing completion pumped");
+        check(missing_runtime.handle_host_completion(completions.front()), "geolocation missing completion handled");
+        result = missing_runtime.eval("geoError");
+        check(result.ok && result.value == "2:geolocation position unavailable", "geolocation error callback shape");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -944,6 +1006,7 @@ int main() {
         javascript_audio_subset_uses_bound_host();
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_system_state_exposes_web_adjacent_subset();
+        javascript_geolocation_uses_bound_location_service();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

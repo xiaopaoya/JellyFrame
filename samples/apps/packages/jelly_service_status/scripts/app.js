@@ -3,7 +3,7 @@
   var line = document.getElementById("line");
   var net = document.getElementById("net");
   var audio = document.getElementById("audio");
-  var sensors = document.getElementById("sensors");
+  var location = document.getElementById("location");
   var data = document.getElementById("data");
   var store = document.getElementById("store");
 
@@ -34,8 +34,20 @@
     }
     data.textContent = payload.data || "Ready";
     audio.textContent = payload.audio || audio.textContent;
-    sensors.textContent = payload.sensors || sensors.textContent;
     rememberStatus(data.textContent);
+  }
+
+  function refreshLocation() {
+    if (!navigator.geolocation || !navigator.geolocation.getCurrentPosition) {
+      location.textContent = "No host";
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(function (position) {
+      var coords = position.coords;
+      location.textContent = String(coords.latitude).slice(0, 5) + "," + String(coords.longitude).slice(0, 6);
+    }, function (error) {
+      location.textContent = "E" + String(error.code);
+    });
   }
 
   function fetchStatus() {
@@ -69,4 +81,5 @@
     store.textContent = localStorage.getItem("serviceStatus");
   }
   fetchStatus();
+  refreshLocation();
 }());

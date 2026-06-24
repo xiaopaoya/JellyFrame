@@ -413,6 +413,9 @@ completion event：
 - `AppLocationSnapshotMock`：通过 `HostServiceJobKind::LocationSnapshot` 请求一个定位快照。
 - `HostServiceHandleKind::SensorSample` / `LocationSnapshot`：结果由短句柄引用，App/JS binding
   在 UI task 消费 completion 后复制出需要的字段，再释放句柄。
+- `JerryScriptRuntime` 在宿主绑定 location service 后暴露
+  `navigator.geolocation.getCurrentPosition(...)`。binding 会把一个完成的定位快照复制成 Web 形状的
+  callback 对象，并立即释放 host handle。sensor JavaScript API 仍延后。
 - `app_sensor_sample_policy_from_service_policies(...)` 和
   `app_location_snapshot_policy_from_service_policies(...)`：把 manifest + host/profile gate
   合并后的策略转换成具体服务 policy。
@@ -802,7 +805,9 @@ enum class AppSystemEventPushStatus {
    并严格限制尺寸和并发。
 5. 接产品级 host-owned MP3 playback backend，仍只向 UI task 返回句柄和 ended/error 事件。mock 与极小
    `Audio()` JS 状态事件子集已经可用于桌面验证。
-6. 更多面向用户的 JS API 必须在上述边界稳定后暴露。当前已暴露异步 `XMLHttpRequest` GET V0；
-   `fetch()` 等有界 Promise/microtask 支持存在后再考虑；让 manifest/profile 检查拦截不支持目标。
+6. 更多面向用户的 JS API 必须在上述边界稳定后暴露。当前已在宿主绑定后暴露异步
+   `XMLHttpRequest` GET V0、极小 `Audio()` 子集和
+   `navigator.geolocation.getCurrentPosition(...)` 子集；`fetch()` 和 sensor JS API 等有界
+   Promise/microtask 支持及更严格的采样频率策略稳定后再考虑；让 manifest/profile 检查拦截不支持目标。
 
 这条顺序的核心目的很朴素：先把生命周期和调度做对，再逐步把真实硬件能力接进来。

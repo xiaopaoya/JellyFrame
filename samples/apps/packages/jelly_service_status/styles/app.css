@@ -89,7 +89,7 @@ body {
   background-color: var(--amber);
 }
 
-.sensor .dot {
+.location .dot {
   background-color: var(--rose);
 }
 

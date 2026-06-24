@@ -123,6 +123,14 @@ API 表面。
   `ended` 和 `error` 的 `addEventListener`/`removeEventListener` 已作为第一版状态事件子集支持。
   V0 每种事件保留一个函数 listener 加一个 `on*` property slot。暂不承诺完整
   `HTMLAudioElement`、Promise 或 streaming 状态。
+- 宿主绑定 location service 后暴露：
+  `navigator.geolocation.getCurrentPosition(success, error)`。callback 是异步的，只在宿主
+  pump `LocationSnapshot` completion 回 UI/main task 后执行。成功对象包含
+  `coords.latitude`、`coords.longitude`、`coords.accuracy`、`coords.altitude`、
+  `coords.altitudeAccuracy`、`coords.heading`、`coords.speed` 和 `timestamp`；
+  其中 `altitudeAccuracy` 和 `heading` 目前为 `null`。错误 callback 使用标准 code 形状：
+  `1` permission denied、`2` position unavailable、`3` timeout。未绑定 location service 时
+  不暴露 `navigator.geolocation`。
 - 已暴露：`navigator.onLine`、`window.addEventListener` / `removeEventListener`
   的 `online` / `offline` 系统状态事件子集、`document.hidden`、`document.visibilityState`
   和 `document` 的 `visibilitychange`，用于 accepted host system events。Win32 壳可用

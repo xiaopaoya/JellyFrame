@@ -496,6 +496,10 @@ Current platform-neutral code provides:
 - `HostServiceHandleKind::SensorSample` / `LocationSnapshot`: results are
   referenced by short handles. App/JS bindings should copy the needed fields on
   the UI task after completion pumping, then release the handle.
+- `JerryScriptRuntime` exposes `navigator.geolocation.getCurrentPosition(...)`
+  when a location service is bound. The binding copies one completed snapshot
+  into the Web-shaped callback object and immediately releases the host handle.
+  Sensor JavaScript APIs are still deferred.
 - `app_sensor_sample_policy_from_service_policies(...)` and
   `app_location_snapshot_policy_from_service_policies(...)`: convert the merged
   manifest + host/profile gate into concrete service policies.
@@ -946,8 +950,10 @@ Recommended order:
    and ended/error events to the UI task. The mock and tiny `Audio()` JS status
    event subset are already available for desktop validation.
 6. Expose further user-facing JS APIs only after the lifetime boundary is
-   stable. The asynchronous `XMLHttpRequest` GET V0 subset is now exposed;
-   `fetch()` waits for bounded Promise/microtask support. Let manifest/profile
+   stable. The asynchronous `XMLHttpRequest` GET V0 subset, tiny `Audio()`
+   subset and `navigator.geolocation.getCurrentPosition(...)` subset are now
+   exposed behind host bindings; `fetch()` and sensor JS APIs wait for bounded
+   Promise/microtask support and stricter cadence policy. Let manifest/profile
    checks reject unsupported targets.
 
 The point is to get lifetime and scheduling right first, then attach real
