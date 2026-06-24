@@ -85,6 +85,12 @@ foreground/suspended, screen-on and low-power state into these budgets:
 low-power may keep input/timers while stopping animation, while screen-off or
 suspended state pauses foreground input, timers, rAF and presentation and
 recommends a first repaint when the app becomes visible again.
+`app_runtime/app_load_telemetry.h` adds an advisory load classifier for hosts
+that need DVFS or sleep decisions. Feed it the current `FrameLoopWorkPlan`,
+`FrameUpdatePlan`, dirty-region summary, service queue depths and frame policy;
+it returns `sleep-ok`, `low-frequency-ok`, `normal`, `boost-needed` or
+`overloaded`. The helper only reports load. Real CPU frequency, PM locks,
+tickless idle, watchdog feeding and worker scheduling remain host policy.
 The Win32 validation shell exposes the animation budget through
 `--animation-fps`, `--animation-callbacks` and matching frame-script commands,
 so low-power behavior can be tested without changing app source.

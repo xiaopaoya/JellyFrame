@@ -86,6 +86,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_frame_policy.cpp
     src/app_runtime/app_host.cpp
     src/app_runtime/app_lifecycle.cpp
+    src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
     src/app_runtime/app_services.cpp
     src/app_runtime/app_storage_lifecycle_policy.cpp
@@ -227,6 +228,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_frame_policy_tests.cpp
         src/app_runtime/tests/app_host_tests.cpp
         src/app_runtime/tests/app_lifecycle_tests.cpp
+        src/app_runtime/tests/app_load_telemetry_tests.cpp
         src/app_runtime/tests/app_service_worker_tests.cpp
         src/app_runtime/tests/app_services_tests.cpp
         src/app_runtime/tests/app_storage_lifecycle_policy_tests.cpp

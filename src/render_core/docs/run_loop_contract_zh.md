@@ -65,6 +65,10 @@ callback 和 pending animation frame callback，然后得到一个有界的 `Fra
 App runtime 还提供 `AppFramePolicy`，可把 foreground/suspended、screen-on 和 low-power 状态转换为
 这些预算：低功耗可保留输入/timer 但关闭动画，息屏或 suspended 会把前台输入、timer、rAF 和 present
 停掉，并在恢复可见时建议首帧 repaint。
+`app_runtime/app_load_telemetry.h` 还提供建议性的负载分类器，供宿主做 DVFS 或睡眠决策。宿主把当前
+`FrameLoopWorkPlan`、`FrameUpdatePlan`、dirty-region 摘要、service 队列深度和 frame policy
+传入后，会得到 `sleep-ok`、`low-frequency-ok`、`normal`、`boost-needed` 或 `overloaded`。
+该 helper 只报告负载；真实 CPU 调频、PM lock、tickless idle、watchdog feed 和 worker 调度仍归宿主策略。
 Win32 验证壳通过 `--animation-fps`、`--animation-callbacks` 和对应 frame-script 命令暴露动画预算，
 因此可以在不修改 app 源码的情况下验收低功耗行为。
 

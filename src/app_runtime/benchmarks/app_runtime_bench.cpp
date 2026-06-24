@@ -1,5 +1,6 @@
 ﻿#include "app_runtime/app_host.h"
 #include "app_runtime/app_lifecycle.h"
+#include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
@@ -485,6 +486,32 @@ void bench_font_fallback_measure(std::size_t capacity) {
     }
 }
 
+void bench_load_telemetry(std::size_t capacity) {
+    DirtyRegionResult region;
+    region.mode = DirtyRegionMode::DirtyRects;
+    region.rects.push_back(Rect{0, 0, 24, 24});
+
+    AppLoadTelemetryInput input;
+    input.frame_policy = AppFramePolicy{true, true, true, true, false};
+    input.service_policy = AppServiceActivityPolicy{true, false, false, false, false};
+    input.work.animation_callbacks_to_pump = 1;
+    input.update.action = FrameUpdateAction::RepaintExisting;
+    input.update.reason = FrameUpdateReason::PaintOnlyDirty;
+    input.dirty_region = &region;
+    input.viewport = Rect{0, 0, 240, 240};
+    input.service_request_capacity = capacity;
+    input.service_completion_capacity = capacity;
+    for (std::size_t i = 0; i < capacity; ++i) {
+        input.pending_service_requests = i % (capacity + 1);
+        input.pending_service_completions = (capacity - i) % (capacity + 1);
+        input.active_animations = i & 1U;
+        const AppLoadTelemetry telemetry = analyze_app_load(input);
+        if (telemetry.level == AppLoadLevel::Overloaded) {
+            input.work.has_more_animation_callbacks = false;
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -545,6 +572,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_font_fallback_measure", iterations, average_microseconds(iterations, [&] {
         bench_font_fallback_measure(capacity);
+    }));
+    print_result("app_runtime_load_telemetry", iterations, average_microseconds(iterations, [&] {
+        bench_load_telemetry(capacity);
     }));
 
     return 0;

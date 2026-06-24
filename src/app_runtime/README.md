@@ -11,6 +11,8 @@ It owns contracts and small bounded data structures for:
 - Host-owned resource handles with generation checks.
 - App lifecycle, package install/update/delete, network fetch, private storage,
   image/audio host-service mocks and system-event plumbing.
+- Advisory app-load telemetry for host DVFS, shallow sleep, service backlog and
+  animation frame-drop decisions.
 
 It may depend on `render_core` for shared host capability and budget types.
 It must not depend on JerryScript directly, filesystem/network implementations,

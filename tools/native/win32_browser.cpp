@@ -4,6 +4,7 @@
 
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_frame_policy.h"
+#include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
@@ -482,6 +483,19 @@ struct FramePolicyDebugCounters {
     std::size_t sensor_active_frames = 0;
     std::size_t pause_audio_frames = 0;
     std::size_t throttle_sensor_frames = 0;
+};
+
+struct LoadTelemetryDebugCounters {
+    std::size_t sampled_frames = 0;
+    std::size_t sleep_ok_frames = 0;
+    std::size_t low_frequency_frames = 0;
+    std::size_t normal_frames = 0;
+    std::size_t boost_frames = 0;
+    std::size_t overloaded_frames = 0;
+    std::size_t drop_animation_frames = 0;
+    std::size_t callback_backlog_frames = 0;
+    std::size_t service_backlog_frames = 0;
+    int max_dirty_area_percent = 0;
 };
 
 class NetworkFetchMockWorker final : public AppHostServiceWorker {
@@ -2329,12 +2343,18 @@ public:
             scripted_now_ms_ = options_.frame_start_ms +
                 static_cast<std::uint64_t>(frame) * options_.frame_step_ms;
             dispatch_scripted_frame_events(frame);
+            const std::size_t telemetry_samples_before = load_telemetry_counters_.sampled_frames;
             handle_timer(kScriptTimerId);
             record_frame_policy_sample();
             if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
                 render_current(input_ ? input_->hovered_node() : nullptr,
                                nullptr,
                                input_ ? input_->focused_node() : nullptr);
+            }
+            if (load_telemetry_counters_.sampled_frames == telemetry_samples_before) {
+                FrameUpdatePlan clean_plan;
+                clean_plan.reason = FrameUpdateReason::CleanCached;
+                record_load_telemetry_sample(clean_plan, nullptr, false);
             }
             if (!options_.frame_montage_path.empty() && frame == 0) {
                 montage_columns = options_.frame_montage_columns > 0
@@ -2481,7 +2501,17 @@ public:
                   << " audio=" << frame_policy_counters_.audio_active_frames
                   << " sensors=" << frame_policy_counters_.sensor_active_frames
                   << " pause_audio=" << frame_policy_counters_.pause_audio_frames
-                  << " throttle_sensors=" << frame_policy_counters_.throttle_sensor_frames << '\n';
+                  << " throttle_sensors=" << frame_policy_counters_.throttle_sensor_frames << '\n'
+                  << "  load_telemetry samples=" << load_telemetry_counters_.sampled_frames
+                  << " sleep=" << load_telemetry_counters_.sleep_ok_frames
+                  << " lowfreq=" << load_telemetry_counters_.low_frequency_frames
+                  << " normal=" << load_telemetry_counters_.normal_frames
+                  << " boost=" << load_telemetry_counters_.boost_frames
+                  << " overloaded=" << load_telemetry_counters_.overloaded_frames
+                  << " drop_animation=" << load_telemetry_counters_.drop_animation_frames
+                  << " callback_backlog=" << load_telemetry_counters_.callback_backlog_frames
+                  << " service_backlog=" << load_telemetry_counters_.service_backlog_frames
+                  << " max_dirty=" << load_telemetry_counters_.max_dirty_area_percent << "%\n";
         return 0;
     }
 
@@ -2555,6 +2585,7 @@ private:
     HostServiceDebugCounters host_service_counters_;
     AppBackgroundServicePolicy background_service_policy_;
     FramePolicyDebugCounters frame_policy_counters_;
+    LoadTelemetryDebugCounters load_telemetry_counters_;
     std::string pending_shell_action_;
     std::string pending_shell_app_id_;
 
@@ -2732,6 +2763,57 @@ private:
         frame_policy_counters_.sensor_active_frames += service_policy.sensor_sampling ? 1 : 0;
         frame_policy_counters_.pause_audio_frames += service_policy.should_pause_audio ? 1 : 0;
         frame_policy_counters_.throttle_sensor_frames += service_policy.should_throttle_sensors ? 1 : 0;
+    }
+
+    void record_load_telemetry_sample(const FrameUpdatePlan& update_plan,
+                                      const DirtyRegionResult* dirty_region,
+                                      bool use_last_dirty_region = true) {
+        FrameLoopPendingWork pending;
+        pending.pending_animation_callbacks = animation_timeline_.empty() ? 0 : 1;
+        const FrameLoopWorkPlan work = plan_frame_loop_work(pending, current_frame_loop_options());
+
+        AppLoadTelemetryInput input;
+        input.frame_policy = current_frame_policy();
+        input.service_policy = current_service_activity_policy();
+        input.work = work;
+        input.update = update_plan;
+        input.dirty_region = dirty_region;
+        input.viewport = Rect{0, 0, viewport_width_, std::max(1, viewport_height_)};
+        if (dirty_region == nullptr && use_last_dirty_region) {
+            input.dirty_region_mode = last_dirty_region_mode_;
+            input.dirty_area_percent = last_dirty_area_percent_;
+        }
+        input.pending_service_requests = app_runtime_.requests().size();
+        input.service_request_capacity = app_runtime_.requests().capacity();
+        input.pending_service_completions = app_runtime_.completions().size();
+        input.service_completion_capacity = app_runtime_.completions().capacity();
+        input.active_animations = animation_timeline_.active_count();
+
+        const AppLoadTelemetry telemetry = analyze_app_load(input);
+        ++load_telemetry_counters_.sampled_frames;
+        switch (telemetry.level) {
+        case AppLoadLevel::SleepOk:
+            ++load_telemetry_counters_.sleep_ok_frames;
+            break;
+        case AppLoadLevel::LowFrequencyOk:
+            ++load_telemetry_counters_.low_frequency_frames;
+            break;
+        case AppLoadLevel::Normal:
+            ++load_telemetry_counters_.normal_frames;
+            break;
+        case AppLoadLevel::BoostNeeded:
+            ++load_telemetry_counters_.boost_frames;
+            break;
+        case AppLoadLevel::Overloaded:
+            ++load_telemetry_counters_.overloaded_frames;
+            break;
+        }
+        load_telemetry_counters_.drop_animation_frames +=
+            telemetry.drop_animation_frame_recommended ? 1 : 0;
+        load_telemetry_counters_.callback_backlog_frames += telemetry.has_callback_backlog ? 1 : 0;
+        load_telemetry_counters_.service_backlog_frames += telemetry.has_service_backlog ? 1 : 0;
+        load_telemetry_counters_.max_dirty_area_percent =
+            std::max(load_telemetry_counters_.max_dirty_area_percent, telemetry.dirty_area_percent);
     }
 
     FrameLoopOptions current_frame_loop_options() const {
@@ -3298,6 +3380,7 @@ private:
         if (update_plan.action == FrameUpdateAction::None) {
             record_frame_update(update_plan, dirty_flags);
             record_dirty_region(DirtyRegionResult{});
+            record_load_telemetry_sample(update_plan, nullptr);
             return;
         }
         frame_scratch_.begin_frame();
@@ -3377,6 +3460,7 @@ private:
             update_blit_pixels();
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
+            record_load_telemetry_sample(update_plan, nullptr);
             return;
         }
 
@@ -3474,6 +3558,7 @@ private:
             update_blit_pixels();
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
+            record_load_telemetry_sample(update_plan, nullptr);
             return;
         }
         record_frame_update(update_plan, dirty_flags);
@@ -3530,6 +3615,7 @@ private:
         update_blit_pixels();
         clear_dirty_flags(*document_);
         clear_finished_animation_overrides();
+        record_load_telemetry_sample(update_plan, nullptr);
     }
 
     void collect_transition_candidate_styles(const RenderObject& object,
