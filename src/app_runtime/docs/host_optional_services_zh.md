@@ -41,6 +41,15 @@ host 应以相同 request/completion/handle 语义替换其 worker 实现。
 host/profile 同时允许该服务，并提供有界预算时，最终 runtime policy 才会启用。这样 JS binding 和
 worker 实现都不需要各自散落权限判断。
 
+`src/app_runtime/app_capability_broker.h` 提供更通用的 capability broker，用于标准能力和产品私有能力名。
+它会把 app 请求分类为 `granted`、`granted-product-specific`、`unsupported-by-host` 或
+`unknown-capability`。已知名称覆盖当前服务和未来语义化设备通道，例如 `sensor.accelerometer`、
+`sensor.gyroscope`、`sensor.heart-rate`、`sensor.ambient-light`、`location.position`、
+`connectivity.status`、`connectivity.companion`、`media.microphone`、`media.camera` 和
+`media.video.input`。manifest 可以声明产品私有名称，但只有 host/profile 明确列出同名能力时才会
+被授予。它们仍必须通过有界 host service 或宿主提供的 JS binding 暴露；app 不会拿到裸
+GPIO/I2C/SPI/radio 句柄。
+
 ## 总体模型
 
 JellyFrame 只有一个 UI owner：

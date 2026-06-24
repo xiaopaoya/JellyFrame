@@ -166,6 +166,11 @@ python tools/jellyframe_cli.py schema --print-path
 `system.launcher`/`system.appManager` capability 并不会自动获得权限；它只表达 app 的意图，
 真正授权必须由宿主/profile 根据签名、安装来源或产品策略决定。
 
+`capabilities` 接受 JellyFrame 标准能力名，也接受产品私有扩展名。未知名称不再让 schema 直接拒绝
+package，但如果所选产品 profile 没有通过 host policy 明确支持同名能力，工具仍会报告
+`manifest-capability-unknown`。可移植 app 应优先使用标准名称；产品私有名称只应保留给无法用已文档化
+Web-near 子集描述的服务。
+
 `fonts` 当前是部署/工具声明，不是完整 CSS runtime font loading。打包器会把 `.jffont`、`.bdf`、
 `.ttf`、`.otf`、`.woff` 等文件作为普通 `Font` 资源写入资源表或 `.jfapp`。其中 `.jffont`
 V0/V1 已可由 runtime 解析并随 app instance 持有；`AppFontSet` 提供 bitmap fallback chain：

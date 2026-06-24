@@ -500,7 +500,18 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
     known_capabilities = {
         "network.fetch",
         "storage.kv",
+        "image.decode",
         "media.audio.mp3",
+        "media.microphone",
+        "media.camera",
+        "media.video.input",
+        "sensor.accelerometer",
+        "sensor.gyroscope",
+        "sensor.heart-rate",
+        "sensor.ambient-light",
+        "location.position",
+        "connectivity.status",
+        "connectivity.companion",
         "system.launcher",
         "system.appManager",
     }

@@ -225,7 +225,9 @@
     "capabilities": {
       "type": "array",
       "items": {
-        "enum": ["network.fetch", "storage.kv", "media.audio.mp3", "system.launcher", "system.appManager"]
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
       },
       "uniqueItems": true
     },

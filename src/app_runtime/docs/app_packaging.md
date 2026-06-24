@@ -208,6 +208,14 @@ python tools/jellyframe_cli.py schema --print-path
 `system.launcher`/`system.appManager` capability does not grant privileges by
 itself; authorization belongs to the host/profile policy.
 
+`capabilities` accepts standard JellyFrame capability names and product-specific
+extension names. Unknown names no longer make the schema reject a package, but
+tools report them as `manifest-capability-unknown` unless the selected product
+profile explicitly supports the same name through host policy. Standard names
+should be preferred for portable apps; product-specific names should be
+reserved for services that cannot be described by the documented Web-near
+subset.
+
 `fonts` is currently a deployment/tooling declaration, not a full runtime CSS
 font-loading system. The packer records `.jffont`, `.bdf`, `.ttf`, `.otf`,
 `.woff` and related files as ordinary `Font` resources in resource tables or

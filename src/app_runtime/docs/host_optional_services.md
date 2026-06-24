@@ -56,6 +56,19 @@ becomes an enabled runtime policy only when the selected host/profile also
 allows that service and provides bounded budgets. This keeps policy decisions
 out of JS bindings and worker implementations.
 
+`src/app_runtime/app_capability_broker.h` provides a more general broker for
+standard and product-specific capability names. It classifies requested
+capabilities as `granted`, `granted-product-specific`, `unsupported-by-host` or
+`unknown-capability`. Known names cover current services plus future semantic
+device channels such as `sensor.accelerometer`, `sensor.gyroscope`,
+`sensor.heart-rate`, `sensor.ambient-light`, `location.position`,
+`connectivity.status`, `connectivity.companion`, `media.microphone`,
+`media.camera` and `media.video.input`. Product-specific names may be declared
+in the manifest, but they are granted only when the host/profile explicitly
+lists the same name. They must still go through bounded host services or
+host-provided JS bindings; raw GPIO/I2C/SPI/radio handles are not exposed to
+apps.
+
 ## Overall Model
 
 JellyFrame has one UI owner:
