@@ -148,6 +148,19 @@ struct HostNetworkCapabilities {
     std::size_t max_response_bytes = 0;
 };
 
+struct HostSensorCapabilities {
+    bool supports_accelerometer = false;
+    bool supports_gyroscope = false;
+    bool supports_heart_rate = false;
+    bool supports_ambient_light = false;
+    std::size_t max_sensor_sample_records = 0;
+};
+
+struct HostLocationCapabilities {
+    bool supports_position = false;
+    std::size_t max_location_snapshot_records = 0;
+};
+
 struct HostAppBundleCapabilities {
     bool supports_installable_bundles = false;
     bool supports_atomic_install = false;
@@ -163,6 +176,8 @@ struct HostDeviceCapabilities {
     HostAsyncCapabilities async;
     HostMediaCapabilities media;
     HostNetworkCapabilities network;
+    HostSensorCapabilities sensors;
+    HostLocationCapabilities location;
     HostAppBundleCapabilities app_bundles;
     HostBudgets budgets;
     bool has_monotonic_clock = true;

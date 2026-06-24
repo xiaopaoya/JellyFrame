@@ -1,7 +1,7 @@
 # Optional Host Services Contract
 
-This document makes image/audio/lightweight-video, network data requests and
-installable app bundles concrete enough for board ports. It complements
+This document makes image/audio/lightweight-video, network data requests,
+semantic device data and installable app bundles concrete enough for board ports. It complements
 `host_abstraction.md` and `embedded_hal_api.md`: those documents define
 ownership and checklists; this one defines the V0 service shape.
 
@@ -55,6 +55,14 @@ The same files also provide the first manifest/profile gate:
 becomes an enabled runtime policy only when the selected host/profile also
 allows that service and provides bounded budgets. This keeps policy decisions
 out of JS bindings and worker implementations.
+
+`src/app_runtime/app_device_services.h` /
+`src/app_runtime/app_device_services.cpp` provide the first semantic-device
+service mocks: `AppSensorSampleMock` and `AppLocationSnapshotMock`. They define
+the request/completion/handle shape for accelerometer, gyroscope, heart-rate,
+ambient-light and location snapshots. Product hosts still decide which sensor,
+bus, RTOS task or companion-phone service produces the data. Apps request
+documented capabilities; they never receive raw GPIO/I2C/SPI/BLE/GPS handles.
 
 `src/app_runtime/app_capability_broker.h` provides a more general broker for
 standard and product-specific capability names. It classifies requested
@@ -116,6 +124,9 @@ Current core helpers:
   stale handles after release, plus active-count and used-byte accounting.
 - `AppSystemEventQueue`: bounded host-injected system status events, tagged with
   the active `app_instance_id` and consumed at frame boundaries.
+- `AppSensorSampleMock` / `AppLocationSnapshotMock`: desktop/test mocks for
+  semantic device data. They keep only small sample/snapshot records and return
+  them to the UI task through host handles.
 
 ## Generic Job Shape
 
@@ -129,6 +140,8 @@ enum class HostServiceJobKind {
     VideoFrameDecode,
     NetworkFetch,
     StorageKv,
+    SensorSample,
+    LocationSnapshot,
     BundleInstall,
     BundleRemove,
 };
@@ -250,6 +263,12 @@ Storage worker:
 
 Audio worker:
   pump_app_host_service_worker(host, { AudioCommand, 1 }, audio_worker)
+
+Sensor worker:
+  pump_app_host_service_worker(host, { SensorSample, 1 }, sensor_worker)
+
+Location worker:
+  pump_app_host_service_worker(host, { LocationSnapshot, 1 }, location_worker)
 ```
 
 For a cooperative MCU loop, the same policy can be expressed without dynamic
@@ -438,6 +457,58 @@ Rules:
   `stream-budget-exceeded`, `command-timeout`, `command-cancelled` and related
   reasons.
 - Audio workers do not call JS; they post events for the UI task to dispatch.
+
+## Semantic Device Data Services
+
+Use cases:
+
+- Fitness, health, watchface and weather apps reading accelerometer, gyroscope,
+  heart-rate, ambient-light or position snapshots.
+- Product-specific sensors exposed through semantic capability names rather than
+  raw hardware buses.
+- Background sampling governed by `AppFramePolicy` /
+  `AppBackgroundServicePolicy`, so the host can slow down or stop sampling in
+  low-power, screen-off or suspended states.
+
+Current platform-neutral code provides:
+
+- `AppSensorSampleMock`: requests one small sensor sample through
+  `HostServiceJobKind::SensorSample`. `AppSensorKind` covers `accelerometer`,
+  `gyroscope`, `heart-rate` and `ambient-light`.
+- `AppLocationSnapshotMock`: requests one location snapshot through
+  `HostServiceJobKind::LocationSnapshot`.
+- `HostServiceHandleKind::SensorSample` / `LocationSnapshot`: results are
+  referenced by short handles. App/JS bindings should copy the needed fields on
+  the UI task after completion pumping, then release the handle.
+- `app_sensor_sample_policy_from_service_policies(...)` and
+  `app_location_snapshot_policy_from_service_policies(...)`: convert the merged
+  manifest + host/profile gate into concrete service policies.
+- `classify_app_device_failure(...)`: classifies request rejection and
+  completion failures into stable diagnostics such as `capability-denied`,
+  `sample-unavailable`, `record-budget-exceeded`, `handle-budget-exceeded`,
+  `request-timeout` and `request-cancelled`.
+
+Rules:
+
+- Apps must declare `sensor.accelerometer`, `sensor.gyroscope`,
+  `sensor.heart-rate`, `sensor.ambient-light` or `location.position` in the
+  manifest, and the host/profile must also allow the same service.
+- A sample/snapshot is discrete data, not an unbounded high-frequency stream. A
+  real host may downsample, debounce or cache continuous hardware samples into
+  the latest snapshot before returning it through the request/completion
+  boundary.
+- Workers must not call DOM/JS/layout/framebuffer APIs. Sensor interrupts,
+  GPS/BLE/Wi-Fi positioning and companion-phone data must be normalized into a
+  small completion or host handle.
+- `max_sensor_sample_records` and `max_location_snapshot_records` limit
+  unreleased records; the host handle byte budget is the second guard.
+- App switch, exit and crash recovery release host handles. Real services
+  should also collect stale records, matching the mock
+  `collect_released_samples(...)` / `collect_released_snapshots(...)` paths.
+- Low-power and screen-off behavior is a product policy. The conservative
+  default is to stop background sensor sampling. Products that need step count,
+  heart-rate or location in the background should continue only when manifest
+  intent, user permission and system power policy all allow it.
 
 ## Background Service Activity Policy
 

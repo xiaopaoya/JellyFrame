@@ -14,6 +14,8 @@ enum class HostServiceJobKind {
     VideoFrameDecode,
     NetworkFetch,
     StorageKv,
+    SensorSample,
+    LocationSnapshot,
     BundleInstall,
     BundleRemove,
     Other,
@@ -34,6 +36,8 @@ enum class HostServiceHandleKind {
     AudioStream,
     FetchResponse,
     StorageValue,
+    SensorSample,
+    LocationSnapshot,
     BundleRecord,
     Other,
 };

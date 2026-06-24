@@ -428,6 +428,11 @@ struct AppServiceManifestCapabilities {
     bool storage_kv = false;
     bool image_decode = false;
     bool audio_playback = false;
+    bool sensor_accelerometer = false;
+    bool sensor_gyroscope = false;
+    bool sensor_heart_rate = false;
+    bool sensor_ambient_light = false;
+    bool location_position = false;
 };
 
 struct AppServiceHostProfile {
@@ -451,6 +456,15 @@ struct AppServiceHostProfile {
     bool allow_audio_playback = false;
     std::size_t max_audio_source_url_bytes = 256;
     std::size_t max_audio_streams = 1;
+
+    bool allow_sensor_accelerometer = false;
+    bool allow_sensor_gyroscope = false;
+    bool allow_sensor_heart_rate = false;
+    bool allow_sensor_ambient_light = false;
+    std::size_t max_sensor_sample_records = 4;
+
+    bool allow_location_position = false;
+    std::size_t max_location_snapshot_records = 2;
 };
 
 struct AppServicePolicies {
@@ -458,6 +472,13 @@ struct AppServicePolicies {
     AppPrivateKvPolicy storage;
     ImageDecodePolicy image;
     AudioPlaybackPolicy audio;
+    bool sensor_accelerometer = false;
+    bool sensor_gyroscope = false;
+    bool sensor_heart_rate = false;
+    bool sensor_ambient_light = false;
+    bool location_position = false;
+    std::size_t max_sensor_sample_records = 4;
+    std::size_t max_location_snapshot_records = 2;
 };
 
 AppServiceHostProfile app_service_host_profile_from_capabilities(

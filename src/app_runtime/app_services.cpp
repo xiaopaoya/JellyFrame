@@ -350,6 +350,19 @@ AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDevic
     profile.max_audio_streams = capabilities.media.max_audio_streams == 0
         ? profile.max_audio_streams
         : capabilities.media.max_audio_streams;
+
+    profile.allow_sensor_accelerometer = capabilities.sensors.supports_accelerometer;
+    profile.allow_sensor_gyroscope = capabilities.sensors.supports_gyroscope;
+    profile.allow_sensor_heart_rate = capabilities.sensors.supports_heart_rate;
+    profile.allow_sensor_ambient_light = capabilities.sensors.supports_ambient_light;
+    profile.max_sensor_sample_records = capabilities.sensors.max_sensor_sample_records == 0
+        ? profile.max_sensor_sample_records
+        : capabilities.sensors.max_sensor_sample_records;
+
+    profile.allow_location_position = capabilities.location.supports_position;
+    profile.max_location_snapshot_records = capabilities.location.max_location_snapshot_records == 0
+        ? profile.max_location_snapshot_records
+        : capabilities.location.max_location_snapshot_records;
     return profile;
 }
 
@@ -381,6 +394,13 @@ AppServicePolicies app_service_policies_for_app(const AppServiceManifestCapabili
         profile.max_audio_source_url_bytes,
         profile.max_audio_streams,
     };
+    policies.sensor_accelerometer = manifest.sensor_accelerometer && profile.allow_sensor_accelerometer;
+    policies.sensor_gyroscope = manifest.sensor_gyroscope && profile.allow_sensor_gyroscope;
+    policies.sensor_heart_rate = manifest.sensor_heart_rate && profile.allow_sensor_heart_rate;
+    policies.sensor_ambient_light = manifest.sensor_ambient_light && profile.allow_sensor_ambient_light;
+    policies.location_position = manifest.location_position && profile.allow_location_position;
+    policies.max_sensor_sample_records = profile.max_sensor_sample_records;
+    policies.max_location_snapshot_records = profile.max_location_snapshot_records;
     return policies;
 }
 

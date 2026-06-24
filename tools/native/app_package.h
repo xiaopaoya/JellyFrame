@@ -34,6 +34,11 @@ struct AppPackageManifest {
     bool network_allowed = false;
     bool storage_kv_allowed = false;
     bool audio_playback_allowed = false;
+    bool sensor_accelerometer_allowed = false;
+    bool sensor_gyroscope_allowed = false;
+    bool sensor_heart_rate_allowed = false;
+    bool sensor_ambient_light_allowed = false;
+    bool location_position_allowed = false;
     bool background_network_while_suspended = false;
     bool background_network_while_screen_off = false;
     bool background_audio_while_suspended = false;
@@ -753,6 +758,13 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
         json_array_contains_string(json, "capabilities", "network.fetch");
     manifest.storage_kv_allowed = json_array_contains_string(json, "capabilities", "storage.kv");
     manifest.audio_playback_allowed = json_array_contains_string(json, "capabilities", "media.audio.mp3");
+    manifest.sensor_accelerometer_allowed =
+        json_array_contains_string(json, "capabilities", "sensor.accelerometer");
+    manifest.sensor_gyroscope_allowed = json_array_contains_string(json, "capabilities", "sensor.gyroscope");
+    manifest.sensor_heart_rate_allowed = json_array_contains_string(json, "capabilities", "sensor.heart-rate");
+    manifest.sensor_ambient_light_allowed =
+        json_array_contains_string(json, "capabilities", "sensor.ambient-light");
+    manifest.location_position_allowed = json_array_contains_string(json, "capabilities", "location.position");
     json_find_nested_bool(json,
                           "backgroundServices",
                           "network",

@@ -27,7 +27,12 @@ height、横向溢出、是否需要滚动以及 diagnostics 计数，帮助 app
   "hostServices": {
     "networkFetch": true,
     "storageKv": true,
-    "audioPlayback": false
+    "audioPlayback": false,
+    "sensorAccelerometer": false,
+    "sensorGyroscope": false,
+    "sensorHeartRate": false,
+    "sensorAmbientLight": false,
+    "locationPosition": false
   }
 }
 ```
@@ -39,8 +44,9 @@ height、横向溢出、是否需要滚动以及 diagnostics 计数，帮助 app
 可能会在通用 preset 之外定义可选服务。
 
 当前内置可穿戴 preset 把有界 runtime network fetch 和 app 私有 KV storage 标为 supported，
-把 audio playback 保守标为 unsupported。具有真实 codec/扬声器路径的产品 port 应在自己的
-preset 中覆盖 `audioPlayback`，不要依赖通用显示形态 preset。
+把 audio playback 保守标为 unsupported。传感器和定位能力默认可以保持 `unknown`，除非产品
+preset 能明确保证语义数据服务可用。具有真实 codec/扬声器路径或传感器/定位服务的产品 port 应在自己的
+preset 中覆盖对应字段，不要依赖通用显示形态 preset。
 
 当前通用显示形态包括 `round-300`、`rect-320x240` 和 `rect-172x320`；
 `esp32s3-round-300` 额外提供面向 ESP32-S3/RGB565 的 profile。`rect-172x320`

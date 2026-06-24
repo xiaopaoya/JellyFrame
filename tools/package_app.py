@@ -374,6 +374,11 @@ def validate_manifest(manifest: dict) -> dict:
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     storage_kv_allowed = "storage.kv" in capabilities
     audio_playback_allowed = "media.audio.mp3" in capabilities
+    sensor_accelerometer_allowed = "sensor.accelerometer" in capabilities
+    sensor_gyroscope_allowed = "sensor.gyroscope" in capabilities
+    sensor_heart_rate_allowed = "sensor.heart-rate" in capabilities
+    sensor_ambient_light_allowed = "sensor.ambient-light" in capabilities
+    location_position_allowed = "location.position" in capabilities
     background_services = parse_background_service_policy(manifest)
     return {
         "id": app_id,
@@ -393,6 +398,11 @@ def validate_manifest(manifest: dict) -> dict:
         "networkAllowed": network_allowed,
         "storageKvAllowed": storage_kv_allowed,
         "audioPlaybackAllowed": audio_playback_allowed,
+        "sensorAccelerometerAllowed": sensor_accelerometer_allowed,
+        "sensorGyroscopeAllowed": sensor_gyroscope_allowed,
+        "sensorHeartRateAllowed": sensor_heart_rate_allowed,
+        "sensorAmbientLightAllowed": sensor_ambient_light_allowed,
+        "locationPositionAllowed": location_position_allowed,
         "backgroundServices": background_services,
     }
 
@@ -424,11 +434,21 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
             "networkFetch": bool(manifest.get("networkAllowed")),
             "storageKv": bool(manifest.get("storageKvAllowed")),
             "audioPlayback": bool(manifest.get("audioPlaybackAllowed")),
+            "sensorAccelerometer": bool(manifest.get("sensorAccelerometerAllowed")),
+            "sensorGyroscope": bool(manifest.get("sensorGyroscopeAllowed")),
+            "sensorHeartRate": bool(manifest.get("sensorHeartRateAllowed")),
+            "sensorAmbientLight": bool(manifest.get("sensorAmbientLightAllowed")),
+            "locationPosition": bool(manifest.get("locationPositionAllowed")),
         },
         "targetSupport": {
             "networkFetch": support_state("networkFetch"),
             "storageKv": support_state("storageKv"),
             "audioPlayback": support_state("audioPlayback"),
+            "sensorAccelerometer": support_state("sensorAccelerometer"),
+            "sensorGyroscope": support_state("sensorGyroscope"),
+            "sensorHeartRate": support_state("sensorHeartRate"),
+            "sensorAmbientLight": support_state("sensorAmbientLight"),
+            "locationPosition": support_state("locationPosition"),
         },
         "permissions": list(permissions),
         "capabilities": list(capabilities),
@@ -438,6 +458,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
             "Network fetch is runtime data only; remote HTML, CSS, script and image loaders remain disabled.",
             "Storage is app-private KV only; cookies, IndexedDB, Cache API and general filesystem access are absent.",
             "Audio playback is host-owned; Audio() V0 is available only when the host binds an audio adapter.",
+            "Sensor and location data are semantic host services; apps never receive raw hardware handles.",
         ],
     }
 
@@ -452,6 +473,11 @@ def collect_service_target_warnings(manifest: dict, target_config: dict) -> list
         ("networkFetch", bool(manifest.get("networkAllowed")), "network.fetch"),
         ("storageKv", bool(manifest.get("storageKvAllowed")), "storage.kv"),
         ("audioPlayback", bool(manifest.get("audioPlaybackAllowed")), "media.audio.mp3"),
+        ("sensorAccelerometer", bool(manifest.get("sensorAccelerometerAllowed")), "sensor.accelerometer"),
+        ("sensorGyroscope", bool(manifest.get("sensorGyroscopeAllowed")), "sensor.gyroscope"),
+        ("sensorHeartRate", bool(manifest.get("sensorHeartRateAllowed")), "sensor.heart-rate"),
+        ("sensorAmbientLight", bool(manifest.get("sensorAmbientLightAllowed")), "sensor.ambient-light"),
+        ("locationPosition", bool(manifest.get("locationPositionAllowed")), "location.position"),
     ]
     warnings = []
     for key, requested, capability in requests:

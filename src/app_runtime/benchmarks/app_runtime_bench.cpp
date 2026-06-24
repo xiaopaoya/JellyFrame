@@ -1,4 +1,5 @@
 ﻿#include "app_runtime/app_host.h"
+#include "app_runtime/app_device_services.h"
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
@@ -325,6 +326,52 @@ void bench_audio_command_mock(std::size_t capacity) {
     }
 }
 
+void bench_sensor_sample_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.sensors", AppRole::App);
+    AppSensorSampleMock sensors(AppSensorSamplePolicy{true, false, false, false, capacity});
+    sensors.add_fixture(AppSensorSampleFixture{AppSensorKind::Accelerometer, 100, 0.1f, 0.2f, 0.3f});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        sensors.submit_sample(host, AppSensorKind::Accelerometer, 100);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        sensors.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            if (completion.handle != 0) {
+                sensors.release_sample(host, completion.handle);
+            }
+        }
+    }
+}
+
+void bench_location_snapshot_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.location", AppRole::App);
+    AppLocationSnapshotMock location(AppLocationSnapshotPolicy{true, capacity});
+    location.set_fixture(AppLocationSnapshotFixture{100, 31.2304, 121.4737, 4.0f, 8.0f, 0.2f});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        location.submit_position(host, 100);
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        location.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            if (completion.handle != 0) {
+                location.release_snapshot(host, completion.handle);
+            }
+        }
+    }
+}
+
 void bench_image_surface_cache(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 512, 1});
     host.launch("org.example.image-cache", AppRole::App);
@@ -554,6 +601,12 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_audio_command_mock", iterations, average_microseconds(iterations, [&] {
         bench_audio_command_mock(capacity);
+    }));
+    print_result("app_runtime_sensor_sample_mock", iterations, average_microseconds(iterations, [&] {
+        bench_sensor_sample_mock(capacity);
+    }));
+    print_result("app_runtime_location_snapshot_mock", iterations, average_microseconds(iterations, [&] {
+        bench_location_snapshot_mock(capacity);
     }));
     print_result("app_runtime_image_surface_cache", iterations, average_microseconds(iterations, [&] {
         bench_image_surface_cache(capacity);

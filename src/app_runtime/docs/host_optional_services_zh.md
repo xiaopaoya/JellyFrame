@@ -1,6 +1,6 @@
 # 可选宿主服务接口契约
 
-本文把图片/音频/轻量视频、网络数据请求和安装式 app bundle 的实现边界具体化。它是
+本文把图片/音频/轻量视频、网络数据请求、语义设备数据和安装式 app bundle 的实现边界具体化。它是
 `host_abstraction_zh.md` 和 `embedded_hal_api_zh.md` 的补充：前者说明职责边界，后者列出
 移植 checklist；本文描述移植侧可以照着实现的 V0 服务形状。
 
@@ -40,6 +40,12 @@ host 应以相同 request/completion/handle 语义替换其 worker 实现。
 `network.fetch`、`storage.kv` 或 `media.audio.mp3` 只表示 app 请求能力；只有被选中的
 host/profile 同时允许该服务，并提供有界预算时，最终 runtime policy 才会启用。这样 JS binding 和
 worker 实现都不需要各自散落权限判断。
+
+`src/app_runtime/app_device_services.h` / `src/app_runtime/app_device_services.cpp` 提供第一版语义设备
+服务 mock：`AppSensorSampleMock` 和 `AppLocationSnapshotMock`。它们覆盖加速度计、陀螺仪、
+心率、环境光和定位快照的 request/completion/handle 形状。真实产品仍由宿主决定这些数据来自哪颗传感器、
+哪条总线、哪个 RTOS task 或哪个手机伴侣服务；App 只能请求文档化能力，不能拿到裸 GPIO/I2C/SPI/BLE/GPS
+句柄。
 
 `src/app_runtime/app_capability_broker.h` 提供更通用的 capability broker，用于标准能力和产品私有能力名。
 它会把 app 请求分类为 `granted`、`granted-product-specific`、`unsupported-by-host` 或
@@ -89,6 +95,8 @@ resource cache   host-owned surfaces/buffers/audio handles/bundles
 - `HostHandleTable`：有界 host handle 表，使用 generation 防止释放后的旧 handle 误命中新资源，
   并统计 active count 与 used bytes。
 - `AppSystemEventQueue`：有界宿主注入系统状态事件，事件绑定 active `app_instance_id`，并在帧边界消费。
+- `AppSensorSampleMock` / `AppLocationSnapshotMock`：语义设备数据服务的桌面/测试 mock。它们只保存小型
+  sample/snapshot record，并通过 host handle 回到 UI task。
 
 ## 通用 Job 结构
 
@@ -101,6 +109,8 @@ enum class HostServiceJobKind {
     VideoFrameDecode,
     NetworkFetch,
     StorageKv,
+    SensorSample,
+    LocationSnapshot,
     BundleInstall,
     BundleRemove,
 };
@@ -208,6 +218,12 @@ Storage worker:
 
 Audio worker:
   pump_app_host_service_worker(host, { AudioCommand, 1 }, audio_worker)
+
+Sensor worker:
+  pump_app_host_service_worker(host, { SensorSample, 1 }, sensor_worker)
+
+Location worker:
+  pump_app_host_service_worker(host, { LocationSnapshot, 1 }, location_worker)
 ```
 
 对协作式 MCU loop，也可以不用动态分配地表达同一策略：
@@ -369,6 +385,44 @@ completion event：
   `invalid-handle`、`stream-budget-exceeded`、`command-timeout`、`command-cancelled`
   等原因。
 - worker/audio task 不得调用 JS；只投递事件，由 UI task 派发 `ended`/`error` 等回调。
+
+## 语义设备数据服务
+
+用途：
+
+- 运动、健康、表盘和天气类 app 读取加速度计、陀螺仪、心率、环境光或定位快照。
+- 产品私有传感器通过 capability broker 暴露语义名称，而不是把硬件总线暴露给第三方 app。
+- 后台 app 采样策略由 `AppFramePolicy` / `AppBackgroundServicePolicy` 控制，宿主可以在低功耗、
+  息屏或 suspended 状态降低频率或停止采样。
+
+当前平台无关代码提供：
+
+- `AppSensorSampleMock`：通过 `HostServiceJobKind::SensorSample` 请求一个小型传感器样本。
+  `AppSensorKind` 覆盖 `accelerometer`、`gyroscope`、`heart-rate` 和 `ambient-light`。
+- `AppLocationSnapshotMock`：通过 `HostServiceJobKind::LocationSnapshot` 请求一个定位快照。
+- `HostServiceHandleKind::SensorSample` / `LocationSnapshot`：结果由短句柄引用，App/JS binding
+  在 UI task 消费 completion 后复制出需要的字段，再释放句柄。
+- `app_sensor_sample_policy_from_service_policies(...)` 和
+  `app_location_snapshot_policy_from_service_policies(...)`：把 manifest + host/profile gate
+  合并后的策略转换成具体服务 policy。
+- `classify_app_device_failure(...)`：把 request 拒绝和 completion 失败归类为稳定 diagnostics：
+  `capability-denied`、`sample-unavailable`、`record-budget-exceeded`、`handle-budget-exceeded`、
+  `request-timeout`、`request-cancelled` 等。
+
+规则：
+
+- App 必须先在 manifest 声明 `sensor.accelerometer`、`sensor.gyroscope`、`sensor.heart-rate`、
+  `sensor.ambient-light` 或 `location.position`，并且 host/profile 同时允许，服务才会启用。
+- sample/snapshot 是离散数据快照，不是无限制高频 stream。真实宿主可以把连续硬件采样降采样、
+  去抖或缓存成最近一次快照，再按 request/completion 边界投递。
+- worker 不得调用 DOM/JS/layout/framebuffer。传感器中断、GPS/BLE/Wi-Fi 定位、手机伴侣数据等都必须
+  归一化为小型 completion 或 host handle。
+- `max_sensor_sample_records` 和 `max_location_snapshot_records` 限制未释放 record 数量；host handle
+  byte budget 仍是第二道保护。
+- app 切换、退出或 crash recovery 会释放 host handles；真实服务也应像 mock 的
+  `collect_released_samples(...)` / `collect_released_snapshots(...)` 一样清掉 stale record。
+- 低功耗/息屏策略由宿主产品决定。默认建议停止后台传感器采样；确实需要计步、心率或定位的产品，应在
+  manifest 意图、用户授权和系统电源策略三者同时允许后才继续。
 
 ## 后台服务活动策略
 

@@ -82,6 +82,10 @@ void service_policy_requires_manifest_and_host_approval() {
     capabilities.media.max_decoded_image_bytes = 80 * 80 * 2;
     capabilities.media.supports_audio_playback = true;
     capabilities.media.max_audio_streams = 2;
+    capabilities.sensors.supports_accelerometer = true;
+    capabilities.sensors.max_sensor_sample_records = 3;
+    capabilities.location.supports_position = true;
+    capabilities.location.max_location_snapshot_records = 1;
     AppServiceHostProfile profile = app_service_host_profile_from_capabilities(
         capabilities, AppPrivateKvPolicy{true, 12, 24, 3, 64});
     check(profile.allow_network_fetch, "profile network allowed");
@@ -93,14 +97,29 @@ void service_policy_requires_manifest_and_host_approval() {
     check(profile.max_pending_image_decodes == 5, "profile image pending budget");
     check(profile.allow_audio_playback, "profile audio allowed");
     check(profile.max_audio_streams == 2, "profile audio stream budget");
+    check(profile.allow_sensor_accelerometer, "profile accelerometer allowed");
+    check(!profile.allow_sensor_gyroscope, "profile gyroscope denied");
+    check(profile.max_sensor_sample_records == 3, "profile sensor sample budget");
+    check(profile.allow_location_position, "profile location allowed");
+    check(profile.max_location_snapshot_records == 1, "profile location budget");
 
     AppServicePolicies policies = app_service_policies_for_app(AppServiceManifestCapabilities{}, profile);
     check(!policies.network.enabled, "network denied without manifest capability");
     check(!policies.storage.enabled, "storage denied without manifest capability");
     check(!policies.image.enabled, "image denied without manifest capability");
     check(!policies.audio.enabled, "audio denied without manifest capability");
+    check(!policies.sensor_accelerometer, "accelerometer denied without manifest capability");
+    check(!policies.location_position, "location denied without manifest capability");
 
-    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true, true}, profile);
+    AppServiceManifestCapabilities manifest;
+    manifest.network_fetch = true;
+    manifest.storage_kv = true;
+    manifest.image_decode = true;
+    manifest.audio_playback = true;
+    manifest.sensor_accelerometer = true;
+    manifest.sensor_gyroscope = true;
+    manifest.location_position = true;
+    policies = app_service_policies_for_app(manifest, profile);
     check(policies.network.enabled, "network allowed with manifest and host");
     check(policies.network.max_response_bytes == 512, "network response budget carried");
     check(policies.storage.enabled, "storage allowed with manifest and host");
@@ -109,16 +128,25 @@ void service_policy_requires_manifest_and_host_approval() {
     check(policies.image.max_decoded_bytes == 80 * 80 * 2, "image decoded budget carried");
     check(policies.audio.enabled, "audio allowed with manifest and host");
     check(policies.audio.max_audio_streams == 2, "audio stream budget carried");
+    check(policies.sensor_accelerometer, "accelerometer allowed with manifest and host");
+    check(!policies.sensor_gyroscope, "gyroscope denied without host");
+    check(policies.max_sensor_sample_records == 3, "sensor sample budget carried");
+    check(policies.location_position, "location allowed with manifest and host");
+    check(policies.max_location_snapshot_records == 1, "location budget carried");
 
     capabilities.has_network = false;
     capabilities.media.supports_image_decode = false;
     capabilities.media.supports_audio_playback = false;
+    capabilities.sensors.supports_accelerometer = false;
+    capabilities.location.supports_position = false;
     profile = app_service_host_profile_from_capabilities(capabilities, AppPrivateKvPolicy{});
-    policies = app_service_policies_for_app(AppServiceManifestCapabilities{true, true, true, true}, profile);
+    policies = app_service_policies_for_app(manifest, profile);
     check(!policies.network.enabled, "network denied without host network");
     check(!policies.storage.enabled, "storage denied without host storage");
     check(!policies.image.enabled, "image denied without host image decode");
     check(!policies.audio.enabled, "audio denied without host playback");
+    check(!policies.sensor_accelerometer, "accelerometer denied without host");
+    check(!policies.location_position, "location denied without host");
 }
 
 void network_fetch_pending_request_is_cancelled_on_app_switch() {

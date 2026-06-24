@@ -94,6 +94,12 @@ Runtime data and storage boundary:
   `--audio-smoke` from a local or in-package resource. JerryScript builds expose
   a tiny host-optional `Audio()` V0 subset with `ended`/`error` status events,
   but there is still no built-in MCU codec.
+- `capabilities: ["sensor.accelerometer"]`, `["sensor.gyroscope"]`,
+  `["sensor.heart-rate"]`, `["sensor.ambient-light"]` or
+  `["location.position"]` declare semantic device data needs. They only allow
+  bounded host-service requests for small samples/snapshots; real sample
+  cadence, background policy, user permission and hardware drivers belong to
+  the host/profile. Apps never receive raw GPIO/I2C/SPI/BLE/GPS handles.
 - Apps may request weather/account data, small JSON sync or download a `.jfapp`
   for the system installer to verify.
 - Remote HTML/CSS/script/image resources are still forbidden as page resources.
@@ -101,8 +107,9 @@ Runtime data and storage boundary:
   Cache API and general filesystem access are still absent. A tiny
   `localStorage` V0 subset is exposed only when the host binds a non-blocking
   app-private shadow.
-- Target profiles may reject network/storage/audio apps or cap response bytes,
-  concurrency, timeouts, KV item counts, byte quotas and stream counts.
+- Target profiles may reject network/storage/audio/sensor/location apps or cap
+  response bytes, concurrency, timeouts, KV item counts, byte quotas, stream
+  counts and unreleased sample/snapshot counts.
 
 This keeps installable third-party apps viable without turning the MCU runtime
 into an uncontrolled general-purpose browser loader.

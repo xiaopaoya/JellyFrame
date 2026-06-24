@@ -1,6 +1,7 @@
 #include <iostream>
 
 int app_capability_broker_tests_main();
+int app_device_services_tests_main();
 int host_services_tests_main();
 int app_frame_policy_tests_main();
 int app_services_tests_main();
@@ -30,6 +31,7 @@ int run_test(const char* name, int (*test_main)()) {
 int main() {
     int failed = 0;
     failed += run_test("app_capability_broker", app_capability_broker_tests_main);
+    failed += run_test("app_device_services", app_device_services_tests_main);
     failed += run_test("app_frame_policy", app_frame_policy_tests_main);
     failed += run_test("app_host", app_host_tests_main);
     failed += run_test("app_lifecycle", app_lifecycle_tests_main);

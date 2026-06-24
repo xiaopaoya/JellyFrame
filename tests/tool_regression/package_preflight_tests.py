@@ -87,7 +87,13 @@ class PackagePreflightTests(unittest.TestCase):
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "permissions": ["network"],
-            "capabilities": ["network.fetch", "storage.kv", "media.audio.mp3"],
+            "capabilities": [
+                "network.fetch",
+                "storage.kv",
+                "media.audio.mp3",
+                "sensor.accelerometer",
+                "location.position",
+            ],
             "backgroundServices": {
                 "network": {"whileSuspended": True, "whileScreenOff": False},
                 "audio": {"whileSuspended": True, "whileScreenOff": True},
@@ -106,11 +112,29 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(intent["target"], "round-300")
         self.assertEqual(
             intent["requested"],
-            {"networkFetch": True, "storageKv": True, "audioPlayback": True},
+            {
+                "networkFetch": True,
+                "storageKv": True,
+                "audioPlayback": True,
+                "sensorAccelerometer": True,
+                "sensorGyroscope": False,
+                "sensorHeartRate": False,
+                "sensorAmbientLight": False,
+                "locationPosition": True,
+            },
         )
         self.assertEqual(
             intent["targetSupport"],
-            {"networkFetch": "unknown", "storageKv": "unknown", "audioPlayback": "unknown"},
+            {
+                "networkFetch": "unknown",
+                "storageKv": "unknown",
+                "audioPlayback": "unknown",
+                "sensorAccelerometer": "unknown",
+                "sensorGyroscope": "unknown",
+                "sensorHeartRate": "unknown",
+                "sensorAmbientLight": "unknown",
+                "locationPosition": "unknown",
+            },
         )
         self.assertTrue(intent["backgroundServices"]["audio"]["whileScreenOff"])
         self.assertTrue(any("remote HTML" in note for note in intent["policyNotes"]))
@@ -121,11 +145,22 @@ class PackagePreflightTests(unittest.TestCase):
                 "networkFetch": True,
                 "storageKv": True,
                 "audioPlayback": False,
+                "sensorAccelerometer": True,
+                "locationPosition": False,
             },
         })
         self.assertEqual(
             supported_intent["targetSupport"],
-            {"networkFetch": "supported", "storageKv": "supported", "audioPlayback": "unsupported"},
+            {
+                "networkFetch": "supported",
+                "storageKv": "supported",
+                "audioPlayback": "unsupported",
+                "sensorAccelerometer": "supported",
+                "sensorGyroscope": "unknown",
+                "sensorHeartRate": "unknown",
+                "sensorAmbientLight": "unknown",
+                "locationPosition": "unsupported",
+            },
         )
 
         warnings = package_app.collect_service_target_warnings(manifest, {
@@ -134,9 +169,14 @@ class PackagePreflightTests(unittest.TestCase):
                 "networkFetch": True,
                 "storageKv": False,
                 "audioPlayback": False,
+                "sensorAccelerometer": False,
+                "locationPosition": False,
             },
         })
-        self.assertEqual([warning["service"] for warning in warnings], ["storageKv", "audioPlayback"])
+        self.assertEqual(
+            [warning["service"] for warning in warnings],
+            ["storageKv", "audioPlayback", "sensorAccelerometer", "locationPosition"],
+        )
         self.assertTrue(all(warning["code"] == "service-target-unsupported" for warning in warnings))
 
     def test_responsive_profile_status_and_report_merge(self):
