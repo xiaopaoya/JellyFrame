@@ -99,7 +99,10 @@ Runtime data and storage boundary:
   `["location.position"]` declare semantic device data needs. They only allow
   bounded host-service requests for small samples/snapshots; real sample
   cadence, background policy, user permission and hardware drivers belong to
-  the host/profile. Apps never receive raw GPIO/I2C/SPI/BLE/GPS handles.
+  the host/profile. Apps never receive raw GPIO/I2C/SPI/BLE/GPS handles. When
+  the host binds a location service, `location.position` enables the
+  `navigator.geolocation.getCurrentPosition(...)` V0 subset; sensor JavaScript
+  APIs are still deferred.
 - Apps may request weather/account data, small JSON sync or download a `.jfapp`
   for the system installer to verify.
 - Remote HTML/CSS/script/image resources are still forbidden as page resources.
