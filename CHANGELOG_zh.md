@@ -224,6 +224,11 @@ JellyFrame Engine 的重要变更记录在这里。
   rAF label 等常见路径制造不必要的 `DomDirtyTree` full-frame planning。
 - JerryScript DOM 子集新增标准形状的 `element.className` 反射，底层仍使用已有 `class`
   attribute 和 style/layout dirty 路径。
+- Win32 动画泵动现在只设置 root 聚合 paint-dirty bit 用于 timeline sampling，不再把 document
+  标成 local dirty node。`jelly_motion_lab` frame capture 现在除首帧外能保持 dirty-rect repaint，
+  不再退回 full-frame repaint。
+- Win32 frame capture 新增 full-frame fallback 前的 attempted dirty 细节，包括尝试的 rect 数、
+  最大尝试 dirty area，以及观察到的最大 dirty node。
 
 ## 0.3.0-dev - 2026-06-18
 

@@ -2375,6 +2375,13 @@ public:
                   << " dirty_area_too_large="
                   << dirty_region_fallback_count(dirty_region_statistics_, DirtyRegionFallbackReason::DirtyAreaTooLarge)
                   << '\n'
+                  << "  dirty_fallback_attempted frames=" << dirty_fallback_attempt_frames_
+                  << " rects=" << dirty_fallback_attempt_rects_
+                  << " max_area=" << dirty_fallback_attempt_max_area_percent_
+                  << "% last_node=" << last_dirty_attempt_node_
+                  << " last_bounds=" << last_dirty_attempt_bounds_.x << "," << last_dirty_attempt_bounds_.y
+                  << "," << last_dirty_attempt_bounds_.width << "x" << last_dirty_attempt_bounds_.height
+                  << '\n'
                   << "  frame_update idle=" << frame_update_statistics_.idle_frames
                   << " repaint=" << frame_update_statistics_.repaint_existing_frames
                   << " rebuild=" << frame_update_statistics_.rebuild_pipeline_frames
@@ -2460,9 +2467,16 @@ private:
     FrameUpdateReason last_frame_repaint_reason_ = FrameUpdateReason::None;
     std::size_t last_dirty_rect_count_ = 0;
     int last_dirty_area_percent_ = 0;
+    std::size_t last_dirty_attempt_rect_count_ = 0;
+    int last_dirty_attempt_area_percent_ = 0;
+    std::string last_dirty_attempt_node_;
+    Rect last_dirty_attempt_bounds_;
     DisplayInvalidationResult last_display_invalidation_;
     DirtyRegionStatistics dirty_region_statistics_;
     FrameUpdateStatistics frame_update_statistics_;
+    std::size_t dirty_fallback_attempt_frames_ = 0;
+    std::size_t dirty_fallback_attempt_rects_ = 0;
+    int dirty_fallback_attempt_max_area_percent_ = 0;
     VectorDiagnosticSink diagnostics_;
     bool system_shell_mode_ = false;
     std::string active_app_id_;
@@ -3105,6 +3119,13 @@ private:
             last_frame_update_action_ = FrameUpdateAction::None;
             last_frame_update_reason_ = FrameUpdateReason::None;
             last_frame_repaint_reason_ = FrameUpdateReason::None;
+            last_dirty_attempt_rect_count_ = 0;
+            last_dirty_attempt_area_percent_ = 0;
+            last_dirty_attempt_node_.clear();
+            last_dirty_attempt_bounds_ = Rect{};
+            dirty_fallback_attempt_frames_ = 0;
+            dirty_fallback_attempt_rects_ = 0;
+            dirty_fallback_attempt_max_area_percent_ = 0;
 
             if (system_shell_mode_) {
                 document_->add_event_listener("click", [this](Event& event) {
@@ -3497,6 +3518,9 @@ private:
             ? attempted_region.fallback_reason
             : DirtyRegionFallbackReason::DirtyAreaTooLarge;
         full_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
+        record_dirty_fallback_attempt(attempted_region,
+                                      Rect{0, 0, viewport_width_, content_height},
+                                      had_no_dirty_rects);
         last_display_invalidation_ =
             analyze_display_invalidation(*layer_tree_, full_region.rects.data(), full_region.rects.size());
         record_dirty_region(full_region);
@@ -3802,7 +3826,7 @@ private:
             return false;
         }
         clear_animation_overrides_after_render_ = animation_timeline_.empty();
-        mark_dirty(*document_, DomDirtyPaint);
+        document_->dirty_flags |= DomDirtyPaint;
         return true;
     }
 
@@ -3849,6 +3873,8 @@ private:
                    << " dirty=" << dirty_region_mode_name(last_dirty_region_mode_)
                    << " rects=" << last_dirty_rect_count_
                    << " area=" << last_dirty_area_percent_ << "%"
+                   << " attempted=" << last_dirty_attempt_rect_count_
+                   << "/" << last_dirty_attempt_area_percent_ << "%"
                    << " cmds=" << last_display_invalidation_.commands_intersecting
                    << "/" << last_display_invalidation_.commands_visited
                    << " local=" << dirty_region_statistics_.dirty_rect_frames
@@ -3858,6 +3884,44 @@ private:
                 status << " reason=" << dirty_region_fallback_reason_name(last_dirty_region_reason_);
             }
             set_title(status.str());
+        }
+    }
+
+    void record_dirty_fallback_attempt(const DirtyRegionResult& attempted_region,
+                                       Rect viewport,
+                                       bool had_no_dirty_rects) {
+        if (had_no_dirty_rects || attempted_region.rects.empty()) {
+            last_dirty_attempt_rect_count_ = 0;
+            last_dirty_attempt_area_percent_ = 0;
+            last_dirty_attempt_node_.clear();
+            last_dirty_attempt_bounds_ = Rect{};
+            return;
+        }
+        last_dirty_attempt_rect_count_ = attempted_region.rects.size();
+        last_dirty_attempt_area_percent_ = dirty_region_area_percent(attempted_region, viewport);
+        record_largest_dirty_attempt_node();
+        ++dirty_fallback_attempt_frames_;
+        dirty_fallback_attempt_rects_ += attempted_region.rects.size();
+        dirty_fallback_attempt_max_area_percent_ =
+            std::max(dirty_fallback_attempt_max_area_percent_, last_dirty_attempt_area_percent_);
+    }
+
+    void record_largest_dirty_attempt_node() {
+        last_dirty_attempt_node_.clear();
+        last_dirty_attempt_bounds_ = Rect{};
+        std::size_t best_area = 0;
+        for (const DirtyNodeBounds& entry : frame_scratch_.dirty_region_scratch.node_bounds) {
+            if (entry.bounds.width <= 0 || entry.bounds.height <= 0) {
+                continue;
+            }
+            const std::size_t area =
+                static_cast<std::size_t>(entry.bounds.width) * static_cast<std::size_t>(entry.bounds.height);
+            if (area <= best_area) {
+                continue;
+            }
+            best_area = area;
+            last_dirty_attempt_bounds_ = entry.bounds;
+            last_dirty_attempt_node_ = describe_node(entry.node);
         }
     }
 

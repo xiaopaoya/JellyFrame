@@ -336,6 +336,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added the standard-shaped `element.className` reflection to the JerryScript
   DOM subset, backed by the existing `class` attribute and style/layout dirty
   path.
+- Win32 animation pumping now sets only the root aggregate paint-dirty bit for
+  timeline sampling instead of marking the document as a local dirty node. The
+  `jelly_motion_lab` frame-capture probe now stays on dirty-rect repaint after
+  the first frame instead of falling back to full-frame repaint.
+- Win32 frame capture now reports attempted dirty fallback details, including
+  attempted rect count, max attempted dirty area and the largest dirty node
+  observed before a full-frame fallback.
 
 ## 0.3.0-dev - 2026-06-18
 

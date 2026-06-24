@@ -203,6 +203,10 @@ paint/compositor 属性：`opacity`、`background-color`、`color` 和 `transfor
 layout 属性动画仍不逐帧重排；如果动画改变了 DOM 结构或 layout，仍应走普通 dirty-region/full-frame
 路径。
 
+宿主可以设置 root 的聚合 `DomDirtyPaint` bit 来调度动画帧，但 animation-only 工作不应把 root
+标成 local dirty node。root 的 local dirty bounds 等价于整篇文档；如果同一帧还有脚本/text 工作，
+它会吞掉 animation dirty-region 计算带来的局部重绘收益。
+
 CSS `@keyframes` / `animation-*` 使用同一条 timeline 和 dirty-region 路径。第一版子集只从已经解析的
 render-tree style 启动动画，采样同一组 paint/compositor 属性的 `from`/`to` declarations，并让
 transition 与 keyframe animation 共享 `max_active_animations` 预算。不支持的 keyframe 属性通过

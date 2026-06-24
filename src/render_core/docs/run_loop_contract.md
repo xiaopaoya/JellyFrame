@@ -270,6 +270,12 @@ paint/compositor property set: `opacity`, `background-color`, `color` and
 reflow every frame; structural or layout-changing animation should use the
 normal dirty-region/full-frame path.
 
+Hosts may set the root aggregate `DomDirtyPaint` bit to schedule an animation
+frame, but should not mark the root as a local dirty node for animation-only
+work. A local root dirty bound is equivalent to the whole document and will
+erase the benefit of animation dirty-region calculation when script/text work
+happens in the same frame.
+
 CSS `@keyframes` / `animation-*` uses the same timeline and dirty-region path.
 The first supported subset only starts animations from resolved render-tree
 styles, samples `from`/`to` declarations for the same paint/compositor property
