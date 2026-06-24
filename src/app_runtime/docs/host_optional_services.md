@@ -280,10 +280,12 @@ AppHostServiceWorkerSlot workers[] = {
     { HostServiceJobKind::StorageKv, 1, &storage_worker },
     { HostServiceJobKind::ImageDecode, 1, &image_worker },
     { HostServiceJobKind::AudioCommand, 1, &audio_worker },
+    { HostServiceJobKind::SensorSample, 1, &sensor_worker },
+    { HostServiceJobKind::LocationSnapshot, 1, &location_worker },
 };
 
 AppHostServiceWorkerGroupPumpResult pumped =
-    pump_app_host_service_workers(host, workers, 4);
+    pump_app_host_service_workers(host, workers, 6);
 ```
 
 The group helper is only a scheduler convenience. It does not create threads,
@@ -299,9 +301,10 @@ branches or one cooperative background loop. The important parts are:
 - Request-queue full, completion-queue full, timeout and capability-denied
   states should be visible in port logs or desktop diagnostics.
 - Regression coverage includes a bounded mixed-worker soak for network, storage,
-  image, audio and system events. This is the reference shape for RTOS ports:
-  workers post small completions, the UI frame boundary consumes them and stale
-  or released handles are collected by service lifecycle hooks.
+  image, audio, sensors, location and system events. This is the reference
+  shape for RTOS ports: workers post small completions, the UI frame boundary
+  consumes them and stale or released handles are collected by service
+  lifecycle hooks.
 - The Win32 shell frame-capture output now reports `host_completion_*`,
   `system_event_*`, `frame_policy_*` and `service_activity` summary counters;
   use those fields as a reference for port log shape.

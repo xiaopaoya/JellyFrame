@@ -1,4 +1,5 @@
 #include "app_runtime/app_service_worker.h"
+#include "app_runtime/app_device_services.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 
@@ -108,6 +109,40 @@ public:
 private:
     AppRuntimeHost& host_;
     AudioCommandMock& audio_;
+};
+
+class SensorSampleWorker final : public AppHostServiceWorker {
+public:
+    SensorSampleWorker(AppRuntimeHost& host, AppSensorSampleMock& sensors)
+        : host_(host), sensors_(sensors) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        ++calls;
+        return sensors_.complete_request(host_, request);
+    }
+
+    int calls = 0;
+
+private:
+    AppRuntimeHost& host_;
+    AppSensorSampleMock& sensors_;
+};
+
+class LocationSnapshotWorker final : public AppHostServiceWorker {
+public:
+    LocationSnapshotWorker(AppRuntimeHost& host, AppLocationSnapshotMock& location)
+        : host_(host), location_(location) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        ++calls;
+        return location_.complete_request(host_, request);
+    }
+
+    int calls = 0;
+
+private:
+    AppRuntimeHost& host_;
+    AppLocationSnapshotMock& location_;
 };
 
 AppSystemStateSnapshot make_snapshot(std::uint64_t tick) {
@@ -444,7 +479,7 @@ void worker_group_pump_handles_real_network_and_storage_mocks_across_ticks() {
 
 void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
     constexpr std::size_t kIterations = 20;
-    AppRuntimeHost host = make_host(kIterations * 4, 4);
+    AppRuntimeHost host = make_host(kIterations * 6, 6);
     host.launch("org.example.rtos-workers", AppRole::App);
 
     NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
@@ -454,6 +489,10 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
     assert(images.add_fixture(ImageDecodeFixture{"/img/icon.raw", 8, 8, 8, HostPixelFormat::Rgb565, {}}));
     AudioCommandMock audio(AudioPlaybackPolicy{true, 128, 4});
     assert(audio.add_source(AudioSourceFixture{"/audio/tone.wav", 1000}));
+    AppSensorSampleMock sensors(AppSensorSamplePolicy{true, false, false, false, kIterations});
+    assert(sensors.add_fixture(AppSensorSampleFixture{AppSensorKind::Accelerometer, 1000, 0.1f, 0.2f, 0.3f}));
+    AppLocationSnapshotMock location(AppLocationSnapshotPolicy{true, kIterations});
+    assert(location.set_fixture(AppLocationSnapshotFixture{1000, 31.2304, 121.4737, 4.0f, 8.0f, 0.2f}));
     AppSystemEventQueue system_events(8, 3);
 
     for (std::size_t index = 0; index < kIterations; ++index) {
@@ -461,21 +500,27 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
         assert(storage.submit_set(host, "k" + std::to_string(index), "v").accepted());
         assert(images.submit_decode(host, "/img/icon.raw", 1000).accepted());
         assert(audio.submit_open(host, "/audio/tone.wav", 100, 1000).accepted());
+        assert(sensors.submit_sample(host, AppSensorKind::Accelerometer, 1000).accepted());
+        assert(location.submit_position(host, 1000).accepted());
     }
 
     NetworkFetchWorker network_worker(host, network);
     StorageKvWorker storage_worker(host, storage);
     ImageDecodeWorker image_worker(host, images);
     AudioCommandWorker audio_worker(host, audio);
+    SensorSampleWorker sensor_worker(host, sensors);
+    LocationSnapshotWorker location_worker(host, location);
     AppHostServiceWorkerSlot slots[] = {
         AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 1, &network_worker},
         AppHostServiceWorkerSlot{HostServiceJobKind::StorageKv, 1, &storage_worker},
         AppHostServiceWorkerSlot{HostServiceJobKind::ImageDecode, 1, &image_worker},
         AppHostServiceWorkerSlot{HostServiceJobKind::AudioCommand, 1, &audio_worker},
+        AppHostServiceWorkerSlot{HostServiceJobKind::SensorSample, 1, &sensor_worker},
+        AppHostServiceWorkerSlot{HostServiceJobKind::LocationSnapshot, 1, &location_worker},
     };
 
     AppFrameScratch scratch;
-    scratch.reserve_from_options(AppRuntimeHostOptions{kIterations * 4, 4, 8, 4096, 1});
+    scratch.reserve_from_options(AppRuntimeHostOptions{kIterations * 6, 6, 8, 4096, 1});
     std::vector<AppSystemEvent> accepted_events;
     accepted_events.reserve(3);
 
@@ -483,17 +528,21 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
     std::size_t storage_completions = 0;
     std::size_t image_completions = 0;
     std::size_t audio_completions = 0;
+    std::size_t sensor_completions = 0;
+    std::size_t location_completions = 0;
     std::size_t system_events_accepted = 0;
     for (std::size_t tick = 0; tick < 128 && (network_completions < kIterations ||
                                               storage_completions < kIterations ||
                                               image_completions < kIterations ||
-                                              audio_completions < kIterations); ++tick) {
+                                              audio_completions < kIterations ||
+                                              sensor_completions < kIterations ||
+                                              location_completions < kIterations); ++tick) {
         assert(system_events.try_push_current(host,
                                               AppSystemEventKind::NetworkStatusChanged,
                                               make_snapshot(tick)) == AppSystemEventPushStatus::Accepted);
 
-        const AppHostServiceWorkerGroupPumpResult result = pump_app_host_service_workers(host, slots, 4);
-        assert(result.requests_processed <= 4);
+        const AppHostServiceWorkerGroupPumpResult result = pump_app_host_service_workers(host, slots, 6);
+        assert(result.requests_processed <= 6);
         assert(result.completions_posted == result.requests_processed);
         assert(!result.completion_queue_full);
 
@@ -515,6 +564,14 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
                 ++audio_completions;
                 assert(completion.handle != 0);
                 assert(audio.release_stream(host, completion.handle));
+            } else if (completion.kind == HostServiceJobKind::SensorSample) {
+                ++sensor_completions;
+                assert(completion.handle != 0);
+                assert(sensors.release_sample(host, completion.handle));
+            } else if (completion.kind == HostServiceJobKind::LocationSnapshot) {
+                ++location_completions;
+                assert(completion.handle != 0);
+                assert(location.release_snapshot(host, completion.handle));
             } else {
                 assert(false && "unexpected mixed worker completion kind");
             }
@@ -522,6 +579,8 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
         network.collect_released_responses(host);
         images.collect_released_surfaces(host);
         audio.collect_released_streams(host);
+        sensors.collect_released_samples(host);
+        location.collect_released_snapshots(host);
 
         const AppSystemEventPumpResult event_result = system_events.pump_current(host, accepted_events);
         assert(event_result.stale == 0);
@@ -537,10 +596,14 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
     assert(storage_worker.calls == static_cast<int>(kIterations));
     assert(image_worker.calls == static_cast<int>(kIterations));
     assert(audio_worker.calls == static_cast<int>(kIterations));
+    assert(sensor_worker.calls == static_cast<int>(kIterations));
+    assert(location_worker.calls == static_cast<int>(kIterations));
     assert(network_completions == kIterations);
     assert(storage_completions == kIterations);
     assert(image_completions == kIterations);
     assert(audio_completions == kIterations);
+    assert(sensor_completions == kIterations);
+    assert(location_completions == kIterations);
     assert(system_events_accepted >= kIterations);
 }
 
