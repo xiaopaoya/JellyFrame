@@ -343,6 +343,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Win32 frame capture now reports attempted dirty fallback details, including
   attempted rect count, max attempted dirty area and the largest dirty node
   observed before a full-frame fallback.
+- Added a Win32 motion-lab dirty-frame CTest regression that requires the
+  90-frame animation soak to stay at one full frame followed by dirty-rect
+  frames.
 
 ## 0.3.0-dev - 2026-06-18
 

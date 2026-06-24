@@ -328,6 +328,16 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(jellyframe_win32_motion_lab_soak_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
                     "frame_policy_samples=90 input=90 timers=90 animation=90 present=90")
+
+            add_test(
+                NAME jellyframe_win32_motion_lab_dirty_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_motion_lab_dirty_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "dirty_local=90 full=1 clean=0")
         endif()
     endif()
 

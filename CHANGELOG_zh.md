@@ -229,6 +229,8 @@ JellyFrame Engine 的重要变更记录在这里。
   不再退回 full-frame repaint。
 - Win32 frame capture 新增 full-frame fallback 前的 attempted dirty 细节，包括尝试的 rect 数、
   最大尝试 dirty area，以及观察到的最大 dirty node。
+- 新增 Win32 motion-lab dirty-frame CTest 回归，要求 90 帧动画 soak 保持首帧 full frame、
+  后续 dirty-rect frame 的形态。
 
 ## 0.3.0-dev - 2026-06-18
 
