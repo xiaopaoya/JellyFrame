@@ -645,8 +645,8 @@ package report 会在 `serviceIntent` 中记录 manifest service intent。这个
 `network.fetch`、`storage.kv`、`media.audio.mp3` 请求、`backgroundServices` 声明，以及提醒
 工具和作者“最终授权仍由 host profile/product policy 决定”的 policy notes。如果 target preset 声明了
 可选 `hostServices`，report 还会用 `targetSupport` 按 `supported`、`unsupported` 或 `unknown`
-报告 network fetch、app 私有 KV 和 audio playback 的目标支持状态。如果 app 请求了被所选 target
-明确标为 unsupported 的服务，package 会输出 `service-target-unsupported` warning；`unknown` 只作为
+报告 network fetch、app 私有 KV、audio playback、语义传感器和定位的目标支持状态。如果 app 请求了
+被所选 target 明确标为 unsupported 的服务，package 会输出 `service-target-unsupported` warning；`unknown` 只作为
 信息保留，因为很多产品 port 会在通用 preset 之外决定可选服务。桌面 app-runtime mock 可以验证
 request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这些请求与 host/profile
 策略合成。核心不会执行真实网络或文件系统 I/O。

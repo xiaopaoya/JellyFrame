@@ -755,9 +755,10 @@ stable summary includes requested `network.fetch`, `storage.kv` and
 that remind tools and authors that host profile/product policy remain
 authoritative. If a target preset declares optional `hostServices`, the report
 also includes `targetSupport` as `supported`, `unsupported` or `unknown` for
-network fetch, app-private KV and audio playback. If an app requests a service
-that the selected target explicitly marks unsupported, packaging emits a
-`service-target-unsupported` warning; `unknown` remains informational because
+network fetch, app-private KV, audio playback, semantic sensors and location
+position. If an app requests a service that the selected target explicitly
+marks unsupported, packaging emits a `service-target-unsupported` warning;
+`unknown` remains informational because
 many product ports decide optional services outside the generic preset. The
 desktop app-runtime mocks can validate the request/completion/handle contract,
 and `app_service_policies_for_app(...)` combines those requests with
