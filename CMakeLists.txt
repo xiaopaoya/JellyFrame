@@ -63,6 +63,7 @@ add_library(jellyframe_render_core
     src/render_core/style_repaint.cpp
     src/render_core/text_adapter.cpp
     src/render_core/text_backend.cpp
+    src/render_core/text_layout_reuse.cpp
     src/render_core/text_normalization.cpp
     src/render_core/text_repaint.cpp
 )

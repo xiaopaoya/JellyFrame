@@ -86,6 +86,49 @@ InteractionInvalidationOptions input_invalidation_options_from_style(const Style
     return options;
 }
 
+bool empty_rect(Rect rect) {
+    return rect.width <= 0 || rect.height <= 0;
+}
+
+Rect union_rect(Rect left, Rect right) {
+    if (empty_rect(left)) {
+        return right;
+    }
+    if (empty_rect(right)) {
+        return left;
+    }
+    const int x1 = std::min(left.x, right.x);
+    const int y1 = std::min(left.y, right.y);
+    const int x2 = std::max(left.x + left.width, right.x + right.width);
+    const int y2 = std::max(left.y + left.height, right.y + right.height);
+    return Rect{x1, y1, x2 - x1, y2 - y1};
+}
+
+void merge_dirty_region(DirtyRegionResult& target,
+                        const DirtyRegionResult& source,
+                        std::size_t max_rects) {
+    if (source.rects.empty()) {
+        return;
+    }
+    if (source.mode == DirtyRegionMode::FullFrame) {
+        target = source;
+        return;
+    }
+    if (target.mode == DirtyRegionMode::FullFrame) {
+        return;
+    }
+    target.mode = DirtyRegionMode::DirtyRects;
+    target.fallback_reason = DirtyRegionFallbackReason::None;
+    const std::size_t rect_limit = std::max<std::size_t>(1, max_rects);
+    for (Rect rect : source.rects) {
+        if (target.rects.size() >= rect_limit && !target.rects.empty()) {
+            target.rects.front() = union_rect(target.rects.front(), rect);
+        } else {
+            target.rects.push_back(rect);
+        }
+    }
+}
+
 std::uint16_t pack_rgb565(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     return static_cast<std::uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
 }
@@ -3369,6 +3412,14 @@ private:
                                          *layout_tree_,
                                          text_backend.measure) &&
             apply_render_styles_to_layout(*next_render_tree, *layout_tree_)) {
+            std::vector<StyleOverride> previous_repaint_overrides;
+            std::vector<StyleOverride> current_repaint_overrides;
+            previous_repaint_overrides.reserve(4);
+            current_repaint_overrides.reserve(4);
+            collect_style_repaint_overrides(*render_tree_,
+                                            *next_render_tree,
+                                            previous_repaint_overrides,
+                                            current_repaint_overrides);
             update_plan.action = FrameUpdateAction::RepaintExisting;
             update_plan.dirty_rect_mode = FrameDirtyRectMode::CurrentLayout;
             update_plan.reason = FrameUpdateReason::StyleDirtyStableLayout;
@@ -3386,6 +3437,16 @@ private:
                 dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
                 frame_scratch_.dirty_region,
                 &frame_scratch_.dirty_region_scratch);
+            if (!previous_repaint_overrides.empty() || !current_repaint_overrides.empty()) {
+                DirtyRegionResult style_dirty_region;
+                compute_animation_dirty_region_into(
+                    *layout_tree_,
+                    previous_repaint_overrides,
+                    current_repaint_overrides,
+                    AnimationInvalidationOptions{Rect{0, 0, viewport_width_, content_height}, budgets_.max_dirty_rects, 3},
+                    style_dirty_region);
+                merge_dirty_region(frame_scratch_.dirty_region, style_dirty_region, budgets_.max_dirty_rects);
+            }
             const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             render_tree_ = std::move(next_render_tree);

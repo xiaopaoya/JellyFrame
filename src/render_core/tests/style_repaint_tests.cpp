@@ -1,3 +1,4 @@
+#include "render_core/animation_invalidation.h"
 #include "render_core/css_parser.h"
 #include "render_core/html_parser.h"
 #include "render_core/layout.h"
@@ -7,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace jellyframe;
 
@@ -98,6 +100,22 @@ void paint_only_class_change_can_reuse_layout() {
           "paint-only class change can reuse layout");
     check(apply_render_styles_to_layout(*next_render, *fixture.layout_tree),
           "new paint styles can be applied to retained layout");
+
+    std::vector<StyleOverride> previous_overrides;
+    std::vector<StyleOverride> current_overrides;
+    collect_style_repaint_overrides(*fixture.render_tree,
+                                    *next_render,
+                                    previous_overrides,
+                                    current_overrides);
+    check(previous_overrides.size() == 1 && current_overrides.size() == 1,
+          "paint-only class change produces repaint overrides");
+    check(previous_overrides.front().has_transform && current_overrides.front().has_transform,
+          "transform repaint override is captured");
+    check(previous_overrides.front().has_background_color &&
+              current_overrides.front().has_background_color,
+          "background repaint override is captured");
+    check(previous_overrides.front().has_opacity && current_overrides.front().has_opacity,
+          "opacity repaint override is captured");
 }
 
 void layout_class_change_stays_conservative() {
@@ -116,6 +134,41 @@ void layout_class_change_stays_conservative() {
                                         *fixture.layout_tree,
                                         fixed_text_measure()),
           "layout-affecting class change does not reuse layout");
+}
+
+void transform_class_change_invalidates_old_and_new_bounds() {
+    auto fixture = build_fixture(
+        "<body><button id='pulse' class='pill'>Open</button></body>",
+        ".pill { display: block; width: 80px; height: 20px; transform: translate(0px, 0px); }"
+        ".pill.active { transform: translate(40px, 0px); background-color: #222222; }");
+    Node* pulse = find_element_by_id(*fixture.document, "pulse");
+    check(pulse != nullptr, "pulse exists");
+    pulse->set_attribute("class", "pill active");
+    auto next_render = rebuild_render_tree(*fixture.document, fixture.resolver);
+
+    check(style_dirty_can_reuse_layout(*fixture.document,
+                                       *fixture.render_tree,
+                                       *next_render,
+                                       *fixture.layout_tree,
+                                       fixed_text_measure()),
+          "transform-only class change can reuse layout");
+    std::vector<StyleOverride> previous_overrides;
+    std::vector<StyleOverride> current_overrides;
+    collect_style_repaint_overrides(*fixture.render_tree,
+                                    *next_render,
+                                    previous_overrides,
+                                    current_overrides);
+    check(apply_render_styles_to_layout(*next_render, *fixture.layout_tree),
+          "new transform style can be applied");
+    const DirtyRegionResult region =
+        compute_animation_dirty_region(*fixture.layout_tree,
+                                       previous_overrides,
+                                       current_overrides,
+                                       AnimationInvalidationOptions{Rect{0, 0, 240, 120}, 4, 0});
+    check(region.mode == DirtyRegionMode::DirtyRects && !region.rects.empty(),
+          "transform style change produces dirty rect");
+    check(region.rects.front().width >= 120,
+          "transform dirty rect covers old and translated bounds");
 }
 
 void class_change_with_stable_text_can_reuse_layout() {
@@ -166,6 +219,7 @@ int main() {
     try {
         paint_only_class_change_can_reuse_layout();
         layout_class_change_stays_conservative();
+        transform_class_change_invalidates_old_and_new_bounds();
         class_change_with_stable_text_can_reuse_layout();
         class_change_with_wider_text_stays_conservative();
     } catch (const std::exception& error) {
