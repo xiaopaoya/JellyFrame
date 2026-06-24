@@ -328,11 +328,11 @@ JerryScript 源码树时可用。
 | Dirty check | 可用 | 因为祖先保存聚合 dirty bits，根节点检查为 O(1)。 |
 | Dirty clear | 可用 | 清理时跳过干净分支。 |
 | 宿主合并重绘 | 子集 | Win32 壳会在 input/script callback 后只对 dirty DOM 重绘。 |
-| 增量 style/layout | 子集 | paint-only 表单控件状态变化可在 Win32 验证壳中复用 render/layout，只重建 layer/display commands。受保护的 same-box 单行文本路径也可在更新后文本测量结果仍匹配旧 layout box 时复用 render/layout。style、attributes、换行文本和树结构变化仍重建 render/layout。 |
+| 增量 style/layout | 子集 | paint-only 表单控件状态变化可在 Win32 验证壳中复用 render/layout，只重建 layer/display commands。受保护的 same-box 单行文本路径也可在更新后文本测量结果仍匹配旧 layout box 时复用 render/layout。受保护的 style/class 路径会在 render tree 形状不变、所有影响 layout 的 style 字段不变时复用 layout；color、background、opacity、transform 等 paint/compositor 变化可以走这条路径。换行文本、影响 layout 的 style、未知结构变化和树结构变化仍重建 render/layout。 |
 | Dirty rectangle repaint | 子集 | `dirty_region` 会通过对比旧/新 layout box，或对 paint-only 变化复用同一份 layout，为直接文本、属性、表单控件绘制变化计算有界重绘区域。树结构变化保守重绘 viewport。若估算 dirty area 过大，宿主也可以选择全帧重绘，避免局部 flush 反而更贵。 |
 | Animation invalidation | 子集 | `animation_invalidation` 可根据上一帧/当前帧的 animation style overrides，在当前 layout tree 上生成局部 dirty rectangles，覆盖 opacity/color paint-only 动画和 translate/scale transform 前后位置。 |
 | Display invalidation 诊断 | 可用 | `analyze_display_invalidation(...)` 会报告 dirty rectangles 对 layer 和 display command 的覆盖情况。它只提供诊断；retained display-list reuse 仍延后。 |
-| Frame dirty 诊断 | 可用 | Win32 脚本化 capture 会报告本轮 dirty flag 分布（`tree`、`attributes`、`text`、`style`、`layout`、`paint`、`render_or_layout`）以及 `text_stable` 等 frame-update 原因。开发者可据此判断页面帧耗时主要来自 layout 型 DOM 变化，还是便宜的 paint-only 更新。 |
+| Frame dirty 诊断 | 可用 | Win32 脚本化 capture 会报告本轮 dirty flag 分布（`tree`、`attributes`、`text`、`style`、`layout`、`paint`、`render_or_layout`）以及 `text_stable`、`style_stable` 等 frame-update 原因。开发者可据此判断页面帧耗时主要来自 layout 型 DOM 变化，还是便宜的 paint-only 更新。 |
 | Host frame sink | 子集 | `present_frame` 可以通过 `HostFrameSink` 暴露 `FrameBuffer`，并携带可选 dirty rects。成功 `present` 是 frame buffer 可复用边界：异步 panel/DMA 宿主必须等待、复制到 driver-owned 内存，或阻止下一帧 render 直到 flush 完成。`embedded_framebuffer` 已提供可移植像素转换；真实显示 I/O 仍由宿主负责。 |
 | Host device capabilities | 草案 | `HostDeviceCapabilities` 记录开发板 port 的显示、输入、内存、budget 和服务 flags。当前核心把它作为契约/策略输入文档；更深的自动适配仍延后。 |
 | Host budgets | 子集 | `HostBudgets` 已接入 HTML/CSS parsing、render/layout/layer tree 上限、display-list 上限、dirty rect 数量、frame-loop input/timer/animation 上限、JerryScript timer/rAF/listener 限制、detached DOM node 限制和软件 compositor 的主/offscreen pixel 上限。Render/layout/layer tree 已有 arena-backed 构建路径；完整 mutable DOM arena 仍是后续工作。 |

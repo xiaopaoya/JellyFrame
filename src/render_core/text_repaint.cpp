@@ -50,6 +50,7 @@ bool dirty_flags_are_text_layout_only(DomDirtyFlags flags) {
 
 bool collect_dirty_text_nodes(const Node& node, std::vector<const Node*>& dirty_text_nodes) {
     std::vector<const Node*> pending;
+    pending.reserve(16);
     pending.push_back(&node);
     while (!pending.empty()) {
         const Node* current = pending.back();
@@ -103,6 +104,7 @@ std::size_t validate_dirty_layout_boxes(const LayoutBox& layout,
                                         const TextMeasureProvider& text_measure) {
     std::size_t matched = 0;
     std::vector<const LayoutBox*> pending;
+    pending.reserve(16);
     pending.push_back(&layout);
     while (!pending.empty()) {
         const LayoutBox* current = pending.back();
@@ -132,6 +134,7 @@ bool text_dirty_can_reuse_layout(const Node& document,
     }
 
     std::vector<const Node*> dirty_text_nodes;
+    dirty_text_nodes.reserve(4);
     if (!collect_dirty_text_nodes(document, dirty_text_nodes) || dirty_text_nodes.empty()) {
         return false;
     }

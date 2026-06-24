@@ -60,6 +60,7 @@ add_library(jellyframe_render_core
     src/render_core/render_tree.cpp
     src/render_core/software_renderer.cpp
     src/render_core/style.cpp
+    src/render_core/style_repaint.cpp
     src/render_core/text_adapter.cpp
     src/render_core/text_backend.cpp
     src/render_core/text_normalization.cpp
@@ -204,6 +205,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/render_tree_tests.cpp
         src/render_core/tests/layer_tree_tests.cpp
         src/render_core/tests/software_renderer_tests.cpp
+        src/render_core/tests/style_repaint_tests.cpp
         src/render_core/tests/text_adapter_tests.cpp
         src/render_core/tests/text_repaint_tests.cpp
     )
@@ -359,7 +361,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_text_reuse_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
-                    "frame_update idle=0 repaint=81 rebuild=10 first_paint=1 paint_dirty=0 text_stable=81 layout_previous=9")
+                    "frame_update idle=0 repaint=90 rebuild=1 first_paint=1 paint_dirty=0 text_stable=81 style_stable=9 layout_previous=0")
         endif()
     endif()
 

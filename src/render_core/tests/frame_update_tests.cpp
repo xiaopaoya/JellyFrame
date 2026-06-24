@@ -247,6 +247,9 @@ void frame_update_names_and_statistics_are_stable() {
     check(std::string(frame_update_reason_name(FrameUpdateReason::TextDirtyStableLayout)) ==
               "text-dirty-stable-layout",
           "text stable layout reason name");
+    check(std::string(frame_update_reason_name(FrameUpdateReason::StyleDirtyStableLayout)) ==
+              "style-dirty-stable-layout",
+          "style stable layout reason name");
 
     FrameUpdateStatistics statistics;
     record_frame_update_plan(statistics, plan_frame_update(cached_state(DomDirtyNone)));

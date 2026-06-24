@@ -25,6 +25,7 @@
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
+#include "render_core/style_repaint.h"
 #include "render_core/text_repaint.h"
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
@@ -2392,6 +2393,8 @@ public:
                   << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::PaintOnlyDirty)
                   << " text_stable="
                   << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::TextDirtyStableLayout)
+                  << " style_stable="
+                  << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::StyleDirtyStableLayout)
                   << " layout_previous="
                   << frame_update_reason_count(frame_update_statistics_,
                                                FrameUpdateReason::LayoutDirtyWithPreviousLayout)
@@ -3279,10 +3282,10 @@ private:
             update_plan.needs_previous_layout = false;
             update_plan.needs_full_framebuffer = false;
         }
-        record_frame_update(update_plan, dirty_flags);
         if (update_plan.action == FrameUpdateAction::RepaintExisting &&
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {
+            record_frame_update(update_plan, dirty_flags);
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
             const bool animation_only_dirty =
                 !style_overrides_.empty() && dirty_flags == DomDirtyPaint;
@@ -3335,7 +3338,6 @@ private:
         }
 
         const DomDirtyFlags rebuild_dirty_flags = document_->dirty_flags;
-        LayoutBoxPtr previous_layout = update_plan.needs_previous_layout ? std::move(layout_tree_) : LayoutBoxPtr{};
         RenderTreeOptions render_options = render_tree_options_from_budgets(budgets_);
         render_options.diagnostics = &diagnostics_;
         RenderTreeBuilder render_builder(*style_resolver_, render_options);
@@ -3357,6 +3359,64 @@ private:
         }
         RenderTreeBuilder sampled_render_builder(*style_resolver_, render_options);
         auto next_render_tree = sampled_render_builder.build(*document_);
+        if (update_plan.action == FrameUpdateAction::RebuildPipeline &&
+            update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
+            render_tree_ != nullptr &&
+            layout_tree_ != nullptr &&
+            style_dirty_can_reuse_layout(*document_,
+                                         *render_tree_,
+                                         *next_render_tree,
+                                         *layout_tree_,
+                                         text_backend.measure) &&
+            apply_render_styles_to_layout(*next_render_tree, *layout_tree_)) {
+            update_plan.action = FrameUpdateAction::RepaintExisting;
+            update_plan.dirty_rect_mode = FrameDirtyRectMode::CurrentLayout;
+            update_plan.reason = FrameUpdateReason::StyleDirtyStableLayout;
+            update_plan.can_reuse_render_and_layout = false;
+            update_plan.needs_previous_layout = false;
+            update_plan.needs_full_framebuffer = false;
+            record_frame_update(update_plan, dirty_flags);
+
+            const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+            auto next_layer_tree = layer_builder.build(*layout_tree_);
+            compute_dirty_region_into(
+                *document_,
+                layout_tree_.get(),
+                layout_tree_.get(),
+                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
+                frame_scratch_.dirty_region,
+                &frame_scratch_.dirty_region_scratch);
+            const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
+            const std::vector<Rect>& dirty_rects = dirty_region.rects;
+            render_tree_ = std::move(next_render_tree);
+            layer_tree_ = std::move(next_layer_tree);
+            evict_unused_image_surfaces();
+            if (!dirty_rects.empty() &&
+                dirty_region_should_repaint_incrementally(dirty_region,
+                                                          Rect{0, 0, viewport_width_, content_height},
+                                                          kIncrementalDirtyAreaLimitPercent)) {
+                compositor.render_into(*layer_tree_,
+                                       frame_buffer_,
+                                       page_background_,
+                                       dirty_rects.data(),
+                                       dirty_rects.size());
+                last_display_invalidation_ =
+                    analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
+                record_dirty_region(dirty_region);
+            } else {
+                render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
+            }
+            input_ = std::make_unique<InputController>(
+                *layer_tree_,
+                input_invalidation_options_from_style(*style_resolver_));
+            input_->set_interaction_state(hovered_node, active_node, focused_node);
+            update_blit_pixels();
+            clear_dirty_flags(*document_);
+            clear_finished_animation_overrides();
+            return;
+        }
+        record_frame_update(update_plan, dirty_flags);
+        LayoutBoxPtr previous_layout = update_plan.needs_previous_layout ? std::move(layout_tree_) : LayoutBoxPtr{};
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
         layout_options.diagnostics = &diagnostics_;
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);

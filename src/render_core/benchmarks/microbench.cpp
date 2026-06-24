@@ -7,6 +7,7 @@
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
+#include "render_core/style_repaint.h"
 #include "render_core/text_repaint.h"
 
 #include <chrono>
@@ -343,6 +344,35 @@ int main(int argc, char** argv) {
             const bool reusable =
                 text_dirty_can_reuse_layout(*text_document, *text_layout_tree, fixed_text_measure());
             clear_dirty_flags(*text_document);
+            (void)reusable;
+        }));
+    }
+
+    auto style_document = html_parser.parse(
+        "<body><button id='pulse' class='pill'>Open</button><strong id='frame'>01</strong></body>");
+    auto style_stylesheet = css_parser.parse(
+        ".pill { display: block; width: 80px; height: 20px; background-color: #111111; }"
+        ".pill.active { background-color: #222222; transform: scale(1.05); }"
+        "strong { display: block; font-size: 10px; line-height: 12px; }");
+    StyleResolver style_reuse_resolver(style_stylesheet);
+    RenderTreeBuilder style_reuse_builder(style_reuse_resolver);
+    auto previous_style_render_tree = style_reuse_builder.build(*style_document);
+    LayoutEngine style_reuse_layout_engine(style_reuse_resolver, fixed_text_measure());
+    auto style_reuse_layout_tree =
+        style_reuse_layout_engine.layout(*previous_style_render_tree, 240);
+    Node* style_pulse = find_first_element_by_id(*style_document, "pulse");
+    Node* style_frame = find_first_element_by_id(*style_document, "frame");
+    if (style_pulse != nullptr && style_frame != nullptr) {
+        clear_dirty_flags(*style_document);
+        style_frame->set_text_content("02");
+        style_pulse->set_attribute("class", "pill active");
+        auto next_style_render_tree = style_reuse_builder.build(*style_document);
+        print_result("style_repaint_reuse_check", iterations, average_microseconds(iterations, [&] {
+            const bool reusable = style_dirty_can_reuse_layout(*style_document,
+                                                               *previous_style_render_tree,
+                                                               *next_style_render_tree,
+                                                               *style_reuse_layout_tree,
+                                                               fixed_text_measure());
             (void)reusable;
         }));
     }

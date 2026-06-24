@@ -28,6 +28,7 @@ enum class FrameUpdateReason {
     FirstPaint,
     PaintOnlyDirty,
     TextDirtyStableLayout,
+    StyleDirtyStableLayout,
     LayoutDirtyWithPreviousLayout,
     TreeDirty,
     MissingPipelineCache,
