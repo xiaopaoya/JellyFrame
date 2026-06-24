@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.tests.watchdog_smoke",
+  "name": "Watchdog Smoke",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 8192,
+    "maxDomNodes": 40,
+    "maxCssRules": 24,
+    "maxDisplayCommands": 80
+  },
+  "capabilities": []
+}

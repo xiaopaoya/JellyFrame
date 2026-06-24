@@ -37,6 +37,8 @@ viewport 300 300
 event 8 click 150 260
 animation-fps 30
 animation-callbacks 4
+script-watchdog-checks 2048
+script-watchdog-interval 16
 ```
 
 JavaScript/rAF playback requires a build configured with
@@ -46,6 +48,11 @@ builds.
 Use `animation-fps 0` and `animation-callbacks 0` in a frame script, or pass
 `--animation-fps 0 --animation-callbacks 0`, to validate low-power profiles
 where the host must stop nonessential motion without changing app source.
+
+Use `script-watchdog-checks N`, `script-watchdog-interval N` and
+`require-script-watchdog` only for Win32/scripted recovery validation. They map
+to the host script-execution budget and require a JerryScript build with VM halt
+support; page authors should not rely on private JavaScript syntax for this.
 
 Native tools may use desktop file I/O. The embedded core does not depend on these
 entry points.

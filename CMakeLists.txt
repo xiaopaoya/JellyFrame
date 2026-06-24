@@ -369,6 +369,18 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(jellyframe_win32_motion_lab_text_reuse_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
                     "frame_update idle=0 repaint=90 rebuild=1 first_paint=1 paint_dirty=0 text_stable=81 style_stable=9 layout_previous=0")
+
+            add_test(
+                NAME jellyframe_win32_script_watchdog_recovery
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --registry-store ${CMAKE_BINARY_DIR}/test_outputs/watchdog_registry
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_watchdog_smoke
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_watchdog_smoke/capture_watchdog.jfcapture
+                        --capture-montage ${CMAKE_BINARY_DIR}/test_outputs/watchdog_recovery.bmp
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_script_watchdog_recovery PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "script_watchdog_recovery reason=script-watchdog")
         endif()
     endif()
 

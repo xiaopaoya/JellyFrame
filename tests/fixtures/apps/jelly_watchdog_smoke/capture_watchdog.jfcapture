@@ -1,0 +1,6 @@
+viewport 300 300
+frames 3
+step-ms 33
+script-watchdog-checks 8
+script-watchdog-interval 1
+require-script-watchdog

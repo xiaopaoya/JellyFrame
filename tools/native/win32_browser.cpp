@@ -449,6 +449,9 @@ struct BrowserOptions {
     int frame_montage_gap = 6;
     int animation_frame_rate = -1;
     int animation_callbacks_per_frame = -1;
+    int script_watchdog_checks = -1;
+    int script_watchdog_interval = -1;
+    bool require_script_watchdog = false;
     std::vector<ScriptedFrameEvent> frame_events;
 };
 
@@ -1725,6 +1728,24 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
             options.animation_callbacks_per_frame =
                 std::min(1024,
                          std::max(0, parse_int_unclamped(fields[1].c_str(), options.animation_callbacks_per_frame)));
+        } else if (command == "script-watchdog-checks") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.script_watchdog_checks =
+                std::min(1000000, std::max(0, parse_int_unclamped(fields[1].c_str(), options.script_watchdog_checks)));
+        } else if (command == "script-watchdog-interval") {
+            if (!require_count(2)) {
+                return false;
+            }
+            options.script_watchdog_interval =
+                std::min(1000000,
+                         std::max(1, parse_int_unclamped(fields[1].c_str(), options.script_watchdog_interval)));
+        } else if (command == "require-script-watchdog") {
+            if (!require_count(1)) {
+                return false;
+            }
+            options.require_script_watchdog = true;
         } else if (command == "viewport") {
             if (!require_count(3)) {
                 return false;
@@ -1798,6 +1819,9 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --frame-start-ms N             First scripted timestamp, default 1000 ms.\n"
         << "  --animation-fps N              Override host animation frame rate budget.\n"
         << "  --animation-callbacks N        Override animation callbacks pumped per frame.\n"
+        << "  --script-watchdog-checks N     Override JS execution check budget.\n"
+        << "  --script-watchdog-interval N   Override JS execution halt callback interval.\n"
+        << "  --require-script-watchdog      Fail scripted startup if JerryScript cannot halt.\n"
         << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y].\n"
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
         << "                                 pointer-up, network-online/offline,\n"
@@ -2226,6 +2250,12 @@ public:
         if (options_.animation_callbacks_per_frame >= 0) {
             budgets_.max_animation_callbacks_per_frame =
                 static_cast<std::size_t>(options_.animation_callbacks_per_frame);
+        }
+        if (options_.script_watchdog_checks >= 0) {
+            budgets_.max_script_execution_checks = static_cast<std::size_t>(options_.script_watchdog_checks);
+        }
+        if (options_.script_watchdog_interval >= 0) {
+            budgets_.script_execution_check_interval = static_cast<std::size_t>(options_.script_watchdog_interval);
         }
         frame_scratch_.reserve_from_budgets(budgets_);
         app_frame_scratch_.reserve_from_options(desktop_app_runtime_options());
@@ -3183,6 +3213,11 @@ private:
             KillTimer(hwnd_, kScriptTimerId);
             const AppTeardownResult teardown = app_runtime_.terminate_current(AppTeardownReason::ScriptWatchdog);
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
+            std::cerr << "script_watchdog_recovery reason=" << app_teardown_reason_name(teardown.reason)
+                      << " released_instance=" << teardown.app_instance_id
+                      << " released_handles=" << teardown.released_handles
+                      << " cancelled_requests=" << teardown.cancelled_requests
+                      << " discarded_completions=" << teardown.discarded_completions << '\n';
             configure_system_shell(
                 "Recovered from " + crashed_app + " after " +
                 app_teardown_reason_name(teardown.reason) + "; released instance " +
@@ -3298,6 +3333,9 @@ private:
             if (!document_scripts.empty() || !options_.script_path.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
                 script_runtime_instance_id_ = app_runtime_.current_app_instance_id();
+                if (options_.require_script_watchdog && !script_runtime_->execution_watchdog_supported()) {
+                    throw std::runtime_error("script watchdog required but linked JerryScript cannot halt execution");
+                }
                 if (debug_local_storage_instance_id_ != script_runtime_instance_id_) {
                     debug_local_storage_.clear();
                     debug_local_storage_instance_id_ = script_runtime_instance_id_;
@@ -4271,6 +4309,28 @@ int main(int argc, char** argv) {
             }
             options.animation_callbacks_per_frame =
                 std::min(1024, std::max(0, parse_int_unclamped(argv[++i], options.animation_callbacks_per_frame)));
+            continue;
+        }
+        if (arg == "--script-watchdog-checks") {
+            if (i + 1 >= argc) {
+                std::cerr << "--script-watchdog-checks requires a number\n";
+                return 1;
+            }
+            options.script_watchdog_checks =
+                std::min(1000000, std::max(0, parse_int_unclamped(argv[++i], options.script_watchdog_checks)));
+            continue;
+        }
+        if (arg == "--script-watchdog-interval") {
+            if (i + 1 >= argc) {
+                std::cerr << "--script-watchdog-interval requires a number\n";
+                return 1;
+            }
+            options.script_watchdog_interval =
+                std::min(1000000, std::max(1, parse_int_unclamped(argv[++i], options.script_watchdog_interval)));
+            continue;
+        }
+        if (arg == "--require-script-watchdog") {
+            options.require_script_watchdog = true;
             continue;
         }
         if (arg == "--frame-event") {

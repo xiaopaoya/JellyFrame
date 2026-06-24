@@ -293,7 +293,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Event object | Subset | `type`, `target`, `currentTarget`, phase, cancel/propagation APIs, mouse/wheel fields. |
 | Form properties | Subset | `value`, `checked`, `selectedIndex` on relevant controls. |
 | Timers | Works | Host-pumped `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`; callback budget controlled by host. |
-| Script execution watchdog | Host/runtime optional | `JerryScriptRuntimeOptions::max_execution_check_count` and `HostBudgets::max_script_execution_checks` can interrupt runaway evals and callbacks with `script execution budget exceeded` when the linked JerryScript library was built with `JERRY_VM_HALT=ON`. If that JerryScript feature is absent, JellyFrame reports the watchdog as unsupported and does not fake preemption. |
+| Script execution watchdog | Host/runtime optional | `JerryScriptRuntimeOptions::max_execution_check_count` and `HostBudgets::max_script_execution_checks` can interrupt runaway evals and callbacks with `script execution budget exceeded` when the linked JerryScript library was built with `JERRY_VM_HALT=ON`. If that JerryScript feature is absent, JellyFrame reports the watchdog as unsupported and does not fake preemption. The Win32 validation shell can require this path with `--require-script-watchdog` plus bounded check options for recovery smoke tests. |
 | Promise/microtask queue | Deferred | Do not rely on browser task semantics. |
 | Modules/import | Deferred | `type="module"`, dynamic import and module loading are skipped. |
 | `querySelector` | Deferred | Use IDs for now. |
