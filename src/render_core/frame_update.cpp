@@ -144,6 +144,41 @@ void record_frame_update_plan(FrameUpdateStatistics& statistics, const FrameUpda
     ++statistics.reasons[frame_update_reason_index(plan.reason)];
 }
 
+void record_frame_update_plan(FrameUpdateStatistics& statistics,
+                              const FrameUpdatePlan& plan,
+                              DomDirtyFlags dirty_flags) {
+    record_frame_update_plan(statistics, plan);
+    record_frame_dirty_flags(statistics, dirty_flags);
+}
+
+void record_frame_dirty_flags(FrameUpdateStatistics& statistics, DomDirtyFlags dirty_flags) {
+    if (dirty_flags == DomDirtyNone) {
+        ++statistics.dirty_none_frames;
+        return;
+    }
+    if ((dirty_flags & DomDirtyTree) != 0U) {
+        ++statistics.dirty_tree_frames;
+    }
+    if ((dirty_flags & DomDirtyAttributes) != 0U) {
+        ++statistics.dirty_attribute_frames;
+    }
+    if ((dirty_flags & DomDirtyText) != 0U) {
+        ++statistics.dirty_text_frames;
+    }
+    if ((dirty_flags & DomDirtyStyle) != 0U) {
+        ++statistics.dirty_style_frames;
+    }
+    if ((dirty_flags & DomDirtyLayout) != 0U) {
+        ++statistics.dirty_layout_frames;
+    }
+    if ((dirty_flags & DomDirtyPaint) != 0U) {
+        ++statistics.dirty_paint_frames;
+    }
+    if (dirty_requires_render_or_layout(dirty_flags)) {
+        ++statistics.dirty_render_or_layout_frames;
+    }
+}
+
 std::size_t frame_update_reason_count(const FrameUpdateStatistics& statistics,
                                       FrameUpdateReason reason) {
     return statistics.reasons[frame_update_reason_index(reason)];

@@ -84,6 +84,14 @@ struct FrameUpdateStatistics {
     std::size_t repaint_existing_frames = 0;
     std::size_t rebuild_pipeline_frames = 0;
     std::array<std::size_t, kFrameUpdateReasonCount> reasons{};
+    std::size_t dirty_none_frames = 0;
+    std::size_t dirty_tree_frames = 0;
+    std::size_t dirty_attribute_frames = 0;
+    std::size_t dirty_text_frames = 0;
+    std::size_t dirty_style_frames = 0;
+    std::size_t dirty_layout_frames = 0;
+    std::size_t dirty_paint_frames = 0;
+    std::size_t dirty_render_or_layout_frames = 0;
 };
 
 const char* frame_update_action_name(FrameUpdateAction action);
@@ -91,6 +99,10 @@ const char* frame_dirty_rect_mode_name(FrameDirtyRectMode mode);
 const char* frame_update_reason_name(FrameUpdateReason reason);
 std::size_t frame_update_reason_index(FrameUpdateReason reason);
 void record_frame_update_plan(FrameUpdateStatistics& statistics, const FrameUpdatePlan& plan);
+void record_frame_update_plan(FrameUpdateStatistics& statistics,
+                              const FrameUpdatePlan& plan,
+                              DomDirtyFlags dirty_flags);
+void record_frame_dirty_flags(FrameUpdateStatistics& statistics, DomDirtyFlags dirty_flags);
 std::size_t frame_update_reason_count(const FrameUpdateStatistics& statistics,
                                       FrameUpdateReason reason);
 

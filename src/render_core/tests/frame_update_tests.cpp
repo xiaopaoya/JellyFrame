@@ -261,6 +261,29 @@ void frame_update_names_and_statistics_are_stable() {
           "statistics count tree dirty reason");
 }
 
+void frame_update_dirty_flag_statistics_are_stable() {
+    FrameUpdateStatistics statistics;
+    record_frame_update_plan(statistics, plan_frame_update(cached_state(DomDirtyNone)), DomDirtyNone);
+    record_frame_update_plan(statistics,
+                             plan_frame_update(cached_state(DomDirtyText | DomDirtyStyle | DomDirtyLayout)),
+                             DomDirtyText | DomDirtyStyle | DomDirtyLayout);
+    record_frame_update_plan(statistics,
+                             plan_frame_update(cached_state(DomDirtyAttributes | DomDirtyPaint)),
+                             DomDirtyAttributes | DomDirtyPaint);
+    record_frame_update_plan(statistics,
+                             plan_frame_update(cached_state(DomDirtyTree | DomDirtyLayout)),
+                             DomDirtyTree | DomDirtyLayout);
+
+    check(statistics.dirty_none_frames == 1, "dirty statistics count clean input");
+    check(statistics.dirty_tree_frames == 1, "dirty statistics count tree input");
+    check(statistics.dirty_attribute_frames == 1, "dirty statistics count attributes input");
+    check(statistics.dirty_text_frames == 1, "dirty statistics count text input");
+    check(statistics.dirty_style_frames == 1, "dirty statistics count style input");
+    check(statistics.dirty_layout_frames == 2, "dirty statistics count layout input");
+    check(statistics.dirty_paint_frames == 1, "dirty statistics count paint input");
+    check(statistics.dirty_render_or_layout_frames == 3, "dirty statistics count render/layout input");
+}
+
 } // namespace
 
 int main() {
@@ -281,6 +304,7 @@ int main() {
         cache_snapshot_builds_state_without_tree_ownership();
         host_frame_sequence_keeps_bounded_actions();
         frame_update_names_and_statistics_are_stable();
+        frame_update_dirty_flag_statistics_are_stable();
     } catch (const std::exception& error) {
         std::cerr << "frame update test failed: " << error.what() << '\n';
         return 1;

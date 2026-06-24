@@ -2397,6 +2397,15 @@ public:
                   << " framebuffer_mismatch="
                   << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::FramebufferSizeMismatch)
                   << '\n'
+                  << "  frame_dirty_flags none=" << frame_update_statistics_.dirty_none_frames
+                  << " tree=" << frame_update_statistics_.dirty_tree_frames
+                  << " attributes=" << frame_update_statistics_.dirty_attribute_frames
+                  << " text=" << frame_update_statistics_.dirty_text_frames
+                  << " style=" << frame_update_statistics_.dirty_style_frames
+                  << " layout=" << frame_update_statistics_.dirty_layout_frames
+                  << " paint=" << frame_update_statistics_.dirty_paint_frames
+                  << " render_or_layout=" << frame_update_statistics_.dirty_render_or_layout_frames
+                  << '\n'
                   << "  host_completion_batches=" << host_service_counters_.completion_batches
                   << " consumed=" << host_service_counters_.completions_consumed
                   << " accepted=" << host_service_counters_.completions_accepted
@@ -3237,7 +3246,7 @@ private:
         cache_state.content_height = current_content_height;
         const FrameUpdateState update_state = make_frame_update_state(dirty_flags, cache_state);
         const FrameUpdatePlan update_plan = plan_frame_update(update_state);
-        record_frame_update(update_plan);
+        record_frame_update(update_plan, dirty_flags);
         if (update_plan.action == FrameUpdateAction::None) {
             record_dirty_region(DirtyRegionResult{});
             return;
@@ -3925,11 +3934,11 @@ private:
         }
     }
 
-    void record_frame_update(const FrameUpdatePlan& plan) {
+    void record_frame_update(const FrameUpdatePlan& plan, DomDirtyFlags dirty_flags) {
         last_frame_update_action_ = plan.action;
         last_frame_update_reason_ = plan.reason;
         last_frame_repaint_reason_ = plan.reason;
-        record_frame_update_plan(frame_update_statistics_, plan);
+        record_frame_update_plan(frame_update_statistics_, plan, dirty_flags);
     }
 
     void set_title(const std::string& status) {
