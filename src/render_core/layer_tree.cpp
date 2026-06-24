@@ -975,12 +975,20 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
 
 DisplayList LayerTreeBuilder::flatten(const LayerNode& root) const {
     DisplayList output;
+    flatten_into(root, output);
+    return output;
+}
+
+void LayerTreeBuilder::flatten_into(const LayerNode& root, DisplayList& output) const {
+    output.clear();
     const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
-    output.reserve(std::min(count_layer_display_commands(root), max_display_commands));
+    const std::size_t required_capacity = std::min(count_layer_display_commands(root), max_display_commands);
+    if (output.capacity() < required_capacity) {
+        output.reserve(required_capacity);
+    }
     bool display_budget_reported = false;
     flatten_layer(root, output, Rect{}, false, 1.0F, 0, 0, max_display_commands,
                   options_.diagnostics, display_budget_reported);
-    return output;
 }
 
 void LayerTreeBuilder::trim_display_list(DisplayList& display_list) const {

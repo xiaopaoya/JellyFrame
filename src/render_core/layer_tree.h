@@ -79,6 +79,7 @@ public:
     LayerNodePtr build(const LayoutBox& root) const;
     LayerNodePtr build(const LayoutBox& root, MonotonicArena& arena) const;
     DisplayList flatten(const LayerNode& root) const;
+    void flatten_into(const LayerNode& root, DisplayList& output) const;
 
 private:
     LayerTreeBuilderOptions options_;

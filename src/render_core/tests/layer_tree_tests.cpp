@@ -123,6 +123,36 @@ void opacity_layer_flattens_alpha() {
     check(found_translucent_fill, "flatten applies layer opacity");
 }
 
+void flatten_into_reuses_storage_and_matches_flatten() {
+    auto pipeline = build_pipeline(
+        "<body><section class='card'><button>Open</button><p>Text</p></section></body>",
+        ".card { padding: 4px; background: #ffffff; border-radius: 8px; }"
+        "button { display: inline-block; width: 48px; height: 20px; background: #222222; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList expected = layer_tree_builder.flatten(*pipeline.layer_tree);
+    DisplayList reused;
+    reused.reserve(expected.size() + 8);
+    const std::size_t capacity = reused.capacity();
+    layer_tree_builder.flatten_into(*pipeline.layer_tree, reused);
+
+    check(reused.size() == expected.size(), "flatten_into command count matches flatten");
+    check(reused.capacity() == capacity, "flatten_into keeps caller storage when capacity is sufficient");
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        check(reused[i].type == expected[i].type, "flatten_into command type matches");
+        check(reused[i].rect.x == expected[i].rect.x &&
+                  reused[i].rect.y == expected[i].rect.y &&
+                  reused[i].rect.width == expected[i].rect.width &&
+                  reused[i].rect.height == expected[i].rect.height,
+              "flatten_into command rect matches");
+        check(reused[i].color.r == expected[i].color.r &&
+                  reused[i].color.g == expected[i].color.g &&
+                  reused[i].color.b == expected[i].color.b &&
+                  reused[i].color.a == expected[i].color.a,
+              "flatten_into command color matches");
+    }
+}
+
 void rounded_equal_border_emits_stroke_command() {
     auto pipeline = build_pipeline("<body><section class='pill'>Rounded</section></body>",
                                    ".pill { width: 80px; height: 24px; border: 2px solid #ffffff; "
@@ -571,6 +601,7 @@ int main() {
     try {
         overflow_hidden_creates_clip_layer();
         opacity_layer_flattens_alpha();
+        flatten_into_reuses_storage_and_matches_flatten();
         rounded_equal_border_emits_stroke_command();
         linear_gradient_background_emits_gradient_command();
         outline_and_text_shadow_emit_paint_commands();

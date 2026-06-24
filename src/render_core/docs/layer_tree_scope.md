@@ -57,6 +57,9 @@ rect/text commands or later map selected layers to hardware surfaces.
   CSS stacking-context rules are not complete yet.
 - The layer tree can always be flattened to the simple `DisplayList`, preserving
   the existing low-end renderer path.
+- `LayerTreeBuilder::flatten_into(...)` lets tools or hosts reuse caller-owned
+  `DisplayList` storage across frames. This is an allocation-reduction helper,
+  not retained display-list diffing.
 
 ## Embedded Constraints
 
@@ -65,11 +68,14 @@ rect/text commands or later map selected layers to hardware surfaces.
 - Rectangular clipping is integer based and allocation-light.
 - The model is designed so future dirty-rectangle repaint can invalidate one
   layer subtree instead of repainting the full document.
+- Repeated validation tools should prefer `flatten_into(...)` when they flatten
+  many frames of the same app shape, so display-command vector capacity is kept
+  outside the hot loop.
 
 ## Deferred
 
 - Full CSS stacking-context algorithm.
 - Full transform matrices, `transform-origin` and precise transformed clipping.
 - Filters, backdrop filters and blend modes.
-- Retained display-list diffing.
+- Retained display-list diffing beyond caller-owned buffer reuse.
 - Texture allocation and GPU compositing.

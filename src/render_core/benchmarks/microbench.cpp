@@ -213,6 +213,11 @@ int main(int argc, char** argv) {
         (void)display_list;
     }));
 
+    DisplayList reusable_display_list;
+    print_result("flatten_layers_reuse", iterations, average_microseconds(iterations, [&] {
+        layer_tree_builder.flatten_into(*layer_tree, reusable_display_list);
+    }));
+
     print_result("full_pipeline", iterations, average_microseconds(iterations, [&] {
         auto local_document = html_parser.parse(html);
         auto local_stylesheet = css_parser.parse(css);
