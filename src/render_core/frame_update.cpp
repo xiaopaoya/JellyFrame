@@ -85,6 +85,8 @@ const char* frame_update_reason_name(FrameUpdateReason reason) {
         return "first-paint";
     case FrameUpdateReason::PaintOnlyDirty:
         return "paint-only-dirty";
+    case FrameUpdateReason::TextDirtyStableLayout:
+        return "text-dirty-stable-layout";
     case FrameUpdateReason::LayoutDirtyWithPreviousLayout:
         return "layout-dirty-with-previous-layout";
     case FrameUpdateReason::TreeDirty:
@@ -113,18 +115,20 @@ std::size_t frame_update_reason_index(FrameUpdateReason reason) {
         return 3;
     case FrameUpdateReason::PaintOnlyDirty:
         return 4;
-    case FrameUpdateReason::LayoutDirtyWithPreviousLayout:
+    case FrameUpdateReason::TextDirtyStableLayout:
         return 5;
-    case FrameUpdateReason::TreeDirty:
+    case FrameUpdateReason::LayoutDirtyWithPreviousLayout:
         return 6;
-    case FrameUpdateReason::MissingPipelineCache:
+    case FrameUpdateReason::TreeDirty:
         return 7;
-    case FrameUpdateReason::MissingFramebuffer:
+    case FrameUpdateReason::MissingPipelineCache:
         return 8;
-    case FrameUpdateReason::FramebufferSizeMismatch:
+    case FrameUpdateReason::MissingFramebuffer:
         return 9;
-    case FrameUpdateReason::ResolvedFramebufferSizeMismatch:
+    case FrameUpdateReason::FramebufferSizeMismatch:
         return 10;
+    case FrameUpdateReason::ResolvedFramebufferSizeMismatch:
+        return 11;
     }
     return 0;
 }

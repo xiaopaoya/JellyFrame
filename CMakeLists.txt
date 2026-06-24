@@ -63,6 +63,7 @@ add_library(jellyframe_render_core
     src/render_core/text_adapter.cpp
     src/render_core/text_backend.cpp
     src/render_core/text_normalization.cpp
+    src/render_core/text_repaint.cpp
 )
 
 target_include_directories(jellyframe_render_core
@@ -204,6 +205,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/layer_tree_tests.cpp
         src/render_core/tests/software_renderer_tests.cpp
         src/render_core/tests/text_adapter_tests.cpp
+        src/render_core/tests/text_repaint_tests.cpp
     )
 
     foreach(test_source IN LISTS JELLYFRAME_RENDER_CORE_TEST_SOURCES)
@@ -348,6 +350,16 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(jellyframe_win32_motion_lab_dirty_flags_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
                     "frame_dirty_flags none=1 tree=0 attributes=9 text=90 style=9 layout=90 paint=90 render_or_layout=90")
+
+            add_test(
+                NAME jellyframe_win32_motion_lab_text_reuse_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_motion_lab_text_reuse_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "frame_update idle=0 repaint=81 rebuild=10 first_paint=1 paint_dirty=0 text_stable=81 layout_previous=9")
         endif()
     endif()
 

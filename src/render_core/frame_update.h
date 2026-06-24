@@ -27,6 +27,7 @@ enum class FrameUpdateReason {
     InvalidViewport,
     FirstPaint,
     PaintOnlyDirty,
+    TextDirtyStableLayout,
     LayoutDirtyWithPreviousLayout,
     TreeDirty,
     MissingPipelineCache,

@@ -25,6 +25,7 @@
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
+#include "render_core/text_repaint.h"
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
 #include "script/jerryscript_runtime.h"
@@ -2389,6 +2390,8 @@ public:
                   << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::FirstPaint)
                   << " paint_dirty="
                   << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::PaintOnlyDirty)
+                  << " text_stable="
+                  << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::TextDirtyStableLayout)
                   << " layout_previous="
                   << frame_update_reason_count(frame_update_statistics_,
                                                FrameUpdateReason::LayoutDirtyWithPreviousLayout)
@@ -3245,9 +3248,9 @@ private:
         cache_state.viewport = Rect{0, 0, viewport_width_, viewport_height_};
         cache_state.content_height = current_content_height;
         const FrameUpdateState update_state = make_frame_update_state(dirty_flags, cache_state);
-        const FrameUpdatePlan update_plan = plan_frame_update(update_state);
-        record_frame_update(update_plan, dirty_flags);
+        FrameUpdatePlan update_plan = plan_frame_update(update_state);
         if (update_plan.action == FrameUpdateAction::None) {
+            record_frame_update(update_plan, dirty_flags);
             record_dirty_region(DirtyRegionResult{});
             return;
         }
@@ -3264,6 +3267,19 @@ private:
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
+        if (update_plan.action == FrameUpdateAction::RebuildPipeline &&
+            update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
+            layout_tree_ != nullptr &&
+            layer_tree_ != nullptr &&
+            text_dirty_can_reuse_layout(*document_, *layout_tree_, text_backend.measure)) {
+            update_plan.action = FrameUpdateAction::RepaintExisting;
+            update_plan.dirty_rect_mode = FrameDirtyRectMode::CurrentLayout;
+            update_plan.reason = FrameUpdateReason::TextDirtyStableLayout;
+            update_plan.can_reuse_render_and_layout = true;
+            update_plan.needs_previous_layout = false;
+            update_plan.needs_full_framebuffer = false;
+        }
+        record_frame_update(update_plan, dirty_flags);
         if (update_plan.action == FrameUpdateAction::RepaintExisting &&
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {

@@ -7,6 +7,7 @@
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
+#include "render_core/text_repaint.h"
 
 #include <chrono>
 #include <iostream>
@@ -112,6 +113,35 @@ DisplayCommand fill_command(Rect rect, Color color, int radius = 0) {
     command.color = color;
     command.border_radius = radius;
     return command;
+}
+
+bool fixed_measure(const std::string& text,
+                   int,
+                   int,
+                   TextMetrics* metrics,
+                   void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    metrics->width = static_cast<int>(text.size()) * 8;
+    metrics->line_height = 12;
+    return true;
+}
+
+TextMeasureProvider fixed_text_measure() {
+    return TextMeasureProvider{fixed_measure, nullptr};
+}
+
+Node* find_first_element_by_id(Node& node, const std::string& id) {
+    if (node.type == NodeType::Element && node.attribute("id") == id) {
+        return &node;
+    }
+    for (auto& child : node.children) {
+        if (Node* found = find_first_element_by_id(*child, id)) {
+            return found;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -293,6 +323,27 @@ int main(int argc, char** argv) {
                                                                              budgets.max_dirty_rects,
                                                                              3},
                                                 frame_scratch.dirty_region);
+        }));
+    }
+
+    auto text_document = html_parser.parse("<body><p id='frame'>01</p></body>");
+    auto text_stylesheet = css_parser.parse("p { margin: 0; font-size: 10px; line-height: 12px; }");
+    StyleResolver text_resolver(text_stylesheet);
+    RenderTreeBuilder text_builder(text_resolver);
+    auto text_render_tree = text_builder.build(*text_document);
+    LayoutEngine text_layout_engine(text_resolver, fixed_text_measure());
+    auto text_layout_tree = text_layout_engine.layout(*text_render_tree, 240);
+    Node* frame_node = find_first_element_by_id(*text_document, "frame");
+    if (frame_node != nullptr) {
+        clear_dirty_flags(*text_document);
+        bool toggle = false;
+        print_result("text_repaint_reuse_check", iterations, average_microseconds(iterations, [&] {
+            frame_node->set_text_content(toggle ? "01" : "02");
+            toggle = !toggle;
+            const bool reusable =
+                text_dirty_can_reuse_layout(*text_document, *text_layout_tree, fixed_text_measure());
+            clear_dirty_flags(*text_document);
+            (void)reusable;
         }));
     }
     print_style_statistics(resolver.statistics());
