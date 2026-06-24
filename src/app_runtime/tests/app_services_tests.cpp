@@ -162,6 +162,24 @@ void network_fetch_pending_request_is_cancelled_on_app_switch() {
     check(!network.complete_next(host), "network cancelled request not completed");
 }
 
+void network_fetch_stale_worker_pending_is_collectable_after_app_switch() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.first", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    check(network.add_fixture(NetworkFetchFixture{"/fixture", 200, "application/json", "{}"}),
+          "network stale fixture accepted");
+    check(network.submit_fetch(host, "/fixture").accepted(), "network stale submit accepted");
+
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request), "network stale worker pop");
+    host.launch("org.example.second", AppRole::App);
+    check(network.collect_stale_pending_fetches(host) == 1, "network stale pending collected");
+
+    const HostServiceCompletion old_completion = network.complete_request(host, request);
+    check(old_completion.status == HostServiceStatus::Cancelled, "network stale worker completion cancelled");
+    check(network.submit_fetch(host, "/fixture").accepted(), "network current app submit accepted after cleanup");
+}
+
 void network_fetch_can_complete_worker_popped_request() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.network-worker", AppRole::App);
@@ -312,6 +330,26 @@ void image_decode_can_complete_worker_popped_request() {
     check(completion.handle != 0, "image worker surface handle");
     check(images.surface(completion.handle) != nullptr, "image worker surface stored");
     check(images.release_surface(host, completion.handle), "image worker surface release");
+}
+
+void image_decode_stale_worker_pending_is_collectable_after_app_switch() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.image-old", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
+    check(images.add_fixture(ImageDecodeFixture{"/icon.raw", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "image stale fixture accepted");
+    check(images.submit_decode(host, "/icon.raw").accepted(), "image stale submit accepted");
+
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::ImageDecode, request), "image stale worker pop");
+    host.launch("org.example.image-new", AppRole::App);
+    check(images.submit_decode(host, "/icon.raw").status == AppServiceSubmitStatus::BudgetExceeded,
+          "image stale pending still consumes decode budget before cleanup");
+    check(images.collect_stale_pending_decodes(host) == 1, "image stale pending collected");
+    check(images.submit_decode(host, "/icon.raw").accepted(), "image current app submit accepted after cleanup");
+
+    const HostServiceCompletion old_completion = images.complete_request(host, request);
+    check(old_completion.status == HostServiceStatus::Cancelled, "image stale worker completion cancelled");
 }
 
 void image_surface_cache_requests_resolves_and_releases_surfaces() {
@@ -783,6 +821,23 @@ void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
     check(host.handles().lookup(next_handle) == nullptr, "audio release app handle");
 }
 
+void audio_command_stale_worker_pending_is_collectable_after_app_switch() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.audio-old", AppRole::App);
+    AudioCommandMock audio(AudioPlaybackPolicy{true, 64, 1});
+    check(audio.add_source(AudioSourceFixture{"/tone.mp3", 100}), "audio stale fixture accepted");
+    check(audio.submit_open(host, "/tone.mp3").accepted(), "audio stale open submitted");
+
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::AudioCommand, request), "audio stale worker pop");
+    host.launch("org.example.audio-new", AppRole::App);
+    check(audio.collect_stale_pending_commands(host) == 1, "audio stale pending command collected");
+
+    const HostServiceCompletion old_completion = audio.complete_request(host, request);
+    check(old_completion.status == HostServiceStatus::Cancelled, "audio stale worker completion cancelled");
+    check(audio.submit_open(host, "/tone.mp3").accepted(), "audio current app open accepted after cleanup");
+}
+
 void audio_command_mock_reports_invalid_handle_at_submit_time() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.audio", AppRole::App);
@@ -1044,11 +1099,13 @@ int main() {
     network_fetch_requires_capability_and_returns_fixture_handle();
     service_policy_requires_manifest_and_host_approval();
     network_fetch_pending_request_is_cancelled_on_app_switch();
+    network_fetch_stale_worker_pending_is_collectable_after_app_switch();
     network_fetch_can_complete_worker_popped_request();
     network_failure_classification_is_specific();
     image_decode_requires_capability_and_returns_surface_handle();
     image_decode_enforces_surface_budgets();
     image_decode_can_complete_worker_popped_request();
+    image_decode_stale_worker_pending_is_collectable_after_app_switch();
     image_surface_cache_requests_resolves_and_releases_surfaces();
     image_surface_cache_records_failed_decodes_without_retry_loop();
     image_surface_cache_keeps_transient_budget_rejections_retryable();
@@ -1063,6 +1120,7 @@ int main() {
     image_surface_cache_drops_stale_ready_entries_during_eviction();
     audio_command_mock_opens_controls_and_closes_streams();
     audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup();
+    audio_command_stale_worker_pending_is_collectable_after_app_switch();
     audio_command_mock_reports_invalid_handle_at_submit_time();
     kv_storage_is_app_private_and_async();
     service_records_collect_handles_released_by_lifecycle();

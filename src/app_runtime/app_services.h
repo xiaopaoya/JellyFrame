@@ -97,6 +97,7 @@ public:
     const NetworkFetchRecord* response(std::uint32_t handle) const;
     bool release_response(AppRuntimeHost& host, std::uint32_t handle);
     std::size_t collect_released_responses(const AppRuntimeHost& host);
+    std::size_t collect_stale_pending_fetches(const AppRuntimeHost& host);
     void clear();
 
 private:
@@ -208,6 +209,7 @@ public:
     const AppDecodedSurfaceRecord* surface(std::uint32_t handle) const;
     bool release_surface(AppRuntimeHost& host, std::uint32_t handle);
     std::size_t collect_released_surfaces(const AppRuntimeHost& host);
+    std::size_t collect_stale_pending_decodes(const AppRuntimeHost& host);
     void clear();
 
 private:
@@ -378,6 +380,7 @@ public:
     bool release_stream(AppRuntimeHost& host, std::uint32_t audio_handle);
     std::size_t release_app_streams(AppRuntimeHost& host, std::uint32_t app_instance_id);
     std::size_t collect_released_streams(const AppRuntimeHost& host);
+    std::size_t collect_stale_pending_commands(const AppRuntimeHost& host);
     void clear();
 
 private:

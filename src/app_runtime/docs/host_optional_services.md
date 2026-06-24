@@ -48,6 +48,15 @@ networking, filesystems, codecs, audio devices or flash; product hosts should
 replace their worker implementation while keeping the same request/completion/
 handle semantics.
 
+Network, image, audio, sensor and location mocks also expose stale-pending
+collection hooks for lifecycle boundaries. After an app switch, exit or crash,
+service-side pending records whose `app_instance_id` no longer matches
+`AppRuntimeHost::current_app_instance_id()` should be dropped. This covers
+requests already popped by a worker before teardown: they are no longer visible
+in the request queue, but they still must not allocate handles or call back into
+a later app instance. Storage uses its own flush/drop policy and should not be
+handled as generic pending cleanup.
+
 The same files also provide the first manifest/profile gate:
 `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
 `app_service_policies_for_app(...)`. A manifest request such as
@@ -305,6 +314,13 @@ branches or one cooperative background loop. The important parts are:
   shape for RTOS ports: workers post small completions, the UI frame boundary
   consumes them and stale or released handles are collected by service
   lifecycle hooks.
+- Lifecycle hooks should collect both already-released result records and
+  popped-but-unfinished pending records. The reference mocks provide
+  `collect_stale_pending_fetches(...)`,
+  `collect_stale_pending_decodes(...)`,
+  `collect_stale_pending_commands(...)`,
+  `collect_stale_pending_samples(...)` and
+  `collect_stale_pending_snapshots(...)`.
 - The Win32 shell frame-capture output now reports `host_completion_*`,
   `system_event_*`, `frame_policy_*` and `service_activity` summary counters;
   use those fields as a reference for port log shape.
@@ -359,6 +375,9 @@ Current V0 helper:
   `AppRuntimeHost`, the mock can call `collect_released_surfaces(...)` to drop
   stale service-side records. Real services should do the same in lifecycle
   hooks.
+- If an image worker popped a request before app teardown, call
+  `collect_stale_pending_decodes(...)` so the old pending decode does not hold
+  the pending-decode budget or later allocate a stale surface.
 - Render core provides `ImageHandleResolver`, image display commands and
   `ImagePainter`. A host can map `<img src>` to decoded surface handles during
   layer-tree construction and paint them through the painter.
@@ -467,6 +486,9 @@ Rules:
 - App teardown releases host handles; service implementations should also drop
   stale stream records through their own lifecycle hook, as the mock does with
   `collect_released_streams(...)`.
+- If an audio worker has already popped an `AudioCommand` when the app is torn
+  down, call `collect_stale_pending_commands(...)`; old commands must complete
+  as cancelled if they return later.
 - `classify_app_audio_failure(...)` / `app_audio_failure_detail(...)` classify
   request rejection and completion failure into stable diagnostics:
   `capability-denied`, `invalid-source`, `source-not-found`, `invalid-handle`,
@@ -525,6 +547,9 @@ Rules:
 - App switch, exit and crash recovery release host handles. Real services
   should also collect stale records, matching the mock
   `collect_released_samples(...)` / `collect_released_snapshots(...)` paths.
+- Service hooks should also drop popped-but-unfinished requests for inactive
+  app instances, matching `collect_stale_pending_samples(...)` /
+  `collect_stale_pending_snapshots(...)`.
 - Low-power and screen-off behavior is a product policy. The conservative
   default is to stop background sensor sampling. Products that need step count,
   heart-rate or location in the background should continue only when manifest
@@ -697,6 +722,9 @@ Rules:
 - If app switch/crash teardown already released the response handle through
   `AppRuntimeHost`, the mock can call `collect_released_responses(...)` to drop
   stale response records. Real services should do the same in lifecycle hooks.
+- If a network worker already popped a fetch before teardown, call
+  `collect_stale_pending_fetches(...)`; the old worker completion should then be
+  treated as cancelled.
 - `classify_app_network_failure(...)` / `app_network_failure_detail(...)`
   classify request rejection and completion failure into stable diagnostics:
   `capability-denied`, `invalid-url`, `resource-not-found`, `offline`,

@@ -29,6 +29,19 @@ typename std::vector<T>::iterator find_job(std::vector<T>& items, std::uint32_t 
     });
 }
 
+template <typename T>
+std::size_t collect_stale_pending_for_current_app(std::vector<T>& items, const AppRuntimeHost& host) {
+    const std::uint32_t current_app_instance_id = host.current_app_instance_id();
+    const auto old_size = items.size();
+    items.erase(std::remove_if(items.begin(),
+                               items.end(),
+                               [current_app_instance_id](const T& item) {
+                                   return item.app_instance_id != current_app_instance_id;
+                               }),
+                items.end());
+    return old_size - items.size();
+}
+
 bool valid_location(const AppLocationSnapshotFixture& fixture) {
     return fixture.latitude >= -90.0 && fixture.latitude <= 90.0 &&
         fixture.longitude >= -180.0 && fixture.longitude <= 180.0;
@@ -325,6 +338,10 @@ std::size_t AppSensorSampleMock::collect_released_samples(const AppRuntimeHost& 
     return old_size - records_.size();
 }
 
+std::size_t AppSensorSampleMock::collect_stale_pending_samples(const AppRuntimeHost& host) {
+    return collect_stale_pending_for_current_app(pending_, host);
+}
+
 void AppSensorSampleMock::clear() {
     fixtures_.clear();
     pending_.clear();
@@ -497,6 +514,10 @@ std::size_t AppLocationSnapshotMock::collect_released_snapshots(const AppRuntime
                                   }),
                    records_.end());
     return old_size - records_.size();
+}
+
+std::size_t AppLocationSnapshotMock::collect_stale_pending_snapshots(const AppRuntimeHost& host) {
+    return collect_stale_pending_for_current_app(pending_, host);
 }
 
 void AppLocationSnapshotMock::clear() {

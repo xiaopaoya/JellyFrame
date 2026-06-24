@@ -181,6 +181,25 @@ void sensor_samples_follow_app_instance_lifetime() {
     check(sensors.sample(handle) == nullptr, "sensor stale sample record removed");
 }
 
+void sensor_stale_worker_pending_is_collectable_after_app_switch() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.sensor-old", AppRole::App);
+    AppSensorSampleMock sensors(AppSensorSamplePolicy{true, false, false, false, 1});
+    check(sensors.add_fixture(AppSensorSampleFixture{AppSensorKind::Accelerometer, 100}),
+          "sensor stale fixture accepted");
+    check(sensors.submit_sample(host, AppSensorKind::Accelerometer).accepted(), "sensor stale submit accepted");
+
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::SensorSample, request), "sensor stale worker pop");
+    host.launch("org.example.sensor-new", AppRole::App);
+    check(sensors.collect_stale_pending_samples(host) == 1, "sensor stale pending collected");
+
+    const HostServiceCompletion old_completion = sensors.complete_request(host, request);
+    check(old_completion.status == HostServiceStatus::Cancelled, "sensor stale worker completion cancelled");
+    check(sensors.submit_sample(host, AppSensorKind::Accelerometer).accepted(),
+          "sensor current app submit accepted after cleanup");
+}
+
 void location_snapshot_requires_capability_and_returns_handle() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.map", AppRole::App);
@@ -246,6 +265,24 @@ void location_snapshot_reports_missing_data_and_budget() {
     check(location.release_snapshot(host, accepted.front().handle), "location budget release");
 }
 
+void location_stale_worker_pending_is_collectable_after_app_switch() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.location-old", AppRole::App);
+    AppLocationSnapshotMock location(AppLocationSnapshotPolicy{true, 1});
+    check(location.set_fixture(AppLocationSnapshotFixture{100, 30.0, 120.0}),
+          "location stale fixture accepted");
+    check(location.submit_position(host).accepted(), "location stale submit accepted");
+
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::LocationSnapshot, request), "location stale worker pop");
+    host.launch("org.example.location-new", AppRole::App);
+    check(location.collect_stale_pending_snapshots(host) == 1, "location stale pending collected");
+
+    const HostServiceCompletion old_completion = location.complete_request(host, request);
+    check(old_completion.status == HostServiceStatus::Cancelled, "location stale worker completion cancelled");
+    check(location.submit_position(host).accepted(), "location current app submit accepted after cleanup");
+}
+
 void device_workers_do_not_consume_other_service_requests() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.mixed-device", AppRole::App);
@@ -303,8 +340,10 @@ int main() {
     sensor_sample_requires_capability_and_returns_handle();
     sensor_sample_reports_missing_data_and_record_budget();
     sensor_samples_follow_app_instance_lifetime();
+    sensor_stale_worker_pending_is_collectable_after_app_switch();
     location_snapshot_requires_capability_and_returns_handle();
     location_snapshot_reports_missing_data_and_budget();
+    location_stale_worker_pending_is_collectable_after_app_switch();
     device_workers_do_not_consume_other_service_requests();
     device_failure_names_are_stable();
     return 0;

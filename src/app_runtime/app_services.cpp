@@ -27,6 +27,19 @@ typename std::vector<T>::iterator find_job(std::vector<T>& items, std::uint32_t 
     });
 }
 
+template <typename T>
+std::size_t collect_stale_pending_for_current_app(std::vector<T>& items, const AppRuntimeHost& host) {
+    const std::uint32_t current_app_instance_id = host.current_app_instance_id();
+    const auto old_size = items.size();
+    items.erase(std::remove_if(items.begin(),
+                               items.end(),
+                               [current_app_instance_id](const T& item) {
+                                   return item.app_instance_id != current_app_instance_id;
+                               }),
+                items.end());
+    return old_size - items.size();
+}
+
 constexpr std::uint32_t kServiceErrorNotFound = 404;
 constexpr std::uint32_t kServiceErrorPayloadTooLarge = 413;
 constexpr std::uint32_t kServiceErrorBudgetExceeded = 507;
@@ -540,6 +553,10 @@ std::size_t NetworkFetchMock::collect_released_responses(const AppRuntimeHost& h
     return old_size - records_.size();
 }
 
+std::size_t NetworkFetchMock::collect_stale_pending_fetches(const AppRuntimeHost& host) {
+    return collect_stale_pending_for_current_app(pending_, host);
+}
+
 void NetworkFetchMock::clear() {
     fixtures_.clear();
     pending_.clear();
@@ -988,6 +1005,10 @@ std::size_t ImageDecodeMock::collect_released_surfaces(const AppRuntimeHost& hos
     return old_size - records_.size();
 }
 
+std::size_t ImageDecodeMock::collect_stale_pending_decodes(const AppRuntimeHost& host) {
+    return collect_stale_pending_for_current_app(pending_, host);
+}
+
 void ImageDecodeMock::clear() {
     fixtures_.clear();
     pending_.clear();
@@ -1320,6 +1341,10 @@ std::size_t AudioCommandMock::collect_released_streams(const AppRuntimeHost& hos
                                   }),
                    streams_.end());
     return old_size - streams_.size();
+}
+
+std::size_t AudioCommandMock::collect_stale_pending_commands(const AppRuntimeHost& host) {
+    return collect_stale_pending_for_current_app(pending_, host);
 }
 
 void AudioCommandMock::clear() {

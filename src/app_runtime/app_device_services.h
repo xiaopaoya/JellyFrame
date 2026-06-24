@@ -112,6 +112,7 @@ public:
     bool release_sample(AppRuntimeHost& host, std::uint32_t handle);
     std::size_t release_app_samples(AppRuntimeHost& host, std::uint32_t app_instance_id);
     std::size_t collect_released_samples(const AppRuntimeHost& host);
+    std::size_t collect_stale_pending_samples(const AppRuntimeHost& host);
     void clear();
 
 private:
@@ -146,6 +147,7 @@ public:
     bool release_snapshot(AppRuntimeHost& host, std::uint32_t handle);
     std::size_t release_app_snapshots(AppRuntimeHost& host, std::uint32_t app_instance_id);
     std::size_t collect_released_snapshots(const AppRuntimeHost& host);
+    std::size_t collect_stale_pending_snapshots(const AppRuntimeHost& host);
     void clear();
 
 private:
