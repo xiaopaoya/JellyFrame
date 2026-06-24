@@ -529,6 +529,17 @@ bool NetworkFetchMock::release_response(AppRuntimeHost& host, std::uint32_t hand
     return host.handles().release(handle);
 }
 
+std::size_t NetworkFetchMock::collect_released_responses(const AppRuntimeHost& host) {
+    const auto old_size = records_.size();
+    records_.erase(std::remove_if(records_.begin(),
+                                  records_.end(),
+                                  [&host](const NetworkFetchRecord& record) {
+                                      return host.handles().lookup(record.handle) == nullptr;
+                                  }),
+                   records_.end());
+    return old_size - records_.size();
+}
+
 void NetworkFetchMock::clear() {
     fixtures_.clear();
     pending_.clear();
@@ -964,6 +975,17 @@ bool ImageDecodeMock::release_surface(AppRuntimeHost& host, std::uint32_t handle
     }
     records_.erase(found);
     return host.handles().release(handle);
+}
+
+std::size_t ImageDecodeMock::collect_released_surfaces(const AppRuntimeHost& host) {
+    const auto old_size = records_.size();
+    records_.erase(std::remove_if(records_.begin(),
+                                  records_.end(),
+                                  [&host](const AppDecodedSurfaceRecord& record) {
+                                      return host.handles().lookup(record.handle) == nullptr;
+                                  }),
+                   records_.end());
+    return old_size - records_.size();
 }
 
 void ImageDecodeMock::clear() {
@@ -1907,6 +1929,17 @@ bool AppPrivateKvStorageMock::release_value(AppRuntimeHost& host, std::uint32_t 
     }
     records_.erase(found);
     return host.handles().release(handle);
+}
+
+std::size_t AppPrivateKvStorageMock::collect_released_values(const AppRuntimeHost& host) {
+    const auto old_size = records_.size();
+    records_.erase(std::remove_if(records_.begin(),
+                                  records_.end(),
+                                  [&host](const AppPrivateKvRecord& record) {
+                                      return host.handles().lookup(record.handle) == nullptr;
+                                  }),
+                   records_.end());
+    return old_size - records_.size();
 }
 
 AppPrivateKvFlushResult AppPrivateKvStorageMock::flush_pending(AppRuntimeHost& host, std::size_t max_ops) {

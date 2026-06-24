@@ -836,6 +836,62 @@ void kv_storage_is_app_private_and_async() {
     check(accepted.front().handle == 0, "kv private miss has no handle");
 }
 
+void service_records_collect_handles_released_by_lifecycle() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.resources", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 1});
+    AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 4, 96});
+    check(network.add_fixture(NetworkFetchFixture{"/data", 200, "application/json", "{}"}),
+          "resource cleanup network fixture");
+    check(images.add_fixture(ImageDecodeFixture{"/icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "resource cleanup image fixture");
+
+    check(storage.submit_set(host, "theme", "dark").accepted(), "resource cleanup storage set submit");
+    check(storage.complete_next(host), "resource cleanup storage set complete");
+    std::vector<HostServiceCompletion> accepted = pump(host);
+    check(accepted.size() == 1 && accepted.front().status == HostServiceStatus::Completed,
+          "resource cleanup storage set completion");
+
+    check(network.submit_fetch(host, "/data").accepted(), "resource cleanup network submit");
+    check(images.submit_decode(host, "/icon").accepted(), "resource cleanup image submit");
+    check(network.complete_next(host), "resource cleanup network complete");
+    check(images.complete_next(host), "resource cleanup image complete");
+    accepted = pump(host);
+    check(accepted.size() == 2, "resource cleanup first handle batch");
+
+    std::uint32_t network_handle = 0;
+    std::uint32_t image_handle = 0;
+    for (const HostServiceCompletion& completion : accepted) {
+        if (completion.kind == HostServiceJobKind::NetworkFetch) {
+            network_handle = completion.handle;
+        } else if (completion.kind == HostServiceJobKind::ImageDecode) {
+            image_handle = completion.handle;
+        }
+    }
+    check(network_handle != 0, "resource cleanup network handle");
+    check(image_handle != 0, "resource cleanup image handle");
+
+    check(storage.submit_get(host, "theme").accepted(), "resource cleanup storage get submit");
+    check(storage.complete_next(host), "resource cleanup storage get complete");
+    accepted = pump(host);
+    check(accepted.size() == 1, "resource cleanup storage get batch");
+    const std::uint32_t storage_handle = accepted.front().handle;
+    check(storage_handle != 0, "resource cleanup storage handle");
+
+    host.launch("org.example.next", AppRole::App);
+    check(host.handles().lookup(network_handle) == nullptr, "resource cleanup network handle released by host");
+    check(host.handles().lookup(image_handle) == nullptr, "resource cleanup image handle released by host");
+    check(host.handles().lookup(storage_handle) == nullptr, "resource cleanup storage handle released by host");
+
+    check(network.collect_released_responses(host) == 1, "resource cleanup collects network record");
+    check(images.collect_released_surfaces(host) == 1, "resource cleanup collects image record");
+    check(storage.collect_released_values(host) == 1, "resource cleanup collects storage record");
+    check(network.response(network_handle) == nullptr, "resource cleanup network record removed");
+    check(images.surface(image_handle) == nullptr, "resource cleanup image record removed");
+    check(storage.value(storage_handle) == nullptr, "resource cleanup storage record removed");
+}
+
 void kv_storage_enforces_budgets() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.settings", AppRole::App);
@@ -1009,6 +1065,7 @@ int main() {
     audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup();
     audio_command_mock_reports_invalid_handle_at_submit_time();
     kv_storage_is_app_private_and_async();
+    service_records_collect_handles_released_by_lifecycle();
     kv_storage_enforces_budgets();
     storage_failure_classification_is_specific();
     local_storage_shadow_follows_web_storage_subset();

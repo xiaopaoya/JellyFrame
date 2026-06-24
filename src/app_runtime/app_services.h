@@ -96,6 +96,7 @@ public:
     bool complete_next(AppRuntimeHost& host);
     const NetworkFetchRecord* response(std::uint32_t handle) const;
     bool release_response(AppRuntimeHost& host, std::uint32_t handle);
+    std::size_t collect_released_responses(const AppRuntimeHost& host);
     void clear();
 
 private:
@@ -206,6 +207,7 @@ public:
     bool complete_next(AppRuntimeHost& host);
     const AppDecodedSurfaceRecord* surface(std::uint32_t handle) const;
     bool release_surface(AppRuntimeHost& host, std::uint32_t handle);
+    std::size_t collect_released_surfaces(const AppRuntimeHost& host);
     void clear();
 
 private:
@@ -591,6 +593,7 @@ public:
     bool complete_next(AppRuntimeHost& host);
     const AppPrivateKvRecord* value(std::uint32_t handle) const;
     bool release_value(AppRuntimeHost& host, std::uint32_t handle);
+    std::size_t collect_released_values(const AppRuntimeHost& host);
     AppPrivateKvFlushResult flush_pending(AppRuntimeHost& host, std::size_t max_ops = 0);
     std::size_t pending_count() const;
     std::size_t pending_count_app_instance(std::uint32_t app_instance_id) const;

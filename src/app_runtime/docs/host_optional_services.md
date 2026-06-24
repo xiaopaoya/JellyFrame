@@ -347,6 +347,10 @@ Current V0 helper:
   optional raw pixels.
 - `release_surface(...)` must be called by the UI/main task when a surface is no
   longer referenced so the record and host handle are released.
+- If app switch/crash teardown already released the surface handle through
+  `AppRuntimeHost`, the mock can call `collect_released_surfaces(...)` to drop
+  stale service-side records. Real services should do the same in lifecycle
+  hooks.
 - Render core provides `ImageHandleResolver`, image display commands and
   `ImagePainter`. A host can map `<img src>` to decoded surface handles during
   layer-tree construction and paint them through the painter.
@@ -674,6 +678,9 @@ Rules:
 - TLS, DNS, retry and cache policy belong to the host.
 - Response buffers should not become long-lived large JavaScript objects; JS
   bindings should copy small data or expose bounded reads.
+- If app switch/crash teardown already released the response handle through
+  `AppRuntimeHost`, the mock can call `collect_released_responses(...)` to drop
+  stale response records. Real services should do the same in lifecycle hooks.
 - `classify_app_network_failure(...)` / `app_network_failure_detail(...)`
   classify request rejection and completion failure into stable diagnostics:
   `capability-denied`, `invalid-url`, `resource-not-found`, `offline`,
@@ -700,6 +707,9 @@ host workers that have already popped a `StorageKv` request through
 `pump_app_host_service_worker(...)`; `complete_next(...)` remains the compact
 single-call helper for tests or cooperative loops that do not use the generic
 worker pump.
+If app switch/crash teardown already released a `StorageValue` handle through
+`AppRuntimeHost`, the mock can call `collect_released_values(...)` to drop stale
+value records. Real storage workers should do the same in lifecycle hooks.
 
 Policy gate: `policies.storage.enabled` is true only when the app manifest
 requested `storage.kv` and the host profile supplies an enabled
