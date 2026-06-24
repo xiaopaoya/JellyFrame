@@ -370,6 +370,7 @@ public:
     AppServiceSubmitResult submit_set_volume(AppRuntimeHost& host,
                                              std::uint32_t audio_handle,
                                              std::uint8_t volume);
+    HostServiceCompletion complete_request(AppRuntimeHost& host, const HostServiceRequest& request);
     bool complete_next(AppRuntimeHost& host);
     bool post_ended(AppRuntimeHost& host, std::uint32_t audio_handle);
     bool post_error(AppRuntimeHost& host, std::uint32_t audio_handle, std::uint32_t error_code);

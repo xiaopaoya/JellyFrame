@@ -1152,9 +1152,14 @@ bool AudioCommandMock::complete_next(AppRuntimeHost& host) {
     if (!host.pop_worker_request(HostServiceJobKind::AudioCommand, request)) {
         return false;
     }
+    return host.push_completion(complete_request(host, request));
+}
+
+HostServiceCompletion AudioCommandMock::complete_request(AppRuntimeHost& host,
+                                                         const HostServiceRequest& request) {
     const auto pending = find_job(pending_, request.job_id);
     if (pending == pending_.end()) {
-        return host.push_completion(make_cancelled_completion(request));
+        return make_cancelled_completion(request);
     }
 
     HostServiceStatus status = pending->status;
@@ -1204,12 +1209,15 @@ bool AudioCommandMock::complete_next(AppRuntimeHost& host) {
                 state = AudioStreamState::Stopped;
                 release_stream(host, handle);
                 pending_.erase(pending);
-                return push_state_completion(host,
-                                             request.job_id,
-                                             request.app_instance_id,
-                                             HostServiceStatus::Completed,
-                                             handle,
-                                             state);
+                return HostServiceCompletion{
+                    request.job_id,
+                    HostServiceJobKind::AudioCommand,
+                    HostServiceStatus::Completed,
+                    request.app_instance_id,
+                    handle,
+                    0,
+                    static_cast<std::uint32_t>(state),
+                };
             case AudioCommandKind::Open:
                 break;
             }
@@ -1217,9 +1225,17 @@ bool AudioCommandMock::complete_next(AppRuntimeHost& host) {
         }
     }
 
-    const bool pushed = push_state_completion(host, request.job_id, request.app_instance_id, status, handle, state, error_code);
+    HostServiceCompletion completion{
+        request.job_id,
+        HostServiceJobKind::AudioCommand,
+        status,
+        request.app_instance_id,
+        handle,
+        error_code,
+        static_cast<std::uint32_t>(state),
+    };
     pending_.erase(pending);
-    return pushed;
+    return completion;
 }
 
 bool AudioCommandMock::post_ended(AppRuntimeHost& host, std::uint32_t audio_handle) {

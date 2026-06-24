@@ -278,11 +278,12 @@ allocation:
 AppHostServiceWorkerSlot workers[] = {
     { HostServiceJobKind::NetworkFetch, 1, &network_worker },
     { HostServiceJobKind::StorageKv, 1, &storage_worker },
+    { HostServiceJobKind::ImageDecode, 1, &image_worker },
     { HostServiceJobKind::AudioCommand, 1, &audio_worker },
 };
 
 AppHostServiceWorkerGroupPumpResult pumped =
-    pump_app_host_service_workers(host, workers, 3);
+    pump_app_host_service_workers(host, workers, 4);
 ```
 
 The group helper is only a scheduler convenience. It does not create threads,
@@ -297,6 +298,10 @@ branches or one cooperative background loop. The important parts are:
   UI task has consumed a frame's completions.
 - Request-queue full, completion-queue full, timeout and capability-denied
   states should be visible in port logs or desktop diagnostics.
+- Regression coverage includes a bounded mixed-worker soak for network, storage,
+  image, audio and system events. This is the reference shape for RTOS ports:
+  workers post small completions, the UI frame boundary consumes them and stale
+  or released handles are collected by service lifecycle hooks.
 - The Win32 shell frame-capture output now reports `host_completion_*`,
   `system_event_*`, `frame_policy_*` and `service_activity` summary counters;
   use those fields as a reference for port log shape.
@@ -446,6 +451,10 @@ Rules:
 
 - Current platform-neutral code provides `AudioCommandMock` for request/
   completion/handle validation. It does not play audio.
+- Like the network, image and storage mocks, it exposes `complete_request(...)`
+  for host workers that have already popped an `AudioCommand` request through
+  `pump_app_host_service_worker(...)`; `complete_next(...)` remains the compact
+  helper for tests or cooperative loops that do not use the generic pump.
 - The Win32 shell provides `--audio-smoke` for local files or `--app`
   in-package `/audio/...` resources to validate the desktop host adapter. This
   remains a host validation path; it does not change the core or imply an MCU

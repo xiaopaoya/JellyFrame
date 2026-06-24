@@ -1,5 +1,6 @@
 #include "app_runtime/app_service_worker.h"
 #include "app_runtime/app_services.h"
+#include "app_runtime/system_events.h"
 
 #include <cassert>
 #include <string>
@@ -74,6 +75,52 @@ private:
     AppRuntimeHost& host_;
     AppPrivateKvStorageMock& storage_;
 };
+
+class ImageDecodeWorker final : public AppHostServiceWorker {
+public:
+    ImageDecodeWorker(AppRuntimeHost& host, ImageDecodeMock& images)
+        : host_(host), images_(images) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        ++calls;
+        return images_.complete_request(host_, request);
+    }
+
+    int calls = 0;
+
+private:
+    AppRuntimeHost& host_;
+    ImageDecodeMock& images_;
+};
+
+class AudioCommandWorker final : public AppHostServiceWorker {
+public:
+    AudioCommandWorker(AppRuntimeHost& host, AudioCommandMock& audio)
+        : host_(host), audio_(audio) {}
+
+    HostServiceCompletion process(const HostServiceRequest& request) override {
+        ++calls;
+        return audio_.complete_request(host_, request);
+    }
+
+    int calls = 0;
+
+private:
+    AppRuntimeHost& host_;
+    AudioCommandMock& audio_;
+};
+
+AppSystemStateSnapshot make_snapshot(std::uint64_t tick) {
+    AppSystemStateSnapshot snapshot;
+    snapshot.unix_time_ms = 1700000000000ULL + tick * 1000ULL;
+    snapshot.timezone_offset_minutes = 480;
+    snapshot.battery_percent = static_cast<std::uint8_t>(80 - (tick % 8));
+    snapshot.charging = (tick % 3) == 0;
+    snapshot.network_online = (tick % 2) == 0;
+    snapshot.screen_on = true;
+    snapshot.low_power_mode = (tick % 5) == 0;
+    return snapshot;
+}
 
 void worker_pump_processes_only_selected_service_kind() {
     AppRuntimeHost host = make_host();
@@ -395,6 +442,108 @@ void worker_group_pump_handles_real_network_and_storage_mocks_across_ticks() {
     assert(storage.pending_count() == 0);
 }
 
+void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
+    constexpr std::size_t kIterations = 20;
+    AppRuntimeHost host = make_host(kIterations * 4, 4);
+    host.launch("org.example.rtos-workers", AppRole::App);
+
+    NetworkFetchMock network(NetworkFetchPolicy{true, 64, 128});
+    assert(network.add_fixture(NetworkFetchFixture{"/data/status.json", 200, "application/json", "{\"ok\":true}"}));
+    AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, kIterations + 2, kIterations * 48});
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, kIterations});
+    assert(images.add_fixture(ImageDecodeFixture{"/img/icon.raw", 8, 8, 8, HostPixelFormat::Rgb565, {}}));
+    AudioCommandMock audio(AudioPlaybackPolicy{true, 128, 4});
+    assert(audio.add_source(AudioSourceFixture{"/audio/tone.wav", 1000}));
+    AppSystemEventQueue system_events(8, 3);
+
+    for (std::size_t index = 0; index < kIterations; ++index) {
+        assert(network.submit_fetch(host, "/data/status.json", 1000).accepted());
+        assert(storage.submit_set(host, "k" + std::to_string(index), "v").accepted());
+        assert(images.submit_decode(host, "/img/icon.raw", 1000).accepted());
+        assert(audio.submit_open(host, "/audio/tone.wav", 100, 1000).accepted());
+    }
+
+    NetworkFetchWorker network_worker(host, network);
+    StorageKvWorker storage_worker(host, storage);
+    ImageDecodeWorker image_worker(host, images);
+    AudioCommandWorker audio_worker(host, audio);
+    AppHostServiceWorkerSlot slots[] = {
+        AppHostServiceWorkerSlot{HostServiceJobKind::NetworkFetch, 1, &network_worker},
+        AppHostServiceWorkerSlot{HostServiceJobKind::StorageKv, 1, &storage_worker},
+        AppHostServiceWorkerSlot{HostServiceJobKind::ImageDecode, 1, &image_worker},
+        AppHostServiceWorkerSlot{HostServiceJobKind::AudioCommand, 1, &audio_worker},
+    };
+
+    AppFrameScratch scratch;
+    scratch.reserve_from_options(AppRuntimeHostOptions{kIterations * 4, 4, 8, 4096, 1});
+    std::vector<AppSystemEvent> accepted_events;
+    accepted_events.reserve(3);
+
+    std::size_t network_completions = 0;
+    std::size_t storage_completions = 0;
+    std::size_t image_completions = 0;
+    std::size_t audio_completions = 0;
+    std::size_t system_events_accepted = 0;
+    for (std::size_t tick = 0; tick < 128 && (network_completions < kIterations ||
+                                              storage_completions < kIterations ||
+                                              image_completions < kIterations ||
+                                              audio_completions < kIterations); ++tick) {
+        assert(system_events.try_push_current(host,
+                                              AppSystemEventKind::NetworkStatusChanged,
+                                              make_snapshot(tick)) == AppSystemEventPushStatus::Accepted);
+
+        const AppHostServiceWorkerGroupPumpResult result = pump_app_host_service_workers(host, slots, 4);
+        assert(result.requests_processed <= 4);
+        assert(result.completions_posted == result.requests_processed);
+        assert(!result.completion_queue_full);
+
+        const AppCompletionPumpResult pumped = host.pump_frame_completions(scratch);
+        assert(pumped.dropped_stale == 0);
+        for (const HostServiceCompletion& completion : scratch.accepted_completions) {
+            assert(completion.status == HostServiceStatus::Completed);
+            if (completion.kind == HostServiceJobKind::NetworkFetch) {
+                ++network_completions;
+                assert(completion.handle != 0);
+                assert(network.release_response(host, completion.handle));
+            } else if (completion.kind == HostServiceJobKind::StorageKv) {
+                ++storage_completions;
+            } else if (completion.kind == HostServiceJobKind::ImageDecode) {
+                ++image_completions;
+                assert(completion.handle != 0);
+                assert(images.release_surface(host, completion.handle));
+            } else if (completion.kind == HostServiceJobKind::AudioCommand) {
+                ++audio_completions;
+                assert(completion.handle != 0);
+                assert(audio.release_stream(host, completion.handle));
+            } else {
+                assert(false && "unexpected mixed worker completion kind");
+            }
+        }
+        network.collect_released_responses(host);
+        images.collect_released_surfaces(host);
+        audio.collect_released_streams(host);
+
+        const AppSystemEventPumpResult event_result = system_events.pump_current(host, accepted_events);
+        assert(event_result.stale == 0);
+        system_events_accepted += event_result.accepted;
+        accepted_events.clear();
+    }
+
+    assert(host.requests().empty());
+    assert(host.completions().empty());
+    assert(system_events.empty());
+    assert(host.handles().active_count() == 0);
+    assert(network_worker.calls == static_cast<int>(kIterations));
+    assert(storage_worker.calls == static_cast<int>(kIterations));
+    assert(image_worker.calls == static_cast<int>(kIterations));
+    assert(audio_worker.calls == static_cast<int>(kIterations));
+    assert(network_completions == kIterations);
+    assert(storage_completions == kIterations);
+    assert(image_completions == kIterations);
+    assert(audio_completions == kIterations);
+    assert(system_events_accepted >= kIterations);
+}
+
 } // namespace
 
 int main() {
@@ -407,5 +556,6 @@ int main() {
     worker_group_pump_stops_before_next_worker_when_completion_queue_is_full();
     worker_group_pump_ignores_empty_slots_without_allocation_or_side_effects();
     worker_group_pump_handles_real_network_and_storage_mocks_across_ticks();
+    worker_group_pump_handles_mixed_media_and_system_events_across_ticks();
     return 0;
 }
