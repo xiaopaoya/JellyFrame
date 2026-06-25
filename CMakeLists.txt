@@ -82,6 +82,7 @@ else()
 endif()
 
 add_library(jellyframe_app_runtime
+    src/app_runtime/app_budget.cpp
     src/app_runtime/app_capability_broker.cpp
     src/app_runtime/app_device_services.cpp
     src/app_runtime/app_font_set.cpp

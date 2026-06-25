@@ -6,6 +6,19 @@
 
 头文件：`src/app_runtime/app_load_telemetry.h`
 
+相关预算快照头文件：`src/app_runtime/app_budget.h`
+
+`AppBudgetSnapshot` 是配套的计数视图。它收集当前 app instance id、role/state、
+service request/completion 队列、host handle、handle bytes、app font 数量、
+system-event 队列深度、frame-loop callback 上限、animation 数量，以及宿主能提供时的
+script timer/listener/detached-node 计数。DOM/CSS/render/layout/layer、display command、
+dirty rect、framebuffer pixels、resource bytes 和 script watchdog 等静态 `HostBudgets`
+上限也放在同一个 snapshot 中。
+
+这个 snapshot 刻意保持只读、只存计数。它不遍历 DOM、不检查 framebuffer 像素，也不分配页面级
+存储。桌面壳可以在每次 capture 时打印；MCU port 可以把它用于串口 diagnostics、watchdog
+策略或 crash report。
+
 ## 输入
 
 `AppLoadTelemetryInput` 复用 JellyFrame 已有契约：

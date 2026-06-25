@@ -15,9 +15,10 @@
   `--audio-smoke local.wav`，或 `--app package --audio-smoke /audio/tone.wav`。
   这只验证 package resource 到桌面宿主 adapter 的交接，不代表嵌入式端内置 audio codec，
   也不代表已经暴露公开 JavaScript 音频 API。
-- 隐藏逐帧 capture 会输出 host completion、system event、frame policy 和 service activity
-  统计。可以用这些计数验证 `backgroundServices`、息屏和低功耗策略是否按预期暂停或保留
-  network/audio/sensor/location 工作，而不需要让 render core 了解硬件。
+- 隐藏逐帧 capture 会输出 host completion、system event、frame policy、service activity、
+  per-app budget snapshot 和 scroll blit 统计。可以用这些计数验证 `backgroundServices`、
+  息屏和低功耗策略是否按预期暂停或保留 network/audio/sensor/location 工作，而不需要让
+  render core 了解硬件。
 - debug image decode 与 debug network fetch 通过 `pump_app_host_service_workers(...)`
   泵送，与 MCU port 推荐的 request/completion 边界保持一致。
 
@@ -30,6 +31,7 @@ frames 30
 step-ms 33
 viewport 300 300
 event 8 click 150 260
+event 10 wheel 150 160 -120
 animation-fps 30
 animation-callbacks 4
 script-watchdog-checks 2048

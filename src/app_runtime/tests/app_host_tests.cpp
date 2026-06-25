@@ -1,4 +1,6 @@
 #include "app_runtime/app_host.h"
+#include "app_runtime/app_budget.h"
+#include "app_runtime/system_events.h"
 #include "render_core/software_renderer.h"
 
 #include <cassert>
@@ -349,6 +351,155 @@ void options_follow_host_capabilities() {
     assert(host.max_completion_events_per_frame() == 3);
 }
 
+void budget_snapshot_reports_runtime_usage_and_caps() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.budget", AppRole::App);
+    const auto request = host.submit_current(HostServiceJobKind::NetworkFetch);
+    assert(request.accepted);
+    const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 128);
+    assert(handle != 0);
+    assert(host.push_completion(HostServiceCompletion{request.job_id,
+                                                      HostServiceJobKind::NetworkFetch,
+                                                      HostServiceStatus::Completed,
+                                                      app.id,
+                                                      handle,
+                                                      0,
+                                                      128}));
+    assert(host.attach_current_jffont_view(tiny_jffont_bytes().data(), tiny_jffont_bytes().size()).loaded());
+
+    AppSystemEventQueue system_events(3, 2);
+    AppSystemStateSnapshot snapshot;
+    assert(system_events.push_current(host, AppSystemEventKind::BatteryChanged, snapshot));
+
+    HostBudgets budgets;
+    budgets.max_timers = 7;
+    budgets.max_event_listeners = 11;
+    budgets.max_detached_dom_nodes = 5;
+    budgets.max_input_events_per_frame = 4;
+    budgets.max_timer_callbacks_per_frame = 3;
+    budgets.max_animation_callbacks_per_frame = 2;
+    budgets.max_active_animations = 9;
+    budgets.max_dom_nodes = 123;
+    budgets.max_framebuffer_pixels = 456;
+
+    FrameLoopPendingWork pending;
+    pending.pending_input_events = 2;
+    pending.pending_timer_callbacks = 1;
+    pending.pending_animation_callbacks = 1;
+
+    AppBudgetSnapshotInput input;
+    input.host_budgets = &budgets;
+    input.system_events = &system_events;
+    input.pending_work = &pending;
+    input.active_animations = 3;
+    input.script_timers = 4;
+    input.script_event_listeners = 6;
+    input.detached_dom_nodes = 1;
+
+    const AppBudgetSnapshot budget = collect_app_budget_snapshot(host, input);
+    assert(budget.app_instance_id == app.id);
+    assert(budget.role == AppRole::App);
+    assert(budget.state == AppLifecycleState::Foreground);
+    assert(budget.service_requests.used == 1);
+    assert(budget.service_requests.limit == 4);
+    assert(budget.service_completions.used == 1);
+    assert(budget.service_completions.limit == 4);
+    assert(budget.host_handles.used == 1);
+    assert(budget.host_handles.limit == 4);
+    assert(budget.host_handle_bytes.used == 128);
+    assert(budget.host_handle_bytes.limit == 4096);
+    assert(budget.app_fonts.used == 1);
+    assert(budget.app_fonts.limit == 2);
+    assert(budget.system_events.used == 1);
+    assert(budget.system_events.limit == 3);
+    assert(budget.input_events_per_frame.used == 2);
+    assert(budget.input_events_per_frame.limit == 4);
+    assert(budget.timer_callbacks_per_frame.used == 1);
+    assert(budget.timer_callbacks_per_frame.limit == 3);
+    assert(budget.animation_callbacks_per_frame.used == 1);
+    assert(budget.animation_callbacks_per_frame.limit == 2);
+    assert(budget.active_animations.used == 3);
+    assert(budget.active_animations.limit == 9);
+    assert(budget.script_timers.used == 4);
+    assert(budget.script_timers.limit == 7);
+    assert(budget.script_event_listeners.used == 6);
+    assert(budget.script_event_listeners.limit == 11);
+    assert(budget.detached_dom_nodes.used == 1);
+    assert(budget.detached_dom_nodes.limit == 5);
+    assert(budget.dom_nodes.limit == 123);
+    assert(budget.framebuffer_pixels.limit == 456);
+    assert(!app_budget_snapshot_has_exhausted_runtime_budget(budget));
+}
+
+void budget_snapshot_detects_exhausted_runtime_budget() {
+    AppRuntimeHost host(AppRuntimeHostOptions{1, 1, 1, 64, 1});
+    host.launch("org.example.exhausted", AppRole::App);
+    assert(host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
+
+    const AppBudgetSnapshot budget = collect_app_budget_snapshot(host);
+    assert(budget.service_requests.exhausted());
+    assert(app_budget_snapshot_has_exhausted_runtime_budget(budget));
+}
+
+void bad_app_teardown_leaves_next_app_clean_and_discards_stale_work() {
+    AppRuntimeHost host(AppRuntimeHostOptions{8, 4, 4, 512, 1});
+    AppSystemEventQueue system_events(8, 4);
+    const AppInstance bad = host.launch("org.example.bad", AppRole::App);
+    for (int i = 0; i < 3; ++i) {
+        assert(host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
+        assert(system_events.push_current(host, AppSystemEventKind::TimeChanged, AppSystemStateSnapshot{}));
+    }
+    const std::uint32_t bad_handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
+    assert(bad_handle != 0);
+    assert(host.push_completion(HostServiceCompletion{90,
+                                                      HostServiceJobKind::NetworkFetch,
+                                                      HostServiceStatus::Completed,
+                                                      bad.id,
+                                                      bad_handle,
+                                                      0,
+                                                      64}));
+
+    const AppTeardownResult teardown = host.terminate_current(AppTeardownReason::ScriptWatchdog);
+    assert(teardown.reason == AppTeardownReason::ScriptWatchdog);
+    assert(teardown.crashed);
+    assert(teardown.cancelled_requests == 3);
+    assert(teardown.discarded_completions == 1);
+    assert(teardown.released_handles == 1);
+    assert(system_events.discard_app_instance(bad.id) == 3);
+
+    const AppInstance shell = host.launch("org.jellyframe.system.launcher", AppRole::Launcher);
+    assert(shell.id != bad.id);
+    assert(host.requests().empty());
+    assert(host.completions().empty());
+    assert(host.handles().active_count() == 0);
+    assert(system_events.empty());
+
+    assert(host.push_completion(HostServiceCompletion{91,
+                                                      HostServiceJobKind::NetworkFetch,
+                                                      HostServiceStatus::Completed,
+                                                      bad.id,
+                                                      bad_handle,
+                                                      0,
+                                                      64}));
+    assert(system_events.push_current(host, AppSystemEventKind::BatteryChanged, AppSystemStateSnapshot{}));
+
+    AppFrameScratch scratch;
+    scratch.reserve_from_options(AppRuntimeHostOptions{8, 4, 4, 512, 1});
+    const AppCompletionPumpResult completion_pump = host.pump_frame_completions(scratch);
+    assert(completion_pump.consumed == 1);
+    assert(completion_pump.accepted == 0);
+    assert(completion_pump.stale == 1);
+    assert(completion_pump.released_stale_handles == 0);
+
+    std::vector<AppSystemEvent> accepted_events;
+    const AppSystemEventPumpResult event_pump = system_events.pump_current(host, accepted_events);
+    assert(event_pump.consumed == 1);
+    assert(event_pump.accepted == 1);
+    assert(event_pump.stale == 0);
+    assert(accepted_events.size() == 1);
+    assert(accepted_events.front().app_instance_id == shell.id);
+}
+
 } // namespace
 
 int main() {
@@ -362,5 +513,8 @@ int main() {
     frame_pump_limits_completions_and_filters_stale_instances();
     frame_scratch_pump_reuses_completion_storage();
     options_follow_host_capabilities();
+    budget_snapshot_reports_runtime_usage_and_caps();
+    budget_snapshot_detects_exhausted_runtime_budget();
+    bad_app_teardown_leaves_next_app_clean_and_discards_stale_work();
     return 0;
 }

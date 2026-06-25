@@ -3,6 +3,7 @@
 #endif
 
 #include "app_runtime/app_host.h"
+#include "app_runtime/app_budget.h"
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_frame_policy.h"
 #include "app_runtime/app_load_telemetry.h"
@@ -402,6 +403,7 @@ enum class ScriptedFrameEventKind {
     PointerDown,
     PointerUp,
     Click,
+    Wheel,
 };
 
 struct ScriptedFrameEvent {
@@ -409,6 +411,7 @@ struct ScriptedFrameEvent {
     ScriptedFrameEventKind kind = ScriptedFrameEventKind::PointerMove;
     int x = 0;
     int y = 0;
+    int delta_y = 0;
 };
 
 struct ParsedFrameEvent {
@@ -505,6 +508,12 @@ struct LoadTelemetryDebugCounters {
     int max_dirty_area_percent = 0;
 };
 
+struct ScrollDebugCounters {
+    std::size_t full_blits = 0;
+    std::size_t fast_blits = 0;
+    std::size_t copied_pixels = 0;
+};
+
 class NetworkFetchMockWorker final : public AppHostServiceWorker {
 public:
     NetworkFetchMockWorker(AppRuntimeHost& host, NetworkFetchMock& network)
@@ -577,6 +586,10 @@ void count_host_completion_kind(HostServiceDebugCounters& counters, HostServiceJ
         ++counters.other_completions;
         break;
     }
+}
+
+void print_budget_meter(std::ostream& output, const char* name, AppBudgetMeter meter) {
+    output << ' ' << name << '=' << meter.used << '/' << meter.limit;
 }
 
 AppBackgroundServicePolicy background_policy_from_manifest(const jellyframe_example::AppPackageManifest& manifest) {
@@ -1653,6 +1666,15 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
         } else {
             parsed.event.kind = ScriptedFrameEventKind::Click;
         }
+    } else if (kind == "wheel") {
+        if (fields.size() != 5) {
+            parsed.error = "wheel events require FRAME:wheel:x:y:delta";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::Wheel;
+        parsed.event.x = parse_int_unclamped(fields[2].c_str(), 0);
+        parsed.event.y = parse_int_unclamped(fields[3].c_str(), 0);
+        parsed.event.delta_y = parse_int_unclamped(fields[4].c_str(), 0);
     } else {
         parsed.error = "unknown frame event kind: " + fields[1];
         return parsed;
@@ -1669,6 +1691,9 @@ std::string event_spec_from_fields(const std::vector<std::string>& fields) {
     spec << fields[1] << ':' << fields[2];
     if (fields.size() >= 5) {
         spec << ':' << fields[3] << ':' << fields[4];
+    }
+    if (fields.size() >= 6) {
+        spec << ':' << fields[5];
     }
     return spec.str();
 }
@@ -1801,12 +1826,12 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
             std::string event_spec;
             if (fields.size() == 2) {
                 event_spec = fields[1];
-            } else if (fields.size() == 3 || fields.size() == 5) {
+            } else if (fields.size() == 3 || fields.size() == 5 || fields.size() == 6) {
                 event_spec = event_spec_from_fields(fields);
             } else {
                 std::ostringstream message;
                 message << path << ':' << line_number
-                        << ": event expects FRAME:kind[:x:y] or FRAME kind [x y]";
+                        << ": event expects FRAME:kind[:x:y[:delta]] or FRAME kind [x y [delta]]";
                 error = message.str();
                 return false;
             }
@@ -1853,9 +1878,9 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --script-watchdog-checks N     Override JS execution check budget.\n"
         << "  --script-watchdog-interval N   Override JS execution halt callback interval.\n"
         << "  --require-script-watchdog      Fail scripted startup if JerryScript cannot halt.\n"
-        << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y].\n"
+        << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y[:delta]].\n"
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
-        << "                                 pointer-up, network-online/offline,\n"
+        << "                                 pointer-up, wheel, network-online/offline,\n"
         << "                                 screen-visible/hidden, low-power-on/off.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
@@ -2567,6 +2592,27 @@ public:
                   << " pause_audio=" << frame_policy_counters_.pause_audio_frames
                   << " throttle_sensors=" << frame_policy_counters_.throttle_sensor_frames
                   << " throttle_location=" << frame_policy_counters_.throttle_location_frames << '\n'
+                  << "  scroll_blits full=" << scroll_counters_.full_blits
+                  << " fast=" << scroll_counters_.fast_blits
+                  << " copied_pixels=" << scroll_counters_.copied_pixels << '\n';
+        const AppBudgetSnapshot budget = current_app_budget_snapshot();
+        std::cout << "  app_budget instance=" << budget.app_instance_id
+                  << " role=" << app_role_name(budget.role)
+                  << " state=" << app_lifecycle_state_name(budget.state);
+        print_budget_meter(std::cout, "requests", budget.service_requests);
+        print_budget_meter(std::cout, "completions", budget.service_completions);
+        print_budget_meter(std::cout, "handles", budget.host_handles);
+        print_budget_meter(std::cout, "handle_bytes", budget.host_handle_bytes);
+        print_budget_meter(std::cout, "fonts", budget.app_fonts);
+        print_budget_meter(std::cout, "system_events", budget.system_events);
+        std::cout << '\n'
+                  << "  app_budget_script";
+        print_budget_meter(std::cout, "timers", budget.script_timers);
+        print_budget_meter(std::cout, "listeners", budget.script_event_listeners);
+        print_budget_meter(std::cout, "detached_nodes", budget.detached_dom_nodes);
+        print_budget_meter(std::cout, "animations", budget.active_animations);
+        std::cout << " watchdog_checks=" << budget.script_execution_checks
+                  << " watchdog_interval=" << budget.script_execution_check_interval << '\n'
                   << "  load_telemetry samples=" << load_telemetry_counters_.sampled_frames
                   << " sleep=" << load_telemetry_counters_.sleep_ok_frames
                   << " lowfreq=" << load_telemetry_counters_.low_frequency_frames
@@ -2627,6 +2673,7 @@ private:
     DisplayInvalidationResult last_display_invalidation_;
     DirtyRegionStatistics dirty_region_statistics_;
     FrameUpdateStatistics frame_update_statistics_;
+    ScrollDebugCounters scroll_counters_;
     std::size_t dirty_fallback_attempt_frames_ = 0;
     std::size_t dirty_fallback_attempt_rects_ = 0;
     int dirty_fallback_attempt_max_area_percent_ = 0;
@@ -2725,6 +2772,14 @@ private:
                 handle_pointer_down(0, pointer_lparam(event.x, event.y));
                 handle_pointer_up(MK_LBUTTON, pointer_lparam(event.x, event.y));
                 break;
+            case ScriptedFrameEventKind::Wheel:
+            {
+                POINT screen_point{event.x, event.y};
+                ClientToScreen(hwnd_, &screen_point);
+                handle_wheel(static_cast<WPARAM>(static_cast<WORD>(event.delta_y)) << 16,
+                             pointer_lparam(screen_point.x, screen_point.y));
+                break;
+            }
             }
         }
     }
@@ -2893,6 +2948,26 @@ private:
     FrameLoopOptions current_frame_loop_options() const {
         return apply_app_frame_policy(frame_loop_options_from_budgets(budgets_),
                                       current_frame_policy());
+    }
+
+    AppBudgetSnapshot current_app_budget_snapshot() const {
+        FrameLoopPendingWork pending;
+        pending.pending_animation_callbacks = animation_timeline_.empty() ? 0 : 1;
+        AppBudgetSnapshotInput input;
+        input.host_budgets = &budgets_;
+        input.system_events = &system_events_;
+        input.pending_work = &pending;
+        input.active_animations = animation_timeline_.active_count();
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr &&
+            script_runtime_instance_id_ == app_runtime_.current_app_instance_id()) {
+            const ScriptRuntimeStatistics script_stats = script_runtime_->statistics();
+            input.script_timers = script_stats.timer_count;
+            input.script_event_listeners = script_stats.event_listener_count;
+            input.detached_dom_nodes = script_stats.detached_nodes.root_count;
+        }
+#endif
+        return collect_app_budget_snapshot(app_runtime_, input);
     }
 
     void reset_image_services() {
@@ -3859,7 +3934,7 @@ private:
         if (scroll_y_ == previous) {
             return false;
         }
-        update_blit_pixels();
+        update_blit_pixels_after_scroll(previous);
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     }
@@ -3883,7 +3958,7 @@ private:
         if (scroll_y_ == previous) {
             return false;
         }
-        update_blit_pixels();
+        update_blit_pixels_after_scroll(previous);
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     }
@@ -3902,20 +3977,72 @@ private:
     }
 
     void update_blit_pixels() {
-        blit_pixels_.assign(static_cast<std::size_t>(viewport_width_) * static_cast<std::size_t>(viewport_height_),
-                            color_to_bgrx(page_background_));
+        const std::size_t target_size =
+            static_cast<std::size_t>(viewport_width_) * static_cast<std::size_t>(viewport_height_);
+        blit_pixels_.assign(target_size, color_to_bgrx(page_background_));
         if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
             return;
         }
         scroll_y_ = std::max(0, std::min(scroll_y_, max_scroll_y()));
         const int copy_width = std::min(viewport_width_, frame_buffer_.width);
         const int copy_height = std::min(viewport_height_, frame_buffer_.height - scroll_y_);
-        for (int y = 0; y < copy_height; ++y) {
+        copy_blit_rows_from_framebuffer(0, copy_height, copy_width);
+        ++scroll_counters_.full_blits;
+        scroll_counters_.copied_pixels +=
+            static_cast<std::size_t>(std::max(0, copy_width)) *
+            static_cast<std::size_t>(std::max(0, copy_height));
+    }
+
+    void copy_blit_rows_from_framebuffer(int start_row, int row_count, int copy_width) {
+        if (row_count <= 0 || copy_width <= 0 || blit_pixels_.empty()) {
+            return;
+        }
+        const std::uint32_t background = color_to_bgrx(page_background_);
+        for (int y = start_row; y < start_row + row_count; ++y) {
+            std::uint32_t* row =
+                blit_pixels_.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(viewport_width_);
+            std::fill(row, row + viewport_width_, background);
+            const int source_y = scroll_y_ + y;
+            if (source_y < 0 || source_y >= frame_buffer_.height) {
+                continue;
+            }
             for (int x = 0; x < copy_width; ++x) {
-                blit_pixels_[static_cast<std::size_t>(y * viewport_width_ + x)] =
-                    color_to_bgrx(frame_buffer_.pixel(x, scroll_y_ + y));
+                row[x] = color_to_bgrx(frame_buffer_.pixel(x, source_y));
             }
         }
+    }
+
+    void update_blit_pixels_after_scroll(int previous_scroll_y) {
+        const std::size_t target_size =
+            static_cast<std::size_t>(viewport_width_) * static_cast<std::size_t>(viewport_height_);
+        if (blit_pixels_.size() != target_size || frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+            update_blit_pixels();
+            return;
+        }
+        scroll_y_ = std::max(0, std::min(scroll_y_, max_scroll_y()));
+        const int delta = scroll_y_ - previous_scroll_y;
+        const int abs_delta = std::abs(delta);
+        const int copy_width = std::min(viewport_width_, frame_buffer_.width);
+        if (delta == 0 || abs_delta >= viewport_height_) {
+            update_blit_pixels();
+            return;
+        }
+        const int moved_rows = viewport_height_ - abs_delta;
+        if (delta > 0) {
+            std::move(blit_pixels_.begin() + static_cast<std::ptrdiff_t>(abs_delta * viewport_width_),
+                      blit_pixels_.begin() + static_cast<std::ptrdiff_t>(viewport_height_ * viewport_width_),
+                      blit_pixels_.begin());
+            copy_blit_rows_from_framebuffer(moved_rows, abs_delta, copy_width);
+        } else {
+            std::move_backward(blit_pixels_.begin(),
+                               blit_pixels_.begin() + static_cast<std::ptrdiff_t>(moved_rows * viewport_width_),
+                               blit_pixels_.end());
+            copy_blit_rows_from_framebuffer(0, abs_delta, copy_width);
+        }
+        ++scroll_counters_.fast_blits;
+        scroll_counters_.copied_pixels +=
+            static_cast<std::size_t>(std::max(0, copy_width)) *
+            static_cast<std::size_t>(abs_delta);
     }
 
     void paint() {

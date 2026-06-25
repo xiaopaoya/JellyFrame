@@ -76,6 +76,38 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(package_app.collect_audio_resource_warnings(manifest, resources), [])
 
+    def test_runtime_budget_estimate_reports_package_known_usage(self):
+        resources = [
+            {"size": 100},
+            {"size": 50},
+        ]
+        budgets = {
+            "maxResourceBytes": 128,
+            "maxDomNodes": 512,
+            "maxTimers": 4,
+            "maxEventListeners": 16,
+        }
+        font_diagnostics = {
+            "runtimeFontBudget": {
+                "maxAppFonts": 1,
+                "maxAppFontBytes": 64,
+                "maxAppFontGlyphs": 8,
+            },
+            "usableRuntimeFontCount": 1,
+            "runtimeFontBytes": 32,
+            "runtimeFontGlyphs": 4,
+        }
+
+        estimate = package_app.collect_runtime_budget_estimate(resources, budgets, font_diagnostics)
+
+        self.assertEqual(estimate["format"], "jellyframe.runtime-budget.estimate")
+        self.assertEqual(estimate["resources"], {"used": 150, "limit": 128, "exhausted": True})
+        self.assertEqual(estimate["domNodes"]["limit"], 512)
+        self.assertEqual(estimate["timers"]["limit"], 4)
+        self.assertEqual(estimate["eventListeners"]["limit"], 16)
+        self.assertEqual(estimate["appFonts"], {"used": 1, "limit": 1, "exhausted": True})
+        self.assertEqual(estimate["appFontBytes"], {"used": 32, "limit": 64, "exhausted": False})
+
     def test_service_intent_report_summarizes_manifest_capabilities(self):
         manifest = package_app.validate_manifest({
             "format": "jellyframe.app",

@@ -767,8 +767,12 @@ core.
 
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
-CRC32/SHA-256 checksums, service intent, local/remote reference diagnostics,
-package-resource warnings and `pipelineDiagnostics`. Pipeline diagnostics include the
+CRC32/SHA-256 checksums, service intent, `runtimeBudgetEstimate`,
+local/remote reference diagnostics, package-resource warnings and
+`pipelineDiagnostics`. `runtimeBudgetEstimate` is a package-preflight estimate:
+it reports package-known resource/font usage and manifest/target budget limits,
+while live queue/handle/timer/listener counters come from `AppBudgetSnapshot`
+in the host/runtime capture path. Pipeline diagnostics include the
 pseudo-browser format/version marker, output viewport, memory-oriented pipeline
 statistics, a severity summary and the concrete diagnostics emitted by parser,
 style, layout, layer and renderer code. Known unsupported/degraded features

@@ -652,8 +652,11 @@ request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这
 策略合成。核心不会执行真实网络或文件系统 I/O。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
-资源大小、CRC32/SHA-256 校验、service intent、local/remote reference 诊断、package-resource
-warnings 和 `pipelineDiagnostics`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、面向内存的管线统计、
+资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote
+reference 诊断、package-resource warnings 和 `pipelineDiagnostics`。`runtimeBudgetEstimate`
+是 package-preflight 估算：它报告打包阶段已知的 resource/font 用量和 manifest/target budget
+上限；真实运行时的 queue/handle/timer/listener 计数来自 host/runtime capture 路径中的
+`AppBudgetSnapshot`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、面向内存的管线统计、
 severity 汇总，以及 parser、style、layout、layer、renderer 代码实际发出的 diagnostics。
 已知不支持或降级的特性应给出明确原因；未知恢复至少应包含触发字段或片段。
 

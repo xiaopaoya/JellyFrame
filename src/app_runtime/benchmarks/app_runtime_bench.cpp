@@ -1,5 +1,6 @@
 ﻿#include "app_runtime/app_host.h"
 #include "app_runtime/app_device_services.h"
+#include "app_runtime/app_budget.h"
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
@@ -594,6 +595,40 @@ void bench_load_telemetry(std::size_t capacity) {
     }
 }
 
+void bench_app_budget_snapshot(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 256, 1});
+    host.launch("org.example.budget", AppRole::App);
+    for (std::size_t i = 0; i < capacity / 2; ++i) {
+        host.submit_current(HostServiceJobKind::NetworkFetch);
+        host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
+    }
+    AppSystemEventQueue system_events(capacity, 8);
+    AppSystemStateSnapshot system_snapshot;
+    for (std::size_t i = 0; i < capacity / 4; ++i) {
+        system_events.push_current(host, AppSystemEventKind::TimeChanged, system_snapshot);
+    }
+
+    HostBudgets budgets;
+    FrameLoopPendingWork pending;
+    pending.pending_input_events = capacity / 8;
+    pending.pending_timer_callbacks = capacity / 8;
+    pending.pending_animation_callbacks = 1;
+
+    AppBudgetSnapshotInput input;
+    input.host_budgets = &budgets;
+    input.system_events = &system_events;
+    input.pending_work = &pending;
+    input.active_animations = 1;
+    input.script_timers = capacity / 8;
+    input.script_event_listeners = capacity / 4;
+    input.detached_dom_nodes = capacity / 16;
+
+    const AppBudgetSnapshot budget = collect_app_budget_snapshot(host, input);
+    if (budget.app_instance_id == 0) {
+        std::abort();
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -666,6 +701,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_load_telemetry", iterations, average_microseconds(iterations, [&] {
         bench_load_telemetry(capacity);
+    }));
+    print_result("app_runtime_budget_snapshot", iterations, average_microseconds(iterations, [&] {
+        bench_app_budget_snapshot(capacity);
     }));
 
     return 0;

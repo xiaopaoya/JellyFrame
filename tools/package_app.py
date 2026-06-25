@@ -1183,6 +1183,45 @@ def collect_font_diagnostics(manifest: dict,
     return diagnostics, warnings
 
 
+def budget_meter(used: int, limit: int) -> dict:
+    return {
+        "used": max(0, int(used)),
+        "limit": max(0, int(limit)),
+        "exhausted": bool(limit and used >= limit),
+    }
+
+
+def collect_runtime_budget_estimate(resources: list[dict],
+                                    budgets: dict,
+                                    font_diagnostics: dict) -> dict:
+    total_resource_bytes = sum(resource["size"] for resource in resources)
+    runtime_font_budget = font_diagnostics.get("runtimeFontBudget", {})
+    if not isinstance(runtime_font_budget, dict):
+        runtime_font_budget = {}
+    return {
+        "format": "jellyframe.runtime-budget.estimate",
+        "source": "package-preflight",
+        "dynamicRuntimeCounters": "available from AppBudgetSnapshot in host/runtime capture",
+        "resources": budget_meter(total_resource_bytes, int_field(budgets, "maxResourceBytes", 0)),
+        "domNodes": budget_meter(0, int_field(budgets, "maxDomNodes", 0)),
+        "cssRules": budget_meter(0, int_field(budgets, "maxCssRules", 0)),
+        "renderObjects": budget_meter(0, int_field(budgets, "maxRenderObjects", 0)),
+        "layoutBoxes": budget_meter(0, int_field(budgets, "maxLayoutBoxes", 0)),
+        "layers": budget_meter(0, int_field(budgets, "maxLayers", 0)),
+        "displayCommands": budget_meter(0, int_field(budgets, "maxDisplayCommands", 0)),
+        "dirtyRects": budget_meter(0, int_field(budgets, "maxDirtyRects", 0)),
+        "timers": budget_meter(0, int_field(budgets, "maxTimers", 0)),
+        "eventListeners": budget_meter(0, int_field(budgets, "maxEventListeners", 0)),
+        "framebufferPixels": budget_meter(0, int_field(budgets, "maxFramebufferPixels", 0)),
+        "appFonts": budget_meter(font_diagnostics.get("usableRuntimeFontCount", 0),
+                                 runtime_font_budget.get("maxAppFonts", 0)),
+        "appFontBytes": budget_meter(font_diagnostics.get("runtimeFontBytes", 0),
+                                     runtime_font_budget.get("maxAppFontBytes", 0)),
+        "appFontGlyphs": budget_meter(font_diagnostics.get("runtimeFontGlyphs", 0),
+                                      runtime_font_budget.get("maxAppFontGlyphs", 0)),
+    }
+
+
 def write_cpp(resources: list[dict], output: Path, namespace: str, include: str) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8", newline="\n") as generated:
@@ -1408,6 +1447,7 @@ def main() -> int:
         "references": references,
         "serviceIntent": service_intent_report(manifest, target_config),
         "fontDiagnostics": font_diagnostics,
+        "runtimeBudgetEstimate": collect_runtime_budget_estimate(resources, budgets, font_diagnostics),
         "warnings": warnings,
     }
     if bundle_report is not None:

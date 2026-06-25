@@ -7,6 +7,21 @@ the current frame, then maps the result to product policy.
 
 Header: `src/app_runtime/app_load_telemetry.h`
 
+Related budget snapshot header: `src/app_runtime/app_budget.h`
+
+`AppBudgetSnapshot` is the companion counter view. It collects the current app
+instance id, role/state, service request/completion queues, host handles,
+handle bytes, app font count, system-event queue depth, frame-loop callback
+limits, animation count and script timer/listener/detached-node counts when the
+host provides them. Static `HostBudgets` caps for DOM/CSS/render/layout/layer,
+display commands, dirty rects, framebuffer pixels, resources and script
+watchdog settings are carried in the same snapshot.
+
+The snapshot is intentionally read-only and counter-only. It does not traverse
+DOM, inspect framebuffer pixels or allocate page-sized storage. Desktop shells
+can print it every capture; MCU ports can sample it for serial diagnostics,
+watchdog decisions or crash reports.
+
 ## Inputs
 
 `AppLoadTelemetryInput` combines existing JellyFrame contracts:
