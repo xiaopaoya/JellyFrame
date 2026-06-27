@@ -1,0 +1,13 @@
+# JellyFrame deterministic Win32 service spam smoke script.
+# Exercises bounded network/audio/location service submission from a single app.
+
+output-dir out/service_spam_frames
+montage out/service_spam_montage.bmp
+frames 72
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 8
+gap 4
+animation-fps 30
+animation-callbacks 4

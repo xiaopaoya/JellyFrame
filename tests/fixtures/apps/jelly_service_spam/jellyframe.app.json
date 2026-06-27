@@ -1,0 +1,46 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.tests.service_spam",
+  "name": "Service Spam Fixture",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 65536,
+    "maxDomNodes": 96,
+    "maxCssRules": 48,
+    "maxDisplayCommands": 160,
+    "maxTimers": 4,
+    "maxEventListeners": 16
+  },
+  "permissions": ["network"],
+  "capabilities": ["network.fetch", "media.audio.mp3", "location.position"],
+  "backgroundServices": {
+    "network": {
+      "whileSuspended": true,
+      "whileScreenOff": false
+    },
+    "audio": {
+      "whileSuspended": true,
+      "whileScreenOff": false
+    },
+    "location": {
+      "whileSuspended": false,
+      "whileScreenOff": false,
+      "inLowPower": false
+    }
+  }
+}

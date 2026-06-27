@@ -425,6 +425,18 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(jellyframe_win32_script_watchdog_recovery PROPERTIES
                 PASS_REGULAR_EXPRESSION
                     "script_watchdog_recovery reason=script-watchdog")
+
+            add_test(
+                NAME jellyframe_win32_service_spam_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_service_spam
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_service_spam/capture_service_spam.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_service_spam_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "host_completion_kinds network=16 storage=0 image=0 audio=0 location=2 other=0"
+                FAIL_REGULAR_EXPRESSION
+                    "dirty_area_too_large=[1-9]|overloaded=[1-9]|app_budget instance=1 role=app state=foreground requests=[1-9]|app_budget instance=1 role=app state=foreground requests=0/64 completions=[1-9]|app_budget instance=1 role=app state=foreground requests=0/64 completions=0/64 handles=[1-9]")
         endif()
     endif()
 

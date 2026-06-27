@@ -1,0 +1,52 @@
+body {
+  margin: 0;
+  background: #101820;
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.app {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+  padding: 22px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 24px;
+  text-align: center;
+}
+
+p {
+  margin: 8px 0;
+  text-align: center;
+  color: #cbd5e1;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.grid div {
+  min-height: 70px;
+  padding: 10px;
+  border-radius: 18px;
+  background: linear-gradient(#1f3a4a, #132431);
+  text-align: center;
+}
+
+b {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+}
+
+span {
+  display: block;
+  margin-top: 4px;
+  color: #a7f3d0;
+}
