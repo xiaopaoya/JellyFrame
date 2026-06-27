@@ -177,7 +177,13 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
   - `element.dataset` snapshot properties for existing `data-*` attributes
-  - `element.style` for a small inline-style property set
+  - `element.style` for a small inline-style property set:
+    `display`, `color`, `background`, `backgroundColor`, `textAlign`,
+    `fontWeight`, `width`, `height`, `opacity`, `transform`,
+    `borderRadius`, `left`, `top`, `right`, `bottom`, `position`,
+    `whiteSpace`, `textOverflow`, `overflow` and `zIndex`
+  - `element.style.setProperty(name, value)` for the same safe CSS property
+    subset plus CSS custom properties such as `--progress`
   - `element.hidden` and `element.disabled`
 - Supported `matches`/`closest` selectors are intentionally small: tag,
   `.class`, `#id`, `[attr]` and `[attr=value]`. Descendant/child combinators

@@ -369,7 +369,18 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
         const int usable_text_width = std::max(0, content_width - text_indent);
         const int text_width = std::max(min_width, std::min(usable_text_width, raw_text_width + 1));
         const int line_height = box.style.line_height > 0 ? box.style.line_height : metrics.line_height;
-        const bool can_wrap = has_text_wrap_opportunity(text);
+        const bool can_wrap = !box.style.white_space_nowrap && has_text_wrap_opportunity(text);
+        if (usable_text_width > 0 && raw_text_width > usable_text_width &&
+            (box.style.white_space_nowrap || box.style.text_overflow_ellipsis || !can_wrap)) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Layout,
+                              DiagnosticSeverity::Warning,
+                              box.style.text_overflow_ellipsis
+                                  ? "layout-text-overflow-ellipsis"
+                                  : "layout-text-overflow",
+                              "Text measured wider than its layout box and will be clipped or visually degraded",
+                              text);
+        }
         const int line_count = can_wrap && usable_text_width > 0
             ? std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width)
             : 1;

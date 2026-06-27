@@ -104,16 +104,18 @@ void supports_queries_flatten_safe_declaration_subset() {
     const Stylesheet stylesheet = parse(
         "@supports (display: grid) { .grid { display: grid; } }"
         "@supports ((display: flex) and (gap: 8px)) { .flex { display: flex; gap: 8px; } }"
+        "@supports (background: conic-gradient(#22cc88 0% 76%, rgba(16, 32, 48, .35) 76% 100%)) { .ring { width: 44px; } }"
         "@supports not (color: oklch(50% 0.2 30)) { .fallback { color: #123456; } }"
         "@supports ((display: grid) or (unknown-prop: 1px)) { .either { display: block; } }"
         "@supports ((display: grid) and (gap: 8px) or (color: red)) { .mixed { color: red; } }"
         "@supports selector(:has(*)) { .has { color: red; } }");
 
-    check(stylesheet.size() == 4, "supported @supports subset flattens matching safe blocks");
+    check(stylesheet.size() == 5, "supported @supports subset flattens matching safe blocks");
     check(stylesheet[0].selector == ".grid", "display grid supports selector");
     check(stylesheet[1].selector == ".flex", "and supports selector");
-    check(stylesheet[2].selector == ".fallback", "not unsupported supports selector");
-    check(stylesheet[3].selector == ".either", "or supports selector");
+    check(stylesheet[2].selector == ".ring", "conic background supports selector");
+    check(stylesheet[3].selector == ".fallback", "not unsupported supports selector");
+    check(stylesheet[4].selector == ".either", "or supports selector");
 }
 
 void flattens_layers_and_plain_media() {
@@ -240,6 +242,29 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
           "text-decoration underline applies");
     check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
           "unsupported gradient value is diagnosed by style resolver");
+}
+
+void conic_gradient_background_applies_progress_subset() {
+    auto ring = make_element("div");
+    ring->attributes["class"] = "ring";
+    auto fallback = make_element("div");
+    fallback->attributes["class"] = "fallback";
+
+    StyleResolver resolver(parse(
+        ".ring { background: conic-gradient(#22cc88 0% 76%, rgba(16,32,48,.35) 76% 100%); }"
+        ".fallback { background: #102030; background: conic-gradient(#fff 20% 80%, #000 80% 100%); }"));
+
+    const Style ring_style = resolver.resolve(*ring);
+    const Style fallback_style = resolver.resolve(*fallback);
+    check(ring_style.background_paint == BackgroundPaintKind::ConicGradient,
+          "conic-gradient background selects conic paint");
+    check(ring_style.background_gradient_stop_percent == 76,
+          "conic-gradient stores progress stop");
+    check(ring_style.background_color.g == 0xcc && ring_style.background_color2.a >= 88,
+          "conic-gradient stores progress and track colors");
+    check(fallback_style.background_paint == BackgroundPaintKind::Solid &&
+              fallback_style.background_color.r == 0x10,
+          "unsupported conic-gradient does not clear earlier fallback");
 }
 
 void matches_simple_compound_selectors() {
@@ -638,6 +663,25 @@ void font_weight_list_style_and_generated_counter_apply() {
     check(item_style.before_font_weight == 600, "before font-weight parsed");
 }
 
+void after_generated_content_and_text_overflow_apply() {
+    auto badge = make_element("span");
+    badge->attributes["class"] = "badge";
+
+    StyleResolver resolver(parse(
+        ".badge { border-radius: 50%; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }"
+        ".badge::after { content: \"%\"; color: #22cc88; font-weight: 700; left: 4px; }"));
+
+    const Style style = resolver.resolve(*badge);
+    check(style.border_radius_percent == 50, "percentage border-radius parsed");
+    check(style.white_space_nowrap, "white-space nowrap parsed");
+    check(style.text_overflow_ellipsis, "text-overflow ellipsis parsed");
+    check(style.after_content_kind == GeneratedContentKind::Text, "after generated content parsed");
+    check(style.after_content_text == "%", "after generated text stored");
+    check(style.after_color.g == 0xcc, "after color parsed");
+    check(style.after_font_weight == 700, "after font-weight parsed");
+    check(style.after_left_specified && style.after_left == 4, "after left parsed");
+}
+
 void fixed_two_column_grid_template_applies() {
     auto list = make_element("dl");
     StyleResolver resolver(parse("dl { display: grid; grid-template-columns: 120px 1fr; gap: .8rem; }"));
@@ -800,6 +844,7 @@ int main() {
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
         linear_gradient_background_applies_without_breaking_fallbacks();
+        conic_gradient_background_applies_progress_subset();
         matches_simple_compound_selectors();
         builds_cssom_metadata();
         cascade_uses_specificity_and_importance();
@@ -817,6 +862,7 @@ int main() {
         grid_and_aspect_ratio_properties_apply();
         physical_edge_longhands_apply_per_side();
         font_weight_list_style_and_generated_counter_apply();
+        after_generated_content_and_text_overflow_apply();
         fixed_two_column_grid_template_applies();
         repeated_fixed_grid_template_applies();
         modern_length_functions_and_flex_wrap_apply();

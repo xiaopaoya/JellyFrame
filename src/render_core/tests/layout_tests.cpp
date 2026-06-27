@@ -237,6 +237,29 @@ void percentage_width_and_height_use_containing_box() {
     check(cap->rect.width == 320 && cap->rect.height == 120, "max-height clamps percentage height");
 }
 
+void nowrap_text_overflow_reports_diagnostic() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><p id='status'>SuperLongStatusLabelWithoutBreaks</p></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#status { width: 40px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }"));
+    VectorDiagnosticSink diagnostics;
+    LayoutEngine layout_engine(resolver, {}, LayoutEngineOptions{4096, &diagnostics});
+    auto layout_tree = layout_engine.layout(*document, 160, 120);
+    (void) layout_tree;
+
+    bool found = false;
+    for (const Diagnostic& diagnostic : diagnostics.diagnostics()) {
+        if (diagnostic.code == "layout-text-overflow" ||
+            diagnostic.code == "layout-text-overflow-ellipsis") {
+            found = true;
+            break;
+        }
+    }
+    check(found, "nowrap overflow emits layout diagnostic");
+}
+
 } // namespace
 
 int main() {
@@ -250,6 +273,7 @@ int main() {
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();
         percentage_width_and_height_use_containing_box();
+        nowrap_text_overflow_reports_diagnostic();
     } catch (const std::exception& error) {
         std::cerr << "layout test failed: " << error.what() << '\n';
         return 1;

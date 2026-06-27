@@ -150,6 +150,23 @@ void horizontal_linear_gradient_rasterizes_left_and_right_colors() {
     check(frame_buffer.pixel(2, 1).r > frame_buffer.pixel(1, 1).r, "horizontal gradient interpolates columns");
 }
 
+void conic_gradient_rasterizes_clockwise_progress() {
+    FrameBuffer frame_buffer(9, 9, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::ConicGradient;
+    command.rect = Rect{0, 0, 9, 9};
+    command.color = Color{220, 20, 20, 255};
+    command.color2 = Color{20, 40, 220, 255};
+    command.gradient_stop_percent = 50;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 9, 9});
+
+    check(frame_buffer.pixel(4, 0).r == 220, "conic gradient starts at top with first color");
+    check(frame_buffer.pixel(8, 4).r == 220, "conic gradient paints right side before stop");
+    check(frame_buffer.pixel(4, 8).b == 220, "conic gradient switches at bottom stop");
+    check(frame_buffer.pixel(0, 4).b == 220, "conic gradient keeps second color on left side");
+}
+
 void rounded_stroke_keeps_corner_pixels_clear() {
     FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -778,6 +795,7 @@ int main() {
         fill_rect_rasterizes_pixels();
         linear_gradient_rasterizes_top_and_bottom_colors();
         horizontal_linear_gradient_rasterizes_left_and_right_colors();
+        conic_gradient_rasterizes_clockwise_progress();
         rounded_stroke_keeps_corner_pixels_clear();
         rounded_fill_antialiases_edge_pixels();
         source_over_alpha_composites();

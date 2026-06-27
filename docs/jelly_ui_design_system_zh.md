@@ -20,12 +20,16 @@
 设计系统必须以当前项目能力为准：
 
 - 可依赖：`rgba()`、hex、基础命名色、`background-color`，以及简单
-  `background: linear-gradient(<color>, <color>)` 或
-  `linear-gradient(to right/left, ...)` 胶体表面、单值
-  `border-radius`、border、`outline`、`text-shadow`、padding、margin、`box-shadow`
+  `background: linear-gradient(<color>, <color>)`、
+  `linear-gradient(to right/left, ...)` 胶体表面、两段
+  `conic-gradient(<color> 0% N%, <color> N% 100%)` 进度环、单值
+  `border-radius`（单值长度或 `50%`）、border、`outline`、`text-shadow`、padding、margin、`box-shadow`
   近似、`opacity`、`transform: translate()/scale()/rotate()`、`transform-origin`
   关键字/百分比子集、`transition` 子集、
   `:hover`、`:active`、`:focus`、`:focus-within`、`:checked` 和 `:disabled`。
+- 可依赖：`::before` / `::after` 的短文本 generated content 子集，以及
+  `white-space: nowrap`、`text-overflow: ellipsis` 的诊断子集。后者用于提前发现小屏文字溢出，
+  当前不应把浏览器级省略号 shaping 当作必需视觉效果。
 - 可依赖：CSS custom properties 的直接 `var(--token)` 和 fallback。
 - 可依赖：CSS `transition` 和 `transition-*` 的有界列表，单个 style 最多保留四条
   transition entry。当前可动画属性是

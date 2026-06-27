@@ -34,6 +34,9 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     if (!style.text_shadow_specified) {
         style.text_shadow = parent_style.text_shadow;
     }
+    if (!style.white_space_specified) {
+        style.white_space_nowrap = parent_style.white_space_nowrap;
+    }
     if (!style.list_style_type_specified) {
         style.list_style_type = parent_style.list_style_type;
     }
@@ -81,6 +84,7 @@ void apply_style_override(Style& style, const Node& node, const std::vector<Styl
         if (override.has_background_color) {
             style.background_paint = BackgroundPaintKind::Solid;
             style.background_gradient_axis = GradientAxis::Vertical;
+            style.background_gradient_stop_percent = 100;
             style.background_color = override.background_color;
             style.background_color2 = override.background_color;
         }

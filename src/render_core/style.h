@@ -54,9 +54,16 @@ enum class GeneratedContentKind {
     Counter,
 };
 
+enum class CssPseudoElement {
+    None,
+    Before,
+    After,
+};
+
 enum class BackgroundPaintKind {
     Solid,
     LinearGradient,
+    ConicGradient,
 };
 
 enum class AnimatableProperty {
@@ -111,6 +118,7 @@ struct Style {
     bool color_specified = false;
     BackgroundPaintKind background_paint = BackgroundPaintKind::Solid;
     GradientAxis background_gradient_axis = GradientAxis::Vertical;
+    int background_gradient_stop_percent = 100;
     Color background_color{0, 0, 0, 0};
     Color background_color2{0, 0, 0, 0};
     EdgeSizes margin;
@@ -120,6 +128,7 @@ struct Style {
     EdgeSizes border_width;
     Color border_color{0, 0, 0, 255};
     int border_radius = 0;
+    int border_radius_percent = -1;
     int width = -1;
     int height = -1;
     int min_width = -1;
@@ -151,6 +160,9 @@ struct Style {
     int outline_width = 0;
     Color outline_color{0, 0, 0, 255};
     std::string overflow;
+    bool white_space_nowrap = false;
+    bool white_space_specified = false;
+    bool text_overflow_ellipsis = false;
     float opacity = 1.0F;
     std::string transform;
     int transform_origin_x_percent = 50;
@@ -194,6 +206,16 @@ struct Style {
     bool before_font_weight_specified = false;
     int before_left = 0;
     bool before_left_specified = false;
+    GeneratedContentKind after_content_kind = GeneratedContentKind::None;
+    std::string after_content_text;
+    std::string after_counter_name;
+    std::string after_counter_suffix;
+    Color after_color{0, 0, 0, 255};
+    bool after_color_specified = false;
+    int after_font_weight = 400;
+    bool after_font_weight_specified = false;
+    int after_left = 0;
+    bool after_left_specified = false;
     TextAlign text_align = TextAlign::Start;
     bool text_align_specified = false;
     JustifyContent justify_content = JustifyContent::Start;
@@ -242,7 +264,7 @@ enum class CssRuleType {
 struct CssRule {
     CssRuleType type = CssRuleType::Style;
     std::string selector;
-    bool pseudo_before = false;
+    CssPseudoElement pseudo_element = CssPseudoElement::None;
     std::vector<CssDeclaration> declarations;
     CssSpecificity specificity;
     std::vector<CssSelectorPart> selector_parts;

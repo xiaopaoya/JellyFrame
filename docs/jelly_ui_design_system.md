@@ -20,14 +20,19 @@ shippable, testable and degradable on the current engine.
 This system must match current project capabilities:
 
 - Safe: `rgba()`, hex colors, named basics, `background-color`, and simple
-  `background: linear-gradient(<color>, <color>)` or
-  `linear-gradient(to right/left, ...)` gel surfaces, single-value
-  `border-radius`, borders, `outline`, `text-shadow`,
+  `background: linear-gradient(<color>, <color>)`,
+  `linear-gradient(to right/left, ...)` gel surfaces, two-segment
+  `conic-gradient(<color> 0% N%, <color> N% 100%)` progress rings, single-value
+  length or `50%` `border-radius`, borders, `outline`, `text-shadow`,
   padding, margin, approximate `box-shadow`, `opacity`, `transform:
   translate()/scale()/rotate()`, `transform-origin` keyword/percentage subset,
   CSS `transition`, and dynamic states such as `:hover`,
   `:active`, `:focus`, `:focus-within`, `:checked` and `:disabled`.
 - Safe: direct CSS custom property usage through `var(--token)` and fallback.
+- Safe: short generated text through `::before` / `::after`, plus the
+  diagnostic subset of `white-space: nowrap` and `text-overflow: ellipsis`.
+  Use the latter to catch small-screen text overflow early; do not rely on
+  browser-grade ellipsis shaping as a required visual yet.
 - Safe: bounded CSS `transition` and `transition-*` lists. Each style keeps at
   most four transition entries. Current animatable properties are `opacity`,
   `transform`, `background-color` and `color`.

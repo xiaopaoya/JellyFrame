@@ -360,6 +360,83 @@ void fill_linear_gradient_clipped(FrameBuffer& target,
     }
 }
 
+int conic_percent_from_top_clockwise(int dx, int dy) {
+    if (dx == 0 && dy == 0) {
+        return 0;
+    }
+    if (dy < 0) {
+        const int up = -dy;
+        if (dx >= 0) {
+            return (dx * 25) / std::max(1, dx + up);
+        }
+        const int left = -dx;
+        return 75 + (up * 25) / std::max(1, left + up);
+    }
+    if (dx >= 0) {
+        return 25 + (dy * 25) / std::max(1, dx + dy);
+    }
+    const int left = -dx;
+    return 50 + (left * 25) / std::max(1, left + dy);
+}
+
+void fill_conic_gradient_region(FrameBuffer& target,
+                                Rect rect,
+                                Rect clipped,
+                                Color first,
+                                Color second,
+                                int stop_percent,
+                                int border_radius) {
+    if (empty_rect(clipped)) {
+        return;
+    }
+    stop_percent = std::max(0, std::min(100, stop_percent));
+    const int center_x2 = rect.x * 2 + rect.width;
+    const int center_y2 = rect.y * 2 + rect.height;
+    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+            const int coverage = rounded_rect_coverage(rect, border_radius, x, y);
+            if (coverage <= 0) {
+                continue;
+            }
+            const int dx = x * 2 + 1 - center_x2;
+            const int dy = y * 2 + 1 - center_y2;
+            const Color color = conic_percent_from_top_clockwise(dx, dy) < stop_percent ? first : second;
+            blend_pixel(target, x, y, with_coverage(color, coverage));
+        }
+    }
+}
+
+void fill_conic_gradient(FrameBuffer& target,
+                         Rect rect,
+                         Color first,
+                         Color second,
+                         int stop_percent,
+                         int border_radius = 0) {
+    fill_conic_gradient_region(target,
+                               rect,
+                               clipped_target_rect(target, rect),
+                               first,
+                               second,
+                               stop_percent,
+                               border_radius);
+}
+
+void fill_conic_gradient_clipped(FrameBuffer& target,
+                                 Rect rect,
+                                 Rect clip,
+                                 Color first,
+                                 Color second,
+                                 int stop_percent,
+                                 int border_radius = 0) {
+    fill_conic_gradient_region(target,
+                               rect,
+                               clipped_target_rect(target, rect, clip),
+                               first,
+                               second,
+                               stop_percent,
+                               border_radius);
+}
+
 std::array<std::uint8_t, 7> glyph_rows(char raw_ch) {
     const char ch = static_cast<char>(std::toupper(static_cast<unsigned char>(raw_ch)));
     switch (ch) {
@@ -851,6 +928,24 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                                          command.color2,
                                          command.gradient_axis,
                                          command.border_radius);
+        }
+        break;
+    case DisplayCommandType::ConicGradient:
+        if (contains_rect(clip, rect)) {
+            fill_conic_gradient(target,
+                                rect,
+                                command.color,
+                                command.color2,
+                                command.gradient_stop_percent,
+                                command.border_radius);
+        } else {
+            fill_conic_gradient_clipped(target,
+                                        rect,
+                                        clip,
+                                        command.color,
+                                        command.color2,
+                                        command.gradient_stop_percent,
+                                        command.border_radius);
         }
         break;
     case DisplayCommandType::StrokeRect:

@@ -146,7 +146,13 @@ API 表面。
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
   - 面向已有 `data-*` 属性的 `element.dataset` 快照 property
-  - 小型 inline-style 属性集合 `element.style`
+  - 小型 inline-style 属性集合 `element.style`：
+    `display`、`color`、`background`、`backgroundColor`、`textAlign`、
+    `fontWeight`、`width`、`height`、`opacity`、`transform`、
+    `borderRadius`、`left`、`top`、`right`、`bottom`、`position`、
+    `whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`
+  - 面向同一安全 CSS 属性子集的 `element.style.setProperty(name, value)`，
+    以及 `--progress` 这类 CSS custom property 写入
   - `element.hidden` 和 `element.disabled`
 - `matches`/`closest` 支持的 selector 刻意保持很小：tag、`.class`、`#id`、
   `[attr]` 和 `[attr=value]`。Descendant/child combinator 目前仍只在 CSS 中支持。

@@ -1334,15 +1334,72 @@ bool parse_linear_gradient_background(const std::string& raw_value, Color& first
     return parse_color(args[0], first) && parse_color(args[1], second);
 }
 
+bool parse_conic_stop(const std::string& component, Color& color, int& start_percent, int& end_percent) {
+    const std::vector<std::string> tokens = split_whitespace_components(component);
+    if (tokens.size() != 3) {
+        return false;
+    }
+    if (!parse_color(tokens[0], color) ||
+        !parse_percentage_int(tokens[1], start_percent) ||
+        !parse_percentage_int(tokens[2], end_percent)) {
+        return false;
+    }
+    start_percent = std::max(0, std::min(100, start_percent));
+    end_percent = std::max(0, std::min(100, end_percent));
+    return start_percent <= end_percent;
+}
+
+bool parse_conic_gradient_background(const std::string& raw_value,
+                                     Color& first,
+                                     Color& second,
+                                     int& stop_percent) {
+    const std::string value = lowercase(trim(raw_value));
+    constexpr std::string_view prefix = "conic-gradient(";
+    if (value.rfind(prefix, 0) != 0 || value.back() != ')') {
+        return false;
+    }
+
+    const std::vector<std::string> args =
+        split_function_arguments(std::string_view(value).substr(prefix.size(), value.size() - prefix.size() - 1));
+    if (args.size() != 2) {
+        return false;
+    }
+
+    int first_start = 0;
+    int first_end = 0;
+    int second_start = 0;
+    int second_end = 0;
+    if (!parse_conic_stop(args[0], first, first_start, first_end) ||
+        !parse_conic_stop(args[1], second, second_start, second_end)) {
+        return false;
+    }
+    if (first_start != 0 || first_end != second_start || second_end != 100) {
+        return false;
+    }
+    stop_percent = first_end;
+    return true;
+}
+
 bool parse_background_paint(const std::string& value,
                             BackgroundPaintKind& kind,
                             GradientAxis& axis,
+                            int& stop_percent,
                             Color& color,
                             Color& color2) {
     Color first;
     Color second;
     if (parse_linear_gradient_background(value, first, second, axis)) {
         kind = BackgroundPaintKind::LinearGradient;
+        stop_percent = 100;
+        color = first;
+        color2 = second;
+        return true;
+    }
+    int conic_stop_percent = 100;
+    if (parse_conic_gradient_background(value, first, second, conic_stop_percent)) {
+        kind = BackgroundPaintKind::ConicGradient;
+        axis = GradientAxis::Vertical;
+        stop_percent = conic_stop_percent;
         color = first;
         color2 = second;
         return true;
@@ -1350,6 +1407,7 @@ bool parse_background_paint(const std::string& value,
     if (parse_color(value, color)) {
         kind = BackgroundPaintKind::Solid;
         axis = GradientAxis::Vertical;
+        stop_percent = 100;
         color2 = color;
         return true;
     }
@@ -2027,6 +2085,8 @@ enum class CascadeProperty : std::size_t {
     Outline,
     OutlineWidth,
     OutlineColor,
+    WhiteSpace,
+    TextOverflow,
     Flex,
     FlexGrow,
     FlexShrink,
@@ -2059,6 +2119,10 @@ enum class CascadeProperty : std::size_t {
     BeforeColor,
     BeforeFontWeight,
     BeforeLeft,
+    AfterContent,
+    AfterColor,
+    AfterFontWeight,
+    AfterLeft,
     Count,
 };
 
@@ -2195,6 +2259,12 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     if (property == "overflow") {
         return &cascade_slot(slots, CascadeProperty::Overflow);
     }
+    if (property == "white-space") {
+        return &cascade_slot(slots, CascadeProperty::WhiteSpace);
+    }
+    if (property == "text-overflow") {
+        return &cascade_slot(slots, CascadeProperty::TextOverflow);
+    }
     if (property == "opacity") {
         return &cascade_slot(slots, CascadeProperty::Opacity);
     }
@@ -2321,18 +2391,21 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     return nullptr;
 }
 
-CascadeSlot* cascade_slot_for_before_property(CascadeSlots& slots, const std::string& property) {
+CascadeSlot* cascade_slot_for_generated_property(CascadeSlots& slots,
+                                                 CssPseudoElement pseudo,
+                                                 const std::string& property) {
+    const bool after = pseudo == CssPseudoElement::After;
     if (property == "content") {
-        return &cascade_slot(slots, CascadeProperty::BeforeContent);
+        return &cascade_slot(slots, after ? CascadeProperty::AfterContent : CascadeProperty::BeforeContent);
     }
     if (property == "color") {
-        return &cascade_slot(slots, CascadeProperty::BeforeColor);
+        return &cascade_slot(slots, after ? CascadeProperty::AfterColor : CascadeProperty::BeforeColor);
     }
     if (property == "font-weight") {
-        return &cascade_slot(slots, CascadeProperty::BeforeFontWeight);
+        return &cascade_slot(slots, after ? CascadeProperty::AfterFontWeight : CascadeProperty::BeforeFontWeight);
     }
     if (property == "left") {
-        return &cascade_slot(slots, CascadeProperty::BeforeLeft);
+        return &cascade_slot(slots, after ? CascadeProperty::AfterLeft : CascadeProperty::BeforeLeft);
     }
     return nullptr;
 }
@@ -2418,19 +2491,22 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.background_paint = BackgroundPaintKind::Solid;
         style.background_gradient_axis = GradientAxis::Vertical;
+        style.background_gradient_stop_percent = 100;
         style.background_color = parsed;
         style.background_color2 = parsed;
         return true;
     } else if (property == "background") {
         BackgroundPaintKind kind = BackgroundPaintKind::Solid;
         GradientAxis axis = GradientAxis::Vertical;
+        int stop_percent = 100;
         Color color;
         Color color2;
-        if (!parse_background_paint(value, kind, axis, color, color2)) {
+        if (!parse_background_paint(value, kind, axis, stop_percent, color, color2)) {
             return false;
         }
         style.background_paint = kind;
         style.background_gradient_axis = axis;
+        style.background_gradient_stop_percent = stop_percent;
         style.background_color = color;
         style.background_color2 = color2;
         return true;
@@ -2535,11 +2611,18 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         return true;
     } else if (property == "border-radius") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.border_radius = 0;
+            style.border_radius_percent = std::max(0, percent);
+            return true;
+        }
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.border_radius = px;
+        style.border_radius_percent = -1;
         return true;
     } else if (property == "width") {
         int percent = -1;
@@ -2768,6 +2851,30 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.overflow = lowered;
         return true;
+    } else if (property == "white-space") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "normal") {
+            style.white_space_nowrap = false;
+            style.white_space_specified = true;
+            return true;
+        }
+        if (lowered == "nowrap") {
+            style.white_space_nowrap = true;
+            style.white_space_specified = true;
+            return true;
+        }
+        return false;
+    } else if (property == "text-overflow") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "clip") {
+            style.text_overflow_ellipsis = false;
+            return true;
+        }
+        if (lowered == "ellipsis") {
+            style.text_overflow_ellipsis = true;
+            return true;
+        }
+        return false;
     } else if (property == "opacity") {
         float parsed = 1.0F;
         if (!parse_float(value, parsed)) {
@@ -3363,29 +3470,55 @@ bool parse_counter_content(const std::string& raw_value, std::string& name, std:
     return !name.empty();
 }
 
-bool apply_before_declaration(Style& style, const std::string& property, const std::string& value) {
+bool apply_generated_declaration(Style& style,
+                                 CssPseudoElement pseudo,
+                                 const std::string& property,
+                                 const std::string& value) {
+    GeneratedContentKind& content_kind = pseudo == CssPseudoElement::After
+        ? style.after_content_kind
+        : style.before_content_kind;
+    std::string& content_text = pseudo == CssPseudoElement::After
+        ? style.after_content_text
+        : style.before_content_text;
+    std::string& counter_name_output = pseudo == CssPseudoElement::After
+        ? style.after_counter_name
+        : style.before_counter_name;
+    std::string& counter_suffix_output = pseudo == CssPseudoElement::After
+        ? style.after_counter_suffix
+        : style.before_counter_suffix;
+    Color& color = pseudo == CssPseudoElement::After ? style.after_color : style.before_color;
+    bool& color_specified = pseudo == CssPseudoElement::After
+        ? style.after_color_specified
+        : style.before_color_specified;
+    int& font_weight = pseudo == CssPseudoElement::After ? style.after_font_weight : style.before_font_weight;
+    bool& font_weight_specified = pseudo == CssPseudoElement::After
+        ? style.after_font_weight_specified
+        : style.before_font_weight_specified;
+    int& left = pseudo == CssPseudoElement::After ? style.after_left : style.before_left;
+    bool& left_specified = pseudo == CssPseudoElement::After ? style.after_left_specified : style.before_left_specified;
+
     if (property == "content") {
         std::string counter_name;
         std::string suffix;
         if (parse_counter_content(value, counter_name, suffix)) {
-            style.before_content_kind = GeneratedContentKind::Counter;
-            style.before_counter_name = std::move(counter_name);
-            style.before_counter_suffix = std::move(suffix);
-            style.before_content_text.clear();
+            content_kind = GeneratedContentKind::Counter;
+            counter_name_output = std::move(counter_name);
+            counter_suffix_output = std::move(suffix);
+            content_text.clear();
             return true;
         }
         const std::string text = unquote(value);
         if (text.empty() || text == "none" || text == "normal") {
-            style.before_content_kind = GeneratedContentKind::None;
-            style.before_content_text.clear();
-            style.before_counter_name.clear();
-            style.before_counter_suffix.clear();
+            content_kind = GeneratedContentKind::None;
+            content_text.clear();
+            counter_name_output.clear();
+            counter_suffix_output.clear();
             return true;
         }
-        style.before_content_kind = GeneratedContentKind::Text;
-        style.before_content_text = text;
-        style.before_counter_name.clear();
-        style.before_counter_suffix.clear();
+        content_kind = GeneratedContentKind::Text;
+        content_text = text;
+        counter_name_output.clear();
+        counter_suffix_output.clear();
         return true;
     }
     if (property == "color") {
@@ -3393,8 +3526,8 @@ bool apply_before_declaration(Style& style, const std::string& property, const s
         if (!parse_color(value, parsed)) {
             return false;
         }
-        style.before_color = parsed;
-        style.before_color_specified = true;
+        color = parsed;
+        color_specified = true;
         return true;
     }
     if (property == "font-weight") {
@@ -3402,8 +3535,8 @@ bool apply_before_declaration(Style& style, const std::string& property, const s
         if (!parse_font_weight(value, weight)) {
             return false;
         }
-        style.before_font_weight = weight;
-        style.before_font_weight_specified = true;
+        font_weight = weight;
+        font_weight_specified = true;
         return true;
     }
     if (property == "left") {
@@ -3411,22 +3544,23 @@ bool apply_before_declaration(Style& style, const std::string& property, const s
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
-        style.before_left = px;
-        style.before_left_specified = true;
+        left = px;
+        left_specified = true;
         return true;
     }
     return false;
 }
 
-bool apply_cascaded_before_declaration(Style& style,
-                                       CascadeSlot& slot,
-                                       const CssDeclaration& declaration,
-                                       const CssSpecificity& specificity,
-                                       std::size_t source_order) {
+bool apply_cascaded_generated_declaration(Style& style,
+                                          CssPseudoElement pseudo,
+                                          CascadeSlot& slot,
+                                          const CssDeclaration& declaration,
+                                          const CssSpecificity& specificity,
+                                          std::size_t source_order) {
     if (!declaration_wins(slot, declaration, specificity, source_order)) {
         return true;
     }
-    if (apply_before_declaration(style, declaration.property, declaration.value)) {
+    if (apply_generated_declaration(style, pseudo, declaration.property, declaration.value)) {
         mark_slot(slot, declaration, specificity, source_order);
         return true;
     }
@@ -3438,7 +3572,7 @@ void apply_declarations(Style& style,
                         const std::vector<CssDeclaration>& declarations,
                         const CssSpecificity& specificity,
                         std::size_t source_order,
-                        bool pseudo_before,
+                        CssPseudoElement pseudo_element,
                         const CustomPropertyMap& custom_properties,
                         DiagnosticSink* diagnostics) {
     for (const CssDeclaration& declaration : declarations) {
@@ -3446,14 +3580,21 @@ void apply_declarations(Style& style,
             continue;
         }
         const CssDeclaration resolved_declaration = resolve_declaration_value(declaration, custom_properties);
-        if (pseudo_before) {
-            CascadeSlot* slot = cascade_slot_for_before_property(slots, resolved_declaration.property);
+        if (pseudo_element != CssPseudoElement::None) {
+            CascadeSlot* slot = cascade_slot_for_generated_property(slots, pseudo_element, resolved_declaration.property);
             if (slot != nullptr) {
-                if (!apply_cascaded_before_declaration(style, *slot, resolved_declaration, specificity, source_order)) {
+                if (!apply_cascaded_generated_declaration(style,
+                                                          pseudo_element,
+                                                          *slot,
+                                                          resolved_declaration,
+                                                          specificity,
+                                                          source_order)) {
                     report_diagnostic(diagnostics,
                                       DiagnosticStage::Style,
                                       DiagnosticSeverity::Warning,
-                                      "style-before-declaration-ignored",
+                                      pseudo_element == CssPseudoElement::After
+                                          ? "style-after-declaration-ignored"
+                                          : "style-before-declaration-ignored",
                                       "Pseudo-element declaration could not be applied",
                                       resolved_declaration.property + ": " + resolved_declaration.value);
                 }
@@ -3461,7 +3602,9 @@ void apply_declarations(Style& style,
                 report_diagnostic(diagnostics,
                                   DiagnosticStage::Style,
                                   DiagnosticSeverity::Info,
-                                  "style-before-property-unsupported",
+                                  pseudo_element == CssPseudoElement::After
+                                      ? "style-after-property-unsupported"
+                                      : "style-before-property-unsupported",
                                   "Pseudo-element property is outside the supported subset",
                                   resolved_declaration.property);
             }
@@ -4046,7 +4189,7 @@ CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
         }
         CustomPropertySlots local;
         for (const CssRule* rule : candidate_rules_for(*current)) {
-            if (!rule->pseudo_before && matches_rule(*current, *rule, context)) {
+            if (rule->pseudo_element == CssPseudoElement::None && matches_rule(*current, *rule, context)) {
                 apply_custom_declarations(local, rule->declarations, rule->specificity, rule->source_order);
             }
         }
@@ -4074,7 +4217,7 @@ Style StyleResolver::resolve(const Node& node) const {
     for (const CssRule* rule : candidate_rules_for(node)) {
         if (matches_rule(node, *rule, context)) {
             apply_declarations(style, slots, rule->declarations, rule->specificity,
-                               rule->source_order, rule->pseudo_before, custom_properties,
+                               rule->source_order, rule->pseudo_element, custom_properties,
                                options_.diagnostics);
         }
     }
@@ -4084,7 +4227,7 @@ Style StyleResolver::resolve(const Node& node) const {
         inline_specificity.classes = 0;
         inline_specificity.elements = 0;
         apply_declarations(style, slots, parse_inline_style(node.attribute("style"), options_.diagnostics), inline_specificity,
-                           static_cast<std::size_t>(-1), false, custom_properties,
+                           static_cast<std::size_t>(-1), CssPseudoElement::None, custom_properties,
                            options_.diagnostics);
     }
     return style;

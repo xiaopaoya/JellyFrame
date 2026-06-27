@@ -418,6 +418,34 @@ void javascript_element_style_hidden_and_disabled_properties_work() {
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "style/hidden/disabled mark layout dirty");
 }
 
+void javascript_element_style_extended_properties_work() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><div id='dial'></div></body>");
+    clear_dirty_flags(*document);
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var dial = document.getElementById('dial');"
+        "dial.style.opacity = '0.72';"
+        "dial.style.transform = 'translate(4px, 2px) rotate(15deg)';"
+        "dial.style.borderRadius = '50%';"
+        "dial.style.left = '6px';"
+        "dial.style.top = '8px';"
+        "dial.style.setProperty('--progress', '76%');"
+        "dial.style.setProperty('filter', 'blur(4px)');"
+        "dial.getAttribute('style')");
+
+    check(result.ok, "extended style script succeeds");
+    check(result.value.find("opacity: 0.72") != std::string::npos, "opacity write serialized");
+    check(result.value.find("transform: translate(4px, 2px) rotate(15deg)") != std::string::npos,
+          "transform write serialized");
+    check(result.value.find("border-radius: 50%") != std::string::npos, "borderRadius write serialized");
+    check(result.value.find("--progress: 76%") != std::string::npos, "custom property write serialized");
+    check(result.value.find("filter") == std::string::npos, "unsupported style.setProperty is ignored");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "extended style writes mark layout dirty");
+}
+
 void javascript_input_event_reads_live_value() {
     HtmlParser parser;
     auto document = parser.parse("<body><input id='name'><p id='status'></p></body>");
@@ -989,6 +1017,7 @@ int main() {
         javascript_embedded_ui_helpers_support_event_delegation();
         javascript_class_name_reflects_class_attribute();
         javascript_element_style_hidden_and_disabled_properties_work();
+        javascript_element_style_extended_properties_work();
         javascript_input_event_reads_live_value();
         javascript_timeout_runs_when_host_pumps_time();
         javascript_clear_timeout_cancels_callback();

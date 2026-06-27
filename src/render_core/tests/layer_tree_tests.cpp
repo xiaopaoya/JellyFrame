@@ -452,6 +452,49 @@ void list_markers_and_generated_counters_emit_text() {
     check(found_bold_text, "marker font-weight reaches display command");
 }
 
+void generated_after_and_percentage_radius_emit_commands() {
+    auto pipeline = build_pipeline(
+        "<body><section class='dial'><span>76</span></section></body>",
+        ".dial { width: 80px; height: 80px; background: #102030; border-radius: 50%; }"
+        ".dial::after { content: \"%\"; color: #22cc88; font-weight: 700; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_round_fill = false;
+    bool found_after = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect && command.border_radius == 40) {
+            found_round_fill = true;
+        }
+        if (command.type == DisplayCommandType::Text && command.text == "%" &&
+            command.text_align == TextCommandAlign::End && command.font_weight >= 700) {
+            found_after = true;
+        }
+    }
+    check(found_round_fill, "percentage border-radius resolves against box");
+    check(found_after, "generated after content is painted after children");
+}
+
+void conic_gradient_background_emits_progress_command() {
+    auto pipeline = build_pipeline(
+        "<body><section class='ring'></section></body>",
+        ".ring { width: 64px; height: 64px; border-radius: 50%; "
+        "background: conic-gradient(#22cc88 0% 75%, rgba(16,32,48,.35) 75% 100%); }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_conic = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::ConicGradient &&
+            command.gradient_stop_percent == 75 &&
+            command.border_radius == 32) {
+            found_conic = true;
+            break;
+        }
+    }
+    check(found_conic, "conic-gradient emits bounded progress display command");
+}
+
 void fixed_grid_places_description_list_in_columns() {
     auto pipeline = build_pipeline(
         "<body><dl><dt>Name</dt><dd>JellyFrame</dd><dt>Mode</dt><dd>Embedded</dd></dl></body>",
@@ -615,6 +658,8 @@ int main() {
         grid_auto_fit_gap_span_and_aspect_ratio_layout();
         box_shadow_emits_cheap_translucent_fill();
         list_markers_and_generated_counters_emit_text();
+        generated_after_and_percentage_radius_emit_commands();
+        conic_gradient_background_emits_progress_command();
         fixed_grid_places_description_list_in_columns();
         unbreakable_symbol_stays_single_line();
         grid_item_auto_width_reflows_centered_text();

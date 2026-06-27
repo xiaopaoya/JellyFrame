@@ -257,6 +257,25 @@ int main(int argc, char** argv) {
         rasterizer.rasterize(rounded_commands, target, Rect{0, 0, 320, 260});
     }));
 
+    DisplayList conic_commands;
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            DisplayCommand command;
+            command.type = DisplayCommandType::ConicGradient;
+            command.rect = Rect{column * 72 + 8, row * 62 + 8, 52, 52};
+            command.color = Color{34, 204, 136, 255};
+            command.color2 = Color{16, 32, 48, 96};
+            command.gradient_stop_percent = 40 + ((row * 4 + column) % 6) * 10;
+            command.border_radius = 26;
+            conic_commands.push_back(command);
+        }
+    }
+    print_result("conic_gradient_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{8, 16, 24, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(conic_commands, target, Rect{0, 0, 320, 260});
+    }));
+
     LayerNode scale_root;
     scale_root.type = LayerType::Root;
     scale_root.bounds = Rect{0, 0, 160, 160};

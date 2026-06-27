@@ -21,7 +21,7 @@ body {
   position: relative;
   width: 246px;
   height: 246px;
-  border-radius: 123px;
+  border-radius: 50%;
   background: linear-gradient(to bottom, #174543, #0d2428);
   border: 2px solid #83f1d2;
   box-shadow: 0 10px 24px rgba(0, 0, 0, .34);
@@ -34,8 +34,19 @@ body {
   top: 18px;
   width: 210px;
   height: 210px;
-  border-radius: 105px;
-  border: 2px solid rgba(233, 255, 248, .42);
+  border-radius: 50%;
+  background: conic-gradient(#7ff7d9 0% 76%, rgba(233, 255, 248, .18) 76% 100%);
+}
+
+.ring-hole {
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: 192px;
+  height: 192px;
+  border-radius: 50%;
+  background: linear-gradient(to bottom, #174543, #0d2428);
+  border: 1px solid rgba(233, 255, 248, .34);
 }
 
 .tick {
@@ -134,7 +145,7 @@ body {
   .dial {
     width: 200px;
     height: 200px;
-    border-radius: 100px;
+    border-radius: 50%;
   }
 
   .ring {
@@ -142,7 +153,15 @@ body {
     top: 16px;
     width: 168px;
     height: 168px;
-    border-radius: 84px;
+    border-radius: 50%;
+  }
+
+  .ring-hole {
+    left: 8px;
+    top: 8px;
+    width: 152px;
+    height: 152px;
+    border-radius: 50%;
   }
 
   .t0 { left: 97px; top: 24px; }
@@ -205,7 +224,7 @@ body {
   .dial {
     width: 150px;
     height: 150px;
-    border-radius: 75px;
+    border-radius: 50%;
   }
 
   .ring {
@@ -213,7 +232,15 @@ body {
     top: 12px;
     width: 126px;
     height: 126px;
-    border-radius: 63px;
+    border-radius: 50%;
+  }
+
+  .ring-hole {
+    left: 7px;
+    top: 7px;
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
   }
 
   .tick {

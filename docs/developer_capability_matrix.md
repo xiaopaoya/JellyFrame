@@ -145,7 +145,7 @@ JellyFrame is not ready for:
 | Dynamic pseudo-classes | Subset | `:hover`, `:active`, `:focus`, `:focus-within`, `:checked` and `:disabled` participate in selector matching. Input state changes mark style/layout dirty; checked/disabled use form-control and attribute state. |
 | `:is()` / `:where()` | Subset | `:is()` matches selector-list arguments and contributes the maximum argument specificity. `:where()` matches the same subset with zero specificity. |
 | `:has()` | Deferred/Lazy | Rules using `:has()` are skipped; relational selector matching is intentionally deferred. |
-| Pseudo-elements | Subset | `::before` supports a tiny generated-content path for text/counter list markers. `::after`, full marker styling and selection styling are deferred. |
+| Pseudo-elements | Subset | `::before` supports a tiny generated-content path for text/counter list markers and short generated text. `::after` supports the same text/counter paint subset for badges, units and status markers. Full generated-content layout, marker styling and selection styling are deferred. |
 | Sibling combinators | Subset | Adjacent `+` and general `~` sibling selectors match previous element siblings. Text nodes between elements do not block adjacent matching. |
 | Shadow selectors | Deferred | `::part`, `::slotted` skipped. |
 
@@ -159,7 +159,7 @@ clear older supported fallback declarations.
 | `display` | Subset | `block`, `inline`, `inline-block`, `flex`, `inline-flex`, `grid`, `inline-grid`, `none`. Inline flex/grid map to the same simplified layout modes. |
 | `color` | Subset | Named basics, hex, `rgb()`, `rgba()`. Unsupported color functions such as `oklch()` do not override fallbacks. |
 | `background-color` | Subset | Same color parser as `color`; gradients are intentionally not accepted here because CSS treats them as background images. |
-| `background` | Subset | Solid colors plus `linear-gradient(<color>, <color>)` and `linear-gradient(to bottom/top/right/left, ...)` as cheap two-color linear paint commands. Images and complex stops/angles are ignored or diagnosed without clearing earlier fallbacks. |
+| `background` | Subset | Solid colors, `linear-gradient(<color>, <color>)`, `linear-gradient(to bottom/top/right/left, ...)`, and a two-segment progress `conic-gradient(<color> 0% N%, <color> N% 100%)`. Conic gradients are intended for watch rings, battery rings and activity arcs; complex stops/angles/repeating/multiple backgrounds are ignored or diagnosed without clearing earlier fallbacks. |
 | `margin` | Works | 1-4 length values plus horizontal `auto`. |
 | `margin-top/right/bottom/left` | Works | Physical longhands. `margin-left/right:auto` works for horizontal centering paths. |
 | `padding` | Works | 1-4 length values. |
@@ -168,7 +168,7 @@ clear older supported fallback declarations.
 | `border-width` | Works | 1-4 length values. |
 | `border-top/right/bottom/left-width` | Works | Physical width longhands. |
 | `border-color` | Subset | Single color for all borders. |
-| `border-radius` | Subset | Single length radius. Rounded fills and borders are supported; the software renderer applies local coverage antialiasing on rounded edges. Complex corner radii are not supported. |
+| `border-radius` | Subset | Single length radius or single percentage such as `50%`. Rounded fills and borders are supported; the software renderer applies local coverage antialiasing on rounded edges. Complex per-corner radii are not supported. |
 | `outline` / `outline-width` / `outline-color` | Subset | Painted as a non-layout outer stroke. Simple width/color shorthand is supported; `outline-offset` and complex style semantics are deferred. |
 | `width` / `height` | Works | Length values and percentage values. Percentages resolve against the containing content box; root/full-screen app wrappers can use the actual viewport width/height. |
 | `min-width` / `min-height` | Works | Length values and percentage values. |
@@ -183,6 +183,8 @@ clear older supported fallback declarations.
 | `text-shadow` | Subset | First shadow is painted as offset text; blur is parsed for compatibility but not rasterized, and multiple shadows are not painted yet. |
 | `box-sizing` | Works | `content-box`, `border-box`. |
 | `overflow` | Subset | `visible`, `hidden`, `clip`, `auto`, `scroll`; clipping creates layer boundaries, but native scroll containers are not complete. |
+| `white-space` | Subset | `normal` and `nowrap`. `nowrap` is inherited into text layout and prevents cheap wrapping. |
+| `text-overflow` | Diagnostic subset | `clip` and `ellipsis` are accepted so app authors can express intent. Current rendering still clips through the box/text backend path; layout diagnostics warn when measured text exceeds the available box. Browser-grade ellipsis shaping is deferred. |
 | `opacity` | Subset | 0..1; creates composited layer in software compositor. |
 | `position` | Subset | `relative` applies visual offsets without changing normal-flow space. `absolute`/`fixed` boxes are taken out of flow and positioned by simple insets. `sticky` is only stored as a layer hint. |
 | `top` / `right` / `bottom` / `left` | Subset | Length and `auto` values. Absolute/fixed boxes use parent content box or viewport-like origin. Percentages, shrink-to-fit, full containing-block rules and sticky scrolling are absent. |
@@ -200,7 +202,7 @@ clear older supported fallback declarations.
 | `grid-auto-rows` | Subset | Length or `minmax(<length>, auto)` minimum row height. |
 | `grid-column` / `grid-row` | Subset | `span N`, clamped to bounded values. Explicit line placement is absent. |
 | `list-style` / `list-style-type` | Subset | `none`, disc-like values and decimal-like values. Native-lite list markers are painted for `li`. |
-| `content` on `::before` | Subset | Plain text and `counter(name) "suffix"` for lightweight list counters. Full generated-content layout is deferred. |
+| `content` on `::before` / `::after` | Subset | Plain text and `counter(name) "suffix"` for lightweight list counters, units and badges. Generated content is painted inside the element box and is budgeted as display commands, not real DOM nodes. Full generated-content layout is deferred. |
 | `box-shadow` | Subset | First shadow becomes an approximate rounded translucent fill. Real blur and multiple shadows are not rasterized. |
 | `object-fit` / `object-position` | Subset | `object-fit` supports `fill`, `contain`, `cover`, `none` and `scale-down`. `object-position` supports the one/two-value keyword and percentage subset, such as `center`, `right top` and `25% 80%`; complex four-value and length-offset syntax is deferred. |
 | `image-rendering` | Subset | Supports the standard keywords `auto`, `pixelated` and `crisp-edges`. `auto` allows host image painters to use bilinear/smooth sampling; `pixelated` and `crisp-edges` keep nearest-neighbor sampling for pixel art. |
@@ -289,7 +291,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `children` / `parentElement` | Subset | Snapshot element-child array and parent wrapper/null. |
 | `matches` / `closest` | Subset | Simple tag, `.class`, `#id`, `[attr]` and `[attr=value]` selectors. No combinators. |
 | `dataset` | Subset | Existing `data-*` attributes are exposed as camelCase snapshot properties for event delegation. Dynamic new keys are deferred. |
-| `element.style` | Subset | Mutable inline style object for `display`, `color`, `background`, `backgroundColor`, `textAlign`, `fontWeight`, `width`, `height`. |
+| `element.style` | Subset | Mutable inline style object for `display`, `color`, `background`, `backgroundColor`, `textAlign`, `fontWeight`, `width`, `height`, `opacity`, `transform`, `borderRadius`, `left`, `top`, `right`, `bottom`, `position`, `whiteSpace`, `textOverflow`, `overflow` and `zIndex`. `style.setProperty(name, value)` accepts the same safe CSS property subset plus CSS custom properties such as `--progress`. |
 | `hidden` / `disabled` properties | Subset | Boolean reflection. `hidden` removes rendering; disabled form controls do not activate or accept text input. |
 | `addEventListener` / `removeEventListener` | Works | JS callbacks are bridged to core event dispatch. |
 | Event object | Subset | `type`, `target`, `currentTarget`, phase, cancel/propagation APIs, mouse/wheel fields. |
@@ -318,6 +320,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Rounded fills | Subset | Rounded rectangle fill clipping for backgrounds/shadows. Rounded fill/stroke/gradient edges use local coverage antialiasing, while ordinary opaque square rectangles keep the fast fill path. |
 | Border painting | Works | Borders emitted as fill rectangles. |
 | Linear gradient | Subset | Two-color horizontal or vertical command support. |
+| Conic gradient | Subset | Two-segment clockwise progress command, starting at 12 o'clock. Rasterized only when used; ordinary rectangles and linear gradients keep their existing fast paths. |
 | Text | Subset | Core fallback is tiny ASCII bitmap painting with UTF-8 placeholder glyphs. Win32 shell injects GDI for UTF-8/Chinese validation. |
 | Chinese text | Shell-dependent | Use Win32 shell or future platform text backend. Pseudo-browser fallback will show placeholder glyphs. |
 | Images | Host-optional/debug usable | Platform-neutral `ImageDecodeMock`, `AppImageSurfaceCache`, `Surface` handle lifetime and width/height/decoded-byte/pending budgets now exist. Render core supports `ImageHandleResolver`, image display commands and `ImagePainter`; pages should use package-local standard paths such as `<img src="/assets/icon.bmp">` or relative URLs. The Win32 debug shell also has `/debug/icon.raw` and `/debug/photo.raw` mock fixtures for low-level validation, and can load uncompressed 24/32-bit BMP resources from `.jfapp`/source packages as the in-bundle image V0 path. `AppImageSurfaceCache` can evict LRU ready surfaces by surface-count and decoded-byte budgets while protecting current display-list references; stale completions are rejected and stale ready entries can be dropped/reported during eviction. Image commands carry the `object-fit`, simple `object-position` and `image-rendering` subsets. The `auto` path uses bilinear scaling, while `pixelated`/`crisp-edges` keep hard-edge sampling. Image request rejections and completion failures are classified into stable reasons such as `capability-denied`, `resource-not-found`, `decode-budget-exceeded` and `surface-budget-exceeded`; `diagnostic_detail_for_url(...)` exposes stable `src`/`state`/`reason`/`submit` plus optional host/job/handle/byte fields for desktop and port logs. PNG/JPEG/WebP, complex position syntax and production MCU codecs are still pending. |

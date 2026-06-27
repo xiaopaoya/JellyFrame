@@ -31,6 +31,7 @@ enum class DisplayCommandType {
     FillRect,
     StrokeRect,
     LinearGradient,
+    ConicGradient,
     Text,
     Image,
 };
@@ -78,6 +79,7 @@ struct DisplayCommand {
     TextCommandAlign text_align = TextCommandAlign::Start;
     bool text_single_line = true;
     GradientAxis gradient_axis = GradientAxis::Vertical;
+    int gradient_stop_percent = 100;
     std::uint32_t image_handle = 0;
     ObjectFit object_fit = ObjectFit::Fill;
     ObjectPosition object_position;

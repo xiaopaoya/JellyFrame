@@ -67,6 +67,44 @@ std::string collapse_ascii_space(std::string_view value) {
     return output;
 }
 
+std::vector<std::string> split_whitespace_top_level(std::string_view value) {
+    std::vector<std::string> tokens;
+    std::size_t begin = 0;
+    int paren_depth = 0;
+    char quote = '\0';
+    const auto flush = [&](std::size_t end) {
+        if (end > begin) {
+            std::string token = trim(value.substr(begin, end - begin));
+            if (!token.empty()) {
+                tokens.push_back(std::move(token));
+            }
+        }
+    };
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        const char ch = value[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < value.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '"' || ch == '\'') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++paren_depth;
+        } else if (ch == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (paren_depth == 0 && is_ascii_space(ch)) {
+            flush(index);
+            begin = index + 1;
+        }
+    }
+    flush(value.size());
+    return tokens;
+}
+
 bool contains_ascii_case_insensitive(std::string_view haystack, std::string_view needle) {
     if (needle.empty() || needle.size() > haystack.size()) {
         return false;
@@ -518,6 +556,34 @@ bool is_supported_background_value(std::string_view value) {
     if (is_supported_color_value(text)) {
         return true;
     }
+    if (text.rfind("conic-gradient(", 0) == 0 && text.back() == ')') {
+        std::vector<std::string> args =
+            split_top_level_commas(std::string_view(text).substr(15, text.size() - 16));
+        if (args.size() != 2) {
+            return false;
+        }
+        std::string first_end;
+        std::string second_end;
+        for (std::size_t index = 0; index < args.size(); ++index) {
+            const std::vector<std::string> tokens = split_whitespace_top_level(args[index]);
+            if (tokens.size() != 3 || !is_supported_color_value(tokens[0]) ||
+                !is_number_with_suffix(tokens[1], {"%"}) ||
+                !is_number_with_suffix(tokens[2], {"%"})) {
+                return false;
+            }
+            const bool starts_at_expected = (index == 0 && tokens[1] == "0%") ||
+                (index == 1 && tokens[1] == first_end);
+            if (!starts_at_expected) {
+                return false;
+            }
+            if (index == 0) {
+                first_end = tokens[2];
+            } else {
+                second_end = tokens[2];
+            }
+        }
+        return second_end == "100%";
+    }
     if (text.rfind("linear-gradient(", 0) != 0 || text.back() != ')') {
         return false;
     }
@@ -677,6 +743,12 @@ bool is_supported_declaration_feature(std::string_view feature) {
     }
     if (property == "overflow") {
         return supported_keyword(value, {"visible", "hidden", "clip", "auto", "scroll"});
+    }
+    if (property == "white-space") {
+        return supported_keyword(value, {"normal", "nowrap"});
+    }
+    if (property == "text-overflow") {
+        return supported_keyword(value, {"clip", "ellipsis"});
     }
     if (property == "opacity") {
         return is_number_with_suffix(value, {""}, false);
@@ -887,8 +959,7 @@ bool is_selector_prelude_supported(std::string_view selector) {
     return true;
 }
 
-bool strip_before_pseudo(std::string& selector) {
-    constexpr std::string_view pseudo = "::before";
+bool strip_generated_pseudo(std::string& selector, std::string_view pseudo) {
     const std::size_t pseudo_pos = selector.rfind(pseudo);
     if (pseudo_pos == std::string::npos) {
         return false;
@@ -898,6 +969,16 @@ bool strip_before_pseudo(std::string& selector) {
     }
     selector = trim(std::string_view(selector).substr(0, pseudo_pos));
     return !selector.empty();
+}
+
+CssPseudoElement strip_generated_pseudo(std::string& selector) {
+    if (strip_generated_pseudo(selector, "::before")) {
+        return CssPseudoElement::Before;
+    }
+    if (strip_generated_pseudo(selector, "::after")) {
+        return CssPseudoElement::After;
+    }
+    return CssPseudoElement::None;
 }
 
 void add_specificity(CssSpecificity& target, const CssSpecificity& value) {
@@ -1224,10 +1305,10 @@ private:
                                   selector);
                 continue;
             }
-            const bool pseudo_before = strip_before_pseudo(selector);
+            const CssPseudoElement pseudo_element = strip_generated_pseudo(selector);
             CssRule rule;
             rule.selector = std::move(selector);
-            rule.pseudo_before = pseudo_before;
+            rule.pseudo_element = pseudo_element;
             rule.declarations = declarations;
             rule.specificity = calculate_specificity(rule.selector);
             rule.selector_parts = parse_css_selector_parts(rule.selector);

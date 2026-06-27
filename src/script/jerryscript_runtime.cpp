@@ -462,6 +462,36 @@ std::string css_property_name_from_js(std::string_view key) {
     return property;
 }
 
+bool is_script_writable_style_property(const std::string& property) {
+    if (property.size() > 2 && property[0] == '-' && property[1] == '-') {
+        return true;
+    }
+    static constexpr std::array<std::string_view, 20> kWritableProperties = {
+        "display",
+        "color",
+        "background",
+        "background-color",
+        "text-align",
+        "font-weight",
+        "width",
+        "height",
+        "opacity",
+        "transform",
+        "border-radius",
+        "left",
+        "top",
+        "right",
+        "bottom",
+        "position",
+        "white-space",
+        "text-overflow",
+        "overflow",
+        "z-index",
+    };
+    return std::find(kWritableProperties.begin(), kWritableProperties.end(), std::string_view(property)) !=
+        kWritableProperties.end();
+}
+
 std::vector<CssDeclaration> inline_declarations_for(const Node& node) {
     std::vector<CssDeclaration> declarations;
     const std::string& source = node.attribute("style");
@@ -1940,6 +1970,21 @@ jerry_value_t style_set_named(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t style_set_property(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    Node* node = style_node(call_info_p);
+    if (node == nullptr || args_count < 2) {
+        return jerry_undefined();
+    }
+    const std::string property = ascii_lowercase(value_to_string(args_p[0]));
+    if (!is_script_writable_style_property(property)) {
+        return jerry_undefined();
+    }
+    set_inline_style_property(*node, property, value_to_string(args_p[1]));
+    return jerry_undefined();
+}
+
 #define JELLYFRAME_STYLE_ACCESSOR(js_name, css_name) \
     jerry_value_t style_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
         return style_get_named(call_info_p, css_name); \
@@ -1956,6 +2001,18 @@ JELLYFRAME_STYLE_ACCESSOR(textAlign, "text-align")
 JELLYFRAME_STYLE_ACCESSOR(fontWeight, "font-weight")
 JELLYFRAME_STYLE_ACCESSOR(width, "width")
 JELLYFRAME_STYLE_ACCESSOR(height, "height")
+JELLYFRAME_STYLE_ACCESSOR(opacity, "opacity")
+JELLYFRAME_STYLE_ACCESSOR(transform, "transform")
+JELLYFRAME_STYLE_ACCESSOR(borderRadius, "border-radius")
+JELLYFRAME_STYLE_ACCESSOR(left, "left")
+JELLYFRAME_STYLE_ACCESSOR(top, "top")
+JELLYFRAME_STYLE_ACCESSOR(right, "right")
+JELLYFRAME_STYLE_ACCESSOR(bottom, "bottom")
+JELLYFRAME_STYLE_ACCESSOR(position, "position")
+JELLYFRAME_STYLE_ACCESSOR(whiteSpace, "white-space")
+JELLYFRAME_STYLE_ACCESSOR(textOverflow, "text-overflow")
+JELLYFRAME_STYLE_ACCESSOR(overflow, "overflow")
+JELLYFRAME_STYLE_ACCESSOR(zIndex, "z-index")
 
 #undef JELLYFRAME_STYLE_ACCESSOR
 
@@ -1971,6 +2028,19 @@ jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "fontWeight", style_get_fontWeight, style_set_fontWeight);
     define_accessor(object.get(), "width", style_get_width, style_set_width);
     define_accessor(object.get(), "height", style_get_height, style_set_height);
+    define_accessor(object.get(), "opacity", style_get_opacity, style_set_opacity);
+    define_accessor(object.get(), "transform", style_get_transform, style_set_transform);
+    define_accessor(object.get(), "borderRadius", style_get_borderRadius, style_set_borderRadius);
+    define_accessor(object.get(), "left", style_get_left, style_set_left);
+    define_accessor(object.get(), "top", style_get_top, style_set_top);
+    define_accessor(object.get(), "right", style_get_right, style_set_right);
+    define_accessor(object.get(), "bottom", style_get_bottom, style_set_bottom);
+    define_accessor(object.get(), "position", style_get_position, style_set_position);
+    define_accessor(object.get(), "whiteSpace", style_get_whiteSpace, style_set_whiteSpace);
+    define_accessor(object.get(), "textOverflow", style_get_textOverflow, style_set_textOverflow);
+    define_accessor(object.get(), "overflow", style_get_overflow, style_set_overflow);
+    define_accessor(object.get(), "zIndex", style_get_zIndex, style_set_zIndex);
+    set_method(object.get(), "setProperty", style_set_property);
     return object.release();
 }
 
