@@ -1,5 +1,7 @@
 #include "boards/waveshare_touch_lcd_boards.h"
 
+#include "jellyframe_esp32s3_input.h"
+
 #include "esp_log.h"
 #include "sdkconfig.h"
 
@@ -16,6 +18,7 @@
 #include "esp_heap_caps.h"
 #include "esp_lcd_panel_commands.h"
 #include "esp_lcd_panel_io.h"
+#include "esp_timer.h"
 #endif
 
 #include <algorithm>
@@ -61,11 +64,24 @@ struct Ws147DisplayContext {
     i2c_master_bus_handle_t i2c_bus = nullptr;
     i2c_master_dev_handle_t touch_dev = nullptr;
     SemaphoreHandle_t lcd_lock = nullptr;
+    SemaphoreHandle_t lcd_color_done = nullptr;
     TaskHandle_t touch_task = nullptr;
     std::uint16_t* dma_pixels = nullptr;
     std::size_t dma_pixel_capacity = 0;
+    BoardInputQueue* input_queue = nullptr;
     bool touch_task_stop = false;
     bool touch_down = false;
+    std::uint8_t touch_miss_count = 0;
+    volatile bool touch_pending = false;
+    volatile std::uint32_t touch_irq_count = 0;
+    std::uint32_t touch_poll_count = 0;
+    std::uint32_t touch_point_count = 0;
+    std::uint64_t last_touch_summary_us = 0;
+    std::uint16_t touch_start_x = 0;
+    std::uint16_t touch_start_y = 0;
+    std::uint16_t last_touch_x = 0;
+    std::uint16_t last_touch_y = 0;
+    bool backlight_on = false;
 };
 
 struct Ws147TouchPoint {
@@ -118,6 +134,21 @@ bool ws147_ensure_dma_buffer(Ws147DisplayContext& display) {
     return true;
 }
 
+esp_err_t ws147_set_backlight(Ws147DisplayContext& display, bool on) {
+    if (CONFIG_JELLYFRAME_WS147_LCD_BL_GPIO < 0) {
+        display.backlight_on = on;
+        return ESP_OK;
+    }
+    const gpio_num_t backlight_gpio = static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_LCD_BL_GPIO);
+    const int active_level = CONFIG_JELLYFRAME_WS147_LCD_BL_ON_LEVEL;
+    const int inactive_level = active_level == 0 ? 1 : 0;
+    ESP_RETURN_ON_ERROR(gpio_set_level(backlight_gpio, on ? active_level : inactive_level),
+                        kTag,
+                        "waveshare 1.47 backlight level failed");
+    display.backlight_on = on;
+    return ESP_OK;
+}
+
 constexpr Ws147InitCommand kWs147InitCommands[] = {
     {0x11, {}, 0, 120},
     {0xdf, {0x98, 0x53}, 2, 0},
@@ -148,12 +179,15 @@ constexpr Ws147InitCommand kWs147InitCommands[] = {
     {0xe5, {0x01, 0x02, 0x00}, 3, 0},
     {0xde, {0x00}, 1, 0},
     {LCD_CMD_TEOFF, {0x00}, 1, 0},
-    {LCD_CMD_COLMOD, {0x05}, 1, 0},
+    {LCD_CMD_COLMOD, {0x55}, 1, 0},
+    {0xb0, {0x00, 0xf0}, 2, 0},
     {LCD_CMD_CASET, {0x00, 0x22, 0x00, 0xcd}, 4, 0},
     {LCD_CMD_RASET, {0x00, 0x00, 0x01, 0x3f}, 4, 0},
     {0xde, {0x02}, 1, 0},
     {0xe5, {0x00, 0x02, 0x00}, 3, 0},
     {0xde, {0x00}, 1, 0},
+    {LCD_CMD_MADCTL, {0x00}, 1, 0},
+    {LCD_CMD_INVON, {}, 0, 0},
     {LCD_CMD_DISPON, {}, 0, 0},
 };
 
@@ -176,6 +210,25 @@ esp_err_t ws147_lcd_tx_param(esp_lcd_panel_io_handle_t io,
     return esp_lcd_panel_io_tx_param(io, command, data, data_bytes);
 }
 
+bool IRAM_ATTR ws147_lcd_color_done_callback(esp_lcd_panel_io_handle_t,
+                                             esp_lcd_panel_io_event_data_t*,
+                                             void* user_ctx) {
+    auto* display = static_cast<Ws147DisplayContext*>(user_ctx);
+    if (display == nullptr || display->lcd_color_done == nullptr) {
+        return false;
+    }
+    BaseType_t high_priority_task_woken = pdFALSE;
+    xSemaphoreGiveFromISR(display->lcd_color_done, &high_priority_task_woken);
+    return high_priority_task_woken == pdTRUE;
+}
+
+bool ws147_wait_lcd_color_done(Ws147DisplayContext& display) {
+    if (display.lcd_color_done == nullptr) {
+        return true;
+    }
+    return xSemaphoreTake(display.lcd_color_done, pdMS_TO_TICKS(1000)) == pdTRUE;
+}
+
 esp_err_t ws147_reset_lcd() {
     const gpio_num_t reset_gpio = static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_LCD_RST_GPIO);
     ESP_RETURN_ON_ERROR(gpio_reset_pin(reset_gpio), kTag, "waveshare 1.47 lcd reset pin reset failed");
@@ -191,6 +244,12 @@ esp_err_t ws147_init_lcd(Ws147DisplayContext& display) {
     if (display.lcd_lock == nullptr) {
         display.lcd_lock = xSemaphoreCreateMutex();
         if (display.lcd_lock == nullptr) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    if (display.lcd_color_done == nullptr) {
+        display.lcd_color_done = xSemaphoreCreateBinary();
+        if (display.lcd_color_done == nullptr) {
             return ESP_ERR_NO_MEM;
         }
     }
@@ -216,11 +275,13 @@ esp_err_t ws147_init_lcd(Ws147DisplayContext& display) {
     esp_lcd_panel_io_spi_config_t io_config{};
     io_config.cs_gpio_num = CONFIG_JELLYFRAME_WS147_LCD_CS_GPIO;
     io_config.dc_gpio_num = CONFIG_JELLYFRAME_WS147_LCD_DC_GPIO;
-    io_config.spi_mode = 0;
+    io_config.spi_mode = 3;
     io_config.pclk_hz = CONFIG_JELLYFRAME_WS147_LCD_PIXEL_CLOCK_HZ;
     io_config.trans_queue_depth = 10;
     io_config.lcd_cmd_bits = 8;
     io_config.lcd_param_bits = 8;
+    io_config.on_color_trans_done = ws147_lcd_color_done_callback;
+    io_config.user_ctx = &display;
 
     err = esp_lcd_new_panel_io_spi(display.spi_host, &io_config, &display.lcd_io);
     if (err != ESP_OK) {
@@ -251,9 +312,7 @@ esp_err_t ws147_init_lcd(Ws147DisplayContext& display) {
         const gpio_num_t backlight_gpio = static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_LCD_BL_GPIO);
         ESP_RETURN_ON_ERROR(gpio_reset_pin(backlight_gpio), kTag, "waveshare 1.47 backlight reset failed");
         ESP_RETURN_ON_ERROR(gpio_set_direction(backlight_gpio, GPIO_MODE_OUTPUT), kTag, "waveshare 1.47 backlight direction failed");
-        ESP_RETURN_ON_ERROR(gpio_set_level(backlight_gpio, CONFIG_JELLYFRAME_WS147_LCD_BL_ON_LEVEL),
-                            kTag,
-                            "waveshare 1.47 backlight on failed");
+        ESP_RETURN_ON_ERROR(ws147_set_backlight(display, false), kTag, "waveshare 1.47 backlight off failed");
     }
 
     return ESP_OK;
@@ -316,51 +375,17 @@ bool ws147_packed_flush(const std::uint16_t* pixels, jellyframe::Rect dirty_rect
             esp_lcd_panel_io_tx_color(display->lcd_io,
                                       LCD_CMD_RAMWR,
                                       color_buffer,
-                                      pixels_in_chunk * sizeof(std::uint16_t)) != ESP_OK) {
+                                      pixels_in_chunk * sizeof(std::uint16_t)) != ESP_OK ||
+            !ws147_wait_lcd_color_done(*display)) {
             ws147_unlock_lcd(*display);
             return false;
         }
     }
     ws147_unlock_lcd(*display);
+    if (!display->backlight_on) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(ws147_set_backlight(*display, true));
+    }
     return true;
-}
-
-void ws147_draw_bringup_pattern(Ws147DisplayContext& display) {
-    constexpr int width = CONFIG_JELLYFRAME_WS147_LCD_WIDTH;
-    constexpr int height = CONFIG_JELLYFRAME_WS147_LCD_HEIGHT;
-    constexpr int rows = 16;
-    std::uint16_t* line_buffer = display.dma_pixels;
-    if (line_buffer == nullptr || display.dma_pixel_capacity < static_cast<std::size_t>(width * rows)) {
-        return;
-    }
-    for (int y = 0; y < height; y += rows) {
-        const int draw_rows = std::min(rows, height - y);
-        for (int row = 0; row < draw_rows; ++row) {
-            for (int x = 0; x < width; ++x) {
-                const int global_y = y + row;
-                std::uint16_t color = 0xffff;
-                if (global_y < height / 4) {
-                    color = 0xf800;
-                } else if (global_y < height / 2) {
-                    color = 0x07e0;
-                } else if (global_y < (height * 3) / 4) {
-                    color = 0x001f;
-                } else {
-                    color = ((x / 12) + (global_y / 12)) % 2 == 0 ? 0xffff : 0x0000;
-                }
-                line_buffer[row * width + x] = ws147_panel_rgb565(color);
-            }
-        }
-        ws147_lock_lcd(display);
-        ESP_ERROR_CHECK(ws147_set_window(display.lcd_io, 0, y, width, y + draw_rows));
-        ESP_ERROR_CHECK(esp_lcd_panel_io_tx_color(display.lcd_io,
-                                                  LCD_CMD_RAMWR,
-                                                  line_buffer,
-                                                  static_cast<std::size_t>(width) *
-                                                      static_cast<std::size_t>(draw_rows) *
-                                                      sizeof(std::uint16_t)));
-        ws147_unlock_lcd(display);
-    }
 }
 
 Ws147TouchPoint ws147_map_touch_point(std::uint16_t raw_x, std::uint16_t raw_y) {
@@ -410,57 +435,99 @@ esp_err_t ws147_read_touch_points(Ws147DisplayContext& display,
     return ESP_OK;
 }
 
-void ws147_draw_touch_marker(Ws147DisplayContext& display, std::uint16_t x, std::uint16_t y) {
-    if (display.lcd_io == nullptr) {
+void ws147_enqueue_touch(Ws147DisplayContext& display,
+                         BoardInputKind kind,
+                         const Ws147TouchPoint& point) {
+    if (display.input_queue == nullptr) {
         return;
     }
-
-    constexpr int width = CONFIG_JELLYFRAME_WS147_LCD_WIDTH;
-    constexpr int height = CONFIG_JELLYFRAME_WS147_LCD_HEIGHT;
-    constexpr int marker_size = 4;
-    std::uint16_t marker[marker_size * marker_size] = {
-        ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xf800),
-        ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xffff), ws147_panel_rgb565(0xffff), ws147_panel_rgb565(0xf800),
-        ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xffff), ws147_panel_rgb565(0xffff), ws147_panel_rgb565(0xf800),
-        ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xf800), ws147_panel_rgb565(0xf800),
-    };
-
-    const int draw_x = std::min(width - marker_size, std::max(0, static_cast<int>(x) - marker_size / 2));
-    const int draw_y = std::min(height - marker_size, std::max(0, static_cast<int>(y) - marker_size / 2));
-    ws147_lock_lcd(display);
-    if (ws147_set_window(display.lcd_io, draw_x, draw_y, draw_x + marker_size, draw_y + marker_size) == ESP_OK) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_lcd_panel_io_tx_color(display.lcd_io,
-                                                                LCD_CMD_RAMWR,
-                                                                marker,
-                                                                sizeof(marker)));
+    BoardInputEvent event;
+    event.kind = kind;
+    event.x = point.x;
+    event.y = point.y;
+    if (!display.input_queue->enqueue(event)) {
+        ESP_LOGW(kTag, "waveshare 1.47 touch input queue full; dropped=%u",
+                 static_cast<unsigned>(display.input_queue->dropped_count()));
     }
-    ws147_unlock_lcd(display);
+}
+
+void ws147_enqueue_touch_release(Ws147DisplayContext& display) {
+    if (display.input_queue == nullptr) {
+        return;
+    }
+    BoardInputEvent event;
+    event.kind = BoardInputKind::PointerUp;
+    event.x = display.touch_start_x;
+    event.y = display.touch_start_y;
+    if (!display.input_queue->enqueue(event)) {
+        ESP_LOGW(kTag, "waveshare 1.47 touch input queue full; dropped=%u",
+                 static_cast<unsigned>(display.input_queue->dropped_count()));
+    }
 }
 
 void ws147_touch_poll_task(void* arg) {
     auto* display = static_cast<Ws147DisplayContext*>(arg);
     Ws147TouchPoint points[kWs147AxsMaxPoints]{};
     while (display != nullptr && !display->touch_task_stop) {
+        const bool was_pending = display->touch_pending;
+        display->touch_pending = false;
+        ++display->touch_poll_count;
         std::uint8_t point_count = 0;
         const esp_err_t err = ws147_read_touch_points(*display, points, kWs147AxsMaxPoints, point_count);
         if (err == ESP_OK && point_count > 0) {
+            const bool was_down = display->touch_down;
             display->touch_down = true;
-            ESP_LOGI(kTag,
-                     "waveshare 1.47 touch points=%u raw=%u,%u mapped=%u,%u",
-                     static_cast<unsigned>(point_count),
-                     static_cast<unsigned>(points[0].raw_x),
-                     static_cast<unsigned>(points[0].raw_y),
-                     static_cast<unsigned>(points[0].x),
-                     static_cast<unsigned>(points[0].y));
-            ws147_draw_touch_marker(*display, points[0].x, points[0].y);
+            display->touch_miss_count = 0;
+            ++display->touch_point_count;
+            display->last_touch_x = points[0].x;
+            display->last_touch_y = points[0].y;
+            if (!was_down) {
+                display->touch_start_x = points[0].x;
+                display->touch_start_y = points[0].y;
+                ESP_LOGI(kTag,
+                         "waveshare 1.47 touch down points=%u raw=%u,%u mapped=%u,%u",
+                         static_cast<unsigned>(point_count),
+                         static_cast<unsigned>(points[0].raw_x),
+                         static_cast<unsigned>(points[0].raw_y),
+                         static_cast<unsigned>(points[0].x),
+                         static_cast<unsigned>(points[0].y));
+            }
+            ws147_enqueue_touch(*display,
+                                was_down ? BoardInputKind::PointerMove : BoardInputKind::PointerDown,
+                                points[0]);
         } else if (err == ESP_OK && display->touch_down) {
+            ++display->touch_miss_count;
+            if (display->touch_miss_count < 3) {
+                vTaskDelay(pdMS_TO_TICKS(10));
+                continue;
+            }
             display->touch_down = false;
-            ESP_LOGI(kTag, "waveshare 1.47 touch released");
+            display->touch_miss_count = 0;
+            ESP_LOGI(kTag,
+                     "waveshare 1.47 touch released start=%u,%u last=%u,%u",
+                     static_cast<unsigned>(display->touch_start_x),
+                     static_cast<unsigned>(display->touch_start_y),
+                     static_cast<unsigned>(display->last_touch_x),
+                     static_cast<unsigned>(display->last_touch_y));
+            ws147_enqueue_touch_release(*display);
         } else if (err != ESP_OK) {
             ESP_LOGW(kTag, "waveshare 1.47 touch read failed: %s", esp_err_to_name(err));
             vTaskDelay(pdMS_TO_TICKS(200));
         }
-        vTaskDelay(pdMS_TO_TICKS(20));
+
+        const std::uint64_t now_us = esp_timer_get_time();
+        if (display->last_touch_summary_us == 0 || now_us - display->last_touch_summary_us >= 5000000ULL) {
+            display->last_touch_summary_us = now_us;
+            ESP_LOGI(kTag,
+                     "waveshare 1.47 touch summary polls=%u irq=%u hits=%u int_level=%d pending=%d down=%d",
+                     static_cast<unsigned>(display->touch_poll_count),
+                     static_cast<unsigned>(display->touch_irq_count),
+                     static_cast<unsigned>(display->touch_point_count),
+                     gpio_get_level(static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO)),
+                     was_pending ? 1 : 0,
+                     display->touch_down ? 1 : 0);
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     if (display != nullptr) {
         display->touch_task = nullptr;
@@ -468,8 +535,22 @@ void ws147_touch_poll_task(void* arg) {
     vTaskDelete(nullptr);
 }
 
+void IRAM_ATTR ws147_touch_isr_handler(void* arg) {
+    auto* display = static_cast<Ws147DisplayContext*>(arg);
+    if (display != nullptr) {
+        display->touch_pending = true;
+        display->touch_irq_count = display->touch_irq_count + 1;
+    }
+}
+
 esp_err_t ws147_init_i2c_and_probe_touch(Ws147DisplayContext& display) {
     const gpio_num_t touch_reset_gpio = static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_TOUCH_RST_GPIO);
+    const gpio_num_t touch_int_gpio = static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO);
+    ESP_RETURN_ON_ERROR(gpio_reset_pin(touch_int_gpio), kTag, "waveshare 1.47 touch int pin reset failed");
+    ESP_RETURN_ON_ERROR(gpio_set_direction(touch_int_gpio, GPIO_MODE_INPUT), kTag, "waveshare 1.47 touch int direction failed");
+    ESP_RETURN_ON_ERROR(gpio_set_pull_mode(touch_int_gpio, GPIO_PULLUP_ONLY), kTag, "waveshare 1.47 touch int pullup failed");
+    ESP_RETURN_ON_ERROR(gpio_set_intr_type(touch_int_gpio, GPIO_INTR_NEGEDGE), kTag, "waveshare 1.47 touch int edge failed");
+
     ESP_RETURN_ON_ERROR(gpio_reset_pin(touch_reset_gpio), kTag, "waveshare 1.47 touch reset pin reset failed");
     ESP_RETURN_ON_ERROR(gpio_set_direction(touch_reset_gpio, GPIO_MODE_OUTPUT), kTag, "waveshare 1.47 touch reset pin direction failed");
     ESP_RETURN_ON_ERROR(gpio_set_level(touch_reset_gpio, 0), kTag, "waveshare 1.47 touch reset low failed");
@@ -493,9 +574,17 @@ esp_err_t ws147_init_i2c_and_probe_touch(Ws147DisplayContext& display) {
              CONFIG_JELLYFRAME_WS147_TOUCH_ADDR,
              esp_err_to_name(probe_err),
              CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO,
-             gpio_get_level(static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO)));
+             gpio_get_level(touch_int_gpio));
     if (probe_err != ESP_OK) {
         return probe_err;
+    }
+
+    esp_err_t isr_err = gpio_install_isr_service(0);
+    if (isr_err != ESP_OK && isr_err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(kTag, "waveshare 1.47 touch ISR service install failed: %s", esp_err_to_name(isr_err));
+    } else {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_isr_handler_add(touch_int_gpio, ws147_touch_isr_handler, &display));
+        ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_intr_enable(touch_int_gpio));
     }
 
     i2c_device_config_t device_config{};
@@ -529,8 +618,6 @@ BoardRuntime initialize_waveshare_147() {
         return BoardRuntime{kWaveshare147Profile, false, "JD9853 init failed", nullptr, &display};
     }
 
-    ws147_draw_bringup_pattern(display);
-
     err = ws147_init_i2c_and_probe_touch(display);
     if (err != ESP_OK) {
         ESP_LOGW(kTag, "waveshare 1.47 display initialized; touch probe failed: %s", esp_err_to_name(err));
@@ -554,11 +641,16 @@ void release_waveshare_147(Ws147DisplayContext& display) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_del_master_bus(display.i2c_bus));
         display.i2c_bus = nullptr;
     }
+    ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_isr_handler_remove(static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO)));
     if (display.lcd_io != nullptr) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_lcd_panel_io_del(display.lcd_io));
         display.lcd_io = nullptr;
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_free(display.spi_host));
+    if (display.lcd_color_done != nullptr) {
+        vSemaphoreDelete(display.lcd_color_done);
+        display.lcd_color_done = nullptr;
+    }
     if (display.lcd_lock != nullptr) {
         vSemaphoreDelete(display.lcd_lock);
         display.lcd_lock = nullptr;
@@ -568,6 +660,7 @@ void release_waveshare_147(Ws147DisplayContext& display) {
         display.dma_pixels = nullptr;
         display.dma_pixel_capacity = 0;
     }
+    display.input_queue = nullptr;
     display.touch_down = false;
 }
 #endif
@@ -614,6 +707,22 @@ void release_board_runtime(BoardRuntime& runtime) {
     runtime.hardware_status = "released";
     runtime.packed_flush = nullptr;
     runtime.flush_context = nullptr;
+}
+
+void attach_input_queue(BoardRuntime& runtime, BoardInputQueue* queue) {
+#if CONFIG_JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && \
+    CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    if (runtime.profile.id == BoardId::WaveshareEsp32s3TouchLcd147 && runtime.flush_context != nullptr) {
+        auto* display = static_cast<Ws147DisplayContext*>(runtime.flush_context);
+        display->input_queue = queue;
+        if (queue != nullptr) {
+            ESP_LOGI(kTag, "waveshare 1.47 touch events attached to JellyFrame input queue");
+        }
+    }
+#else
+    (void)runtime;
+    (void)queue;
+#endif
 }
 
 } // namespace jellyframe_esp32s3::boards

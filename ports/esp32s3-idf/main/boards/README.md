@@ -12,6 +12,7 @@ Current adapters:
 - `waveshare_touch_lcd_boards.*`: bring-up profile for the Waveshare
   ESP32-S3-Touch-LCD-1.47 board. It initializes the JD9853 SPI LCD, probes the
   AXS5106L touch controller and presents JellyFrame's RGB565 dirty rectangles
-  through a packed panel flush callback. Touch is intentionally still a probe
-  path; production input should translate board events into the normal
-  `BoardInputQueue` flow.
+  through a packed panel flush callback. The adapter waits for the LCD color
+  transfer-done callback before reusing the DMA strip buffer, keeps the
+  backlight off until the first app frame is flushed, and can attach touch
+  events to the normal `BoardInputQueue` flow.

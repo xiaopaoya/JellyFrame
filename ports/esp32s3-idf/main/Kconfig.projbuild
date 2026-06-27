@@ -137,12 +137,12 @@ config JELLYFRAME_WS147_TOUCH_SCL_GPIO
 config JELLYFRAME_WS147_TOUCH_INT_GPIO
     int "Waveshare 1.47 touch INT GPIO"
     depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
-    default 47
+    default 48
 
 config JELLYFRAME_WS147_TOUCH_RST_GPIO
     int "Waveshare 1.47 touch reset GPIO"
     depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
-    default 48
+    default 47
 
 config JELLYFRAME_WS147_TOUCH_ADDR
     hex "Waveshare 1.47 AXS5106L I2C address"

@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "freertos/FreeRTOS.h"
+
 namespace jellyframe_esp32s3 {
 
 enum class BoardInputKind {
@@ -39,8 +41,9 @@ public:
     std::uint32_t dropped_count() const;
 
 private:
-    static constexpr std::size_t kCapacity = 16;
+    static constexpr std::size_t kCapacity = 64;
 
+    mutable portMUX_TYPE lock_ = portMUX_INITIALIZER_UNLOCKED;
     BoardInputEvent events_[kCapacity]{};
     std::size_t head_ = 0;
     std::size_t tail_ = 0;

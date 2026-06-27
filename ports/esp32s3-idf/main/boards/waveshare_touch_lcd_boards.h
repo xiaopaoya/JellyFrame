@@ -4,7 +4,11 @@
 
 #include <cstdint>
 
-namespace jellyframe_esp32s3::boards {
+namespace jellyframe_esp32s3 {
+
+class BoardInputQueue;
+
+namespace boards {
 
 enum class BoardId : std::uint8_t {
     GenericQemu = 0,
@@ -38,7 +42,9 @@ struct BoardRuntime {
 const BoardProfile& selected_board_profile();
 BoardRuntime initialize_selected_board();
 void release_board_runtime(BoardRuntime& runtime);
+void attach_input_queue(BoardRuntime& runtime, BoardInputQueue* queue);
 bool selected_board_probe_only_enabled();
 void run_selected_board_probe_only();
 
-} // namespace jellyframe_esp32s3::boards
+} // namespace boards
+} // namespace jellyframe_esp32s3

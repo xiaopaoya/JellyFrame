@@ -16,34 +16,45 @@ std::size_t bounded_text_length(const char* text, std::size_t capacity) {
 } // namespace
 
 bool BoardInputQueue::enqueue(const BoardInputEvent& event) {
+    portENTER_CRITICAL(&lock_);
     if (count_ == kCapacity) {
         ++dropped_count_;
+        portEXIT_CRITICAL(&lock_);
         return false;
     }
     events_[tail_] = event;
     tail_ = (tail_ + 1) % kCapacity;
     ++count_;
+    portEXIT_CRITICAL(&lock_);
     return true;
 }
 
 bool BoardInputQueue::dequeue(BoardInputEvent& event) {
+    portENTER_CRITICAL(&lock_);
     if (count_ == 0) {
+        portEXIT_CRITICAL(&lock_);
         return false;
     }
     event = events_[head_];
     head_ = (head_ + 1) % kCapacity;
     --count_;
+    portEXIT_CRITICAL(&lock_);
     return true;
 }
 
 void BoardInputQueue::clear() {
+    portENTER_CRITICAL(&lock_);
     head_ = 0;
     tail_ = 0;
     count_ = 0;
+    portEXIT_CRITICAL(&lock_);
 }
 
 std::size_t BoardInputQueue::size() const {
-    return count_;
+    portENTER_CRITICAL(&lock_);
+    const std::size_t count = count_;
+    portEXIT_CRITICAL(&lock_);
+    return count;
 }
 
 std::size_t BoardInputQueue::capacity() const {
@@ -51,7 +62,10 @@ std::size_t BoardInputQueue::capacity() const {
 }
 
 std::uint32_t BoardInputQueue::dropped_count() const {
-    return dropped_count_;
+    portENTER_CRITICAL(&lock_);
+    const std::uint32_t dropped = dropped_count_;
+    portEXIT_CRITICAL(&lock_);
+    return dropped;
 }
 
 BoardInputDispatchStats dispatch_input_events(BoardInputQueue& queue,
