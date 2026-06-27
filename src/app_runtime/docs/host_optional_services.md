@@ -340,6 +340,12 @@ Current V0 helper:
 
 - `ImageDecodePolicy` gates the service and carries URL, width, height, decoded
   byte and pending-decode budgets.
+- `AppImageCodecAdapter` is the production decoder boundary. A product host can
+  implement it for PNG, JPEG, WebP or a vendor codec by consuming package-local
+  bytes and returning an `AppImageCodecResult`. The platform-neutral helper
+  `app_image_codec_result_within_policy(...)` validates width, height, stride,
+  pixel format, optional copied bytes and decoded-byte budget before a result
+  becomes a drawable surface.
 - `ImageDecodeMock` provides desktop/test raw-surface fixtures through
   `HostServiceJobKind::ImageDecode` requests and completions.
 - `AppImageSurfaceCache` turns URLs into bounded decode requests, records ready
@@ -389,6 +395,11 @@ Current V0 helper:
 Future host requests can map to:
 
 ```cpp
+class ProductImageCodec final : public AppImageCodecAdapter {
+public:
+    AppImageCodecResult decode(const AppImageCodecRequest& request) override;
+};
+
 struct HostImageDecodeRequest {
     uint32_t app_instance_id;
     const char* resource_path;
@@ -414,8 +425,12 @@ struct HostDecodedSurface {
 Rules:
 
 - Resize or reject large images during packaging; do not gamble at runtime.
+- Product decoders must run outside the UI/main task and return only a small
+  completion plus a host-owned surface handle.
 - Prefer the format needed by the screen or compositor. ESP32-S3 should prefer
   RGB565.
+- Converting through RGBA is acceptable on desktop, but should be avoided on
+  small MCUs unless measurement proves the memory and CPU cost is safe.
 - Decoded surfaces are host-cache owned; UI only references handles.
 - A full cache may reclaim surfaces not referenced by the current display list;
   if every ready surface is still visible, the cache may temporarily exceed the
@@ -430,7 +445,8 @@ Rules:
   painter. The Win32 debug painter supports `fill`, `contain`, `cover`, `none`,
   `scale-down` and one/two-value keyword/percentage positioning. Complex
   four-value and length-offset positioning is deferred.
-- PNG/JPEG/WebP and production MCU codecs are not wired yet.
+- Real PNG/JPEG/WebP/vendor decoders are still port work; JellyFrame now defines
+  the adapter shape and budget validation helper they should use.
 
 ## Audio Playback Service
 

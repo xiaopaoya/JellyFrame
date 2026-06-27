@@ -947,6 +947,39 @@ void service_records_collect_handles_released_by_lifecycle() {
     check(storage.value(storage_handle) == nullptr, "resource cleanup storage record removed");
 }
 
+void image_codec_adapter_policy_helpers_are_bounded() {
+    check(std::string(app_image_codec_kind_name(AppImageCodecKind::Png)) == "png", "codec kind png name");
+    check(std::string(app_image_codec_kind_name(AppImageCodecKind::ProductSpecific)) == "product-specific",
+          "codec kind product name");
+
+    const ImageDecodePolicy policy{true, 64, 16, 16, 16U * 16U * 2U, 1};
+    AppImageCodecResult ok;
+    ok.status = HostServiceStatus::Completed;
+    ok.width = 16;
+    ok.height = 16;
+    ok.stride_pixels = 16;
+    ok.pixel_format = HostPixelFormat::Rgb565;
+    ok.pixels.resize(16U * 16U * 2U);
+    check(app_image_codec_result_within_policy(ok, policy), "codec result within policy");
+
+    AppImageCodecResult too_wide = ok;
+    too_wide.width = 17;
+    check(!app_image_codec_result_within_policy(too_wide, policy), "codec result rejects oversized width");
+
+    AppImageCodecResult byte_mismatch = ok;
+    byte_mismatch.pixels.pop_back();
+    check(!app_image_codec_result_within_policy(byte_mismatch, policy), "codec result rejects byte mismatch");
+
+    AppImageCodecResult failed;
+    failed.status = HostServiceStatus::Unsupported;
+    failed.error_code = 415;
+    failed.width = 999;
+    check(app_image_codec_result_within_policy(failed, policy), "failed codec result carries status without surface");
+
+    check(app_decoded_surface_within_policy(8, 8, 8, HostPixelFormat::Rgb565, 0, policy),
+          "host-owned external surface may omit copied pixels");
+}
+
 void kv_storage_enforces_budgets() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.settings", AppRole::App);
@@ -1124,6 +1157,7 @@ int main() {
     audio_command_mock_reports_invalid_handle_at_submit_time();
     kv_storage_is_app_private_and_async();
     service_records_collect_handles_released_by_lifecycle();
+    image_codec_adapter_policy_helpers_are_bounded();
     kv_storage_enforces_budgets();
     storage_failure_classification_is_specific();
     local_storage_shadow_follows_web_storage_subset();

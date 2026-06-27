@@ -27,6 +27,10 @@ JellyFrame Engine 的重要变更记录在这里。
 - `embedded_framebuffer` 新增可选 `EmbeddedFrameBufferPresentStats`，用于开发板 bring-up
   统计 converted pixels、packed bytes、clipped/empty dirty rects 和 flush count。virtual board
   benchmark 会打印这些字段，方便把核心输出与 port 侧 panel bytes 和 DMA wait time 对齐。
+- 新增第一版产品级图片 codec adapter 形状。`AppImageCodecAdapter` 与
+  `AppImageCodecRequest` / `AppImageCodecResult` 允许产品 host 在现有 image
+  request/completion/handle 路径后接入 PNG、JPEG、WebP 或厂商 decoder；
+  `app_image_codec_result_within_policy` 会按 app 图片预算校验 decoded surface。
 
 ### 变更
 

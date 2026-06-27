@@ -133,6 +133,44 @@ struct ImageDecodeFixture {
     std::vector<std::uint8_t> pixels;
 };
 
+enum class AppImageCodecKind {
+    Unknown,
+    Bmp,
+    Png,
+    Jpeg,
+    WebP,
+    ProductSpecific,
+};
+
+struct AppImageCodecRequest {
+    std::uint32_t app_instance_id = 0;
+    std::string url;
+    AppImageCodecKind codec = AppImageCodecKind::Unknown;
+    HostPixelFormat preferred_pixel_format = HostPixelFormat::Unknown;
+    const std::uint8_t* bytes = nullptr;
+    std::size_t byte_count = 0;
+    int max_width = 0;
+    int max_height = 0;
+    std::size_t max_decoded_bytes = 0;
+    std::uint32_t timeout_ms = 0;
+};
+
+struct AppImageCodecResult {
+    HostServiceStatus status = HostServiceStatus::Failed;
+    std::uint32_t error_code = 0;
+    int width = 0;
+    int height = 0;
+    int stride_pixels = 0;
+    HostPixelFormat pixel_format = HostPixelFormat::Unknown;
+    std::vector<std::uint8_t> pixels;
+};
+
+class AppImageCodecAdapter {
+public:
+    virtual ~AppImageCodecAdapter() = default;
+    virtual AppImageCodecResult decode(const AppImageCodecRequest& request) = 0;
+};
+
 struct AppDecodedSurfaceRecord {
     std::uint32_t handle = 0;
     std::uint32_t app_instance_id = 0;
@@ -182,6 +220,15 @@ std::size_t decoded_surface_byte_count(int width,
                                        int height,
                                        int stride_pixels,
                                        HostPixelFormat pixel_format);
+const char* app_image_codec_kind_name(AppImageCodecKind kind);
+bool app_decoded_surface_within_policy(int width,
+                                       int height,
+                                       int stride_pixels,
+                                       HostPixelFormat pixel_format,
+                                       std::size_t pixel_bytes,
+                                       const ImageDecodePolicy& policy);
+bool app_image_codec_result_within_policy(const AppImageCodecResult& result,
+                                          const ImageDecodePolicy& policy);
 const char* app_image_surface_state_name(AppImageSurfaceState state);
 const char* app_image_failure_reason_name(AppImageFailureReason reason);
 AppImageFailureReason classify_app_image_failure(AppServiceSubmitStatus submit_status,

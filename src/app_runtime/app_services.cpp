@@ -590,6 +590,60 @@ std::size_t decoded_surface_byte_count(int width,
     return 0;
 }
 
+const char* app_image_codec_kind_name(AppImageCodecKind kind) {
+    switch (kind) {
+    case AppImageCodecKind::Unknown:
+        return "unknown";
+    case AppImageCodecKind::Bmp:
+        return "bmp";
+    case AppImageCodecKind::Png:
+        return "png";
+    case AppImageCodecKind::Jpeg:
+        return "jpeg";
+    case AppImageCodecKind::WebP:
+        return "webp";
+    case AppImageCodecKind::ProductSpecific:
+        return "product-specific";
+    }
+    return "unknown";
+}
+
+bool app_image_codec_result_within_policy(const AppImageCodecResult& result,
+                                          const ImageDecodePolicy& policy) {
+    if (result.status != HostServiceStatus::Completed) {
+        return true;
+    }
+    return app_decoded_surface_within_policy(result.width,
+                                             result.height,
+                                             result.stride_pixels,
+                                             result.pixel_format,
+                                             result.pixels.size(),
+                                             policy);
+}
+
+bool app_decoded_surface_within_policy(int width,
+                                       int height,
+                                       int stride_pixels,
+                                       HostPixelFormat pixel_format,
+                                       std::size_t pixel_bytes,
+                                       const ImageDecodePolicy& policy) {
+    if (policy.max_width > 0 && width > policy.max_width) {
+        return false;
+    }
+    if (policy.max_height > 0 && height > policy.max_height) {
+        return false;
+    }
+    const std::size_t decoded_bytes =
+        decoded_surface_byte_count(width, height, stride_pixels, pixel_format);
+    if (decoded_bytes == 0 || decoded_bytes > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+        return false;
+    }
+    if (pixel_bytes != 0 && pixel_bytes != decoded_bytes) {
+        return false;
+    }
+    return policy.max_decoded_bytes == 0 || decoded_bytes <= policy.max_decoded_bytes;
+}
+
 const char* app_image_surface_state_name(AppImageSurfaceState state) {
     switch (state) {
     case AppImageSurfaceState::Missing:
@@ -848,24 +902,12 @@ bool ImageDecodeMock::valid_fixture(const ImageDecodeFixture& fixture) const {
     if (fixture.url.empty() || fixture.url.size() > policy_.max_url_bytes) {
         return false;
     }
-    if (policy_.max_width > 0 && fixture.width > policy_.max_width) {
-        return false;
-    }
-    if (policy_.max_height > 0 && fixture.height > policy_.max_height) {
-        return false;
-    }
-    const std::size_t decoded_bytes =
-        decoded_surface_byte_count(fixture.width, fixture.height, fixture.stride_pixels, fixture.pixel_format);
-    if (decoded_bytes == 0) {
-        return false;
-    }
-    if (decoded_bytes > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
-        return false;
-    }
-    if (!fixture.pixels.empty() && fixture.pixels.size() != decoded_bytes) {
-        return false;
-    }
-    return policy_.max_decoded_bytes == 0 || decoded_bytes <= policy_.max_decoded_bytes;
+    return app_decoded_surface_within_policy(fixture.width,
+                                             fixture.height,
+                                             fixture.stride_pixels,
+                                             fixture.pixel_format,
+                                             fixture.pixels.size(),
+                                             policy_);
 }
 
 bool ImageDecodeMock::add_fixture(ImageDecodeFixture fixture) {

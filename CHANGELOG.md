@@ -35,6 +35,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   for board bring-up, reporting converted pixels, packed bytes, clipped/empty
   dirty rects and flush count. The virtual board benchmark prints these fields
   so port-side panel bytes and DMA wait time can be compared with core output.
+- Added the first production image codec adapter shape. `AppImageCodecAdapter`
+  and `AppImageCodecRequest`/`AppImageCodecResult` let product hosts connect
+  PNG, JPEG, WebP or vendor decoders behind the existing image
+  request/completion/handle path, while `app_image_codec_result_within_policy`
+  validates decoded surfaces against app image budgets.
 
 ### Changed
 
