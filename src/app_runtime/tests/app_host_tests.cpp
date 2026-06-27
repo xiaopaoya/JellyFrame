@@ -425,6 +425,8 @@ void budget_snapshot_reports_runtime_usage_and_caps() {
     input.script_timers = 4;
     input.script_event_listeners = 6;
     input.detached_dom_nodes = 1;
+    input.storage_shadow_items = 2;
+    input.storage_shadow_bytes = 48;
 
     const AppBudgetSnapshot budget = collect_app_budget_snapshot(host, input);
     assert(budget.app_instance_id == app.id);
@@ -456,6 +458,10 @@ void budget_snapshot_reports_runtime_usage_and_caps() {
     assert(budget.script_event_listeners.limit == 11);
     assert(budget.detached_dom_nodes.used == 1);
     assert(budget.detached_dom_nodes.limit == 5);
+    assert(budget.storage_shadow_items.used == 2);
+    assert(budget.storage_shadow_items.limit == 0);
+    assert(budget.storage_shadow_bytes.used == 48);
+    assert(budget.storage_shadow_bytes.limit == 0);
     assert(budget.dom_nodes.limit == 123);
     assert(budget.framebuffer_pixels.limit == 456);
     assert(!app_budget_snapshot_has_exhausted_runtime_budget(budget));

@@ -3,6 +3,19 @@
 #include "app_runtime/app_services.h"
 
 namespace jellyframe {
+namespace {
+
+void append_diagnostic(AppStorageLifecycleReport& report,
+                       AppStorageLifecycleDiagnosticCode code,
+                       std::size_t count,
+                       bool incomplete = false) {
+    if (report.diagnostic_count >= AppStorageLifecycleReport::kMaxDiagnostics) {
+        return;
+    }
+    report.diagnostics[report.diagnostic_count++] = AppStorageLifecycleDiagnostic{code, count, incomplete};
+}
+
+} // namespace
 
 AppStorageLifecycleDecision app_storage_lifecycle_decision_for(
     AppStorageLifecycleTrigger trigger,
@@ -69,6 +82,44 @@ AppStorageLifecycleApplyResult apply_app_storage_lifecycle_decision(
     return result;
 }
 
+AppStorageLifecycleReport apply_app_storage_lifecycle(
+    AppRuntimeHost& host,
+    AppPrivateKvStorageMock& storage,
+    const std::string& app_id,
+    std::uint32_t app_instance_id,
+    AppStorageLifecycleTrigger trigger,
+    const AppStorageLifecyclePolicy& policy,
+    std::size_t max_flush_ops) {
+    AppStorageLifecycleReport report;
+    report.trigger = trigger;
+    report.decision = app_storage_lifecycle_decision_for(trigger, policy);
+    report.applied = apply_app_storage_lifecycle_decision(
+        host, storage, app_id, app_instance_id, report.decision, max_flush_ops);
+
+    if (report.decision.flush_pending_writes) {
+        append_diagnostic(report,
+                          report.applied.flush_stopped_before_empty
+                              ? AppStorageLifecycleDiagnosticCode::FlushFailed
+                              : AppStorageLifecycleDiagnosticCode::FlushOk,
+                          report.applied.flushed_pending_writes,
+                          report.applied.flush_stopped_before_empty);
+    }
+    if (report.decision.drop_pending_writes) {
+        append_diagnostic(report,
+                          AppStorageLifecycleDiagnosticCode::DropPending,
+                          report.applied.dropped_pending_writes);
+    }
+    if (report.decision.delete_persistent_data) {
+        append_diagnostic(report,
+                          AppStorageLifecycleDiagnosticCode::DeleteData,
+                          report.applied.deleted_persistent_items);
+    } else if (trigger == AppStorageLifecycleTrigger::Uninstall ||
+               trigger == AppStorageLifecycleTrigger::UpdateReplace) {
+        append_diagnostic(report, AppStorageLifecycleDiagnosticCode::RetainData, 0);
+    }
+    return report;
+}
+
 const char* app_storage_lifecycle_trigger_name(AppStorageLifecycleTrigger trigger) {
     switch (trigger) {
     case AppStorageLifecycleTrigger::Suspend:
@@ -87,6 +138,22 @@ const char* app_storage_lifecycle_trigger_name(AppStorageLifecycleTrigger trigge
         return "memory-pressure";
     }
     return "unknown";
+}
+
+const char* app_storage_lifecycle_diagnostic_code_name(AppStorageLifecycleDiagnosticCode code) {
+    switch (code) {
+    case AppStorageLifecycleDiagnosticCode::FlushOk:
+        return "storage-flush-ok";
+    case AppStorageLifecycleDiagnosticCode::FlushFailed:
+        return "storage-flush-failed";
+    case AppStorageLifecycleDiagnosticCode::DropPending:
+        return "storage-drop-pending";
+    case AppStorageLifecycleDiagnosticCode::DeleteData:
+        return "storage-delete-data";
+    case AppStorageLifecycleDiagnosticCode::RetainData:
+        return "storage-retain-data";
+    }
+    return "storage-unknown";
 }
 
 } // namespace jellyframe

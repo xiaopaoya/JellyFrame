@@ -6,7 +6,20 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ## Unreleased
 
-No unreleased changes.
+### Added
+
+- Started the `0.5.0-dev` device-usability line with a fixed-size storage
+  lifecycle report for system shells. Hosts can now apply exit, crash, uninstall,
+  update and memory-pressure storage policy through one helper and receive stable
+  diagnostics such as `storage-flush-ok`, `storage-flush-failed`,
+  `storage-drop-pending`, `storage-delete-data` and `storage-retain-data`.
+- `AppBudgetSnapshot` can now carry lightweight localStorage-shadow item/byte
+  counters when the host supplies them, and the Win32 shell prints those counters
+  in scripted capture summaries.
+- The desktop installed-app registry mock now models app-private data under
+  `data/<sanitized-app-id>`. Removing an app deletes that data by default,
+  `--keep-data` retains it, and `delete-data` / Win32 `--delete-app-data` can
+  clear data without removing the installed bundle.
 
 ## 0.4.0-dev - 2026-06-28
 

@@ -46,6 +46,10 @@ inline std::filesystem::path registry_staging_dir(const std::filesystem::path& s
     return store / "staging";
 }
 
+inline std::filesystem::path registry_data_dir(const std::filesystem::path& store) {
+    return store / "data";
+}
+
 inline std::string json_escape_text(std::string_view value) {
     std::string output;
     output.reserve(value.size() + 8);
@@ -92,6 +96,10 @@ inline std::string sanitize_registry_filename(std::string_view value) {
         output.pop_back();
     }
     return output.empty() ? std::string("app") : output;
+}
+
+inline std::filesystem::path registry_app_data_dir(const std::filesystem::path& store, std::string_view app_id) {
+    return registry_data_dir(store) / sanitize_registry_filename(app_id);
 }
 
 inline std::string utc_now_compact() {
@@ -341,7 +349,26 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
     return entry;
 }
 
-inline InstalledAppEntry remove_bundle_from_registry(const std::filesystem::path& store, std::string_view app_id) {
+inline bool delete_registry_app_data(const std::filesystem::path& store, std::string_view app_id) {
+    const std::filesystem::path path = registry_app_data_dir(std::filesystem::absolute(store), app_id);
+    std::error_code exists_error;
+    if (!std::filesystem::exists(path, exists_error)) {
+        return false;
+    }
+    if (!std::filesystem::is_directory(path)) {
+        throw std::runtime_error("app data path is not a directory: " + path.string());
+    }
+    std::error_code remove_error;
+    std::filesystem::remove_all(path, remove_error);
+    if (remove_error) {
+        throw std::runtime_error("failed to delete app data: " + path.string());
+    }
+    return true;
+}
+
+inline InstalledAppEntry remove_bundle_from_registry(const std::filesystem::path& store,
+                                                     std::string_view app_id,
+                                                     bool delete_data = true) {
     const std::filesystem::path absolute_store = std::filesystem::absolute(store);
     InstalledAppRegistry registry = load_installed_app_registry(absolute_store);
     auto existing = std::find_if(registry.apps.begin(), registry.apps.end(), [&](const InstalledAppEntry& app) {
@@ -355,6 +382,9 @@ inline InstalledAppEntry remove_bundle_from_registry(const std::filesystem::path
     write_installed_app_registry(absolute_store, registry);
     std::error_code error;
     std::filesystem::remove(installed_app_bundle_path(absolute_store, removed), error);
+    if (delete_data) {
+        delete_registry_app_data(absolute_store, app_id);
+    }
     return removed;
 }
 

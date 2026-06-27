@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <vector>
 
 using namespace jellyframe;
@@ -189,6 +190,71 @@ void apply_lifecycle_deletes_persistent_data_on_uninstall() {
     check(storage.clear_app(app.app_id) == 0, "uninstall data is already gone");
 }
 
+void lifecycle_report_emits_stable_system_shell_diagnostics() {
+    AppRuntimeHost host = make_host();
+    AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 8, 256});
+    const AppInstance app = host.launch("org.example.report", AppRole::App);
+
+    check(storage.submit_set(host, "theme", "dark").accepted(), "report set accepted");
+    AppStorageLifecycleReport report =
+        apply_app_storage_lifecycle(host,
+                                    storage,
+                                    app.app_id,
+                                    app.id,
+                                    AppStorageLifecycleTrigger::Exit);
+    check(report.trigger == AppStorageLifecycleTrigger::Exit, "report trigger stored");
+    check(report.applied.flushed_pending_writes == 1, "report flushes pending write");
+    check(report.diagnostic_count == 1, "exit report has one diagnostic");
+    check(std::string(app_storage_lifecycle_diagnostic_code_name(report.diagnostics[0].code)) ==
+              "storage-flush-ok",
+          "exit report diagnostic code");
+
+    std::vector<HostServiceCompletion> accepted;
+    host.pump_frame_completions(accepted);
+    check(accepted.size() == 1, "report setup completion accepted");
+    host.exit_current();
+    const AppInstance replacement = host.launch("org.example.report", AppRole::App);
+    check(storage.submit_set(host, "draft", "pending").accepted(), "replacement pending write accepted");
+
+    report = apply_app_storage_lifecycle(host,
+                                         storage,
+                                         replacement.app_id,
+                                         replacement.id,
+                                         AppStorageLifecycleTrigger::Uninstall);
+    check(report.applied.dropped_pending_writes == 1, "uninstall report drops pending write");
+    check(report.applied.deleted_persistent_items == 1, "uninstall report deletes persisted item");
+    check(report.diagnostic_count == 2, "uninstall report has drop and delete diagnostics");
+    check(std::string(app_storage_lifecycle_diagnostic_code_name(report.diagnostics[0].code)) ==
+              "storage-drop-pending",
+          "uninstall drop diagnostic code");
+    check(std::string(app_storage_lifecycle_diagnostic_code_name(report.diagnostics[1].code)) ==
+              "storage-delete-data",
+          "uninstall delete diagnostic code");
+}
+
+void lifecycle_report_marks_incomplete_flush_as_failed() {
+    AppRuntimeHost host = make_host();
+    AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, 8, 256});
+    const AppInstance app = host.launch("org.example.flush", AppRole::App);
+    check(storage.submit_set(host, "a", "1").accepted(), "flush a accepted");
+    check(storage.submit_set(host, "b", "2").accepted(), "flush b accepted");
+
+    const AppStorageLifecycleReport report =
+        apply_app_storage_lifecycle(host,
+                                    storage,
+                                    app.app_id,
+                                    app.id,
+                                    AppStorageLifecycleTrigger::Exit,
+                                    AppStorageLifecyclePolicy{},
+                                    1);
+    check(report.applied.flush_stopped_before_empty, "budgeted flush is incomplete");
+    check(report.diagnostic_count == 1, "incomplete flush has one diagnostic");
+    check(report.diagnostics[0].incomplete, "diagnostic records incomplete flag");
+    check(std::string(app_storage_lifecycle_diagnostic_code_name(report.diagnostics[0].code)) ==
+              "storage-flush-failed",
+          "incomplete flush diagnostic code");
+}
+
 } // namespace
 
 int main() {
@@ -200,5 +266,7 @@ int main() {
     apply_lifecycle_flushes_pending_writes_on_exit();
     apply_lifecycle_respects_flush_budget_and_reports_remaining_work();
     apply_lifecycle_deletes_persistent_data_on_uninstall();
+    lifecycle_report_emits_stable_system_shell_diagnostics();
+    lifecycle_report_marks_incomplete_flush_as_failed();
     return 0;
 }

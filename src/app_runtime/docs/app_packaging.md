@@ -691,12 +691,29 @@ $bundle = python tools/jellyframe_cli.py registry path `
 python tools/jellyframe_cli.py registry remove `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
+
+python tools/jellyframe_cli.py registry remove `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather `
+  --keep-data
+
+python tools/jellyframe_cli.py registry delete-data `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
+.\build\Release\jellyframe_win32_browser.exe `
+  --registry-store build/installed_apps `
+  --delete-app-data org.jellyframe.examples.weather
 ```
 
 The registry mock validates the `.jfapp` header, section ranges, CRC32 and
 manifest summary, copies the bundle through staging and commits `registry.json`
 with an atomic write. The Win32 system-shell mode uses this same registry format
-for app discovery, launch and inactive-app deletion.
+for app discovery, launch, inactive-app deletion and explicit data deletion.
+Desktop app-private data lives under `data/<sanitized-app-id>` in the registry
+store. Removing an app deletes that data by default; `--keep-data` retains it,
+and `delete-data` / `--delete-app-data` erases data without removing the
+installed bundle.
 
 The render-core pseudo browser remains the deterministic CI shell for standalone
 HTML/CSS pages and package entry preflight. App/package capture and human
@@ -781,6 +798,21 @@ statistics, a severity summary and the concrete diagnostics emitted by parser,
 style, layout, layer and renderer code. Known unsupported/degraded features
 should include a precise reason; unknown recovery should at least include the
 triggering field or snippet.
+
+Install/update/delete lifecycle:
+
+- Packaging and registry installation validate and stage bytes; the system
+  shell owns user-visible app lifecycle decisions.
+- On update, the default storage lifecycle keeps app-private data and flushes
+  pending writes before switching bundles.
+- On uninstall, the default storage lifecycle drops pending writes and deletes
+  app-private data. A product app manager may expose an explicit "keep data"
+  option by changing `AppStorageLifecyclePolicy`.
+- Crash/watchdog/memory-pressure recovery should prefer dropping pending writes
+  and returning to the launcher/system shell over blocking on flash.
+- Hosts should surface the stable storage lifecycle diagnostics from
+  `apply_app_storage_lifecycle(...)` in development logs or package validation
+  reports when they simulate these operations.
 
 `tools/package_app.py` remains the lower-level packer used by the CLI and
 embedded build integrations.

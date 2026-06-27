@@ -588,11 +588,26 @@ $bundle = python tools/jellyframe_cli.py registry path `
 python tools/jellyframe_cli.py registry remove `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
+
+python tools/jellyframe_cli.py registry remove `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather `
+  --keep-data
+
+python tools/jellyframe_cli.py registry delete-data `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
+.\build\Release\jellyframe_win32_browser.exe `
+  --registry-store build/installed_apps `
+  --delete-app-data org.jellyframe.examples.weather
 ```
 
 registry mock 会先校验 `.jfapp` header、section range、CRC32 和 manifest summary，再把 bundle
 复制到 staging，最后用原子 JSON 写入提交 `registry.json`。Win32 system-shell 模式使用同一份
-registry 格式完成 app discovery、launch 和非活动 app deletion。
+registry 格式完成 app discovery、launch、非活动 app deletion 和显式数据删除。桌面 registry store 中的 app
+私有数据位于 `data/<sanitized-app-id>`。删除 app 默认删除这份数据；`--keep-data` 会保留数据，
+`delete-data` / `--delete-app-data` 可在不移除已安装 bundle 的情况下单独删除数据。
 
 render-core 伪浏览器继续作为独立 HTML/CSS 页面和 package entry 预检的确定性 CI 壳。
 App/package 截图与人工调试应走 Win32 shell，这样同一路径能覆盖 package loading、scripting、
@@ -662,6 +677,18 @@ reference 诊断、package-resource warnings 和 `pipelineDiagnostics`。`runtim
 `AppBudgetSnapshot`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、面向内存的管线统计、
 severity 汇总，以及 parser、style、layout、layer、renderer 代码实际发出的 diagnostics。
 已知不支持或降级的特性应给出明确原因；未知恢复至少应包含触发字段或片段。
+
+安装/升级/删除生命周期：
+
+- 打包和 registry install 负责校验、staging 与提交字节；用户可见的 app 生命周期决策由 system
+  shell 持有。
+- update 默认保留 app 私有数据，并在切换 bundle 前 flush pending writes。
+- uninstall 默认 drop pending writes 并删除 app 私有数据。产品 app manager 可以通过调整
+  `AppStorageLifecyclePolicy` 提供明确的“保留数据”选项。
+- crash/watchdog/memory-pressure recovery 应优先 drop pending writes 并回到 launcher/system shell，
+  不应阻塞等待 flash 写入。
+- 宿主在模拟这些操作时，应把 `apply_app_storage_lifecycle(...)` 产生的稳定 storage lifecycle
+  diagnostics 输出到开发日志或验证报告中。
 
 `tools/package_app.py` 仍作为 CLI 和嵌入式构建集成使用的底层 packer。
 

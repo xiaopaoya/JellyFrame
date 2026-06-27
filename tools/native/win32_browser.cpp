@@ -458,6 +458,8 @@ struct BrowserOptions {
     std::string install_bundle_path;
     std::string launch_app_id;
     std::string remove_app_id;
+    std::string delete_app_data_id;
+    bool remove_keep_data = false;
     std::string audio_smoke_source;
     int audio_smoke_ms = 1000;
     std::string startup_status;
@@ -2001,6 +2003,8 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --install-bundle PATH          Install .jfapp into registry store.\n"
         << "  --launch-app ID                Launch installed app id.\n"
         << "  --remove-app ID                Remove installed app id.\n"
+        << "  --keep-data                    Keep app-private data with --remove-app.\n"
+        << "  --delete-app-data ID           Delete app-private data without removing the app.\n"
         << "\n"
         << "Frame script commands:\n"
         << "  output-dir PATH | montage PATH | frames N | step-ms N | start-ms N\n"
@@ -2749,6 +2753,8 @@ public:
         print_budget_meter(std::cout, "handle_bytes", budget.host_handle_bytes);
         print_budget_meter(std::cout, "fonts", budget.app_fonts);
         print_budget_meter(std::cout, "system_events", budget.system_events);
+        print_budget_meter(std::cout, "storage_items", budget.storage_shadow_items);
+        print_budget_meter(std::cout, "storage_bytes", budget.storage_shadow_bytes);
         std::cout << '\n'
                   << "  app_budget_script";
         print_budget_meter(std::cout, "timers", budget.script_timers);
@@ -3103,6 +3109,10 @@ private:
         input.system_events = &system_events_;
         input.pending_work = &pending;
         input.active_animations = animation_timeline_.active_count();
+        if (debug_local_storage_instance_id_ == app_runtime_.current_app_instance_id()) {
+            input.storage_shadow_items = debug_local_storage_.length();
+            input.storage_shadow_bytes = debug_local_storage_.used_bytes();
+        }
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ != nullptr &&
             script_runtime_instance_id_ == app_runtime_.current_app_instance_id()) {
@@ -4773,6 +4783,18 @@ int main(int argc, char** argv) {
             options.remove_app_id = argv[++i];
             continue;
         }
+        if (arg == "--delete-app-data") {
+            if (i + 1 >= argc) {
+                std::cerr << "--delete-app-data requires an installed app id\n";
+                return 1;
+            }
+            options.delete_app_data_id = argv[++i];
+            continue;
+        }
+        if (arg == "--keep-data") {
+            options.remove_keep_data = true;
+            continue;
+        }
         if (arg == "--script" || arg == "-s") {
             if (i + 1 >= argc) {
                 std::cerr << "--script requires a script file path\n";
@@ -4842,9 +4864,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() || !options.launch_app_id.empty()) {
+    if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() ||
+        !options.delete_app_data_id.empty() || !options.launch_app_id.empty()) {
         if (options.registry_store_path.empty()) {
-            std::cerr << "--registry-store is required for install/remove/launch app manager commands\n";
+            std::cerr << "--registry-store is required for install/remove/delete-data/launch app manager commands\n";
             return 1;
         }
     }
@@ -4858,9 +4881,17 @@ int main(int argc, char** argv) {
         }
         if (!options.remove_app_id.empty()) {
             const auto removed =
-                jellyframe_example::remove_bundle_from_registry(options.registry_store_path, options.remove_app_id);
+                jellyframe_example::remove_bundle_from_registry(
+                    options.registry_store_path, options.remove_app_id, !options.remove_keep_data);
             options.startup_status = "Removed " + removed.name + ".";
-            std::cout << "removed " << removed.id << '\n';
+            std::cout << "removed " << removed.id
+                      << (options.remove_keep_data ? " data-retained" : " data-deleted") << '\n';
+        }
+        if (!options.delete_app_data_id.empty()) {
+            const bool deleted =
+                jellyframe_example::delete_registry_app_data(options.registry_store_path, options.delete_app_data_id);
+            options.startup_status = deleted ? "Deleted app data." : "No app data to delete.";
+            std::cout << (deleted ? "deleted-data " : "no-data ") << options.delete_app_data_id << '\n';
         }
         if (!options.launch_app_id.empty()) {
             options.app_path =

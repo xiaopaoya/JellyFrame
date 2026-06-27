@@ -33,6 +33,8 @@ struct AppBudgetSnapshotInput {
     std::size_t script_timers = kAppBudgetUnknown;
     std::size_t script_event_listeners = kAppBudgetUnknown;
     std::size_t detached_dom_nodes = kAppBudgetUnknown;
+    std::size_t storage_shadow_items = kAppBudgetUnknown;
+    std::size_t storage_shadow_bytes = kAppBudgetUnknown;
 };
 
 struct AppBudgetSnapshot {
@@ -54,6 +56,8 @@ struct AppBudgetSnapshot {
     AppBudgetMeter script_timers;
     AppBudgetMeter script_event_listeners;
     AppBudgetMeter detached_dom_nodes;
+    AppBudgetMeter storage_shadow_items;
+    AppBudgetMeter storage_shadow_bytes;
 
     AppBudgetMeter dom_nodes;
     AppBudgetMeter css_rules;

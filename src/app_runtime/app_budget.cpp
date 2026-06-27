@@ -39,6 +39,10 @@ AppBudgetSnapshot collect_app_budget_snapshot(const AppRuntimeHost& host,
         input.script_event_listeners == kAppBudgetUnknown ? 0 : input.script_event_listeners;
     snapshot.detached_dom_nodes.used =
         input.detached_dom_nodes == kAppBudgetUnknown ? 0 : input.detached_dom_nodes;
+    snapshot.storage_shadow_items.used =
+        input.storage_shadow_items == kAppBudgetUnknown ? 0 : input.storage_shadow_items;
+    snapshot.storage_shadow_bytes.used =
+        input.storage_shadow_bytes == kAppBudgetUnknown ? 0 : input.storage_shadow_bytes;
 
     if (input.host_budgets != nullptr) {
         const HostBudgets& budgets = *input.host_budgets;

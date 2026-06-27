@@ -714,10 +714,23 @@ struct HostStorageResponse {
 - `AppPrivateKvStorageMock::drop_pending_app_instance(...)` 和 `drop_pending_app(...)` 提供桌面验收路径。
   真实 port 应实现等价的 worker queue cancellation 或 journal discard。
 - `AppPrivateKvStorageMock::flush_pending(...)` 和
-  `apply_app_storage_lifecycle_decision(...)` 提供第一版平台无关参考实现：宿主可按 frame/事件预算分批
-  flush pending writes，并获得 flushed、dropped、deleted、remaining 等统计。真实 port 可以复用同样的
-  决策结构，但具体 flash/NVS/filesystem 写入仍必须在 host worker 中完成。
+  `apply_app_storage_lifecycle_decision(...)` 是低层参考路径；`apply_app_storage_lifecycle(...)`
+  会把 decision、执行结果和固定容量 diagnostics report 包在一起，供 system shell 使用。宿主可按
+  frame/事件预算分批 flush pending writes，并获得 flushed、dropped、deleted、remaining 等统计，以及
+  `storage-flush-ok`、`storage-flush-failed`、`storage-drop-pending`、`storage-delete-data`、
+  `storage-retain-data` 等稳定诊断码。真实 port 可以复用同样的决策结构，但具体
+  flash/NVS/filesystem 写入仍必须在 host worker 中完成。
 - flush work 必须是有界 host job。不要让 UI/main task 阻塞在 flash、NVS 或 filesystem 写入上。
+
+面向可穿戴的默认策略：
+
+- launcher、表盘和 settings 应是受信 app，但仍使用同一份 lifecycle report，便于宿主一致观察失败。
+- 普通前台 app exit 和 update replacement 优先 flush pending writes；crash、watchdog 和 memory
+  pressure 优先 drop pending work，让 launcher 尽快恢复。
+- uninstall 默认删除 app 私有数据。产品 shell 可以通过 `delete_data_on_uninstall = false` 提供
+  “保留数据”选项，但这应当是 app manager UI 中明确的用户选择。
+- 非手表类嵌入式设备也可沿用同一策略，只调整预算：较大设备可每 tick flush 更多操作，极小设备可不在
+  suspend 时 flush，而依赖 update/exit flush。
 
 ## Bundle 安装服务
 
@@ -744,6 +757,15 @@ bundle_offset
 bundle_size
 validation_state
 ```
+
+桌面 registry 数据模型：
+
+- 已安装 bundle 位于 `bundles/`。
+- 安装临时字节位于 `staging/`。
+- app 私有数据位于 `data/<sanitized-app-id>/`。
+- 删除 app 默认删除 app 私有数据。宿主可提供明确的保留数据选项，`delete-data` 可在不删除 bundle
+  的情况下单独清理数据；Python registry 命令名为 `delete-data`，Win32 壳提供同等语义的
+  `--delete-app-data`。
 
 规则：
 

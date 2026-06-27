@@ -31,6 +31,8 @@ def main() -> int:
     require("usage: jellyframe_win32_browser" in help_result.stdout, "--help must print usage")
     require("Frame script commands:" in help_result.stdout, "--help must document frame scripts")
     require("event FRAME:kind[:x:y[:delta]]" in help_result.stdout, "--help must document wheel delta")
+    require("--keep-data" in help_result.stdout, "--help must document app data retention")
+    require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
 
     numeric_result = run_case(exe, ["--viewport-width", "nope"])
     require(numeric_result.returncode != 0, "invalid numeric option must fail")

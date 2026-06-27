@@ -261,6 +261,12 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+        add_test(
+            NAME jellyframe_tool_app_registry_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_registry_tests.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
         if(JELLYFRAME_BUILD_EXAMPLES)
             add_test(
                 NAME jellyframe_pipeline_visual_diagnostics_tests

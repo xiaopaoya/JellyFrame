@@ -6,7 +6,17 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ## Unreleased
 
-暂无未发布变更。
+### 新增
+
+- 进入 `0.5.0-dev` 设备可用性开发线，添加固定容量 storage lifecycle report，供
+  system shell 统一处理 exit、crash、uninstall、update 和 memory-pressure 下的存储策略，
+  并输出稳定 diagnostics：`storage-flush-ok`、`storage-flush-failed`、
+  `storage-drop-pending`、`storage-delete-data` 和 `storage-retain-data`。
+- `AppBudgetSnapshot` 现在可在宿主提供时携带轻量 localStorage shadow item/byte 计数；
+  Win32 壳的脚本化 capture 摘要会打印这些计数，便于调试小内存设备上的存储压力。
+- 桌面 installed-app registry mock 现在用 `data/<sanitized-app-id>` 表示 app 私有数据。
+  删除 app 默认删除这份数据；`--keep-data` 会保留数据，`delete-data` 可在不移除已安装
+  bundle 的情况下清理数据；Win32 壳提供同等语义的 `--delete-app-data`。
 
 ## 0.4.0-dev - 2026-06-28
 

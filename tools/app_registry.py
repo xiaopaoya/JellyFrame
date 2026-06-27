@@ -41,6 +41,14 @@ def staging_dir(store: Path) -> Path:
     return store / "staging"
 
 
+def data_dir(store: Path) -> Path:
+    return store / "data"
+
+
+def app_data_dir(store: Path, app_id: str) -> Path:
+    return data_dir(store) / sanitize_filename(app_id)
+
+
 def sanitize_filename(value: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9_.-]+", "_", value).strip("._")
     return cleaned or "app"
@@ -224,7 +232,18 @@ def install_bundle(store: Path, bundle_path: Path, max_apps: int, max_bundle_byt
     return entry
 
 
-def remove_app(store: Path, app_id: str) -> dict:
+def delete_app_data(store: Path, app_id: str) -> bool:
+    store = store.resolve()
+    path = app_data_dir(store, app_id)
+    if not path.exists():
+        return False
+    if not path.is_dir():
+        fail(f"app data path is not a directory: {path}")
+    shutil.rmtree(path)
+    return True
+
+
+def remove_app(store: Path, app_id: str, delete_data: bool = True) -> dict:
     store = store.resolve()
     registry = load_registry(store)
     apps = registry["apps"]
@@ -238,6 +257,8 @@ def remove_app(store: Path, app_id: str) -> dict:
         path = bundles_dir(store) / bundle_file
         if path.exists():
             path.unlink()
+    entry["dataDeleted"] = delete_app_data(store, app_id) if delete_data else False
+    entry["dataRetained"] = not delete_data
     return entry
 
 
@@ -283,11 +304,22 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_remove(args: argparse.Namespace) -> int:
-    entry = remove_app(args.store, args.app_id)
+    entry = remove_app(args.store, args.app_id, delete_data=not args.keep_data)
     if args.json:
         print(json.dumps(entry, ensure_ascii=False, indent=2))
     else:
-        print(f"removed {entry.get('id')}")
+        suffix = " data-retained" if entry.get("dataRetained") else " data-deleted"
+        print(f"removed {entry.get('id')}{suffix}")
+    return 0
+
+
+def cmd_delete_data(args: argparse.Namespace) -> int:
+    deleted = delete_app_data(args.store, args.app_id)
+    result = {"id": args.app_id, "dataDeleted": deleted}
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"deleted-data {args.app_id}" if deleted else f"no-data {args.app_id}")
     return 0
 
 
@@ -321,8 +353,15 @@ def build_parser() -> argparse.ArgumentParser:
     remove = subparsers.add_parser("remove", help="Remove an installed app.")
     add_store_arg(remove)
     remove.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    remove.add_argument("--keep-data", action="store_true", help="Keep app-private data after removing the bundle.")
     remove.add_argument("--json", action="store_true", help="Print removed entry as JSON.")
     remove.set_defaults(func=cmd_remove)
+
+    delete_data = subparsers.add_parser("delete-data", help="Delete app-private data without removing the bundle.")
+    add_store_arg(delete_data)
+    delete_data.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    delete_data.add_argument("--json", action="store_true", help="Print deletion result as JSON.")
+    delete_data.set_defaults(func=cmd_delete_data)
 
     path = subparsers.add_parser("path", help="Print the installed bundle path for an app.")
     add_store_arg(path)

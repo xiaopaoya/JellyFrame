@@ -855,13 +855,31 @@ Lifecycle policy:
   `drop_pending_app(...)` provide the desktop validation path. Real ports should
   implement equivalent worker-queue cancellation or journal discard.
 - `AppPrivateKvStorageMock::flush_pending(...)` and
-  `apply_app_storage_lifecycle_decision(...)` provide the first
-  platform-neutral reference path. Hosts can flush pending writes in bounded
-  frame/event slices and receive flushed, dropped, deleted and remaining-work
-  counters. Real ports may reuse the same decision shape, but flash/NVS/
-  filesystem writes still belong in host workers.
+  `apply_app_storage_lifecycle_decision(...)` are the low-level reference path.
+  `apply_app_storage_lifecycle(...)` wraps the decision, application and
+  fixed-size diagnostic report used by system shells. Hosts can flush pending
+  writes in bounded frame/event slices and receive flushed, dropped, deleted and
+  remaining-work counters plus stable diagnostic codes:
+  `storage-flush-ok`, `storage-flush-failed`, `storage-drop-pending`,
+  `storage-delete-data` and `storage-retain-data`. Real ports may reuse the
+  same decision shape, but flash/NVS/filesystem writes still belong in host
+  workers.
 - Flush work must be a bounded host job. Do not block the UI/main task on flash,
   NVS or filesystem writes.
+
+Wearable-first defaults:
+
+- Launchers, watch faces and settings should be trusted apps, but they still use
+  the same lifecycle report so the host can observe failures consistently.
+- Normal foreground app exit and update replacement prefer flushing pending
+  writes. Crash, watchdog and memory pressure prefer dropping pending work so
+  the launcher can recover quickly.
+- Uninstall deletes app-private data by default. Product shells may expose a
+  user-facing "keep data" choice by setting `delete_data_on_uninstall = false`,
+  but that should be explicit in the app manager UI.
+- Non-watch embedded devices can keep the same policy and tune only budgets:
+  larger products may flush more operations per tick, while very small devices
+  may defer suspend flushes and rely on update/exit flushes.
 
 ## Bundle Installation Service
 
@@ -890,6 +908,16 @@ bundle_offset
 bundle_size
 validation_state
 ```
+
+Desktop registry data model:
+
+- Installed bundles live under `bundles/`.
+- Temporary install bytes live under `staging/`.
+- App-private data lives under `data/<sanitized-app-id>/`.
+- App removal deletes app-private data by default. Hosts can expose an explicit
+  keep-data option, and a separate delete-data command can erase data without
+  removing the bundle. The Python registry uses `delete-data`; the Win32 shell
+  exposes the same operation as `--delete-app-data`.
 
 Rules:
 
