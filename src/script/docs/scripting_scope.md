@@ -102,7 +102,7 @@ surface.
 - Hosts can set animation callback/FPS budgets to zero while the app is
   backgrounded, suspended, screen-off or in low-power mode.
 - Render core supports a CSS `transition` subset for `opacity`, `transform:
-  translate()/scale()`, `background-color` and `color`, advanced through
+  translate()/scale()/rotate()`, `background-color` and `color`, advanced through
   `AnimationTimeline` and animation dirty-region helpers. It also supports a
   bounded `@keyframes` / `animation-*` from/to subset over the same property
   set. Use rAF when explicit per-frame control is needed.

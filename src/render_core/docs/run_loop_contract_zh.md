@@ -203,7 +203,7 @@ retained layer/display-command 结构。
 的基础 bounds、上一帧 transform bounds 和当前帧 transform bounds 合并为 dirty rectangles。
 
 这条路径专门避免动画帧因为 root `DomDirtyPaint` 退回全帧。适用范围是当前 D 主线承诺的
-paint/compositor 属性：`opacity`、`background-color`、`color` 和 `transform: translate()/scale()`。
+paint/compositor 属性：`opacity`、`background-color`、`color` 和 `transform: translate()/scale()/rotate()`。
 layout 属性动画仍不逐帧重排；如果动画改变了 DOM 结构或 layout，仍应走普通 dirty-region/full-frame
 路径。
 

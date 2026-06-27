@@ -24,24 +24,25 @@ This system must match current project capabilities:
   `linear-gradient(to right/left, ...)` gel surfaces, single-value
   `border-radius`, borders, `outline`, `text-shadow`,
   padding, margin, approximate `box-shadow`, `opacity`, `transform:
-  translate()/scale()`, CSS `transition`, and dynamic states such as `:hover`,
+  translate()/scale()/rotate()`, `transform-origin` keyword/percentage subset,
+  CSS `transition`, and dynamic states such as `:hover`,
   `:active`, `:focus`, `:focus-within`, `:checked` and `:disabled`.
 - Safe: direct CSS custom property usage through `var(--token)` and fallback.
 - Safe: bounded CSS `transition` and `transition-*` lists. Each style keeps at
   most four transition entries. Current animatable properties are `opacity`,
   `transform`, `background-color` and `color`.
 - Safe with restraint: bounded `@keyframes` / `animation-*` from/to animations
-  over `opacity`, `transform: translate()/scale()`, `background-color` and
+  over `opacity`, `transform: translate()/scale()/rotate()`, `background-color` and
   `color`. Use them for small persistent loading/pulse states, not layout
   motion.
-- Safe: software compositor support for layer `translate()/scale()`.
-  Translation is rounded to integer pixels; scale uses nearest-neighbor
-  sampling around layer bounds center.
+- Safe: software compositor support for layer `translate()/scale()/rotate()`.
+  Translation is rounded to integer pixels; scale and rotate use the supported
+  `transform-origin` subset.
 - Safe in scripting builds: host-pumped one-shot `requestAnimationFrame()` and
   `cancelAnimationFrame()`.
 - Not safe for v1: `backdrop-filter`, CSS `filter`, `mix-blend-mode`, SVG
-  texture, Canvas-rendered widgets, layout-property animation, rotate, skew,
-  matrix, perspective and full `transform-origin`.
+  texture, Canvas-rendered widgets, layout-property animation, skew, matrix,
+  perspective and pixel-length `transform-origin`.
 
 ## Feasibility Analysis
 
@@ -397,7 +398,7 @@ Forbidden as required v1 effects:
 - SVG textures or SVG-only widget structure
 - Canvas-rendered standard controls
 - Layout-property animation and full CSS animation semantics
-- rotate, skew, matrix and perspective transforms
+- skew, matrix, perspective and 3D transforms
 - irregular per-corner radius as a required effect
 
 Allowed in source design only when a runtime fallback exists:

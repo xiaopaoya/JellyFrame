@@ -37,9 +37,9 @@ rect/text commands or later map selected layers to hardware surfaces.
 - `overflow: hidden`, `overflow: clip`, `overflow: auto` and `overflow: scroll`
   create a clipping layer.
 - `opacity` below 1 creates a composited layer and is applied during flattening.
-- `transform: translate()/scale()` creates a composited layer and is applied by
-  the software compositor as integer-approximated 2D translation and centered
-  scale.
+- `transform: translate()/scale()/rotate()` creates a composited layer and is
+  applied by the software compositor. Translation is rounded to device pixels;
+  scale and rotate use the supported `transform-origin` subset.
 - `position` and explicit `z-index` create stacking layers.
 - `box-shadow` and rounded overflow clips create layer boundaries. Current
   painting emits a cheap rounded translucent shadow fill; real blur can later
@@ -49,8 +49,8 @@ rect/text commands or later map selected layers to hardware surfaces.
 
 - Unsupported transform values do not crash; style/layer diagnostics report
   values outside the executable subset and the unsupported transform is ignored.
-- `transform-origin` is currently approximated as the layer bounds center.
-  `rotate()`, `skew()`, `matrix()` and perspective are deferred.
+- `transform-origin` supports common keywords and percentages. Pixel lengths,
+  `skew()`, `matrix()` and perspective are deferred.
 - Rounded clipping is detected but approximated by rectangular clipping.
 - `box-shadow` blur is approximated as rectangle expansion and translucent fill.
 - `z-index` ordering is layer-local and useful for positioned children, but true
@@ -75,7 +75,7 @@ rect/text commands or later map selected layers to hardware surfaces.
 ## Deferred
 
 - Full CSS stacking-context algorithm.
-- Full transform matrices, `transform-origin` and precise transformed clipping.
+- Full transform matrices, pixel-length `transform-origin` and precise transformed clipping.
 - Filters, backdrop filters and blend modes.
 - Retained display-list diffing beyond caller-owned buffer reuse.
 - Texture allocation and GPU compositing.

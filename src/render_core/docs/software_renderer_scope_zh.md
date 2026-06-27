@@ -38,8 +38,8 @@ DOM + CSSOM
 - 非 Windows 构建保留内置 tiny ASCII fallback text drawing。
 - 宿主 image painter 可按 `object-fit`、简单 `object-position` 和 `image-rendering` 绘制已解码 surface。
 - 针对 opacity/composited layers 的离屏合成。
-- 对 composited layer 执行 `transform: translate()/scale()` 子集：平移为整数像素近似，缩放以 layer bounds
-  中心为原点并默认采用双线性采样，适合按钮反馈和卡片滑动，不追求浏览器级像素一致。
+- 对 composited layer 执行 `transform: translate()/scale()/rotate()` 子集：平移为整数像素近似，缩放和旋转使用受支持的
+  `transform-origin` 子集，并在 `smooth_scaled_layers` 启用时使用双线性采样。它适合按钮反馈、表盘指针和卡片滑动，不追求浏览器级像素一致。
 - 可选 offscreen pixel budget：过大的 composited layer 会降级为逐命令透明绘制，
   避免分配大块临时 RGBA framebuffer。
 - 用于 pseudo-browser 验收的 BMP 和 PPM 图片写出。
@@ -52,7 +52,7 @@ DOM + CSSOM
 - 不做完整 text shaping、bidi 或 font fallback stack。
 - 不做 image decode。
 - 不做 subpixel layout、任意路径抗锯齿或浏览器级 glyph rasterization；当前抗锯齿只覆盖圆角几何边缘和缩放采样。
-- 不做 rotate/skew/matrix/perspective，也不做完整 transform-origin。
+- 不做 skew/matrix/perspective，也不做 px 长度 `transform-origin`。
 
 ## 当前兼容性说明
 
@@ -62,4 +62,4 @@ DOM + CSSOM
 近期修复包括 Windows UTF-8 文本输出、保守文本 overhang padding、基础多行文本绘制、
 `box-sizing:border-box`、常见 `rgb()/rgba()` 颜色、四值 box edges，以及最小 flex
 居中/横向布局、响应式 grid card layout、`aspect-ratio` 尺寸计算和便宜圆角
-`box-shadow` 近似，第一版 `opacity`/2D transform 合成动画基础，以及圆角 coverage AA / layer scale bilinear 质量路径。
+`box-shadow` 近似，第一版 `opacity`/2D transform 合成动画基础、可旋转的表盘指针，以及圆角 coverage AA / layer scale bilinear 质量路径。

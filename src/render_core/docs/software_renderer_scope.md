@@ -46,10 +46,11 @@ DOM + CSSOM
 - Host image painters can draw decoded surfaces with `object-fit`, simple
   `object-position` and `image-rendering`.
 - Offscreen compositing for opacity/composited layers.
-- `transform: translate()/scale()` for composited layers. Translation is rounded
-  to integer pixels; scale defaults to bilinear sampling around the layer bounds
-  center. This is intended for button feedback and card motion, not browser-level
-  pixel parity.
+- `transform: translate()/scale()/rotate()` for composited layers. Translation
+  is rounded to integer pixels; scale and rotate use the supported
+  `transform-origin` subset and bilinear sampling when `smooth_scaled_layers`
+  is enabled. This is intended for button feedback, watch hands and card motion,
+  not browser-level pixel parity.
 - Optional offscreen pixel budget: oversized composited layers degrade to direct
   per-command opacity instead of allocating a large temporary RGBA framebuffer.
 - BMP and PPM image writers for pseudo-browser validation.
@@ -64,7 +65,7 @@ DOM + CSSOM
 - No subpixel layout, arbitrary path antialiasing or browser-level glyph
   rasterization. Current antialiasing covers rounded geometry edges and scale
   sampling only.
-- No rotate/skew/matrix/perspective and no full `transform-origin`.
+- No skew/matrix/perspective and no pixel-length `transform-origin`.
 
 ## Current Compatibility Notes
 
@@ -77,5 +78,5 @@ padding, basic multiline text drawing, `box-sizing:border-box`, common
 `rgb()/rgba()` colors, four-value box edges, minimal flex centering/row layout,
 responsive grid-card layout, `aspect-ratio` sizing and cheap rounded
 `box-shadow` approximations, plus the first `opacity`/2D-transform compositing
-foundation for animation and the rounded-coverage AA / layer-scale bilinear
-quality paths.
+foundation for animation, rotate-capable watch hands and the rounded-coverage
+AA / layer-scale bilinear quality paths.

@@ -272,7 +272,7 @@ transform bounds.
 This path avoids falling back to full-frame repaint just because an animation
 frame marks the root as `DomDirtyPaint`. It is intended for the Track D
 paint/compositor property set: `opacity`, `background-color`, `color` and
-`transform: translate()/scale()`. Layout-property animation still does not
+`transform: translate()/scale()/rotate()`. Layout-property animation still does not
 reflow every frame; structural or layout-changing animation should use the
 normal dirty-region/full-frame path.
 

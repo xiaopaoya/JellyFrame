@@ -1,0 +1,279 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, #071918, #102629);
+  color: #f4fffb;
+}
+
+.face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 300px;
+  height: 300px;
+  padding: 18px;
+  box-sizing: border-box;
+}
+
+.dial {
+  position: relative;
+  width: 246px;
+  height: 246px;
+  border-radius: 123px;
+  background: linear-gradient(to bottom, #174543, #0d2428);
+  border: 2px solid #83f1d2;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .34);
+  overflow: hidden;
+}
+
+.ring {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  width: 210px;
+  height: 210px;
+  border-radius: 105px;
+  border: 2px solid rgba(233, 255, 248, .42);
+}
+
+.tick {
+  position: absolute;
+  left: 120px;
+  top: 30px;
+  width: 6px;
+  height: 18px;
+  border-radius: 3px;
+  background: #e8fff6;
+}
+
+.t0 { left: 120px; top: 30px; }
+.t1 { left: 198px; top: 120px; width: 18px; height: 6px; }
+.t2 { left: 120px; top: 198px; }
+.t3 { left: 30px; top: 120px; width: 18px; height: 6px; }
+
+.hand {
+  position: absolute;
+  left: 120px;
+  top: 42px;
+  width: 6px;
+  height: 82px;
+  border-radius: 3px;
+  transform-origin: 50% 100%;
+  background: #ecfff7;
+}
+
+.hour {
+  left: 118px;
+  top: 70px;
+  width: 10px;
+  height: 54px;
+  border-radius: 5px;
+  background: #fff7cc;
+  transform: rotate(285deg);
+}
+
+.minute {
+  height: 78px;
+  background: #bdfde7;
+  transform: rotate(180deg);
+}
+
+.second {
+  left: 122px;
+  top: 34px;
+  width: 3px;
+  height: 90px;
+  border-radius: 2px;
+  background: #ff6f86;
+  transform: rotate(0deg);
+}
+
+.cap {
+  position: absolute;
+  left: 113px;
+  top: 113px;
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: #f7fff7;
+  border: 2px solid #0b2021;
+}
+
+.time {
+  position: absolute;
+  left: 54px;
+  top: 164px;
+  width: 138px;
+  text-align: center;
+}
+
+.time strong {
+  display: block;
+  font-size: 30px;
+  line-height: 34px;
+  font-weight: 700;
+}
+
+.time span {
+  display: block;
+  margin-top: 2px;
+  color: #9ee9d6;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+@media screen and (max-height: 260px) {
+  .face {
+    padding: 12px;
+    width: 320px;
+    height: 240px;
+  }
+
+  .dial {
+    width: 200px;
+    height: 200px;
+    border-radius: 100px;
+  }
+
+  .ring {
+    left: 16px;
+    top: 16px;
+    width: 168px;
+    height: 168px;
+    border-radius: 84px;
+  }
+
+  .t0 { left: 97px; top: 24px; }
+  .t1 { left: 160px; top: 97px; }
+  .t2 { left: 97px; top: 160px; }
+  .t3 { left: 24px; top: 97px; }
+
+  .hand {
+    left: 97px;
+    top: 34px;
+    width: 5px;
+    height: 66px;
+  }
+
+  .hour {
+    left: 96px;
+    top: 56px;
+    width: 8px;
+    height: 44px;
+  }
+
+  .minute {
+    height: 64px;
+  }
+
+  .second {
+    left: 99px;
+    top: 28px;
+    width: 2px;
+    height: 72px;
+  }
+
+  .cap {
+    left: 91px;
+    top: 91px;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+  }
+
+  .time {
+    left: 42px;
+    top: 132px;
+    width: 116px;
+  }
+
+  .time strong {
+    font-size: 24px;
+    line-height: 28px;
+  }
+}
+
+@media screen and (max-width: 220px) {
+  .face {
+    padding: 8px;
+    width: 172px;
+    height: 320px;
+  }
+
+  .dial {
+    width: 150px;
+    height: 150px;
+    border-radius: 75px;
+  }
+
+  .ring {
+    left: 12px;
+    top: 12px;
+    width: 126px;
+    height: 126px;
+    border-radius: 63px;
+  }
+
+  .tick {
+    width: 5px;
+    height: 12px;
+  }
+
+  .t0 { left: 72px; top: 18px; }
+  .t1 { left: 120px; top: 72px; width: 12px; height: 5px; }
+  .t2 { left: 72px; top: 120px; }
+  .t3 { left: 18px; top: 72px; width: 12px; height: 5px; }
+
+  .hand {
+    left: 73px;
+    top: 25px;
+    width: 4px;
+    height: 50px;
+    border-radius: 2px;
+  }
+
+  .hour {
+    left: 72px;
+    top: 41px;
+    width: 6px;
+    height: 34px;
+    border-radius: 3px;
+  }
+
+  .minute {
+    height: 50px;
+  }
+
+  .second {
+    left: 74px;
+    top: 18px;
+    width: 2px;
+    height: 57px;
+  }
+
+  .cap {
+    left: 67px;
+    top: 67px;
+    width: 16px;
+    height: 16px;
+    border-radius: 8px;
+  }
+
+  .time {
+    left: 30px;
+    top: 96px;
+    width: 90px;
+  }
+
+  .time strong {
+    font-size: 20px;
+    line-height: 24px;
+  }
+
+  .time span {
+    font-size: 11px;
+    line-height: 14px;
+  }
+}
