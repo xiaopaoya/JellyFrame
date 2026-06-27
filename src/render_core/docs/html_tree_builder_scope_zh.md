@@ -74,5 +74,4 @@ tree-construction 机器。目标是有韧性的 app-runtime parsing：常见结
 - `max_depth`：64
 - `max_attributes_per_element`：64
 - `synthesize_document_structure`：true
-- `collapse_whitespace`：false；该选项仅作为兼容开关保留，显示期空白规范化由
-  layout/rendering 处理
+- DOM text 保留作者空白。Render/layout 在显示期处理普通文本折叠和保留空白上下文。

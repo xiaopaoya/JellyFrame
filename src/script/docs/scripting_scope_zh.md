@@ -159,8 +159,8 @@ API 表面。
 - native input dispatch 会把 `pointerdown`、`pointerup`、`touchstart` 和 `touchend`
   作为 mouse-like event 暴露，便于可穿戴壳实现按下反馈。
 - disabled 表单控件不会接收文本输入、range 移动或 activation。
-- 文本检索式兼容性扫描已弃用。脚本相关 diagnostics 应来自真正处理 app 的 package loader、
-  JerryScript runtime 和 DOM/event binding 代码路径。
+- 脚本相关 diagnostics 来自真正处理 app 的 package loader、JerryScript runtime 和
+  DOM/event binding 代码路径。
 
 ## 暂不支持
 

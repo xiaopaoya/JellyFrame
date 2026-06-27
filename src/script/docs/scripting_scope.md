@@ -191,9 +191,8 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Native input dispatch exposes `pointerdown`, `pointerup`, `touchstart` and
   `touchend` as mouse-like events for press feedback on wearable shells.
 - Disabled form controls do not accept text input, range movement or activation.
-- Text-search compatibility scanning is retired. Script-related diagnostics
-  should come from the package loader, JerryScript runtime and DOM/event binding
-  code paths that actually handled the app.
+- Script-related diagnostics come from the package loader, JerryScript runtime
+  and DOM/event binding code paths that actually handled the app.
 
 ## Not Supported Yet
 

@@ -6,6 +6,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ## Unreleased
 
+No unreleased changes.
+
+## 0.4.0-dev - 2026-06-28
+
 ### Added
 
 - Added an optional JerryScript execution watchdog. Runtime options and
@@ -80,7 +84,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   includes `fontFamilyUsage`, matching explicit CSS `font-family` declarations
   against manifest `.jffont` family metadata, generic fallback names and
   unmatched primary custom families. Added the `jelly_font_policy` sample
-  package and an app-runtime font fallback microbenchmark.
+  package and an app-runtime font fallback microbenchmark. Runtime app-font
+  selection now uses normalized `font-family` preferences so matching manifest
+  `.jffont` resources are measured and painted consistently when enabled.
 - Added manifest/profile policy merging for optional data services:
   `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
   `app_service_policies_for_app(...)` now gate `network.fetch` and `storage.kv`
@@ -269,10 +275,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   CSS, and responsive reports now include `paintBounds` so clipped layout boxes
   do not look like visible horizontal overflow.
 - Public samples, templates and script/runtime tests now use package-local
-  standard paths such as `/data/weather.json`, `/debug/icon.raw` and
-  `/audio/tone.wav`. The old debug-only `app://...` fixture scheme was removed;
-  before 1.0, JellyFrame intentionally avoids compatibility shims for private
-  syntax that was never part of the documented Web subset.
+  standard paths such as `/data/weather.json` and `/audio/tone.wav`; Win32-only
+  debug fixtures stay shell internals. The old debug-only `app://...` fixture
+  scheme was removed; before 1.0, JellyFrame intentionally avoids compatibility
+  shims for private syntax that was never part of the documented Web subset.
 - Package reports now include a stable `serviceIntent` summary for requested
   network, storage, audio and background-service manifest intent without
   implying host authorization.

@@ -440,8 +440,8 @@ jellyframe_font_pack_gen `
 
 1. 校验 `jellyframe.app.json` 并规范化路径。
 2. 遍历 entry HTML、linked stylesheets 和 classic scripts。
-3. 运行真实管线组件上报的 diagnostics。旧的文本检索式兼容性扫描已弃用；诊断应来自真正执行了
-   parse、CSS、style、layout、layer、render、scripting 或 package loading 的组件。
+3. 运行真实管线组件上报的 diagnostics。诊断应来自真正执行了 parse、CSS、style、layout、
+   layer、render、scripting 或 package loading 的组件。
 4. 默认执行字体资源预检：收集源码字符、估算 bitmap font budget，并在提供 `--font-coverage`
    时验证目标字体覆盖。需要产出嵌入式 C++ 字体头文件时，再使用 `jellyframe_font_pack_gen`。
 5. 执行预算检查：单资源字节、总包字节、CSS rule 估算和 script byte 限制。

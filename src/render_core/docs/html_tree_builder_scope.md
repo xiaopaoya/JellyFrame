@@ -80,5 +80,5 @@ input does not corrupt the entire tree, and pathological input is bounded.
 - `max_depth`: 64
 - `max_attributes_per_element`: 64
 - `synthesize_document_structure`: true
-- `collapse_whitespace`: false; kept only as a compatibility option while
-  layout/rendering handle display-time whitespace normalization
+- DOM text preserves author whitespace. Render/layout perform display-time
+  whitespace normalization for ordinary text and preserving contexts.

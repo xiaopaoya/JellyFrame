@@ -6,6 +6,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ## Unreleased
 
+暂无未发布变更。
+
+## 0.4.0-dev - 2026-06-28
+
 ### 新增
 
 - 添加可选 JerryScript 执行 watchdog。Runtime options 和 `HostBudgets` 现在可以设置有限
@@ -57,7 +61,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加 package 字体 family 策略 diagnostics。`fontDiagnostics` 现在包含 `fontFamilyUsage`，
   会把显式 CSS `font-family` declaration 与 manifest `.jffont` family 元数据、generic fallback 名称
   和未匹配首选自定义 family 对照。新增 `jelly_font_policy` 示例 package 和 app-runtime 字体 fallback
-  微基准。
+  微基准。runtime app-font 选择现在会使用规范化后的 `font-family` 偏好，启用包内字体时，
+  匹配 manifest 的 `.jffont` 资源会在测量和绘制中保持一致。
 - 添加可选数据服务的 manifest/profile policy 合成：`AppServiceManifestCapabilities`、
   `AppServiceHostProfile` 和 `app_service_policies_for_app(...)` 现在会在 runtime mock
   或 JS binding 提交任务前 gate `network.fetch` 与 `storage.kv`。
@@ -181,9 +186,9 @@ JellyFrame Engine 的重要变更记录在这里。
 ### 变更
 
 - 公开 samples、templates 和 script/runtime 测试现在使用 `/data/weather.json`、
-  `/debug/icon.raw`、`/audio/tone.wav` 这样的 package-local 标准路径，不再教 app
-  作者使用旧的 debug-only `app://...` fixture scheme。该私有 scheme 已删除；在 1.0
-  之前，JellyFrame 不为未纳入文档化 Web 子集的私有语法保留兼容 shim。
+  `/audio/tone.wav` 这样的 package-local 标准路径；Win32-only debug fixture 仍是壳层内部细节。
+  旧的 debug-only `app://...` fixture scheme 已删除；在 1.0 之前，JellyFrame 不为未纳入
+  文档化 Web 子集的私有语法保留兼容 shim。
 - Package report 新增稳定的 `serviceIntent` 摘要，用于记录 manifest 请求的网络、存储、音频和
   后台服务意图，但不暗示宿主已经授权。
 - Host service worker 现在可以按 `HostServiceJobKind` 弹出 request，避免 network、

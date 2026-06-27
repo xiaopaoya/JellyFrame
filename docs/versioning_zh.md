@@ -27,4 +27,7 @@ MAJOR.MINOR.PATCH[-stage]
 - `0.2.x`：framebuffer renderer 和输入路由。
 - `0.3.x`：可穿戴 app runtime 开发线，包括可选 JerryScript、DOM mutation APIs、
   packaging、文本/字体工作流和嵌入式内存优化。
-- `0.4.x`：在更多真实设备验证后，继续稳定 package app API。
+- `0.4.x`：面向可安装 package app 的 runtime 稳定化，包括管线 diagnostics、
+  responsive target report、有界动画、宿主服务策略、font-family 选择和 Win32 验证工具。
+- `0.5.x`：设备可用性阶段，包括 storage lifecycle 接入、retained rendering 分片、
+  产品级 image codec adapter、system shell recovery 和更多实机验证。

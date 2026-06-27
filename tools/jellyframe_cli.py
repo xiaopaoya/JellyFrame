@@ -520,9 +520,9 @@ def cmd_check(args: argparse.Namespace) -> int:
     else:
         print("package is valid; pipeline diagnostics ran through the render-core pseudo browser.")
         if getattr(args, "no_font_check", False):
-            print("Text-search compatibility scanning has been retired; font resource preflight was skipped by request.")
+            print("font resource preflight was skipped by request.")
         else:
-            print("Text-search compatibility scanning has been retired; font resource preflight ran with the package check.")
+            print("font resource preflight completed.")
     return 0
 
 

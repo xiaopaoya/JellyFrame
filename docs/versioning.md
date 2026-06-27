@@ -31,5 +31,9 @@ MAJOR.MINOR.PATCH[-stage]
 - `0.2.x`: framebuffer renderer and input routing.
 - `0.3.x`: wearable app runtime development, including optional JerryScript,
   DOM mutation APIs, packaging, text/font workflow and embedded memory work.
-- `0.4.x`: future stabilization of packaged app APIs after more real-device
-  validation.
+- `0.4.x`: app-runtime stabilization for installable packages, pipeline
+  diagnostics, responsive target reports, bounded animation, host service
+  policy, font-family selection and Win32 validation tooling.
+- `0.5.x`: device-usability work: storage lifecycle integration, retained
+  rendering slices, production image codec adapters, system shell recovery and
+  broader real-device validation.

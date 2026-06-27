@@ -16,7 +16,6 @@ struct HtmlParserOptions {
     std::size_t max_attributes_per_element = 64;
     DiagnosticSink* diagnostics = nullptr;
     bool synthesize_document_structure = true;
-    bool collapse_whitespace = false;
 };
 
 enum HtmlParserDiagnosticFlag : std::uint32_t {
