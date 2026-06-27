@@ -60,6 +60,29 @@ bool center_pixel_text_painter(FrameBuffer& target,
     return true;
 }
 
+struct TextPaintCounter {
+    int calls = 0;
+};
+
+bool counting_text_painter(FrameBuffer& target,
+                           Rect rect,
+                           Color color,
+                           const std::string&,
+                           int,
+                           int,
+                           TextCommandAlign,
+                           bool,
+                           void* context) {
+    auto* counter = static_cast<TextPaintCounter*>(context);
+    if (counter != nullptr) {
+        ++counter->calls;
+    }
+    if (target.contains(rect.x, rect.y)) {
+        target.pixel(rect.x, rect.y) = color;
+    }
+    return true;
+}
+
 struct ImagePaintProbe {
     std::uint32_t expected_handle = 0;
     ObjectFit fit = ObjectFit::Fill;
@@ -377,6 +400,33 @@ void dirty_render_preserves_original_rounded_geometry() {
     check(frame_buffer.pixel(35, 5).r == 0, "dirty clip does not create a new left rounded edge");
     check(frame_buffer.pixel(44, 5).r == 0, "dirty clip does not create a new right rounded edge");
     check(frame_buffer.pixel(20, 5).r == 255, "outside dirty clip remains untouched");
+}
+
+void dirty_render_skips_contained_dirty_rects() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 80, 40};
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{10, 10, 20, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "once";
+    command.font_size = 10;
+    command.text_single_line = true;
+    root.display_list.push_back(std::move(command));
+
+    FrameBuffer frame_buffer(80, 40, Color{255, 255, 255, 255});
+    TextPaintCounter counter;
+    SoftwareCompositor compositor(TextPainter{counting_text_painter, &counter});
+    const Rect dirty_rects[] = {
+        Rect{0, 0, 50, 30},
+        Rect{12, 12, 4, 4},
+        Rect{0, 0, 50, 30},
+    };
+    compositor.render_into(root, frame_buffer, Color{255, 255, 255, 255}, dirty_rects, 3);
+
+    check(counter.calls == 1, "contained and duplicate dirty rects are rendered once");
+    check(frame_buffer.pixel(10, 10).r == 0, "normalized dirty rect still paints content");
 }
 
 DisplayCommand white_fill(Rect rect) {
@@ -807,6 +857,7 @@ int main() {
         layout_uses_injected_text_measurement();
         dirty_render_only_updates_requested_clip();
         dirty_render_preserves_original_rounded_geometry();
+        dirty_render_skips_contained_dirty_rects();
         rasterizer_reports_text_fallback();
         dirty_text_clip_preserves_original_text_geometry();
         compositor_smooths_scaled_layers();

@@ -265,9 +265,11 @@ The Win32 validation shell surfaces the latest command coverage as
 `cmds=intersecting/visited` in the window title.
 
 This is an audit helper, not retained display-list reuse. The compositor still
-replays commands inside each dirty clip. The value is that hosts and tests can
-see whether a page interaction genuinely narrows paint work before the project
-adds heavier retained layer/display-command structures.
+replays commands inside each dirty clip, but first drops duplicate or fully
+contained dirty rectangles so the same repaint area is not cleared and replayed
+more than once. The value is that hosts and tests can see whether a page
+interaction genuinely narrows paint work before the project adds heavier
+retained layer/display-command structures.
 
 ## Animation Invalidation
 

@@ -276,6 +276,34 @@ int main(int argc, char** argv) {
         rasterizer.rasterize(conic_commands, target, Rect{0, 0, 320, 260});
     }));
 
+    LayerNode dirty_root;
+    dirty_root.type = LayerType::Root;
+    dirty_root.bounds = Rect{0, 0, 320, 260};
+    for (int row = 0; row < 8; ++row) {
+        for (int column = 0; column < 8; ++column) {
+            dirty_root.display_list.push_back(fill_command(Rect{column * 38, row * 30, 30, 22},
+                                                           Color{30, 64, 175, 255},
+                                                           6));
+        }
+    }
+    const std::array<Rect, 6> contained_dirty_rects{{
+        Rect{0, 0, 160, 130},
+        Rect{20, 20, 30, 30},
+        Rect{0, 0, 160, 130},
+        Rect{180, 20, 70, 80},
+        Rect{190, 30, 20, 20},
+        Rect{180, 20, 70, 80},
+    }};
+    print_result("dirty_rect_replay_contained", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareCompositor compositor;
+        compositor.render_into(dirty_root,
+                               target,
+                               Color{255, 255, 255, 255},
+                               contained_dirty_rects.data(),
+                               contained_dirty_rects.size());
+    }));
+
     LayerNode scale_root;
     scale_root.type = LayerType::Root;
     scale_root.bounds = Rect{0, 0, 160, 160};

@@ -16,6 +16,9 @@ Retained repaint probes:
   retained layout tree.
 - `retained_style_display_pipeline` measures layer rebuild plus
   `flatten_into(...)` with reusable display-list storage.
+- `dirty_rect_replay_contained` measures software compositor replay when dirty
+  rectangles contain duplicates or nested rectangles. The compositor normalizes
+  those rectangles before clearing and replaying commands.
 
 These probes quantify the remaining cost after text/style layout reuse. They do
 not imply display-list diffing or subtree replay.

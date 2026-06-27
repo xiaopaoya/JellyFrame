@@ -197,8 +197,9 @@ display commands 后的覆盖情况。它会统计访问/命中的 layer、带 c
 访问/命中的 display command。Win32 验证壳会在窗口标题中用 `cmds=命中/访问` 显示最近一次
 command 覆盖情况。
 
-这是审计 helper，不是 retained display-list reuse。Compositor 仍会在每个 dirty clip 内重放命令。
-它的价值是让宿主和测试能看到一次页面交互是否真的缩小了 paint 工作，然后再决定是否值得加入更重的
+这是审计 helper，不是 retained display-list reuse。Compositor 仍会在每个 dirty clip 内重放命令，
+但会先丢掉重复或被完全包含的 dirty rectangles，避免同一 repaint 区域被清屏和重放多次。它的价值是让
+宿主和测试能看到一次页面交互是否真的缩小了 paint 工作，然后再决定是否值得加入更重的
 retained layer/display-command 结构。
 
 ## Animation Invalidation

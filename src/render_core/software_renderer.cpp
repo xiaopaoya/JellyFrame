@@ -40,6 +40,36 @@ Rect target_rect(const FrameBuffer& target) {
     return Rect{0, 0, target.width, target.height};
 }
 
+std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects,
+                                        std::size_t dirty_rect_count,
+                                        Rect target) {
+    std::vector<Rect> normalized;
+    normalized.reserve(dirty_rect_count);
+    for (std::size_t index = 0; index < dirty_rect_count; ++index) {
+        const Rect dirty = intersect_rect(dirty_rects[index], target);
+        if (empty_rect(dirty)) {
+            continue;
+        }
+        bool covered = false;
+        for (const Rect& existing : normalized) {
+            if (contains_rect(existing, dirty)) {
+                covered = true;
+                break;
+            }
+        }
+        if (covered) {
+            continue;
+        }
+        normalized.erase(
+            std::remove_if(normalized.begin(), normalized.end(), [dirty](Rect existing) {
+                return contains_rect(dirty, existing);
+            }),
+            normalized.end());
+        normalized.push_back(dirty);
+    }
+    return normalized;
+}
+
 std::uint8_t clamp_u8(int value) {
     return static_cast<std::uint8_t>(std::max(0, std::min(255, value)));
 }
@@ -1089,11 +1119,17 @@ void SoftwareCompositor::render_into(const LayerNode& root,
         composite_layer(root, target, Rect{0, 0, target.width, target.height}, 0, 0, 1.0F);
         return;
     }
-    for (std::size_t index = 0; index < dirty_rect_count; ++index) {
-        const Rect dirty = intersect_rect(dirty_rects[index], target_rect(target));
-        if (empty_rect(dirty)) {
-            continue;
+    if (dirty_rect_count == 1) {
+        const Rect dirty = intersect_rect(dirty_rects[0], target_rect(target));
+        if (!empty_rect(dirty)) {
+            fill_rect(target, dirty, background);
+            composite_layer(root, target, dirty, 0, 0, 1.0F);
         }
+        return;
+    }
+    const std::vector<Rect> normalized_dirty_rects =
+        normalize_dirty_rects(dirty_rects, dirty_rect_count, target_rect(target));
+    for (const Rect dirty : normalized_dirty_rects) {
         fill_rect(target, dirty, background);
         composite_layer(root, target, dirty, 0, 0, 1.0F);
     }
