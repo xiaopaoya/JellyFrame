@@ -1,0 +1,19 @@
+# JellyFrame deterministic Win32 weather interaction capture script.
+# Run with:
+#   jellyframe_win32_browser.exe --app samples/apps/packages/watch_weather --frame-script samples/apps/packages/watch_weather/capture_weather_interaction.jfcapture
+
+output-dir out/weather_interaction_frames
+montage out/weather_interaction_montage.bmp
+frames 36
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 6
+gap 6
+animation-fps 30
+animation-callbacks 4
+
+# Exercise the bottom segmented buttons without depending on platform input.
+event 10 click 48 228
+event 18 click 150 228
+event 26 click 252 228

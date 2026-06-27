@@ -373,6 +373,16 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_win32_weather_interaction_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/watch_weather
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/watch_weather/capture_weather_interaction.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_weather_interaction_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "host_completion_kinds network=1 storage=0 image=3 audio=0 location=0 other=0")
+
+            add_test(
                 NAME jellyframe_win32_motion_lab_dirty_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_win32_browser>
                         --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
