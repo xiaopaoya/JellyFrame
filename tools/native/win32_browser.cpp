@@ -2553,6 +2553,34 @@ public:
                   << " framebuffer_mismatch="
                   << frame_update_reason_count(frame_update_statistics_, FrameUpdateReason::FramebufferSizeMismatch)
                   << '\n'
+                  << "  frame_repaint dirty_rect=" << frame_repaint_statistics_.dirty_rect_frames
+                  << " full_frame=" << frame_repaint_statistics_.full_frame_frames
+                  << " full_first_paint="
+                  << frame_repaint_full_frame_reason_count(frame_repaint_statistics_, FrameUpdateReason::FirstPaint)
+                  << " full_tree_dirty="
+                  << frame_repaint_full_frame_reason_count(frame_repaint_statistics_, FrameUpdateReason::TreeDirty)
+                  << " full_framebuffer_mismatch="
+                  << frame_repaint_full_frame_reason_count(frame_repaint_statistics_,
+                                                           FrameUpdateReason::FramebufferSizeMismatch)
+                  << " full_resolved_mismatch="
+                  << frame_repaint_full_frame_reason_count(frame_repaint_statistics_,
+                                                           FrameUpdateReason::ResolvedFramebufferSizeMismatch)
+                  << " full_paint_dirty="
+                  << frame_repaint_full_frame_reason_count(frame_repaint_statistics_,
+                                                           FrameUpdateReason::PaintOnlyDirty)
+                  << " dirty_paint_dirty="
+                  << frame_repaint_dirty_rect_reason_count(frame_repaint_statistics_,
+                                                           FrameUpdateReason::PaintOnlyDirty)
+                  << " dirty_text_stable="
+                  << frame_repaint_dirty_rect_reason_count(frame_repaint_statistics_,
+                                                           FrameUpdateReason::TextDirtyStableLayout)
+                  << " dirty_style_stable="
+                  << frame_repaint_dirty_rect_reason_count(frame_repaint_statistics_,
+                                                           FrameUpdateReason::StyleDirtyStableLayout)
+                  << " dirty_layout_previous="
+                  << frame_repaint_dirty_rect_reason_count(frame_repaint_statistics_,
+                                                           FrameUpdateReason::LayoutDirtyWithPreviousLayout)
+                  << '\n'
                   << "  frame_dirty_flags none=" << frame_update_statistics_.dirty_none_frames
                   << " tree=" << frame_update_statistics_.dirty_tree_frames
                   << " attributes=" << frame_update_statistics_.dirty_attribute_frames
@@ -2673,6 +2701,7 @@ private:
     DisplayInvalidationResult last_display_invalidation_;
     DirtyRegionStatistics dirty_region_statistics_;
     FrameUpdateStatistics frame_update_statistics_;
+    FrameRepaintStatistics frame_repaint_statistics_;
     ScrollDebugCounters scroll_counters_;
     std::size_t dirty_fallback_attempt_frames_ = 0;
     std::size_t dirty_fallback_attempt_rects_ = 0;
@@ -3413,6 +3442,7 @@ private:
             pending_shell_app_id_.clear();
             dirty_region_statistics_ = DirtyRegionStatistics{};
             frame_update_statistics_ = FrameUpdateStatistics{};
+            frame_repaint_statistics_ = FrameRepaintStatistics{};
             last_frame_update_action_ = FrameUpdateAction::None;
             last_frame_update_reason_ = FrameUpdateReason::None;
             last_frame_repaint_reason_ = FrameUpdateReason::None;
@@ -3588,6 +3618,8 @@ private:
             }
             apply_animation_overrides_to_cached_trees();
             auto next_layer_tree = layer_builder.build(*layout_tree_);
+            const FrameRepaintPlan repaint_plan =
+                current_layout_repaint_plan(update_plan.reason, content_height);
             if (!animation_only_dirty) {
                 compute_dirty_region_into(
                     *document_,
@@ -3613,7 +3645,9 @@ private:
                 last_display_invalidation_ =
                     analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
                 record_dirty_region(dirty_region);
+                record_frame_repaint(repaint_plan, true);
             } else {
+                record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
             input_ = std::make_unique<InputController>(
@@ -3677,6 +3711,8 @@ private:
 
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
             auto next_layer_tree = layer_builder.build(*layout_tree_);
+            const FrameRepaintPlan repaint_plan =
+                current_layout_repaint_plan(update_plan.reason, content_height);
             compute_dirty_region_into(
                 *document_,
                 layout_tree_.get(),
@@ -3711,7 +3747,9 @@ private:
                 last_display_invalidation_ =
                     analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
                 record_dirty_region(dirty_region);
+                record_frame_repaint(repaint_plan, true);
             } else {
+                record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
             input_ = std::make_unique<InputController>(
@@ -3768,7 +3806,9 @@ private:
             last_display_invalidation_ =
                 analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
             record_dirty_region(dirty_region);
+            record_frame_repaint(repaint_plan, true);
         } else {
+            record_frame_repaint(repaint_plan, false);
             render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
         }
         input_ = std::make_unique<InputController>(
@@ -4380,6 +4420,21 @@ private:
         last_frame_update_reason_ = plan.reason;
         last_frame_repaint_reason_ = plan.reason;
         record_frame_update_plan(frame_update_statistics_, plan, dirty_flags);
+    }
+
+    FrameRepaintPlan current_layout_repaint_plan(FrameUpdateReason reason, int content_height) const {
+        FrameRepaintPlan plan;
+        plan.dirty_rect_mode = FrameDirtyRectMode::CurrentLayout;
+        plan.reason = reason;
+        plan.target_width = viewport_width_;
+        plan.target_height = content_height;
+        plan.can_repaint_dirty_rects = true;
+        return plan;
+    }
+
+    void record_frame_repaint(const FrameRepaintPlan& plan, bool used_dirty_rects) {
+        last_frame_repaint_reason_ = plan.reason;
+        record_frame_repaint_result(frame_repaint_statistics_, plan, used_dirty_rects);
     }
 
     void set_title(const std::string& status) {

@@ -231,6 +231,11 @@ class PackagePreflightTests(unittest.TestCase):
                 "framebufferBytes": 307200,
                 "estimatedHeapBytes": 333000,
             },
+            "frameUpdate": {
+                "action": "rebuild-pipeline",
+                "repaint": "full-frame",
+                "reason": "first-paint",
+            },
             "summary": {"total": 0, "info": 0, "warning": 0, "error": 0},
         }
 
@@ -242,6 +247,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(profile["status"], "scroll-needed")
         self.assertEqual(profile["viewport"], {"width": 320, "height": 240, "shape": "rect"})
         self.assertEqual(profile["layout"]["contentHeight"], 320)
+        self.assertEqual(profile["frameUpdate"]["reason"], "first-paint")
 
         pipeline_report["layout"]["horizontalOverflow"] = True
         self.assertEqual(jellyframe_cli.responsive_status(pipeline_report), "horizontal-overflow")

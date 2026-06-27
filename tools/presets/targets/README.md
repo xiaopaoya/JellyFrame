@@ -14,7 +14,11 @@ inside the JSON report.
 A responsive profile is a desktop developer signal, not a runtime feature. It
 reports viewport size, shape, content height, horizontal overflow, scroll need
 and diagnostic counts so an app author can see whether one package remains
-usable on several wearable form factors. The pseudo-browser report also exposes
+usable on several wearable form factors. Each profile also carries the
+pseudo-browser `frameUpdate` summary for the first render, normally
+`first-paint` / `full-frame`, so authors can separate expected first-frame cost
+from later Win32 frame-loop repaint fallback data. The pseudo-browser report
+also exposes
 `paintBounds` next to raw layout bounds; horizontal overflow is based on visible
 display-list bounds so clipped implementation boxes do not create false
 failures. Single-target commands keep the older report shape and do not emit

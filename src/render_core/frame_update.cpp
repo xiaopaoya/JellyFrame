@@ -192,6 +192,29 @@ std::size_t frame_update_reason_count(const FrameUpdateStatistics& statistics,
     return statistics.reasons[frame_update_reason_index(reason)];
 }
 
+void record_frame_repaint_result(FrameRepaintStatistics& statistics,
+                                 const FrameRepaintPlan& plan,
+                                 bool used_dirty_rects) {
+    const std::size_t reason_index = frame_update_reason_index(plan.reason);
+    if (used_dirty_rects) {
+        ++statistics.dirty_rect_frames;
+        ++statistics.dirty_rect_reasons[reason_index];
+    } else {
+        ++statistics.full_frame_frames;
+        ++statistics.full_frame_reasons[reason_index];
+    }
+}
+
+std::size_t frame_repaint_dirty_rect_reason_count(const FrameRepaintStatistics& statistics,
+                                                  FrameUpdateReason reason) {
+    return statistics.dirty_rect_reasons[frame_update_reason_index(reason)];
+}
+
+std::size_t frame_repaint_full_frame_reason_count(const FrameRepaintStatistics& statistics,
+                                                  FrameUpdateReason reason) {
+    return statistics.full_frame_reasons[frame_update_reason_index(reason)];
+}
+
 FrameUpdateState make_frame_update_state(DomDirtyFlags dirty_flags,
                                          const FramePipelineCacheState& cache_state) {
     FrameUpdateState state;

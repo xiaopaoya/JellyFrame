@@ -133,6 +133,11 @@ framebuffer 尺寸仍匹配解析后的目标高度时保留 `PreviousAndCurrent
 `CurrentLayout`。如果文本、样式或布局变化导致内容变高或变矮，宿主必须 resize 或重建
 framebuffer，并执行 full frame repaint。
 
+`FrameUpdateStatistics` 记录 planner 决策和 dirty flag 输入。`FrameRepaintStatistics`
+单独记录最终 repaint 结果：多少帧真正使用 dirty rectangles，多少帧回退 full-frame repaint，
+以及两侧各自的稳定 `FrameUpdateReason` 直方图。Win32 frame-script capture 会同时输出这两行，
+方便开发者区分“页面确实需要 layout 工作”和“最终 framebuffer repaint 退回整帧”。
+
 ## Dirty Flags 语义
 
 - `DomDirtyPaint`：控件值、选择状态、焦点类视觉变化等。若 framebuffer 和 layout cache 可用，可走 `RepaintExisting`。

@@ -264,6 +264,7 @@ def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_
     layout = pipeline_report.get("layout", {}) if isinstance(pipeline_report, dict) else {}
     pipeline = pipeline_report.get("pipeline", {}) if isinstance(pipeline_report, dict) else {}
     summary = pipeline_report.get("summary", {}) if isinstance(pipeline_report, dict) else {}
+    frame_update = pipeline_report.get("frameUpdate", {}) if isinstance(pipeline_report, dict) else {}
     target_viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
     shape = target_viewport.get("shape", "")
     return {
@@ -290,6 +291,7 @@ def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_
             "framebufferBytes": int(pipeline.get("framebufferBytes", 0) or 0),
             "estimatedHeapBytes": int(pipeline.get("estimatedHeapBytes", 0) or 0),
         },
+        "frameUpdate": frame_update if isinstance(frame_update, dict) else {},
         "diagnostics": {
             "total": int(summary.get("total", 0) or 0),
             "info": int(summary.get("info", 0) or 0),

@@ -176,6 +176,13 @@ resolved the new layout height. It keeps `PreviousAndCurrentLayout` or
 resolved target. If text/style/layout changes make content taller or shorter,
 the host must resize or recreate the framebuffer and repaint the full frame.
 
+`FrameUpdateStatistics` records planner decisions and dirty-flag inputs.
+`FrameRepaintStatistics` records the final repaint result separately: how many
+frames used dirty rectangles, how many fell back to full-frame repaint, and the
+stable `FrameUpdateReason` histogram for each side. Win32 frame-script capture
+prints both lines so developers can distinguish "the page needed layout work"
+from "the final framebuffer repaint became full-frame".
+
 ## Dirty Flag Semantics
 
 - `DomDirtyPaint`: control values, selection state and similar visual-only

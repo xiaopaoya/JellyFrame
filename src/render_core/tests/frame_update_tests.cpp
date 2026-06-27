@@ -290,6 +290,28 @@ void frame_update_dirty_flag_statistics_are_stable() {
     check(statistics.dirty_render_or_layout_frames == 3, "dirty statistics count render/layout input");
 }
 
+void frame_repaint_statistics_are_stable() {
+    FrameRepaintStatistics statistics;
+    const FrameUpdateState paint_state = cached_state(DomDirtyPaint);
+    const FrameUpdatePlan paint_plan = plan_frame_update(paint_state);
+    record_frame_repaint_result(statistics,
+                                plan_frame_repaint(paint_state, paint_plan, 320),
+                                true);
+
+    const FrameUpdateState layout_state = cached_state(DomDirtyText | DomDirtyLayout);
+    const FrameUpdatePlan layout_plan = plan_frame_update(layout_state);
+    record_frame_repaint_result(statistics,
+                                plan_frame_repaint(layout_state, layout_plan, 420),
+                                false);
+
+    check(statistics.dirty_rect_frames == 1, "repaint statistics count dirty rect frames");
+    check(statistics.full_frame_frames == 1, "repaint statistics count full frame frames");
+    check(frame_repaint_dirty_rect_reason_count(statistics, FrameUpdateReason::PaintOnlyDirty) == 1,
+          "repaint statistics count dirty rect reason");
+    check(frame_repaint_full_frame_reason_count(statistics, FrameUpdateReason::ResolvedFramebufferSizeMismatch) == 1,
+          "repaint statistics count full frame fallback reason");
+}
+
 } // namespace
 
 int main() {
@@ -311,6 +333,7 @@ int main() {
         host_frame_sequence_keeps_bounded_actions();
         frame_update_names_and_statistics_are_stable();
         frame_update_dirty_flag_statistics_are_stable();
+        frame_repaint_statistics_are_stable();
     } catch (const std::exception& error) {
         std::cerr << "frame update test failed: " << error.what() << '\n';
         return 1;

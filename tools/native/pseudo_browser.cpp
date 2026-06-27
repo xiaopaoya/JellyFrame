@@ -2,6 +2,7 @@
 #include "render_core/css_parser.h"
 #include "render_core/diagnostics.h"
 #include "render_core/document_style.h"
+#include "render_core/frame_update.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
@@ -268,6 +269,11 @@ void write_diagnostics_json(const std::string& path,
     output << "    \"horizontalOverflow\": " << (horizontal_overflow ? "true" : "false") << ",\n";
     output << "    \"verticalOverflow\": " << (vertical_overflow ? "true" : "false") << "\n";
     output << "  },\n";
+    output << "  \"frameUpdate\": {\"action\": \""
+           << frame_update_action_name(FrameUpdateAction::RebuildPipeline)
+           << "\", \"repaint\": \"" << frame_dirty_rect_mode_name(FrameDirtyRectMode::FullFrame)
+           << "\", \"reason\": \"" << frame_update_reason_name(FrameUpdateReason::FirstPaint)
+           << "\"},\n";
     output << "  \"pipeline\": {\n";
     output << "    \"domNodes\": " << statistics.dom.node_count << ",\n";
     output << "    \"renderObjects\": " << statistics.render_objects << ",\n";
