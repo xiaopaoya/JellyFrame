@@ -66,6 +66,16 @@ def main() -> int:
     require("visual-horizontal-overflow" in diagnostic_codes(overflow_report),
             "horizontal paint overflow should be reported")
 
+    vertical_report = run_pseudo_browser(
+        exe,
+        "<body><div class='up'></div></body>",
+        "body { margin: 0; } .up { position: absolute; top: -10px; left: 8px; width: 30px; height: 20px; background: #000; }",
+        100,
+        80,
+    )
+    require("visual-vertical-paint-overflow" in diagnostic_codes(vertical_report),
+            "vertical paint overflow should be reported")
+
     dense_html = "<body>" + "".join("<i></i>" for _ in range(600)) + "</body>"
     dense_report = run_pseudo_browser(
         exe,

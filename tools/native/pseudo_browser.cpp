@@ -167,6 +167,15 @@ void report_visual_diagnostics(const BrowserOptions& options,
                           "Paint output extends outside the viewport horizontally",
                           bounds_detail("paintBounds", paint_bounds));
     }
+    if (paint_bounds.valid && (paint_bounds.top < 0 || paint_bounds.bottom > content_height)) {
+        report_diagnostic(&diagnostics,
+                          DiagnosticStage::Layout,
+                          DiagnosticSeverity::Warning,
+                          "visual-vertical-paint-overflow",
+                          "Paint output extends outside the resolved content bounds vertically",
+                          bounds_detail("paintBounds", paint_bounds) +
+                              " contentHeight=" + std::to_string(content_height));
+    }
     if (content_height > options.viewport_height) {
         report_diagnostic(&diagnostics,
                           DiagnosticStage::Layout,
