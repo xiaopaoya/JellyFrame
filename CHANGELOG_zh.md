@@ -35,6 +35,8 @@ JellyFrame Engine 的重要变更记录在这里。
   摘要。工具会分类包内 BMP、PNG、JPEG、WebP、GIF 和未知图片资源，读取轻量 BMP/PNG
   metadata，报告所选 target 的 `hostServices.imageDecode` / `imageCodecs` 支持状态，
   并在 package 使用 unsupported 或尚未验证的 codec 时输出 warning。
+- 新增包内图片验收回归：检查 `watch_weather` 的 `imageDiagnostics`，通过 Win32 壳捕获样例，
+  并读取输出 BMP 像素，确认 package-local BMP 图标确实被绘制出来。
 
 ### 变更
 

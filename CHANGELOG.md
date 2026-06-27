@@ -45,6 +45,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   WebP, GIF and unknown image resources, reads lightweight BMP/PNG metadata,
   reports the selected target's `hostServices.imageDecode` / `imageCodecs`
   support and warns when a package uses an unsupported or unvalidated codec.
+- Added a package-image acceptance regression that checks `watch_weather`
+  `imageDiagnostics`, captures the sample through the Win32 shell and inspects
+  the output BMP pixels to make sure package-local BMP icons are actually
+  painted.
 
 ### Changed
 
