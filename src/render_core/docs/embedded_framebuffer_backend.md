@@ -58,6 +58,24 @@ HostFrameSink sink = embedded_frame_sink(embedded);
 present_frame(frame_buffer, sink, dirty_rects, dirty_rect_count);
 ```
 
+Bring-up tools and board ports can call the lower-level entry point when they
+need per-frame accounting:
+
+```cpp
+EmbeddedFrameBufferPresentStats stats;
+present_to_embedded_framebuffer(frame_buffer_view(frame_buffer),
+                                dirty_rects,
+                                dirty_rect_count,
+                                embedded,
+                                &stats);
+```
+
+The stats object reports whether the frame was a full present, how many source
+rectangles were clipped or skipped, how many pixels were converted, the tightly
+packed byte count for those rectangles, and how many flush callbacks were
+accepted. It is optional; normal rendering paths can omit it and pay no storage
+cost.
+
 If `dirty_rects` is empty, the full frame is converted. Otherwise only clipped
 dirty rectangles are converted and flushed. Pixels outside those rectangles are
 left untouched.

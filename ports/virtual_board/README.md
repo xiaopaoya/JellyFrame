@@ -47,6 +47,9 @@ Interpretation:
 - `steady_frame_estimate_us` is `render_frame + present_rgb565 + virtual_flush`.
 - `cold_pipeline_frame_estimate_us` additionally includes full parse/style/layout
   pipeline work.
+- `present_pixels`, `present_packed_bytes`, `present_clipped_rects` and
+  `present_flushes` come from `EmbeddedFrameBufferPresentStats`; compare them
+  with board-side panel bytes, DMA wait time and flush-done counts.
 
 Use the estimates for trend comparison and display bandwidth planning, not as a
 cycle-accurate ESP32-S3 replacement.

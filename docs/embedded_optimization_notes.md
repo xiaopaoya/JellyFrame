@@ -45,6 +45,9 @@ small wearable devices.
 - `embedded_framebuffer` converts only clipped dirty rectangles into
   caller-owned display buffers and does not allocate, retain or flush device
   memory itself.
+- `embedded_framebuffer` conversion is format-dispatched per rectangle and can
+  optionally report converted pixels, packed bytes, clipped/empty rects and
+  flush count through `EmbeddedFrameBufferPresentStats`.
 - `HostFrameSink::present` is a frame-lifetime boundary. If the underlying panel
   path uses asynchronous DMA, the host must make buffers reusable before
   returning, or the UI loop must wait for a flush-done event before starting the

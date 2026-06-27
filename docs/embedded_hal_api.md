@@ -327,6 +327,21 @@ know when a device flush is complete. Therefore:
 - if even the RGBA framebuffer does not fit, the current core is not enough yet;
   add a tiled/scanline compositor first.
 
+During bring-up, pass `EmbeddedFrameBufferPresentStats` to
+`present_to_embedded_framebuffer(...)` and log it next to the real panel data:
+
+- `converted_pixels` / `packed_bytes`: how much the core converted and intended
+  to submit this frame.
+- `clipped_rects` / `empty_rects`: whether dirty rectangles are being clipped
+  correctly and whether invalid input is present.
+- `flushes`: how many rectangle flush callbacks the core requested.
+
+Compare those fields with port-side DMA wait time, flush-done count, panel
+bytes and heap watermarks. If core `packed_bytes` is small but the board still
+has high frame latency, first check whether the panel driver falls back to a
+full-screen flush, whether pixels are copied through an internal full-screen
+buffer, or whether the UI task is synchronously waiting on slow I/O.
+
 LVGL is optional here. It is reasonable to reuse LVGL or a vendor BSP to
 initialize the panel, touch controller or backlight, or to forward a dirty
 rectangle into a vendor flush primitive. It is not recommended to translate

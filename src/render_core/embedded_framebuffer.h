@@ -37,16 +37,28 @@ struct EmbeddedFrameBufferSink {
     void* flush_context = nullptr;
 };
 
+struct EmbeddedFrameBufferPresentStats {
+    bool full_present = false;
+    std::size_t source_rects = 0;
+    std::size_t clipped_rects = 0;
+    std::size_t empty_rects = 0;
+    std::size_t flushes = 0;
+    std::uint64_t converted_pixels = 0;
+    std::uint64_t packed_bytes = 0;
+};
+
 std::size_t embedded_framebuffer_min_stride_bytes(int width, EmbeddedPixelFormat format);
 std::size_t embedded_framebuffer_min_size(int width,
                                           int height,
                                           EmbeddedPixelFormat format,
                                           std::size_t stride_bytes = 0);
+std::size_t embedded_framebuffer_packed_rect_bytes(int width, int height, EmbeddedPixelFormat format);
 
 bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
                                      const Rect* dirty_rects,
                                      std::size_t dirty_rect_count,
-                                     EmbeddedFrameBufferSink& sink);
+                                     EmbeddedFrameBufferSink& sink,
+                                     EmbeddedFrameBufferPresentStats* stats = nullptr);
 
 HostFrameSink embedded_frame_sink(EmbeddedFrameBufferSink& sink);
 

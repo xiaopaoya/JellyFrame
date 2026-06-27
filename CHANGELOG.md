@@ -31,6 +31,16 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Win32 frame-script summaries now include `layer_tree layers=N
   display_commands=N`, making retained-rendering and full-frame fallback
   sampling easier to compare across watch samples.
+- `embedded_framebuffer` now offers optional `EmbeddedFrameBufferPresentStats`
+  for board bring-up, reporting converted pixels, packed bytes, clipped/empty
+  dirty rects and flush count. The virtual board benchmark prints these fields
+  so port-side panel bytes and DMA wait time can be compared with core output.
+
+### Changed
+
+- Low-depth embedded framebuffer conversion is now dispatched per rectangle and
+  pixel format, reducing per-pixel branch and stride recomputation overhead on
+  RGB565/BGR565-style targets.
 
 ## 0.4.0-dev - 2026-06-28
 

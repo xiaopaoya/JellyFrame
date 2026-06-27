@@ -53,6 +53,21 @@ HostFrameSink sink = embedded_frame_sink(embedded);
 present_frame(frame_buffer, sink, dirty_rects, dirty_rect_count);
 ```
 
+bring-up 工具和开发板 port 如果需要逐帧统计，可以直接调用低层入口：
+
+```cpp
+EmbeddedFrameBufferPresentStats stats;
+present_to_embedded_framebuffer(frame_buffer_view(frame_buffer),
+                                dirty_rects,
+                                dirty_rect_count,
+                                embedded,
+                                &stats);
+```
+
+`stats` 会报告本帧是否 full present、输入 rectangles 中多少被裁剪/跳过、实际转换了多少像素、
+这些 rectangles 紧凑打包后约多少字节，以及成功触发了多少次 flush callback。它是可选项；
+普通渲染路径不传统计指针，不承担额外存储成本。
+
 如果 `dirty_rects` 为空，则转换整帧。否则只转换并 flush 裁剪后的 dirty rectangles。
 这些 rectangles 外的像素保持不变。
 

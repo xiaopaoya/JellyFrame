@@ -24,6 +24,14 @@ JellyFrame Engine 的重要变更记录在这里。
   宿主持有、用户授权的 file broker，并具备异步预算、rollback/fallback，且不暴露裸 filesystem handle。
 - Win32 frame-script 摘要现在会输出 `layer_tree layers=N display_commands=N`，便于对比手表样例的
   retained rendering 与 full-frame fallback 采样结果。
+- `embedded_framebuffer` 新增可选 `EmbeddedFrameBufferPresentStats`，用于开发板 bring-up
+  统计 converted pixels、packed bytes、clipped/empty dirty rects 和 flush count。virtual board
+  benchmark 会打印这些字段，方便把核心输出与 port 侧 panel bytes 和 DMA wait time 对齐。
+
+### 变更
+
+- 低色深 embedded framebuffer 转换现在按 rectangle 和 pixel format 分派，减少 RGB565/BGR565
+  这类目标上的每像素分支与 stride 重算开销。
 
 ## 0.4.0-dev - 2026-06-28
 

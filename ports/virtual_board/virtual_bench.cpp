@@ -301,15 +301,16 @@ int main(int argc, char** argv) {
         virtual_flush,
         &panel,
     };
-    const HostFrameSink frame_sink = embedded_frame_sink(embedded_sink);
     const Rect full_dirty{0, 0, options.width, options.height};
+    EmbeddedFrameBufferPresentStats present_stats;
 
     const double present_rgb565_us = average_microseconds(options.iterations, [&] {
         panel.flushes = 0;
         panel.pixels = 0;
         panel.bytes = 0;
         panel.virtual_us = 0.0;
-        if (!present_frame(frame_buffer, frame_sink, &full_dirty, 1)) {
+        if (!present_to_embedded_framebuffer(frame_buffer_view(frame_buffer), &full_dirty, 1, embedded_sink,
+                                             &present_stats)) {
             std::cerr << "present_frame failed\n";
             std::exit(2);
         }
@@ -355,6 +356,12 @@ int main(int argc, char** argv) {
     std::cout << "last_flush_bytes=" << last_flush_bytes
               << " last_flush_pixels=" << panel.pixels
               << " last_flushes=" << panel.flushes << '\n';
+    std::cout << "present_source_rects=" << present_stats.source_rects
+              << " present_clipped_rects=" << present_stats.clipped_rects
+              << " present_empty_rects=" << present_stats.empty_rects
+              << " present_pixels=" << present_stats.converted_pixels
+              << " present_packed_bytes=" << present_stats.packed_bytes
+              << " present_flushes=" << present_stats.flushes << '\n';
     std::cout << "pipeline_estimated_bytes=" << pipeline_statistics.estimated_heap_bytes
               << " framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes
               << " resource_bytes=" << pipeline_statistics.resource_bytes

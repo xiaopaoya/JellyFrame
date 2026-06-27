@@ -276,6 +276,17 @@ buffer。如果底层 SPI/8080/RGB panel flush 是异步 DMA，宿主必须在 `
   从 RGBA framebuffer 转换到一个很小的 internal DMA scratch buffer，提交并等待该 strip 完成，再处理下一段；
 - 如果连 RGBA framebuffer 本身也放不下，当前核心还不能满足，需要先实现 tiled/scanline compositor。
 
+bring-up 阶段建议在 `present_to_embedded_framebuffer(...)` 传入 `EmbeddedFrameBufferPresentStats`，
+并把以下字段与真实 panel 指标一起打印：
+
+- `converted_pixels` / `packed_bytes`：核心本帧实际转换和预计提交的数据量；
+- `clipped_rects` / `empty_rects`：dirty rect 是否已经被正确裁剪，是否存在无效输入；
+- `flushes`：核心请求了多少次 rectangle flush。
+
+这些指标应与 port 侧的 DMA wait time、flush-done 次数、panel bytes、heap watermark 对齐。若核心
+`packed_bytes` 很小但实机帧延迟仍高，优先检查 panel driver 是否退化为整屏 flush、是否复制到了
+internal full-screen buffer、或是否在 UI task 中同步等待了过长的 I/O。
+
 这里的 LVGL 是可选项。可以复用 LVGL 或厂商 BSP 初始化屏幕、触摸控制器、背光，
 也可以把 dirty rectangle 转交给厂商 flush primitive；但不建议把 JellyFrame 节点翻译成
 LVGL widgets 作为主渲染器。核心 pipeline 和 framebuffer 路径应保持权威，只在最终 I/O

@@ -72,6 +72,24 @@ std::size_t actual_stride(const EmbeddedFrameBufferTarget& target) {
         : embedded_framebuffer_min_stride_bytes(target.width, target.format);
 }
 
+std::size_t bytes_per_pixel_floor(EmbeddedPixelFormat format) {
+    switch (format) {
+    case EmbeddedPixelFormat::Rgba8888:
+    case EmbeddedPixelFormat::Bgra8888:
+        return 4U;
+    case EmbeddedPixelFormat::Rgb565:
+    case EmbeddedPixelFormat::Bgr565:
+        return 2U;
+    case EmbeddedPixelFormat::Rgb332:
+    case EmbeddedPixelFormat::Gray8:
+        return 1U;
+    case EmbeddedPixelFormat::Mono1Msb:
+    case EmbeddedPixelFormat::Mono1Lsb:
+        return 0U;
+    }
+    return 0U;
+}
+
 bool valid_target(const EmbeddedFrameBufferTarget& target) {
     if (target.width <= 0 || target.height <= 0 || target.pixels == nullptr) {
         return false;
@@ -85,55 +103,101 @@ bool valid_target(const EmbeddedFrameBufferTarget& target) {
     return target.byte_size >= required;
 }
 
-void write_pixel(EmbeddedFrameBufferTarget& target, int x, int y, Color color) {
+void convert_rect(const HostFrameBufferView& frame, EmbeddedFrameBufferTarget& target, Rect dirty) {
     const std::size_t stride = actual_stride(target);
-    std::uint8_t* row = target.pixels + stride * static_cast<std::size_t>(y);
-    color = opaque_color(color);
 
     switch (target.format) {
     case EmbeddedPixelFormat::Rgba8888: {
-        std::uint8_t* pixel = row + static_cast<std::size_t>(x) * 4U;
-        pixel[0] = color.r;
-        pixel[1] = color.g;
-        pixel[2] = color.b;
-        pixel[3] = color.a;
+        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+            std::uint8_t* target_row = target.pixels + stride * static_cast<std::size_t>(y);
+            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                const Color color = opaque_color(source_row[x]);
+                std::uint8_t* pixel = target_row + static_cast<std::size_t>(x) * 4U;
+                pixel[0] = color.r;
+                pixel[1] = color.g;
+                pixel[2] = color.b;
+                pixel[3] = color.a;
+            }
+        }
         break;
     }
     case EmbeddedPixelFormat::Bgra8888: {
-        std::uint8_t* pixel = row + static_cast<std::size_t>(x) * 4U;
-        pixel[0] = color.b;
-        pixel[1] = color.g;
-        pixel[2] = color.r;
-        pixel[3] = color.a;
+        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+            std::uint8_t* target_row = target.pixels + stride * static_cast<std::size_t>(y);
+            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                const Color color = opaque_color(source_row[x]);
+                std::uint8_t* pixel = target_row + static_cast<std::size_t>(x) * 4U;
+                pixel[0] = color.b;
+                pixel[1] = color.g;
+                pixel[2] = color.r;
+                pixel[3] = color.a;
+            }
+        }
         break;
     }
     case EmbeddedPixelFormat::Rgb565:
     case EmbeddedPixelFormat::Bgr565: {
         const bool bgr = target.format == EmbeddedPixelFormat::Bgr565;
-        const std::uint16_t packed = pack_565(color, bgr, x, y, target.ordered_dither);
-        std::uint8_t* pixel = row + static_cast<std::size_t>(x) * 2U;
-        pixel[0] = static_cast<std::uint8_t>(packed & 0xffU);
-        pixel[1] = static_cast<std::uint8_t>(packed >> 8);
+        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+            std::uint8_t* target_row = target.pixels + stride * static_cast<std::size_t>(y);
+            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                const std::uint16_t packed = pack_565(source_row[x], bgr, x, y, target.ordered_dither);
+                std::uint8_t* pixel = target_row + static_cast<std::size_t>(x) * 2U;
+                pixel[0] = static_cast<std::uint8_t>(packed & 0xffU);
+                pixel[1] = static_cast<std::uint8_t>(packed >> 8);
+            }
+        }
         break;
     }
     case EmbeddedPixelFormat::Rgb332: {
-        row[x] = static_cast<std::uint8_t>((color.r & 0xe0U) | ((color.g >> 3) & 0x1cU) | (color.b >> 6));
+        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+            std::uint8_t* target_row = target.pixels + stride * static_cast<std::size_t>(y);
+            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                const Color color = opaque_color(source_row[x]);
+                target_row[x] =
+                    static_cast<std::uint8_t>((color.r & 0xe0U) | ((color.g >> 3) & 0x1cU) | (color.b >> 6));
+            }
+        }
         break;
     }
-    case EmbeddedPixelFormat::Gray8:
-        row[x] = luminance(color);
+    case EmbeddedPixelFormat::Gray8: {
+        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+            std::uint8_t* target_row = target.pixels + stride * static_cast<std::size_t>(y);
+            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                target_row[x] = luminance(source_row[x]);
+            }
+        }
         break;
+    }
     case EmbeddedPixelFormat::Mono1Msb:
     case EmbeddedPixelFormat::Mono1Lsb: {
-        const std::size_t byte_index = static_cast<std::size_t>(x) >> 3;
-        const int bit_index = x & 7;
-        const std::uint8_t mask = target.format == EmbeddedPixelFormat::Mono1Msb
-            ? static_cast<std::uint8_t>(0x80U >> bit_index)
-            : static_cast<std::uint8_t>(1U << bit_index);
-        if (luminance(color) >= 128) {
-            row[byte_index] = static_cast<std::uint8_t>(row[byte_index] | mask);
-        } else {
-            row[byte_index] = static_cast<std::uint8_t>(row[byte_index] & ~mask);
+        const bool msb = target.format == EmbeddedPixelFormat::Mono1Msb;
+        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+            std::uint8_t* target_row = target.pixels + stride * static_cast<std::size_t>(y);
+            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                const std::size_t byte_index = static_cast<std::size_t>(x) >> 3;
+                const int bit_index = x & 7;
+                const std::uint8_t mask = msb
+                    ? static_cast<std::uint8_t>(0x80U >> bit_index)
+                    : static_cast<std::uint8_t>(1U << bit_index);
+                if (luminance(source_row[x]) >= 128) {
+                    target_row[byte_index] = static_cast<std::uint8_t>(target_row[byte_index] | mask);
+                } else {
+                    target_row[byte_index] = static_cast<std::uint8_t>(target_row[byte_index] & ~mask);
+                }
+            }
         }
         break;
     }
@@ -190,10 +254,25 @@ std::size_t embedded_framebuffer_min_size(int width,
     return stride * static_cast<std::size_t>(height - 1) + min_stride;
 }
 
+std::size_t embedded_framebuffer_packed_rect_bytes(int width, int height, EmbeddedPixelFormat format) {
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+    const std::size_t h = static_cast<std::size_t>(height);
+    if (format == EmbeddedPixelFormat::Mono1Msb || format == EmbeddedPixelFormat::Mono1Lsb) {
+        return ((static_cast<std::size_t>(width) + 7U) / 8U) * h;
+    }
+    return static_cast<std::size_t>(width) * h * bytes_per_pixel_floor(format);
+}
+
 bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
                                      const Rect* dirty_rects,
                                      std::size_t dirty_rect_count,
-                                     EmbeddedFrameBufferSink& sink) {
+                                     EmbeddedFrameBufferSink& sink,
+                                     EmbeddedFrameBufferPresentStats* stats) {
+    if (stats != nullptr) {
+        *stats = EmbeddedFrameBufferPresentStats{};
+    }
     if (frame.width <= 0 || frame.height <= 0 || frame.pixels == nullptr ||
         frame.stride_pixels < frame.width || !valid_target(sink.target) ||
         sink.target.width != frame.width || sink.target.height != frame.height) {
@@ -203,22 +282,33 @@ bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
     const Rect full{0, 0, frame.width, frame.height};
     const bool full_present = dirty_rects == nullptr || dirty_rect_count == 0;
     const std::size_t count = full_present ? 1U : dirty_rect_count;
+    if (stats != nullptr) {
+        stats->full_present = full_present;
+        stats->source_rects = count;
+    }
 
     for (std::size_t index = 0; index < count; ++index) {
         const Rect source_rect = full_present ? full : dirty_rects[index];
         const Rect dirty = intersect_rect(source_rect, full);
         if (empty_rect(dirty)) {
+            if (stats != nullptr) {
+                ++stats->empty_rects;
+            }
             continue;
         }
-        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
-            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
-                static_cast<std::size_t>(frame.stride_pixels);
-            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
-                write_pixel(sink.target, x, y, source_row[x]);
-            }
+        convert_rect(frame, sink.target, dirty);
+        if (stats != nullptr) {
+            ++stats->clipped_rects;
+            stats->converted_pixels += static_cast<std::uint64_t>(dirty.width) *
+                static_cast<std::uint64_t>(dirty.height);
+            stats->packed_bytes += embedded_framebuffer_packed_rect_bytes(dirty.width, dirty.height,
+                                                                          sink.target.format);
         }
         if (sink.flush != nullptr && !sink.flush(dirty, sink.flush_context)) {
             return false;
+        }
+        if (stats != nullptr && sink.flush != nullptr) {
+            ++stats->flushes;
         }
     }
     return true;

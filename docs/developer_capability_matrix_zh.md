@@ -306,7 +306,7 @@ JerryScript 源码树时可用。
 | --- | --- | --- |
 | Display list | 可用 | 矩形、边框、渐变、文本命令，包含近似文本字重。 |
 | CPU framebuffer | 可用 | 软件 rasterizer/compositor 可输出 BMP/PPM。带预算的 compositor 会在分配前拒绝过大的主 framebuffer。 |
-| 嵌入式 framebuffer adapter | 可用 | `embedded_framebuffer` 可把 `HostFrameBufferView` 转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit 单色 buffer，并通过 callback flush dirty rects。RGB565/BGR565 target 可选择开启 4x4 ordered dithering，以降低低色深渐变色带。 |
+| 嵌入式 framebuffer adapter | 可用 | `embedded_framebuffer` 可把 `HostFrameBufferView` 转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit 单色 buffer，并通过 callback flush dirty rects。转换按 rectangle/format 分派；RGB565/BGR565 target 可选择开启 4x4 ordered dithering；可选 `EmbeddedFrameBufferPresentStats` 会报告 converted pixels、packed bytes、clipped/empty rects 和 flush count，供开发板 bring-up 对齐真实 panel 指标。 |
 | Source-over alpha | 可用 | straight-alpha 合成。 |
 | Opacity layer | 子集 | opacity/composited layer 使用离屏合成。嵌入式宿主可限制 offscreen pixels；超限 layer 会降级为逐命令直接透明绘制，避免分配过大的临时 buffer。 |
 | 圆角填充 | 子集 | 背景/阴影支持 rounded rectangle fill clipping；圆角 fill/stroke/gradient 边缘使用局部 coverage 抗锯齿，普通不透明直角矩形仍走快速填充路径。 |

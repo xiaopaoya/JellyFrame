@@ -314,7 +314,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | --- | --- | --- |
 | Display list | Works | Rectangles, borders, gradients and text commands, including approximate text weight. |
 | CPU framebuffer | Works | Software rasterizer/compositor can produce BMP/PPM. Budgeted compositor renders reject oversized primary framebuffers before allocation. |
-| Embedded framebuffer adapter | Works | `embedded_framebuffer` converts `HostFrameBufferView` into caller-owned RGBA8888/BGRA8888, RGB565/BGR565, RGB332, Gray8 or 1-bit monochrome buffers and flushes dirty rects through a callback. RGB565/BGR565 targets may enable 4x4 ordered dithering to reduce low-color-depth gradient banding. |
+| Embedded framebuffer adapter | Works | `embedded_framebuffer` converts `HostFrameBufferView` into caller-owned RGBA8888/BGRA8888, RGB565/BGR565, RGB332, Gray8 or 1-bit monochrome buffers and flushes dirty rects through a callback. Conversion is dispatched per rectangle/format, RGB565/BGR565 targets may enable 4x4 ordered dithering, and optional `EmbeddedFrameBufferPresentStats` reports converted pixels, packed bytes, clipped/empty rects and flush count for board bring-up. |
 | Source-over alpha | Works | Straight-alpha composition. |
 | Opacity layers | Subset | Offscreen compositing for opacity/composited layers. Embedded hosts can cap offscreen pixels; oversized layers degrade to direct per-command opacity instead of allocating a large temporary buffer. |
 | Rounded fills | Subset | Rounded rectangle fill clipping for backgrounds/shadows. Rounded fill/stroke/gradient edges use local coverage antialiasing, while ordinary opaque square rectangles keep the fast fill path. |

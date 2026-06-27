@@ -31,6 +31,9 @@
 - offscreen compositing 在像素循环前裁剪 source/destination rectangles。
 - `embedded_framebuffer` 只把裁剪后的 dirty rectangles 转换到调用方持有的显示 buffer；
   它不分配、不持有，也不自行 flush 设备内存。
+- `embedded_framebuffer` 现在按 rectangle 进行格式分派转换，并可通过
+  `EmbeddedFrameBufferPresentStats` 可选报告 converted pixels、packed bytes、clipped/empty rects
+  和 flush count。
 - `HostFrameSink::present` 被定义为 frame-lifetime 边界；如果底层 DMA 异步刷新，宿主必须在返回前确保
   buffer 已可复用，或在 UI loop 中等待 flush-done 后再进入下一帧。
 - `FrameScratch` 和 `AppFrameScratch` 提供帧级临时容器复用。dirty-region bounds、dirty rectangles、

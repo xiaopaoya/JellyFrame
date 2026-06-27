@@ -37,6 +37,10 @@ void stride_and_size_are_bounded() {
           "tight size");
     check(embedded_framebuffer_min_size(10, 3, EmbeddedPixelFormat::Rgb565, 24) == 68,
           "padded size");
+    check(embedded_framebuffer_packed_rect_bytes(5, 2, EmbeddedPixelFormat::Rgb565) == 20,
+          "rgb565 packed rect bytes");
+    check(embedded_framebuffer_packed_rect_bytes(9, 2, EmbeddedPixelFormat::Mono1Msb) == 4,
+          "mono packed rect bytes round per row");
 }
 
 void rgb565_present_respects_dirty_rect() {
@@ -57,10 +61,15 @@ void rgb565_present_respects_dirty_rect() {
         record_flush,
         &probe};
     const Rect dirty{1, 1, 2, 1};
+    EmbeddedFrameBufferPresentStats stats;
 
-    check(present_to_embedded_framebuffer(frame_buffer_view(source), &dirty, 1, sink),
+    check(present_to_embedded_framebuffer(frame_buffer_view(source), &dirty, 1, sink, &stats),
           "rgb565 present succeeds");
     check(probe.count == 1 && probe.last.x == 1 && probe.last.width == 2, "flush receives dirty rect");
+    check(!stats.full_present && stats.source_rects == 1 && stats.clipped_rects == 1 &&
+              stats.empty_rects == 0 && stats.flushes == 1,
+          "present stats count dirty rect and flush");
+    check(stats.converted_pixels == 2 && stats.packed_bytes == 4, "present stats count rgb565 bytes");
 
     const std::size_t row = embedded_framebuffer_min_stride_bytes(4, EmbeddedPixelFormat::Rgb565);
     check(target_bytes[0] == 0xcc, "outside dirty rect remains untouched");
@@ -150,6 +159,32 @@ void invalid_target_fails_cleanly() {
           "too-small target fails");
 }
 
+void clipped_and_empty_rects_are_reported() {
+    FrameBuffer source(3, 3, Color{16, 32, 48, 255});
+    std::vector<std::uint8_t> target_bytes(embedded_framebuffer_min_size(3, 3, EmbeddedPixelFormat::Rgb332),
+                                           0);
+    EmbeddedFrameBufferSink sink{
+        EmbeddedFrameBufferTarget{3,
+                                  3,
+                                  EmbeddedPixelFormat::Rgb332,
+                                  target_bytes.data(),
+                                  target_bytes.size(),
+                                  0},
+        nullptr,
+        nullptr};
+    const Rect dirty[] = {
+        Rect{-1, -1, 2, 2},
+        Rect{5, 5, 1, 1},
+    };
+    EmbeddedFrameBufferPresentStats stats;
+
+    check(present_to_embedded_framebuffer(frame_buffer_view(source), dirty, 2, sink, &stats),
+          "clipped present succeeds");
+    check(stats.source_rects == 2 && stats.clipped_rects == 1 && stats.empty_rects == 1,
+          "present stats report clipped and empty rects");
+    check(stats.converted_pixels == 1 && stats.packed_bytes == 1, "present stats count clipped area");
+}
+
 } // namespace
 
 int main() {
@@ -160,6 +195,7 @@ int main() {
         mono_present_packs_bits();
         host_frame_sink_wrapper_presents();
         invalid_target_fails_cleanly();
+        clipped_and_empty_rects_are_reported();
     } catch (const std::exception& error) {
         std::cerr << "embedded framebuffer test failed: " << error.what() << '\n';
         return 1;
