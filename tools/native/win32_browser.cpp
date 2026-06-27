@@ -1557,28 +1557,65 @@ void append_to_montage(FrameBuffer& montage,
     }
 }
 
-int parse_int_arg(const char* value, int fallback) {
+bool parse_int_token(const std::string& value, int& out) {
+    if (value.empty()) {
+        return false;
+    }
     try {
-        return std::max(1, std::stoi(value));
+        std::size_t consumed = 0;
+        const long long parsed = std::stoll(value, &consumed, 10);
+        if (consumed != value.size() || parsed < std::numeric_limits<int>::min() ||
+            parsed > std::numeric_limits<int>::max()) {
+            return false;
+        }
+        out = static_cast<int>(parsed);
+        return true;
     } catch (...) {
-        return fallback;
+        return false;
     }
 }
 
-int parse_int_unclamped(const char* value, int fallback) {
+bool parse_u64_token(const std::string& value, std::uint64_t& out) {
+    if (value.empty() || value[0] == '-') {
+        return false;
+    }
     try {
-        return std::stoi(value);
+        std::size_t consumed = 0;
+        const unsigned long long parsed = std::stoull(value, &consumed, 10);
+        if (consumed != value.size()) {
+            return false;
+        }
+        out = static_cast<std::uint64_t>(parsed);
+        return true;
     } catch (...) {
-        return fallback;
+        return false;
     }
 }
 
-std::uint64_t parse_u64_arg(const char* value, std::uint64_t fallback) {
-    try {
-        return std::max<std::uint64_t>(1, static_cast<std::uint64_t>(std::stoull(value)));
-    } catch (...) {
-        return fallback;
+bool parse_int_option(const char* option, const char* value, int min_value, int max_value, int& out) {
+    int parsed = 0;
+    if (!parse_int_token(value, parsed) || parsed < min_value || parsed > max_value) {
+        std::cerr << option << " requires an integer in [" << min_value << ", " << max_value << "], got '" << value
+                  << "'\n";
+        return false;
     }
+    out = parsed;
+    return true;
+}
+
+bool parse_u64_option(const char* option,
+                      const char* value,
+                      std::uint64_t min_value,
+                      std::uint64_t max_value,
+                      std::uint64_t& out) {
+    std::uint64_t parsed = 0;
+    if (!parse_u64_token(value, parsed) || parsed < min_value || parsed > max_value) {
+        std::cerr << option << " requires an integer in [" << min_value << ", " << max_value << "], got '" << value
+                  << "'\n";
+        return false;
+    }
+    out = parsed;
+    return true;
 }
 
 std::vector<std::string> split_colon_fields(const std::string& text) {
@@ -1628,11 +1665,10 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
     ParsedFrameEvent parsed;
     const std::vector<std::string> fields = split_colon_fields(spec);
     if (fields.size() < 2) {
-        parsed.error = "expected FRAME:kind[:x:y]";
+        parsed.error = "expected FRAME:kind[:x:y[:delta]]";
         return parsed;
     }
-    parsed.event.frame_index = parse_int_unclamped(fields[0].c_str(), -1);
-    if (fields[0].empty() || parsed.event.frame_index < 0) {
+    if (!parse_int_token(fields[0], parsed.event.frame_index) || parsed.event.frame_index < 0) {
         parsed.error = "frame index must be non-negative";
         return parsed;
     }
@@ -1655,8 +1691,10 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
             parsed.error = "pointer/click events require FRAME:kind:x:y";
             return parsed;
         }
-        parsed.event.x = parse_int_unclamped(fields[2].c_str(), 0);
-        parsed.event.y = parse_int_unclamped(fields[3].c_str(), 0);
+        if (!parse_int_token(fields[2], parsed.event.x) || !parse_int_token(fields[3], parsed.event.y)) {
+            parsed.error = "pointer/click x and y must be integers";
+            return parsed;
+        }
         if (kind == "pointer-move") {
             parsed.event.kind = ScriptedFrameEventKind::PointerMove;
         } else if (kind == "pointer-down") {
@@ -1672,9 +1710,11 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
             return parsed;
         }
         parsed.event.kind = ScriptedFrameEventKind::Wheel;
-        parsed.event.x = parse_int_unclamped(fields[2].c_str(), 0);
-        parsed.event.y = parse_int_unclamped(fields[3].c_str(), 0);
-        parsed.event.delta_y = parse_int_unclamped(fields[4].c_str(), 0);
+        if (!parse_int_token(fields[2], parsed.event.x) || !parse_int_token(fields[3], parsed.event.y) ||
+            !parse_int_token(fields[4], parsed.event.delta_y)) {
+            parsed.error = "wheel x, y and delta must be integers";
+            return parsed;
+        }
     } else {
         parsed.error = "unknown frame event kind: " + fields[1];
         return parsed;
@@ -1733,6 +1773,33 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
             error = message.str();
             return false;
         };
+        const auto parse_script_int = [&](std::size_t index, int min_value, int max_value, int& out) -> bool {
+            int parsed = 0;
+            if (index >= fields.size() || !parse_int_token(fields[index], parsed) || parsed < min_value ||
+                parsed > max_value) {
+                std::ostringstream message;
+                message << path << ':' << line_number << ": " << fields[0] << " argument " << index
+                        << " expects integer in [" << min_value << ", " << max_value << "]";
+                error = message.str();
+                return false;
+            }
+            out = parsed;
+            return true;
+        };
+        const auto parse_script_u64 =
+            [&](std::size_t index, std::uint64_t min_value, std::uint64_t max_value, std::uint64_t& out) -> bool {
+            std::uint64_t parsed = 0;
+            if (index >= fields.size() || !parse_u64_token(fields[index], parsed) || parsed < min_value ||
+                parsed > max_value) {
+                std::ostringstream message;
+                message << path << ':' << line_number << ": " << fields[0] << " argument " << index
+                        << " expects integer in [" << min_value << ", " << max_value << "]";
+                error = message.str();
+                return false;
+            }
+            out = parsed;
+            return true;
+        };
 
         if (command == "capture-frames" || command == "output-dir") {
             if (!require_count(2)) {
@@ -1749,54 +1816,67 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
             if (!require_count(2)) {
                 return false;
             }
-            options.frame_montage_columns = std::min(30, parse_int_arg(fields[1].c_str(), 0));
+            if (!parse_script_int(1, 1, 30, options.frame_montage_columns)) {
+                return false;
+            }
         } else if (command == "montage-gap" || command == "gap") {
             if (!require_count(2)) {
                 return false;
             }
-            options.frame_montage_gap = std::min(64, parse_int_arg(fields[1].c_str(), options.frame_montage_gap));
+            if (!parse_script_int(1, 1, 64, options.frame_montage_gap)) {
+                return false;
+            }
         } else if (command == "frame-count" || command == "frames") {
             if (!require_count(2)) {
                 return false;
             }
-            options.frame_count = std::min(600, parse_int_arg(fields[1].c_str(), options.frame_count));
+            if (!parse_script_int(1, 1, 600, options.frame_count)) {
+                return false;
+            }
         } else if (command == "frame-step-ms" || command == "step-ms") {
             if (!require_count(2)) {
                 return false;
             }
-            options.frame_step_ms = static_cast<std::uint32_t>(
-                std::min<std::uint64_t>(1000, parse_u64_arg(fields[1].c_str(), options.frame_step_ms)));
+            std::uint64_t parsed = 0;
+            if (!parse_script_u64(1, 1, 1000, parsed)) {
+                return false;
+            }
+            options.frame_step_ms = static_cast<std::uint32_t>(parsed);
         } else if (command == "frame-start-ms" || command == "start-ms") {
             if (!require_count(2)) {
                 return false;
             }
-            options.frame_start_ms = parse_u64_arg(fields[1].c_str(), options.frame_start_ms);
+            if (!parse_script_u64(1, 1, std::numeric_limits<std::uint64_t>::max(), options.frame_start_ms)) {
+                return false;
+            }
         } else if (command == "animation-fps" || command == "animation-frame-rate") {
             if (!require_count(2)) {
                 return false;
             }
-            options.animation_frame_rate =
-                std::min(240, std::max(0, parse_int_unclamped(fields[1].c_str(), options.animation_frame_rate)));
+            if (!parse_script_int(1, 0, 240, options.animation_frame_rate)) {
+                return false;
+            }
         } else if (command == "animation-callbacks" || command == "animation-callbacks-per-frame") {
             if (!require_count(2)) {
                 return false;
             }
-            options.animation_callbacks_per_frame =
-                std::min(1024,
-                         std::max(0, parse_int_unclamped(fields[1].c_str(), options.animation_callbacks_per_frame)));
+            if (!parse_script_int(1, 0, 1024, options.animation_callbacks_per_frame)) {
+                return false;
+            }
         } else if (command == "script-watchdog-checks") {
             if (!require_count(2)) {
                 return false;
             }
-            options.script_watchdog_checks =
-                std::min(1000000, std::max(0, parse_int_unclamped(fields[1].c_str(), options.script_watchdog_checks)));
+            if (!parse_script_int(1, 0, 1000000, options.script_watchdog_checks)) {
+                return false;
+            }
         } else if (command == "script-watchdog-interval") {
             if (!require_count(2)) {
                 return false;
             }
-            options.script_watchdog_interval =
-                std::min(1000000,
-                         std::max(1, parse_int_unclamped(fields[1].c_str(), options.script_watchdog_interval)));
+            if (!parse_script_int(1, 1, 1000000, options.script_watchdog_interval)) {
+                return false;
+            }
         } else if (command == "require-script-watchdog") {
             if (!require_count(1)) {
                 return false;
@@ -1806,21 +1886,27 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
             if (!require_count(3)) {
                 return false;
             }
-            options.viewport_width = parse_int_arg(fields[1].c_str(), options.viewport_width);
-            options.viewport_height = parse_int_arg(fields[2].c_str(), options.viewport_height);
+            if (!parse_script_int(1, 1, 10000, options.viewport_width) ||
+                !parse_script_int(2, 1, 10000, options.viewport_height)) {
+                return false;
+            }
             options.viewport_width_set = true;
             options.viewport_height_set = true;
         } else if (command == "viewport-width") {
             if (!require_count(2)) {
                 return false;
             }
-            options.viewport_width = parse_int_arg(fields[1].c_str(), options.viewport_width);
+            if (!parse_script_int(1, 1, 10000, options.viewport_width)) {
+                return false;
+            }
             options.viewport_width_set = true;
         } else if (command == "viewport-height") {
             if (!require_count(2)) {
                 return false;
             }
-            options.viewport_height = parse_int_arg(fields[1].c_str(), options.viewport_height);
+            if (!parse_script_int(1, 1, 10000, options.viewport_height)) {
+                return false;
+            }
             options.viewport_height_set = true;
         } else if (command == "event") {
             std::string event_spec;
@@ -1867,7 +1953,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --script PATH                  Load an extra classic script file.\n"
         << "  --capture PATH                 Render one frame to BMP/PPM by extension.\n"
         << "  --capture-frames DIR           Hidden deterministic frame capture directory.\n"
-        << "  --frame-script PATH            Apply a deterministic frame script file.\n"
+        << "  --frame-script PATH            Apply deterministic capture/script commands.\n"
         << "  --capture-montage PATH         Write a BMP/PPM contact sheet for captured frames.\n"
         << "  --montage-columns N            Contact sheet columns, default auto.\n"
         << "  --frame-count N                Frames for --capture-frames, default 30.\n"
@@ -1892,7 +1978,12 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --launcher-app PATH            Launcher app used with --registry-store.\n"
         << "  --install-bundle PATH          Install .jfapp into registry store.\n"
         << "  --launch-app ID                Launch installed app id.\n"
-        << "  --remove-app ID                Remove installed app id.\n";
+        << "  --remove-app ID                Remove installed app id.\n"
+        << "\n"
+        << "Frame script commands:\n"
+        << "  output-dir PATH | montage PATH | frames N | step-ms N | start-ms N\n"
+        << "  viewport W H | animation-fps N | animation-callbacks N\n"
+        << "  event FRAME:kind[:x:y[:delta]] | event FRAME kind [x y [delta]]\n";
 }
 
 const Node* find_first_element(const Node& node, const char* tag_name) {
@@ -4500,7 +4591,9 @@ int main(int argc, char** argv) {
                 std::cerr << "--montage-columns requires a number\n";
                 return 1;
             }
-            options.frame_montage_columns = std::min(30, parse_int_arg(argv[++i], options.frame_montage_columns));
+            if (!parse_int_option("--montage-columns", argv[++i], 1, 30, options.frame_montage_columns)) {
+                return 1;
+            }
             continue;
         }
         if (arg == "--frame-count") {
@@ -4508,7 +4601,9 @@ int main(int argc, char** argv) {
                 std::cerr << "--frame-count requires a number\n";
                 return 1;
             }
-            options.frame_count = std::min(600, parse_int_arg(argv[++i], options.frame_count));
+            if (!parse_int_option("--frame-count", argv[++i], 1, 600, options.frame_count)) {
+                return 1;
+            }
             continue;
         }
         if (arg == "--frame-step-ms") {
@@ -4516,8 +4611,11 @@ int main(int argc, char** argv) {
                 std::cerr << "--frame-step-ms requires a number\n";
                 return 1;
             }
-            options.frame_step_ms =
-                static_cast<std::uint32_t>(std::min<std::uint64_t>(1000, parse_u64_arg(argv[++i], options.frame_step_ms)));
+            std::uint64_t parsed = 0;
+            if (!parse_u64_option("--frame-step-ms", argv[++i], 1, 1000, parsed)) {
+                return 1;
+            }
+            options.frame_step_ms = static_cast<std::uint32_t>(parsed);
             continue;
         }
         if (arg == "--frame-start-ms") {
@@ -4525,7 +4623,13 @@ int main(int argc, char** argv) {
                 std::cerr << "--frame-start-ms requires a number\n";
                 return 1;
             }
-            options.frame_start_ms = parse_u64_arg(argv[++i], options.frame_start_ms);
+            if (!parse_u64_option("--frame-start-ms",
+                                  argv[++i],
+                                  1,
+                                  std::numeric_limits<std::uint64_t>::max(),
+                                  options.frame_start_ms)) {
+                return 1;
+            }
             continue;
         }
         if (arg == "--animation-fps") {
@@ -4533,8 +4637,9 @@ int main(int argc, char** argv) {
                 std::cerr << "--animation-fps requires a number\n";
                 return 1;
             }
-            options.animation_frame_rate =
-                std::min(240, std::max(0, parse_int_unclamped(argv[++i], options.animation_frame_rate)));
+            if (!parse_int_option("--animation-fps", argv[++i], 0, 240, options.animation_frame_rate)) {
+                return 1;
+            }
             continue;
         }
         if (arg == "--animation-callbacks") {
@@ -4542,8 +4647,10 @@ int main(int argc, char** argv) {
                 std::cerr << "--animation-callbacks requires a number\n";
                 return 1;
             }
-            options.animation_callbacks_per_frame =
-                std::min(1024, std::max(0, parse_int_unclamped(argv[++i], options.animation_callbacks_per_frame)));
+            if (!parse_int_option(
+                    "--animation-callbacks", argv[++i], 0, 1024, options.animation_callbacks_per_frame)) {
+                return 1;
+            }
             continue;
         }
         if (arg == "--script-watchdog-checks") {
@@ -4551,8 +4658,10 @@ int main(int argc, char** argv) {
                 std::cerr << "--script-watchdog-checks requires a number\n";
                 return 1;
             }
-            options.script_watchdog_checks =
-                std::min(1000000, std::max(0, parse_int_unclamped(argv[++i], options.script_watchdog_checks)));
+            if (!parse_int_option(
+                    "--script-watchdog-checks", argv[++i], 0, 1000000, options.script_watchdog_checks)) {
+                return 1;
+            }
             continue;
         }
         if (arg == "--script-watchdog-interval") {
@@ -4560,8 +4669,10 @@ int main(int argc, char** argv) {
                 std::cerr << "--script-watchdog-interval requires a number\n";
                 return 1;
             }
-            options.script_watchdog_interval =
-                std::min(1000000, std::max(1, parse_int_unclamped(argv[++i], options.script_watchdog_interval)));
+            if (!parse_int_option(
+                    "--script-watchdog-interval", argv[++i], 1, 1000000, options.script_watchdog_interval)) {
+                return 1;
+            }
             continue;
         }
         if (arg == "--require-script-watchdog") {
@@ -4642,7 +4753,9 @@ int main(int argc, char** argv) {
                 std::cerr << "--viewport-width requires a number\n";
                 return 1;
             }
-            options.viewport_width = parse_int_arg(argv[++i], options.viewport_width);
+            if (!parse_int_option("--viewport-width", argv[++i], 1, 10000, options.viewport_width)) {
+                return 1;
+            }
             options.viewport_width_set = true;
             continue;
         }
@@ -4651,7 +4764,9 @@ int main(int argc, char** argv) {
                 std::cerr << "--viewport-height requires a number\n";
                 return 1;
             }
-            options.viewport_height = parse_int_arg(argv[++i], options.viewport_height);
+            if (!parse_int_option("--viewport-height", argv[++i], 1, 10000, options.viewport_height)) {
+                return 1;
+            }
             options.viewport_height_set = true;
             continue;
         }
@@ -4672,7 +4787,9 @@ int main(int argc, char** argv) {
                 std::cerr << "--audio-smoke-ms requires a number\n";
                 return 1;
             }
-            options.audio_smoke_ms = std::min(10000, std::max(0, parse_int_unclamped(argv[++i], options.audio_smoke_ms)));
+            if (!parse_int_option("--audio-smoke-ms", argv[++i], 0, 10000, options.audio_smoke_ms)) {
+                return 1;
+            }
             continue;
         }
         positional.push_back(arg);
@@ -4796,10 +4913,14 @@ int main(int argc, char** argv) {
             options.css_path = positional[1];
         }
         if (positional.size() >= 3) {
-            options.viewport_width = parse_int_arg(positional[2].c_str(), options.viewport_width);
+            if (!parse_int_option("positional width", positional[2].c_str(), 1, 10000, options.viewport_width)) {
+                return 1;
+            }
         }
         if (positional.size() >= 4) {
-            options.viewport_height = parse_int_arg(positional[3].c_str(), options.viewport_height);
+            if (!parse_int_option("positional height", positional[3].c_str(), 1, 10000, options.viewport_height)) {
+                return 1;
+            }
         }
         try {
             FrameBuffer frame_buffer = render_page_with_browser_text(options.html_path,
@@ -4836,10 +4957,14 @@ int main(int argc, char** argv) {
             options.css_path = positional[1];
         }
         if (positional.size() >= 3) {
-            options.viewport_width = parse_int_arg(positional[2].c_str(), options.viewport_width);
+            if (!parse_int_option("positional width", positional[2].c_str(), 1, 10000, options.viewport_width)) {
+                return 1;
+            }
         }
         if (positional.size() >= 4) {
-            options.viewport_height = parse_int_arg(positional[3].c_str(), options.viewport_height);
+            if (!parse_int_option("positional height", positional[3].c_str(), 1, 10000, options.viewport_height)) {
+                return 1;
+            }
         }
     }
 

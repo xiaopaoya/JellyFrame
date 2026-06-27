@@ -311,6 +311,13 @@ if(JELLYFRAME_BUILD_TESTS)
 
     if(WIN32 AND JELLYFRAME_BUILD_EXAMPLES)
         add_test(
+            NAME jellyframe_win32_browser_cli_contract
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py
+                    $<TARGET_FILE:jellyframe_win32_browser>
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_test(
             NAME jellyframe_win32_service_status_frame_script
             COMMAND $<TARGET_FILE:jellyframe_win32_browser>
                     --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status

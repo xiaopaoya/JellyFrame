@@ -10,7 +10,8 @@
 - 动画验收推荐使用隐藏帧脚本：
   `--frame-script PATH`。脚本可以统一指定 deterministic time、逐帧 BMP 输出目录、拼图输出和事件注入。
   底层的 `--capture-frames DIR --frame-count 30 --frame-step-ms 33` 与多个
-  `--frame-event FRAME:kind[:x:y]` 仍可用于快速 smoke test。
+  `--frame-event FRAME:kind[:x:y[:delta]]` 仍可用于快速 smoke test。完整参数以
+  `jellyframe_win32_browser --help` 输出为准。
 - `win32_browser.cpp` 还提供 Win32-only host audio smoke 路径：
   `--audio-smoke local.wav`，或 `--app package --audio-smoke /audio/tone.wav`。
   这只验证 package resource 到桌面宿主 adapter 的交接，不代表嵌入式端内置 audio codec，
