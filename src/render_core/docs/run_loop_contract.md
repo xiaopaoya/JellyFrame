@@ -261,6 +261,8 @@ Header: `src/render_core/display_invalidation.h`
 `analyze_display_invalidation(...)` reports how a dirty-rectangle set maps onto
 the current layer tree and display commands. It counts visited/intersecting
 layers, clipped/composited layers and visited/intersecting display commands.
+Duplicate or fully contained dirty rectangles are normalized before the
+diagnostic dirty count, area and intersections are computed.
 The Win32 validation shell surfaces the latest command coverage as
 `cmds=intersecting/visited` in the window title.
 

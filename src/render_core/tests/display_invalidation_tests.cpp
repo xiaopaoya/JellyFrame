@@ -56,6 +56,23 @@ void local_dirty_rect_reports_intersecting_commands_and_layers() {
           "local dirty rect leaves some display commands untouched");
 }
 
+void contained_dirty_rects_are_normalized_for_diagnostics() {
+    auto layer_tree = build_layer_tree(
+        "<body><section class='a'>A</section><section class='b'>B</section></body>",
+        "body { margin: 0; } section { width: 80px; height: 30px; margin: 0; } "
+        ".a { background: #000000; } .b { background: #777777; }");
+    const Rect dirty_rects[] = {
+        Rect{0, 0, 90, 35},
+        Rect{10, 10, 8, 8},
+        Rect{0, 0, 90, 35},
+    };
+    const DisplayInvalidationResult result =
+        analyze_display_invalidation(*layer_tree, dirty_rects, 3);
+    check(result.dirty_rect_count == 1, "contained dirty rects are dropped");
+    check(result.dirty_area == 3150, "diagnostic dirty area uses normalized rects");
+    check(result.commands_intersecting > 0, "normalized dirty rect still intersects commands");
+}
+
 void clipped_and_composited_layers_are_visible_in_diagnostics() {
     auto layer_tree = build_layer_tree(
         "<body><div class='clip'><div class='fade'>A</div></div></body>",
@@ -73,6 +90,7 @@ int main() {
     try {
         empty_dirty_rects_report_no_work();
         local_dirty_rect_reports_intersecting_commands_and_layers();
+        contained_dirty_rects_are_normalized_for_diagnostics();
         clipped_and_composited_layers_are_visible_in_diagnostics();
     } catch (const std::exception& error) {
         std::cerr << "display invalidation test failed: " << error.what() << '\n';

@@ -194,8 +194,9 @@ rect 面积直接求和，不扣除重叠部分；这是刻意保守的嵌入式
 
 `analyze_display_invalidation(...)` 会报告一组 dirty rectangles 映射到当前 layer tree 和
 display commands 后的覆盖情况。它会统计访问/命中的 layer、带 clip/composited 的命中 layer、
-访问/命中的 display command。Win32 验证壳会在窗口标题中用 `cmds=命中/访问` 显示最近一次
-command 覆盖情况。
+访问/命中的 display command。重复或被完全包含的 dirty rectangles 会先被规整，再计算诊断中的
+dirty 数量、面积和命中情况。Win32 验证壳会在窗口标题中用 `cmds=命中/访问` 显示最近一次 command
+覆盖情况。
 
 这是审计 helper，不是 retained display-list reuse。Compositor 仍会在每个 dirty clip 内重放命令，
 但会先丢掉重复或被完全包含的 dirty rectangles，避免同一 repaint 区域被清屏和重放多次。它的价值是让

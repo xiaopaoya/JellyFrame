@@ -40,6 +40,42 @@ std::size_t rect_area(Rect rect) {
     return static_cast<std::size_t>(rect.width) * static_cast<std::size_t>(rect.height);
 }
 
+bool contains_rect(Rect outer, Rect inner) {
+    return !empty_rect(inner) &&
+        inner.x >= outer.x &&
+        inner.y >= outer.y &&
+        inner.x + inner.width <= outer.x + outer.width &&
+        inner.y + inner.height <= outer.y + outer.height;
+}
+
+std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects, std::size_t dirty_rect_count) {
+    std::vector<Rect> normalized;
+    normalized.reserve(dirty_rect_count);
+    for (std::size_t index = 0; index < dirty_rect_count; ++index) {
+        const Rect dirty = dirty_rects[index];
+        if (empty_rect(dirty)) {
+            continue;
+        }
+        bool covered = false;
+        for (const Rect& existing : normalized) {
+            if (contains_rect(existing, dirty)) {
+                covered = true;
+                break;
+            }
+        }
+        if (covered) {
+            continue;
+        }
+        normalized.erase(
+            std::remove_if(normalized.begin(), normalized.end(), [dirty](Rect existing) {
+                return contains_rect(dirty, existing);
+            }),
+            normalized.end());
+        normalized.push_back(dirty);
+    }
+    return normalized;
+}
+
 bool is_composited_layer(const LayerNode& layer) {
     return layer.type == LayerType::Composited || layer.opacity < 0.999F;
 }
@@ -59,10 +95,16 @@ DisplayInvalidationResult analyze_display_invalidation(const LayerNode& root,
     if (dirty_rects == nullptr || dirty_rect_count == 0) {
         return result;
     }
-    result.dirty_rect_count = dirty_rect_count;
-    for (std::size_t index = 0; index < dirty_rect_count; ++index) {
-        result.dirty_area += rect_area(dirty_rects[index]);
+    const std::vector<Rect> normalized_dirty_rects = normalize_dirty_rects(dirty_rects, dirty_rect_count);
+    if (normalized_dirty_rects.empty()) {
+        return result;
     }
+    result.dirty_rect_count = normalized_dirty_rects.size();
+    for (const Rect dirty : normalized_dirty_rects) {
+        result.dirty_area += rect_area(dirty);
+    }
+    dirty_rects = normalized_dirty_rects.data();
+    dirty_rect_count = normalized_dirty_rects.size();
 
     std::vector<PendingLayer> pending;
     pending.push_back(PendingLayer{&root, Rect{}, false});
