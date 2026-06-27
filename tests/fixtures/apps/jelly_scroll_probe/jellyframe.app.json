@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.tests.scroll_probe",
+  "name": "Scroll Probe",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.4.0",
+    "script": "none"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 16384,
+    "maxDomNodes": 160,
+    "maxCssRules": 48,
+    "maxDisplayCommands": 220
+  },
+  "capabilities": []
+}

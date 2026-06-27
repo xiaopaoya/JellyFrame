@@ -1,0 +1,24 @@
+# JellyFrame deterministic scroll probe.
+# Run with:
+#   jellyframe_win32_browser.exe --app tests/fixtures/apps/jelly_scroll_probe --frame-script tests/fixtures/apps/jelly_scroll_probe/capture_wheel_scroll.jfcapture
+
+output-dir out/scroll_probe_frames
+montage out/scroll_probe_montage.bmp
+frames 18
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 6
+gap 6
+
+event 2 wheel 150 150 -120
+event 3 wheel 150 150 -120
+event 4 wheel 150 150 -120
+event 5 wheel 150 150 -120
+event 6 wheel 150 150 -120
+event 7 wheel 150 150 -120
+event 8 wheel 150 150 -120
+event 9 wheel 150 150 -120
+event 10 wheel 150 150 -120
+event 11 wheel 150 150 -120
+event 12 wheel 150 150 -120

@@ -1,0 +1,61 @@
+html,
+body {
+  margin: 0;
+  background: #071923;
+  color: #f7fff6;
+}
+
+.screen {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 620px;
+  padding: 12px;
+  background: linear-gradient(#0b2b38, #071923);
+}
+
+.hero {
+  box-sizing: border-box;
+  height: 74px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid rgba(122, 232, 238, .54);
+  border-radius: 20px;
+  background: linear-gradient(rgba(114, 226, 240, .30), rgba(42, 142, 184, .18));
+}
+
+.hero span {
+  display: block;
+  color: rgba(210, 245, 255, .72);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hero strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 28px;
+  line-height: 32px;
+}
+
+.list article {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+  height: 42px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(122, 232, 238, .38);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .08);
+}
+
+.list strong {
+  font-size: 16px;
+}
+
+.list span {
+  color: rgba(210, 245, 255, .76);
+  font-size: 12px;
+  line-height: 18px;
+}

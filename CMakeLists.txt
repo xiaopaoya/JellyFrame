@@ -320,6 +320,16 @@ if(JELLYFRAME_BUILD_TESTS)
             PASS_REGULAR_EXPRESSION
                 "service_activity network=18 audio=36 sensors=16 location=16 pause_audio=0 throttle_sensors=20 throttle_location=20")
 
+        add_test(
+            NAME jellyframe_win32_scroll_probe_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_probe
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_probe/capture_wheel_scroll.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_scroll_probe_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "scroll_blits full=1 fast=4")
+
         if(JELLYFRAME_BUILD_SCRIPTING)
             add_test(
                 NAME jellyframe_win32_motion_lab_low_power_frame_script
