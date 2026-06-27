@@ -80,6 +80,12 @@ the app host. Current fields are descriptive, not a mandatory runtime registry:
 - `budgets`: DOM/CSS/display-list/timer/listener/resource limits;
 - service flags for monotonic time, filesystem and network.
 
+`has_filesystem` only says the host has storage primitives. It must not be
+treated as permission for ordinary apps to access arbitrary files. General file
+editing, if a product exposes it, should be a separate host file-broker service
+with user/system authorization, bounded async operations, rollback/fallback and
+no raw filesystem or flash handles passed to app code.
+
 Suggested ESP32-S3 watch starting point:
 
 - `preferred_pixel_format = HostPixelFormat::Rgb565`;

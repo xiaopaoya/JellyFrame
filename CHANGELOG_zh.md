@@ -17,6 +17,11 @@ JellyFrame Engine 的重要变更记录在这里。
 - 桌面 installed-app registry mock 现在用 `data/<sanitized-app-id>` 表示 app 私有数据。
   删除 app 默认删除这份数据；`--keep-data` 会保留数据，`delete-data` 可在不移除已安装
   bundle 的情况下清理数据；Win32 壳提供同等语义的 `--delete-app-data`。
+- 添加固定容量 budget recovery 分类。`AppBudgetRecoveryReport` 会把耗尽的 runtime counter 映射为
+  `warn` 或 `terminate-app`；Win32 system-shell 验收现在会把 request queue 耗尽恢复为
+  `budget-exceeded` 并回到 launcher。
+- 文档明确授权文件访问边界：普通 app 仍无通用文件系统访问能力；未来文件管理器或系统组件应通过
+  宿主持有、用户授权的 file broker，并具备异步预算、rollback/fallback，且不暴露裸 filesystem handle。
 
 ## 0.4.0-dev - 2026-06-28
 

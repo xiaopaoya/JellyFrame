@@ -433,6 +433,19 @@ if(JELLYFRAME_BUILD_TESTS)
                     "script_watchdog_recovery reason=script-watchdog")
 
             add_test(
+                NAME jellyframe_win32_budget_recovery
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --registry-store ${CMAKE_BINARY_DIR}/test_outputs/budget_registry
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_budget_spam
+                        --app-runtime-jobs 4
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_budget_spam/capture_budget_recovery.jfcapture
+                        --capture-montage ${CMAKE_BINARY_DIR}/test_outputs/budget_recovery.bmp
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_budget_recovery PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "budget_recovery_teardown reason=budget-exceeded")
+
+            add_test(
                 NAME jellyframe_win32_service_spam_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_win32_browser>
                         --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_service_spam

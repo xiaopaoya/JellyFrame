@@ -110,6 +110,13 @@ Runtime data and storage boundary:
   Cache API and general filesystem access are still absent. A tiny
   `localStorage` V0 subset is exposed only when the host binds a non-blocking
   app-private shadow.
+- General file editing is not an ordinary app capability in V0. Future system
+  components, file managers or user-approved apps should use a manifest/profile
+  capability backed by a host file broker, not raw filesystem handles and not a
+  JellyFrame-specific HTML/JS syntax. Without that authorization, an app must
+  not affect runtime files, system apps or another app's data. With
+  authorization, every operation still needs bounded async execution, stable
+  errors and a fallback that does not require reflashing firmware.
 - Target profiles may reject network/storage/audio/sensor/location apps or cap
   response bytes, concurrency, timeouts, KV item counts, byte quotas, stream
   counts and unreleased sample/snapshot counts.

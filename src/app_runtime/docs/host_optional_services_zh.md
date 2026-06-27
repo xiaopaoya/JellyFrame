@@ -732,6 +732,31 @@ struct HostStorageResponse {
 - 非手表类嵌入式设备也可沿用同一策略，只调整预算：较大设备可每 tick flush 更多操作，极小设备可不在
   suspend 时 flush，而依赖 update/exit flush。
 
+授权文件访问边界：
+
+- app 私有 KV 服务不是通用文件系统。未得到明确用户授权或系统策略授权的普通第三方 app，不能读取、
+  枚举、编辑或删除 runtime 文件、系统组件文件、其他 app 数据或 package 字节。
+- 未来产品可以为系统组件、文件管理器、备份/恢复工具或用户批准的 app 暴露宿主持有的 file broker。
+  这个 broker 必须是语义化、能力 gated 的；app 仍不能得到裸 filesystem、flash partition 或 block
+  device handle。
+- 授权文件操作必须是异步 host job，并带有 byte 预算、目录遍历规则、路径规范化、必要时的原子更新或
+  journal，以及稳定错误 diagnostics。失败或恶意请求应当返回错误、撤销该操作，或只终止请求方 app；
+  不应破坏 runtime、影响其他 app、击穿 system shell，或导致 MCU 异常复位。
+- 任何不修改固件的操作都必须有产品级 fallback，不能依赖重新烧写固件恢复。典型 fallback 包括拒绝请求、
+  回滚 staged file write、保留旧 registry，或启动安全 system shell。
+
+预算恢复：
+
+- `AppBudgetSnapshot` 是只含计数的结构，用于 UI tick 或 frame-script 边界。不要在单个 paint primitive
+  或 host worker 内部到处检查预算。
+- `app_budget_recovery_for_snapshot(...)` 会把耗尽的计数转换成固定容量 recovery report。request queue、
+  completion queue、handle、handle byte、app font、system event、script timer/listener 和 detached DOM
+  耗尽属于 `terminate-app` 条件；每帧 callback 与 active animation 上限属于 `warn` 条件，因为 frame
+  policy 可以节流，不必杀掉 app。
+- System shell 应把 `terminate-app` 作为 `AppTeardownReason::BudgetExceeded` 处理：取消当前 app request、
+  丢弃 stale completion 和 system event、释放 handle/font、回到可信 launcher，并报告稳定诊断。请求方 app
+  可以失败；runtime、system shell 和其他 app 必须继续运行，且不能要求重新烧写固件恢复。
+
 ## Bundle 安装服务
 
 安装式第三方 app 应由系统 shell/app manager 管理。

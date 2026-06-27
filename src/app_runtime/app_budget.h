@@ -73,9 +73,49 @@ struct AppBudgetSnapshot {
     std::size_t script_execution_check_interval = 0;
 };
 
+enum class AppBudgetRecoveryAction {
+    None,
+    Warn,
+    TerminateApp,
+};
+
+enum class AppBudgetRecoveryDiagnosticCode {
+    ServiceRequests,
+    ServiceCompletions,
+    HostHandles,
+    HostHandleBytes,
+    AppFonts,
+    SystemEvents,
+    InputEventsPerFrame,
+    TimerCallbacksPerFrame,
+    AnimationCallbacksPerFrame,
+    ActiveAnimations,
+    ScriptTimers,
+    ScriptEventListeners,
+    DetachedDomNodes,
+};
+
+struct AppBudgetRecoveryDiagnostic {
+    AppBudgetRecoveryDiagnosticCode code = AppBudgetRecoveryDiagnosticCode::ServiceRequests;
+    std::size_t used = 0;
+    std::size_t limit = 0;
+};
+
+struct AppBudgetRecoveryReport {
+    static constexpr std::size_t kMaxDiagnostics = 8;
+
+    AppBudgetRecoveryAction action = AppBudgetRecoveryAction::None;
+    AppTeardownReason teardown_reason = AppTeardownReason::None;
+    AppBudgetRecoveryDiagnostic diagnostics[kMaxDiagnostics];
+    std::size_t diagnostic_count = 0;
+};
+
 AppBudgetSnapshot collect_app_budget_snapshot(const AppRuntimeHost& host,
                                               const AppBudgetSnapshotInput& input = {});
 
 bool app_budget_snapshot_has_exhausted_runtime_budget(const AppBudgetSnapshot& snapshot);
+AppBudgetRecoveryReport app_budget_recovery_for_snapshot(const AppBudgetSnapshot& snapshot);
+const char* app_budget_recovery_action_name(AppBudgetRecoveryAction action);
+const char* app_budget_recovery_diagnostic_code_name(AppBudgetRecoveryDiagnosticCode code);
 
 } // namespace jellyframe

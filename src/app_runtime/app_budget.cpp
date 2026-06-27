@@ -8,6 +8,26 @@ AppBudgetMeter make_limit_only_meter(std::size_t limit) {
     return AppBudgetMeter{0, limit};
 }
 
+void append_recovery_diagnostic(AppBudgetRecoveryReport& report,
+                                AppBudgetRecoveryDiagnosticCode code,
+                                AppBudgetMeter meter,
+                                AppBudgetRecoveryAction action) {
+    if (!meter.exhausted()) {
+        return;
+    }
+    if (action == AppBudgetRecoveryAction::TerminateApp) {
+        report.action = AppBudgetRecoveryAction::TerminateApp;
+        report.teardown_reason = AppTeardownReason::BudgetExceeded;
+    } else if (report.action == AppBudgetRecoveryAction::None) {
+        report.action = AppBudgetRecoveryAction::Warn;
+    }
+    if (report.diagnostic_count >= AppBudgetRecoveryReport::kMaxDiagnostics) {
+        return;
+    }
+    report.diagnostics[report.diagnostic_count++] =
+        AppBudgetRecoveryDiagnostic{code, meter.used, meter.limit};
+}
+
 } // namespace
 
 AppBudgetSnapshot collect_app_budget_snapshot(const AppRuntimeHost& host,
@@ -70,19 +90,108 @@ AppBudgetSnapshot collect_app_budget_snapshot(const AppRuntimeHost& host,
 }
 
 bool app_budget_snapshot_has_exhausted_runtime_budget(const AppBudgetSnapshot& snapshot) {
-    return snapshot.service_requests.exhausted() ||
-        snapshot.service_completions.exhausted() ||
-        snapshot.host_handles.exhausted() ||
-        snapshot.host_handle_bytes.exhausted() ||
-        snapshot.app_fonts.exhausted() ||
-        snapshot.system_events.exhausted() ||
-        snapshot.input_events_per_frame.exhausted() ||
-        snapshot.timer_callbacks_per_frame.exhausted() ||
-        snapshot.animation_callbacks_per_frame.exhausted() ||
-        snapshot.active_animations.exhausted() ||
-        snapshot.script_timers.exhausted() ||
-        snapshot.script_event_listeners.exhausted() ||
-        snapshot.detached_dom_nodes.exhausted();
+    return app_budget_recovery_for_snapshot(snapshot).action == AppBudgetRecoveryAction::TerminateApp;
+}
+
+AppBudgetRecoveryReport app_budget_recovery_for_snapshot(const AppBudgetSnapshot& snapshot) {
+    AppBudgetRecoveryReport report;
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::ServiceRequests,
+                               snapshot.service_requests,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::ServiceCompletions,
+                               snapshot.service_completions,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::HostHandles,
+                               snapshot.host_handles,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::HostHandleBytes,
+                               snapshot.host_handle_bytes,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::AppFonts,
+                               snapshot.app_fonts,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::SystemEvents,
+                               snapshot.system_events,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::ScriptTimers,
+                               snapshot.script_timers,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::ScriptEventListeners,
+                               snapshot.script_event_listeners,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::DetachedDomNodes,
+                               snapshot.detached_dom_nodes,
+                               AppBudgetRecoveryAction::TerminateApp);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::InputEventsPerFrame,
+                               snapshot.input_events_per_frame,
+                               AppBudgetRecoveryAction::Warn);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::TimerCallbacksPerFrame,
+                               snapshot.timer_callbacks_per_frame,
+                               AppBudgetRecoveryAction::Warn);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::AnimationCallbacksPerFrame,
+                               snapshot.animation_callbacks_per_frame,
+                               AppBudgetRecoveryAction::Warn);
+    append_recovery_diagnostic(report,
+                               AppBudgetRecoveryDiagnosticCode::ActiveAnimations,
+                               snapshot.active_animations,
+                               AppBudgetRecoveryAction::Warn);
+    return report;
+}
+
+const char* app_budget_recovery_action_name(AppBudgetRecoveryAction action) {
+    switch (action) {
+    case AppBudgetRecoveryAction::None:
+        return "none";
+    case AppBudgetRecoveryAction::Warn:
+        return "warn";
+    case AppBudgetRecoveryAction::TerminateApp:
+        return "terminate-app";
+    }
+    return "unknown";
+}
+
+const char* app_budget_recovery_diagnostic_code_name(AppBudgetRecoveryDiagnosticCode code) {
+    switch (code) {
+    case AppBudgetRecoveryDiagnosticCode::ServiceRequests:
+        return "budget-service-requests";
+    case AppBudgetRecoveryDiagnosticCode::ServiceCompletions:
+        return "budget-service-completions";
+    case AppBudgetRecoveryDiagnosticCode::HostHandles:
+        return "budget-host-handles";
+    case AppBudgetRecoveryDiagnosticCode::HostHandleBytes:
+        return "budget-host-handle-bytes";
+    case AppBudgetRecoveryDiagnosticCode::AppFonts:
+        return "budget-app-fonts";
+    case AppBudgetRecoveryDiagnosticCode::SystemEvents:
+        return "budget-system-events";
+    case AppBudgetRecoveryDiagnosticCode::InputEventsPerFrame:
+        return "budget-input-events-per-frame";
+    case AppBudgetRecoveryDiagnosticCode::TimerCallbacksPerFrame:
+        return "budget-timer-callbacks-per-frame";
+    case AppBudgetRecoveryDiagnosticCode::AnimationCallbacksPerFrame:
+        return "budget-animation-callbacks-per-frame";
+    case AppBudgetRecoveryDiagnosticCode::ActiveAnimations:
+        return "budget-active-animations";
+    case AppBudgetRecoveryDiagnosticCode::ScriptTimers:
+        return "budget-script-timers";
+    case AppBudgetRecoveryDiagnosticCode::ScriptEventListeners:
+        return "budget-script-event-listeners";
+    case AppBudgetRecoveryDiagnosticCode::DetachedDomNodes:
+        return "budget-detached-dom-nodes";
+    }
+    return "budget-unknown";
 }
 
 } // namespace jellyframe

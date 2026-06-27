@@ -1,0 +1,10 @@
+# JellyFrame deterministic budget recovery smoke script.
+
+output-dir out/budget_recovery_frames
+montage out/budget_recovery_montage.bmp
+frames 8
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 4
+gap 4

@@ -479,6 +479,7 @@ struct BrowserOptions {
     int animation_callbacks_per_frame = -1;
     int script_watchdog_checks = -1;
     int script_watchdog_interval = -1;
+    int app_runtime_jobs = -1;
     bool require_script_watchdog = false;
     std::vector<ScriptedFrameEvent> frame_events;
 };
@@ -616,6 +617,21 @@ void print_budget_meter(std::ostream& output, const char* name, AppBudgetMeter m
     output << ' ' << name << '=' << meter.used << '/' << meter.limit;
 }
 
+void print_budget_recovery_report(std::ostream& output, const AppBudgetRecoveryReport& report) {
+    output << "  app_budget_recovery action=" << app_budget_recovery_action_name(report.action)
+           << " diagnostics=" << report.diagnostic_count;
+    if (report.teardown_reason != AppTeardownReason::None) {
+        output << " reason=" << app_teardown_reason_name(report.teardown_reason);
+    }
+    if (report.diagnostic_count != 0) {
+        const AppBudgetRecoveryDiagnostic& first = report.diagnostics[0];
+        output << " first=" << app_budget_recovery_diagnostic_code_name(first.code)
+               << " used=" << first.used
+               << " limit=" << first.limit;
+    }
+    output << '\n';
+}
+
 AppBackgroundServicePolicy background_policy_from_manifest(const jellyframe_example::AppPackageManifest& manifest) {
     AppBackgroundServicePolicy policy;
     policy.network_while_suspended = manifest.background_network_while_suspended;
@@ -687,6 +703,17 @@ HostBudgets desktop_browser_budgets() {
 
 AppRuntimeHostOptions desktop_app_runtime_options() {
     return AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4};
+}
+
+AppRuntimeHostOptions desktop_app_runtime_options(const BrowserOptions& options) {
+    AppRuntimeHostOptions runtime_options = desktop_app_runtime_options();
+    if (options.app_runtime_jobs >= 0) {
+        const std::size_t jobs = static_cast<std::size_t>(options.app_runtime_jobs);
+        runtime_options.max_in_flight_jobs = jobs;
+        runtime_options.max_completion_events_per_frame = std::min<std::size_t>(
+            runtime_options.max_completion_events_per_frame, jobs);
+    }
+    return runtime_options;
 }
 
 std::string read_file_limited(const std::string& path) {
@@ -1987,6 +2014,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --animation-callbacks N        Override animation callbacks pumped per frame.\n"
         << "  --script-watchdog-checks N     Override JS execution check budget.\n"
         << "  --script-watchdog-interval N   Override JS execution halt callback interval.\n"
+        << "  --app-runtime-jobs N           Override Win32 host request/completion queue capacity.\n"
         << "  --require-script-watchdog      Fail scripted startup if JerryScript cannot halt.\n"
         << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y[:delta]].\n"
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
@@ -2419,7 +2447,8 @@ class BrowserApp {
 public:
     explicit BrowserApp(BrowserOptions options)
         : options_(std::move(options)),
-          active_app_id_(options_.launch_app_id) {
+          active_app_id_(options_.launch_app_id),
+          app_runtime_(desktop_app_runtime_options(options_)) {
         if (options_.animation_frame_rate >= 0) {
             budgets_.animation_frame_rate = static_cast<std::size_t>(options_.animation_frame_rate);
         }
@@ -2434,7 +2463,7 @@ public:
             budgets_.script_execution_check_interval = static_cast<std::size_t>(options_.script_watchdog_interval);
         }
         frame_scratch_.reserve_from_budgets(budgets_);
-        app_frame_scratch_.reserve_from_options(desktop_app_runtime_options());
+        app_frame_scratch_.reserve_from_options(desktop_app_runtime_options(options_));
         if (!options_.launch_app_id.empty()) {
             app_runtime_.launch(options_.launch_app_id, AppRole::App);
         } else if (!options_.app_path.empty()) {
@@ -2762,8 +2791,9 @@ public:
         print_budget_meter(std::cout, "detached_nodes", budget.detached_dom_nodes);
         print_budget_meter(std::cout, "animations", budget.active_animations);
         std::cout << " watchdog_checks=" << budget.script_execution_checks
-                  << " watchdog_interval=" << budget.script_execution_check_interval << '\n'
-                  << "  load_telemetry samples=" << load_telemetry_counters_.sampled_frames
+                  << " watchdog_interval=" << budget.script_execution_check_interval << '\n';
+        print_budget_recovery_report(std::cout, app_budget_recovery_for_snapshot(budget));
+        std::cout << "  load_telemetry samples=" << load_telemetry_counters_.sampled_frames
                   << " sleep=" << load_telemetry_counters_.sleep_ok_frames
                   << " lowfreq=" << load_telemetry_counters_.low_frequency_frames
                   << " normal=" << load_telemetry_counters_.normal_frames
@@ -3485,6 +3515,58 @@ private:
         set_title(std::string("error: ") + error.what());
     }
 
+    bool recover_active_app_after_budget_if_needed(const char* boundary) {
+        const AppBudgetSnapshot budget = current_app_budget_snapshot();
+        const AppBudgetRecoveryReport report = app_budget_recovery_for_snapshot(budget);
+        if (report.action != AppBudgetRecoveryAction::TerminateApp) {
+            return false;
+        }
+        if (options_.registry_store_path.empty() || system_shell_mode_) {
+            return false;
+        }
+        std::cerr << "app_budget_recovery action=" << app_budget_recovery_action_name(report.action)
+                  << " reason=" << app_teardown_reason_name(report.teardown_reason)
+                  << " boundary=" << boundary
+                  << " diagnostics=" << report.diagnostic_count;
+        if (report.diagnostic_count != 0) {
+            const AppBudgetRecoveryDiagnostic& first = report.diagnostics[0];
+            std::cerr << " first=" << app_budget_recovery_diagnostic_code_name(first.code)
+                      << " used=" << first.used
+                      << " limit=" << first.limit;
+        }
+        std::cerr << '\n';
+
+        reset_image_services();
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        pending_script_audio_events_.clear();
+        script_runtime_.reset();
+        script_runtime_instance_id_ = 0;
+        KillTimer(hwnd_, kScriptTimerId);
+#endif
+        const std::uint32_t instance_id = app_runtime_.current_app_instance_id();
+        const std::size_t discarded_system_events = system_events_.discard_app_instance(instance_id);
+        const AppTeardownResult teardown = app_runtime_.terminate_current(report.teardown_reason);
+        const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
+        std::cerr << "budget_recovery_teardown reason=" << app_teardown_reason_name(teardown.reason)
+                  << " released_instance=" << teardown.app_instance_id
+                  << " released_handles=" << teardown.released_handles
+                  << " cancelled_requests=" << teardown.cancelled_requests
+                  << " discarded_completions=" << teardown.discarded_completions
+                  << " discarded_system_events=" << discarded_system_events << '\n';
+        configure_system_shell(
+            "Recovered from " + crashed_app + " after " +
+            app_teardown_reason_name(teardown.reason) + "; released instance " +
+            std::to_string(teardown.app_instance_id) + ".");
+        try {
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        } catch (const std::exception& shell_error) {
+            std::cerr << "system shell recovery failed: " << shell_error.what() << '\n';
+            set_title(std::string("error: ") + shell_error.what());
+        }
+        return true;
+    }
+
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
     void recover_active_app_after_script_watchdog(const std::string& detail) {
         std::cerr << "script watchdog interrupted app: " << detail << '\n';
@@ -3684,6 +3766,9 @@ private:
         }
 #endif
         drain_system_events();
+        if (recover_active_app_after_budget_if_needed("render")) {
+            return;
+        }
         std::vector<std::pair<const Node*, Style>> previous_styles;
         if ((document_->dirty_flags & DomDirtyStyle) != 0U && render_tree_ != nullptr) {
             collect_transition_candidate_styles(*render_tree_, previous_styles);
@@ -4389,6 +4474,9 @@ private:
         const bool completed_image = image_pump.completions_posted != 0;
         bool handled_completion = drain_host_completions();
         const bool handled_system_event = drain_system_events();
+        if (recover_active_app_after_budget_if_needed("timer-host")) {
+            return;
+        }
         const bool animation_budget_enabled = frame_options.animation_frame_rate > 0 &&
             frame_options.max_animation_callbacks_per_frame > 0;
         const bool advanced_animation = frame_policy.presents_frames &&
@@ -4426,6 +4514,9 @@ private:
             : 0;
         if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
             recover_active_app_after_script_watchdog("script callback execution budget exceeded");
+            return;
+        }
+        if (recover_active_app_after_budget_if_needed("timer-script")) {
             return;
         }
         if (frame_policy.presents_frames &&
@@ -4714,6 +4805,16 @@ int main(int argc, char** argv) {
             }
             if (!parse_int_option(
                     "--script-watchdog-interval", argv[++i], 1, 1000000, options.script_watchdog_interval)) {
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "--app-runtime-jobs") {
+            if (i + 1 >= argc) {
+                std::cerr << "--app-runtime-jobs requires a number\n";
+                return 1;
+            }
+            if (!parse_int_option("--app-runtime-jobs", argv[++i], 1, 4096, options.app_runtime_jobs)) {
                 return 1;
             }
             continue;

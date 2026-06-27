@@ -881,6 +881,44 @@ Wearable-first defaults:
   larger products may flush more operations per tick, while very small devices
   may defer suspend flushes and rely on update/exit flushes.
 
+Authorized file access boundary:
+
+- The app-private KV service is not the general filesystem. Ordinary third-party
+  apps without explicit user/system authorization must not read, enumerate,
+  edit or delete runtime files, system-component files, other apps' data or
+  package bytes.
+- Products may later expose a host-owned file broker for system components,
+  file managers, backup/restore tools or user-approved apps. That broker must
+  be semantic and capability-gated; apps still must not receive raw filesystem,
+  flash partition or block-device handles.
+- Authorized file operations must be asynchronous host jobs with bounded byte
+  counts, directory traversal rules, path normalization, atomic update or
+  journaling where appropriate, and stable error diagnostics. A failed or
+  malicious request should return an error, revoke the operation or terminate
+  only the requesting app; it must not corrupt the runtime, break another app,
+  crash the system shell or force an MCU reset.
+- Any operation that does not modify firmware must have a product fallback that
+  avoids reflashing firmware. Examples include refusing the request, rolling
+  back a staged file write, preserving the previous registry or booting a safe
+  system shell.
+
+Budget recovery:
+
+- `AppBudgetSnapshot` is a counter-only structure for UI-tick or frame-script
+  boundaries. Do not inspect budgets inside individual paint primitives or host
+  worker internals.
+- `app_budget_recovery_for_snapshot(...)` turns exhausted counters into a
+  fixed-size recovery report. Queue, completion, handle, handle-byte, app-font,
+  system-event, script timer/listener and detached DOM exhaustion are
+  `terminate-app` conditions. Per-frame callback and active-animation caps are
+  `warn` conditions because frame policy can throttle them without killing the
+  app.
+- System shells should treat `terminate-app` as `AppTeardownReason::BudgetExceeded`:
+  cancel current-app requests, discard stale completions and system events,
+  release handles/fonts, return to a trusted launcher and report the stable
+  diagnostic. The requesting app may fail; the runtime, system shell and other
+  apps must continue without requiring a firmware reflash.
+
 ## Bundle Installation Service
 
 Installable third-party apps are managed by the system shell/app manager.

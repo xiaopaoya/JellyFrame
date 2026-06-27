@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.tests.budget_spam",
+  "name": "Budget Spam Fixture",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.5.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 32768,
+    "maxDomNodes": 32,
+    "maxCssRules": 16,
+    "maxDisplayCommands": 64,
+    "maxTimers": 2,
+    "maxEventListeners": 8
+  },
+  "permissions": ["network"],
+  "capabilities": ["network.fetch"]
+}

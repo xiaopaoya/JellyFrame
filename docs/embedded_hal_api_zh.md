@@ -63,6 +63,10 @@ struct HostDeviceCapabilities {
 - `budgets`：DOM/CSS/display-list/timer/listener/resource 限制；
 - monotonic time、filesystem、network 等服务 flags。
 
+`has_filesystem` 只表示宿主具备存储原语，不等于普通 app 获得任意文件访问授权。如果产品暴露通用文件
+编辑能力，应作为独立的 host file-broker service，并带有用户/系统授权、有界异步操作、rollback/fallback，
+且不能把裸 filesystem 或 flash handle 传给 app 代码。
+
 ESP32-S3 手表起步建议：
 
 - `preferred_pixel_format = HostPixelFormat::Rgb565`；

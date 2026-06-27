@@ -644,6 +644,27 @@ void bench_app_budget_snapshot(std::size_t capacity) {
     }
 }
 
+void bench_app_budget_recovery(std::size_t capacity) {
+    AppBudgetSnapshot budget;
+    budget.service_requests = AppBudgetMeter{capacity, capacity};
+    budget.service_completions = AppBudgetMeter{capacity / 2, capacity};
+    budget.host_handles = AppBudgetMeter{capacity / 4, capacity};
+    budget.host_handle_bytes = AppBudgetMeter{capacity * 16, capacity * 256};
+    budget.app_fonts = AppBudgetMeter{0, 1};
+    budget.system_events = AppBudgetMeter{capacity / 8, capacity};
+    budget.timer_callbacks_per_frame = AppBudgetMeter{1, 1};
+    budget.active_animations = AppBudgetMeter{2, 2};
+    budget.script_timers = AppBudgetMeter{capacity / 8, capacity};
+    budget.script_event_listeners = AppBudgetMeter{capacity / 8, capacity};
+    budget.detached_dom_nodes = AppBudgetMeter{capacity / 16, capacity};
+
+    const AppBudgetRecoveryReport report = app_budget_recovery_for_snapshot(budget);
+    if (report.action != AppBudgetRecoveryAction::TerminateApp ||
+        report.teardown_reason != AppTeardownReason::BudgetExceeded) {
+        std::abort();
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -722,6 +743,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_budget_snapshot", iterations, average_microseconds(iterations, [&] {
         bench_app_budget_snapshot(capacity);
+    }));
+    print_result("app_runtime_budget_recovery", iterations, average_microseconds(iterations, [&] {
+        bench_app_budget_recovery(capacity);
     }));
 
     return 0;

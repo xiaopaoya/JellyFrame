@@ -33,6 +33,7 @@ def main() -> int:
     require("event FRAME:kind[:x:y[:delta]]" in help_result.stdout, "--help must document wheel delta")
     require("--keep-data" in help_result.stdout, "--help must document app data retention")
     require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
+    require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
 
     numeric_result = run_case(exe, ["--viewport-width", "nope"])
     require(numeric_result.returncode != 0, "invalid numeric option must fail")

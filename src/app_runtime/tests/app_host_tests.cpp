@@ -4,6 +4,7 @@
 #include "render_core/software_renderer.h"
 
 #include <cassert>
+#include <string>
 #include <vector>
 
 using namespace jellyframe;
@@ -475,6 +476,37 @@ void budget_snapshot_detects_exhausted_runtime_budget() {
     const AppBudgetSnapshot budget = collect_app_budget_snapshot(host);
     assert(budget.service_requests.exhausted());
     assert(app_budget_snapshot_has_exhausted_runtime_budget(budget));
+
+    const AppBudgetRecoveryReport report = app_budget_recovery_for_snapshot(budget);
+    assert(report.action == AppBudgetRecoveryAction::TerminateApp);
+    assert(report.teardown_reason == AppTeardownReason::BudgetExceeded);
+    assert(report.diagnostic_count >= 1);
+    assert(std::string(app_budget_recovery_action_name(report.action)) == "terminate-app");
+    assert(std::string(app_budget_recovery_diagnostic_code_name(report.diagnostics[0].code)) ==
+           "budget-service-requests");
+}
+
+void budget_recovery_distinguishes_frame_throttle_from_app_termination() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.frame-budget", AppRole::App);
+
+    HostBudgets budgets;
+    budgets.max_animation_callbacks_per_frame = 1;
+    budgets.max_active_animations = 2;
+    FrameLoopPendingWork pending;
+    pending.pending_animation_callbacks = 1;
+
+    AppBudgetSnapshotInput input;
+    input.host_budgets = &budgets;
+    input.pending_work = &pending;
+    input.active_animations = 2;
+
+    const AppBudgetSnapshot budget = collect_app_budget_snapshot(host, input);
+    const AppBudgetRecoveryReport report = app_budget_recovery_for_snapshot(budget);
+    assert(report.action == AppBudgetRecoveryAction::Warn);
+    assert(report.teardown_reason == AppTeardownReason::None);
+    assert(!app_budget_snapshot_has_exhausted_runtime_budget(budget));
+    assert(report.diagnostic_count == 2);
 }
 
 void bad_app_teardown_leaves_next_app_clean_and_discards_stale_work() {
@@ -552,6 +584,7 @@ int main() {
     options_follow_host_capabilities();
     budget_snapshot_reports_runtime_usage_and_caps();
     budget_snapshot_detects_exhausted_runtime_budget();
+    budget_recovery_distinguishes_frame_throttle_from_app_termination();
     bad_app_teardown_leaves_next_app_clean_and_discards_stale_work();
     return 0;
 }

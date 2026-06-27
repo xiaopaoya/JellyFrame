@@ -20,6 +20,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `data/<sanitized-app-id>`. Removing an app deletes that data by default,
   `--keep-data` retains it, and `delete-data` / Win32 `--delete-app-data` can
   clear data without removing the installed bundle.
+- Added fixed-size budget recovery classification. `AppBudgetRecoveryReport`
+  maps exhausted runtime counters to `warn` or `terminate-app`; Win32
+  system-shell validation now recovers request-queue exhaustion as
+  `budget-exceeded` and returns to the launcher.
+- Documented the authorized file-access boundary: ordinary apps still have no
+  general filesystem access, while future file managers or system components
+  should use a host-owned, user-authorized file broker with async budgets,
+  rollback/fallback and no raw filesystem handles.
 
 ## 0.4.0-dev - 2026-06-28
 
