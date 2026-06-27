@@ -75,6 +75,9 @@ DOM + computed style
   `grid-auto-rows: minmax(<length>, auto)`，以及 `grid-column`/`grid-row:
   span N`。`repeat(N, 1fr)` 和 `repeat(N, minmax(0, 1fr))` 也属于该子集。
 - `aspect-ratio` 会参与空媒体框/card 的 intrinsic content height 计算。
+- `width`/`height` 百分比 sizing 会穿过 style resolution，并在 layout 阶段相对
+  containing content box 或根 viewport 解析。这个子集刻意保持很窄，但足以覆盖全屏
+  app wrapper 和响应式手表面板。
 - 简化 flex row 可以使用 `column-gap`，并保留现有 justification 行为。
 
 ## 可用性策略

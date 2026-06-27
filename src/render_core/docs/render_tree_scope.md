@@ -80,6 +80,10 @@ DOM + computed style
   subset.
 - `aspect-ratio` participates in intrinsic content height for empty media/card
   boxes.
+- `width`/`height` percentage sizing is preserved through style resolution and
+  resolved by layout against the containing content box or root viewport. This
+  is intentionally narrow, but it is enough for full-screen app wrappers and
+  responsive watch panels.
 - Simplified flex rows can use `column-gap` in addition to the existing
   justification behavior.
 

@@ -2237,7 +2237,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     layout_options.diagnostics = &diagnostics;
     LayoutEngine layout_engine(resolver, text_backend.measure, layout_options);
-    auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
+    auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
     layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
@@ -3729,7 +3729,7 @@ private:
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
         layout_options.diagnostics = &diagnostics_;
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
-        auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_);
+        auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_, viewport_height_);
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
 
         const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);

@@ -389,7 +389,7 @@ int main(int argc, char** argv) {
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
         LayoutEngine layout_engine(resolver, {}, layout_options);
-        auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width);
+        auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
         layer_options.diagnostics = &diagnostics;

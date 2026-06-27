@@ -30,6 +30,11 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.min_width == right.min_width &&
         left.min_height == right.min_height &&
         left.max_width == right.max_width &&
+        left.width_percent == right.width_percent &&
+        left.height_percent == right.height_percent &&
+        left.min_width_percent == right.min_width_percent &&
+        left.min_height_percent == right.min_height_percent &&
+        left.max_width_percent == right.max_width_percent &&
         left.aspect_ratio_width == right.aspect_ratio_width &&
         left.aspect_ratio_height == right.aspect_ratio_height &&
         left.font_size == right.font_size &&

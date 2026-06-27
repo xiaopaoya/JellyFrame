@@ -290,6 +290,34 @@ bool parse_float(const std::string& raw_value, float& output) {
     return true;
 }
 
+bool parse_percentage_int(const std::string& raw_value, int& output) {
+    const std::string value = trim(raw_value);
+    if (value.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(value.c_str(), &end);
+    if (end == value.c_str() || errno == ERANGE) {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || *end != '%') {
+        return false;
+    }
+    ++end;
+    while (std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (*end != '\0') {
+        return false;
+    }
+    output = std::max(-1000, std::min(1000, static_cast<int>(parsed + (parsed >= 0.0F ? 0.5F : -0.5F))));
+    return true;
+}
+
 bool parse_time_ms(const std::string& raw_value, std::uint32_t& output) {
     const std::string value = lowercase(trim(raw_value));
     if (value.empty()) {
@@ -2510,39 +2538,74 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.border_radius = px;
         return true;
     } else if (property == "width") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.width = -1;
+            style.width_percent = percent;
+            return true;
+        }
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.width = px;
+        style.width_percent = -1;
         return true;
     } else if (property == "height") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.height = -1;
+            style.height_percent = percent;
+            return true;
+        }
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.height = px;
+        style.height_percent = -1;
         return true;
     } else if (property == "min-width") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.min_width = -1;
+            style.min_width_percent = percent;
+            return true;
+        }
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.min_width = px;
+        style.min_width_percent = -1;
         return true;
     } else if (property == "min-height") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.min_height = -1;
+            style.min_height_percent = percent;
+            return true;
+        }
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.min_height = px;
+        style.min_height_percent = -1;
         return true;
     } else if (property == "max-width") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.max_width = -1;
+            style.max_width_percent = percent;
+            return true;
+        }
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
         }
         style.max_width = px;
+        style.max_width_percent = -1;
         return true;
     } else if (property == "aspect-ratio") {
         int ratio_width = 0;

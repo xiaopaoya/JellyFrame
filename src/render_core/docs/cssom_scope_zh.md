@@ -75,7 +75,8 @@ CssStyleSheet
 - `display`：block、inline、inline-block、flex、grid、none。
 - `margin`、`padding`、`border-width` 及其物理单边 longhands，
   以及 `border-color`、`border-radius`。
-- `width`、`height`、`min-width`、`min-height`、`max-width`。
+- `width`、`height`、`min-width`、`min-height`、`max-width`，包括这些 sizing
+  属性在 layout 阶段解析的百分比值。
 - `color`、`background-color`。
 - `font-size`、`line-height`、`text-align`、`text-indent`。
 - `box-sizing`、`overflow`、`opacity`、`position`、`z-index`、`transform`。

@@ -40,16 +40,20 @@ public:
                           LayoutEngineOptions options = {});
 
     LayoutBoxPtr layout(const Node& root, int viewport_width) const;
+    LayoutBoxPtr layout(const Node& root, int viewport_width, int viewport_height) const;
     LayoutBoxPtr layout(const Node& root, int viewport_width, MonotonicArena& arena) const;
+    LayoutBoxPtr layout(const Node& root, int viewport_width, int viewport_height, MonotonicArena& arena) const;
     LayoutBoxPtr layout(const RenderObject& render_tree, int viewport_width) const;
+    LayoutBoxPtr layout(const RenderObject& render_tree, int viewport_width, int viewport_height) const;
     LayoutBoxPtr layout(const RenderObject& render_tree, int viewport_width, MonotonicArena& arena) const;
+    LayoutBoxPtr layout(const RenderObject& render_tree, int viewport_width, int viewport_height, MonotonicArena& arena) const;
 
 private:
     const StyleResolver& style_resolver_;
     TextMeasureProvider text_measure_;
     LayoutEngineOptions options_;
 
-    int layout_box(LayoutBox& box, int x, int y, int width) const;
+    int layout_box(LayoutBox& box, int x, int y, int width, int height) const;
     int layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
     int layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
     int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const;
@@ -61,6 +65,7 @@ private:
                                     int viewport_width) const;
     LayoutBoxPtr build_with_arena(const RenderObject& render_tree,
                                   int viewport_width,
+                                  int viewport_height,
                                   MonotonicArena* arena) const;
     void build_layout_tree(const RenderObject& object,
                            LayoutBox& box,

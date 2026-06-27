@@ -689,7 +689,8 @@ bool is_supported_declaration_feature(std::string_view feature) {
     }
     if (property == "transform") {
         return value == "none" || value.find("translate") != std::string::npos ||
-               value.find("scale") != std::string::npos;
+               value.find("scale") != std::string::npos ||
+               value.find("rotate") != std::string::npos;
     }
     if (property == "transition" || property == "transition-property" ||
         property == "transition-duration" || property == "transition-delay" ||
