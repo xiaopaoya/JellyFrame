@@ -141,6 +141,56 @@ void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bo
     }
 }
 
+std::string bounds_detail(const char* name, const LayoutBounds& bounds) {
+    if (!bounds.valid) {
+        return std::string(name) + "=empty";
+    }
+    std::ostringstream detail;
+    detail << name << "=(" << bounds.left << ',' << bounds.top << ")-("
+           << bounds.right << ',' << bounds.bottom << ')';
+    return detail.str();
+}
+
+void report_visual_diagnostics(const BrowserOptions& options,
+                               const PipelineStatistics& statistics,
+                               const LayoutBounds& layout_bounds,
+                               const LayoutBounds& paint_bounds,
+                               VectorDiagnosticSink& diagnostics) {
+    const int content_height = layout_bounds.valid
+        ? std::max(options.viewport_height, layout_bounds.bottom)
+        : options.viewport_height;
+    if (paint_bounds.valid && (paint_bounds.left < 0 || paint_bounds.right > options.viewport_width)) {
+        report_diagnostic(&diagnostics,
+                          DiagnosticStage::Layout,
+                          DiagnosticSeverity::Warning,
+                          "visual-horizontal-overflow",
+                          "Paint output extends outside the viewport horizontally",
+                          bounds_detail("paintBounds", paint_bounds));
+    }
+    if (content_height > options.viewport_height) {
+        report_diagnostic(&diagnostics,
+                          DiagnosticStage::Layout,
+                          DiagnosticSeverity::Info,
+                          "visual-scroll-needed",
+                          "Content is taller than the viewport and requires scrolling",
+                          "contentHeight=" + std::to_string(content_height) +
+                              " viewportHeight=" + std::to_string(options.viewport_height));
+    }
+
+    const int viewport_area = std::max(1, options.viewport_width * options.viewport_height);
+    const std::size_t density_limit =
+        std::max<std::size_t>(512, static_cast<std::size_t>(viewport_area / 48));
+    if (statistics.flattened_display_commands > density_limit) {
+        report_diagnostic(&diagnostics,
+                          DiagnosticStage::LayerTree,
+                          DiagnosticSeverity::Warning,
+                          "visual-display-command-density",
+                          "Display command density is high for a small embedded viewport",
+                          "flattenedDisplayCommands=" + std::to_string(statistics.flattened_display_commands) +
+                              " densityLimit=" + std::to_string(density_limit));
+    }
+}
+
 bool write_image_frame_sink(const HostFrameBufferView& frame,
                             const Rect*,
                             std::size_t,
@@ -432,6 +482,12 @@ int main(int argc, char** argv) {
             html.size() + css.size(),
         });
 
+        LayoutBounds layout_bounds;
+        accumulate_layout_bounds(*layout_tree, layout_bounds);
+        LayoutBounds paint_bounds;
+        accumulate_display_bounds(display_list, paint_bounds);
+        report_visual_diagnostics(options, pipeline_statistics, layout_bounds, paint_bounds, diagnostics);
+
         std::cout << "JellyFrame render core pseudo browser\n";
         std::cout << "  output=" << options.output_path << '\n';
         std::cout << "  viewport=" << options.viewport_width << "x" << options.viewport_height << '\n';
@@ -459,10 +515,6 @@ int main(int argc, char** argv) {
             std::cout << '\n';
         }
 
-        LayoutBounds layout_bounds;
-        accumulate_layout_bounds(*layout_tree, layout_bounds);
-        LayoutBounds paint_bounds;
-        accumulate_display_bounds(display_list, paint_bounds);
         write_diagnostics_json(options.diagnostics_json_path,
                                options,
                                pipeline_statistics,

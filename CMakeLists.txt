@@ -263,6 +263,13 @@ if(JELLYFRAME_BUILD_TESTS)
 
         if(JELLYFRAME_BUILD_EXAMPLES)
             add_test(
+                NAME jellyframe_pipeline_visual_diagnostics_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/pipeline_visual_diagnostics_tests.py
+                        $<TARGET_FILE:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
                 NAME jellyframe_cli_check_audio_smoke_package
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
@@ -357,6 +364,13 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(jellyframe_win32_motion_lab_soak_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
                     "frame_policy_samples=90 input=90 timers=90 animation=90 present=90")
+
+            add_test(
+                NAME jellyframe_win32_watch_face_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_watch_face
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_watch_face/capture_watch_face_30fps.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
                 NAME jellyframe_win32_motion_lab_dirty_frame_script

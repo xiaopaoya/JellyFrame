@@ -267,6 +267,26 @@ void conic_gradient_background_applies_progress_subset() {
           "unsupported conic-gradient does not clear earlier fallback");
 }
 
+void unsupported_conic_gradient_reports_specific_diagnostic() {
+    auto fallback = make_element("div");
+    fallback->attributes["class"] = "fallback";
+
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    StyleResolver resolver(parse(
+        ".fallback { background: #102030; "
+        "background: conic-gradient(#fff -10% 80%, #000 80% 100%); }"),
+        options);
+
+    const Style style = resolver.resolve(*fallback);
+    check(style.background_paint == BackgroundPaintKind::Solid &&
+              style.background_color.r == 0x10,
+          "invalid conic-gradient preserves earlier fallback background");
+    check(has_diagnostic_code(diagnostics, "style-conic-gradient-unsupported"),
+          "unsupported conic-gradient emits specific diagnostic");
+}
+
 void matches_simple_compound_selectors() {
     const Stylesheet stylesheet = parse("button.primary.large { color: #abcdef; }");
     auto element = make_element("button");
@@ -845,6 +865,7 @@ int main() {
         resolves_simple_css_custom_properties();
         linear_gradient_background_applies_without_breaking_fallbacks();
         conic_gradient_background_applies_progress_subset();
+        unsupported_conic_gradient_reports_specific_diagnostic();
         matches_simple_compound_selectors();
         builds_cssom_metadata();
         cascade_uses_specificity_and_importance();

@@ -14,6 +14,8 @@
 namespace jellyframe {
 namespace {
 
+constexpr int kConicGradientAreaWarningPixels = 65536;
+
 bool has_border(const EdgeSizes& border) {
     return border.top > 0 || border.right > 0 || border.bottom > 0 || border.left > 0;
 }
@@ -758,6 +760,17 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                              box.style.background_gradient_axis,
                              border_radius);
     } else if (box.style.background_paint == BackgroundPaintKind::ConicGradient) {
+        const long long conic_area = static_cast<long long>(std::max(0, paint_rect.width)) *
+            static_cast<long long>(std::max(0, paint_rect.height));
+        if (conic_area > kConicGradientAreaWarningPixels) {
+            report_diagnostic(options.diagnostics,
+                              DiagnosticStage::LayerTree,
+                              DiagnosticSeverity::Warning,
+                              "layer-conic-gradient-area-budget",
+                              "conic-gradient() area is above the embedded progress-ring budget",
+                              "area=" + std::to_string(conic_area) +
+                                  "px limit=" + std::to_string(kConicGradientAreaWarningPixels) + "px");
+        }
         push_conic_gradient(display_list,
                             paint_rect,
                             box.style.background_color,

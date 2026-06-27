@@ -1344,9 +1344,58 @@ bool parse_conic_stop(const std::string& component, Color& color, int& start_per
         !parse_percentage_int(tokens[2], end_percent)) {
         return false;
     }
-    start_percent = std::max(0, std::min(100, start_percent));
-    end_percent = std::max(0, std::min(100, end_percent));
+    if (start_percent < 0 || start_percent > 100 || end_percent < 0 || end_percent > 100) {
+        return false;
+    }
     return start_percent <= end_percent;
+}
+
+std::string conic_gradient_failure_detail(const std::string& raw_value) {
+    const std::string value = lowercase(trim(raw_value));
+    constexpr std::string_view prefix = "conic-gradient(";
+    if (value.rfind(prefix, 0) != 0) {
+        return {};
+    }
+    constexpr std::string_view expected =
+        "Expected supported subset: conic-gradient(<color> 0% N%, <color> N% 100%).";
+    if (value.size() <= prefix.size() + 1 || value.back() != ')') {
+        return std::string(expected) + " Function must be closed with ')'.";
+    }
+
+    const std::vector<std::string> args =
+        split_function_arguments(std::string_view(value).substr(prefix.size(), value.size() - prefix.size() - 1));
+    if (args.size() != 2) {
+        return std::string(expected) + " Only two contiguous color segments are supported.";
+    }
+
+    std::array<int, 4> percents{{0, 0, 0, 0}};
+    for (std::size_t index = 0; index < args.size(); ++index) {
+        const std::vector<std::string> tokens = split_whitespace_components(args[index]);
+        if (tokens.size() != 3) {
+            return std::string(expected) + " Each segment must be '<color> start% end%'.";
+        }
+        Color color;
+        if (!parse_color(tokens[0], color)) {
+            return std::string(expected) + " Segment color is outside the supported color subset.";
+        }
+        int start = 0;
+        int end = 0;
+        if (!parse_percentage_int(tokens[1], start) || !parse_percentage_int(tokens[2], end)) {
+            return std::string(expected) + " Segment stops must be percentages.";
+        }
+        if (start < 0 || start > 100 || end < 0 || end > 100) {
+            return std::string(expected) + " Segment percentages must be between 0% and 100%.";
+        }
+        if (start > end) {
+            return std::string(expected) + " Segment start must not be after segment end.";
+        }
+        percents[index * 2] = start;
+        percents[index * 2 + 1] = end;
+    }
+    if (percents[0] != 0 || percents[1] != percents[2] || percents[3] != 100) {
+        return std::string(expected) + " Segments must be contiguous from 0% to 100%.";
+    }
+    return {};
 }
 
 bool parse_conic_gradient_background(const std::string& raw_value,
@@ -3616,12 +3665,25 @@ void apply_declarations(Style& style,
         CascadeSlot* slot = cascade_slot_for_property(slots, resolved_declaration.property);
         if (slot != nullptr) {
             if (!apply_cascaded_declaration(style, *slot, resolved_declaration, specificity, source_order)) {
-                report_diagnostic(diagnostics,
-                                  DiagnosticStage::Style,
-                                  DiagnosticSeverity::Warning,
-                                  "style-declaration-ignored",
-                                  "CSS declaration could not be applied by the supported style subset",
-                                  resolved_declaration.property + ": " + resolved_declaration.value);
+                const std::string conic_detail =
+                    resolved_declaration.property == "background"
+                        ? conic_gradient_failure_detail(resolved_declaration.value)
+                        : std::string{};
+                if (!conic_detail.empty()) {
+                    report_diagnostic(diagnostics,
+                                      DiagnosticStage::Style,
+                                      DiagnosticSeverity::Warning,
+                                      "style-conic-gradient-unsupported",
+                                      "conic-gradient() is outside the supported progress-ring subset",
+                                      conic_detail);
+                } else {
+                    report_diagnostic(diagnostics,
+                                      DiagnosticStage::Style,
+                                      DiagnosticSeverity::Warning,
+                                      "style-declaration-ignored",
+                                      "CSS declaration could not be applied by the supported style subset",
+                                      resolved_declaration.property + ": " + resolved_declaration.value);
+                }
             }
         } else {
             report_diagnostic(diagnostics,

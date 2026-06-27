@@ -495,6 +495,30 @@ void conic_gradient_background_emits_progress_command() {
     check(found_conic, "conic-gradient emits bounded progress display command");
 }
 
+void large_conic_gradient_reports_area_budget_diagnostic() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><section class='ring'></section></body>");
+    Stylesheet stylesheet = css_parser.parse(
+        ".ring { width: 400px; height: 400px; "
+        "background: conic-gradient(#22cc88 0% 75%, rgba(16,32,48,.35) 75% 100%); }");
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 480);
+
+    VectorDiagnosticSink diagnostics;
+    LayerTreeBuilderOptions options;
+    options.diagnostics = &diagnostics;
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    (void)layer_tree;
+
+    check(has_diagnostic_code(diagnostics, "layer-conic-gradient-area-budget"),
+          "large conic-gradient emits area budget diagnostic");
+}
+
 void fixed_grid_places_description_list_in_columns() {
     auto pipeline = build_pipeline(
         "<body><dl><dt>Name</dt><dd>JellyFrame</dd><dt>Mode</dt><dd>Embedded</dd></dl></body>",
@@ -660,6 +684,7 @@ int main() {
         list_markers_and_generated_counters_emit_text();
         generated_after_and_percentage_radius_emit_commands();
         conic_gradient_background_emits_progress_command();
+        large_conic_gradient_reports_area_budget_diagnostic();
         fixed_grid_places_description_list_in_columns();
         unbreakable_symbol_stays_single_line();
         grid_item_auto_width_reflows_centered_text();
