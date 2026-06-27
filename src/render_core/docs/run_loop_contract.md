@@ -28,6 +28,9 @@ Loop frame:
 3. Dispatch pointer/wheel/key/text/focus operations through `InputController`.
 4. Drain a bounded number of host completion events, such as resource, image
    decode, audio state, network response or installation results.
+   A completion should mark the smallest affected DOM owner when one is known
+   (for example the `<img>` elements using a decoded image), and use a root
+   paint dirty fallback only when the owner cannot be resolved.
 5. If JerryScript is enabled, pump a bounded number of timer callbacks.
 6. If animation is active, pump a bounded number of animation frame callbacks.
 7. Read root `subtree_dirty_flags(document)`.

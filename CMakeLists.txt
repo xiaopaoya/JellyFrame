@@ -380,7 +380,9 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_weather_interaction_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
-                    "host_completion_kinds network=1 storage=0 image=3 audio=0 location=0 other=0")
+                    "host_completion_kinds network=1 storage=0 image=3 audio=0 location=0 other=0"
+                FAIL_REGULAR_EXPRESSION
+                    "dirty_area_too_large=[1-9]")
 
             add_test(
                 NAME jellyframe_win32_motion_lab_dirty_frame_script

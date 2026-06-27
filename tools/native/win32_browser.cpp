@@ -302,6 +302,28 @@ void collect_image_sources(const Node& node, std::vector<std::string>& sources) 
     }
 }
 
+std::size_t mark_image_source_dirty(Node& document, const std::string& source) {
+    if (source.empty()) {
+        return 0;
+    }
+    std::size_t marked = 0;
+    std::vector<Node*> pending;
+    pending.push_back(&document);
+    while (!pending.empty()) {
+        Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "img" &&
+            current->attribute("src") == source) {
+            mark_dirty(*current, DomDirtyPaint);
+            ++marked;
+        }
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
+    }
+    return marked;
+}
+
 void add_package_image_fixtures(const Node& document,
                                 jellyframe_example::PackageResourceContext& package_context,
                                 ImageDecodeMock& images,
@@ -3229,12 +3251,19 @@ private:
         host_service_counters_.released_stale_handles += result.released_stale_handles;
         host_service_counters_.released_stale_handles += debug_location_.collect_released_snapshots(app_runtime_);
         std::size_t image_handled = 0;
+        std::size_t image_dirty_nodes = 0;
+        bool image_dirty_fallback_needed = false;
         for (const HostServiceCompletion& completion : app_frame_scratch_.accepted_completions) {
             count_host_completion_kind(host_service_counters_, completion.kind);
             const std::string image_src = image_cache_.url_for_job(completion.job_id);
             report_image_completion_failure(&diagnostics_, completion, image_src);
             if (image_cache_.handle_completion(completion)) {
                 ++image_handled;
+                if (document_ != nullptr) {
+                    const std::size_t marked = mark_image_source_dirty(*document_, image_src);
+                    image_dirty_nodes += marked;
+                    image_dirty_fallback_needed = image_dirty_fallback_needed || marked == 0;
+                }
                 if (completion.kind == HostServiceJobKind::ImageDecode &&
                     completion.status != HostServiceStatus::Completed) {
                     report_image_cache_state(&diagnostics_, image_cache_, image_src);
@@ -3243,7 +3272,7 @@ private:
                 debug_images_.release_surface(app_runtime_, completion.handle);
             }
         }
-        if (image_handled != 0 && document_ != nullptr) {
+        if (image_handled != 0 && image_dirty_fallback_needed && document_ != nullptr) {
             mark_dirty(*document_, DomDirtyPaint);
         }
         host_service_counters_.image_handled += image_handled;
@@ -3264,6 +3293,7 @@ private:
                   << " stale=" << result.stale
                   << " released_stale_handles=" << result.released_stale_handles
                   << " image_handled=" << image_handled
+                  << " image_dirty_nodes=" << image_dirty_nodes
                   << " script_handled=" << script_handled << '\n';
         return script_handled != 0 || image_handled != 0;
     }

@@ -23,6 +23,8 @@
 2. 从宿主队列取有限个输入事件。
 3. 通过 `InputController` 派发 pointer/wheel/key/text/focus 操作。
 4. 从宿主异步队列取有限个 completion events，例如资源、图片 decode、音频状态、网络响应或安装结果。
+   completion 应尽量标记最小受影响 DOM owner，例如图片 decode 完成时标记使用该资源的
+   `<img>` 节点；只有无法定位 owner 时才使用根节点 paint dirty 兜底。
 5. 如果启用 JerryScript，泵动有限个 timer callback。
 6. 如果有活动动画，泵动有限个 animation frame callback。
 7. 读取根节点 `subtree_dirty_flags(document)`。
