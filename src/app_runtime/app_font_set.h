@@ -6,6 +6,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace jellyframe {
@@ -33,9 +35,17 @@ public:
     AppFontLoadResult load_jffont(std::uint32_t app_instance_id,
                                   const std::uint8_t* data,
                                   std::size_t size);
+    AppFontLoadResult load_jffont(std::uint32_t app_instance_id,
+                                  const std::uint8_t* data,
+                                  std::size_t size,
+                                  std::string_view family);
     AppFontLoadResult attach_jffont_view(std::uint32_t app_instance_id,
                                          const std::uint8_t* data,
                                          std::size_t size);
+    AppFontLoadResult attach_jffont_view(std::uint32_t app_instance_id,
+                                         const std::uint8_t* data,
+                                         std::size_t size,
+                                         std::string_view family);
     std::size_t clear_app_instance(std::uint32_t app_instance_id);
     void clear();
 
@@ -60,9 +70,24 @@ public:
     const BitmapFont* primary_font() const;
     TextMeasureProvider measure_provider();
     TextPainter painter();
+    bool has_family(std::uint32_t font_family_hash) const;
+    TextMetrics measure_text(const std::string& text,
+                             int font_size,
+                             int font_weight,
+                             std::uint32_t font_family_hash);
+    bool paint_text(FrameBuffer& target,
+                    Rect rect,
+                    Color color,
+                    const std::string& text,
+                    int font_size,
+                    int font_weight,
+                    std::uint32_t font_family_hash,
+                    TextCommandAlign align,
+                    bool single_line);
 
 private:
     struct LoadedFont {
+        std::uint32_t family_hash = 0;
         std::vector<std::uint8_t> bytes;
         BitmapFontResource resource;
     };
@@ -70,8 +95,10 @@ private:
     AppFontLoadResult add_jffont(std::uint32_t app_instance_id,
                                  const std::uint8_t* data,
                                  std::size_t size,
-                                 bool copy_bytes);
+                                 bool copy_bytes,
+                                 std::string_view family);
     void refresh_context();
+    const BitmapFontFallbackContext* context_for_family(std::uint32_t font_family_hash);
 
     std::size_t capacity_ = 1;
     std::uint32_t app_instance_id_ = 0;
@@ -80,6 +107,8 @@ private:
     BitmapFontContext primary_context_{};
     std::vector<const BitmapFont*> fallback_fonts_;
     BitmapFontFallbackContext fallback_context_{};
+    std::vector<const BitmapFont*> family_fonts_;
+    BitmapFontFallbackContext family_context_{};
 };
 
 } // namespace jellyframe

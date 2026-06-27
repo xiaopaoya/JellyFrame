@@ -540,12 +540,26 @@ void draw_text(FrameBuffer& target,
                const std::string& text,
                int font_size,
                int font_weight,
+               std::uint32_t font_family_hash,
                TextCommandAlign align,
                bool single_line,
                TextPainter text_painter,
                DiagnosticSink* diagnostics) {
     (void)single_line;
     if (color.a == 0 || empty_rect(rect)) {
+        return;
+    }
+    if (font_family_hash != 0 && text_painter.paint_family != nullptr &&
+        text_painter.paint_family(target,
+                                  rect,
+                                  color,
+                                  text,
+                                  font_size,
+                                  font_weight,
+                                  font_family_hash,
+                                  align,
+                                  single_line,
+                                  text_painter.context)) {
         return;
     }
     if (text_painter.paint != nullptr &&
@@ -996,6 +1010,7 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                       command.text,
                       command.font_size,
                       command.font_weight,
+                      command.font_family_hash,
                       command.text_align,
                       command.text_single_line,
                       text_painter_,
@@ -1009,6 +1024,7 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                   command.text,
                   command.font_size,
                   command.font_weight,
+                  command.font_family_hash,
                   command.text_align,
                   command.text_single_line,
                   text_painter_,

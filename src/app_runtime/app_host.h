@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace jellyframe {
@@ -78,7 +79,9 @@ public:
                                           std::uint32_t bytes = 0,
                                           void* payload = nullptr);
     AppFontLoadResult load_current_jffont(const std::uint8_t* data, std::size_t size);
+    AppFontLoadResult load_current_jffont(const std::uint8_t* data, std::size_t size, std::string_view family);
     AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size);
+    AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size, std::string_view family);
     std::size_t clear_current_fonts();
 
     bool push_completion(const HostServiceCompletion& completion);

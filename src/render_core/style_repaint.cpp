@@ -43,6 +43,8 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.font_size_specified == right.font_size_specified &&
         left.font_weight == right.font_weight &&
         left.font_weight_specified == right.font_weight_specified &&
+        left.font_family_hash == right.font_family_hash &&
+        left.font_family_specified == right.font_family_specified &&
         left.line_height == right.line_height &&
         left.line_height_specified == right.line_height_specified &&
         left.text_indent == right.text_indent &&

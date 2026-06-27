@@ -1,6 +1,7 @@
 ﻿#include "render_core/style.h"
 
 #include "render_core/form_control.h"
+#include "render_core/text_backend.h"
 
 #include <algorithm>
 #include <array>
@@ -647,6 +648,27 @@ std::vector<std::string> split_comma_components(std::string_view value) {
     }
     components.push_back(trim(value.substr(begin)));
     return components;
+}
+
+bool parse_font_family_hash(const std::string& raw_value, std::uint32_t& output) {
+    const std::vector<std::string> components = split_comma_components(raw_value);
+    for (const std::string& component : components) {
+        const std::string family = trim(component);
+        if (family.empty()) {
+            continue;
+        }
+        const std::string lowered = lowercase(family);
+        if (lowered == "initial" || lowered == "revert" || lowered == "unset") {
+            output = 0;
+            return true;
+        }
+        if (lowered == "inherit") {
+            return false;
+        }
+        output = normalized_font_family_hash(family);
+        return true;
+    }
+    return false;
 }
 
 void set_style_transitions(Style& style, const std::vector<StyleTransition>& transitions) {
@@ -2112,6 +2134,7 @@ enum class CascadeProperty : std::size_t {
     AspectRatio,
     FontSize,
     FontWeight,
+    FontFamily,
     LineHeight,
     TextIndent,
     TextDecoration,
@@ -2280,6 +2303,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "font-weight") {
         return &cascade_slot(slots, CascadeProperty::FontWeight);
+    }
+    if (property == "font-family") {
+        return &cascade_slot(slots, CascadeProperty::FontFamily);
     }
     if (property == "line-height") {
         return &cascade_slot(slots, CascadeProperty::LineHeight);
@@ -2781,6 +2807,14 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.font_weight = weight;
         style.font_weight_specified = true;
+        return true;
+    } else if (property == "font-family") {
+        std::uint32_t hash = 0;
+        if (!parse_font_family_hash(value, hash)) {
+            return false;
+        }
+        style.font_family_hash = hash;
+        style.font_family_specified = true;
         return true;
     } else if (property == "line-height") {
         float multiplier = 0.0F;

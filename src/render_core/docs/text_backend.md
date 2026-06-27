@@ -17,7 +17,9 @@ is meant for bring-up and diagnostics, not production CJK typography.
 
 - `TextMetrics { width, line_height }`
 - `TextMeasureCallback`
+- `TextMeasureFamilyCallback` for optional manifest-family-aware backends
 - `TextMeasureProvider`
+- `normalized_font_family_hash(...)`
 - `measure_text(...)`
 - `fallback_text_metrics(...)`
 
@@ -27,19 +29,25 @@ is meant for bring-up and diagnostics, not production CJK typography.
 LayoutEngine layout_engine(style_resolver, TextMeasureProvider{measure, context});
 ```
 
-The callback receives the UTF-8 text, CSS font size and CSS font weight. It
-returns an unwrapped run width and a single-line height. The layout engine uses
-that width to estimate wrapping within the available content width.
+The classic callback receives the UTF-8 text, CSS font size and CSS font weight.
+It returns an unwrapped run width and a single-line height. The layout engine
+uses that width to estimate wrapping within the available content width. A
+provider may also expose `measure_family`; when the computed CSS `font-family`
+matches a manifest-declared app font, layout passes a normalized 32-bit family
+hash so the backend can select that face without carrying family strings through
+the display list.
 
 `src/render_core/software_renderer.h` still owns the paint-side callback:
 
 - `TextPainter`
 - `TextPaintCallback`
+- `TextPaintFamilyCallback` for optional family-aware paint
 
 Text display commands now carry minimal paint semantics:
 
 - horizontal alignment: start, center or end;
 - single-line versus wrapped text.
+- optional normalized font-family hash.
 
 Hosts that care about visual correctness should provide both measurement and
 painting from the same font engine. If they disagree, text can be clipped or
@@ -57,6 +65,12 @@ SoftwareCompositor compositor(text_painter_from_adapter(adapter));
 
 This helper exists to keep board ports consistent. It does not add font
 discovery, shaping or caching to the core.
+
+`AppFontSet` in `jellyframe_app_runtime` uses the optional family-aware
+callbacks. Generic/no-family text keeps the compact system-first fallback chain;
+CSS `font-family` can select a manifest `.jffont` family before falling back to
+system/default fonts. Hosts that do not need app-provided fonts can ignore the
+family-aware callbacks.
 
 ## Fallback Behavior
 
@@ -185,7 +199,9 @@ The intended production path is:
 
 - Text layout is still simplified block/inline wrapping, not a full browser
   inline formatting context.
-- No core font loading or font-family cascade is implemented.
+- No CSS `@font-face` loading or full browser font-family cascade is
+  implemented. The runtime supports only the manifest `.jffont` family selection
+  subset described in the app packaging docs.
 - No HarfBuzz-style shaping, bidi, ligatures, kerning or hyphenation.
 - The callback reports whole-run metrics; per-word and per-grapheme wrapping is
   still future work.

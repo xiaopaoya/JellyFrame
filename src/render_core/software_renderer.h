@@ -37,9 +37,21 @@ using TextPaintCallback = bool (*)(FrameBuffer& target,
                                    bool single_line,
                                    void* context);
 
+using TextPaintFamilyCallback = bool (*)(FrameBuffer& target,
+                                         Rect rect,
+                                         Color color,
+                                         const std::string& text,
+                                         int font_size,
+                                         int font_weight,
+                                         std::uint32_t font_family_hash,
+                                         TextCommandAlign align,
+                                         bool single_line,
+                                         void* context);
+
 struct TextPainter {
     TextPaintCallback paint = nullptr;
     void* context = nullptr;
+    TextPaintFamilyCallback paint_family = nullptr;
 };
 
 using ImagePaintCallback = bool (*)(FrameBuffer& target,

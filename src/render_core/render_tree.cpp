@@ -18,6 +18,9 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     if (!style.font_weight_specified) {
         style.font_weight = parent_style.font_weight;
     }
+    if (!style.font_family_specified) {
+        style.font_family_hash = parent_style.font_family_hash;
+    }
     if (!style.text_align_specified) {
         style.text_align = parent_style.text_align;
     }

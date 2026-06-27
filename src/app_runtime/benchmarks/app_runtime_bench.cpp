@@ -569,6 +569,21 @@ void bench_font_fallback_measure(std::size_t capacity) {
     }
 }
 
+void bench_font_family_measure(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 128, 1});
+    host.launch("org.example.font-family", AppRole::App);
+    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
+    host.load_current_jffont(bytes.data(), bytes.size(), "Jelly Tiny");
+    TextMeasureProvider provider = host.fonts().measure_provider();
+    const std::uint32_t family = normalized_font_family_hash("Jelly Tiny");
+    for (std::size_t i = 0; i < capacity; ++i) {
+        const TextMetrics metrics = measure_text(provider, "A\xe4\xb8\xad", 8, 400, family);
+        if (metrics.width <= 0) {
+            std::abort();
+        }
+    }
+}
+
 void bench_load_telemetry(std::size_t capacity) {
     DirtyRegionResult region;
     region.mode = DirtyRegionMode::DirtyRects;
@@ -698,6 +713,9 @@ int main(int argc, char** argv) {
     }));
     print_result("app_runtime_font_fallback_measure", iterations, average_microseconds(iterations, [&] {
         bench_font_fallback_measure(capacity);
+    }));
+    print_result("app_runtime_font_family_measure", iterations, average_microseconds(iterations, [&] {
+        bench_font_family_measure(capacity);
     }));
     print_result("app_runtime_load_telemetry", iterations, average_microseconds(iterations, [&] {
         bench_load_telemetry(capacity);

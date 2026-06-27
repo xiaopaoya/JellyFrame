@@ -363,7 +363,8 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
         const std::string text = normalized_render_text(*box.node);
-        const TextMetrics metrics = measure_text(text_measure_, text, box.style.font_size, box.style.font_weight);
+        const TextMetrics metrics =
+            measure_text(text_measure_, text, box.style.font_size, box.style.font_weight, box.style.font_family_hash);
         const int raw_text_width = metrics.width;
         const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
         const int usable_text_width = std::max(0, content_width - text_indent);

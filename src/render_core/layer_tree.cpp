@@ -186,6 +186,7 @@ void push_text(DisplayList& display_list,
                const std::string& text,
                int font_size,
                int font_weight,
+               std::uint32_t font_family_hash,
                TextCommandAlign align,
                bool single_line) {
     if (rect.width <= 0 || rect.height <= 0 || text.empty() || color.a == 0) {
@@ -199,6 +200,7 @@ void push_text(DisplayList& display_list,
     command.text = text;
     command.font_size = font_size;
     command.font_weight = font_weight;
+    command.font_family_hash = font_family_hash;
     command.text_align = align;
     command.text_single_line = single_line;
     display_list.push_back(std::move(command));
@@ -398,6 +400,7 @@ void paint_list_marker(const LayoutBox& box, DisplayList& display_list) {
               marker,
               box.style.font_size,
               font_weight,
+              box.style.font_family_hash,
               TextCommandAlign::Start,
               true);
 }
@@ -435,6 +438,7 @@ void paint_generated_inline_content(const LayoutBox& box,
                   text,
                   box.style.font_size,
                   font_weight,
+                  box.style.font_family_hash,
                   align,
                   true);
     };
@@ -709,6 +713,7 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
                   text,
                   box.style.font_size,
                   box.style.font_weight,
+                  box.style.font_family_hash,
                   text_command_align(box.style.text_align),
                   true);
         if (state.kind == FormControlKind::Select) {
@@ -718,6 +723,7 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
                       "v",
                       box.style.font_size,
                       box.style.font_weight,
+                      box.style.font_family_hash,
                       TextCommandAlign::Center,
                       true);
         }
@@ -827,6 +833,7 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                           text,
                           box.style.font_size,
                           box.style.font_weight,
+                          box.style.font_family_hash,
                           text_command_align(box.style.text_align),
                           single_line);
             }
@@ -837,6 +844,7 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                   text,
                   box.style.font_size,
                   box.style.font_weight,
+                  box.style.font_family_hash,
                   text_command_align(box.style.text_align),
                   single_line);
         push_text_decorations(display_list, box, box.rect);

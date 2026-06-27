@@ -390,6 +390,11 @@ using TextMeasureCallback = bool (*)(const std::string& text,
                                      void* context);
 ```
 
+The optional app-font path may additionally provide `TextMeasureFamilyCallback`
+through `TextMeasureProvider::measure_family`. It receives the same inputs plus
+a normalized manifest `font-family` hash. Ports that use one fixed system font
+can leave it null.
+
 Painting:
 
 ```cpp
@@ -403,6 +408,10 @@ using TextPaintCallback = bool (*)(FrameBuffer& target,
                                    bool single_line,
                                    void* context);
 ```
+
+The optional companion `TextPaintFamilyCallback` mirrors this signature and adds
+the same normalized family hash. If it is absent, rendering falls back to the
+classic callback.
 
 ESP32-S3 mapping:
 

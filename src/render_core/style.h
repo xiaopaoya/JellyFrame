@@ -147,6 +147,8 @@ struct Style {
     bool font_size_specified = false;
     int font_weight = 400;
     bool font_weight_specified = false;
+    std::uint32_t font_family_hash = 0;
+    bool font_family_specified = false;
     int line_height = -1;
     bool line_height_specified = false;
     int text_indent = 0;

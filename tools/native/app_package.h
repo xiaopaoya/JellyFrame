@@ -50,6 +50,7 @@ struct AppPackageManifest {
     bool background_location_while_screen_off = false;
     bool background_location_in_low_power = false;
     std::vector<std::string> font_sources;
+    std::vector<std::string> font_families;
 };
 
 struct BundleResourceEntry {
@@ -819,6 +820,10 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
                           "inLowPower",
                           manifest.background_location_in_low_power);
     manifest.font_sources = json_collect_object_string_values(json, "fonts", "source");
+    manifest.font_families = json_collect_object_string_values(json, "fonts", "family");
+    if (manifest.font_families.size() != manifest.font_sources.size()) {
+        manifest.font_families.clear();
+    }
     for (std::string& source : manifest.font_sources) {
         std::string normalized;
         if (!normalize_app_path(source, normalized)) {

@@ -75,8 +75,20 @@ AppFontLoadResult AppRuntimeHost::load_current_jffont(const std::uint8_t* data, 
     return fonts_.load_jffont(lifecycle_.current_app_instance_id(), data, size);
 }
 
+AppFontLoadResult AppRuntimeHost::load_current_jffont(const std::uint8_t* data,
+                                                      std::size_t size,
+                                                      std::string_view family) {
+    return fonts_.load_jffont(lifecycle_.current_app_instance_id(), data, size, family);
+}
+
 AppFontLoadResult AppRuntimeHost::attach_current_jffont_view(const std::uint8_t* data, std::size_t size) {
     return fonts_.attach_jffont_view(lifecycle_.current_app_instance_id(), data, size);
+}
+
+AppFontLoadResult AppRuntimeHost::attach_current_jffont_view(const std::uint8_t* data,
+                                                            std::size_t size,
+                                                            std::string_view family) {
+    return fonts_.attach_jffont_view(lifecycle_.current_app_instance_id(), data, size, family);
 }
 
 std::size_t AppRuntimeHost::clear_current_fonts() {

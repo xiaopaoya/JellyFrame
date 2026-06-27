@@ -76,6 +76,7 @@ struct DisplayCommand {
     int stroke_width = 1;
     int font_size = 14;
     int font_weight = 400;
+    std::uint32_t font_family_hash = 0;
     TextCommandAlign text_align = TextCommandAlign::Start;
     bool text_single_line = true;
     GradientAxis gradient_axis = GradientAxis::Vertical;

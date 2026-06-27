@@ -16,7 +16,9 @@ JellyFrame 不把字体加载和平台文本 API 放进 `jellyframe_render_core`
 
 - `TextMetrics { width, line_height }`
 - `TextMeasureCallback`
+- 可选的 family-aware `TextMeasureFamilyCallback`
 - `TextMeasureProvider`
+- `normalized_font_family_hash(...)`
 - `measure_text(...)`
 - `fallback_text_metrics(...)`
 
@@ -26,18 +28,22 @@ JellyFrame 不把字体加载和平台文本 API 放进 `jellyframe_render_core`
 LayoutEngine layout_engine(style_resolver, TextMeasureProvider{measure, context});
 ```
 
-回调收到 UTF-8 文本、CSS font-size 和 CSS font-weight，返回未换行文本段的宽度和单行高度。
-layout engine 会用这个宽度在可用内容宽度内估算换行。
+经典回调收到 UTF-8 文本、CSS font-size 和 CSS font-weight，返回未换行文本段的宽度和单行高度。
+layout engine 会用这个宽度在可用内容宽度内估算换行。provider 也可以暴露 `measure_family`；
+当计算后的 CSS `font-family` 命中 manifest 声明的 app 字体时，layout 会传入规范化的 32-bit family
+hash，让后端选择对应字体，而不把 family 字符串带进 display list。
 
 `src/render_core/software_renderer.h` 仍然负责绘制侧回调：
 
 - `TextPainter`
 - `TextPaintCallback`
+- 可选的 family-aware `TextPaintFamilyCallback`
 
 文本 display command 现在带有最小绘制语义：
 
 - 水平对齐：start、center 或 end；
 - 单行文本或可换行文本。
+- 可选的规范化 font-family hash。
 
 重视视觉正确性的宿主应让测量和绘制来自同一个字体引擎。二者不一致时，文本可能被裁切，或换行位置与实际绘制不一致。
 
@@ -51,6 +57,10 @@ SoftwareCompositor compositor(text_painter_from_adapter(adapter));
 ```
 
 这个 helper 只是为了让板级 port 的接入形态一致，不会把字体发现、shaping 或 cache 放进核心。
+
+`jellyframe_app_runtime` 中的 `AppFontSet` 使用可选 family-aware callback。generic/未指定 family
+的文本保留紧凑的系统优先 fallback 链；CSS `font-family` 可以先选择 manifest `.jffont` family，
+再回落到系统/default 字体。不需要 app 自带字体的宿主可以忽略 family-aware callback。
 
 ## Fallback 行为
 
@@ -164,7 +174,8 @@ app-specific subset；全球化产品应按销售区域提供字体包。
 ## 当前限制
 
 - 文本 layout 仍是简化的 block/inline wrapping，不是完整浏览器 inline formatting context。
-- core 不加载字体，也不实现 font-family cascade。
+- core 不实现 CSS `@font-face` 加载或完整浏览器 font-family cascade。runtime 只支持 app packaging
+  文档中描述的 manifest `.jffont` family 选择子集。
 - 不支持 HarfBuzz 级 shaping、双向文本、连字、kerning 或 hyphenation。
 - 当前回调返回整段文本 metrics；按单词、grapheme 的精细换行仍是后续工作。
 

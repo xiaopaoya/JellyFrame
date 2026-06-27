@@ -337,6 +337,10 @@ using TextMeasureCallback = bool (*)(const std::string& text,
                                      void* context);
 ```
 
+可选 app-font 路径还可以通过 `TextMeasureProvider::measure_family` 提供
+`TextMeasureFamilyCallback`。它在同样参数之外接收规范化的 manifest `font-family` hash。
+只使用固定系统字体的 port 可以保持为空。
+
 绘制：
 
 ```cpp
@@ -350,6 +354,9 @@ using TextPaintCallback = bool (*)(FrameBuffer& target,
                                    bool single_line,
                                    void* context);
 ```
+
+可选的 `TextPaintFamilyCallback` 与该签名对应，并额外接收同一个规范化 family hash。
+如果未提供，渲染会回落到经典绘制 callback。
 
 ESP32-S3 映射：
 

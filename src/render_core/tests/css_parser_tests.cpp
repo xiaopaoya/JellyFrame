@@ -3,7 +3,9 @@
 #include "render_core/dom.h"
 #include "render_core/form_control.h"
 #include "render_core/html_parser.h"
+#include "render_core/render_tree.h"
 #include "render_core/style.h"
+#include "render_core/text_backend.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -683,6 +685,32 @@ void font_weight_list_style_and_generated_counter_apply() {
     check(item_style.before_font_weight == 600, "before font-weight parsed");
 }
 
+void font_family_declares_runtime_family_hash_and_inherits() {
+    auto root = make_element("section");
+    root->attributes["class"] = "screen";
+    auto label = make_element("span");
+    Node& label_node = root->append_child(std::move(label));
+
+    StyleResolver resolver(parse(
+        ".screen { font-family: \"Jelly Tiny\", system-ui, sans-serif; }"
+        ".screen .generic { font-family: system-ui; }"));
+
+    const Style root_style = resolver.resolve(*root);
+    check(root_style.font_family_hash == normalized_font_family_hash("Jelly Tiny"),
+          "custom font-family hashes to runtime family");
+    check(root_style.font_family_specified, "font-family declaration marks style as specified");
+
+    RenderTreeBuilder builder(resolver);
+    auto tree = builder.build(*root);
+    check(!tree->children.empty(), "font-family inheritance fixture builds child render object");
+    check(tree->children.front()->style.font_family_hash == root_style.font_family_hash,
+          "font-family inherits through render tree");
+
+    label_node.attributes["class"] = "generic";
+    const Style generic_style = resolver.resolve(label_node);
+    check(generic_style.font_family_hash == 0, "generic font-family maps to host/system fallback");
+}
+
 void after_generated_content_and_text_overflow_apply() {
     auto badge = make_element("span");
     badge->attributes["class"] = "badge";
@@ -883,6 +911,7 @@ int main() {
         grid_and_aspect_ratio_properties_apply();
         physical_edge_longhands_apply_per_side();
         font_weight_list_style_and_generated_counter_apply();
+        font_family_declares_runtime_family_hash_and_inherits();
         after_generated_content_and_text_overflow_apply();
         fixed_two_column_grid_template_applies();
         repeated_fixed_grid_template_applies();

@@ -176,10 +176,12 @@ package，但如果所选产品 profile 没有通过 host policy 明确支持同
 `manifest-capability-unknown`。可移植 app 应优先使用标准名称；产品私有名称只应保留给无法用已文档化
 Web-near 子集描述的服务。
 
-`fonts` 当前是部署/工具声明，不是完整 CSS runtime font loading。打包器会把 `.jffont`、`.bdf`、
-`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font` 资源写入资源表或 `.jfapp`。其中 `.jffont`
-V0/V1 已可由 runtime 解析并随 app instance 持有；`AppFontSet` 提供 bitmap fallback chain：
-系统字体 profile 优先，app `.jffont` supplement 补缺字。Win32 壳可用 `--use-app-fonts`
+`fonts` 是 JellyFrame bitmap font 路径的部署/runtime 声明，不是完整 CSS `@font-face`
+实现。打包器会把 `.jffont`、`.bdf`、`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font`
+资源写入资源表或 `.jfapp`。其中 `.jffont` V0/V1 已可由 runtime 解析并随 app instance
+持有；`AppFontSet` 提供 bitmap fallback chain：generic/未指定 family 的文本先尝试系统字体
+profile，再用 app `.jffont` supplement 补缺字；CSS `font-family` 的首个自定义 family 若匹配
+manifest `fonts[].family`，则优先尝试对应 app 字体。Win32 壳可用 `--use-app-fonts`
 显式切到这条验收路径。
 
 manifest 中的每个 font 条目可以写：
@@ -200,11 +202,12 @@ manifest 中的每个 font 条目可以写：
 }
 ```
 
-`family` 会被 package diagnostics 用来把显式 CSS `font-family` declaration 与 manifest runtime
-font 匹配。`system-ui`、`sans-serif` 等 generic family 会报告为 generic fallback；未匹配的首选自定义
-family 会产生 `font-family-unmatched`。`sizes`、`weights` 目前仍是产品策略元数据；runtime 文本后端选择
-仍不实现完整浏览器 font-family cascade。工具仍会检查这些数组是否存在且合法，发布前可报告
-`font-axis-metadata-missing` 或 `font-axis-metadata-invalid`。`license.name` 和 `license.source`
+`family` 同时用于 package diagnostics 和 runtime app-font 选择。`system-ui`、`sans-serif`
+等 generic family 会报告为 generic fallback；未匹配的首选自定义 family 会产生
+`font-family-unmatched`。runtime 匹配刻意很小：只规范化 CSS family list 中首个自定义 family，
+并与 manifest `.jffont` family 匹配；不实现完整浏览器 cascade、`@font-face`、stretch/style/features
+和多字号选择。`sizes`、`weights` 目前仍是产品策略元数据。工具仍会检查这些数组是否存在且合法，
+发布前可报告 `font-axis-metadata-missing` 或 `font-axis-metadata-invalid`。`license.name` 和 `license.source`
 是推荐字段；缺失时 pack/check 会给出 `font-license-missing` 或 `font-license-incomplete`，
 便于发布前确认字体来源。
 `budgets.maxAppFonts`、`budgets.maxAppFontBytes`、`budgets.maxAppFontGlyphs` 会限制可用

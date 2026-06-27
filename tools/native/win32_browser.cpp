@@ -2206,11 +2206,14 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
         return;
     }
     app_runtime->clear_current_fonts();
-    for (const std::string& source : manifest.font_sources) {
+    for (std::size_t index = 0; index < manifest.font_sources.size(); ++index) {
+        const std::string& source = manifest.font_sources[index];
+        const std::string_view family =
+            index < manifest.font_families.size() ? std::string_view(manifest.font_families[index]) : std::string_view{};
         jellyframe_example::PackageResourceView view;
         if (jellyframe_example::load_package_resource_view(source, manifest.entry, view, &package_context) &&
             view.stable) {
-            const AppFontLoadResult result = app_runtime->attach_current_jffont_view(view.data, view.size);
+            const AppFontLoadResult result = app_runtime->attach_current_jffont_view(view.data, view.size, family);
             if (result.loaded()) {
                 continue;
             }
@@ -2234,7 +2237,7 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
             continue;
         }
         const AppFontLoadResult result = app_runtime->load_current_jffont(
-            reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size());
+            reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size(), family);
         if (!result.loaded()) {
             report_diagnostic(diagnostics,
                               DiagnosticStage::Package,

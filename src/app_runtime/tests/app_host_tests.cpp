@@ -161,6 +161,36 @@ void app_font_set_uses_system_font_before_app_supplement() {
     assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
 }
 
+void app_font_set_selects_named_app_family_before_system_font() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.named-fonts", AppRole::App);
+    host.fonts().set_system_font(&tiny_system_font());
+    assert(host.load_current_jffont(tiny_jffont_bytes().data(),
+                                    tiny_jffont_bytes().size(),
+                                    "Jelly Tiny").loaded());
+
+    const std::uint32_t jelly_tiny = normalized_font_family_hash("jelly tiny");
+    TextMeasureProvider provider = host.fonts().measure_provider();
+    TextMetrics metrics = measure_text(provider, "A", 8, 400, jelly_tiny);
+    assert(metrics.width == 6);
+    metrics = measure_text(provider, "A", 8, 400);
+    assert(metrics.width == 4);
+
+    FrameBuffer frame(16, 12, Color{255, 255, 255, 255});
+    TextPainter painter = host.fonts().painter();
+    assert(painter.paint_family(frame,
+                                Rect{0, 0, 16, 12},
+                                Color{0, 0, 0, 255},
+                                "A",
+                                8,
+                                400,
+                                jelly_tiny,
+                                TextCommandAlign::Start,
+                                true,
+                                painter.context));
+    assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
+}
+
 void app_font_set_can_attach_borrowed_jffont_view() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.borrowed-fonts", AppRole::App);
@@ -507,6 +537,7 @@ int main() {
     launch_cleans_previous_instance_state();
     app_fonts_follow_active_instance_lifecycle();
     app_font_set_uses_system_font_before_app_supplement();
+    app_font_set_selects_named_app_family_before_system_font();
     app_font_set_can_attach_borrowed_jffont_view();
     crash_current_tears_down_active_instance_state();
     terminate_current_supports_watchdog_and_user_kill_reasons();

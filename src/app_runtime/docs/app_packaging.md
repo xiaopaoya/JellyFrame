@@ -226,14 +226,15 @@ should be preferred for portable apps; product-specific names should be
 reserved for services that cannot be described by the documented Web-near
 subset.
 
-`fonts` is currently a deployment/tooling declaration, not a full runtime CSS
-font-loading system. The packer records `.jffont`, `.bdf`, `.ttf`, `.otf`,
-`.woff` and related files as ordinary `Font` resources in resource tables or
-`.jfapp` bundles. `.jffont` V0/V1 can be parsed by runtime code and held per app
-instance. `AppFontSet` provides a bitmap fallback chain where the system font
-profile is tried first and app `.jffont` supplements fill missing glyphs; the
-Win32 shell can explicitly switch to this validation path with
-`--use-app-fonts`.
+`fonts` is a deployment/runtime declaration for the JellyFrame bitmap font
+path, not a full CSS `@font-face` implementation. The packer records `.jffont`,
+`.bdf`, `.ttf`, `.otf`, `.woff` and related files as ordinary `Font` resources
+in resource tables or `.jfapp` bundles. `.jffont` V0/V1 can be parsed by
+runtime code and held per app instance. `AppFontSet` provides a bitmap fallback
+chain: generic/no-family text tries the system font profile first and app
+`.jffont` supplements fill missing glyphs; a CSS `font-family` whose first
+custom family matches manifest `fonts[].family` tries that app font first. The
+Win32 shell can explicitly switch to this validation path with `--use-app-fonts`.
 
 Each manifest font entry may declare:
 
@@ -253,14 +254,16 @@ Each manifest font entry may declare:
 }
 ```
 
-`family` is used by package diagnostics to match explicit CSS `font-family`
-declarations against manifest runtime fonts. Generic families such as
-`system-ui` and `sans-serif` are reported as generic fallback, while an
-unmatched primary custom family produces `font-family-unmatched`. `sizes` and
-`weights` remain product-policy metadata for now; runtime text backend selection
-still does not implement full browser font-family cascade. Tooling still checks
-that these arrays are present and valid, reporting `font-axis-metadata-missing`
-or `font-axis-metadata-invalid` before release. `license.name` and
+`family` is used by package diagnostics and by runtime app-font selection.
+Generic families such as `system-ui` and `sans-serif` are reported as generic
+fallback, while an unmatched primary custom family produces
+`font-family-unmatched`. Runtime matching is intentionally small: only the first
+custom family in the CSS list is normalized and matched against manifest
+`.jffont` families; full browser cascade, `@font-face`, stretch/style/features
+and multi-size selection are not implemented. `sizes` and `weights` remain
+product-policy metadata for now. Tooling still checks that these arrays are
+present and valid, reporting `font-axis-metadata-missing` or
+`font-axis-metadata-invalid` before release. `license.name` and
 `license.source` are recommended for redistributed font supplements. Missing
 metadata produces `font-license-missing` or `font-license-incomplete`
 diagnostics. `budgets.maxAppFonts`,

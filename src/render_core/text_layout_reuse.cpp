@@ -81,7 +81,8 @@ bool text_box_can_reuse_layout(const LayoutBox& box, const TextMeasureProvider& 
     if (text.empty() || has_text_wrap_opportunity(text)) {
         return false;
     }
-    const TextMetrics metrics = measure_text(text_measure, text, box.style.font_size, box.style.font_weight);
+    const TextMetrics metrics =
+        measure_text(text_measure, text, box.style.font_size, box.style.font_weight, box.style.font_family_hash);
     const int measured_width = metrics.width + 1;
     const bool same_intrinsic_width = measured_width == box.rect.width;
     const bool fixed_min_width_still_contains_text =
