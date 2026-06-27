@@ -534,6 +534,14 @@ V0 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。`.
 `.bdf` 等字体文件可以作为文档或未来工具资源被打包，但当前不是 runtime-loadable font
 supplement；如果写进 manifest `fonts`，会被报告为不支持的字体资源格式。
 
+Package report 还包含 `imageDiagnostics`。这是打包期 target profile 检查，不是核心内置图片
+解码器。它会按扩展名分类 package-local 图片资源（`bmp`、`png`、`jpeg`、`webp`、`gif`
+或 `unknown`），读取便宜的 BMP/PNG metadata，并记录所选 target preset 是否通过
+`hostServices.imageDecode` 和 `hostServices.imageCodecs` 声明支持。无压缩 24/32-bit BMP 是
+当前 Win32 debug shell 已验证的包内图片路径；PNG/JPEG/WebP 或厂商格式必须先由产品 host
+接入 codec adapter，preset 才应标为 supported。target 不支持的 codec 和非法 BMP header
+会在 install 或 preview 前以 package warning 报告。
+
 Windows 上做人类 app 开发时，应优先使用交互式 Win32 browser 壳：
 
 ```powershell
@@ -675,7 +683,8 @@ request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote
-reference 诊断、package-resource warnings 和 `pipelineDiagnostics`。`runtimeBudgetEstimate`
+reference 诊断、`imageDiagnostics`、`fontDiagnostics`、package-resource warnings 和
+`pipelineDiagnostics`。`runtimeBudgetEstimate`
 是 package-preflight 估算：它报告打包阶段已知的 resource/font 用量和 manifest/target budget
 上限；真实运行时的 queue/handle/timer/listener 计数来自 host/runtime capture 路径中的
 `AppBudgetSnapshot`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、面向内存的管线统计、

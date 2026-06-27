@@ -37,6 +37,8 @@ Optional host services may be described with `hostServices`:
     "networkFetch": true,
     "storageKv": true,
     "audioPlayback": false,
+    "imageDecode": true,
+    "imageCodecs": ["bmp"],
     "sensorAccelerometer": false,
     "sensorGyroscope": false,
     "sensorHeartRate": false,
@@ -54,12 +56,16 @@ warning. Missing keys stay `unknown` rather than failing, because product ports
 may define optional services outside the generic preset.
 
 The built-in wearable presets currently mark bounded runtime network fetch and
-app-private KV storage as supported, and audio playback as unsupported. Sensor
-and location capabilities may remain `unknown` by default unless a product
-preset can guarantee the semantic data service. Product ports with a real
-codec/speaker path or sensor/location service should override the matching
-fields in their own preset rather than relying on the generic display-shape
-preset.
+app-private KV storage as supported, audio playback as unsupported, and package
+BMP images as the currently validated image path. `imageCodecs` is a target
+diagnostic list for package-local image resources and is reported through
+package-report `imageDiagnostics`; real PNG/JPEG/WebP/vendor decoders can be
+enabled by product presets once the host provides a bounded codec adapter.
+Sensor and location capabilities may remain `unknown` by default unless a
+product preset can guarantee the semantic data service. Product ports with a
+real codec/speaker path, image decoder or sensor/location service should
+override the matching fields in their own preset rather than relying on the
+generic display-shape preset.
 
 Current generic display shapes include `round-300`, `rect-320x240` and
 `rect-172x320`; `esp32s3-round-300` adds an ESP32-S3-oriented RGB565 profile.

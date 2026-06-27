@@ -31,6 +31,10 @@ JellyFrame Engine 的重要变更记录在这里。
   `AppImageCodecRequest` / `AppImageCodecResult` 允许产品 host 在现有 image
   request/completion/handle 路径后接入 PNG、JPEG、WebP 或厂商 decoder；
   `app_image_codec_result_within_policy` 会按 app 图片预算校验 decoded surface。
+- Package report 新增 `imageDiagnostics`，作为打包期的图片 codec 与 target profile
+  摘要。工具会分类包内 BMP、PNG、JPEG、WebP、GIF 和未知图片资源，读取轻量 BMP/PNG
+  metadata，报告所选 target 的 `hostServices.imageDecode` / `imageCodecs` 支持状态，
+  并在 package 使用 unsupported 或尚未验证的 codec 时输出 warning。
 
 ### 变更
 

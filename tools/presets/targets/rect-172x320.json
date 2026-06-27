@@ -19,7 +19,9 @@
   "hostServices": {
     "networkFetch": true,
     "storageKv": true,
-    "audioPlayback": false
+    "audioPlayback": false,
+    "imageDecode": true,
+    "imageCodecs": ["bmp"]
   },
   "output": "cpp",
   "framebuffer": {

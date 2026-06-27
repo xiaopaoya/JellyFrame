@@ -40,6 +40,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   PNG, JPEG, WebP or vendor decoders behind the existing image
   request/completion/handle path, while `app_image_codec_result_within_policy`
   validates decoded surfaces against app image budgets.
+- Package reports now include `imageDiagnostics`, a packaging-time image codec
+  and target-profile summary. The tool classifies package-local BMP, PNG, JPEG,
+  WebP, GIF and unknown image resources, reads lightweight BMP/PNG metadata,
+  reports the selected target's `hostServices.imageDecode` / `imageCodecs`
+  support and warns when a package uses an unsupported or unvalidated codec.
 
 ### Changed
 

@@ -45,6 +45,17 @@ BUNDLE_KIND_BY_RESOURCE_KIND = {
     "jellyframe::HostResourceKind::Font": 4,
 }
 
+IMAGE_CODEC_BY_SUFFIX = {
+    ".bmp": "bmp",
+    ".png": "png",
+    ".jpg": "jpeg",
+    ".jpeg": "jpeg",
+    ".webp": "webp",
+    ".gif": "gif",
+}
+
+STANDARD_IMAGE_CODECS = {"bmp", "png", "jpeg", "webp"}
+
 
 def fail(message: str) -> None:
     raise SystemExit(f"jellyframe_package_app: {message}")
@@ -702,6 +713,138 @@ def collect_audio_resource_warnings(manifest: dict, resources: list[dict]) -> li
                    f"{sources}. A real MCU host MP3 pipeline will not play these resources.",
         "source": "jellyframe.app.json",
     }]
+
+
+def parse_bmp_metadata(data: bytes) -> dict:
+    if len(data) < 54 or data[:2] != b"BM":
+        return {"ok": False, "reason": "invalid-signature"}
+    pixel_offset = struct.unpack_from("<I", data, 10)[0]
+    dib_size = struct.unpack_from("<I", data, 14)[0]
+    if dib_size < 40 or len(data) < 14 + dib_size or pixel_offset >= len(data):
+        return {"ok": False, "reason": "invalid-header"}
+    width = struct.unpack_from("<i", data, 18)[0]
+    signed_height = struct.unpack_from("<i", data, 22)[0]
+    planes = struct.unpack_from("<H", data, 26)[0]
+    bits_per_pixel = struct.unpack_from("<H", data, 28)[0]
+    compression = struct.unpack_from("<I", data, 30)[0]
+    if width <= 0 or signed_height == 0 or planes != 1:
+        return {"ok": False, "reason": "invalid-dimensions"}
+    height = abs(signed_height)
+    supported = compression == 0 and bits_per_pixel in {24, 32}
+    row_stride = ((width * bits_per_pixel + 31) // 32) * 4
+    required_end = pixel_offset + row_stride * height
+    if required_end > len(data):
+        return {"ok": False, "reason": "truncated-pixels", "width": width, "height": height}
+    return {
+        "ok": True,
+        "codec": "bmp",
+        "width": width,
+        "height": height,
+        "bitsPerPixel": bits_per_pixel,
+        "compression": compression,
+        "topDown": signed_height < 0,
+        "supportedByWin32DebugShell": supported,
+    }
+
+
+def parse_png_metadata(data: bytes) -> dict:
+    if len(data) < 33 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        return {"ok": False, "reason": "invalid-signature"}
+    width = struct.unpack_from(">I", data, 16)[0]
+    height = struct.unpack_from(">I", data, 20)[0]
+    bit_depth = data[24]
+    color_type = data[25]
+    return {
+        "ok": width > 0 and height > 0,
+        "codec": "png",
+        "width": width,
+        "height": height,
+        "bitDepth": bit_depth,
+        "colorType": color_type,
+    }
+
+
+def image_codec_for_resource(resource: dict) -> str:
+    return IMAGE_CODEC_BY_SUFFIX.get(Path(resource.get("path", "")).suffix.lower(), "unknown")
+
+
+def image_target_support(codec: str, target_config: dict) -> str:
+    host_services = target_config.get("hostServices", {})
+    if not isinstance(host_services, dict):
+        return "unknown"
+    image_decode = host_services.get("imageDecode")
+    if image_decode is False:
+        return "unsupported"
+    codecs = host_services.get("imageCodecs")
+    if isinstance(codecs, list):
+        normalized = {str(item).lower() for item in codecs if isinstance(item, str)}
+        return "supported" if codec in normalized else "unsupported"
+    if image_decode is True:
+        return "supported" if codec in STANDARD_IMAGE_CODECS else "unsupported"
+    return "unknown"
+
+
+def collect_image_diagnostics(resources: list[dict], target_config: dict) -> tuple[dict, list[dict]]:
+    entries = []
+    warnings = []
+    codec_counts = {}
+    target_id = target_config.get("id", "")
+    for resource in resources:
+        if resource_kind_name(resource["kind"]) != "Image":
+            continue
+        codec = image_codec_for_resource(resource)
+        codec_counts[codec] = codec_counts.get(codec, 0) + 1
+        support = image_target_support(codec, target_config)
+        entry = {
+            "path": resource["path"],
+            "codec": codec,
+            "size": resource["size"],
+            "targetSupport": support,
+        }
+        data = resource["file"].read_bytes()
+        if codec == "bmp":
+            metadata = parse_bmp_metadata(data)
+            entry["metadata"] = metadata
+            if not metadata.get("ok"):
+                warnings.append({
+                    "level": "warning",
+                    "code": "image-bmp-invalid",
+                    "message": f"BMP image metadata is invalid: {resource['path']} ({metadata.get('reason', 'invalid')})",
+                    "source": resource["path"],
+                })
+            elif not metadata.get("supportedByWin32DebugShell", False):
+                warnings.append({
+                    "level": "warning",
+                    "code": "image-bmp-unsupported-debug-format",
+                    "message": f"BMP image is packaged but not supported by the Win32 debug shell decoder: {resource['path']}",
+                    "source": resource["path"],
+                })
+        elif codec == "png":
+            entry["metadata"] = parse_png_metadata(data)
+        if codec not in STANDARD_IMAGE_CODECS:
+            warnings.append({
+                "level": "warning",
+                "code": "image-codec-unsupported",
+                "message": f"image resource uses unsupported codec '{codec}': {resource['path']}",
+                "source": resource["path"],
+            })
+        if support == "unsupported":
+            warnings.append({
+                "level": "warning",
+                "code": "image-codec-target-unsupported",
+                "message": f"target {target_id or '<custom>'} does not declare support for image codec '{codec}': {resource['path']}",
+                "source": resource["path"],
+                "target": target_id if isinstance(target_id, str) else "",
+                "codec": codec,
+            })
+        entries.append(entry)
+    return {
+        "model": "package-image-codec-and-target-profile",
+        "target": target_id if isinstance(target_id, str) else "",
+        "imageCount": len(entries),
+        "entries": entries,
+        "codecCounts": {codec: codec_counts[codec] for codec in sorted(codec_counts)},
+    }, warnings
 
 
 def load_target_preset(target: str) -> dict:
@@ -1413,6 +1556,8 @@ def main() -> int:
     resources = discover_resources(root, max_resource_bytes)
     warnings.extend(collect_audio_resource_warnings(manifest, resources))
     warnings.extend(collect_service_target_warnings(manifest, target_config))
+    image_diagnostics, image_warnings = collect_image_diagnostics(resources, target_config)
+    warnings.extend(image_warnings)
     reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
     warnings.extend(reference_warnings)
     font_diagnostics, font_warnings = collect_font_diagnostics(manifest, resources, target_config, budgets)
@@ -1446,6 +1591,7 @@ def main() -> int:
         ],
         "references": references,
         "serviceIntent": service_intent_report(manifest, target_config),
+        "imageDiagnostics": image_diagnostics,
         "fontDiagnostics": font_diagnostics,
         "runtimeBudgetEstimate": collect_runtime_budget_estimate(resources, budgets, font_diagnostics),
         "warnings": warnings,

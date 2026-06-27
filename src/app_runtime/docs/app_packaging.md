@@ -637,6 +637,16 @@ tables and reports remaining missing non-ASCII glyphs as warnings. `.ttf`,
 or future tooling, but they are not runtime-loadable font supplements yet and
 will be reported as unsupported manifest font formats.
 
+Package reports also include `imageDiagnostics`. This is a packaging-time target
+profile check, not an in-core image decoder. It classifies package-local image
+resources by extension (`bmp`, `png`, `jpeg`, `webp`, `gif` or `unknown`), reads
+cheap BMP/PNG metadata and records whether the selected target preset declares
+support through `hostServices.imageDecode` and `hostServices.imageCodecs`.
+Uncompressed 24/32-bit BMP is the built-in Win32 debug-shell package image path;
+PNG/JPEG/WebP or vendor formats require a product host codec adapter before a
+preset should mark them supported. Unsupported target codecs and invalid BMP
+headers are reported as package warnings before install or preview.
+
 For human app authoring on Windows, prefer the interactive Win32 browser shell:
 
 ```powershell
@@ -795,7 +805,8 @@ core.
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
 CRC32/SHA-256 checksums, service intent, `runtimeBudgetEstimate`,
-local/remote reference diagnostics, package-resource warnings and
+`imageDiagnostics`, `fontDiagnostics`, local/remote reference diagnostics,
+package-resource warnings and
 `pipelineDiagnostics`. `runtimeBudgetEstimate` is a package-preflight estimate:
 it reports package-known resource/font usage and manifest/target budget limits,
 while live queue/handle/timer/listener counters come from `AppBudgetSnapshot`

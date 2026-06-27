@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import struct
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,46 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import jellyframe_cli  # noqa: E402
 import package_app  # noqa: E402
+
+
+def tiny_bmp(width: int = 2, height: int = 2, bits_per_pixel: int = 24) -> bytes:
+    bytes_per_pixel = bits_per_pixel // 8
+    row_stride = ((width * bits_per_pixel + 31) // 32) * 4
+    pixel_bytes = row_stride * height
+    file_size = 54 + pixel_bytes
+    header = bytearray()
+    header.extend(b"BM")
+    header.extend(struct.pack("<IHHI", file_size, 0, 0, 54))
+    header.extend(struct.pack("<IiiHHIIiiII",
+                              40,
+                              width,
+                              height,
+                              1,
+                              bits_per_pixel,
+                              0,
+                              pixel_bytes,
+                              2835,
+                              2835,
+                              0,
+                              0))
+    pixels = bytearray(pixel_bytes)
+    for y in range(height):
+        for x in range(width):
+            offset = y * row_stride + x * bytes_per_pixel
+            pixels[offset:offset + 3] = bytes([x * 80, y * 80, 180])
+            if bytes_per_pixel == 4:
+                pixels[offset + 3] = 255
+    return bytes(header + pixels)
+
+
+def tiny_png_header(width: int = 2, height: int = 2) -> bytes:
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + struct.pack(">I", 13)
+        + b"IHDR"
+        + struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+        + b"\0\0\0\0"
+    )
 
 
 class PackagePreflightTests(unittest.TestCase):
@@ -60,6 +101,56 @@ class PackagePreflightTests(unittest.TestCase):
             package_app.resource_kind(Path("audio/tone.wav")),
             "jellyframe::HostResourceKind::Other",
         )
+
+    def test_image_diagnostics_classify_codec_and_target_support(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-image-diagnostics-") as directory:
+            root = Path(directory)
+            bmp = root / "icon.bmp"
+            png = root / "photo.png"
+            gif = root / "anim.gif"
+            bmp.write_bytes(tiny_bmp())
+            png.write_bytes(tiny_png_header())
+            gif.write_bytes(b"GIF89a")
+            resources = [
+                package_app.build_resource_entry(root, bmp, "/icon.bmp", 0),
+                package_app.build_resource_entry(root, png, "/photo.png", 0),
+                package_app.build_resource_entry(root, gif, "/anim.gif", 0),
+            ]
+
+            diagnostics, warnings = package_app.collect_image_diagnostics(resources, {
+                "id": "bmp-only",
+                "hostServices": {
+                    "imageDecode": True,
+                    "imageCodecs": ["bmp"],
+                },
+            })
+
+        entries = {entry["path"]: entry for entry in diagnostics["entries"]}
+        self.assertEqual(diagnostics["codecCounts"], {"bmp": 1, "gif": 1, "png": 1})
+        self.assertEqual(entries["/icon.bmp"]["codec"], "bmp")
+        self.assertEqual(entries["/icon.bmp"]["targetSupport"], "supported")
+        self.assertEqual(entries["/icon.bmp"]["metadata"]["width"], 2)
+        self.assertEqual(entries["/photo.png"]["codec"], "png")
+        self.assertEqual(entries["/photo.png"]["targetSupport"], "unsupported")
+        self.assertEqual(entries["/photo.png"]["metadata"]["height"], 2)
+        codes = [warning["code"] for warning in warnings]
+        self.assertIn("image-codec-target-unsupported", codes)
+        self.assertIn("image-codec-unsupported", codes)
+
+    def test_invalid_bmp_reports_specific_warning(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-invalid-bmp-") as directory:
+            root = Path(directory)
+            bmp = root / "broken.bmp"
+            bmp.write_bytes(b"BM")
+            resources = [package_app.build_resource_entry(root, bmp, "/broken.bmp", 0)]
+
+            diagnostics, warnings = package_app.collect_image_diagnostics(resources, {
+                "id": "bmp-target",
+                "hostServices": {"imageDecode": True, "imageCodecs": ["bmp"]},
+            })
+
+        self.assertEqual(diagnostics["entries"][0]["metadata"]["reason"], "invalid-signature")
+        self.assertEqual(warnings[0]["code"], "image-bmp-invalid")
 
     def test_mp3_capability_warns_when_packaged_audio_is_not_mp3(self):
         manifest = {"capabilities": ["media.audio.mp3"]}
