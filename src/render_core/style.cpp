@@ -2001,6 +2001,7 @@ enum class CascadeProperty : std::size_t {
     MinWidth,
     MinHeight,
     MaxWidth,
+    MaxHeight,
     AspectRatio,
     FontSize,
     FontWeight,
@@ -2154,6 +2155,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "max-width") {
         return &cascade_slot(slots, CascadeProperty::MaxWidth);
+    }
+    if (property == "max-height") {
+        return &cascade_slot(slots, CascadeProperty::MaxHeight);
     }
     if (property == "aspect-ratio") {
         return &cascade_slot(slots, CascadeProperty::AspectRatio);
@@ -2606,6 +2610,20 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.max_width = px;
         style.max_width_percent = -1;
+        return true;
+    } else if (property == "max-height") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.max_height = -1;
+            style.max_height_percent = percent;
+            return true;
+        }
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return false;
+        }
+        style.max_height = px;
+        style.max_height_percent = -1;
         return true;
     } else if (property == "aspect-ratio") {
         int ratio_width = 0;

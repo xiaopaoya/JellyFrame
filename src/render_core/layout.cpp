@@ -84,6 +84,19 @@ int specified_content_min_height(const Style& style, int containing_height) {
         : min_height;
 }
 
+int resolved_max_content_height(const Style& style, int containing_height) {
+    int max_height = style.max_height;
+    if (style.max_height_percent >= 0) {
+        max_height = resolve_percent(containing_height, style.max_height_percent);
+    }
+    if (max_height < 0) {
+        return -1;
+    }
+    return style.box_sizing_border_box
+        ? std::max(0, max_height - vertical_edges(style.border_width) - vertical_edges(style.padding))
+        : max_height;
+}
+
 bool has_aspect_ratio(const Style& style) {
     return style.aspect_ratio_width > 0 && style.aspect_ratio_height > 0;
 }
@@ -361,8 +374,12 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
             ? std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width)
             : 1;
         const int fixed_text_height = specified_content_height(box.style, height);
-        const int text_height = std::max(specified_content_min_height(box.style, height),
+        int text_height = std::max(specified_content_min_height(box.style, height),
             fixed_text_height >= 0 ? fixed_text_height : line_height * line_count);
+        const int max_text_height = resolved_max_content_height(box.style, height);
+        if (max_text_height >= 0) {
+            text_height = std::min(text_height, max_text_height);
+        }
         int text_x = border_box_x + text_indent;
         if (box.style.text_align == TextAlign::Center) {
             text_x += std::max(0, (usable_text_width - text_width) / 2);
@@ -433,10 +450,14 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
                          box.style.aspect_ratio_width)
         : 0;
     const int fixed_content_height = specified_content_height(box.style, height);
-    const int content_height = std::max(specified_content_min_height(box.style, height),
+    int content_height = std::max(specified_content_min_height(box.style, height),
         fixed_content_height >= 0
             ? fixed_content_height
             : std::max({children_height, intrinsic_control_height, aspect_ratio_height}));
+    const int max_content_height = resolved_max_content_height(box.style, height);
+    if (max_content_height >= 0) {
+        content_height = std::min(content_height, max_content_height);
+    }
     const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
     const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};

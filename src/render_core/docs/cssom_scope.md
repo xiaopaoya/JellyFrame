@@ -80,7 +80,7 @@ exist as fallbacks.
 - `display`: block, inline, inline-block, flex, grid, none.
 - `margin`, `padding`, `border-width` and their physical edge longhands,
   plus `border-color`, `border-radius`.
-- `width`, `height`, `min-width`, `min-height`, `max-width`, including
+- `width`, `height`, `min-width`, `min-height`, `max-width`, `max-height`, including
   layout-resolved percentage values for these sizing properties.
 - `color`, `background-color`.
 - `font-size`, `line-height`, `text-align`, `text-indent`.

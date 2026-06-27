@@ -215,21 +215,26 @@ void border_box_sizing_keeps_declared_width_and_height() {
 void percentage_width_and_height_use_containing_box() {
     HtmlParser html_parser;
     CssParser css_parser;
-    auto document = html_parser.parse("<body><main id='screen'><section id='card'></section></main></body>");
+    auto document = html_parser.parse(
+        "<body><main id='screen'><section id='card'></section><aside id='cap'></aside></main></body>");
     StyleResolver resolver(css_parser.parse(
         "body { margin: 0; width: 100%; height: 100%; }"
         "#screen { width: 100%; height: 100%; }"
-        "#card { width: 50%; height: 25%; min-width: 80px; }"));
+        "#card { width: 50%; height: 25%; min-width: 80px; }"
+        "#cap { width: 100%; height: 100%; max-height: 120px; }"));
     LayoutEngine layout_engine(resolver);
     auto layout_tree = layout_engine.layout(*document, 320, 240);
 
     const LayoutBox* body = find_first_by_tag(*layout_tree, "body");
     const LayoutBox* screen = find_first_by_id(*layout_tree, "screen");
     const LayoutBox* card = find_first_by_id(*layout_tree, "card");
-    check(body != nullptr && screen != nullptr && card != nullptr, "percentage fixture boxes exist");
+    const LayoutBox* cap = find_first_by_id(*layout_tree, "cap");
+    check(body != nullptr && screen != nullptr && card != nullptr && cap != nullptr,
+          "percentage fixture boxes exist");
     check(body->rect.width == 320 && body->rect.height == 240, "body percentages resolve to viewport");
     check(screen->rect.width == 320 && screen->rect.height == 240, "child percentages resolve to parent");
     check(card->rect.width == 160 && card->rect.height == 60, "nested percentages resolve cheaply");
+    check(cap->rect.width == 320 && cap->rect.height == 120, "max-height clamps percentage height");
 }
 
 } // namespace

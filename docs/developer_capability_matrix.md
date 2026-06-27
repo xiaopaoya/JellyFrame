@@ -172,7 +172,7 @@ clear older supported fallback declarations.
 | `outline` / `outline-width` / `outline-color` | Subset | Painted as a non-layout outer stroke. Simple width/color shorthand is supported; `outline-offset` and complex style semantics are deferred. |
 | `width` / `height` | Works | Length values and percentage values. Percentages resolve against the containing content box; root/full-screen app wrappers can use the actual viewport width/height. |
 | `min-width` / `min-height` | Works | Length values and percentage values. |
-| `max-width` | Works | Length or percentage value; used by block layout. |
+| `max-width` / `max-height` | Works | Length or percentage value; used by block layout. |
 | `aspect-ratio` | Works | Positive number or `w / h`, including `auto w / h`. Used for intrinsic box height. |
 | `font-size` | Works | Length values. |
 | `font-weight` | Subset | `normal`, `bold`, `bolder`, `lighter` and numeric weights. Software fallback approximates bold; platform text painters decide final glyph weight. |
@@ -212,7 +212,7 @@ clear older supported fallback declarations.
 
 Supported length units are currently `px`, unitless px-like numbers, `rem`,
 `em` and simple `vh`/`vw` approximations. `width`, `height`, `min-width`,
-`min-height` and `max-width` additionally preserve percentage values and
+`min-height`, `max-width` and `max-height` additionally preserve percentage values and
 resolve them during layout against the containing box or root viewport. Other
 percentage lengths still use conservative parser fallbacks. `min()`, `max()`, `clamp()` and simple
 `calc(A +/- B)` are parsed when their arguments reduce to supported lengths.

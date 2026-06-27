@@ -125,11 +125,13 @@ struct Style {
     int min_width = -1;
     int min_height = -1;
     int max_width = -1;
+    int max_height = -1;
     int width_percent = -1;
     int height_percent = -1;
     int min_width_percent = -1;
     int min_height_percent = -1;
     int max_width_percent = -1;
+    int max_height_percent = -1;
     int aspect_ratio_width = 0;
     int aspect_ratio_height = 0;
     int font_size = 14;

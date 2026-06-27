@@ -634,7 +634,7 @@ bool is_supported_declaration_feature(std::string_view feature) {
         return is_supported_background_value(value);
     }
     if (property == "width" || property == "height" || property == "min-width" ||
-        property == "min-height" || property == "max-width" || property == "font-size" ||
+        property == "min-height" || property == "max-width" || property == "max-height" || property == "font-size" ||
         property == "text-indent" || property == "gap" || property == "row-gap" ||
         property == "column-gap" || property == "grid-auto-rows") {
         return is_supported_length_value(value);
