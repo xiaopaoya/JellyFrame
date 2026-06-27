@@ -67,6 +67,17 @@ void css_transition_and_transform_subset_is_parsed() {
     check(transform.translate_x > 9.0F && transform.translate_x < 11.0F, "translate x parsed");
     check(transform.translate_y > 3.0F && transform.translate_y < 5.0F, "translate y parsed");
     check(transform.scale_x > 0.89F && transform.scale_x < 0.91F, "scale x parsed");
+
+    StyleResolver rotate_resolver(parser.parse(
+        ".hand { transform: rotate(.25turn); transform-origin: 50% 100%; }"));
+    auto hand = make_element("div");
+    hand->attributes["class"] = "hand";
+    const Style hand_style = rotate_resolver.resolve(*hand);
+    check(parse_css_transform_2d(hand_style.transform, transform), "rotate transform parses");
+    check(transform.rotate_degrees > 89.0F && transform.rotate_degrees < 91.0F, "rotate angle parsed");
+    check(hand_style.transform_origin_x_percent == 50 &&
+              hand_style.transform_origin_y_percent == 100,
+          "transform-origin percentage parsed");
 }
 
 void css_keyframes_animation_subset_is_parsed() {
@@ -149,7 +160,7 @@ void animation_timeline_samples_keyframes_subset() {
     keyframes.from_declarations.push_back(CssDeclaration{"background-color", "#000000", false});
     keyframes.to_declarations.push_back(CssDeclaration{"opacity", "1", false});
     keyframes.to_declarations.push_back(CssDeclaration{"background-color", "#640000", false});
-    keyframes.to_declarations.push_back(CssDeclaration{"transform", "translate(10px, 0px) scale(1.1)", false});
+    keyframes.to_declarations.push_back(CssDeclaration{"transform", "translate(10px, 0px) scale(1.1) rotate(90deg)", false});
 
     AnimationTimeline timeline;
     check(timeline.ensure_keyframe_animation(*node, base, animation, keyframes, 0), "keyframe animation starts");
@@ -163,6 +174,10 @@ void animation_timeline_samples_keyframes_subset() {
               overrides[0].background_color.r <= 51,
           "keyframe background color interpolates");
     check(overrides[0].has_transform, "keyframe transform interpolates");
+    Transform2D sampled_transform;
+    check(parse_css_transform_2d(overrides[0].transform, sampled_transform), "sampled transform parses");
+    check(sampled_transform.rotate_degrees > 44.0F && sampled_transform.rotate_degrees < 46.0F,
+          "keyframe rotate interpolates");
     check(timeline.sample(100, overrides), "timeline samples keyframe final frame");
     check(timeline.empty(), "finite keyframe animation is removed after final frame");
 }
@@ -232,6 +247,31 @@ void software_compositor_applies_translate_transform() {
     check(frame.pixel(12, 2).r > 200 && frame.pixel(12, 2).g < 80, "translated box is painted");
 }
 
+void software_compositor_applies_rotate_transform_origin() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 60, 50};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->bounds = Rect{20, 10, 4, 20};
+    child->transform.rotate_degrees = 90.0F;
+    child->transform_origin_x_percent = 50;
+    child->transform_origin_y_percent = 100;
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = Rect{20, 10, 4, 20};
+    fill.color = Color{255, 0, 0, 255};
+    child->display_list.push_back(fill);
+    root.children.push_back(std::move(child));
+
+    FrameBuffer frame = SoftwareCompositor().render(root, 60, 50, Color{255, 255, 255, 255});
+    check(frame.pixel(22, 12).r == 255 && frame.pixel(22, 12).g == 255,
+          "rotated layer does not remain at original vertical position");
+    check(frame.pixel(38, 30).r > 180 && frame.pixel(38, 30).g < 100,
+          "rotated layer paints around bottom-center transform-origin");
+}
+
 void animation_invalidation_covers_previous_and_current_transform_bounds() {
     HtmlParser html;
     CssParser css;
@@ -278,6 +318,7 @@ int main() {
         keyframe_unsupported_properties_report_diagnostics();
         render_tree_applies_animation_style_overrides();
         software_compositor_applies_translate_transform();
+        software_compositor_applies_rotate_transform_origin();
         animation_invalidation_covers_previous_and_current_transform_bounds();
     } catch (const std::exception& error) {
         std::cerr << "animation timeline test failed: " << error.what() << '\n';

@@ -273,6 +273,22 @@ int main(int argc, char** argv) {
         (void)target;
     }));
 
+    LayerNode rotate_root;
+    rotate_root.type = LayerType::Root;
+    rotate_root.bounds = Rect{0, 0, 160, 160};
+    auto rotate_child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    rotate_child->type = LayerType::Composited;
+    rotate_child->bounds = Rect{76, 34, 8, 72};
+    rotate_child->transform.rotate_degrees = 42.0F;
+    rotate_child->transform_origin_x_percent = 50;
+    rotate_child->transform_origin_y_percent = 100;
+    rotate_child->display_list.push_back(fill_command(Rect{76, 34, 8, 72}, Color{236, 253, 245, 255}, 4));
+    rotate_root.children.push_back(std::move(rotate_child));
+    print_result("rotated_layer_bilinear", iterations, average_microseconds(iterations, [&] {
+        const FrameBuffer target = SoftwareCompositor().render(rotate_root, 160, 160, Color{15, 23, 42, 255});
+        (void)target;
+    }));
+
     Node animation_node(NodeType::Element);
     animation_node.tag_name = "div";
     const Style from_style = animated_style(0.25F, "translate(0px, 0px) scale(1)", Color{30, 64, 175, 255});

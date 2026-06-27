@@ -50,6 +50,54 @@ int round_transform_offset(float value) {
     return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
 }
 
+Rect rotated_scaled_bounds(Rect bounds, const Transform2D& transform, int origin_x_percent, int origin_y_percent) {
+    const float scaled_width = std::max(1.0F, static_cast<float>(bounds.width) * transform.scale_x);
+    const float scaled_height = std::max(1.0F, static_cast<float>(bounds.height) * transform.scale_y);
+    const float origin_x = static_cast<float>(bounds.x) +
+        static_cast<float>(bounds.width) * static_cast<float>(origin_x_percent) / 100.0F;
+    const float origin_y = static_cast<float>(bounds.y) +
+        static_cast<float>(bounds.height) * static_cast<float>(origin_y_percent) / 100.0F;
+    const float left = origin_x -
+        scaled_width * static_cast<float>(origin_x_percent) / 100.0F;
+    const float top = origin_y -
+        scaled_height * static_cast<float>(origin_y_percent) / 100.0F;
+
+    constexpr float kPi = 3.14159265358979323846F;
+    const float radians = transform.rotate_degrees * kPi / 180.0F;
+    const float c = std::cos(radians);
+    const float s = std::sin(radians);
+    const float corners[4][2] = {
+        {left, top},
+        {left + scaled_width, top},
+        {left, top + scaled_height},
+        {left + scaled_width, top + scaled_height},
+    };
+    float min_x = 0.0F;
+    float min_y = 0.0F;
+    float max_x = 0.0F;
+    float max_y = 0.0F;
+    for (int index = 0; index < 4; ++index) {
+        const float dx = corners[index][0] - origin_x;
+        const float dy = corners[index][1] - origin_y;
+        const float x = origin_x + dx * c - dy * s;
+        const float y = origin_y + dx * s + dy * c;
+        if (index == 0) {
+            min_x = max_x = x;
+            min_y = max_y = y;
+        } else {
+            min_x = std::min(min_x, x);
+            min_y = std::min(min_y, y);
+            max_x = std::max(max_x, x);
+            max_y = std::max(max_y, y);
+        }
+    }
+    const int x = static_cast<int>(std::floor(min_x));
+    const int y = static_cast<int>(std::floor(min_y));
+    const int right = static_cast<int>(std::ceil(max_x));
+    const int bottom = static_cast<int>(std::ceil(max_y));
+    return Rect{x, y, std::max(1, right - x), std::max(1, bottom - y)};
+}
+
 Rect subtree_bounds(const LayoutBox& box, std::vector<const LayoutBox*>& pending) {
     Rect bounds = box.rect;
     pending.clear();
@@ -87,15 +135,12 @@ Rect transformed_bounds(Rect bounds, const Style& base_style, const StyleOverrid
     bounds.x += round_transform_offset(transform.translate_x);
     bounds.y += round_transform_offset(transform.translate_y);
     if (std::abs(transform.scale_x - 1.0F) >= 0.001F ||
-        std::abs(transform.scale_y - 1.0F) >= 0.001F) {
-        const int scaled_width =
-            std::max(1, static_cast<int>(static_cast<float>(bounds.width) * transform.scale_x + 0.5F));
-        const int scaled_height =
-            std::max(1, static_cast<int>(static_cast<float>(bounds.height) * transform.scale_y + 0.5F));
-        bounds.x += (bounds.width - scaled_width) / 2;
-        bounds.y += (bounds.height - scaled_height) / 2;
-        bounds.width = scaled_width;
-        bounds.height = scaled_height;
+        std::abs(transform.scale_y - 1.0F) >= 0.001F ||
+        std::abs(transform.rotate_degrees) >= 0.001F) {
+        return rotated_scaled_bounds(bounds,
+                                     transform,
+                                     base_style.transform_origin_x_percent,
+                                     base_style.transform_origin_y_percent);
     }
     return bounds;
 }

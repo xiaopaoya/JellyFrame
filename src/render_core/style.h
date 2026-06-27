@@ -102,6 +102,7 @@ struct Transform2D {
     float translate_y = 0.0F;
     float scale_x = 1.0F;
     float scale_y = 1.0F;
+    float rotate_degrees = 0.0F;
 };
 
 struct Style {
@@ -145,6 +146,8 @@ struct Style {
     std::string overflow;
     float opacity = 1.0F;
     std::string transform;
+    int transform_origin_x_percent = 50;
+    int transform_origin_y_percent = 50;
     std::string position;
     int inset_top = 0;
     int inset_right = 0;

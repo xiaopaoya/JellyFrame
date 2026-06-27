@@ -961,6 +961,8 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->has_clip = has_overflow_clip(root.style);
     root_layer->opacity = root.style.opacity;
     root_layer->transform = parsed_transform_or_identity(root.style, options_.diagnostics);
+    root_layer->transform_origin_x_percent = root.style.transform_origin_x_percent;
+    root_layer->transform_origin_y_percent = root.style.transform_origin_y_percent;
     root_layer->has_transform = has_transform(root.style);
     root_layer->z_index = root.style.z_index;
     root_layer->source_order = next_source_order++;
@@ -1034,6 +1036,8 @@ void LayerTreeBuilder::build_box(const LayoutBox& box,
         child_layer->has_clip = (reasons & LayerReasonOverflowClip) != 0U;
         child_layer->opacity = box.style.opacity;
         child_layer->transform = parsed_transform_or_identity(box.style, options_.diagnostics);
+        child_layer->transform_origin_x_percent = box.style.transform_origin_x_percent;
+        child_layer->transform_origin_y_percent = box.style.transform_origin_y_percent;
         child_layer->has_transform = has_transform(box.style);
         child_layer->z_index = box.style.z_index_auto ? 0 : box.style.z_index;
         child_layer->source_order = next_source_order++;

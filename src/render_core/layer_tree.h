@@ -58,6 +58,8 @@ struct LayerNode {
     bool has_clip = false;
     float opacity = 1.0F;
     Transform2D transform;
+    int transform_origin_x_percent = 50;
+    int transform_origin_y_percent = 50;
     bool has_transform = false;
     int z_index = 0;
     std::size_t source_order = 0;

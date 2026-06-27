@@ -1345,6 +1345,35 @@ bool parse_scale_value(const std::string& value, float& output) {
     return true;
 }
 
+bool parse_angle_degrees(const std::string& raw_value, float& output) {
+    const std::string value = lowercase(trim(raw_value));
+    if (value.empty()) {
+        return false;
+    }
+    if (value == "0") {
+        output = 0.0F;
+        return true;
+    }
+    const auto parse_with_suffix = [&](const char* suffix, float multiplier) {
+        const std::size_t suffix_length = std::strlen(suffix);
+        if (value.size() <= suffix_length ||
+            value.compare(value.size() - suffix_length, suffix_length, suffix) != 0) {
+            return false;
+        }
+        float parsed = 0.0F;
+        if (!parse_float(trim(std::string_view(value).substr(0, value.size() - suffix_length)), parsed)) {
+            return false;
+        }
+        output = parsed * multiplier;
+        return true;
+    };
+    constexpr float kPi = 3.14159265358979323846F;
+    return parse_with_suffix("deg", 1.0F) ||
+        parse_with_suffix("turn", 360.0F) ||
+        parse_with_suffix("rad", 180.0F / kPi) ||
+        parse_with_suffix("grad", 0.9F);
+}
+
 bool parse_transform_function(std::string_view function, Transform2D& output) {
     const std::size_t open = function.find('(');
     if (open == std::string_view::npos || function.empty() || function.back() != ')') {
@@ -1418,7 +1447,89 @@ bool parse_transform_function(std::string_view function, Transform2D& output) {
         output.scale_y *= y;
         return true;
     }
+    if (name == "rotate" || name == "rotatez") {
+        float degrees = 0.0F;
+        if (args.size() != 1 || !parse_angle_degrees(args[0], degrees)) {
+            return false;
+        }
+        output.rotate_degrees += degrees;
+        return true;
+    }
     return false;
+}
+
+bool parse_transform_origin_percent_token(const std::string& token, int& percent) {
+    const std::string value = lowercase(trim(token));
+    if (value == "left" || value == "top") {
+        percent = 0;
+        return true;
+    }
+    if (value == "center") {
+        percent = 50;
+        return true;
+    }
+    if (value == "right" || value == "bottom") {
+        percent = 100;
+        return true;
+    }
+    char* end = nullptr;
+    errno = 0;
+    const float parsed = std::strtof(value.c_str(), &end);
+    if (end == value.c_str() || errno == ERANGE) {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || std::strncmp(end, "%", 1) != 0) {
+        return false;
+    }
+    ++end;
+    while (std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (*end != '\0') {
+        return false;
+    }
+    percent = std::max(-200, std::min(300, static_cast<int>(parsed + (parsed >= 0.0F ? 0.5F : -0.5F))));
+    return true;
+}
+
+bool parse_transform_origin_percent(const std::string& raw_value, int& x_percent, int& y_percent) {
+    const std::vector<std::string> tokens = split_whitespace_components(raw_value);
+    if (tokens.empty() || tokens.size() > 2) {
+        return false;
+    }
+    int first = 50;
+    int second = 50;
+    if (!parse_transform_origin_percent_token(tokens[0], first)) {
+        return false;
+    }
+    if (tokens.size() == 1) {
+        const std::string token = lowercase(trim(tokens[0]));
+        if (token == "top" || token == "bottom") {
+            x_percent = 50;
+            y_percent = first;
+        } else {
+            x_percent = first;
+            y_percent = 50;
+        }
+        return true;
+    }
+    if (!parse_transform_origin_percent_token(tokens[1], second)) {
+        return false;
+    }
+    const std::string first_token = lowercase(trim(tokens[0]));
+    const std::string second_token = lowercase(trim(tokens[1]));
+    if ((first_token == "top" || first_token == "bottom") &&
+        !(second_token == "top" || second_token == "bottom")) {
+        x_percent = second;
+        y_percent = first;
+    } else {
+        x_percent = first;
+        y_percent = second;
+    }
+    return true;
 }
 
 bool parse_object_position_percent_token(const std::string& token, int& percent) {
@@ -1872,6 +1983,7 @@ enum class CascadeProperty : std::size_t {
     Overflow,
     Opacity,
     Transform,
+    TransformOrigin,
     Position,
     Top,
     Right,
@@ -2056,6 +2168,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
     }
     if (property == "transform") {
         return &cascade_slot(slots, CascadeProperty::Transform);
+    }
+    if (property == "transform-origin") {
+        return &cascade_slot(slots, CascadeProperty::TransformOrigin);
     }
     if (property == "position") {
         return &cascade_slot(slots, CascadeProperty::Position);
@@ -2593,6 +2708,15 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             return false;
         }
         style.transform = serialize_css_transform_2d(parsed);
+        return true;
+    } else if (property == "transform-origin") {
+        int x_percent = 50;
+        int y_percent = 50;
+        if (!parse_transform_origin_percent(value, x_percent, y_percent)) {
+            return false;
+        }
+        style.transform_origin_x_percent = x_percent;
+        style.transform_origin_y_percent = y_percent;
         return true;
     } else if (property == "position") {
         const std::string lowered = lowercase(trim(value));
@@ -3636,7 +3760,8 @@ std::string serialize_css_transform_2d(const Transform2D& transform) {
     if (std::abs(transform.translate_x) < 0.01F &&
         std::abs(transform.translate_y) < 0.01F &&
         std::abs(transform.scale_x - 1.0F) < 0.001F &&
-        std::abs(transform.scale_y - 1.0F) < 0.001F) {
+        std::abs(transform.scale_y - 1.0F) < 0.001F &&
+        std::abs(transform.rotate_degrees) < 0.001F) {
         return {};
     }
     std::ostringstream stream;
@@ -3649,6 +3774,12 @@ std::string serialize_css_transform_2d(const Transform2D& transform) {
             stream << ' ';
         }
         stream << "scale(" << transform.scale_x << ',' << transform.scale_y << ')';
+    }
+    if (std::abs(transform.rotate_degrees) >= 0.001F) {
+        if (stream.tellp() > 0) {
+            stream << ' ';
+        }
+        stream << "rotate(" << transform.rotate_degrees << "deg)";
     }
     return stream.str();
 }

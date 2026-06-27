@@ -80,7 +80,8 @@ bool transform_equal(const Transform2D& left, const Transform2D& right) {
     return std::abs(left.translate_x - right.translate_x) < 0.01F &&
         std::abs(left.translate_y - right.translate_y) < 0.01F &&
         std::abs(left.scale_x - right.scale_x) < 0.001F &&
-        std::abs(left.scale_y - right.scale_y) < 0.001F;
+        std::abs(left.scale_y - right.scale_y) < 0.001F &&
+        std::abs(left.rotate_degrees - right.rotate_degrees) < 0.001F;
 }
 
 Transform2D mix_transform(const Transform2D& from, const Transform2D& to, float t) {
@@ -89,6 +90,7 @@ Transform2D mix_transform(const Transform2D& from, const Transform2D& to, float 
     output.translate_y = mix_float(from.translate_y, to.translate_y, t);
     output.scale_x = mix_float(from.scale_x, to.scale_x, t);
     output.scale_y = mix_float(from.scale_y, to.scale_y, t);
+    output.rotate_degrees = mix_float(from.rotate_degrees, to.rotate_degrees, t);
     return output;
 }
 

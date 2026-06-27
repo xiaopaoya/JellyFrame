@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <stdexcept>
@@ -602,6 +603,125 @@ void composite_scaled_buffer(FrameBuffer& target,
     }
 }
 
+Rect transformed_destination_rect(Rect source_rect,
+                                  const Transform2D& transform,
+                                  int origin_x_percent,
+                                  int origin_y_percent) {
+    const float scaled_width = std::max(1.0F, static_cast<float>(source_rect.width) * transform.scale_x);
+    const float scaled_height = std::max(1.0F, static_cast<float>(source_rect.height) * transform.scale_y);
+    const float origin_x = static_cast<float>(source_rect.x) +
+        static_cast<float>(source_rect.width) * static_cast<float>(origin_x_percent) / 100.0F;
+    const float origin_y = static_cast<float>(source_rect.y) +
+        static_cast<float>(source_rect.height) * static_cast<float>(origin_y_percent) / 100.0F;
+    const float left = origin_x -
+        scaled_width * static_cast<float>(origin_x_percent) / 100.0F;
+    const float top = origin_y -
+        scaled_height * static_cast<float>(origin_y_percent) / 100.0F;
+
+    constexpr float kPi = 3.14159265358979323846F;
+    const float radians = transform.rotate_degrees * kPi / 180.0F;
+    const float c = std::cos(radians);
+    const float s = std::sin(radians);
+    const float corners[4][2] = {
+        {left, top},
+        {left + scaled_width, top},
+        {left, top + scaled_height},
+        {left + scaled_width, top + scaled_height},
+    };
+    float min_x = 0.0F;
+    float min_y = 0.0F;
+    float max_x = 0.0F;
+    float max_y = 0.0F;
+    for (int index = 0; index < 4; ++index) {
+        const float dx = corners[index][0] - origin_x;
+        const float dy = corners[index][1] - origin_y;
+        const float x = origin_x + dx * c - dy * s;
+        const float y = origin_y + dx * s + dy * c;
+        if (index == 0) {
+            min_x = max_x = x;
+            min_y = max_y = y;
+        } else {
+            min_x = std::min(min_x, x);
+            min_y = std::min(min_y, y);
+            max_x = std::max(max_x, x);
+            max_y = std::max(max_y, y);
+        }
+    }
+    const int x = static_cast<int>(std::floor(min_x));
+    const int y = static_cast<int>(std::floor(min_y));
+    const int right = static_cast<int>(std::ceil(max_x));
+    const int bottom = static_cast<int>(std::ceil(max_y));
+    return Rect{x, y, std::max(1, right - x), std::max(1, bottom - y)};
+}
+
+void composite_transformed_buffer(FrameBuffer& target,
+                                  const FrameBuffer& source,
+                                  Rect source_rect,
+                                  Rect destination,
+                                  const Transform2D& transform,
+                                  int origin_x_percent,
+                                  int origin_y_percent,
+                                  Rect clip,
+                                  float opacity,
+                                  bool smooth) {
+    Rect copy_rect = intersect_rect(destination, target_rect(target));
+    copy_rect = intersect_rect(copy_rect, clip);
+    if (empty_rect(copy_rect) || source.width <= 0 || source.height <= 0) {
+        return;
+    }
+
+    const float origin_x = static_cast<float>(source_rect.x) +
+        static_cast<float>(source_rect.width) * static_cast<float>(origin_x_percent) / 100.0F;
+    const float origin_y = static_cast<float>(source_rect.y) +
+        static_cast<float>(source_rect.height) * static_cast<float>(origin_y_percent) / 100.0F;
+    constexpr float kPi = 3.14159265358979323846F;
+    const float radians = transform.rotate_degrees * kPi / 180.0F;
+    const float c = std::cos(radians);
+    const float s = std::sin(radians);
+
+    for (int y = 0; y < copy_rect.height; ++y) {
+        const float target_y = static_cast<float>(copy_rect.y + y) + 0.5F;
+        for (int x = 0; x < copy_rect.width; ++x) {
+            const float target_x = static_cast<float>(copy_rect.x + x) + 0.5F;
+            const float dx = target_x - origin_x;
+            const float dy = target_y - origin_y;
+            const float unrotated_x = origin_x + dx * c + dy * s;
+            const float unrotated_y = origin_y - dx * s + dy * c;
+            const float source_world_x = origin_x +
+                (unrotated_x - origin_x) / std::max(0.01F, transform.scale_x);
+            const float source_world_y = origin_y +
+                (unrotated_y - origin_y) / std::max(0.01F, transform.scale_y);
+            const float source_x = source_world_x - static_cast<float>(source_rect.x);
+            const float source_y = source_world_y - static_cast<float>(source_rect.y);
+            if (source_x < 0.0F || source_y < 0.0F ||
+                source_x >= static_cast<float>(source.width) ||
+                source_y >= static_cast<float>(source.height)) {
+                continue;
+            }
+            Color source_pixel;
+            if (smooth) {
+                const int sx = std::max(0, std::min(source.width - 1, static_cast<int>(source_x)));
+                const int sy = std::max(0, std::min(source.height - 1, static_cast<int>(source_y)));
+                const int nx = std::min(source.width - 1, sx + 1);
+                const int ny = std::min(source.height - 1, sy + 1);
+                const int tx = std::max(0, std::min(255, static_cast<int>((source_x - static_cast<float>(sx)) * 256.0F)));
+                const int ty = std::max(0, std::min(255, static_cast<int>((source_y - static_cast<float>(sy)) * 256.0F)));
+                const Color top = lerp_color_fixed(source.pixel(sx, sy), source.pixel(nx, sy), tx);
+                const Color bottom = lerp_color_fixed(source.pixel(sx, ny), source.pixel(nx, ny), tx);
+                source_pixel = lerp_color_fixed(top, bottom, ty);
+            } else {
+                const int sx = std::max(0, std::min(source.width - 1, static_cast<int>(source_x)));
+                const int sy = std::max(0, std::min(source.height - 1, static_cast<int>(source_y)));
+                source_pixel = source.pixel(sx, sy);
+            }
+            blend_pixel(target,
+                        copy_rect.x + x,
+                        copy_rect.y + y,
+                        with_opacity(source_pixel, opacity));
+        }
+    }
+}
+
 int round_transform_offset(float value) {
     return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
 }
@@ -908,21 +1028,32 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
     const float layer_opacity = inherited_opacity * layer.opacity;
     const bool needs_offscreen = layer.type == LayerType::Composited || layer.opacity < 0.999F;
     if (needs_offscreen) {
-        Rect bounds = layer.bounds;
-        bounds.x += layer_offset_x;
-        bounds.y += layer_offset_y;
-        bounds = intersect_rect(bounds, layer_clip);
-        bounds = intersect_rect(bounds, target_rect(target));
-        if (empty_rect(bounds)) {
+        Rect source_bounds = layer.bounds;
+        source_bounds.x += layer_offset_x;
+        source_bounds.y += layer_offset_y;
+        const bool has_scale_or_rotate =
+            std::abs(layer.transform.scale_x - 1.0F) >= 0.001F ||
+            std::abs(layer.transform.scale_y - 1.0F) >= 0.001F ||
+            std::abs(layer.transform.rotate_degrees) >= 0.001F;
+        const Rect destination = has_scale_or_rotate
+            ? transformed_destination_rect(source_bounds,
+                                           layer.transform,
+                                           layer.transform_origin_x_percent,
+                                           layer.transform_origin_y_percent)
+            : source_bounds;
+        Rect visible_destination = intersect_rect(destination, layer_clip);
+        visible_destination = intersect_rect(visible_destination, target_rect(target));
+        if (empty_rect(visible_destination)) {
             return;
         }
-        if (!offscreen_fits_budget(bounds, options_)) {
+        Rect offscreen_bounds = has_scale_or_rotate ? source_bounds : visible_destination;
+        if (!offscreen_fits_budget(offscreen_bounds, options_)) {
             report_diagnostic(options_.diagnostics,
                               DiagnosticStage::Paint,
                               DiagnosticSeverity::Warning,
                               "paint-offscreen-budget",
                               "Offscreen compositing buffer exceeded budget; layer was painted by direct opacity fallback",
-                              std::to_string(bounds.width) + "x" + std::to_string(bounds.height));
+                              std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
             rasterize_with_opacity(rasterizer_,
                                    layer.display_list,
                                    target,
@@ -936,29 +1067,27 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
             return;
         }
 
-        FrameBuffer offscreen(bounds.width, bounds.height, Color{0, 0, 0, 0});
-        const int child_offset_x = layer_offset_x - bounds.x;
-        const int child_offset_y = layer_offset_y - bounds.y;
-        const Rect offscreen_clip{0, 0, bounds.width, bounds.height};
+        FrameBuffer offscreen(offscreen_bounds.width, offscreen_bounds.height, Color{0, 0, 0, 0});
+        const int child_offset_x = layer_offset_x - offscreen_bounds.x;
+        const int child_offset_y = layer_offset_y - offscreen_bounds.y;
+        const Rect offscreen_clip{0, 0, offscreen_bounds.width, offscreen_bounds.height};
         rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y);
         for (const auto& child : layer.children) {
             composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F);
         }
-        if (std::abs(layer.transform.scale_x - 1.0F) >= 0.001F ||
-            std::abs(layer.transform.scale_y - 1.0F) >= 0.001F) {
-            const int scaled_width =
-                std::max(1, static_cast<int>(static_cast<float>(bounds.width) * layer.transform.scale_x + 0.5F));
-            const int scaled_height =
-                std::max(1, static_cast<int>(static_cast<float>(bounds.height) * layer.transform.scale_y + 0.5F));
-            const Rect destination{
-                bounds.x + (bounds.width - scaled_width) / 2,
-                bounds.y + (bounds.height - scaled_height) / 2,
-                scaled_width,
-                scaled_height,
-            };
-            composite_scaled_buffer(target, offscreen, destination, layer_opacity, options_.smooth_scaled_layers);
+        if (has_scale_or_rotate) {
+            composite_transformed_buffer(target,
+                                         offscreen,
+                                         offscreen_bounds,
+                                         destination,
+                                         layer.transform,
+                                         layer.transform_origin_x_percent,
+                                         layer.transform_origin_y_percent,
+                                         layer_clip,
+                                         layer_opacity,
+                                         options_.smooth_scaled_layers);
         } else {
-            composite_buffer(target, offscreen, bounds.x, bounds.y, layer_opacity);
+            composite_buffer(target, offscreen, offscreen_bounds.x, offscreen_bounds.y, layer_opacity);
         }
         return;
     }
