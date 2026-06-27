@@ -2772,6 +2772,10 @@ public:
                   << "  scroll_blits full=" << scroll_counters_.full_blits
                   << " fast=" << scroll_counters_.fast_blits
                   << " copied_pixels=" << scroll_counters_.copied_pixels << '\n';
+        if (layer_tree_ != nullptr) {
+            std::cout << "  layer_tree layers=" << count_layers(*layer_tree_)
+                      << " display_commands=" << count_layer_display_commands(*layer_tree_) << '\n';
+        }
         const AppBudgetSnapshot budget = current_app_budget_snapshot();
         std::cout << "  app_budget instance=" << budget.app_instance_id
                   << " role=" << app_role_name(budget.role)

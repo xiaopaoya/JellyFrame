@@ -28,6 +28,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   general filesystem access, while future file managers or system components
   should use a host-owned, user-authorized file broker with async budgets,
   rollback/fallback and no raw filesystem handles.
+- Win32 frame-script summaries now include `layer_tree layers=N
+  display_commands=N`, making retained-rendering and full-frame fallback
+  sampling easier to compare across watch samples.
 
 ## 0.4.0-dev - 2026-06-28
 

@@ -22,6 +22,8 @@ JellyFrame Engine 的重要变更记录在这里。
   `budget-exceeded` 并回到 launcher。
 - 文档明确授权文件访问边界：普通 app 仍无通用文件系统访问能力；未来文件管理器或系统组件应通过
   宿主持有、用户授权的 file broker，并具备异步预算、rollback/fallback，且不暴露裸 filesystem handle。
+- Win32 frame-script 摘要现在会输出 `layer_tree layers=N display_commands=N`，便于对比手表样例的
+  retained rendering 与 full-frame fallback 采样结果。
 
 ## 0.4.0-dev - 2026-06-28
 
