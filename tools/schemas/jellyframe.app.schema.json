@@ -141,7 +141,7 @@
             ]
           },
           "family": {
-            "description": "Optional product font family label. Current runtime uses system-profile-first bitmap fallback; this label is packaged for future family selection and diagnostics.",
+            "description": "Runtime font-family label for this .jffont supplement. When CSS selects the same custom family and the host uses the app-font backend, this supplement is tried before the normal fallback chain.",
             "type": "string",
             "minLength": 1
           },

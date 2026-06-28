@@ -27,4 +27,5 @@ Current packages:
 - `jelly_audio_smoke`: package audio resource used by the Win32 host-owned
   audio smoke path.
 - `jelly_font_policy`: package font-family and `.jffont` supplement policy
-  sample.
+  sample with two runtime families, missing-glyph diagnostics and Win32
+  `--use-app-fonts` validation.

@@ -2,7 +2,7 @@
   display: block;
   background: #101319;
   color: #f7fafc;
-  font-family: "Jelly Tiny", system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
 }
 
 body {
@@ -42,8 +42,27 @@ h1 {
   font-weight: 700;
 }
 
+.cn {
+  font-family: "Jelly Tiny CN", system-ui, sans-serif;
+}
+
+.symbols {
+  margin: 10px 0 0 0;
+  color: #ffe6a7;
+  font-family: "Jelly Tiny Symbols", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .body {
-  margin: 16px 0 0 0;
+  margin: 12px 0 0 0;
   color: #d7e3f8;
   font-size: 14px;
+}
+
+.missing {
+  margin: 8px 0 0 0;
+  color: #ffb4c4;
+  font-family: "Jelly Tiny CN", system-ui, sans-serif;
+  font-size: 12px;
 }

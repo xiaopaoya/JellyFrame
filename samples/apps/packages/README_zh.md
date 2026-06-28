@@ -21,4 +21,5 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 - `jelly_watch_face`：使用 `transform: rotate(...)` 和 `transform-origin` 绘制指针的模拟表盘示例。
 - `jelly_service_status`：包含系统事件和本地存储的网络、音频、定位 service 边界示例。
 - `jelly_audio_smoke`：用于 Win32 host-owned audio smoke 路径的包内音频资源示例。
-- `jelly_font_policy`：用于说明 CSS `font-family` 与 `.jffont` 补充包策略的示例。
+- `jelly_font_policy`：用于说明 CSS `font-family` 与 `.jffont` 补充包策略的示例，
+  覆盖两个 runtime family、缺字诊断和 Win32 `--use-app-fonts` 验收。

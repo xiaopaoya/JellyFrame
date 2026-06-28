@@ -218,8 +218,9 @@ manifest 中的每个 font 条目可以写：
 runtime `.jffont` 数量、总字节和总 glyph 数；超过时会报告 `font-budget-exceeded`。这些检查只发生在工具层，
 不会增加 MCU 渲染热路径成本。
 
-`samples/apps/packages/jelly_font_policy` 是这条路径的最小验收样例：它在 CSS 和 manifest 元数据中声明
-`"Jelly Tiny"`，并包含由仓库 BDF fixture 生成的极小 `.jffont` supplement。
+`samples/apps/packages/jelly_font_policy` 是这条路径的验收样例：它在 CSS 和 manifest 元数据中分别声明
+`Jelly Tiny CN` 与 `Jelly Tiny Symbols` family，包含由仓库 BDF fixture 生成的极小 `.jffont`
+supplement，并故意保留一个缺字探针，方便验证工具 warning 是否稳定。
 
 当前稳定生产路径仍是：打包/检查阶段收集 used chars，离线从授权字体生成 bitmap glyph 数据，
 再把生成的 `BitmapFont` 编译进 port/firmware 或作为 `.jffont` supplement 随 `.jfapp`

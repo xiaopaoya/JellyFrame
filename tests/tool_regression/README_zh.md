@@ -7,4 +7,7 @@ render-core 或 app-runtime C++ 单元测试的行为。
 预检并验证 `imageDiagnostics`，再通过 Win32 壳捕获同一个 package，读取 BMP 像素，确保
 包内图片不会退化成不可见占位。
 
+`font_policy_report_tests.py` 验证 app 字体路径：检查字体策略样例报告两个可用 `.jffont`
+runtime family，保持故意缺字 warning 稳定，并用 Win32 `--use-app-fonts` 捕获样例。
+
 生成的报告和截图应保留在 `build*/test_outputs` 或 `out/`，不要提交这些输出。

@@ -40,6 +40,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - `jellyframe_virtual_bench` 现在除 full-frame RGB565 presentation 外，还会输出典型
   dirty-rectangle 和 scroll-strip 的 render/present/virtual-flush 估算，方便 port
   用更低成本把核心 packed bytes 与 panel/DMA flush 数据对齐。
+- 扩展 `jelly_font_policy` 示例为两个 family 的 `.jffont` 验收包，覆盖中文 glyph、常用符号、
+  故意缺字 warning，并新增 Win32 `--use-app-fonts` capture 回归。
 
 ### 变更
 

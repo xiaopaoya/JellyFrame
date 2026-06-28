@@ -369,6 +369,14 @@ if(JELLYFRAME_BUILD_TESTS)
                     $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+        add_test(
+            NAME jellyframe_win32_font_policy_report
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/font_policy_report_tests.py
+                    $<TARGET_FILE:jellyframe_win32_browser>
+                    $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
         if(JELLYFRAME_BUILD_SCRIPTING)
             add_test(
                 NAME jellyframe_win32_motion_lab_low_power_frame_script

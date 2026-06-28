@@ -18,16 +18,28 @@
   },
   "budgets": {
     "maxResourceBytes": 16384,
-    "maxAppFonts": 1,
+    "maxAppFonts": 2,
     "maxAppFontBytes": 1024,
-    "maxAppFontGlyphs": 8
+    "maxAppFontGlyphs": 12
   },
   "fonts": [
     {
-      "id": "tiny",
-      "source": "/fonts/tiny.jffont",
+      "id": "tiny-cn",
+      "source": "/fonts/tiny_cn.jffont",
       "profile": "app-subset-cn",
-      "family": "Jelly Tiny",
+      "family": "Jelly Tiny CN",
+      "license": {
+        "name": "JellyFrame sample font",
+        "source": "src/render_core/samples/fonts/bitmap/tiny.bdf"
+      },
+      "sizes": [8],
+      "weights": [400]
+    },
+    {
+      "id": "tiny-symbols",
+      "source": "/fonts/tiny_symbols.jffont",
+      "profile": "tiny-plus-symbols",
+      "family": "Jelly Tiny Symbols",
       "license": {
         "name": "JellyFrame sample font",
         "source": "src/render_core/samples/fonts/bitmap/tiny.bdf"
@@ -42,6 +54,11 @@
         "width": 300,
         "height": 300,
         "shape": "round"
+      },
+      "budgets": {
+        "maxAppFonts": 2,
+        "maxAppFontBytes": 1024,
+        "maxAppFontGlyphs": 12
       }
     }
   }

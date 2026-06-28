@@ -53,6 +53,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   render/present/virtual-flush estimates in addition to full-frame RGB565
   presentation, giving ports a cheaper way to compare core packed bytes with
   panel/DMA flush data.
+- Expanded the `jelly_font_policy` sample into a two-family `.jffont`
+  validation package covering Chinese glyphs, common symbols, a deliberate
+  missing-glyph warning and Win32 `--use-app-fonts` capture regression.
 
 ### Changed
 

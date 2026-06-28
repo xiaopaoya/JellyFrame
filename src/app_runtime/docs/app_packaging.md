@@ -279,10 +279,11 @@ diagnostics. `budgets.maxAppFonts`,
 `font-budget-exceeded`. These checks run only in tooling and add no MCU render
 hot-path cost.
 
-The `samples/apps/packages/jelly_font_policy` package is the minimal acceptance
-sample for this path: it declares `"Jelly Tiny"` in CSS and manifest metadata,
-then includes a tiny `.jffont` supplement generated from the repository BDF
-fixture.
+The `samples/apps/packages/jelly_font_policy` package is the acceptance sample
+for this path: it declares separate `Jelly Tiny CN` and `Jelly Tiny Symbols`
+families in CSS and manifest metadata, includes tiny `.jffont` supplements
+generated from the repository BDF fixture and intentionally keeps one missing
+glyph probe so tooling warnings remain easy to verify.
 
 The stable production path is still: collect used characters during
 package/check, generate bitmap glyph data offline from a licensed font, compile
