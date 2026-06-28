@@ -91,6 +91,35 @@ void path_stroke_draws_line() {
     assert(surface->pixels[7 * surface->width + 7].r == 255);
 }
 
+void path_stroke_antialiases_diagonal_edges() {
+    Canvas2DRegistry registry(Canvas2DPolicy{
+        true,
+        1,
+        64,
+        64,
+        8,
+        8,
+    });
+    auto canvas = make_element("canvas");
+    assert(registry.set_stroke_style(*canvas, "#ffffff"));
+    assert(registry.set_line_width(*canvas, 1));
+    assert(registry.begin_path(*canvas));
+    assert(registry.move_to(*canvas, 0, 0));
+    assert(registry.line_to(*canvas, 7, 7));
+    assert(registry.stroke(*canvas));
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    assert(surface != nullptr);
+
+    bool found_partial_edge = false;
+    for (const Color& pixel : surface->pixels) {
+        if (pixel.a > 0 && pixel.a < 255) {
+            found_partial_edge = true;
+            break;
+        }
+    }
+    assert(found_partial_edge);
+}
+
 } // namespace
 
 int main() {
@@ -98,6 +127,7 @@ int main() {
     oversized_canvas_is_rejected();
     drawing_updates_pixels_and_marks_paint_dirty();
     path_stroke_draws_line();
+    path_stroke_antialiases_diagonal_edges();
     std::cout << "canvas2d tests passed\n";
     return 0;
 }

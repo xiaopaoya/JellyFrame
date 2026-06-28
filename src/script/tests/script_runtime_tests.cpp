@@ -1016,7 +1016,7 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     const ScriptEvaluationResult result = runtime.eval(
         "var ctx = document.getElementById('chart').getContext('2d');"
         "ctx.fillStyle = '#336699';"
-        "ctx.fillRect(2, 3, 2, 2);"
+        "ctx.fillRect(5, 1, 2, 2);"
         "ctx.strokeStyle = '#ffffff';"
         "ctx.beginPath();"
         "ctx.moveTo(0, 0);"
@@ -1027,7 +1027,7 @@ void javascript_canvas_2d_is_optional_and_lazy() {
 
     const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
     check(surface != nullptr, "canvas surface allocated lazily after getContext");
-    const Color filled = surface->pixels[3 * surface->width + 2];
+    const Color filled = surface->pixels[1 * surface->width + 5];
     check(filled.r == 0x33 && filled.g == 0x66 && filled.b == 0x99, "canvas fillRect updated pixels");
     const Color stroked = surface->pixels[7 * surface->width + 7];
     check(stroked.r == 255 && stroked.g == 255 && stroked.b == 255, "canvas stroke updated pixels");

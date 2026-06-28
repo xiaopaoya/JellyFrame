@@ -120,6 +120,56 @@ void write_pixel(Canvas2DSurface& surface, int x, int y, Color color) {
                    static_cast<std::size_t>(x)] = color;
 }
 
+std::uint8_t clamp_u8(int value) {
+    return static_cast<std::uint8_t>(std::max(0, std::min(255, value)));
+}
+
+Color with_coverage(Color color, int coverage) {
+    if (coverage >= 255) {
+        return color;
+    }
+    if (coverage <= 0) {
+        color.a = 0;
+        return color;
+    }
+    color.a = clamp_u8((static_cast<int>(color.a) * coverage + 127) / 255);
+    return color;
+}
+
+void blend_pixel(Canvas2DSurface& surface, int x, int y, Color source) {
+    if (x < 0 || y < 0 || x >= surface.width || y >= surface.height || source.a == 0) {
+        return;
+    }
+    Color& destination =
+        surface.pixels[static_cast<std::size_t>(y) * static_cast<std::size_t>(surface.width) +
+                       static_cast<std::size_t>(x)];
+    if (source.a == 255) {
+        destination = source;
+        return;
+    }
+
+    const int src_a = source.a;
+    const int dst_a = destination.a;
+    const int inv_src_a = 255 - src_a;
+    const int out_a = src_a + ((dst_a * inv_src_a + 127) / 255);
+    if (out_a == 0) {
+        destination = Color{0, 0, 0, 0};
+        return;
+    }
+
+    const auto blend_channel = [&](std::uint8_t src, std::uint8_t dst) {
+        const int premul = src * src_a + ((dst * dst_a * inv_src_a + 127) / 255);
+        return clamp_u8((premul + out_a / 2) / out_a);
+    };
+
+    destination = Color{
+        blend_channel(source.r, destination.r),
+        blend_channel(source.g, destination.g),
+        blend_channel(source.b, destination.b),
+        clamp_u8(out_a),
+    };
+}
+
 void fill_rect_pixels(Canvas2DSurface& surface, int x, int y, int width, int height, Color color) {
     if (width <= 0 || height <= 0 || surface.width <= 0 || surface.height <= 0) {
         return;
@@ -138,29 +188,46 @@ void fill_rect_pixels(Canvas2DSurface& surface, int x, int y, int width, int hei
 }
 
 void draw_line(Canvas2DSurface& surface, Canvas2DPoint from, Canvas2DPoint to, Color color, int line_width) {
-    int x0 = from.x;
-    int y0 = from.y;
-    const int x1 = to.x;
-    const int y1 = to.y;
-    const int dx = std::abs(x1 - x0);
-    const int sx = x0 < x1 ? 1 : -1;
-    const int dy = -std::abs(y1 - y0);
-    const int sy = y0 < y1 ? 1 : -1;
-    int error = dx + dy;
-    const int radius = std::max(0, line_width - 1) / 2;
-    while (true) {
-        fill_rect_pixels(surface, x0 - radius, y0 - radius, std::max(1, line_width), std::max(1, line_width), color);
-        if (x0 == x1 && y0 == y1) {
-            break;
-        }
-        const int doubled_error = error * 2;
-        if (doubled_error >= dy) {
-            error += dy;
-            x0 += sx;
-        }
-        if (doubled_error <= dx) {
-            error += dx;
-            y0 += sy;
+    const double x0 = static_cast<double>(from.x);
+    const double y0 = static_cast<double>(from.y);
+    const double dx = static_cast<double>(to.x - from.x);
+    const double dy = static_cast<double>(to.y - from.y);
+    const double length_squared = dx * dx + dy * dy;
+    if (length_squared <= 0.0) {
+        blend_pixel(surface, from.x, from.y, color);
+        return;
+    }
+
+    const double half_width = std::max(1.0, static_cast<double>(line_width)) * 0.5;
+    const double aa_radius = half_width + 1.0;
+    const double inner_radius = std::max(0.0, aa_radius - 1.0);
+    const double aa_radius_squared = aa_radius * aa_radius;
+    const double inner_radius_squared = inner_radius * inner_radius;
+    const double feather_squared = std::max(0.0001, aa_radius_squared - inner_radius_squared);
+    const int pad = std::max(1, static_cast<int>(std::ceil(aa_radius)));
+    const int left = std::max(0, std::min(from.x, to.x) - pad);
+    const int right = std::min(surface.width - 1, std::max(from.x, to.x) + pad);
+    const int top = std::max(0, std::min(from.y, to.y) - pad);
+    const int bottom = std::min(surface.height - 1, std::max(from.y, to.y) + pad);
+
+    for (int y = top; y <= bottom; ++y) {
+        const double py = static_cast<double>(y) + 0.5;
+        for (int x = left; x <= right; ++x) {
+            const double px = static_cast<double>(x) + 0.5;
+            double t = ((px - x0) * dx + (py - y0) * dy) / length_squared;
+            t = std::max(0.0, std::min(1.0, t));
+            const double nearest_x = x0 + t * dx;
+            const double nearest_y = y0 + t * dy;
+            const double distance_x = px - nearest_x;
+            const double distance_y = py - nearest_y;
+            const double distance_squared = distance_x * distance_x + distance_y * distance_y;
+            if (distance_squared >= aa_radius_squared) {
+                continue;
+            }
+            const int alpha = distance_squared <= inner_radius_squared
+                ? 255
+                : static_cast<int>(((aa_radius_squared - distance_squared) / feather_squared) * 255.0 + 0.5);
+            blend_pixel(surface, x, y, with_coverage(color, alpha));
         }
     }
 }
