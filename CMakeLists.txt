@@ -407,7 +407,7 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_touch_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
-                "scroll_containers scrolls=3 full_repaints=0 dirty_repaints=3")
+                "scroll_containers scrolls=9 full_repaints=0 dirty_repaints=9 inertia=6")
 
         add_test(
             NAME jellyframe_win32_package_image_fixture

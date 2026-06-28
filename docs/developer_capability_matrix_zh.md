@@ -179,7 +179,7 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 | `text-decoration` / `text-decoration-line` | 子集 | `none`、`underline`、`line-through` 会绘制便宜的实线装饰。颜色/粗细/style 变体和 wavy/double 延后。 |
 | `text-shadow` | 子集 | 第一条 shadow 会绘制为偏移文本；blur 只用于解析兼容，不做真实模糊；多重阴影暂不栅格化。 |
 | `box-sizing` | 可用 | `content-box`、`border-box`。 |
-| `overflow` | 子集 | `visible`、`hidden`、`clip`、`auto`、`scroll`；会形成裁剪 layer。V0 原生滚动容器支持固定尺寸的垂直 `auto`/`scroll` 区域，由宿主提供 scroll offset，并参与裁切绘制和命中测试。Win32 壳会把 wheel/arrow/drag 默认动作先交给最近的可滚容器，不能滚时才回退页面滚动；dirty 面积在预算内时只重绘容器视口。惯性、可见滚动条、水平滚动和 strip 级 scroll blit 延后。 |
+| `overflow` | 子集 | `visible`、`hidden`、`clip`、`auto`、`scroll`；会形成裁剪 layer。V0 原生滚动容器支持固定尺寸的垂直 `auto`/`scroll` 区域，由宿主提供 scroll offset，并参与裁切绘制和命中测试。Win32 壳会把 wheel/arrow/drag 默认动作先交给最近的可滚容器，不能滚时才回退页面滚动；dirty 面积在预算内时只重绘容器视口；frame policy 允许 present 时会追加有界的宿主侧惯性尾巴。可见滚动条、水平滚动和 strip 级 scroll blit 延后。 |
 | `white-space` | 子集 | `normal` 和 `nowrap`。`nowrap` 会继承到文本 layout，阻止便宜换行。 |
 | `text-overflow` | 诊断子集 | 接受 `clip` 和 `ellipsis`，用于表达作者意图。当前渲染仍通过盒/文本后端裁剪；当测量文本宽度超过可用盒时，layout diagnostics 会给出 warning。浏览器级 ellipsis shaping 延后。 |
 | `opacity` | 子集 | 0..1；软件合成中创建 composited layer。 |

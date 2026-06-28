@@ -77,6 +77,10 @@ constexpr UINT_PTR kScriptTimerId = 1;
 constexpr UINT kScriptTimerPeriodMs = 16;
 constexpr int kIncrementalDirtyAreaLimitPercent = 70;
 constexpr int kScrollDragStartThresholdPx = 4;
+constexpr int kScrollInertiaMinDeltaPx = 2;
+constexpr int kScrollInertiaDecayNumerator = 3;
+constexpr int kScrollInertiaDecayDenominator = 4;
+constexpr int kScrollInertiaMaxFrames = 12;
 constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_launcher";
 constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
@@ -563,6 +567,7 @@ struct ScrollContainerDebugCounters {
     std::size_t scrolls = 0;
     std::size_t full_repaints = 0;
     std::size_t dirty_repaints = 0;
+    std::size_t inertia_steps = 0;
 };
 
 struct PresentEstimateCounters {
@@ -3238,7 +3243,8 @@ public:
                   << " copied_pixels=" << scroll_counters_.copied_pixels << '\n';
         std::cout << "  scroll_containers scrolls=" << scroll_container_counters_.scrolls
                   << " full_repaints=" << scroll_container_counters_.full_repaints
-                  << " dirty_repaints=" << scroll_container_counters_.dirty_repaints << '\n';
+                  << " dirty_repaints=" << scroll_container_counters_.dirty_repaints
+                  << " inertia=" << scroll_container_counters_.inertia_steps << '\n';
         std::cout << "  present_estimate_rgb565 frames=" << present_estimate_counters_.frames
                   << " full=" << present_estimate_counters_.full_frames
                   << " dirty=" << present_estimate_counters_.dirty_frames
@@ -3313,7 +3319,11 @@ private:
     const Node* scroll_drag_target_ = nullptr;
     int scroll_drag_start_y_ = 0;
     int scroll_drag_last_y_ = 0;
+    int scroll_drag_last_delta_y_ = 0;
     bool scroll_dragging_ = false;
+    const Node* scroll_inertia_target_ = nullptr;
+    int scroll_inertia_delta_y_ = 0;
+    int scroll_inertia_frames_ = 0;
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
     std::vector<StyleOverride> previous_style_overrides_;
@@ -4161,7 +4171,7 @@ private:
             present_estimate_counters_ = PresentEstimateCounters{};
             present_estimate_rects_.clear();
             scroll_offsets_.clear();
-            reset_scroll_drag();
+            reset_scroll_motion();
             scroll_container_counters_ = ScrollContainerDebugCounters{};
 
             if (system_shell_mode_) {
@@ -4407,7 +4417,19 @@ private:
         scroll_drag_target_ = nullptr;
         scroll_drag_start_y_ = 0;
         scroll_drag_last_y_ = 0;
+        scroll_drag_last_delta_y_ = 0;
         scroll_dragging_ = false;
+    }
+
+    void stop_scroll_inertia() {
+        scroll_inertia_target_ = nullptr;
+        scroll_inertia_delta_y_ = 0;
+        scroll_inertia_frames_ = 0;
+    }
+
+    void reset_scroll_motion() {
+        reset_scroll_drag();
+        stop_scroll_inertia();
     }
 
     bool can_start_scroll_drag(const Node* target) const {
@@ -4423,7 +4445,9 @@ private:
         scroll_drag_target_ = target;
         scroll_drag_start_y_ = y;
         scroll_drag_last_y_ = y;
+        scroll_drag_last_delta_y_ = 0;
         scroll_dragging_ = false;
+        stop_scroll_inertia();
     }
 
     bool update_scroll_drag(int y) {
@@ -4441,7 +4465,44 @@ private:
         scroll_dragging_ = true;
         const int scroll_delta = scroll_drag_last_y_ - y;
         scroll_drag_last_y_ = y;
+        scroll_drag_last_delta_y_ = scroll_delta;
         scroll_container_by(scroll_drag_target_, scroll_delta);
+        return true;
+    }
+
+    void start_scroll_inertia_if_needed() {
+        if (scroll_drag_target_ == nullptr ||
+            std::abs(scroll_drag_last_delta_y_) < kScrollInertiaMinDeltaPx) {
+            stop_scroll_inertia();
+            return;
+        }
+        scroll_inertia_target_ = scroll_drag_target_;
+        scroll_inertia_delta_y_ = scroll_drag_last_delta_y_;
+        scroll_inertia_frames_ = kScrollInertiaMaxFrames;
+    }
+
+    bool advance_scroll_inertia(const AppFramePolicy& frame_policy) {
+        if (scroll_inertia_target_ == nullptr || scroll_inertia_frames_ <= 0 ||
+            !frame_policy.presents_frames) {
+            return false;
+        }
+        if (std::abs(scroll_inertia_delta_y_) < kScrollInertiaMinDeltaPx) {
+            stop_scroll_inertia();
+            return false;
+        }
+        const bool scrolled = scroll_container_by(scroll_inertia_target_, scroll_inertia_delta_y_);
+        if (!scrolled) {
+            stop_scroll_inertia();
+            return false;
+        }
+        ++scroll_container_counters_.inertia_steps;
+        --scroll_inertia_frames_;
+        scroll_inertia_delta_y_ =
+            (scroll_inertia_delta_y_ * kScrollInertiaDecayNumerator) / kScrollInertiaDecayDenominator;
+        if (scroll_inertia_frames_ <= 0 ||
+            std::abs(scroll_inertia_delta_y_) < kScrollInertiaMinDeltaPx) {
+            stop_scroll_inertia();
+        }
         return true;
     }
 
@@ -5174,11 +5235,12 @@ private:
         input.modifiers = modifiers_from_keys(wparam);
         const bool consumed_by_drag = scroll_dragging_;
         if (consumed_by_drag) {
+            start_scroll_inertia_if_needed();
             reset_scroll_drag();
             set_title("drag-scroll end");
             return;
         }
-        reset_scroll_drag();
+        reset_scroll_motion();
         const Node* target = input_->pointer_up(input);
         rerender_if_dirty(input_->focused_node());
         follow_hash_anchor(target);
@@ -5201,6 +5263,7 @@ private:
         input.delta_y = GET_WHEEL_DELTA_WPARAM(wparam);
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->wheel(input);
+        stop_scroll_inertia();
         rerender_if_dirty(input_->focused_node());
         const int scroll_delta = -input.delta_y;
         if (!scroll_container_by(target, scroll_delta)) {
@@ -5268,6 +5331,7 @@ private:
         if (input_->key_down(key)) {
             rerender_if_dirty(focus);
         } else if (key.code == KeyCode::ArrowDown || key.code == KeyCode::ArrowUp) {
+            stop_scroll_inertia();
             const int scroll_delta = key.code == KeyCode::ArrowDown ? 40 : -40;
             const Node* scroll_target = focus != nullptr ? focus : input_->hovered_node();
             if (!scroll_container_by(scroll_target, scroll_delta)) {
@@ -5298,11 +5362,13 @@ private:
             frame_options.max_animation_callbacks_per_frame > 0;
         const bool advanced_animation = frame_policy.presents_frames &&
             animation_budget_enabled && advance_animation_timeline(current_time_ms());
+        const bool advanced_scroll_inertia = advance_scroll_inertia(frame_policy);
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr || !frame_policy.pumps_timers ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
             if (frame_policy.presents_frames &&
-                (completed_image || handled_completion || handled_system_event || advanced_animation)) {
+                (completed_image || handled_completion || handled_system_event || advanced_animation ||
+                 advanced_scroll_inertia)) {
                 rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
             }
             return;
@@ -5338,12 +5404,14 @@ private:
         }
         if (frame_policy.presents_frames &&
             (callbacks != 0 || animation_callbacks != 0 || audio_event_handled || completed_script_service || advanced_animation ||
+             advanced_scroll_inertia ||
              completed_image || handled_completion || handled_system_event)) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #else
         if (frame_policy.presents_frames &&
-            (completed_image || handled_completion || handled_system_event || advanced_animation)) {
+            (completed_image || handled_completion || handled_system_event || advanced_animation ||
+             advanced_scroll_inertia)) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
 #endif
