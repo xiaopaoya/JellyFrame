@@ -1022,6 +1022,16 @@ void javascript_canvas_2d_is_optional_and_lazy() {
         "ctx.moveTo(0, 0);"
         "ctx.lineTo(7, 7);"
         "ctx.stroke();"
+        "ctx.save();"
+        "ctx.globalAlpha = 0.5;"
+        "ctx.fillStyle = '#ff0000';"
+        "ctx.fillRect(0, 6, 1, 1);"
+        "ctx.restore();"
+        "ctx.beginPath();"
+        "ctx.moveTo(6, 6);"
+        "ctx.arc(6, 6, 2, 0, Math.PI);"
+        "ctx.closePath();"
+        "ctx.fill();"
         "ctx.fillStyle");
     check(result.ok && result.value == "#336699", "canvas context draws and reflects fillStyle");
 
@@ -1029,8 +1039,14 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     check(surface != nullptr, "canvas surface allocated lazily after getContext");
     const Color filled = surface->pixels[1 * surface->width + 5];
     check(filled.r == 0x33 && filled.g == 0x66 && filled.b == 0x99, "canvas fillRect updated pixels");
-    const Color stroked = surface->pixels[7 * surface->width + 7];
+    const Color stroked = surface->pixels[1 * surface->width + 1];
     check(stroked.r == 255 && stroked.g == 255 && stroked.b == 255, "canvas stroke updated pixels");
+    const Color translucent = surface->pixels[6 * surface->width + 0];
+    check(translucent.r == 255 && translucent.a >= 126 && translucent.a <= 129,
+          "canvas globalAlpha affects fillRect");
+    const Color arc_filled = surface->pixels[6 * surface->width + 6];
+    check(arc_filled.r == 0x33 && arc_filled.g == 0x66 && arc_filled.b == 0x99,
+          "canvas arc and fill are bound to script");
     check((subtree_dirty_flags(*document) & DomDirtyPaint) != 0U, "canvas drawing marks paint dirty");
 }
 

@@ -1,0 +1,75 @@
+html,
+body {
+  margin: 0;
+  width: 300px;
+  height: 300px;
+  background: #061418;
+  color: #f4fff7;
+  font-family: system-ui;
+}
+
+.screen {
+  width: 264px;
+  height: 264px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 120px 132px;
+  gap: 10px;
+  background: linear-gradient(#17414a, #061418);
+}
+
+.summary {
+  padding: 16px 14px;
+  border-radius: 24px;
+  background: linear-gradient(#256c78, #0f2c34);
+}
+
+.eyebrow,
+.subtle,
+.mini span {
+  margin: 0;
+  font-size: 12px;
+  color: #b7ead9;
+}
+
+h1 {
+  margin: 6px 0 2px;
+  font-size: 38px;
+  line-height: 44px;
+  font-weight: 700;
+}
+
+.rings {
+  display: block;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: #0b2128;
+}
+
+.mini {
+  grid-column: 1 / span 2;
+  width: 264px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mini article {
+  padding: 10px 12px;
+  border-radius: 22px;
+  background: linear-gradient(#102c36, #0a1d24);
+}
+
+.mini canvas {
+  display: block;
+  width: 74px;
+  height: 44px;
+  margin-bottom: 2px;
+}
+
+.mini strong {
+  display: block;
+  font-size: 24px;
+  line-height: 28px;
+}

@@ -10,6 +10,8 @@ namespace jellyframe {
 namespace {
 
 constexpr std::uint32_t kCanvasHandleMask = 0x80000000U;
+constexpr double kPi = 3.14159265358979323846;
+constexpr double kTwoPi = kPi * 2.0;
 
 int parse_positive_int(const std::string& value, int fallback) {
     if (value.empty()) {
@@ -112,16 +114,20 @@ bool parse_canvas_color(std::string_view raw, Color& output) {
     return false;
 }
 
-void write_pixel(Canvas2DSurface& surface, int x, int y, Color color) {
-    if (x < 0 || y < 0 || x >= surface.width || y >= surface.height) {
-        return;
-    }
-    surface.pixels[static_cast<std::size_t>(y) * static_cast<std::size_t>(surface.width) +
-                   static_cast<std::size_t>(x)] = color;
-}
-
 std::uint8_t clamp_u8(int value) {
     return static_cast<std::uint8_t>(std::max(0, std::min(255, value)));
+}
+
+Color with_global_alpha(Color color, double global_alpha) {
+    if (global_alpha >= 1.0) {
+        return color;
+    }
+    if (global_alpha <= 0.0) {
+        color.a = 0;
+        return color;
+    }
+    color.a = clamp_u8(static_cast<int>(static_cast<double>(color.a) * global_alpha + 0.5));
+    return color;
 }
 
 Color with_coverage(Color color, int coverage) {
@@ -171,6 +177,29 @@ void blend_pixel(Canvas2DSurface& surface, int x, int y, Color source) {
 }
 
 void fill_rect_pixels(Canvas2DSurface& surface, int x, int y, int width, int height, Color color) {
+    if (width <= 0 || height <= 0 || surface.width <= 0 || surface.height <= 0 || color.a == 0) {
+        return;
+    }
+    const int left = std::max(0, x);
+    const int top = std::max(0, y);
+    const int right = std::min(surface.width, x + width);
+    const int bottom = std::min(surface.height, y + height);
+    if (right <= left || bottom <= top) {
+        return;
+    }
+    for (int row = top; row < bottom; ++row) {
+        auto* line = surface.pixels.data() + static_cast<std::size_t>(row) * static_cast<std::size_t>(surface.width);
+        if (color.a == 255) {
+            std::fill(line + left, line + right, color);
+        } else {
+            for (int column = left; column < right; ++column) {
+                blend_pixel(surface, column, row, color);
+            }
+        }
+    }
+}
+
+void overwrite_rect_pixels(Canvas2DSurface& surface, int x, int y, int width, int height, Color color) {
     if (width <= 0 || height <= 0 || surface.width <= 0 || surface.height <= 0) {
         return;
     }
@@ -230,6 +259,109 @@ void draw_line(Canvas2DSurface& surface, Canvas2DPoint from, Canvas2DPoint to, C
             blend_pixel(surface, x, y, with_coverage(color, alpha));
         }
     }
+}
+
+bool push_path_point(Canvas2DSurface& surface, const Canvas2DPolicy& policy, Canvas2DPoint point) {
+    if (surface.path.size() >= std::max<std::size_t>(1, policy.max_path_points)) {
+        return false;
+    }
+    surface.path.push_back(point);
+    return true;
+}
+
+bool append_arc_points(Canvas2DSurface& surface,
+                       const Canvas2DPolicy& policy,
+                       double x,
+                       double y,
+                       double radius,
+                       double start_angle,
+                       double end_angle,
+                       bool anticlockwise) {
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(radius) ||
+        !std::isfinite(start_angle) || !std::isfinite(end_angle) || radius <= 0.0) {
+        return false;
+    }
+
+    double sweep = end_angle - start_angle;
+    if (!anticlockwise && sweep < 0.0) {
+        sweep = std::fmod(sweep, kTwoPi) + kTwoPi;
+    } else if (anticlockwise && sweep > 0.0) {
+        sweep = std::fmod(sweep, kTwoPi) - kTwoPi;
+    }
+    if (std::abs(sweep) >= kTwoPi) {
+        sweep = anticlockwise ? -kTwoPi : kTwoPi;
+    }
+    if (std::abs(sweep) < 0.000001) {
+        return true;
+    }
+
+    const int arc_pixels = static_cast<int>(std::ceil(std::abs(sweep) * radius));
+    const int segments = std::max(4, std::min(96, (arc_pixels + 3) / 4));
+    const std::size_t max_points = std::max<std::size_t>(1, policy.max_path_points);
+    if (surface.path.size() + static_cast<std::size_t>(segments) + 1 > max_points) {
+        return false;
+    }
+    for (int index = 0; index <= segments; ++index) {
+        const double angle = start_angle + sweep * static_cast<double>(index) / static_cast<double>(segments);
+        const int px = static_cast<int>(std::round(x + std::cos(angle) * radius));
+        const int py = static_cast<int>(std::round(y + std::sin(angle) * radius));
+        if (!surface.path.empty() && surface.path.back().x == px && surface.path.back().y == py) {
+            continue;
+        }
+        if (!push_path_point(surface, policy, Canvas2DPoint{px, py})) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool fill_polygon(Canvas2DSurface& surface, const std::vector<Canvas2DPoint>& points, Color color) {
+    if (points.size() < 3 || surface.width <= 0 || surface.height <= 0 || color.a == 0) {
+        return false;
+    }
+    int min_y = points.front().y;
+    int max_y = points.front().y;
+    for (const Canvas2DPoint& point : points) {
+        min_y = std::min(min_y, point.y);
+        max_y = std::max(max_y, point.y);
+    }
+    const int top = std::max(0, min_y);
+    const int bottom = std::min(surface.height - 1, max_y);
+    if (bottom < top) {
+        return false;
+    }
+
+    std::vector<int>& intersections = surface.fill_intersections;
+    if (intersections.capacity() < points.size()) {
+        intersections.reserve(points.size());
+    }
+    for (int y = top; y <= bottom; ++y) {
+        intersections.clear();
+        const double scan_y = static_cast<double>(y) + 0.5;
+        for (std::size_t index = 0; index < points.size(); ++index) {
+            const Canvas2DPoint& a = points[index];
+            const Canvas2DPoint& b = points[(index + 1) % points.size()];
+            const double ay = static_cast<double>(a.y);
+            const double by = static_cast<double>(b.y);
+            if ((ay <= scan_y && by > scan_y) || (by <= scan_y && ay > scan_y)) {
+                const double t = (scan_y - ay) / (by - ay);
+                intersections.push_back(static_cast<int>(std::round(static_cast<double>(a.x) +
+                                                                     t * static_cast<double>(b.x - a.x))));
+            }
+        }
+        if (intersections.size() < 2) {
+            continue;
+        }
+        std::sort(intersections.begin(), intersections.end());
+        for (std::size_t index = 0; index + 1 < intersections.size(); index += 2) {
+            const int left = std::max(0, intersections[index]);
+            const int right = std::min(surface.width - 1, intersections[index + 1]);
+            if (right >= left) {
+                fill_rect_pixels(surface, left, y, right - left + 1, 1, color);
+            }
+        }
+    }
+    return true;
 }
 
 } // namespace
@@ -337,7 +469,7 @@ bool Canvas2DRegistry::set_fill_style(Node& node, std::string_view value) {
     if (surface == nullptr || !parse_canvas_color(value, parsed)) {
         return false;
     }
-    surface->fill_style = parsed;
+    surface->state.fill_style = parsed;
     return true;
 }
 
@@ -347,7 +479,7 @@ bool Canvas2DRegistry::set_stroke_style(Node& node, std::string_view value) {
     if (surface == nullptr || !parse_canvas_color(value, parsed)) {
         return false;
     }
-    surface->stroke_style = parsed;
+    surface->state.stroke_style = parsed;
     return true;
 }
 
@@ -356,23 +488,56 @@ bool Canvas2DRegistry::set_line_width(Node& node, double value) {
     if (surface == nullptr || !std::isfinite(value) || value <= 0) {
         return false;
     }
-    surface->line_width = std::max(1, std::min(32, static_cast<int>(std::round(value))));
+    surface->state.line_width = std::max(1, std::min(32, static_cast<int>(std::round(value))));
+    return true;
+}
+
+bool Canvas2DRegistry::set_global_alpha(Node& node, double value) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || !std::isfinite(value) || value < 0.0 || value > 1.0) {
+        return false;
+    }
+    surface->state.global_alpha = value;
     return true;
 }
 
 Color Canvas2DRegistry::fill_style(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
-    return surface != nullptr ? surface->fill_style : Color{0, 0, 0, 255};
+    return surface != nullptr ? surface->state.fill_style : Color{0, 0, 0, 255};
 }
 
 Color Canvas2DRegistry::stroke_style(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
-    return surface != nullptr ? surface->stroke_style : Color{0, 0, 0, 255};
+    return surface != nullptr ? surface->state.stroke_style : Color{0, 0, 0, 255};
 }
 
 int Canvas2DRegistry::line_width(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
-    return surface != nullptr ? surface->line_width : 1;
+    return surface != nullptr ? surface->state.line_width : 1;
+}
+
+double Canvas2DRegistry::global_alpha(const Node& node) const {
+    const Canvas2DSurface* surface = surface_for(node);
+    return surface != nullptr ? surface->state.global_alpha : 1.0;
+}
+
+bool Canvas2DRegistry::save(Node& node) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || surface->state_stack.size() >= std::max<std::size_t>(1, policy_.max_state_stack_depth)) {
+        return false;
+    }
+    surface->state_stack.push_back(surface->state);
+    return true;
+}
+
+bool Canvas2DRegistry::restore(Node& node) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || surface->state_stack.empty()) {
+        return false;
+    }
+    surface->state = surface->state_stack.back();
+    surface->state_stack.pop_back();
+    return true;
 }
 
 bool Canvas2DRegistry::clear_rect(Node& node, int x, int y, int width, int height) {
@@ -380,7 +545,7 @@ bool Canvas2DRegistry::clear_rect(Node& node, int x, int y, int width, int heigh
     if (surface == nullptr) {
         return false;
     }
-    fill_rect_pixels(*surface, x, y, width, height, Color{0, 0, 0, 0});
+    overwrite_rect_pixels(*surface, x, y, width, height, Color{0, 0, 0, 0});
     mark_dirty(node, DomDirtyPaint);
     return true;
 }
@@ -390,7 +555,8 @@ bool Canvas2DRegistry::fill_rect(Node& node, int x, int y, int width, int height
     if (surface == nullptr) {
         return false;
     }
-    fill_rect_pixels(*surface, x, y, width, height, surface->fill_style);
+    fill_rect_pixels(*surface, x, y, width, height,
+                     with_global_alpha(surface->state.fill_style, surface->state.global_alpha));
     mark_dirty(node, DomDirtyPaint);
     return true;
 }
@@ -400,11 +566,12 @@ bool Canvas2DRegistry::stroke_rect(Node& node, int x, int y, int width, int heig
     if (surface == nullptr || width <= 0 || height <= 0) {
         return false;
     }
-    const int line = std::max(1, surface->line_width);
-    fill_rect_pixels(*surface, x, y, width, line, surface->stroke_style);
-    fill_rect_pixels(*surface, x, y + height - line, width, line, surface->stroke_style);
-    fill_rect_pixels(*surface, x, y, line, height, surface->stroke_style);
-    fill_rect_pixels(*surface, x + width - line, y, line, height, surface->stroke_style);
+    const int line = std::max(1, surface->state.line_width);
+    const Color color = with_global_alpha(surface->state.stroke_style, surface->state.global_alpha);
+    fill_rect_pixels(*surface, x, y, width, line, color);
+    fill_rect_pixels(*surface, x, y + height - line, width, line, color);
+    fill_rect_pixels(*surface, x, y, line, height, color);
+    fill_rect_pixels(*surface, x + width - line, y, line, height, color);
     mark_dirty(node, DomDirtyPaint);
     return true;
 }
@@ -415,6 +582,7 @@ bool Canvas2DRegistry::begin_path(Node& node) {
         return false;
     }
     surface->path.clear();
+    surface->path_closed = false;
     return true;
 }
 
@@ -424,7 +592,8 @@ bool Canvas2DRegistry::move_to(Node& node, int x, int y) {
         return false;
     }
     surface->path.clear();
-    surface->path.push_back(Canvas2DPoint{x, y});
+    surface->path_closed = false;
+    push_path_point(*surface, policy_, Canvas2DPoint{x, y});
     return true;
 }
 
@@ -433,11 +602,44 @@ bool Canvas2DRegistry::line_to(Node& node, int x, int y) {
     if (surface == nullptr) {
         return false;
     }
-    if (surface->path.empty()) {
-        surface->path.push_back(Canvas2DPoint{x, y});
-    } else {
-        surface->path.push_back(Canvas2DPoint{x, y});
+    surface->path_closed = false;
+    return push_path_point(*surface, policy_, Canvas2DPoint{x, y});
+}
+
+bool Canvas2DRegistry::arc(Node& node,
+                           double x,
+                           double y,
+                           double radius,
+                           double start_angle,
+                           double end_angle,
+                           bool anticlockwise) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr) {
+        return false;
     }
+    surface->path_closed = false;
+    return append_arc_points(*surface, policy_, x, y, radius, start_angle, end_angle, anticlockwise);
+}
+
+bool Canvas2DRegistry::close_path(Node& node) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || surface->path.size() < 2) {
+        return false;
+    }
+    surface->path_closed = true;
+    return true;
+}
+
+bool Canvas2DRegistry::fill(Node& node) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || surface->path.size() < 3) {
+        return false;
+    }
+    if (!fill_polygon(*surface, surface->path,
+                      with_global_alpha(surface->state.fill_style, surface->state.global_alpha))) {
+        return false;
+    }
+    mark_dirty(node, DomDirtyPaint);
     return true;
 }
 
@@ -446,8 +648,13 @@ bool Canvas2DRegistry::stroke(Node& node) {
     if (surface == nullptr || surface->path.size() < 2) {
         return false;
     }
+    const Color color = with_global_alpha(surface->state.stroke_style, surface->state.global_alpha);
+    const int line_width = surface->state.line_width;
     for (std::size_t index = 1; index < surface->path.size(); ++index) {
-        draw_line(*surface, surface->path[index - 1], surface->path[index], surface->stroke_style, surface->line_width);
+        draw_line(*surface, surface->path[index - 1], surface->path[index], color, line_width);
+    }
+    if (surface->path_closed) {
+        draw_line(*surface, surface->path.back(), surface->path.front(), color, line_width);
     }
     mark_dirty(node, DomDirtyPaint);
     return true;

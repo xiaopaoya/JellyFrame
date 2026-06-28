@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Jelly Canvas Gauges</title>
+    <link rel="stylesheet" href="styles/app.css">
+  </head>
+  <body>
+    <main class="screen">
+      <section class="summary">
+        <p class="eyebrow">Move</p>
+        <h1>82%</h1>
+        <p class="subtle">daily goal</p>
+      </section>
+      <canvas id="rings" width="132" height="132" class="rings"></canvas>
+      <section class="mini">
+        <article>
+          <canvas id="heart" width="74" height="44"></canvas>
+          <strong>72</strong>
+          <span>bpm</span>
+        </article>
+        <article>
+          <canvas id="battery" width="74" height="44"></canvas>
+          <strong>64%</strong>
+          <span>battery</span>
+        </article>
+      </section>
+    </main>
+    <script src="scripts/app.js"></script>
+  </body>
+</html>

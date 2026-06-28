@@ -62,11 +62,16 @@ JellyFrame Engine 的重要变更记录在这里。
   微基准和 `jelly_canvas_smoke` 示例。
 - 登记 `graphics.canvas2d` 作为标准可选 Canvas 2D capability 名称。Package report 会输出
   Canvas target support；target profile 仍通过 `hostServices.canvas2d` 显式开启。
+- 扩展可选 Canvas 2D 到 V0.1，加入 `globalAlpha`、`save`/`restore`、`arc`、
+  `closePath`、`fill`、有界 path/state 预算和抗锯齿 stroke coverage。新增
+  `jelly_canvas_gauges` package，并补齐 CLI、Win32、脚本、render-core 和微基准回归。
 
 ### 变更
 
 - 低色深 embedded framebuffer 转换现在按 rectangle 和 pixel format 分派，减少 RGB565/BGR565
   这类目标上的每像素分支与 stride 重算开销。
+- Canvas fill-path 扫描线交点现在复用 surface 持有的 scratch storage，避免每次 `fill()`
+  都产生临时分配。
 
 ## 0.4.0-dev - 2026-06-28
 

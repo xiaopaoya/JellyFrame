@@ -2153,6 +2153,47 @@ jerry_value_t canvas_set_line_width(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t canvas_get_global_alpha(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t[],
+                                      const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    return jerry_number(registry != nullptr && node != nullptr ? registry->global_alpha(*node) : 1.0);
+}
+
+jerry_value_t canvas_set_global_alpha(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count > 0) {
+        registry->set_global_alpha(*node, double_from_value(args_p[0], 1.0));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_save(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t[],
+                          const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr) {
+        registry->save(*node);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_restore(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t[],
+                             const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr) {
+        registry->restore(*node);
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t canvas_clear_rect(const jerry_call_info_t* call_info_p,
                                 const jerry_value_t args_p[],
                                 const jerry_length_t args_count) {
@@ -2231,6 +2272,45 @@ jerry_value_t canvas_line_to(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t canvas_arc(const jerry_call_info_t* call_info_p,
+                         const jerry_value_t args_p[],
+                         const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count >= 5) {
+        registry->arc(*node,
+                      double_from_value(args_p[0]),
+                      double_from_value(args_p[1]),
+                      double_from_value(args_p[2]),
+                      double_from_value(args_p[3]),
+                      double_from_value(args_p[4]),
+                      args_count >= 6 && jerry_value_to_boolean(args_p[5]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_close_path(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr) {
+        registry->close_path(*node);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_fill(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t[],
+                          const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr) {
+        registry->fill(*node);
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t canvas_stroke(const jerry_call_info_t* call_info_p,
                             const jerry_value_t[],
                             const jerry_length_t) {
@@ -2249,12 +2329,18 @@ jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "fillStyle", canvas_get_fill_style, canvas_set_fill_style);
     define_accessor(object.get(), "strokeStyle", canvas_get_stroke_style, canvas_set_stroke_style);
     define_accessor(object.get(), "lineWidth", canvas_get_line_width, canvas_set_line_width);
+    define_accessor(object.get(), "globalAlpha", canvas_get_global_alpha, canvas_set_global_alpha);
+    set_method(object.get(), "save", canvas_save);
+    set_method(object.get(), "restore", canvas_restore);
     set_method(object.get(), "clearRect", canvas_clear_rect);
     set_method(object.get(), "fillRect", canvas_fill_rect);
     set_method(object.get(), "strokeRect", canvas_stroke_rect);
     set_method(object.get(), "beginPath", canvas_begin_path);
     set_method(object.get(), "moveTo", canvas_move_to);
     set_method(object.get(), "lineTo", canvas_line_to);
+    set_method(object.get(), "arc", canvas_arc);
+    set_method(object.get(), "closePath", canvas_close_path);
+    set_method(object.get(), "fill", canvas_fill);
     set_method(object.get(), "stroke", canvas_stroke);
     return object.release();
 }

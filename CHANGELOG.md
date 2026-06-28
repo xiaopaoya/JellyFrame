@@ -81,12 +81,18 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Registered `graphics.canvas2d` as the standard optional Canvas 2D capability
   name. Package reports include Canvas target support; target profiles still
   opt in explicitly through `hostServices.canvas2d`.
+- Expanded optional Canvas 2D to V0.1 with `globalAlpha`, `save`/`restore`,
+  `arc`, `closePath`, `fill`, bounded path/state budgets and antialiased stroke
+  coverage. Added the `jelly_canvas_gauges` package plus CLI, Win32, script,
+  render-core and microbench regression coverage.
 
 ### Changed
 
 - Low-depth embedded framebuffer conversion is now dispatched per rectangle and
   pixel format, reducing per-pixel branch and stride recomputation overhead on
   RGB565/BGR565-style targets.
+- Canvas fill-path scanline intersections now reuse surface-owned scratch
+  storage, avoiding a transient allocation on each `fill()` call.
 
 ## 0.4.0-dev - 2026-06-28
 

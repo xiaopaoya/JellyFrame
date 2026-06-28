@@ -500,6 +500,22 @@ int main(int argc, char** argv) {
         }
         canvas_registry.stroke(*canvas);
     }));
+    print_result("canvas2d_arc_stroke", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        canvas_registry.begin_path(*canvas);
+        canvas_registry.arc(*canvas, 60.0, 40.0, 28.0, -1.57079632679, 4.18879020479, false);
+        canvas_registry.stroke(*canvas);
+    }));
+    canvas_registry.set_fill_style(*canvas, "#2dd4bf");
+    canvas_registry.set_global_alpha(*canvas, 0.65);
+    print_result("canvas2d_fill_path", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        canvas_registry.begin_path(*canvas);
+        canvas_registry.move_to(*canvas, 60, 40);
+        canvas_registry.arc(*canvas, 60.0, 40.0, 30.0, -1.57079632679, 2.61799387799, false);
+        canvas_registry.close_path(*canvas);
+        canvas_registry.fill(*canvas);
+    }));
     print_style_statistics(resolver.statistics());
 
     return 0;
