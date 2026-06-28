@@ -224,6 +224,70 @@ Color with_coverage(Color color, int coverage) {
     return color;
 }
 
+const Canvas2DLinearGradient* find_gradient(const std::vector<Canvas2DLinearGradient>& gradients,
+                                            std::uint32_t gradient_id) {
+    for (const Canvas2DLinearGradient& gradient : gradients) {
+        if (gradient.id == gradient_id) {
+            return &gradient;
+        }
+    }
+    return nullptr;
+}
+
+Color lerp_color(Color from, Color to, double t) {
+    t = std::max(0.0, std::min(1.0, t));
+    const auto channel = [t](std::uint8_t left, std::uint8_t right) {
+        return clamp_u8(static_cast<int>(static_cast<double>(left) +
+                                         (static_cast<double>(right) - static_cast<double>(left)) * t + 0.5));
+    };
+    return Color{
+        channel(from.r, to.r),
+        channel(from.g, to.g),
+        channel(from.b, to.b),
+        channel(from.a, to.a),
+    };
+}
+
+Color sample_linear_gradient(const Canvas2DLinearGradient& gradient, double x, double y) {
+    if (gradient.stops.empty()) {
+        return Color{0, 0, 0, 0};
+    }
+    if (gradient.stops.size() == 1) {
+        return gradient.stops.front().color;
+    }
+    const double dx = gradient.x1 - gradient.x0;
+    const double dy = gradient.y1 - gradient.y0;
+    const double length_squared = dx * dx + dy * dy;
+    double offset = 0.0;
+    if (length_squared > 0.000001) {
+        offset = ((x - gradient.x0) * dx + (y - gradient.y0) * dy) / length_squared;
+    }
+    offset = std::max(0.0, std::min(1.0, offset));
+
+    const Canvas2DGradientStop* previous = &gradient.stops.front();
+    for (std::size_t index = 1; index < gradient.stops.size(); ++index) {
+        const Canvas2DGradientStop& next = gradient.stops[index];
+        if (offset <= next.offset) {
+            const double span = std::max(0.000001, next.offset - previous->offset);
+            return lerp_color(previous->color, next.color, (offset - previous->offset) / span);
+        }
+        previous = &next;
+    }
+    return gradient.stops.back().color;
+}
+
+Color color_for_style(const Canvas2DPaintStyle& style,
+                      const std::vector<Canvas2DLinearGradient>& gradients,
+                      double x,
+                      double y) {
+    if (style.kind == Canvas2DPaintKind::LinearGradient) {
+        if (const Canvas2DLinearGradient* gradient = find_gradient(gradients, style.gradient_id)) {
+            return sample_linear_gradient(*gradient, x, y);
+        }
+    }
+    return style.color;
+}
+
 void blend_pixel(Canvas2DSurface& surface, int x, int y, Color source) {
     if (x < 0 || y < 0 || x >= surface.width || y >= surface.height || source.a == 0) {
         return;
@@ -298,14 +362,58 @@ void overwrite_rect_pixels(Canvas2DSurface& surface, int x, int y, int width, in
     }
 }
 
-void draw_line(Canvas2DSurface& surface, Canvas2DPoint from, Canvas2DPoint to, Color color, int line_width) {
+void fill_rect_paint(Canvas2DSurface& surface,
+                     int x,
+                     int y,
+                     int width,
+                     int height,
+                     const Canvas2DPaintStyle& style,
+                     double global_alpha,
+                     const std::vector<Canvas2DLinearGradient>& gradients) {
+    if (style.kind == Canvas2DPaintKind::Solid) {
+        fill_rect_pixels(surface, x, y, width, height, with_global_alpha(style.color, global_alpha));
+        return;
+    }
+    const Canvas2DLinearGradient* gradient = find_gradient(gradients, style.gradient_id);
+    if (gradient == nullptr) {
+        return;
+    }
+    if (width <= 0 || height <= 0 || surface.width <= 0 || surface.height <= 0) {
+        return;
+    }
+    const int left = std::max(0, x);
+    const int top = std::max(0, y);
+    const int right = std::min(surface.width, x + width);
+    const int bottom = std::min(surface.height, y + height);
+    if (right <= left || bottom <= top) {
+        return;
+    }
+    for (int row = top; row < bottom; ++row) {
+        for (int column = left; column < right; ++column) {
+            const Color color = with_global_alpha(sample_linear_gradient(*gradient, column + 0.5, row + 0.5),
+                                                  global_alpha);
+            blend_pixel(surface, column, row, color);
+        }
+    }
+}
+
+void draw_line(Canvas2DSurface& surface,
+               Canvas2DPoint from,
+               Canvas2DPoint to,
+               const Canvas2DPaintStyle& style,
+               double global_alpha,
+               int line_width,
+               const std::vector<Canvas2DLinearGradient>& gradients) {
     const double x0 = static_cast<double>(from.x);
     const double y0 = static_cast<double>(from.y);
     const double dx = static_cast<double>(to.x - from.x);
     const double dy = static_cast<double>(to.y - from.y);
     const double length_squared = dx * dx + dy * dy;
     if (length_squared <= 0.0) {
-        blend_pixel(surface, from.x, from.y, color);
+        blend_pixel(surface,
+                    from.x,
+                    from.y,
+                    with_global_alpha(color_for_style(style, gradients, from.x, from.y), global_alpha));
         return;
     }
 
@@ -338,6 +446,7 @@ void draw_line(Canvas2DSurface& surface, Canvas2DPoint from, Canvas2DPoint to, C
             const int alpha = distance_squared <= inner_radius_squared
                 ? 255
                 : static_cast<int>(((aa_radius_squared - distance_squared) / feather_squared) * 255.0 + 0.5);
+            const Color color = with_global_alpha(color_for_style(style, gradients, px, py), global_alpha);
             blend_pixel(surface, x, y, with_coverage(color, alpha));
         }
     }
@@ -397,8 +506,12 @@ bool append_arc_points(Canvas2DSurface& surface,
     return true;
 }
 
-bool fill_polygon(Canvas2DSurface& surface, const std::vector<Canvas2DPoint>& points, Color color) {
-    if (points.size() < 3 || surface.width <= 0 || surface.height <= 0 || color.a == 0) {
+bool fill_polygon(Canvas2DSurface& surface,
+                  const std::vector<Canvas2DPoint>& points,
+                  const Canvas2DPaintStyle& style,
+                  double global_alpha,
+                  const std::vector<Canvas2DLinearGradient>& gradients) {
+    if (points.size() < 3 || surface.width <= 0 || surface.height <= 0) {
         return false;
     }
     int min_y = points.front().y;
@@ -439,7 +552,7 @@ bool fill_polygon(Canvas2DSurface& surface, const std::vector<Canvas2DPoint>& po
             const int left = std::max(0, intersections[index]);
             const int right = std::min(surface.width - 1, intersections[index + 1]);
             if (right >= left) {
-                fill_rect_pixels(surface, left, y, right - left + 1, 1, color);
+                fill_rect_paint(surface, left, y, right - left + 1, 1, style, global_alpha, gradients);
             }
         }
     }
@@ -463,7 +576,9 @@ void Canvas2DRegistry::set_text_backend(TextMeasureProvider measure, TextPainter
 
 void Canvas2DRegistry::clear() {
     surfaces_.clear();
+    gradients_.clear();
     next_handle_ = 1;
+    next_gradient_id_ = 1;
 }
 
 std::size_t Canvas2DRegistry::total_pixels() const {
@@ -550,13 +665,21 @@ const Canvas2DSurface* Canvas2DRegistry::surface_for(const Node& node) const {
     return nullptr;
 }
 
+const Canvas2DLinearGradient* Canvas2DRegistry::gradient(std::uint32_t gradient_id) const {
+    return find_gradient(gradients_, gradient_id);
+}
+
+bool Canvas2DRegistry::gradient_exists(std::uint32_t gradient_id) const {
+    return gradient(gradient_id) != nullptr;
+}
+
 bool Canvas2DRegistry::set_fill_style(Node& node, std::string_view value) {
     Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
     Color parsed;
     if (surface == nullptr || !parse_canvas_color(value, parsed)) {
         return false;
     }
-    surface->state.fill_style = parsed;
+    surface->state.fill_style = Canvas2DPaintStyle{Canvas2DPaintKind::Solid, parsed, 0};
     return true;
 }
 
@@ -566,7 +689,26 @@ bool Canvas2DRegistry::set_stroke_style(Node& node, std::string_view value) {
     if (surface == nullptr || !parse_canvas_color(value, parsed)) {
         return false;
     }
-    surface->state.stroke_style = parsed;
+    surface->state.stroke_style = Canvas2DPaintStyle{Canvas2DPaintKind::Solid, parsed, 0};
+    return true;
+}
+
+bool Canvas2DRegistry::set_fill_gradient(Node& node, std::uint32_t gradient_id) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || !gradient_exists(gradient_id)) {
+        return false;
+    }
+    surface->state.fill_style = Canvas2DPaintStyle{Canvas2DPaintKind::LinearGradient, Color{0, 0, 0, 255}, gradient_id};
+    return true;
+}
+
+bool Canvas2DRegistry::set_stroke_gradient(Node& node, std::uint32_t gradient_id) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || !gradient_exists(gradient_id)) {
+        return false;
+    }
+    surface->state.stroke_style =
+        Canvas2DPaintStyle{Canvas2DPaintKind::LinearGradient, Color{0, 0, 0, 255}, gradient_id};
     return true;
 }
 
@@ -603,12 +745,12 @@ bool Canvas2DRegistry::set_font(Node& node, std::string_view value) {
 
 Color Canvas2DRegistry::fill_style(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
-    return surface != nullptr ? surface->state.fill_style : Color{0, 0, 0, 255};
+    return surface != nullptr ? surface->state.fill_style.color : Color{0, 0, 0, 255};
 }
 
 Color Canvas2DRegistry::stroke_style(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
-    return surface != nullptr ? surface->state.stroke_style : Color{0, 0, 0, 255};
+    return surface != nullptr ? surface->state.stroke_style.color : Color{0, 0, 0, 255};
 }
 
 int Canvas2DRegistry::line_width(const Node& node) const {
@@ -660,8 +802,7 @@ bool Canvas2DRegistry::fill_rect(Node& node, int x, int y, int width, int height
     if (surface == nullptr) {
         return false;
     }
-    fill_rect_pixels(*surface, x, y, width, height,
-                     with_global_alpha(surface->state.fill_style, surface->state.global_alpha));
+    fill_rect_paint(*surface, x, y, width, height, surface->state.fill_style, surface->state.global_alpha, gradients_);
     mark_dirty(node, DomDirtyPaint);
     return true;
 }
@@ -672,11 +813,24 @@ bool Canvas2DRegistry::stroke_rect(Node& node, int x, int y, int width, int heig
         return false;
     }
     const int line = std::max(1, surface->state.line_width);
-    const Color color = with_global_alpha(surface->state.stroke_style, surface->state.global_alpha);
-    fill_rect_pixels(*surface, x, y, width, line, color);
-    fill_rect_pixels(*surface, x, y + height - line, width, line, color);
-    fill_rect_pixels(*surface, x, y, line, height, color);
-    fill_rect_pixels(*surface, x + width - line, y, line, height, color);
+    fill_rect_paint(*surface, x, y, width, line, surface->state.stroke_style, surface->state.global_alpha, gradients_);
+    fill_rect_paint(*surface,
+                    x,
+                    y + height - line,
+                    width,
+                    line,
+                    surface->state.stroke_style,
+                    surface->state.global_alpha,
+                    gradients_);
+    fill_rect_paint(*surface, x, y, line, height, surface->state.stroke_style, surface->state.global_alpha, gradients_);
+    fill_rect_paint(*surface,
+                    x + width - line,
+                    y,
+                    line,
+                    height,
+                    surface->state.stroke_style,
+                    surface->state.global_alpha,
+                    gradients_);
     mark_dirty(node, DomDirtyPaint);
     return true;
 }
@@ -740,8 +894,7 @@ bool Canvas2DRegistry::fill(Node& node) {
     if (surface == nullptr || surface->path.size() < 3) {
         return false;
     }
-    if (!fill_polygon(*surface, surface->path,
-                      with_global_alpha(surface->state.fill_style, surface->state.global_alpha))) {
+    if (!fill_polygon(*surface, surface->path, surface->state.fill_style, surface->state.global_alpha, gradients_)) {
         return false;
     }
     mark_dirty(node, DomDirtyPaint);
@@ -753,13 +906,24 @@ bool Canvas2DRegistry::stroke(Node& node) {
     if (surface == nullptr || surface->path.size() < 2) {
         return false;
     }
-    const Color color = with_global_alpha(surface->state.stroke_style, surface->state.global_alpha);
     const int line_width = surface->state.line_width;
     for (std::size_t index = 1; index < surface->path.size(); ++index) {
-        draw_line(*surface, surface->path[index - 1], surface->path[index], color, line_width);
+        draw_line(*surface,
+                  surface->path[index - 1],
+                  surface->path[index],
+                  surface->state.stroke_style,
+                  surface->state.global_alpha,
+                  line_width,
+                  gradients_);
     }
     if (surface->path_closed) {
-        draw_line(*surface, surface->path.back(), surface->path.front(), color, line_width);
+        draw_line(*surface,
+                  surface->path.back(),
+                  surface->path.front(),
+                  surface->state.stroke_style,
+                  surface->state.global_alpha,
+                  line_width,
+                  gradients_);
     }
     mark_dirty(node, DomDirtyPaint);
     return true;
@@ -813,7 +977,8 @@ bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, do
     DisplayCommand command;
     command.type = DisplayCommandType::Text;
     command.rect = Rect{left, baseline - line_height, width, line_height};
-    command.color = with_global_alpha(surface->state.fill_style, surface->state.global_alpha);
+    command.color = with_global_alpha(color_for_style(surface->state.fill_style, gradients_, left, baseline),
+                                      surface->state.global_alpha);
     command.text = owned_text;
     command.font_size = surface->state.font_size;
     command.font_weight = surface->state.font_weight;
@@ -825,6 +990,46 @@ bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, do
 
     surface->pixels.swap(target.pixels);
     mark_dirty(node, DomDirtyPaint);
+    return true;
+}
+
+std::uint32_t Canvas2DRegistry::create_linear_gradient(double x0, double y0, double x1, double y1) {
+    if (!policy_.enabled || gradients_.size() >= policy_.max_gradients ||
+        !std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(x1) || !std::isfinite(y1)) {
+        return 0;
+    }
+    Canvas2DLinearGradient gradient;
+    gradient.id = next_gradient_id_++;
+    if (next_gradient_id_ == 0) {
+        next_gradient_id_ = 1;
+    }
+    gradient.x0 = x0;
+    gradient.y0 = y0;
+    gradient.x1 = x1;
+    gradient.y1 = y1;
+    gradients_.push_back(std::move(gradient));
+    return gradients_.back().id;
+}
+
+bool Canvas2DRegistry::add_color_stop(std::uint32_t gradient_id, double offset, std::string_view color) {
+    if (!std::isfinite(offset) || offset < 0.0 || offset > 1.0) {
+        return false;
+    }
+    Canvas2DLinearGradient* found = nullptr;
+    for (Canvas2DLinearGradient& gradient : gradients_) {
+        if (gradient.id == gradient_id) {
+            found = &gradient;
+            break;
+        }
+    }
+    Color parsed;
+    if (found == nullptr || found->stops.size() >= policy_.max_gradient_stops || !parse_canvas_color(color, parsed)) {
+        return false;
+    }
+    found->stops.push_back(Canvas2DGradientStop{offset, parsed});
+    std::stable_sort(found->stops.begin(), found->stops.end(), [](const auto& left, const auto& right) {
+        return left.offset < right.offset;
+    });
     return true;
 }
 

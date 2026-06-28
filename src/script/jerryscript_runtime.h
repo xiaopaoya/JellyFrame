@@ -25,6 +25,7 @@ struct ScriptAnimationFrameCallback;
 struct ScriptAudioElement;
 struct ScriptEventListener;
 struct ScriptGeolocationRequest;
+struct ScriptCanvasGradient;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
 
@@ -134,6 +135,7 @@ private:
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
     std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
+    std::vector<std::unique_ptr<ScriptCanvasGradient>> canvas_gradients_;
     JerryScriptRuntimeOptions options_;
     AppRuntimeHost* app_host_ = nullptr;
     NetworkFetchMock* network_fetch_ = nullptr;
@@ -177,6 +179,8 @@ private:
                                                          std::uint32_t success_callback,
                                                          std::uint32_t error_callback);
     void clear_geolocation_requests();
+    ScriptCanvasGradient* create_canvas_gradient(std::uint32_t gradient_id);
+    void clear_canvas_gradients();
 };
 
 } // namespace jellyframe

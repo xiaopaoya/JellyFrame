@@ -68,6 +68,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - 扩展可选 Canvas 2D 到 V0.2，加入有界 `font`、`measureText` 和 `fillText`
   子集。Canvas 文本在宿主绑定 text backend 时复用宿主文本后端，否则退回 JellyFrame
   极小 bitmap 文本路径；已覆盖 render-core/script 测试、微基准和 gauges 示例。
+- 扩展可选 Canvas 2D 到 V0.3，加入有界、标准的 `createLinearGradient` /
+  `CanvasGradient.addColorStop` 子集。`fillStyle` 和 `strokeStyle` 现在可以接收
+  CanvasGradient 对象；纯色路径继续走原有快速填充。
 
 ### 变更
 
@@ -77,6 +80,8 @@ JellyFrame Engine 的重要变更记录在这里。
   都产生临时分配。
 - Win32 browser 壳会把 DOM 文本使用的同一套 GDI/app-font 文本后端绑定进 Canvas，
   让桌面验收时 Canvas 标签和 DOM 标签的测量结果保持一致。
+- `jelly_canvas_gauges` 现在在圆环和电量条中使用 Canvas gradient，Win32 脚本化截图会覆盖
+  新增渐变路径。
 
 ## 0.4.0-dev - 2026-06-28
 

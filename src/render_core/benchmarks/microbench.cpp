@@ -526,6 +526,14 @@ int main(int argc, char** argv) {
         canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
         canvas_registry.fill_text(*canvas, "82%", 42.0, 44.0);
     }));
+    const std::uint32_t canvas_gradient = canvas_registry.create_linear_gradient(0.0, 0.0, 120.0, 0.0);
+    canvas_registry.add_color_stop(canvas_gradient, 0.0, "#0f766e");
+    canvas_registry.add_color_stop(canvas_gradient, 1.0, "#facc15");
+    canvas_registry.set_fill_gradient(*canvas, canvas_gradient);
+    print_result("canvas2d_linear_gradient_fill_rect", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        canvas_registry.fill_rect(*canvas, 0, 0, 120, 80);
+    }));
     print_style_statistics(resolver.statistics());
 
     return 0;

@@ -55,7 +55,7 @@ JellyFrame deliberately does not provide:
 - GPU compositing or pixel-compatible browser rendering.
 
 Host-optional async `XMLHttpRequest` GET V0, `localStorage` V0, packaged BMP
-images, `Audio` V0 and optional Canvas 2D V0.2 exist, but they are not full
+images, `Audio` V0 and optional Canvas 2D V0.3 exist, but they are not full
 browser APIs. Use them only within the capability matrix and manifest
 declarations.
 Before relying on a feature, check

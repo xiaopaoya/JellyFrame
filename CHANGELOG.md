@@ -89,6 +89,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   and `fillText` subset. Canvas text now reuses the host text backend when one
   is bound, falls back to JellyFrame's tiny bitmap text path otherwise, and is
   covered by render-core/script tests, microbench output and the gauges sample.
+- Expanded optional Canvas 2D to V0.3 with a bounded standard
+  `createLinearGradient` / `CanvasGradient.addColorStop` subset. Fill and stroke
+  styles can now receive CanvasGradient objects; pure solid-color paths keep the
+  existing fast fill route.
 
 ### Changed
 
@@ -100,6 +104,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - The Win32 browser shell binds the same GDI/app-font text backend into Canvas
   that it already uses for DOM text, so Canvas labels and DOM labels measure
   consistently during desktop validation.
+- `jelly_canvas_gauges` now uses Canvas gradients in its rings and battery meter
+  so the Win32 scripted capture exercises the new gradient path.
 
 ## 0.4.0-dev - 2026-06-28
 

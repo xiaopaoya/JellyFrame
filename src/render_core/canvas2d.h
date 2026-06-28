@@ -22,6 +22,8 @@ struct Canvas2DPolicy {
     int default_height = 150;
     std::size_t max_path_points = 256;
     std::size_t max_state_stack_depth = 8;
+    std::size_t max_gradients = 16;
+    std::size_t max_gradient_stops = 4;
 };
 
 struct Canvas2DPoint {
@@ -29,9 +31,34 @@ struct Canvas2DPoint {
     int y = 0;
 };
 
+enum class Canvas2DPaintKind {
+    Solid,
+    LinearGradient,
+};
+
+struct Canvas2DPaintStyle {
+    Canvas2DPaintKind kind = Canvas2DPaintKind::Solid;
+    Color color{0, 0, 0, 255};
+    std::uint32_t gradient_id = 0;
+};
+
+struct Canvas2DGradientStop {
+    double offset = 0.0;
+    Color color{0, 0, 0, 255};
+};
+
+struct Canvas2DLinearGradient {
+    std::uint32_t id = 0;
+    double x0 = 0.0;
+    double y0 = 0.0;
+    double x1 = 0.0;
+    double y1 = 0.0;
+    std::vector<Canvas2DGradientStop> stops;
+};
+
 struct Canvas2DState {
-    Color fill_style{0, 0, 0, 255};
-    Color stroke_style{0, 0, 0, 255};
+    Canvas2DPaintStyle fill_style;
+    Canvas2DPaintStyle stroke_style;
     int line_width = 1;
     double global_alpha = 1.0;
     int font_size = 10;
@@ -72,6 +99,8 @@ public:
 
     bool set_fill_style(Node& node, std::string_view value);
     bool set_stroke_style(Node& node, std::string_view value);
+    bool set_fill_gradient(Node& node, std::uint32_t gradient_id);
+    bool set_stroke_gradient(Node& node, std::uint32_t gradient_id);
     bool set_line_width(Node& node, double value);
     bool set_global_alpha(Node& node, double value);
     bool set_font(Node& node, std::string_view value);
@@ -95,17 +124,23 @@ public:
     bool stroke(Node& node);
     Canvas2DTextMetrics measure_text(Node& node, std::string_view text);
     bool fill_text(Node& node, std::string_view text, double x, double y, double max_width = 0.0);
+    std::uint32_t create_linear_gradient(double x0, double y0, double x1, double y1);
+    bool add_color_stop(std::uint32_t gradient_id, double offset, std::string_view color);
 
 private:
     Canvas2DPolicy policy_;
     TextMeasureProvider text_measure_;
     TextPainter text_painter_;
     std::uint32_t next_handle_ = 1;
+    std::uint32_t next_gradient_id_ = 1;
     std::vector<Canvas2DSurface> surfaces_;
+    std::vector<Canvas2DLinearGradient> gradients_;
 
     Canvas2DSurface* mutable_surface(std::uint32_t handle);
     Canvas2DSurface* surface_for(Node& node);
     const Canvas2DSurface* surface_for(const Node& node) const;
+    const Canvas2DLinearGradient* gradient(std::uint32_t gradient_id) const;
+    bool gradient_exists(std::uint32_t gradient_id) const;
     std::size_t total_pixels() const;
 };
 

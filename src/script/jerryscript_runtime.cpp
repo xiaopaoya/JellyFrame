@@ -76,6 +76,10 @@ struct ScriptGeolocationRequest {
     bool active = false;
 };
 
+struct ScriptCanvasGradient {
+    std::uint32_t id = 0;
+};
+
 struct ScriptRuntimeAccess {
     static bool can_adopt_detached_node(const JerryScriptRuntime& runtime) {
         return runtime.can_adopt_detached_node();
@@ -187,6 +191,10 @@ struct ScriptRuntimeAccess {
         return runtime.canvas_2d_;
     }
 
+    static ScriptCanvasGradient* create_canvas_gradient(JerryScriptRuntime& runtime, std::uint32_t gradient_id) {
+        return runtime.create_canvas_gradient(gradient_id);
+    }
+
     static const JerryScriptRuntimeOptions& options(const JerryScriptRuntime& runtime) {
         return runtime.options_;
     }
@@ -218,6 +226,7 @@ const jerry_object_native_info_t kEventNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kXhrNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kLocalStorageNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kAudioNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kCanvasGradientNativeInfo = {nullptr, 0, 0};
 
 class JerryValue {
 public:
@@ -692,6 +701,13 @@ ScriptAudioElement* native_audio(const jerry_value_t object) {
         return nullptr;
     }
     return static_cast<ScriptAudioElement*>(jerry_object_get_native_ptr(object, &kAudioNativeInfo));
+}
+
+ScriptCanvasGradient* native_canvas_gradient(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    return static_cast<ScriptCanvasGradient*>(jerry_object_get_native_ptr(object, &kCanvasGradientNativeInfo));
 }
 
 std::size_t xhr_event_index(AppXhrEventKind kind) {
@@ -2107,7 +2123,11 @@ jerry_value_t canvas_set_fill_style(const jerry_call_info_t* call_info_p,
     Node* node = nullptr;
     Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
     if (registry != nullptr && node != nullptr && args_count > 0) {
-        registry->set_fill_style(*node, value_to_string(args_p[0]));
+        if (ScriptCanvasGradient* gradient = native_canvas_gradient(args_p[0])) {
+            registry->set_fill_gradient(*node, gradient->id);
+        } else {
+            registry->set_fill_style(*node, value_to_string(args_p[0]));
+        }
     }
     return jerry_undefined();
 }
@@ -2129,7 +2149,11 @@ jerry_value_t canvas_set_stroke_style(const jerry_call_info_t* call_info_p,
     Node* node = nullptr;
     Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
     if (registry != nullptr && node != nullptr && args_count > 0) {
-        registry->set_stroke_style(*node, value_to_string(args_p[0]));
+        if (ScriptCanvasGradient* gradient = native_canvas_gradient(args_p[0])) {
+            registry->set_stroke_gradient(*node, gradient->id);
+        } else {
+            registry->set_stroke_style(*node, value_to_string(args_p[0]));
+        }
     }
     return jerry_undefined();
 }
@@ -2243,6 +2267,32 @@ jerry_value_t canvas_fill_text(const jerry_call_info_t* call_info_p,
                             args_count >= 4 ? double_from_value(args_p[3]) : 0.0);
     }
     return jerry_undefined();
+}
+
+jerry_value_t canvas_gradient_add_color_stop(const jerry_call_info_t* call_info_p,
+                                             const jerry_value_t args_p[],
+                                             const jerry_length_t args_count) {
+    ScriptCanvasGradient* gradient = native_canvas_gradient(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    Canvas2DRegistry* registry = runtime != nullptr ? ScriptRuntimeAccess::canvas_2d(*runtime) : nullptr;
+    if (gradient != nullptr && registry != nullptr && args_count >= 2) {
+        registry->add_color_stop(gradient->id,
+                                 double_from_value(args_p[0]),
+                                 value_to_string(args_p[1]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t make_canvas_gradient(JerryScriptRuntime& runtime, std::uint32_t gradient_id) {
+    ScriptCanvasGradient* gradient = ScriptRuntimeAccess::create_canvas_gradient(runtime, gradient_id);
+    if (gradient == nullptr) {
+        return jerry_null();
+    }
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kCanvasGradientNativeInfo, gradient);
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    set_method(object.get(), "addColorStop", canvas_gradient_add_color_stop);
+    return object.release();
 }
 
 jerry_value_t canvas_clear_rect(const jerry_call_info_t* call_info_p,
@@ -2373,6 +2423,23 @@ jerry_value_t canvas_stroke(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t canvas_create_linear_gradient(const jerry_call_info_t* call_info_p,
+                                            const jerry_value_t args_p[],
+                                            const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (registry == nullptr || runtime == nullptr || args_count < 4) {
+        return jerry_null();
+    }
+    const std::uint32_t gradient_id =
+        registry->create_linear_gradient(double_from_value(args_p[0]),
+                                         double_from_value(args_p[1]),
+                                         double_from_value(args_p[2]),
+                                         double_from_value(args_p[3]));
+    return gradient_id != 0 ? make_canvas_gradient(*runtime, gradient_id) : jerry_null();
+}
+
 jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     JerryValue object(jerry_object());
     jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
@@ -2396,6 +2463,7 @@ jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     set_method(object.get(), "stroke", canvas_stroke);
     set_method(object.get(), "measureText", canvas_measure_text);
     set_method(object.get(), "fillText", canvas_fill_text);
+    set_method(object.get(), "createLinearGradient", canvas_create_linear_gradient);
     return object.release();
 }
 
@@ -2785,6 +2853,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
         clear_xml_http_requests();
         clear_audio_elements();
         clear_geolocation_requests();
+        clear_canvas_gradients();
         clear_script_event_listeners();
         clear_animation_frame_callbacks();
         clear_timers();
@@ -2801,6 +2870,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     clear_xml_http_requests();
     clear_audio_elements();
     clear_geolocation_requests();
+    clear_canvas_gradients();
     clear_script_event_listeners();
     clear_animation_frame_callbacks();
     clear_timers();
@@ -2876,10 +2946,12 @@ void JerryScriptRuntime::bind_audio_host(ScriptAudioHost host) {
 
 void JerryScriptRuntime::bind_canvas_2d(Canvas2DRegistry& canvas) {
     canvas_2d_ = &canvas;
+    clear_canvas_gradients();
     canvas_2d_->clear();
 }
 
 void JerryScriptRuntime::clear_canvas_2d() {
+    clear_canvas_gradients();
     if (canvas_2d_ != nullptr) {
         canvas_2d_->clear();
     }
@@ -3593,6 +3665,21 @@ void JerryScriptRuntime::clear_geolocation_requests() {
         request->active = false;
     }
     geolocation_requests_.clear();
+}
+
+ScriptCanvasGradient* JerryScriptRuntime::create_canvas_gradient(std::uint32_t gradient_id) {
+    if (gradient_id == 0) {
+        return nullptr;
+    }
+    auto gradient = std::make_unique<ScriptCanvasGradient>();
+    gradient->id = gradient_id;
+    ScriptCanvasGradient* raw = gradient.get();
+    canvas_gradients_.push_back(std::move(gradient));
+    return raw;
+}
+
+void JerryScriptRuntime::clear_canvas_gradients() {
+    canvas_gradients_.clear();
 }
 
 } // namespace jellyframe

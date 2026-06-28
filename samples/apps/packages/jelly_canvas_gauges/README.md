@@ -1,6 +1,6 @@
 # Jelly Canvas Gauges
 
-Canvas 2D V0.2 sample for wearable gauges and compact data graphics. DOM/CSS still
+Canvas 2D V0.3 sample for wearable gauges and compact data graphics. DOM/CSS still
 own layout, text and controls; Canvas is used only for bounded rings and tiny
 charts/labels that are awkward to express with boxes.
 

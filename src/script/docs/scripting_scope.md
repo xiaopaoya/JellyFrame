@@ -190,12 +190,13 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   remain CSS-only for now.
 - Native input dispatch exposes `pointerdown`, `pointerup`, `touchstart` and
   `touchend` as mouse-like events for press feedback on wearable shells.
-- Optional Canvas 2D V0.2 is exposed only when the host binds a canvas registry:
+- Optional Canvas 2D V0.3 is exposed only when the host binds a canvas registry:
   `canvas.getContext("2d")`, `fillStyle`, `strokeStyle`, `lineWidth`,
   `globalAlpha`, `font`, `save`, `restore`, `clearRect`, `fillRect`,
   `strokeRect`, `beginPath`, `moveTo`, `lineTo`, `arc`, `closePath`, `fill`,
-  `stroke`, `measureText` and `fillText`. `getContext("2d")` returns `null`
-  when the capability is absent or the backing-store budget rejects the surface.
+  `stroke`, `measureText`, `fillText`, `createLinearGradient` and
+  `CanvasGradient.addColorStop`. `getContext("2d")` returns `null` when the
+  capability is absent or the backing-store budget rejects the surface.
 - Disabled form controls do not accept text input, range movement or activation.
 - Script-related diagnostics come from the package loader, JerryScript runtime
   and DOM/event binding code paths that actually handled the app.
@@ -208,7 +209,7 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   evaluation.
 - `fetch()`, modules, dynamic import, `sessionStorage`, IndexedDB, cookies,
   full `HTMLAudioElement`, full `Window`/`EventTarget` semantics beyond
-  `online`/`offline`, Canvas APIs beyond V0.2 and Web Components.
+  `online`/`offline`, Canvas APIs beyond V0.3 and Web Components.
 
 ## Embedded Policy
 

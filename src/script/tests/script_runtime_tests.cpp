@@ -1031,6 +1031,12 @@ void javascript_canvas_2d_is_optional_and_lazy() {
         "var textWidth = ctx.measureText('Hi').width;"
         "ctx.fillStyle = '#00ff00';"
         "ctx.fillText('Hi', 1, 5);"
+        "var gradient = ctx.createLinearGradient(0, 0, 8, 0);"
+        "gradient.addColorStop(0, '#000000');"
+        "gradient.addColorStop(1, '#ffffff');"
+        "ctx.fillStyle = gradient;"
+        "ctx.fillRect(6, 0, 2, 1);"
+        "ctx.fillStyle = '#00ff00';"
         "ctx.beginPath();"
         "ctx.moveTo(6, 6);"
         "ctx.arc(6, 6, 2, 0, Math.PI);"
@@ -1049,6 +1055,9 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     const Color translucent = surface->pixels[6 * surface->width + 0];
     check(translucent.r == 255 && translucent.a >= 126 && translucent.a <= 129,
           "canvas globalAlpha affects fillRect");
+    const Color gradient_pixel = surface->pixels[0 * surface->width + 7];
+    check(gradient_pixel.r > 180 && gradient_pixel.g > 180 && gradient_pixel.b > 180,
+          "canvas linear gradient fillStyle updates pixels");
     const Color arc_filled = surface->pixels[6 * surface->width + 6];
     check(arc_filled.r == 0x00 && arc_filled.g == 0xff && arc_filled.b == 0x00,
           "canvas arc and fill are bound to script");

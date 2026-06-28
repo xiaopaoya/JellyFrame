@@ -24,7 +24,10 @@
   if (rings) {
     rings.clearRect(0, 0, 132, 132);
     rings.globalAlpha = 0.32;
-    rings.fillStyle = "#2dd4bf";
+    var glow = rings.createLinearGradient(14, 0, 118, 132);
+    glow.addColorStop(0, "#45f3d0");
+    glow.addColorStop(1, "#f7d25c");
+    rings.fillStyle = glow;
     rings.beginPath();
     rings.moveTo(66, 66);
     rings.arc(66, 66, 52, -Math.PI / 2, 0.95 * tau - Math.PI / 2, false);
@@ -64,7 +67,10 @@
     battery.strokeStyle = "#b7ead9";
     battery.lineWidth = 2;
     battery.strokeRect(4, 10, 54, 24);
-    battery.fillStyle = "#45f3d0";
+    var fill = battery.createLinearGradient(8, 0, 42, 0);
+    fill.addColorStop(0, "#45f3d0");
+    fill.addColorStop(1, "#a7f36b");
+    battery.fillStyle = fill;
     battery.fillRect(8, 14, 33, 16);
     battery.globalAlpha = 0.72;
     battery.fillStyle = "#b7ead9";
