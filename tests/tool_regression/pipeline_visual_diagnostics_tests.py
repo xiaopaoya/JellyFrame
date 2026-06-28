@@ -88,6 +88,18 @@ def main() -> int:
     require("visual-display-command-density" in codes, "display command density should be reported")
     require("visual-scroll-needed" in codes, "vertical overflow should be reported as scroll-needed")
 
+    scroll_container_report = run_pseudo_browser(
+        exe,
+        "<body><section id='hours'><button>06</button><button>07</button><button>08</button></section></body>",
+        "body { margin: 0; }"
+        "#hours { width: 90px; height: 36px; overflow: scroll; }"
+        "button { display: block; width: 90px; height: 24px; }",
+        120,
+        100,
+    )
+    require("visual-scroll-container" in diagnostic_codes(scroll_container_report),
+            "internal scroll containers should report clipped scrollable content")
+
     print("pipeline visual diagnostics tests passed")
     return 0
 

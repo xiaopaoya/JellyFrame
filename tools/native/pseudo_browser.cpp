@@ -23,6 +23,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace jellyframe;
 
@@ -141,6 +142,58 @@ void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bo
     }
 }
 
+std::string node_summary(const Node* node) {
+    if (node == nullptr || node->type != NodeType::Element) {
+        return "anonymous";
+    }
+    std::string summary = node->tag_name.empty() ? "element" : node->tag_name;
+    const std::string& id = node->attribute("id");
+    if (!id.empty()) {
+        summary += '#';
+        summary += id;
+    }
+    const std::string& class_name = node->attribute("class");
+    if (!class_name.empty()) {
+        summary += '.';
+        summary += class_name;
+    }
+    return summary;
+}
+
+int scroll_container_content_bottom(const LayoutBox& box) {
+    int bottom = box.rect.y;
+    for (const auto& child : box.children) {
+        if (!child) {
+            continue;
+        }
+        bottom = std::max(bottom, child->rect.y + child->rect.height + child->style.margin.bottom);
+    }
+    return bottom;
+}
+
+void report_scroll_container_diagnostics(const LayoutBox& box, VectorDiagnosticSink& diagnostics) {
+    if ((box.style.overflow == "auto" || box.style.overflow == "scroll") && box.rect.height > 0) {
+        const int content_bottom = scroll_container_content_bottom(box);
+        const int overflow_px = content_bottom - (box.rect.y + box.rect.height);
+        if (overflow_px > 0) {
+            report_diagnostic(&diagnostics,
+                              DiagnosticStage::Layout,
+                              DiagnosticSeverity::Info,
+                              "visual-scroll-container",
+                              "Scrollable container has clipped vertical content",
+                              node_summary(box.node) +
+                                  " boxHeight=" + std::to_string(box.rect.height) +
+                                  " contentHeight=" + std::to_string(box.rect.height + overflow_px) +
+                                  " overflowY=" + std::to_string(overflow_px));
+        }
+    }
+    for (const auto& child : box.children) {
+        if (child) {
+            report_scroll_container_diagnostics(*child, diagnostics);
+        }
+    }
+}
+
 std::string bounds_detail(const char* name, const LayoutBounds& bounds) {
     if (!bounds.valid) {
         return std::string(name) + "=empty";
@@ -153,6 +206,7 @@ std::string bounds_detail(const char* name, const LayoutBounds& bounds) {
 
 void report_visual_diagnostics(const BrowserOptions& options,
                                const PipelineStatistics& statistics,
+                               const LayoutBox& layout_tree,
                                const LayoutBounds& layout_bounds,
                                const LayoutBounds& paint_bounds,
                                VectorDiagnosticSink& diagnostics) {
@@ -185,6 +239,7 @@ void report_visual_diagnostics(const BrowserOptions& options,
                           "contentHeight=" + std::to_string(content_height) +
                               " viewportHeight=" + std::to_string(options.viewport_height));
     }
+    report_scroll_container_diagnostics(layout_tree, diagnostics);
 
     const int viewport_area = std::max(1, options.viewport_width * options.viewport_height);
     const std::size_t density_limit =
@@ -495,7 +550,7 @@ int main(int argc, char** argv) {
         accumulate_layout_bounds(*layout_tree, layout_bounds);
         LayoutBounds paint_bounds;
         accumulate_display_bounds(display_list, paint_bounds);
-        report_visual_diagnostics(options, pipeline_statistics, layout_bounds, paint_bounds, diagnostics);
+        report_visual_diagnostics(options, pipeline_statistics, *layout_tree, layout_bounds, paint_bounds, diagnostics);
 
         std::cout << "JellyFrame render core pseudo browser\n";
         std::cout << "  output=" << options.output_path << '\n';
