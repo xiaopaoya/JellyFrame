@@ -146,6 +146,37 @@ void scroll_container_offsets_descendant_paint() {
     check(found_shifted_child, "scroll offset moves second row into viewport");
 }
 
+void scroll_indicator_is_opt_in_overlay() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><section id='list'><div></div><div></div><div></div></section></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#list { width: 80px; height: 32px; overflow: scroll; background: #101010; }"
+        "div { width: 80px; height: 24px; background: #000000; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 120);
+
+    LayerTreeBuilderOptions options;
+    options.paint_scroll_indicators = true;
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    DisplayList flattened = layer_tree_builder.flatten(*layer_tree);
+
+    bool found_thumb = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect &&
+            command.rect.width == 3 &&
+            command.color.a == 176) {
+            found_thumb = true;
+        }
+    }
+    check(found_thumb, "opt-in scroll indicator emits a thumb overlay");
+}
+
 void opacity_layer_flattens_alpha() {
     auto pipeline = build_pipeline("<body><section class='fade'>Faded</section></body>",
                                    ".fade { opacity: .5; background: #000000; }");
@@ -751,6 +782,7 @@ int main() {
     try {
         overflow_hidden_creates_clip_layer();
         scroll_container_offsets_descendant_paint();
+        scroll_indicator_is_opt_in_overlay();
         opacity_layer_flattens_alpha();
         flatten_into_reuses_storage_and_matches_flatten();
         rounded_equal_border_emits_stroke_command();

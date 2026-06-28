@@ -744,6 +744,36 @@ int resolved_scroll_y_for(const LayoutBox& box, const LayerTreeBuilderOptions& o
     return std::max(0, std::min(requested, max_scroll));
 }
 
+bool paint_scroll_indicator(const LayoutBox& box, int scroll_y, int max_scroll_y, DisplayList& display_list) {
+    if (max_scroll_y <= 0 || scroll_y < 0) {
+        return false;
+    }
+    const Rect content = content_rect_for(box);
+    if (content.width < 16 || content.height < 18) {
+        return false;
+    }
+    constexpr int kTrackWidth = 3;
+    constexpr int kTrackInset = 2;
+    constexpr int kMinThumbHeight = 12;
+    const int track_height = std::max(0, content.height - kTrackInset * 2);
+    if (track_height < kMinThumbHeight) {
+        return false;
+    }
+    const int scrollable_height = content.height + max_scroll_y;
+    int thumb_height = std::max(kMinThumbHeight, (track_height * content.height) / std::max(1, scrollable_height));
+    thumb_height = std::min(track_height, thumb_height);
+    const int travel = std::max(0, track_height - thumb_height);
+    const int clamped_scroll = std::max(0, std::min(scroll_y, max_scroll_y));
+    const int thumb_y = content.y + kTrackInset +
+        (max_scroll_y > 0 ? (travel * clamped_scroll) / max_scroll_y : 0);
+    const int track_x = content.x + content.width - kTrackWidth - kTrackInset;
+    const Rect track{track_x, content.y + kTrackInset, kTrackWidth, track_height};
+    const Rect thumb{track_x, thumb_y, kTrackWidth, thumb_height};
+    push_fill_rect(display_list, track, Color{255, 255, 255, 48}, 2);
+    push_fill_rect(display_list, thumb, Color{255, 255, 255, 176}, 2);
+    return true;
+}
+
 void translate_display_commands(DisplayList& display_list, std::size_t begin, int dx, int dy) {
     if (dx == 0 && dy == 0) {
         return;
@@ -1154,6 +1184,28 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
             paint_generated_inline_content(current_box, current_layer.display_list, CssPseudoElement::After);
             translate_display_commands(current_layer.display_list, command_begin, 0, -current.scroll_y);
             trim_display_list(current_layer.display_list);
+            if (options_.paint_scroll_indicators &&
+                current_layer.box == &current_box &&
+                current_layer.max_scroll_y > 0 &&
+                layer_count < max_layers) {
+                DisplayList indicator_commands;
+                indicator_commands.reserve(2);
+                if (paint_scroll_indicator(current_box,
+                                           current_layer.scroll_y,
+                                           current_layer.max_scroll_y,
+                                           indicator_commands)) {
+                    auto indicator_layer = make_layer_node(arena);
+                    indicator_layer->type = LayerType::Paint;
+                    indicator_layer->box = nullptr;
+                    indicator_layer->bounds = current_box.rect;
+                    indicator_layer->opacity = 1.0F;
+                    indicator_layer->source_order = next_source_order++;
+                    indicator_layer->display_list = std::move(indicator_commands);
+                    trim_display_list(indicator_layer->display_list);
+                    current_layer.children.push_back(std::move(indicator_layer));
+                    ++layer_count;
+                }
+            }
             continue;
         }
 

@@ -40,8 +40,9 @@ rect/text commands or later map selected layers to hardware surfaces.
   are shifted inside the existing clip. The Win32 host maps wheel, arrow and
   pointer-drag defaults to these offsets, applies a bounded host-side inertia
   tail while presentation is allowed, and repaints the container viewport as a
-  dirty rect when the area stays within budget. Scrollbars, horizontal scrolling
-  and strip-level scroll blit are outside this first slice.
+  dirty rect when the area stays within budget. Hosts may opt into lightweight
+  overlay scroll indicators through `LayerTreeBuilderOptions`. Horizontal
+  scrolling and strip-level scroll blit are outside this first slice.
 - `opacity` below 1 creates a composited layer and is applied during flattening.
 - `transform: translate()/scale()/rotate()` creates a composited layer and is
   applied by the software compositor. Translation is rounded to device pixels;

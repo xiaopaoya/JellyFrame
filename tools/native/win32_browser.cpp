@@ -2857,6 +2857,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
+    layer_options.paint_scroll_indicators = true;
     layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
     LayerTreeBuilder layer_builder(layer_options);
     auto layer_tree = layer_builder.build(*layout_tree);
@@ -4328,6 +4329,7 @@ private:
         }
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
+        layer_options.paint_scroll_indicators = true;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};
@@ -4551,6 +4553,7 @@ private:
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
+        layer_options.paint_scroll_indicators = true;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};

@@ -82,6 +82,7 @@ struct LayerTreeBuilderOptions {
     DiagnosticSink* diagnostics = nullptr;
     ImageHandleResolver image_resolver;
     ScrollOffsetResolver scroll_resolver;
+    bool paint_scroll_indicators = false;
 };
 
 class LayerTreeBuilder {
