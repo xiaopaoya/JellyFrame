@@ -48,6 +48,10 @@ small wearable devices.
 - `embedded_framebuffer` conversion is format-dispatched per rectangle and can
   optionally report converted pixels, packed bytes, clipped/empty rects and
   flush count through `EmbeddedFrameBufferPresentStats`.
+- `jellyframe_virtual_bench` reports full-frame, typical dirty-rectangle and
+  scroll-strip presentation estimates so port authors can compare core-side
+  converted pixels/packed bytes with board-side panel bytes, DMA wait and
+  flush-done counts before adding heavier retained-rendering machinery.
 - `HostFrameSink::present` is a frame-lifetime boundary. If the underlying panel
   path uses asynchronous DMA, the host must make buffers reusable before
   returning, or the UI loop must wait for a flush-done event before starting the

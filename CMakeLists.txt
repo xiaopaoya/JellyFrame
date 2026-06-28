@@ -319,6 +319,17 @@ if(JELLYFRAME_BUILD_TESTS)
                         --report ${CMAKE_BINARY_DIR}/test_outputs/watch_weather.responsive.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            if(TARGET jellyframe_virtual_bench)
+                add_test(
+                    NAME jellyframe_virtual_board_bench_smoke
+                    COMMAND $<TARGET_FILE:jellyframe_virtual_bench>
+                            300 300 8 3 40 0.85 40
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+                set_tests_properties(jellyframe_virtual_board_bench_smoke PROPERTIES
+                    PASS_REGULAR_EXPRESSION
+                        "scroll_strip_frame_estimate_fps")
+            endif()
         endif()
     endif()
 

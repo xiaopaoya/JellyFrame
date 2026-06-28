@@ -37,6 +37,9 @@ JellyFrame Engine 的重要变更记录在这里。
   并在 package 使用 unsupported 或尚未验证的 codec 时输出 warning。
 - 新增包内图片验收回归：检查 `watch_weather` 的 `imageDiagnostics`，通过 Win32 壳捕获样例，
   并读取输出 BMP 像素，确认 package-local BMP 图标确实被绘制出来。
+- `jellyframe_virtual_bench` 现在除 full-frame RGB565 presentation 外，还会输出典型
+  dirty-rectangle 和 scroll-strip 的 render/present/virtual-flush 估算，方便 port
+  用更低成本把核心 packed bytes 与 panel/DMA flush 数据对齐。
 
 ### 变更
 

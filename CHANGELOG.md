@@ -49,6 +49,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `imageDiagnostics`, captures the sample through the Win32 shell and inspects
   the output BMP pixels to make sure package-local BMP icons are actually
   painted.
+- `jellyframe_virtual_bench` now reports typical dirty-rectangle and scroll-strip
+  render/present/virtual-flush estimates in addition to full-frame RGB565
+  presentation, giving ports a cheaper way to compare core packed bytes with
+  panel/DMA flush data.
 
 ### Changed
 

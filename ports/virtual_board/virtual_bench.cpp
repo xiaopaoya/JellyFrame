@@ -8,6 +8,7 @@
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 
+#include <array>
 #include <chrono>
 #include <algorithm>
 #include <cmath>
@@ -158,6 +159,30 @@ bool virtual_flush(Rect dirty, void* context) {
     return true;
 }
 
+void reset_panel(VirtualPanel& panel) {
+    panel.flushes = 0;
+    panel.pixels = 0;
+    panel.bytes = 0;
+    panel.virtual_us = 0.0;
+}
+
+std::array<Rect, 4> make_typical_dirty_rects(int width, int height) {
+    const int top_height = std::max(12, height / 10);
+    const int bottom_height = std::max(18, height / 8);
+    const int card_width = std::max(32, width / 3);
+    const int card_height = std::max(24, height / 5);
+    return {{
+        Rect{0, 0, width, top_height},
+        Rect{std::max(0, width / 12), std::max(0, height / 4), card_width, card_height},
+        Rect{std::max(0, width / 2), std::max(0, height / 3), std::max(32, width / 3), std::max(18, height / 7)},
+        Rect{0, std::max(0, height - bottom_height), width, bottom_height},
+    }};
+}
+
+Rect make_scroll_strip_rect(int width, int height) {
+    return Rect{0, std::max(0, height - std::max(16, height / 12)), width, std::max(16, height / 12)};
+}
+
 template <typename Fn>
 double average_microseconds(int iterations, Fn fn) {
     const auto begin = Clock::now();
@@ -265,6 +290,23 @@ int main(int argc, char** argv) {
     const double render_frame_us = average_microseconds(options.iterations, [&] {
         compositor.render_into(*layer_tree, frame_buffer, background);
     });
+    const auto typical_dirty_rects = make_typical_dirty_rects(options.width, options.height);
+    const Rect scroll_strip_rect = make_scroll_strip_rect(options.width, options.height);
+    FrameBuffer dirty_frame_buffer(options.width, options.height, background);
+    const double dirty_render_frame_us = average_microseconds(options.iterations, [&] {
+        compositor.render_into(*layer_tree,
+                               dirty_frame_buffer,
+                               background,
+                               typical_dirty_rects.data(),
+                               typical_dirty_rects.size());
+    });
+    const double scroll_strip_render_frame_us = average_microseconds(options.iterations, [&] {
+        compositor.render_into(*layer_tree,
+                               dirty_frame_buffer,
+                               background,
+                               &scroll_strip_rect,
+                               1);
+    });
     DisplayList final_display_list = layer_tree_builder.flatten(*layer_tree);
     const PipelineStatistics pipeline_statistics = collect_pipeline_statistics(PipelineStatisticsInput{
         document.get(),
@@ -305,10 +347,7 @@ int main(int argc, char** argv) {
     EmbeddedFrameBufferPresentStats present_stats;
 
     const double present_rgb565_us = average_microseconds(options.iterations, [&] {
-        panel.flushes = 0;
-        panel.pixels = 0;
-        panel.bytes = 0;
-        panel.virtual_us = 0.0;
+        reset_panel(panel);
         if (!present_to_embedded_framebuffer(frame_buffer_view(frame_buffer), &full_dirty, 1, embedded_sink,
                                              &present_stats)) {
             std::cerr << "present_frame failed\n";
@@ -317,6 +356,42 @@ int main(int argc, char** argv) {
     });
     const double virtual_flush_us = panel.virtual_us;
     const std::uint64_t last_flush_bytes = panel.bytes;
+    const std::uint64_t last_flush_pixels = panel.pixels;
+    const std::uint64_t last_flushes = panel.flushes;
+
+    EmbeddedFrameBufferPresentStats dirty_present_stats;
+    const double dirty_present_rgb565_us = average_microseconds(options.iterations, [&] {
+        reset_panel(panel);
+        if (!present_to_embedded_framebuffer(frame_buffer_view(frame_buffer),
+                                             typical_dirty_rects.data(),
+                                             typical_dirty_rects.size(),
+                                             embedded_sink,
+                                             &dirty_present_stats)) {
+            std::cerr << "dirty present_frame failed\n";
+            std::exit(2);
+        }
+    });
+    const double dirty_virtual_flush_us = panel.virtual_us;
+    const std::uint64_t dirty_flush_bytes = panel.bytes;
+    const std::uint64_t dirty_flush_pixels = panel.pixels;
+    const std::uint64_t dirty_flushes = panel.flushes;
+
+    EmbeddedFrameBufferPresentStats scroll_present_stats;
+    const double scroll_present_rgb565_us = average_microseconds(options.iterations, [&] {
+        reset_panel(panel);
+        if (!present_to_embedded_framebuffer(frame_buffer_view(frame_buffer),
+                                             &scroll_strip_rect,
+                                             1,
+                                             embedded_sink,
+                                             &scroll_present_stats)) {
+            std::cerr << "scroll present_frame failed\n";
+            std::exit(2);
+        }
+    });
+    const double scroll_virtual_flush_us = panel.virtual_us;
+    const std::uint64_t scroll_flush_bytes = panel.bytes;
+    const std::uint64_t scroll_flush_pixels = panel.pixels;
+    const std::uint64_t scroll_flushes = panel.flushes;
 
     const double full_pipeline_us = average_microseconds(options.iterations, [&] {
         auto local_document = html_parser.parse(html, html_options);
@@ -336,6 +411,10 @@ int main(int argc, char** argv) {
     });
 
     const double steady_frame_estimate_us = render_frame_us + present_rgb565_us + virtual_flush_us;
+    const double dirty_frame_estimate_us =
+        dirty_render_frame_us + dirty_present_rgb565_us + dirty_virtual_flush_us;
+    const double scroll_strip_frame_estimate_us =
+        scroll_strip_render_frame_us + scroll_present_rgb565_us + scroll_virtual_flush_us;
     const double cold_pipeline_frame_estimate_us =
         full_pipeline_us + render_frame_us + present_rgb565_us + virtual_flush_us;
 
@@ -348,20 +427,43 @@ int main(int argc, char** argv) {
     print_metric("render_frame_cpu_avg_us", render_frame_us);
     print_metric("present_rgb565_cpu_avg_us", present_rgb565_us);
     print_metric("virtual_flush_avg_us", virtual_flush_us);
+    print_metric("dirty_render_frame_cpu_avg_us", dirty_render_frame_us);
+    print_metric("dirty_present_rgb565_cpu_avg_us", dirty_present_rgb565_us);
+    print_metric("dirty_virtual_flush_avg_us", dirty_virtual_flush_us);
+    print_metric("dirty_frame_estimate_us", dirty_frame_estimate_us);
+    print_metric("dirty_frame_estimate_fps", 1000000.0 / dirty_frame_estimate_us);
+    print_metric("scroll_strip_render_cpu_avg_us", scroll_strip_render_frame_us);
+    print_metric("scroll_strip_present_cpu_avg_us", scroll_present_rgb565_us);
+    print_metric("scroll_strip_flush_avg_us", scroll_virtual_flush_us);
+    print_metric("scroll_strip_frame_estimate_us", scroll_strip_frame_estimate_us);
+    print_metric("scroll_strip_frame_estimate_fps", 1000000.0 / scroll_strip_frame_estimate_us);
     print_metric("full_pipeline_cpu_avg_us", full_pipeline_us);
     print_metric("steady_frame_estimate_us", steady_frame_estimate_us);
     print_metric("steady_frame_estimate_fps", 1000000.0 / steady_frame_estimate_us);
     print_metric("cold_pipeline_frame_estimate_us", cold_pipeline_frame_estimate_us);
     print_metric("cold_pipeline_frame_estimate_fps", 1000000.0 / cold_pipeline_frame_estimate_us);
     std::cout << "last_flush_bytes=" << last_flush_bytes
-              << " last_flush_pixels=" << panel.pixels
-              << " last_flushes=" << panel.flushes << '\n';
+              << " last_flush_pixels=" << last_flush_pixels
+              << " last_flushes=" << last_flushes << '\n';
     std::cout << "present_source_rects=" << present_stats.source_rects
               << " present_clipped_rects=" << present_stats.clipped_rects
               << " present_empty_rects=" << present_stats.empty_rects
               << " present_pixels=" << present_stats.converted_pixels
               << " present_packed_bytes=" << present_stats.packed_bytes
               << " present_flushes=" << present_stats.flushes << '\n';
+    std::cout << "dirty_profile_rects=" << typical_dirty_rects.size()
+              << " dirty_flush_bytes=" << dirty_flush_bytes
+              << " dirty_flush_pixels=" << dirty_flush_pixels
+              << " dirty_flushes=" << dirty_flushes
+              << " dirty_present_pixels=" << dirty_present_stats.converted_pixels
+              << " dirty_present_packed_bytes=" << dirty_present_stats.packed_bytes << '\n';
+    std::cout << "scroll_strip_rect=" << scroll_strip_rect.x << "," << scroll_strip_rect.y
+              << "," << scroll_strip_rect.width << "x" << scroll_strip_rect.height
+              << " scroll_flush_bytes=" << scroll_flush_bytes
+              << " scroll_flush_pixels=" << scroll_flush_pixels
+              << " scroll_flushes=" << scroll_flushes
+              << " scroll_present_pixels=" << scroll_present_stats.converted_pixels
+              << " scroll_present_packed_bytes=" << scroll_present_stats.packed_bytes << '\n';
     std::cout << "pipeline_estimated_bytes=" << pipeline_statistics.estimated_heap_bytes
               << " framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes
               << " resource_bytes=" << pipeline_statistics.resource_bytes

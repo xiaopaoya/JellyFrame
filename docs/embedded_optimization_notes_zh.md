@@ -34,6 +34,9 @@
 - `embedded_framebuffer` 现在按 rectangle 进行格式分派转换，并可通过
   `EmbeddedFrameBufferPresentStats` 可选报告 converted pixels、packed bytes、clipped/empty rects
   和 flush count。
+- `jellyframe_virtual_bench` 会输出 full-frame、典型 dirty-rectangle 和 scroll-strip 三类
+  presentation 估算，方便 port 作者在加入更重的 retained-rendering 机制前，把核心侧 converted
+  pixels/packed bytes 与开发板上的 panel bytes、DMA wait 和 flush-done 次数对齐。
 - `HostFrameSink::present` 被定义为 frame-lifetime 边界；如果底层 DMA 异步刷新，宿主必须在返回前确保
   buffer 已可复用，或在 UI loop 中等待 flush-done 后再进入下一帧。
 - `FrameScratch` 和 `AppFrameScratch` 提供帧级临时容器复用。dirty-region bounds、dirty rectangles、

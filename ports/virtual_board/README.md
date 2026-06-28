@@ -45,11 +45,19 @@ Interpretation:
 - `*_cpu_avg_us` values are measured on the host CPU.
 - `virtual_flush_avg_us` estimates panel transfer time for the dirty rectangles.
 - `steady_frame_estimate_us` is `render_frame + present_rgb565 + virtual_flush`.
+- `dirty_*` fields use a small multi-rectangle wearable UI update profile.
+  They estimate the cost of repainting and presenting localized card/status
+  changes without pretending to be a full retained-display-list model.
+- `scroll_strip_*` fields use one exposed strip at the bottom of the viewport.
+  They are useful for checking whether scrolling is likely to be limited by
+  panel transfer rather than layout or render-tree work.
 - `cold_pipeline_frame_estimate_us` additionally includes full parse/style/layout
   pipeline work.
 - `present_pixels`, `present_packed_bytes`, `present_clipped_rects` and
   `present_flushes` come from `EmbeddedFrameBufferPresentStats`; compare them
-  with board-side panel bytes, DMA wait time and flush-done counts.
+  with board-side panel bytes, DMA wait time and flush-done counts. The
+  `dirty_profile_*` and `scroll_strip_*` summary lines expose the same counters
+  for localized presentation profiles.
 
 Use the estimates for trend comparison and display bandwidth planning, not as a
 cycle-accurate ESP32-S3 replacement.
