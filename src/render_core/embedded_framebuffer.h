@@ -60,6 +60,12 @@ bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
                                      EmbeddedFrameBufferSink& sink,
                                      EmbeddedFrameBufferPresentStats* stats = nullptr);
 
+EmbeddedFrameBufferPresentStats estimate_embedded_framebuffer_present_stats(int width,
+                                                                            int height,
+                                                                            EmbeddedPixelFormat format,
+                                                                            const Rect* dirty_rects = nullptr,
+                                                                            std::size_t dirty_rect_count = 0);
+
 HostFrameSink embedded_frame_sink(EmbeddedFrameBufferSink& sink);
 
 } // namespace jellyframe

@@ -21,6 +21,11 @@
   per-app budget snapshot 和 scroll blit 统计。可以用这些计数验证 `backgroundServices`、
   息屏和低功耗策略是否按预期暂停或保留 network/audio/sensor/location 工作，而不需要让
   render core 了解硬件。
+- 隐藏逐帧 capture 还会输出 `present_estimate_rgb565`。这是面向 16-bit RGB565 屏的
+  嵌入式提交估算，不是 Win32 GDI 的真实工作量。它按桌面壳实际执行的 full-frame、
+  dirty-rect 和 scroll-strip present 口径，估算 flush 次数、转换像素数和紧凑打包字节数。
+  修改 dirty-region 或滚动复用逻辑前，可以用它和开发板端 `embedded_framebuffer`/panel
+  日志对齐。
 - debug image decode 与 debug network fetch 通过 `pump_app_host_service_workers(...)`
   泵送，与 MCU port 推荐的 request/completion 边界保持一致。
 

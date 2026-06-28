@@ -314,6 +314,38 @@ bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
     return true;
 }
 
+EmbeddedFrameBufferPresentStats estimate_embedded_framebuffer_present_stats(int width,
+                                                                            int height,
+                                                                            EmbeddedPixelFormat format,
+                                                                            const Rect* dirty_rects,
+                                                                            std::size_t dirty_rect_count) {
+    EmbeddedFrameBufferPresentStats stats;
+    if (width <= 0 || height <= 0) {
+        return stats;
+    }
+
+    const Rect full{0, 0, width, height};
+    const bool full_present = dirty_rects == nullptr || dirty_rect_count == 0;
+    const std::size_t count = full_present ? 1U : dirty_rect_count;
+    stats.full_present = full_present;
+    stats.source_rects = count;
+
+    for (std::size_t index = 0; index < count; ++index) {
+        const Rect source_rect = full_present ? full : dirty_rects[index];
+        const Rect dirty = intersect_rect(source_rect, full);
+        if (empty_rect(dirty)) {
+            ++stats.empty_rects;
+            continue;
+        }
+        ++stats.clipped_rects;
+        ++stats.flushes;
+        stats.converted_pixels += static_cast<std::uint64_t>(dirty.width) *
+            static_cast<std::uint64_t>(dirty.height);
+        stats.packed_bytes += embedded_framebuffer_packed_rect_bytes(dirty.width, dirty.height, format);
+    }
+    return stats;
+}
+
 HostFrameSink embedded_frame_sink(EmbeddedFrameBufferSink& sink) {
     return HostFrameSink{present_callback, &sink};
 }

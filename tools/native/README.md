@@ -25,6 +25,13 @@ output. Sample pages and app packages live in `../../samples`.
   Use those counters to validate that manifest `backgroundServices`,
   screen-off and low-power policies pause or keep network/audio/sensor/location
   work without making the render core hardware-aware.
+- Hidden frame capture also prints `present_estimate_rgb565`. This is an
+  embedded-output estimate for a 16-bit RGB565 panel, not Win32 GDI work. It
+  accounts for the same full-frame, dirty-rect and scroll-strip presents that
+  the shell blits on desktop, and reports estimated flush count, converted
+  pixels and tightly packed bytes. Use it to compare Win32 frame-script runs
+  with board-side `embedded_framebuffer`/panel logs before changing dirty-region
+  or scroll reuse logic.
 - Debug image decode and debug network fetch are pumped through
   `pump_app_host_service_workers(...)`, matching the request/completion boundary
   recommended for MCU ports.

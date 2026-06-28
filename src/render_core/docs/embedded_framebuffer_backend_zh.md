@@ -68,6 +68,22 @@ present_to_embedded_framebuffer(frame_buffer_view(frame_buffer),
 这些 rectangles 紧凑打包后约多少字节，以及成功触发了多少次 flush callback。它是可选项；
 普通渲染路径不传统计指针，不承担额外存储成本。
 
+桌面验收工具如果只需要同口径统计、不持有目标 buffer，也可以调用估算入口：
+
+```cpp
+EmbeddedFrameBufferPresentStats estimate =
+    estimate_embedded_framebuffer_present_stats(width,
+                                                height,
+                                                EmbeddedPixelFormat::Rgb565,
+                                                dirty_rects,
+                                                dirty_rect_count);
+```
+
+这个 helper 不读取源像素、不转换颜色，也不会调用 `flush`。它只裁剪输入 rectangles，并估算
+指定格式下嵌入式 adapter 会触碰的字节数/像素数。Win32 frame-script 壳的
+`present_estimate_rgb565` 使用的就是这个口径，因此桌面滚动和 dirty-region capture 可以和
+开发板真实日志用同一组单位对齐。
+
 如果 `dirty_rects` 为空，则转换整帧。否则只转换并 flush 裁剪后的 dirty rectangles。
 这些 rectangles 外的像素保持不变。
 

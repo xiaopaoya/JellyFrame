@@ -185,6 +185,26 @@ void clipped_and_empty_rects_are_reported() {
     check(stats.converted_pixels == 1 && stats.packed_bytes == 1, "present stats count clipped area");
 }
 
+void present_stats_estimate_matches_dirty_rect_accounting() {
+    const Rect dirty[] = {
+        Rect{1, 1, 2, 3},
+        Rect{8, 8, 2, 2},
+    };
+    const EmbeddedFrameBufferPresentStats stats =
+        estimate_embedded_framebuffer_present_stats(4, 4, EmbeddedPixelFormat::Rgb565, dirty, 2);
+    check(!stats.full_present && stats.source_rects == 2 && stats.clipped_rects == 1 &&
+              stats.empty_rects == 1 && stats.flushes == 1,
+          "estimated stats count dirty/clipped/empty rects");
+    check(stats.converted_pixels == 6 && stats.packed_bytes == 12,
+          "estimated stats count converted pixels and packed bytes");
+
+    const EmbeddedFrameBufferPresentStats full =
+        estimate_embedded_framebuffer_present_stats(4, 4, EmbeddedPixelFormat::Rgb332);
+    check(full.full_present && full.source_rects == 1 && full.clipped_rects == 1 &&
+              full.converted_pixels == 16 && full.packed_bytes == 16,
+          "estimated stats count full frame present");
+}
+
 } // namespace
 
 int main() {
@@ -196,6 +216,7 @@ int main() {
         host_frame_sink_wrapper_presents();
         invalid_target_fails_cleanly();
         clipped_and_empty_rects_are_reported();
+        present_stats_estimate_matches_dirty_rect_accounting();
     } catch (const std::exception& error) {
         std::cerr << "embedded framebuffer test failed: " << error.what() << '\n';
         return 1;

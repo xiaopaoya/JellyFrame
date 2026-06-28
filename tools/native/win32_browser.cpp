@@ -21,6 +21,7 @@
 #include "render_core/dirty_region.h"
 #include "render_core/document_script.h"
 #include "render_core/document_style.h"
+#include "render_core/embedded_framebuffer.h"
 #include "render_core/frame_scratch.h"
 #include "render_core/frame_update.h"
 #include "render_core/html_parser.h"
@@ -542,6 +543,18 @@ struct ScrollDebugCounters {
     std::size_t full_blits = 0;
     std::size_t fast_blits = 0;
     std::size_t copied_pixels = 0;
+};
+
+struct PresentEstimateCounters {
+    std::size_t frames = 0;
+    std::size_t full_frames = 0;
+    std::size_t dirty_frames = 0;
+    std::uint64_t source_rects = 0;
+    std::uint64_t clipped_rects = 0;
+    std::uint64_t empty_rects = 0;
+    std::uint64_t flushes = 0;
+    std::uint64_t converted_pixels = 0;
+    std::uint64_t packed_bytes = 0;
 };
 
 class NetworkFetchMockWorker final : public AppHostServiceWorker {
@@ -3203,6 +3216,15 @@ public:
                   << "  scroll_blits full=" << scroll_counters_.full_blits
                   << " fast=" << scroll_counters_.fast_blits
                   << " copied_pixels=" << scroll_counters_.copied_pixels << '\n';
+        std::cout << "  present_estimate_rgb565 frames=" << present_estimate_counters_.frames
+                  << " full=" << present_estimate_counters_.full_frames
+                  << " dirty=" << present_estimate_counters_.dirty_frames
+                  << " source_rects=" << present_estimate_counters_.source_rects
+                  << " clipped_rects=" << present_estimate_counters_.clipped_rects
+                  << " empty_rects=" << present_estimate_counters_.empty_rects
+                  << " flushes=" << present_estimate_counters_.flushes
+                  << " converted_pixels=" << present_estimate_counters_.converted_pixels
+                  << " packed_bytes=" << present_estimate_counters_.packed_bytes << '\n';
         if (layer_tree_ != nullptr) {
             std::cout << "  layer_tree layers=" << count_layers(*layer_tree_)
                       << " display_commands=" << count_layer_display_commands(*layer_tree_) << '\n';
@@ -3290,6 +3312,8 @@ private:
     FrameUpdateStatistics frame_update_statistics_;
     FrameRepaintStatistics frame_repaint_statistics_;
     ScrollDebugCounters scroll_counters_;
+    PresentEstimateCounters present_estimate_counters_;
+    std::vector<Rect> present_estimate_rects_;
     std::size_t dirty_fallback_attempt_frames_ = 0;
     std::size_t dirty_fallback_attempt_rects_ = 0;
     int dirty_fallback_attempt_max_area_percent_ = 0;
@@ -4105,6 +4129,8 @@ private:
             dirty_fallback_attempt_frames_ = 0;
             dirty_fallback_attempt_rects_ = 0;
             dirty_fallback_attempt_max_area_percent_ = 0;
+            present_estimate_counters_ = PresentEstimateCounters{};
+            present_estimate_rects_.clear();
 
             if (system_shell_mode_) {
                 document_->add_event_listener("click", [this](Event& event) {
@@ -4304,6 +4330,7 @@ private:
                     analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
                 record_dirty_region(dirty_region);
                 record_frame_repaint(repaint_plan, true);
+                record_present_estimate_for_content_rects(dirty_rects.data(), dirty_rects.size());
             } else {
                 record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
@@ -4406,6 +4433,7 @@ private:
                     analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
                 record_dirty_region(dirty_region);
                 record_frame_repaint(repaint_plan, true);
+                record_present_estimate_for_content_rects(dirty_rects.data(), dirty_rects.size());
             } else {
                 record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
@@ -4465,6 +4493,7 @@ private:
                 analyze_display_invalidation(*layer_tree_, dirty_rects.data(), dirty_rects.size());
             record_dirty_region(dirty_region);
             record_frame_repaint(repaint_plan, true);
+            record_present_estimate_for_content_rects(dirty_rects.data(), dirty_rects.size());
         } else {
             record_frame_repaint(repaint_plan, false);
             render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
@@ -4600,6 +4629,57 @@ private:
         return std::max(0, frame_buffer_.height - viewport_height_);
     }
 
+    void accumulate_present_estimate(const EmbeddedFrameBufferPresentStats& stats) {
+        if (stats.clipped_rects == 0 && stats.flushes == 0) {
+            return;
+        }
+        ++present_estimate_counters_.frames;
+        if (stats.full_present) {
+            ++present_estimate_counters_.full_frames;
+        } else {
+            ++present_estimate_counters_.dirty_frames;
+        }
+        present_estimate_counters_.source_rects += stats.source_rects;
+        present_estimate_counters_.clipped_rects += stats.clipped_rects;
+        present_estimate_counters_.empty_rects += stats.empty_rects;
+        present_estimate_counters_.flushes += stats.flushes;
+        present_estimate_counters_.converted_pixels += stats.converted_pixels;
+        present_estimate_counters_.packed_bytes += stats.packed_bytes;
+    }
+
+    void record_present_estimate_full_viewport() {
+        accumulate_present_estimate(estimate_embedded_framebuffer_present_stats(viewport_width_,
+                                                                                viewport_height_,
+                                                                                EmbeddedPixelFormat::Rgb565));
+    }
+
+    void record_present_estimate_for_viewport_rect(Rect rect) {
+        accumulate_present_estimate(estimate_embedded_framebuffer_present_stats(viewport_width_,
+                                                                                viewport_height_,
+                                                                                EmbeddedPixelFormat::Rgb565,
+                                                                                &rect,
+                                                                                1));
+    }
+
+    void record_present_estimate_for_content_rects(const Rect* rects, std::size_t rect_count) {
+        if (rects == nullptr || rect_count == 0) {
+            return;
+        }
+        present_estimate_rects_.clear();
+        present_estimate_rects_.reserve(rect_count);
+        for (std::size_t index = 0; index < rect_count; ++index) {
+            Rect viewport_rect = rects[index];
+            viewport_rect.y -= scroll_y_;
+            present_estimate_rects_.push_back(viewport_rect);
+        }
+        accumulate_present_estimate(
+            estimate_embedded_framebuffer_present_stats(viewport_width_,
+                                                        viewport_height_,
+                                                        EmbeddedPixelFormat::Rgb565,
+                                                        present_estimate_rects_.data(),
+                                                        present_estimate_rects_.size()));
+    }
+
     void render_full_frame(SoftwareCompositor& compositor,
                            const DirtyRegionResult& attempted_region,
                            bool had_no_dirty_rects,
@@ -4617,6 +4697,7 @@ private:
         last_display_invalidation_ =
             analyze_display_invalidation(*layer_tree_, full_region.rects.data(), full_region.rects.size());
         record_dirty_region(full_region);
+        record_present_estimate_full_viewport();
     }
 
     int clamp_scroll_y(int value) const {
@@ -4715,6 +4796,7 @@ private:
             static_cast<std::size_t>(viewport_width_) * static_cast<std::size_t>(viewport_height_);
         if (blit_pixels_.size() != target_size || frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
             update_blit_pixels();
+            record_present_estimate_full_viewport();
             return;
         }
         scroll_y_ = std::max(0, std::min(scroll_y_, max_scroll_y()));
@@ -4727,6 +4809,7 @@ private:
         }
         if (plan.mode != ScrollBlitMode::FastBlit) {
             update_blit_pixels();
+            record_present_estimate_full_viewport();
             return;
         }
         const std::ptrdiff_t source_begin =
@@ -4750,6 +4833,7 @@ private:
         scroll_counters_.copied_pixels +=
             static_cast<std::size_t>(std::max(0, copy_width)) *
             static_cast<std::size_t>(std::max(0, plan.exposed_strip.height));
+        record_present_estimate_for_viewport_rect(plan.exposed_strip);
     }
 
     void paint() {

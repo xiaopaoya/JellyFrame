@@ -76,6 +76,24 @@ packed byte count for those rectangles, and how many flush callbacks were
 accepted. It is optional; normal rendering paths can omit it and pay no storage
 cost.
 
+Desktop validation tools can use the same accounting without owning a target
+buffer:
+
+```cpp
+EmbeddedFrameBufferPresentStats estimate =
+    estimate_embedded_framebuffer_present_stats(width,
+                                                height,
+                                                EmbeddedPixelFormat::Rgb565,
+                                                dirty_rects,
+                                                dirty_rect_count);
+```
+
+This helper does not read source pixels, convert colors or call `flush`. It
+only clips the requested rectangles and estimates the bytes/pixels that an
+embedded adapter would touch for that format. The Win32 frame-script shell uses
+it for `present_estimate_rgb565`, so desktop scroll and dirty-region captures
+can be compared with real board logs using the same units.
+
 If `dirty_rects` is empty, the full frame is converted. Otherwise only clipped
 dirty rectangles are converted and flushed. Pixels outside those rectangles are
 left untouched.
