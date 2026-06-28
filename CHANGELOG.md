@@ -58,6 +58,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   missing-glyph warning and Win32 `--use-app-fonts` capture regression.
 - Manifest app fonts now follow CSS `font-size` with bounded integer bitmap
   scaling and keep the existing synthetic-bold path for `font-weight >= 600`.
+- Added the first authorized file-broker contract: standard `file.read`,
+  `file.write` and `file.manage` capability names, platform-neutral request
+  validation, stable diagnostics and the `AuthorizedFile` host-service job kind.
 
 ### Changed
 

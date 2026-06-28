@@ -304,6 +304,26 @@ class PackagePreflightTests(unittest.TestCase):
         )
         self.assertTrue(all(warning["code"] == "service-target-unsupported" for warning in warnings))
 
+    def test_authorized_file_capabilities_are_known_but_not_storage(self):
+        manifest = {
+            "format": "jellyframe.app",
+            "formatVersion": 0,
+            "id": "org.example.file.manager",
+            "version": {"name": "1.0.0", "code": 1},
+            "entry": "/index.html",
+            "runtime": {"minJellyFrame": "0.5.0", "script": "classic"},
+            "viewport": {"designWidth": 300, "designHeight": 300},
+            "budgets": {"maxResourceBytes": 4096},
+            "capabilities": ["file.read", "file.write", "file.manage"],
+            "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
+        }
+
+        warnings = package_app.collect_manifest_warnings(manifest)
+        self.assertNotIn("manifest-capability-unknown", [warning["code"] for warning in warnings])
+        normalized = package_app.validate_manifest(manifest)
+        intent = package_app.service_intent_report(normalized, {"id": "round-300"})
+        self.assertFalse(intent["requested"]["storageKv"])
+
     def test_responsive_profile_status_and_report_merge(self):
         pipeline_report = {
             "viewport": {"width": 320, "height": 240},

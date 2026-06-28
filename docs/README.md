@@ -48,6 +48,8 @@ interfaces and host contracts. These docs should stay close to the code.
   time, framebuffer, text and budgets.
 - [app_packaging.md](../src/app_runtime/docs/app_packaging.md): app package format, manifest and
   resource-bundle workflow.
+- [authorized_file_broker.md](../src/app_runtime/docs/authorized_file_broker.md): host-owned
+  authorized file access boundary for file-manager and system-component flows.
 - [host_optional_services.md](../src/app_runtime/docs/host_optional_services.md): optional host-service
   contract for images, audio, lightweight video, network data and installable
   bundles.

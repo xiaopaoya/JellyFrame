@@ -606,6 +606,7 @@ void count_host_completion_kind(HostServiceDebugCounters& counters, HostServiceJ
         break;
     case HostServiceJobKind::SensorSample:
     case HostServiceJobKind::VideoFrameDecode:
+    case HostServiceJobKind::AuthorizedFile:
     case HostServiceJobKind::BundleInstall:
     case HostServiceJobKind::BundleRemove:
         ++counters.other_completions;

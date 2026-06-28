@@ -16,6 +16,7 @@ enum class HostServiceJobKind {
     StorageKv,
     SensorSample,
     LocationSnapshot,
+    AuthorizedFile,
     BundleInstall,
     BundleRemove,
     Other,
@@ -38,6 +39,7 @@ enum class HostServiceHandleKind {
     StorageValue,
     SensorSample,
     LocationSnapshot,
+    FileBrokerResult,
     BundleRecord,
     Other,
 };

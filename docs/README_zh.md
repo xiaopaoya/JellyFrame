@@ -34,6 +34,7 @@
 
 - [host_abstraction_zh.md](host_abstraction_zh.md)：资源、时间、framebuffer、文本和预算的薄宿主边界。
 - [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)：app 包格式、manifest 和资源包工作流。
+- [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。
 - [host_optional_services_zh.md](../src/app_runtime/docs/host_optional_services_zh.md)：图片/音频/轻量视频、网络数据和安装式 bundle 的可选宿主服务契约。
 - [../tools/vscode-jellyframe/README_zh.md](../tools/vscode-jellyframe/README_zh.md)：
   调用 developer CLI 的可选 VS Code 辅助扩展。

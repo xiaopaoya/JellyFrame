@@ -93,6 +93,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_service_worker.cpp
     src/app_runtime/app_services.cpp
     src/app_runtime/app_storage_lifecycle_policy.cpp
+    src/app_runtime/authorized_file_broker.cpp
     src/app_runtime/host_services.cpp
     src/app_runtime/system_events.cpp
     src/app_runtime/xml_http_request.cpp
@@ -237,6 +238,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_service_worker_tests.cpp
         src/app_runtime/tests/app_services_tests.cpp
         src/app_runtime/tests/app_storage_lifecycle_policy_tests.cpp
+        src/app_runtime/tests/authorized_file_broker_tests.cpp
         src/app_runtime/tests/host_services_tests.cpp
         src/app_runtime/tests/system_events_tests.cpp
         src/app_runtime/tests/xml_http_request_tests.cpp

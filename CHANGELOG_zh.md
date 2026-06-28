@@ -44,6 +44,9 @@ JellyFrame Engine 的重要变更记录在这里。
   故意缺字 warning，并新增 Win32 `--use-app-fonts` capture 回归。
 - Manifest app font 现在会按 CSS `font-size` 做有界整数倍 bitmap 缩放，并继续对
   `font-weight >= 600` 使用现有合成粗体路径。
+- 添加第一版授权 file broker 契约：标准 `file.read`、`file.write`、`file.manage`
+  capability 名称、平台无关请求校验、稳定 diagnostics，以及 `AuthorizedFile`
+  host-service job kind。
 
 ### 变更
 
