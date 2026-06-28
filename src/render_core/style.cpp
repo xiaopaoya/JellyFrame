@@ -4151,15 +4151,46 @@ void apply_custom_declarations(CustomPropertySlots& local,
     }
 }
 
+bool node_has_inline_custom_property(const Node& node) {
+    return node.type == NodeType::Element && node.attribute("style").find("--") != std::string::npos;
+}
+
+void StyleResolver::apply_custom_properties_for_node(CustomPropertyMap& inherited, const Node& node) const {
+    if (node.type != NodeType::Element) {
+        return;
+    }
+    const SelectorMatchContext context = selector_match_context_from_options(options_);
+    CustomPropertySlots local;
+    if (has_custom_property_declarations_) {
+        for (const CssRule* rule : candidate_rules_for(node)) {
+            if (rule->pseudo_element == CssPseudoElement::None && matches_rule(node, *rule, context)) {
+                apply_custom_declarations(local, rule->declarations, rule->specificity, rule->source_order);
+            }
+        }
+    }
+    if (node_has_inline_custom_property(node)) {
+        CssSpecificity inline_specificity;
+        inline_specificity.ids = 1;
+        apply_custom_declarations(local,
+                                  parse_inline_style(node.attribute("style"), options_.diagnostics),
+                                  inline_specificity,
+                                  static_cast<std::size_t>(-1));
+    }
+    for (const auto& entry : local) {
+        if (entry.second.set) {
+            inherited[entry.first] = entry.second.value;
+        }
+    }
+}
+
 CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
     CustomPropertyMap inherited;
-    const SelectorMatchContext context = selector_match_context_from_options(options_);
 
     std::vector<const Node*> path;
     bool has_inline_custom_property = false;
     for (const Node* current = &node; current != nullptr; current = current->parent) {
         path.push_back(current);
-        if (current->type == NodeType::Element && current->attribute("style").find("--") != std::string::npos) {
+        if (node_has_inline_custom_property(*current)) {
             has_inline_custom_property = true;
         }
     }
@@ -4169,26 +4200,7 @@ CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
     std::reverse(path.begin(), path.end());
 
     for (const Node* current : path) {
-        if (current->type != NodeType::Element) {
-            continue;
-        }
-        CustomPropertySlots local;
-        for (const CssRule* rule : candidate_rules_for(*current)) {
-            if (rule->pseudo_element == CssPseudoElement::None && matches_rule(*current, *rule, context)) {
-                apply_custom_declarations(local, rule->declarations, rule->specificity, rule->source_order);
-            }
-        }
-        CssSpecificity inline_specificity;
-        inline_specificity.ids = 1;
-        apply_custom_declarations(local,
-                                  parse_inline_style(current->attribute("style"), options_.diagnostics),
-                                  inline_specificity,
-                                  static_cast<std::size_t>(-1));
-        for (const auto& entry : local) {
-            if (entry.second.set) {
-                inherited[entry.first] = entry.second.value;
-            }
-        }
+        apply_custom_properties_for_node(inherited, *current);
     }
     return inherited;
 }
@@ -4203,7 +4215,14 @@ const CustomPropertyMap& StyleResolver::custom_properties_for(const Node& node, 
     if (existing != context.custom_property_cache.end()) {
         return existing->second;
     }
-    auto inserted = context.custom_property_cache.emplace(&node, custom_properties_for(node));
+    CustomPropertyMap inherited;
+    if (node.parent != nullptr) {
+        inherited = custom_properties_for(*node.parent, context);
+    }
+    if (has_custom_property_declarations_ || node_has_inline_custom_property(node)) {
+        apply_custom_properties_for_node(inherited, node);
+    }
+    auto inserted = context.custom_property_cache.emplace(&node, std::move(inherited));
     return inserted.first->second;
 }
 

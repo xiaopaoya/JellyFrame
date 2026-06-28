@@ -51,6 +51,30 @@ std::string make_card_css() {
            "@supports (backdrop-filter: blur(8px)) { .card { backdrop-filter: blur(8px); } }";
 }
 
+std::string make_custom_property_html(int count) {
+    std::ostringstream html;
+    html << "<!doctype html><html><body><main class='theme'>";
+    for (int i = 0; i < count; ++i) {
+        html << "<section class='cluster'><article class='card tone-" << (i % 3)
+             << "' style='--local-gap:" << (6 + i % 5) << "px'>"
+             << "<h2>Card " << i << "</h2><p>Signal " << (40 + i % 60)
+             << "</p><button class='action'>Open</button></article></section>";
+    }
+    html << "</main></body></html>";
+    return html.str();
+}
+
+std::string make_custom_property_css() {
+    return ":root { --fg: #0f172a; --panel: #f8fafc; --accent: #2563eb; }"
+           ".theme { --panel: #ffffff; color: var(--fg); }"
+           ".cluster { --accent: #0f766e; margin: var(--local-gap, 8px); }"
+           ".card { display: block; padding: var(--local-gap, 8px); color: var(--fg); "
+           "background: var(--panel); border-color: var(--accent); }"
+           ".tone-1 { --accent: #dc2626; }"
+           ".tone-2 { --panel: #eef2ff; }"
+           ".action { color: var(--panel); background: var(--accent); }";
+}
+
 template <typename Fn>
 double average_microseconds(int iterations, Fn fn) {
     const auto begin = Clock::now();
@@ -164,6 +188,13 @@ Node* find_first_element_by_id(Node& node, const std::string& id) {
     return nullptr;
 }
 
+void collect_nodes(const Node& node, std::vector<const Node*>& nodes) {
+    nodes.push_back(&node);
+    for (const auto& child : node.children) {
+        collect_nodes(*child, nodes);
+    }
+}
+
 } // namespace
 
 int run_render_core_microbench(int argc, char** argv) {
@@ -191,6 +222,19 @@ int run_render_core_microbench(int argc, char** argv) {
 
     auto document = html_parser.parse(html);
     auto stylesheet = css_parser.parse(css);
+
+    auto custom_document = html_parser.parse(make_custom_property_html(card_count));
+    auto custom_stylesheet = css_parser.parse(make_custom_property_css());
+    std::vector<const Node*> custom_nodes;
+    collect_nodes(*custom_document, custom_nodes);
+    print_result("custom_property_style_resolve", iterations, average_microseconds(iterations, [&] {
+        StyleResolver custom_resolver(custom_stylesheet);
+        StyleResolveContext context;
+        for (const Node* node : custom_nodes) {
+            const Style style = custom_resolver.resolve(*node, context);
+            (void)style;
+        }
+    }));
 
     print_result("render_tree", iterations, average_microseconds(iterations, [&] {
         StyleResolver resolver(stylesheet);

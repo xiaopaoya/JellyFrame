@@ -369,6 +369,7 @@ private:
 
     void build_rule_index();
     const std::vector<const CssRule*>& candidate_rules_for(const Node& node) const;
+    void apply_custom_properties_for_node(CustomPropertyMap& inherited, const Node& node) const;
     CustomPropertyMap custom_properties_for(const Node& node) const;
     const CustomPropertyMap& custom_properties_for(const Node& node, StyleResolveContext& context) const;
     Style resolve_with_custom_properties(const Node& node, const CustomPropertyMap& custom_properties) const;
