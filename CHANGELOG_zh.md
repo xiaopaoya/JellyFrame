@@ -65,6 +65,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - 扩展可选 Canvas 2D 到 V0.1，加入 `globalAlpha`、`save`/`restore`、`arc`、
   `closePath`、`fill`、有界 path/state 预算和抗锯齿 stroke coverage。新增
   `jelly_canvas_gauges` package，并补齐 CLI、Win32、脚本、render-core 和微基准回归。
+- 扩展可选 Canvas 2D 到 V0.2，加入有界 `font`、`measureText` 和 `fillText`
+  子集。Canvas 文本在宿主绑定 text backend 时复用宿主文本后端，否则退回 JellyFrame
+  极小 bitmap 文本路径；已覆盖 render-core/script 测试、微基准和 gauges 示例。
 
 ### 变更
 
@@ -72,6 +75,8 @@ JellyFrame Engine 的重要变更记录在这里。
   这类目标上的每像素分支与 stride 重算开销。
 - Canvas fill-path 扫描线交点现在复用 surface 持有的 scratch storage，避免每次 `fill()`
   都产生临时分配。
+- Win32 browser 壳会把 DOM 文本使用的同一套 GDI/app-font 文本后端绑定进 Canvas，
+  让桌面验收时 Canvas 标签和 DOM 标签的测量结果保持一致。
 
 ## 0.4.0-dev - 2026-06-28
 

@@ -184,9 +184,9 @@ Canvas 2D 的标准能力名是 `graphics.canvas2d`。它用于声明 app 需要
 `CanvasRenderingContext2D` 这类按需像素绘制能力。Canvas 会消耗 backing store 内存和 JS 绘制时间，
 因此它不是默认能力；target profile 会通过 `hostServices.canvas2d` 报告当前产品是否支持。
 运行时支持是可选且有界的：只有 `getContext("2d")` 后才分配像素，产品应只在内存预算能接受
-  surface 上限时开启 `hostServices.canvas2d`。Canvas V0.1 覆盖纯色矩形、有界 path、抗锯齿
-  stroked line、`arc`、`fill`、`globalAlpha` 和 `save`/`restore`；文本、imageData、
-  drawImage、transform 和 gradient 等 API 仍属于未来工作。
+  surface 上限时开启 `hostServices.canvas2d`。Canvas V0.2 覆盖纯色矩形、有界 path、抗锯齿
+  stroked line、`arc`、`fill`、`globalAlpha`、`save`/`restore`、`font`、`measureText`
+  和 `fillText`；imageData、drawImage、transform 和 gradient 等 API 仍属于未来工作。
 
 `fonts` 是 JellyFrame bitmap font 路径的部署/runtime 声明，不是完整 CSS `@font-face`
 实现。打包器会把 `.jffont`、`.bdf`、`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font`

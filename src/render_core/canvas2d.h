@@ -2,9 +2,12 @@
 
 #include "render_core/dom.h"
 #include "render_core/geometry.h"
+#include "render_core/software_renderer.h"
+#include "render_core/text_backend.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -31,6 +34,14 @@ struct Canvas2DState {
     Color stroke_style{0, 0, 0, 255};
     int line_width = 1;
     double global_alpha = 1.0;
+    int font_size = 10;
+    int font_weight = 400;
+    std::uint32_t font_family_hash = 0;
+    std::string font = "10px sans-serif";
+};
+
+struct Canvas2DTextMetrics {
+    double width = 0.0;
 };
 
 struct Canvas2DSurface {
@@ -52,6 +63,7 @@ public:
 
     void set_policy(Canvas2DPolicy policy);
     const Canvas2DPolicy& policy() const { return policy_; }
+    void set_text_backend(TextMeasureProvider measure, TextPainter painter);
     void clear();
 
     std::uint32_t ensure_surface(Node& node);
@@ -62,10 +74,12 @@ public:
     bool set_stroke_style(Node& node, std::string_view value);
     bool set_line_width(Node& node, double value);
     bool set_global_alpha(Node& node, double value);
+    bool set_font(Node& node, std::string_view value);
     Color fill_style(const Node& node) const;
     Color stroke_style(const Node& node) const;
     int line_width(const Node& node) const;
     double global_alpha(const Node& node) const;
+    std::string font(const Node& node) const;
     bool save(Node& node);
     bool restore(Node& node);
 
@@ -79,9 +93,13 @@ public:
     bool close_path(Node& node);
     bool fill(Node& node);
     bool stroke(Node& node);
+    Canvas2DTextMetrics measure_text(Node& node, std::string_view text);
+    bool fill_text(Node& node, std::string_view text, double x, double y, double max_width = 0.0);
 
 private:
     Canvas2DPolicy policy_;
+    TextMeasureProvider text_measure_;
+    TextPainter text_painter_;
     std::uint32_t next_handle_ = 1;
     std::vector<Canvas2DSurface> surfaces_;
 

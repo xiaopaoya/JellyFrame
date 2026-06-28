@@ -1027,13 +1027,18 @@ void javascript_canvas_2d_is_optional_and_lazy() {
         "ctx.fillStyle = '#ff0000';"
         "ctx.fillRect(0, 6, 1, 1);"
         "ctx.restore();"
+        "ctx.font = 'bold 10px system-ui';"
+        "var textWidth = ctx.measureText('Hi').width;"
+        "ctx.fillStyle = '#00ff00';"
+        "ctx.fillText('Hi', 1, 5);"
         "ctx.beginPath();"
         "ctx.moveTo(6, 6);"
         "ctx.arc(6, 6, 2, 0, Math.PI);"
         "ctx.closePath();"
         "ctx.fill();"
-        "ctx.fillStyle");
-    check(result.ok && result.value == "#336699", "canvas context draws and reflects fillStyle");
+        "ctx.font + ':' + String(textWidth > 0) + ':' + ctx.fillStyle");
+    check(result.ok && result.value == "bold 10px system-ui:true:#00ff00",
+          "canvas context draws and reflects text state");
 
     const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
     check(surface != nullptr, "canvas surface allocated lazily after getContext");
@@ -1045,7 +1050,7 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     check(translucent.r == 255 && translucent.a >= 126 && translucent.a <= 129,
           "canvas globalAlpha affects fillRect");
     const Color arc_filled = surface->pixels[6 * surface->width + 6];
-    check(arc_filled.r == 0x33 && arc_filled.g == 0x66 && arc_filled.b == 0x99,
+    check(arc_filled.r == 0x00 && arc_filled.g == 0xff && arc_filled.b == 0x00,
           "canvas arc and fill are bound to script");
     check((subtree_dirty_flags(*document) & DomDirtyPaint) != 0U, "canvas drawing marks paint dirty");
 }

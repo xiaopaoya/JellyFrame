@@ -2172,6 +2172,28 @@ jerry_value_t canvas_set_global_alpha(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t canvas_get_font(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t[],
+                              const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry == nullptr || node == nullptr) {
+        return jerry_string_sz("10px sans-serif");
+    }
+    return string_to_value(registry->font(*node)).release();
+}
+
+jerry_value_t canvas_set_font(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t args_p[],
+                              const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count > 0) {
+        registry->set_font(*node, value_to_string(args_p[0]));
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t canvas_save(const jerry_call_info_t* call_info_p,
                           const jerry_value_t[],
                           const jerry_length_t) {
@@ -2190,6 +2212,35 @@ jerry_value_t canvas_restore(const jerry_call_info_t* call_info_p,
     Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
     if (registry != nullptr && node != nullptr) {
         registry->restore(*node);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_measure_text(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    JerryValue metrics(jerry_object());
+    double width = 0.0;
+    if (registry != nullptr && node != nullptr && args_count >= 1) {
+        width = registry->measure_text(*node, value_to_string(args_p[0])).width;
+    }
+    set_number_property(metrics.get(), "width", width);
+    return metrics.release();
+}
+
+jerry_value_t canvas_fill_text(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count >= 3) {
+        registry->fill_text(*node,
+                            value_to_string(args_p[0]),
+                            double_from_value(args_p[1]),
+                            double_from_value(args_p[2]),
+                            args_count >= 4 ? double_from_value(args_p[3]) : 0.0);
     }
     return jerry_undefined();
 }
@@ -2330,6 +2381,7 @@ jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "strokeStyle", canvas_get_stroke_style, canvas_set_stroke_style);
     define_accessor(object.get(), "lineWidth", canvas_get_line_width, canvas_set_line_width);
     define_accessor(object.get(), "globalAlpha", canvas_get_global_alpha, canvas_set_global_alpha);
+    define_accessor(object.get(), "font", canvas_get_font, canvas_set_font);
     set_method(object.get(), "save", canvas_save);
     set_method(object.get(), "restore", canvas_restore);
     set_method(object.get(), "clearRect", canvas_clear_rect);
@@ -2342,6 +2394,8 @@ jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     set_method(object.get(), "closePath", canvas_close_path);
     set_method(object.get(), "fill", canvas_fill);
     set_method(object.get(), "stroke", canvas_stroke);
+    set_method(object.get(), "measureText", canvas_measure_text);
+    set_method(object.get(), "fillText", canvas_fill_text);
     return object.release();
 }
 

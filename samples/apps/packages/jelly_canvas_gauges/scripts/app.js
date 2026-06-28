@@ -34,6 +34,11 @@
     ring(rings, 52, 8, 0.82, "#45f3d0");
     ring(rings, 38, 7, 0.64, "#a7f36b");
     ring(rings, 25, 6, 0.48, "#f7d25c");
+    rings.font = "bold 18px system-ui";
+    rings.fillStyle = "#f4fff7";
+    var label = "82";
+    var labelWidth = rings.measureText(label).width;
+    rings.fillText(label, 66 - labelWidth / 2, 70);
   }
 
   var heart = context("heart");

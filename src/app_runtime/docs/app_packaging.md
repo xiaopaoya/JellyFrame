@@ -240,9 +240,10 @@ capability; target profiles report support through `hostServices.canvas2d`.
 Runtime support is optional and bounded: pixels are allocated only after
 `getContext("2d")`, and hosts/products should enable `hostServices.canvas2d`
   only when their memory budget accepts the configured surface limits. Canvas
-  V0.1 covers solid color rects, bounded paths, antialiased stroked lines,
-  `arc`, `fill`, `globalAlpha` and `save`/`restore`; richer APIs such as text,
-  imageData, drawImage, transform and gradients remain future work.
+  V0.2 covers solid color rects, bounded paths, antialiased stroked lines,
+  `arc`, `fill`, `globalAlpha`, `save`/`restore`, `font`, `measureText` and
+  `fillText`; richer APIs such as imageData, drawImage, transform and gradients
+  remain future work.
 
 `fonts` is a deployment/runtime declaration for the JellyFrame bitmap font
 path, not a full CSS `@font-face` implementation. The packer records `.jffont`,

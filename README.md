@@ -66,7 +66,7 @@ interface.
 JellyFrame is not suitable for arbitrary modern websites, full frontend
 frameworks, browser storage, network-loaded pages, full Canvas/SVG/video,
 complete web compatibility or pixel-perfect rendering. A bounded optional
-Canvas 2D V0.1 exists for bounded custom charts, rings and similar local
+Canvas 2D V0.2 exists for bounded custom charts, rings, labels and similar local
 graphics, but it is still an opt-in subset rather than browser-compatible
 Canvas.
 

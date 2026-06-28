@@ -1,11 +1,41 @@
 #include "render_core/canvas2d.h"
 
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 
 using namespace jellyframe;
 
 namespace {
+
+bool fixed_measure(const std::string& text,
+                   int font_size,
+                   int,
+                   TextMetrics* metrics,
+                   void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    metrics->width = static_cast<int>(text.size()) * std::max(1, font_size / 2);
+    metrics->line_height = font_size + 4;
+    return true;
+}
+
+bool marker_paint(FrameBuffer& target,
+                  Rect rect,
+                  Color color,
+                  const std::string&,
+                  int,
+                  int,
+                  TextCommandAlign,
+                  bool,
+                  void*) {
+    if (target.contains(rect.x, rect.y)) {
+        target.pixel(rect.x, rect.y) = color;
+        return true;
+    }
+    return false;
+}
 
 void canvas_surface_is_lazy_and_budgeted() {
     Canvas2DRegistry registry(Canvas2DPolicy{
@@ -268,6 +298,36 @@ void fill_path_fills_closed_polygon() {
     assert(pixel.b == 0x99);
 }
 
+void text_metrics_and_fill_text_use_bound_backend() {
+    Canvas2DRegistry registry(Canvas2DPolicy{
+        true,
+        1,
+        64,
+        64,
+        32,
+        24,
+    });
+    registry.set_text_backend(TextMeasureProvider{fixed_measure, nullptr},
+                              TextPainter{marker_paint, nullptr});
+    auto canvas = make_element("canvas");
+    assert(registry.set_font(*canvas, "bold 16px system-ui"));
+    assert(registry.font(*canvas) == "bold 16px system-ui");
+    const Canvas2DTextMetrics metrics = registry.measure_text(*canvas, "Hi");
+    assert(metrics.width == 16.0);
+    assert(registry.set_fill_style(*canvas, "#abcdef"));
+    assert(registry.fill_text(*canvas, "Hi", 3.0, 18.0));
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    assert(surface != nullptr);
+    bool found_marker = false;
+    for (const Color& color : surface->pixels) {
+        if (color.r == 0xab && color.g == 0xcd && color.b == 0xef) {
+            found_marker = true;
+            break;
+        }
+    }
+    assert(found_marker);
+}
+
 } // namespace
 
 int main() {
@@ -283,6 +343,7 @@ int main() {
     path_point_budget_is_bounded();
     arc_stroke_draws_ring_pixels();
     fill_path_fills_closed_polygon();
+    text_metrics_and_fill_text_use_bound_backend();
     std::cout << "canvas2d tests passed\n";
     return 0;
 }

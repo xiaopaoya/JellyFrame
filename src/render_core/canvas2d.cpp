@@ -1,10 +1,12 @@
 #include "render_core/canvas2d.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
 #include <string>
+#include <string_view>
 
 namespace jellyframe {
 namespace {
@@ -23,6 +25,86 @@ int parse_positive_int(const std::string& value, int fallback) {
         return fallback;
     }
     return static_cast<int>(parsed);
+}
+
+std::string_view trim_ascii(std::string_view value) {
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())) != 0) {
+        value.remove_prefix(1);
+    }
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())) != 0) {
+        value.remove_suffix(1);
+    }
+    return value;
+}
+
+bool contains_ascii_word(std::string_view value, std::string_view word) {
+    if (word.empty() || value.size() < word.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index + word.size() <= value.size(); ++index) {
+        bool matched = true;
+        for (std::size_t offset = 0; offset < word.size(); ++offset) {
+            const char normalized =
+                static_cast<char>(std::tolower(static_cast<unsigned char>(value[index + offset])));
+            if (normalized != word[offset]) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool parse_canvas_font(std::string_view raw, Canvas2DState& state) {
+    raw = trim_ascii(raw);
+    if (raw.empty() || raw.size() > 96) {
+        return false;
+    }
+    const std::size_t px = raw.find("px");
+    if (px == std::string_view::npos || px == 0) {
+        return false;
+    }
+    std::size_t size_begin = px;
+    while (size_begin > 0 && std::isdigit(static_cast<unsigned char>(raw[size_begin - 1])) != 0) {
+        --size_begin;
+    }
+    if (size_begin == px) {
+        return false;
+    }
+    int font_size = 0;
+    for (std::size_t index = size_begin; index < px; ++index) {
+        font_size = font_size * 10 + (raw[index] - '0');
+    }
+    if (font_size <= 0 || font_size > 96) {
+        return false;
+    }
+
+    int font_weight = contains_ascii_word(raw.substr(0, size_begin), "bold") ? 700 : 400;
+    for (std::size_t index = 0; index + 2 < size_begin; ++index) {
+        if (std::isdigit(static_cast<unsigned char>(raw[index])) == 0 ||
+            std::isdigit(static_cast<unsigned char>(raw[index + 1])) == 0 ||
+            std::isdigit(static_cast<unsigned char>(raw[index + 2])) == 0) {
+            continue;
+        }
+        const int numeric_weight = (raw[index] - '0') * 100 + (raw[index + 1] - '0') * 10 + (raw[index + 2] - '0');
+        if (numeric_weight >= 100 && numeric_weight <= 900) {
+            font_weight = numeric_weight;
+        }
+    }
+
+    std::string_view family = trim_ascii(raw.substr(px + 2));
+    if (!family.empty() && family.front() == '/') {
+        const std::size_t space = family.find(' ');
+        family = space == std::string_view::npos ? std::string_view{} : trim_ascii(family.substr(space + 1));
+    }
+    state.font_size = font_size;
+    state.font_weight = font_weight;
+    state.font_family_hash = normalized_font_family_hash(family);
+    state.font.assign(raw.begin(), raw.end());
+    return true;
 }
 
 int canvas_width_for(const Node& node, int fallback) {
@@ -374,6 +456,11 @@ void Canvas2DRegistry::set_policy(Canvas2DPolicy policy) {
     policy_ = policy;
 }
 
+void Canvas2DRegistry::set_text_backend(TextMeasureProvider measure, TextPainter painter) {
+    text_measure_ = measure;
+    text_painter_ = painter;
+}
+
 void Canvas2DRegistry::clear() {
     surfaces_.clear();
     next_handle_ = 1;
@@ -501,6 +588,19 @@ bool Canvas2DRegistry::set_global_alpha(Node& node, double value) {
     return true;
 }
 
+bool Canvas2DRegistry::set_font(Node& node, std::string_view value) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr) {
+        return false;
+    }
+    Canvas2DState next = surface->state;
+    if (!parse_canvas_font(value, next)) {
+        return false;
+    }
+    surface->state = std::move(next);
+    return true;
+}
+
 Color Canvas2DRegistry::fill_style(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
     return surface != nullptr ? surface->state.fill_style : Color{0, 0, 0, 255};
@@ -519,6 +619,11 @@ int Canvas2DRegistry::line_width(const Node& node) const {
 double Canvas2DRegistry::global_alpha(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
     return surface != nullptr ? surface->state.global_alpha : 1.0;
+}
+
+std::string Canvas2DRegistry::font(const Node& node) const {
+    const Canvas2DSurface* surface = surface_for(node);
+    return surface != nullptr ? surface->state.font : "10px sans-serif";
 }
 
 bool Canvas2DRegistry::save(Node& node) {
@@ -656,6 +761,69 @@ bool Canvas2DRegistry::stroke(Node& node) {
     if (surface->path_closed) {
         draw_line(*surface, surface->path.back(), surface->path.front(), color, line_width);
     }
+    mark_dirty(node, DomDirtyPaint);
+    return true;
+}
+
+Canvas2DTextMetrics Canvas2DRegistry::measure_text(Node& node, std::string_view text) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr) {
+        return Canvas2DTextMetrics{};
+    }
+    const std::string owned_text(text);
+    const TextMetrics metrics =
+        jellyframe::measure_text(text_measure_,
+                                 owned_text,
+                                 surface->state.font_size,
+                                 surface->state.font_weight,
+                                 surface->state.font_family_hash);
+    return Canvas2DTextMetrics{static_cast<double>(metrics.width)};
+}
+
+bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, double y, double max_width) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || text.empty() || !std::isfinite(x) || !std::isfinite(y) ||
+        (max_width != 0.0 && !std::isfinite(max_width))) {
+        return false;
+    }
+    const std::string owned_text(text);
+    const TextMetrics metrics =
+        jellyframe::measure_text(text_measure_,
+                                 owned_text,
+                                 surface->state.font_size,
+                                 surface->state.font_weight,
+                                 surface->state.font_family_hash);
+    const int left = static_cast<int>(std::round(x));
+    const int baseline = static_cast<int>(std::round(y));
+    int width = max_width > 0.0 ? static_cast<int>(std::round(max_width)) : metrics.width;
+    if (width <= 0) {
+        width = metrics.width;
+    }
+    const int available_width = surface->width - left;
+    if (available_width <= 0) {
+        return false;
+    }
+    width = std::max(1, std::min(width, available_width));
+    const int line_height = std::max(1, metrics.line_height);
+    FrameBuffer target;
+    target.width = surface->width;
+    target.height = surface->height;
+    target.pixels.swap(surface->pixels);
+
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{left, baseline - line_height, width, line_height};
+    command.color = with_global_alpha(surface->state.fill_style, surface->state.global_alpha);
+    command.text = owned_text;
+    command.font_size = surface->state.font_size;
+    command.font_weight = surface->state.font_weight;
+    command.font_family_hash = surface->state.font_family_hash;
+    command.text_align = TextCommandAlign::Start;
+    command.text_single_line = true;
+    SoftwareRasterizer rasterizer(text_painter_);
+    rasterizer.rasterize(command, target, Rect{0, 0, surface->width, surface->height});
+
+    surface->pixels.swap(target.pixels);
     mark_dirty(node, DomDirtyPaint);
     return true;
 }

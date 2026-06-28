@@ -516,6 +516,16 @@ int main(int argc, char** argv) {
         canvas_registry.close_path(*canvas);
         canvas_registry.fill(*canvas);
     }));
+    canvas_registry.set_font(*canvas, "bold 16px system-ui");
+    canvas_registry.set_fill_style(*canvas, "#ffffff");
+    print_result("canvas2d_measure_text", iterations, average_microseconds(iterations, [&] {
+        const Canvas2DTextMetrics metrics = canvas_registry.measure_text(*canvas, "82%");
+        (void)metrics;
+    }));
+    print_result("canvas2d_fill_text", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        canvas_registry.fill_text(*canvas, "82%", 42.0, 44.0);
+    }));
     print_style_statistics(resolver.statistics());
 
     return 0;

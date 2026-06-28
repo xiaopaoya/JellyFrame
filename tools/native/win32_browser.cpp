@@ -2802,6 +2802,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     }
     AppImageSurfaceCache image_cache(AppImageSurfaceCacheOptions{8, 512 * 1024});
     Canvas2DRegistry debug_canvas;
+    debug_canvas.set_text_backend(text_backend.measure, text_backend.painter);
     BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache, &debug_canvas, &diagnostics};
     BrowserImageContext image_context{&debug_images, &debug_canvas};
     StyleResolverOptions style_options;
@@ -4149,6 +4150,8 @@ private:
                 }
                 script_runtime_->bind_local_storage(debug_local_storage_);
                 script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
+                const BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
+                debug_canvas_.set_text_backend(text_backend.measure, text_backend.painter);
                 script_runtime_->bind_canvas_2d(debug_canvas_);
                 script_runtime_->set_system_state(ScriptSystemState{
                     !debug_system_state_.screen_on || debug_system_state_.low_power_mode,
