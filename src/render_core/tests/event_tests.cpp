@@ -120,6 +120,23 @@ void listener_mutation_during_dispatch_is_stable() {
     check(added_count == 1, "added listener runs on later dispatch");
 }
 
+void bounded_cpp_listener_registration_respects_limit() {
+    auto button = make_element("button");
+    int count = 0;
+    const EventTarget::ListenerId first =
+        button->add_event_listener_bounded("click", [&](Event&) { ++count; }, 1);
+    const EventTarget::ListenerId second =
+        button->add_event_listener_bounded("click", [&](Event&) { count += 10; }, 1);
+
+    check(first != 0, "first bounded listener registered");
+    check(second == 0, "second bounded listener rejected");
+    check(button->event_listener_count() == 1, "bounded listener count");
+
+    MouseEvent event("click", 0, 0);
+    dispatch_event(*button, event);
+    check(count == 1, "only registered bounded listener runs");
+}
+
 } // namespace
 
 int main() {
@@ -127,6 +144,7 @@ int main() {
         dispatch_runs_capture_target_and_bubble();
         prevent_default_stop_and_once_work();
         listener_mutation_during_dispatch_is_stable();
+        bounded_cpp_listener_registration_respects_limit();
     } catch (const std::exception& error) {
         std::cerr << "event test failed: " << error.what() << '\n';
         return 1;

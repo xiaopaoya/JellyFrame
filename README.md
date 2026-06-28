@@ -64,8 +64,9 @@ interface.
 - Desktop validation for board ports, text backends, input and rendering.
 
 JellyFrame is not suitable for arbitrary modern websites, full frontend
-frameworks, browser storage, network-loaded pages, Canvas/SVG/video, complete
-web compatibility or pixel-perfect rendering.
+frameworks, browser storage, network-loaded pages, full Canvas/SVG/video,
+complete web compatibility or pixel-perfect rendering. A bounded optional
+Canvas 2D V0 subset exists for custom charts and similar local graphics.
 
 ## Quick Start
 

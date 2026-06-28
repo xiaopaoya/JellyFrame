@@ -161,28 +161,34 @@ void append_coalesced(std::vector<Rect>& rects, Rect rect, Rect viewport, std::s
     rects.push_back(rect);
 }
 
-void collect_animation_rects(const LayoutBox& box,
-                             const std::vector<StyleOverride>& previous_overrides,
-                             const std::vector<StyleOverride>& current_overrides,
-                             const AnimationInvalidationOptions& options,
-                             std::vector<const LayoutBox*>& pending_boxes,
-                             DirtyRegionResult& result) {
-    if (box.node != nullptr) {
-        const StyleOverride* previous = find_override(previous_overrides, box.node);
-        const StyleOverride* current = find_override(current_overrides, box.node);
-        if ((previous != nullptr && override_affects_paint(*previous)) ||
-            (current != nullptr && override_affects_paint(*current))) {
-            const Rect base_bounds = subtree_bounds(box, pending_boxes);
-            Rect dirty = transformed_bounds(base_bounds, box.style, previous);
-            dirty = union_rect(dirty, transformed_bounds(base_bounds, box.style, current));
-            append_coalesced(result.rects,
-                             expand_rect(dirty, options.expansion_px),
-                             options.viewport,
-                             std::max<std::size_t>(1, options.max_rects));
+void collect_animation_rects_iterative(const LayoutBox& box,
+                                       const std::vector<StyleOverride>& previous_overrides,
+                                       const std::vector<StyleOverride>& current_overrides,
+                                       const AnimationInvalidationOptions& options,
+                                       std::vector<const LayoutBox*>& pending_boxes,
+                                       DirtyRegionResult& result) {
+    std::vector<const LayoutBox*> pending;
+    pending.push_back(&box);
+    while (!pending.empty()) {
+        const LayoutBox& current_box = *pending.back();
+        pending.pop_back();
+        if (current_box.node != nullptr) {
+            const StyleOverride* previous = find_override(previous_overrides, current_box.node);
+            const StyleOverride* current = find_override(current_overrides, current_box.node);
+            if ((previous != nullptr && override_affects_paint(*previous)) ||
+                (current != nullptr && override_affects_paint(*current))) {
+                const Rect base_bounds = subtree_bounds(current_box, pending_boxes);
+                Rect dirty = transformed_bounds(base_bounds, current_box.style, previous);
+                dirty = union_rect(dirty, transformed_bounds(base_bounds, current_box.style, current));
+                append_coalesced(result.rects,
+                                 expand_rect(dirty, options.expansion_px),
+                                 options.viewport,
+                                 std::max<std::size_t>(1, options.max_rects));
+            }
         }
-    }
-    for (const auto& child : box.children) {
-        collect_animation_rects(*child, previous_overrides, current_overrides, options, pending_boxes, result);
+        for (const auto& child : current_box.children) {
+            pending.push_back(child.get());
+        }
     }
 }
 
@@ -209,7 +215,7 @@ void compute_animation_dirty_region_into(const LayoutBox& layout,
         return;
     }
     std::vector<const LayoutBox*> pending_boxes;
-    collect_animation_rects(layout, previous_overrides, current_overrides, options, pending_boxes, result);
+    collect_animation_rects_iterative(layout, previous_overrides, current_overrides, options, pending_boxes, result);
     if (!result.rects.empty()) {
         result.mode = DirtyRegionMode::DirtyRects;
     } else {

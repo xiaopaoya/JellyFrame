@@ -67,6 +67,45 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(sorted(desktop_sources - esp_sources), [])
         self.assertEqual(sorted(esp_sources - desktop_sources), [])
 
+    def test_weather_template_and_sample_stay_intentionally_aligned(self):
+        mirrored_files = (
+            "index.html",
+            "styles/app.css",
+            "scripts/app.js",
+            "assets/cloudy.bmp",
+            "assets/haze.bmp",
+            "assets/rain.bmp",
+            "assets/sunny.bmp",
+        )
+        sample_root = REPO_ROOT / "samples" / "apps" / "packages" / "watch_weather"
+        template_root = REPO_ROOT / "tools" / "templates" / "apps" / "weather"
+        for relative in mirrored_files:
+            self.assertEqual(
+                (sample_root / relative).read_bytes(),
+                (template_root / relative).read_bytes(),
+                f"weather template drifted from sample: {relative}",
+            )
+
+        sample_manifest = json.loads((sample_root / "jellyframe.app.json").read_text(encoding="utf-8"))
+        template_manifest = json.loads((template_root / "jellyframe.app.json").read_text(encoding="utf-8"))
+        shared_fields = (
+            "format",
+            "formatVersion",
+            "version",
+            "entry",
+            "runtime",
+            "viewport",
+            "budgets",
+            "permissions",
+            "capabilities",
+        )
+        for field in shared_fields:
+            self.assertEqual(
+                sample_manifest.get(field),
+                template_manifest.get(field),
+                f"weather template manifest drifted from sample field: {field}",
+            )
+
     def test_font_preflight_scans_text_resources_and_skips_binary_other(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-tool-regression-") as directory:
             root = Path(directory)

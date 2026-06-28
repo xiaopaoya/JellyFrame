@@ -23,6 +23,8 @@ JellyFrame 将输入接线和核心引擎分开：
 - DOM `Node` 上的 `EventTarget`。
 - listener storage 惰性分配，没有 listener 的节点不分配 listener table。
 - 带 listener id 的 `add_event_listener()` 和 `remove_event_listener()`。
+- `add_event_listener_bounded()` 供直接注册 C++ listener 的嵌入式 host 使用，
+  可在 script runtime 之外显式执行 `HostBudgets::max_event_listeners`。
 - `Event`、`MouseEvent` 和 `WheelEvent` 数据对象。
 - 平台无关 `InputController`，用于 pointer move/down/up 和 wheel input。
 - `prevent_default()`、`stop_propagation()` 和 `stop_immediate_propagation()`。
@@ -45,7 +47,8 @@ JellyFrame 将输入接线和核心引擎分开：
 
 ## 明确裁剪
 
-- 暂无 JavaScript callbacks。JerryScript 集成前先使用 C++ callbacks。
+- 直接调用 C++ `add_event_listener()` 属于 host-trusted 路径。嵌入式 port 如果允许第三方或动态 native listener
+  注册，应使用 `add_event_listener_bounded()` 或更严格的 runtime wrapper。
 - 不支持 shadow DOM、slots 或 composed paths。
 - 不支持 form、anchor、editing 或 selection 默认行为。
 - 不支持 `pointer-events` CSS 属性。

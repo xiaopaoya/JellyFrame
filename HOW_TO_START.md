@@ -50,13 +50,14 @@ JellyFrame deliberately does not provide:
 - cookies, IndexedDB or a general filesystem API;
 - full DOM, query selector APIs, Shadow DOM or Web Components;
 - ES modules or browser loading algorithms;
-- Canvas, SVG or a browser-grade image/video stack;
+- full Canvas, SVG or a browser-grade image/video stack;
 - full Flexbox/Grid/positioning/animation/filter behavior;
 - GPU compositing or pixel-compatible browser rendering.
 
 Host-optional async `XMLHttpRequest` GET V0, `localStorage` V0, packaged BMP
-images and `Audio` V0 exist, but they are not full browser APIs. Use them only
-within the capability matrix and manifest declarations.
+images, `Audio` V0 and optional Canvas 2D V0 exist, but they are not full
+browser APIs. Use them only within the capability matrix and manifest
+declarations.
 Before relying on a feature, check
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
 

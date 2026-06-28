@@ -338,11 +338,18 @@ struct InteractionInvalidationHints {
     bool focus = false;
 };
 
+using CustomPropertyMap = std::unordered_map<std::string, std::string>;
+
+struct StyleResolveContext {
+    std::unordered_map<const Node*, CustomPropertyMap> custom_property_cache;
+};
+
 class StyleResolver {
 public:
     explicit StyleResolver(Stylesheet stylesheet, StyleResolverOptions options = {});
 
     Style resolve(const Node& node) const;
+    Style resolve(const Node& node, StyleResolveContext& context) const;
     const CssKeyframesRule* keyframes(std::string_view name) const;
     StyleResolverStatistics statistics() const;
     InteractionInvalidationHints interaction_invalidation_hints() const;
@@ -362,7 +369,9 @@ private:
 
     void build_rule_index();
     const std::vector<const CssRule*>& candidate_rules_for(const Node& node) const;
-    std::unordered_map<std::string, std::string> custom_properties_for(const Node& node) const;
+    CustomPropertyMap custom_properties_for(const Node& node) const;
+    const CustomPropertyMap& custom_properties_for(const Node& node, StyleResolveContext& context) const;
+    Style resolve_with_custom_properties(const Node& node, const CustomPropertyMap& custom_properties) const;
 };
 
 } // namespace jellyframe

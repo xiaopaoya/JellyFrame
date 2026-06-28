@@ -29,6 +29,9 @@ controllers and UI driver libraries.
 - Lazy listener storage so nodes without listeners do not allocate listener
   tables.
 - `add_event_listener()` and `remove_event_listener()` with listener ids.
+- `add_event_listener_bounded()` for embedded hosts that register C++ listeners
+  directly and want to enforce `HostBudgets::max_event_listeners` outside the
+  script runtime.
 - `Event`, `MouseEvent` and `WheelEvent` data objects.
 - Platform-neutral `InputController` for pointer move/down/up and wheel input.
 - `prevent_default()`, `stop_propagation()` and
@@ -58,8 +61,9 @@ controllers and UI driver libraries.
 
 ## Deliberate Cuts
 
-- No JavaScript callbacks yet. C++ callbacks are used until JerryScript is
-  integrated.
+- Direct C++ `add_event_listener()` is a host-trusted path. Embedded ports that
+  expose third-party or dynamic native listener registration should use
+  `add_event_listener_bounded()` or a stricter runtime wrapper.
 - No shadow DOM, slots or composed paths.
 - No default form, anchor, editing or selection behavior.
 - No `pointer-events` CSS property.

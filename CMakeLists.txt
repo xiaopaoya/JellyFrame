@@ -37,6 +37,7 @@ add_library(jellyframe_render_core
     src/render_core/arena.cpp
     src/render_core/bitmap_font.cpp
     src/render_core/bitmap_font_resource.cpp
+    src/render_core/canvas2d.cpp
     src/render_core/css_parser.cpp
     src/render_core/display_invalidation.cpp
     src/render_core/dirty_region.cpp
@@ -67,6 +68,7 @@ add_library(jellyframe_render_core
     src/render_core/text_layout_reuse.cpp
     src/render_core/text_normalization.cpp
     src/render_core/text_repaint.cpp
+    src/render_core/text_scan.cpp
 )
 
 target_include_directories(jellyframe_render_core
@@ -194,6 +196,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/arena_tests.cpp
         src/render_core/tests/animation_timeline_tests.cpp
         src/render_core/tests/budget_stress_tests.cpp
+        src/render_core/tests/canvas2d_tests.cpp
         src/render_core/tests/dom_mutation_tests.cpp
         src/render_core/tests/dom_owner_tests.cpp
         src/render_core/tests/document_script_tests.cpp
@@ -216,6 +219,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/style_repaint_tests.cpp
         src/render_core/tests/text_adapter_tests.cpp
         src/render_core/tests/text_repaint_tests.cpp
+        src/render_core/tests/text_scan_tests.cpp
     )
 
     foreach(test_source IN LISTS JELLYFRAME_RENDER_CORE_TEST_SOURCES)
@@ -313,6 +317,16 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_cli_check_canvas_smoke_package
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        check
+                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke
+                        --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_canvas_smoke.report.json
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
                 NAME jellyframe_cli_check_watch_weather_responsive
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
@@ -382,6 +396,16 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         if(JELLYFRAME_BUILD_SCRIPTING)
+            add_test(
+                NAME jellyframe_win32_canvas_smoke_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke/capture_canvas_smoke.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_canvas_smoke_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "layer_tree layers=1 display_commands=15")
+
             add_test(
                 NAME jellyframe_win32_motion_lab_low_power_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_win32_browser>

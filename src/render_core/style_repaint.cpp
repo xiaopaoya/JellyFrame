@@ -87,14 +87,20 @@ bool layout_fields_equal(const Style& left, const Style& right) {
 
 bool render_tree_shape_and_layout_fields_match(const RenderObject& previous,
                                                const RenderObject& next) {
-    if (previous.type != next.type || previous.node != next.node ||
-        previous.children.size() != next.children.size() ||
-        !layout_fields_equal(previous.style, next.style)) {
-        return false;
-    }
-    for (std::size_t index = 0; index < previous.children.size(); ++index) {
-        if (!render_tree_shape_and_layout_fields_match(*previous.children[index], *next.children[index])) {
+    std::vector<std::pair<const RenderObject*, const RenderObject*>> pending;
+    pending.push_back({&previous, &next});
+    while (!pending.empty()) {
+        const auto current = pending.back();
+        pending.pop_back();
+        const RenderObject& left = *current.first;
+        const RenderObject& right = *current.second;
+        if (left.type != right.type || left.node != right.node ||
+            left.children.size() != right.children.size() ||
+            !layout_fields_equal(left.style, right.style)) {
             return false;
+        }
+        for (std::size_t index = 0; index < left.children.size(); ++index) {
+            pending.push_back({left.children[index].get(), right.children[index].get()});
         }
     }
     return true;
@@ -105,21 +111,35 @@ bool dirty_flags_are_style_text_layout_only(DomDirtyFlags flags) {
 }
 
 bool render_layout_shape_matches(const RenderObject& render, const LayoutBox& layout) {
-    if (render.node != layout.node || render.children.size() != layout.children.size()) {
-        return false;
-    }
-    for (std::size_t index = 0; index < render.children.size(); ++index) {
-        if (!render_layout_shape_matches(*render.children[index], *layout.children[index])) {
+    std::vector<std::pair<const RenderObject*, const LayoutBox*>> pending;
+    pending.push_back({&render, &layout});
+    while (!pending.empty()) {
+        const auto current = pending.back();
+        pending.pop_back();
+        const RenderObject& render_node = *current.first;
+        const LayoutBox& layout_node = *current.second;
+        if (render_node.node != layout_node.node || render_node.children.size() != layout_node.children.size()) {
             return false;
+        }
+        for (std::size_t index = 0; index < render_node.children.size(); ++index) {
+            pending.push_back({render_node.children[index].get(), layout_node.children[index].get()});
         }
     }
     return true;
 }
 
-void apply_styles_recursive(const RenderObject& render, LayoutBox& layout) {
-    layout.style = render.style;
-    for (std::size_t index = 0; index < render.children.size(); ++index) {
-        apply_styles_recursive(*render.children[index], *layout.children[index]);
+void apply_styles_iterative(const RenderObject& render, LayoutBox& layout) {
+    std::vector<std::pair<const RenderObject*, LayoutBox*>> pending;
+    pending.push_back({&render, &layout});
+    while (!pending.empty()) {
+        const auto current = pending.back();
+        pending.pop_back();
+        const RenderObject& render_node = *current.first;
+        LayoutBox& layout_node = *current.second;
+        layout_node.style = render_node.style;
+        for (std::size_t index = 0; index < render_node.children.size(); ++index) {
+            pending.push_back({render_node.children[index].get(), layout_node.children[index].get()});
+        }
     }
 }
 
@@ -160,24 +180,29 @@ void append_style_override(const RenderObject& object,
     overrides.push_back(std::move(override));
 }
 
-void collect_style_overrides_recursive(const RenderObject& previous,
+void collect_style_overrides_iterative(const RenderObject& previous,
                                        const RenderObject& next,
                                        std::vector<StyleOverride>& previous_overrides,
                                        std::vector<StyleOverride>& current_overrides) {
-    if (previous.node == next.node && style_override_needed(previous.style, next.style)) {
-        const bool transform = previous.style.transform != next.style.transform;
-        const bool opacity = previous.style.opacity != next.style.opacity;
-        const bool background = !color_equal(previous.style.background_color, next.style.background_color);
-        const bool color = !color_equal(previous.style.color, next.style.color);
-        append_style_override(previous, previous_overrides, transform, opacity, background, color);
-        append_style_override(next, current_overrides, transform, opacity, background, color);
-    }
-    const std::size_t child_count = std::min(previous.children.size(), next.children.size());
-    for (std::size_t index = 0; index < child_count; ++index) {
-        collect_style_overrides_recursive(*previous.children[index],
-                                          *next.children[index],
-                                          previous_overrides,
-                                          current_overrides);
+    std::vector<std::pair<const RenderObject*, const RenderObject*>> pending;
+    pending.push_back({&previous, &next});
+    while (!pending.empty()) {
+        const auto current = pending.back();
+        pending.pop_back();
+        const RenderObject& previous_node = *current.first;
+        const RenderObject& next_node = *current.second;
+        if (previous_node.node == next_node.node && style_override_needed(previous_node.style, next_node.style)) {
+            const bool transform = previous_node.style.transform != next_node.style.transform;
+            const bool opacity = previous_node.style.opacity != next_node.style.opacity;
+            const bool background = !color_equal(previous_node.style.background_color, next_node.style.background_color);
+            const bool color = !color_equal(previous_node.style.color, next_node.style.color);
+            append_style_override(previous_node, previous_overrides, transform, opacity, background, color);
+            append_style_override(next_node, current_overrides, transform, opacity, background, color);
+        }
+        const std::size_t child_count = std::min(previous_node.children.size(), next_node.children.size());
+        for (std::size_t index = 0; index < child_count; ++index) {
+            pending.push_back({previous_node.children[index].get(), next_node.children[index].get()});
+        }
     }
 }
 
@@ -203,7 +228,7 @@ void collect_style_repaint_overrides(const RenderObject& previous_render_tree,
                                      std::vector<StyleOverride>& current_overrides) {
     previous_overrides.clear();
     current_overrides.clear();
-    collect_style_overrides_recursive(previous_render_tree,
+    collect_style_overrides_iterative(previous_render_tree,
                                       next_render_tree,
                                       previous_overrides,
                                       current_overrides);
@@ -213,7 +238,7 @@ bool apply_render_styles_to_layout(const RenderObject& render_tree, LayoutBox& l
     if (!render_layout_shape_matches(render_tree, layout_tree)) {
         return false;
     }
-    apply_styles_recursive(render_tree, layout_tree);
+    apply_styles_iterative(render_tree, layout_tree);
     return true;
 }
 

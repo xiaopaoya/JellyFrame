@@ -158,6 +158,10 @@ API 表面。
   `[attr]` 和 `[attr=value]`。Descendant/child combinator 目前仍只在 CSS 中支持。
 - native input dispatch 会把 `pointerdown`、`pointerup`、`touchstart` 和 `touchend`
   作为 mouse-like event 暴露，便于可穿戴壳实现按下反馈。
+- 可选 Canvas 2D V0 只在宿主绑定 canvas registry 后暴露：`canvas.getContext("2d")`、
+  `fillStyle`、`strokeStyle`、`lineWidth`、`clearRect`、`fillRect`、`strokeRect`、
+  `beginPath`、`moveTo`、`lineTo` 和 `stroke`。能力缺失或 backing-store 预算拒绝时，
+  `getContext("2d")` 返回 `null`。
 - disabled 表单控件不会接收文本输入、range 移动或 activation。
 - 脚本相关 diagnostics 来自真正处理 app 的 package loader、JerryScript runtime 和
   DOM/event binding 代码路径。
@@ -168,8 +172,8 @@ API 表面。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
 - `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、完整
-  `HTMLAudioElement`、超出 `online`/`offline` 的完整 `Window`/`EventTarget` 语义、canvas 和
-  Web Components。
+  `HTMLAudioElement`、超出 `online`/`offline` 的完整 `Window`/`EventTarget` 语义、Canvas V0
+  以外的 API 和 Web Components。
 
 ## 嵌入式策略
 

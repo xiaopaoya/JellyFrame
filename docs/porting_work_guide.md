@@ -183,6 +183,10 @@ Requirements:
 - If memory permits, keep one persistent RGB565 target buffer to avoid per-frame
   allocation; when internal RAM is tight, do not put a full-screen RGB565 target
   in internal RAM.
+- Treat `ports/esp32s3-idf/main` display smoke and benchmark full-frame
+  allocations as measurement code only. Product firmware should not allocate
+  full-screen RGB565 scratch buffers per probe/frame; use persistent targets,
+  dirty-rect flush and a bounded strip/row scratch buffer instead.
 - `flush` must submit dirty rectangles, not always full frames.
 - If the display driver requires tightly packed rows and a dirty rect is not
   full-width, pack rows into a static or stack scratch buffer before calling the

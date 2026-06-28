@@ -1,0 +1,14 @@
+# JellyFrame deterministic Canvas 2D capture script.
+# Run with:
+#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_canvas_smoke --frame-script samples/apps/packages/jelly_canvas_smoke/capture_canvas_smoke.jfcapture
+
+output-dir out/canvas_smoke_frames
+montage out/canvas_smoke_montage.bmp
+frames 1
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 1
+gap 1
+animation-fps 30
+animation-callbacks 4

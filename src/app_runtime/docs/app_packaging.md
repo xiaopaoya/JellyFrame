@@ -237,8 +237,11 @@ Canvas 2D uses the standard capability name `graphics.canvas2d`. It declares
 that an app needs `<canvas>` / `CanvasRenderingContext2D` style pixel drawing.
 Canvas consumes backing-store memory and JS drawing time, so it is not a default
 capability; target profiles report support through `hostServices.canvas2d`.
-Built-in targets currently mark it unsupported until runtime and Win32/port
-acceptance paths are implemented.
+Runtime support is optional and bounded: pixels are allocated only after
+`getContext("2d")`, and hosts/products should enable `hostServices.canvas2d`
+only when their memory budget accepts the configured surface limits. Canvas V0
+currently covers solid color rects and simple stroked paths; richer APIs such as
+arc, text, imageData and transform remain future work.
 
 `fonts` is a deployment/runtime declaration for the JellyFrame bitmap font
 path, not a full CSS `@font-face` implementation. The packer records `.jffont`,

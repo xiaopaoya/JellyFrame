@@ -52,11 +52,6 @@ private:
     RenderTreeOptions options_;
 
     RenderObjectPtr build_with_arena(const Node& document, MonotonicArena* arena) const;
-    RenderObjectPtr build_object(const Node& node,
-                                 const Style* parent_style,
-                                 std::size_t& render_object_count,
-                                 bool& budget_reported,
-                                 MonotonicArena* arena) const;
     RenderObjectPtr make_render_object(MonotonicArena* arena) const;
     RenderObjectType render_type_for(const Node& node, const Style& style) const;
 };

@@ -7,6 +7,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/render_core/arena.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/bitmap_font.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/bitmap_font_resource.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/canvas2d.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/css_parser.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/display_invalidation.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/dirty_region.cpp"
@@ -37,6 +38,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/render_core/text_layout_reuse.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/text_normalization.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/text_repaint.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/text_scan.cpp"
     INCLUDE_DIRS
         "${JELLYFRAME_ROOT}/src"
 )

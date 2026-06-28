@@ -2,6 +2,7 @@
 
 #include "render_core/form_control.h"
 #include "render_core/text_normalization.h"
+#include "render_core/text_scan.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -264,54 +265,6 @@ TextCommandAlign text_command_align(TextAlign align) {
     default:
         return TextCommandAlign::Start;
     }
-}
-
-std::uint32_t consume_utf8_codepoint(const std::string& text, std::size_t& index) {
-    const unsigned char lead = static_cast<unsigned char>(text[index]);
-    std::uint32_t codepoint = lead;
-    std::size_t width = 1;
-    if ((lead & 0xe0U) == 0xc0U && index + 1 < text.size()) {
-        width = 2;
-        codepoint = ((lead & 0x1fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 1]) & 0x3fU);
-    } else if ((lead & 0xf0U) == 0xe0U && index + 2 < text.size()) {
-        width = 3;
-        codepoint = ((lead & 0x0fU) << 12U) |
-            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 2]) & 0x3fU);
-    } else if ((lead & 0xf8U) == 0xf0U && index + 3 < text.size()) {
-        width = 4;
-        codepoint = ((lead & 0x07U) << 18U) |
-            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 12U) |
-            ((static_cast<unsigned char>(text[index + 2]) & 0x3fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 3]) & 0x3fU);
-    }
-    index += std::min(width, text.size() - index);
-    return codepoint;
-}
-
-bool is_cjk_codepoint(std::uint32_t codepoint) {
-    return (codepoint >= 0x3400U && codepoint <= 0x4dbfU) ||
-        (codepoint >= 0x4e00U && codepoint <= 0x9fffU) ||
-        (codepoint >= 0xf900U && codepoint <= 0xfaffU);
-}
-
-bool has_text_wrap_opportunity(const std::string& text) {
-    int cjk_count = 0;
-    for (std::size_t index = 0; index < text.size();) {
-        const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
-        if (codepoint == ' ' || codepoint == '\t' || codepoint == '\n' ||
-            codepoint == '-' || codepoint == '/') {
-            return true;
-        }
-        if (is_cjk_codepoint(codepoint)) {
-            ++cjk_count;
-            if (cjk_count > 1) {
-                return true;
-            }
-        }
-    }
-    return false;
 }
 
 int estimate_marker_width(const std::string& text, int font_size) {
@@ -734,10 +687,14 @@ bool resolve_image_handle(const LayoutBox& box,
                           const LayerTreeBuilderOptions& options,
                           std::uint32_t& image_handle) {
     image_handle = 0;
-    if (box.node == nullptr || box.node->type != NodeType::Element || box.node->tag_name != "img") {
+    if (box.node == nullptr || box.node->type != NodeType::Element ||
+        (box.node->tag_name != "img" && box.node->tag_name != "canvas")) {
         return false;
     }
-    if (box.node->attribute("src").empty() || options.image_resolver.resolve == nullptr) {
+    if (box.node->tag_name == "img" && box.node->attribute("src").empty()) {
+        return false;
+    }
+    if (options.image_resolver.resolve == nullptr) {
         return false;
     }
     return options.image_resolver.resolve(*box.node, image_handle, options.image_resolver.context) && image_handle != 0;
@@ -961,42 +918,20 @@ void flatten_layer(const LayerNode& layer,
                    std::size_t max_display_commands,
                    DiagnosticSink* diagnostics,
                    bool& display_budget_reported) {
-    if (output.size() >= max_display_commands) {
-        if (!display_budget_reported) {
-            report_diagnostic(diagnostics,
-                              DiagnosticStage::LayerTree,
-                              DiagnosticSeverity::Warning,
-                              "display-command-limit",
-                              "Flattened display command budget was reached; remaining paint commands were skipped",
-                              "Increase max_display_commands for complex pages.");
-            display_budget_reported = true;
-        }
-        return;
-    }
-    if (layer.has_clip) {
-        clip = has_clip ? intersect_rect(clip, layer.clip_rect) : layer.clip_rect;
-        has_clip = true;
-        if (empty_rect(clip)) {
-            return;
-        }
-    }
+    struct PendingLayer {
+        const LayerNode* layer = nullptr;
+        Rect clip;
+        bool has_clip = false;
+        float opacity = 1.0F;
+        int translate_x = 0;
+        int translate_y = 0;
+    };
 
-    const float layer_opacity = opacity * layer.opacity;
-    const int layer_translate_x = translate_x + static_cast<int>(layer.transform.translate_x >= 0.0F
-        ? layer.transform.translate_x + 0.5F
-        : layer.transform.translate_x - 0.5F);
-    const int layer_translate_y = translate_y + static_cast<int>(layer.transform.translate_y >= 0.0F
-        ? layer.transform.translate_y + 0.5F
-        : layer.transform.translate_y - 0.5F);
-    for (const DisplayCommand& command : layer.display_list) {
-        append_flattened_command(output,
-                                 command,
-                                 clip,
-                                 has_clip,
-                                 layer_opacity,
-                                 layer_translate_x,
-                                 layer_translate_y,
-                                 max_display_commands);
+    std::vector<PendingLayer> pending;
+    pending.push_back(PendingLayer{&layer, clip, has_clip, opacity, translate_x, translate_y});
+    while (!pending.empty()) {
+        const PendingLayer current = pending.back();
+        pending.pop_back();
         if (output.size() >= max_display_commands) {
             if (!display_budget_reported) {
                 report_diagnostic(diagnostics,
@@ -1009,42 +944,64 @@ void flatten_layer(const LayerNode& layer,
             }
             return;
         }
-    }
-    for (const auto& child : layer.children) {
-        flatten_layer(*child,
-                      output,
-                      clip,
-                      has_clip,
-                      layer_opacity,
-                      layer_translate_x,
-                      layer_translate_y,
-                      max_display_commands,
-                      diagnostics, display_budget_reported);
-        if (output.size() >= max_display_commands) {
-            if (!display_budget_reported) {
-                report_diagnostic(diagnostics,
-                                  DiagnosticStage::LayerTree,
-                                  DiagnosticSeverity::Warning,
-                                  "display-command-limit",
-                                  "Flattened display command budget was reached; remaining paint commands were skipped",
-                                  "Increase max_display_commands for complex pages.");
-                display_budget_reported = true;
+        const LayerNode& current_layer = *current.layer;
+        Rect current_clip = current.clip;
+        bool current_has_clip = current.has_clip;
+        if (current_layer.has_clip) {
+            current_clip = current_has_clip ? intersect_rect(current_clip, current_layer.clip_rect) : current_layer.clip_rect;
+            current_has_clip = true;
+            if (empty_rect(current_clip)) {
+                continue;
             }
-            return;
+        }
+
+        const float layer_opacity = current.opacity * current_layer.opacity;
+        const int layer_translate_x = current.translate_x + static_cast<int>(current_layer.transform.translate_x >= 0.0F
+            ? current_layer.transform.translate_x + 0.5F
+            : current_layer.transform.translate_x - 0.5F);
+        const int layer_translate_y = current.translate_y + static_cast<int>(current_layer.transform.translate_y >= 0.0F
+            ? current_layer.transform.translate_y + 0.5F
+            : current_layer.transform.translate_y - 0.5F);
+        for (const DisplayCommand& command : current_layer.display_list) {
+            append_flattened_command(output,
+                                     command,
+                                     current_clip,
+                                     current_has_clip,
+                                     layer_opacity,
+                                     layer_translate_x,
+                                     layer_translate_y,
+                                     max_display_commands);
+            if (output.size() >= max_display_commands) {
+                break;
+            }
+        }
+        for (auto it = current_layer.children.rbegin(); it != current_layer.children.rend(); ++it) {
+            pending.push_back(PendingLayer{it->get(),
+                                           current_clip,
+                                           current_has_clip,
+                                           layer_opacity,
+                                           layer_translate_x,
+                                           layer_translate_y});
         }
     }
 }
 
 void sort_layer_children(LayerNode& layer) {
-    std::stable_sort(layer.children.begin(), layer.children.end(),
-        [](const LayerNodePtr& left, const LayerNodePtr& right) {
-            if (left->z_index != right->z_index) {
-                return left->z_index < right->z_index;
-            }
-            return left->source_order < right->source_order;
-        });
-    for (const auto& child : layer.children) {
-        sort_layer_children(*child);
+    std::vector<LayerNode*> pending;
+    pending.push_back(&layer);
+    while (!pending.empty()) {
+        LayerNode* current = pending.back();
+        pending.pop_back();
+        std::stable_sort(current->children.begin(), current->children.end(),
+            [](const LayerNodePtr& left, const LayerNodePtr& right) {
+                if (left->z_index != right->z_index) {
+                    return left->z_index < right->z_index;
+                }
+                return left->source_order < right->source_order;
+            });
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
     }
 }
 
@@ -1068,8 +1025,6 @@ LayerNodePtr LayerTreeBuilder::build(const LayoutBox& root, MonotonicArena& aren
 }
 
 LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, MonotonicArena* arena) const {
-    std::size_t next_source_order = 0;
-    std::size_t layer_count = 1;
     auto root_layer = make_layer_node(arena);
     root_layer->type = LayerType::Root;
     root_layer->reasons = layer_reasons_for(root, true);
@@ -1083,12 +1038,11 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->transform_origin_y_percent = root.style.transform_origin_y_percent;
     root_layer->has_transform = has_transform(root.style);
     root_layer->z_index = root.style.z_index;
-    root_layer->source_order = next_source_order++;
+    root_layer->source_order = 0;
 
     paint_box_self(root, root_layer->display_list, options_);
     trim_display_list(root_layer->display_list);
-    bool layer_budget_reported = false;
-    build_children(root, *root_layer, next_source_order, layer_count, layer_budget_reported, arena);
+    build_children(root, *root_layer, arena);
     paint_generated_inline_content(root, root_layer->display_list, CssPseudoElement::After);
     trim_display_list(root_layer->display_list);
     sort_layer_children(*root_layer);
@@ -1126,64 +1080,72 @@ void LayerTreeBuilder::trim_display_list(DisplayList& display_list) const {
     }
 }
 
-void LayerTreeBuilder::build_children(const LayoutBox& box,
-                                      LayerNode& layer,
-                                      std::size_t& next_source_order,
-                                      std::size_t& layer_count,
-                                      bool& layer_budget_reported,
-                                      MonotonicArena* arena) const {
-    for (const auto& child : box.children) {
-        build_box(*child, layer, next_source_order, layer_count, layer_budget_reported, arena);
-    }
-}
+void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, MonotonicArena* arena) const {
+    struct PendingBox {
+        const LayoutBox* box = nullptr;
+        LayerNode* layer = nullptr;
+        bool exit = false;
+    };
 
-void LayerTreeBuilder::build_box(const LayoutBox& box,
-                                 LayerNode& parent_layer,
-                                 std::size_t& next_source_order,
-                                 std::size_t& layer_count,
-                                 bool& layer_budget_reported,
-                                 MonotonicArena* arena) const {
-    const LayerReasons reasons = layer_reasons_for(box, false);
+    std::size_t next_source_order = layer.source_order + 1;
+    std::size_t layer_count = 1;
+    bool layer_budget_reported = false;
     const std::size_t max_layers = std::max<std::size_t>(1, options_.max_layers);
-    if (needs_own_layer(reasons) && layer_count < max_layers) {
-        auto child_layer = make_layer_node(arena);
-        ++layer_count;
-        child_layer->type = layer_type_for(reasons);
-        child_layer->reasons = reasons;
-        child_layer->box = &box;
-        child_layer->bounds = box.rect;
-        child_layer->clip_rect = box.rect;
-        child_layer->has_clip = (reasons & LayerReasonOverflowClip) != 0U;
-        child_layer->opacity = box.style.opacity;
-        child_layer->transform = parsed_transform_or_identity(box.style, options_.diagnostics);
-        child_layer->transform_origin_x_percent = box.style.transform_origin_x_percent;
-        child_layer->transform_origin_y_percent = box.style.transform_origin_y_percent;
-        child_layer->has_transform = has_transform(box.style);
-        child_layer->z_index = box.style.z_index_auto ? 0 : box.style.z_index;
-        child_layer->source_order = next_source_order++;
-        paint_box_self(box, child_layer->display_list, options_);
-        trim_display_list(child_layer->display_list);
-        build_children(box, *child_layer, next_source_order, layer_count, layer_budget_reported, arena);
-        paint_generated_inline_content(box, child_layer->display_list, CssPseudoElement::After);
-        trim_display_list(child_layer->display_list);
-        parent_layer.children.push_back(std::move(child_layer));
-        return;
-    }
-    if (needs_own_layer(reasons) && !layer_budget_reported) {
-        report_diagnostic(options_.diagnostics,
-                          DiagnosticStage::LayerTree,
-                          DiagnosticSeverity::Warning,
-                          "layer-limit",
-                          "Layer budget was reached; later stacking/clip/composited boxes were folded into parent layers",
-                          "This preserves paint output where possible but may reduce clipping or stacking fidelity.");
-        layer_budget_reported = true;
+
+    std::vector<PendingBox> pending;
+    pending.reserve(box.children.size());
+    for (auto it = box.children.rbegin(); it != box.children.rend(); ++it) {
+        pending.push_back(PendingBox{it->get(), &layer, false});
     }
 
-    paint_box_self(box, parent_layer.display_list, options_);
-    trim_display_list(parent_layer.display_list);
-    build_children(box, parent_layer, next_source_order, layer_count, layer_budget_reported, arena);
-    paint_generated_inline_content(box, parent_layer.display_list, CssPseudoElement::After);
-    trim_display_list(parent_layer.display_list);
+    while (!pending.empty()) {
+        const PendingBox current = pending.back();
+        pending.pop_back();
+        const LayoutBox& current_box = *current.box;
+        LayerNode& current_layer = *current.layer;
+        if (current.exit) {
+            paint_generated_inline_content(current_box, current_layer.display_list, CssPseudoElement::After);
+            trim_display_list(current_layer.display_list);
+            continue;
+        }
+
+        const LayerReasons reasons = layer_reasons_for(current_box, false);
+        LayerNode* target_layer = &current_layer;
+        if (needs_own_layer(reasons) && layer_count < max_layers) {
+            auto child_layer = make_layer_node(arena);
+            target_layer = child_layer.get();
+            ++layer_count;
+            child_layer->type = layer_type_for(reasons);
+            child_layer->reasons = reasons;
+            child_layer->box = &current_box;
+            child_layer->bounds = current_box.rect;
+            child_layer->clip_rect = current_box.rect;
+            child_layer->has_clip = (reasons & LayerReasonOverflowClip) != 0U;
+            child_layer->opacity = current_box.style.opacity;
+            child_layer->transform = parsed_transform_or_identity(current_box.style, options_.diagnostics);
+            child_layer->transform_origin_x_percent = current_box.style.transform_origin_x_percent;
+            child_layer->transform_origin_y_percent = current_box.style.transform_origin_y_percent;
+            child_layer->has_transform = has_transform(current_box.style);
+            child_layer->z_index = current_box.style.z_index_auto ? 0 : current_box.style.z_index;
+            child_layer->source_order = next_source_order++;
+            current_layer.children.push_back(std::move(child_layer));
+        } else if (needs_own_layer(reasons) && !layer_budget_reported) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::LayerTree,
+                              DiagnosticSeverity::Warning,
+                              "layer-limit",
+                              "Layer budget was reached; later stacking/clip/composited boxes were folded into parent layers",
+                              "This preserves paint output where possible but may reduce clipping or stacking fidelity.");
+            layer_budget_reported = true;
+        }
+
+        paint_box_self(current_box, target_layer->display_list, options_);
+        trim_display_list(target_layer->display_list);
+        pending.push_back(PendingBox{&current_box, target_layer, true});
+        for (auto it = current_box.children.rbegin(); it != current_box.children.rend(); ++it) {
+            pending.push_back(PendingBox{it->get(), target_layer, false});
+        }
+    }
 }
 
 LayerNodePtr LayerTreeBuilder::make_layer_node(MonotonicArena* arena) const {

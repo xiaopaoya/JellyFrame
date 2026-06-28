@@ -72,9 +72,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added render-core `scroll_blit` planning helpers so hosts can share the same
   vertical-scroll fast-blit rectangles across Win32, framebuffer and panel
   implementations without adding steady-frame cost to non-scrolling apps.
+- Implemented optional Canvas 2D V0. Render core now has a lazy bounded
+  `Canvas2DRegistry`, layer trees can paint `<canvas>` through the existing
+  image display command path, JerryScript builds expose `getContext("2d")`,
+  rect drawing and simple stroked paths, and the Win32 shell can render canvas
+  backing stores. Added canvas unit tests, script tests, microbench coverage and
+  the `jelly_canvas_smoke` sample.
 - Registered `graphics.canvas2d` as the standard optional Canvas 2D capability
-  name. Package reports now include Canvas target support, and built-in targets
-  currently mark it unsupported until the runtime implementation lands.
+  name. Package reports include Canvas target support; target profiles still
+  opt in explicitly through `hostServices.canvas2d`.
 
 ### Changed
 

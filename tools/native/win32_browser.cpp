@@ -14,6 +14,7 @@
 #include "render_core/animation_invalidation.h"
 #include "render_core/animation_timeline.h"
 #include "render_core/budget.h"
+#include "render_core/canvas2d.h"
 #include "render_core/css_parser.h"
 #include "render_core/display_invalidation.h"
 #include "render_core/diagnostics.h"
@@ -1540,19 +1541,28 @@ bool draw_text_with_gdi(FrameBuffer& target,
 
 struct BrowserImageContext {
     ImageDecodeMock* images = nullptr;
+    Canvas2DRegistry* canvas = nullptr;
 };
 
 struct BrowserImageResolveContext {
     AppRuntimeHost* runtime = nullptr;
     ImageDecodeMock* images = nullptr;
     AppImageSurfaceCache* cache = nullptr;
+    Canvas2DRegistry* canvas = nullptr;
     DiagnosticSink* diagnostics = nullptr;
 };
 
 bool resolve_browser_image_handle(const Node& node, std::uint32_t& handle, void* raw_context) {
     auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
-    if (context == nullptr || context->runtime == nullptr || context->images == nullptr ||
-        context->cache == nullptr || node.type != NodeType::Element || node.tag_name != "img") {
+    if (context == nullptr || node.type != NodeType::Element) {
+        return false;
+    }
+    if (node.tag_name == "canvas") {
+        handle = context->canvas != nullptr ? context->canvas->handle_for(node) : 0;
+        return handle != 0;
+    }
+    if (context->runtime == nullptr || context->images == nullptr ||
+        context->cache == nullptr || node.tag_name != "img") {
         return false;
     }
     const std::string src = node.attribute("src");
@@ -1618,6 +1628,15 @@ Color read_surface_pixel(const AppDecodedSurfaceRecord& surface, int x, int y) {
     return Color{0, 0, 0, 0};
 }
 
+Color read_canvas_pixel(const Canvas2DSurface& surface, int x, int y) {
+    if (x < 0 || y < 0 || x >= surface.width || y >= surface.height) {
+        return Color{0, 0, 0, 0};
+    }
+    const std::size_t index = static_cast<std::size_t>(y) * static_cast<std::size_t>(surface.width) +
+        static_cast<std::size_t>(x);
+    return index < surface.pixels.size() ? surface.pixels[index] : Color{0, 0, 0, 0};
+}
+
 Color lerp_color_fixed(Color a, Color b, int t256) {
     return Color{
         static_cast<std::uint8_t>((static_cast<int>(a.r) * (256 - t256) + static_cast<int>(b.r) * t256 + 128) >> 8),
@@ -1655,6 +1674,38 @@ Color sample_surface_bilinear(const AppDecodedSurfaceRecord& surface,
                                        tx);
     const Color bottom = lerp_color_fixed(read_surface_pixel(surface, source_rect.x + base_x, source_rect.y + next_y),
                                           read_surface_pixel(surface, source_rect.x + next_x, source_rect.y + next_y),
+                                          tx);
+    return lerp_color_fixed(top, bottom, ty);
+}
+
+Color sample_canvas_bilinear(const Canvas2DSurface& surface,
+                             Rect source_rect,
+                             int local_x,
+                             int local_y,
+                             int dst_width,
+                             int dst_height) {
+    if (source_rect.width <= 1 || source_rect.height <= 1 || dst_width <= 1 || dst_height <= 1) {
+        const int src_x = std::min(surface.width - 1,
+                                   source_rect.x + (local_x * source_rect.width) / std::max(1, dst_width));
+        const int src_y = std::min(surface.height - 1,
+                                   source_rect.y + (local_y * source_rect.height) / std::max(1, dst_height));
+        return read_canvas_pixel(surface, src_x, src_y);
+    }
+
+    const int fx = (local_x * (source_rect.width - 1) * 256) / std::max(1, dst_width - 1);
+    const int fy = (local_y * (source_rect.height - 1) * 256) / std::max(1, dst_height - 1);
+    const int base_x = std::min(source_rect.width - 1, fx >> 8);
+    const int base_y = std::min(source_rect.height - 1, fy >> 8);
+    const int next_x = std::min(source_rect.width - 1, base_x + 1);
+    const int next_y = std::min(source_rect.height - 1, base_y + 1);
+    const int tx = fx & 0xff;
+    const int ty = fy & 0xff;
+
+    const Color top = lerp_color_fixed(read_canvas_pixel(surface, source_rect.x + base_x, source_rect.y + base_y),
+                                       read_canvas_pixel(surface, source_rect.x + next_x, source_rect.y + base_y),
+                                       tx);
+    const Color bottom = lerp_color_fixed(read_canvas_pixel(surface, source_rect.x + base_x, source_rect.y + next_y),
+                                          read_canvas_pixel(surface, source_rect.x + next_x, source_rect.y + next_y),
                                           tx);
     return lerp_color_fixed(top, bottom, ty);
 }
@@ -1735,7 +1786,62 @@ bool paint_image_surface(FrameBuffer& target,
                          ImageRendering image_rendering,
                          void* raw_context) {
     auto* context = static_cast<BrowserImageContext*>(raw_context);
-    if (context == nullptr || context->images == nullptr || rect.width <= 0 || rect.height <= 0) {
+    if (context == nullptr || rect.width <= 0 || rect.height <= 0) {
+        return false;
+    }
+    if (context->canvas != nullptr && is_canvas2d_handle(image_handle)) {
+        const Canvas2DSurface* surface = context->canvas->surface(image_handle);
+        if (surface == nullptr || surface->width <= 0 || surface->height <= 0 || surface->pixels.empty()) {
+            return false;
+        }
+        const ImageDrawMapping mapping =
+            map_image_draw_rect(rect, surface->width, surface->height, object_fit, object_position);
+        if (mapping.dst.width <= 0 || mapping.dst.height <= 0 || mapping.src.width <= 0 || mapping.src.height <= 0) {
+            return false;
+        }
+        const Rect clip{
+            std::max(rect.x, mapping.dst.x),
+            std::max(rect.y, mapping.dst.y),
+            std::min(rect.x + rect.width, mapping.dst.x + mapping.dst.width) - std::max(rect.x, mapping.dst.x),
+            std::min(rect.y + rect.height, mapping.dst.y + mapping.dst.height) - std::max(rect.y, mapping.dst.y),
+        };
+        if (clip.width <= 0 || clip.height <= 0) {
+            return true;
+        }
+        const bool smooth = image_rendering == ImageRendering::Auto;
+        for (int y = 0; y < clip.height; ++y) {
+            const int dst_y = clip.y + y;
+            const int local_y = dst_y - mapping.dst.y;
+            for (int x = 0; x < clip.width; ++x) {
+                const int dst_x = clip.x + x;
+                if (!target.contains(dst_x, dst_y)) {
+                    continue;
+                }
+                const int local_x = dst_x - mapping.dst.x;
+                if (smooth) {
+                    blend_pixel(target,
+                                dst_x,
+                                dst_y,
+                                sample_canvas_bilinear(*surface,
+                                                       mapping.src,
+                                                       local_x,
+                                                       local_y,
+                                                       mapping.dst.width,
+                                                       mapping.dst.height));
+                } else {
+                    const int src_y = std::min(surface->height - 1,
+                                               mapping.src.y + (local_y * mapping.src.height) /
+                                                   std::max(1, mapping.dst.height));
+                    const int src_x = std::min(surface->width - 1,
+                                               mapping.src.x + (local_x * mapping.src.width) /
+                                                   std::max(1, mapping.dst.width));
+                    blend_pixel(target, dst_x, dst_y, read_canvas_pixel(*surface, src_x, src_y));
+                }
+            }
+        }
+        return true;
+    }
+    if (context->images == nullptr) {
         return false;
     }
     const AppDecodedSurfaceRecord* surface = context->images->surface(image_handle);
@@ -2695,8 +2801,9 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
         add_package_image_fixtures(*page.document, page.package_context, debug_images, &diagnostics);
     }
     AppImageSurfaceCache image_cache(AppImageSurfaceCacheOptions{8, 512 * 1024});
-    BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache, &diagnostics};
-    BrowserImageContext image_context{&debug_images};
+    Canvas2DRegistry debug_canvas;
+    BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache, &debug_canvas, &diagnostics};
+    BrowserImageContext image_context{&debug_images, &debug_canvas};
     StyleResolverOptions style_options;
     style_options.diagnostics = &diagnostics;
     StyleResolver resolver(std::move(page.stylesheet), style_options);
@@ -3194,10 +3301,11 @@ private:
     AppSystemStateSnapshot debug_system_state_;
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
     ImageDecodeMock debug_images_{ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4}};
+    Canvas2DRegistry debug_canvas_{Canvas2DPolicy{true, 4, 300 * 300, 300 * 300, 300, 150}};
     AppLocationSnapshotMock debug_location_{AppLocationSnapshotPolicy{false, 2}};
     bool debug_location_enabled_ = false;
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
-    BrowserImageContext image_context_{&debug_images_};
+    BrowserImageContext image_context_{&debug_images_, &debug_canvas_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
     std::uint32_t debug_local_storage_instance_id_ = 0;
     std::vector<std::filesystem::path> temp_audio_files_;
@@ -4041,6 +4149,7 @@ private:
                 }
                 script_runtime_->bind_local_storage(debug_local_storage_);
                 script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
+                script_runtime_->bind_canvas_2d(debug_canvas_);
                 script_runtime_->set_system_state(ScriptSystemState{
                     !debug_system_state_.screen_on || debug_system_state_.low_power_mode,
                     debug_system_state_.network_online,
@@ -4126,7 +4235,7 @@ private:
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
-        BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &diagnostics_};
+        BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);

@@ -56,8 +56,12 @@ JellyFrame Engine 的重要变更记录在这里。
   stale completion 过滤和 launcher 事件投递。
 - render-core 新增 `scroll_blit` 计划 helper，让 Win32、framebuffer 和 panel 实现共享同一套
   纵向滚动快速搬移矩形；未滚动 app 不增加 steady-frame 成本。
-- 登记 `graphics.canvas2d` 作为标准可选 Canvas 2D capability 名称。Package report 现在会输出
-  Canvas target support；内置 target 暂时标记为 unsupported，直到 runtime 实现落地。
+- 实现可选 Canvas 2D V0。render core 新增按需、有界 `Canvas2DRegistry`；layer tree 可通过现有
+  image display command 路径绘制 `<canvas>`；JerryScript 构建暴露 `getContext("2d")`、矩形绘制和
+  简单 stroked path；Win32 壳可渲染 canvas backing store。同步新增 canvas 单元测试、脚本测试、
+  微基准和 `jelly_canvas_smoke` 示例。
+- 登记 `graphics.canvas2d` 作为标准可选 Canvas 2D capability 名称。Package report 会输出
+  Canvas target support；target profile 仍通过 `hostServices.canvas2d` 显式开启。
 
 ### 变更
 

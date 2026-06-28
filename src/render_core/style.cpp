@@ -2237,8 +2237,6 @@ struct CascadeSlots {
     std::array<CascadeSlot, static_cast<std::size_t>(CascadeProperty::Count)> slots;
 };
 
-using CustomPropertyMap = std::unordered_map<std::string, std::string>;
-
 struct CustomPropertySlot {
     bool set = false;
     bool important = false;
@@ -2258,245 +2256,103 @@ bool is_custom_property_name(const std::string& property) {
 }
 
 CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& property) {
-    if (property == "display") {
-        return &cascade_slot(slots, CascadeProperty::Display);
-    }
-    if (property == "color") {
-        return &cascade_slot(slots, CascadeProperty::Color);
-    }
-    if (property == "background" || property == "background-color") {
-        return &cascade_slot(slots, CascadeProperty::Background);
-    }
-    if (property == "margin-top") {
-        return &cascade_slot(slots, CascadeProperty::MarginTop);
-    }
-    if (property == "margin-right") {
-        return &cascade_slot(slots, CascadeProperty::MarginRight);
-    }
-    if (property == "margin-bottom") {
-        return &cascade_slot(slots, CascadeProperty::MarginBottom);
-    }
-    if (property == "margin-left") {
-        return &cascade_slot(slots, CascadeProperty::MarginLeft);
-    }
-    if (property == "padding-top") {
-        return &cascade_slot(slots, CascadeProperty::PaddingTop);
-    }
-    if (property == "padding-right") {
-        return &cascade_slot(slots, CascadeProperty::PaddingRight);
-    }
-    if (property == "padding-bottom") {
-        return &cascade_slot(slots, CascadeProperty::PaddingBottom);
-    }
-    if (property == "padding-left") {
-        return &cascade_slot(slots, CascadeProperty::PaddingLeft);
-    }
-    if (property == "border-top-width") {
-        return &cascade_slot(slots, CascadeProperty::BorderTopWidth);
-    }
-    if (property == "border-right-width") {
-        return &cascade_slot(slots, CascadeProperty::BorderRightWidth);
-    }
-    if (property == "border-bottom-width") {
-        return &cascade_slot(slots, CascadeProperty::BorderBottomWidth);
-    }
-    if (property == "border-left-width") {
-        return &cascade_slot(slots, CascadeProperty::BorderLeftWidth);
-    }
-    if (property == "border-color") {
-        return &cascade_slot(slots, CascadeProperty::BorderColor);
-    }
-    if (property == "border") {
-        return &cascade_slot(slots, CascadeProperty::Border);
-    }
-    if (property == "border-radius") {
-        return &cascade_slot(slots, CascadeProperty::BorderRadius);
-    }
-    if (property == "width") {
-        return &cascade_slot(slots, CascadeProperty::Width);
-    }
-    if (property == "height") {
-        return &cascade_slot(slots, CascadeProperty::Height);
-    }
-    if (property == "min-width") {
-        return &cascade_slot(slots, CascadeProperty::MinWidth);
-    }
-    if (property == "min-height") {
-        return &cascade_slot(slots, CascadeProperty::MinHeight);
-    }
-    if (property == "max-width") {
-        return &cascade_slot(slots, CascadeProperty::MaxWidth);
-    }
-    if (property == "max-height") {
-        return &cascade_slot(slots, CascadeProperty::MaxHeight);
-    }
-    if (property == "aspect-ratio") {
-        return &cascade_slot(slots, CascadeProperty::AspectRatio);
-    }
-    if (property == "font-size") {
-        return &cascade_slot(slots, CascadeProperty::FontSize);
-    }
-    if (property == "font-weight") {
-        return &cascade_slot(slots, CascadeProperty::FontWeight);
-    }
-    if (property == "font-family") {
-        return &cascade_slot(slots, CascadeProperty::FontFamily);
-    }
-    if (property == "line-height") {
-        return &cascade_slot(slots, CascadeProperty::LineHeight);
-    }
-    if (property == "text-indent") {
-        return &cascade_slot(slots, CascadeProperty::TextIndent);
-    }
-    if (property == "text-decoration" || property == "text-decoration-line") {
-        return &cascade_slot(slots, CascadeProperty::TextDecoration);
-    }
-    if (property == "text-shadow") {
-        return &cascade_slot(slots, CascadeProperty::TextShadow);
-    }
-    if (property == "box-shadow") {
-        return &cascade_slot(slots, CascadeProperty::BoxShadow);
-    }
-    if (property == "outline") {
-        return &cascade_slot(slots, CascadeProperty::Outline);
-    }
-    if (property == "outline-width") {
-        return &cascade_slot(slots, CascadeProperty::OutlineWidth);
-    }
-    if (property == "outline-color") {
-        return &cascade_slot(slots, CascadeProperty::OutlineColor);
-    }
-    if (property == "overflow") {
-        return &cascade_slot(slots, CascadeProperty::Overflow);
-    }
-    if (property == "white-space") {
-        return &cascade_slot(slots, CascadeProperty::WhiteSpace);
-    }
-    if (property == "text-overflow") {
-        return &cascade_slot(slots, CascadeProperty::TextOverflow);
-    }
-    if (property == "opacity") {
-        return &cascade_slot(slots, CascadeProperty::Opacity);
-    }
-    if (property == "transform") {
-        return &cascade_slot(slots, CascadeProperty::Transform);
-    }
-    if (property == "transform-origin") {
-        return &cascade_slot(slots, CascadeProperty::TransformOrigin);
-    }
-    if (property == "position") {
-        return &cascade_slot(slots, CascadeProperty::Position);
-    }
-    if (property == "top") {
-        return &cascade_slot(slots, CascadeProperty::Top);
-    }
-    if (property == "right") {
-        return &cascade_slot(slots, CascadeProperty::Right);
-    }
-    if (property == "bottom") {
-        return &cascade_slot(slots, CascadeProperty::Bottom);
-    }
-    if (property == "left") {
-        return &cascade_slot(slots, CascadeProperty::Left);
-    }
-    if (property == "z-index") {
-        return &cascade_slot(slots, CascadeProperty::ZIndex);
-    }
-    if (property == "text-align") {
-        return &cascade_slot(slots, CascadeProperty::TextAlign);
-    }
-    if (property == "justify-content") {
-        return &cascade_slot(slots, CascadeProperty::JustifyContent);
-    }
-    if (property == "align-items") {
-        return &cascade_slot(slots, CascadeProperty::AlignItems);
-    }
-    if (property == "box-sizing") {
-        return &cascade_slot(slots, CascadeProperty::BoxSizing);
-    }
-    if (property == "flex") {
-        return &cascade_slot(slots, CascadeProperty::Flex);
-    }
-    if (property == "flex-grow") {
-        return &cascade_slot(slots, CascadeProperty::FlexGrow);
-    }
-    if (property == "flex-shrink") {
-        return &cascade_slot(slots, CascadeProperty::FlexShrink);
-    }
-    if (property == "flex-basis") {
-        return &cascade_slot(slots, CascadeProperty::FlexBasis);
-    }
-    if (property == "flex-wrap") {
-        return &cascade_slot(slots, CascadeProperty::FlexWrap);
-    }
-    if (property == "gap") {
-        return &cascade_slot(slots, CascadeProperty::Gap);
-    }
-    if (property == "column-gap") {
-        return &cascade_slot(slots, CascadeProperty::ColumnGap);
-    }
-    if (property == "row-gap") {
-        return &cascade_slot(slots, CascadeProperty::RowGap);
-    }
-    if (property == "grid-template-columns") {
-        return &cascade_slot(slots, CascadeProperty::GridTemplateColumns);
-    }
-    if (property == "grid-auto-rows") {
-        return &cascade_slot(slots, CascadeProperty::GridAutoRows);
-    }
-    if (property == "grid-column") {
-        return &cascade_slot(slots, CascadeProperty::GridColumn);
-    }
-    if (property == "grid-row") {
-        return &cascade_slot(slots, CascadeProperty::GridRow);
-    }
-    if (property == "object-fit") {
-        return &cascade_slot(slots, CascadeProperty::ObjectFit);
-    }
-    if (property == "object-position") {
-        return &cascade_slot(slots, CascadeProperty::ObjectPosition);
-    }
-    if (property == "image-rendering") {
-        return &cascade_slot(slots, CascadeProperty::ImageRendering);
-    }
-    if (property == "list-style" || property == "list-style-type") {
-        return &cascade_slot(slots, CascadeProperty::ListStyleType);
-    }
-    if (property == "transition") {
-        return &cascade_slot(slots, CascadeProperty::Transition);
-    }
-    if (property == "transition-property") {
-        return &cascade_slot(slots, CascadeProperty::TransitionProperty);
-    }
-    if (property == "transition-duration") {
-        return &cascade_slot(slots, CascadeProperty::TransitionDuration);
-    }
-    if (property == "transition-delay") {
-        return &cascade_slot(slots, CascadeProperty::TransitionDelay);
-    }
-    if (property == "transition-timing-function") {
-        return &cascade_slot(slots, CascadeProperty::TransitionTimingFunction);
-    }
-    if (property == "animation") {
-        return &cascade_slot(slots, CascadeProperty::Animation);
-    }
-    if (property == "animation-name") {
-        return &cascade_slot(slots, CascadeProperty::AnimationName);
-    }
-    if (property == "animation-duration") {
-        return &cascade_slot(slots, CascadeProperty::AnimationDuration);
-    }
-    if (property == "animation-delay") {
-        return &cascade_slot(slots, CascadeProperty::AnimationDelay);
-    }
-    if (property == "animation-timing-function") {
-        return &cascade_slot(slots, CascadeProperty::AnimationTimingFunction);
-    }
-    if (property == "animation-iteration-count") {
-        return &cascade_slot(slots, CascadeProperty::AnimationIterationCount);
-    }
-    if (property == "animation-direction") {
-        return &cascade_slot(slots, CascadeProperty::AnimationDirection);
+    struct PropertySlotEntry {
+        const char* name;
+        CascadeProperty slot;
+    };
+    static constexpr PropertySlotEntry kPropertySlots[] = {
+        {"align-items", CascadeProperty::AlignItems},
+        {"animation", CascadeProperty::Animation},
+        {"animation-delay", CascadeProperty::AnimationDelay},
+        {"animation-direction", CascadeProperty::AnimationDirection},
+        {"animation-duration", CascadeProperty::AnimationDuration},
+        {"animation-iteration-count", CascadeProperty::AnimationIterationCount},
+        {"animation-name", CascadeProperty::AnimationName},
+        {"animation-timing-function", CascadeProperty::AnimationTimingFunction},
+        {"aspect-ratio", CascadeProperty::AspectRatio},
+        {"background", CascadeProperty::Background},
+        {"background-color", CascadeProperty::Background},
+        {"border", CascadeProperty::Border},
+        {"border-bottom-width", CascadeProperty::BorderBottomWidth},
+        {"border-color", CascadeProperty::BorderColor},
+        {"border-left-width", CascadeProperty::BorderLeftWidth},
+        {"border-radius", CascadeProperty::BorderRadius},
+        {"border-right-width", CascadeProperty::BorderRightWidth},
+        {"border-top-width", CascadeProperty::BorderTopWidth},
+        {"bottom", CascadeProperty::Bottom},
+        {"box-shadow", CascadeProperty::BoxShadow},
+        {"box-sizing", CascadeProperty::BoxSizing},
+        {"color", CascadeProperty::Color},
+        {"column-gap", CascadeProperty::ColumnGap},
+        {"display", CascadeProperty::Display},
+        {"flex", CascadeProperty::Flex},
+        {"flex-basis", CascadeProperty::FlexBasis},
+        {"flex-grow", CascadeProperty::FlexGrow},
+        {"flex-shrink", CascadeProperty::FlexShrink},
+        {"flex-wrap", CascadeProperty::FlexWrap},
+        {"font-family", CascadeProperty::FontFamily},
+        {"font-size", CascadeProperty::FontSize},
+        {"font-weight", CascadeProperty::FontWeight},
+        {"gap", CascadeProperty::Gap},
+        {"grid-auto-rows", CascadeProperty::GridAutoRows},
+        {"grid-column", CascadeProperty::GridColumn},
+        {"grid-row", CascadeProperty::GridRow},
+        {"grid-template-columns", CascadeProperty::GridTemplateColumns},
+        {"height", CascadeProperty::Height},
+        {"image-rendering", CascadeProperty::ImageRendering},
+        {"justify-content", CascadeProperty::JustifyContent},
+        {"left", CascadeProperty::Left},
+        {"line-height", CascadeProperty::LineHeight},
+        {"list-style", CascadeProperty::ListStyleType},
+        {"list-style-type", CascadeProperty::ListStyleType},
+        {"margin-bottom", CascadeProperty::MarginBottom},
+        {"margin-left", CascadeProperty::MarginLeft},
+        {"margin-right", CascadeProperty::MarginRight},
+        {"margin-top", CascadeProperty::MarginTop},
+        {"max-height", CascadeProperty::MaxHeight},
+        {"max-width", CascadeProperty::MaxWidth},
+        {"min-height", CascadeProperty::MinHeight},
+        {"min-width", CascadeProperty::MinWidth},
+        {"object-fit", CascadeProperty::ObjectFit},
+        {"object-position", CascadeProperty::ObjectPosition},
+        {"opacity", CascadeProperty::Opacity},
+        {"outline", CascadeProperty::Outline},
+        {"outline-color", CascadeProperty::OutlineColor},
+        {"outline-width", CascadeProperty::OutlineWidth},
+        {"overflow", CascadeProperty::Overflow},
+        {"padding-bottom", CascadeProperty::PaddingBottom},
+        {"padding-left", CascadeProperty::PaddingLeft},
+        {"padding-right", CascadeProperty::PaddingRight},
+        {"padding-top", CascadeProperty::PaddingTop},
+        {"position", CascadeProperty::Position},
+        {"right", CascadeProperty::Right},
+        {"row-gap", CascadeProperty::RowGap},
+        {"text-align", CascadeProperty::TextAlign},
+        {"text-decoration", CascadeProperty::TextDecoration},
+        {"text-decoration-line", CascadeProperty::TextDecoration},
+        {"text-indent", CascadeProperty::TextIndent},
+        {"text-overflow", CascadeProperty::TextOverflow},
+        {"text-shadow", CascadeProperty::TextShadow},
+        {"top", CascadeProperty::Top},
+        {"transform", CascadeProperty::Transform},
+        {"transform-origin", CascadeProperty::TransformOrigin},
+        {"transition", CascadeProperty::Transition},
+        {"transition-delay", CascadeProperty::TransitionDelay},
+        {"transition-duration", CascadeProperty::TransitionDuration},
+        {"transition-property", CascadeProperty::TransitionProperty},
+        {"transition-timing-function", CascadeProperty::TransitionTimingFunction},
+        {"white-space", CascadeProperty::WhiteSpace},
+        {"width", CascadeProperty::Width},
+        {"z-index", CascadeProperty::ZIndex},
+    };
+    const auto* it = std::lower_bound(std::begin(kPropertySlots),
+                                      std::end(kPropertySlots),
+                                      property,
+                                      [](const PropertySlotEntry& entry, const std::string& value) {
+                                          return entry.name < value;
+                                      });
+    if (it != std::end(kPropertySlots) && property == it->name) {
+        return &cascade_slot(slots, it->slot);
     }
     return nullptr;
 }
@@ -4338,10 +4194,28 @@ CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
 }
 
 Style StyleResolver::resolve(const Node& node) const {
+    const CustomPropertyMap custom_properties = custom_properties_for(node);
+    return resolve_with_custom_properties(node, custom_properties);
+}
+
+const CustomPropertyMap& StyleResolver::custom_properties_for(const Node& node, StyleResolveContext& context) const {
+    const auto existing = context.custom_property_cache.find(&node);
+    if (existing != context.custom_property_cache.end()) {
+        return existing->second;
+    }
+    auto inserted = context.custom_property_cache.emplace(&node, custom_properties_for(node));
+    return inserted.first->second;
+}
+
+Style StyleResolver::resolve(const Node& node, StyleResolveContext& context) const {
+    return resolve_with_custom_properties(node, custom_properties_for(node, context));
+}
+
+Style StyleResolver::resolve_with_custom_properties(const Node& node,
+                                                    const CustomPropertyMap& custom_properties) const {
     Style style = default_style_for(node);
     CascadeSlots slots;
     const SelectorMatchContext context = selector_match_context_from_options(options_);
-    CustomPropertyMap custom_properties = custom_properties_for(node);
 
     for (const CssRule* rule : candidate_rules_for(node)) {
         if (matches_rule(node, *rule, context)) {

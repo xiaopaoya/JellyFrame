@@ -1,6 +1,8 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/style.h"
 
+#include "native_file_io.h"
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -11,7 +13,7 @@ using namespace jellyframe;
 
 namespace {
 
-constexpr std::size_t kMaxInputBytes = 512 * 1024;
+using jellyframe::native::read_file_limited;
 
 std::string sample_css() {
     return "/* JellyFrame CSSOM demo */"
@@ -23,29 +25,6 @@ std::string sample_css() {
            "  #search { background: color-mix(in srgb, white, transparent); }"
            "}"
            "@media screen { .box { background: #e5e7eb; } }";
-}
-
-std::string read_file_limited(const std::string& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("failed to open input file");
-    }
-
-    std::ostringstream output;
-    char buffer[4096];
-    std::size_t total = 0;
-    while (file && total < kMaxInputBytes) {
-        const std::size_t remaining = kMaxInputBytes - total;
-        const std::size_t chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-        file.read(buffer, static_cast<std::streamsize>(chunk));
-        const std::streamsize read = file.gcount();
-        if (read <= 0) {
-            break;
-        }
-        output.write(buffer, read);
-        total += static_cast<std::size_t>(read);
-    }
-    return output.str();
 }
 
 std::string clipped(std::string value, std::size_t max_bytes) {

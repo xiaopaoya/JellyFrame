@@ -1,6 +1,7 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/animation_timeline.h"
 #include "render_core/animation_invalidation.h"
+#include "render_core/canvas2d.h"
 #include "render_core/frame_scratch.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
@@ -475,6 +476,30 @@ int main(int argc, char** argv) {
             retained_layer_builder.flatten_into(*retained_layer_tree, retained_display_list);
         }));
     }
+
+    auto canvas = make_element("canvas");
+    canvas->set_attribute("width", "120");
+    canvas->set_attribute("height", "80");
+    Canvas2DRegistry canvas_registry(Canvas2DPolicy{true, 1, 120 * 80, 120 * 80, 120, 80});
+    canvas_registry.ensure_surface(*canvas);
+    canvas_registry.set_fill_style(*canvas, "#1d9bf0");
+    print_result("canvas2d_fill_rect", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        for (int index = 0; index < 24; ++index) {
+            canvas_registry.fill_rect(*canvas, index * 5, 80 - (index % 10 + 1) * 7, 3, (index % 10 + 1) * 7);
+        }
+    }));
+    canvas_registry.set_stroke_style(*canvas, "#ffffff");
+    canvas_registry.set_line_width(*canvas, 2);
+    print_result("canvas2d_path_stroke", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        canvas_registry.begin_path(*canvas);
+        canvas_registry.move_to(*canvas, 0, 70);
+        for (int index = 1; index < 24; ++index) {
+            canvas_registry.line_to(*canvas, index * 5, 70 - (index % 8) * 8);
+        }
+        canvas_registry.stroke(*canvas);
+    }));
     print_style_statistics(resolver.statistics());
 
     return 0;

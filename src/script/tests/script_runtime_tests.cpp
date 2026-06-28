@@ -3,6 +3,7 @@
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
+#include "render_core/canvas2d.h"
 #include "render_core/document_script.h"
 #include "render_core/dom.h"
 #include "render_core/form_control.h"
@@ -994,6 +995,45 @@ void javascript_geolocation_uses_bound_location_service() {
     }
 }
 
+void javascript_canvas_2d_is_optional_and_lazy() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><canvas id='chart' width='8' height='8'></canvas></body>");
+    Node* canvas = find_first_by_tag(*document, "canvas");
+    check(canvas != nullptr, "canvas element exists");
+
+    {
+        JerryScriptRuntime runtime;
+        runtime.bind_document(*document);
+        const ScriptEvaluationResult result =
+            runtime.eval("document.getElementById('chart').getContext('2d') === null");
+        check(result.ok && result.value == "true", "canvas getContext returns null when unbound");
+    }
+
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(registry);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var ctx = document.getElementById('chart').getContext('2d');"
+        "ctx.fillStyle = '#336699';"
+        "ctx.fillRect(2, 3, 2, 2);"
+        "ctx.strokeStyle = '#ffffff';"
+        "ctx.beginPath();"
+        "ctx.moveTo(0, 0);"
+        "ctx.lineTo(7, 7);"
+        "ctx.stroke();"
+        "ctx.fillStyle");
+    check(result.ok && result.value == "#336699", "canvas context draws and reflects fillStyle");
+
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    check(surface != nullptr, "canvas surface allocated lazily after getContext");
+    const Color filled = surface->pixels[3 * surface->width + 2];
+    check(filled.r == 0x33 && filled.g == 0x66 && filled.b == 0x99, "canvas fillRect updated pixels");
+    const Color stroked = surface->pixels[7 * surface->width + 7];
+    check(stroked.r == 255 && stroked.g == 255 && stroked.b == 255, "canvas stroke updated pixels");
+    check((subtree_dirty_flags(*document) & DomDirtyPaint) != 0U, "canvas drawing marks paint dirty");
+}
+
 } // namespace
 
 int main() {
@@ -1036,6 +1076,7 @@ int main() {
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_system_state_exposes_web_adjacent_subset();
         javascript_geolocation_uses_bound_location_service();
+        javascript_canvas_2d_is_optional_and_lazy();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

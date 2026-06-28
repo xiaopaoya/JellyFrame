@@ -88,18 +88,7 @@ private:
 
     LayerNodePtr build_with_arena(const LayoutBox& root, MonotonicArena* arena) const;
     void trim_display_list(DisplayList& display_list) const;
-    void build_children(const LayoutBox& box,
-                        LayerNode& layer,
-                   std::size_t& next_source_order,
-                   std::size_t& layer_count,
-                   bool& layer_budget_reported,
-                   MonotonicArena* arena) const;
-    void build_box(const LayoutBox& box,
-                   LayerNode& parent_layer,
-                   std::size_t& next_source_order,
-                   std::size_t& layer_count,
-                   bool& layer_budget_reported,
-                   MonotonicArena* arena) const;
+    void build_children(const LayoutBox& box, LayerNode& layer, MonotonicArena* arena) const;
     LayerNodePtr make_layer_node(MonotonicArena* arena) const;
 };
 

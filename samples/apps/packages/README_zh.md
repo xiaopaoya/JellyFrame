@@ -19,6 +19,7 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 - `jelly_controls`：Jelly UI 控件和动效风格示例。
 - `jelly_motion_lab`：参考 LVGL 常见动效的验收 app，包含图标展开窗口、sheet 弹出和按钮果冻反馈。
 - `jelly_watch_face`：使用 `transform: rotate(...)` 和 `transform-origin` 绘制指针的模拟表盘示例。
+- `jelly_canvas_smoke`：可选 Canvas 2D V0 趋势线和柱状图示例。
 - `jelly_service_status`：包含系统事件和本地存储的网络、音频、定位 service 边界示例。
 - `jelly_audio_smoke`：用于 Win32 host-owned audio smoke 路径的包内音频资源示例。
 - `jelly_font_policy`：用于说明 CSS `font-family` 与 `.jffont` 补充包策略的示例，

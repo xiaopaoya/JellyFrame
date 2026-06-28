@@ -1,0 +1,71 @@
+html,
+body {
+  margin: 0;
+  width: 300px;
+  height: 300px;
+  background: #07151f;
+  color: #f7fff6;
+  font-family: system-ui;
+}
+
+.screen {
+  width: 300px;
+  height: 300px;
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+  background: linear-gradient(#0f2c3a, #07151f);
+}
+
+.hero {
+  padding: 12px 16px;
+  border-radius: 22px;
+  background: linear-gradient(#1d6f82, #123341);
+}
+
+.eyebrow,
+.label {
+  margin: 0;
+  font-size: 13px;
+  color: #b8f2df;
+}
+
+h1 {
+  margin: 0;
+  font-size: 46px;
+  line-height: 52px;
+  font-weight: 700;
+}
+
+.trend {
+  display: block;
+  width: 220px;
+  height: 96px;
+  margin-left: 22px;
+  border-radius: 18px;
+  background: #0b1f2a;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stats article {
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #122735;
+}
+
+.stats strong {
+  display: block;
+  font-size: 24px;
+  line-height: 28px;
+}
+
+.stats span {
+  display: block;
+  font-size: 12px;
+  color: #a9d7cc;
+}

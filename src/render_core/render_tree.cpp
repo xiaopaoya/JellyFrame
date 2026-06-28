@@ -119,70 +119,74 @@ RenderObjectPtr RenderTreeBuilder::build(const Node& document, MonotonicArena& a
 }
 
 RenderObjectPtr RenderTreeBuilder::build_with_arena(const Node& document, MonotonicArena* arena) const {
+    struct PendingNode {
+        const Node* node = nullptr;
+        RenderObject* parent = nullptr;
+    };
+
+    StyleResolveContext style_context;
     auto view = make_render_object(arena);
+    RenderObject* view_raw = view.get();
     view->type = RenderObjectType::View;
     view->node = &document;
-    view->style = style_resolver_.resolve(document);
+    view->style = style_resolver_.resolve(document, style_context);
     apply_style_override(view->style, document, options_.style_overrides);
 
     std::size_t render_object_count = 1;
     bool budget_reported = false;
-    for (const auto& child : document.children) {
-        auto object = build_object(*child, &view->style, render_object_count, budget_reported, arena);
-        if (object != nullptr) {
-            view->children.push_back(std::move(object));
-        }
-    }
-    return view;
-}
-
-RenderObjectPtr RenderTreeBuilder::build_object(const Node& node,
-                                                const Style* parent_style,
-                                                std::size_t& render_object_count,
-                                                bool& budget_reported,
-                                                MonotonicArena* arena) const {
     const std::size_t max_render_objects = std::max<std::size_t>(1, options_.max_render_objects);
-    if (render_object_count >= max_render_objects) {
-        if (!budget_reported) {
-            report_diagnostic(options_.diagnostics,
-                              DiagnosticStage::RenderTree,
-                              DiagnosticSeverity::Warning,
-                              "render-object-limit",
-                              "Render object budget was reached; remaining visible nodes were skipped",
-                              "Increase max_render_objects or simplify the view hierarchy.");
-            budget_reported = true;
+
+    std::vector<PendingNode> pending;
+    pending.reserve(document.children.size());
+    for (auto it = document.children.rbegin(); it != document.children.rend(); ++it) {
+        pending.push_back(PendingNode{it->get(), view_raw});
+    }
+
+    while (!pending.empty()) {
+        const PendingNode pending_node = pending.back();
+        pending.pop_back();
+        const Node& node = *pending_node.node;
+        RenderObject& parent = *pending_node.parent;
+
+        if (render_object_count >= max_render_objects) {
+            if (!budget_reported) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::RenderTree,
+                                  DiagnosticSeverity::Warning,
+                                  "render-object-limit",
+                                  "Render object budget was reached; remaining visible nodes were skipped",
+                                  "Increase max_render_objects or simplify the view hierarchy.");
+                budget_reported = true;
+            }
+            continue;
         }
-        return nullptr;
-    }
 
-    Style style = style_resolver_.resolve(node);
-    if (parent_style != nullptr) {
+        Style style = style_resolver_.resolve(node, style_context);
         style = node.type == NodeType::Text
-            ? inherit_text_style(style, *parent_style)
-            : inherit_element_style(style, *parent_style);
-    }
-    apply_style_override(style, node, options_.style_overrides);
+            ? inherit_text_style(style, parent.style)
+            : inherit_element_style(style, parent.style);
+        apply_style_override(style, node, options_.style_overrides);
 
-    if (!creates_render_object(node, style)) {
-        return nullptr;
-    }
+        if (!creates_render_object(node, style)) {
+            continue;
+        }
 
-    auto object = make_render_object(arena);
-    ++render_object_count;
-    object->type = render_type_for(node, style);
-    object->node = &node;
-    object->style = style;
+        auto object = make_render_object(arena);
+        RenderObject* object_raw = object.get();
+        ++render_object_count;
+        object->type = render_type_for(node, style);
+        object->node = &node;
+        object->style = style;
+        parent.children.push_back(std::move(object));
 
-    if (!is_replaced_control(node)) {
-        for (const auto& child : node.children) {
-            auto child_object = build_object(*child, &object->style, render_object_count, budget_reported, arena);
-            if (child_object != nullptr) {
-                object->children.push_back(std::move(child_object));
+        if (!is_replaced_control(node)) {
+            for (auto it = node.children.rbegin(); it != node.children.rend(); ++it) {
+                pending.push_back(PendingNode{it->get(), object_raw});
             }
         }
     }
 
-    return object;
+    return view;
 }
 
 RenderObjectPtr RenderTreeBuilder::make_render_object(MonotonicArena* arena) const {

@@ -104,7 +104,12 @@ public:
     ~EventTarget();
 
     ListenerId add_event_listener(std::string type, ListenerCallback callback, EventListenerOptions options = {});
+    ListenerId add_event_listener_bounded(std::string type,
+                                          ListenerCallback callback,
+                                          std::size_t max_listeners,
+                                          EventListenerOptions options = {});
     bool remove_event_listener(ListenerId id);
+    std::size_t event_listener_count() const;
 
 protected:
     void invoke_event_listeners(Event& event, bool capture_phase) const;

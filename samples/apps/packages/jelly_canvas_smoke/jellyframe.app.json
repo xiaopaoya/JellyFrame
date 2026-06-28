@@ -1,0 +1,41 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.examples.canvas_smoke",
+  "name": "Jelly Canvas Smoke",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.5.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 65536,
+    "maxDomNodes": 128,
+    "maxCssRules": 96,
+    "maxDisplayCommands": 256,
+    "maxTimers": 2,
+    "maxEventListeners": 8
+  },
+  "capabilities": ["graphics.canvas2d"],
+  "targets": {
+    "round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "app-subset-cn",
+      "output": "jfapp"
+    }
+  }
+}

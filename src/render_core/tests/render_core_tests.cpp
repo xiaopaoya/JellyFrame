@@ -3,7 +3,10 @@
 int tokenizer_tests_main();
 int arena_tests_main();
 int animation_timeline_tests_main();
+int budget_stress_tests_main();
+int canvas2d_tests_main();
 int dom_mutation_tests_main();
+int dom_owner_tests_main();
 int document_script_tests_main();
 int dirty_region_tests_main();
 int embedded_framebuffer_tests_main();
@@ -23,6 +26,7 @@ int software_renderer_tests_main();
 int style_repaint_tests_main();
 int text_adapter_tests_main();
 int text_repaint_tests_main();
+int text_scan_tests_main();
 
 namespace {
 
@@ -44,7 +48,10 @@ int main() {
     failed += run_test("tokenizer", tokenizer_tests_main);
     failed += run_test("arena", arena_tests_main);
     failed += run_test("animation_timeline", animation_timeline_tests_main);
+    failed += run_test("budget_stress", budget_stress_tests_main);
+    failed += run_test("canvas2d", canvas2d_tests_main);
     failed += run_test("dom_mutation", dom_mutation_tests_main);
+    failed += run_test("dom_owner", dom_owner_tests_main);
     failed += run_test("document_script", document_script_tests_main);
     failed += run_test("dirty_region", dirty_region_tests_main);
     failed += run_test("embedded_framebuffer", embedded_framebuffer_tests_main);
@@ -64,6 +71,7 @@ int main() {
     failed += run_test("style_repaint", style_repaint_tests_main);
     failed += run_test("text_adapter", text_adapter_tests_main);
     failed += run_test("text_repaint", text_repaint_tests_main);
+    failed += run_test("text_scan", text_scan_tests_main);
 
     if (failed != 0) {
         std::cerr << failed << " test group(s) failed\n";

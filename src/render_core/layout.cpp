@@ -2,6 +2,7 @@
 
 #include "render_core/form_control.h"
 #include "render_core/text_normalization.h"
+#include "render_core/text_scan.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -148,54 +149,6 @@ void apply_relative_position_offset(LayoutBox& box) {
     }
 }
 
-std::uint32_t consume_utf8_codepoint(const std::string& text, std::size_t& index) {
-    const unsigned char lead = static_cast<unsigned char>(text[index]);
-    std::uint32_t codepoint = lead;
-    std::size_t width = 1;
-    if ((lead & 0xe0U) == 0xc0U && index + 1 < text.size()) {
-        width = 2;
-        codepoint = ((lead & 0x1fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 1]) & 0x3fU);
-    } else if ((lead & 0xf0U) == 0xe0U && index + 2 < text.size()) {
-        width = 3;
-        codepoint = ((lead & 0x0fU) << 12U) |
-            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 2]) & 0x3fU);
-    } else if ((lead & 0xf8U) == 0xf0U && index + 3 < text.size()) {
-        width = 4;
-        codepoint = ((lead & 0x07U) << 18U) |
-            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 12U) |
-            ((static_cast<unsigned char>(text[index + 2]) & 0x3fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 3]) & 0x3fU);
-    }
-    index += std::min(width, text.size() - index);
-    return codepoint;
-}
-
-bool is_cjk_codepoint(std::uint32_t codepoint) {
-    return (codepoint >= 0x3400U && codepoint <= 0x4dbfU) ||
-        (codepoint >= 0x4e00U && codepoint <= 0x9fffU) ||
-        (codepoint >= 0xf900U && codepoint <= 0xfaffU);
-}
-
-bool has_text_wrap_opportunity(const std::string& text) {
-    int cjk_count = 0;
-    for (std::size_t index = 0; index < text.size();) {
-        const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
-        if (codepoint == ' ' || codepoint == '\t' || codepoint == '\n' ||
-            codepoint == '-' || codepoint == '/') {
-            return true;
-        }
-        if (is_cjk_codepoint(codepoint)) {
-            ++cjk_count;
-            if (cjk_count > 1) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 constexpr int kMaxGridColumns = 32;
 
 bool participates_in_inline_flow(const LayoutBox& box) {
@@ -287,38 +240,53 @@ LayoutBoxPtr LayoutEngine::build_with_arena(const RenderObject& render_tree,
     auto root_box = make_layout_box(arena);
     root_box->node = render_tree.node;
     root_box->style = render_tree.style;
-    std::size_t layout_box_count = 1;
-    bool budget_reported = false;
-    build_layout_tree(render_tree, *root_box, layout_box_count, budget_reported, arena);
+    build_layout_tree(render_tree, *root_box, arena);
     root_box->rect.height = layout_box(*root_box, 0, 0, viewport_width, viewport_height);
     return root_box;
 }
 
-void LayoutEngine::build_layout_tree(const RenderObject& object,
-                                     LayoutBox& box,
-                                     std::size_t& layout_box_count,
-                                     bool& budget_reported,
-                                     MonotonicArena* arena) const {
+void LayoutEngine::build_layout_tree(const RenderObject& object, LayoutBox& box, MonotonicArena* arena) const {
+    struct PendingObject {
+        const RenderObject* object = nullptr;
+        LayoutBox* box = nullptr;
+    };
+
     const std::size_t max_layout_boxes = std::max<std::size_t>(1, options_.max_layout_boxes);
-    for (const auto& child : object.children) {
-        if (layout_box_count >= max_layout_boxes) {
-            if (!budget_reported) {
-                report_diagnostic(options_.diagnostics,
-                                  DiagnosticStage::Layout,
-                                  DiagnosticSeverity::Warning,
-                                  "layout-box-limit",
-                                  "Layout box budget was reached; remaining render objects were skipped",
-                                  "Increase max_layout_boxes or simplify nested layout.");
-                budget_reported = true;
+    std::size_t layout_box_count = 1;
+    bool budget_reported = false;
+    std::vector<PendingObject> pending;
+    pending.push_back(PendingObject{&object, &box});
+    while (!pending.empty()) {
+        const PendingObject current = pending.back();
+        pending.pop_back();
+        const RenderObject& render_object = *current.object;
+        LayoutBox& layout_box = *current.box;
+        std::vector<PendingObject> child_work;
+        child_work.reserve(render_object.children.size());
+        for (const auto& child : render_object.children) {
+            if (layout_box_count >= max_layout_boxes) {
+                if (!budget_reported) {
+                    report_diagnostic(options_.diagnostics,
+                                      DiagnosticStage::Layout,
+                                      DiagnosticSeverity::Warning,
+                                      "layout-box-limit",
+                                      "Layout box budget was reached; remaining render objects were skipped",
+                                      "Increase max_layout_boxes or simplify nested layout.");
+                    budget_reported = true;
+                }
+                break;
             }
-            return;
+            auto child_box = make_layout_box(arena);
+            LayoutBox* child_box_raw = child_box.get();
+            ++layout_box_count;
+            child_box->node = child->node;
+            child_box->style = child->style;
+            layout_box.children.push_back(std::move(child_box));
+            child_work.push_back(PendingObject{child.get(), child_box_raw});
         }
-        auto child_box = make_layout_box(arena);
-        ++layout_box_count;
-        child_box->node = child->node;
-        child_box->style = child->style;
-        build_layout_tree(*child, *child_box, layout_box_count, budget_reported, arena);
-        box.children.push_back(std::move(child_box));
+        for (auto it = child_work.rbegin(); it != child_work.rend(); ++it) {
+            pending.push_back(*it);
+        }
     }
 }
 

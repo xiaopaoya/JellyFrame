@@ -48,12 +48,13 @@ JellyFrame 明确不提供：
 - cookie、IndexedDB 或通用文件系统 API；
 - 完整 DOM、query selector APIs、Shadow DOM、Web Components；
 - ES modules 或完整浏览器加载算法；
-- Canvas、SVG 或浏览器级图片/视频栈；
+- 完整 Canvas、SVG 或浏览器级图片/视频栈；
 - 完整 Flexbox/Grid/positioning/animation/filter 行为；
 - GPU 合成或像素级浏览器兼容渲染。
 
-宿主可选的异步 `XMLHttpRequest` GET V0、`localStorage` V0、包内 BMP 图片和 `Audio` V0
-已经存在，但它们不是浏览器完整实现，必须按 capability matrix 和 manifest 能力声明使用。
+宿主可选的异步 `XMLHttpRequest` GET V0、`localStorage` V0、包内 BMP 图片、`Audio` V0
+和可选 Canvas 2D V0 已经存在，但它们不是浏览器完整实现，必须按 capability matrix 和
+manifest 能力声明使用。
 依赖某个功能前，请先查
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
 

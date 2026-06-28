@@ -380,6 +380,9 @@ bool enough_pipeline_scratch_memory() {
 }
 
 void run_p3_display_smoke(const FrameBuffer& frame_buffer, int width, int height) {
+    // Benchmark/smoke only: these full-frame RGB565 buffers make conversion
+    // paths easy to compare. Product ports should keep persistent targets or
+    // small strip scratch buffers and flush dirty rectangles.
     const Rect full_dirty{0, 0, width, height};
     StridedFlushProbe full_probe;
     jellyframe_esp32s3::Rgb565Panel full_panel;

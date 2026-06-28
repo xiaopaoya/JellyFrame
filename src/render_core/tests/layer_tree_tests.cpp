@@ -627,6 +627,15 @@ bool resolve_test_image(const Node& node, std::uint32_t& handle, void* raw_conte
     return true;
 }
 
+bool resolve_test_canvas(const Node& node, std::uint32_t& handle, void* raw_context) {
+    auto* expected_handle = static_cast<std::uint32_t*>(raw_context);
+    if (expected_handle == nullptr || node.type != NodeType::Element || node.tag_name != "canvas") {
+        return false;
+    }
+    handle = *expected_handle;
+    return true;
+}
+
 void image_element_emits_image_display_command_when_surface_resolves() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -662,6 +671,38 @@ void image_element_emits_image_display_command_when_surface_resolves() {
     check(found_image, "resolved img emits image command");
 }
 
+void canvas_element_emits_image_display_command_when_surface_resolves() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><canvas width='32' height='24'></canvas></body>");
+    Stylesheet stylesheet = css_parser.parse(
+        "canvas { width: 32px; height: 24px; object-fit: contain; image-rendering: pixelated; }");
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 120);
+
+    std::uint32_t handle = 0x80000011U;
+    LayerTreeBuilderOptions options;
+    options.image_resolver = ImageHandleResolver{resolve_test_canvas, &handle};
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    DisplayList flattened = layer_tree_builder.flatten(*layer_tree);
+
+    bool found_canvas = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::Image) {
+            found_canvas = true;
+            check(command.image_handle == handle, "canvas image command carries resolved handle");
+            check(command.rect.width == 32 && command.rect.height == 24, "canvas command uses content rect");
+            check(command.object_fit == ObjectFit::Contain, "canvas command carries object-fit");
+            check(command.image_rendering == ImageRendering::Pixelated, "canvas command carries image-rendering");
+        }
+    }
+    check(found_canvas, "resolved canvas emits image command");
+}
+
 } // namespace
 
 int main() {
@@ -691,6 +732,7 @@ int main() {
         text_input_respects_text_align();
         flex_wrap_places_items_on_new_lines();
         image_element_emits_image_display_command_when_surface_resolves();
+        canvas_element_emits_image_display_command_when_surface_resolves();
         layer_builder_respects_layer_and_display_command_budgets();
         layer_tree_can_use_monotonic_arena();
     } catch (const std::exception& error) {

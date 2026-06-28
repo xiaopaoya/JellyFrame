@@ -133,6 +133,18 @@ struct EventTarget::ListenerStore {
     std::vector<ListenerGroup> groups;
     ListenerId next_listener_id = 1;
 
+    std::size_t listener_count() const {
+        std::size_t count = 0;
+        for (const ListenerGroup& group : groups) {
+            for (const Listener& listener : group.listeners) {
+                if (!listener.removed) {
+                    ++count;
+                }
+            }
+        }
+        return count;
+    }
+
     std::vector<Listener>& listeners_for_type(const std::string& type) {
         for (ListenerGroup& group : groups) {
             if (group.type == type) {
@@ -170,11 +182,21 @@ EventTarget::~EventTarget() = default;
 EventTarget::ListenerId EventTarget::add_event_listener(std::string type,
                                                         ListenerCallback callback,
                                                         EventListenerOptions options) {
+    return add_event_listener_bounded(std::move(type), std::move(callback), 0, options);
+}
+
+EventTarget::ListenerId EventTarget::add_event_listener_bounded(std::string type,
+                                                                ListenerCallback callback,
+                                                                std::size_t max_listeners,
+                                                                EventListenerOptions options) {
     if (!callback) {
         return 0;
     }
     if (!listeners_) {
         listeners_ = std::make_unique<ListenerStore>();
+    }
+    if (max_listeners > 0 && listeners_->listener_count() >= max_listeners) {
+        return 0;
     }
 
     ListenerStore::Listener listener;
@@ -183,6 +205,10 @@ EventTarget::ListenerId EventTarget::add_event_listener(std::string type,
     listener.options = options;
     listeners_->listeners_for_type(type).push_back(std::move(listener));
     return listener.id;
+}
+
+std::size_t EventTarget::event_listener_count() const {
+    return listeners_ == nullptr ? 0 : listeners_->listener_count();
 }
 
 bool EventTarget::remove_event_listener(ListenerId id) {

@@ -22,6 +22,7 @@ Current packages:
   sheet and button jelly animations.
 - `jelly_watch_face`: analog watch face using `transform: rotate(...)` and
   `transform-origin` for hands.
+- `jelly_canvas_smoke`: optional Canvas 2D V0 trend-line and bar-chart sample.
 - `jelly_service_status`: optional network/audio/location service-boundary
   sample with system events and local storage.
 - `jelly_audio_smoke`: package audio resource used by the Win32 host-owned

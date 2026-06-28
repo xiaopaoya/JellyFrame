@@ -4,6 +4,7 @@
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
+#include "render_core/canvas2d.h"
 #include "render_core/form_control.h"
 #include "render_core/style.h"
 
@@ -180,6 +181,10 @@ struct ScriptRuntimeAccess {
 
     static ScriptAudioHost audio_host(const JerryScriptRuntime& runtime) {
         return runtime.audio_host_;
+    }
+
+    static Canvas2DRegistry* canvas_2d(JerryScriptRuntime& runtime) {
+        return runtime.canvas_2d_;
     }
 
     static const JerryScriptRuntimeOptions& options(const JerryScriptRuntime& runtime) {
@@ -772,6 +777,26 @@ std::uint32_t timer_id_from_value(jerry_value_t value) {
     }
     constexpr double kMaxId = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
     return static_cast<std::uint32_t>(std::min(number, kMaxId));
+}
+
+double double_from_value(jerry_value_t value, double fallback = 0.0) {
+    JerryValue number_value(jerry_value_to_number(value));
+    if (jerry_value_is_exception(number_value.get())) {
+        return fallback;
+    }
+    const double number = jerry_value_as_number(number_value.get());
+    return std::isfinite(number) ? number : fallback;
+}
+
+int int_from_value(jerry_value_t value, int fallback = 0) {
+    const double number = double_from_value(value, static_cast<double>(fallback));
+    if (number > static_cast<double>(std::numeric_limits<int>::max())) {
+        return std::numeric_limits<int>::max();
+    }
+    if (number < static_cast<double>(std::numeric_limits<int>::min())) {
+        return std::numeric_limits<int>::min();
+    }
+    return static_cast<int>(std::round(number));
 }
 
 EventListenerOptions listener_options_from_value(jerry_value_t value) {
@@ -2044,6 +2069,212 @@ jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     return object.release();
 }
 
+std::string canvas_color_to_string(Color color) {
+    constexpr char kHex[] = "0123456789abcdef";
+    std::string output = "#000000";
+    output[1] = kHex[color.r >> 4U];
+    output[2] = kHex[color.r & 0x0fU];
+    output[3] = kHex[color.g >> 4U];
+    output[4] = kHex[color.g & 0x0fU];
+    output[5] = kHex[color.b >> 4U];
+    output[6] = kHex[color.b & 0x0fU];
+    return output;
+}
+
+Canvas2DRegistry* canvas_registry_for(jerry_value_t object, Node*& node) {
+    node = native_node(object);
+    JerryScriptRuntime* runtime = native_runtime(object);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element || node->tag_name != "canvas") {
+        return nullptr;
+    }
+    return ScriptRuntimeAccess::canvas_2d(*runtime);
+}
+
+jerry_value_t canvas_get_fill_style(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry == nullptr || node == nullptr) {
+        return jerry_string_sz("#000000");
+    }
+    return string_to_value(canvas_color_to_string(registry->fill_style(*node))).release();
+}
+
+jerry_value_t canvas_set_fill_style(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count > 0) {
+        registry->set_fill_style(*node, value_to_string(args_p[0]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_get_stroke_style(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t[],
+                                      const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry == nullptr || node == nullptr) {
+        return jerry_string_sz("#000000");
+    }
+    return string_to_value(canvas_color_to_string(registry->stroke_style(*node))).release();
+}
+
+jerry_value_t canvas_set_stroke_style(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count > 0) {
+        registry->set_stroke_style(*node, value_to_string(args_p[0]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_get_line_width(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    return jerry_number(registry != nullptr && node != nullptr ? registry->line_width(*node) : 1);
+}
+
+jerry_value_t canvas_set_line_width(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count > 0) {
+        registry->set_line_width(*node, double_from_value(args_p[0], 1.0));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_clear_rect(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count >= 4) {
+        registry->clear_rect(*node,
+                             int_from_value(args_p[0]),
+                             int_from_value(args_p[1]),
+                             int_from_value(args_p[2]),
+                             int_from_value(args_p[3]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_fill_rect(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count >= 4) {
+        registry->fill_rect(*node,
+                            int_from_value(args_p[0]),
+                            int_from_value(args_p[1]),
+                            int_from_value(args_p[2]),
+                            int_from_value(args_p[3]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_stroke_rect(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count >= 4) {
+        registry->stroke_rect(*node,
+                              int_from_value(args_p[0]),
+                              int_from_value(args_p[1]),
+                              int_from_value(args_p[2]),
+                              int_from_value(args_p[3]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_begin_path(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr) {
+        registry->begin_path(*node);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_move_to(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t args_p[],
+                             const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count >= 2) {
+        registry->move_to(*node, int_from_value(args_p[0]), int_from_value(args_p[1]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_line_to(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t args_p[],
+                             const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr && args_count >= 2) {
+        registry->line_to(*node, int_from_value(args_p[0]), int_from_value(args_p[1]));
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t canvas_stroke(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t[],
+                            const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr) {
+        registry->stroke(*node);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    define_accessor(object.get(), "fillStyle", canvas_get_fill_style, canvas_set_fill_style);
+    define_accessor(object.get(), "strokeStyle", canvas_get_stroke_style, canvas_set_stroke_style);
+    define_accessor(object.get(), "lineWidth", canvas_get_line_width, canvas_set_line_width);
+    set_method(object.get(), "clearRect", canvas_clear_rect);
+    set_method(object.get(), "fillRect", canvas_fill_rect);
+    set_method(object.get(), "strokeRect", canvas_stroke_rect);
+    set_method(object.get(), "beginPath", canvas_begin_path);
+    set_method(object.get(), "moveTo", canvas_move_to);
+    set_method(object.get(), "lineTo", canvas_line_to);
+    set_method(object.get(), "stroke", canvas_stroke);
+    return object.release();
+}
+
+jerry_value_t canvas_get_context(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element || node->tag_name != "canvas" ||
+        args_count < 1 || value_to_string(args_p[0]) != "2d") {
+        return jerry_null();
+    }
+    Canvas2DRegistry* registry = ScriptRuntimeAccess::canvas_2d(*runtime);
+    if (registry == nullptr || registry->ensure_surface(*node) == 0) {
+        return jerry_null();
+    }
+    return make_canvas_2d_context(*runtime, *node);
+}
+
 jerry_value_t node_get_dataset(const jerry_call_info_t* call_info_p,
                                const jerry_value_t[],
                                const jerry_length_t) {
@@ -2093,6 +2324,9 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     set_method(object.get(), "removeEventListener", node_remove_event_listener);
     set_method(object.get(), "matches", node_matches);
     set_method(object.get(), "closest", node_closest);
+    if (node.type == NodeType::Element && node.tag_name == "canvas") {
+        set_method(object.get(), "getContext", canvas_get_context);
+    }
 
     if (node.type == NodeType::Element) {
         set_property(object.get(), "tagName", string_to_value(node.tag_name).get());
@@ -2414,6 +2648,9 @@ JerryScriptRuntime::~JerryScriptRuntime() {
         clear_script_event_listeners();
         clear_animation_frame_callbacks();
         clear_timers();
+        if (canvas_2d_ != nullptr) {
+            canvas_2d_->clear();
+        }
         jerry_cleanup();
         initialized_ = false;
         g_runtime_active = false;
@@ -2428,6 +2665,9 @@ void JerryScriptRuntime::bind_document(Node& document) {
     clear_animation_frame_callbacks();
     clear_timers();
     detached_nodes_.clear_detached_nodes();
+    if (canvas_2d_ != nullptr) {
+        canvas_2d_->clear();
+    }
     bound_document_ = &document;
 
     JerryValue global(jerry_current_realm());
@@ -2492,6 +2732,18 @@ void JerryScriptRuntime::bind_local_storage(AppLocalStorageShadow& storage) {
 
 void JerryScriptRuntime::bind_audio_host(ScriptAudioHost host) {
     audio_host_ = host;
+}
+
+void JerryScriptRuntime::bind_canvas_2d(Canvas2DRegistry& canvas) {
+    canvas_2d_ = &canvas;
+    canvas_2d_->clear();
+}
+
+void JerryScriptRuntime::clear_canvas_2d() {
+    if (canvas_2d_ != nullptr) {
+        canvas_2d_->clear();
+    }
+    canvas_2d_ = nullptr;
 }
 
 void JerryScriptRuntime::clear_app_services() {
