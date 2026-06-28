@@ -19,6 +19,7 @@
   "hostServices": {
     "networkFetch": true,
     "storageKv": true,
+    "canvas2d": false,
     "audioPlayback": false,
     "imageDecode": true,
     "imageCodecs": ["bmp"]

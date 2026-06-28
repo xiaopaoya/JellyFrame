@@ -180,6 +180,11 @@ package，但如果所选产品 profile 没有通过 host policy 明确支持同
 `manifest-capability-unknown`。可移植 app 应优先使用标准名称；产品私有名称只应保留给无法用已文档化
 Web-near 子集描述的服务。
 
+Canvas 2D 的标准能力名是 `graphics.canvas2d`。它用于声明 app 需要 `<canvas>` /
+`CanvasRenderingContext2D` 这类按需像素绘制能力。Canvas 会消耗 backing store 内存和 JS 绘制时间，
+因此它不是默认能力；target profile 会通过 `hostServices.canvas2d` 报告当前产品是否支持。当前内置
+target 仍标记为 unsupported，直到 runtime 与 Win32/port 验收实现完成。
+
 `fonts` 是 JellyFrame bitmap font 路径的部署/runtime 声明，不是完整 CSS `@font-face`
 实现。打包器会把 `.jffont`、`.bdf`、`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font`
 资源写入资源表或 `.jfapp`。其中 `.jffont` V0/V1 已可由 runtime 解析并随 app instance

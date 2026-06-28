@@ -233,6 +233,13 @@ should be preferred for portable apps; product-specific names should be
 reserved for services that cannot be described by the documented Web-near
 subset.
 
+Canvas 2D uses the standard capability name `graphics.canvas2d`. It declares
+that an app needs `<canvas>` / `CanvasRenderingContext2D` style pixel drawing.
+Canvas consumes backing-store memory and JS drawing time, so it is not a default
+capability; target profiles report support through `hostServices.canvas2d`.
+Built-in targets currently mark it unsupported until runtime and Win32/port
+acceptance paths are implemented.
+
 `fonts` is a deployment/runtime declaration for the JellyFrame bitmap font
 path, not a full CSS `@font-face` implementation. The packer records `.jffont`,
 `.bdf`, `.ttf`, `.otf`, `.woff` and related files as ordinary `Font` resources

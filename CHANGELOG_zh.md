@@ -56,6 +56,8 @@ JellyFrame Engine 的重要变更记录在这里。
   stale completion 过滤和 launcher 事件投递。
 - render-core 新增 `scroll_blit` 计划 helper，让 Win32、framebuffer 和 panel 实现共享同一套
   纵向滚动快速搬移矩形；未滚动 app 不增加 steady-frame 成本。
+- 登记 `graphics.canvas2d` 作为标准可选 Canvas 2D capability 名称。Package report 现在会输出
+  Canvas target support；内置 target 暂时标记为 unsupported，直到 runtime 实现落地。
 
 ### 变更
 

@@ -72,6 +72,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added render-core `scroll_blit` planning helpers so hosts can share the same
   vertical-scroll fast-blit rectangles across Win32, framebuffer and panel
   implementations without adding steady-frame cost to non-scrolling apps.
+- Registered `graphics.canvas2d` as the standard optional Canvas 2D capability
+  name. Package reports now include Canvas target support, and built-in targets
+  currently mark it unsupported until the runtime implementation lands.
 
 ### Changed
 

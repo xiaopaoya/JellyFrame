@@ -213,6 +213,7 @@ class PackagePreflightTests(unittest.TestCase):
             "capabilities": [
                 "network.fetch",
                 "storage.kv",
+                "graphics.canvas2d",
                 "media.audio.mp3",
                 "sensor.accelerometer",
                 "location.position",
@@ -239,6 +240,7 @@ class PackagePreflightTests(unittest.TestCase):
             {
                 "networkFetch": True,
                 "storageKv": True,
+                "canvas2d": True,
                 "audioPlayback": True,
                 "sensorAccelerometer": True,
                 "sensorGyroscope": False,
@@ -252,6 +254,7 @@ class PackagePreflightTests(unittest.TestCase):
             {
                 "networkFetch": "unknown",
                 "storageKv": "unknown",
+                "canvas2d": "unknown",
                 "audioPlayback": "unknown",
                 "sensorAccelerometer": "unknown",
                 "sensorGyroscope": "unknown",
@@ -269,6 +272,7 @@ class PackagePreflightTests(unittest.TestCase):
             "hostServices": {
                 "networkFetch": True,
                 "storageKv": True,
+                "canvas2d": False,
                 "audioPlayback": False,
                 "sensorAccelerometer": True,
                 "locationPosition": False,
@@ -279,6 +283,7 @@ class PackagePreflightTests(unittest.TestCase):
             {
                 "networkFetch": "supported",
                 "storageKv": "supported",
+                "canvas2d": "unsupported",
                 "audioPlayback": "unsupported",
                 "sensorAccelerometer": "supported",
                 "sensorGyroscope": "unknown",
@@ -293,6 +298,7 @@ class PackagePreflightTests(unittest.TestCase):
             "hostServices": {
                 "networkFetch": True,
                 "storageKv": False,
+                "canvas2d": False,
                 "audioPlayback": False,
                 "sensorAccelerometer": False,
                 "locationPosition": False,
@@ -300,7 +306,7 @@ class PackagePreflightTests(unittest.TestCase):
         })
         self.assertEqual(
             [warning["service"] for warning in warnings],
-            ["storageKv", "audioPlayback", "sensorAccelerometer", "locationPosition"],
+            ["storageKv", "canvas2d", "audioPlayback", "sensorAccelerometer", "locationPosition"],
         )
         self.assertTrue(all(warning["code"] == "service-target-unsupported" for warning in warnings))
 

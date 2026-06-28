@@ -29,6 +29,7 @@ height、横向溢出、是否需要滚动以及 diagnostics 计数，帮助 app
   "hostServices": {
     "networkFetch": true,
     "storageKv": true,
+    "canvas2d": false,
     "audioPlayback": false,
     "imageDecode": true,
     "imageCodecs": ["bmp"],

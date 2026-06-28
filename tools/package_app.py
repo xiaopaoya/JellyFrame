@@ -385,6 +385,7 @@ def validate_manifest(manifest: dict) -> dict:
         fail("manifest role must be one of: app, launcher, watchface, settings")
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     storage_kv_allowed = "storage.kv" in capabilities
+    canvas2d_allowed = "graphics.canvas2d" in capabilities
     audio_playback_allowed = "media.audio.mp3" in capabilities
     sensor_accelerometer_allowed = "sensor.accelerometer" in capabilities
     sensor_gyroscope_allowed = "sensor.gyroscope" in capabilities
@@ -409,6 +410,7 @@ def validate_manifest(manifest: dict) -> dict:
         "capabilities": capabilities,
         "networkAllowed": network_allowed,
         "storageKvAllowed": storage_kv_allowed,
+        "canvas2dAllowed": canvas2d_allowed,
         "audioPlaybackAllowed": audio_playback_allowed,
         "sensorAccelerometerAllowed": sensor_accelerometer_allowed,
         "sensorGyroscopeAllowed": sensor_gyroscope_allowed,
@@ -445,6 +447,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
         "requested": {
             "networkFetch": bool(manifest.get("networkAllowed")),
             "storageKv": bool(manifest.get("storageKvAllowed")),
+            "canvas2d": bool(manifest.get("canvas2dAllowed")),
             "audioPlayback": bool(manifest.get("audioPlaybackAllowed")),
             "sensorAccelerometer": bool(manifest.get("sensorAccelerometerAllowed")),
             "sensorGyroscope": bool(manifest.get("sensorGyroscopeAllowed")),
@@ -455,6 +458,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
         "targetSupport": {
             "networkFetch": support_state("networkFetch"),
             "storageKv": support_state("storageKv"),
+            "canvas2d": support_state("canvas2d"),
             "audioPlayback": support_state("audioPlayback"),
             "sensorAccelerometer": support_state("sensorAccelerometer"),
             "sensorGyroscope": support_state("sensorGyroscope"),
@@ -470,6 +474,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
             "Network fetch is runtime data only; remote HTML, CSS, script and image loaders remain disabled.",
             "Storage is app-private KV only; cookies, IndexedDB, Cache API and general filesystem access are absent.",
             "Audio playback is host-owned; Audio() V0 is available only when the host binds an audio adapter.",
+            "Canvas 2D is an optional bounded drawing surface; backing storage should be allocated only after getContext(\"2d\").",
             "Sensor and location data are semantic host services; apps never receive raw hardware handles.",
         ],
     }
@@ -484,6 +489,7 @@ def collect_service_target_warnings(manifest: dict, target_config: dict) -> list
     requests = [
         ("networkFetch", bool(manifest.get("networkAllowed")), "network.fetch"),
         ("storageKv", bool(manifest.get("storageKvAllowed")), "storage.kv"),
+        ("canvas2d", bool(manifest.get("canvas2dAllowed")), "graphics.canvas2d"),
         ("audioPlayback", bool(manifest.get("audioPlaybackAllowed")), "media.audio.mp3"),
         ("sensorAccelerometer", bool(manifest.get("sensorAccelerometerAllowed")), "sensor.accelerometer"),
         ("sensorGyroscope", bool(manifest.get("sensorGyroscopeAllowed")), "sensor.gyroscope"),
@@ -541,6 +547,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "file.read",
         "file.write",
         "file.manage",
+        "graphics.canvas2d",
         "image.decode",
         "media.audio.mp3",
         "media.microphone",
@@ -1611,6 +1618,7 @@ def main() -> int:
         f"packaged {manifest['id']} resources={len(resources)} "
         f"bytes={report['totalResourceBytes']} network_allowed={manifest['networkAllowed']} "
         f"storage_kv_allowed={manifest['storageKvAllowed']} "
+        f"canvas2d_allowed={manifest['canvas2dAllowed']} "
         f"audio_playback_allowed={manifest['audioPlaybackAllowed']} "
         f"background_services={json.dumps(manifest['backgroundServices'], separators=(',', ':'))} "
         f"warnings={len(warnings)}"

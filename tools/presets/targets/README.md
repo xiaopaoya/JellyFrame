@@ -36,6 +36,7 @@ Optional host services may be described with `hostServices`:
   "hostServices": {
     "networkFetch": true,
     "storageKv": true,
+    "canvas2d": false,
     "audioPlayback": false,
     "imageDecode": true,
     "imageCodecs": ["bmp"],
