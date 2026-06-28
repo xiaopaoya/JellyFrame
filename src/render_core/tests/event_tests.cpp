@@ -88,12 +88,45 @@ void prevent_default_stop_and_once_work() {
     check(body_bubble_count == 1, "stop propagation only affected first dispatch");
 }
 
+void listener_mutation_during_dispatch_is_stable() {
+    auto document = make_element("document");
+    Node& button = append_element(*document, "button");
+
+    int first_count = 0;
+    int added_count = 0;
+    EventTarget::ListenerId removable_id = 0;
+
+    button.add_event_listener("click", [&](Event&) {
+        ++first_count;
+        button.add_event_listener("click", [&](Event&) {
+            ++added_count;
+        });
+        if (first_count == 1) {
+            check(button.remove_event_listener(removable_id), "listener removed during dispatch");
+        }
+    });
+    removable_id = button.add_event_listener("click", [&](Event&) {
+        throw std::runtime_error("removed listener should not run in the same dispatch");
+    });
+
+    MouseEvent first("click", 1, 2);
+    dispatch_event(button, first);
+    check(first_count == 1, "first listener ran once");
+    check(added_count == 0, "new listener waits until the next dispatch");
+
+    MouseEvent second("click", 1, 2);
+    dispatch_event(button, second);
+    check(first_count == 2, "existing listener still runs on second dispatch");
+    check(added_count == 1, "added listener runs on later dispatch");
+}
+
 } // namespace
 
 int main() {
     try {
         dispatch_runs_capture_target_and_bubble();
         prevent_default_stop_and_once_work();
+        listener_mutation_during_dispatch_is_stable();
     } catch (const std::exception& error) {
         std::cerr << "event test failed: " << error.what() << '\n';
         return 1;

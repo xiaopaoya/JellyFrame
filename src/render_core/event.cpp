@@ -3,10 +3,16 @@
 #include "render_core/dom.h"
 
 #include <algorithm>
+#include <array>
 #include <utility>
 #include <vector>
 
 namespace jellyframe {
+namespace {
+
+constexpr std::size_t kStackListenerSnapshotCapacity = 8;
+
+} // namespace
 
 Event::Event(std::string type, bool bubbles, bool cancelable)
     : type_(std::move(type)), bubbles_(bubbles), cancelable_(cancelable) {}
@@ -145,6 +151,17 @@ struct EventTarget::ListenerStore {
         }
         return nullptr;
     }
+
+    Listener* find_listener(ListenerId id) {
+        for (ListenerGroup& group : groups) {
+            for (Listener& listener : group.listeners) {
+                if (listener.id == id) {
+                    return &listener;
+                }
+            }
+        }
+        return nullptr;
+    }
 };
 
 EventTarget::EventTarget() = default;
@@ -193,17 +210,58 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         return;
     }
 
-    for (ListenerStore::Listener& listener : *listeners) {
+    std::array<ListenerId, kStackListenerSnapshotCapacity> stack_dispatch_ids{};
+    std::size_t stack_dispatch_count = 0;
+    std::vector<ListenerId> overflow_dispatch_ids;
+    for (const ListenerStore::Listener& listener : *listeners) {
         if (listener.removed || listener.options.capture != capture_phase) {
             continue;
         }
-        listener.callback(event);
-        if (listener.options.once) {
-            listener.removed = true;
+        if (stack_dispatch_count < stack_dispatch_ids.size()) {
+            stack_dispatch_ids[stack_dispatch_count++] = listener.id;
+        } else {
+            if (overflow_dispatch_ids.empty()) {
+                overflow_dispatch_ids.reserve(listeners->size() - stack_dispatch_ids.size());
+            }
+            overflow_dispatch_ids.push_back(listener.id);
+        }
+    }
+
+    const auto invoke_snapshot_listener = [this, &event, capture_phase](ListenerId listener_id) {
+        ListenerStore::Listener* listener = listeners_->find_listener(listener_id);
+        if (listener == nullptr || listener->removed || listener->options.capture != capture_phase) {
+            return true;
+        }
+        ListenerCallback callback = listener->callback;
+        const bool once = listener->options.once;
+        callback(event);
+        if (once) {
+            if (ListenerStore::Listener* once_listener = listeners_->find_listener(listener_id)) {
+                once_listener->removed = true;
+            }
         }
         if (event.immediate_propagation_stopped()) {
+            return false;
+        }
+        return true;
+    };
+
+    for (std::size_t index = 0; index < stack_dispatch_count; ++index) {
+        if (!invoke_snapshot_listener(stack_dispatch_ids[index])) {
             break;
         }
+    }
+    if (!event.immediate_propagation_stopped()) {
+        for (ListenerId listener_id : overflow_dispatch_ids) {
+            if (!invoke_snapshot_listener(listener_id)) {
+                break;
+            }
+        }
+    }
+
+    listeners = listeners_->find_listeners(event.type());
+    if (listeners == nullptr) {
+        return;
     }
 
     listeners->erase(std::remove_if(listeners->begin(), listeners->end(), [](const ListenerStore::Listener& listener) {

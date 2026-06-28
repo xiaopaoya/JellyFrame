@@ -275,7 +275,7 @@ manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 tar
 
 JellyFrame 应使用严格的本地路径子集：
 
-- 包资源 URL 只能是本地路径：不接受 scheme、不接受 `//host`、不做 query 驱动的网络 fetch。
+- 包资源 URL 只能是本地路径：不接受冒号/scheme、不接受 `//host`、不做 query 驱动的网络 fetch。
 - 绝对 app 路径以 `/` 开头。
 - 相对路径按引用它的资源目录解析。
 - `.` 忽略；`..` 如果逃出 app root 就拒绝。

@@ -70,7 +70,7 @@ def presets_dir() -> Path:
 
 
 def normalize_app_path(value: str) -> str:
-    if not value or "://" in value or value.startswith("//"):
+    if not value or ":" in value or value.startswith("//"):
         fail(f"resource path must be local: {value!r}")
     raw = value.replace("\\", "/")
     if not raw.startswith("/"):

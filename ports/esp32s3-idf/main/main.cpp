@@ -731,37 +731,41 @@ void run_benchmark() {
         run_p4_p5_p6_ui_smoke(viewport_width, viewport_height, budgets);
 
 #if CONFIG_JELLYFRAME_BENCH_PRESENT_RGB565
-        auto rgb565 = std::make_unique<std::uint16_t[]>(
-            jellyframe_esp32s3::rgb565_buffer_pixels(viewport_width, viewport_height));
-        jellyframe_esp32s3::Rgb565Panel panel;
-        panel.pixels = rgb565.get();
-        panel.width = viewport_width;
-        panel.height = viewport_height;
-        panel.stride_pixels = viewport_width;
-        panel.packed_flush = board_runtime.packed_flush;
-        panel.flush_context = board_runtime.flush_context;
-        jellyframe::EmbeddedFrameBufferSink embedded_sink = jellyframe_esp32s3::make_rgb565_sink(panel);
-        const HostFrameSink frame_sink = embedded_frame_sink(embedded_sink);
-        const Rect full_dirty{0, 0, viewport_width, viewport_height};
+        std::unique_ptr<std::uint16_t[]> rgb565(new (std::nothrow) std::uint16_t[
+            jellyframe_esp32s3::rgb565_buffer_pixels(viewport_width, viewport_height)]);
+        if (!rgb565) {
+            ESP_LOGW(tag, "present_rgb565 benchmark skipped: RGB565 buffer allocation failed");
+        } else {
+            jellyframe_esp32s3::Rgb565Panel panel;
+            panel.pixels = rgb565.get();
+            panel.width = viewport_width;
+            panel.height = viewport_height;
+            panel.stride_pixels = viewport_width;
+            panel.packed_flush = board_runtime.packed_flush;
+            panel.flush_context = board_runtime.flush_context;
+            jellyframe::EmbeddedFrameBufferSink embedded_sink = jellyframe_esp32s3::make_rgb565_sink(panel);
+            const HostFrameSink frame_sink = embedded_frame_sink(embedded_sink);
+            const Rect full_dirty{0, 0, viewport_width, viewport_height};
 
-        present_rgb565_us = average_microseconds(clock, iterations, [&] {
-            panel.flush_count = 0;
-            panel.packed_flush_count = 0;
-            panel.scratch_flush_count = 0;
-            panel.failed_flush_count = 0;
-            panel.flushed_pixels = 0;
-            panel.flushed_bytes = 0;
-            panel.last_dirty_rect = {};
-            const bool ok = present_frame(frame_buffer, frame_sink, &full_dirty, 1);
-            if (!ok) {
-                ESP_LOGE(tag, "present_rgb565 failed");
-            }
-        });
-        print_result("present_rgb565", iterations, present_rgb565_us);
-        ESP_LOGI(tag,
-                 "last_present flushes=%u pixels=%u",
-                 static_cast<unsigned>(panel.flush_count),
-                 static_cast<unsigned>(panel.flushed_pixels));
+            present_rgb565_us = average_microseconds(clock, iterations, [&] {
+                panel.flush_count = 0;
+                panel.packed_flush_count = 0;
+                panel.scratch_flush_count = 0;
+                panel.failed_flush_count = 0;
+                panel.flushed_pixels = 0;
+                panel.flushed_bytes = 0;
+                panel.last_dirty_rect = {};
+                const bool ok = present_frame(frame_buffer, frame_sink, &full_dirty, 1);
+                if (!ok) {
+                    ESP_LOGE(tag, "present_rgb565 failed");
+                }
+            });
+            print_result("present_rgb565", iterations, present_rgb565_us);
+            ESP_LOGI(tag,
+                     "last_present flushes=%u pixels=%u",
+                     static_cast<unsigned>(panel.flush_count),
+                     static_cast<unsigned>(panel.flushed_pixels));
+        }
 #endif
     }
 

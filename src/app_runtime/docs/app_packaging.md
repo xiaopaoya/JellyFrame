@@ -349,8 +349,8 @@ bounded budgets.
 
 JellyFrame should use a strict local path subset:
 
-- Package resource URLs are local only: no scheme, no `//host`, no query-driven
-  network fetch.
+- Package resource URLs are local only: no colon/scheme, no `//host`, no
+  query-driven network fetch.
 - Absolute app paths start with `/`.
 - Relative paths resolve against the referring resource directory.
 - `.` is ignored; `..` is rejected when it escapes the app root.

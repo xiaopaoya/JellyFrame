@@ -173,9 +173,42 @@ std::string Node::text_content() const {
     if (type == NodeType::Text) {
         return text;
     }
+
+    std::size_t total_size = 0;
+    std::vector<const Node*> pending;
+    pending.reserve(children.size());
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        pending.push_back(it->get());
+    }
+
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Text) {
+            total_size += current->text.size();
+            continue;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+
     std::string output;
-    for (const auto& child : children) {
-        output += child->text_content();
+    output.reserve(total_size);
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        pending.push_back(it->get());
+    }
+
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Text) {
+            output += current->text;
+            continue;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
     }
     return output;
 }

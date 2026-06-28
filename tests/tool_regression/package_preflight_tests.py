@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 import struct
 import sys
 import tempfile
@@ -55,6 +56,17 @@ def tiny_png_header(width: int = 2, height: int = 2) -> bytes:
 
 
 class PackagePreflightTests(unittest.TestCase):
+    def test_esp32s3_render_core_sources_match_desktop_target(self):
+        desktop_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        esp_cmake = (REPO_ROOT / "ports" / "esp32s3-idf" / "components" /
+                     "jellyframe_render_core" / "CMakeLists.txt").read_text(encoding="utf-8")
+        pattern = r"src/render_core/([A-Za-z0-9_]+\.cpp)"
+        desktop_sources = set(re.findall(pattern, desktop_cmake))
+        esp_sources = set(re.findall(pattern, esp_cmake))
+
+        self.assertEqual(sorted(desktop_sources - esp_sources), [])
+        self.assertEqual(sorted(esp_sources - desktop_sources), [])
+
     def test_font_preflight_scans_text_resources_and_skips_binary_other(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-tool-regression-") as directory:
             root = Path(directory)
@@ -101,6 +113,12 @@ class PackagePreflightTests(unittest.TestCase):
             package_app.resource_kind(Path("audio/tone.wav")),
             "jellyframe::HostResourceKind::Other",
         )
+
+    def test_package_resource_paths_reject_colon_like_runtime(self):
+        self.assertEqual(package_app.normalize_app_path("assets/icon.bmp"), "/assets/icon.bmp")
+        for path in ("foo:bar", "app://assets/icon.bmp", "https://example.test/app.css"):
+            with self.assertRaises(SystemExit):
+                package_app.normalize_app_path(path)
 
     def test_image_diagnostics_classify_codec_and_target_support(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-image-diagnostics-") as directory:

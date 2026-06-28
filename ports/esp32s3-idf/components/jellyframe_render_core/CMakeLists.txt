@@ -2,8 +2,11 @@ set(JELLYFRAME_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../..")
 
 idf_component_register(
     SRCS
+        "${JELLYFRAME_ROOT}/src/render_core/animation_invalidation.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/animation_timeline.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/arena.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/bitmap_font.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/bitmap_font_resource.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/css_parser.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/display_invalidation.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/dirty_region.cpp"
@@ -25,11 +28,15 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/render_core/layout.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/pipeline_statistics.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/render_tree.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/scroll_blit.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/software_renderer.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/style.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/style_repaint.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/text_adapter.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/text_backend.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/text_layout_reuse.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/text_normalization.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/text_repaint.cpp"
     INCLUDE_DIRS
         "${JELLYFRAME_ROOT}/src"
 )

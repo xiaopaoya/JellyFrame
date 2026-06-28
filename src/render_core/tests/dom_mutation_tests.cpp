@@ -116,6 +116,22 @@ void deep_subtree_replacement_and_teardown_are_iterative() {
     check(document->children.front()->type == NodeType::Text, "replacement text node exists");
 }
 
+void deep_text_content_is_iterative_and_ordered() {
+    auto document = make_element("document");
+    Node* current = document.get();
+    current->append_child(make_text("root-"));
+    for (int depth = 0; depth < 4096; ++depth) {
+        current = &current->append_child(make_element("span"));
+        if (depth % 1024 == 0) {
+            current->append_child(make_text("mid-"));
+        }
+    }
+    current->append_child(make_text("leaf"));
+
+    const std::string text = document->text_content();
+    check(text == "root-mid-mid-mid-mid-leaf", "deep text content preserves document order");
+}
+
 void deep_dirty_flags_clear_iteratively() {
     auto document = make_element("document");
     Node* current = document.get();
@@ -159,6 +175,7 @@ int main() {
         attributes_and_text_mark_specific_dirty_bits();
         unchanged_text_content_stays_clean();
         deep_subtree_replacement_and_teardown_are_iterative();
+        deep_text_content_is_iterative_and_ordered();
         deep_dirty_flags_clear_iteratively();
         dom_statistics_are_iterative_and_budget_oriented();
     } catch (const std::exception& error) {
