@@ -1,0 +1,66 @@
+body {
+  margin: 0;
+  background: #07111f;
+  color: #f8fafc;
+}
+
+.screen {
+  width: 300px;
+  height: 300px;
+  padding: 16px;
+  box-sizing: border-box;
+  background: linear-gradient(to bottom, #123b68, #08111f);
+}
+
+.hero {
+  height: 62px;
+  margin-bottom: 10px;
+}
+
+.hero span {
+  display: block;
+  color: #bae6fd;
+  font-size: 14px;
+}
+
+.hero strong {
+  display: block;
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 34px;
+}
+
+.forecast {
+  height: 150px;
+  overflow: scroll;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.10);
+  padding: 8px;
+}
+
+.forecast button {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-bottom: 8px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+  text-align: center;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  height: 42px;
+  margin-top: 12px;
+}
+
+.tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 14px;
+  background: #38bdf8;
+  color: #06121f;
+}

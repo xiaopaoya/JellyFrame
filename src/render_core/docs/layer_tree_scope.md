@@ -35,7 +35,10 @@ rect/text commands or later map selected layers to hardware surfaces.
 
 - Root document layer.
 - `overflow: hidden`, `overflow: clip`, `overflow: auto` and `overflow: scroll`
-  create a clipping layer.
+  create a clipping layer. Fixed-size vertical `auto`/`scroll` containers may
+  also carry a host-provided `scroll_y` offset; descendant paint and hit testing
+  are shifted inside the existing clip. Inertia, scrollbars, horizontal
+  scrolling and container-only dirty repaint are outside this first slice.
 - `opacity` below 1 creates a composited layer and is applied during flattening.
 - `transform: translate()/scale()/rotate()` creates a composited layer and is
   applied by the software compositor. Translation is rounded to device pixels;

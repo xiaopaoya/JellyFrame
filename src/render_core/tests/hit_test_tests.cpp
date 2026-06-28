@@ -5,6 +5,7 @@
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -42,7 +43,10 @@ struct Pipeline {
           layer_tree(std::move(layer_tree_in)) {}
 };
 
-Pipeline build_pipeline(const char* html, const char* css, int viewport_width = 240) {
+Pipeline build_pipeline(const char* html,
+                        const char* css,
+                        int viewport_width = 240,
+                        LayerTreeBuilderOptions layer_options = {}) {
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse(html);
@@ -52,10 +56,17 @@ Pipeline build_pipeline(const char* html, const char* css, int viewport_width = 
     auto render_tree = render_tree_builder.build(*document);
     LayoutEngine layout_engine(resolver);
     auto layout_tree = layout_engine.layout(*render_tree, viewport_width);
-    LayerTreeBuilder layer_tree_builder;
+    LayerTreeBuilder layer_tree_builder(layer_options);
     auto layer_tree = layer_tree_builder.build(*layout_tree);
     return Pipeline(std::move(document), std::move(stylesheet), std::move(resolver),
                     std::move(render_tree), std::move(layout_tree), std::move(layer_tree));
+}
+
+int fixed_scroll_offset(const Node& node, int max_scroll_y, void*) {
+    if (node.attribute("id") == "list") {
+        return max_scroll_y;
+    }
+    return 0;
 }
 
 void basic_hit_test_returns_deepest_element() {
@@ -100,6 +111,25 @@ void overflow_clip_blocks_outside_hits() {
     check(!clipped || clipped.node->attribute("id") != "inside", "outside clip does not hit button");
 }
 
+void scroll_container_hit_test_uses_scrolled_content_coordinates() {
+    LayerTreeBuilderOptions options;
+    options.scroll_resolver = ScrollOffsetResolver{fixed_scroll_offset, nullptr};
+    auto pipeline = build_pipeline(
+        "<body><section id='list'><button id='one'>One</button><button id='two'>Two</button></section></body>",
+        "body { margin: 0; }"
+        "#list { width: 90px; height: 24px; overflow: scroll; }"
+        "button { display: block; width: 90px; height: 24px; }",
+        120,
+        options);
+
+    HitTester hit_tester;
+    HitTestResult result = hit_tester.hit_test(*pipeline.layer_tree, 8, 8);
+
+    check(static_cast<bool>(result), "scrolled hit result exists");
+    check(result.node != nullptr && result.node->attribute("id") == "two",
+          "scroll container hit test targets visible scrolled child");
+}
+
 } // namespace
 
 int main() {
@@ -107,6 +137,7 @@ int main() {
         basic_hit_test_returns_deepest_element();
         layer_order_prefers_higher_z_index();
         overflow_clip_blocks_outside_hits();
+        scroll_container_hit_test_uses_scrolled_content_coordinates();
     } catch (const std::exception& error) {
         std::cerr << "hit test failed: " << error.what() << '\n';
         return 1;

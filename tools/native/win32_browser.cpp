@@ -63,6 +63,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -543,6 +544,11 @@ struct ScrollDebugCounters {
     std::size_t full_blits = 0;
     std::size_t fast_blits = 0;
     std::size_t copied_pixels = 0;
+};
+
+struct ScrollContainerDebugCounters {
+    std::size_t scrolls = 0;
+    std::size_t full_repaints = 0;
 };
 
 struct PresentEstimateCounters {
@@ -3216,6 +3222,8 @@ public:
                   << "  scroll_blits full=" << scroll_counters_.full_blits
                   << " fast=" << scroll_counters_.fast_blits
                   << " copied_pixels=" << scroll_counters_.copied_pixels << '\n';
+        std::cout << "  scroll_containers scrolls=" << scroll_container_counters_.scrolls
+                  << " full_repaints=" << scroll_container_counters_.full_repaints << '\n';
         std::cout << "  present_estimate_rgb565 frames=" << present_estimate_counters_.frames
                   << " full=" << present_estimate_counters_.full_frames
                   << " dirty=" << present_estimate_counters_.dirty_frames
@@ -3286,6 +3294,7 @@ private:
     LayoutBoxPtr layout_tree_;
     LayerNodePtr layer_tree_;
     std::unique_ptr<InputController> input_;
+    std::unordered_map<const Node*, int> scroll_offsets_;
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
     std::vector<StyleOverride> previous_style_overrides_;
@@ -3312,6 +3321,7 @@ private:
     FrameUpdateStatistics frame_update_statistics_;
     FrameRepaintStatistics frame_repaint_statistics_;
     ScrollDebugCounters scroll_counters_;
+    ScrollContainerDebugCounters scroll_container_counters_;
     PresentEstimateCounters present_estimate_counters_;
     std::vector<Rect> present_estimate_rects_;
     std::size_t dirty_fallback_attempt_frames_ = 0;
@@ -4131,6 +4141,8 @@ private:
             dirty_fallback_attempt_max_area_percent_ = 0;
             present_estimate_counters_ = PresentEstimateCounters{};
             present_estimate_rects_.clear();
+            scroll_offsets_.clear();
+            scroll_container_counters_ = ScrollContainerDebugCounters{};
 
             if (system_shell_mode_) {
                 document_->add_event_listener("click", [this](Event& event) {
@@ -4219,6 +4231,118 @@ private:
         }
     }
 
+    static int resolve_browser_scroll_y(const Node& node, int max_scroll_y, void* context) {
+        auto* app = static_cast<BrowserApp*>(context);
+        if (app == nullptr || max_scroll_y <= 0) {
+            return 0;
+        }
+        const auto found = app->scroll_offsets_.find(&node);
+        if (found == app->scroll_offsets_.end()) {
+            return 0;
+        }
+        const int clamped = std::max(0, std::min(found->second, max_scroll_y));
+        if (clamped == 0) {
+            app->scroll_offsets_.erase(found);
+        } else if (clamped != found->second) {
+            found->second = clamped;
+        }
+        return clamped;
+    }
+
+    const LayerNode* find_scroll_layer_for_node(const Node* node) const {
+        if (node == nullptr || layer_tree_ == nullptr) {
+            return nullptr;
+        }
+        for (const Node* current = node; current != nullptr; current = current->parent) {
+            const LayerNode* found = find_scroll_layer_for_exact_node(*layer_tree_, current);
+            if (found != nullptr) {
+                return found;
+            }
+        }
+        return nullptr;
+    }
+
+    const LayerNode* find_scroll_layer_for_exact_node(const LayerNode& layer, const Node* node) const {
+        if (layer.box != nullptr && layer.box->node == node && layer.max_scroll_y > 0) {
+            return &layer;
+        }
+        for (const auto& child : layer.children) {
+            const LayerNode* found = find_scroll_layer_for_exact_node(*child, node);
+            if (found != nullptr) {
+                return found;
+            }
+        }
+        return nullptr;
+    }
+
+    bool render_scroll_state_only(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
+        if (layout_tree_ == nullptr) {
+            return false;
+        }
+        LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
+        layer_options.diagnostics = &diagnostics_;
+        BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
+        layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
+        layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};
+        LayerTreeBuilder layer_builder(layer_options);
+        layer_tree_ = layer_builder.build(*layout_tree_);
+
+        SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
+        compositor_options.diagnostics = &diagnostics_;
+        BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
+        SoftwareCompositor compositor(text_backend.painter,
+                                      ImagePainter{paint_image_surface, &image_context_},
+                                      compositor_options);
+        const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+        frame_buffer_ = compositor.render(*layer_tree_, viewport_width_, content_height, page_background_);
+        if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+            return false;
+        }
+        input_ = std::make_unique<InputController>(
+            *layer_tree_,
+            input_invalidation_options_from_style(*style_resolver_));
+        input_->set_interaction_state(hovered_node, active_node, focused_node);
+        update_blit_pixels();
+        record_present_estimate_full_viewport();
+        ++scroll_container_counters_.full_repaints;
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    bool scroll_container_by(const Node* target, int delta_y) {
+        if (delta_y == 0) {
+            return false;
+        }
+        for (const Node* current = target; current != nullptr; current = current->parent) {
+            const LayerNode* layer = find_scroll_layer_for_node(current);
+            if (layer == nullptr || layer->box == nullptr || layer->box->node == nullptr ||
+                layer->max_scroll_y <= 0) {
+                continue;
+            }
+            const Node* scroll_node = layer->box->node;
+            const auto existing = scroll_offsets_.find(scroll_node);
+            const int stored = existing == scroll_offsets_.end() ? 0 : existing->second;
+            const int previous = std::max(0, std::min(stored, layer->max_scroll_y));
+            const int next = std::max(0, std::min(previous + delta_y, layer->max_scroll_y));
+            if (next == previous) {
+                continue;
+            }
+            if (next == 0) {
+                scroll_offsets_.erase(scroll_node);
+            } else {
+                scroll_offsets_[scroll_node] = next;
+            }
+            const bool rendered = render_scroll_state_only(input_ ? input_->hovered_node() : nullptr,
+                                                           input_ ? input_->active_node() : nullptr,
+                                                           input_ ? input_->focused_node() : nullptr);
+            if (rendered) {
+                ++scroll_container_counters_.scrolls;
+            }
+            return rendered;
+        }
+        return false;
+    }
+
     void render_current(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
@@ -4266,6 +4390,7 @@ private:
         layer_options.diagnostics = &diagnostics_;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
+        layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
@@ -4926,7 +5051,9 @@ private:
         const Node* target = input_->wheel(input);
         rerender_if_dirty(input_->focused_node());
         const int scroll_delta = -input.delta_y;
-        scroll_by(scroll_delta);
+        if (!scroll_container_by(target, scroll_delta)) {
+            scroll_by(scroll_delta);
+        }
         set_title("wheel " + describe_node(target) + " scrollY=" + std::to_string(scroll_y_));
     }
 
@@ -4988,6 +5115,12 @@ private:
         const Node* focus = input_->focused_node();
         if (input_->key_down(key)) {
             rerender_if_dirty(focus);
+        } else if (key.code == KeyCode::ArrowDown || key.code == KeyCode::ArrowUp) {
+            const int scroll_delta = key.code == KeyCode::ArrowDown ? 40 : -40;
+            const Node* scroll_target = focus != nullptr ? focus : input_->hovered_node();
+            if (!scroll_container_by(scroll_target, scroll_delta)) {
+                scroll_by(scroll_delta);
+            }
         }
     }
 

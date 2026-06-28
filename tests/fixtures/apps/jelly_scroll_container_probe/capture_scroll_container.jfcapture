@@ -1,0 +1,16 @@
+# JellyFrame deterministic internal scroll-container probe.
+
+output-dir out/scroll_container_probe_frames
+montage out/scroll_container_probe_montage.bmp
+frames 12
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 4
+gap 6
+
+event 2 wheel 150 142 -120
+event 3 wheel 150 142 -120
+event 4 wheel 150 142 -120
+event 5 wheel 150 142 -120
+event 6 wheel 150 142 -120

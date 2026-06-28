@@ -94,6 +94,13 @@ const LayoutBox* find_layout_by_class(const LayoutBox& box, const std::string& c
     return nullptr;
 }
 
+int fixed_scroll_offset(const Node& node, int max_scroll_y, void*) {
+    if (node.attribute("id") == "list") {
+        return std::min(24, max_scroll_y);
+    }
+    return 0;
+}
+
 void overflow_hidden_creates_clip_layer() {
     auto pipeline = build_pipeline("<body><section class='clip'><p>Visible</p></section></body>",
                                    ".clip { overflow: hidden; height: 20px; background: #ffffff; }");
@@ -102,6 +109,41 @@ void overflow_hidden_creates_clip_layer() {
     check(layer != nullptr, "overflow layer exists");
     check(layer->type == LayerType::Clip, "overflow layer is clip layer");
     check(layer->has_clip, "overflow layer has clip");
+}
+
+void scroll_container_offsets_descendant_paint() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><section id='list'><div id='one'></div><div id='two'></div><div id='three'></div></section></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#list { width: 80px; height: 24px; overflow: scroll; background: #ffffff; }"
+        "#one { width: 80px; height: 24px; background: #000000; }"
+        "#two { width: 80px; height: 24px; background: #000000; }"
+        "#three { width: 80px; height: 24px; background: #000000; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 120);
+    LayerTreeBuilderOptions options;
+    options.scroll_resolver = ScrollOffsetResolver{fixed_scroll_offset, nullptr};
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+
+    const LayerNode* scroll_layer = find_layer_with_reason(*layer_tree, LayerReasonOverflowClip);
+    check(scroll_layer != nullptr && scroll_layer->scroll_y == 24 && scroll_layer->max_scroll_y >= 24,
+          "scroll layer records clamped offset");
+
+    DisplayList flattened = layer_tree_builder.flatten(*layer_tree);
+    bool found_shifted_child = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect && command.color.r == 0 &&
+            command.rect.y == 0 && command.rect.height == 24) {
+            found_shifted_child = true;
+        }
+    }
+    check(found_shifted_child, "scroll offset moves second row into viewport");
 }
 
 void opacity_layer_flattens_alpha() {
@@ -708,6 +750,7 @@ void canvas_element_emits_image_display_command_when_surface_resolves() {
 int main() {
     try {
         overflow_hidden_creates_clip_layer();
+        scroll_container_offsets_descendant_paint();
         opacity_layer_flattens_alpha();
         flatten_into_reuses_storage_and_matches_flatten();
         rounded_equal_border_emits_stroke_command();

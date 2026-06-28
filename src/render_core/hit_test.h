@@ -24,7 +24,13 @@ public:
 
 private:
     HitTestResult hit_test_box(const LayoutBox& box, int x, int y) const;
-    HitTestResult hit_test_layer(const LayerNode& layer, int x, int y, Rect clip, bool has_clip) const;
+    HitTestResult hit_test_layer(const LayerNode& layer,
+                                 int x,
+                                 int y,
+                                 Rect clip,
+                                 bool has_clip,
+                                 int offset_x,
+                                 int offset_y) const;
 };
 
 } // namespace jellyframe

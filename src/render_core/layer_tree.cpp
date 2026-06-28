@@ -55,6 +55,10 @@ bool has_overflow_clip(const Style& style) {
         style.overflow == "auto" || style.overflow == "clip";
 }
 
+bool has_scrollable_overflow(const Style& style) {
+    return style.overflow == "scroll" || style.overflow == "auto";
+}
+
 bool is_positioned(const Style& style) {
     return !style.position.empty();
 }
@@ -711,6 +715,45 @@ Rect content_rect_for(const LayoutBox& box) {
     };
 }
 
+int scrollable_content_height(const LayoutBox& box) {
+    const Rect content = content_rect_for(box);
+    int bottom = content.y;
+    for (const auto& child : box.children) {
+        bottom = std::max(bottom, child->rect.y + child->rect.height + child->style.margin.bottom);
+    }
+    return std::max(0, bottom - content.y);
+}
+
+int max_scroll_y_for(const LayoutBox& box) {
+    if (!has_scrollable_overflow(box.style)) {
+        return 0;
+    }
+    const Rect content = content_rect_for(box);
+    return std::max(0, scrollable_content_height(box) - std::max(0, content.height));
+}
+
+int resolved_scroll_y_for(const LayoutBox& box, const LayerTreeBuilderOptions& options) {
+    if (box.node == nullptr || options.scroll_resolver.resolve_y == nullptr) {
+        return 0;
+    }
+    const int max_scroll = max_scroll_y_for(box);
+    if (max_scroll <= 0) {
+        return 0;
+    }
+    const int requested = options.scroll_resolver.resolve_y(*box.node, max_scroll, options.scroll_resolver.context);
+    return std::max(0, std::min(requested, max_scroll));
+}
+
+void translate_display_commands(DisplayList& display_list, std::size_t begin, int dx, int dy) {
+    if (dx == 0 && dy == 0) {
+        return;
+    }
+    for (std::size_t index = begin; index < display_list.size(); ++index) {
+        display_list[index].rect.x += dx;
+        display_list[index].rect.y += dy;
+    }
+}
+
 void paint_box_self(const LayoutBox& box, DisplayList& display_list, const LayerTreeBuilderOptions& options) {
     const Rect paint_rect = paint_rect_for(box);
     const int border_radius = resolved_border_radius(box);
@@ -1037,6 +1080,8 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->transform_origin_x_percent = root.style.transform_origin_x_percent;
     root_layer->transform_origin_y_percent = root.style.transform_origin_y_percent;
     root_layer->has_transform = has_transform(root.style);
+    root_layer->scroll_y = resolved_scroll_y_for(root, options_);
+    root_layer->max_scroll_y = max_scroll_y_for(root);
     root_layer->z_index = root.style.z_index;
     root_layer->source_order = 0;
 
@@ -1084,6 +1129,7 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
     struct PendingBox {
         const LayoutBox* box = nullptr;
         LayerNode* layer = nullptr;
+        int scroll_y = 0;
         bool exit = false;
     };
 
@@ -1095,7 +1141,7 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
     std::vector<PendingBox> pending;
     pending.reserve(box.children.size());
     for (auto it = box.children.rbegin(); it != box.children.rend(); ++it) {
-        pending.push_back(PendingBox{it->get(), &layer, false});
+        pending.push_back(PendingBox{it->get(), &layer, layer.scroll_y, false});
     }
 
     while (!pending.empty()) {
@@ -1104,13 +1150,16 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
         const LayoutBox& current_box = *current.box;
         LayerNode& current_layer = *current.layer;
         if (current.exit) {
+            const std::size_t command_begin = current_layer.display_list.size();
             paint_generated_inline_content(current_box, current_layer.display_list, CssPseudoElement::After);
+            translate_display_commands(current_layer.display_list, command_begin, 0, -current.scroll_y);
             trim_display_list(current_layer.display_list);
             continue;
         }
 
         const LayerReasons reasons = layer_reasons_for(current_box, false);
         LayerNode* target_layer = &current_layer;
+        const int own_scroll_y = resolved_scroll_y_for(current_box, options_);
         if (needs_own_layer(reasons) && layer_count < max_layers) {
             auto child_layer = make_layer_node(arena);
             target_layer = child_layer.get();
@@ -1123,9 +1172,12 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
             child_layer->has_clip = (reasons & LayerReasonOverflowClip) != 0U;
             child_layer->opacity = current_box.style.opacity;
             child_layer->transform = parsed_transform_or_identity(current_box.style, options_.diagnostics);
+            child_layer->transform.translate_y -= static_cast<float>(current.scroll_y);
             child_layer->transform_origin_x_percent = current_box.style.transform_origin_x_percent;
             child_layer->transform_origin_y_percent = current_box.style.transform_origin_y_percent;
             child_layer->has_transform = has_transform(current_box.style);
+            child_layer->scroll_y = own_scroll_y;
+            child_layer->max_scroll_y = max_scroll_y_for(current_box);
             child_layer->z_index = current_box.style.z_index_auto ? 0 : current_box.style.z_index;
             child_layer->source_order = next_source_order++;
             current_layer.children.push_back(std::move(child_layer));
@@ -1139,11 +1191,16 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
             layer_budget_reported = true;
         }
 
+        const std::size_t command_begin = target_layer->display_list.size();
         paint_box_self(current_box, target_layer->display_list, options_);
+        if (target_layer == &current_layer) {
+            translate_display_commands(target_layer->display_list, command_begin, 0, -current.scroll_y);
+        }
         trim_display_list(target_layer->display_list);
-        pending.push_back(PendingBox{&current_box, target_layer, true});
+        const int child_scroll_y = target_layer == &current_layer ? current.scroll_y + own_scroll_y : own_scroll_y;
+        pending.push_back(PendingBox{&current_box, target_layer, child_scroll_y, true});
         for (auto it = current_box.children.rbegin(); it != current_box.children.rend(); ++it) {
-            pending.push_back(PendingBox{it->get(), target_layer, false});
+            pending.push_back(PendingBox{it->get(), target_layer, child_scroll_y, false});
         }
     }
 }

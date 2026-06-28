@@ -49,6 +49,13 @@ struct ImageHandleResolver {
     void* context = nullptr;
 };
 
+using ScrollOffsetResolveCallback = int (*)(const Node& node, int max_scroll_y, void* context);
+
+struct ScrollOffsetResolver {
+    ScrollOffsetResolveCallback resolve_y = nullptr;
+    void* context = nullptr;
+};
+
 struct LayerNode {
     LayerType type = LayerType::Paint;
     LayerReasons reasons = LayerReasonNone;
@@ -61,6 +68,8 @@ struct LayerNode {
     int transform_origin_x_percent = 50;
     int transform_origin_y_percent = 50;
     bool has_transform = false;
+    int scroll_y = 0;
+    int max_scroll_y = 0;
     int z_index = 0;
     std::size_t source_order = 0;
     DisplayList display_list;
@@ -72,6 +81,7 @@ struct LayerTreeBuilderOptions {
     std::size_t max_display_commands = 8192;
     DiagnosticSink* diagnostics = nullptr;
     ImageHandleResolver image_resolver;
+    ScrollOffsetResolver scroll_resolver;
 };
 
 class LayerTreeBuilder {
