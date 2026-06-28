@@ -64,3 +64,16 @@ The host or port layer must implement:
 
 No JavaScript file API is exposed yet. Future JS bindings should be added only
 after the broker lifecycle and permission UX are proven in the Win32 shell.
+
+## Win32 Validation
+
+The Win32 shell includes a deterministic broker smoke test:
+
+```powershell
+.\build-script\Release\jellyframe_win32_browser.exe --authorized-file-smoke out\file_broker
+```
+
+It verifies that unapproved writes do not alter another logical app path,
+traversal paths are rejected, staged writes commit only after validation,
+simulated commit failures preserve the previous file and manage operations are
+gated separately from read/write.

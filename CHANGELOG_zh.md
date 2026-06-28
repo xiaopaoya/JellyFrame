@@ -47,6 +47,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 添加第一版授权 file broker 契约：标准 `file.read`、`file.write`、`file.manage`
   capability 名称、平台无关请求校验、稳定 diagnostics，以及 `AuthorizedFile`
   host-service job kind。
+- Win32 壳新增 `--authorized-file-smoke DIR` 验收，覆盖未授权写入、路径穿越拒绝、
+  staged commit/rollback 和 manage 操作 gate。
 
 ### 变更
 

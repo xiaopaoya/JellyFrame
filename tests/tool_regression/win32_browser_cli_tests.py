@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -34,6 +35,7 @@ def main() -> int:
     require("--keep-data" in help_result.stdout, "--help must document app data retention")
     require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
+    require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
 
     numeric_result = run_case(exe, ["--viewport-width", "nope"])
     require(numeric_result.returncode != 0, "invalid numeric option must fail")
@@ -44,6 +46,22 @@ def main() -> int:
     require(event_result.returncode != 0, "invalid frame event must fail")
     require("wheel x, y and delta must be integers" in event_result.stdout,
             "invalid frame event must explain the failing field")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-authorized-file-") as directory:
+        file_result = run_case(exe, ["--authorized-file-smoke", directory])
+        require(file_result.returncode == 0, "authorized file smoke must pass")
+        require("authorized_file_smoke denied=user-approval-required unchanged=yes" in file_result.stdout,
+                "authorized file smoke must reject unapproved writes")
+        require("authorized_file_smoke traversal=traversal-rejected unchanged=yes" in file_result.stdout,
+                "authorized file smoke must reject traversal")
+        require("authorized_file_smoke commit=accepted changed=yes" in file_result.stdout,
+                "authorized file smoke must commit authorized write")
+        require("authorized_file_smoke rollback=operation-unsupported preserved=yes" in file_result.stdout,
+                "authorized file smoke must preserve previous file on failed staged write")
+        require("authorized_file_smoke delete_denied=capability-denied delete_allowed=accepted" in file_result.stdout,
+                "authorized file smoke must gate manage operations")
+        require("authorized_file_smoke result=ok" in file_result.stdout,
+                "authorized file smoke must report success")
 
     print("win32 browser cli tests passed")
     return 0

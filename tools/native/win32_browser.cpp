@@ -4,6 +4,7 @@
 
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_budget.h"
+#include "app_runtime/authorized_file_broker.h"
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_frame_policy.h"
 #include "app_runtime/app_load_telemetry.h"
@@ -459,6 +460,7 @@ struct BrowserOptions {
     std::string launch_app_id;
     std::string remove_app_id;
     std::string delete_app_data_id;
+    std::string authorized_file_smoke_dir;
     bool remove_keep_data = false;
     std::string audio_smoke_source;
     int audio_smoke_ms = 1000;
@@ -738,6 +740,189 @@ std::string read_file_limited(const std::string& path) {
         total += static_cast<std::size_t>(read);
     }
     return output.str();
+}
+
+std::string read_text_file(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        return {};
+    }
+    std::ostringstream output;
+    output << file.rdbuf();
+    return output.str();
+}
+
+bool write_text_file(const std::filesystem::path& path, const std::string& text) {
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) {
+        return false;
+    }
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        return false;
+    }
+    file.write(text.data(), static_cast<std::streamsize>(text.size()));
+    return static_cast<bool>(file);
+}
+
+std::filesystem::path broker_host_path(const std::filesystem::path& root, std::string_view logical_path) {
+    std::filesystem::path result = root;
+    std::size_t begin = 1;
+    while (begin < logical_path.size()) {
+        const std::size_t end = logical_path.find('/', begin);
+        const std::string_view part =
+            logical_path.substr(begin, end == std::string_view::npos ? end : end - begin);
+        result /= std::string(part);
+        if (end == std::string_view::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+    return result;
+}
+
+AuthorizedFileStatus broker_stage_write(const AuthorizedFilePolicy& policy,
+                                        const std::filesystem::path& root,
+                                        std::string_view logical_path,
+                                        const std::string& bytes,
+                                        bool user_approved,
+                                        bool simulate_failure) {
+    const AuthorizedFileRequest request{
+        AuthorizedFileOperation::Write,
+        logical_path,
+        {},
+        bytes.size(),
+        user_approved,
+        false,
+    };
+    const AuthorizedFileStatus status = validate_authorized_file_request(policy, request);
+    if (status != AuthorizedFileStatus::Accepted) {
+        return status;
+    }
+
+    const std::filesystem::path final_path = broker_host_path(root, logical_path);
+    const std::filesystem::path stage_path = final_path.string() + ".stage";
+    const std::filesystem::path backup_path = final_path.string() + ".bak";
+    if (!write_text_file(stage_path, bytes)) {
+        return AuthorizedFileStatus::OperationUnsupported;
+    }
+    if (simulate_failure) {
+        std::error_code remove_error;
+        std::filesystem::remove(stage_path, remove_error);
+        return AuthorizedFileStatus::OperationUnsupported;
+    }
+
+    std::error_code error;
+    std::filesystem::create_directories(final_path.parent_path(), error);
+    if (error) {
+        std::filesystem::remove(stage_path, error);
+        return AuthorizedFileStatus::OperationUnsupported;
+    }
+    std::filesystem::remove(backup_path, error);
+    error.clear();
+    const bool had_existing = std::filesystem::exists(final_path, error);
+    if (error) {
+        std::filesystem::remove(stage_path, error);
+        return AuthorizedFileStatus::OperationUnsupported;
+    }
+    if (had_existing) {
+        std::filesystem::rename(final_path, backup_path, error);
+        if (error) {
+            std::filesystem::remove(stage_path, error);
+            return AuthorizedFileStatus::OperationUnsupported;
+        }
+    }
+    error.clear();
+    std::filesystem::rename(stage_path, final_path, error);
+    if (error) {
+        std::filesystem::remove(stage_path, error);
+        if (had_existing) {
+            error.clear();
+            std::filesystem::rename(backup_path, final_path, error);
+        }
+        return AuthorizedFileStatus::OperationUnsupported;
+    }
+    if (had_existing) {
+        std::filesystem::remove(backup_path, error);
+    }
+    return AuthorizedFileStatus::Accepted;
+}
+
+int run_authorized_file_smoke(const std::string& directory) {
+    if (directory.empty()) {
+        std::cerr << "--authorized-file-smoke requires a directory\n";
+        return 1;
+    }
+    const std::filesystem::path base = std::filesystem::absolute(directory);
+    const std::filesystem::path root = base / "authorized_file_smoke";
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    error.clear();
+    std::filesystem::create_directories(root, error);
+    if (error) {
+        std::cerr << "authorized_file_smoke setup failed: " << error.message() << '\n';
+        return 1;
+    }
+
+    const AuthorizedFilePolicy read_policy{true, false, false, 64, 64};
+    const AuthorizedFilePolicy write_policy{false, true, false, 64, 64};
+    const AuthorizedFilePolicy manage_policy{false, false, true, 64, 64};
+
+    const std::filesystem::path app_a_note = broker_host_path(root, "/app-a/note.txt");
+    const std::filesystem::path app_b_secret = broker_host_path(root, "/app-b/secret.txt");
+    if (!write_text_file(app_a_note, "original") || !write_text_file(app_b_secret, "secret")) {
+        std::cerr << "authorized_file_smoke fixture write failed\n";
+        return 1;
+    }
+
+    const AuthorizedFileStatus denied = broker_stage_write(write_policy, root, "/app-b/secret.txt", "changed", false, false);
+    const bool denied_unchanged = read_text_file(app_b_secret) == "secret";
+    const AuthorizedFileStatus traversal =
+        broker_stage_write(write_policy, root, "/app-a/../app-b/secret.txt", "changed", true, false);
+    const bool traversal_unchanged = read_text_file(app_b_secret) == "secret";
+    const AuthorizedFileStatus committed =
+        broker_stage_write(write_policy, root, "/app-a/note.txt", "committed", true, false);
+    const bool commit_ok = read_text_file(app_a_note) == "committed";
+    const AuthorizedFileStatus rollback =
+        broker_stage_write(write_policy, root, "/app-a/note.txt", "broken", true, true);
+    const bool rollback_ok = read_text_file(app_a_note) == "committed";
+    const AuthorizedFileStatus delete_denied = validate_authorized_file_request(read_policy, AuthorizedFileRequest{
+        AuthorizedFileOperation::DeleteEntry,
+        "/app-a/note.txt",
+        {},
+        0,
+        true,
+        false,
+    });
+    const AuthorizedFileStatus delete_allowed = validate_authorized_file_request(manage_policy, AuthorizedFileRequest{
+        AuthorizedFileOperation::DeleteEntry,
+        "/app-a/note.txt",
+        {},
+        0,
+        true,
+        false,
+    });
+
+    std::cout << "authorized_file_smoke denied=" << authorized_file_status_name(denied)
+              << " unchanged=" << (denied_unchanged ? "yes" : "no") << '\n';
+    std::cout << "authorized_file_smoke traversal=" << authorized_file_status_name(traversal)
+              << " unchanged=" << (traversal_unchanged ? "yes" : "no") << '\n';
+    std::cout << "authorized_file_smoke commit=" << authorized_file_status_name(committed)
+              << " changed=" << (commit_ok ? "yes" : "no") << '\n';
+    std::cout << "authorized_file_smoke rollback=" << authorized_file_status_name(rollback)
+              << " preserved=" << (rollback_ok ? "yes" : "no") << '\n';
+    std::cout << "authorized_file_smoke delete_denied=" << authorized_file_status_name(delete_denied)
+              << " delete_allowed=" << authorized_file_status_name(delete_allowed) << '\n';
+
+    const bool ok = denied == AuthorizedFileStatus::UserApprovalRequired && denied_unchanged &&
+        traversal == AuthorizedFileStatus::TraversalRejected && traversal_unchanged &&
+        committed == AuthorizedFileStatus::Accepted && commit_ok &&
+        rollback == AuthorizedFileStatus::OperationUnsupported && rollback_ok &&
+        delete_denied == AuthorizedFileStatus::CapabilityDenied &&
+        delete_allowed == AuthorizedFileStatus::Accepted;
+    std::cout << "authorized_file_smoke result=" << (ok ? "ok" : "failed") << '\n';
+    return ok ? 0 : 1;
 }
 
 std::wstring utf8_to_wide(const std::string& text) {
@@ -2034,6 +2219,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --remove-app ID                Remove installed app id.\n"
         << "  --keep-data                    Keep app-private data with --remove-app.\n"
         << "  --delete-app-data ID           Delete app-private data without removing the app.\n"
+        << "  --authorized-file-smoke DIR    Run Win32 authorized file-broker validation.\n"
         << "\n"
         << "Frame script commands:\n"
         << "  output-dir PATH | montage PATH | frames N | step-ms N | start-ms N\n"
@@ -4897,6 +5083,14 @@ int main(int argc, char** argv) {
             options.delete_app_data_id = argv[++i];
             continue;
         }
+        if (arg == "--authorized-file-smoke") {
+            if (i + 1 >= argc) {
+                std::cerr << "--authorized-file-smoke requires a directory\n";
+                return 1;
+            }
+            options.authorized_file_smoke_dir = argv[++i];
+            continue;
+        }
         if (arg == "--keep-data") {
             options.remove_keep_data = true;
             continue;
@@ -4957,7 +5151,7 @@ int main(int argc, char** argv) {
     }
 
     if (options.registry_store_path.empty() && options.app_path.empty() && positional.empty() &&
-        options.audio_smoke_source.empty()) {
+        options.audio_smoke_source.empty() && options.authorized_file_smoke_dir.empty()) {
         options.app_path = "samples/apps/packages/watch_weather";
     }
 
@@ -4968,6 +5162,10 @@ int main(int argc, char** argv) {
     if (options.capture_frames && options.frame_output_dir.empty() && options.frame_montage_path.empty()) {
         std::cerr << "--capture-frames/--frame-script requires an output directory or --capture-montage\n";
         return 1;
+    }
+
+    if (!options.authorized_file_smoke_dir.empty()) {
+        return run_authorized_file_smoke(options.authorized_file_smoke_dir);
     }
 
     if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() ||

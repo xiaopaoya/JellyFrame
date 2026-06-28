@@ -50,3 +50,14 @@ host 或 port 层必须实现：
 - 所有不修改固件的失败路径都要有 fallback，恢复不能依赖重新烧写固件。
 
 目前仍不暴露 JavaScript 文件 API。未来 JS 绑定应等 broker 生命周期和授权 UX 在 Win32 壳中验证后再加入。
+
+## Win32 验收
+
+Win32 壳提供确定性的 broker smoke test：
+
+```powershell
+.\build-script\Release\jellyframe_win32_browser.exe --authorized-file-smoke out\file_broker
+```
+
+它会验证：未批准写入不会改变另一个逻辑 app 路径；路径穿越会被拒绝；staged write 只在校验后提交；
+模拟 commit 失败会保留旧文件；manage 操作与 read/write 分开 gate。

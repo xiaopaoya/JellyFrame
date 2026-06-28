@@ -61,6 +61,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added the first authorized file-broker contract: standard `file.read`,
   `file.write` and `file.manage` capability names, platform-neutral request
   validation, stable diagnostics and the `AuthorizedFile` host-service job kind.
+- Added Win32 `--authorized-file-smoke DIR` validation for denied writes,
+  traversal rejection, staged commit/rollback and manage-operation gates.
 
 ### Changed
 
