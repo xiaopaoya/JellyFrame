@@ -27,6 +27,7 @@
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
+#include "render_core/scroll_blit.h"
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
 #include "render_core/style_repaint.h"
@@ -4605,29 +4606,38 @@ private:
             return;
         }
         scroll_y_ = std::max(0, std::min(scroll_y_, max_scroll_y()));
-        const int delta = scroll_y_ - previous_scroll_y;
-        const int abs_delta = std::abs(delta);
         const int copy_width = std::min(viewport_width_, frame_buffer_.width);
-        if (delta == 0 || abs_delta >= viewport_height_) {
+        const ScrollBlitPlan plan =
+            plan_vertical_scroll_blit(viewport_width_, viewport_height_, frame_buffer_.height, previous_scroll_y, scroll_y_);
+        scroll_y_ = plan.current_scroll_y;
+        if (plan.mode == ScrollBlitMode::None) {
+            return;
+        }
+        if (plan.mode != ScrollBlitMode::FastBlit) {
             update_blit_pixels();
             return;
         }
-        const int moved_rows = viewport_height_ - abs_delta;
-        if (delta > 0) {
-            std::move(blit_pixels_.begin() + static_cast<std::ptrdiff_t>(abs_delta * viewport_width_),
-                      blit_pixels_.begin() + static_cast<std::ptrdiff_t>(viewport_height_ * viewport_width_),
-                      blit_pixels_.begin());
-            copy_blit_rows_from_framebuffer(moved_rows, abs_delta, copy_width);
+        const std::ptrdiff_t source_begin =
+            static_cast<std::ptrdiff_t>(plan.move_source.y * viewport_width_);
+        const std::ptrdiff_t source_end =
+            source_begin + static_cast<std::ptrdiff_t>(plan.move_source.height * viewport_width_);
+        const std::ptrdiff_t destination_begin =
+            static_cast<std::ptrdiff_t>(plan.move_destination.y * viewport_width_);
+        if (plan.move_destination.y <= plan.move_source.y) {
+            std::move(blit_pixels_.begin() + source_begin,
+                      blit_pixels_.begin() + source_end,
+                      blit_pixels_.begin() + destination_begin);
         } else {
-            std::move_backward(blit_pixels_.begin(),
-                               blit_pixels_.begin() + static_cast<std::ptrdiff_t>(moved_rows * viewport_width_),
-                               blit_pixels_.end());
-            copy_blit_rows_from_framebuffer(0, abs_delta, copy_width);
+            std::move_backward(blit_pixels_.begin() + source_begin,
+                               blit_pixels_.begin() + source_end,
+                               blit_pixels_.begin() + destination_begin +
+                                   static_cast<std::ptrdiff_t>(plan.move_destination.height * viewport_width_));
         }
+        copy_blit_rows_from_framebuffer(plan.exposed_strip.y, plan.exposed_strip.height, copy_width);
         ++scroll_counters_.fast_blits;
         scroll_counters_.copied_pixels +=
             static_cast<std::size_t>(std::max(0, copy_width)) *
-            static_cast<std::size_t>(abs_delta);
+            static_cast<std::size_t>(std::max(0, plan.exposed_strip.height));
     }
 
     void paint() {

@@ -58,6 +58,7 @@ add_library(jellyframe_render_core
     src/render_core/layout.cpp
     src/render_core/pipeline_statistics.cpp
     src/render_core/render_tree.cpp
+    src/render_core/scroll_blit.cpp
     src/render_core/software_renderer.cpp
     src/render_core/style.cpp
     src/render_core/style_repaint.cpp
@@ -210,6 +211,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/pipeline_statistics_tests.cpp
         src/render_core/tests/render_tree_tests.cpp
         src/render_core/tests/layer_tree_tests.cpp
+        src/render_core/tests/scroll_blit_tests.cpp
         src/render_core/tests/software_renderer_tests.cpp
         src/render_core/tests/style_repaint_tests.cpp
         src/render_core/tests/text_adapter_tests.cpp

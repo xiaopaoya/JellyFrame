@@ -80,6 +80,22 @@ Animation caps 与 timer caps 分开，因此带动效的页面不能饿死输�
 `plan_frame_loop(...)` 会把上述有界工作计划和 `plan_frame_update(...)` 合成一次调用，适合希望统一规划的宿主。
 它仍然不派发输入、不泵动 timer/animation callback、不修改 DOM、不重建 layout，也不提交像素。
 
+## 滚动 Blit 计划
+
+头文件：`src/render_core/scroll_blit.h`
+
+`plan_vertical_scroll_blit(...)` 是给小屏滚动路径准备的无分配 helper。它不移动像素、不访问屏幕，
+只根据 viewport 高度、content 高度和前后 scrollY 返回：
+
+- `FastBlit`：旧 viewport framebuffer 中可搬移的 `move_source` / `move_destination`，以及必须重绘或重新从
+  内容 framebuffer 拷贝的新露出 `exposed_strip`。
+- `FullRepaint`：滚动距离大于等于 viewport 高度、viewport 无效或无法复用时，宿主应完整重绘/重拷贝可视区域。
+- `None`：scrollY clamp 后没有变化。
+
+Win32 壳用它驱动 BGRX viewport buffer 的快速滚动。嵌入式 port 可以用同一计划选择 framebuffer
+`memmove`、panel/GRAM scroll、DMA2D copy，或直接忽略该优化。该 helper 不进入未滚动页面热路径；
+它只在宿主已经决定发生滚动时调用。
+
 ## 异步 Completion Events
 
 宿主可以在 UI task 外执行慢任务，但完成结果必须通过有界队列回到帧循环。典型事件包括：

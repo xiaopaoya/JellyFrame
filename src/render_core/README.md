@@ -12,6 +12,7 @@ It owns:
   and `@keyframes` / `animation-*` subsets.
 - Render tree, layout tree, layer tree, display list and frame update planning.
 - CPU software rasterization/compositing and embedded framebuffer conversion.
+- Dirty-rect and scroll-blit planning for host-owned incremental presentation.
 - Text measurement/painting contracts and bitmap font helpers.
 - Neutral host contracts such as device capabilities, frame sink callbacks,
   resource request hooks and memory/time budgets.

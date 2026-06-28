@@ -65,6 +65,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   traversal rejection, staged commit/rollback and manage-operation gates.
 - Added Win32 `--system-survival-smoke N` validation for repeated bad-app
   budget recovery, stale completion filtering and launcher event delivery.
+- Added render-core `scroll_blit` planning helpers so hosts can share the same
+  vertical-scroll fast-blit rectangles across Win32, framebuffer and panel
+  implementations without adding steady-frame cost to non-scrolling apps.
 
 ### Changed
 

@@ -6,6 +6,7 @@
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
+#include "render_core/scroll_blit.h"
 #include "render_core/software_renderer.h"
 #include "render_core/style_repaint.h"
 #include "render_core/text_repaint.h"
@@ -302,6 +303,11 @@ int main(int argc, char** argv) {
                                Color{255, 255, 255, 255},
                                contained_dirty_rects.data(),
                                contained_dirty_rects.size());
+    }));
+
+    print_result("scroll_blit_plan", iterations, average_microseconds(iterations, [&] {
+        const ScrollBlitPlan plan = plan_vertical_scroll_blit(320, 240, 720, 96, 112);
+        (void)plan;
     }));
 
     LayerNode scale_root;

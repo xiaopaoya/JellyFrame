@@ -107,6 +107,27 @@ pending animation callbacks and does not request animation frames.
 does not dispatch input, pump timers or animation callbacks, mutate DOM, rebuild
 layout or present pixels.
 
+## Scroll Blit Planning
+
+Header: `src/render_core/scroll_blit.h`
+
+`plan_vertical_scroll_blit(...)` is an allocation-free helper for small-screen
+scrolling. It does not move pixels or access a display. Given viewport height,
+content height and previous/current scrollY, it returns:
+
+- `FastBlit`: `move_source` / `move_destination` rectangles inside the previous
+  viewport framebuffer, plus the newly exposed `exposed_strip` that must be
+  repainted or copied from the content framebuffer.
+- `FullRepaint`: the scroll distance is at least one viewport, the viewport is
+  invalid, or reuse is not possible.
+- `None`: clamped scrollY did not change.
+
+The Win32 shell uses this to drive its BGRX viewport-buffer fast scroll path.
+Embedded ports can use the same plan for framebuffer `memmove`, panel/GRAM
+scroll, DMA2D copy or ignore the optimization. The helper is only called after a
+host has decided that scrolling occurred, so pages that do not scroll pay no
+steady-frame cost.
+
 ## Async Completion Events
 
 Hosts may run slow work outside the UI task, but results return through a

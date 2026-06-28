@@ -51,6 +51,8 @@ JellyFrame Engine 的重要变更记录在这里。
   staged commit/rollback 和 manage 操作 gate。
 - Win32 壳新增 `--system-survival-smoke N` 验收，覆盖坏 app 多轮 budget recovery、
   stale completion 过滤和 launcher 事件投递。
+- render-core 新增 `scroll_blit` 计划 helper，让 Win32、framebuffer 和 panel 实现共享同一套
+  纵向滚动快速搬移矩形；未滚动 app 不增加 steady-frame 成本。
 
 ### 变更
 
