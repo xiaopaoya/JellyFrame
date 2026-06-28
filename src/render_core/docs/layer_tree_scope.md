@@ -37,8 +37,9 @@ rect/text commands or later map selected layers to hardware surfaces.
 - `overflow: hidden`, `overflow: clip`, `overflow: auto` and `overflow: scroll`
   create a clipping layer. Fixed-size vertical `auto`/`scroll` containers may
   also carry a host-provided `scroll_y` offset; descendant paint and hit testing
-  are shifted inside the existing clip. The Win32 host repaints the container
-  viewport as a dirty rect when the area stays within budget. Inertia,
+  are shifted inside the existing clip. The Win32 host maps wheel, arrow and
+  pointer-drag defaults to these offsets and repaints the container viewport as
+  a dirty rect when the area stays within budget. Inertia,
   scrollbars, horizontal scrolling and strip-level scroll blit are outside this
   first slice.
 - `opacity` below 1 creates a composited layer and is applied during flattening.

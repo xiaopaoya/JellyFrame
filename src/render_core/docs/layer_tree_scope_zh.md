@@ -33,7 +33,7 @@ Layer tree 是一种可保留的绘制组织结构。它不是 GPU API，也不�
 - 根文档 layer。
 - `overflow: hidden`、`overflow: clip`、`overflow: auto` 和 `overflow: scroll`
   创建裁剪 layer。固定尺寸的垂直 `auto`/`scroll` 容器还可以携带宿主提供的
-  `scroll_y` offset；后代绘制和命中测试会在既有 clip 内移动。Win32 宿主会在面积预算内把容器视口作为 dirty rect 重绘。惯性、滚动条、水平滚动和
+  `scroll_y` offset；后代绘制和命中测试会在既有 clip 内移动。Win32 宿主会把 wheel、arrow 和 pointer drag 默认动作映射为这些 offset，并在面积预算内把容器视口作为 dirty rect 重绘。惯性、滚动条、水平滚动和
   strip 级 scroll blit 不在这一切片内。
 - 小于 1 的 `opacity` 创建 composited layer，并在 flatten 时应用透明度。
 - `transform: translate()/scale()/rotate()` 子集创建 composited layer，并由软件合成器执行。平移会取整到设备像素；缩放和旋转使用受支持的 `transform-origin` 子集。

@@ -76,6 +76,7 @@ constexpr wchar_t kWindowClassName[] = L"JellyFrameWin32Browser";
 constexpr UINT_PTR kScriptTimerId = 1;
 constexpr UINT kScriptTimerPeriodMs = 16;
 constexpr int kIncrementalDirtyAreaLimitPercent = 70;
+constexpr int kScrollDragStartThresholdPx = 4;
 constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_launcher";
 constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
@@ -3309,6 +3310,10 @@ private:
     LayerNodePtr layer_tree_;
     std::unique_ptr<InputController> input_;
     std::unordered_map<const Node*, int> scroll_offsets_;
+    const Node* scroll_drag_target_ = nullptr;
+    int scroll_drag_start_y_ = 0;
+    int scroll_drag_last_y_ = 0;
+    bool scroll_dragging_ = false;
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
     std::vector<StyleOverride> previous_style_overrides_;
@@ -4156,6 +4161,7 @@ private:
             present_estimate_counters_ = PresentEstimateCounters{};
             present_estimate_rects_.clear();
             scroll_offsets_.clear();
+            reset_scroll_drag();
             scroll_container_counters_ = ScrollContainerDebugCounters{};
 
             if (system_shell_mode_) {
@@ -4395,6 +4401,48 @@ private:
             return rendered;
         }
         return false;
+    }
+
+    void reset_scroll_drag() {
+        scroll_drag_target_ = nullptr;
+        scroll_drag_start_y_ = 0;
+        scroll_drag_last_y_ = 0;
+        scroll_dragging_ = false;
+    }
+
+    bool can_start_scroll_drag(const Node* target) const {
+        return target != nullptr && find_scroll_layer_match_for_node(target).layer != nullptr &&
+            !(target->tag_name == "input" && target->attribute("type") == "range");
+    }
+
+    void begin_scroll_drag(const Node* target, int y) {
+        if (!can_start_scroll_drag(target)) {
+            reset_scroll_drag();
+            return;
+        }
+        scroll_drag_target_ = target;
+        scroll_drag_start_y_ = y;
+        scroll_drag_last_y_ = y;
+        scroll_dragging_ = false;
+    }
+
+    bool update_scroll_drag(int y) {
+        if (scroll_drag_target_ == nullptr) {
+            return false;
+        }
+        const int total_delta = y - scroll_drag_start_y_;
+        if (!scroll_dragging_ && std::abs(total_delta) < kScrollDragStartThresholdPx) {
+            scroll_drag_last_y_ = y;
+            return false;
+        }
+        if (!scroll_dragging_ && input_) {
+            input_->clear_pointer_state();
+        }
+        scroll_dragging_ = true;
+        const int scroll_delta = scroll_drag_last_y_ - y;
+        scroll_drag_last_y_ = y;
+        scroll_container_by(scroll_drag_target_, scroll_delta);
+        return true;
     }
 
     void render_current(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
@@ -5089,6 +5137,10 @@ private:
         input.y = GET_Y_LPARAM(lparam) + scroll_y_;
         input.buttons = buttons_from_keys(wparam);
         input.modifiers = modifiers_from_keys(wparam);
+        if (update_scroll_drag(input.y)) {
+            set_title("drag-scroll scrollY=" + std::to_string(scroll_y_));
+            return;
+        }
         const Node* target = input_->pointer_move(input);
         rerender_if_dirty(input_->focused_node());
         set_title("hover " + describe_node(target));
@@ -5105,6 +5157,7 @@ private:
         input.buttons = buttons_from_keys(wparam) | 1;
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_down(input);
+        begin_scroll_drag(target, input.y);
         rerender_if_dirty(input_->focused_node());
         set_title("active " + describe_node(target));
     }
@@ -5119,6 +5172,13 @@ private:
         input.button = PointerButton::Primary;
         input.buttons = buttons_from_keys(wparam) & ~1;
         input.modifiers = modifiers_from_keys(wparam);
+        const bool consumed_by_drag = scroll_dragging_;
+        if (consumed_by_drag) {
+            reset_scroll_drag();
+            set_title("drag-scroll end");
+            return;
+        }
+        reset_scroll_drag();
         const Node* target = input_->pointer_up(input);
         rerender_if_dirty(input_->focused_node());
         follow_hash_anchor(target);

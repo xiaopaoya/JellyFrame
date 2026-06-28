@@ -400,6 +400,16 @@ if(JELLYFRAME_BUILD_TESTS)
                 "scroll_containers scrolls=3 full_repaints=0 dirty_repaints=3")
 
         add_test(
+            NAME jellyframe_win32_scroll_container_touch_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_scroll_container.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_scroll_container_touch_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "scroll_containers scrolls=3 full_repaints=0 dirty_repaints=3")
+
+        add_test(
             NAME jellyframe_win32_package_image_fixture
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_image_fixture_tests.py
