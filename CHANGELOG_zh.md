@@ -42,6 +42,8 @@ JellyFrame Engine 的重要变更记录在这里。
   用更低成本把核心 packed bytes 与 panel/DMA flush 数据对齐。
 - 扩展 `jelly_font_policy` 示例为两个 family 的 `.jffont` 验收包，覆盖中文 glyph、常用符号、
   故意缺字 warning，并新增 Win32 `--use-app-fonts` capture 回归。
+- Manifest app font 现在会按 CSS `font-size` 做有界整数倍 bitmap 缩放，并继续对
+  `font-weight >= 600` 使用现有合成粗体路径。
 
 ### 变更
 

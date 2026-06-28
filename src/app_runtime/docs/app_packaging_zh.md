@@ -210,7 +210,10 @@ manifest 中的每个 font 条目可以写：
 等 generic family 会报告为 generic fallback；未匹配的首选自定义 family 会产生
 `font-family-unmatched`。runtime 匹配刻意很小：只规范化 CSS family list 中首个自定义 family，
 并与 manifest `.jffont` family 匹配；不实现完整浏览器 cascade、`@font-face`、stretch/style/features
-和多字号选择。`sizes`、`weights` 目前仍是产品策略元数据。工具仍会检查这些数组是否存在且合法，
+和完整字体匹配。app-font backend 使用便宜的整数倍字号策略：根据 CSS `font-size` 除以字体
+line height 选择 1x/2x/3x... 缩放，并设置上限避免异常字号失控；`font-weight >= 600`
+沿用合成粗体描边。`sizes`、`weights` 用来声明这个 package font 已验收的 CSS 字号和字重。
+工具仍会检查这些数组是否存在且合法，
 发布前可报告 `font-axis-metadata-missing` 或 `font-axis-metadata-invalid`。`license.name` 和 `license.source`
 是推荐字段；缺失时 pack/check 会给出 `font-license-missing` 或 `font-license-incomplete`，
 便于发布前确认字体来源。
@@ -220,7 +223,7 @@ runtime `.jffont` 数量、总字节和总 glyph 数；超过时会报告 `font-
 
 `samples/apps/packages/jelly_font_policy` 是这条路径的验收样例：它在 CSS 和 manifest 元数据中分别声明
 `Jelly Tiny CN` 与 `Jelly Tiny Symbols` family，包含由仓库 BDF fixture 生成的极小 `.jffont`
-supplement，并故意保留一个缺字探针，方便验证工具 warning 是否稳定。
+supplement，验收整数倍字号缩放，并故意保留一个缺字探针，方便验证工具 warning 是否稳定。
 
 当前稳定生产路径仍是：打包/检查阶段收集 used chars，离线从授权字体生成 bitmap glyph 数据，
 再把生成的 `BitmapFont` 编译进 port/firmware 或作为 `.jffont` supplement 随 `.jfapp`

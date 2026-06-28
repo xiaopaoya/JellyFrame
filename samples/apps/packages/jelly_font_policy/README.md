@@ -5,6 +5,9 @@ Small package used to validate the app font policy path:
 - CSS declares two package families: `Jelly Tiny CN` and `Jelly Tiny Symbols`.
 - `jellyframe.app.json` declares both families and points to package-local
   `.jffont` supplements.
+- Manifest `sizes`/`weights` list the CSS sizes and weights this package
+  validates; the app-font backend uses integer bitmap scaling rather than full
+  browser font matching.
 - `jellyframe_cli.py check` reports both families as manifest runtime fonts,
   validates glyph coverage before install and intentionally warns about the
   missing `あ` probe.

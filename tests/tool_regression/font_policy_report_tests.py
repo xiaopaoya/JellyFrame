@@ -34,8 +34,12 @@ def assert_font_report(report_path: Path) -> None:
 
     fonts = {font["id"]: font for font in diagnostics["manifestFonts"]}
     assert fonts["tiny-cn"]["status"] == "usable"
+    assert fonts["tiny-cn"]["sizes"] == [8, 12, 18, 36]
+    assert fonts["tiny-cn"]["weights"] == [400, 700]
     assert fonts["tiny-cn"]["usedGlyphCount"] == 2
     assert fonts["tiny-symbols"]["status"] == "usable"
+    assert fonts["tiny-symbols"]["sizes"] == [8, 12, 18, 36]
+    assert fonts["tiny-symbols"]["weights"] == [400, 700]
     assert fonts["tiny-symbols"]["usedGlyphCount"] == 3
 
     family_status = {

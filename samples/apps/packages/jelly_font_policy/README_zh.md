@@ -4,6 +4,8 @@
 
 - CSS 声明两个包内 family：`Jelly Tiny CN` 和 `Jelly Tiny Symbols`。
 - `jellyframe.app.json` 声明两个 family，并指向包内 `.jffont` 补充包。
+- Manifest `sizes` / `weights` 声明本包验收过的 CSS 字号和字重；app-font backend
+  使用整数倍 bitmap 缩放，不做完整浏览器字体匹配。
 - `jellyframe_cli.py check` 会把两个 family 报告为 manifest runtime font，在安装前验证 glyph 覆盖，
   并故意对缺失的 `あ` 探针给出 warning。
 - Win32 可用 `--use-app-fonts` 验证 runtime 文本路径：

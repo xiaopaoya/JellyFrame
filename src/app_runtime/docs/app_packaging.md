@@ -267,9 +267,13 @@ fallback, while an unmatched primary custom family produces
 `font-family-unmatched`. Runtime matching is intentionally small: only the first
 custom family in the CSS list is normalized and matched against manifest
 `.jffont` families; full browser cascade, `@font-face`, stretch/style/features
-and multi-size selection are not implemented. `sizes` and `weights` remain
-product-policy metadata for now. Tooling still checks that these arrays are
-present and valid, reporting `font-axis-metadata-missing` or
+and full font matching are not implemented. The app-font backend uses a cheap
+integer-size policy: bitmap glyphs draw at 1x/2x/3x... according to CSS
+`font-size` divided by the font line height, with a cap for pathological sizes;
+`font-weight >= 600` uses the existing synthetic bold stroke. `sizes` and
+`weights` declare the CSS sizes and weights the app has validated for that
+package font. Tooling still checks that these arrays are present and valid,
+reporting `font-axis-metadata-missing` or
 `font-axis-metadata-invalid` before release. `license.name` and
 `license.source` are recommended for redistributed font supplements. Missing
 metadata produces `font-license-missing` or `font-license-incomplete`
@@ -282,8 +286,9 @@ hot-path cost.
 The `samples/apps/packages/jelly_font_policy` package is the acceptance sample
 for this path: it declares separate `Jelly Tiny CN` and `Jelly Tiny Symbols`
 families in CSS and manifest metadata, includes tiny `.jffont` supplements
-generated from the repository BDF fixture and intentionally keeps one missing
-glyph probe so tooling warnings remain easy to verify.
+generated from the repository BDF fixture, validates integer scaled sizes and
+intentionally keeps one missing glyph probe so tooling warnings remain easy to
+verify.
 
 The stable production path is still: collect used characters during
 package/check, generate bitmap glyph data offline from a licensed font, compile

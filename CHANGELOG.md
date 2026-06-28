@@ -56,6 +56,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Expanded the `jelly_font_policy` sample into a two-family `.jffont`
   validation package covering Chinese glyphs, common symbols, a deliberate
   missing-glyph warning and Win32 `--use-app-fonts` capture regression.
+- Manifest app fonts now follow CSS `font-size` with bounded integer bitmap
+  scaling and keep the existing synthetic-bold path for `font-weight >= 600`.
 
 ### Changed
 

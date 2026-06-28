@@ -174,6 +174,9 @@ void app_font_set_selects_named_app_family_before_system_font() {
     TextMeasureProvider provider = host.fonts().measure_provider();
     TextMetrics metrics = measure_text(provider, "A", 8, 400, jelly_tiny);
     assert(metrics.width == 6);
+    metrics = measure_text(provider, "A", 18, 400, jelly_tiny);
+    assert(metrics.width == 12);
+    assert(metrics.line_height == 16);
     metrics = measure_text(provider, "A", 8, 400);
     assert(metrics.width == 4);
 

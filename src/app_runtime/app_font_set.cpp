@@ -1,5 +1,7 @@
 #include "app_runtime/app_font_set.h"
 
+#include <algorithm>
+
 namespace jellyframe {
 namespace {
 
@@ -70,6 +72,22 @@ void append_unique_font(std::vector<const BitmapFont*>& fonts, const BitmapFont*
         }
     }
     fonts.push_back(font);
+}
+
+int app_font_scale_for_size(const BitmapFontFallbackContext& context, int font_size) {
+    const int fixed_scale = std::max(1, context.scale);
+    if (context.fonts == nullptr || context.font_count == 0 || context.fonts[0] == nullptr) {
+        return fixed_scale;
+    }
+    const int line_height = std::max(1, static_cast<int>(context.fonts[0]->line_height));
+    const int requested = std::max(1, (std::max(1, font_size) + line_height / 2) / line_height);
+    return std::max(fixed_scale, std::min(requested, 8));
+}
+
+BitmapFontFallbackContext app_font_context_for_size(const BitmapFontFallbackContext& context, int font_size) {
+    BitmapFontFallbackContext scaled = context;
+    scaled.scale = app_font_scale_for_size(context, font_size);
+    return scaled;
 }
 
 } // namespace
@@ -198,7 +216,8 @@ TextMetrics AppFontSet::measure_text(const std::string& text,
     if (context == nullptr) {
         return fallback_text_metrics(text, font_size, font_weight);
     }
-    return measure_bitmap_text_with_fallback(*context, text, font_size, font_weight);
+    const BitmapFontFallbackContext scaled = app_font_context_for_size(*context, font_size);
+    return measure_bitmap_text_with_fallback(scaled, text, font_size, font_weight);
 }
 
 bool AppFontSet::paint_text(FrameBuffer& target,
@@ -211,16 +230,19 @@ bool AppFontSet::paint_text(FrameBuffer& target,
                             TextCommandAlign align,
                             bool single_line) {
     const BitmapFontFallbackContext* context = context_for_family(font_family_hash);
-    return context != nullptr &&
-        bitmap_font_fallback_paint_callback(target,
-                                            rect,
-                                            color,
-                                            text,
-                                            font_size,
-                                            font_weight,
-                                            align,
-                                            single_line,
-                                            const_cast<BitmapFontFallbackContext*>(context));
+    if (context == nullptr) {
+        return false;
+    }
+    const BitmapFontFallbackContext scaled = app_font_context_for_size(*context, font_size);
+    return bitmap_font_fallback_paint_callback(target,
+                                               rect,
+                                               color,
+                                               text,
+                                               font_size,
+                                               font_weight,
+                                               align,
+                                               single_line,
+                                               const_cast<BitmapFontFallbackContext*>(&scaled));
 }
 
 void AppFontSet::refresh_context() {
