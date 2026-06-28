@@ -10,11 +10,14 @@
 #include "app_runtime/host_services.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -665,15 +668,29 @@ void bench_app_budget_recovery(std::size_t capacity) {
     }
 }
 
+int parse_positive_int_arg(const char* value, const char* name) {
+    if (value == nullptr) {
+        throw std::invalid_argument(std::string("missing ") + name);
+    }
+    char* end = nullptr;
+    errno = 0;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || *end != '\0' || errno == ERANGE || parsed < 1 || parsed > INT_MAX) {
+        throw std::invalid_argument(std::string("invalid positive integer for ") + name + ": " + value);
+    }
+    return static_cast<int>(parsed);
+}
+
 } // namespace
 
-int main(int argc, char** argv) {
+int run_app_runtime_bench(int argc, char** argv) {
     if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         std::cout << "usage: jellyframe_app_runtime_microbench [iterations=10000] [capacity=32]\n";
         return 0;
     }
-    const int iterations = argc >= 2 ? std::max(1, std::atoi(argv[1])) : 10000;
-    const std::size_t capacity = argc >= 3 ? static_cast<std::size_t>(std::max(1, std::atoi(argv[2]))) : 32;
+    const int iterations = argc >= 2 ? parse_positive_int_arg(argv[1], "iterations") : 10000;
+    const std::size_t capacity =
+        argc >= 3 ? static_cast<std::size_t>(parse_positive_int_arg(argv[2], "capacity")) : 32;
 
     print_result("app_runtime_request_queue", iterations, average_microseconds(iterations, [&] {
         bench_request_queue(capacity);
@@ -749,4 +766,13 @@ int main(int argc, char** argv) {
     }));
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return run_app_runtime_bench(argc, argv);
+    } catch (const std::exception& error) {
+        std::cerr << "jellyframe_app_runtime_microbench failed: " << error.what() << '\n';
+        return 1;
+    }
 }

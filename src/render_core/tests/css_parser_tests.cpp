@@ -120,6 +120,36 @@ void supports_queries_flatten_safe_declaration_subset() {
     check(stylesheet[4].selector == ".either", "or supports selector");
 }
 
+void supports_queries_apply_representative_supported_properties() {
+    const Stylesheet stylesheet = parse(
+        "@supports (display: flex) { .probe { display: flex; flex-wrap: wrap; gap: 6px; } }"
+        "@supports (grid-template-columns: repeat(2, 1fr)) { .probe { display: grid; grid-template-columns: repeat(2, 1fr); } }"
+        "@supports (object-fit: cover) { .probe { object-fit: cover; image-rendering: pixelated; } }"
+        "@supports (border-right: 2px solid #123456) { .probe { border-right: 2px solid #123456; } }"
+        "@supports (text-overflow: ellipsis) { .probe { white-space: nowrap; text-overflow: ellipsis; } }"
+        "@supports (unknown-property: 1px) { .probe { color: #ff0000; } }");
+
+    auto element = make_element("div");
+    element->attributes["class"] = "probe";
+    StyleResolver resolver(stylesheet);
+    const Style style = resolver.resolve(*element);
+
+    check(style.display == Display::Grid, "supported grid declaration survives @supports and applies");
+    check(style.grid_template_column_count == 2, "grid-template-columns applies after @supports");
+    check(style.flex_wrap, "flex-wrap applies after @supports");
+    check(style.column_gap == 6 && style.row_gap == 6, "gap applies after @supports");
+    check(style.object_fit == ObjectFit::Cover, "object-fit applies after @supports");
+    check(style.image_rendering == ImageRendering::Pixelated, "image-rendering applies after @supports");
+    check(style.border_width.right == 2, "border-right applies after @supports");
+    check(style.white_space_nowrap && style.text_overflow_ellipsis, "text overflow controls apply after @supports");
+    check(style.color.r == 0 && style.color.g == 0 && style.color.b == 0, "unsupported @supports block is not applied");
+}
+
+void style_struct_size_has_embedded_guardrail() {
+    check(sizeof(Style) <= 1536, "Style should stay within the embedded size guardrail");
+    check(sizeof(DisplayCommand) <= 160, "DisplayCommand should stay compact for display-list reuse");
+}
+
 void flattens_layers_and_plain_media() {
     const Stylesheet stylesheet = parse(
         "@layer components { .button { color: red; } }"
@@ -889,6 +919,8 @@ int main() {
         skips_enhancement_blocks_without_corrupting_following_rules();
         pipeline_diagnostics_report_css_and_style_degradation();
         supports_queries_flatten_safe_declaration_subset();
+        supports_queries_apply_representative_supported_properties();
+        style_struct_size_has_embedded_guardrail();
         flattens_layers_and_plain_media();
         conditional_media_queries_respect_viewport();
         preserves_declaration_fallback_order();

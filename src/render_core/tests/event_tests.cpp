@@ -131,6 +131,12 @@ void bounded_cpp_listener_registration_respects_limit() {
     check(first != 0, "first bounded listener registered");
     check(second == 0, "second bounded listener rejected");
     check(button->event_listener_count() == 1, "bounded listener count");
+    check(button->remove_event_listener(first), "returned bounded listener id removes listener");
+    check(button->event_listener_count() == 0, "removed bounded listener count");
+
+    const EventTarget::ListenerId third =
+        button->add_event_listener_bounded("click", [&](Event&) { ++count; }, 1);
+    check(third != 0 && third != first, "bounded listener ids remain stable after removal");
 
     MouseEvent event("click", 0, 0);
     dispatch_event(*button, event);

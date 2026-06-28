@@ -13,6 +13,7 @@
 #include "render_core/style.h"
 
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -141,7 +142,7 @@ std::vector<std::uint8_t> make_rgb565_buffer() {
 
 } // namespace
 
-int main() {
+int run_embedded_host_demo() {
     BitmapFontContext font_context{&kFont, 2};
     const HostBudgets budgets = embedded_demo_budgets();
     Pipeline pipeline = build_pipeline(font_context, budgets);
@@ -215,4 +216,13 @@ int main() {
     std::cout << "  select_value=" << form_control_display_text(*select) << '\n';
     std::cout << "  non_background_pixels=" << count_non_background_pixels(rgba, Color{0, 0, 0, 255}) << '\n';
     return 0;
+}
+
+int main() {
+    try {
+        return run_embedded_host_demo();
+    } catch (const std::exception& error) {
+        std::cerr << "embedded host demo failed: " << error.what() << '\n';
+        return 1;
+    }
 }

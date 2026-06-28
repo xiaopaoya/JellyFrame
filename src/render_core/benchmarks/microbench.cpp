@@ -12,9 +12,13 @@
 #include "render_core/style_repaint.h"
 #include "render_core/text_repaint.h"
 
+#include <cerrno>
 #include <chrono>
+#include <climits>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 using namespace jellyframe;
@@ -135,6 +139,19 @@ TextMeasureProvider fixed_text_measure() {
     return TextMeasureProvider{fixed_measure, nullptr};
 }
 
+int parse_positive_int_arg(const char* value, const char* name) {
+    if (value == nullptr) {
+        throw std::invalid_argument(std::string("missing ") + name);
+    }
+    char* end = nullptr;
+    errno = 0;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || *end != '\0' || errno == ERANGE || parsed < 1 || parsed > INT_MAX) {
+        throw std::invalid_argument(std::string("invalid positive integer for ") + name + ": " + value);
+    }
+    return static_cast<int>(parsed);
+}
+
 Node* find_first_element_by_id(Node& node, const std::string& id) {
     if (node.type == NodeType::Element && node.attribute("id") == id) {
         return &node;
@@ -149,13 +166,13 @@ Node* find_first_element_by_id(Node& node, const std::string& id) {
 
 } // namespace
 
-int main(int argc, char** argv) {
+int run_render_core_microbench(int argc, char** argv) {
     if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         std::cout << "usage: jellyframe_render_core_microbench [card_count=80] [iterations=200]\n";
         return 0;
     }
-    const int card_count = argc >= 2 ? std::stoi(argv[1]) : 80;
-    const int iterations = argc >= 3 ? std::stoi(argv[2]) : 200;
+    const int card_count = argc >= 2 ? parse_positive_int_arg(argv[1], "card_count") : 80;
+    const int iterations = argc >= 3 ? parse_positive_int_arg(argv[2], "iterations") : 200;
     const std::string html = make_card_html(card_count);
     const std::string css = make_card_css();
 
@@ -537,4 +554,13 @@ int main(int argc, char** argv) {
     print_style_statistics(resolver.statistics());
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return run_render_core_microbench(argc, argv);
+    } catch (const std::exception& error) {
+        std::cerr << "jellyframe_render_core_microbench failed: " << error.what() << '\n';
+        return 1;
+    }
 }

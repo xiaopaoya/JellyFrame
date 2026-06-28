@@ -330,44 +330,7 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
     int cursor_y = content_y;
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
-        const std::string text = normalized_render_text(*box.node);
-        const TextMetrics metrics =
-            measure_text(text_measure_, text, box.style.font_size, box.style.font_weight, box.style.font_family_hash);
-        const int raw_text_width = metrics.width;
-        const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
-        const int usable_text_width = std::max(0, content_width - text_indent);
-        const int text_width = std::max(min_width, std::min(usable_text_width, raw_text_width + 1));
-        const int line_height = box.style.line_height > 0 ? box.style.line_height : metrics.line_height;
-        const bool can_wrap = !box.style.white_space_nowrap && has_text_wrap_opportunity(text);
-        if (usable_text_width > 0 && raw_text_width > usable_text_width &&
-            (box.style.white_space_nowrap || box.style.text_overflow_ellipsis || !can_wrap)) {
-            report_diagnostic(options_.diagnostics,
-                              DiagnosticStage::Layout,
-                              DiagnosticSeverity::Warning,
-                              box.style.text_overflow_ellipsis
-                                  ? "layout-text-overflow-ellipsis"
-                                  : "layout-text-overflow",
-                              "Text measured wider than its layout box and will be clipped or visually degraded",
-                              text);
-        }
-        const int line_count = can_wrap && usable_text_width > 0
-            ? std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width)
-            : 1;
-        const int fixed_text_height = specified_content_height(box.style, height);
-        int text_height = std::max(specified_content_min_height(box.style, height),
-            fixed_text_height >= 0 ? fixed_text_height : line_height * line_count);
-        const int max_text_height = resolved_max_content_height(box.style, height);
-        if (max_text_height >= 0) {
-            text_height = std::min(text_height, max_text_height);
-        }
-        int text_x = border_box_x + text_indent;
-        if (box.style.text_align == TextAlign::Center) {
-            text_x += std::max(0, (usable_text_width - text_width) / 2);
-        } else if (box.style.text_align == TextAlign::End) {
-            text_x += std::max(0, usable_text_width - text_width);
-        }
-        box.rect = Rect{text_x, border_box_y, text_width, text_height};
-        return text_height;
+        return layout_text_box(box, border_box_x, border_box_y, content_width, min_width, height);
     }
 
     int max_child_width = 0;
@@ -444,6 +407,50 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
     layout_positioned_children(box, content_x, content_y, content_width, content_height, width);
     apply_relative_position_offset(box);
     return total_height;
+}
+
+int LayoutEngine::layout_text_box(LayoutBox& box,
+                                  int border_box_x,
+                                  int border_box_y,
+                                  int content_width,
+                                  int min_width,
+                                  int height) const {
+    const std::string text = normalized_render_text(*box.node);
+    const TextMetrics metrics =
+        measure_text(text_measure_, text, box.style.font_size, box.style.font_weight, box.style.font_family_hash);
+    const int raw_text_width = metrics.width;
+    const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
+    const int usable_text_width = std::max(0, content_width - text_indent);
+    const int text_width = std::max(min_width, std::min(usable_text_width, raw_text_width + 1));
+    const int line_height = box.style.line_height > 0 ? box.style.line_height : metrics.line_height;
+    const bool can_wrap = !box.style.white_space_nowrap && has_text_wrap_opportunity(text);
+    if (usable_text_width > 0 && raw_text_width > usable_text_width &&
+        (box.style.white_space_nowrap || box.style.text_overflow_ellipsis || !can_wrap)) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::Layout,
+                          DiagnosticSeverity::Warning,
+                          box.style.text_overflow_ellipsis ? "layout-text-overflow-ellipsis" : "layout-text-overflow",
+                          "Text measured wider than its layout box and will be clipped or visually degraded",
+                          text);
+    }
+    const int line_count = can_wrap && usable_text_width > 0
+        ? std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width)
+        : 1;
+    const int fixed_text_height = specified_content_height(box.style, height);
+    int text_height = std::max(specified_content_min_height(box.style, height),
+        fixed_text_height >= 0 ? fixed_text_height : line_height * line_count);
+    const int max_text_height = resolved_max_content_height(box.style, height);
+    if (max_text_height >= 0) {
+        text_height = std::min(text_height, max_text_height);
+    }
+    int text_x = border_box_x + text_indent;
+    if (box.style.text_align == TextAlign::Center) {
+        text_x += std::max(0, (usable_text_width - text_width) / 2);
+    } else if (box.style.text_align == TextAlign::End) {
+        text_x += std::max(0, usable_text_width - text_width);
+    }
+    box.rect = Rect{text_x, border_box_y, text_width, text_height};
+    return text_height;
 }
 
 int LayoutEngine::layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const {

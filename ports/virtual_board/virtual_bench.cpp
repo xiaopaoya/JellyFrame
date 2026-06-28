@@ -9,8 +9,10 @@
 #include "render_core/software_renderer.h"
 
 #include <array>
-#include <chrono>
 #include <algorithm>
+#include <cerrno>
+#include <chrono>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -18,6 +20,7 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 using namespace jellyframe;
@@ -96,36 +99,54 @@ HostBudgets make_budgets(const Options& options) {
     return budgets;
 }
 
-int parse_int_arg(char** argv, int index, int fallback) {
-    return argv[index] != nullptr ? std::atoi(argv[index]) : fallback;
+int parse_int_arg(const char* value, const char* name) {
+    if (value == nullptr) {
+        throw std::invalid_argument(std::string("missing ") + name);
+    }
+    char* end = nullptr;
+    errno = 0;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || *end != '\0' || errno == ERANGE || parsed < INT_MIN || parsed > INT_MAX) {
+        throw std::invalid_argument(std::string("invalid integer for ") + name + ": " + value);
+    }
+    return static_cast<int>(parsed);
 }
 
-double parse_double_arg(char** argv, int index, double fallback) {
-    return argv[index] != nullptr ? std::atof(argv[index]) : fallback;
+double parse_double_arg(const char* value, const char* name) {
+    if (value == nullptr) {
+        throw std::invalid_argument(std::string("missing ") + name);
+    }
+    char* end = nullptr;
+    errno = 0;
+    const double parsed = std::strtod(value, &end);
+    if (end == value || *end != '\0' || errno == ERANGE || !std::isfinite(parsed)) {
+        throw std::invalid_argument(std::string("invalid number for ") + name + ": " + value);
+    }
+    return parsed;
 }
 
 Options parse_options(int argc, char** argv) {
     Options options;
     if (argc > 1) {
-        options.width = parse_int_arg(argv, 1, options.width);
+        options.width = parse_int_arg(argv[1], "width");
     }
     if (argc > 2) {
-        options.height = parse_int_arg(argv, 2, options.height);
+        options.height = parse_int_arg(argv[2], "height");
     }
     if (argc > 3) {
-        options.cards = parse_int_arg(argv, 3, options.cards);
+        options.cards = parse_int_arg(argv[3], "cards");
     }
     if (argc > 4) {
-        options.iterations = parse_int_arg(argv, 4, options.iterations);
+        options.iterations = parse_int_arg(argv[4], "iterations");
     }
     if (argc > 5) {
-        options.bus_mhz = parse_double_arg(argv, 5, options.bus_mhz);
+        options.bus_mhz = parse_double_arg(argv[5], "bus_mhz");
     }
     if (argc > 6) {
-        options.bus_efficiency = parse_double_arg(argv, 6, options.bus_efficiency);
+        options.bus_efficiency = parse_double_arg(argv[6], "bus_efficiency");
     }
     if (argc > 7) {
-        options.flush_overhead_us = parse_double_arg(argv, 7, options.flush_overhead_us);
+        options.flush_overhead_us = parse_double_arg(argv[7], "flush_overhead_us");
     }
     options.width = std::max(64, options.width);
     options.height = std::max(64, options.height);
@@ -209,7 +230,7 @@ void print_style_statistics(const StyleResolverStatistics& statistics) {
 
 } // namespace
 
-int main(int argc, char** argv) {
+int run_virtual_bench(int argc, char** argv) {
     const Options options = parse_options(argc, argv);
     const HostBudgets budgets = make_budgets(options);
     const HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
@@ -479,4 +500,13 @@ int main(int argc, char** argv) {
     print_style_statistics(resolver.statistics());
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return run_virtual_bench(argc, argv);
+    } catch (const std::exception& error) {
+        std::cerr << "jellyframe_virtual_bench failed: " << error.what() << '\n';
+        return 1;
+    }
 }

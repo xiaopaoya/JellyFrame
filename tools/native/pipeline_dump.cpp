@@ -31,8 +31,12 @@ const char* command_name(DisplayCommandType type) {
         return "stroke";
     case DisplayCommandType::LinearGradient:
         return "linear_gradient";
+    case DisplayCommandType::ConicGradient:
+        return "conic_gradient";
     case DisplayCommandType::Text:
         return "text";
+    case DisplayCommandType::Image:
+        return "image";
     }
     return "unknown";
 }

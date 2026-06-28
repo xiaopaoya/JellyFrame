@@ -54,6 +54,12 @@ private:
     LayoutEngineOptions options_;
 
     int layout_box(LayoutBox& box, int x, int y, int width, int height) const;
+    int layout_text_box(LayoutBox& box,
+                        int border_box_x,
+                        int border_box_y,
+                        int content_width,
+                        int min_width,
+                        int height) const;
     int layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
     int layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
     int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const;

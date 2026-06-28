@@ -13,7 +13,7 @@
 
 namespace jellyframe {
 
-enum class Display {
+enum class Display : std::uint8_t {
     Block,
     Inline,
     InlineBlock,
@@ -22,51 +22,51 @@ enum class Display {
     None,
 };
 
-enum class TextAlign {
+enum class TextAlign : std::uint8_t {
     Start,
     Center,
     End,
 };
 
-enum class JustifyContent {
+enum class JustifyContent : std::uint8_t {
     Start,
     Center,
     SpaceAround,
     SpaceBetween,
 };
 
-enum class AlignItems {
+enum class AlignItems : std::uint8_t {
     Stretch,
     Start,
     Center,
     End,
 };
 
-enum class ListStyleType {
+enum class ListStyleType : std::uint8_t {
     None,
     Disc,
     Decimal,
 };
 
-enum class GeneratedContentKind {
+enum class GeneratedContentKind : std::uint8_t {
     None,
     Text,
     Counter,
 };
 
-enum class CssPseudoElement {
+enum class CssPseudoElement : std::uint8_t {
     None,
     Before,
     After,
 };
 
-enum class BackgroundPaintKind {
+enum class BackgroundPaintKind : std::uint8_t {
     Solid,
     LinearGradient,
     ConicGradient,
 };
 
-enum class AnimatableProperty {
+enum class AnimatableProperty : std::uint8_t {
     All,
     Opacity,
     Transform,
@@ -74,7 +74,7 @@ enum class AnimatableProperty {
     Color,
 };
 
-enum class AnimationTimingFunction {
+enum class AnimationTimingFunction : std::uint8_t {
     Linear,
     Ease,
     EaseIn,
@@ -89,7 +89,7 @@ struct StyleTransition {
     AnimationTimingFunction timing = AnimationTimingFunction::Ease;
 };
 
-enum class AnimationDirection {
+enum class AnimationDirection : std::uint8_t {
     Normal,
     Alternate,
 };
@@ -240,7 +240,7 @@ struct CssSpecificity {
     int elements = 0;
 };
 
-enum class CssSelectorCombinator {
+enum class CssSelectorCombinator : std::uint8_t {
     Descendant,
     Child,
     AdjacentSibling,

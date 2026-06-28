@@ -308,7 +308,7 @@ void worker_pump_remains_stable_across_many_ticks() {
 
         const AppCompletionPumpResult pumped = host.pump_frame_completions(scratch);
         assert(result.requests_processed != 0 || pumped.accepted != 0);
-        assert(pumped.dropped_stale == 0);
+        assert(pumped.stale == 0);
         for (const HostServiceCompletion& completion : scratch.accepted_completions) {
             assert(completion.app_instance_id == app.id);
             assert(completion.kind == HostServiceJobKind::NetworkFetch);
@@ -444,7 +444,7 @@ void worker_group_pump_handles_real_network_and_storage_mocks_across_ticks() {
         assert(!result.completion_queue_full);
 
         const AppCompletionPumpResult pumped = host.pump_frame_completions(scratch);
-        assert(pumped.dropped_stale == 0);
+        assert(pumped.stale == 0);
         for (const HostServiceCompletion& completion : scratch.accepted_completions) {
             assert(completion.status == HostServiceStatus::Completed);
             if (completion.kind == HostServiceJobKind::NetworkFetch) {
@@ -547,7 +547,7 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
         assert(!result.completion_queue_full);
 
         const AppCompletionPumpResult pumped = host.pump_frame_completions(scratch);
-        assert(pumped.dropped_stale == 0);
+        assert(pumped.stale == 0);
         for (const HostServiceCompletion& completion : scratch.accepted_completions) {
             assert(completion.status == HostServiceStatus::Completed);
             if (completion.kind == HostServiceJobKind::NetworkFetch) {

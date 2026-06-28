@@ -27,7 +27,7 @@ struct EdgeSizes {
     int left = 0;
 };
 
-enum class DisplayCommandType {
+enum class DisplayCommandType : std::uint8_t {
     FillRect,
     StrokeRect,
     LinearGradient,
@@ -36,18 +36,18 @@ enum class DisplayCommandType {
     Image,
 };
 
-enum class GradientAxis {
+enum class GradientAxis : std::uint8_t {
     Vertical,
     Horizontal,
 };
 
-enum class TextCommandAlign {
+enum class TextCommandAlign : std::uint8_t {
     Start,
     Center,
     End,
 };
 
-enum class ObjectFit {
+enum class ObjectFit : std::uint8_t {
     Fill,
     Contain,
     Cover,
@@ -55,7 +55,7 @@ enum class ObjectFit {
     ScaleDown,
 };
 
-enum class ImageRendering {
+enum class ImageRendering : std::uint8_t {
     Auto,
     Pixelated,
     CrispEdges,

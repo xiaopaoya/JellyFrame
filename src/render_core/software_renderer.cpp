@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -671,59 +672,6 @@ Color lerp_color_fixed(Color left, Color right, int t256) {
     };
 }
 
-Color sample_bilinear(const FrameBuffer& source, int local_x, int local_y, int dst_width, int dst_height) {
-    if (source.width <= 1 || source.height <= 1 || dst_width <= 1 || dst_height <= 1) {
-        const int src_x = std::min(source.width - 1, (local_x * source.width) / std::max(1, dst_width));
-        const int src_y = std::min(source.height - 1, (local_y * source.height) / std::max(1, dst_height));
-        return source.pixel(src_x, src_y);
-    }
-
-    const int fx = (local_x * (source.width - 1) * 256) / std::max(1, dst_width - 1);
-    const int fy = (local_y * (source.height - 1) * 256) / std::max(1, dst_height - 1);
-    const int base_x = std::min(source.width - 1, fx >> 8);
-    const int base_y = std::min(source.height - 1, fy >> 8);
-    const int next_x = std::min(source.width - 1, base_x + 1);
-    const int next_y = std::min(source.height - 1, base_y + 1);
-    const int tx = fx & 0xff;
-    const int ty = fy & 0xff;
-
-    const Color top = lerp_color_fixed(source.pixel(base_x, base_y), source.pixel(next_x, base_y), tx);
-    const Color bottom = lerp_color_fixed(source.pixel(base_x, next_y), source.pixel(next_x, next_y), tx);
-    return lerp_color_fixed(top, bottom, ty);
-}
-
-void composite_scaled_buffer(FrameBuffer& target,
-                             const FrameBuffer& source,
-                             Rect destination,
-                             float opacity,
-                             bool smooth) {
-    const Rect target_bounds = target_rect(target);
-    Rect copy_rect = intersect_rect(destination, target_bounds);
-    if (empty_rect(copy_rect) || source.width <= 0 || source.height <= 0) {
-        return;
-    }
-    for (int y = 0; y < copy_rect.height; ++y) {
-        for (int x = 0; x < copy_rect.width; ++x) {
-            const int local_x = copy_rect.x + x - destination.x;
-            const int local_y = copy_rect.y + y - destination.y;
-            Color source_pixel;
-            if (smooth) {
-                source_pixel = sample_bilinear(source, local_x, local_y, destination.width, destination.height);
-            } else {
-                const int src_y = std::min(source.height - 1,
-                                           (local_y * source.height) / std::max(1, destination.height));
-                const int src_x = std::min(source.width - 1,
-                                           (local_x * source.width) / std::max(1, destination.width));
-                source_pixel = source.pixel(src_x, src_y);
-            }
-            blend_pixel(target,
-                        copy_rect.x + x,
-                        copy_rect.y + y,
-                        with_opacity(source_pixel, opacity));
-        }
-    }
-}
-
 Rect transformed_destination_rect(Rect source_rect,
                                   const Transform2D& transform,
                                   int origin_x_percent,
@@ -910,11 +858,17 @@ bool FrameBuffer::contains(int x, int y) const {
 }
 
 Color& FrameBuffer::pixel(int x, int y) {
-    return pixels[static_cast<std::size_t>(y * width + x)];
+    assert(contains(x, y));
+    const std::size_t index =
+        static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
+    return pixels[index];
 }
 
 const Color& FrameBuffer::pixel(int x, int y) const {
-    return pixels[static_cast<std::size_t>(y * width + x)];
+    assert(contains(x, y));
+    const std::size_t index =
+        static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
+    return pixels[index];
 }
 
 SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter, DiagnosticSink* diagnostics)

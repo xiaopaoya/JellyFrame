@@ -203,8 +203,9 @@ EventTarget::ListenerId EventTarget::add_event_listener_bounded(std::string type
     listener.id = listeners_->next_listener_id++;
     listener.callback = std::move(callback);
     listener.options = options;
+    const ListenerId id = listener.id;
     listeners_->listeners_for_type(type).push_back(std::move(listener));
-    return listener.id;
+    return id;
 }
 
 std::size_t EventTarget::event_listener_count() const {
