@@ -397,7 +397,7 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
-                "scroll_containers scrolls=3 full_repaints=0 dirty_repaints=3")
+                "scroll_containers scrolls=3 strip_blits=0 full_repaints=0 dirty_repaints=3")
 
         add_test(
             NAME jellyframe_win32_scroll_container_touch_frame_script
@@ -407,7 +407,17 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_touch_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
-                "scroll_containers scrolls=9 full_repaints=0 dirty_repaints=9 inertia=6")
+                "scroll_containers scrolls=9 strip_blits=0 full_repaints=0 dirty_repaints=9 inertia=6")
+
+        add_test(
+            NAME jellyframe_win32_scroll_container_strip_blit_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_blit_probe
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_blit_probe/capture_scroll_blit.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_scroll_container_strip_blit_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "scroll_containers scrolls=3 strip_blits=3 full_repaints=0 dirty_repaints=3")
 
         add_test(
             NAME jellyframe_win32_package_image_fixture

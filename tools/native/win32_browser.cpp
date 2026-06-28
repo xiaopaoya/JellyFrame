@@ -565,6 +565,7 @@ struct ScrollDebugCounters {
 
 struct ScrollContainerDebugCounters {
     std::size_t scrolls = 0;
+    std::size_t strip_blits = 0;
     std::size_t full_repaints = 0;
     std::size_t dirty_repaints = 0;
     std::size_t inertia_steps = 0;
@@ -3243,6 +3244,7 @@ public:
                   << " fast=" << scroll_counters_.fast_blits
                   << " copied_pixels=" << scroll_counters_.copied_pixels << '\n';
         std::cout << "  scroll_containers scrolls=" << scroll_container_counters_.scrolls
+                  << " strip_blits=" << scroll_container_counters_.strip_blits
                   << " full_repaints=" << scroll_container_counters_.full_repaints
                   << " dirty_repaints=" << scroll_container_counters_.dirty_repaints
                   << " inertia=" << scroll_container_counters_.inertia_steps << '\n';
@@ -4320,13 +4322,102 @@ private:
         return {};
     }
 
+    bool node_is_ancestor_or_self(const Node* candidate, const Node* node) const {
+        for (const Node* current = node; current != nullptr; current = current->parent) {
+            if (current == candidate) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool rects_intersect(Rect left, Rect right) const {
+        return !empty_rect(intersect_rect(left, right));
+    }
+
+    bool layout_outside_subtree_intersects(const LayoutBox& box,
+                                           const Node* subtree_root,
+                                           Rect rect) const {
+        if (subtree_root == nullptr) {
+            return true;
+        }
+        if (box.node == subtree_root) {
+            return false;
+        }
+        const bool ancestor = node_is_ancestor_or_self(box.node, subtree_root);
+        if (!ancestor && box.node != nullptr && box.node->type == NodeType::Element &&
+            box.rect.width > 0 && box.rect.height > 0 && rects_intersect(box.rect, rect)) {
+            return true;
+        }
+        for (const auto& child : box.children) {
+            if (child && layout_outside_subtree_intersects(*child, subtree_root, rect)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool scroll_layer_has_only_overlay_children(const LayerNode& layer) const {
+        for (const auto& child : layer.children) {
+            if (child->box != nullptr || !child->children.empty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool can_strip_blit_scroll_layer(const ScrollLayerMatch& match) const {
+        const LayerNode* layer = match.layer;
+        if (layer == nullptr || layer->box == nullptr || layout_tree_ == nullptr ||
+            frame_buffer_.width != viewport_width_ ||
+            frame_buffer_.height < viewport_height_ ||
+            empty_rect(match.visible_rect)) {
+            return false;
+        }
+        const Style& style = layer->box->style;
+        if (style.border_radius > 0 || style.border_radius_percent >= 0 ||
+            style.opacity < 0.999F ||
+            style.background_paint != BackgroundPaintKind::Solid ||
+            style.background_color.a != 255) {
+            return false;
+        }
+        if (!scroll_layer_has_only_overlay_children(*layer)) {
+            return false;
+        }
+        const Rect content_bounds{0, 0, frame_buffer_.width, frame_buffer_.height};
+        const Rect clipped = intersect_rect(match.visible_rect, content_bounds);
+        if (empty_rect(clipped) ||
+            clipped.width != match.visible_rect.width ||
+            clipped.height != match.visible_rect.height) {
+            return false;
+        }
+        return !layout_outside_subtree_intersects(*layout_tree_, layer->box->node, match.visible_rect);
+    }
+
     bool render_scroll_state_only(const Node* hovered_node,
                                   const Node* active_node,
                                   const Node* focused_node,
-                                  Rect dirty_content_rect) {
+                                  Rect dirty_content_rect,
+                                  const ScrollLayerMatch* scroll_match = nullptr,
+                                  int previous_scroll_y = 0,
+                                  int next_scroll_y = 0) {
         if (layout_tree_ == nullptr) {
             return false;
         }
+        const bool can_strip_blit = scroll_match != nullptr &&
+            can_strip_blit_scroll_layer(*scroll_match);
+        const Rect strip_visible_rect = can_strip_blit ? scroll_match->visible_rect : Rect{};
+        const int strip_max_scroll_y =
+            can_strip_blit && scroll_match->layer != nullptr ? scroll_match->layer->max_scroll_y : 0;
+        const ScrollBlitPlan strip_plan = can_strip_blit
+            ? plan_vertical_scroll_blit(strip_visible_rect.width,
+                                        strip_visible_rect.height,
+                                        strip_visible_rect.height + strip_max_scroll_y,
+                                        previous_scroll_y,
+                                        next_scroll_y)
+            : ScrollBlitPlan{};
+        const bool use_strip_blit = can_strip_blit && strip_plan.mode == ScrollBlitMode::FastBlit;
+
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
         layer_options.paint_scroll_indicators = true;
@@ -4345,6 +4436,47 @@ private:
         const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
         const Rect content_bounds{0, 0, viewport_width_, content_height};
         dirty_content_rect = intersect_rect(dirty_content_rect, content_bounds);
+        if (use_strip_blit) {
+            const Rect move_source{strip_visible_rect.x + strip_plan.move_source.x,
+                                   strip_visible_rect.y + strip_plan.move_source.y,
+                                   strip_plan.move_source.width,
+                                   strip_plan.move_source.height};
+            const Rect move_destination{strip_visible_rect.x + strip_plan.move_destination.x,
+                                        strip_visible_rect.y + strip_plan.move_destination.y,
+                                        strip_plan.move_destination.width,
+                                        strip_plan.move_destination.height};
+            move_framebuffer_rect(move_source, move_destination);
+
+            Rect dirty_rects[2];
+            std::size_t dirty_count = 0;
+            dirty_rects[dirty_count++] = Rect{strip_visible_rect.x + strip_plan.exposed_strip.x,
+                                              strip_visible_rect.y + strip_plan.exposed_strip.y,
+                                              strip_plan.exposed_strip.width,
+                                              strip_plan.exposed_strip.height};
+            const int indicator_width = std::min(8, std::max(0, strip_visible_rect.width));
+            if (indicator_width > 0) {
+                dirty_rects[dirty_count++] = Rect{strip_visible_rect.x + strip_visible_rect.width - indicator_width,
+                                                  strip_visible_rect.y,
+                                                  indicator_width,
+                                                  strip_visible_rect.height};
+            }
+            compositor.render_into(*layer_tree_,
+                                   frame_buffer_,
+                                   page_background_,
+                                   dirty_rects,
+                                   dirty_count);
+            ++scroll_container_counters_.strip_blits;
+            ++scroll_container_counters_.dirty_repaints;
+            record_present_estimate_for_content_rects(dirty_rects, dirty_count);
+            input_ = std::make_unique<InputController>(
+                *layer_tree_,
+                input_invalidation_options_from_style(*style_resolver_));
+            input_->set_interaction_state(hovered_node, active_node, focused_node);
+            update_blit_pixels_for_content_rect(strip_visible_rect);
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return true;
+        }
+
         DirtyRegionResult scroll_dirty_region;
         scroll_dirty_region.mode = DirtyRegionMode::DirtyRects;
         scroll_dirty_region.rects.push_back(dirty_content_rect);
@@ -4406,7 +4538,10 @@ private:
             const bool rendered = render_scroll_state_only(input_ ? input_->hovered_node() : nullptr,
                                                            input_ ? input_->active_node() : nullptr,
                                                            input_ ? input_->focused_node() : nullptr,
-                                                           match.visible_rect);
+                                                           match.visible_rect,
+                                                           &match,
+                                                           previous,
+                                                           next);
             if (rendered) {
                 ++scroll_container_counters_.scrolls;
             }
@@ -5104,6 +5239,45 @@ private:
                 } else {
                     row[x] = color_to_bgrx(frame_buffer_.pixel(x, source_y));
                 }
+            }
+        }
+    }
+
+    void move_framebuffer_rect(Rect source, Rect destination) {
+        if (empty_rect(source) || empty_rect(destination) ||
+            source.width != destination.width ||
+            source.height != destination.height ||
+            frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+            return;
+        }
+        const Rect bounds{0, 0, frame_buffer_.width, frame_buffer_.height};
+        if (intersect_rect(source, bounds).width != source.width ||
+            intersect_rect(source, bounds).height != source.height ||
+            intersect_rect(destination, bounds).width != destination.width ||
+            intersect_rect(destination, bounds).height != destination.height) {
+            return;
+        }
+        if (destination.y <= source.y) {
+            for (int row = 0; row < source.height; ++row) {
+                const int src_y = source.y + row;
+                const int dst_y = destination.y + row;
+                std::copy(frame_buffer_.pixels.begin() +
+                              static_cast<std::ptrdiff_t>(src_y * frame_buffer_.width + source.x),
+                          frame_buffer_.pixels.begin() +
+                              static_cast<std::ptrdiff_t>(src_y * frame_buffer_.width + source.x + source.width),
+                          frame_buffer_.pixels.begin() +
+                              static_cast<std::ptrdiff_t>(dst_y * frame_buffer_.width + destination.x));
+            }
+        } else {
+            for (int row = source.height - 1; row >= 0; --row) {
+                const int src_y = source.y + row;
+                const int dst_y = destination.y + row;
+                std::copy(frame_buffer_.pixels.begin() +
+                              static_cast<std::ptrdiff_t>(src_y * frame_buffer_.width + source.x),
+                          frame_buffer_.pixels.begin() +
+                              static_cast<std::ptrdiff_t>(src_y * frame_buffer_.width + source.x + source.width),
+                          frame_buffer_.pixels.begin() +
+                              static_cast<std::ptrdiff_t>(dst_y * frame_buffer_.width + destination.x));
             }
         }
     }

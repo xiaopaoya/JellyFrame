@@ -42,7 +42,9 @@ rect/text commands or later map selected layers to hardware surfaces.
   tail while presentation is allowed, and repaints the container viewport as a
   dirty rect when the area stays within budget. Hosts may opt into lightweight
   overlay scroll indicators through `LayerTreeBuilderOptions`. Horizontal
-  scrolling and strip-level scroll blit are outside this first slice.
+  scrolling is outside this first slice. The Win32 host has a conservative
+  strip-blit path for rectangular, opaque, non-overlapped containers; unsafe
+  cases fall back to the container dirty-rect repaint path.
 - `opacity` below 1 creates a composited layer and is applied during flattening.
 - `transform: translate()/scale()/rotate()` creates a composited layer and is
   applied by the software compositor. Translation is rounded to device pixels;

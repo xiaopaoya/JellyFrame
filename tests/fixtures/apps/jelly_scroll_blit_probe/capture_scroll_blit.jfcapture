@@ -1,0 +1,14 @@
+# JellyFrame deterministic safe scroll-strip blit probe.
+
+output-dir out/scroll_blit_probe_frames
+montage out/scroll_blit_probe_montage.bmp
+frames 8
+step-ms 33
+start-ms 1000
+viewport 240 240
+columns 4
+gap 6
+
+event 2 wheel 60 88 -32
+event 3 wheel 60 88 -32
+event 4 wheel 60 88 -32

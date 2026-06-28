@@ -1,0 +1,39 @@
+body {
+  margin: 0;
+  background: #08111f;
+  color: #f8fafc;
+}
+
+.screen {
+  width: 240px;
+  height: 240px;
+  padding: 12px;
+  box-sizing: border-box;
+  background: #0f172a;
+}
+
+h1 {
+  margin: 0 0 10px 0;
+  height: 34px;
+  font-size: 24px;
+  line-height: 30px;
+  color: #ffffff;
+}
+
+.list {
+  width: 184px;
+  height: 120px;
+  overflow: scroll;
+  background: #10233a;
+  padding: 0;
+}
+
+.list button {
+  display: block;
+  width: 184px;
+  height: 32px;
+  border: 0;
+  background: #164e63;
+  color: #ecfeff;
+  text-align: left;
+}
