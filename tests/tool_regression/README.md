@@ -15,7 +15,8 @@ intentional missing-glyph warning stable and captures the sample through Win32
 with `--use-app-fonts`.
 
 `win32_browser_cli_tests.py` checks CLI/help/error contracts for the interactive
-Win32 shell, including the authorized file-broker smoke command.
+Win32 shell, including the authorized file-broker smoke command and the bad-app
+system survival smoke.
 
 Generated reports and screenshots must stay under `build*/test_outputs` or
 `out/`; do not commit those outputs.

@@ -11,6 +11,6 @@ render-core 或 app-runtime C++ 单元测试的行为。
 runtime family，保持故意缺字 warning 稳定，并用 Win32 `--use-app-fonts` 捕获样例。
 
 `win32_browser_cli_tests.py` 检查交互式 Win32 壳的 CLI/help/error 契约，包括授权 file-broker
-smoke 命令。
+smoke 命令和坏 app 系统存活 smoke。
 
 生成的报告和截图应保留在 `build*/test_outputs` 或 `out/`，不要提交这些输出。

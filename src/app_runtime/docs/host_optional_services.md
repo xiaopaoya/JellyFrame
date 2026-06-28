@@ -934,6 +934,10 @@ Budget recovery:
   release handles/fonts, return to a trusted launcher and report the stable
   diagnostic. The requesting app may fail; the runtime, system shell and other
   apps must continue without requiring a firmware reflash.
+- The Win32 shell provides `--system-survival-smoke N` as a deterministic
+  acceptance fixture for this boundary. It repeatedly launches a bad app,
+  forces request-budget recovery, relaunches the launcher and verifies that
+  stale completions are filtered while launcher system events still arrive.
 
 ## Bundle Installation Service
 

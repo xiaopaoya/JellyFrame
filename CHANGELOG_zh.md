@@ -49,6 +49,8 @@ JellyFrame Engine 的重要变更记录在这里。
   host-service job kind。
 - Win32 壳新增 `--authorized-file-smoke DIR` 验收，覆盖未授权写入、路径穿越拒绝、
   staged commit/rollback 和 manage 操作 gate。
+- Win32 壳新增 `--system-survival-smoke N` 验收，覆盖坏 app 多轮 budget recovery、
+  stale completion 过滤和 launcher 事件投递。
 
 ### 变更
 

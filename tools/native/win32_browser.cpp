@@ -461,6 +461,7 @@ struct BrowserOptions {
     std::string remove_app_id;
     std::string delete_app_data_id;
     std::string authorized_file_smoke_dir;
+    int system_survival_smoke_cycles = 0;
     bool remove_keep_data = false;
     std::string audio_smoke_source;
     int audio_smoke_ms = 1000;
@@ -922,6 +923,139 @@ int run_authorized_file_smoke(const std::string& directory) {
         delete_denied == AuthorizedFileStatus::CapabilityDenied &&
         delete_allowed == AuthorizedFileStatus::Accepted;
     std::cout << "authorized_file_smoke result=" << (ok ? "ok" : "failed") << '\n';
+    return ok ? 0 : 1;
+}
+
+bool fail_system_survival_smoke(const std::string& message) {
+    std::cout << "system_survival_smoke failure=" << message << '\n';
+    return false;
+}
+
+int run_system_survival_smoke(int cycles) {
+    if (cycles <= 0) {
+        std::cerr << "--system-survival-smoke requires a positive cycle count\n";
+        return 1;
+    }
+
+    const AppRuntimeHostOptions host_options{3, 2, 2, 256, 1};
+    AppRuntimeHost host(host_options);
+    AppSystemEventQueue system_events(4, 2);
+    AppFrameScratch scratch;
+    scratch.reserve_from_options(host_options);
+    std::vector<AppSystemEvent> accepted_events;
+
+    std::size_t recovered = 0;
+    std::size_t stale_completions = 0;
+    std::size_t shell_events = 0;
+    std::size_t released_handles = 0;
+    bool ok = true;
+
+    host.launch("org.jellyframe.system.launcher", AppRole::Launcher);
+    for (int cycle = 0; cycle < cycles && ok; ++cycle) {
+        const AppInstance bad = host.launch("org.example.bad." + std::to_string(cycle), AppRole::App);
+        for (int i = 0; i < 3; ++i) {
+            ok = host.submit_current(HostServiceJobKind::NetworkFetch).accepted;
+            if (!ok) {
+                ok = fail_system_survival_smoke("submit-current-failed");
+                break;
+            }
+        }
+        if (!ok) {
+            break;
+        }
+
+        ok = system_events.push_current(host, AppSystemEventKind::TimeChanged, AppSystemStateSnapshot{}) &&
+             system_events.push_current(host, AppSystemEventKind::BatteryChanged, AppSystemStateSnapshot{});
+        if (!ok) {
+            ok = fail_system_survival_smoke("system-event-setup-failed");
+            break;
+        }
+
+        const std::uint32_t bad_handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
+        if (bad_handle == 0) {
+            ok = fail_system_survival_smoke("handle-allocation-failed");
+            break;
+        }
+        ok = host.push_completion(HostServiceCompletion{static_cast<std::uint32_t>(100 + cycle),
+                                                        HostServiceJobKind::NetworkFetch,
+                                                        HostServiceStatus::Completed,
+                                                        bad.id,
+                                                        bad_handle,
+                                                        0,
+                                                        64});
+        if (!ok) {
+            ok = fail_system_survival_smoke("completion-setup-failed");
+            break;
+        }
+
+        AppBudgetSnapshotInput snapshot_input;
+        snapshot_input.system_events = &system_events;
+        const AppBudgetRecoveryReport report = app_budget_recovery_for_snapshot(
+            collect_app_budget_snapshot(host, snapshot_input));
+        if (report.action != AppBudgetRecoveryAction::TerminateApp ||
+            report.teardown_reason != AppTeardownReason::BudgetExceeded) {
+            ok = fail_system_survival_smoke("budget-report-did-not-terminate");
+            break;
+        }
+
+        const std::size_t discarded_system_events = system_events.discard_app_instance(bad.id);
+        const AppTeardownResult teardown = host.terminate_current(report.teardown_reason);
+        if (teardown.cancelled_requests != 3 || teardown.discarded_completions != 1 ||
+            teardown.released_handles != 1 || discarded_system_events != 2) {
+            ok = fail_system_survival_smoke("teardown-did-not-clear-bad-app-work");
+            break;
+        }
+        released_handles += teardown.released_handles;
+
+        const AppInstance shell = host.launch("org.jellyframe.system.launcher", AppRole::Launcher);
+        if (shell.role != AppRole::Launcher || shell.id == bad.id || !host.requests().empty() ||
+            !host.completions().empty() || host.handles().active_count() != 0 || !system_events.empty()) {
+            ok = fail_system_survival_smoke("launcher-relaunch-not-clean");
+            break;
+        }
+
+        ok = host.push_completion(HostServiceCompletion{static_cast<std::uint32_t>(200 + cycle),
+                                                        HostServiceJobKind::NetworkFetch,
+                                                        HostServiceStatus::Completed,
+                                                        bad.id,
+                                                        bad_handle,
+                                                        0,
+                                                        64});
+        if (!ok) {
+            ok = fail_system_survival_smoke("stale-completion-injection-failed");
+            break;
+        }
+        const AppCompletionPumpResult completion_pump = host.pump_frame_completions(scratch);
+        if (completion_pump.consumed != 1 || completion_pump.accepted != 0 || completion_pump.stale != 1 ||
+            completion_pump.released_stale_handles != 0) {
+            ok = fail_system_survival_smoke("stale-completion-not-filtered");
+            break;
+        }
+        stale_completions += completion_pump.stale;
+
+        ok = system_events.push_current(host, AppSystemEventKind::ScreenStateChanged, AppSystemStateSnapshot{});
+        if (!ok) {
+            ok = fail_system_survival_smoke("shell-event-injection-failed");
+            break;
+        }
+        accepted_events.clear();
+        const AppSystemEventPumpResult event_pump = system_events.pump_current(host, accepted_events);
+        if (event_pump.consumed != 1 || event_pump.accepted != 1 || event_pump.stale != 0 ||
+            accepted_events.size() != 1 || accepted_events.front().app_instance_id != shell.id) {
+            ok = fail_system_survival_smoke("launcher-event-not-accepted");
+            break;
+        }
+        shell_events += event_pump.accepted;
+
+        ++recovered;
+    }
+
+    std::cout << "system_survival_smoke cycles=" << cycles
+              << " recovered=" << recovered
+              << " stale_completions=" << stale_completions
+              << " shell_events=" << shell_events
+              << " released_handles=" << released_handles << '\n';
+    std::cout << "system_survival_smoke result=" << (ok ? "ok" : "failed") << '\n';
     return ok ? 0 : 1;
 }
 
@@ -2220,6 +2354,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --keep-data                    Keep app-private data with --remove-app.\n"
         << "  --delete-app-data ID           Delete app-private data without removing the app.\n"
         << "  --authorized-file-smoke DIR    Run Win32 authorized file-broker validation.\n"
+        << "  --system-survival-smoke N      Run bad-app recovery/launcher survival validation.\n"
         << "\n"
         << "Frame script commands:\n"
         << "  output-dir PATH | montage PATH | frames N | step-ms N | start-ms N\n"
@@ -5091,6 +5226,17 @@ int main(int argc, char** argv) {
             options.authorized_file_smoke_dir = argv[++i];
             continue;
         }
+        if (arg == "--system-survival-smoke") {
+            if (i + 1 >= argc) {
+                std::cerr << "--system-survival-smoke requires a cycle count\n";
+                return 1;
+            }
+            if (!parse_int_option("--system-survival-smoke", argv[++i], 1, 10000,
+                                  options.system_survival_smoke_cycles)) {
+                return 1;
+            }
+            continue;
+        }
         if (arg == "--keep-data") {
             options.remove_keep_data = true;
             continue;
@@ -5151,7 +5297,8 @@ int main(int argc, char** argv) {
     }
 
     if (options.registry_store_path.empty() && options.app_path.empty() && positional.empty() &&
-        options.audio_smoke_source.empty() && options.authorized_file_smoke_dir.empty()) {
+        options.audio_smoke_source.empty() && options.authorized_file_smoke_dir.empty() &&
+        options.system_survival_smoke_cycles == 0) {
         options.app_path = "samples/apps/packages/watch_weather";
     }
 
@@ -5166,6 +5313,9 @@ int main(int argc, char** argv) {
 
     if (!options.authorized_file_smoke_dir.empty()) {
         return run_authorized_file_smoke(options.authorized_file_smoke_dir);
+    }
+    if (options.system_survival_smoke_cycles > 0) {
+        return run_system_survival_smoke(options.system_survival_smoke_cycles);
     }
 
     if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() ||

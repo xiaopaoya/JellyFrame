@@ -36,6 +36,7 @@ def main() -> int:
     require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
+    require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
 
     numeric_result = run_case(exe, ["--viewport-width", "nope"])
     require(numeric_result.returncode != 0, "invalid numeric option must fail")
@@ -62,6 +63,17 @@ def main() -> int:
                 "authorized file smoke must gate manage operations")
         require("authorized_file_smoke result=ok" in file_result.stdout,
                 "authorized file smoke must report success")
+
+    survival_result = run_case(exe, ["--system-survival-smoke", "12"])
+    require(survival_result.returncode == 0, "system survival smoke must pass")
+    require("system_survival_smoke cycles=12 recovered=12" in survival_result.stdout,
+            "system survival smoke must recover every bad-app cycle")
+    require("stale_completions=12" in survival_result.stdout,
+            "system survival smoke must filter stale completions")
+    require("shell_events=12" in survival_result.stdout,
+            "system survival smoke must keep launcher events alive")
+    require("system_survival_smoke result=ok" in survival_result.stdout,
+            "system survival smoke must report success")
 
     print("win32 browser cli tests passed")
     return 0

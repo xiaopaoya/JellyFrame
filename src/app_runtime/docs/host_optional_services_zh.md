@@ -767,6 +767,9 @@ struct HostStorageResponse {
 - System shell 应把 `terminate-app` 作为 `AppTeardownReason::BudgetExceeded` 处理：取消当前 app request、
   丢弃 stale completion 和 system event、释放 handle/font、回到可信 launcher，并报告稳定诊断。请求方 app
   可以失败；runtime、system shell 和其他 app 必须继续运行，且不能要求重新烧写固件恢复。
+- Win32 壳提供 `--system-survival-smoke N` 作为这个边界的确定性验收 fixture。它会反复启动坏 app，
+  触发 request budget recovery，重新启动 launcher，并验证 stale completion 会被过滤，而 launcher
+  system event 仍能正常投递。
 
 ## Bundle 安装服务
 

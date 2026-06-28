@@ -63,6 +63,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   validation, stable diagnostics and the `AuthorizedFile` host-service job kind.
 - Added Win32 `--authorized-file-smoke DIR` validation for denied writes,
   traversal rejection, staged commit/rollback and manage-operation gates.
+- Added Win32 `--system-survival-smoke N` validation for repeated bad-app
+  budget recovery, stale completion filtering and launcher event delivery.
 
 ### Changed
 
