@@ -1322,6 +1322,41 @@ bool parse_color(const std::string& raw_value, Color& output) {
     return false;
 }
 
+struct BorderShorthandParseResult {
+    int width = 0;
+    Color color;
+    bool has_width = false;
+    bool has_color = false;
+};
+
+BorderShorthandParseResult parse_border_shorthand(const std::string& value, int em_base) {
+    BorderShorthandParseResult result;
+    const std::string lowered = lowercase(trim(value));
+    if (lowered == "none" || lowered == "0" || lowered == "0px") {
+        result.has_width = true;
+        result.width = 0;
+        return result;
+    }
+
+    std::size_t index = 0;
+    while (index < value.size()) {
+        while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) != 0) {
+            ++index;
+        }
+        const std::size_t begin = index;
+        while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) == 0) {
+            ++index;
+        }
+        const std::string token = value.substr(begin, index - begin);
+        if (!token.empty() && !result.has_width && parse_length_px(token, result.width, em_base)) {
+            result.has_width = true;
+        } else if (!token.empty() && !result.has_color && parse_color(token, result.color)) {
+            result.has_color = true;
+        }
+    }
+    return result;
+}
+
 bool parse_linear_gradient_background(const std::string& raw_value, Color& first, Color& second, GradientAxis& axis) {
     const std::string value = lowercase(trim(raw_value));
     constexpr std::string_view prefix = "linear-gradient(";
@@ -2650,39 +2685,36 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.border_color = parsed;
         return true;
     } else if (property == "border") {
-        const std::string lowered = lowercase(trim(value));
-        if (lowered == "none" || lowered == "0" || lowered == "0px") {
-            style.border_width = EdgeSizes{};
-            return true;
-        }
-        int width = 0;
-        Color color;
-        bool has_width = false;
-        bool has_color = false;
-        std::size_t index = 0;
-        while (index < value.size()) {
-            while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) != 0) {
-                ++index;
-            }
-            const std::size_t begin = index;
-            while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) == 0) {
-                ++index;
-            }
-            const std::string token = value.substr(begin, index - begin);
-            if (!token.empty() && !has_width && parse_length_px(token, width, style.font_size)) {
-                has_width = true;
-            } else if (!token.empty() && !has_color && parse_color(token, color)) {
-                has_color = true;
-            }
-        }
-        if (!has_width && !has_color) {
+        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
+        if (!parsed.has_width && !parsed.has_color) {
             return false;
         }
-        if (has_width) {
-            style.border_width = EdgeSizes{width, width, width, width};
+        if (parsed.has_width) {
+            style.border_width = EdgeSizes{parsed.width, parsed.width, parsed.width, parsed.width};
         }
-        if (has_color) {
-            style.border_color = color;
+        if (parsed.has_color) {
+            style.border_color = parsed.color;
+        }
+        return true;
+    } else if (property == "border-top" || property == "border-right" ||
+               property == "border-bottom" || property == "border-left") {
+        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
+        if (!parsed.has_width && !parsed.has_color) {
+            return false;
+        }
+        if (parsed.has_width) {
+            if (property == "border-top") {
+                style.border_width.top = parsed.width;
+            } else if (property == "border-right") {
+                style.border_width.right = parsed.width;
+            } else if (property == "border-bottom") {
+                style.border_width.bottom = parsed.width;
+            } else {
+                style.border_width.left = parsed.width;
+            }
+        }
+        if (parsed.has_color) {
+            style.border_color = parsed.color;
         }
         return true;
     } else if (property == "border-radius") {
@@ -3468,50 +3500,51 @@ bool apply_edge_shorthand(Style& style,
         return true;
     }
     if (declaration.property == "border") {
-        const std::string lowered = lowercase(trim(declaration.value));
-        int width = 0;
-        Color color;
-        bool has_width = false;
-        bool has_color = false;
-        if (lowered == "none" || lowered == "0" || lowered == "0px") {
-            has_width = true;
-        } else {
-            std::size_t index = 0;
-            while (index < declaration.value.size()) {
-                while (index < declaration.value.size() &&
-                       std::isspace(static_cast<unsigned char>(declaration.value[index])) != 0) {
-                    ++index;
-                }
-                const std::size_t begin = index;
-                while (index < declaration.value.size() &&
-                       std::isspace(static_cast<unsigned char>(declaration.value[index])) == 0) {
-                    ++index;
-                }
-                const std::string token = declaration.value.substr(begin, index - begin);
-                if (!token.empty() && !has_width && parse_length_px(token, width, style.font_size)) {
-                    has_width = true;
-                } else if (!token.empty() && !has_color && parse_color(token, color)) {
-                    has_color = true;
-                }
-            }
-        }
-        if (!has_width && !has_color) {
+        const BorderShorthandParseResult parsed = parse_border_shorthand(declaration.value, style.font_size);
+        if (!parsed.has_width && !parsed.has_color) {
             return true;
         }
-        if (has_width) {
-            apply_edge_value(slots, CascadeProperty::BorderTopWidth, style.border_width, width,
+        if (parsed.has_width) {
+            apply_edge_value(slots, CascadeProperty::BorderTopWidth, style.border_width, parsed.width,
                              declaration, specificity, source_order);
-            apply_edge_value(slots, CascadeProperty::BorderRightWidth, style.border_width, width,
+            apply_edge_value(slots, CascadeProperty::BorderRightWidth, style.border_width, parsed.width,
                              declaration, specificity, source_order);
-            apply_edge_value(slots, CascadeProperty::BorderBottomWidth, style.border_width, width,
+            apply_edge_value(slots, CascadeProperty::BorderBottomWidth, style.border_width, parsed.width,
                              declaration, specificity, source_order);
-            apply_edge_value(slots, CascadeProperty::BorderLeftWidth, style.border_width, width,
+            apply_edge_value(slots, CascadeProperty::BorderLeftWidth, style.border_width, parsed.width,
                              declaration, specificity, source_order);
         }
-        if (has_color) {
+        if (parsed.has_color) {
             CascadeSlot& slot = cascade_slot(slots, CascadeProperty::BorderColor);
             if (declaration_wins(slot, declaration, specificity, source_order)) {
-                style.border_color = color;
+                style.border_color = parsed.color;
+                mark_slot(slot, declaration, specificity, source_order);
+            }
+        }
+        return true;
+    }
+    if (declaration.property == "border-top" || declaration.property == "border-right" ||
+        declaration.property == "border-bottom" || declaration.property == "border-left") {
+        const BorderShorthandParseResult parsed = parse_border_shorthand(declaration.value, style.font_size);
+        if (!parsed.has_width && !parsed.has_color) {
+            return true;
+        }
+        if (parsed.has_width) {
+            CascadeProperty edge_property = CascadeProperty::BorderTopWidth;
+            if (declaration.property == "border-right") {
+                edge_property = CascadeProperty::BorderRightWidth;
+            } else if (declaration.property == "border-bottom") {
+                edge_property = CascadeProperty::BorderBottomWidth;
+            } else if (declaration.property == "border-left") {
+                edge_property = CascadeProperty::BorderLeftWidth;
+            }
+            apply_edge_value(slots, edge_property, style.border_width, parsed.width,
+                             declaration, specificity, source_order);
+        }
+        if (parsed.has_color) {
+            CascadeSlot& slot = cascade_slot(slots, CascadeProperty::BorderColor);
+            if (declaration_wins(slot, declaration, specificity, source_order)) {
+                style.border_color = parsed.color;
                 mark_slot(slot, declaration, specificity, source_order);
             }
         }

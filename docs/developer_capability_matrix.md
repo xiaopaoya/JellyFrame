@@ -166,6 +166,7 @@ clear older supported fallback declarations.
 | `padding` | Works | 1-4 length values. |
 | `padding-top/right/bottom/left` | Works | Physical longhands. |
 | `border` | Subset | Parses `none`, width and color from simple shorthand. Style keyword is tolerated only as ignored text. |
+| `border-top/right/bottom/left` | Subset | Supports the width/color subset of single-side shorthands, for example `border-right: 1px solid #ddd`. The current style model has one `border_color`, so a single-side shorthand color becomes the global border color; the single-side width applies only to that edge. |
 | `border-width` | Works | 1-4 length values. |
 | `border-top/right/bottom/left-width` | Works | Physical width longhands. |
 | `border-color` | Subset | Single color for all borders. |

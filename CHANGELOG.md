@@ -8,6 +8,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added the `border-top` / `border-right` / `border-bottom` / `border-left`
+  single-side shorthand subset. It parses simple width/color syntax such as
+  `border-right: 1px solid #ddd`; the side width applies to that edge, while the
+  color still maps to JellyFrame's single global border color.
 - Started the `0.5.0-dev` device-usability line with a fixed-size storage
   lifecycle report for system shells. Hosts can now apply exit, crash, uninstall,
   update and memory-pressure storage policy through one helper and receive stable

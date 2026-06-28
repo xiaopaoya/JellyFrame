@@ -160,6 +160,7 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 | `padding` | 可用 | 1-4 个长度值。 |
 | `padding-top/right/bottom/left` | 可用 | 物理 longhand。 |
 | `border` | 子集 | 支持 `none`，从简单 shorthand 中提取 width 和 color；style 关键词只作为可忽略文本。 |
+| `border-top/right/bottom/left` | 子集 | 支持单边 shorthand 的 width/color 子集，例如 `border-right: 1px solid #ddd`。当前内部只有单个 `border_color`，因此单边 shorthand 的 color 会成为全局 border color；单边宽度按对应边生效。 |
 | `border-width` | 可用 | 1-4 个长度值。 |
 | `border-top/right/bottom/left-width` | 可用 | 物理边框宽度 longhand。 |
 | `border-color` | 子集 | 单色应用到所有边。 |

@@ -551,6 +551,32 @@ bool is_supported_color_value(std::string_view value) {
     return (text.rfind("rgb(", 0) == 0 || text.rfind("rgba(", 0) == 0) && text.back() == ')';
 }
 
+bool is_supported_border_shorthand_value(std::string_view value) {
+    const std::string text = ascii_lowercase(trim(value));
+    if (text == "none" || text == "0" || text == "0px" || text.find("var(") != std::string::npos) {
+        return true;
+    }
+
+    bool has_width = false;
+    bool has_color = false;
+    const std::vector<std::string> tokens = split_whitespace_top_level(text);
+    for (const std::string& token : tokens) {
+        if (token == "solid" || token == "none") {
+            continue;
+        }
+        if (!has_width && is_supported_length_value(token)) {
+            has_width = true;
+            continue;
+        }
+        if (!has_color && is_supported_color_value(token)) {
+            has_color = true;
+            continue;
+        }
+        return false;
+    }
+    return has_width || has_color;
+}
+
 bool is_supported_background_value(std::string_view value) {
     const std::string text = ascii_lowercase(trim(value));
     if (is_supported_color_value(text)) {
@@ -719,10 +745,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
         property == "border-left-width" || property == "border-radius") {
         return is_supported_length_value(value);
     }
-    if (property == "border") {
-        return value == "none" || value.find("var(") != std::string::npos ||
-               value.find('#') != std::string::npos || value.find("rgb(") != std::string::npos ||
-               value.find("px") != std::string::npos;
+    if (property == "border" || property == "border-top" || property == "border-right" ||
+        property == "border-bottom" || property == "border-left") {
+        return is_supported_border_shorthand_value(value);
     }
     if (property == "aspect-ratio") {
         return value.find('/') != std::string::npos ||

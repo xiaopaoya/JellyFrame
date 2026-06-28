@@ -8,6 +8,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 增加 `border-top` / `border-right` / `border-bottom` / `border-left` 单边 shorthand
+  子集。支持 `border-right: 1px solid #ddd` 这类简单 width/color 语法；单边宽度只作用于该边，
+  color 仍映射到 JellyFrame 当前单一全局 border color。
 - 进入 `0.5.0-dev` 设备可用性开发线，添加固定容量 storage lifecycle report，供
   system shell 统一处理 exit、crash、uninstall、update 和 memory-pressure 下的存储策略，
   并输出稳定 diagnostics：`storage-flush-ok`、`storage-flush-failed`、

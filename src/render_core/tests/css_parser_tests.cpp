@@ -651,9 +651,10 @@ void physical_edge_longhands_apply_per_side() {
     element->attributes["class"] = "card";
 
     StyleResolver resolver(parse(
-        "#panel { margin-top: 18px; border-bottom-width: 5px; }"
+        "#panel { margin-top: 18px; border-bottom: 5px solid #222222; }"
         ".card { margin: 4px; padding: 2px; border: 1px solid #111111; }"
-        ".card { margin-left: auto; padding-left: 12px; border-left-width: 3px; }"));
+        ".card { margin-left: auto; padding-left: 12px; border-left-width: 3px; "
+        "border-right: 4px solid #334455; }"));
 
     const Style style = resolver.resolve(*element);
     check(style.margin.top == 18, "higher-specificity margin-top survives shorthand");
@@ -661,8 +662,9 @@ void physical_edge_longhands_apply_per_side() {
     check(style.margin_left_auto, "margin-left auto applies");
     check(style.padding.top == 2 && style.padding.left == 12, "padding longhand applies");
     check(style.border_width.top == 1 && style.border_width.left == 3, "border width longhand applies");
-    check(style.border_width.bottom == 5, "higher-specificity border-bottom-width survives shorthand");
-    check(style.border_color.r == 0x11, "border shorthand color applies");
+    check(style.border_width.right == 4, "border-right shorthand applies");
+    check(style.border_width.bottom == 5, "higher-specificity border-bottom shorthand survives shorthand");
+    check(style.border_color.r == 0x22, "higher-specificity single-side border color wins global border color");
 }
 
 void font_weight_list_style_and_generated_counter_apply() {
