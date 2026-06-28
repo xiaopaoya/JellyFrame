@@ -98,6 +98,10 @@ bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
 }
 
+int rounded_transform_offset(float value) {
+    return value >= 0.0F ? static_cast<int>(value + 0.5F) : static_cast<int>(value - 0.5F);
+}
+
 Rect union_rect(Rect left, Rect right) {
     if (empty_rect(left)) {
         return right;
@@ -110,6 +114,14 @@ Rect union_rect(Rect left, Rect right) {
     const int x2 = std::max(left.x + left.width, right.x + right.width);
     const int y2 = std::max(left.y + left.height, right.y + right.height);
     return Rect{x1, y1, x2 - x1, y2 - y1};
+}
+
+Rect intersect_rect(Rect left, Rect right) {
+    const int x1 = std::max(left.x, right.x);
+    const int y1 = std::max(left.y, right.y);
+    const int x2 = std::min(left.x + left.width, right.x + right.width);
+    const int y2 = std::min(left.y + left.height, right.y + right.height);
+    return Rect{x1, y1, std::max(0, x2 - x1), std::max(0, y2 - y1)};
 }
 
 void merge_dirty_region(DirtyRegionResult& target,
@@ -549,6 +561,7 @@ struct ScrollDebugCounters {
 struct ScrollContainerDebugCounters {
     std::size_t scrolls = 0;
     std::size_t full_repaints = 0;
+    std::size_t dirty_repaints = 0;
 };
 
 struct PresentEstimateCounters {
@@ -3223,7 +3236,8 @@ public:
                   << " fast=" << scroll_counters_.fast_blits
                   << " copied_pixels=" << scroll_counters_.copied_pixels << '\n';
         std::cout << "  scroll_containers scrolls=" << scroll_container_counters_.scrolls
-                  << " full_repaints=" << scroll_container_counters_.full_repaints << '\n';
+                  << " full_repaints=" << scroll_container_counters_.full_repaints
+                  << " dirty_repaints=" << scroll_container_counters_.dirty_repaints << '\n';
         std::cout << "  present_estimate_rgb565 frames=" << present_estimate_counters_.frames
                   << " full=" << present_estimate_counters_.full_frames
                   << " dirty=" << present_estimate_counters_.dirty_frames
@@ -4249,33 +4263,50 @@ private:
         return clamped;
     }
 
-    const LayerNode* find_scroll_layer_for_node(const Node* node) const {
+    struct ScrollLayerMatch {
+        const LayerNode* layer = nullptr;
+        Rect visible_rect;
+    };
+
+    ScrollLayerMatch find_scroll_layer_match_for_node(const Node* node) const {
         if (node == nullptr || layer_tree_ == nullptr) {
-            return nullptr;
+            return {};
         }
         for (const Node* current = node; current != nullptr; current = current->parent) {
-            const LayerNode* found = find_scroll_layer_for_exact_node(*layer_tree_, current);
-            if (found != nullptr) {
+            const ScrollLayerMatch found = find_scroll_layer_match_for_exact_node(*layer_tree_, current, 0, 0);
+            if (found.layer != nullptr) {
                 return found;
             }
         }
-        return nullptr;
+        return {};
     }
 
-    const LayerNode* find_scroll_layer_for_exact_node(const LayerNode& layer, const Node* node) const {
+    ScrollLayerMatch find_scroll_layer_match_for_exact_node(const LayerNode& layer,
+                                                            const Node* node,
+                                                            int offset_x,
+                                                            int offset_y) const {
+        const int layer_offset_x = offset_x + rounded_transform_offset(layer.transform.translate_x);
+        const int layer_offset_y = offset_y + rounded_transform_offset(layer.transform.translate_y);
         if (layer.box != nullptr && layer.box->node == node && layer.max_scroll_y > 0) {
-            return &layer;
+            Rect visible_rect = layer.has_clip ? layer.clip_rect : layer.bounds;
+            visible_rect.x += layer_offset_x;
+            visible_rect.y += layer_offset_y;
+            return ScrollLayerMatch{&layer, visible_rect};
         }
         for (const auto& child : layer.children) {
-            const LayerNode* found = find_scroll_layer_for_exact_node(*child, node);
-            if (found != nullptr) {
+            const ScrollLayerMatch found =
+                find_scroll_layer_match_for_exact_node(*child, node, layer_offset_x, layer_offset_y);
+            if (found.layer != nullptr) {
                 return found;
             }
         }
-        return nullptr;
+        return {};
     }
 
-    bool render_scroll_state_only(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
+    bool render_scroll_state_only(const Node* hovered_node,
+                                  const Node* active_node,
+                                  const Node* focused_node,
+                                  Rect dirty_content_rect) {
         if (layout_tree_ == nullptr) {
             return false;
         }
@@ -4294,17 +4325,38 @@ private:
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
         const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
-        frame_buffer_ = compositor.render(*layer_tree_, viewport_width_, content_height, page_background_);
-        if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
-            return false;
+        const Rect content_bounds{0, 0, viewport_width_, content_height};
+        dirty_content_rect = intersect_rect(dirty_content_rect, content_bounds);
+        DirtyRegionResult scroll_dirty_region;
+        scroll_dirty_region.mode = DirtyRegionMode::DirtyRects;
+        scroll_dirty_region.rects.push_back(dirty_content_rect);
+        const bool can_repaint_dirty = frame_buffer_.width == viewport_width_ &&
+            frame_buffer_.height == content_height &&
+            !empty_rect(dirty_content_rect) &&
+            dirty_region_should_repaint_incrementally(scroll_dirty_region,
+                                                      content_bounds,
+                                                      kIncrementalDirtyAreaLimitPercent);
+        if (can_repaint_dirty) {
+            compositor.render_into(*layer_tree_, frame_buffer_, page_background_, &dirty_content_rect, 1);
+            ++scroll_container_counters_.dirty_repaints;
+            record_present_estimate_for_content_rects(&dirty_content_rect, 1);
+        } else {
+            frame_buffer_ = compositor.render(*layer_tree_, viewport_width_, content_height, page_background_);
+            if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+                return false;
+            }
+            ++scroll_container_counters_.full_repaints;
+            record_present_estimate_full_viewport();
         }
         input_ = std::make_unique<InputController>(
             *layer_tree_,
             input_invalidation_options_from_style(*style_resolver_));
         input_->set_interaction_state(hovered_node, active_node, focused_node);
-        update_blit_pixels();
-        record_present_estimate_full_viewport();
-        ++scroll_container_counters_.full_repaints;
+        if (can_repaint_dirty) {
+            update_blit_pixels_for_content_rect(dirty_content_rect);
+        } else {
+            update_blit_pixels();
+        }
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     }
@@ -4314,7 +4366,8 @@ private:
             return false;
         }
         for (const Node* current = target; current != nullptr; current = current->parent) {
-            const LayerNode* layer = find_scroll_layer_for_node(current);
+            const ScrollLayerMatch match = find_scroll_layer_match_for_node(current);
+            const LayerNode* layer = match.layer;
             if (layer == nullptr || layer->box == nullptr || layer->box->node == nullptr ||
                 layer->max_scroll_y <= 0) {
                 continue;
@@ -4334,7 +4387,8 @@ private:
             }
             const bool rendered = render_scroll_state_only(input_ ? input_->hovered_node() : nullptr,
                                                            input_ ? input_->active_node() : nullptr,
-                                                           input_ ? input_->focused_node() : nullptr);
+                                                           input_ ? input_->focused_node() : nullptr,
+                                                           match.visible_rect);
             if (rendered) {
                 ++scroll_container_counters_.scrolls;
             }
@@ -4914,6 +4968,44 @@ private:
                 row[x] = color_to_bgrx(frame_buffer_.pixel(x, source_y));
             }
         }
+    }
+
+    void copy_blit_rect_from_framebuffer(Rect viewport_rect) {
+        if (empty_rect(viewport_rect) || blit_pixels_.empty() ||
+            frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+            return;
+        }
+        viewport_rect = intersect_rect(viewport_rect, Rect{0, 0, viewport_width_, viewport_height_});
+        if (empty_rect(viewport_rect)) {
+            return;
+        }
+        const std::uint32_t background = color_to_bgrx(page_background_);
+        const int copy_width = std::min(viewport_width_, frame_buffer_.width);
+        for (int y = viewport_rect.y; y < viewport_rect.y + viewport_rect.height; ++y) {
+            std::uint32_t* row =
+                blit_pixels_.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(viewport_width_);
+            const int source_y = scroll_y_ + y;
+            for (int x = viewport_rect.x; x < viewport_rect.x + viewport_rect.width; ++x) {
+                if (x < 0 || x >= viewport_width_ || x >= copy_width ||
+                    source_y < 0 || source_y >= frame_buffer_.height) {
+                    row[x] = background;
+                } else {
+                    row[x] = color_to_bgrx(frame_buffer_.pixel(x, source_y));
+                }
+            }
+        }
+    }
+
+    void update_blit_pixels_for_content_rect(Rect content_rect) {
+        const std::size_t target_size =
+            static_cast<std::size_t>(viewport_width_) * static_cast<std::size_t>(viewport_height_);
+        if (blit_pixels_.size() != target_size || frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+            update_blit_pixels();
+            return;
+        }
+        Rect viewport_rect = content_rect;
+        viewport_rect.y -= scroll_y_;
+        copy_blit_rect_from_framebuffer(viewport_rect);
     }
 
     void update_blit_pixels_after_scroll(int previous_scroll_y) {
