@@ -224,6 +224,41 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(package_app.collect_audio_resource_warnings(manifest, resources), [])
 
+    def test_script_api_diagnostics_warn_when_manifest_capability_is_missing(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-script-api-diagnostics-") as directory:
+            root = Path(directory)
+            script = root / "scripts" / "app.js"
+            inline = root / "index.html"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                "var xhr = new XMLHttpRequest();\n"
+                "localStorage.setItem('k', 'v');\n"
+                "new Audio('/audio/tone.wav').play();\n",
+                encoding="utf-8")
+            inline.write_text(
+                "<script>navigator.geolocation.getCurrentPosition(function(){});"
+                "canvas.getContext('2d');</script>",
+                encoding="utf-8")
+            resources = [
+                package_app.build_resource_entry(root, script, "/scripts/app.js", 0),
+                package_app.build_resource_entry(root, inline, "/index.html", 0),
+            ]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics({
+                "capabilities": ["network.fetch", "graphics.canvas2d"],
+            }, resources)
+
+        self.assertEqual(diagnostics["entryCount"], 5)
+        self.assertEqual(
+            sorted((warning["api"], warning["capability"]) for warning in warnings),
+            [
+                ("Audio", "media.audio.mp3"),
+                ("localStorage", "storage.kv"),
+                ("navigator.geolocation", "location.position"),
+            ],
+        )
+        self.assertTrue(all(warning["code"] == "script-capability-missing" for warning in warnings))
+
     def test_runtime_budget_estimate_reports_package_known_usage(self):
         resources = [
             {"size": 100},
@@ -512,6 +547,11 @@ class PackagePreflightTests(unittest.TestCase):
                 "source": "jellyframe.app.json",
             }, {
                 "level": "warning",
+                "code": "script-capability-missing",
+                "message": "script uses localStorage but manifest does not declare storage.kv",
+                "source": "/scripts/app.js",
+            }, {
+                "level": "warning",
                 "code": "future-diagnostic-code",
                 "message": "future warning shape",
                 "source": "future",
@@ -548,6 +588,7 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertIn("font-family-unmatched", codes)
         self.assertIn("service-target-unsupported", codes)
+        self.assertIn("script-capability-missing", codes)
         self.assertIn("future-diagnostic-code", codes)
         self.assertIn("layout-text-overflow", codes)
         self.assertIn("visual-horizontal-overflow", codes)

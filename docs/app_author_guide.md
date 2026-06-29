@@ -57,6 +57,8 @@ Stable authoring pieces today:
 
 Check the full matrix before relying on details:
 [developer_capability_matrix.md](developer_capability_matrix.md).
+For a quick "can I use it?" table, start with
+[app_author_capability_table.md](app_author_capability_table.md).
 
 ## What Not To Assume
 

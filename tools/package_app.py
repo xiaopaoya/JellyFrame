@@ -725,6 +725,114 @@ def collect_audio_resource_warnings(manifest: dict, resources: list[dict]) -> li
     }]
 
 
+SCRIPT_API_CAPABILITIES = [
+    {
+        "api": "XMLHttpRequest",
+        "capability": "network.fetch",
+        "pattern": re.compile(r"\bXMLHttpRequest\b"),
+    },
+    {
+        "api": "localStorage",
+        "capability": "storage.kv",
+        "pattern": re.compile(r"\blocalStorage\b"),
+    },
+    {
+        "api": "Audio",
+        "capability": "media.audio.mp3",
+        "pattern": re.compile(r"(?:\bnew\s+Audio\s*\(|\bAudio\s*\()"),
+    },
+    {
+        "api": "navigator.geolocation",
+        "capability": "location.position",
+        "pattern": re.compile(r"\bnavigator\s*\.\s*geolocation\b|\bgetCurrentPosition\s*\("),
+    },
+    {
+        "api": "CanvasRenderingContext2D",
+        "capability": "graphics.canvas2d",
+        "pattern": re.compile(r"\bgetContext\s*\(\s*['\"]2d['\"]\s*\)"),
+        "preserveStrings": True,
+    },
+]
+
+
+def strip_script_comments(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"(^|[^:])//[^\n\r]*", r"\1 ", text)
+    return text
+
+
+def strip_script_comments_and_strings(text: str) -> str:
+    text = strip_script_comments(text)
+    text = re.sub(r"`(?:\\.|[^`\\])*`", "''", text, flags=re.S)
+    text = re.sub(r"'(?:\\.|[^'\\])*'", "''", text, flags=re.S)
+    text = re.sub(r'"(?:\\.|[^"\\])*"', '""', text, flags=re.S)
+    return text
+
+
+def script_sources_for_resource(resource: dict) -> list[str]:
+    suffix = resource["file"].suffix.lower()
+    kind = resource_kind_name(resource["kind"])
+    if kind == "ClassicScript":
+        try:
+            return [resource["file"].read_text(encoding="utf-8-sig")]
+        except UnicodeDecodeError:
+            return []
+    if suffix not in {".html", ".htm"}:
+        return []
+    try:
+        text = resource["file"].read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        return []
+    return [match.group(1) for match in re.finditer(r"<script\b(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script>",
+                                                    text,
+                                                    flags=re.I | re.S)]
+
+
+def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tuple[dict, list[dict]]:
+    capabilities = manifest.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        capabilities = []
+    declared = {capability for capability in capabilities if isinstance(capability, str)}
+    entries = []
+    warnings = []
+    seen = set()
+    for resource in resources:
+        for source_text in script_sources_for_resource(resource):
+            searchable = strip_script_comments_and_strings(source_text)
+            searchable_with_strings = strip_script_comments(source_text)
+            for api in SCRIPT_API_CAPABILITIES:
+                source = searchable_with_strings if api.get("preserveStrings") else searchable
+                if not api["pattern"].search(source):
+                    continue
+                key = (resource["path"], api["api"], api["capability"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                declared_capability = api["capability"] in declared
+                entry = {
+                    "api": api["api"],
+                    "capability": api["capability"],
+                    "source": resource["path"],
+                    "declared": declared_capability,
+                }
+                entries.append(entry)
+                if not declared_capability:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "script-capability-missing",
+                        "message": f"script uses {api['api']} but manifest does not declare {api['capability']}",
+                        "source": resource["path"],
+                        "api": api["api"],
+                        "capability": api["capability"],
+                    })
+    return {
+        "model": "static-classic-script-api-capability-preflight",
+        "entries": entries,
+        "entryCount": len(entries),
+        "missingCapabilityCount": len(warnings),
+    }, warnings
+
+
 def parse_bmp_metadata(data: bytes) -> dict:
     if len(data) < 54 or data[:2] != b"BM":
         return {"ok": False, "reason": "invalid-signature"}
@@ -1566,6 +1674,8 @@ def main() -> int:
     resources = discover_resources(root, max_resource_bytes)
     warnings.extend(collect_audio_resource_warnings(manifest, resources))
     warnings.extend(collect_service_target_warnings(manifest, target_config))
+    script_api_diagnostics, script_api_warnings = collect_script_api_diagnostics(manifest, resources)
+    warnings.extend(script_api_warnings)
     image_diagnostics, image_warnings = collect_image_diagnostics(resources, target_config)
     warnings.extend(image_warnings)
     reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
@@ -1601,6 +1711,7 @@ def main() -> int:
         ],
         "references": references,
         "serviceIntent": service_intent_report(manifest, target_config),
+        "scriptApiDiagnostics": script_api_diagnostics,
         "imageDiagnostics": image_diagnostics,
         "fontDiagnostics": font_diagnostics,
         "runtimeBudgetEstimate": collect_runtime_budget_estimate(resources, budgets, font_diagnostics),

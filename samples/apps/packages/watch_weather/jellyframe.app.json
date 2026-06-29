@@ -27,7 +27,7 @@
     "maxEventListeners": 32
   },
   "permissions": ["network"],
-  "capabilities": ["network.fetch"],
+  "capabilities": ["network.fetch", "storage.kv"],
   "targets": {
     "round-300": {
       "viewport": {

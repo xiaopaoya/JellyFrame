@@ -899,10 +899,20 @@ and `app_service_policies_for_app(...)` combines those requests with
 host/profile policy. No real network or filesystem I/O is performed by the
 core.
 
+Package reports also include `scriptApiDiagnostics`. This is a packaging-time
+static check over package-local classic scripts and HTML inline scripts; it
+does not execute JavaScript. It currently recognizes `XMLHttpRequest`,
+`localStorage`, `Audio()`, `navigator.geolocation.getCurrentPosition(...)` and
+`getContext("2d")`. If a script uses one of these host-backed APIs without the
+matching manifest capability, packaging emits `script-capability-missing`.
+CLI `developerAdvice[]` explains this as "declare the capability and verify the
+target profile supports it". This check does not enter the MCU runtime and does
+not replace real host authorization.
+
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
 CRC32/SHA-256 checksums, service intent, `runtimeBudgetEstimate`,
-`imageDiagnostics`, `fontDiagnostics`, local/remote reference diagnostics,
+`scriptApiDiagnostics`, `imageDiagnostics`, `fontDiagnostics`, local/remote reference diagnostics,
 package-resource warnings and
 `pipelineDiagnostics`. `runtimeBudgetEstimate` is a package-preflight estimate:
 it reports package-known resource/font usage and manifest/target budget limits,

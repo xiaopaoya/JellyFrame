@@ -52,6 +52,7 @@
 ### 面向开发者的功能契约
 
 - [app_author_guide_zh.md](app_author_guide_zh.md)：给 app 作者的短契约、布局 recipes 和 warning 修法。
+- [app_author_capability_table_zh.md](app_author_capability_table_zh.md)：app 作者快速判断 HTML/CSS/JS/资源能力能不能用。
 - [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)：最主要的 can-do/cannot-do 契约。
 - [jelly_ui_design_system_zh.md](jelly_ui_design_system_zh.md)：胶体/水母质感的控件与动效设计体系。
 - [versioning_zh.md](versioning_zh.md)：版本和发布纪律。

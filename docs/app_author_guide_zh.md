@@ -47,6 +47,8 @@ python tools\jellyframe_cli.py check `
 
 依赖细节前，请查完整能力矩阵：
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)。
+只想快速判断“能不能用”时，先看
+[app_author_capability_table_zh.md](app_author_capability_table_zh.md)。
 
 ## 不要默认以为能用
 

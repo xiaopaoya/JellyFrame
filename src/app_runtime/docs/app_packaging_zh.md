@@ -761,9 +761,17 @@ package report 会在 `serviceIntent` 中记录 manifest service intent。这个
 request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这些请求与 host/profile
 策略合成。核心不会执行真实网络或文件系统 I/O。
 
+Package report 还包含 `scriptApiDiagnostics`。这是打包期静态检查，只扫描 package-local
+classic script 和 HTML inline script，不执行 JavaScript。当前会识别 `XMLHttpRequest`、
+`localStorage`、`Audio()`、`navigator.geolocation.getCurrentPosition(...)` 和
+`getContext("2d")`。如果脚本使用这些宿主支持 API，但 manifest 没有声明对应 capability，
+工具会输出 `script-capability-missing` warning；CLI 的 `developerAdvice[]` 会把它解释为
+“补 manifest capability，并确认 target profile 支持”。这项检查不进入 MCU runtime，也不替代
+真实 host 授权。
+
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote
-reference 诊断、`imageDiagnostics`、`fontDiagnostics`、package-resource warnings 和
+reference 诊断、`scriptApiDiagnostics`、`imageDiagnostics`、`fontDiagnostics`、package-resource warnings 和
 `pipelineDiagnostics`。`runtimeBudgetEstimate`
 是 package-preflight 估算：它报告打包阶段已知的 resource/font 用量和 manifest/target budget
 上限；真实运行时的 queue/handle/timer/listener 计数来自 host/runtime capture 路径中的

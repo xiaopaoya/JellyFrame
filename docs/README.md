@@ -73,6 +73,8 @@ interfaces and host contracts. These docs should stay close to the code.
 
 - [app_author_guide.md](app_author_guide.md): short app-author contract,
   recipes and warning fixes.
+- [app_author_capability_table.md](app_author_capability_table.md): quick
+  app-author can-I-use-it table for HTML/CSS/JS/resources.
 - [developer_capability_matrix.md](developer_capability_matrix.md): the primary
   can-do/cannot-do contract.
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish
