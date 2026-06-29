@@ -65,6 +65,13 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+第一次拉取仓库后，建议再跑一次面向试用者的样例自检。它会验证所有完整 app package，
+并在三类常见可穿戴 target 上输出响应式和字体诊断报告：
+
+```powershell
+python tools\jellyframe_cli.py doctor --build-dir build\Release
+```
+
 把静态页面渲染成图片：
 
 ```powershell

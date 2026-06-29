@@ -78,6 +78,14 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+After cloning the repository for the first time, run the trial-oriented sample
+self-check. It validates every complete app package and reports responsive/font
+diagnostics across common wearable targets:
+
+```powershell
+python tools\jellyframe_cli.py doctor --build-dir build\Release
+```
+
 Render a static page to an image:
 
 ```powershell

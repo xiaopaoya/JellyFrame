@@ -649,6 +649,60 @@ def cmd_registry(args: argparse.Namespace) -> int:
     return app_registry.main(registry_args)
 
 
+def sample_package_roots(samples_dir: Path) -> list[Path]:
+    if not samples_dir.is_dir():
+        raise SystemExit(f"samples directory does not exist: {samples_dir}")
+    roots = []
+    for path in sorted(samples_dir.iterdir()):
+        if path.is_dir() and (path / "jellyframe.app.json").is_file():
+            roots.append(path)
+    return roots
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    ensure_tool(tool_path(args.build_dir, "jellyframe_pseudo_browser"))
+    roots = sample_package_roots(args.samples_dir)
+    if not roots:
+        raise SystemExit(f"no sample packages found in {args.samples_dir}")
+    args.report_dir.mkdir(parents=True, exist_ok=True)
+    print(
+        "JellyFrame doctor: "
+        f"samples={len(roots)} targets={args.targets or '<default>'} "
+        f"build_dir={args.build_dir}"
+    )
+    failed = 0
+    for root in roots:
+        report = args.report_dir / f"{root.name}.report.json"
+        command = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "check",
+            "--root",
+            str(root),
+            "--report",
+            str(report),
+            "--build-dir",
+            str(args.build_dir),
+        ]
+        if args.targets:
+            command.extend(["--targets", args.targets])
+        if args.target:
+            command.extend(["--target", args.target])
+        if args.no_font_check:
+            command.append("--no-font-check")
+        if args.strict:
+            command.append("--strict")
+        result = run_command(command)
+        status = "ok" if result == 0 else "failed"
+        print(f"doctor sample {root.name}: {status} report={report}")
+        if result != 0:
+            failed += 1
+            if args.fail_fast:
+                break
+    print(f"doctor summary: samples={len(roots)} failed={failed}")
+    return 1 if failed else 0
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     if bool(args.root) == bool(args.bundle):
         raise SystemExit("install requires exactly one of --root or --bundle")
@@ -806,6 +860,24 @@ def main() -> int:
     registry.add_argument("registry_args", nargs=argparse.REMAINDER,
                           help="Arguments passed to tools/app_registry.py.")
     registry.set_defaults(func=cmd_registry)
+
+    doctor = subparsers.add_parser("doctor", help="Run repository self-checks for trial-ready sample packages.")
+    doctor.add_argument("--build-dir", default=default_build_dir(), type=Path,
+                        help="Directory containing built tools.")
+    doctor.add_argument("--samples-dir", default=repo_root() / "samples" / "apps" / "packages", type=Path,
+                        help="Directory containing source-package samples.")
+    doctor.add_argument("--report-dir", default=repo_root() / "build" / "doctor_reports", type=Path,
+                        help="Directory for per-sample JSON reports.")
+    doctor.add_argument("--target", help="Primary target preset id passed to package diagnostics.")
+    doctor.add_argument("--targets", default="round-300,rect-320x240,rect-172x320",
+                        help="Comma-separated responsive target preset ids.")
+    doctor.add_argument("--no-font-check", action="store_true",
+                        help="Skip font resource preflight while checking samples.")
+    doctor.add_argument("--strict", action="store_true",
+                        help="Fail when sample diagnostics contain warnings.")
+    doctor.add_argument("--fail-fast", action="store_true",
+                        help="Stop after the first failed sample.")
+    doctor.set_defaults(func=cmd_doctor)
 
     args = parser.parse_args()
     return args.func(args)

@@ -348,6 +348,18 @@ if(JELLYFRAME_BUILD_TESTS)
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+            add_test(
+                NAME jellyframe_cli_doctor_sample_packages
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        doctor
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                        --report-dir ${CMAKE_BINARY_DIR}/test_outputs/doctor
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_cli_doctor_sample_packages PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "doctor summary: samples=[0-9]+ failed=0")
+
             if(TARGET jellyframe_virtual_bench)
                 add_test(
                     NAME jellyframe_virtual_board_bench_smoke

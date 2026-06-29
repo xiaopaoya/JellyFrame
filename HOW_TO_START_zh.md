@@ -173,6 +173,19 @@ cmake --build build-core --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+运行面向试用者的仓库自检。它会扫描 `samples/apps/packages` 中的完整 app package，
+对每个样例执行 manifest/package、render pipeline、responsive profile 和字体预检，并把
+JSON 报告写入 `build/doctor_reports`：
+
+```powershell
+python tools\jellyframe_cli.py doctor --build-dir build\Release
+```
+
+`doctor` 默认使用 `round-300,rect-320x240,rect-172x320` 三类可穿戴目标。它允许 warning，
+因为窄屏滚动需求、可解释的文本溢出或 target 不支持某个可选能力都可能是合理降级；但任何
+package 错误、管线错误或阻塞字体问题都会使命令失败。外部开发者第一次拉仓库后，建议先跑
+这条命令，再打开 Win32 壳调试具体 app。
+
 运行核心微基准：
 
 ```powershell

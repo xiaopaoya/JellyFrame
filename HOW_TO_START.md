@@ -189,6 +189,22 @@ Run the regression suite:
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+Run the trial-oriented repository self-check. It scans complete app packages in
+`samples/apps/packages`, runs manifest/package validation, render pipeline
+diagnostics, responsive profiles and font preflight, then writes per-sample JSON
+reports to `build/doctor_reports`:
+
+```powershell
+python tools\jellyframe_cli.py doctor --build-dir build\Release
+```
+
+`doctor` uses `round-300,rect-320x240,rect-172x320` wearable targets by default.
+Warnings are allowed because small-screen scroll needs, explainable text
+overflow or target-gated optional capabilities can be valid degradation. Package
+errors, pipeline errors and blocking font issues still fail the command. New
+developers should run this command before opening the Win32 shell for app-level
+debugging.
+
 Run the core microbenchmark:
 
 ```powershell
