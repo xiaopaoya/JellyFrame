@@ -277,6 +277,15 @@ function updateReportDiagnostics(root) {
   };
   const entryPath = path.resolve(root, String(lastReport.app?.entry || "jellyframe.app.json").replace(/^[/\\]/, ""));
 
+  for (const advice of lastReport.developerAdvice || []) {
+    const from = advice.source || lastReport.app?.entry || "/jellyframe.app.json";
+    const filePath = path.resolve(root, String(from).replace(/^[/\\]/, ""));
+    const target = advice.target ? ` [${advice.target}]` : "";
+    const text = advice.text ? ` text="${advice.text}"` : "";
+    const message = `${advice.title || advice.code || "JellyFrame advice"}${target}${text}: ${advice.action || advice.explanation || ""}`;
+    addDiagnostic(filePath, message, diagnosticSeverity(advice.severity));
+  }
+
   for (const warning of lastReport.warnings || []) {
     const from = warning.from || lastReport.app?.entry || "/jellyframe.app.json";
     const filePath = path.resolve(root, String(from).replace(/^[/\\]/, ""));
@@ -321,6 +330,7 @@ function reportHtml() {
   const warnings = report?.warnings || [];
   const resources = report?.resources || [];
   const references = report?.references || [];
+  const developerAdvice = report?.developerAdvice || [];
   const pipeline = report?.pipelineDiagnostics || {};
   const summary = pipeline.summary || {};
   const pipelineStats = pipeline.pipeline || {};
@@ -338,6 +348,8 @@ function reportHtml() {
     code { color: var(--vscode-textPreformat-foreground); }
     .muted { color: var(--vscode-descriptionForeground); }
     .pill { display: inline-block; padding: 1px 6px; border: 1px solid var(--vscode-panel-border); border-radius: 10px; }
+    .advice { margin-bottom: 10px; }
+    .advice strong { display: block; margin-bottom: 2px; }
     .error { color: var(--vscode-errorForeground); }
     .warning { color: var(--vscode-editorWarning-foreground); }
     .info { color: var(--vscode-editorInfo-foreground); }
@@ -348,6 +360,8 @@ function reportHtml() {
   ${report ? `
     <p><strong>${escapeHtml(app.name || app.id || "App")}</strong> <span class="muted">${escapeHtml(app.id || "")}</span></p>
     <p>Target: <code>${escapeHtml(targetConfig.id || "default")}</code> · Resources: ${resources.length} · Bytes: ${escapeHtml(report.totalResourceBytes || 0)}</p>
+    <h2>App Author Advice</h2>
+    ${renderList(developerAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Review item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.text ? ` <span class="muted">Text: <code>${escapeHtml(advice.text)}</code></span>` : ""}${advice.node ? ` <span class="muted">Node: <code>${escapeHtml(advice.node)}</code></span>` : ""}${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
     <h2>Pipeline Diagnostics</h2>
     ${pipeline.format ? `
       <p>

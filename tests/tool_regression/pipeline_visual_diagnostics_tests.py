@@ -65,6 +65,12 @@ def main() -> int:
     )
     require("visual-horizontal-overflow" in diagnostic_codes(overflow_report),
             "horizontal paint overflow should be reported")
+    horizontal = next(entry for entry in overflow_report.get("diagnostics", [])
+                      if entry.get("code") == "visual-horizontal-overflow")
+    require("viewport=160x120" in horizontal.get("detail", ""),
+            "horizontal overflow detail should include viewport")
+    require("overflowRight=240" in horizontal.get("detail", ""),
+            "horizontal overflow detail should include overflowRight")
 
     vertical_report = run_pseudo_browser(
         exe,

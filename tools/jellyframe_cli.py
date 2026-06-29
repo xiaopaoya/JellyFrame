@@ -2,6 +2,7 @@
 import argparse
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -413,6 +414,42 @@ def advice_template_for_code(code: str) -> dict:
     }
 
 
+def parse_diagnostic_detail(detail: str) -> dict:
+    if not detail or "=" not in detail:
+        return {}
+    parsed: dict[str, object] = {}
+    try:
+        tokens = shlex.split(detail)
+    except ValueError:
+        tokens = detail.split()
+    for token in tokens:
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        if not key:
+            continue
+        if re.fullmatch(r"-?\d+", value):
+            parsed[key] = int(value)
+        else:
+            parsed[key] = value
+    return parsed
+
+
+def diagnostic_metrics_from_detail(parsed: dict) -> dict:
+    keys = (
+        "measuredWidth",
+        "availableWidth",
+        "contentWidth",
+        "textIndent",
+        "fontSize",
+        "fontWeight",
+        "overflowLeft",
+        "overflowRight",
+    )
+    metrics = {key: parsed[key] for key in keys if key in parsed}
+    return metrics
+
+
 def append_developer_advice(advice: list[dict],
                             seen: set[tuple[str, str, str]],
                             code: str,
@@ -440,6 +477,19 @@ def append_developer_advice(advice: list[dict],
         entry["detail"] = detail
     if target:
         entry["target"] = target
+    parsed_detail = parse_diagnostic_detail(detail)
+    if parsed_detail:
+        if "text" in parsed_detail:
+            entry["text"] = parsed_detail["text"]
+        if "node" in parsed_detail:
+            entry["node"] = parsed_detail["node"]
+        if "viewport" in parsed_detail:
+            entry["viewport"] = parsed_detail["viewport"]
+        if "paintBounds" in parsed_detail:
+            entry["paintBounds"] = parsed_detail["paintBounds"]
+        metrics = diagnostic_metrics_from_detail(parsed_detail)
+        if metrics:
+            entry["metrics"] = metrics
     advice.append(entry)
 
 
@@ -586,7 +636,26 @@ def merge_font_subset_report(package_report_path: Path, font_subset: dict) -> No
 def diagnostic_samples(report: dict, limit: int = 12) -> list[dict]:
     diagnostics = report.get("diagnostics", []) if isinstance(report, dict) else []
     samples = []
-    for diagnostic in diagnostics:
+
+    def diagnostic_priority(diagnostic: dict) -> tuple[int, int]:
+        code = str(diagnostic.get("code", ""))
+        severity = str(diagnostic.get("severity", "info"))
+        if code in ADVICE_IGNORED_CODES:
+            return (3, 0)
+        severity_rank = {
+            "error": 0,
+            "warning": 1,
+            "info": 2,
+        }.get(severity, 2)
+        advice_rank = 0 if advice_template_for_code(code) else 1
+        return (severity_rank, advice_rank)
+
+    actionable = [
+        diagnostic for diagnostic in diagnostics
+        if isinstance(diagnostic, dict) and str(diagnostic.get("code", "")) not in ADVICE_IGNORED_CODES
+    ]
+    actionable.sort(key=diagnostic_priority)
+    for diagnostic in actionable:
         if not isinstance(diagnostic, dict):
             continue
         sample = {
@@ -597,6 +666,19 @@ def diagnostic_samples(report: dict, limit: int = 12) -> list[dict]:
         detail = str(diagnostic.get("detail", ""))
         if detail:
             sample["detail"] = detail
+            parsed_detail = parse_diagnostic_detail(detail)
+            if parsed_detail:
+                if "text" in parsed_detail:
+                    sample["text"] = parsed_detail["text"]
+                if "node" in parsed_detail:
+                    sample["node"] = parsed_detail["node"]
+                if "viewport" in parsed_detail:
+                    sample["viewport"] = parsed_detail["viewport"]
+                if "paintBounds" in parsed_detail:
+                    sample["paintBounds"] = parsed_detail["paintBounds"]
+                metrics = diagnostic_metrics_from_detail(parsed_detail)
+                if metrics:
+                    sample["metrics"] = metrics
         samples.append(sample)
         if len(samples) >= limit:
             break

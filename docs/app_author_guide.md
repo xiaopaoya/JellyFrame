@@ -161,8 +161,8 @@ For fuller button, card, scroll-list and fixed bottom-nav recipes, see
 
 | Diagnostic | What it usually means | First fix |
 | --- | --- | --- |
-| `layout-text-overflow` | Text does not fit its box. | Shorten the label, widen the box, reduce font size, or use a narrow-target media rule. |
-| `visual-horizontal-overflow` | Paint extends outside the target width. | Add `max-width: 100%`, use `box-sizing: border-box`, stack columns, or put long content in a scroll container. |
+| `layout-text-overflow` | Text does not fit its box. Reports usually include `text`, `node`, measured width and available width. | Shorten the label, widen the box, reduce font size, or use a narrow-target media rule. |
+| `visual-horizontal-overflow` | Paint extends outside the target width. Reports usually include `paintBounds`, viewport and overflow pixels. | Add `max-width: 100%`, use `box-sizing: border-box`, stack columns, or put long content in a scroll container. |
 | `visual-scroll-needed` | Page is taller than the viewport. | Decide whether scrolling is intended. If yes, use an explicit `overflow: auto` area and allow it in the target gate. |
 | `font-family-unmatched` | CSS names a custom font not declared in manifest. | Use `system-ui` or declare a matching `.jffont` family. |
 | `font-missing-glyphs` | Target fonts do not cover all text. | Use the generated `*.used_chars.txt` to build and declare an app font supplement. |

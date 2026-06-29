@@ -324,8 +324,10 @@ target。当前 gate 可检查最小 viewport、是否允许滚动、是否允�
 warning/error 数。它是发布前适配契约，不是完整 responsive layout 引擎。
 
 Responsive profile 还会携带小型 `diagnosticSamples[]` 列表。它只保留代表性的 target-specific
-诊断，例如窄屏文本溢出，不会把整份伪浏览器日志复制到每个 profile。`developerAdvice[]`
-会消费这些样本，从而把建议指向具体 target 和 detail。
+诊断，例如窄屏文本溢出，不会把整份伪浏览器日志复制到每个 profile。对常见布局诊断，
+样本会尽量带上解析后的 `text`、`node`、`metrics.measuredWidth`、`metrics.availableWidth`、
+`paintBounds` 和 `viewport` 等字段。`developerAdvice[]` 会消费这些样本，从而把建议指向
+具体 target 和最小可行动 detail。
 
 影响运行兼容性的字段应由 packer 强制要求：
 

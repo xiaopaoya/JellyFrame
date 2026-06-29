@@ -9,9 +9,9 @@
 - 命令面板提供 validate、check、preview、打开交互式 Win32 browser 和生成 package。
 - 可从内置 weather、clock、timer 和 calculator 模板创建 app。
 - 在专用 `JellyFrame` output channel 中显示 CLI 输出。
-- `JellyFrame Report` webview 会汇总最近一次 package report、resources、
-  references、warnings 和管线 diagnostics。
-- 对需要处理的 package warnings 和管线 diagnostics 提供 inline diagnostics。
+- `JellyFrame Report` webview 会优先展示 CLI 的 `developerAdvice[]`，再汇总
+  resources、references、warnings 和管线 diagnostics。
+- 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - 可配置仓库根目录、Python 可执行文件、默认 target 和字体预算。
 
 ## 开发使用

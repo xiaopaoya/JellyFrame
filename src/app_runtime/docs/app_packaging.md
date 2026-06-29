@@ -407,8 +407,11 @@ engine.
 Responsive profiles also carry a small `diagnosticSamples[]` list. It preserves
 representative target-specific diagnostics, such as narrow-screen text
 overflow, without copying the whole pseudo-browser log into every profile.
-`developerAdvice[]` uses these samples to point app authors at the affected
-target and detail.
+For common layout diagnostics the samples include parsed fields such as `text`,
+`node`, `metrics.measuredWidth`, `metrics.availableWidth`, `paintBounds` and
+`viewport` when the pipeline can determine them. `developerAdvice[]` uses these
+samples to point app authors at the affected target and the smallest actionable
+detail.
 
 Fields that affect runtime compatibility must be required by the packer:
 

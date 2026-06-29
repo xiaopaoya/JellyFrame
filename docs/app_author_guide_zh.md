@@ -143,8 +143,8 @@ body {
 
 | Diagnostic | 通常含义 | 优先修法 |
 | --- | --- | --- |
-| `layout-text-overflow` | 文本放不进盒子。 | 缩短 label、加宽盒子、减小字号，或为窄屏写 media rule。 |
-| `visual-horizontal-overflow` | 绘制内容超出 target 宽度。 | 加 `max-width: 100%`、用 `box-sizing: border-box`、改纵向布局，或把长内容放进 scroll container。 |
+| `layout-text-overflow` | 文本放不进盒子。报告通常包含 `text`、`node`、测量宽度和可用宽度。 | 缩短 label、加宽盒子、减小字号，或为窄屏写 media rule。 |
+| `visual-horizontal-overflow` | 绘制内容超出 target 宽度。报告通常包含 `paintBounds`、viewport 和越界像素。 | 加 `max-width: 100%`、用 `box-sizing: border-box`、改纵向布局，或把长内容放进 scroll container。 |
 | `visual-scroll-needed` | 页面比 viewport 高。 | 判断是否需要滚动。需要就使用明确 `overflow: auto` 区域并在 target gate 允许滚动。 |
 | `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |

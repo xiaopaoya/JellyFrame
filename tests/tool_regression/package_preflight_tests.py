@@ -561,7 +561,7 @@ class PackagePreflightTests(unittest.TestCase):
                     "stage": "layout",
                     "severity": "warning",
                     "code": "layout-text-overflow",
-                    "detail": "Start",
+                    "detail": "text=\"Start\" measuredWidth=54 availableWidth=32 contentWidth=32 fontSize=16 node=\"button.primary\"",
                 }],
             },
             "responsiveProfiles": [{
@@ -573,7 +573,7 @@ class PackagePreflightTests(unittest.TestCase):
                     "stage": "layout",
                     "severity": "warning",
                     "code": "layout-text-overflow",
-                    "detail": "Daily",
+                    "detail": "text=\"Daily\" measuredWidth=45 availableWidth=30 contentWidth=30 fontSize=16 node=\"button.tab\"",
                 }],
                 "gate": {"decision": "warn", "reasons": ["horizontal-overflow"]},
             }],
@@ -599,7 +599,9 @@ class PackagePreflightTests(unittest.TestCase):
                             "review" in entry["title"].lower()
                             for entry in advice))
         self.assertTrue(any(entry["code"] == "layout-text-overflow" and
-                            entry.get("target") == "rect-172x320"
+                            entry.get("target") == "rect-172x320" and
+                            entry.get("text") == "Daily" and
+                            entry.get("metrics", {}).get("availableWidth") == 30
                             for entry in advice))
 
     def test_responsive_profile_carries_diagnostic_samples(self):
@@ -607,17 +609,24 @@ class PackagePreflightTests(unittest.TestCase):
             "viewport": {"width": 172, "height": 320, "shape": "rect"},
         }, {
             "viewport": {"width": 172, "height": 320},
-            "summary": {"warning": 1},
+            "summary": {"warning": 1, "info": 1},
             "diagnostics": [{
+                "stage": "css",
+                "severity": "info",
+                "code": "css-media-query-not-matched",
+                "detail": "@media (max-height: 260px)",
+            }, {
                 "stage": "layout",
                 "severity": "warning",
                 "code": "layout-text-overflow",
-                "detail": "Hourly",
+                "detail": "text=\"Hourly\" measuredWidth=60 availableWidth=34 contentWidth=34 fontSize=16 node=\"button.tab\"",
             }],
         })
 
         self.assertEqual(profile["diagnosticSamples"][0]["code"], "layout-text-overflow")
-        self.assertEqual(profile["diagnosticSamples"][0]["detail"], "Hourly")
+        self.assertEqual(profile["diagnosticSamples"][0]["text"], "Hourly")
+        self.assertEqual(profile["diagnosticSamples"][0]["node"], "button.tab")
+        self.assertEqual(profile["diagnosticSamples"][0]["metrics"]["measuredWidth"], 60)
 
     def test_write_json_report_adds_developer_advice(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-advice-report-") as directory:

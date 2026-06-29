@@ -204,6 +204,15 @@ std::string bounds_detail(const char* name, const LayoutBounds& bounds) {
     return detail.str();
 }
 
+std::string horizontal_overflow_detail(const LayoutBounds& bounds, int viewport_width, int viewport_height) {
+    std::ostringstream detail;
+    detail << bounds_detail("paintBounds", bounds)
+           << " viewport=" << viewport_width << 'x' << viewport_height
+           << " overflowLeft=" << (bounds.valid ? std::max(0, -bounds.left) : 0)
+           << " overflowRight=" << (bounds.valid ? std::max(0, bounds.right - viewport_width) : 0);
+    return detail.str();
+}
+
 void report_visual_diagnostics(const BrowserOptions& options,
                                const PipelineStatistics& statistics,
                                const LayoutBox& layout_tree,
@@ -219,7 +228,7 @@ void report_visual_diagnostics(const BrowserOptions& options,
                           DiagnosticSeverity::Warning,
                           "visual-horizontal-overflow",
                           "Paint output extends outside the viewport horizontally",
-                          bounds_detail("paintBounds", paint_bounds));
+                          horizontal_overflow_detail(paint_bounds, options.viewport_width, options.viewport_height));
     }
     if (paint_bounds.valid && (paint_bounds.top < 0 || paint_bounds.bottom > content_height)) {
         report_diagnostic(&diagnostics,

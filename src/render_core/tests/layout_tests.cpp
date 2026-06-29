@@ -298,6 +298,14 @@ void nowrap_text_overflow_reports_diagnostic() {
         if (diagnostic.code == "layout-text-overflow" ||
             diagnostic.code == "layout-text-overflow-ellipsis") {
             found = true;
+            check(diagnostic.detail.find("text=\"SuperLongStatusLabelWithoutBreaks\"") != std::string::npos,
+                  "overflow diagnostic includes text snippet");
+            check(diagnostic.detail.find("measuredWidth=") != std::string::npos,
+                  "overflow diagnostic includes measured width");
+            check(diagnostic.detail.find("availableWidth=") != std::string::npos,
+                  "overflow diagnostic includes available width");
+            check(diagnostic.detail.find("node=\"p#status\"") != std::string::npos,
+                  "overflow diagnostic includes node label");
             break;
         }
     }

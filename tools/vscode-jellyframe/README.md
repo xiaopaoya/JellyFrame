@@ -11,9 +11,10 @@ implement its own parser or packer; every command delegates to
   browser launch and package generation.
 - App creation from the built-in weather, clock, timer and calculator templates.
 - CLI output in a dedicated `JellyFrame` output channel.
-- A `JellyFrame Report` webview that summarizes the latest package report,
-  resources, references, warnings and pipeline diagnostics.
-- Inline diagnostics for actionable package warnings and pipeline diagnostics.
+- A `JellyFrame Report` webview that puts CLI `developerAdvice[]` first, then
+  summarizes resources, references, warnings and pipeline diagnostics.
+- Inline diagnostics for app-author advice, package warnings and pipeline
+  diagnostics.
 - Configurable repository root, Python executable, default target and font
   budget.
 
