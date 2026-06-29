@@ -17,6 +17,7 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 
 - `watch_weather`：包含 package 资源和可选数据能力的手表天气 app。
 - `jelly_controls`：Jelly UI 控件和动效风格示例。
+- `jelly_component_recipes`：可复制的小屏按钮、卡片、滚动列表和固定底部导航 recipes。
 - `jelly_motion_lab`：参考 LVGL 常见动效的验收 app，包含图标展开窗口、sheet 弹出和按钮果冻反馈。
 - `jelly_watch_face`：使用 `transform: rotate(...)` 和 `transform-origin` 绘制指针的模拟表盘示例。
 - `jelly_canvas_smoke`：可选 Canvas 2D V0.3 趋势线和柱状图示例。

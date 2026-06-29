@@ -18,6 +18,8 @@ Current packages:
 
 - `watch_weather`: watch weather app with package resources and optional data.
 - `jelly_controls`: Jelly UI controls and motion style sample.
+- `jelly_component_recipes`: copyable small-screen button, card, scroll-list
+  and fixed bottom-navigation recipes.
 - `jelly_motion_lab`: LVGL-style motion validation app with icon-to-window,
   sheet and button jelly animations.
 - `jelly_watch_face`: analog watch face using `transform: rotate(...)` and

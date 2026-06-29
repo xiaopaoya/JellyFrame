@@ -8,9 +8,10 @@ interfaces and host contracts. These docs should stay close to the code.
 1. [../HOW_TO_START.md](../HOW_TO_START.md)
 2. [engine_architecture.md](engine_architecture.md)
 3. [app_author_guide.md](app_author_guide.md) if you are writing apps.
-4. [developer_capability_matrix.md](developer_capability_matrix.md)
-5. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
-6. The module document for the area you want to use, port or inspect.
+4. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
+5. [developer_capability_matrix.md](developer_capability_matrix.md)
+6. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
+7. The module document for the area you want to use, port or inspect.
 
 ## Technical Documents
 
@@ -75,6 +76,8 @@ interfaces and host contracts. These docs should stay close to the code.
   recipes and warning fixes.
 - [app_author_capability_table.md](app_author_capability_table.md): quick
   app-author can-I-use-it table for HTML/CSS/JS/resources.
+- [app_author_recipes.md](app_author_recipes.md): copyable small-screen
+  component recipes for buttons, cards, scroll lists and bottom navigation.
 - [developer_capability_matrix.md](developer_capability_matrix.md): the primary
   can-do/cannot-do contract.
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish

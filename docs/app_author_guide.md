@@ -59,6 +59,8 @@ Check the full matrix before relying on details:
 [developer_capability_matrix.md](developer_capability_matrix.md).
 For a quick "can I use it?" table, start with
 [app_author_capability_table.md](app_author_capability_table.md).
+For copyable small-screen component patterns, read
+[app_author_recipes.md](app_author_recipes.md).
 
 ## What Not To Assume
 
@@ -129,8 +131,8 @@ body {
 }
 
 .stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -150,6 +152,10 @@ body {
   }
 }
 ```
+
+For fuller button, card, scroll-list and fixed bottom-nav recipes, see
+[app_author_recipes.md](app_author_recipes.md) and the live package at
+`samples/apps/packages/jelly_component_recipes`.
 
 ## Common Warnings And Fixes
 

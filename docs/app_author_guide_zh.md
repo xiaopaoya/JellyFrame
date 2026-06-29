@@ -49,6 +49,8 @@ python tools\jellyframe_cli.py check `
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)。
 只想快速判断“能不能用”时，先看
 [app_author_capability_table_zh.md](app_author_capability_table_zh.md)。
+需要可复制的小屏组件写法时，读
+[app_author_recipes_zh.md](app_author_recipes_zh.md)。
 
 ## 不要默认以为能用
 
@@ -111,8 +113,8 @@ body {
 }
 
 .stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -132,6 +134,10 @@ body {
   }
 }
 ```
+
+更完整的按钮、卡片、滚动列表和固定底部导航写法见
+[app_author_recipes_zh.md](app_author_recipes_zh.md)，活样例位于
+`samples/apps/packages/jelly_component_recipes`。
 
 ## 常见 warning 怎么修
 

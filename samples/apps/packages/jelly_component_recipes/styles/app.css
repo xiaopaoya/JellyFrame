@@ -1,0 +1,346 @@
+:root {
+  --page: #071a22;
+  --ink: #f3fbff;
+  --muted: rgba(218, 244, 248, 0.72);
+  --panel: rgba(82, 180, 210, 0.22);
+  --panel-strong: rgba(112, 226, 232, 0.32);
+  --edge: rgba(144, 237, 236, 0.64);
+  --accent: #a7f06a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--ink);
+  background-color: var(--page);
+  font-family: system-ui, sans-serif;
+}
+
+.screen {
+  width: 100%;
+  height: 300px;
+  padding: 12px;
+  background-color: #092530;
+  background: linear-gradient(#0c2d39, #071a22);
+  overflow: hidden;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr 42px;
+  gap: 8px;
+  height: 36px;
+  margin-bottom: 8px;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.topbar strong {
+  display: block;
+  font-size: 18px;
+  line-height: 21px;
+}
+
+.badge {
+  height: 26px;
+  margin-top: 4px;
+  padding-top: 5px;
+  color: #06202a;
+  background-color: var(--accent);
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.content-scroll {
+  height: 196px;
+  overflow: auto;
+}
+
+.hero-card,
+.recipe-card {
+  position: relative;
+  max-width: 100%;
+  margin-bottom: 8px;
+  padding: 11px;
+  background-color: var(--panel);
+  background: linear-gradient(rgba(130, 232, 236, 0.28), rgba(44, 135, 176, 0.18));
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  box-shadow: 0 0 14px rgba(64, 196, 224, 0.20);
+  overflow: hidden;
+}
+
+.hero-card {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  min-height: 70px;
+}
+
+.status-dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  background-color: var(--accent);
+  border-radius: 50%;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 23px;
+  line-height: 27px;
+}
+
+h2 {
+  margin-bottom: 5px;
+  font-size: 15px;
+  line-height: 18px;
+}
+
+p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.button,
+.nav-button {
+  width: 100%;
+  height: 32px;
+  color: var(--ink);
+  background-color: rgba(96, 193, 220, 0.24);
+  background: linear-gradient(rgba(170, 244, 248, 0.30), rgba(68, 154, 194, 0.18));
+  border: 1px solid rgba(144, 237, 236, 0.58);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.button.primary,
+.nav-button.is-active {
+  color: #06202a;
+  background-color: var(--accent);
+  background: linear-gradient(rgba(224, 255, 174, 0.92), rgba(143, 228, 112, 0.74));
+}
+
+.button:active,
+.button:focus,
+.nav-button:active,
+.nav-button:focus {
+  transform: translate(0px, 1px) scale(0.97);
+  outline: 1px solid rgba(230, 255, 255, 0.54);
+}
+
+.soft {
+  background-color: rgba(255, 255, 255, 0.10);
+  background: linear-gradient(rgba(255, 255, 255, 0.14), rgba(92, 178, 208, 0.10));
+}
+
+.metric-row,
+.mini-list li {
+  display: grid;
+  grid-template-columns: 1fr 52px;
+  gap: 6px;
+  align-items: center;
+}
+
+.metric-row {
+  height: 28px;
+  margin-top: 7px;
+}
+
+.metric-row span,
+.mini-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-row strong,
+.mini-list strong {
+  font-size: 15px;
+  text-align: right;
+}
+
+.mini-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mini-list li {
+  height: 25px;
+  border-bottom: 1px solid rgba(144, 237, 236, 0.28);
+}
+
+.mini-list li:last-child {
+  border-bottom: 0;
+}
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  height: 34px;
+  margin-top: 8px;
+}
+
+.nav-button {
+  height: 34px;
+  padding: 0;
+  font-size: 11px;
+}
+
+@media (max-height: 260px) {
+  .screen {
+    height: 240px;
+    padding: 10px;
+  }
+
+  .topbar {
+    height: 30px;
+    margin-bottom: 6px;
+  }
+
+  .topbar strong {
+    font-size: 16px;
+    line-height: 18px;
+  }
+
+  .badge {
+    height: 23px;
+    padding-top: 4px;
+  }
+
+  .content-scroll {
+    height: 154px;
+  }
+
+  .hero-card,
+  .recipe-card {
+    margin-bottom: 7px;
+    padding: 9px;
+    border-radius: 15px;
+  }
+
+  .hero-card {
+    min-height: 62px;
+  }
+
+  h1 {
+    font-size: 20px;
+    line-height: 23px;
+  }
+
+  h2 {
+    font-size: 13px;
+    line-height: 16px;
+  }
+
+  p {
+    font-size: 10px;
+    line-height: 14px;
+  }
+
+  .button,
+  .nav-button {
+    height: 28px;
+    border-radius: 14px;
+  }
+
+  .bottom-nav {
+    height: 28px;
+    margin-top: 6px;
+  }
+}
+
+@media (max-width: 200px) {
+  .screen {
+    height: 320px;
+    padding: 10px;
+  }
+
+  .topbar {
+    grid-template-columns: 1fr 34px;
+    height: 34px;
+    gap: 6px;
+  }
+
+  .topbar strong {
+    font-size: 17px;
+    line-height: 20px;
+  }
+
+  .badge {
+    height: 24px;
+    padding-top: 4px;
+    font-size: 11px;
+  }
+
+  .content-scroll {
+    height: 226px;
+  }
+
+  .hero-card {
+    grid-template-columns: 18px 1fr;
+    gap: 6px;
+  }
+
+  .recipe-card,
+  .hero-card {
+    padding: 9px;
+    border-radius: 15px;
+  }
+
+  .status-dot {
+    width: 12px;
+    height: 12px;
+  }
+
+  h1 {
+    font-size: 20px;
+    line-height: 23px;
+  }
+
+  .button {
+    height: 30px;
+  }
+
+  .metric-row,
+  .mini-list li {
+    grid-template-columns: 1fr 42px;
+  }
+
+  .bottom-nav {
+    gap: 5px;
+  }
+
+  .nav-button {
+    font-size: 10px;
+  }
+}
