@@ -40,7 +40,9 @@ JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固
   远程 CSS/script/image 资源，但不会把未来宿主提供的 fetch API 路线写死。
 - 可选资源缺失时干净降级；必需 entry 资源缺失应在烧录前由打包器报错。
 - 打包默认执行字体资源预检，报告源码中使用的非 ASCII 字符、推荐 font profile 和 bitmap
-  字体预算；开发者只有在明确知道目标环境字体覆盖由系统保证时才应使用 `--no-font-check`。
+  字体预算；CLI 默认还会在 report 旁生成 `*.used_chars.txt`，作为 app 字体补充包的输入。
+  开发者只有在明确知道目标环境字体覆盖由系统保证时才应使用 `--no-font-check` 或
+  `--font-subset off`。
 
 ## 运行时安装与网络边界
 
@@ -238,6 +240,38 @@ supplement，验收整数倍字号缩放，并故意保留一个缺字探针，�
 当前稳定生产路径仍是：打包/检查阶段收集 used chars，离线从授权字体生成 bitmap glyph 数据，
 再把生成的 `BitmapFont` 编译进 port/firmware 或作为 `.jffont` supplement 随 `.jfapp`
 安装，并通过 `TextMeasureProvider`/`TextPainter` 或 `AppFontSet` 注入。
+
+CLI 的 `check`、`package`、`preview` 和源码包 `install` 默认使用 `--font-subset auto`。
+这会运行字体预检、输出 `report.used_chars.txt`，并在 JSON report 中写入：
+
+```json
+{
+  "fontSubset": {
+    "mode": "auto",
+    "usedChars": "build/my_app.used_chars.txt",
+    "generatedFont": "",
+    "generated": false
+  }
+}
+```
+
+如果已有授权 BDF bitmap font，可以让 CLI 在同一次预检中生成 `.jffont`：
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root samples\apps\packages\jelly_font_policy `
+  --target round-300 `
+  --report build\font_policy.report.json `
+  --font-source-bdf src\render_core\samples\fonts\bitmap\tiny.bdf `
+  --font-output build\font_policy.generated.jffont `
+  --font-coverage-bits 2 `
+  --font-allow-missing
+```
+
+生成的 `.jffont` 不会自动修改源码包。要让 runtime 使用它，仍需把文件复制或输出到 app
+目录下，并在 `jellyframe.app.json` 的 `fonts[]` 中声明 `id`、`source`、`profile`、`family`
+和授权信息。这个显式步骤是有意保留的：字体来源和授权必须由 app 作者确认，工具不应替作者
+默默发布第三方字体资源。
 
 内置 target presets 位于 `tools/presets/targets`。可以这样列出：
 

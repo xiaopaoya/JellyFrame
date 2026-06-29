@@ -62,8 +62,10 @@ The reviewed platforms converge on a few practical patterns:
   fail package validation before flashing.
 - Packaging runs font resource preflight by default. It reports non-ASCII
   source characters, a recommended font profile and bitmap-font budget
-  estimates; use `--no-font-check` only when target font coverage is guaranteed
-  outside this package flow.
+  estimates. The CLI also writes `*.used_chars.txt` beside the report by
+  default so the file can feed an app font supplement generator; use
+  `--no-font-check` or `--font-subset off` only when target font coverage is
+  guaranteed outside this package flow.
 
 ## Runtime Installation And Network Boundary
 
@@ -309,6 +311,42 @@ package/check, generate bitmap glyph data offline from a licensed font, compile
 the generated `BitmapFont` into the port/firmware or install it as a `.jffont`
 supplement inside `.jfapp`, then inject it through `TextMeasureProvider`/
 `TextPainter` or `AppFontSet`.
+
+CLI `check`, `package`, `preview` and source-package `install` default to
+`--font-subset auto`. That runs font preflight, emits `report.used_chars.txt`
+and records the plan in the JSON report:
+
+```json
+{
+  "fontSubset": {
+    "mode": "auto",
+    "usedChars": "build/my_app.used_chars.txt",
+    "generatedFont": "",
+    "generated": false
+  }
+}
+```
+
+When a licensed BDF bitmap font is available, the same preflight can generate a
+`.jffont` supplement:
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root samples\apps\packages\jelly_font_policy `
+  --target round-300 `
+  --report build\font_policy.report.json `
+  --font-source-bdf src\render_core\samples\fonts\bitmap\tiny.bdf `
+  --font-output build\font_policy.generated.jffont `
+  --font-coverage-bits 2 `
+  --font-allow-missing
+```
+
+The generated `.jffont` is not injected into the source package automatically.
+To use it at runtime, copy or write it into the app directory and declare it in
+`jellyframe.app.json` `fonts[]` with `id`, `source`, `profile`, `family` and
+license metadata. This explicit step is intentional: the app author must own
+font source and redistribution decisions, and the tool should not silently ship
+third-party font data.
 
 Built-in target presets live under `tools/presets/targets`. List them with:
 

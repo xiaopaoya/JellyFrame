@@ -53,6 +53,13 @@ def assert_font_report(report_path: Path) -> None:
     warnings = report.get("warnings", [])
     assert [warning["code"] for warning in warnings] == ["font-missing-glyphs"]
 
+    subset = report["fontSubset"]
+    assert subset["mode"] == "auto"
+    assert subset["generated"] is False
+    used_chars = Path(subset["usedChars"])
+    assert used_chars.is_file()
+    assert "あ" in used_chars.read_text(encoding="utf-8")
+
 
 def main() -> int:
     if len(sys.argv) != 3:

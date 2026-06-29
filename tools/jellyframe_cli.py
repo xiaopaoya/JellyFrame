@@ -229,6 +229,18 @@ def merge_responsive_profiles(package_report_path: Path, profiles: list[dict]) -
     write_json_report(package_report_path, report)
 
 
+def merge_font_subset_report(package_report_path: Path, font_subset: dict) -> None:
+    if not font_subset:
+        return
+    report = load_json_if_exists(package_report_path)
+    if not report:
+        report = {
+            "format": "jellyframe.package.report",
+        }
+    report["fontSubset"] = font_subset
+    write_json_report(package_report_path, report)
+
+
 def remember_pipeline_report(args: argparse.Namespace, pipeline_report_path: Path) -> None:
     args._pipeline_report = load_json_if_exists(pipeline_report_path)
     merge_pipeline_report(args.report, args._pipeline_report)
@@ -489,15 +501,74 @@ def run_font_resource_check(args: argparse.Namespace) -> int:
     ensure_tool(font_check)
     files = resource_files_from_report(args.root, args.report)
     command = [str(font_check)]
-    emit_used_chars = getattr(args, "emit_used_chars", None)
+    font_subset_mode = getattr(args, "font_subset", "auto") or "auto"
+    if font_subset_mode not in {"auto", "off"}:
+        emit_used_chars = Path(font_subset_mode)
+    else:
+        emit_used_chars = getattr(args, "emit_used_chars", None)
+        if font_subset_mode == "auto" and emit_used_chars is None:
+            emit_used_chars = args.report.with_suffix(".used_chars.txt")
     font_coverage = getattr(args, "font_coverage", None)
     if font_coverage:
         command.extend(["--font-coverage", str(font_coverage)])
     command.extend(["--font-budget", effective_font_budget(args)])
     if emit_used_chars:
+        emit_used_chars.parent.mkdir(parents=True, exist_ok=True)
         command.extend(["--emit-used-chars", str(emit_used_chars)])
     command.extend(files)
-    return run_command(command)
+    result = run_command(command)
+    if result != 0:
+        return result
+
+    generated_font = getattr(args, "font_output", None)
+    font_source_bdf = getattr(args, "font_source_bdf", None)
+    generated = False
+    if generated_font and font_subset_mode == "off":
+        raise SystemExit("--font-output requires --font-subset auto or a used-chars path")
+    if generated_font and not font_source_bdf:
+        raise SystemExit("--font-output requires --font-source-bdf")
+    if font_source_bdf:
+        if font_subset_mode == "off":
+            raise SystemExit("--font-source-bdf requires --font-subset auto or a used-chars path")
+        if not generated_font:
+            raise SystemExit("--font-source-bdf requires --font-output")
+        if not emit_used_chars:
+            raise SystemExit("font subset generation requires a used-chars output path")
+        font_pack_gen = tool_path(args.build_dir, "jellyframe_font_pack_gen")
+        ensure_tool(font_pack_gen)
+        generated_font.parent.mkdir(parents=True, exist_ok=True)
+        font_command = [
+            str(font_pack_gen),
+            "--bdf",
+            str(font_source_bdf),
+            "--chars",
+            str(emit_used_chars),
+            "--output-binary",
+            str(generated_font),
+            "--coverage-bits",
+            str(getattr(args, "font_coverage_bits", 1)),
+        ]
+        if getattr(args, "font_allow_missing", False):
+            font_command.append("--allow-missing")
+        result = run_command(font_command)
+        if result != 0:
+            return result
+        generated = True
+
+    merge_font_subset_report(args.report, {
+        "mode": font_subset_mode,
+        "usedChars": str(emit_used_chars) if emit_used_chars else "",
+        "sourceBdf": str(font_source_bdf) if font_source_bdf else "",
+        "generatedFont": str(generated_font) if generated_font else "",
+        "generated": generated,
+        "coverageBits": int(getattr(args, "font_coverage_bits", 1)),
+        "note": (
+            "Generated .jffont files must still be declared in manifest fonts[] before runtime use."
+            if generated else
+            "Use --font-source-bdf and --font-output to generate a .jffont supplement from the scanned used chars."
+        ),
+    })
+    return 0
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -756,6 +827,16 @@ def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:
                         help="Optional embedded font coverage text file for preflight checks.")
     parser.add_argument("--emit-used-chars", type=Path,
                         help="Optional output file for used non-ASCII characters.")
+    parser.add_argument("--font-subset", default="auto",
+                        help="Font subset plan: auto, off, or an explicit used-chars output path. Defaults to auto.")
+    parser.add_argument("--font-source-bdf", type=Path,
+                        help="Optional BDF source used to generate a .jffont supplement during preflight.")
+    parser.add_argument("--font-output", type=Path,
+                        help="Optional generated .jffont output path. Requires --font-source-bdf.")
+    parser.add_argument("--font-coverage-bits", type=int, default=1, choices=[1, 2, 4],
+                        help="Coverage depth for generated .jffont supplements.")
+    parser.add_argument("--font-allow-missing", action="store_true",
+                        help="Allow missing BDF glyphs while generating a .jffont supplement.")
 
 
 def add_responsive_args(parser: argparse.ArgumentParser) -> None:
