@@ -34,7 +34,18 @@
         "shape": "round"
       },
       "fontProfile": "tiny-plus-symbols",
-      "output": "cpp"
+      "output": "cpp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 300,
+          "height": 300
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
     },
     "rect-320x240": {
       "viewport": {
@@ -43,7 +54,18 @@
         "shape": "rect"
       },
       "fontProfile": "tiny-plus-symbols",
-      "output": "cpp"
+      "output": "cpp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 300,
+          "height": 220
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
     },
     "rect-172x320": {
       "viewport": {
@@ -52,7 +74,18 @@
         "shape": "rect"
       },
       "fontProfile": "tiny-plus-symbols",
-      "output": "cpp"
+      "output": "cpp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 172,
+          "height": 300
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
     }
   }
 }
