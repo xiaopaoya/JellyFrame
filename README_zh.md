@@ -31,6 +31,8 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 
 精确的支持/降级/延后功能见
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
+如果你是 app 作者而不是引擎移植者，请先读
+[docs/app_author_guide_zh.md](docs/app_author_guide_zh.md)。
 
 ## 应用截图
 

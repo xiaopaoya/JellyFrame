@@ -69,12 +69,14 @@ For a first pass:
 2. Read this file for build and tool usage.
 3. Read [docs/engine_architecture.md](docs/engine_architecture.md) to understand
    the pipeline.
-4. Read [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md)
-   before writing pages for the engine.
-5. Read the module scope document for the area you want to use, port or inspect:
+4. If you are writing an app, read
+   [docs/app_author_guide.md](docs/app_author_guide.md) before the full matrix.
+5. Use [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md)
+   as the detailed can-do/cannot-do reference.
+6. Read the module scope document for the area you want to use, port or inspect:
    tokenizer, tree builder, CSS parser, CSSOM, render tree, layer tree,
    renderer, events, scripting, text backend or HAL.
-6. Use the dump tools to inspect what the engine actually produced.
+7. Use the dump tools to inspect what the engine actually produced.
 
 For embedded porting:
 

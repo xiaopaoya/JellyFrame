@@ -65,10 +65,12 @@ manifest 能力声明使用。
 1. 读 [README_zh.md](README_zh.md)，建立项目直觉。
 2. 读本文，了解构建、工具和运行方式。
 3. 读 [docs/engine_architecture_zh.md](docs/engine_architecture_zh.md)，理解整条管线。
-4. 写页面或 app 前，查 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
-5. 根据要使用、移植或检查的模块，阅读对应模块 scope 文档：tokenizer、tree builder、CSS parser、CSSOM、
+4. 如果你要写 app，先读 [docs/app_author_guide_zh.md](docs/app_author_guide_zh.md)，再查完整能力矩阵。
+5. 用 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)
+   作为详细 can-do/cannot-do 参考。
+6. 根据要使用、移植或检查的模块，阅读对应模块 scope 文档：tokenizer、tree builder、CSS parser、CSSOM、
    render tree、layer tree、renderer、events、scripting、text backend 或 HAL。
-6. 用 dump 工具观察引擎实际生成了什么，不要只凭浏览器直觉猜。
+7. 用 dump 工具观察引擎实际生成了什么，不要只凭浏览器直觉猜。
 
 做嵌入式移植时：
 

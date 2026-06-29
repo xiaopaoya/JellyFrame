@@ -6,9 +6,10 @@
 
 1. [../HOW_TO_START_zh.md](../HOW_TO_START_zh.md)
 2. [engine_architecture_zh.md](engine_architecture_zh.md)
-3. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
-4. 如果要构建本地 app package，读 [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)。
-5. 根据要使用、移植或检查的模块，继续阅读对应模块文档。
+3. 如果要写 app，读 [app_author_guide_zh.md](app_author_guide_zh.md)。
+4. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
+5. 如果要构建本地 app package，读 [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)。
+6. 根据要使用、移植或检查的模块，继续阅读对应模块文档。
 
 ## 技术文档
 
@@ -50,6 +51,7 @@
 
 ### 面向开发者的功能契约
 
+- [app_author_guide_zh.md](app_author_guide_zh.md)：给 app 作者的短契约、布局 recipes 和 warning 修法。
 - [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)：最主要的 can-do/cannot-do 契约。
 - [jelly_ui_design_system_zh.md](jelly_ui_design_system_zh.md)：胶体/水母质感的控件与动效设计体系。
 - [versioning_zh.md](versioning_zh.md)：版本和发布纪律。

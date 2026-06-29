@@ -498,6 +498,105 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("round-300:fits/accept", formatted)
         self.assertIn("rect-172x320:diagnostics-warning/warn", formatted)
 
+    def test_developer_advice_is_derived_from_report_diagnostics(self):
+        report = {
+            "warnings": [{
+                "level": "warning",
+                "code": "font-family-unmatched",
+                "message": "CSS primary font-family is not declared",
+                "source": "/styles/app.css",
+            }, {
+                "level": "warning",
+                "code": "service-target-unsupported",
+                "message": "target does not support requested service",
+                "source": "jellyframe.app.json",
+            }, {
+                "level": "warning",
+                "code": "future-diagnostic-code",
+                "message": "future warning shape",
+                "source": "future",
+            }],
+            "pipelineDiagnostics": {
+                "diagnostics": [{
+                    "stage": "layout",
+                    "severity": "warning",
+                    "code": "layout-text-overflow",
+                    "detail": "Start",
+                }],
+            },
+            "responsiveProfiles": [{
+                "target": "rect-172x320",
+                "status": "horizontal-overflow",
+                "layout": {"horizontalOverflow": True},
+                "diagnostics": {"warning": 1, "error": 0},
+                "diagnosticSamples": [{
+                    "stage": "layout",
+                    "severity": "warning",
+                    "code": "layout-text-overflow",
+                    "detail": "Daily",
+                }],
+                "gate": {"decision": "warn", "reasons": ["horizontal-overflow"]},
+            }],
+            "fontDiagnostics": {
+                "missingNonAsciiCodepointCount": 1,
+                "fontFamilyUsage": {"unmatchedPrimaryCount": 1},
+            },
+        }
+
+        advice = jellyframe_cli.collect_developer_advice(report)
+        codes = {entry["code"] for entry in advice}
+
+        self.assertIn("font-family-unmatched", codes)
+        self.assertIn("service-target-unsupported", codes)
+        self.assertIn("future-diagnostic-code", codes)
+        self.assertIn("layout-text-overflow", codes)
+        self.assertIn("visual-horizontal-overflow", codes)
+        self.assertIn("target-gate-not-accepted", codes)
+        self.assertIn("font-missing-glyphs", codes)
+        self.assertTrue(all(entry.get("action") for entry in advice))
+        self.assertTrue(any(entry["code"] == "future-diagnostic-code" and
+                            "review" in entry["title"].lower()
+                            for entry in advice))
+        self.assertTrue(any(entry["code"] == "layout-text-overflow" and
+                            entry.get("target") == "rect-172x320"
+                            for entry in advice))
+
+    def test_responsive_profile_carries_diagnostic_samples(self):
+        profile = jellyframe_cli.responsive_profile_from_pipeline("rect-172x320", {
+            "viewport": {"width": 172, "height": 320, "shape": "rect"},
+        }, {
+            "viewport": {"width": 172, "height": 320},
+            "summary": {"warning": 1},
+            "diagnostics": [{
+                "stage": "layout",
+                "severity": "warning",
+                "code": "layout-text-overflow",
+                "detail": "Hourly",
+            }],
+        })
+
+        self.assertEqual(profile["diagnosticSamples"][0]["code"], "layout-text-overflow")
+        self.assertEqual(profile["diagnosticSamples"][0]["detail"], "Hourly")
+
+    def test_write_json_report_adds_developer_advice(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-advice-report-") as directory:
+            report_path = Path(directory) / "report.json"
+            jellyframe_cli.write_json_report(report_path, {
+                "format": "jellyframe.package.report",
+                "pipelineDiagnostics": {
+                    "diagnostics": [{
+                        "stage": "layout",
+                        "severity": "warning",
+                        "code": "visual-scroll-needed",
+                        "detail": "contentHeight=340 viewportHeight=300",
+                    }],
+                },
+            })
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(report["developerAdvice"][0]["code"], "visual-scroll-needed")
+        self.assertIn("action", report["developerAdvice"][0])
+
     def test_requested_targets_are_explicit_opt_in(self):
         class Args:
             target = "round-300"

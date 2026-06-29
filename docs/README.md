@@ -7,9 +7,10 @@ interfaces and host contracts. These docs should stay close to the code.
 
 1. [../HOW_TO_START.md](../HOW_TO_START.md)
 2. [engine_architecture.md](engine_architecture.md)
-3. [developer_capability_matrix.md](developer_capability_matrix.md)
-4. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
-5. The module document for the area you want to use, port or inspect.
+3. [app_author_guide.md](app_author_guide.md) if you are writing apps.
+4. [developer_capability_matrix.md](developer_capability_matrix.md)
+5. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
+6. The module document for the area you want to use, port or inspect.
 
 ## Technical Documents
 
@@ -70,6 +71,8 @@ interfaces and host contracts. These docs should stay close to the code.
 
 ### Developer-Facing Feature Contract
 
+- [app_author_guide.md](app_author_guide.md): short app-author contract,
+  recipes and warning fixes.
 - [developer_capability_matrix.md](developer_capability_matrix.md): the primary
   can-do/cannot-do contract.
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish

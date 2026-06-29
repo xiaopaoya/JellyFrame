@@ -40,6 +40,8 @@ targets and documentation use `JellyFrame`.
 
 For the exact supported/degraded/deferred feature set, read
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
+If you are writing an app rather than porting the engine, start with
+[docs/app_author_guide.md](docs/app_author_guide.md).
 
 ## App Gallery
 

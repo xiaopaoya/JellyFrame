@@ -323,6 +323,10 @@ manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 tar
 target。当前 gate 可检查最小 viewport、是否允许滚动、是否允许横向溢出，以及 diagnostics
 warning/error 数。它是发布前适配契约，不是完整 responsive layout 引擎。
 
+Responsive profile 还会携带小型 `diagnosticSamples[]` 列表。它只保留代表性的 target-specific
+诊断，例如窄屏文本溢出，不会把整份伪浏览器日志复制到每个 profile。`developerAdvice[]`
+会消费这些样本，从而把建议指向具体 target 和 detail。
+
 影响运行兼容性的字段应由 packer 强制要求：
 
 - `id`、`version.code`、`entry`、`runtime.minJellyFrame`；
@@ -766,6 +770,12 @@ reference 诊断、`imageDiagnostics`、`fontDiagnostics`、package-resource war
 `AppBudgetSnapshot`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、面向内存的管线统计、
 severity 汇总，以及 parser、style、layout、layer、renderer 代码实际发出的 diagnostics。
 已知不支持或降级的特性应给出明确原因；未知恢复至少应包含触发字段或片段。
+
+当 report 由 `tools/jellyframe_cli.py` 写出时，CLI 还会从 package warnings、管线
+diagnostics、responsive profiles 和字体 diagnostics 派生 `developerAdvice[]`。这个字段面向
+app 作者和编辑器集成：每条保留稳定诊断 `code`、severity，以及可选 source/target/detail，
+再补一段简短解释和优先修复动作。它不替代底层 diagnostics，也不进入 MCU runtime。未来新增但还没
+专门写 advice 文案的诊断码仍会得到通用 review 项，避免 app 作者只看到沉默的失败。
 
 安装/升级/删除生命周期：
 

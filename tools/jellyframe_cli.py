@@ -200,8 +200,345 @@ def load_json_if_exists(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+ADVICE_BY_CODE = {
+    "visual-horizontal-overflow": {
+        "title": "Content paints outside the target width",
+        "explanation": "One or more boxes extend beyond the viewport on this target.",
+        "action": "Use max-width: 100%, box-sizing: border-box, shorter labels, a vertical stack, or a scroll container. Check the target's paintBounds in the report.",
+    },
+    "layout-text-overflow": {
+        "title": "Text is wider than its layout box",
+        "explanation": "The measured label cannot fit in the available box and will be clipped or visually degraded.",
+        "action": "Shorten the text, increase the box width, reduce font-size, allow wrapping, or use a target-specific media rule for narrow screens.",
+    },
+    "layout-text-overflow-ellipsis": {
+        "title": "Ellipsis text still overflows its box",
+        "explanation": "The page requested ellipsis, but the current text backend still reports a clipped or degraded narrow label.",
+        "action": "Keep the text short for this target, reserve more width, or provide a narrower label through app logic or media rules.",
+    },
+    "visual-scroll-needed": {
+        "title": "Page content is taller than the viewport",
+        "explanation": "The rendered content height exceeds the target height.",
+        "action": "If scrolling is intended, put long content in an explicit overflow: auto container and allow scroll in the target gate. Otherwise reduce vertical padding, card count, or fixed heights.",
+    },
+    "visual-scroll-container": {
+        "title": "A scroll container clips content",
+        "explanation": "An internal scroll area contains more content than its visible box.",
+        "action": "Make sure the container is reachable by touch/wheel/key input, keep fixed navigation outside it, and verify the target gate allows this scroll behavior.",
+    },
+    "visual-display-command-density": {
+        "title": "Display command density is high",
+        "explanation": "This page generates a dense display list for the current viewport.",
+        "action": "Reduce decorative layers, shadows, gradients, generated content, or repeated nodes. Prefer one canvas/chart or one background effect over many overlapping DOM boxes.",
+    },
+    "style-property-unsupported": {
+        "title": "CSS property is outside the supported subset",
+        "explanation": "The parser accepted the CSS syntax, but this property is not applied by JellyFrame.",
+        "action": "Replace it with a documented subset property from the capability matrix, or move the effect into a supported component/canvas path.",
+    },
+    "style-declaration-ignored": {
+        "title": "CSS declaration value was ignored",
+        "explanation": "The property may exist, but the specific value is outside the supported subset.",
+        "action": "Use a simpler documented value. For sizing, prefer px, %, min/max/clamp subsets and box-sizing: border-box.",
+    },
+    "style-after-property-unsupported": {
+        "title": "::after uses an unsupported property",
+        "explanation": "Generated content exists only as a small decoration/text subset.",
+        "action": "Keep ::before/::after to content, simple box styling and low-cost decoration. Put richer styling on a real element.",
+    },
+    "style-conic-gradient-unsupported": {
+        "title": "conic-gradient() is outside the supported subset",
+        "explanation": "JellyFrame supports only a small progress-ring-oriented conic-gradient subset.",
+        "action": "Use two-color or simple stop conic gradients centered in the element, or use Canvas 2D for custom gauges.",
+    },
+    "layer-conic-gradient-area-budget": {
+        "title": "Conic gradient exceeds the paint budget",
+        "explanation": "The gradient area is too expensive for the configured embedded rendering budget.",
+        "action": "Shrink the element, simplify the gradient, pre-render the asset, or move the effect behind an opt-in canvas/resource budget.",
+    },
+    "css-at-rule-skipped": {
+        "title": "CSS at-rule was skipped",
+        "explanation": "This at-rule is not part of the supported CSS subset.",
+        "action": "Use supported @media rules and simple selectors, or move target-specific choices into manifest targets and plain CSS rules.",
+    },
+    "css-selector-skipped": {
+        "title": "CSS selector was skipped",
+        "explanation": "The selector is too complex or outside the supported selector subset.",
+        "action": "Use simple class, id, element, descendant or documented pseudo-class selectors. Avoid browser-only selector tricks in app UI.",
+    },
+    "script-type-unsupported": {
+        "title": "Script type is unsupported",
+        "explanation": "JellyFrame V0 runs bounded classic scripts, not browser modules.",
+        "action": "Use classic package-local scripts and keep module bundling as a desktop build step.",
+    },
+    "script-load-failed": {
+        "title": "Script resource could not be loaded",
+        "explanation": "The script is missing, not packaged, or outside the local package resource model.",
+        "action": "Reference package-local scripts only and verify they appear in the package report resources list.",
+    },
+    "font-family-unmatched": {
+        "title": "CSS font-family is not a manifest runtime font",
+        "explanation": "A custom primary font-family was used in CSS but no manifest .jffont family matches it.",
+        "action": "Use system-ui/sans-serif for the system font, or add a .jffont entry with a matching family in jellyframe.app.json.",
+    },
+    "font-missing-glyphs": {
+        "title": "Target fonts do not cover all app text",
+        "explanation": "Some source characters are not covered by the target font profile or app font supplements.",
+        "action": "Run the default font subset preflight, generate a .jffont supplement from the used-chars file, then declare it in manifest fonts[].",
+    },
+    "missing-font-resource": {
+        "title": "Declared font resource is not packaged",
+        "explanation": "The manifest points at a font file that was not found in the app package.",
+        "action": "Fix fonts[].source to a package-local path and rerun check/package.",
+    },
+    "unsupported-font-resource-format": {
+        "title": "Font resource format is not runtime-loadable",
+        "explanation": "Runtime app fonts must use JellyFrame .jffont resources.",
+        "action": "Convert the source bitmap font to .jffont with the font pack generator, then declare the .jffont file in the manifest.",
+    },
+    "image-codec-target-unsupported": {
+        "title": "Target does not declare this image codec",
+        "explanation": "The app packages an image codec that the selected target profile may not decode.",
+        "action": "Use a target-supported package image format, add a host image decoder profile, or replace large decorative images with CSS/canvas.",
+    },
+    "image-codec-unsupported": {
+        "title": "Image codec is unsupported",
+        "explanation": "The packaged image does not use a recognized V0 image codec path.",
+        "action": "For current Win32/package validation, use package-local BMP or a target profile with an explicit production codec adapter.",
+    },
+    "manifest-capability-unknown": {
+        "title": "Manifest capability is unknown",
+        "explanation": "The manifest asks for a capability name JellyFrame does not recognize.",
+        "action": "Use documented capability names only. Put product-specific features behind a host/profile contract before exposing them to apps.",
+    },
+    "service-target-unsupported": {
+        "title": "Target profile does not provide a requested service",
+        "explanation": "The app manifest requests a service, but the selected target reports it as unsupported.",
+        "action": "Either remove the app feature for this target, choose a target profile that provides it, or degrade the UI when the service is unavailable.",
+    },
+    "remote-package-resource": {
+        "title": "Package resource uses a remote URL",
+        "explanation": "JellyFrame packages local app resources only. Runtime data requests use host services instead of remote page assets.",
+        "action": "Move HTML, CSS, scripts, images and fonts into the app package. Use XHR/network capability only for bounded runtime data.",
+    },
+    "missing-local-resource": {
+        "title": "Referenced package resource is missing",
+        "explanation": "A local stylesheet, script, image, font or other resource path could not be found in the package.",
+        "action": "Fix the path, keep it package-local, and rerun check/package before testing on device.",
+    },
+    "manifest-field-unknown": {
+        "title": "Manifest contains an unknown field",
+        "explanation": "The field is not part of the documented manifest contract consumed by current tooling.",
+        "action": "Remove the field, move product-specific data under a documented host/profile contract, or update the schema before relying on it.",
+    },
+    "audio-capability-resource-mismatch": {
+        "title": "Audio resource is packaged without matching capability",
+        "explanation": "The app includes audio resources but the manifest/service intent does not match the current audio playback contract.",
+        "action": "Declare the documented audio capability for intended playback, or remove unused audio assets from the package.",
+    },
+    "image-bmp-invalid": {
+        "title": "BMP image header is invalid",
+        "explanation": "The packaged BMP metadata could not be parsed by the lightweight package checker.",
+        "action": "Regenerate the image as a simple uncompressed BMP for Win32 validation, or use a target profile with a production image codec adapter.",
+    },
+    "image-bmp-unsupported-debug-format": {
+        "title": "BMP format is not supported by the debug shell",
+        "explanation": "The Win32 debug shell only validates a small uncompressed BMP subset.",
+        "action": "Use uncompressed 24-bit or 32-bit BMP for current shell validation, or validate the asset through a product image codec adapter.",
+    },
+    "font-axis-metadata-missing": {
+        "title": "Font size/weight metadata is missing",
+        "explanation": "Runtime app fonts are bitmap supplements, so package metadata should say which sizes and weights were validated.",
+        "action": "Add fonts[].sizes and fonts[].weights to the manifest entry for this app font.",
+    },
+    "font-axis-metadata-invalid": {
+        "title": "Font size/weight metadata is invalid",
+        "explanation": "The manifest font metadata is present but not in the documented numeric array shape.",
+        "action": "Use integer arrays such as \"sizes\": [16, 20] and \"weights\": [400, 700].",
+    },
+    "font-license-missing": {
+        "title": "Font license metadata is missing",
+        "explanation": "The package redistributes or declares a font supplement without clear license metadata.",
+        "action": "Add fonts[].license.name and fonts[].license.source after confirming you can redistribute the generated font subset.",
+    },
+    "font-license-incomplete": {
+        "title": "Font license metadata is incomplete",
+        "explanation": "A font license block exists but does not include enough source/license information for release review.",
+        "action": "Fill in the missing license fields, or remove the app font until its redistribution terms are clear.",
+    },
+    "invalid-jffont-resource": {
+        "title": ".jffont resource is invalid",
+        "explanation": "The declared runtime font supplement could not be parsed as a JellyFrame bitmap font resource.",
+        "action": "Regenerate it with jellyframe_font_pack_gen and verify the manifest points at the generated .jffont file.",
+    },
+    "target-gate-not-accepted": {
+        "title": "Target gate is not accepted",
+        "explanation": "The app declared this target as publish-gated and the responsive profile violates that gate.",
+        "action": "Open the target's responsive profile, fix the listed overflow/scroll/diagnostic reasons, or intentionally lower the gate policy to warn while the target is still experimental.",
+    },
+}
+
+
+ADVICE_IGNORED_CODES = {
+    "css-media-query-not-matched",
+}
+
+
+def advice_template_for_code(code: str) -> dict:
+    if not code or code in ADVICE_IGNORED_CODES:
+        return {}
+    if code in ADVICE_BY_CODE:
+        return ADVICE_BY_CODE[code]
+    if "budget" in code or code.endswith("-limit"):
+        return {
+            "title": "A runtime or rendering budget was reached",
+            "explanation": "The app is asking for more nodes, resources, handles, commands or pixels than the configured target budget allows.",
+            "action": "Simplify the page, reduce repeated UI, shrink assets, or raise the manifest/target budget only after measuring the device cost.",
+        }
+    if "capability" in code or code.endswith("-denied"):
+        return {
+            "title": "A capability or host service is unavailable",
+            "explanation": "The app used an API or resource path that must be allowed by both manifest and target host profile.",
+            "action": "Declare the documented manifest capability, verify the selected target supports it, and provide a visible fallback when the host denies it.",
+        }
+    return {
+        "title": "Diagnostic needs app author review",
+        "explanation": "The toolchain reported a compatibility, resource, budget or degradation diagnostic for this app.",
+        "action": "Inspect this entry's source/detail, then check the app author guide and capability matrix. If it is intentional, document the tradeoff; otherwise simplify the app or use a documented subset feature.",
+    }
+
+
+def append_developer_advice(advice: list[dict],
+                            seen: set[tuple[str, str, str]],
+                            code: str,
+                            severity: str,
+                            source: str = "",
+                            detail: str = "",
+                            target: str = "") -> None:
+    template = advice_template_for_code(code)
+    if not template:
+        return
+    key = (code, source or target, detail[:120])
+    if key in seen:
+        return
+    seen.add(key)
+    entry = {
+        "code": code,
+        "severity": severity,
+        "title": template["title"],
+        "explanation": template["explanation"],
+        "action": template["action"],
+    }
+    if source:
+        entry["source"] = source
+    if detail:
+        entry["detail"] = detail
+    if target:
+        entry["target"] = target
+    advice.append(entry)
+
+
+def collect_developer_advice(report: dict) -> list[dict]:
+    advice: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    for warning in report.get("warnings", []):
+        if not isinstance(warning, dict):
+            continue
+        append_developer_advice(advice,
+                                seen,
+                                str(warning.get("code", "")),
+                                str(warning.get("level", "warning")),
+                                str(warning.get("source", "")),
+                                str(warning.get("message", "")),
+                                str(warning.get("target", "")))
+
+    pipeline = report.get("pipelineDiagnostics", {})
+    if isinstance(pipeline, dict):
+        for diagnostic in pipeline.get("diagnostics", []):
+            if not isinstance(diagnostic, dict):
+                continue
+            append_developer_advice(advice,
+                                    seen,
+                                    str(diagnostic.get("code", "")),
+                                    str(diagnostic.get("severity", "warning")),
+                                    "",
+                                    str(diagnostic.get("detail", "")))
+
+    for profile in report.get("responsiveProfiles", []):
+        if not isinstance(profile, dict):
+            continue
+        target = str(profile.get("target", ""))
+        status = str(profile.get("status", ""))
+        layout = profile.get("layout", {}) if isinstance(profile.get("layout", {}), dict) else {}
+        if status == "horizontal-overflow" or bool(layout.get("horizontalOverflow", False)):
+            append_developer_advice(advice,
+                                    seen,
+                                    "visual-horizontal-overflow",
+                                    "warning",
+                                    "",
+                                    "Responsive profile reports horizontal overflow.",
+                                    target)
+        if status == "scroll-needed" or bool(layout.get("verticalOverflow", False)):
+            append_developer_advice(advice,
+                                    seen,
+                                    "visual-scroll-needed",
+                                    "info",
+                                    "",
+                                    "Responsive profile reports content taller than the viewport.",
+                                    target)
+        gate = profile.get("gate", {})
+        if isinstance(gate, dict) and gate.get("decision") in {"warn", "reject"}:
+            append_developer_advice(advice,
+                                    seen,
+                                    "target-gate-not-accepted",
+                                    "error" if gate.get("decision") == "reject" else "warning",
+                                    "",
+                                    "Target gate reasons: " + ", ".join(gate.get("reasons", [])),
+                                    target)
+        for diagnostic in profile.get("diagnosticSamples", []):
+            if not isinstance(diagnostic, dict):
+                continue
+            append_developer_advice(advice,
+                                    seen,
+                                    str(diagnostic.get("code", "")),
+                                    str(diagnostic.get("severity", "warning")),
+                                    "",
+                                    str(diagnostic.get("detail", "")),
+                                    target)
+
+    font_diagnostics = report.get("fontDiagnostics", {})
+    if isinstance(font_diagnostics, dict):
+        if int(font_diagnostics.get("missingNonAsciiCodepointCount", 0) or 0) > 0:
+            append_developer_advice(advice,
+                                    seen,
+                                    "font-missing-glyphs",
+                                    "warning",
+                                    "jellyframe.app.json",
+                                    "Target/app fonts miss non-ASCII source codepoints.")
+        usage = font_diagnostics.get("fontFamilyUsage", {})
+        if isinstance(usage, dict) and int(usage.get("unmatchedPrimaryCount", 0) or 0) > 0:
+            append_developer_advice(advice,
+                                    seen,
+                                    "font-family-unmatched",
+                                    "warning",
+                                    "styles",
+                                    "One or more CSS primary font families do not match manifest fonts.")
+
+    return advice
+
+
+def enrich_report(report: dict) -> dict:
+    report.pop("developerAdvice", None)
+    advice = collect_developer_advice(report)
+    if advice:
+        report["developerAdvice"] = advice
+    return report
+
+
 def write_json_report(path: Path, report: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    enrich_report(report)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -239,6 +576,26 @@ def merge_font_subset_report(package_report_path: Path, font_subset: dict) -> No
         }
     report["fontSubset"] = font_subset
     write_json_report(package_report_path, report)
+
+
+def diagnostic_samples(report: dict, limit: int = 12) -> list[dict]:
+    diagnostics = report.get("diagnostics", []) if isinstance(report, dict) else []
+    samples = []
+    for diagnostic in diagnostics:
+        if not isinstance(diagnostic, dict):
+            continue
+        sample = {
+            "stage": str(diagnostic.get("stage", "")),
+            "severity": str(diagnostic.get("severity", "info")),
+            "code": str(diagnostic.get("code", "")),
+        }
+        detail = str(diagnostic.get("detail", ""))
+        if detail:
+            sample["detail"] = detail
+        samples.append(sample)
+        if len(samples) >= limit:
+            break
+    return samples
 
 
 def remember_pipeline_report(args: argparse.Namespace, pipeline_report_path: Path) -> None:
@@ -384,6 +741,7 @@ def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_
             "warning": int(summary.get("warning", 0) or 0),
             "error": int(summary.get("error", 0) or 0),
         },
+        "diagnosticSamples": diagnostic_samples(pipeline_report),
     }
 
 

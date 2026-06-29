@@ -404,6 +404,12 @@ allowed, whether horizontal overflow is allowed and diagnostic warning/error
 counts. It is a release-time adaptation contract, not a full responsive layout
 engine.
 
+Responsive profiles also carry a small `diagnosticSamples[]` list. It preserves
+representative target-specific diagnostics, such as narrow-screen text
+overflow, without copying the whole pseudo-browser log into every profile.
+`developerAdvice[]` uses these samples to point app authors at the affected
+target and detail.
+
 Fields that affect runtime compatibility must be required by the packer:
 
 - `id`, `version.code`, `entry`, `runtime.minJellyFrame`;
@@ -907,6 +913,15 @@ statistics, a severity summary and the concrete diagnostics emitted by parser,
 style, layout, layer and renderer code. Known unsupported/degraded features
 should include a precise reason; unknown recovery should at least include the
 triggering field or snippet.
+
+When the report is written through `tools/jellyframe_cli.py`, the CLI also
+derives `developerAdvice[]` from package warnings, pipeline diagnostics,
+responsive profiles and font diagnostics. This field is for app authors and
+editor integrations: each item keeps the stable diagnostic `code`, severity and
+optional source/target/detail, then adds a short explanation and first repair
+action. It does not replace the lower-level diagnostic fields and is not
+consumed by the MCU runtime. Unknown future diagnostic codes still receive a
+generic review item so authors have a visible place to start.
 
 Install/update/delete lifecycle:
 
