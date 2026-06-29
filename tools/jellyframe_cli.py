@@ -813,6 +813,51 @@ def sample_package_roots(samples_dir: Path) -> list[Path]:
     return roots
 
 
+def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> dict:
+    errors, warnings, infos = diagnostic_status_from_report(report_path)
+    report = load_json_if_exists(report_path)
+    targets = []
+    for profile in report.get("responsiveProfiles", []):
+        if not isinstance(profile, dict):
+            continue
+        gate = profile.get("gate", {})
+        gate_decision = gate.get("decision", "not-declared") if isinstance(gate, dict) else "not-declared"
+        targets.append({
+            "target": str(profile.get("target", "<target>")),
+            "status": str(profile.get("status", "unknown")),
+            "gate": str(gate_decision),
+        })
+    return {
+        "sample": sample,
+        "status": status,
+        "errors": errors,
+        "warnings": warnings,
+        "infos": infos,
+        "targets": targets,
+        "report": str(report_path),
+    }
+
+
+def format_doctor_summary(row: dict) -> str:
+    target_text = "-"
+    targets = row.get("targets", [])
+    if isinstance(targets, list) and targets:
+        target_text = ", ".join(
+            f"{target.get('target', '<target>')}:"
+            f"{target.get('status', 'unknown')}/"
+            f"{target.get('gate', 'not-declared')}"
+            for target in targets
+            if isinstance(target, dict)
+        ) or "-"
+    return (
+        f"  {row.get('sample', '<sample>')}: {row.get('status', 'unknown')} "
+        f"diagnostics={int(row.get('errors', 0) or 0)}/"
+        f"{int(row.get('warnings', 0) or 0)}/"
+        f"{int(row.get('infos', 0) or 0)} "
+        f"targets={target_text} report={row.get('report', '')}"
+    )
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     ensure_tool(tool_path(args.build_dir, "jellyframe_pseudo_browser"))
     roots = sample_package_roots(args.samples_dir)
@@ -825,6 +870,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         f"build_dir={args.build_dir}"
     )
     failed = 0
+    summaries = []
     for root in roots:
         report = args.report_dir / f"{root.name}.report.json"
         command = [
@@ -849,11 +895,21 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         result = run_command(command)
         status = "ok" if result == 0 else "failed"
         print(f"doctor sample {root.name}: {status} report={report}")
+        summaries.append(doctor_summary_from_report(root.name, status, report))
         if result != 0:
             failed += 1
             if args.fail_fast:
                 break
-    print(f"doctor summary: samples={len(roots)} failed={failed}")
+    total_errors = sum(int(row.get("errors", 0) or 0) for row in summaries)
+    total_warnings = sum(int(row.get("warnings", 0) or 0) for row in summaries)
+    total_infos = sum(int(row.get("infos", 0) or 0) for row in summaries)
+    print("doctor results:")
+    for row in summaries:
+        print(format_doctor_summary(row))
+    print(
+        f"doctor summary: samples={len(roots)} checked={len(summaries)} failed={failed} "
+        f"diagnostics={total_errors}/{total_warnings}/{total_infos} reports={args.report_dir}"
+    )
     return 1 if failed else 0
 
 

@@ -199,11 +199,12 @@ python tools\jellyframe_cli.py doctor --build-dir build\Release
 ```
 
 `doctor` uses `round-300,rect-320x240,rect-172x320` wearable targets by default.
-Warnings are allowed because small-screen scroll needs, explainable text
-overflow or target-gated optional capabilities can be valid degradation. Package
-errors, pipeline errors and blocking font issues still fail the command. New
-developers should run this command before opening the Win32 shell for app-level
-debugging.
+The final `doctor results` table shows each sample as
+`diagnostics=errors/warnings/infos` plus `target:status/gate` entries. Warnings
+are allowed because small-screen scroll needs, explainable text overflow or
+target-gated optional capabilities can be valid degradation. Package errors,
+pipeline errors and blocking font issues still fail the command. New developers
+should run this command before opening the Win32 shell for app-level debugging.
 
 Run the core microbenchmark:
 

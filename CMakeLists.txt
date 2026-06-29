@@ -358,7 +358,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_cli_doctor_sample_packages PROPERTIES
                 PASS_REGULAR_EXPRESSION
-                    "doctor summary: samples=[0-9]+ failed=0")
+                    "doctor summary: samples=[0-9]+ checked=[0-9]+ failed=0 diagnostics=[0-9]+/[0-9]+/[0-9]+")
 
             if(TARGET jellyframe_virtual_bench)
                 add_test(

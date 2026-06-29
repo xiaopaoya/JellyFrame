@@ -466,6 +466,38 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(warnings, 2)
         self.assertEqual(infos, 0)
 
+    def test_doctor_summary_compacts_responsive_gate_results(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-doctor-summary-") as directory:
+            report_path = Path(directory) / "sample.report.json"
+            report_path.write_text(json.dumps({
+                "format": "jellyframe.package.report",
+                "warnings": [{"code": "package-warning"}],
+                "pipelineDiagnostics": {
+                    "summary": {"error": 0, "warning": 1, "info": 2},
+                },
+                "responsiveProfiles": [{
+                    "target": "round-300",
+                    "status": "fits",
+                    "diagnostics": {"error": 0, "warning": 0, "info": 1},
+                    "gate": {"decision": "accept"},
+                }, {
+                    "target": "rect-172x320",
+                    "status": "diagnostics-warning",
+                    "diagnostics": {"error": 0, "warning": 2, "info": 0},
+                    "gate": {"decision": "warn"},
+                }],
+            }), encoding="utf-8")
+
+            summary = jellyframe_cli.doctor_summary_from_report("sample", "ok", report_path)
+            formatted = jellyframe_cli.format_doctor_summary(summary)
+
+        self.assertEqual(summary["warnings"], 5)
+        self.assertEqual(summary["infos"], 3)
+        self.assertEqual(summary["targets"][0]["gate"], "accept")
+        self.assertIn("sample: ok diagnostics=0/5/3", formatted)
+        self.assertIn("round-300:fits/accept", formatted)
+        self.assertIn("rect-172x320:diagnostics-warning/warn", formatted)
+
     def test_requested_targets_are_explicit_opt_in(self):
         class Args:
             target = "round-300"

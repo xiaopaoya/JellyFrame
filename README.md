@@ -80,7 +80,9 @@ ctest --test-dir build -C Release --output-on-failure
 
 After cloning the repository for the first time, run the trial-oriented sample
 self-check. It validates every complete app package and reports responsive/font
-diagnostics across common wearable targets:
+diagnostics across common wearable targets. The command leaves detailed JSON
+reports in `build/doctor_reports` and prints a compact per-sample summary at
+the end:
 
 ```powershell
 python tools\jellyframe_cli.py doctor --build-dir build\Release
