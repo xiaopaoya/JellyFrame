@@ -72,6 +72,8 @@ The reviewed platforms converge on a few practical patterns:
 JellyFrame's third-party app path is a flash/external-storage bundle, not
 firmware reflashing. Static C++ resource tables remain useful for launchers,
 watch faces, system settings, factory apps and safe fallback UI.
+For app-author launch, suspend, resume, service-completion and recovery
+semantics, see `app_lifecycle.md`.
 
 Runtime bundle boundary:
 

@@ -48,6 +48,7 @@ JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固
 
 JellyFrame 的第三方 app 目标是安装到 flash/外部存储的 bundle，而不是重新烧录固件。静态 C++
 资源表仍然有价值，但它更适合启动器、表盘、系统设置、出厂 app 和安全兜底 UI。
+面向 app 作者的启动、挂起、恢复、service completion 和 recovery 语义见 `app_lifecycle_zh.md`。
 
 安装式 bundle 的运行时边界：
 
