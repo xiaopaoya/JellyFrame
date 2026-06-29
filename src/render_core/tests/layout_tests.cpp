@@ -237,6 +237,50 @@ void percentage_width_and_height_use_containing_box() {
     check(cap->rect.width == 320 && cap->rect.height == 120, "max-height clamps percentage height");
 }
 
+void border_box_percent_width_accounts_for_edges() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main id='screen'><section id='card'></section></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#screen { width: 200px; }"
+        "#card { box-sizing: border-box; width: 100%; height: 20px; padding: 10px; border: 2px solid #000; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 240, 160);
+
+    const LayoutBox* screen = find_first_by_id(*layout_tree, "screen");
+    const LayoutBox* card = find_first_by_id(*layout_tree, "card");
+    check(screen != nullptr && card != nullptr, "border-box percent fixture boxes exist");
+    check(card->rect.width == 200, "border-box percent width keeps parent-sized border box");
+    check(card->rect.x + card->rect.width <= screen->rect.x + screen->rect.width,
+          "border-box percent child does not overflow parent horizontally");
+}
+
+void max_width_percent_clamps_nested_border_box() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main id='screen'><section id='card'><div id='inner'></div></section></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#screen { width: 172px; }"
+        "#card { box-sizing: border-box; width: 300px; max-width: 100%; padding: 6px; border: 1px solid #000; }"
+        "#inner { box-sizing: border-box; width: 100%; height: 18px; padding: 4px; border: 1px solid #000; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 172, 320);
+
+    const LayoutBox* screen = find_first_by_id(*layout_tree, "screen");
+    const LayoutBox* card = find_first_by_id(*layout_tree, "card");
+    const LayoutBox* inner = find_first_by_id(*layout_tree, "inner");
+    check(screen != nullptr && card != nullptr && inner != nullptr,
+          "max-width percent fixture boxes exist");
+    check(card->rect.width == 172, "max-width:100% clamps declared border-box width");
+    check(card->rect.x + card->rect.width <= screen->rect.x + screen->rect.width,
+          "clamped card stays inside narrow parent");
+    check(inner->rect.x + inner->rect.width <= card->rect.x + card->rect.width - card->style.border_width.right,
+          "nested border-box percent item stays inside clamped card");
+}
+
 void nowrap_text_overflow_reports_diagnostic() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -273,6 +317,8 @@ int main() {
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();
         percentage_width_and_height_use_containing_box();
+        border_box_percent_width_accounts_for_edges();
+        max_width_percent_clamps_nested_border_box();
         nowrap_text_overflow_reports_diagnostic();
     } catch (const std::exception& error) {
         std::cerr << "layout test failed: " << error.what() << '\n';

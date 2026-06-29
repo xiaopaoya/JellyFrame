@@ -316,8 +316,11 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
     const int fixed_border_box_width_px = box.style.width_percent >= 0
         ? resolve_percent(containing_content_width, box.style.width_percent)
         : box.style.width;
-    int border_box_width = std::max(min_width,
-        fixed_border_box_width ? fixed_border_box_width_px : measured_border_box_width);
+    int preferred_border_box_width = fixed_border_box_width ? fixed_border_box_width_px : measured_border_box_width;
+    if (max_content_width >= 0) {
+        preferred_border_box_width = std::min(preferred_border_box_width, measured_border_box_width);
+    }
+    int border_box_width = std::max(min_width, preferred_border_box_width);
     const int auto_space = std::max(0, width - border_box_width - margin_left - margin_right);
     int border_box_x = x + margin_left;
     if (box.style.margin_left_auto && box.style.margin_right_auto) {

@@ -18,6 +18,11 @@ height、横向溢出、是否需要滚动以及 diagnostics 计数，帮助 app
 `paintBounds`；横向溢出按最终可见 display-list bounds 判断，避免被裁剪的实现盒子造成误报。
 普通单 target 命令保持旧 report 结构，不输出 `responsiveProfiles[]`。
 
+App manifest 可以在 `targets[id].gate` 中声明发布前门槛，例如最小 viewport、是否允许滚动、
+是否允许横向溢出和 warning/error 上限。CLI 会在对应 `responsiveProfiles[]` 中写入
+`gate.decision`，其中 `reject` 会让命令失败，`warn` 只计入 warning。通用 preset 不应默认写
+app-specific gate；gate 是 app 作者对“这个 app 在这个 target 上是否可发布”的声明。
+
 字体预算字段（`maxAppFonts`、`maxAppFontBytes`、`maxAppFontGlyphs`）是 installable
 `.jffont` 补充包的工具限制。它们应反映 flash/storage 和安装策略预期，而不是每个 app 都共享的
 系统固件字体。

@@ -24,6 +24,14 @@ display-list bounds so clipped implementation boxes do not create false
 failures. Single-target commands keep the older report shape and do not emit
 `responsiveProfiles[]`.
 
+App manifests may declare release gates under `targets[id].gate`, such as
+minimum viewport, whether scroll is allowed, whether horizontal overflow is
+allowed and warning/error caps. The CLI writes `gate.decision` into the matching
+`responsiveProfiles[]` entry; `reject` fails the command, while `warn` only
+counts as a warning. Generic presets should not declare app-specific gates by
+default. A gate is the app author's statement about whether this app is
+publishable on a given target.
+
 Font budgets (`maxAppFonts`, `maxAppFontBytes`, `maxAppFontGlyphs`) are tooling
 limits for installable `.jffont` supplements. They should reflect flash/storage
 and install-policy expectations, not the system firmware font that every app

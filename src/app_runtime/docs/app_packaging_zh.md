@@ -295,6 +295,33 @@ python tools/jellyframe_cli.py new `
 manifest 中同名 `targets[id]` 设置。只存在于 manifest 的自定义 target 也允许；
 完全未知的 target 会明确失败。
 
+`targets[id].gate` 是可选的发布前适配门槛。它只由桌面 CLI 在 responsive profile 检查中消费，
+不进入 MCU runtime，也不改变页面行为。示例：
+
+```json
+{
+  "targets": {
+    "round-300": {
+      "viewport": { "width": 300, "height": 300, "shape": "round" },
+      "output": "jfapp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": { "width": 300, "height": 300 },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
+    }
+  }
+}
+```
+
+`policy` 决定违反 gate 时 report 写入 `accept`、`warn` 还是 `reject`。`reject`
+会让 `check`/`package`/`install` 失败；`warn` 只计入 warning，适合试用期或还在打磨的窄屏
+target。当前 gate 可检查最小 viewport、是否允许滚动、是否允许横向溢出，以及 diagnostics
+warning/error 数。它是发布前适配契约，不是完整 responsive layout 引擎。
+
 影响运行兼容性的字段应由 packer 强制要求：
 
 - `id`、`version.code`、`entry`、`runtime.minJellyFrame`；

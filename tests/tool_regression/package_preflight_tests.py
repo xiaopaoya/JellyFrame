@@ -434,6 +434,38 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(merged["responsiveProfiles"][0]["target"], "rect-320x240")
 
+    def test_responsive_gate_decision_is_reported_and_counted(self):
+        profile = {
+            "status": "horizontal-overflow",
+            "viewport": {"width": 172, "height": 320, "shape": "rect"},
+            "layout": {"horizontalOverflow": True},
+            "diagnostics": {"warning": 2, "error": 0},
+        }
+        gate = jellyframe_cli.responsive_gate_for_profile(profile, {
+            "policy": "reject",
+            "allowHorizontalOverflow": False,
+            "maxWarnings": 1,
+            "minViewport": {"width": 200, "height": 300},
+        })
+
+        self.assertEqual(gate["decision"], "reject")
+        self.assertIn("horizontal-overflow", gate["reasons"])
+        self.assertIn("warnings>1", gate["reasons"])
+        self.assertIn("viewport-width<200", gate["reasons"])
+
+        with tempfile.TemporaryDirectory(prefix="jellyframe-responsive-gate-") as directory:
+            report_path = Path(directory) / "report.json"
+            profile["gate"] = gate
+            report_path.write_text(json.dumps({
+                "format": "jellyframe.package.report",
+                "responsiveProfiles": [profile],
+            }), encoding="utf-8")
+            errors, warnings, infos = jellyframe_cli.diagnostic_status_from_report(report_path)
+
+        self.assertEqual(errors, 1)
+        self.assertEqual(warnings, 2)
+        self.assertEqual(infos, 0)
+
     def test_requested_targets_are_explicit_opt_in(self):
         class Args:
             target = "round-300"

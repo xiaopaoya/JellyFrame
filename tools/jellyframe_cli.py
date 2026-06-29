@@ -271,6 +271,80 @@ def responsive_status(pipeline_report: dict) -> str:
     return "fits"
 
 
+def load_manifest(root: Path) -> dict:
+    manifest_path = root / "jellyframe.app.json"
+    if not manifest_path.is_file():
+        return {}
+    return json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+
+
+def target_gate_config(root: Path, target: str) -> dict:
+    manifest = load_manifest(root)
+    targets = manifest.get("targets", {})
+    if not isinstance(targets, dict):
+        return {}
+    target_entry = targets.get(target, {})
+    if not isinstance(target_entry, dict):
+        return {}
+    gate = target_entry.get("gate", {})
+    return gate if isinstance(gate, dict) else {}
+
+
+def responsive_gate_for_profile(profile: dict, gate: dict) -> dict:
+    if not gate:
+        return {
+            "policy": "none",
+            "decision": "not-declared",
+            "reasons": [],
+        }
+    policy = gate.get("policy", "warn")
+    if policy not in {"accept", "warn", "reject"}:
+        policy = "warn"
+    allow_scroll = bool(gate.get("allowScroll", True))
+    allow_horizontal_overflow = bool(gate.get("allowHorizontalOverflow", False))
+    max_warnings = gate.get("maxWarnings", None)
+    max_errors = gate.get("maxErrors", 0)
+    min_viewport = gate.get("minViewport", {})
+    if not isinstance(min_viewport, dict):
+        min_viewport = {}
+
+    reasons = []
+    viewport = profile.get("viewport", {}) if isinstance(profile.get("viewport", {}), dict) else {}
+    layout = profile.get("layout", {}) if isinstance(profile.get("layout", {}), dict) else {}
+    diagnostics = profile.get("diagnostics", {}) if isinstance(profile.get("diagnostics", {}), dict) else {}
+    min_width = int(min_viewport.get("width", 0) or 0)
+    min_height = int(min_viewport.get("height", 0) or 0)
+    if min_width and int(viewport.get("width", 0) or 0) < min_width:
+        reasons.append(f"viewport-width<{min_width}")
+    if min_height and int(viewport.get("height", 0) or 0) < min_height:
+        reasons.append(f"viewport-height<{min_height}")
+    if bool(layout.get("horizontalOverflow", False)) and not allow_horizontal_overflow:
+        reasons.append("horizontal-overflow")
+    if profile.get("status") == "scroll-needed" and not allow_scroll:
+        reasons.append("scroll-needed")
+    warning_count = int(diagnostics.get("warning", 0) or 0)
+    error_count = int(diagnostics.get("error", 0) or 0)
+    if isinstance(max_warnings, int) and warning_count > max_warnings:
+        reasons.append(f"warnings>{max_warnings}")
+    if isinstance(max_errors, int) and error_count > max_errors:
+        reasons.append(f"errors>{max_errors}")
+
+    decision = "accept" if not reasons else policy
+    return {
+        "policy": policy,
+        "decision": decision,
+        "reasons": reasons,
+        "allowScroll": allow_scroll,
+        "allowHorizontalOverflow": allow_horizontal_overflow,
+        "maxWarnings": max_warnings if isinstance(max_warnings, int) else None,
+        "maxErrors": max_errors if isinstance(max_errors, int) else None,
+        "minViewport": {
+            "width": min_width,
+            "height": min_height,
+        },
+    }
+
+
 def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_report: dict) -> dict:
     viewport = pipeline_report.get("viewport", {}) if isinstance(pipeline_report, dict) else {}
     layout = pipeline_report.get("layout", {}) if isinstance(pipeline_report, dict) else {}
@@ -330,6 +404,13 @@ def diagnostic_status_from_report(package_report_path: Path) -> tuple[int, int, 
                 errors += int(diagnostics.get("error", 0) or 0)
                 warnings += int(diagnostics.get("warning", 0) or 0)
                 infos += int(diagnostics.get("info", 0) or 0)
+            gate = profile.get("gate", {})
+            if isinstance(gate, dict):
+                decision = gate.get("decision", "")
+                if decision == "reject":
+                    errors += 1
+                elif decision == "warn":
+                    warnings += 1
     return errors, warnings, infos
 
 
@@ -396,10 +477,12 @@ def run_responsive_profile_checks(args: argparse.Namespace) -> int:
             return result
         target_config = effective_target_config(args.root, target)
         profile = responsive_profile_from_pipeline(target, target_config, pipeline_report)
+        profile["gate"] = responsive_gate_for_profile(profile, target_gate_config(args.root, target))
         profiles.append(profile)
         print(
             "responsive "
             f"{target}: {profile['status']} "
+            f"gate={profile['gate']['decision']} "
             f"viewport={profile['viewport']['width']}x{profile['viewport']['height']} "
             f"content={profile['layout']['contentHeight']} "
             f"overflowX={profile['layout']['horizontalOverflow']} "

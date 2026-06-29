@@ -211,6 +211,9 @@
           },
           "framebuffer": {
             "$ref": "#/$defs/framebuffer"
+          },
+          "gate": {
+            "$ref": "#/$defs/targetGate"
           }
         }
       }
@@ -309,6 +312,45 @@
         },
         "shape": {
           "enum": ["rect", "round"]
+        }
+      }
+    },
+    "targetGate": {
+      "description": "Optional release gate evaluated by desktop tooling during responsive profile checks. It does not affect MCU runtime.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "description": "Decision to emit when the gate is violated.",
+          "enum": ["accept", "warn", "reject"]
+        },
+        "minViewport": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "allowScroll": {
+          "type": "boolean"
+        },
+        "allowHorizontalOverflow": {
+          "type": "boolean"
+        },
+        "maxWarnings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxErrors": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

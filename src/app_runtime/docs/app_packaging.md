@@ -371,6 +371,37 @@ When `--target id` is used, the packer first loads `tools/presets/targets/id.jso
 when present, then overlays any same-named manifest `targets[id]` settings.
 Manifest-only custom targets are also allowed; unknown targets fail explicitly.
 
+`targets[id].gate` is an optional release-time adaptation gate. It is consumed
+only by the desktop CLI responsive profile pass; it does not enter the MCU
+runtime or change page behavior. Example:
+
+```json
+{
+  "targets": {
+    "round-300": {
+      "viewport": { "width": 300, "height": 300, "shape": "round" },
+      "output": "jfapp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": { "width": 300, "height": 300 },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
+    }
+  }
+}
+```
+
+`policy` controls whether a violated gate reports `accept`, `warn` or `reject`.
+`reject` makes `check`/`package`/`install` fail; `warn` only counts as a warning,
+which is useful during trial phases or while narrow-screen targets are still
+being tuned. The current gate can check minimum viewport, whether scrolling is
+allowed, whether horizontal overflow is allowed and diagnostic warning/error
+counts. It is a release-time adaptation contract, not a full responsive layout
+engine.
+
 Fields that affect runtime compatibility must be required by the packer:
 
 - `id`, `version.code`, `entry`, `runtime.minJellyFrame`;
