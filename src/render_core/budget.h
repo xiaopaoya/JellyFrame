@@ -35,7 +35,10 @@ inline RenderTreeOptions render_tree_options_from_budgets(const HostBudgets& bud
 }
 
 inline LayoutEngineOptions layout_engine_options_from_budgets(const HostBudgets& budgets) {
-    return LayoutEngineOptions{std::max<std::size_t>(1, budgets.max_layout_boxes)};
+    LayoutEngineOptions options;
+    options.max_layout_boxes = std::max<std::size_t>(1, budgets.max_layout_boxes);
+    options.max_layout_depth = std::max<std::size_t>(1, budgets.max_dom_depth);
+    return options;
 }
 
 inline LayerTreeBuilderOptions layer_tree_options_from_budgets(const HostBudgets& budgets) {

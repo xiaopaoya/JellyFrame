@@ -31,6 +31,7 @@ struct LayoutBox {
 struct LayoutEngineOptions {
     std::size_t max_layout_boxes = 4096;
     DiagnosticSink* diagnostics = nullptr;
+    std::size_t max_layout_depth = 64;
 };
 
 class LayoutEngine {
@@ -53,22 +54,23 @@ private:
     TextMeasureProvider text_measure_;
     LayoutEngineOptions options_;
 
-    int layout_box(LayoutBox& box, int x, int y, int width, int height) const;
+    int layout_box(LayoutBox& box, int x, int y, int width, int height, std::size_t depth) const;
     int layout_text_box(LayoutBox& box,
                         int border_box_x,
                         int border_box_y,
                         int content_width,
                         int min_width,
                         int height) const;
-    int layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
-    int layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width) const;
-    int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const;
+    int layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width, std::size_t depth) const;
+    int layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width, std::size_t depth) const;
+    int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width, std::size_t depth) const;
     void layout_positioned_children(LayoutBox& box,
                                     int content_x,
                                     int content_y,
                                     int content_width,
                                     int content_height,
-                                    int viewport_width) const;
+                                    int viewport_width,
+                                    std::size_t depth) const;
     LayoutBoxPtr build_with_arena(const RenderObject& render_tree,
                                   int viewport_width,
                                   int viewport_height,

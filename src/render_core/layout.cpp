@@ -316,7 +316,7 @@ LayoutBoxPtr LayoutEngine::build_with_arena(const RenderObject& render_tree,
     root_box->node = render_tree.node;
     root_box->style = render_tree.style;
     build_layout_tree(render_tree, *root_box, arena);
-    root_box->rect.height = layout_box(*root_box, 0, 0, viewport_width, viewport_height);
+    root_box->rect.height = layout_box(*root_box, 0, 0, viewport_width, viewport_height, 1);
     return root_box;
 }
 
@@ -372,7 +372,18 @@ LayoutBoxPtr LayoutEngine::make_layout_box(MonotonicArena* arena) const {
     return LayoutBoxPtr(&arena->create<LayoutBox>(), LayoutBoxDeleter{true});
 }
 
-int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height) const {
+int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height, std::size_t depth) const {
+    if (depth > std::max<std::size_t>(1, options_.max_layout_depth)) {
+        report_diagnostic(options_.diagnostics,
+                          DiagnosticStage::Layout,
+                          DiagnosticSeverity::Warning,
+                          "layout-depth-limit",
+                          "Layout depth budget was reached; remaining nested layout was skipped",
+                          "Increase max_layout_depth or simplify deeply nested layout.");
+        box.rect = Rect{x, y, 0, 0};
+        return 0;
+    }
+
     const int margin_left = box.style.margin_left_auto ? 0 : box.style.margin.left;
     const int margin_right = box.style.margin_right_auto ? 0 : box.style.margin.right;
     const int border_box_y = y + box.style.margin.top;
@@ -413,18 +424,18 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
 
     int max_child_width = 0;
     const int children_height = box.style.display == Display::Flex
-        ? layout_flex_box(box, content_x, cursor_y, content_width)
+        ? layout_flex_box(box, content_x, cursor_y, content_width, depth)
         : box.style.display == Display::Grid
-        ? layout_grid_box(box, content_x, cursor_y, content_width)
+        ? layout_grid_box(box, content_x, cursor_y, content_width, depth)
         : has_only_inline_children(box)
-        ? layout_inline_children(box, content_x, cursor_y, content_width)
+        ? layout_inline_children(box, content_x, cursor_y, content_width, depth)
         : [&] {
             int flow_height = 0;
             for (auto& child : box.children) {
                 if (is_out_of_flow_positioned(child->style)) {
                     continue;
                 }
-                const int child_height = layout_box(*child, content_x, cursor_y, content_width, height);
+                const int child_height = layout_box(*child, content_x, cursor_y, content_width, height, depth + 1);
                 cursor_y += child_height;
                 flow_height += child_height;
                 max_child_width = std::max(max_child_width,
@@ -482,7 +493,7 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
     const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
     const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};
-    layout_positioned_children(box, content_x, content_y, content_width, content_height, width);
+    layout_positioned_children(box, content_x, content_y, content_width, content_height, width, depth);
     apply_relative_position_offset(box);
     return total_height;
 }
@@ -536,7 +547,11 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
     return text_height;
 }
 
-int LayoutEngine::layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width) const {
+int LayoutEngine::layout_inline_children(LayoutBox& box,
+                                         int content_x,
+                                         int content_y,
+                                         int content_width,
+                                         std::size_t depth) const {
     int cursor_x = content_x + std::max(0, std::min(box.style.text_indent, content_width));
     int line_y = content_y;
     int line_height = 0;
@@ -567,7 +582,7 @@ int LayoutEngine::layout_inline_children(LayoutBox& box, int content_x, int cont
         if (is_out_of_flow_positioned(child->style)) {
             continue;
         }
-        layout_box(*child, 0, 0, content_width, 0);
+        layout_box(*child, 0, 0, content_width, 0, depth + 1);
         const int child_outer_width = child->style.margin.left + child->rect.width + child->style.margin.right;
         const int child_outer_height = child->style.margin.top + child->rect.height + child->style.margin.bottom;
         const int remaining_width = std::max(0, content_x + content_width - cursor_x);
@@ -597,7 +612,8 @@ void LayoutEngine::layout_positioned_children(LayoutBox& box,
                                               int content_y,
                                               int content_width,
                                               int content_height,
-                                              int viewport_width) const {
+                                              int viewport_width,
+                                              std::size_t depth) const {
     for (auto& child : box.children) {
         if (!is_out_of_flow_positioned(child->style)) {
             continue;
@@ -620,7 +636,7 @@ void LayoutEngine::layout_positioned_children(LayoutBox& box,
             child->style.box_sizing_border_box = true;
         }
 
-        layout_box(*child, 0, 0, area_width, area_height);
+        layout_box(*child, 0, 0, area_width, area_height, depth + 1);
         child->style.width = original_width;
         child->style.width_percent = original_width_percent;
         child->style.box_sizing_border_box = original_box_sizing;
@@ -631,7 +647,11 @@ void LayoutEngine::layout_positioned_children(LayoutBox& box,
     }
 }
 
-int LayoutEngine::layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width) const {
+int LayoutEngine::layout_flex_box(LayoutBox& box,
+                                  int content_x,
+                                  int content_y,
+                                  int content_width,
+                                  std::size_t depth) const {
     const auto in_flow_count = static_cast<int>(std::count_if(box.children.begin(), box.children.end(),
         [](const LayoutBoxPtr& child) { return !is_out_of_flow_positioned(child->style); }));
     if (in_flow_count == 0) {
@@ -645,7 +665,7 @@ int LayoutEngine::layout_flex_box(LayoutBox& box, int content_x, int content_y, 
             child.style.width = std::max(0, target_width);
             child.style.width_percent = -1;
         }
-        const int height = layout_box(child, 0, 0, std::max(0, target_width), 0);
+        const int height = layout_box(child, 0, 0, std::max(0, target_width), 0, depth + 1);
         child.style.width = old_width;
         child.style.width_percent = old_width_percent;
         return height;
@@ -802,7 +822,11 @@ int LayoutEngine::layout_flex_box(LayoutBox& box, int content_x, int content_y, 
     return container_height;
 }
 
-int LayoutEngine::layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width) const {
+int LayoutEngine::layout_grid_box(LayoutBox& box,
+                                  int content_x,
+                                  int content_y,
+                                  int content_width,
+                                  std::size_t depth) const {
     const auto in_flow_count = static_cast<int>(std::count_if(box.children.begin(), box.children.end(),
         [](const LayoutBoxPtr& child) { return !is_out_of_flow_positioned(child->style); }));
     if (in_flow_count == 0) {
@@ -935,7 +959,7 @@ int LayoutEngine::layout_grid_box(LayoutBox& box, int content_x, int content_y, 
             child->style.width_percent = -1;
             child->style.box_sizing_border_box = true;
         }
-        const int child_height = layout_box(*child, 0, 0, item_width, 0);
+        const int child_height = layout_box(*child, 0, 0, item_width, 0, depth + 1);
         child->style.width = original_width;
         child->style.width_percent = original_width_percent;
         child->style.box_sizing_border_box = original_box_sizing;

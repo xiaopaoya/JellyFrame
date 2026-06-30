@@ -58,6 +58,7 @@ int main() {
     assert(caps.budgets.max_dom_nodes == 768);
     caps.budgets.max_css_rules = 99;
     caps.budgets.max_css_declarations_per_rule = 7;
+    caps.budgets.max_dom_depth = 11;
     caps.budgets.max_render_objects = 66;
     caps.budgets.max_layout_boxes = 55;
     caps.budgets.max_layers = 12;
@@ -77,6 +78,7 @@ int main() {
     assert(css_parser_options_from_budgets(caps.budgets).max_declarations_per_rule == 7);
     assert(render_tree_options_from_budgets(caps.budgets).max_render_objects == 66);
     assert(layout_engine_options_from_budgets(caps.budgets).max_layout_boxes == 55);
+    assert(layout_engine_options_from_budgets(caps.budgets).max_layout_depth == 11);
     assert(layer_tree_options_from_budgets(caps.budgets).max_layers == 12);
     assert(layer_tree_options_from_budgets(caps.budgets).max_display_commands == 34);
     assert(dirty_region_options_from_budgets(caps.budgets, Rect{0, 0, 1, 1}).max_rects == 3);

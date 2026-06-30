@@ -105,6 +105,26 @@ void layout_tree_reports_box_budget_diagnostic() {
     check(has_diagnostic_code(diagnostics, "layout-box-limit"), "layout budget diagnostic is reported");
 }
 
+void layout_tree_reports_depth_budget_diagnostic() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><section><p>Deep</p></section></main></body>");
+    StyleResolver resolver(css_parser.parse("body, main, section, p { margin: 0; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    VectorDiagnosticSink diagnostics;
+    LayoutEngineOptions options;
+    options.max_layout_depth = 2;
+    options.diagnostics = &diagnostics;
+    LayoutEngine layout_engine(resolver, {}, options);
+    auto layout_tree = layout_engine.layout(*render_tree, 240);
+
+    check(layout_tree != nullptr, "depth budget layout root exists");
+    check(has_diagnostic_code(diagnostics, "layout-depth-limit"), "layout depth diagnostic is reported");
+    const LayoutBox* main = find_first_by_tag(*layout_tree, "main");
+    check(main == nullptr || main->rect.height == 0, "layout beyond depth budget is skipped");
+}
+
 void flex_row_distributes_grow_space() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -319,6 +339,7 @@ int main() {
         layout_tree_can_use_monotonic_arena();
         layout_tree_respects_box_budget();
         layout_tree_reports_box_budget_diagnostic();
+        layout_tree_reports_depth_budget_diagnostic();
         flex_row_distributes_grow_space();
         flex_row_shrinks_basis_widths();
         positioned_layout_offsets_without_flow_space();
