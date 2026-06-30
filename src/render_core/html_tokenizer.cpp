@@ -282,7 +282,7 @@ public:
         }
 
         flush_text();
-        emit_token(HtmlToken{HtmlTokenType::EndOfFile});
+        emit_token(HtmlToken{HtmlTokenType::EndOfFile, {}, {}, {}, false});
     }
 
 private:
@@ -456,7 +456,7 @@ private:
             consume();
         }
 
-        const std::string replacement = lookup_named_character_reference(name);
+        std::string replacement = lookup_named_character_reference(name);
         if (!replacement.empty()) {
             if (!had_semicolon) {
                 report(DiagnosticSeverity::Info,

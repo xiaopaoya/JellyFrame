@@ -24,7 +24,7 @@ public:
     T& create(Args&&... args) {
         static_assert(alignof(T) <= alignof(std::max_align_t), "over-aligned arena objects are not supported");
         void* storage = allocate(sizeof(T), alignof(T));
-        T* object = new (storage) T(std::forward<Args>(args)...);
+        T* object = new (storage) T{std::forward<Args>(args)...};
         if (!std::is_trivially_destructible<T>::value) {
             destructors_.push_back(Destructor{object, destroy<T>});
         }

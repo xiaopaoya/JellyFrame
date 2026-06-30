@@ -182,10 +182,10 @@ EventTarget::~EventTarget() = default;
 EventTarget::ListenerId EventTarget::add_event_listener(std::string type,
                                                         ListenerCallback callback,
                                                         EventListenerOptions options) {
-    return add_event_listener_bounded(std::move(type), std::move(callback), 0, options);
+    return add_event_listener_bounded(type, std::move(callback), 0, options);
 }
 
-EventTarget::ListenerId EventTarget::add_event_listener_bounded(std::string type,
+EventTarget::ListenerId EventTarget::add_event_listener_bounded(const std::string& type,
                                                                 ListenerCallback callback,
                                                                 std::size_t max_listeners,
                                                                 EventListenerOptions options) {

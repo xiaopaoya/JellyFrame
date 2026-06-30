@@ -235,15 +235,6 @@ FormControlState make_initial_state(const Node& node) {
     return state;
 }
 
-int state_int_value(const FormControlState& state) {
-    char* end = nullptr;
-    const long parsed = std::strtol(state.value.c_str(), &end, 10);
-    if (end == state.value.c_str()) {
-        return state.min;
-    }
-    return static_cast<int>(parsed);
-}
-
 } // namespace
 
 FormControlKind form_control_kind(const Node& node) {

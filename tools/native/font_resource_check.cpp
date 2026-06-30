@@ -72,7 +72,7 @@ std::string hex_codepoint(std::uint32_t codepoint) {
     if (codepoint <= 0xffffU) {
         output.width(4);
     }
-    output.fill('0');
+    (void) output.fill('0');
     output << codepoint;
     return output.str();
 }

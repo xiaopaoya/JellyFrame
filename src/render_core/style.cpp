@@ -236,7 +236,7 @@ bool parse_length_px(const std::string& raw_value, int& output, int em_base) {
         ++end;
     }
 
-    float pixels = parsed;
+    float pixels = 0.0F;
     if (end == nullptr || *end == '\0') {
         pixels = parsed;
     } else if (std::strncmp(end, "px", 2) == 0) {
@@ -333,7 +333,7 @@ bool parse_time_ms(const std::string& raw_value, std::uint32_t& output) {
     while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
         ++end;
     }
-    float milliseconds = parsed;
+    float milliseconds = 0.0F;
     if (end != nullptr && std::strncmp(end, "ms", 2) == 0) {
         milliseconds = parsed;
         end += 2;

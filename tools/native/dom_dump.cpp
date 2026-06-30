@@ -40,7 +40,7 @@ std::string clipped(std::string value, std::size_t max_bytes) {
     return value;
 }
 
-std::string escaped(std::string value) {
+std::string escaped(const std::string& value) {
     std::string output;
     output.reserve(value.size());
     for (const char ch : value) {

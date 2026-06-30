@@ -1177,27 +1177,27 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
     while (!pending.empty()) {
         const PendingBox current = pending.back();
         pending.pop_back();
-        const LayoutBox& current_box = *current.box;
+        const LayoutBox* current_box = current.box;
         LayerNode& current_layer = *current.layer;
         if (current.exit) {
             const std::size_t command_begin = current_layer.display_list.size();
-            paint_generated_inline_content(current_box, current_layer.display_list, CssPseudoElement::After);
+            paint_generated_inline_content(*current_box, current_layer.display_list, CssPseudoElement::After);
             translate_display_commands(current_layer.display_list, command_begin, 0, -current.scroll_y);
             trim_display_list(current_layer.display_list);
             if (options_.paint_scroll_indicators &&
-                current_layer.box == &current_box &&
+                current_layer.box == current_box &&
                 current_layer.max_scroll_y > 0 &&
                 layer_count < max_layers) {
                 DisplayList indicator_commands;
                 indicator_commands.reserve(2);
-                if (paint_scroll_indicator(current_box,
+                if (paint_scroll_indicator(*current_box,
                                            current_layer.scroll_y,
                                            current_layer.max_scroll_y,
                                            indicator_commands)) {
                     auto indicator_layer = make_layer_node(arena);
                     indicator_layer->type = LayerType::Paint;
                     indicator_layer->box = nullptr;
-                    indicator_layer->bounds = current_box.rect;
+                    indicator_layer->bounds = current_box->rect;
                     indicator_layer->opacity = 1.0F;
                     indicator_layer->source_order = next_source_order++;
                     indicator_layer->display_list = std::move(indicator_commands);
@@ -1209,28 +1209,28 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
             continue;
         }
 
-        const LayerReasons reasons = layer_reasons_for(current_box, false);
+        const LayerReasons reasons = layer_reasons_for(*current_box, false);
         LayerNode* target_layer = &current_layer;
-        const int own_scroll_y = resolved_scroll_y_for(current_box, options_);
+        const int own_scroll_y = resolved_scroll_y_for(*current_box, options_);
         if (needs_own_layer(reasons) && layer_count < max_layers) {
             auto child_layer = make_layer_node(arena);
             target_layer = child_layer.get();
             ++layer_count;
             child_layer->type = layer_type_for(reasons);
             child_layer->reasons = reasons;
-            child_layer->box = &current_box;
-            child_layer->bounds = current_box.rect;
-            child_layer->clip_rect = current_box.rect;
+            child_layer->box = current_box;
+            child_layer->bounds = current_box->rect;
+            child_layer->clip_rect = current_box->rect;
             child_layer->has_clip = (reasons & LayerReasonOverflowClip) != 0U;
-            child_layer->opacity = current_box.style.opacity;
-            child_layer->transform = parsed_transform_or_identity(current_box.style, options_.diagnostics);
+            child_layer->opacity = current_box->style.opacity;
+            child_layer->transform = parsed_transform_or_identity(current_box->style, options_.diagnostics);
             child_layer->transform.translate_y -= static_cast<float>(current.scroll_y);
-            child_layer->transform_origin_x_percent = current_box.style.transform_origin_x_percent;
-            child_layer->transform_origin_y_percent = current_box.style.transform_origin_y_percent;
-            child_layer->has_transform = has_transform(current_box.style);
+            child_layer->transform_origin_x_percent = current_box->style.transform_origin_x_percent;
+            child_layer->transform_origin_y_percent = current_box->style.transform_origin_y_percent;
+            child_layer->has_transform = has_transform(current_box->style);
             child_layer->scroll_y = own_scroll_y;
-            child_layer->max_scroll_y = max_scroll_y_for(current_box);
-            child_layer->z_index = current_box.style.z_index_auto ? 0 : current_box.style.z_index;
+            child_layer->max_scroll_y = max_scroll_y_for(*current_box);
+            child_layer->z_index = current_box->style.z_index_auto ? 0 : current_box->style.z_index;
             child_layer->source_order = next_source_order++;
             current_layer.children.push_back(std::move(child_layer));
         } else if (needs_own_layer(reasons) && !layer_budget_reported) {
@@ -1244,14 +1244,14 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
         }
 
         const std::size_t command_begin = target_layer->display_list.size();
-        paint_box_self(current_box, target_layer->display_list, options_);
+        paint_box_self(*current_box, target_layer->display_list, options_);
         if (target_layer == &current_layer) {
             translate_display_commands(target_layer->display_list, command_begin, 0, -current.scroll_y);
         }
         trim_display_list(target_layer->display_list);
         const int child_scroll_y = target_layer == &current_layer ? current.scroll_y + own_scroll_y : own_scroll_y;
-        pending.push_back(PendingBox{&current_box, target_layer, child_scroll_y, true});
-        for (auto it = current_box.children.rbegin(); it != current_box.children.rend(); ++it) {
+        pending.push_back(PendingBox{current_box, target_layer, child_scroll_y, true});
+        for (auto it = current_box->children.rbegin(); it != current_box->children.rend(); ++it) {
             pending.push_back(PendingBox{it->get(), target_layer, child_scroll_y, false});
         }
     }

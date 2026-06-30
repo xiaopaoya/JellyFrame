@@ -3907,7 +3907,7 @@ private:
         report_image_eviction_result(&diagnostics_, evicted);
     }
 
-    void configure_system_shell(std::string status) {
+    void configure_system_shell(const std::string& status) {
         if (options_.registry_store_path.empty()) {
             return;
         }

@@ -104,7 +104,7 @@ public:
     ~EventTarget();
 
     ListenerId add_event_listener(std::string type, ListenerCallback callback, EventListenerOptions options = {});
-    ListenerId add_event_listener_bounded(std::string type,
+    ListenerId add_event_listener_bounded(const std::string& type,
                                           ListenerCallback callback,
                                           std::size_t max_listeners,
                                           EventListenerOptions options = {});
