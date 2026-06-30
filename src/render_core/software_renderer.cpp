@@ -1,5 +1,7 @@
 ﻿#include "render_core/software_renderer.h"
 
+#include "render_core/text_scan.h"
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -518,21 +520,8 @@ std::array<std::uint8_t, 7> glyph_rows(char raw_ch) {
 }
 
 char fallback_glyph_for_codepoint(const std::string& text, std::size_t& index) {
-    const unsigned char lead = static_cast<unsigned char>(text[index]);
-    std::size_t width = 1;
-    char glyph = static_cast<char>(lead);
-    if (lead >= 0x80U) {
-        glyph = '?';
-        if ((lead & 0xe0U) == 0xc0U) {
-            width = 2;
-        } else if ((lead & 0xf0U) == 0xe0U) {
-            width = 3;
-        } else if ((lead & 0xf8U) == 0xf0U) {
-            width = 4;
-        }
-    }
-    index += std::min(width, text.size() - index);
-    return glyph;
+    const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
+    return codepoint < 0x80U ? static_cast<char>(codepoint) : '?';
 }
 
 void draw_text(FrameBuffer& target,
