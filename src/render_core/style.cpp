@@ -2424,7 +2424,72 @@ bool custom_declaration_wins(const CustomPropertySlot& current,
     return source_order >= current.source_order;
 }
 
+enum class DeclarationApplyResult : std::uint8_t {
+    Unhandled,
+    Applied,
+    Invalid,
+};
+
+DeclarationApplyResult apply_length_or_percent(int& length_px,
+                                               int& percent,
+                                               const std::string& value,
+                                               int font_size) {
+    int parsed_percent = -1;
+    if (parse_percentage_int(value, parsed_percent)) {
+        length_px = -1;
+        percent = parsed_percent;
+        return DeclarationApplyResult::Applied;
+    }
+
+    int px = 0;
+    if (!parse_length_px(value, px, font_size)) {
+        return DeclarationApplyResult::Invalid;
+    }
+    length_px = px;
+    percent = -1;
+    return DeclarationApplyResult::Applied;
+}
+
+DeclarationApplyResult apply_sizing_declaration(Style& style,
+                                                const std::string& property,
+                                                const std::string& value) {
+    if (property == "width") {
+        return apply_length_or_percent(style.width, style.width_percent, value, style.font_size);
+    }
+    if (property == "height") {
+        return apply_length_or_percent(style.height, style.height_percent, value, style.font_size);
+    }
+    if (property == "min-width") {
+        return apply_length_or_percent(style.min_width, style.min_width_percent, value, style.font_size);
+    }
+    if (property == "min-height") {
+        return apply_length_or_percent(style.min_height, style.min_height_percent, value, style.font_size);
+    }
+    if (property == "max-width") {
+        return apply_length_or_percent(style.max_width, style.max_width_percent, value, style.font_size);
+    }
+    if (property == "max-height") {
+        return apply_length_or_percent(style.max_height, style.max_height_percent, value, style.font_size);
+    }
+    if (property == "aspect-ratio") {
+        int ratio_width = 0;
+        int ratio_height = 0;
+        if (!parse_aspect_ratio(value, ratio_width, ratio_height)) {
+            return DeclarationApplyResult::Invalid;
+        }
+        style.aspect_ratio_width = ratio_width;
+        style.aspect_ratio_height = ratio_height;
+        return DeclarationApplyResult::Applied;
+    }
+    return DeclarationApplyResult::Unhandled;
+}
+
 bool apply_declaration(Style& style, const std::string& property, const std::string& value) {
+    const DeclarationApplyResult sizing = apply_sizing_declaration(style, property, value);
+    if (sizing != DeclarationApplyResult::Unhandled) {
+        return sizing == DeclarationApplyResult::Applied;
+    }
+
     if (property == "display") {
         if (value == "block") {
             style.display = Display::Block;
@@ -2587,100 +2652,8 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.border_radius = px;
         style.border_radius_percent = -1;
         return true;
-    } else if (property == "width") {
-        int percent = -1;
-        if (parse_percentage_int(value, percent)) {
-            style.width = -1;
-            style.width_percent = percent;
-            return true;
-        }
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        style.width = px;
-        style.width_percent = -1;
-        return true;
-    } else if (property == "height") {
-        int percent = -1;
-        if (parse_percentage_int(value, percent)) {
-            style.height = -1;
-            style.height_percent = percent;
-            return true;
-        }
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        style.height = px;
-        style.height_percent = -1;
-        return true;
-    } else if (property == "min-width") {
-        int percent = -1;
-        if (parse_percentage_int(value, percent)) {
-            style.min_width = -1;
-            style.min_width_percent = percent;
-            return true;
-        }
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        style.min_width = px;
-        style.min_width_percent = -1;
-        return true;
-    } else if (property == "min-height") {
-        int percent = -1;
-        if (parse_percentage_int(value, percent)) {
-            style.min_height = -1;
-            style.min_height_percent = percent;
-            return true;
-        }
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        style.min_height = px;
-        style.min_height_percent = -1;
-        return true;
-    } else if (property == "max-width") {
-        int percent = -1;
-        if (parse_percentage_int(value, percent)) {
-            style.max_width = -1;
-            style.max_width_percent = percent;
-            return true;
-        }
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        style.max_width = px;
-        style.max_width_percent = -1;
-        return true;
-    } else if (property == "max-height") {
-        int percent = -1;
-        if (parse_percentage_int(value, percent)) {
-            style.max_height = -1;
-            style.max_height_percent = percent;
-            return true;
-        }
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        style.max_height = px;
-        style.max_height_percent = -1;
-        return true;
-    } else if (property == "aspect-ratio") {
-        int ratio_width = 0;
-        int ratio_height = 0;
-        if (!parse_aspect_ratio(value, ratio_width, ratio_height)) {
-            return false;
-        }
-        style.aspect_ratio_width = ratio_width;
-        style.aspect_ratio_height = ratio_height;
-        return true;
-    } else if (property == "font-size") {
+    }
+    if (property == "font-size") {
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {
             return false;
