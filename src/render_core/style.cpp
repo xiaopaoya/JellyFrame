@@ -2484,6 +2484,139 @@ DeclarationApplyResult apply_sizing_declaration(Style& style,
     return DeclarationApplyResult::Unhandled;
 }
 
+DeclarationApplyResult apply_box_model_declaration(Style& style,
+                                                   const std::string& property,
+                                                   const std::string& value) {
+    if (property == "margin") {
+        return parse_margin_edge_px(value, style.margin, style.margin_left_auto, style.margin_right_auto, style.font_size)
+            ? DeclarationApplyResult::Applied
+            : DeclarationApplyResult::Invalid;
+    }
+    if (property == "margin-top" || property == "margin-right" ||
+        property == "margin-bottom" || property == "margin-left") {
+        int px = 0;
+        bool is_auto = false;
+        if (!parse_margin_side_px(value, px, is_auto, style.font_size)) {
+            return DeclarationApplyResult::Invalid;
+        }
+        if (property == "margin-top") {
+            style.margin.top = px;
+        } else if (property == "margin-right") {
+            style.margin.right = px;
+            style.margin_right_auto = is_auto;
+        } else if (property == "margin-bottom") {
+            style.margin.bottom = px;
+        } else {
+            style.margin.left = px;
+            style.margin_left_auto = is_auto;
+        }
+        return DeclarationApplyResult::Applied;
+    }
+    if (property == "padding") {
+        return parse_box_edge_px(value, style.padding, style.font_size)
+            ? DeclarationApplyResult::Applied
+            : DeclarationApplyResult::Invalid;
+    }
+    if (property == "padding-top" || property == "padding-right" ||
+        property == "padding-bottom" || property == "padding-left") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return DeclarationApplyResult::Invalid;
+        }
+        if (property == "padding-top") {
+            style.padding.top = px;
+        } else if (property == "padding-right") {
+            style.padding.right = px;
+        } else if (property == "padding-bottom") {
+            style.padding.bottom = px;
+        } else {
+            style.padding.left = px;
+        }
+        return DeclarationApplyResult::Applied;
+    }
+    if (property == "border-width") {
+        return parse_box_edge_px(value, style.border_width, style.font_size)
+            ? DeclarationApplyResult::Applied
+            : DeclarationApplyResult::Invalid;
+    }
+    if (property == "border-top-width" || property == "border-right-width" ||
+        property == "border-bottom-width" || property == "border-left-width") {
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return DeclarationApplyResult::Invalid;
+        }
+        if (property == "border-top-width") {
+            style.border_width.top = px;
+        } else if (property == "border-right-width") {
+            style.border_width.right = px;
+        } else if (property == "border-bottom-width") {
+            style.border_width.bottom = px;
+        } else {
+            style.border_width.left = px;
+        }
+        return DeclarationApplyResult::Applied;
+    }
+    if (property == "border-color") {
+        Color parsed;
+        if (!parse_color(value, parsed)) {
+            return DeclarationApplyResult::Invalid;
+        }
+        style.border_color = parsed;
+        return DeclarationApplyResult::Applied;
+    }
+    if (property == "border") {
+        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
+        if (!parsed.has_width && !parsed.has_color) {
+            return DeclarationApplyResult::Invalid;
+        }
+        if (parsed.has_width) {
+            style.border_width = EdgeSizes{parsed.width, parsed.width, parsed.width, parsed.width};
+        }
+        if (parsed.has_color) {
+            style.border_color = parsed.color;
+        }
+        return DeclarationApplyResult::Applied;
+    }
+    if (property == "border-top" || property == "border-right" ||
+        property == "border-bottom" || property == "border-left") {
+        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
+        if (!parsed.has_width && !parsed.has_color) {
+            return DeclarationApplyResult::Invalid;
+        }
+        if (parsed.has_width) {
+            if (property == "border-top") {
+                style.border_width.top = parsed.width;
+            } else if (property == "border-right") {
+                style.border_width.right = parsed.width;
+            } else if (property == "border-bottom") {
+                style.border_width.bottom = parsed.width;
+            } else {
+                style.border_width.left = parsed.width;
+            }
+        }
+        if (parsed.has_color) {
+            style.border_color = parsed.color;
+        }
+        return DeclarationApplyResult::Applied;
+    }
+    if (property == "border-radius") {
+        int percent = -1;
+        if (parse_percentage_int(value, percent)) {
+            style.border_radius = 0;
+            style.border_radius_percent = std::max(0, percent);
+            return DeclarationApplyResult::Applied;
+        }
+        int px = 0;
+        if (!parse_length_px(value, px, style.font_size)) {
+            return DeclarationApplyResult::Invalid;
+        }
+        style.border_radius = px;
+        style.border_radius_percent = -1;
+        return DeclarationApplyResult::Applied;
+    }
+    return DeclarationApplyResult::Unhandled;
+}
+
 bool apply_declaration(Style& style, const std::string& property, const std::string& value) {
     const DeclarationApplyResult sizing = apply_sizing_declaration(style, property, value);
     if (sizing != DeclarationApplyResult::Unhandled) {
@@ -2541,117 +2674,10 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.background_color = color;
         style.background_color2 = color2;
         return true;
-    } else if (property == "margin") {
-        return parse_margin_edge_px(value, style.margin, style.margin_left_auto, style.margin_right_auto, style.font_size);
-    } else if (property == "margin-top" || property == "margin-right" ||
-               property == "margin-bottom" || property == "margin-left") {
-        int px = 0;
-        bool is_auto = false;
-        if (!parse_margin_side_px(value, px, is_auto, style.font_size)) {
-            return false;
-        }
-        if (property == "margin-top") {
-            style.margin.top = px;
-        } else if (property == "margin-right") {
-            style.margin.right = px;
-            style.margin_right_auto = is_auto;
-        } else if (property == "margin-bottom") {
-            style.margin.bottom = px;
-        } else {
-            style.margin.left = px;
-            style.margin_left_auto = is_auto;
-        }
-        return true;
-    } else if (property == "padding") {
-        return parse_box_edge_px(value, style.padding, style.font_size);
-    } else if (property == "padding-top" || property == "padding-right" ||
-               property == "padding-bottom" || property == "padding-left") {
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        if (property == "padding-top") {
-            style.padding.top = px;
-        } else if (property == "padding-right") {
-            style.padding.right = px;
-        } else if (property == "padding-bottom") {
-            style.padding.bottom = px;
-        } else {
-            style.padding.left = px;
-        }
-        return true;
-    } else if (property == "border-width") {
-        return parse_box_edge_px(value, style.border_width, style.font_size);
-    } else if (property == "border-top-width" || property == "border-right-width" ||
-               property == "border-bottom-width" || property == "border-left-width") {
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        if (property == "border-top-width") {
-            style.border_width.top = px;
-        } else if (property == "border-right-width") {
-            style.border_width.right = px;
-        } else if (property == "border-bottom-width") {
-            style.border_width.bottom = px;
-        } else {
-            style.border_width.left = px;
-        }
-        return true;
-    } else if (property == "border-color") {
-        Color parsed;
-        if (!parse_color(value, parsed)) {
-            return false;
-        }
-        style.border_color = parsed;
-        return true;
-    } else if (property == "border") {
-        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
-        if (!parsed.has_width && !parsed.has_color) {
-            return false;
-        }
-        if (parsed.has_width) {
-            style.border_width = EdgeSizes{parsed.width, parsed.width, parsed.width, parsed.width};
-        }
-        if (parsed.has_color) {
-            style.border_color = parsed.color;
-        }
-        return true;
-    } else if (property == "border-top" || property == "border-right" ||
-               property == "border-bottom" || property == "border-left") {
-        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
-        if (!parsed.has_width && !parsed.has_color) {
-            return false;
-        }
-        if (parsed.has_width) {
-            if (property == "border-top") {
-                style.border_width.top = parsed.width;
-            } else if (property == "border-right") {
-                style.border_width.right = parsed.width;
-            } else if (property == "border-bottom") {
-                style.border_width.bottom = parsed.width;
-            } else {
-                style.border_width.left = parsed.width;
-            }
-        }
-        if (parsed.has_color) {
-            style.border_color = parsed.color;
-        }
-        return true;
-    } else if (property == "border-radius") {
-        int percent = -1;
-        if (parse_percentage_int(value, percent)) {
-            style.border_radius = 0;
-            style.border_radius_percent = std::max(0, percent);
-            return true;
-        }
-        int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
-            return false;
-        }
-        style.border_radius = px;
-        style.border_radius_percent = -1;
-        return true;
+    }
+    const DeclarationApplyResult box_model = apply_box_model_declaration(style, property, value);
+    if (box_model != DeclarationApplyResult::Unhandled) {
+        return box_model == DeclarationApplyResult::Applied;
     }
     if (property == "font-size") {
         int px = 0;
