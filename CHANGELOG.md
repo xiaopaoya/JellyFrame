@@ -106,6 +106,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   consistently during desktop validation.
 - `jelly_canvas_gauges` now uses Canvas gradients in its rings and battery meter
   so the Win32 scripted capture exercises the new gradient path.
+- App-runtime host completion delivery now uses a fixed-capacity ring buffer,
+  and host handle allocation keeps a free-slot hint for release/reallocate
+  churn. These changes keep the same bounded APIs while reducing avoidable
+  queue shifting and repeated slot scans in embedded-style loops.
+- Render-core CSS declaration application is split into smaller sizing and
+  box-model helpers, keeping the public CSS subset unchanged while making future
+  property-family work easier to review and test.
 
 ## 0.4.0-dev - 2026-06-28
 

@@ -82,6 +82,10 @@ JellyFrame Engine 的重要变更记录在这里。
   让桌面验收时 Canvas 标签和 DOM 标签的测量结果保持一致。
 - `jelly_canvas_gauges` 现在在圆环和电量条中使用 Canvas gradient，Win32 脚本化截图会覆盖
   新增渐变路径。
+- app-runtime 的 host completion 投递改为固定容量环形缓冲，host handle allocation
+  增加 free-slot hint，用相同的有界 API 减少嵌入式循环中的队列搬移和重复 slot 扫描。
+- render-core 的 CSS declaration 应用逻辑拆出 sizing 与 box-model helper；公开 CSS 子集不变，
+  后续按属性族继续维护和测试会更清楚。
 
 ## 0.4.0-dev - 2026-06-28
 
