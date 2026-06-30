@@ -99,37 +99,52 @@ void HostServiceRequestQueue::clear() {
 
 HostServiceCompletionQueue::HostServiceCompletionQueue(std::size_t capacity)
     : capacity_(capacity) {
-    completions_.reserve(capacity_);
+    completions_.resize(capacity_);
 }
 
 bool HostServiceCompletionQueue::push(const HostServiceCompletion& completion) {
     if (capacity_ == 0 || full()) {
         return false;
     }
-    completions_.push_back(completion);
+    completions_[(head_ + size_) % capacity_] = completion;
+    ++size_;
     return true;
 }
 
 std::size_t HostServiceCompletionQueue::pop(std::size_t max_count, std::vector<HostServiceCompletion>& output) {
-    const std::size_t count = std::min(max_count, completions_.size());
-    output.insert(output.end(), completions_.begin(), completions_.begin() + static_cast<std::ptrdiff_t>(count));
-    completions_.erase(completions_.begin(), completions_.begin() + static_cast<std::ptrdiff_t>(count));
+    const std::size_t count = std::min(max_count, size_);
+    output.reserve(output.size() + count);
+    for (std::size_t i = 0; i < count; ++i) {
+        output.push_back(completions_[(head_ + i) % capacity_]);
+    }
+    if (count > 0) {
+        head_ = (head_ + count) % capacity_;
+        size_ -= count;
+        if (size_ == 0) {
+            head_ = 0;
+        }
+    }
     return count;
 }
 
 std::size_t HostServiceCompletionQueue::discard_app_instance(std::uint32_t app_instance_id) {
-    const auto old_size = completions_.size();
-    completions_.erase(std::remove_if(completions_.begin(),
-                                      completions_.end(),
-                                      [app_instance_id](const HostServiceCompletion& completion) {
-                                          return completion.app_instance_id == app_instance_id;
-                                      }),
-                       completions_.end());
-    return old_size - completions_.size();
+    const std::size_t old_size = size_;
+    std::size_t kept = 0;
+    for (std::size_t i = 0; i < old_size; ++i) {
+        const HostServiceCompletion& completion = completions_[(head_ + i) % capacity_];
+        if (completion.app_instance_id == app_instance_id) {
+            continue;
+        }
+        completions_[kept++] = completion;
+    }
+    head_ = 0;
+    size_ = kept;
+    return old_size - kept;
 }
 
 void HostServiceCompletionQueue::clear() {
-    completions_.clear();
+    head_ = 0;
+    size_ = 0;
 }
 
 HostHandleTable::HostHandleTable(std::size_t capacity, std::size_t byte_budget)

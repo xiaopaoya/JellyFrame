@@ -94,6 +94,52 @@ void completion_queue_rejects_overflow() {
     assert(!queue.push(HostServiceCompletion{2, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
 }
 
+void completion_queue_preserves_fifo_after_wraparound() {
+    HostServiceCompletionQueue queue(3);
+    assert(queue.push(HostServiceCompletion{1, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+    assert(queue.push(HostServiceCompletion{2, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+    assert(queue.push(HostServiceCompletion{3, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+
+    std::vector<HostServiceCompletion> completions;
+    assert(queue.pop(2, completions) == 2);
+    assert(completions[0].job_id == 1);
+    assert(completions[1].job_id == 2);
+    completions.clear();
+
+    assert(queue.push(HostServiceCompletion{4, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+    assert(queue.push(HostServiceCompletion{5, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+    assert(queue.full());
+
+    assert(queue.pop(3, completions) == 3);
+    assert(completions[0].job_id == 3);
+    assert(completions[1].job_id == 4);
+    assert(completions[2].job_id == 5);
+    assert(queue.empty());
+}
+
+void completion_queue_discard_preserves_order_after_wraparound() {
+    HostServiceCompletionQueue queue(5);
+    assert(queue.push(HostServiceCompletion{1, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+    assert(queue.push(HostServiceCompletion{2, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 2}));
+    assert(queue.push(HostServiceCompletion{3, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+
+    std::vector<HostServiceCompletion> completions;
+    assert(queue.pop(1, completions) == 1);
+    completions.clear();
+
+    assert(queue.push(HostServiceCompletion{4, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 2}));
+    assert(queue.push(HostServiceCompletion{5, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 3}));
+    assert(queue.push(HostServiceCompletion{6, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+
+    assert(queue.discard_app_instance(2) == 2);
+    assert(queue.size() == 3);
+    assert(queue.pop(3, completions) == 3);
+    assert(completions[0].job_id == 3);
+    assert(completions[1].job_id == 5);
+    assert(completions[2].job_id == 6);
+    assert(queue.empty());
+}
+
 void handle_table_rejects_stale_handles() {
     HostHandleTable handles(2, 1024);
     const std::uint32_t first =
@@ -170,6 +216,8 @@ int main() {
     request_queue_can_pop_by_kind_without_consuming_other_jobs();
     completion_queue_drains_with_frame_budget();
     completion_queue_rejects_overflow();
+    completion_queue_preserves_fifo_after_wraparound();
+    completion_queue_discard_preserves_order_after_wraparound();
     handle_table_rejects_stale_handles();
     handle_table_enforces_capacity_and_bytes();
     queue_helpers_use_capability_budgets();

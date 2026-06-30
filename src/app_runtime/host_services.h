@@ -105,13 +105,15 @@ public:
     std::size_t discard_app_instance(std::uint32_t app_instance_id);
     void clear();
 
-    std::size_t size() const { return completions_.size(); }
+    std::size_t size() const { return size_; }
     std::size_t capacity() const { return capacity_; }
-    bool empty() const { return completions_.empty(); }
-    bool full() const { return completions_.size() >= capacity_; }
+    bool empty() const { return size_ == 0; }
+    bool full() const { return size_ >= capacity_; }
 
 private:
     std::size_t capacity_ = 0;
+    std::size_t head_ = 0;
+    std::size_t size_ = 0;
     std::vector<HostServiceCompletion> completions_;
 };
 
