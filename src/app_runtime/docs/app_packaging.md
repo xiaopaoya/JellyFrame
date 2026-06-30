@@ -411,7 +411,9 @@ For common layout diagnostics the samples include parsed fields such as `text`,
 `node`, `metrics.measuredWidth`, `metrics.availableWidth`, `paintBounds` and
 `viewport` when the pipeline can determine them. `developerAdvice[]` uses these
 samples to point app authors at the affected target and the smallest actionable
-detail.
+detail. Some advice entries also carry a `recipe` string such as
+`app_author_recipes.md#scroll-list`; this is a documentation pointer, not a
+runtime feature flag.
 
 Fields that affect runtime compatibility must be required by the packer:
 

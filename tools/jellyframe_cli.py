@@ -206,26 +206,31 @@ ADVICE_BY_CODE = {
         "title": "Content paints outside the target width",
         "explanation": "One or more boxes extend beyond the viewport on this target.",
         "action": "Use max-width: 100%, box-sizing: border-box, shorter labels, a vertical stack, or a scroll container. Check the target's paintBounds in the report.",
+        "recipe": "app_author_recipes.md#narrow-targets",
     },
     "layout-text-overflow": {
         "title": "Text is wider than its layout box",
         "explanation": "The measured label cannot fit in the available box and will be clipped or visually degraded.",
         "action": "Shorten the text, increase the box width, reduce font-size, allow wrapping, or use a target-specific media rule for narrow screens.",
+        "recipe": "app_author_recipes.md#narrow-targets",
     },
     "layout-text-overflow-ellipsis": {
         "title": "Ellipsis text still overflows its box",
         "explanation": "The page requested ellipsis, but the current text backend still reports a clipped or degraded narrow label.",
         "action": "Keep the text short for this target, reserve more width, or provide a narrower label through app logic or media rules.",
+        "recipe": "app_author_recipes.md#narrow-targets",
     },
     "visual-scroll-needed": {
         "title": "Page content is taller than the viewport",
         "explanation": "The rendered content height exceeds the target height.",
         "action": "If scrolling is intended, put long content in an explicit overflow: auto container and allow scroll in the target gate. Otherwise reduce vertical padding, card count, or fixed heights.",
+        "recipe": "app_author_recipes.md#scroll-list",
     },
     "visual-scroll-container": {
         "title": "A scroll container clips content",
         "explanation": "An internal scroll area contains more content than its visible box.",
         "action": "Make sure the container is reachable by touch/wheel/key input, keep fixed navigation outside it, and verify the target gate allows this scroll behavior.",
+        "recipe": "app_author_recipes.md#scroll-list",
     },
     "visual-display-command-density": {
         "title": "Display command density is high",
@@ -381,6 +386,7 @@ ADVICE_BY_CODE = {
         "title": "Target gate is not accepted",
         "explanation": "The app declared this target as publish-gated and the responsive profile violates that gate.",
         "action": "Open the target's responsive profile, fix the listed overflow/scroll/diagnostic reasons, or intentionally lower the gate policy to warn while the target is still experimental.",
+        "recipe": "app_author_recipes.md#validation",
     },
 }
 
@@ -471,6 +477,8 @@ def append_developer_advice(advice: list[dict],
         "explanation": template["explanation"],
         "action": template["action"],
     }
+    if "recipe" in template:
+        entry["recipe"] = template["recipe"]
     if source:
         entry["source"] = source
     if detail:

@@ -73,6 +73,56 @@ Cards should frame repeated items or controls. Avoid cards inside cards.
 }
 ```
 
+## Status Page
+
+Use a centered status card for empty, offline or error states. Keep the title
+short and expose one primary action.
+
+```html
+<article class="status-card">
+  <span class="status-icon">!</span>
+  <h2>Offline</h2>
+  <p>Keep failure states short.</p>
+  <button class="button primary">Retry</button>
+</article>
+```
+
+```css
+.status-card {
+  min-height: 118px;
+  text-align: center;
+}
+
+.status-icon {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 7px;
+  border-radius: 50%;
+}
+```
+
+## Control Panel
+
+Control panels should use short labels and fixed-height rows. Do not put many
+large controls side by side on narrow screens.
+
+```html
+<div class="control-row">
+  <span>Bright</span>
+  <div class="mini-meter"><span></span></div>
+</div>
+```
+
+```css
+.control-row {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 8px;
+  align-items: center;
+  height: 30px;
+}
+```
+
 ## Scroll List
 
 Use a fixed-height scroll area when content can exceed the viewport. Keep fixed
@@ -103,6 +153,12 @@ For `172x320`, reduce horizontal decisions first:
 - Keep metric values short.
 - Reduce padding before reducing readable text.
 - Avoid three or more wide buttons in one row.
+
+## Round-First Screen
+
+For `round-300`, reserve the edge area for background and low-priority content.
+Put the most important card or state in the visual center, keep bottom nav
+compact, and validate the same package on `rect-320x240` and `rect-172x320`.
 
 ## Validation
 

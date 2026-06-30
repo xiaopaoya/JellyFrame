@@ -70,7 +70,8 @@ body {
 }
 
 .hero-card,
-.recipe-card {
+.recipe-card,
+.status-card {
   position: relative;
   max-width: 100%;
   margin-bottom: 8px;
@@ -90,12 +91,30 @@ body {
   min-height: 70px;
 }
 
+.status-card {
+  min-height: 118px;
+  text-align: center;
+}
+
 .status-dot {
   width: 14px;
   height: 14px;
   margin-top: 4px;
   background-color: var(--accent);
   border-radius: 50%;
+}
+
+.status-icon {
+  display: block;
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 7px;
+  padding-top: 5px;
+  color: #06202a;
+  background-color: var(--accent);
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: 700;
 }
 
 h1,
@@ -126,6 +145,11 @@ p {
   grid-template-columns: 1fr 1fr;
   gap: 7px;
   margin-top: 9px;
+}
+
+.status-card .button {
+  width: 78px;
+  margin-top: 10px;
 }
 
 .button,
@@ -202,6 +226,45 @@ p {
   border-bottom: 0;
 }
 
+.control-row {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 8px;
+  align-items: center;
+  height: 30px;
+}
+
+.control-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mini-meter {
+  height: 10px;
+  background-color: rgba(122, 232, 238, 0.22);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.mini-meter span {
+  display: block;
+  width: 68%;
+  height: 10px;
+  background-color: var(--accent);
+  border-radius: 99px;
+}
+
+.chip-button {
+  width: 42px;
+  height: 24px;
+  color: #06202a;
+  background-color: var(--accent);
+  border: 0;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .bottom-nav {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -242,7 +305,8 @@ p {
   }
 
   .hero-card,
-  .recipe-card {
+  .recipe-card,
+  .status-card {
     margin-bottom: 7px;
     padding: 9px;
     border-radius: 15px;
@@ -250,6 +314,10 @@ p {
 
   .hero-card {
     min-height: 62px;
+  }
+
+  .status-card {
+    min-height: 106px;
   }
 
   h1 {
@@ -312,7 +380,8 @@ p {
   }
 
   .recipe-card,
-  .hero-card {
+  .hero-card,
+  .status-card {
     padding: 9px;
     border-radius: 15px;
   }
@@ -334,6 +403,10 @@ p {
   .metric-row,
   .mini-list li {
     grid-template-columns: 1fr 42px;
+  }
+
+  .control-row {
+    grid-template-columns: 50px 1fr;
   }
 
   .bottom-nav {

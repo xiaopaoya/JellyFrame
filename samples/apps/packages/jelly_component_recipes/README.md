@@ -2,7 +2,8 @@
 
 Small app-author recipes for common wearable UI structure.
 
-- Top bar, card stack, compact buttons and fixed bottom navigation.
+- Top bar, round-first status card, card stack, compact buttons, control rows
+  and fixed bottom navigation.
 - One explicit `overflow: auto` content area, with navigation outside it.
 - No host services, images, Canvas or JavaScript.
 - The manifest gates `round-300`, `rect-320x240` and `rect-172x320`.

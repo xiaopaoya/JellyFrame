@@ -33,7 +33,9 @@ python tools\jellyframe_cli.py check `
 ```
 
 Then read the final `developerAdvice[]` section in the JSON report. It is the
-app-author view of the lower-level diagnostics.
+app-author view of the lower-level diagnostics. Some advice entries include a
+`recipe` field that points at a copyable pattern in
+[app_author_recipes.md](app_author_recipes.md).
 
 ## What You Can Rely On
 

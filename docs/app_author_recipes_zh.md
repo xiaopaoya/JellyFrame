@@ -70,6 +70,54 @@
 }
 ```
 
+## 状态页
+
+空状态、离线或错误状态使用居中的状态卡片。标题要短，只暴露一个主操作。
+
+```html
+<article class="status-card">
+  <span class="status-icon">!</span>
+  <h2>Offline</h2>
+  <p>Keep failure states short.</p>
+  <button class="button primary">Retry</button>
+</article>
+```
+
+```css
+.status-card {
+  min-height: 118px;
+  text-align: center;
+}
+
+.status-icon {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 7px;
+  border-radius: 50%;
+}
+```
+
+## 控制面板
+
+控制面板使用短标签和固定高度行。窄屏不要把很多大控件横向挤在一起。
+
+```html
+<div class="control-row">
+  <span>Bright</span>
+  <div class="mini-meter"><span></span></div>
+</div>
+```
+
+```css
+.control-row {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 8px;
+  align-items: center;
+  height: 30px;
+}
+```
+
 ## 滚动列表
 
 内容可能超过 viewport 时，使用固定高度滚动区域。固定底部导航放在滚动区域外。
@@ -98,6 +146,11 @@
 - 数值和标签保持短。
 - 先缩 padding，再缩可读文本。
 - 避免一行放三个以上宽按钮。
+
+## 圆屏优先首屏
+
+对 `round-300`，把边缘区域留给背景和低优先级内容。最重要的卡片或状态放在视觉中心，
+底部导航保持紧凑，并始终用同一个 package 验证 `rect-320x240` 和 `rect-172x320`。
 
 ## 验收
 

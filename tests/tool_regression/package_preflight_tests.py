@@ -601,7 +601,8 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertTrue(any(entry["code"] == "layout-text-overflow" and
                             entry.get("target") == "rect-172x320" and
                             entry.get("text") == "Daily" and
-                            entry.get("metrics", {}).get("availableWidth") == 30
+                            entry.get("metrics", {}).get("availableWidth") == 30 and
+                            entry.get("recipe") == "app_author_recipes.md#narrow-targets"
                             for entry in advice))
 
     def test_responsive_profile_carries_diagnostic_samples(self):

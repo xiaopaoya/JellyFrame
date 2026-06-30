@@ -30,6 +30,8 @@ python tools\jellyframe_cli.py check `
 ```
 
 然后优先读 JSON report 末尾的 `developerAdvice[]`。它是低层 diagnostics 面向 app 作者的解释和修复建议。
+部分建议会带 `recipe` 字段，指向 [app_author_recipes_zh.md](app_author_recipes_zh.md)
+中的可复制写法。
 
 ## 现在可以依赖什么
 
