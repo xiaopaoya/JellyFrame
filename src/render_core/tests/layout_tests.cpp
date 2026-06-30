@@ -167,6 +167,42 @@ void flex_row_shrinks_basis_widths() {
     check(a->rect.width == 90 && b->rect.width == 90, "flex basis widths shrink evenly");
 }
 
+void flex_row_justifies_and_aligns_items() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><div id='a'></div><div id='b'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; width: 200px; height: 50px; justify-content: center; align-items: center; }"
+        "div { width: 40px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 240);
+
+    const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* b = find_first_by_id(*layout_tree, "b");
+    check(a != nullptr && b != nullptr, "justify/align flex fixture boxes exist");
+    check(a->rect.x == 60 && b->rect.x == 100, "center justification places row as a group");
+    check(a->rect.y == 20 && b->rect.y == 20, "center alignment places items vertically");
+}
+
+void flex_wrap_stacks_lines_with_row_gap() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><div id='a'></div><div id='b'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; flex-wrap: wrap; width: 90px; column-gap: 5px; row-gap: 7px; }"
+        "div { width: 50px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 120);
+
+    const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* b = find_first_by_id(*layout_tree, "b");
+    check(a != nullptr && b != nullptr, "wrapped flex fixture boxes exist");
+    check(a->rect.x == 0 && a->rect.y == 0, "first wrapped flex item starts first line");
+    check(b->rect.x == 0 && b->rect.y == 17, "second wrapped flex item moves to next row with row-gap");
+}
+
 void positioned_layout_offsets_without_flow_space() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -342,6 +378,8 @@ int main() {
         layout_tree_reports_depth_budget_diagnostic();
         flex_row_distributes_grow_space();
         flex_row_shrinks_basis_widths();
+        flex_row_justifies_and_aligns_items();
+        flex_wrap_stacks_lines_with_row_gap();
         positioned_layout_offsets_without_flow_space();
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();

@@ -224,6 +224,132 @@ void apply_relative_position_offset(LayoutBox& box) {
     }
 }
 
+struct FlexLayoutItem {
+    LayoutBox* child = nullptr;
+    int base_width = 0;
+    int target_width = 0;
+    bool force_width = false;
+};
+
+int flex_grow_factor(const FlexLayoutItem& item) {
+    return item.child == nullptr ? 0 : std::max(0, item.child->style.flex_grow);
+}
+
+std::int64_t flex_shrink_weight(const FlexLayoutItem& item) {
+    if (item.child == nullptr) {
+        return 0;
+    }
+    const int shrink = std::max(0, item.child->style.flex_shrink);
+    return static_cast<std::int64_t>(shrink) * std::max(1, item.base_width);
+}
+
+void distribute_flex_row_widths(std::vector<FlexLayoutItem>& items,
+                                int free_space,
+                                int total_grow,
+                                std::int64_t total_shrink_weight) {
+    if (free_space > 0 && total_grow > 0) {
+        int remaining_space = free_space;
+        int remaining_grow = total_grow;
+        for (FlexLayoutItem& item : items) {
+            const int grow = flex_grow_factor(item);
+            if (grow <= 0) {
+                continue;
+            }
+            const int share = remaining_grow == grow
+                ? remaining_space
+                : static_cast<int>((static_cast<std::int64_t>(remaining_space) * grow) / remaining_grow);
+            remaining_space -= share;
+            remaining_grow -= grow;
+            item.target_width = std::max(0, item.base_width + share);
+            item.force_width = true;
+        }
+    } else if (free_space < 0 && total_shrink_weight > 0) {
+        const int deficit = -free_space;
+        int remaining_deficit = deficit;
+        std::int64_t remaining_weight = total_shrink_weight;
+        for (FlexLayoutItem& item : items) {
+            const std::int64_t weight = flex_shrink_weight(item);
+            if (weight <= 0) {
+                continue;
+            }
+            const int share = remaining_weight == weight
+                ? remaining_deficit
+                : static_cast<int>((static_cast<std::int64_t>(remaining_deficit) * weight) / remaining_weight);
+            remaining_deficit -= share;
+            remaining_weight -= weight;
+            const int min_width = item.child == nullptr ? 0 : std::max(0, item.child->style.min_width);
+            item.target_width = std::max(min_width, item.base_width - share);
+            item.force_width = true;
+        }
+    }
+}
+
+struct FlexJustifyPlacement {
+    int cursor_x = 0;
+    int extra_gap = 0;
+};
+
+FlexJustifyPlacement flex_justify_placement(JustifyContent justify_content,
+                                            int content_x,
+                                            int content_width,
+                                            int total_child_width,
+                                            int in_flow_count) {
+    FlexJustifyPlacement placement;
+    placement.cursor_x = content_x;
+    if (justify_content == JustifyContent::Center) {
+        placement.cursor_x += std::max(0, (content_width - total_child_width) / 2);
+    } else if (justify_content == JustifyContent::SpaceAround) {
+        placement.extra_gap = in_flow_count == 0 ? 0 : std::max(0, (content_width - total_child_width) / in_flow_count);
+        placement.cursor_x += placement.extra_gap / 2;
+    } else if (justify_content == JustifyContent::SpaceBetween && in_flow_count > 1) {
+        placement.extra_gap = std::max(0, (content_width - total_child_width) / (in_flow_count - 1));
+    }
+    return placement;
+}
+
+int flex_aligned_y(AlignItems align_items, int content_y, int container_height, int child_height) {
+    if (align_items == AlignItems::Center) {
+        return content_y + std::max(0, (container_height - child_height) / 2);
+    }
+    if (align_items == AlignItems::End) {
+        return content_y + std::max(0, container_height - child_height);
+    }
+    return content_y;
+}
+
+template <typename LayoutChildForWidth>
+int layout_wrapped_flex_children(LayoutBox& box,
+                                 int content_x,
+                                 int content_y,
+                                 int content_width,
+                                 const LayoutChildForWidth& layout_child_for_width) {
+    int cursor_x = content_x;
+    int line_y = content_y;
+    int line_height = 0;
+    const int max_line_width = std::max(1, content_width);
+    for (auto& child : box.children) {
+        if (is_out_of_flow_positioned(child->style)) {
+            continue;
+        }
+        const bool use_basis = child->style.flex_basis >= 0;
+        layout_child_for_width(*child, use_basis ? child->style.flex_basis : content_width, use_basis);
+        const int child_width = child->rect.width + child->style.margin.left + child->style.margin.right;
+        const int child_height = child->rect.height + child->style.margin.top + child->style.margin.bottom;
+        const bool should_wrap = cursor_x > content_x && cursor_x + child_width > content_x + max_line_width;
+        if (should_wrap) {
+            line_y += std::max(1, line_height) + box.style.row_gap;
+            cursor_x = content_x;
+            line_height = 0;
+        }
+        const int dx = cursor_x + child->style.margin.left - child->rect.x;
+        const int dy = line_y + child->style.margin.top - child->rect.y;
+        shift_box(*child, dx, dy);
+        cursor_x += child_width + box.style.column_gap;
+        line_height = std::max(line_height, child_height);
+    }
+    return line_y - content_y + std::max(0, line_height);
+}
+
 constexpr int kMaxGridColumns = 32;
 
 bool participates_in_inline_flow(const LayoutBox& box) {
@@ -672,41 +798,10 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
     };
 
     if (box.style.flex_wrap) {
-        int cursor_x = content_x;
-        int line_y = content_y;
-        int line_height = 0;
-        int max_line_width = std::max(1, content_width);
-        for (auto& child : box.children) {
-            if (is_out_of_flow_positioned(child->style)) {
-                continue;
-            }
-            const bool use_basis = child->style.flex_basis >= 0;
-            layout_child_for_width(*child, use_basis ? child->style.flex_basis : content_width, use_basis);
-            const int child_width = child->rect.width + child->style.margin.left + child->style.margin.right;
-            const int child_height = child->rect.height + child->style.margin.top + child->style.margin.bottom;
-            const bool should_wrap = cursor_x > content_x && cursor_x + child_width > content_x + max_line_width;
-            if (should_wrap) {
-                line_y += std::max(1, line_height) + box.style.row_gap;
-                cursor_x = content_x;
-                line_height = 0;
-            }
-            const int dx = cursor_x + child->style.margin.left - child->rect.x;
-            const int dy = line_y + child->style.margin.top - child->rect.y;
-            shift_box(*child, dx, dy);
-            cursor_x += child_width + box.style.column_gap;
-            line_height = std::max(line_height, child_height);
-        }
-        return line_y - content_y + std::max(0, line_height);
+        return layout_wrapped_flex_children(box, content_x, content_y, content_width, layout_child_for_width);
     }
 
-    struct FlexItem {
-        LayoutBox* child = nullptr;
-        int base_width = 0;
-        int target_width = 0;
-        bool force_width = false;
-    };
-
-    std::vector<FlexItem> items;
+    std::vector<FlexLayoutItem> items;
     items.reserve(box.children.size());
     int total_base_width = 0;
     int total_margin_width = 0;
@@ -729,7 +824,7 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
             base_width = child->style.width;
         }
         base_width = std::max(std::max(0, child->style.min_width), base_width);
-        FlexItem item;
+        FlexLayoutItem item;
         item.child = child.get();
         item.base_width = base_width;
         item.target_width = base_width;
@@ -738,85 +833,40 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
 
         total_base_width += base_width;
         total_margin_width += child->style.margin.left + child->style.margin.right;
-        total_grow += std::max(0, child->style.flex_grow);
-        if (child->style.flex_shrink > 0) {
-            total_shrink_weight += static_cast<std::int64_t>(child->style.flex_shrink) * std::max(1, base_width);
-        }
+        total_grow += flex_grow_factor(item);
+        total_shrink_weight += flex_shrink_weight(item);
     }
 
     const int total_gap_width = box.style.column_gap * std::max(0, in_flow_count - 1);
     const int available_item_width = std::max(0, content_width - total_margin_width - total_gap_width);
     const int free_space = available_item_width - total_base_width;
-    if (free_space > 0 && total_grow > 0) {
-        int remaining_space = free_space;
-        int remaining_grow = total_grow;
-        for (FlexItem& item : items) {
-            const int grow = std::max(0, item.child->style.flex_grow);
-            if (grow <= 0) {
-                continue;
-            }
-            const int share = remaining_grow == grow
-                ? remaining_space
-                : static_cast<int>((static_cast<std::int64_t>(remaining_space) * grow) / remaining_grow);
-            remaining_space -= share;
-            remaining_grow -= grow;
-            item.target_width = std::max(0, item.base_width + share);
-            item.force_width = true;
-        }
-    } else if (free_space < 0 && total_shrink_weight > 0) {
-        const int deficit = -free_space;
-        int remaining_deficit = deficit;
-        std::int64_t remaining_weight = total_shrink_weight;
-        for (FlexItem& item : items) {
-            const int shrink = std::max(0, item.child->style.flex_shrink);
-            const std::int64_t weight = static_cast<std::int64_t>(shrink) * std::max(1, item.base_width);
-            if (weight <= 0) {
-                continue;
-            }
-            const int share = remaining_weight == weight
-                ? remaining_deficit
-                : static_cast<int>((static_cast<std::int64_t>(remaining_deficit) * weight) / remaining_weight);
-            remaining_deficit -= share;
-            remaining_weight -= weight;
-            const int min_width = std::max(0, item.child->style.min_width);
-            item.target_width = std::max(min_width, item.base_width - share);
-            item.force_width = true;
-        }
-    }
+    distribute_flex_row_widths(items, free_space, total_grow, total_shrink_weight);
 
     int total_child_width = total_margin_width + total_gap_width;
-    for (FlexItem& item : items) {
+    for (FlexLayoutItem& item : items) {
         layout_child_for_width(*item.child, item.target_width, item.force_width);
         total_child_width += item.child->rect.width;
         max_child_height = std::max(max_child_height,
             item.child->rect.height + item.child->style.margin.top + item.child->style.margin.bottom);
     }
 
-    int gap = 0;
-    int cursor_x = content_x;
-    if (box.style.justify_content == JustifyContent::Center) {
-        cursor_x += std::max(0, (content_width - total_child_width) / 2);
-    } else if (box.style.justify_content == JustifyContent::SpaceAround) {
-        gap = in_flow_count == 0 ? 0 : std::max(0, (content_width - total_child_width) / in_flow_count);
-        cursor_x += gap / 2;
-    } else if (box.style.justify_content == JustifyContent::SpaceBetween && in_flow_count > 1) {
-        gap = std::max(0, (content_width - total_child_width) / (in_flow_count - 1));
-    }
+    const FlexJustifyPlacement placement = flex_justify_placement(box.style.justify_content,
+                                                                  content_x,
+                                                                  content_width,
+                                                                  total_child_width,
+                                                                  in_flow_count);
+    int cursor_x = placement.cursor_x;
 
     const int container_height = std::max(box.style.min_height, box.style.height >= 0 ? box.style.height : max_child_height);
-    for (FlexItem& item : items) {
+    for (FlexLayoutItem& item : items) {
         LayoutBox* child = item.child;
-        int target_y = content_y;
-        if (box.style.align_items == AlignItems::Center) {
-            target_y += std::max(0, (container_height - child->rect.height) / 2);
-        } else if (box.style.align_items == AlignItems::End) {
-            target_y += std::max(0, container_height - child->rect.height);
-        }
+        const int target_y = flex_aligned_y(box.style.align_items, content_y, container_height, child->rect.height);
 
         const int dx = cursor_x + child->style.margin.left - child->rect.x;
         const int dy = target_y + child->style.margin.top - child->rect.y;
         shift_box(*child, dx, dy);
-        cursor_x += child->rect.width + child->style.margin.left + child->style.margin.right + gap + box.style.column_gap;
+        cursor_x += child->rect.width + child->style.margin.left + child->style.margin.right +
+            placement.extra_gap + box.style.column_gap;
     }
 
     return container_height;
