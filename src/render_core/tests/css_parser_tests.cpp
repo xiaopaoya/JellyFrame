@@ -146,7 +146,7 @@ void supports_queries_apply_representative_supported_properties() {
 }
 
 void style_struct_size_has_embedded_guardrail() {
-    check(sizeof(Style) <= 1536, "Style should stay within the embedded size guardrail");
+    check(sizeof(Style) <= 1024, "Style should stay within the embedded size guardrail");
     check(sizeof(DisplayCommand) <= 160, "DisplayCommand should stay compact for display-list reuse");
 }
 
