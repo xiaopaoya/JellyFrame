@@ -163,15 +163,24 @@ std::uint32_t HostHandleTable::allocate(HostServiceHandleKind kind,
     if (byte_budget_ > 0 && static_cast<std::size_t>(bytes) > byte_budget_ - used_bytes_) {
         return 0;
     }
-    for (std::size_t i = 0; i < slots_.size(); ++i) {
+    std::size_t i = next_free_hint_;
+    for (std::size_t offset = 0; offset < slots_.size(); ++offset) {
         Slot& slot = slots_[i];
         if (slot.active) {
+            ++i;
+            if (i == slots_.size()) {
+                i = 0;
+            }
             continue;
         }
         slot.active = true;
         slot.info = HostHandleInfo{kind, app_instance_id, bytes, payload};
         used_bytes_ += bytes;
         ++active_count_;
+        next_free_hint_ = i + 1;
+        if (next_free_hint_ == slots_.size()) {
+            next_free_hint_ = 0;
+        }
         return make_handle(i, slot.generation);
     }
     return 0;
@@ -187,6 +196,7 @@ bool HostHandleTable::release(std::uint32_t handle) {
     slot->info = {};
     slot->generation = next_generation(slot->generation);
     --active_count_;
+    next_free_hint_ = slot_index_from_handle(handle);
     return true;
 }
 
@@ -212,6 +222,9 @@ std::size_t HostHandleTable::release_app_instance(std::uint32_t app_instance_id)
         slot.info = {};
         slot.generation = next_generation(slot.generation);
         --active_count_;
+        if (released == 0) {
+            next_free_hint_ = i;
+        }
         ++released;
     }
     return released;
@@ -227,6 +240,7 @@ void HostHandleTable::clear() {
     }
     used_bytes_ = 0;
     active_count_ = 0;
+    next_free_hint_ = 0;
 }
 
 std::uint32_t HostHandleTable::make_handle(std::size_t slot_index, std::uint16_t generation) {

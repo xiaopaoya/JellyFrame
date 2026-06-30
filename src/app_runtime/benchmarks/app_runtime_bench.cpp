@@ -95,6 +95,26 @@ void bench_handle_table(std::size_t capacity) {
     }
 }
 
+void bench_handle_table_churn(std::size_t capacity) {
+    HostHandleTable table(capacity, capacity * 512);
+    std::vector<std::uint32_t> handles;
+    handles.reserve(capacity);
+    for (std::size_t i = 0; i < capacity; ++i) {
+        handles.push_back(table.allocate(HostServiceHandleKind::FetchResponse,
+                                         static_cast<std::uint32_t>((i % 4) + 1),
+                                         128,
+                                         nullptr));
+    }
+    for (std::size_t i = 0; i < capacity * 4; ++i) {
+        std::uint32_t& handle = handles.back();
+        table.release(handle);
+        handle = table.allocate(HostServiceHandleKind::FetchResponse,
+                                static_cast<std::uint32_t>((i % 4) + 1),
+                                128,
+                                nullptr);
+    }
+}
+
 void bench_lifecycle_teardown(std::size_t capacity) {
     AppLifecycleController lifecycle;
     HostServiceRequestQueue requests(capacity);
@@ -700,6 +720,9 @@ int run_app_runtime_bench(int argc, char** argv) {
     }));
     print_result("app_runtime_handle_table", iterations, average_microseconds(iterations, [&] {
         bench_handle_table(capacity);
+    }));
+    print_result("app_runtime_handle_table_churn", iterations, average_microseconds(iterations, [&] {
+        bench_handle_table_churn(capacity);
     }));
     print_result("app_runtime_lifecycle_teardown", iterations, average_microseconds(iterations, [&] {
         bench_lifecycle_teardown(capacity);

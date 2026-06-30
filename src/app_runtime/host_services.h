@@ -160,6 +160,7 @@ private:
     std::size_t byte_budget_ = 0;
     std::size_t used_bytes_ = 0;
     std::size_t active_count_ = 0;
+    std::size_t next_free_hint_ = 0;
     std::vector<Slot> slots_;
 };
 

@@ -186,6 +186,27 @@ void handle_table_enforces_capacity_and_bytes() {
     assert(handles.lookup(second) == nullptr);
 }
 
+void handle_table_reuses_released_slot_with_new_generation() {
+    HostHandleTable handles(3, 1024);
+    const std::uint32_t first = handles.allocate(HostServiceHandleKind::Surface, 1, 64);
+    const std::uint32_t second = handles.allocate(HostServiceHandleKind::FetchResponse, 1, 64);
+    const std::uint32_t third = handles.allocate(HostServiceHandleKind::AudioStream, 1, 64);
+    assert(first != 0);
+    assert(second != 0);
+    assert(third != 0);
+
+    assert(handles.release(second));
+    const std::uint32_t reused = handles.allocate(HostServiceHandleKind::StorageValue, 2, 64);
+    assert(reused != 0);
+    assert(reused != second);
+    assert((reused & 0x0000ffffu) == (second & 0x0000ffffu));
+    assert(handles.lookup(second) == nullptr);
+    const HostHandleInfo* info = handles.lookup(reused);
+    assert(info != nullptr);
+    assert(info->kind == HostServiceHandleKind::StorageValue);
+    assert(info->app_instance_id == 2);
+}
+
 void queue_helpers_use_capability_budgets() {
     HostAsyncCapabilities caps;
     caps.max_in_flight_jobs = 3;
@@ -220,6 +241,7 @@ int main() {
     completion_queue_discard_preserves_order_after_wraparound();
     handle_table_rejects_stale_handles();
     handle_table_enforces_capacity_and_bytes();
+    handle_table_reuses_released_slot_with_new_generation();
     queue_helpers_use_capability_budgets();
     cancelled_completion_preserves_request_identity();
     return 0;
