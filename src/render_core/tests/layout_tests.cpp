@@ -337,6 +337,29 @@ void max_width_percent_clamps_nested_border_box() {
           "nested border-box percent item stays inside clamped card");
 }
 
+void grid_places_fixed_columns_and_spans() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main><section id='a'></section><section id='b'></section><section id='wide'></section></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: grid; grid-template-columns: 40px 1fr; width: 120px; gap: 5px; }"
+        "section { height: 10px; }"
+        "#wide { grid-column: span 2; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 160);
+
+    const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* b = find_first_by_id(*layout_tree, "b");
+    const LayoutBox* wide = find_first_by_id(*layout_tree, "wide");
+    check(a != nullptr && b != nullptr && wide != nullptr, "grid fixture boxes exist");
+    check(a->rect.x == 0 && a->rect.width == 40, "fixed grid column width applies");
+    check(b->rect.x == 45 && b->rect.width == 75, "flexible grid column fills remaining width");
+    check(wide->rect.x == 0 && wide->rect.y == 15 && wide->rect.width == 120,
+          "span grid item moves to next row and covers both columns");
+}
+
 void nowrap_text_overflow_reports_diagnostic() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -386,6 +409,7 @@ int main() {
         percentage_width_and_height_use_containing_box();
         border_box_percent_width_accounts_for_edges();
         max_width_percent_clamps_nested_border_box();
+        grid_places_fixed_columns_and_spans();
         nowrap_text_overflow_reports_diagnostic();
     } catch (const std::exception& error) {
         std::cerr << "layout test failed: " << error.what() << '\n';
