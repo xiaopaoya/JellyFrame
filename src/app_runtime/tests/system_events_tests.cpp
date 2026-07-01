@@ -77,6 +77,76 @@ void pump_is_frame_bounded_and_drops_stale_instances() {
     assert(accepted.front().app_instance_id == second.id);
 }
 
+void queue_preserves_order_after_wraparound() {
+    AppRuntimeHost host = make_host();
+    AppSystemEventQueue queue(3, 2);
+    const AppInstance app = host.launch("org.example.clock", AppRole::App);
+    assert(queue.push_current(host, AppSystemEventKind::TimeChanged, make_snapshot(1, true)));
+    assert(queue.push_current(host, AppSystemEventKind::BatteryChanged, make_snapshot(2, true)));
+    assert(queue.push_current(host, AppSystemEventKind::NetworkStatusChanged, make_snapshot(3, true)));
+
+    std::vector<AppSystemEvent> accepted;
+    AppSystemEventPumpResult result = queue.pump_current(host, accepted);
+    assert(result.consumed == 2);
+    assert(result.accepted == 2);
+    assert(accepted[0].snapshot.unix_time_ms == 1);
+    assert(accepted[1].snapshot.unix_time_ms == 2);
+    accepted.clear();
+
+    assert(queue.push_current(host, AppSystemEventKind::ScreenStateChanged, make_snapshot(4, true)));
+    assert(queue.push_current(host, AppSystemEventKind::LowPowerModeChanged, make_snapshot(5, true)));
+    assert(queue.full());
+
+    result = queue.pump_current(host, accepted);
+    assert(result.consumed == 2);
+    assert(result.accepted == 2);
+    assert(accepted[0].app_instance_id == app.id);
+    assert(accepted[0].snapshot.unix_time_ms == 3);
+    assert(accepted[1].snapshot.unix_time_ms == 4);
+    accepted.clear();
+
+    result = queue.pump_current(host, accepted);
+    assert(result.consumed == 1);
+    assert(result.accepted == 1);
+    assert(accepted[0].snapshot.unix_time_ms == 5);
+    assert(queue.empty());
+}
+
+void discard_preserves_order_after_wraparound() {
+    AppRuntimeHost host = make_host();
+    AppSystemEventQueue queue(5, 2);
+    const AppInstance first = host.launch("org.example.first", AppRole::App);
+    assert(queue.push_current(host, AppSystemEventKind::TimeChanged, make_snapshot(1, true)));
+    assert(queue.push_current(host, AppSystemEventKind::BatteryChanged, make_snapshot(2, true)));
+    assert(queue.push_current(host, AppSystemEventKind::NetworkStatusChanged, make_snapshot(3, true)));
+
+    std::vector<AppSystemEvent> accepted;
+    AppSystemEventPumpResult result = queue.pump_current(host, accepted);
+    assert(result.consumed == 2);
+    assert(result.accepted == 2);
+    accepted.clear();
+
+    const AppInstance second = host.launch("org.example.second", AppRole::App);
+    assert(queue.push_current(host, AppSystemEventKind::TimeChanged, make_snapshot(4, true)));
+    assert(queue.push_current(host, AppSystemEventKind::ScreenStateChanged, make_snapshot(5, true)));
+    assert(queue.push_current(host, AppSystemEventKind::BatteryChanged, make_snapshot(6, true)));
+
+    assert(queue.discard_app_instance(first.id) == 1);
+    result = queue.pump_current(host, accepted);
+    assert(result.consumed == 2);
+    assert(result.accepted == 2);
+    assert(accepted[0].app_instance_id == second.id);
+    assert(accepted[0].snapshot.unix_time_ms == 4);
+    assert(accepted[1].snapshot.unix_time_ms == 5);
+    accepted.clear();
+
+    result = queue.pump_current(host, accepted);
+    assert(result.consumed == 1);
+    assert(result.accepted == 1);
+    assert(accepted[0].snapshot.unix_time_ms == 6);
+    assert(queue.empty());
+}
+
 void discard_and_clear_are_bounded_helpers() {
     AppRuntimeHost host = make_host();
     AppSystemEventQueue queue(4, 4);
@@ -96,6 +166,8 @@ void discard_and_clear_are_bounded_helpers() {
 int main() {
     queue_requires_active_instance_and_capacity();
     pump_is_frame_bounded_and_drops_stale_instances();
+    queue_preserves_order_after_wraparound();
+    discard_preserves_order_after_wraparound();
     discard_and_clear_are_bounded_helpers();
     return 0;
 }

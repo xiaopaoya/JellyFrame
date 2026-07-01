@@ -63,7 +63,7 @@ public:
     void clear();
 
     std::size_t size() const {
-        return events_.size();
+        return size_;
     }
 
     std::size_t capacity() const {
@@ -71,16 +71,18 @@ public:
     }
 
     bool empty() const {
-        return events_.empty();
+        return size_ == 0;
     }
 
     bool full() const {
-        return events_.size() >= capacity_;
+        return size_ >= capacity_;
     }
 
 private:
     std::size_t capacity_ = 0;
     std::size_t max_events_per_frame_ = 0;
+    std::size_t head_ = 0;
+    std::size_t size_ = 0;
     std::vector<AppSystemEvent> events_;
 };
 
