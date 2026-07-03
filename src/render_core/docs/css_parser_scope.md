@@ -56,9 +56,12 @@ layout behavior.
   `:root` tokens and inline tokens work, and unresolved values keep earlier
   fallback declarations alive.
 - `background` accepts solid colors and a style-resolution subset of
-  `linear-gradient(<color>, <color>)` and
-  `linear-gradient(to bottom/top/right/left, ...)`. Unsupported angles, stops
-  or image values are reported without replacing earlier supported fallbacks.
+  `linear-gradient(<color>, <color>)`,
+  `linear-gradient(to bottom/top/right/left, ...)`, two-segment `conic-gradient()`
+  progress rings and two-color center-circle `radial-gradient()` highlights.
+  Unsupported angles, stops, focal points, ellipses or image values are reported
+  without replacing earlier supported fallbacks.
+- `background-image` accepts the same gradient subset, but not solid colors.
 - Type/class/id/attribute compound selectors, descendant and child combinators,
   and adjacent/general sibling combinators.
 - Dynamic pseudo-classes `:hover`, `:active`, `:focus`, `:focus-within`,

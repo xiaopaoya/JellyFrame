@@ -16,6 +16,7 @@ namespace jellyframe {
 namespace {
 
 constexpr int kConicGradientAreaWarningPixels = 65536;
+constexpr int kRadialGradientAreaWarningPixels = 32768;
 
 bool has_border(const EdgeSizes& border) {
     return border.top > 0 || border.right > 0 || border.bottom > 0 || border.left > 0;
@@ -149,6 +150,23 @@ void push_conic_gradient(DisplayList& display_list,
     command.color = first;
     command.color2 = second;
     command.gradient_stop_percent = std::max(0, std::min(100, stop_percent));
+    command.border_radius = border_radius;
+    display_list.push_back(std::move(command));
+}
+
+void push_radial_gradient(DisplayList& display_list,
+                          Rect rect,
+                          Color center,
+                          Color edge,
+                          int border_radius = 0) {
+    if (rect.width <= 0 || rect.height <= 0 || (center.a == 0 && edge.a == 0)) {
+        return;
+    }
+    DisplayCommand command;
+    command.type = DisplayCommandType::RadialGradient;
+    command.rect = rect;
+    command.color = center;
+    command.color2 = edge;
     command.border_radius = border_radius;
     display_list.push_back(std::move(command));
 }
@@ -813,6 +831,23 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                             box.style.background_color2,
                             box.style.background_gradient_stop_percent,
                             border_radius);
+    } else if (box.style.background_paint == BackgroundPaintKind::RadialGradient) {
+        const long long radial_area = static_cast<long long>(std::max(0, paint_rect.width)) *
+            static_cast<long long>(std::max(0, paint_rect.height));
+        if (radial_area > kRadialGradientAreaWarningPixels) {
+            report_diagnostic(options.diagnostics,
+                              DiagnosticStage::LayerTree,
+                              DiagnosticSeverity::Warning,
+                              "layer-radial-gradient-area-budget",
+                              "radial-gradient() area is above the embedded highlight budget",
+                              "area=" + std::to_string(radial_area) +
+                                  "px limit=" + std::to_string(kRadialGradientAreaWarningPixels) + "px");
+        }
+        push_radial_gradient(display_list,
+                             paint_rect,
+                             box.style.background_color,
+                             box.style.background_color2,
+                             border_radius);
     } else if (is_visible_background(box.style.background_color)) {
         push_fill_rect(display_list, paint_rect, box.style.background_color, border_radius);
     }
@@ -975,7 +1010,8 @@ void append_flattened_command(DisplayList& output,
     flattened.color2 = with_opacity(flattened.color2, opacity);
     if (flattened.color.a == 0 &&
         ((flattened.type != DisplayCommandType::LinearGradient &&
-          flattened.type != DisplayCommandType::ConicGradient) || flattened.color2.a == 0)) {
+          flattened.type != DisplayCommandType::ConicGradient &&
+          flattened.type != DisplayCommandType::RadialGradient) || flattened.color2.a == 0)) {
         return;
     }
     output.push_back(std::move(flattened));

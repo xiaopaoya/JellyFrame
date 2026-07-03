@@ -1486,6 +1486,76 @@ bool parse_conic_gradient_background(const std::string& raw_value,
     return true;
 }
 
+bool parse_radial_stop(const std::string& component, Color& color, int expected_percent) {
+    const std::vector<std::string> tokens = split_whitespace_components(component);
+    if (tokens.empty() || tokens.size() > 2) {
+        return false;
+    }
+    if (!parse_color(tokens[0], color)) {
+        return false;
+    }
+    if (tokens.size() == 1) {
+        return true;
+    }
+    int percent = 0;
+    return parse_percentage_int(tokens[1], percent) && percent == expected_percent;
+}
+
+std::string radial_gradient_failure_detail(const std::string& raw_value) {
+    const std::string value = lowercase(trim(raw_value));
+    constexpr std::string_view prefix = "radial-gradient(";
+    if (value.rfind(prefix, 0) != 0) {
+        return {};
+    }
+    constexpr std::string_view expected =
+        "Expected supported subset: radial-gradient([circle|circle at center,] <color> [0%], <color> [100%]).";
+    if (value.size() <= prefix.size() + 1 || value.back() != ')') {
+        return std::string(expected) + " Function must be closed with ')'.";
+    }
+
+    std::vector<std::string> args =
+        split_function_arguments(std::string_view(value).substr(prefix.size(), value.size() - prefix.size() - 1));
+    if (args.size() == 3) {
+        const std::string shape = trim(args[0]);
+        if (shape != "circle" && shape != "circle at center" && shape != "at center") {
+            return std::string(expected) + " Only a center circle is supported.";
+        }
+        args.erase(args.begin());
+    }
+    if (args.size() != 2) {
+        return std::string(expected) + " Only two color stops are supported.";
+    }
+
+    Color first;
+    Color second;
+    if (!parse_radial_stop(args[0], first, 0) || !parse_radial_stop(args[1], second, 100)) {
+        return std::string(expected) + " Stops must be colors with optional 0% and 100% percentages.";
+    }
+    return {};
+}
+
+bool parse_radial_gradient_background(const std::string& raw_value, Color& first, Color& second) {
+    const std::string value = lowercase(trim(raw_value));
+    constexpr std::string_view prefix = "radial-gradient(";
+    if (value.rfind(prefix, 0) != 0 || value.back() != ')') {
+        return false;
+    }
+
+    std::vector<std::string> args =
+        split_function_arguments(std::string_view(value).substr(prefix.size(), value.size() - prefix.size() - 1));
+    if (args.size() == 3) {
+        const std::string shape = trim(args[0]);
+        if (shape != "circle" && shape != "circle at center" && shape != "at center") {
+            return false;
+        }
+        args.erase(args.begin());
+    }
+    if (args.size() != 2) {
+        return false;
+    }
+    return parse_radial_stop(args[0], first, 0) && parse_radial_stop(args[1], second, 100);
+}
+
 bool parse_background_paint(const std::string& value,
                             BackgroundPaintKind& kind,
                             GradientAxis& axis,
@@ -1510,11 +1580,54 @@ bool parse_background_paint(const std::string& value,
         color2 = second;
         return true;
     }
+    if (parse_radial_gradient_background(value, first, second)) {
+        kind = BackgroundPaintKind::RadialGradient;
+        axis = GradientAxis::Vertical;
+        stop_percent = 100;
+        color = first;
+        color2 = second;
+        return true;
+    }
     if (parse_color(value, color)) {
         kind = BackgroundPaintKind::Solid;
         axis = GradientAxis::Vertical;
         stop_percent = 100;
         color2 = color;
+        return true;
+    }
+    return false;
+}
+
+bool parse_background_image_paint(const std::string& value,
+                                  BackgroundPaintKind& kind,
+                                  GradientAxis& axis,
+                                  int& stop_percent,
+                                  Color& color,
+                                  Color& color2) {
+    Color first;
+    Color second;
+    if (parse_linear_gradient_background(value, first, second, axis)) {
+        kind = BackgroundPaintKind::LinearGradient;
+        stop_percent = 100;
+        color = first;
+        color2 = second;
+        return true;
+    }
+    int conic_stop_percent = 100;
+    if (parse_conic_gradient_background(value, first, second, conic_stop_percent)) {
+        kind = BackgroundPaintKind::ConicGradient;
+        axis = GradientAxis::Vertical;
+        stop_percent = conic_stop_percent;
+        color = first;
+        color2 = second;
+        return true;
+    }
+    if (parse_radial_gradient_background(value, first, second)) {
+        kind = BackgroundPaintKind::RadialGradient;
+        axis = GradientAxis::Vertical;
+        stop_percent = 100;
+        color = first;
+        color2 = second;
         return true;
     }
     return false;
@@ -2272,6 +2385,7 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
         {"aspect-ratio", CascadeProperty::AspectRatio},
         {"background", CascadeProperty::Background},
         {"background-color", CascadeProperty::Background},
+        {"background-image", CascadeProperty::Background},
         {"border", CascadeProperty::Border},
         {"border-bottom-width", CascadeProperty::BorderBottomWidth},
         {"border-color", CascadeProperty::BorderColor},
@@ -2659,13 +2773,16 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         style.background_color = parsed;
         style.background_color2 = parsed;
         return true;
-    } else if (property == "background") {
+    } else if (property == "background" || property == "background-image") {
         BackgroundPaintKind kind = BackgroundPaintKind::Solid;
         GradientAxis axis = GradientAxis::Vertical;
         int stop_percent = 100;
         Color color;
         Color color2;
-        if (!parse_background_paint(value, kind, axis, stop_percent, color, color2)) {
+        const bool parsed = property == "background"
+            ? parse_background_paint(value, kind, axis, stop_percent, color, color2)
+            : parse_background_image_paint(value, kind, axis, stop_percent, color, color2);
+        if (!parsed) {
             return false;
         }
         style.background_paint = kind;
@@ -3588,8 +3705,14 @@ void apply_declarations(Style& style,
         if (slot != nullptr) {
             if (!apply_cascaded_declaration(style, *slot, resolved_declaration, specificity, source_order)) {
                 const std::string conic_detail =
-                    resolved_declaration.property == "background"
+                    (resolved_declaration.property == "background" ||
+                     resolved_declaration.property == "background-image")
                         ? conic_gradient_failure_detail(resolved_declaration.value)
+                        : std::string{};
+                const std::string radial_detail =
+                    (resolved_declaration.property == "background" ||
+                     resolved_declaration.property == "background-image")
+                        ? radial_gradient_failure_detail(resolved_declaration.value)
                         : std::string{};
                 if (!conic_detail.empty()) {
                     report_diagnostic(diagnostics,
@@ -3598,6 +3721,13 @@ void apply_declarations(Style& style,
                                       "style-conic-gradient-unsupported",
                                       "conic-gradient() is outside the supported progress-ring subset",
                                       conic_detail);
+                } else if (!radial_detail.empty()) {
+                    report_diagnostic(diagnostics,
+                                      DiagnosticStage::Style,
+                                      DiagnosticSeverity::Warning,
+                                      "style-radial-gradient-unsupported",
+                                      "radial-gradient() is outside the supported center-circle subset",
+                                      radial_detail);
                 } else {
                     report_diagnostic(diagnostics,
                                       DiagnosticStage::Style,

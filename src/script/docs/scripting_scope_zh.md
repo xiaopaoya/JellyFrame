@@ -147,7 +147,7 @@ API 表面。
   - `element.closest(simpleSelector)`
   - 面向已有 `data-*` 属性的 `element.dataset` 快照 property
   - 小型 inline-style 属性集合 `element.style`：
-    `display`、`color`、`background`、`backgroundColor`、`textAlign`、
+    `display`、`color`、`background`、`backgroundColor`、`backgroundImage`、`textAlign`、
     `fontWeight`、`width`、`height`、`opacity`、`transform`、
     `borderRadius`、`left`、`top`、`right`、`bottom`、`position`、
     `whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`

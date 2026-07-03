@@ -32,6 +32,7 @@ enum class DisplayCommandType : std::uint8_t {
     StrokeRect,
     LinearGradient,
     ConicGradient,
+    RadialGradient,
     Text,
     Image,
 };

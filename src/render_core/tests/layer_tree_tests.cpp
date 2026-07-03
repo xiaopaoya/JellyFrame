@@ -568,6 +568,27 @@ void conic_gradient_background_emits_progress_command() {
     check(found_conic, "conic-gradient emits bounded progress display command");
 }
 
+void radial_gradient_background_emits_center_circle_command() {
+    auto pipeline = build_pipeline(
+        "<body><section class='gel'></section></body>",
+        ".gel { width: 80px; height: 48px; border-radius: 18px; "
+        "background: radial-gradient(circle, rgba(240,255,252,.86) 0%, rgba(36,126,160,.18) 100%); }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_radial = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::RadialGradient &&
+            command.border_radius == 18 &&
+            command.color.r == 240 &&
+            command.color2.b == 160) {
+            found_radial = true;
+            break;
+        }
+    }
+    check(found_radial, "radial-gradient emits center-circle display command");
+}
+
 void large_conic_gradient_reports_area_budget_diagnostic() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -590,6 +611,30 @@ void large_conic_gradient_reports_area_budget_diagnostic() {
 
     check(has_diagnostic_code(diagnostics, "layer-conic-gradient-area-budget"),
           "large conic-gradient emits area budget diagnostic");
+}
+
+void large_radial_gradient_reports_area_budget_diagnostic() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><section class='gel'></section></body>");
+    Stylesheet stylesheet = css_parser.parse(
+        ".gel { width: 240px; height: 180px; "
+        "background: radial-gradient(circle, rgba(255,255,255,.6) 0%, rgba(40,120,160,.2) 100%); }");
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 320);
+
+    VectorDiagnosticSink diagnostics;
+    LayerTreeBuilderOptions options;
+    options.diagnostics = &diagnostics;
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    (void)layer_tree;
+
+    check(has_diagnostic_code(diagnostics, "layer-radial-gradient-area-budget"),
+          "large radial-gradient emits area budget diagnostic");
 }
 
 void fixed_grid_places_description_list_in_columns() {
@@ -800,7 +845,9 @@ int main() {
         list_markers_and_generated_counters_emit_text();
         generated_after_and_percentage_radius_emit_commands();
         conic_gradient_background_emits_progress_command();
+        radial_gradient_background_emits_center_circle_command();
         large_conic_gradient_reports_area_budget_diagnostic();
+        large_radial_gradient_reports_area_budget_diagnostic();
         fixed_grid_places_description_list_in_columns();
         unbreakable_symbol_stays_single_line();
         grid_item_auto_width_reflows_centered_text();

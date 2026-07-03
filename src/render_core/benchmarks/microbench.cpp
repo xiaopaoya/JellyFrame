@@ -339,6 +339,24 @@ int run_render_core_microbench(int argc, char** argv) {
         rasterizer.rasterize(conic_commands, target, Rect{0, 0, 320, 260});
     }));
 
+    DisplayList radial_commands;
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            DisplayCommand command;
+            command.type = DisplayCommandType::RadialGradient;
+            command.rect = Rect{column * 72 + 8, row * 62 + 8, 56, 46};
+            command.color = Color{236, 254, 255, 220};
+            command.color2 = Color{14, 116, 144, 72};
+            command.border_radius = 18;
+            radial_commands.push_back(command);
+        }
+    }
+    print_result("radial_gradient_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{8, 16, 24, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(radial_commands, target, Rect{0, 0, 320, 260});
+    }));
+
     LayerNode dirty_root;
     dirty_root.type = LayerType::Root;
     dirty_root.bounds = Rect{0, 0, 320, 260};

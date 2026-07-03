@@ -431,9 +431,11 @@ void javascript_element_style_extended_properties_work() {
         "dial.style.opacity = '0.72';"
         "dial.style.transform = 'translate(4px, 2px) rotate(15deg)';"
         "dial.style.borderRadius = '50%';"
+        "dial.style.backgroundImage = 'radial-gradient(#ffffff, rgba(36,126,160,.20))';"
         "dial.style.left = '6px';"
         "dial.style.top = '8px';"
         "dial.style.setProperty('--progress', '76%');"
+        "dial.style.setProperty('background-image', 'radial-gradient(circle, #ffffff, #000000)');"
         "dial.style.setProperty('filter', 'blur(4px)');"
         "dial.getAttribute('style')");
 
@@ -442,6 +444,8 @@ void javascript_element_style_extended_properties_work() {
     check(result.value.find("transform: translate(4px, 2px) rotate(15deg)") != std::string::npos,
           "transform write serialized");
     check(result.value.find("border-radius: 50%") != std::string::npos, "borderRadius write serialized");
+    check(result.value.find("background-image: radial-gradient(circle, #ffffff, #000000)") != std::string::npos,
+          "backgroundImage write serialized");
     check(result.value.find("--progress: 76%") != std::string::npos, "custom property write serialized");
     check(result.value.find("filter") == std::string::npos, "unsupported style.setProperty is ignored");
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "extended style writes mark layout dirty");

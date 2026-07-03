@@ -22,7 +22,8 @@
 - 可依赖：`rgba()`、hex、基础命名色、`background-color`，以及简单
   `background: linear-gradient(<color>, <color>)`、
   `linear-gradient(to right/left, ...)` 胶体表面、两段
-  `conic-gradient(<color> 0% N%, <color> N% 100%)` 进度环、单值
+  `conic-gradient(<color> 0% N%, <color> N% 100%)` 进度环、两色中心圆形
+  `radial-gradient()` 高光、单值
   `border-radius`（单值长度或 `50%`）、border、`outline`、`text-shadow`、padding、margin、`box-shadow`
   近似、`opacity`、`transform: translate()/scale()/rotate()`、`transform-origin`
   关键字/百分比子集、`transition` 子集、
@@ -50,8 +51,8 @@
 这条方向在当前引擎上是可行的，因为它把 JellyFrame 当作小型 HTML/CSS app runtime，
 而不是试图复刻桌面浏览器的复杂视觉效果。
 
-- 视觉识别主要来自便宜原语：颜色、opacity、border、单值圆角、近似 shadow 和少量
-  子元素高光。
+- 视觉识别主要来自便宜原语：颜色、opacity、border、单值圆角、近似 shadow、
+  两色中心圆形 `radial-gradient()` 和少量子元素高光。
 - 动效只落在 paint/compositor 属性上，静态 app 不需要为 layout animation 付费。
 - 控件仍是普通 HTML 控件或 button-like 元素，因此事件、focus、disabled 状态和脚本绑定可以继续工作。
 - 低功耗产品可以降低 `animation_frame_rate`，甚至把 animation budget 设为 0；每个动效状态都有静态等价形态，
@@ -147,7 +148,7 @@ JellyFrame 的胶体语言由四个概念组成：
 
 ### 2. Core Highlight
 
-使用真实子元素表达内部高光，而不是 `backdrop-filter`。
+优先用两色中心圆形 `radial-gradient()` 或真实子元素表达内部高光，而不是 `backdrop-filter`。
 
 ```html
 <button class="jf-button">

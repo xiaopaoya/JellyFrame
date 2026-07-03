@@ -484,11 +484,12 @@ bool is_script_writable_style_property(const std::string& property) {
     if (property.size() > 2 && property[0] == '-' && property[1] == '-') {
         return true;
     }
-    static constexpr std::array<std::string_view, 20> kWritableProperties = {
+    static constexpr std::array<std::string_view, 21> kWritableProperties = {
         "display",
         "color",
         "background",
         "background-color",
+        "background-image",
         "text-align",
         "font-weight",
         "width",
@@ -2052,6 +2053,7 @@ JELLYFRAME_STYLE_ACCESSOR(display, "display")
 JELLYFRAME_STYLE_ACCESSOR(color, "color")
 JELLYFRAME_STYLE_ACCESSOR(background, "background")
 JELLYFRAME_STYLE_ACCESSOR(backgroundColor, "background-color")
+JELLYFRAME_STYLE_ACCESSOR(backgroundImage, "background-image")
 JELLYFRAME_STYLE_ACCESSOR(textAlign, "text-align")
 JELLYFRAME_STYLE_ACCESSOR(fontWeight, "font-weight")
 JELLYFRAME_STYLE_ACCESSOR(width, "width")
@@ -2079,6 +2081,7 @@ jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "color", style_get_color, style_set_color);
     define_accessor(object.get(), "background", style_get_background, style_set_background);
     define_accessor(object.get(), "backgroundColor", style_get_backgroundColor, style_set_backgroundColor);
+    define_accessor(object.get(), "backgroundImage", style_get_backgroundImage, style_set_backgroundImage);
     define_accessor(object.get(), "textAlign", style_get_textAlign, style_set_textAlign);
     define_accessor(object.get(), "fontWeight", style_get_fontWeight, style_set_fontWeight);
     define_accessor(object.get(), "width", style_get_width, style_set_width);

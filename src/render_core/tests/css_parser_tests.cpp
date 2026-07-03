@@ -127,6 +127,7 @@ void supports_queries_apply_representative_supported_properties() {
         "@supports (object-fit: cover) { .probe { object-fit: cover; image-rendering: pixelated; } }"
         "@supports (border-right: 2px solid #123456) { .probe { border-right: 2px solid #123456; } }"
         "@supports (text-overflow: ellipsis) { .probe { white-space: nowrap; text-overflow: ellipsis; } }"
+        "@supports (background-image: radial-gradient(#fff, #000)) { .probe { background-image: radial-gradient(#fff, #000); } }"
         "@supports (unknown-property: 1px) { .probe { color: #ff0000; } }");
 
     auto element = make_element("div");
@@ -142,6 +143,8 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.image_rendering == ImageRendering::Pixelated, "image-rendering applies after @supports");
     check(style.border_width.right == 2, "border-right applies after @supports");
     check(style.white_space_nowrap && style.text_overflow_ellipsis, "text overflow controls apply after @supports");
+    check(style.background_paint == BackgroundPaintKind::RadialGradient,
+          "background-image radial-gradient applies after @supports");
     check(style.color.r == 0 && style.color.g == 0 && style.color.b == 0, "unsupported @supports block is not applied");
 }
 
@@ -299,6 +302,36 @@ void conic_gradient_background_applies_progress_subset() {
           "unsupported conic-gradient does not clear earlier fallback");
 }
 
+void radial_gradient_background_applies_center_circle_subset() {
+    auto gel = make_element("div");
+    gel->attributes["class"] = "gel";
+    auto image = make_element("div");
+    image->attributes["class"] = "image";
+    auto fallback = make_element("div");
+    fallback->attributes["class"] = "fallback";
+
+    StyleResolver resolver(parse(
+        ".gel { background: radial-gradient(circle at center, rgba(240,255,252,.85) 0%, rgba(36,126,160,.20) 100%); }"
+        ".image { background-color: #102030; background-image: radial-gradient(#ffffff, rgba(36,126,160,.20)); }"
+        ".fallback { background: #102030; background: radial-gradient(ellipse, #fff, #000); }"));
+
+    const Style gel_style = resolver.resolve(*gel);
+    const Style image_style = resolver.resolve(*image);
+    const Style fallback_style = resolver.resolve(*fallback);
+    check(gel_style.background_paint == BackgroundPaintKind::RadialGradient,
+          "radial-gradient background selects radial paint");
+    check(gel_style.background_color.r == 240 && gel_style.background_color2.b == 160,
+          "radial-gradient stores center and edge colors");
+    check(gel_style.background_color.a >= 216 && gel_style.background_color.a <= 217,
+          "radial-gradient stores rgba center alpha");
+    check(image_style.background_paint == BackgroundPaintKind::RadialGradient &&
+              image_style.background_color.r == 255,
+          "background-image accepts radial-gradient image subset");
+    check(fallback_style.background_paint == BackgroundPaintKind::Solid &&
+              fallback_style.background_color.r == 0x10,
+          "unsupported radial-gradient does not clear earlier fallback");
+}
+
 void unsupported_conic_gradient_reports_specific_diagnostic() {
     auto fallback = make_element("div");
     fallback->attributes["class"] = "fallback";
@@ -317,6 +350,26 @@ void unsupported_conic_gradient_reports_specific_diagnostic() {
           "invalid conic-gradient preserves earlier fallback background");
     check(has_diagnostic_code(diagnostics, "style-conic-gradient-unsupported"),
           "unsupported conic-gradient emits specific diagnostic");
+}
+
+void unsupported_radial_gradient_reports_specific_diagnostic() {
+    auto fallback = make_element("div");
+    fallback->attributes["class"] = "fallback";
+
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    StyleResolver resolver(parse(
+        ".fallback { background: #102030; "
+        "background-image: radial-gradient(circle at 20% 30%, #fff 0%, #000 100%); }"),
+        options);
+
+    const Style style = resolver.resolve(*fallback);
+    check(style.background_paint == BackgroundPaintKind::Solid &&
+              style.background_color.r == 0x10,
+          "invalid radial-gradient preserves earlier fallback background");
+    check(has_diagnostic_code(diagnostics, "style-radial-gradient-unsupported"),
+          "unsupported radial-gradient emits specific diagnostic");
 }
 
 void matches_simple_compound_selectors() {
@@ -927,7 +980,9 @@ int main() {
         resolves_simple_css_custom_properties();
         linear_gradient_background_applies_without_breaking_fallbacks();
         conic_gradient_background_applies_progress_subset();
+        radial_gradient_background_applies_center_circle_subset();
         unsupported_conic_gradient_reports_specific_diagnostic();
+        unsupported_radial_gradient_reports_specific_diagnostic();
         matches_simple_compound_selectors();
         builds_cssom_metadata();
         cascade_uses_specificity_and_importance();

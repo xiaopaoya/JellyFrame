@@ -190,6 +190,22 @@ void conic_gradient_rasterizes_clockwise_progress() {
     check(frame_buffer.pixel(0, 4).b == 220, "conic gradient keeps second color on left side");
 }
 
+void radial_gradient_rasterizes_center_to_edge() {
+    FrameBuffer frame_buffer(9, 9, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::RadialGradient;
+    command.rect = Rect{0, 0, 9, 9};
+    command.color = Color{240, 250, 255, 255};
+    command.color2 = Color{20, 80, 140, 255};
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 9, 9});
+
+    check(frame_buffer.pixel(4, 4).r > 220, "radial gradient keeps center near first color");
+    check(frame_buffer.pixel(0, 0).b == 140, "radial gradient reaches edge color at far corner");
+    check(frame_buffer.pixel(2, 4).r > frame_buffer.pixel(0, 4).r,
+          "radial gradient interpolates by distance from center");
+}
+
 void rounded_stroke_keeps_corner_pixels_clear() {
     FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -846,6 +862,7 @@ int main() {
         linear_gradient_rasterizes_top_and_bottom_colors();
         horizontal_linear_gradient_rasterizes_left_and_right_colors();
         conic_gradient_rasterizes_clockwise_progress();
+        radial_gradient_rasterizes_center_to_edge();
         rounded_stroke_keeps_corner_pixels_clear();
         rounded_fill_antialiases_edge_pixels();
         source_over_alpha_composites();

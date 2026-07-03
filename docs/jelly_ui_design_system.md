@@ -22,7 +22,8 @@ This system must match current project capabilities:
 - Safe: `rgba()`, hex colors, named basics, `background-color`, and simple
   `background: linear-gradient(<color>, <color>)`,
   `linear-gradient(to right/left, ...)` gel surfaces, two-segment
-  `conic-gradient(<color> 0% N%, <color> N% 100%)` progress rings, single-value
+  `conic-gradient(<color> 0% N%, <color> N% 100%)` progress rings, two-color
+  center-circle `radial-gradient()` highlights, single-value
   length or `50%` `border-radius`, borders, `outline`, `text-shadow`,
   padding, margin, approximate `box-shadow`, `opacity`, `transform:
   translate()/scale()/rotate()`, `transform-origin` keyword/percentage subset,
@@ -56,7 +57,8 @@ a small HTML/CSS app runtime, not as a browser trying to imitate desktop visual
 effects.
 
 - Visual identity comes from cheap primitives: color, opacity, border,
-  single-value radius, approximate shadow and small highlight children.
+  single-value radius, approximate shadow, two-color center-circle
+  `radial-gradient()` and small highlight children.
 - Motion stays on paint/compositor properties, so static apps do not pay a
   layout-animation cost.
 - Controls remain ordinary HTML controls or button-like elements, so event,
@@ -157,7 +159,8 @@ Runtime v1 uses three layers and avoids real blur or blend modes.
 
 ### Core Highlight
 
-Use real child elements instead of `backdrop-filter`.
+Prefer two-color center-circle `radial-gradient()` or real child elements
+instead of `backdrop-filter`.
 
 ```html
 <button class="jf-button">

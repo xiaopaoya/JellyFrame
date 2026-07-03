@@ -51,8 +51,10 @@ cascade。Parser 接受常见语法，在 at-rule 和 declaration 边界恢复�
   `:root` token 和 inline token 可用；无法解析的值不会覆盖之前的 fallback
   declaration。
 - `background` 支持纯色，以及 style resolution 阶段的
-  `linear-gradient(<color>, <color>)`、`linear-gradient(to bottom/top/right/left, ...)`
-  子集。不支持的角度、stop 或图片值会被报告，且不会替换之前已经支持的 fallback。
+  `linear-gradient(<color>, <color>)`、`linear-gradient(to bottom/top/right/left, ...)`、
+  两段 `conic-gradient()` 进度环和两色中心圆形 `radial-gradient()` 高光子集。
+  不支持的角度、stop、焦点、椭圆或图片值会被报告，且不会替换之前已经支持的 fallback。
+- `background-image` 接受同一 gradient 子集，但不接受纯色。
 - Type/class/id/attribute compound selectors、descendant 和 child combinators，
   以及 adjacent/general sibling combinators。
 - 动态 pseudo-classes：`:hover`、`:active`、`:focus`、`:focus-within`、

@@ -178,7 +178,7 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `element.closest(simpleSelector)`
   - `element.dataset` snapshot properties for existing `data-*` attributes
   - `element.style` for a small inline-style property set:
-    `display`, `color`, `background`, `backgroundColor`, `textAlign`,
+    `display`, `color`, `background`, `backgroundColor`, `backgroundImage`, `textAlign`,
     `fontWeight`, `width`, `height`, `opacity`, `transform`,
     `borderRadius`, `left`, `top`, `right`, `bottom`, `position`,
     `whiteSpace`, `textOverflow`, `overflow` and `zIndex`

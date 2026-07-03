@@ -156,7 +156,8 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 | `display` | 子集 | `block`、`inline`、`inline-block`、`flex`、`inline-flex`、`grid`、`inline-grid`、`none`。inline flex/grid 映射为同一简化布局模式。 |
 | `color` | 子集 | 基础命名色、hex、`rgb()`、`rgba()`。`oklch()` 等不覆盖 fallback。 |
 | `background-color` | 子集 | 与 `color` 相同的颜色解析；刻意不接受渐变，因为 CSS 语义中渐变属于背景图像。 |
-| `background` | 子集 | 支持纯色、`linear-gradient(<color>, <color>)`、`linear-gradient(to bottom/top/right/left, ...)`，以及双色进度 `conic-gradient(<color> 0% N%, <color> N% 100%)`。Conic gradient 面向表盘环、电量环和活动弧线；复杂 stop、角度、repeating 和多重背景会诊断并忽略，不会覆盖之前 fallback。超出子集会输出 `style-conic-gradient-unsupported`，过大的绘制区域会输出 `layer-conic-gradient-area-budget`。 |
+| `background` | 子集 | 支持纯色、`linear-gradient(<color>, <color>)`、`linear-gradient(to bottom/top/right/left, ...)`、双色进度 `conic-gradient(<color> 0% N%, <color> N% 100%)`，以及两色中心圆形 `radial-gradient([circle\|circle at center,] <color> [0%], <color> [100%])`。Conic gradient 面向表盘环、电量环和活动弧线；radial gradient 面向水凝胶高光、中心光斑和内凹质感。复杂 stop、角度、焦点偏移、椭圆、repeating 和多重背景会诊断并忽略，不会覆盖之前 fallback。超出 conic/radial 子集会分别输出 `style-conic-gradient-unsupported` / `style-radial-gradient-unsupported`，过大的绘制区域会输出 `layer-conic-gradient-area-budget` / `layer-radial-gradient-area-budget`。 |
+| `background-image` | 子集 | 接受与 `background` 相同的 gradient 子集，但不接受纯色；纯色请使用 `background-color` 或 `background`。 |
 | `margin` | 可用 | 1-4 个长度值，支持水平 `auto`。 |
 | `margin-top/right/bottom/left` | 可用 | 物理 longhand。`margin-left/right:auto` 可用于当前水平居中路径。 |
 | `padding` | 可用 | 1-4 个长度值。 |
@@ -201,7 +202,7 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 | `grid-column` / `grid-row` | 子集 | `span N`，内部有界钳制。无显式 line placement。 |
 | `list-style` / `list-style-type` | 子集 | `none`、disc-like 和 decimal-like 值。`li` 会绘制轻量原生列表标记。 |
 | `content` on `::before` / `::after` | 子集 | 支持纯文本和 `counter(name) "suffix"`，用于轻量列表计数、单位和角标。Generated content 被绘制在元素盒内，并计入 display command 预算，不是真实 DOM 节点。完整 generated-content layout 延后。 |
-| `box-shadow` | 子集 | 第一条 shadow 近似为圆角半透明填充。不做真实 blur 和多重阴影。 |
+| `box-shadow` | 子集 | 第一条 shadow 近似为圆角半透明填充。不做真实 blur 和多重阴影；需要柔光质感时优先组合轻量阴影、边框和 `radial-gradient()` 高光。 |
 | `object-fit` / `object-position` | 子集 | `object-fit` 支持 `fill`、`contain`、`cover`、`none`、`scale-down`。`object-position` 支持关键词和百分比的一/二值子集，例如 `center`、`right top`、`25% 80%`；复杂四值和长度偏移延后。 |
 | `image-rendering` | 子集 | 支持标准关键词 `auto`、`pixelated`、`crisp-edges`。`auto` 允许宿主 image painter 使用双线性/平滑采样；`pixelated` 和 `crisp-edges` 保持 nearest-neighbor，适合像素图标。 |
 | `font-family` | runtime 子集 | 解析逗号分隔 family list。首个自定义 family 会规范化为小型 runtime hash；`system-ui`、`sans-serif` 等 generic family 会映射到宿主/系统 fallback。使用 app-font 后端时，manifest `.jffont` 的 `family` 若匹配该 hash，会优先于普通系统优先 fallback 链；layout 测量和 paint 使用同一选择结果。不实现完整浏览器 cascade、`@font-face`、style/stretch/features 和多字号匹配。Package diagnostics 仍会报告 generic family、manifest 匹配和未匹配首选 family。Win32 默认使用 GDI；传 `--use-app-fonts` 才验收包内 `.jffont` 选择。 |
@@ -287,7 +288,7 @@ JerryScript 源码树时可用。
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
 | `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |
-| `element.style` | 子集 | 可写 inline style object，支持 `display`、`color`、`background`、`backgroundColor`、`textAlign`、`fontWeight`、`width`、`height`、`opacity`、`transform`、`borderRadius`、`left`、`top`、`right`、`bottom`、`position`、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.setProperty(name, value)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
+| `element.style` | 子集 | 可写 inline style object，支持 `display`、`color`、`background`、`backgroundColor`、`backgroundImage`、`textAlign`、`fontWeight`、`width`、`height`、`opacity`、`transform`、`borderRadius`、`left`、`top`、`right`、`bottom`、`position`、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.setProperty(name, value)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
 | `hidden` / `disabled` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |
@@ -317,6 +318,7 @@ JerryScript 源码树时可用。
 | 边框绘制 | 可用 | 边框拆成 fill rectangles。 |
 | Linear gradient | 子集 | 两色水平/垂直渐变命令。 |
 | Conic gradient | 子集 | 两段顺时针进度绘制命令，从 12 点方向开始。只在实际使用时栅格化；普通矩形和线性渐变保持原快路径。Stop 必须覆盖 `0%..100%` 且连续；越界值不会被静默夹取。 |
+| Radial gradient | 子集 | 两色中心圆形径向渐变命令，仅在实际使用时栅格化。用于小面积高光、胶感卡片和表盘光斑；不支持焦点偏移、椭圆、多 stop、repeating 或多层背景。大面积使用会输出 `layer-radial-gradient-area-budget`。 |
 | 文本 | 子集 | 核心 fallback 是极小 ASCII bitmap 绘制，并为 UTF-8 非 ASCII 码点显示占位 glyph。Win32 壳注入 GDI，可验证 UTF-8/中文。 |
 | 中文文本 | 壳层相关 | 用 Win32 壳或未来平台 text backend。伪浏览器 fallback 会显示占位 glyph。 |
 | 图片 | 宿主可选/包内 BMP V0 + codec adapter 形状 | 已有平台无关 `ImageDecodeMock`、`AppImageSurfaceCache`、`Surface` handle 生命周期和尺寸/decoded bytes/pending 预算检查。render core 支持 `ImageHandleResolver` + image display command + `ImagePainter`；页面应使用 package-local 标准路径，例如 `<img src="/assets/icon.bmp">` 或相对 URL。Win32 壳可从 `.jfapp`/源码包加载无压缩 24/32-bit BMP 作为包内图片 V0；它的私有 debug fixture 只属于壳层验收，不是 app 语法。`AppImageCodecAdapter` 已定义 PNG/JPEG/WebP/厂商 codec 的产品级解码器边界，`app_image_codec_result_within_policy(...)` 会在 decoded surface 变成 handle 前做预算校验。`AppImageSurfaceCache` 可按 ready surface 数量和 decoded bytes 回收未被当前 display list 引用的 LRU surface；旧 app completion 会被拒绝，stale ready entry 可在 eviction 时丢弃并报告；图片命令携带 `object-fit`、简单 `object-position` 和 `image-rendering` 子集；`auto` 路径使用双线性缩放，`pixelated`/`crisp-edges` 保留硬边采样。Package report 包含 `imageDiagnostics`，会分类 package 图片 codec、读取轻量 BMP/PNG metadata，并与 target `hostServices.imageDecode` / `imageCodecs` 声明进行对比。图片 request 拒绝和 completion 失败会归类为稳定原因，例如 `capability-denied`、`resource-not-found`、`decode-budget-exceeded` 和 `surface-budget-exceeded`；`diagnostic_detail_for_url(...)` 会暴露稳定的 `src`/`state`/`reason`/`submit` 以及可选 host/job/handle/byte 字段，供桌面工具和移植日志使用。真实 PNG/JPEG/WebP decoder 和复杂 position 语法仍属于 port/未来工作。 |

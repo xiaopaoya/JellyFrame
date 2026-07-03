@@ -36,8 +36,10 @@ DOM + CSSOM
   oversized renders return an empty framebuffer before allocating pixels.
 - Source-over alpha compositing.
 - Rectangle fills, stroke rectangles, non-layout outline strokes, cheap
-  approximate `box-shadow`/`text-shadow` commands, solid text-decoration lines
-  and two-color horizontal or vertical linear-gradient command support.
+  approximate `box-shadow`/`text-shadow` commands, solid text-decoration lines,
+  two-color horizontal or vertical linear-gradient commands, two-segment
+  conic-gradient progress commands and two-color center-circle radial-gradient
+  highlight commands.
 - Rounded rectangle clipping for filled backgrounds, borders and gradients.
   Rounded edges use local coverage antialiasing, while ordinary opaque square
   rectangles keep the fast fill path.

@@ -470,6 +470,65 @@ void fill_conic_gradient_clipped(FrameBuffer& target,
                                border_radius);
 }
 
+void fill_radial_gradient_region(FrameBuffer& target,
+                                 Rect rect,
+                                 Rect clipped,
+                                 Color center_color,
+                                 Color edge_color,
+                                 int border_radius) {
+    if (empty_rect(clipped)) {
+        return;
+    }
+    const int center_x2 = rect.x * 2 + rect.width;
+    const int center_y2 = rect.y * 2 + rect.height;
+    const int radius2 = std::max(1, std::max(rect.width, rect.height));
+    const int gradient_scale = (255 << 16) / radius2;
+    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+            const int coverage = rounded_rect_coverage(rect, border_radius, x, y);
+            if (coverage <= 0) {
+                continue;
+            }
+            const int dx2 = x * 2 + 1 - center_x2;
+            const int dy2 = y * 2 + 1 - center_y2;
+            const int ax = std::abs(dx2);
+            const int ay = std::abs(dy2);
+            const int major = std::max(ax, ay);
+            const int minor = std::min(ax, ay);
+            const int distance = major + ((minor * 3) >> 3);
+            const int t = std::min(255, (distance * gradient_scale) >> 16);
+            blend_pixel(target, x, y, with_coverage(lerp_color_255(center_color, edge_color, t), coverage));
+        }
+    }
+}
+
+void fill_radial_gradient(FrameBuffer& target,
+                          Rect rect,
+                          Color center_color,
+                          Color edge_color,
+                          int border_radius = 0) {
+    fill_radial_gradient_region(target,
+                                rect,
+                                clipped_target_rect(target, rect),
+                                center_color,
+                                edge_color,
+                                border_radius);
+}
+
+void fill_radial_gradient_clipped(FrameBuffer& target,
+                                  Rect rect,
+                                  Rect clip,
+                                  Color center_color,
+                                  Color edge_color,
+                                  int border_radius = 0) {
+    fill_radial_gradient_region(target,
+                                rect,
+                                clipped_target_rect(target, rect, clip),
+                                center_color,
+                                edge_color,
+                                border_radius);
+}
+
 std::array<std::uint8_t, 7> glyph_rows(char raw_ch) {
     const char ch = static_cast<char>(std::toupper(static_cast<unsigned char>(raw_ch)));
     switch (ch) {
@@ -933,6 +992,22 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                                         command.color2,
                                         command.gradient_stop_percent,
                                         command.border_radius);
+        }
+        break;
+    case DisplayCommandType::RadialGradient:
+        if (contains_rect(clip, rect)) {
+            fill_radial_gradient(target,
+                                 rect,
+                                 command.color,
+                                 command.color2,
+                                 command.border_radius);
+        } else {
+            fill_radial_gradient_clipped(target,
+                                         rect,
+                                         clip,
+                                         command.color,
+                                         command.color2,
+                                         command.border_radius);
         }
         break;
     case DisplayCommandType::StrokeRect:

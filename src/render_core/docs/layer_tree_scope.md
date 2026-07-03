@@ -61,7 +61,9 @@ rect/text commands or later map selected layers to hardware surfaces.
 - `transform-origin` supports common keywords and percentages. Pixel lengths,
   `skew()`, `matrix()` and perspective are deferred.
 - Rounded clipping is detected but approximated by rectangular clipping.
-- `box-shadow` blur is approximated as rectangle expansion and translucent fill.
+- `box-shadow` blur is approximated as rectangle expansion and translucent fill;
+  hydrogel highlights should use the two-color center-circle `radial-gradient()`
+  subset.
 - `z-index` ordering is layer-local and useful for positioned children, but true
   CSS stacking-context rules are not complete yet.
 - The layer tree can always be flattened to the simple `DisplayList`, preserving

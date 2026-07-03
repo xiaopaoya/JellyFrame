@@ -32,7 +32,8 @@ DOM + CSSOM
 - `SoftwareCompositor::render()` 支持可选主 framebuffer pixel budget；超限时会在分配像素前返回空 framebuffer。
 - Source-over alpha compositing。
 - Rectangle fills、stroke rectangles、不参与布局的 outline stroke、便宜近似
-  `box-shadow`/`text-shadow` 命令、实线 text-decoration，以及两色水平/垂直 linear-gradient command。
+  `box-shadow`/`text-shadow` 命令、实线 text-decoration、两色水平/垂直 linear-gradient command、
+  两段 conic-gradient 进度命令，以及两色中心圆形 radial-gradient 高光命令。
 - 背景填充、边框和渐变 rounded rectangle clipping；圆角边缘使用局部 coverage 抗锯齿，普通不透明直角矩形仍走快速填充路径。
 - Windows 下通过 GDI CPU mask 绘制文本。
 - 非 Windows 构建保留内置 tiny ASCII fallback text drawing。

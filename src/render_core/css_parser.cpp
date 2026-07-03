@@ -610,6 +610,33 @@ bool is_supported_background_value(std::string_view value) {
         }
         return second_end == "100%";
     }
+    if (text.rfind("radial-gradient(", 0) == 0 && text.back() == ')') {
+        std::vector<std::string> args =
+            split_top_level_commas(std::string_view(text).substr(16, text.size() - 17));
+        if (args.size() == 3) {
+            const std::string shape = trim(args[0]);
+            if (shape != "circle" && shape != "circle at center" && shape != "at center") {
+                return false;
+            }
+            args.erase(args.begin());
+        }
+        if (args.size() != 2) {
+            return false;
+        }
+        for (std::size_t index = 0; index < args.size(); ++index) {
+            const std::vector<std::string> tokens = split_whitespace_top_level(args[index]);
+            if (tokens.empty() || tokens.size() > 2 || !is_supported_color_value(tokens[0])) {
+                return false;
+            }
+            if (tokens.size() == 2) {
+                const std::string expected = index == 0 ? "0%" : "100%";
+                if (tokens[1] != expected) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
     if (text.rfind("linear-gradient(", 0) != 0 || text.back() != ')') {
         return false;
     }
@@ -624,6 +651,14 @@ bool is_supported_background_value(std::string_view value) {
         args.erase(args.begin());
     }
     return args.size() == 2 && is_supported_color_value(args[0]) && is_supported_color_value(args[1]);
+}
+
+bool is_supported_background_image_value(std::string_view value) {
+    const std::string text = ascii_lowercase(trim(value));
+    if (is_supported_color_value(text)) {
+        return false;
+    }
+    return is_supported_background_value(text);
 }
 
 bool supported_keyword(std::string_view value, const std::initializer_list<std::string_view>& keywords) {
@@ -724,6 +759,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
     }
     if (property == "background") {
         return is_supported_background_value(value);
+    }
+    if (property == "background-image") {
+        return is_supported_background_image_value(value);
     }
     if (property == "width" || property == "height" || property == "min-width" ||
         property == "min-height" || property == "max-width" || property == "max-height" || property == "font-size" ||

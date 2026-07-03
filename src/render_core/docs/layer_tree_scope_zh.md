@@ -45,7 +45,7 @@ Layer tree 是一种可保留的绘制组织结构。它不是 GPU API，也不�
 - 不支持的 transform 值不会导致崩溃；style/layer 阶段会输出 diagnostics，并忽略无法执行的变换。
 - `transform-origin` 支持常用关键字和百分比。px 长度、`skew()`、`matrix()` 和 perspective 延后。
 - 已检测圆角裁剪，但当前近似为矩形裁剪。
-- `box-shadow` blur 近似为矩形扩张和半透明填充。
+- `box-shadow` blur 近似为矩形扩张和半透明填充；水凝胶高光优先用两色中心圆形 `radial-gradient()`。
 - `z-index` 排序目前是 layer-local 的，对 positioned children 有用，但还不是完整 CSS stacking-context 算法。
 - Layer tree 始终可以 flatten 为简单 `DisplayList`，保留低端 renderer 路径。
 - `LayerTreeBuilder::flatten_into(...)` 允许工具或宿主在多帧之间复用调用方持有的 `DisplayList`

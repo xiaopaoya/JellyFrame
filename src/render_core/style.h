@@ -64,6 +64,7 @@ enum class BackgroundPaintKind : std::uint8_t {
     Solid,
     LinearGradient,
     ConicGradient,
+    RadialGradient,
 };
 
 enum class AnimatableProperty : std::uint8_t {
