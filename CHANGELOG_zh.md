@@ -19,6 +19,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - JerryScript scripting 构建现在把标准 `Date.now()` 绑定到宿主时钟，来源是
   `set_host_time_ms(...)` 或 `TimeChanged` 系统快照。时间快照只更新时间，不额外派发
   Web 事件。
+- Win32 frame script 新增 `event FRAME time-ms VALUE`，用于确定性注入宿主时间。
+  watch-face 样例改为 `new Date(Date.now())`，并使用真实 epoch capture 起点，使脚本化截图可复现。
 - 新增 `tools/benchmark_guard.py`，作为 render-core 和 app-runtime 微基准的宽松 CI
   smoke guard。CI 现在会检查 style/custom-property resolution、full pipeline、
   dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、

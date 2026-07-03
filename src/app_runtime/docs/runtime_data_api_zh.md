@@ -147,7 +147,8 @@ V0 支持面应限制在：
   切换 screen visibility，`Ctrl+F8` 切换 low-power visibility。这些快捷键不读取真实 Windows
   硬件状态。
 - 确定性的 Win32 frame script 也能注入同类状态：`event FRAME network-online/offline`、
-  `event FRAME screen-visible/hidden` 和 `event FRAME low-power-on/off`。
+  `event FRAME screen-visible/hidden` 和 `event FRAME low-power-on/off`。还可以用
+  `event FRAME time-ms VALUE` 为 `Date.now()` 注入确定性宿主时间。
 
 尚未实现：battery JS API、JellyFrame 专有 system state 对象，以及超出 `online` / `offline`
 子集的完整 `Window`/`EventTarget` 语义。

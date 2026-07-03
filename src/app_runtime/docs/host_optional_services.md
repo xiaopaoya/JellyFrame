@@ -1044,7 +1044,7 @@ Rules:
   `visibilitychange`. Battery JavaScript APIs remain out of V0.
 - The Win32 debug shell can inject fake events with `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8`
   and through frame scripts (`network-online/offline`, `screen-visible/hidden`,
-  `low-power-on/off`) for app testing; failed injection reports
+  `low-power-on/off`, `time-ms`) for app testing; failed injection reports
   `system-event-rejected` diagnostics. Hardware ports should use the same queue
   from their own host state provider.
 

@@ -443,6 +443,7 @@ enum class ScriptedFrameEventKind {
     ScreenHidden,
     LowPowerOn,
     LowPowerOff,
+    TimeMs,
     PointerMove,
     PointerDown,
     PointerUp,
@@ -456,6 +457,7 @@ struct ScriptedFrameEvent {
     int x = 0;
     int y = 0;
     int delta_y = 0;
+    std::uint64_t value = 0;
 };
 
 struct ParsedFrameEvent {
@@ -2202,6 +2204,16 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
         parsed.event.kind = ScriptedFrameEventKind::LowPowerOn;
     } else if (kind == "low-power-off") {
         parsed.event.kind = ScriptedFrameEventKind::LowPowerOff;
+    } else if (kind == "time-ms") {
+        if (fields.size() != 3) {
+            parsed.error = "time-ms events require FRAME:time-ms:VALUE";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::TimeMs;
+        if (!parse_u64_token(fields[2], parsed.event.value)) {
+            parsed.error = "time-ms value must be a non-negative integer";
+            return parsed;
+        }
     } else if (kind == "pointer-move" || kind == "pointer-down" ||
                kind == "pointer-up" || kind == "click") {
         if (fields.size() != 4) {
@@ -2245,12 +2257,9 @@ std::string event_spec_from_fields(const std::vector<std::string>& fields) {
         return {};
     }
     std::ostringstream spec;
-    spec << fields[1] << ':' << fields[2];
-    if (fields.size() >= 5) {
-        spec << ':' << fields[3] << ':' << fields[4];
-    }
-    if (fields.size() >= 6) {
-        spec << ':' << fields[5];
+    spec << fields[1];
+    for (std::size_t index = 2; index < fields.size(); ++index) {
+        spec << ':' << fields[index];
     }
     return spec.str();
 }
@@ -2429,7 +2438,7 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
             std::string event_spec;
             if (fields.size() == 2) {
                 event_spec = fields[1];
-            } else if (fields.size() == 3 || fields.size() == 5 || fields.size() == 6) {
+            } else if (fields.size() >= 3 && fields.size() <= 6) {
                 event_spec = event_spec_from_fields(fields);
             } else {
                 std::ostringstream message;
@@ -2485,7 +2494,8 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y[:delta]].\n"
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
         << "                                 pointer-up, wheel, network-online/offline,\n"
-        << "                                 screen-visible/hidden, low-power-on/off.\n"
+        << "                                 screen-visible/hidden, low-power-on/off,\n"
+        << "                                 time-ms.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
         << "  --use-app-fonts                Use package .jffont resources when available.\n"
@@ -2505,7 +2515,8 @@ void print_win32_browser_usage(std::ostream& output) {
         << "Frame script commands:\n"
         << "  output-dir PATH | montage PATH | frames N | step-ms N | start-ms N\n"
         << "  viewport W H | animation-fps N | animation-callbacks N\n"
-        << "  event FRAME:kind[:x:y[:delta]] | event FRAME kind [x y [delta]]\n";
+        << "  event FRAME:kind[:x:y[:delta]] | event FRAME kind [x y [delta]]\n"
+        << "  event FRAME:time-ms:VALUE | event FRAME time-ms VALUE\n";
 }
 
 const Node* find_first_element(const Node& node, const char* tag_name) {
@@ -3440,6 +3451,11 @@ private:
             case ScriptedFrameEventKind::LowPowerOff:
                 debug_system_state_.low_power_mode = false;
                 queue_system_event(AppSystemEventKind::LowPowerModeChanged, "low power off");
+                break;
+            case ScriptedFrameEventKind::TimeMs:
+                scripted_now_ms_ = event.value;
+                debug_system_state_.unix_time_ms = event.value;
+                queue_system_event(AppSystemEventKind::TimeChanged, "time ms");
                 break;
             case ScriptedFrameEventKind::PointerMove:
                 handle_pointer_move(0, pointer_lparam(event.x, event.y));

@@ -175,7 +175,8 @@ Current V0 implementation:
   hardware state.
 - Deterministic Win32 frame scripts can inject the same states with
   `event FRAME network-online/offline`, `event FRAME screen-visible/hidden` and
-  `event FRAME low-power-on/off`.
+  `event FRAME low-power-on/off`. They can also inject deterministic host time
+  for `Date.now()` with `event FRAME time-ms VALUE`.
 
 Not implemented yet: battery JS APIs, custom JellyFrame-specific system state
 objects and full `Window`/`EventTarget` semantics beyond the `online` /

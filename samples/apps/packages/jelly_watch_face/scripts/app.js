@@ -10,7 +10,7 @@
   }
 
   function update() {
-    var now = new Date();
+    var now = new Date(Date.now());
     var hours = now.getHours();
     var minutes = now.getMinutes();
     var seconds = now.getSeconds();

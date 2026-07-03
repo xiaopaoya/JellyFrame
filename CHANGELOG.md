@@ -22,6 +22,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - JerryScript scripting builds now bind standard `Date.now()` to the host clock
   supplied by `set_host_time_ms(...)` or `TimeChanged` system snapshots. Time
   snapshots update the clock without dispatching an extra web event.
+- Win32 frame scripts now support `event FRAME time-ms VALUE` for deterministic
+  host-time injection. The watch-face sample now uses `new Date(Date.now())`
+  and a real epoch capture start time so scripted captures are reproducible.
 - Added `tools/benchmark_guard.py`, a broad CI smoke guard for render-core and
   app-runtime microbenchmarks. CI now checks style/custom-property resolution,
   full pipeline, dirty-rect replay, scroll-blit planning, Canvas 2D path and

@@ -6,7 +6,7 @@ output-dir out/watch_face_frames
 montage out/watch_face_montage.bmp
 frames 30
 step-ms 167
-start-ms 1000
+start-ms 1700000000000
 viewport 300 300
 columns 6
 gap 6

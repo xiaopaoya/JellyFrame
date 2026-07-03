@@ -869,7 +869,7 @@ enum class AppSystemEventPushStatus {
   `document.visibilityState` 和 `document` 的 `visibilitychange`。battery JavaScript API
   不进入 V0。
 - Win32 debug 壳可以通过 `Ctrl+F6`/`Ctrl+F7`/`Ctrl+F8` 和 frame script
-  （`network-online/offline`、`screen-visible/hidden`、`low-power-on/off`）注入 fake event，
+  （`network-online/offline`、`screen-visible/hidden`、`low-power-on/off`、`time-ms`）注入 fake event，
   方便 app 调试；注入失败会报告 `system-event-rejected` diagnostics。硬件 port 应从自己的
   host state provider 使用同一个队列。
 

@@ -32,6 +32,7 @@ def main() -> int:
     require("usage: jellyframe_win32_browser" in help_result.stdout, "--help must print usage")
     require("Frame script commands:" in help_result.stdout, "--help must document frame scripts")
     require("event FRAME:kind[:x:y[:delta]]" in help_result.stdout, "--help must document wheel delta")
+    require("event FRAME:time-ms:VALUE" in help_result.stdout, "--help must document host time injection")
     require("--keep-data" in help_result.stdout, "--help must document app data retention")
     require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
@@ -47,6 +48,11 @@ def main() -> int:
     require(event_result.returncode != 0, "invalid frame event must fail")
     require("wheel x, y and delta must be integers" in event_result.stdout,
             "invalid frame event must explain the failing field")
+
+    time_event_result = run_case(exe, ["--frame-event", "2:time-ms:nope"])
+    require(time_event_result.returncode != 0, "invalid time event must fail")
+    require("time-ms value must be a non-negative integer" in time_event_result.stdout,
+            "invalid time event must explain the failing field")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-authorized-file-") as directory:
         file_result = run_case(exe, ["--authorized-file-smoke", directory])

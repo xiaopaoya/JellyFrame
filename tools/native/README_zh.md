@@ -39,6 +39,7 @@ step-ms 33
 viewport 300 300
 event 8 click 150 260
 event 10 wheel 150 160 -120
+event 12 time-ms 1700000000123
 animation-fps 30
 animation-callbacks 4
 script-watchdog-checks 2048
@@ -51,6 +52,9 @@ JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来�
 在帧脚本中使用 `animation-fps 0` 和 `animation-callbacks 0`，或命令行传入
 `--animation-fps 0 --animation-callbacks 0`，可以验证低功耗 profile：宿主应停止非必要动效，
 但不需要修改 app 源码。
+
+`event FRAME time-ms VALUE` 可为依赖 `Date.now()` 的表盘、计时器和天气样例注入确定性宿主时间。
+这是壳层调试命令，不是 app 可见语法。
 
 `script-watchdog-checks N`、`script-watchdog-interval N` 和
 `require-script-watchdog` 只用于 Win32/scripted recovery 验收。它们映射到宿主的脚本执行预算，
