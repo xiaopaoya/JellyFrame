@@ -2,6 +2,7 @@
 #include "render_core/css_parser.h"
 #include "render_core/diagnostics.h"
 #include "render_core/document_style.h"
+#include "render_core/dom.h"
 #include "render_core/frame_update.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
@@ -142,24 +143,6 @@ void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bo
     }
 }
 
-std::string node_summary(const Node* node) {
-    if (node == nullptr || node->type != NodeType::Element) {
-        return "anonymous";
-    }
-    std::string summary = node->tag_name.empty() ? "element" : node->tag_name;
-    const std::string& id = node->attribute("id");
-    if (!id.empty()) {
-        summary += '#';
-        summary += id;
-    }
-    const std::string& class_name = node->attribute("class");
-    if (!class_name.empty()) {
-        summary += '.';
-        summary += class_name;
-    }
-    return summary;
-}
-
 int scroll_container_content_bottom(const LayoutBox& box) {
     int bottom = box.rect.y;
     for (const auto& child : box.children) {
@@ -171,20 +154,40 @@ int scroll_container_content_bottom(const LayoutBox& box) {
     return bottom;
 }
 
+std::string quote_detail_value(const std::string& value, std::size_t max_chars = 160) {
+    std::string output;
+    output.reserve(std::min(value.size(), max_chars) + 2);
+    output += '"';
+    for (const char ch : value) {
+        if (output.size() >= max_chars + 1) {
+            break;
+        }
+        if (ch == '\\' || ch == '"') {
+            output += '\\';
+        }
+        output += ch;
+    }
+    output += '"';
+    return output;
+}
+
 void report_scroll_container_diagnostics(const LayoutBox& box, VectorDiagnosticSink& diagnostics) {
     if ((box.style.overflow == "auto" || box.style.overflow == "scroll") && box.rect.height > 0) {
         const int content_bottom = scroll_container_content_bottom(box);
         const int overflow_px = content_bottom - (box.rect.y + box.rect.height);
         if (overflow_px > 0) {
+            std::ostringstream detail;
+            detail << "node=" << quote_detail_value(dom_node_label(box.node), 48)
+                   << " path=" << quote_detail_value(dom_node_path(box.node), 160)
+                   << " boxHeight=" << box.rect.height
+                   << " contentHeight=" << (box.rect.height + overflow_px)
+                   << " overflowY=" << overflow_px;
             report_diagnostic(&diagnostics,
                               DiagnosticStage::Layout,
                               DiagnosticSeverity::Info,
                               "visual-scroll-container",
                               "Scrollable container has clipped vertical content",
-                              node_summary(box.node) +
-                                  " boxHeight=" + std::to_string(box.rect.height) +
-                                  " contentHeight=" + std::to_string(box.rect.height + overflow_px) +
-                                  " overflowY=" + std::to_string(overflow_px));
+                              detail.str());
         }
     }
     for (const auto& child : box.children) {

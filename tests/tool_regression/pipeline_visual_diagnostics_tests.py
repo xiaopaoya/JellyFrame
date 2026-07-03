@@ -105,6 +105,12 @@ def main() -> int:
     )
     require("visual-scroll-container" in diagnostic_codes(scroll_container_report),
             "internal scroll containers should report clipped scrollable content")
+    scroll_container = next(entry for entry in scroll_container_report.get("diagnostics", [])
+                            if entry.get("code") == "visual-scroll-container")
+    require('node="section#hours"' in scroll_container.get("detail", ""),
+            "scroll container diagnostic should include compact node label")
+    require('path="' in scroll_container.get("detail", "") and "section#hours" in scroll_container.get("detail", ""),
+            "scroll container diagnostic should include stable DOM path")
 
     print("pipeline visual diagnostics tests passed")
     return 0

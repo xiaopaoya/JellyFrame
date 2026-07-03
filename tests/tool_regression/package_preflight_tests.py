@@ -562,6 +562,11 @@ class PackagePreflightTests(unittest.TestCase):
                     "severity": "warning",
                     "code": "layout-text-overflow",
                     "detail": "text=\"Start\" measuredWidth=54 availableWidth=32 contentWidth=32 fontSize=16 node=\"button.primary\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>button.primary:nth-of-type(1)\"",
+                }, {
+                    "stage": "layout",
+                    "severity": "info",
+                    "code": "visual-scroll-container",
+                    "detail": "node=\"section#hours\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>section#hours\" boxHeight=80 contentHeight=144 overflowY=64",
                 }],
             },
             "responsiveProfiles": [{
@@ -591,6 +596,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("script-capability-missing", codes)
         self.assertIn("future-diagnostic-code", codes)
         self.assertIn("layout-text-overflow", codes)
+        self.assertIn("visual-scroll-container", codes)
         self.assertIn("visual-horizontal-overflow", codes)
         self.assertIn("target-gate-not-accepted", codes)
         self.assertIn("font-missing-glyphs", codes)
@@ -604,6 +610,11 @@ class PackagePreflightTests(unittest.TestCase):
                             entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>button.tab:nth-of-type(2)" and
                             entry.get("metrics", {}).get("availableWidth") == 30 and
                             entry.get("recipe") == "app_author_recipes.md#narrow-targets"
+                            for entry in advice))
+        self.assertTrue(any(entry["code"] == "visual-scroll-container" and
+                            entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>section#hours" and
+                            entry.get("metrics", {}).get("overflowY") == 64 and
+                            entry.get("recipe") == "app_author_recipes.md#scroll-list"
                             for entry in advice))
 
     def test_responsive_profile_carries_diagnostic_samples(self):

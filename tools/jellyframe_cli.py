@@ -451,6 +451,10 @@ def diagnostic_metrics_from_detail(parsed: dict) -> dict:
         "fontWeight",
         "overflowLeft",
         "overflowRight",
+        "boxHeight",
+        "contentHeight",
+        "overflowY",
+        "viewportHeight",
     )
     metrics = {key: parsed[key] for key in keys if key in parsed}
     return metrics

@@ -12,6 +12,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow
   target fixes easier to locate.
+- Internal scroll-container diagnostics now use structured `node`, `path`,
+  `boxHeight`, `contentHeight` and `overflowY` fields, so scroll-list advice can
+  point at the specific clipped container.
 - Added `tools/benchmark_guard.py`, a broad CI smoke guard for render-core and
   app-runtime microbenchmarks. CI now checks style/custom-property resolution,
   full pipeline, dirty-rect replay, scroll-blit planning, Canvas 2D path and
