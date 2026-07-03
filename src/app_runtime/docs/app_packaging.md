@@ -914,8 +914,9 @@ matching manifest capability, packaging emits `script-capability-missing`.
 It also warns on no-argument `Date()` / `new Date()` as
 `script-host-time-ambiguous`; use `Date.now()` or `new Date(Date.now())` for the
 documented host-clock path. Deferred browser APIs such as `fetch()`, `Promise`,
-`querySelector`, `innerHTML` and dynamic `import()` are reported as
-`script-api-deferred`.
+`innerHTML` and dynamic `import()` are reported as `script-api-deferred`.
+Complex `querySelector` / `querySelectorAll` string literals are reported as
+`script-api-subset` because the runtime supports only a simple selector subset.
 CLI `developerAdvice[]` explains this as "declare the capability and verify the
 target profile supports it". This check does not enter the MCU runtime and does
 not replace real host authorization.

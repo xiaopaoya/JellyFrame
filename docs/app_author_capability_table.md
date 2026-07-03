@@ -30,7 +30,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 
 | Feature | Status | Manifest |
 | --- | --- | --- |
-| DOM mutation | Subset | No extra capability. Use `getElementById`, `createElement`, `appendChild`, `textContent` and `className`. |
+| DOM mutation | Subset | No extra capability. Use `getElementById`, `querySelector` simple selectors, `createElement`, `appendChild`, `textContent`, `className` and the small `classList` helper. |
 | Events | Available | Use `addEventListener`, event delegation, `dataset` and the `matches`/`closest` subset. |
 | Timers / rAF | Bounded | No extra capability, but frame policy and budgets apply. |
 | `XMLHttpRequest` GET | Host optional | `network.fetch`. Runtime data only; not a page/resource loader. |
@@ -40,7 +40,8 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Canvas 2D | Host optional | `graphics.canvas2d`. Backing storage is allocated only after `getContext("2d")`. |
 | Host time | Available | Use `Date.now()`. Do not assume `new Date()` is host-clock controlled unless documented later. |
 | Weather/activity/battery | Host/system only | Weather app data should use XHR JSON; activity and battery summaries are not ordinary app JS APIs yet. |
-| Promise/fetch/modules/querySelector/innerHTML | Deferred | Do not rely on them yet. |
+| Promise/fetch/modules/innerHTML | Deferred | Do not rely on them yet. |
+| querySelector/querySelectorAll | Subset | Simple tag, `.class`, `#id`, `[attr]`, `[attr=value]` and same-compound combinations only; complex selectors are diagnosed. |
 
 ## Resources And Fonts
 

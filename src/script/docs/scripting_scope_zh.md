@@ -143,19 +143,26 @@ API 表面。
   - `element.children`
   - `element.parentElement`
   - 反射到 `class` attribute 的 `element.className`
+  - 极小 DOMTokenList-like helper：`element.classList.contains/add/remove/toggle`
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
+  - `document.querySelector(simpleSelector)` / `element.querySelector(simpleSelector)`
+  - `document.querySelectorAll(simpleSelector)` / `element.querySelectorAll(simpleSelector)`，返回静态数组快照
   - 面向已有 `data-*` 属性的 `element.dataset` 快照 property
   - 小型 inline-style 属性集合 `element.style`：
     `display`、`color`、`background`、`backgroundColor`、`backgroundImage`、`textAlign`、
-    `fontWeight`、`width`、`height`、`opacity`、`transform`、
-    `borderRadius`、`left`、`top`、`right`、`bottom`、`position`、
+    `fontSize`、`fontWeight`、`lineHeight`、`width`、`height`、`minWidth`、
+    `minHeight`、`maxWidth`、`maxHeight`、`boxSizing`、margin/padding shorthand
+    与各边、`opacity`、`transform`、`borderRadius`、`left`、`top`、`right`、
+    `bottom`、`position`、
     `whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`
-  - 面向同一安全 CSS 属性子集的 `element.style.setProperty(name, value)`，
-    以及 `--progress` 这类 CSS custom property 写入
+  - 面向同一安全 CSS 属性子集的 `element.style.getPropertyValue(name)`、
+    `setProperty(name, value)` 和 `removeProperty(name)`，以及 `--progress`
+    这类 CSS custom property
   - `element.hidden` 和 `element.disabled`
-- `matches`/`closest` 支持的 selector 刻意保持很小：tag、`.class`、`#id`、
-  `[attr]` 和 `[attr=value]`。Descendant/child combinator 目前仍只在 CSS 中支持。
+- `matches`/`closest`/`querySelector(All)` 支持的 selector 刻意保持很小：tag、`.class`、`#id`、
+  `[attr]`、`[attr=value]` 和同一 compound 内组合，例如 `button.primary`。
+  Descendant/child combinator 目前仍只在 CSS 中支持。
 - native input dispatch 会把 `pointerdown`、`pointerup`、`touchstart` 和 `touchend`
   作为 mouse-like event 暴露，便于可穿戴壳实现按下反馈。
 - 可选 Canvas 2D V0.3 只在宿主绑定 canvas registry 后暴露：`canvas.getContext("2d")`、
@@ -170,7 +177,10 @@ API 表面。
 
 ## 暂不支持
 
-- 完整 selector API，例如 `querySelector` / `querySelectorAll`。
+- 完整 selector API。`querySelector` / `querySelectorAll` 只支持上方简单 selector 子集，不支持组合器、
+  逗号、伪类、`:has()` 或 live NodeList。
+- 完整 DOMTokenList 语义。`classList` 只支持 `contains`/`add`/`remove`/`toggle`；
+  迭代、`replace()` 和非法 token 的异常行为延后。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
 - `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、完整

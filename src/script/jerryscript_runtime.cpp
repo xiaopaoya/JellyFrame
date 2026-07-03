@@ -484,16 +484,33 @@ bool is_script_writable_style_property(const std::string& property) {
     if (property.size() > 2 && property[0] == '-' && property[1] == '-') {
         return true;
     }
-    static constexpr std::array<std::string_view, 21> kWritableProperties = {
+    static constexpr std::string_view kWritableProperties[] = {
         "display",
         "color",
         "background",
         "background-color",
         "background-image",
         "text-align",
+        "font-size",
         "font-weight",
+        "line-height",
         "width",
         "height",
+        "min-width",
+        "min-height",
+        "max-width",
+        "max-height",
+        "box-sizing",
+        "margin",
+        "margin-top",
+        "margin-right",
+        "margin-bottom",
+        "margin-left",
+        "padding",
+        "padding-top",
+        "padding-right",
+        "padding-bottom",
+        "padding-left",
         "opacity",
         "transform",
         "border-radius",
@@ -507,8 +524,8 @@ bool is_script_writable_style_property(const std::string& property) {
         "overflow",
         "z-index",
     };
-    return std::find(kWritableProperties.begin(), kWritableProperties.end(), std::string_view(property)) !=
-        kWritableProperties.end();
+    return std::find(std::begin(kWritableProperties), std::end(kWritableProperties), std::string_view(property)) !=
+        std::end(kWritableProperties);
 }
 
 std::vector<CssDeclaration> inline_declarations_for(const Node& node) {
@@ -623,6 +640,9 @@ bool simple_selector_matches(const Node& node, std::string_view selector) {
                     value[index] == '-' || value[index] == '_')) {
                 ++index;
             }
+            if (index == begin) {
+                return false;
+            }
             if (!node.has_class(value.substr(begin, index - begin))) {
                 return false;
             }
@@ -632,6 +652,9 @@ bool simple_selector_matches(const Node& node, std::string_view selector) {
                    (std::isalnum(static_cast<unsigned char>(value[index])) != 0 ||
                     value[index] == '-' || value[index] == '_')) {
                 ++index;
+            }
+            if (index == begin) {
+                return false;
             }
             if (node.attribute("id") != value.substr(begin, index - begin)) {
                 return false;
@@ -1068,6 +1091,146 @@ jerry_value_t node_set_class_name(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+std::vector<std::string> class_tokens_for(const Node& node) {
+    std::vector<std::string> tokens;
+    const std::string& value = node.attribute("class");
+    std::size_t index = 0;
+    while (index < value.size()) {
+        while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) != 0) {
+            ++index;
+        }
+        const std::size_t begin = index;
+        while (index < value.size() && std::isspace(static_cast<unsigned char>(value[index])) == 0) {
+            ++index;
+        }
+        if (index > begin) {
+            tokens.push_back(value.substr(begin, index - begin));
+        }
+    }
+    return tokens;
+}
+
+void set_class_tokens(Node& node, const std::vector<std::string>& tokens) {
+    std::string value;
+    for (const std::string& token : tokens) {
+        if (token.empty()) {
+            continue;
+        }
+        if (!value.empty()) {
+            value.push_back(' ');
+        }
+        value += token;
+    }
+    node.set_attribute("class", std::move(value));
+}
+
+bool class_token_valid(const std::string& token) {
+    return !token.empty() &&
+        std::find_if(token.begin(), token.end(), [](unsigned char ch) {
+            return std::isspace(ch) != 0;
+        }) == token.end();
+}
+
+bool class_tokens_contains(const std::vector<std::string>& tokens, const std::string& token) {
+    return std::find(tokens.begin(), tokens.end(), token) != tokens.end();
+}
+
+jerry_value_t class_list_contains(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
+        return jerry_boolean(false);
+    }
+    const std::string token = value_to_string(args_p[0]);
+    return jerry_boolean(class_token_valid(token) && class_tokens_contains(class_tokens_for(*node), token));
+}
+
+jerry_value_t class_list_add(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t args_p[],
+                             const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    std::vector<std::string> tokens = class_tokens_for(*node);
+    bool changed = false;
+    for (jerry_length_t index = 0; index < args_count; ++index) {
+        const std::string token = value_to_string(args_p[index]);
+        if (!class_token_valid(token) || class_tokens_contains(tokens, token)) {
+            continue;
+        }
+        tokens.push_back(token);
+        changed = true;
+    }
+    if (changed) {
+        set_class_tokens(*node, tokens);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t class_list_remove(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    std::vector<std::string> tokens = class_tokens_for(*node);
+    const std::size_t before = tokens.size();
+    for (jerry_length_t index = 0; index < args_count; ++index) {
+        const std::string token = value_to_string(args_p[index]);
+        if (!class_token_valid(token)) {
+            continue;
+        }
+        tokens.erase(std::remove(tokens.begin(), tokens.end(), token), tokens.end());
+    }
+    if (tokens.size() != before) {
+        set_class_tokens(*node, tokens);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t class_list_toggle(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
+        return jerry_boolean(false);
+    }
+    const std::string token = value_to_string(args_p[0]);
+    if (!class_token_valid(token)) {
+        return jerry_boolean(false);
+    }
+    std::vector<std::string> tokens = class_tokens_for(*node);
+    const bool contained = class_tokens_contains(tokens, token);
+    const bool should_have = args_count >= 2 ? jerry_value_to_boolean(args_p[1]) : !contained;
+    if (should_have && !contained) {
+        tokens.push_back(token);
+        set_class_tokens(*node, tokens);
+    } else if (!should_have && contained) {
+        tokens.erase(std::remove(tokens.begin(), tokens.end(), token), tokens.end());
+        set_class_tokens(*node, tokens);
+    }
+    return jerry_boolean(should_have);
+}
+
+jerry_value_t node_get_class_list(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, node);
+    set_method(object.get(), "contains", class_list_contains);
+    set_method(object.get(), "add", class_list_add);
+    set_method(object.get(), "remove", class_list_remove);
+    set_method(object.get(), "toggle", class_list_toggle);
+    return object.release();
+}
+
 jerry_value_t node_ignore_setter(const jerry_call_info_t*,
                                  const jerry_value_t[],
                                  const jerry_length_t) {
@@ -1222,6 +1385,18 @@ jerry_value_t node_matches(const jerry_call_info_t* call_info_p,
 jerry_value_t node_closest(const jerry_call_info_t* call_info_p,
                            const jerry_value_t args_p[],
                            const jerry_length_t args_count);
+jerry_value_t node_query_selector(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count);
+jerry_value_t node_query_selector_all(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count);
+jerry_value_t document_query_selector(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count);
+jerry_value_t document_query_selector_all(const jerry_call_info_t* call_info_p,
+                                          const jerry_value_t args_p[],
+                                          const jerry_length_t args_count);
 jerry_value_t element_remove_attribute(const jerry_call_info_t* call_info_p,
                                        const jerry_value_t args_p[],
                                        const jerry_length_t args_count);
@@ -2041,6 +2216,36 @@ jerry_value_t style_set_property(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t style_get_property_value(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count) {
+    Node* node = style_node(call_info_p);
+    if (node == nullptr || args_count < 1) {
+        return jerry_string_sz("");
+    }
+    const std::string property = ascii_lowercase(value_to_string(args_p[0]));
+    if (!is_script_writable_style_property(property)) {
+        return jerry_string_sz("");
+    }
+    return jerry_string_sz(inline_style_property(*node, property).c_str());
+}
+
+jerry_value_t style_remove_property(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = style_node(call_info_p);
+    if (node == nullptr || args_count < 1) {
+        return jerry_string_sz("");
+    }
+    const std::string property = ascii_lowercase(value_to_string(args_p[0]));
+    if (!is_script_writable_style_property(property)) {
+        return jerry_string_sz("");
+    }
+    const std::string previous = inline_style_property(*node, property);
+    set_inline_style_property(*node, property, std::string());
+    return jerry_string_sz(previous.c_str());
+}
+
 #define JELLYFRAME_STYLE_ACCESSOR(js_name, css_name) \
     jerry_value_t style_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
         return style_get_named(call_info_p, css_name); \
@@ -2055,9 +2260,26 @@ JELLYFRAME_STYLE_ACCESSOR(background, "background")
 JELLYFRAME_STYLE_ACCESSOR(backgroundColor, "background-color")
 JELLYFRAME_STYLE_ACCESSOR(backgroundImage, "background-image")
 JELLYFRAME_STYLE_ACCESSOR(textAlign, "text-align")
+JELLYFRAME_STYLE_ACCESSOR(fontSize, "font-size")
 JELLYFRAME_STYLE_ACCESSOR(fontWeight, "font-weight")
+JELLYFRAME_STYLE_ACCESSOR(lineHeight, "line-height")
 JELLYFRAME_STYLE_ACCESSOR(width, "width")
 JELLYFRAME_STYLE_ACCESSOR(height, "height")
+JELLYFRAME_STYLE_ACCESSOR(minWidth, "min-width")
+JELLYFRAME_STYLE_ACCESSOR(minHeight, "min-height")
+JELLYFRAME_STYLE_ACCESSOR(maxWidth, "max-width")
+JELLYFRAME_STYLE_ACCESSOR(maxHeight, "max-height")
+JELLYFRAME_STYLE_ACCESSOR(boxSizing, "box-sizing")
+JELLYFRAME_STYLE_ACCESSOR(margin, "margin")
+JELLYFRAME_STYLE_ACCESSOR(marginTop, "margin-top")
+JELLYFRAME_STYLE_ACCESSOR(marginRight, "margin-right")
+JELLYFRAME_STYLE_ACCESSOR(marginBottom, "margin-bottom")
+JELLYFRAME_STYLE_ACCESSOR(marginLeft, "margin-left")
+JELLYFRAME_STYLE_ACCESSOR(padding, "padding")
+JELLYFRAME_STYLE_ACCESSOR(paddingTop, "padding-top")
+JELLYFRAME_STYLE_ACCESSOR(paddingRight, "padding-right")
+JELLYFRAME_STYLE_ACCESSOR(paddingBottom, "padding-bottom")
+JELLYFRAME_STYLE_ACCESSOR(paddingLeft, "padding-left")
 JELLYFRAME_STYLE_ACCESSOR(opacity, "opacity")
 JELLYFRAME_STYLE_ACCESSOR(transform, "transform")
 JELLYFRAME_STYLE_ACCESSOR(borderRadius, "border-radius")
@@ -2083,9 +2305,26 @@ jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "backgroundColor", style_get_backgroundColor, style_set_backgroundColor);
     define_accessor(object.get(), "backgroundImage", style_get_backgroundImage, style_set_backgroundImage);
     define_accessor(object.get(), "textAlign", style_get_textAlign, style_set_textAlign);
+    define_accessor(object.get(), "fontSize", style_get_fontSize, style_set_fontSize);
     define_accessor(object.get(), "fontWeight", style_get_fontWeight, style_set_fontWeight);
+    define_accessor(object.get(), "lineHeight", style_get_lineHeight, style_set_lineHeight);
     define_accessor(object.get(), "width", style_get_width, style_set_width);
     define_accessor(object.get(), "height", style_get_height, style_set_height);
+    define_accessor(object.get(), "minWidth", style_get_minWidth, style_set_minWidth);
+    define_accessor(object.get(), "minHeight", style_get_minHeight, style_set_minHeight);
+    define_accessor(object.get(), "maxWidth", style_get_maxWidth, style_set_maxWidth);
+    define_accessor(object.get(), "maxHeight", style_get_maxHeight, style_set_maxHeight);
+    define_accessor(object.get(), "boxSizing", style_get_boxSizing, style_set_boxSizing);
+    define_accessor(object.get(), "margin", style_get_margin, style_set_margin);
+    define_accessor(object.get(), "marginTop", style_get_marginTop, style_set_marginTop);
+    define_accessor(object.get(), "marginRight", style_get_marginRight, style_set_marginRight);
+    define_accessor(object.get(), "marginBottom", style_get_marginBottom, style_set_marginBottom);
+    define_accessor(object.get(), "marginLeft", style_get_marginLeft, style_set_marginLeft);
+    define_accessor(object.get(), "padding", style_get_padding, style_set_padding);
+    define_accessor(object.get(), "paddingTop", style_get_paddingTop, style_set_paddingTop);
+    define_accessor(object.get(), "paddingRight", style_get_paddingRight, style_set_paddingRight);
+    define_accessor(object.get(), "paddingBottom", style_get_paddingBottom, style_set_paddingBottom);
+    define_accessor(object.get(), "paddingLeft", style_get_paddingLeft, style_set_paddingLeft);
     define_accessor(object.get(), "opacity", style_get_opacity, style_set_opacity);
     define_accessor(object.get(), "transform", style_get_transform, style_set_transform);
     define_accessor(object.get(), "borderRadius", style_get_borderRadius, style_set_borderRadius);
@@ -2098,7 +2337,9 @@ jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "textOverflow", style_get_textOverflow, style_set_textOverflow);
     define_accessor(object.get(), "overflow", style_get_overflow, style_set_overflow);
     define_accessor(object.get(), "zIndex", style_get_zIndex, style_set_zIndex);
+    set_method(object.get(), "getPropertyValue", style_get_property_value);
     set_method(object.get(), "setProperty", style_set_property);
+    set_method(object.get(), "removeProperty", style_remove_property);
     return object.release();
 }
 
@@ -2529,6 +2770,7 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
 
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
     define_accessor(object.get(), "className", node_get_class_name, node_set_class_name);
+    define_accessor(object.get(), "classList", node_get_class_list, node_ignore_setter);
     define_accessor(object.get(), "parentElement", node_get_parent_element, node_ignore_setter);
     define_accessor(object.get(), "children", node_get_children, node_ignore_setter);
     define_accessor(object.get(), "dataset", node_get_dataset, node_ignore_setter);
@@ -2549,6 +2791,8 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     set_method(object.get(), "removeEventListener", node_remove_event_listener);
     set_method(object.get(), "matches", node_matches);
     set_method(object.get(), "closest", node_closest);
+    set_method(object.get(), "querySelector", node_query_selector);
+    set_method(object.get(), "querySelectorAll", node_query_selector_all);
     if (node.type == NodeType::Element && node.tag_name == "canvas") {
         set_method(object.get(), "getContext", canvas_get_context);
     }
@@ -2564,6 +2808,8 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         define_accessor(object.get(), "hidden", document_get_hidden, node_ignore_setter);
         define_accessor(object.get(), "visibilityState", document_get_visibility_state, node_ignore_setter);
         set_method(object.get(), "getElementById", document_get_element_by_id);
+        set_method(object.get(), "querySelector", document_query_selector);
+        set_method(object.get(), "querySelectorAll", document_query_selector_all);
         set_method(object.get(), "createElement", document_create_element);
         set_method(object.get(), "createTextNode", document_create_text_node);
     }
@@ -2703,6 +2949,64 @@ jerry_value_t node_closest(const jerry_call_info_t* call_info_p,
     return jerry_null();
 }
 
+Node* query_selector_first(Node& root, const std::string& selector, bool include_root) {
+    if (include_root && simple_selector_matches(root, selector)) {
+        return &root;
+    }
+    for (const auto& child : root.children) {
+        if (Node* found = query_selector_first(*child, selector, true)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+void query_selector_all(Node& root,
+                        const std::string& selector,
+                        bool include_root,
+                        std::vector<Node*>& output) {
+    if (include_root && simple_selector_matches(root, selector)) {
+        output.push_back(&root);
+    }
+    for (const auto& child : root.children) {
+        query_selector_all(*child, selector, true, output);
+    }
+}
+
+jerry_value_t node_query_selector(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || args_count < 1) {
+        return jerry_null();
+    }
+    Node* found = query_selector_first(*node, value_to_string(args_p[0]), false);
+    if (found == nullptr) {
+        return jerry_null();
+    }
+    return make_node_wrapper(*runtime, *found, false);
+}
+
+jerry_value_t node_query_selector_all(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || args_count < 1) {
+        return jerry_array(0);
+    }
+    std::vector<Node*> matches;
+    query_selector_all(*node, value_to_string(args_p[0]), false, matches);
+    JerryValue array(jerry_array(static_cast<jerry_length_t>(matches.size())));
+    for (std::size_t index = 0; index < matches.size(); ++index) {
+        JerryValue wrapped(make_node_wrapper(*runtime, *matches[index], false));
+        JerryValue result(jerry_object_set_index(array.get(), static_cast<jerry_length_t>(index), wrapped.get()));
+        (void) result;
+    }
+    return array.release();
+}
+
 jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
                                          const jerry_value_t args_p[],
                                          const jerry_length_t args_count) {
@@ -2717,6 +3021,40 @@ jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
         return jerry_null();
     }
     return make_node_wrapper(*runtime, *found, false);
+}
+
+jerry_value_t document_query_selector(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    Node* document = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr || args_count < 1) {
+        return jerry_null();
+    }
+    Node* found = query_selector_first(*document, value_to_string(args_p[0]), true);
+    if (found == nullptr) {
+        return jerry_null();
+    }
+    return make_node_wrapper(*runtime, *found, false);
+}
+
+jerry_value_t document_query_selector_all(const jerry_call_info_t* call_info_p,
+                                          const jerry_value_t args_p[],
+                                          const jerry_length_t args_count) {
+    Node* document = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr || args_count < 1) {
+        return jerry_array(0);
+    }
+    std::vector<Node*> matches;
+    query_selector_all(*document, value_to_string(args_p[0]), true, matches);
+    JerryValue array(jerry_array(static_cast<jerry_length_t>(matches.size())));
+    for (std::size_t index = 0; index < matches.size(); ++index) {
+        JerryValue wrapped(make_node_wrapper(*runtime, *matches[index], false));
+        JerryValue result(jerry_object_set_index(array.get(), static_cast<jerry_length_t>(index), wrapped.get()));
+        (void) result;
+    }
+    return array.release();
 }
 
 jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,

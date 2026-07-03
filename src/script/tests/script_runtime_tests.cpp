@@ -377,6 +377,29 @@ void javascript_embedded_ui_helpers_support_event_delegation() {
     check(result.value == "+:2:true:true", "dataset children parentElement matches closest work");
 }
 
+void javascript_query_selector_subset_works() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><main id='app'><button class='key primary' data-op='+'><span>Plus</span></button>"
+        "<button class='key' data-op='-'>Minus</button><p class='note'>Done</p></main></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var app = document.querySelector('#app');"
+        "var firstKey = document.querySelector('.key');"
+        "var scoped = app.querySelector('[data-op=\"-\"]');"
+        "var keys = document.querySelectorAll('button.key');"
+        "var notes = app.querySelectorAll('.note');"
+        "var complex = document.querySelector('main > button');"
+        "app.tagName + ':' + firstKey.dataset.op + ':' + scoped.dataset.op + ':' + "
+        "String(keys.length) + ':' + notes[0].textContent + ':' + String(complex === null)");
+
+    check(result.ok, "querySelector subset script succeeds");
+    check(result.value == "main:+:-:2:Done:true",
+          "querySelector/querySelectorAll simple selector subset works");
+}
+
 void javascript_class_name_reflects_class_attribute() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='save' class='idle'>Save</button></body>");
@@ -394,6 +417,30 @@ void javascript_class_name_reflects_class_attribute() {
     check(result.value == "idle:active primary:active primary", "className reflects class attribute");
     check((subtree_dirty_flags(*document) & DomDirtyStyle) != 0U, "className marks style dirty");
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "className marks layout dirty");
+}
+
+void javascript_class_list_subset_mutates_class_attribute() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='save' class='idle primary'>Save</button></body>");
+    clear_dirty_flags(*document);
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var save = document.getElementById('save');"
+        "var before = save.classList.contains('idle');"
+        "save.classList.add('active', 'primary');"
+        "var afterAdd = save.className;"
+        "var forced = save.classList.toggle('pressed', true);"
+        "var removed = save.classList.toggle('idle', false);"
+        "save.classList.remove('primary', 'missing');"
+        "before + ':' + afterAdd + ':' + forced + ':' + removed + ':' + save.className");
+
+    check(result.ok, "classList subset script succeeds");
+    check(result.value == "true:idle primary active:true:false:active pressed",
+          "classList contains/add/remove/toggle update class attribute");
+    check((subtree_dirty_flags(*document) & DomDirtyStyle) != 0U, "classList marks style dirty");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "classList marks layout dirty");
 }
 
 void javascript_element_style_hidden_and_disabled_properties_work() {
@@ -431,22 +478,40 @@ void javascript_element_style_extended_properties_work() {
         "dial.style.opacity = '0.72';"
         "dial.style.transform = 'translate(4px, 2px) rotate(15deg)';"
         "dial.style.borderRadius = '50%';"
+        "dial.style.fontSize = '18px';"
+        "dial.style.lineHeight = '22px';"
+        "dial.style.boxSizing = 'border-box';"
+        "dial.style.padding = '4px 6px';"
+        "dial.style.marginTop = '3px';"
+        "dial.style.maxWidth = '100%';"
         "dial.style.backgroundImage = 'radial-gradient(#ffffff, rgba(36,126,160,.20))';"
         "dial.style.left = '6px';"
         "dial.style.top = '8px';"
         "dial.style.setProperty('--progress', '76%');"
         "dial.style.setProperty('background-image', 'radial-gradient(circle, #ffffff, #000000)');"
+        "dial.style.setProperty('min-height', '44px');"
+        "var oldProgress = dial.style.removeProperty('--progress');"
+        "var missingFilter = dial.style.getPropertyValue('filter');"
         "dial.style.setProperty('filter', 'blur(4px)');"
+        "oldProgress + ':' + missingFilter + ':' + dial.style.getPropertyValue('min-height') + ':' + "
         "dial.getAttribute('style')");
 
     check(result.ok, "extended style script succeeds");
+    check(result.value.find("76%::44px:") == 0, "style get/removeProperty return inline values");
     check(result.value.find("opacity: 0.72") != std::string::npos, "opacity write serialized");
     check(result.value.find("transform: translate(4px, 2px) rotate(15deg)") != std::string::npos,
           "transform write serialized");
     check(result.value.find("border-radius: 50%") != std::string::npos, "borderRadius write serialized");
+    check(result.value.find("font-size: 18px") != std::string::npos, "fontSize write serialized");
+    check(result.value.find("line-height: 22px") != std::string::npos, "lineHeight write serialized");
+    check(result.value.find("box-sizing: border-box") != std::string::npos, "boxSizing write serialized");
+    check(result.value.find("padding: 4px 6px") != std::string::npos, "padding write serialized");
+    check(result.value.find("margin-top: 3px") != std::string::npos, "marginTop write serialized");
+    check(result.value.find("max-width: 100%") != std::string::npos, "maxWidth write serialized");
+    check(result.value.find("min-height: 44px") != std::string::npos, "setProperty min-height serialized");
     check(result.value.find("background-image: radial-gradient(circle, #ffffff, #000000)") != std::string::npos,
           "backgroundImage write serialized");
-    check(result.value.find("--progress: 76%") != std::string::npos, "custom property write serialized");
+    check(result.value.find("--progress") == std::string::npos, "removeProperty removes custom property");
     check(result.value.find("filter") == std::string::npos, "unsupported style.setProperty is ignored");
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "extended style writes mark layout dirty");
 }
@@ -1109,7 +1174,9 @@ int main() {
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_form_properties_mutate_control_state();
         javascript_embedded_ui_helpers_support_event_delegation();
+        javascript_query_selector_subset_works();
         javascript_class_name_reflects_class_attribute();
+        javascript_class_list_subset_mutates_class_attribute();
         javascript_element_style_hidden_and_disabled_properties_work();
         javascript_element_style_extended_properties_work();
         javascript_input_event_reads_live_value();

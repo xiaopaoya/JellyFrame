@@ -30,7 +30,7 @@
 
 | 能力 | 状态 | Manifest |
 | --- | --- | --- |
-| DOM 查询/修改 | 子集 | 无需额外 capability。使用 `getElementById`、`createElement`、`appendChild`、`textContent`、`className`。 |
+| DOM 查询/修改 | 子集 | 无需额外 capability。使用 `getElementById`、简单 selector 的 `querySelector`、`createElement`、`appendChild`、`textContent`、`className` 和小型 `classList` helper。 |
 | 事件 | 可用 | 使用 `addEventListener`、事件委托、`dataset`、`matches`/`closest` 子集。 |
 | 时间 / Timer / rAF | 有界 | `Date.now()` 读取宿主注入时间；timer/rAF 无需额外 capability，但受 frame policy 和预算限制。 |
 | `XMLHttpRequest` GET | 宿主可选 | `network.fetch`。只用于运行时数据，不加载页面资源。 |
@@ -40,7 +40,8 @@
 | Canvas 2D | 宿主可选 | `graphics.canvas2d`。只在 `getContext("2d")` 后分配 backing store。 |
 | 宿主时间 | 可用 | 使用 `Date.now()`。除非后续明确文档化，不要假设 `new Date()` 已受宿主时钟控制。 |
 | 天气/活动/电量 | 宿主/system only | 天气 app 数据应使用 XHR JSON；活动和电量 summary 目前不是普通 app JS API。 |
-| Promise/fetch/modules/querySelector/innerHTML | 延后 | 不要依赖。 |
+| Promise/fetch/modules/innerHTML | 延后 | 不要依赖。 |
+| querySelector/querySelectorAll | 子集 | 仅支持简单 tag、`.class`、`#id`、`[attr]`、`[attr=value]` 和同一 compound 组合；复杂 selector 会诊断。 |
 
 ## 资源和字体
 

@@ -286,20 +286,56 @@ class PackagePreflightTests(unittest.TestCase):
             script.write_text(
                 "fetch('/data.json');\n"
                 "Promise.resolve(1);\n"
-                "document.querySelector('.card');\n"
                 "view.innerHTML = '<b>unsafe</b>';\n"
+                "view.getBoundingClientRect();\n"
+                "view.setPointerCapture(1);\n"
                 "import('./chunk.js');\n",
                 encoding="utf-8")
             resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
 
             diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
 
-        self.assertEqual(diagnostics["entryCount"], 5)
+        self.assertEqual(diagnostics["entryCount"], 6)
         self.assertEqual(
             sorted(warning["api"] for warning in warnings),
-            ["Promise", "dynamic import", "fetch", "innerHTML", "querySelector"],
+            ["Promise", "dynamic import", "fetch", "getBoundingClientRect", "innerHTML", "pointer capture"],
         )
         self.assertTrue(all(warning["code"] == "script-api-deferred" for warning in warnings))
+
+    def test_script_api_diagnostics_accept_simple_query_selector_subset(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-script-query-selector-diagnostics-") as directory:
+            root = Path(directory)
+            script = root / "scripts" / "app.js"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                "document.querySelector('.card');\n"
+                "document.querySelectorAll('button.primary');\n"
+                "panel.querySelector('[data-op=\"+\"]');\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
+
+        self.assertEqual(diagnostics["entryCount"], 0)
+        self.assertEqual(warnings, [])
+
+    def test_script_api_diagnostics_warn_for_complex_query_selector_subset(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-script-query-selector-subset-") as directory:
+            root = Path(directory)
+            script = root / "scripts" / "app.js"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                "document.querySelector('main > button');\n"
+                "document.querySelectorAll(selectorFromState);\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
+
+        self.assertEqual(diagnostics["entryCount"], 1)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["code"], "script-api-subset")
+        self.assertEqual(warnings[0]["api"], "querySelector")
 
     def test_runtime_budget_estimate_reports_package_known_usage(self):
         resources = [
@@ -605,6 +641,11 @@ class PackagePreflightTests(unittest.TestCase):
                 "source": "/scripts/app.js",
             }, {
                 "level": "warning",
+                "code": "script-api-subset",
+                "message": "script uses complex querySelector",
+                "source": "/scripts/app.js",
+            }, {
+                "level": "warning",
                 "code": "future-diagnostic-code",
                 "message": "future warning shape",
                 "source": "future",
@@ -649,6 +690,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("script-capability-missing", codes)
         self.assertIn("script-host-time-ambiguous", codes)
         self.assertIn("script-api-deferred", codes)
+        self.assertIn("script-api-subset", codes)
         self.assertIn("future-diagnostic-code", codes)
         self.assertIn("layout-text-overflow", codes)
         self.assertIn("visual-scroll-container", codes)

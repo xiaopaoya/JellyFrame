@@ -17,6 +17,7 @@ namespace {
 
 constexpr int kConicGradientAreaWarningPixels = 65536;
 constexpr int kRadialGradientAreaWarningPixels = 32768;
+constexpr int kBoxShadowAreaWarningPixels = 65536;
 
 bool has_border(const EdgeSizes& border) {
     return border.top > 0 || border.right > 0 || border.bottom > 0 || border.left > 0;
@@ -529,7 +530,9 @@ Color approximate_shadow_color(const std::string& shadow) {
     return Color{0, 0, 0, static_cast<std::uint8_t>(std::max(8, std::min(64, out_alpha)))};
 }
 
-void paint_approximate_box_shadow(const LayoutBox& box, DisplayList& display_list) {
+void paint_approximate_box_shadow(const LayoutBox& box,
+                                  DisplayList& display_list,
+                                  const LayerTreeBuilderOptions& options) {
     if (!has_shadow(box.style)) {
         return;
     }
@@ -546,6 +549,17 @@ void paint_approximate_box_shadow(const LayoutBox& box, DisplayList& display_lis
         box.rect.width + spread * 2,
         box.rect.height + spread * 2,
     };
+    const long long shadow_area = static_cast<long long>(std::max(0, shadow_rect.width)) *
+        static_cast<long long>(std::max(0, shadow_rect.height));
+    if (shadow_area > kBoxShadowAreaWarningPixels) {
+        report_diagnostic(options.diagnostics,
+                          DiagnosticStage::LayerTree,
+                          DiagnosticSeverity::Warning,
+                          "layer-box-shadow-area-budget",
+                          "box-shadow approximate paint area is above the embedded shadow budget",
+                          "area=" + std::to_string(shadow_area) +
+                              "px limit=" + std::to_string(kBoxShadowAreaWarningPixels) + "px");
+    }
     push_fill_rect(display_list, shadow_rect, approximate_shadow_color(box.style.box_shadow), resolved_border_radius(box));
 }
 
@@ -805,7 +819,7 @@ void translate_display_commands(DisplayList& display_list, std::size_t begin, in
 void paint_box_self(const LayoutBox& box, DisplayList& display_list, const LayerTreeBuilderOptions& options) {
     const Rect paint_rect = paint_rect_for(box);
     const int border_radius = resolved_border_radius(box);
-    paint_approximate_box_shadow(box, display_list);
+    paint_approximate_box_shadow(box, display_list, options);
     if (box.style.background_paint == BackgroundPaintKind::LinearGradient) {
         push_linear_gradient(display_list,
                              paint_rect,

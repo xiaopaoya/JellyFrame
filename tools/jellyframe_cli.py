@@ -262,6 +262,16 @@ ADVICE_BY_CODE = {
         "explanation": "The gradient area is too expensive for the configured embedded rendering budget.",
         "action": "Shrink the element, simplify the gradient, pre-render the asset, or move the effect behind an opt-in canvas/resource budget.",
     },
+    "layer-radial-gradient-area-budget": {
+        "title": "Radial gradient exceeds the paint budget",
+        "explanation": "Radial gradients are intended for small highlights and glows. Large areas are CPU-rasterized and can dominate paint time.",
+        "action": "Keep radial gradients to small control highlights, use a linear gradient for large backgrounds, or pre-render a static asset.",
+    },
+    "layer-box-shadow-area-budget": {
+        "title": "Box shadow exceeds the paint budget",
+        "explanation": "JellyFrame paints box-shadow as a cheap approximate translucent rounded rectangle, but large expanded areas still cost pixels.",
+        "action": "Keep shadows small, reduce blur/spread, or combine borders and small radial-gradient highlights for gel depth.",
+    },
     "css-at-rule-skipped": {
         "title": "CSS at-rule is unsupported",
         "explanation": "The at-rule was parsed as CSS input but does not match the supported at-rule subset.",
@@ -296,6 +306,11 @@ ADVICE_BY_CODE = {
         "title": "JavaScript API is outside the current runtime subset",
         "explanation": "The script references a browser API that is documented as deferred in the current JellyFrame JavaScript subset.",
         "action": "Use the documented V0 substitute when one exists, or move this behavior behind a desktop build step or future host/runtime capability.",
+    },
+    "script-api-subset": {
+        "title": "JavaScript API uses only a JellyFrame subset",
+        "explanation": "The script references a Web API that exists in JellyFrame, but not with full browser semantics.",
+        "action": "Keep querySelector/querySelectorAll selectors to tag, .class, #id, [attr] or [attr=value]. Use explicit IDs or element references for complex relationships.",
     },
     "font-family-unmatched": {
         "title": "CSS font-family is not a manifest runtime font",

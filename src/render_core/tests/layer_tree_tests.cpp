@@ -493,6 +493,43 @@ void box_shadow_emits_cheap_translucent_fill() {
     check(found_shadows >= 2, "box-shadow emits approximate translucent fills");
 }
 
+void box_shadow_none_and_large_shadow_are_diagnosed() {
+    auto none_pipeline = build_pipeline(
+        "<body><section class='card'>No shadow</section></body>",
+        ".card { background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.08); box-shadow: none; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList none_flattened = layer_tree_builder.flatten(*none_pipeline.layer_tree);
+    int translucent_fills = 0;
+    for (const DisplayCommand& command : none_flattened) {
+        if (command.type == DisplayCommandType::FillRect && command.color.a > 0 && command.color.a < 80) {
+            ++translucent_fills;
+        }
+    }
+    check(translucent_fills == 0, "box-shadow:none suppresses approximate shadow fill");
+
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><section class='card'>Large</section></body>");
+    Stylesheet stylesheet = css_parser.parse(
+        ".card { width: 320px; height: 240px; box-shadow: 0 0 48px rgba(0,0,0,0.16); }");
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 360);
+
+    VectorDiagnosticSink diagnostics;
+    LayerTreeBuilderOptions options;
+    options.diagnostics = &diagnostics;
+    LayerTreeBuilder diagnostic_builder(options);
+    auto layer_tree = diagnostic_builder.build(*layout_tree);
+    (void)layer_tree;
+
+    check(has_diagnostic_code(diagnostics, "layer-box-shadow-area-budget"),
+          "large box-shadow emits area budget diagnostic");
+}
+
 void list_markers_and_generated_counters_emit_text() {
     auto pipeline = build_pipeline(
         "<body><ol class='custom'><li>Alpha</li><li>Beta<ul><li>Nested</li></ul></li></ol></body>",
@@ -842,6 +879,7 @@ int main() {
         select_does_not_paint_option_list_inline();
         grid_auto_fit_gap_span_and_aspect_ratio_layout();
         box_shadow_emits_cheap_translucent_fill();
+        box_shadow_none_and_large_shadow_are_diagnosed();
         list_markers_and_generated_counters_emit_text();
         generated_after_and_percentage_radius_emit_commands();
         conic_gradient_background_emits_progress_command();

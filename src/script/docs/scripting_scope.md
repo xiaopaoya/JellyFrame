@@ -174,20 +174,28 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `element.children`
   - `element.parentElement`
   - `element.className` reflected to the `class` attribute
+  - `element.classList.contains/add/remove/toggle` as a minimal DOMTokenList-like helper
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
+  - `document.querySelector(simpleSelector)` / `element.querySelector(simpleSelector)`
+  - `document.querySelectorAll(simpleSelector)` / `element.querySelectorAll(simpleSelector)`,
+    returning a static array snapshot
   - `element.dataset` snapshot properties for existing `data-*` attributes
   - `element.style` for a small inline-style property set:
     `display`, `color`, `background`, `backgroundColor`, `backgroundImage`, `textAlign`,
-    `fontWeight`, `width`, `height`, `opacity`, `transform`,
-    `borderRadius`, `left`, `top`, `right`, `bottom`, `position`,
+    `fontSize`, `fontWeight`, `lineHeight`, `width`, `height`, `minWidth`,
+    `minHeight`, `maxWidth`, `maxHeight`, `boxSizing`, margin/padding shorthands
+    and sides, `opacity`, `transform`, `borderRadius`, `left`, `top`, `right`,
+    `bottom`, `position`,
     `whiteSpace`, `textOverflow`, `overflow` and `zIndex`
-  - `element.style.setProperty(name, value)` for the same safe CSS property
-    subset plus CSS custom properties such as `--progress`
+  - `element.style.getPropertyValue(name)`, `setProperty(name, value)` and
+    `removeProperty(name)` for the same safe CSS property subset plus CSS
+    custom properties such as `--progress`
   - `element.hidden` and `element.disabled`
-- Supported `matches`/`closest` selectors are intentionally small: tag,
-  `.class`, `#id`, `[attr]` and `[attr=value]`. Descendant/child combinators
-  remain CSS-only for now.
+- Supported `matches`/`closest`/`querySelector(All)` selectors are intentionally
+  small: tag, `.class`, `#id`, `[attr]`, `[attr=value]` and same-compound
+  combinations such as `button.primary`. Descendant/child combinators remain
+  CSS-only for now.
 - Native input dispatch exposes `pointerdown`, `pointerup`, `touchstart` and
   `touchend` as mouse-like events for press feedback on wearable shells.
 - Optional Canvas 2D V0.3 is exposed only when the host binds a canvas registry:
@@ -203,7 +211,12 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 
 ## Not Supported Yet
 
-- Full selector APIs such as `querySelector` / `querySelectorAll`.
+- Full selector APIs. `querySelector` / `querySelectorAll` support only the
+  simple selector subset above, with no combinators, commas, pseudo-classes,
+  `:has()` or live NodeList semantics.
+- Full DOMTokenList semantics. `classList` is limited to
+  `contains`/`add`/`remove`/`toggle`; iteration, `replace()` and exception
+  behavior for invalid tokens are deferred.
 - Dynamic `dataset` property creation or native mutation through new arbitrary keys.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.

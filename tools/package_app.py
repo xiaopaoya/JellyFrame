@@ -773,16 +773,22 @@ SCRIPT_API_USAGE_WARNINGS = [
         "message": "script uses Promise, which is deferred until JellyFrame has bounded microtask support",
     },
     {
-        "api": "querySelector",
-        "code": "script-api-deferred",
-        "pattern": re.compile(r"\bquerySelector(?:All)?\s*\("),
-        "message": "script uses querySelector/querySelectorAll, which is deferred; use IDs, classes and small explicit DOM references",
-    },
-    {
         "api": "innerHTML",
         "code": "script-api-deferred",
         "pattern": re.compile(r"\binnerHTML\b"),
         "message": "script uses innerHTML, which is deferred; use textContent or DOM creation APIs",
+    },
+    {
+        "api": "getBoundingClientRect",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bgetBoundingClientRect\s*\("),
+        "message": "script uses getBoundingClientRect(), which is deferred until the host can expose a stable frame layout snapshot",
+    },
+    {
+        "api": "pointer capture",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\b(?:setPointerCapture|releasePointerCapture)\s*\("),
+        "message": "script uses pointer capture, which is deferred; use pointerdown/pointermove/pointerup state while the pointer remains inside the app viewport",
     },
     {
         "api": "dynamic import",
@@ -805,6 +811,106 @@ def strip_script_comments_and_strings(text: str) -> str:
     text = re.sub(r"'(?:\\.|[^'\\])*'", "''", text, flags=re.S)
     text = re.sub(r'"(?:\\.|[^"\\])*"', '""', text, flags=re.S)
     return text
+
+
+QUERY_SELECTOR_CALL_RE = re.compile(
+    r"\bquerySelector(?:All)?\s*\(\s*(?:(['\"])(.*?)\1|([^)]*))\s*\)",
+    re.S,
+)
+
+
+def has_top_level_selector_syntax(selector: str) -> bool:
+    depth = 0
+    quote = ""
+    for ch in selector:
+        if quote:
+            if ch == quote:
+                quote = ""
+            continue
+        if ch in {"'", '"'}:
+            quote = ch
+        elif ch == "[":
+            depth += 1
+        elif ch == "]" and depth > 0:
+            depth -= 1
+        elif depth == 0 and ch in " >+~,:":
+            return True
+    return False
+
+
+def is_jellyframe_simple_selector(selector: str) -> bool:
+    selector = selector.strip()
+    if not selector or has_top_level_selector_syntax(selector):
+        return False
+    index = 0
+    if selector[index] not in ".#[":
+        match = re.match(r"[A-Za-z0-9_-]+", selector)
+        if match is None:
+            return False
+        index = match.end()
+    while index < len(selector):
+        if selector[index] == ".":
+            match = re.match(r"\.[A-Za-z0-9_-]+", selector[index:])
+            if match is None:
+                return False
+            index += match.end()
+        elif selector[index] == "#":
+            match = re.match(r"#[A-Za-z0-9_-]+", selector[index:])
+            if match is None:
+                return False
+            index += match.end()
+        elif selector[index] == "[":
+            close = selector.find("]", index + 1)
+            if close < 0:
+                return False
+            content = selector[index + 1:close].strip()
+            if not re.match(r"^[A-Za-z0-9_-]+(?:=(?:[A-Za-z0-9_-]+|'[^']*'|\"[^\"]*\"))?$", content):
+                return False
+            index = close + 1
+        else:
+            return False
+    return True
+
+
+def collect_query_selector_diagnostics(resource_path: str, source_text: str, seen: set) -> tuple[list[dict], list[dict]]:
+    entries = []
+    warnings = []
+    for match in QUERY_SELECTOR_CALL_RE.finditer(strip_script_comments(source_text)):
+        selector = match.group(2)
+        dynamic_arg = match.group(3)
+        if selector is not None and is_jellyframe_simple_selector(selector):
+            continue
+        code = "script-api-subset"
+        key = (resource_path, code, "querySelector")
+        if key in seen:
+            continue
+        seen.add(key)
+        detail = selector if selector is not None else (dynamic_arg or "").strip()
+        entries.append({
+            "api": "querySelector",
+            "source": resource_path,
+            "declared": True,
+            "warningCode": code,
+        })
+        if selector is None:
+            warnings.append({
+                "level": "info",
+                "code": code,
+                "message": "script uses dynamic querySelector/querySelectorAll; JellyFrame supports only simple tag/.class/#id/[attr] selectors at runtime",
+                "source": resource_path,
+                "api": "querySelector",
+                "detail": detail[:80],
+            })
+        else:
+            warnings.append({
+                "level": "warning",
+                "code": code,
+                "message": "script uses querySelector/querySelectorAll outside JellyFrame's simple selector subset",
+                "source": resource_path,
+                "api": "querySelector",
+                "selector": selector,
+            })
+    return entries, warnings
 
 
 def script_sources_for_resource(resource: dict) -> list[str]:
@@ -883,6 +989,9 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                     "source": resource["path"],
                     "api": usage["api"],
                 })
+            query_entries, query_warnings = collect_query_selector_diagnostics(resource["path"], source_text, seen)
+            entries.extend(query_entries)
+            warnings.extend(query_warnings)
     return {
         "model": "static-classic-script-api-capability-preflight",
         "entries": entries,
