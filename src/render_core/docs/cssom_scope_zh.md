@@ -78,7 +78,8 @@ CssStyleSheet
 - `width`、`height`、`min-width`、`min-height`、`max-width`、`max-height`，包括这些 sizing
   属性在 layout 阶段解析的百分比值。
 - `color`、`background-color`。
-- `font-size`、`line-height`、`text-align`、`text-indent`。
+- `font-size`、`line-height`、`text-align`、`text-indent`、ASCII 子集
+  `text-transform`。
 - `box-sizing`、`overflow`、`opacity`、`position`、`z-index`、`transform`。
 - 面向嵌入式应用的 layout 字段：`aspect-ratio`、`gap`、`column-gap`、
   `row-gap`、简化 grid 最小轨道尺寸、`grid-auto-rows` 最小尺寸，以及

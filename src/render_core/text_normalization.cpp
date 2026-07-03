@@ -24,6 +24,22 @@ bool ascii_space(char ch) {
     return std::isspace(static_cast<unsigned char>(ch)) != 0;
 }
 
+bool ascii_alpha(char ch) {
+    return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+}
+
+bool ascii_alnum(char ch) {
+    return ascii_alpha(ch) || (ch >= '0' && ch <= '9');
+}
+
+char ascii_upper(char ch) {
+    return ch >= 'a' && ch <= 'z' ? static_cast<char>(ch - 'a' + 'A') : ch;
+}
+
+char ascii_lower(char ch) {
+    return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
+}
+
 std::string collapse_render_whitespace(std::string_view value) {
     std::string output;
     output.reserve(value.size());
@@ -65,6 +81,33 @@ std::string normalized_render_text(const Node& text_node) {
         return text_node.text;
     }
     return collapse_render_whitespace(text_node.text);
+}
+
+std::string transformed_render_text(const Node& text_node, TextTransform transform) {
+    std::string output = normalized_render_text(text_node);
+    if (transform == TextTransform::None || output.empty()) {
+        return output;
+    }
+    bool at_word_start = true;
+    for (char& ch : output) {
+        switch (transform) {
+        case TextTransform::Uppercase:
+            ch = ascii_upper(ch);
+            break;
+        case TextTransform::Lowercase:
+            ch = ascii_lower(ch);
+            break;
+        case TextTransform::Capitalize:
+            if (ascii_alpha(ch)) {
+                ch = at_word_start ? ascii_upper(ch) : ascii_lower(ch);
+            }
+            at_word_start = !ascii_alnum(ch);
+            break;
+        case TextTransform::None:
+            break;
+        }
+    }
+    return output;
 }
 
 } // namespace jellyframe

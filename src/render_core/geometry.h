@@ -48,6 +48,13 @@ enum class TextCommandAlign : std::uint8_t {
     End,
 };
 
+enum class TextTransform : std::uint8_t {
+    None,
+    Uppercase,
+    Lowercase,
+    Capitalize,
+};
+
 enum class ObjectFit : std::uint8_t {
     Fill,
     Contain,

@@ -2285,6 +2285,7 @@ enum class CascadeProperty : std::size_t {
     FontFamily,
     LineHeight,
     TextIndent,
+    TextTransform,
     TextDecoration,
     BoxShadow,
     Overflow,
@@ -2447,6 +2448,7 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
         {"text-indent", CascadeProperty::TextIndent},
         {"text-overflow", CascadeProperty::TextOverflow},
         {"text-shadow", CascadeProperty::TextShadow},
+        {"text-transform", CascadeProperty::TextTransform},
         {"top", CascadeProperty::Top},
         {"transform", CascadeProperty::Transform},
         {"transform-origin", CascadeProperty::TransformOrigin},
@@ -2839,6 +2841,21 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.text_indent = px;
         style.text_indent_specified = true;
+        return true;
+    } else if (property == "text-transform") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "none") {
+            style.text_transform = TextTransform::None;
+        } else if (lowered == "uppercase") {
+            style.text_transform = TextTransform::Uppercase;
+        } else if (lowered == "lowercase") {
+            style.text_transform = TextTransform::Lowercase;
+        } else if (lowered == "capitalize") {
+            style.text_transform = TextTransform::Capitalize;
+        } else {
+            return false;
+        }
+        style.text_transform_specified = true;
         return true;
     } else if (property == "text-decoration" || property == "text-decoration-line") {
         const std::vector<std::string> tokens = split_whitespace_components(lowercase(trim(value)));

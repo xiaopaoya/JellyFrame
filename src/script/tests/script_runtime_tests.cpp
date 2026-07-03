@@ -419,6 +419,26 @@ void javascript_class_name_reflects_class_attribute() {
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "className marks layout dirty");
 }
 
+void javascript_id_and_document_body_reflect_dom_attributes() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><main id='app'>Ready</main></body>");
+    clear_dirty_flags(*document);
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var body = document.body;"
+        "var app = body.children[0];"
+        "var before = app.id;"
+        "app.id = 'launcher';"
+        "before + ':' + body.tagName + ':' + document.getElementById('launcher').textContent");
+
+    check(result.ok, "id/body reflection script succeeds");
+    check(result.value == "app:body:Ready", "element.id and document.body reflect DOM state");
+    check((subtree_dirty_flags(*document) & DomDirtyStyle) != 0U, "id setter marks style dirty");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "id setter marks layout dirty");
+}
+
 void javascript_class_list_subset_mutates_class_attribute() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='save' class='idle primary'>Save</button></body>");
@@ -480,6 +500,7 @@ void javascript_element_style_extended_properties_work() {
         "dial.style.borderRadius = '50%';"
         "dial.style.fontSize = '18px';"
         "dial.style.lineHeight = '22px';"
+        "dial.style.textTransform = 'uppercase';"
         "dial.style.boxSizing = 'border-box';"
         "dial.style.padding = '4px 6px';"
         "dial.style.marginTop = '3px';"
@@ -504,6 +525,8 @@ void javascript_element_style_extended_properties_work() {
     check(result.value.find("border-radius: 50%") != std::string::npos, "borderRadius write serialized");
     check(result.value.find("font-size: 18px") != std::string::npos, "fontSize write serialized");
     check(result.value.find("line-height: 22px") != std::string::npos, "lineHeight write serialized");
+    check(result.value.find("text-transform: uppercase") != std::string::npos,
+          "textTransform write serialized");
     check(result.value.find("box-sizing: border-box") != std::string::npos, "boxSizing write serialized");
     check(result.value.find("padding: 4px 6px") != std::string::npos, "padding write serialized");
     check(result.value.find("margin-top: 3px") != std::string::npos, "marginTop write serialized");
@@ -1176,6 +1199,7 @@ int main() {
         javascript_embedded_ui_helpers_support_event_delegation();
         javascript_query_selector_subset_works();
         javascript_class_name_reflects_class_attribute();
+        javascript_id_and_document_body_reflect_dom_attributes();
         javascript_class_list_subset_mutates_class_attribute();
         javascript_element_style_hidden_and_disabled_properties_work();
         javascript_element_style_extended_properties_work();

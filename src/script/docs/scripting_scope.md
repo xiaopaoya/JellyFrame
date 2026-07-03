@@ -173,6 +173,8 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Embedded-app DOM helpers:
   - `element.children`
   - `element.parentElement`
+  - `document.body` as a read-only first-`body` wrapper
+  - `element.id` reflected to the `id` attribute
   - `element.className` reflected to the `class` attribute
   - `element.classList.contains/add/remove/toggle` as a minimal DOMTokenList-like helper
   - `element.matches(simpleSelector)`
@@ -183,7 +185,7 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `element.dataset` snapshot properties for existing `data-*` attributes
   - `element.style` for a small inline-style property set:
     `display`, `color`, `background`, `backgroundColor`, `backgroundImage`, `textAlign`,
-    `fontSize`, `fontWeight`, `lineHeight`, `width`, `height`, `minWidth`,
+    `textTransform`, `fontSize`, `fontWeight`, `lineHeight`, `width`, `height`, `minWidth`,
     `minHeight`, `maxWidth`, `maxHeight`, `boxSizing`, margin/padding shorthands
     and sides, `opacity`, `transform`, `borderRadius`, `left`, `top`, `right`,
     `bottom`, `position`,

@@ -770,6 +770,24 @@ void font_weight_list_style_and_generated_counter_apply() {
     check(item_style.before_font_weight == 600, "before font-weight parsed");
 }
 
+void text_transform_parses_and_inherits() {
+    auto root = make_element("section");
+    root->attributes["class"] = "screen";
+    auto label = make_element("span");
+    root->append_child(std::move(label));
+
+    StyleResolver resolver(parse(".screen { text-transform: uppercase; }"));
+    const Style root_style = resolver.resolve(*root);
+    check(root_style.text_transform == TextTransform::Uppercase, "text-transform uppercase parsed");
+    check(root_style.text_transform_specified, "text-transform marks style as specified");
+
+    RenderTreeBuilder builder(resolver);
+    auto tree = builder.build(*root);
+    check(!tree->children.empty(), "text-transform inheritance fixture builds child render object");
+    check(tree->children.front()->style.text_transform == TextTransform::Uppercase,
+          "text-transform inherits through render tree");
+}
+
 void font_family_declares_runtime_family_hash_and_inherits() {
     auto root = make_element("section");
     root->attributes["class"] = "screen";
@@ -1000,6 +1018,7 @@ int main() {
         grid_and_aspect_ratio_properties_apply();
         physical_edge_longhands_apply_per_side();
         font_weight_list_style_and_generated_counter_apply();
+        text_transform_parses_and_inherits();
         font_family_declares_runtime_family_hash_and_inherits();
         after_generated_content_and_text_overflow_apply();
         fixed_two_column_grid_template_applies();

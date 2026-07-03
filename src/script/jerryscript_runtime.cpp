@@ -428,6 +428,18 @@ Node* find_by_id(Node& node, const std::string& id) {
     return nullptr;
 }
 
+Node* find_first_element_by_tag(Node& node, const std::string& tag_name) {
+    if (node.type == NodeType::Element && node.tag_name == tag_name) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        if (Node* found = find_first_element_by_tag(*child, tag_name)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 bool has_attribute(const Node& node, const std::string& name) {
     return node.attributes.find(name) != node.attributes.end();
 }
@@ -491,6 +503,7 @@ bool is_script_writable_style_property(const std::string& property) {
         "background-color",
         "background-image",
         "text-align",
+        "text-transform",
         "font-size",
         "font-weight",
         "line-height",
@@ -1081,6 +1094,26 @@ jerry_value_t node_get_class_name(const jerry_call_info_t* call_info_p,
     return jerry_string_sz(node->attribute("class").c_str());
 }
 
+jerry_value_t node_get_id(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t[],
+                          const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    return jerry_string_sz(node->attribute("id").c_str());
+}
+
+jerry_value_t node_set_id(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t args_p[],
+                          const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element) {
+        node->set_attribute("id", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t node_set_class_name(const jerry_call_info_t* call_info_p,
                                   const jerry_value_t args_p[],
                                   const jerry_length_t args_count) {
@@ -1355,6 +1388,9 @@ jerry_value_t element_get_attribute(const jerry_call_info_t* call_info_p,
 jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
                                          const jerry_value_t args_p[],
                                          const jerry_length_t args_count);
+jerry_value_t document_get_body(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t);
 jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count);
@@ -2260,6 +2296,7 @@ JELLYFRAME_STYLE_ACCESSOR(background, "background")
 JELLYFRAME_STYLE_ACCESSOR(backgroundColor, "background-color")
 JELLYFRAME_STYLE_ACCESSOR(backgroundImage, "background-image")
 JELLYFRAME_STYLE_ACCESSOR(textAlign, "text-align")
+JELLYFRAME_STYLE_ACCESSOR(textTransform, "text-transform")
 JELLYFRAME_STYLE_ACCESSOR(fontSize, "font-size")
 JELLYFRAME_STYLE_ACCESSOR(fontWeight, "font-weight")
 JELLYFRAME_STYLE_ACCESSOR(lineHeight, "line-height")
@@ -2305,6 +2342,7 @@ jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "backgroundColor", style_get_backgroundColor, style_set_backgroundColor);
     define_accessor(object.get(), "backgroundImage", style_get_backgroundImage, style_set_backgroundImage);
     define_accessor(object.get(), "textAlign", style_get_textAlign, style_set_textAlign);
+    define_accessor(object.get(), "textTransform", style_get_textTransform, style_set_textTransform);
     define_accessor(object.get(), "fontSize", style_get_fontSize, style_set_fontSize);
     define_accessor(object.get(), "fontWeight", style_get_fontWeight, style_set_fontWeight);
     define_accessor(object.get(), "lineHeight", style_get_lineHeight, style_set_lineHeight);
@@ -2769,6 +2807,7 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
 
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
+    define_accessor(object.get(), "id", node_get_id, node_set_id);
     define_accessor(object.get(), "className", node_get_class_name, node_set_class_name);
     define_accessor(object.get(), "classList", node_get_class_list, node_ignore_setter);
     define_accessor(object.get(), "parentElement", node_get_parent_element, node_ignore_setter);
@@ -2807,6 +2846,7 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     if (document_methods) {
         define_accessor(object.get(), "hidden", document_get_hidden, node_ignore_setter);
         define_accessor(object.get(), "visibilityState", document_get_visibility_state, node_ignore_setter);
+        define_accessor(object.get(), "body", document_get_body, node_ignore_setter);
         set_method(object.get(), "getElementById", document_get_element_by_id);
         set_method(object.get(), "querySelector", document_query_selector);
         set_method(object.get(), "querySelectorAll", document_query_selector_all);
@@ -3021,6 +3061,18 @@ jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
         return jerry_null();
     }
     return make_node_wrapper(*runtime, *found, false);
+}
+
+jerry_value_t document_get_body(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* document = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr) {
+        return jerry_null();
+    }
+    Node* body = find_first_element_by_tag(*document, "body");
+    return body != nullptr ? make_node_wrapper(*runtime, *body, false) : jerry_null();
 }
 
 jerry_value_t document_query_selector(const jerry_call_info_t* call_info_p,

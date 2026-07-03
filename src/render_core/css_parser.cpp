@@ -801,6 +801,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "text-align") {
         return supported_keyword(value, {"left", "right", "start", "end", "center"});
     }
+    if (property == "text-transform") {
+        return supported_keyword(value, {"none", "uppercase", "lowercase", "capitalize"});
+    }
     if (property == "box-sizing") {
         return supported_keyword(value, {"content-box", "border-box"});
     }

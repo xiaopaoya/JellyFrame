@@ -142,6 +142,8 @@ API 表面。
 - 面向嵌入式 app 的 DOM helpers：
   - `element.children`
   - `element.parentElement`
+  - `document.body` 作为只读的第一个 `body` wrapper
+  - 反射到 `id` attribute 的 `element.id`
   - 反射到 `class` attribute 的 `element.className`
   - 极小 DOMTokenList-like helper：`element.classList.contains/add/remove/toggle`
   - `element.matches(simpleSelector)`
@@ -151,7 +153,7 @@ API 表面。
   - 面向已有 `data-*` 属性的 `element.dataset` 快照 property
   - 小型 inline-style 属性集合 `element.style`：
     `display`、`color`、`background`、`backgroundColor`、`backgroundImage`、`textAlign`、
-    `fontSize`、`fontWeight`、`lineHeight`、`width`、`height`、`minWidth`、
+    `textTransform`、`fontSize`、`fontWeight`、`lineHeight`、`width`、`height`、`minWidth`、
     `minHeight`、`maxWidth`、`maxHeight`、`boxSizing`、margin/padding shorthand
     与各边、`opacity`、`transform`、`borderRadius`、`left`、`top`、`right`、
     `bottom`、`position`、

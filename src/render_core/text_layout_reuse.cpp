@@ -43,7 +43,7 @@ bool text_box_can_reuse_layout(const LayoutBox& box, const TextMeasureProvider& 
     if (box.node == nullptr || box.node->type != NodeType::Text) {
         return false;
     }
-    const std::string text = normalized_render_text(*box.node);
+    const std::string text = transformed_render_text(*box.node, box.style.text_transform);
     if (text.empty() || has_text_wrap_opportunity(text)) {
         return false;
     }

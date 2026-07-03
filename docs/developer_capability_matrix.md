@@ -184,6 +184,7 @@ clear older supported fallback declarations.
 | `line-height` | Works | Unitless multiplier or length. |
 | `text-align` | Works | `left`, `right`, `start`, `end`, `center`. |
 | `text-indent` | Works | Length value. |
+| `text-transform` | ASCII subset | `none`, `uppercase`, `lowercase` and `capitalize`. Transformation is applied consistently before text measurement and paint. V0 intentionally transforms ASCII letters only; locale-sensitive Unicode case mapping is deferred. |
 | `text-decoration` / `text-decoration-line` | Subset | `none`, `underline` and `line-through` paint cheap solid decoration lines. Color/thickness/style variants and wavy/double lines are deferred. |
 | `text-shadow` | Subset | First shadow is painted as offset text; blur is parsed for compatibility but not rasterized, and multiple shadows are not painted yet. |
 | `box-sizing` | Works | `content-box`, `border-box`. |
@@ -286,18 +287,20 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | --- | --- | --- |
 | Classic document scripts | Subset | In scripting builds, pseudo/Win32 shells execute inline classic `<script>` and local external `<script src>` through host callbacks. |
 | `window` / `document` | Subset | Bound objects expose the methods below. |
+| `document.body` | Works | Returns the first `body` element wrapper or `null`. It is read-only in V0. |
 | `document.getElementById` | Works | Returns wrapper or `null`. |
 | `document.createElement` | Works | Creates a detached element owned by the runtime until it is attached. Creation is bounded by `HostBudgets::max_detached_dom_nodes`. |
 | `document.createTextNode` | Works | Creates a detached text node with the same detached-node budget. |
 | `appendChild` / `removeChild` | Works | Moves nodes, prevents cycles and marks dirty. `removeChild` keeps the returned node runtime-owned and reusable while it is detached. |
 | `setAttribute` / `getAttribute` / `removeAttribute` | Works | Attribute names are lowercased by binding. |
 | `textContent` | Works | Getter/setter; unchanged text avoids dirty work. A sole existing text child is updated in place; replacing mixed children remains structural. |
+| `id` | Works | Reflected to the `id` attribute and uses the normal style/layout dirty path. |
 | `className` | Works | Reflected to the `class` attribute and uses the normal style/layout dirty path. |
 | `classList` | Subset | Minimal DOMTokenList-like helper for `contains(token)`, `add(...tokens)`, `remove(...tokens)` and `toggle(token[, force])`. Tokens with whitespace are ignored instead of throwing. The helper reflects to `class` and uses the normal dirty path; full DOMTokenList semantics, iteration and `replace()` are deferred. |
 | `children` / `parentElement` | Subset | Snapshot element-child array and parent wrapper/null. |
 | `matches` / `closest` | Subset | Simple tag, `.class`, `#id`, `[attr]` and `[attr=value]` selectors. No combinators. |
 | `dataset` | Subset | Existing `data-*` attributes are exposed as camelCase snapshot properties for event delegation. Dynamic new keys are deferred. |
-| `element.style` | Subset | Mutable inline style object for common safe CSS properties: `display`, `color`, `background*`, `textAlign`, `fontSize`, `fontWeight`, `lineHeight`, size/min/max size, `boxSizing`, margin/padding shorthands and sides, `opacity`, `transform`, `borderRadius`, inset/position, `whiteSpace`, `textOverflow`, `overflow` and `zIndex`. `style.getPropertyValue(name)`, `style.setProperty(name, value)` and `style.removeProperty(name)` accept the same safe CSS property subset plus CSS custom properties such as `--progress`. |
+| `element.style` | Subset | Mutable inline style object for common safe CSS properties: `display`, `color`, `background*`, `textAlign`, `textTransform`, `fontSize`, `fontWeight`, `lineHeight`, size/min/max size, `boxSizing`, margin/padding shorthands and sides, `opacity`, `transform`, `borderRadius`, inset/position, `whiteSpace`, `textOverflow`, `overflow` and `zIndex`. `style.getPropertyValue(name)`, `style.setProperty(name, value)` and `style.removeProperty(name)` accept the same safe CSS property subset plus CSS custom properties such as `--progress`. |
 | `hidden` / `disabled` properties | Subset | Boolean reflection. `hidden` removes rendering; disabled form controls do not activate or accept text input. |
 | `addEventListener` / `removeEventListener` | Works | JS callbacks are bridged to core event dispatch. |
 | Event object | Subset | `type`, `target`, `currentTarget`, phase, cancel/propagation APIs, mouse/wheel fields. |

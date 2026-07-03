@@ -716,6 +716,26 @@ void unbreakable_symbol_stays_single_line() {
     check(false, "symbol text command exists");
 }
 
+void text_transform_paints_transformed_text() {
+    auto pipeline = build_pipeline("<body><p>hello ui</p><p class='cap'>jelly-frame kit</p></body>",
+                                   "p { text-transform: uppercase; }"
+                                   ".cap { text-transform: capitalize; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    bool found_upper = false;
+    bool found_capitalized = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::Text) {
+            continue;
+        }
+        found_upper = found_upper || command.text == "HELLO UI";
+        found_capitalized = found_capitalized || command.text == "Jelly-Frame Kit";
+    }
+    check(found_upper, "text-transform uppercase reaches paint commands");
+    check(found_capitalized, "text-transform capitalize reaches paint commands");
+}
+
 void grid_item_auto_width_reflows_centered_text() {
     auto pipeline = build_pipeline(
         "<body><section class='grid'><button>7</button><button>8</button></section></body>",
@@ -888,6 +908,7 @@ int main() {
         large_radial_gradient_reports_area_budget_diagnostic();
         fixed_grid_places_description_list_in_columns();
         unbreakable_symbol_stays_single_line();
+        text_transform_paints_transformed_text();
         grid_item_auto_width_reflows_centered_text();
         text_input_respects_text_align();
         flex_wrap_places_items_on_new_lines();

@@ -83,7 +83,8 @@ exist as fallbacks.
 - `width`, `height`, `min-width`, `min-height`, `max-width`, `max-height`, including
   layout-resolved percentage values for these sizing properties.
 - `color`, `background-color`.
-- `font-size`, `line-height`, `text-align`, `text-indent`.
+- `font-size`, `line-height`, `text-align`, `text-indent`, ASCII-subset
+  `text-transform`.
 - `box-sizing`, `overflow`, `opacity`, `position`, `z-index`, `transform`.
 - Embedded-app layout fields: `aspect-ratio`, `gap`, `column-gap`,
   `row-gap`, simplified grid minimum track sizing, `grid-auto-rows` minimum

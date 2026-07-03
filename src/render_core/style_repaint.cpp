@@ -49,6 +49,8 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.line_height_specified == right.line_height_specified &&
         left.text_indent == right.text_indent &&
         left.text_indent_specified == right.text_indent_specified &&
+        left.text_transform == right.text_transform &&
+        left.text_transform_specified == right.text_transform_specified &&
         left.position == right.position &&
         left.inset_top == right.inset_top &&
         left.inset_right == right.inset_right &&

@@ -61,7 +61,7 @@ cascade。Parser 接受常见语法，在 at-rule 和 declaration 边界恢复�
   `:checked` 和 `:disabled`。
 - `:is()` 和 `:where()` selector-list functions，支持当前 selector 子集；
   `:where()` specificity 为 0。
-- 面向嵌入式应用子集的 UI 属性声明，包括 `outline`、`text-shadow`、`text-decoration`、`aspect-ratio`、`gap`、
+- 面向嵌入式应用子集的 UI 属性声明，包括 `outline`、`text-shadow`、`text-decoration`、`text-transform`、`aspect-ratio`、`gap`、
   物理 `margin-*`/`padding-*`/`border-*-width` longhands、`column-gap`、
   `row-gap`、`flex`、`flex-grow`、`flex-shrink`、`flex-basis`、
   `position`、`top`、`right`、`bottom`、`left`、带 `minmax()` 最小轨道的

@@ -178,6 +178,7 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 | `line-height` | 可用 | 无单位倍率或长度。 |
 | `text-align` | 可用 | `left`、`right`、`start`、`end`、`center`。 |
 | `text-indent` | 可用 | 长度值。 |
+| `text-transform` | ASCII 子集 | `none`、`uppercase`、`lowercase` 和 `capitalize`。转换会在文本测量和绘制前统一执行。V0 只转换 ASCII 字母；locale-sensitive Unicode 大小写映射延后。 |
 | `text-decoration` / `text-decoration-line` | 子集 | `none`、`underline`、`line-through` 会绘制便宜的实线装饰。颜色/粗细/style 变体和 wavy/double 延后。 |
 | `text-shadow` | 子集 | 第一条 shadow 会绘制为偏移文本；blur 只用于解析兼容，不做真实模糊；多重阴影暂不栅格化。 |
 | `box-sizing` | 可用 | `content-box`、`border-box`。 |
@@ -278,18 +279,20 @@ JerryScript 源码树时可用。
 | --- | --- | --- |
 | Classic document scripts | 子集 | scripting 构建中，伪浏览器/Win32 壳会执行 inline classic `<script>`，并通过宿主 callback 加载本地外部 `<script src>`。 |
 | `window` / `document` | 子集 | 暴露下列方法。 |
+| `document.body` | 可用 | 返回第一个 `body` element wrapper 或 `null`。V0 中只读。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
 | `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；数量受 `HostBudgets::max_detached_dom_nodes` 限制。 |
 | `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |
 | `appendChild` / `removeChild` | 可用 | 移动节点、防止环、标记 dirty。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
 | `setAttribute` / `getAttribute` / `removeAttribute` | 可用 | 绑定层会 lowercase 属性名。 |
 | `textContent` | 可用 | getter/setter；同值设置不会触发 dirty。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。 |
+| `id` | 可用 | 反射到 `id` attribute，并走现有 style/layout dirty 路径。 |
 | `className` | 可用 | 反射到 `class` attribute，并走现有 style/layout dirty 路径。 |
 | `classList` | 子集 | 极小 DOMTokenList-like helper，支持 `contains(token)`、`add(...tokens)`、`remove(...tokens)` 和 `toggle(token[, force])`。含空白 token 会被忽略而不是抛异常。它反射到 `class` 并走正常 dirty 路径；完整 DOMTokenList 语义、迭代和 `replace()` 延后。 |
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
 | `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |
-| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
+| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
 | `hidden` / `disabled` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |

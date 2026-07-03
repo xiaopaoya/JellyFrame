@@ -891,7 +891,7 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
     }
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
-        const std::string text = normalized_render_text(*box.node);
+        const std::string text = transformed_render_text(*box.node, box.style.text_transform);
         const int line_height = box.style.line_height > 0
             ? box.style.line_height
             : box.style.font_size + std::max(6, box.style.font_size / 3);

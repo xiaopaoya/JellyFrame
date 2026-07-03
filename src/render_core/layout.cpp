@@ -741,7 +741,7 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                   int content_width,
                                   int min_width,
                                   int height) const {
-    const std::string text = normalized_render_text(*box.node);
+    const std::string text = transformed_render_text(*box.node, box.style.text_transform);
     const TextMetrics metrics =
         measure_text(text_measure_, text, box.style.font_size, box.style.font_weight, box.style.font_family_hash);
     const int raw_text_width = metrics.width;

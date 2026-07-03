@@ -30,7 +30,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 
 | Feature | Status | Manifest |
 | --- | --- | --- |
-| DOM mutation | Subset | No extra capability. Use `getElementById`, `querySelector` simple selectors, `createElement`, `appendChild`, `textContent`, `className` and the small `classList` helper. |
+| DOM mutation | Subset | No extra capability. Use `document.body`, `getElementById`, `querySelector` simple selectors, `createElement`, `appendChild`, `textContent`, `id`, `className` and the small `classList` helper. |
 | Events | Available | Use `addEventListener`, event delegation, `dataset` and the `matches`/`closest` subset. |
 | Timers / rAF | Bounded | No extra capability, but frame policy and budgets apply. |
 | `XMLHttpRequest` GET | Host optional | `network.fetch`. Runtime data only; not a page/resource loader. |
