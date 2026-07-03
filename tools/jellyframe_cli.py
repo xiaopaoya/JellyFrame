@@ -287,6 +287,11 @@ ADVICE_BY_CODE = {
         "explanation": "The app script references a host-backed Web-near API, but the manifest does not request the matching JellyFrame capability.",
         "action": "Declare the reported capability in jellyframe.app.json, verify the target profile supports it, and keep a visible fallback for hosts that deny it.",
     },
+    "script-host-time-ambiguous": {
+        "title": "Script relies on ambient Date construction",
+        "explanation": "JellyFrame V0 exposes host-injected wall-clock time through Date.now(); a no-argument Date() call is not documented as host-clock controlled.",
+        "action": "Use new Date(Date.now()) when a Date object is needed, or keep Date.now() as the stored numeric timestamp.",
+    },
     "font-family-unmatched": {
         "title": "CSS font-family is not a manifest runtime font",
         "explanation": "A custom primary font-family was used in CSS but no manifest .jffont family matches it.",

@@ -911,6 +911,9 @@ does not execute JavaScript. It currently recognizes `XMLHttpRequest`,
 `localStorage`, `Audio()`, `navigator.geolocation.getCurrentPosition(...)` and
 `getContext("2d")`. If a script uses one of these host-backed APIs without the
 matching manifest capability, packaging emits `script-capability-missing`.
+It also warns on no-argument `Date()` / `new Date()` as
+`script-host-time-ambiguous`; use `Date.now()` or `new Date(Date.now())` for the
+documented host-clock path.
 CLI `developerAdvice[]` explains this as "declare the capability and verify the
 target profile supports it". This check does not enter the MCU runtime and does
 not replace real host authorization.

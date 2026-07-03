@@ -259,6 +259,25 @@ class PackagePreflightTests(unittest.TestCase):
         )
         self.assertTrue(all(warning["code"] == "script-capability-missing" for warning in warnings))
 
+    def test_script_api_diagnostics_warn_for_ambient_date_construction(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-script-date-diagnostics-") as directory:
+            root = Path(directory)
+            script = root / "scripts" / "app.js"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                "var unsafe = new Date();\n"
+                "var alsoUnsafe = Date();\n"
+                "var safe = new Date(Date.now());\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
+
+        self.assertEqual(diagnostics["entryCount"], 1)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["code"], "script-host-time-ambiguous")
+        self.assertEqual(warnings[0]["api"], "Date")
+
     def test_runtime_budget_estimate_reports_package_known_usage(self):
         resources = [
             {"size": 100},
@@ -552,6 +571,11 @@ class PackagePreflightTests(unittest.TestCase):
                 "source": "/scripts/app.js",
             }, {
                 "level": "warning",
+                "code": "script-host-time-ambiguous",
+                "message": "script uses Date() without host time",
+                "source": "/scripts/app.js",
+            }, {
+                "level": "warning",
                 "code": "future-diagnostic-code",
                 "message": "future warning shape",
                 "source": "future",
@@ -594,6 +618,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("font-family-unmatched", codes)
         self.assertIn("service-target-unsupported", codes)
         self.assertIn("script-capability-missing", codes)
+        self.assertIn("script-host-time-ambiguous", codes)
         self.assertIn("future-diagnostic-code", codes)
         self.assertIn("layout-text-overflow", codes)
         self.assertIn("visual-scroll-container", codes)

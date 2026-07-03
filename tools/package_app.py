@@ -753,6 +753,16 @@ SCRIPT_API_CAPABILITIES = [
 ]
 
 
+SCRIPT_API_USAGE_WARNINGS = [
+    {
+        "api": "Date",
+        "code": "script-host-time-ambiguous",
+        "pattern": re.compile(r"(?:\bnew\s+Date\s*\(\s*\)|(?<![\w.])Date\s*\(\s*\))"),
+        "message": "script uses Date() without an explicit value; JellyFrame host time is exposed through Date.now()",
+    },
+]
+
+
 def strip_script_comments(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
     text = re.sub(r"(^|[^:])//[^\n\r]*", r"\1 ", text)
@@ -823,6 +833,26 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                         "api": api["api"],
                         "capability": api["capability"],
                     })
+            for usage in SCRIPT_API_USAGE_WARNINGS:
+                if not usage["pattern"].search(searchable):
+                    continue
+                key = (resource["path"], usage["code"], usage["api"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                entries.append({
+                    "api": usage["api"],
+                    "source": resource["path"],
+                    "declared": True,
+                    "warningCode": usage["code"],
+                })
+                warnings.append({
+                    "level": "warning",
+                    "code": usage["code"],
+                    "message": usage["message"],
+                    "source": resource["path"],
+                    "api": usage["api"],
+                })
     return {
         "model": "static-classic-script-api-capability-preflight",
         "entries": entries,

@@ -771,7 +771,8 @@ classic script 和 HTML inline script，不执行 JavaScript。当前会识别 `
 `getContext("2d")`。如果脚本使用这些宿主支持 API，但 manifest 没有声明对应 capability，
 工具会输出 `script-capability-missing` warning；CLI 的 `developerAdvice[]` 会把它解释为
 “补 manifest capability，并确认 target profile 支持”。这项检查不进入 MCU runtime，也不替代
-真实 host 授权。
+真实 host 授权。无参 `Date()` / `new Date()` 会输出 `script-host-time-ambiguous`；
+需要宿主时钟时使用 `Date.now()`，需要 Date 对象时使用 `new Date(Date.now())`。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote
