@@ -25,38 +25,6 @@ int resolve_percent(int basis, int percent) {
     return std::max(0, (std::max(0, basis) * percent + 50) / 100);
 }
 
-const std::string& node_attribute_or_empty(const Node& node, const std::string& name) {
-    static const std::string empty;
-    const auto it = node.attributes.find(name);
-    return it != node.attributes.end() ? it->second : empty;
-}
-
-std::string compact_node_label(const Node* node) {
-    if (node == nullptr) {
-        return "node";
-    }
-    if (node->type == NodeType::Text) {
-        node = node->parent;
-    }
-    if (node == nullptr) {
-        return "text";
-    }
-    std::string label = node->tag_name.empty() ? "element" : node->tag_name;
-    const std::string& id = node_attribute_or_empty(*node, "id");
-    if (!id.empty()) {
-        label += '#';
-        label += id.substr(0, 32);
-        return label;
-    }
-    const std::string& class_name = node_attribute_or_empty(*node, "class");
-    if (!class_name.empty()) {
-        label += '.';
-        const std::size_t end = class_name.find_first_of(" \t\r\n");
-        label += class_name.substr(0, std::min<std::size_t>(end == std::string::npos ? class_name.size() : end, 32));
-    }
-    return label;
-}
-
 std::string quote_detail_value(const std::string& value, std::size_t max_chars = 48) {
     std::string output;
     output.reserve(std::min(value.size(), max_chars) + 2);
@@ -95,7 +63,8 @@ std::string text_overflow_detail(const LayoutBox& box,
            << " textIndent=" << text_indent
            << " fontSize=" << box.style.font_size
            << " fontWeight=" << box.style.font_weight
-           << " node=" << quote_detail_value(compact_node_label(box.node), 48);
+           << " node=" << quote_detail_value(dom_node_label(box.node), 48)
+           << " path=" << quote_detail_value(dom_node_path(box.node), 160);
     return detail.str();
 }
 

@@ -29,6 +29,58 @@ void destroy_node_list_iterative(std::vector<std::unique_ptr<Node>>& nodes) {
     }
 }
 
+std::string first_class_token(const Node& node) {
+    std::istringstream stream(node.attribute("class"));
+    std::string token;
+    stream >> token;
+    return token;
+}
+
+std::string limited_token(std::string token, std::size_t max_chars = 32) {
+    if (token.size() > max_chars) {
+        token.resize(max_chars);
+    }
+    return token;
+}
+
+std::size_t element_index_of_type(const Node& node) {
+    if (node.parent == nullptr || node.type != NodeType::Element) {
+        return 1;
+    }
+    std::size_t index = 0;
+    for (const auto& sibling : node.parent->children) {
+        if (sibling->type != NodeType::Element || sibling->tag_name != node.tag_name) {
+            continue;
+        }
+        ++index;
+        if (sibling.get() == &node) {
+            return index;
+        }
+    }
+    return std::max<std::size_t>(1, index);
+}
+
+std::string dom_path_segment(const Node& node) {
+    std::string segment = node.tag_name.empty() ? "element" : node.tag_name;
+    const std::string& id = node.attribute("id");
+    if (!id.empty()) {
+        segment += '#';
+        segment += limited_token(id);
+        return segment;
+    }
+    const std::string class_name = first_class_token(node);
+    if (!class_name.empty()) {
+        segment += '.';
+        segment += limited_token(class_name);
+    }
+    if (node.parent != nullptr) {
+        segment += ":nth-of-type(";
+        segment += std::to_string(element_index_of_type(node));
+        segment += ')';
+    }
+    return segment;
+}
+
 } // namespace
 
 AttributeList::iterator AttributeList::find(const std::string& name) {
@@ -314,6 +366,66 @@ DomStatistics compute_dom_statistics(const Node& root) {
         }
     }
     return statistics;
+}
+
+std::string dom_node_label(const Node* node) {
+    if (node == nullptr) {
+        return "node";
+    }
+    if (node->type == NodeType::Text) {
+        node = node->parent;
+    }
+    if (node == nullptr) {
+        return "text";
+    }
+    if (node->type != NodeType::Element) {
+        return "node";
+    }
+    std::string label = node->tag_name.empty() ? "element" : node->tag_name;
+    const std::string& id = node->attribute("id");
+    if (!id.empty()) {
+        label += '#';
+        label += limited_token(id);
+        return label;
+    }
+    const std::string class_name = first_class_token(*node);
+    if (!class_name.empty()) {
+        label += '.';
+        label += limited_token(class_name);
+    }
+    return label;
+}
+
+std::string dom_node_path(const Node* node, std::size_t max_depth) {
+    if (node == nullptr) {
+        return "node";
+    }
+    if (node->type == NodeType::Text) {
+        node = node->parent;
+    }
+    if (node == nullptr) {
+        return "text";
+    }
+    std::vector<const Node*> ancestors;
+    for (const Node* current = node; current != nullptr; current = current->parent) {
+        if (current->type == NodeType::Element) {
+            ancestors.push_back(current);
+        }
+    }
+    if (ancestors.empty()) {
+        return dom_node_label(node);
+    }
+    const bool truncated = max_depth > 0 && ancestors.size() > max_depth;
+    const std::size_t count = max_depth == 0 ? ancestors.size() : std::min(max_depth, ancestors.size());
+    const std::size_t begin = ancestors.size() - count;
+    std::string path = truncated ? "...>" : "";
+    for (std::size_t index = ancestors.size(); index-- > begin;) {
+        if (!path.empty() && path.back() != '>') {
+            path += '>';
+        }
+        path += dom_path_segment(*ancestors[index]);
+    }
+    return path;
 }
 
 } // namespace jellyframe

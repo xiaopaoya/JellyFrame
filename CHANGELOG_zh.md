@@ -8,6 +8,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
+  `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
+  与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。
 - 新增 `tools/benchmark_guard.py`，作为 render-core 和 app-runtime 微基准的宽松 CI
   smoke guard。CI 现在会检查 style/custom-property resolution、full pipeline、
   dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、

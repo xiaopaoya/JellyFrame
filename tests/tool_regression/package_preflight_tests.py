@@ -561,7 +561,7 @@ class PackagePreflightTests(unittest.TestCase):
                     "stage": "layout",
                     "severity": "warning",
                     "code": "layout-text-overflow",
-                    "detail": "text=\"Start\" measuredWidth=54 availableWidth=32 contentWidth=32 fontSize=16 node=\"button.primary\"",
+                    "detail": "text=\"Start\" measuredWidth=54 availableWidth=32 contentWidth=32 fontSize=16 node=\"button.primary\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>button.primary:nth-of-type(1)\"",
                 }],
             },
             "responsiveProfiles": [{
@@ -573,7 +573,7 @@ class PackagePreflightTests(unittest.TestCase):
                     "stage": "layout",
                     "severity": "warning",
                     "code": "layout-text-overflow",
-                    "detail": "text=\"Daily\" measuredWidth=45 availableWidth=30 contentWidth=30 fontSize=16 node=\"button.tab\"",
+                    "detail": "text=\"Daily\" measuredWidth=45 availableWidth=30 contentWidth=30 fontSize=16 node=\"button.tab\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>button.tab:nth-of-type(2)\"",
                 }],
                 "gate": {"decision": "warn", "reasons": ["horizontal-overflow"]},
             }],
@@ -601,6 +601,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertTrue(any(entry["code"] == "layout-text-overflow" and
                             entry.get("target") == "rect-172x320" and
                             entry.get("text") == "Daily" and
+                            entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>button.tab:nth-of-type(2)" and
                             entry.get("metrics", {}).get("availableWidth") == 30 and
                             entry.get("recipe") == "app_author_recipes.md#narrow-targets"
                             for entry in advice))
@@ -620,13 +621,14 @@ class PackagePreflightTests(unittest.TestCase):
                 "stage": "layout",
                 "severity": "warning",
                 "code": "layout-text-overflow",
-                "detail": "text=\"Hourly\" measuredWidth=60 availableWidth=34 contentWidth=34 fontSize=16 node=\"button.tab\"",
+                "detail": "text=\"Hourly\" measuredWidth=60 availableWidth=34 contentWidth=34 fontSize=16 node=\"button.tab\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>button.tab:nth-of-type(1)\"",
             }],
         })
 
         self.assertEqual(profile["diagnosticSamples"][0]["code"], "layout-text-overflow")
         self.assertEqual(profile["diagnosticSamples"][0]["text"], "Hourly")
         self.assertEqual(profile["diagnosticSamples"][0]["node"], "button.tab")
+        self.assertEqual(profile["diagnosticSamples"][0]["path"], "body:nth-of-type(1)>main:nth-of-type(1)>button.tab:nth-of-type(1)")
         self.assertEqual(profile["diagnosticSamples"][0]["metrics"]["measuredWidth"], 60)
 
     def test_write_json_report_adds_developer_advice(self):

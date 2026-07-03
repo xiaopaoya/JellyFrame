@@ -385,6 +385,9 @@ void nowrap_text_overflow_reports_diagnostic() {
                   "overflow diagnostic includes available width");
             check(diagnostic.detail.find("node=\"p#status\"") != std::string::npos,
                   "overflow diagnostic includes node label");
+            check(diagnostic.detail.find("path=\"") != std::string::npos &&
+                  diagnostic.detail.find("p#status") != std::string::npos,
+                  "overflow diagnostic includes stable dom path");
             break;
         }
     }

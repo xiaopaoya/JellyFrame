@@ -491,6 +491,8 @@ def append_developer_advice(advice: list[dict],
             entry["text"] = parsed_detail["text"]
         if "node" in parsed_detail:
             entry["node"] = parsed_detail["node"]
+        if "path" in parsed_detail:
+            entry["path"] = parsed_detail["path"]
         if "viewport" in parsed_detail:
             entry["viewport"] = parsed_detail["viewport"]
         if "paintBounds" in parsed_detail:
@@ -680,6 +682,8 @@ def diagnostic_samples(report: dict, limit: int = 12) -> list[dict]:
                     sample["text"] = parsed_detail["text"]
                 if "node" in parsed_detail:
                     sample["node"] = parsed_detail["node"]
+                if "path" in parsed_detail:
+                    sample["path"] = parsed_detail["path"]
                 if "viewport" in parsed_detail:
                     sample["viewport"] = parsed_detail["viewport"]
                 if "paintBounds" in parsed_detail:

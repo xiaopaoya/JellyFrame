@@ -101,5 +101,7 @@ bool dirty_requires_render_or_layout(DomDirtyFlags flags);
 void clear_dirty_flags(Node& node);
 DomDirtyFlags take_dirty_flags(Node& node);
 DomStatistics compute_dom_statistics(const Node& root);
+std::string dom_node_label(const Node* node);
+std::string dom_node_path(const Node* node, std::size_t max_depth = 8);
 
 } // namespace jellyframe
