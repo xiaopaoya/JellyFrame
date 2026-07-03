@@ -32,7 +32,7 @@
 | --- | --- | --- |
 | DOM 查询/修改 | 子集 | 无需额外 capability。使用 `getElementById`、`createElement`、`appendChild`、`textContent`、`className`。 |
 | 事件 | 可用 | 使用 `addEventListener`、事件委托、`dataset`、`matches`/`closest` 子集。 |
-| Timer / rAF | 有界 | 无需额外 capability，但受 frame policy 和预算限制。 |
+| 时间 / Timer / rAF | 有界 | `Date.now()` 读取宿主注入时间；timer/rAF 无需额外 capability，但受 frame policy 和预算限制。 |
 | `XMLHttpRequest` GET | 宿主可选 | `network.fetch`。只用于运行时数据，不加载页面资源。 |
 | `localStorage` | 宿主可选 | `storage.kv`。这是 app 私有小型 KV shadow，不是浏览器持久存储全集。 |
 | `Audio()` | 宿主可选 | `media.audio.playback`。真实 codec/I2S 由 host 提供。 |

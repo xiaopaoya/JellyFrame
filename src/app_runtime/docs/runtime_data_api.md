@@ -140,6 +140,7 @@ System state should use existing web-adjacent concepts where they fit:
 - `document.hidden`
 - `document.visibilityState`
 - `document` `visibilitychange` event
+- `Date.now()` for host-injected wall-clock milliseconds
 - `pagehide` / `pageshow` for lifecycle-like transitions, if needed later
 
 Battery and low-power state do not have a broadly safe modern baseline. The
@@ -155,6 +156,10 @@ report `empty-instance` / `queue-full` through tool or serial diagnostics.
 
 Current V0 implementation:
 
+- `Date.now()` returns the runtime host time set through
+  `JerryScriptRuntime::set_host_time_ms(...)` or the latest accepted
+  `TimeChanged` snapshot. It does not dispatch an event by itself; apps that need
+  periodic UI updates should use budgeted timers or `requestAnimationFrame`.
 - `navigator.onLine` is exposed as a read-only snapshot.
 - Accepted `NetworkStatusChanged` events dispatch `online` / `offline` on
   `window` only when the state changes. The supported target is intentionally

@@ -19,6 +19,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `media.audio.mp3` wording to `media.audio.playback`. Audio resources now warn
   only when a package includes audio assets without declaring the playback
   capability; actual codecs remain a host/profile responsibility.
+- JerryScript scripting builds now bind standard `Date.now()` to the host clock
+  supplied by `set_host_time_ms(...)` or `TimeChanged` system snapshots. Time
+  snapshots update the clock without dispatching an extra web event.
 - Added `tools/benchmark_guard.py`, a broad CI smoke guard for render-core and
   app-runtime microbenchmarks. CI now checks style/custom-property resolution,
   full pipeline, dirty-rect replay, scroll-blit planning, Canvas 2D path and

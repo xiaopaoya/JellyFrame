@@ -183,6 +183,10 @@ struct ScriptRuntimeAccess {
         return runtime.system_state_;
     }
 
+    static std::uint64_t current_time_ms(const JerryScriptRuntime& runtime) {
+        return runtime.current_time_ms_;
+    }
+
     static ScriptAudioHost audio_host(const JerryScriptRuntime& runtime) {
         return runtime.audio_host_;
     }
@@ -1269,6 +1273,16 @@ jerry_value_t navigator_get_on_line(const jerry_call_info_t* call_info_p,
                                     const jerry_length_t) {
     JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
     return jerry_boolean(runtime != nullptr && ScriptRuntimeAccess::system_state(*runtime).navigator_online);
+}
+
+jerry_value_t script_date_now(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t[],
+                              const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr) {
+        runtime = native_runtime(call_info_p->this_value);
+    }
+    return jerry_number(runtime != nullptr ? static_cast<double>(ScriptRuntimeAccess::current_time_ms(*runtime)) : 0.0);
 }
 
 jerry_value_t make_geolocation_error_object(int code, const char* message) {
@@ -2909,6 +2923,10 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
+    JerryValue date_object(jerry_object_get_sz(global.get(), "Date"));
+    if (jerry_value_is_object(date_object.get())) {
+        set_runtime_method(date_object.get(), "now", script_date_now, *this);
+    }
     if (network_fetch_ != nullptr) {
         JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
         set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
@@ -3201,6 +3219,9 @@ bool JerryScriptRuntime::handle_system_event(const AppSystemEvent& event) {
         visibility_changed = next.document_hidden != system_state_.document_hidden;
         break;
     case AppSystemEventKind::TimeChanged:
+        current_time_ms_ = event.snapshot.unix_time_ms;
+        handled = false;
+        break;
     case AppSystemEventKind::TimezoneChanged:
     case AppSystemEventKind::BatteryChanged:
         handled = false;

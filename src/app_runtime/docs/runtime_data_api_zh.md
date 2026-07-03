@@ -119,6 +119,7 @@ V0 支持面应限制在：
 - `document.hidden`
 - `document.visibilityState`
 - `document` 的 `visibilitychange` 事件
+- 用 `Date.now()` 读取宿主注入的 wall-clock 毫秒时间
 - 后续如需要，再考虑生命周期相关的 `pagehide` / `pageshow`
 
 电量和低功耗状态没有一个足够安全、现代、普遍的基线。Battery Status API 历史上存在，但有隐私敏感问题，
@@ -131,6 +132,9 @@ V0 支持面应限制在：
 
 当前 V0 已实现：
 
+- `Date.now()` 返回 `JerryScriptRuntime::set_host_time_ms(...)` 设置的宿主时间，或最新 accepted
+  `TimeChanged` 快照中的时间。它本身不派发事件；需要周期性刷新 UI 的 app 应使用受预算控制的
+  timer 或 `requestAnimationFrame`。
 - `navigator.onLine` 作为只读快照暴露。
 - accepted `NetworkStatusChanged` 会在状态真的变化时向 `window` 派发 `online` / `offline`。
   该 target 刻意保持很小：支持 `addEventListener`、`removeEventListener`、函数 listener

@@ -16,6 +16,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - app manifest 音频能力名从偏 codec 的 `media.audio.mp3` 改为
   `media.audio.playback`。包内音频资源现在只在未声明播放能力时 warning；
   具体 codec 仍由 host/profile 决定。
+- JerryScript scripting 构建现在把标准 `Date.now()` 绑定到宿主时钟，来源是
+  `set_host_time_ms(...)` 或 `TimeChanged` 系统快照。时间快照只更新时间，不额外派发
+  Web 事件。
 - 新增 `tools/benchmark_guard.py`，作为 render-core 和 app-runtime 微基准的宽松 CI
   smoke guard。CI 现在会检查 style/custom-property resolution、full pipeline、
   dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、

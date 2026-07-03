@@ -934,6 +934,26 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     check(result.ok && result.value == "true:hidden:1", "document visibility state updates");
 }
 
+void javascript_date_now_uses_host_time() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.set_host_time_ms(1700000000123ULL);
+    runtime.bind_document(*document);
+
+    ScriptEvaluationResult result = runtime.eval("String(Date.now())");
+    check(result.ok && result.value == "1700000000123", "Date.now reads host time");
+
+    AppSystemStateSnapshot snapshot;
+    snapshot.unix_time_ms = 1700000000456ULL;
+    check(!runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::TimeChanged, snapshot}),
+          "time system event updates clock without dispatching a web event");
+
+    result = runtime.eval("String(Date.now())");
+    check(result.ok && result.value == "1700000000456", "Date.now follows time system events");
+}
+
 void javascript_geolocation_uses_bound_location_service() {
     HtmlParser parser;
     auto document = parser.parse("<body><p id='status'>ready</p></body>");
@@ -1105,6 +1125,7 @@ int main() {
         javascript_audio_subset_uses_bound_host();
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_system_state_exposes_web_adjacent_subset();
+        javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();
         javascript_canvas_2d_is_optional_and_lazy();
     } catch (const std::exception& error) {
