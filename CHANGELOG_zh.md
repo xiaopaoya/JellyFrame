@@ -21,6 +21,9 @@ JellyFrame Engine 的重要变更记录在这里。
   Web 事件。
 - Win32 frame script 新增 `event FRAME time-ms VALUE`，用于确定性注入宿主时间。
   watch-face 样例改为 `new Date(Date.now())`，并使用真实 epoch capture 起点，使脚本化截图可复现。
+- 新增 `AppHostDataSnapshot` 与 `AppHostDataAccessPolicy`，作为固定大小 battery、weather、
+  activity、location 和 sensor summary 的宿主/system 边界。过滤器默认清掉所有字段，目前还不是
+  JavaScript API。
 - 新增 `tools/benchmark_guard.py`，作为 render-core 和 app-runtime 微基准的宽松 CI
   smoke guard。CI 现在会检查 style/custom-property resolution、full pipeline、
   dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、

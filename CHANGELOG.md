@@ -25,6 +25,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Win32 frame scripts now support `event FRAME time-ms VALUE` for deterministic
   host-time injection. The watch-face sample now uses `new Date(Date.now())`
   and a real epoch capture start time so scripted captures are reproducible.
+- Added `AppHostDataSnapshot` and `AppHostDataAccessPolicy` as the host/system
+  boundary for fixed-size battery, weather, activity, location and sensor
+  summaries. The filter strips every field by default and is not a JavaScript
+  API yet.
 - Added `tools/benchmark_guard.py`, a broad CI smoke guard for render-core and
   app-runtime microbenchmarks. CI now checks style/custom-property resolution,
   full pipeline, dirty-rect replay, scroll-blit planning, Canvas 2D path and

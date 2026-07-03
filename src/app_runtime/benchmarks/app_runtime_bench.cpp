@@ -1,6 +1,7 @@
 ﻿#include "app_runtime/app_host.h"
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_budget.h"
+#include "app_runtime/app_host_data.h"
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
@@ -688,6 +689,36 @@ void bench_app_budget_recovery(std::size_t capacity) {
     }
 }
 
+void bench_app_host_data_filter(std::size_t capacity) {
+    AppHostDataSnapshot snapshot;
+    snapshot.has.battery = true;
+    snapshot.battery = AppBatterySnapshot{1000, 87, true};
+    snapshot.has.weather = true;
+    snapshot.weather = AppWeatherSnapshot{1000, AppWeatherCondition::Cloudy, 226, 220, 68, 32, 0, 42};
+    snapshot.has.activity = true;
+    snapshot.activity = AppActivitySnapshot{1000, 6400, 32, 230, 4100};
+    snapshot.has.location = true;
+    snapshot.location = AppLocationSummarySnapshot{1000, 31.2304, 121.4737, 8.0f};
+    snapshot.has.accelerometer = true;
+    snapshot.has.gyroscope = true;
+    snapshot.has.heart_rate = true;
+    snapshot.has.ambient_light = true;
+    snapshot.sensors = AppSensorSummarySnapshot{1000, 0.1f, 0.2f, 0.3f, 1.0f, 2.0f, 3.0f, 72.0f, 240.0f};
+
+    AppHostDataAccessPolicy policy;
+    policy.battery = (capacity & 1U) == 0;
+    policy.weather = true;
+    policy.services.location_position = true;
+    policy.services.sensor_accelerometer = true;
+    policy.services.sensor_heart_rate = true;
+
+    const AppHostDataSnapshot filtered = app_host_data_filter_for_app(snapshot, policy);
+    if (!filtered.has.weather || !filtered.has.location || !filtered.has.heart_rate ||
+        filtered.has.gyroscope || filtered.has.ambient_light) {
+        std::abort();
+    }
+}
+
 int parse_positive_int_arg(const char* value, const char* name) {
     if (value == nullptr) {
         throw std::invalid_argument(std::string("missing ") + name);
@@ -786,6 +817,9 @@ int run_app_runtime_bench(int argc, char** argv) {
     }));
     print_result("app_runtime_budget_recovery", iterations, average_microseconds(iterations, [&] {
         bench_app_budget_recovery(capacity);
+    }));
+    print_result("app_runtime_host_data_filter", iterations, average_microseconds(iterations, [&] {
+        bench_app_host_data_filter(capacity);
     }));
 
     return 0;

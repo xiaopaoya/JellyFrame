@@ -91,6 +91,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_font_set.cpp
     src/app_runtime/app_frame_policy.cpp
     src/app_runtime/app_host.cpp
+    src/app_runtime/app_host_data.cpp
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
@@ -238,6 +239,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_capability_broker_tests.cpp
         src/app_runtime/tests/app_device_services_tests.cpp
         src/app_runtime/tests/app_frame_policy_tests.cpp
+        src/app_runtime/tests/app_host_data_tests.cpp
         src/app_runtime/tests/app_host_tests.cpp
         src/app_runtime/tests/app_lifecycle_tests.cpp
         src/app_runtime/tests/app_load_telemetry_tests.cpp

@@ -130,6 +130,11 @@ V0 支持面应限制在：
 宿主需要诊断注入失败时应使用 `try_push_current(...)`，并把 `empty-instance` / `queue-full`
 写入工具或串口 diagnostics。
 
+对于更丰富的产品数据，`AppHostDataSnapshot` 定义固定大小的宿主/system summary，覆盖
+battery、weather、activity、location 和 sensor。V0 中它刻意不暴露给 JavaScript；宿主可用于
+system shell 状态、diagnostics 或未来产品 profile binding。任何 app 可见 surface 出现前，都必须先经过
+`AppHostDataAccessPolicy` 过滤。
+
 当前 V0 已实现：
 
 - `Date.now()` 返回 `JerryScriptRuntime::set_host_time_ms(...)` 设置的宿主时间，或最新 accepted

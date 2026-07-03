@@ -154,6 +154,12 @@ map accepted events to the standard subset above when possible.
 Hosts that need injection diagnostics should call `try_push_current(...)` and
 report `empty-instance` / `queue-full` through tool or serial diagnostics.
 
+For richer product data, `AppHostDataSnapshot` defines a fixed-size host/system
+summary for battery, weather, activity, location and sensors. It is deliberately
+not exposed to JavaScript in V0. Hosts may use it for system shell state,
+diagnostics or future product-profile bindings, and must pass it through
+`AppHostDataAccessPolicy` before any app-visible surface is added.
+
 Current V0 implementation:
 
 - `Date.now()` returns the runtime host time set through
