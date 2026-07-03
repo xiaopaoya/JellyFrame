@@ -8,6 +8,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added `tools/benchmark_guard.py`, a broad CI smoke guard for render-core and
+  app-runtime microbenchmarks. CI now checks style/custom-property resolution,
+  full pipeline, dirty-rect replay, scroll-blit planning, Canvas 2D path and
+  gradient paths, font-family measurement and app-runtime queue/system-event
+  helpers against intentionally wide catastrophic-regression thresholds.
 - Added the `border-top` / `border-right` / `border-bottom` / `border-left`
   single-side shorthand subset. It parses simple width/color syntax such as
   `border-right: 1px solid #ddd`; the side width applies to that edge, while the

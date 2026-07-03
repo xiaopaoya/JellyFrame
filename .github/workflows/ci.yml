@@ -50,7 +50,7 @@ jobs:
 
       - name: Check Python tools
         shell: pwsh
-        run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py tools\app_registry.py
+        run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py tools\app_registry.py tools\benchmark_guard.py
 
       - name: Check VS Code helper
         shell: pwsh
@@ -116,6 +116,14 @@ jobs:
           assert int(summary.get("error", 0)) == 0
           print("pipelineDiagnostics", summary)
           '@ | python -
+
+      - name: Run benchmark regression guard
+        shell: pwsh
+        run: >
+          python tools\benchmark_guard.py
+          --build-dir build\Release
+          --suite all
+          --report build\ci\benchmark_guard.report.json
 
       - name: Check whitespace
         shell: pwsh

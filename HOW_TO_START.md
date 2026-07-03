@@ -214,6 +214,16 @@ Run the core microbenchmark:
 .\build\Release\jellyframe_render_core_microbench.exe
 ```
 
+Run the broad CI performance regression guard:
+
+```powershell
+python tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
+```
+
+The guard checks only a small set of catastrophic-regression thresholds. Use it
+before performance-sensitive changes, but use real hardware or the virtual board
+benchmark for product decisions.
+
 Run the virtual board benchmark:
 
 ```powershell

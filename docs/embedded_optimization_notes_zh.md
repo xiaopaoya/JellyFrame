@@ -120,3 +120,18 @@ full_pipeline avg_us=2228.91
 - 当前 full pipeline 仍主要由 HTML parse 和 style/render 工作主导。
 - 下一项性能升级应转向重复 class pattern 的 computed-style sharing；如果硬件内存压力证明
   full framebuffer 路径过贵，再推进 tile/scanline presentation。
+
+## CI 回归保护
+
+CI 还会运行：
+
+```powershell
+python tools\benchmark_guard.py --build-dir build\Release
+```
+
+这个 guard 检查少量 render-core 和 app-runtime 微基准：style/custom-property resolution、
+full pipeline、dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、
+font-family measurement，以及 app-runtime queue/system-event helper。
+
+这些阈值故意留得很宽，只用于捕捉灾难性退化，例如某个每帧队列路径意外重新变成线性搬移。
+它不是设备性能承诺。Port 作者仍应在 port 文档中维护真实 panel、DMA 和内存基线。

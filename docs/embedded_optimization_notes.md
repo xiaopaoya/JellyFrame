@@ -162,3 +162,21 @@ Interpretation:
 - The next performance upgrade should target computed-style sharing for
   repeated class patterns and tile/scanline presentation if hardware memory
   pressure proves the full framebuffer path too expensive.
+
+## CI Regression Guard
+
+CI also runs:
+
+```powershell
+python tools\benchmark_guard.py --build-dir build\Release
+```
+
+This guard checks a small set of render-core and app-runtime microbenchmarks:
+style/custom-property resolution, full pipeline, dirty-rect replay, scroll-blit
+planning, Canvas 2D path/gradient paths, font-family measurement and
+app-runtime queue/system-event helpers.
+
+The thresholds are deliberately broad. They are meant to catch catastrophic
+regressions such as accidentally making a per-frame queue path linear again.
+They are not device performance claims. Port authors should still keep real
+panel/DMA/memory baselines in port documentation.

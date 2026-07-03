@@ -8,6 +8,11 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 新增 `tools/benchmark_guard.py`，作为 render-core 和 app-runtime 微基准的宽松 CI
+  smoke guard。CI 现在会检查 style/custom-property resolution、full pipeline、
+  dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、
+  font-family measurement，以及 app-runtime queue/system-event helper，并使用故意留宽的
+  灾难性退化阈值。
 - 增加 `border-top` / `border-right` / `border-bottom` / `border-left` 单边 shorthand
   子集。支持 `border-right: 1px solid #ddd` 这类简单 width/color 语法；单边宽度只作用于该边，
   color 仍映射到 JellyFrame 当前单一全局 border color。
