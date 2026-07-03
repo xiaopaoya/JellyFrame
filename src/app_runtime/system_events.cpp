@@ -1,5 +1,7 @@
 #include "app_runtime/system_events.h"
 
+#include <algorithm>
+
 namespace jellyframe {
 
 const char* app_system_event_push_status_name(AppSystemEventPushStatus status) {

@@ -84,8 +84,13 @@ JellyFrame Engine 的重要变更记录在这里。
   新增渐变路径。
 - app-runtime 的 host completion 投递改为固定容量环形缓冲，host handle allocation
   增加 free-slot hint，用相同的有界 API 减少嵌入式循环中的队列搬移和重复 slot 扫描。
+- app-runtime 的 system event 投递也改为同样的固定容量环形缓冲，在保持 app instance
+  过滤语义的同时，避免宿主注入时间、电量、网络或低功耗状态快照时产生逐帧前端 `erase`。
 - render-core 的 CSS declaration 应用逻辑拆出 sizing 与 box-model helper；公开 CSS 子集不变，
   后续按属性族继续维护和测试会更清楚。
+- render-core 的 flex 与 grid layout 内部拆成更小的 row sizing、placement 和 auto-placement
+  helper。支持的 layout 子集不变，但 flex justify/align/wrap 和 grid column/span placement
+  有了更直接的回归测试。
 
 ## 0.4.0-dev - 2026-06-28
 

@@ -110,9 +110,16 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   and host handle allocation keeps a free-slot hint for release/reallocate
   churn. These changes keep the same bounded APIs while reducing avoidable
   queue shifting and repeated slot scans in embedded-style loops.
+- App-runtime system-event delivery now uses the same fixed-capacity ring-buffer
+  approach, preserving app-instance filtering while avoiding per-frame front
+  erases when hosts inject time, battery, network or power-state snapshots.
 - Render-core CSS declaration application is split into smaller sizing and
   box-model helpers, keeping the public CSS subset unchanged while making future
   property-family work easier to review and test.
+- Render-core flex and grid layout internals are split into smaller row sizing,
+  placement and auto-placement helpers. The supported layout subset is
+  unchanged, but the code paths now have tighter regression tests for flex
+  justify/align/wrap behavior and grid column/span placement.
 
 ## 0.4.0-dev - 2026-06-28
 
