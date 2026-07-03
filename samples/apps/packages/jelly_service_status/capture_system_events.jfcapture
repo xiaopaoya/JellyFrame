@@ -14,7 +14,10 @@ gap 6
 # Validate that the Win32 shell can inject host/system state without giving the
 # app direct access to platform APIs.
 event 6 network-offline
+event 8 battery 88 1
+event 10 weather 213 rain
 event 12 screen-hidden
+event 14 activity 6400 32
 event 18 low-power-on
 event 24 network-online
 event 30 screen-visible

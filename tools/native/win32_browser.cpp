@@ -7,6 +7,7 @@
 #include "app_runtime/authorized_file_broker.h"
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_frame_policy.h"
+#include "app_runtime/app_host_data.h"
 #include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
 #include "app_runtime/app_services.h"
@@ -444,6 +445,9 @@ enum class ScriptedFrameEventKind {
     LowPowerOn,
     LowPowerOff,
     TimeMs,
+    Battery,
+    Weather,
+    Activity,
     PointerMove,
     PointerDown,
     PointerUp,
@@ -458,6 +462,7 @@ struct ScriptedFrameEvent {
     int y = 0;
     int delta_y = 0;
     std::uint64_t value = 0;
+    AppWeatherCondition weather_condition = AppWeatherCondition::Unknown;
 };
 
 struct ParsedFrameEvent {
@@ -2170,6 +2175,28 @@ std::string trim_ascii(std::string value) {
     return std::string(begin, end);
 }
 
+bool parse_weather_condition_token(const std::string& value, AppWeatherCondition& out) {
+    const std::string key = ascii_lowercase_local(value);
+    if (key == "unknown") {
+        out = AppWeatherCondition::Unknown;
+    } else if (key == "clear") {
+        out = AppWeatherCondition::Clear;
+    } else if (key == "cloudy") {
+        out = AppWeatherCondition::Cloudy;
+    } else if (key == "rain") {
+        out = AppWeatherCondition::Rain;
+    } else if (key == "snow") {
+        out = AppWeatherCondition::Snow;
+    } else if (key == "storm") {
+        out = AppWeatherCondition::Storm;
+    } else if (key == "fog") {
+        out = AppWeatherCondition::Fog;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 std::vector<std::string> split_whitespace(const std::string& text) {
     std::vector<std::string> fields;
     std::istringstream input(text);
@@ -2212,6 +2239,50 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
         parsed.event.kind = ScriptedFrameEventKind::TimeMs;
         if (!parse_u64_token(fields[2], parsed.event.value)) {
             parsed.error = "time-ms value must be a non-negative integer";
+            return parsed;
+        }
+    } else if (kind == "battery") {
+        if (fields.size() != 4) {
+            parsed.error = "battery events require FRAME:battery:PERCENT:CHARGING";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::Battery;
+        if (!parse_int_token(fields[2], parsed.event.x) ||
+            parsed.event.x < 0 || parsed.event.x > 255) {
+            parsed.error = "battery percent must be an integer in [0, 255]";
+            return parsed;
+        }
+        if (!parse_int_token(fields[3], parsed.event.y) ||
+            (parsed.event.y != 0 && parsed.event.y != 1)) {
+            parsed.error = "battery charging must be 0 or 1";
+            return parsed;
+        }
+    } else if (kind == "weather") {
+        if (fields.size() != 4) {
+            parsed.error = "weather events require FRAME:weather:TEMP_C_X10:CONDITION";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::Weather;
+        if (!parse_int_token(fields[2], parsed.event.x)) {
+            parsed.error = "weather temperature must be an integer in tenths of Celsius";
+            return parsed;
+        }
+        if (!parse_weather_condition_token(fields[3], parsed.event.weather_condition)) {
+            parsed.error = "weather condition must be one of unknown, clear, cloudy, rain, snow, storm, fog";
+            return parsed;
+        }
+    } else if (kind == "activity") {
+        if (fields.size() != 4) {
+            parsed.error = "activity events require FRAME:activity:STEPS:ACTIVE_MINUTES";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::Activity;
+        if (!parse_int_token(fields[2], parsed.event.x) || parsed.event.x < 0) {
+            parsed.error = "activity steps must be a non-negative integer";
+            return parsed;
+        }
+        if (!parse_int_token(fields[3], parsed.event.y) || parsed.event.y < 0) {
+            parsed.error = "activity minutes must be a non-negative integer";
             return parsed;
         }
     } else if (kind == "pointer-move" || kind == "pointer-down" ||
@@ -2495,7 +2566,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
         << "                                 pointer-up, wheel, network-online/offline,\n"
         << "                                 screen-visible/hidden, low-power-on/off,\n"
-        << "                                 time-ms.\n"
+        << "                                 time-ms, battery, weather, activity.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
         << "  --use-app-fonts                Use package .jffont resources when available.\n"
@@ -2516,7 +2587,10 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  output-dir PATH | montage PATH | frames N | step-ms N | start-ms N\n"
         << "  viewport W H | animation-fps N | animation-callbacks N\n"
         << "  event FRAME:kind[:x:y[:delta]] | event FRAME kind [x y [delta]]\n"
-        << "  event FRAME:time-ms:VALUE | event FRAME time-ms VALUE\n";
+        << "  event FRAME:time-ms:VALUE | event FRAME time-ms VALUE\n"
+        << "  event FRAME battery PERCENT CHARGING\n"
+        << "  event FRAME weather TEMP_C_X10 CONDITION\n"
+        << "  event FRAME activity STEPS ACTIVE_MINUTES\n";
 }
 
 const Node* find_first_element(const Node& node, const char* tag_name) {
@@ -3272,6 +3346,16 @@ public:
             std::cout << "  layer_tree layers=" << count_layers(*layer_tree_)
                       << " display_commands=" << count_layer_display_commands(*layer_tree_) << '\n';
         }
+        const AppHostDataSnapshot host_data =
+            app_host_data_filter_for_app(debug_host_data_, current_host_data_access_policy());
+        std::cout << "  host_data battery=" << (host_data.has.battery ? "yes" : "no")
+                  << " percent=" << static_cast<int>(host_data.battery.percent)
+                  << " charging=" << (host_data.battery.charging ? 1 : 0)
+                  << " weather=" << (host_data.has.weather ? app_weather_condition_name(host_data.weather.condition) : "none")
+                  << " temp_x10=" << host_data.weather.temperature_c_x10
+                  << " activity=" << (host_data.has.activity ? "yes" : "no")
+                  << " steps=" << host_data.activity.steps
+                  << " minutes=" << host_data.activity.active_minutes << '\n';
         const AppBudgetSnapshot budget = current_app_budget_snapshot();
         std::cout << "  app_budget instance=" << budget.app_instance_id
                   << " role=" << app_role_name(budget.role)
@@ -3382,6 +3466,7 @@ private:
     Canvas2DRegistry debug_canvas_{Canvas2DPolicy{true, 4, 300 * 300, 300 * 300, 300, 150}};
     AppLocationSnapshotMock debug_location_{AppLocationSnapshotPolicy{false, 2}};
     bool debug_location_enabled_ = false;
+    AppHostDataSnapshot debug_host_data_;
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_, &debug_canvas_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
@@ -3456,6 +3541,28 @@ private:
                 scripted_now_ms_ = event.value;
                 debug_system_state_.unix_time_ms = event.value;
                 queue_system_event(AppSystemEventKind::TimeChanged, "time ms");
+                break;
+            case ScriptedFrameEventKind::Battery:
+                debug_host_data_.has.battery = true;
+                debug_host_data_.battery.timestamp_ms = current_time_ms();
+                debug_host_data_.battery.percent = static_cast<std::uint8_t>(event.x);
+                debug_host_data_.battery.charging = event.y != 0;
+                debug_system_state_.battery_percent = static_cast<std::uint8_t>(event.x);
+                debug_system_state_.charging = event.y != 0;
+                queue_system_event(AppSystemEventKind::BatteryChanged, "battery");
+                break;
+            case ScriptedFrameEventKind::Weather:
+                debug_host_data_.has.weather = true;
+                debug_host_data_.weather.timestamp_ms = current_time_ms();
+                debug_host_data_.weather.temperature_c_x10 = static_cast<std::int16_t>(event.x);
+                debug_host_data_.weather.feels_like_c_x10 = static_cast<std::int16_t>(event.x);
+                debug_host_data_.weather.condition = event.weather_condition;
+                break;
+            case ScriptedFrameEventKind::Activity:
+                debug_host_data_.has.activity = true;
+                debug_host_data_.activity.timestamp_ms = current_time_ms();
+                debug_host_data_.activity.steps = static_cast<std::uint32_t>(event.x);
+                debug_host_data_.activity.active_minutes = static_cast<std::uint32_t>(event.y);
                 break;
             case ScriptedFrameEventKind::PointerMove:
                 handle_pointer_move(0, pointer_lparam(event.x, event.y));
@@ -3574,6 +3681,15 @@ private:
         return app_service_activity_policy_for(app_runtime_.current(),
                                                debug_system_state_,
                                                background_service_policy_);
+    }
+
+    AppHostDataAccessPolicy current_host_data_access_policy() const {
+        AppHostDataAccessPolicy policy;
+        policy.battery = true;
+        policy.weather = true;
+        policy.activity = true;
+        policy.services.location_position = debug_location_enabled_;
+        return policy;
     }
 
     void record_frame_policy_sample() {

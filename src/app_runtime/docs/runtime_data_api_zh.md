@@ -134,6 +134,8 @@ V0 支持面应限制在：
 battery、weather、activity、location 和 sensor。V0 中它刻意不暴露给 JavaScript；宿主可用于
 system shell 状态、diagnostics 或未来产品 profile binding。任何 app 可见 surface 出现前，都必须先经过
 `AppHostDataAccessPolicy` 过滤。
+Win32 壳可通过 frame script 注入 debug battery/weather/activity summary，并在 capture 输出中打印过滤后的
+`host_data` 摘要。
 
 当前 V0 已实现：
 

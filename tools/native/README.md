@@ -47,6 +47,9 @@ viewport 300 300
 event 8 click 150 260
 event 10 wheel 150 160 -120
 event 12 time-ms 1700000000123
+event 14 battery 88 1
+event 16 weather 213 rain
+event 18 activity 6400 32
 animation-fps 30
 animation-callbacks 4
 script-watchdog-checks 2048
@@ -64,6 +67,11 @@ where the host must stop nonessential motion without changing app source.
 Use `event FRAME time-ms VALUE` to inject deterministic host time for
 `Date.now()`-driven watch faces, timers and weather samples. This is a shell
 debug command, not app-visible syntax.
+
+Use `event FRAME battery PERCENT CHARGING`, `event FRAME weather TEMP_C_X10
+CONDITION` and `event FRAME activity STEPS ACTIVE_MINUTES` to validate the
+host-data snapshot path in Win32 captures. These update the shell's filtered
+debug summary only; they do not expose a JavaScript API.
 
 Use `script-watchdog-checks N`, `script-watchdog-interval N` and
 `require-script-watchdog` only for Win32/scripted recovery validation. They map

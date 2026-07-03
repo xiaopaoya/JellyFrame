@@ -33,6 +33,8 @@ def main() -> int:
     require("Frame script commands:" in help_result.stdout, "--help must document frame scripts")
     require("event FRAME:kind[:x:y[:delta]]" in help_result.stdout, "--help must document wheel delta")
     require("event FRAME:time-ms:VALUE" in help_result.stdout, "--help must document host time injection")
+    require("event FRAME battery PERCENT CHARGING" in help_result.stdout,
+            "--help must document host battery injection")
     require("--keep-data" in help_result.stdout, "--help must document app data retention")
     require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
@@ -53,6 +55,27 @@ def main() -> int:
     require(time_event_result.returncode != 0, "invalid time event must fail")
     require("time-ms value must be a non-negative integer" in time_event_result.stdout,
             "invalid time event must explain the failing field")
+
+    weather_event_result = run_case(exe, ["--frame-event", "2:weather:213:windy"])
+    require(weather_event_result.returncode != 0, "invalid weather event must fail")
+    require("weather condition must be one of" in weather_event_result.stdout,
+            "invalid weather event must explain the failing field")
+
+    service_status_result = run_case(
+        exe,
+        [
+            "--app",
+            "samples/apps/packages/jelly_service_status",
+            "--frame-script",
+            "samples/apps/packages/jelly_service_status/capture_system_events.jfcapture",
+        ],
+    )
+    require(service_status_result.returncode == 0, "service status frame script must pass")
+    require(
+        "host_data battery=yes percent=88 charging=1 weather=rain temp_x10=213 activity=yes steps=6400 minutes=32"
+        in service_status_result.stdout,
+        "service status frame script must report filtered host data",
+    )
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-authorized-file-") as directory:
         file_result = run_case(exe, ["--authorized-file-smoke", directory])

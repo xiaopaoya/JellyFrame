@@ -159,6 +159,8 @@ summary for battery, weather, activity, location and sensors. It is deliberately
 not exposed to JavaScript in V0. Hosts may use it for system shell state,
 diagnostics or future product-profile bindings, and must pass it through
 `AppHostDataAccessPolicy` before any app-visible surface is added.
+The Win32 shell can inject debug battery/weather/activity summaries through
+frame scripts and prints the filtered `host_data` summary in capture output.
 
 Current V0 implementation:
 
