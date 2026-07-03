@@ -24,7 +24,7 @@
     "maxCssRules": 80,
     "maxDisplayCommands": 180
   },
-  "capabilities": [],
+  "capabilities": ["media.audio.playback"],
   "targets": {
     "round-300": {
       "viewport": {

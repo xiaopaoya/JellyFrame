@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "render_core/diagnostics.h"
 
@@ -761,7 +761,7 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
         json_array_contains_string(json, "permissions", "network") ||
         json_array_contains_string(json, "capabilities", "network.fetch");
     manifest.storage_kv_allowed = json_array_contains_string(json, "capabilities", "storage.kv");
-    manifest.audio_playback_allowed = json_array_contains_string(json, "capabilities", "media.audio.mp3");
+    manifest.audio_playback_allowed = json_array_contains_string(json, "capabilities", "media.audio.playback");
     manifest.sensor_accelerometer_allowed =
         json_array_contains_string(json, "capabilities", "sensor.accelerometer");
     manifest.sensor_gyroscope_allowed = json_array_contains_string(json, "capabilities", "sensor.gyroscope");

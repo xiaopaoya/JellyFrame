@@ -84,7 +84,7 @@ JellyFrame apps are local, bounded, target-aware UI packages.
 The manifest is part of the app, not boilerplate.
 
 - Declare services in `capabilities`: `network.fetch`, `storage.kv`,
-  `media.audio.mp3`, `location.position`, `graphics.canvas2d`, and documented
+  `media.audio.playback`, `location.position`, `graphics.canvas2d`, and documented
   sensor names.
 - A declaration is a request, not a guarantee. The selected target profile and
   product host must also provide the service.

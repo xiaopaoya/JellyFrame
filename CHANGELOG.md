@@ -15,6 +15,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Internal scroll-container diagnostics now use structured `node`, `path`,
   `boxHeight`, `contentHeight` and `overflowY` fields, so scroll-list advice can
   point at the specific clipped container.
+- Renamed the app manifest audio capability from the codec-specific
+  `media.audio.mp3` wording to `media.audio.playback`. Audio resources now warn
+  only when a package includes audio assets without declaring the playback
+  capability; actual codecs remain a host/profile responsibility.
 - Added `tools/benchmark_guard.py`, a broad CI smoke guard for render-core and
   app-runtime microbenchmarks. CI now checks style/custom-property resolution,
   full pipeline, dirty-rect replay, scroll-blit planning, Canvas 2D path and

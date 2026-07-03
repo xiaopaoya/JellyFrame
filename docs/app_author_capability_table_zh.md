@@ -35,7 +35,7 @@
 | Timer / rAF | 有界 | 无需额外 capability，但受 frame policy 和预算限制。 |
 | `XMLHttpRequest` GET | 宿主可选 | `network.fetch`。只用于运行时数据，不加载页面资源。 |
 | `localStorage` | 宿主可选 | `storage.kv`。这是 app 私有小型 KV shadow，不是浏览器持久存储全集。 |
-| `Audio()` | 宿主可选 | `media.audio.mp3`。真实 codec/I2S 由 host 提供。 |
+| `Audio()` | 宿主可选 | `media.audio.playback`。真实 codec/I2S 由 host 提供。 |
 | `navigator.geolocation` | 宿主可选 | `location.position`。只提供离散定位快照。 |
 | Canvas 2D | 宿主可选 | `graphics.canvas2d`。只在 `getContext("2d")` 后分配 backing store。 |
 | Promise/fetch/modules/querySelector/innerHTML | 延后 | 不要依赖。 |

@@ -71,7 +71,7 @@ JellyFrame app 是本地、有界、target-aware 的 UI 包。
 
 Manifest 不是样板文件，而是 app 契约的一部分。
 
-- 在 `capabilities` 中声明服务：`network.fetch`、`storage.kv`、`media.audio.mp3`、
+- 在 `capabilities` 中声明服务：`network.fetch`、`storage.kv`、`media.audio.playback`、
   `location.position`、`graphics.canvas2d` 和文档化 sensor 名称。
 - 声明 capability 只是请求，不是保证。所选 target profile 和产品宿主也必须提供同一服务。
 - 用 `targets[id].gate` 表达发布门槛。app 宣称支持的设备用 `reject`；仍在试验或可选的设备用 `warn`。

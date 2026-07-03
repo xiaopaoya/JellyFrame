@@ -1,4 +1,4 @@
-﻿# Host Abstraction Draft
+# Host Abstraction Draft
 
 
 JellyFrame's core should stay independent from filesystems, network stacks,
@@ -74,7 +74,7 @@ and network as optional host services, not core assumptions.
 
 These fields do not mean the core calls hardware directly. They are a policy
 contract shared by ports, desktop tools, packagers and future JS APIs. If an app
-declares `network.fetch` or `media.audio.mp3`, tools can compare that against
+declares `network.fetch` or `media.audio.playback`, tools can compare that against
 the target profile before packaging or installation, and runtime bindings can
 decide whether to expose the API.
 

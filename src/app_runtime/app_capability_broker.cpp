@@ -14,7 +14,7 @@ constexpr std::array<std::string_view, 20> kKnownCapabilities = {
     "file.manage",
     "graphics.canvas2d",
     "image.decode",
-    "media.audio.mp3",
+    "media.audio.playback",
     "media.microphone",
     "media.camera",
     "media.video.input",

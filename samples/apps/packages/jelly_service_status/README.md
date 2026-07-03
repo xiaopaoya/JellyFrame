@@ -3,7 +3,7 @@
 Small runtime-service sample for optional data, media and location service
 boundaries.
 
-It declares network, storage, MP3 playback and location capabilities, then uses
+It declares network, storage, audio playback and location capabilities, then uses
 `backgroundServices` to express which work may continue while the app is
 suspended or the screen is off. The manifest is only an intent signal: the host
 profile still decides which background activity is allowed on a given device.

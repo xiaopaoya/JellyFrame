@@ -60,7 +60,7 @@ handled as generic pending cleanup.
 The same files also provide the first manifest/profile gate:
 `AppServiceManifestCapabilities`, `AppServiceHostProfile` and
 `app_service_policies_for_app(...)`. A manifest request such as
-`network.fetch`, `storage.kv` or `media.audio.mp3` is only an app request. It
+`network.fetch`, `storage.kv` or `media.audio.playback` is only an app request. It
 becomes an enabled runtime policy only when the selected host/profile also
 allows that service and provides bounded budgets. This keeps policy decisions
 out of JS bindings and worker implementations.

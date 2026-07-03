@@ -75,7 +75,7 @@ void duplicates_and_empty_capabilities_are_ignored() {
 }
 
 void names_are_stable_for_diagnostics() {
-    assert(is_known_app_capability("media.audio.mp3"));
+    assert(is_known_app_capability("media.audio.playback"));
     assert(is_known_app_capability("sensor.heart-rate"));
     assert(is_known_app_capability("file.read"));
     assert(is_known_app_capability("file.write"));

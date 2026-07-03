@@ -209,8 +209,8 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(diagnostics["entries"][0]["metadata"]["reason"], "invalid-signature")
         self.assertEqual(warnings[0]["code"], "image-bmp-invalid")
 
-    def test_mp3_capability_warns_when_packaged_audio_is_not_mp3(self):
-        manifest = {"capabilities": ["media.audio.mp3"]}
+    def test_packaged_audio_warns_without_playback_capability(self):
+        manifest = {"capabilities": []}
         resources = [{"path": "/audio/tone.wav"}]
 
         warnings = package_app.collect_audio_resource_warnings(manifest, resources)
@@ -218,9 +218,9 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0]["code"], "audio-capability-resource-mismatch")
 
-    def test_mp3_capability_accepts_packaged_mp3_resource(self):
-        manifest = {"capabilities": ["media.audio.mp3"]}
-        resources = [{"path": "/audio/tone.mp3"}]
+    def test_playback_capability_accepts_packaged_audio_resource(self):
+        manifest = {"capabilities": ["media.audio.playback"]}
+        resources = [{"path": "/audio/tone.wav"}]
 
         self.assertEqual(package_app.collect_audio_resource_warnings(manifest, resources), [])
 
@@ -252,7 +252,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(
             sorted((warning["api"], warning["capability"]) for warning in warnings),
             [
-                ("Audio", "media.audio.mp3"),
+                ("Audio", "media.audio.playback"),
                 ("localStorage", "storage.kv"),
                 ("navigator.geolocation", "location.position"),
             ],
@@ -306,7 +306,7 @@ class PackagePreflightTests(unittest.TestCase):
                 "network.fetch",
                 "storage.kv",
                 "graphics.canvas2d",
-                "media.audio.mp3",
+                "media.audio.playback",
                 "sensor.accelerometer",
                 "location.position",
             ],

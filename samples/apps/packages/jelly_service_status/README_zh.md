@@ -2,7 +2,7 @@
 
 用于验证可选数据、媒体和定位服务边界的小型 runtime 示例。
 
-它声明网络、存储、MP3 播放和定位能力，并通过 `backgroundServices` 表达 app 在
+它声明网络、存储、音频播放和定位能力，并通过 `backgroundServices` 表达 app 在
 suspended 或 screen-off 状态下希望继续哪些后台活动。manifest 只表示意图；
 真实设备上仍必须由宿主 profile 决定是否批准。
 

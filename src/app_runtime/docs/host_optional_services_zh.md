@@ -43,7 +43,7 @@ instance。storage 有独立的 flush/drop 生命周期策略，不应按普通 
 
 同一组文件还提供第一版 manifest/profile gate：`AppServiceManifestCapabilities`、
 `AppServiceHostProfile` 和 `app_service_policies_for_app(...)`。manifest 中的
-`network.fetch`、`storage.kv` 或 `media.audio.mp3` 只表示 app 请求能力；只有被选中的
+`network.fetch`、`storage.kv` 或 `media.audio.playback` 只表示 app 请求能力；只有被选中的
 host/profile 同时允许该服务，并提供有界预算时，最终 runtime policy 才会启用。这样 JS binding 和
 worker 实现都不需要各自散落权限判断。
 

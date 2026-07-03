@@ -27,7 +27,7 @@
     "maxEventListeners": 16
   },
   "permissions": ["network"],
-  "capabilities": ["network.fetch", "media.audio.mp3", "location.position"],
+  "capabilities": ["network.fetch", "media.audio.playback", "location.position"],
   "backgroundServices": {
     "network": {
       "whileSuspended": true,

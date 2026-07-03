@@ -386,7 +386,7 @@ def validate_manifest(manifest: dict) -> dict:
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     storage_kv_allowed = "storage.kv" in capabilities
     canvas2d_allowed = "graphics.canvas2d" in capabilities
-    audio_playback_allowed = "media.audio.mp3" in capabilities
+    audio_playback_allowed = "media.audio.playback" in capabilities
     sensor_accelerometer_allowed = "sensor.accelerometer" in capabilities
     sensor_gyroscope_allowed = "sensor.gyroscope" in capabilities
     sensor_heart_rate_allowed = "sensor.heart-rate" in capabilities
@@ -490,7 +490,7 @@ def collect_service_target_warnings(manifest: dict, target_config: dict) -> list
         ("networkFetch", bool(manifest.get("networkAllowed")), "network.fetch"),
         ("storageKv", bool(manifest.get("storageKvAllowed")), "storage.kv"),
         ("canvas2d", bool(manifest.get("canvas2dAllowed")), "graphics.canvas2d"),
-        ("audioPlayback", bool(manifest.get("audioPlaybackAllowed")), "media.audio.mp3"),
+        ("audioPlayback", bool(manifest.get("audioPlaybackAllowed")), "media.audio.playback"),
         ("sensorAccelerometer", bool(manifest.get("sensorAccelerometerAllowed")), "sensor.accelerometer"),
         ("sensorGyroscope", bool(manifest.get("sensorGyroscopeAllowed")), "sensor.gyroscope"),
         ("sensorHeartRate", bool(manifest.get("sensorHeartRateAllowed")), "sensor.heart-rate"),
@@ -549,7 +549,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "file.manage",
         "graphics.canvas2d",
         "image.decode",
-        "media.audio.mp3",
+        "media.audio.playback",
         "media.microphone",
         "media.camera",
         "media.video.input",
@@ -704,8 +704,6 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
 
 def collect_audio_resource_warnings(manifest: dict, resources: list[dict]) -> list[dict]:
     capabilities = manifest.get("capabilities", [])
-    if not isinstance(capabilities, list) or "media.audio.mp3" not in capabilities:
-        return []
     audio_suffixes = {".mp3", ".wav", ".ogg", ".m4a", ".aac"}
     audio_resources = [
         resource for resource in resources
@@ -713,14 +711,14 @@ def collect_audio_resource_warnings(manifest: dict, resources: list[dict]) -> li
     ]
     if not audio_resources:
         return []
-    if any(Path(resource.get("path", "")).suffix.lower() == ".mp3" for resource in audio_resources):
+    if isinstance(capabilities, list) and "media.audio.playback" in capabilities:
         return []
     sources = ", ".join(resource["path"] for resource in audio_resources)
     return [{
         "level": "warning",
         "code": "audio-capability-resource-mismatch",
-        "message": "manifest declares media.audio.mp3, but packaged audio resources are not MP3: "
-                   f"{sources}. A real MCU host MP3 pipeline will not play these resources.",
+        "message": "package includes audio resources but manifest does not declare media.audio.playback: "
+                   f"{sources}. Declare the host-owned playback capability or remove unused audio assets.",
         "source": "jellyframe.app.json",
     }]
 
@@ -738,7 +736,7 @@ SCRIPT_API_CAPABILITIES = [
     },
     {
         "api": "Audio",
-        "capability": "media.audio.mp3",
+        "capability": "media.audio.playback",
         "pattern": re.compile(r"(?:\bnew\s+Audio\s*\(|\bAudio\s*\()"),
     },
     {

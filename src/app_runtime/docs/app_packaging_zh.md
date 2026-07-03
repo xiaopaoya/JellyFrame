@@ -62,7 +62,7 @@ JellyFrame 的第三方 app 目标是安装到 flash/外部存储的 bundle，�
 
 - `permissions: ["network"]` / `capabilities: ["network.fetch"]` 只声明运行时数据请求。
 - `capabilities: ["storage.kv"]` 只声明 app 私有小型异步 KV storage。
-- `capabilities: ["media.audio.mp3"]` 声明可选的宿主持有 MP3 playback。当前 runtime
+- `capabilities: ["media.audio.playback"]` 声明可选的宿主持有音频播放。当前 runtime
   已有 command/handle/completion 验证，Win32 壳可用 `--audio-smoke` 验证桌面 host adapter
   能接收本地或包内音频资源；JerryScript 构建已暴露带 `ended`/`error` 状态事件的宿主可选极小
   `Audio()` V0 子集，但仍不内置 MCU codec。
@@ -756,7 +756,7 @@ python tools/jellyframe_cli.py font `
 ```
 
 package report 会在 `serviceIntent` 中记录 manifest service intent。这个稳定摘要包含
-`network.fetch`、`storage.kv`、`media.audio.mp3` 请求、`backgroundServices` 声明，以及提醒
+`network.fetch`、`storage.kv`、`media.audio.playback` 请求、`backgroundServices` 声明，以及提醒
 工具和作者“最终授权仍由 host profile/product policy 决定”的 policy notes。如果 target preset 声明了
 可选 `hostServices`，report 还会用 `targetSupport` 按 `supported`、`unsupported` 或 `unknown`
 报告 network fetch、app 私有 KV、audio playback、语义传感器和定位的目标支持状态。如果 app 请求了

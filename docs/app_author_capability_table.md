@@ -35,7 +35,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Timers / rAF | Bounded | No extra capability, but frame policy and budgets apply. |
 | `XMLHttpRequest` GET | Host optional | `network.fetch`. Runtime data only; not a page/resource loader. |
 | `localStorage` | Host optional | `storage.kv`. App-private tiny KV shadow, not full browser storage. |
-| `Audio()` | Host optional | `media.audio.mp3`. Real codec/I2S belongs to the host. |
+| `Audio()` | Host optional | `media.audio.playback`. Real codec/I2S belongs to the host. |
 | `navigator.geolocation` | Host optional | `location.position`. Discrete position snapshots only. |
 | Canvas 2D | Host optional | `graphics.canvas2d`. Backing storage is allocated only after `getContext("2d")`. |
 | Promise/fetch/modules/querySelector/innerHTML | Deferred | Do not rely on them yet. |

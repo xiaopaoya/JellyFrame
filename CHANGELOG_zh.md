@@ -13,6 +13,9 @@ JellyFrame Engine 的重要变更记录在这里。
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。
 - 内部 scroll container 诊断改为结构化输出 `node`、`path`、`boxHeight`、
   `contentHeight` 与 `overflowY`，scroll-list 建议可以指向具体被裁切的容器。
+- app manifest 音频能力名从偏 codec 的 `media.audio.mp3` 改为
+  `media.audio.playback`。包内音频资源现在只在未声明播放能力时 warning；
+  具体 codec 仍由 host/profile 决定。
 - 新增 `tools/benchmark_guard.py`，作为 render-core 和 app-runtime 微基准的宽松 CI
   smoke guard。CI 现在会检查 style/custom-property resolution、full pipeline、
   dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、

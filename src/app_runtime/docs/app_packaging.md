@@ -92,7 +92,7 @@ Runtime data and storage boundary:
   runtime data requests only.
 - `capabilities: ["storage.kv"]` declares small app-private async KV storage
   only.
-- `capabilities: ["media.audio.mp3"]` declares optional host-owned MP3
+- `capabilities: ["media.audio.playback"]` declares optional host-owned audio
   playback. Current runtime code has command/handle/completion validation, but
   the Win32 shell can also validate desktop host-adapter handoff with
   `--audio-smoke` from a local or in-package resource. JerryScript builds expose
@@ -891,7 +891,7 @@ python tools/jellyframe_cli.py font `
 
 The package report records manifest service intent in `serviceIntent`. This
 stable summary includes requested `network.fetch`, `storage.kv` and
-`media.audio.mp3` capabilities, declared `backgroundServices` and policy notes
+`media.audio.playback` capabilities, declared `backgroundServices` and policy notes
 that remind tools and authors that host profile/product policy remain
 authoritative. If a target preset declares optional `hostServices`, the report
 also includes `targetSupport` as `supported`, `unsupported` or `unknown` for

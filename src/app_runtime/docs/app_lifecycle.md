@@ -87,7 +87,7 @@ profile must also allow them.
 - `network.fetch` enables the asynchronous `XMLHttpRequest` GET V0 subset.
 - `storage.kv` enables the tiny `localStorage` subset only when the host binds a
   non-blocking app-private shadow.
-- `media.audio.mp3` enables the host-optional `Audio()` V0 subset.
+- `media.audio.playback` enables the host-optional `Audio()` V0 subset.
 - `location.position` enables `navigator.geolocation.getCurrentPosition(...)`
   when a host location service is bound.
 - Sensor capability names express intent, but sensor JavaScript APIs are still

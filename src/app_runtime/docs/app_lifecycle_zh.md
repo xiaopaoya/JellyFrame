@@ -68,7 +68,7 @@ App 通过 manifest capability 请求服务，所选 target profile 也必须允
 
 - `network.fetch` 启用异步 `XMLHttpRequest` GET V0 子集。
 - `storage.kv` 只在宿主绑定非阻塞 app 私有 shadow 时启用极小 `localStorage` 子集。
-- `media.audio.mp3` 启用宿主可选的 `Audio()` V0 子集。
+- `media.audio.playback` 启用宿主可选的 `Audio()` V0 子集。
 - `location.position` 在宿主绑定 location service 时启用
   `navigator.geolocation.getCurrentPosition(...)`。
 - sensor capability 名称只表达意图，sensor JavaScript API 在 V0 仍延后。
