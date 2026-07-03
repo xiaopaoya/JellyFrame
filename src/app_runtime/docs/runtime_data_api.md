@@ -162,6 +162,18 @@ diagnostics or future product-profile bindings, and must pass it through
 The Win32 shell can inject debug battery/weather/activity summaries through
 frame scripts and prints the filtered `host_data` summary in capture output.
 
+V0 app-visible mapping:
+
+| Data | App-visible path | Notes |
+| --- | --- | --- |
+| Time | `Date.now()` | Host-injected wall-clock milliseconds; use timer/rAF for updates. |
+| Network online/offline | `navigator.onLine`, `online` / `offline` | Read-only snapshot plus bounded events. |
+| Weather | `XMLHttpRequest` to app/local host data endpoint | No dedicated weather object. Products may feed package-local or host-served JSON through `network.fetch`. |
+| Location | `navigator.geolocation.getCurrentPosition(...)` | Requires `location.position` and host/profile support. |
+| Battery / charging | Not exposed to ordinary app JS in V0 | Keep in host/system shell or future product-profile binding. |
+| Activity | Not exposed to ordinary app JS in V0 | Keep in host/system shell or future product-profile binding. |
+| Sensors | No JS sensor API in V0 | Use host/system shell or future semantic sensor APIs; raw buses remain hidden. |
+
 Current V0 implementation:
 
 - `Date.now()` returns the runtime host time set through

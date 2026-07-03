@@ -38,6 +38,8 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | `Audio()` | Host optional | `media.audio.playback`. Real codec/I2S belongs to the host. |
 | `navigator.geolocation` | Host optional | `location.position`. Discrete position snapshots only. |
 | Canvas 2D | Host optional | `graphics.canvas2d`. Backing storage is allocated only after `getContext("2d")`. |
+| Host time | Available | Use `Date.now()`. Do not assume `new Date()` is host-clock controlled unless documented later. |
+| Weather/activity/battery | Host/system only | Weather app data should use XHR JSON; activity and battery summaries are not ordinary app JS APIs yet. |
 | Promise/fetch/modules/querySelector/innerHTML | Deferred | Do not rely on them yet. |
 
 ## Resources And Fonts

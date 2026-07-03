@@ -137,6 +137,18 @@ system shell 状态、diagnostics 或未来产品 profile binding。任何 app �
 Win32 壳可通过 frame script 注入 debug battery/weather/activity summary，并在 capture 输出中打印过滤后的
 `host_data` 摘要。
 
+V0 app 可见映射：
+
+| 数据 | App 可见路径 | 说明 |
+| --- | --- | --- |
+| 时间 | `Date.now()` | 宿主注入的 wall-clock 毫秒；需要刷新时用 timer/rAF。 |
+| 网络在线/离线 | `navigator.onLine`、`online` / `offline` | 只读快照与有界事件。 |
+| 天气 | 对 app/local host data endpoint 发 `XMLHttpRequest` | 没有专用 weather object。产品可通过 `network.fetch` 提供包内或宿主 JSON。 |
+| 定位 | `navigator.geolocation.getCurrentPosition(...)` | 需要 `location.position` 与 host/profile 同时支持。 |
+| 电量/充电 | V0 不暴露给普通 app JS | 保留给 host/system shell 或未来 product-profile binding。 |
+| 活动数据 | V0 不暴露给普通 app JS | 保留给 host/system shell 或未来 product-profile binding。 |
+| 传感器 | V0 无 JS sensor API | 先走 host/system shell 或未来语义传感器 API；裸 bus 继续隐藏。 |
+
 当前 V0 已实现：
 
 - `Date.now()` 返回 `JerryScriptRuntime::set_host_time_ms(...)` 设置的宿主时间，或最新 accepted
