@@ -572,6 +572,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(summary["infos"], 3)
         self.assertEqual(summary["targets"][0]["gate"], "accept")
         self.assertIn("sample: ok diagnostics=0/5/3", formatted)
+        self.assertIn("perf=unknown/0", formatted)
         self.assertIn("round-300:fits/accept", formatted)
         self.assertIn("rect-172x320:diagnostics-warning/warn", formatted)
 
@@ -714,6 +715,51 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(report["developerAdvice"][0]["code"], "visual-scroll-needed")
         self.assertIn("action", report["developerAdvice"][0])
+
+    def test_write_json_report_adds_performance_summary_and_advice(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-performance-report-") as directory:
+            report_path = Path(directory) / "report.json"
+            jellyframe_cli.write_json_report(report_path, {
+                "format": "jellyframe.package.report",
+                "runtimeBudgetEstimate": {
+                    "resources": {"used": 90, "limit": 100},
+                    "displayCommands": {"used": 0, "limit": 120},
+                },
+                "responsiveProfiles": [{
+                    "target": "round-300",
+                    "pipeline": {
+                        "domNodes": 260,
+                        "layers": 20,
+                        "displayCommands": 128,
+                        "framebufferBytes": 360000,
+                        "estimatedHeapBytes": 700000,
+                    },
+                    "viewport": {"width": 300, "height": 300},
+                    "layout": {"horizontalOverflow": False},
+                    "frameUpdate": {
+                        "action": "rebuild-pipeline",
+                        "repaint": "full-frame",
+                        "reason": "first-paint",
+                    },
+                    "timingsUs": {
+                        "paint": 9000,
+                        "present": 2000,
+                        "total": 15000,
+                    },
+                }],
+            })
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(report["performanceSummary"]["rating"], "high-risk")
+        self.assertEqual(report["performanceSummary"]["maxDisplayCommands"], 128)
+        self.assertEqual(report["performanceSummary"]["maxTotalPipelineUs"], 15000)
+        self.assertEqual(report["performanceSummary"]["slowestMeasuredStage"], {"stage": "paint", "us": 9000})
+        self.assertEqual(report["performanceSummary"]["resourceBudgetPercent"], 90)
+        codes = {entry["code"] for entry in report["performanceAdvice"]}
+        self.assertIn("performance-pipeline-heap-estimate", codes)
+        self.assertIn("performance-display-command-count", codes)
+        self.assertIn("performance-layer-count", codes)
+        self.assertIn("performance-resource-budget-high", codes)
 
     def test_requested_targets_are_explicit_opt_in(self):
         class Args:

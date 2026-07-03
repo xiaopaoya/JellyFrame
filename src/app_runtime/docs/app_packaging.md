@@ -925,7 +925,16 @@ metadata, selected target config, effective budgets, resource sizes,
 CRC32/SHA-256 checksums, service intent, `runtimeBudgetEstimate`,
 `scriptApiDiagnostics`, `imageDiagnostics`, `fontDiagnostics`, local/remote reference diagnostics,
 package-resource warnings and
-`pipelineDiagnostics`. `runtimeBudgetEstimate` is a package-preflight estimate:
+`pipelineDiagnostics`. The CLI also derives `performanceSummary` and optional
+`performanceAdvice[]` from the same package and pipeline data. These fields
+quantify static preflight cost drivers such as object counts, layer/display
+command counts, framebuffer bytes, estimated pipeline heap, resource budget
+ratio and full-frame present scale. When pseudo-browser diagnostics are present,
+the summary also carries desktop tool-side stage timings in microseconds
+(`timingsUs`) so authors can see whether parse, layout, paint or present
+dominated that validation run. These timings are attribution data, not device
+FPS.
+`runtimeBudgetEstimate` is a package-preflight estimate:
 it reports package-known resource/font usage and manifest/target budget limits,
 while live queue/handle/timer/listener counters come from `AppBudgetSnapshot`
 in the host/runtime capture path. Pipeline diagnostics include the

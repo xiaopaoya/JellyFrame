@@ -15,6 +15,7 @@
 #include "example_css_io.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
@@ -55,6 +56,26 @@ struct LayoutBounds {
     int bottom = 0;
     bool valid = false;
 };
+
+struct PipelineTimings {
+    long long read_input_us = 0;
+    long long parse_html_us = 0;
+    long long load_parse_css_us = 0;
+    long long build_render_tree_us = 0;
+    long long layout_us = 0;
+    long long build_layer_tree_us = 0;
+    long long flatten_us = 0;
+    long long paint_us = 0;
+    long long present_us = 0;
+    long long statistics_us = 0;
+    long long total_us = 0;
+};
+
+using Clock = std::chrono::steady_clock;
+
+long long elapsed_us(Clock::time_point start, Clock::time_point end) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+}
 
 HostBudgets desktop_validation_budgets() {
     HostBudgets budgets;
@@ -344,6 +365,7 @@ void write_diagnostics_json(const std::string& path,
                             const PipelineStatistics& statistics,
                             const LayoutBounds& layout_bounds,
                             const LayoutBounds& paint_bounds,
+                            const PipelineTimings& timings,
                             const VectorDiagnosticSink& diagnostics) {
     if (path.empty()) {
         return;
@@ -400,6 +422,19 @@ void write_diagnostics_json(const std::string& path,
            << "\", \"repaint\": \"" << frame_dirty_rect_mode_name(FrameDirtyRectMode::FullFrame)
            << "\", \"reason\": \"" << frame_update_reason_name(FrameUpdateReason::FirstPaint)
            << "\"},\n";
+    output << "  \"timingsUs\": {\n";
+    output << "    \"readInput\": " << timings.read_input_us << ",\n";
+    output << "    \"parseHtml\": " << timings.parse_html_us << ",\n";
+    output << "    \"loadParseCss\": " << timings.load_parse_css_us << ",\n";
+    output << "    \"buildRenderTree\": " << timings.build_render_tree_us << ",\n";
+    output << "    \"layout\": " << timings.layout_us << ",\n";
+    output << "    \"buildLayerTree\": " << timings.build_layer_tree_us << ",\n";
+    output << "    \"flatten\": " << timings.flatten_us << ",\n";
+    output << "    \"paint\": " << timings.paint_us << ",\n";
+    output << "    \"present\": " << timings.present_us << ",\n";
+    output << "    \"statistics\": " << timings.statistics_us << ",\n";
+    output << "    \"total\": " << timings.total_us << "\n";
+    output << "  },\n";
     output << "  \"pipeline\": {\n";
     output << "    \"domNodes\": " << statistics.dom.node_count << ",\n";
     output << "    \"renderObjects\": " << statistics.render_objects << ",\n";
@@ -482,6 +517,8 @@ BrowserOptions parse_options(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     try {
+        const auto total_start = Clock::now();
+        PipelineTimings timings;
         const BrowserOptions options = parse_options(argc, argv);
         const HostBudgets budgets = desktop_validation_budgets();
         VectorDiagnosticSink diagnostics;
@@ -489,8 +526,12 @@ int main(int argc, char** argv) {
         HtmlParser html_parser;
         HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
         html_options.diagnostics = &diagnostics;
+        auto stage_start = Clock::now();
         const std::string html = jellyframe_example::read_file_limited(options.html_path, kMaxInputBytes);
+        timings.read_input_us = elapsed_us(stage_start, Clock::now());
+        stage_start = Clock::now();
         auto document = html_parser.parse(html, html_options);
+        timings.parse_html_us = elapsed_us(stage_start, Clock::now());
 
         jellyframe_example::StylesheetLoadContext stylesheet_context;
         const std::filesystem::path html_path(options.html_path);
@@ -498,6 +539,7 @@ int main(int argc, char** argv) {
             html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
         stylesheet_context.max_input_bytes = kMaxInputBytes;
         stylesheet_context.diagnostics = &diagnostics;
+        stage_start = Clock::now();
         const std::string css = combine_author_css(jellyframe_example::read_file_limited(options.css_path, kMaxInputBytes),
                                                    *document,
                                                    jellyframe_example::load_linked_stylesheet,
@@ -509,6 +551,7 @@ int main(int argc, char** argv) {
         css_options.media_viewport_height = options.viewport_height;
         css_options.diagnostics = &diagnostics;
         Stylesheet stylesheet = css_parser.parse(css, css_options);
+        timings.load_parse_css_us = elapsed_us(stage_start, Clock::now());
         StyleResolverOptions style_options;
         style_options.diagnostics = &diagnostics;
         StyleResolver resolver(std::move(stylesheet), style_options);
@@ -516,24 +559,34 @@ int main(int argc, char** argv) {
         RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
         render_options.diagnostics = &diagnostics;
         RenderTreeBuilder render_tree_builder(resolver, render_options);
+        stage_start = Clock::now();
         auto render_tree = render_tree_builder.build(*document);
+        timings.build_render_tree_us = elapsed_us(stage_start, Clock::now());
 
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
         LayoutEngine layout_engine(resolver, {}, layout_options);
+        stage_start = Clock::now();
         auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
+        timings.layout_us = elapsed_us(stage_start, Clock::now());
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
         layer_options.diagnostics = &diagnostics;
         LayerTreeBuilder layer_tree_builder(layer_options);
+        stage_start = Clock::now();
         auto layer_tree = layer_tree_builder.build(*layout_tree);
+        timings.build_layer_tree_us = elapsed_us(stage_start, Clock::now());
+        stage_start = Clock::now();
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
+        timings.flatten_us = elapsed_us(stage_start, Clock::now());
 
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
         compositor_options.diagnostics = &diagnostics;
         SoftwareCompositor compositor({}, compositor_options);
         const Color background = page_background_color(*document, resolver);
+        stage_start = Clock::now();
         FrameBuffer frame_buffer = compositor.render(*layer_tree, options.viewport_width, options.viewport_height, background);
+        timings.paint_us = elapsed_us(stage_start, Clock::now());
         if (frame_buffer.width <= 0 || frame_buffer.height <= 0) {
             throw std::runtime_error("framebuffer budget exceeded");
         }
@@ -541,10 +594,13 @@ int main(int argc, char** argv) {
         ImageFrameSinkContext frame_sink_context{options.output_path, false};
         const Rect full_dirty{0, 0, frame_buffer.width, frame_buffer.height};
         const HostFrameSink frame_sink{write_image_frame_sink, &frame_sink_context};
+        stage_start = Clock::now();
         if (!present_frame(frame_buffer, frame_sink, &full_dirty, 1)) {
             throw std::runtime_error("failed to present output frame");
         }
+        timings.present_us = elapsed_us(stage_start, Clock::now());
 
+        stage_start = Clock::now();
         const PipelineStatistics pipeline_statistics = collect_pipeline_statistics(PipelineStatisticsInput{
             document.get(),
             render_tree.get(),
@@ -557,12 +613,14 @@ int main(int argc, char** argv) {
             nullptr,
             html.size() + css.size(),
         });
+        timings.statistics_us = elapsed_us(stage_start, Clock::now());
 
         LayoutBounds layout_bounds;
         accumulate_layout_bounds(*layout_tree, layout_bounds);
         LayoutBounds paint_bounds;
         accumulate_display_bounds(display_list, paint_bounds);
         report_visual_diagnostics(options, pipeline_statistics, *layout_tree, layout_bounds, paint_bounds, diagnostics);
+        timings.total_us = elapsed_us(total_start, Clock::now());
 
         std::cout << "JellyFrame render core pseudo browser\n";
         std::cout << "  output=" << options.output_path << '\n';
@@ -578,6 +636,8 @@ int main(int argc, char** argv) {
         std::cout << "  framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes << '\n';
         std::cout << "  resource_bytes=" << pipeline_statistics.resource_bytes << '\n';
         std::cout << "  estimated_pipeline_bytes=" << pipeline_statistics.estimated_heap_bytes << '\n';
+        std::cout << "  timing_total_us=" << timings.total_us << '\n';
+        std::cout << "  timing_paint_us=" << timings.paint_us << '\n';
         std::cout << "  frame_sink=" << (frame_sink_context.ok ? "image" : "none") << '\n';
         std::cout << "  non_background_pixels=" << count_non_background_pixels(frame_buffer, background) << '\n';
         std::cout << "  diagnostics=" << diagnostics.size() << '\n';
@@ -596,6 +656,7 @@ int main(int argc, char** argv) {
                                pipeline_statistics,
                                layout_bounds,
                                paint_bounds,
+                               timings,
                                diagnostics);
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';

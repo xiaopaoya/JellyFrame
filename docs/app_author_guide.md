@@ -37,6 +37,21 @@ app-author view of the lower-level diagnostics. Some advice entries include a
 `recipe` field that points at a copyable pattern in
 [app_author_recipes.md](app_author_recipes.md).
 
+If the page feels slow, inspect `performanceSummary` and `performanceAdvice[]`
+next. These fields quantify preflight complexity: DOM/render/layout object
+counts, layer and display-command counts, framebuffer bytes, estimated pipeline
+heap, resource budget use and full-frame present scale. When the pseudo browser
+ran during `check`, the same summary also includes desktop tool-side stage
+timings such as parse, layout, paint and present microseconds. These timings are
+useful attribution, but they are still not device FPS. Use Win32 frame-script
+capture or device telemetry for actual frame time, DMA wait and panel flush
+time.
+
+Diagnostic titles and explanations try to reuse Web/CSS vocabulary when it
+matches the failure: parse error, invalid declaration, unsupported value,
+overflow, clipping, deferred API and similar terms. JellyFrame-specific `code`
+values remain stable machine-readable identifiers for tools.
+
 ## What You Can Rely On
 
 Stable authoring pieces today:

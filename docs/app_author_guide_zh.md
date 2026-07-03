@@ -33,6 +33,17 @@ python tools\jellyframe_cli.py check `
 部分建议会带 `recipe` 字段，指向 [app_author_recipes_zh.md](app_author_recipes_zh.md)
 中的可复制写法。
 
+如果页面感觉卡顿，下一步看 `performanceSummary` 和 `performanceAdvice[]`。这些字段会量化
+预检阶段能可靠判断的复杂度：DOM/render/layout 对象数量、layer 与 display command 数量、
+framebuffer bytes、估算 pipeline heap、资源预算占比和 full-frame present 规模。`check` 调用
+伪浏览器时，summary 还会带桌面工具侧阶段耗时，例如 parse、layout、paint、present 的微秒数。
+这些耗时适合判断“时间花在哪一步”，但仍不是设备 FPS。真实帧耗时、DMA wait 和 panel flush 时间
+仍应通过 Win32 frame-script capture 或设备 telemetry 获取。
+
+诊断标题和解释会尽量复用 Web/CSS 规范中已有的表达：parse error、invalid declaration、
+unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己的 `code` 字段只作为
+稳定的机器可读标识，便于工具和 CI 使用。
+
 ## 现在可以依赖什么
 
 目前比较稳定的作者能力：

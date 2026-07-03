@@ -239,12 +239,12 @@ ADVICE_BY_CODE = {
     },
     "style-property-unsupported": {
         "title": "CSS property is outside the supported subset",
-        "explanation": "The parser accepted the CSS syntax, but this property is not applied by JellyFrame.",
+        "explanation": "The declaration uses a property that is not implemented by the current JellyFrame CSS subset.",
         "action": "Replace it with a documented subset property from the capability matrix, or move the effect into a supported component/canvas path.",
     },
     "style-declaration-ignored": {
-        "title": "CSS declaration value was ignored",
-        "explanation": "The property may exist, but the specific value is outside the supported subset.",
+        "title": "CSS declaration has an unsupported value",
+        "explanation": "The property is recognized, but the value is invalid or outside the supported value grammar for this subset.",
         "action": "Use a simpler documented value. For sizing, prefer px, %, min/max/clamp subsets and box-sizing: border-box.",
     },
     "style-after-property-unsupported": {
@@ -263,13 +263,13 @@ ADVICE_BY_CODE = {
         "action": "Shrink the element, simplify the gradient, pre-render the asset, or move the effect behind an opt-in canvas/resource budget.",
     },
     "css-at-rule-skipped": {
-        "title": "CSS at-rule was skipped",
-        "explanation": "This at-rule is not part of the supported CSS subset.",
+        "title": "CSS at-rule is unsupported",
+        "explanation": "The at-rule was parsed as CSS input but does not match the supported at-rule subset.",
         "action": "Use supported @media rules and simple selectors, or move target-specific choices into manifest targets and plain CSS rules.",
     },
     "css-selector-skipped": {
-        "title": "CSS selector was skipped",
-        "explanation": "The selector is too complex or outside the supported selector subset.",
+        "title": "CSS selector is unsupported",
+        "explanation": "The selector requires semantics outside the supported selector subset and the rule was not applied.",
         "action": "Use simple class, id, element, descendant or documented pseudo-class selectors. Avoid browser-only selector tricks in app UI.",
     },
     "script-type-unsupported": {
@@ -470,6 +470,264 @@ def diagnostic_metrics_from_detail(parsed: dict) -> dict:
     return metrics
 
 
+def ratio_percent(used: int, limit: int) -> int:
+    if limit <= 0:
+        return 0
+    return int((max(0, used) * 100 + limit - 1) // limit)
+
+
+def perf_score_for_profile(profile: dict) -> int:
+    pipeline = profile.get("pipeline", {}) if isinstance(profile.get("pipeline", {}), dict) else {}
+    layout = profile.get("layout", {}) if isinstance(profile.get("layout", {}), dict) else {}
+    viewport = profile.get("viewport", {}) if isinstance(profile.get("viewport", {}), dict) else {}
+    width = int(viewport.get("width", 0) or 0)
+    height = int(viewport.get("height", 0) or 0)
+    area = max(1, width * height)
+    display_commands = int(pipeline.get("displayCommands", 0) or 0)
+    layers = int(pipeline.get("layers", 0) or 0)
+    estimated_heap = int(pipeline.get("estimatedHeapBytes", 0) or 0)
+    framebuffer_bytes = int(pipeline.get("framebufferBytes", 0) or 0)
+    score = 0
+    if estimated_heap > 768 * 1024:
+        score += 3
+    elif estimated_heap > 512 * 1024:
+        score += 2
+    elif estimated_heap > 384 * 1024:
+        score += 1
+    if framebuffer_bytes > 360000:
+        score += 2
+    elif framebuffer_bytes > 220160:
+        score += 1
+    if display_commands > max(96, area // 900):
+        score += 2
+    elif display_commands > max(64, area // 1400):
+        score += 1
+    if layers > 24:
+        score += 2
+    elif layers > 12:
+        score += 1
+    if bool(layout.get("horizontalOverflow", False)):
+        score += 1
+    return score
+
+
+def perf_rating(score: int) -> str:
+    if score >= 6:
+        return "high-risk"
+    if score >= 3:
+        return "watch"
+    return "ok"
+
+
+def top_timing_stage(timings: dict) -> dict:
+    ignored = {"total"}
+    top_name = ""
+    top_us = 0
+    for key, value in timings.items():
+        if key in ignored:
+            continue
+        try:
+            micros = int(value or 0)
+        except (TypeError, ValueError):
+            continue
+        if micros > top_us:
+            top_name = str(key)
+            top_us = micros
+    return {"stage": top_name, "us": top_us} if top_name else {}
+
+
+def append_performance_advice(advice: list[dict],
+                              seen: set[tuple[str, str]],
+                              code: str,
+                              severity: str,
+                              title: str,
+                              explanation: str,
+                              action: str,
+                              target: str = "",
+                              metrics: dict | None = None) -> None:
+    key = (code, target)
+    if key in seen:
+        return
+    seen.add(key)
+    entry = {
+        "code": code,
+        "severity": severity,
+        "title": title,
+        "explanation": explanation,
+        "action": action,
+    }
+    if target:
+        entry["target"] = target
+    if metrics:
+        entry["metrics"] = metrics
+    advice.append(entry)
+
+
+def collect_performance_summary(report: dict) -> dict:
+    profiles = report.get("responsiveProfiles", [])
+    if not isinstance(profiles, list) or not profiles:
+        pipeline = report.get("pipelineDiagnostics", {}).get("pipeline", {}) \
+            if isinstance(report.get("pipelineDiagnostics", {}), dict) else {}
+        if isinstance(pipeline, dict) and pipeline:
+            profiles = [{
+                "target": str(report.get("target", {}).get("id", "default"))
+                if isinstance(report.get("target", {}), dict) else "default",
+                "pipeline": {
+                    "domNodes": int(pipeline.get("domNodes", 0) or 0),
+                    "renderObjects": int(pipeline.get("renderObjects", 0) or 0),
+                    "layoutBoxes": int(pipeline.get("layoutBoxes", 0) or 0),
+                    "layers": int(pipeline.get("layers", 0) or 0),
+                    "displayCommands": int(pipeline.get("displayCommands", 0) or 0),
+                    "framebufferBytes": int(pipeline.get("framebufferBytes", 0) or 0),
+                    "estimatedHeapBytes": int(pipeline.get("estimatedHeapBytes", 0) or 0),
+                },
+                "layout": report.get("pipelineDiagnostics", {}).get("layout", {})
+                if isinstance(report.get("pipelineDiagnostics", {}), dict) else {},
+                "viewport": report.get("pipelineDiagnostics", {}).get("viewport", {})
+                if isinstance(report.get("pipelineDiagnostics", {}), dict) else {},
+                "frameUpdate": report.get("pipelineDiagnostics", {}).get("frameUpdate", {})
+                if isinstance(report.get("pipelineDiagnostics", {}), dict) else {},
+                "timingsUs": report.get("pipelineDiagnostics", {}).get("timingsUs", {})
+                if isinstance(report.get("pipelineDiagnostics", {}), dict) else {},
+            }]
+
+    per_target = []
+    max_score = 0
+    max_heap = 0
+    max_framebuffer = 0
+    max_display_commands = 0
+    max_layers = 0
+    max_dom_nodes = 0
+    max_total_us = 0
+    slowest_stage: dict = {}
+    full_frame_targets = 0
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        pipeline = profile.get("pipeline", {}) if isinstance(profile.get("pipeline", {}), dict) else {}
+        frame_update = profile.get("frameUpdate", {}) if isinstance(profile.get("frameUpdate", {}), dict) else {}
+        timings = profile.get("timingsUs", {}) if isinstance(profile.get("timingsUs", {}), dict) else {}
+        score = perf_score_for_profile(profile)
+        max_score = max(max_score, score)
+        dom_nodes = int(pipeline.get("domNodes", 0) or 0)
+        layers = int(pipeline.get("layers", 0) or 0)
+        display_commands = int(pipeline.get("displayCommands", 0) or 0)
+        framebuffer_bytes = int(pipeline.get("framebufferBytes", 0) or 0)
+        estimated_heap = int(pipeline.get("estimatedHeapBytes", 0) or 0)
+        max_heap = max(max_heap, estimated_heap)
+        max_framebuffer = max(max_framebuffer, framebuffer_bytes)
+        max_display_commands = max(max_display_commands, display_commands)
+        max_layers = max(max_layers, layers)
+        max_dom_nodes = max(max_dom_nodes, dom_nodes)
+        total_us = int(timings.get("total", 0) or 0) if isinstance(timings, dict) else 0
+        if total_us > max_total_us:
+            max_total_us = total_us
+            slowest_stage = top_timing_stage(timings)
+        if frame_update.get("repaint") == "full-frame":
+            full_frame_targets += 1
+        per_target.append({
+            "target": str(profile.get("target", "default")),
+            "rating": perf_rating(score),
+            "score": score,
+            "domNodes": dom_nodes,
+            "layers": layers,
+            "displayCommands": display_commands,
+            "framebufferBytes": framebuffer_bytes,
+            "estimatedHeapBytes": estimated_heap,
+            "frameUpdate": frame_update if isinstance(frame_update, dict) else {},
+            "timingsUs": timings if isinstance(timings, dict) else {},
+        })
+
+    budget = report.get("runtimeBudgetEstimate", {})
+    resource_budget = budget.get("resources", {}) if isinstance(budget, dict) and isinstance(budget.get("resources", {}), dict) else {}
+    display_budget = budget.get("displayCommands", {}) if isinstance(budget, dict) and isinstance(budget.get("displayCommands", {}), dict) else {}
+    resource_used = int(resource_budget.get("used", 0) or 0)
+    resource_limit = int(resource_budget.get("limit", 0) or 0)
+    display_limit = int(display_budget.get("limit", 0) or 0)
+
+    return {
+        "model": "jellyframe.package.performance-summary.v0",
+        "source": "package-preflight-estimate",
+        "rating": perf_rating(max_score),
+        "score": max_score,
+        "targetCount": len(per_target),
+        "maxEstimatedHeapBytes": max_heap,
+        "maxFramebufferBytes": max_framebuffer,
+        "maxDisplayCommands": max_display_commands,
+        "maxLayers": max_layers,
+        "maxDomNodes": max_dom_nodes,
+        "maxTotalPipelineUs": max_total_us,
+        "slowestMeasuredStage": slowest_stage,
+        "fullFramePresentTargets": full_frame_targets,
+        "resourceBudgetPercent": ratio_percent(resource_used, resource_limit),
+        "displayCommandBudgetPercent": ratio_percent(max_display_commands, display_limit),
+        "perTarget": per_target,
+        "notes": [
+            "This is a static preflight estimate, not measured frame time.",
+            "Use Win32 frame-script capture or port telemetry for actual milliseconds, DMA wait and flush-done timing.",
+        ],
+    }
+
+
+def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
+    advice: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for target in summary.get("perTarget", []):
+        if not isinstance(target, dict):
+            continue
+        name = str(target.get("target", "default"))
+        commands = int(target.get("displayCommands", 0) or 0)
+        layers = int(target.get("layers", 0) or 0)
+        heap = int(target.get("estimatedHeapBytes", 0) or 0)
+        framebuffer = int(target.get("framebufferBytes", 0) or 0)
+        if heap > 512 * 1024:
+            append_performance_advice(
+                advice, seen, "performance-pipeline-heap-estimate", "warning",
+                "Pipeline heap estimate is high",
+                "The preflight render pipeline estimates more heap than a small MCU profile usually wants to spend on one app frame.",
+                "Reduce DOM depth, large images, nested layout, extra layers and heavy visual effects before testing on a small internal-RAM target.",
+                name, {"estimatedHeapBytes": heap})
+        if framebuffer > 220160:
+            append_performance_advice(
+                advice, seen, "performance-full-frame-present-bytes", "info",
+                "Full-frame present is expensive on this target",
+                "The first paint uses a full-frame repaint/present. On RGB565 panels this is often dominated by conversion, DMA and panel flush time.",
+                "Keep scrolling and animations on dirty rectangles or scroll-strip paths; use port telemetry to confirm converted pixels, packed bytes and DMA wait.",
+                name, {"framebufferBytes": framebuffer})
+        if commands > 96:
+            append_performance_advice(
+                advice, seen, "performance-display-command-count", "warning",
+                "Display command count is high",
+                "Many display commands increase layer flattening and dirty-rect replay work on CPU-rendered embedded targets.",
+                "Merge decorative boxes, prefer CSS backgrounds over extra DOM where possible, and avoid rebuilding static decoration every frame.",
+                name, {"displayCommands": commands})
+        if layers > 16:
+            append_performance_advice(
+                advice, seen, "performance-layer-count", "warning",
+                "Layer count is high",
+                "Many layers make hit testing, sorting, compositing and dirty-region analysis more expensive.",
+                "Use positioning and transforms only where they buy real behavior; keep repeated decorative elements in normal flow when possible.",
+                name, {"layers": layers})
+
+    resource_percent = int(summary.get("resourceBudgetPercent", 0) or 0)
+    if resource_percent >= 80:
+        append_performance_advice(
+            advice, seen, "performance-resource-budget-high", "warning",
+            "Package resources are close to the budget",
+            "Large bundled resources increase install size, flash pressure and image/font decode pressure even before runtime work starts.",
+            "Compress or subset assets, remove unused images/audio/fonts, and prefer generated CSS/canvas decoration only when it is cheaper on the target.",
+            "", {"resourceBudgetPercent": resource_percent})
+    display_percent = int(summary.get("displayCommandBudgetPercent", 0) or 0)
+    if display_percent >= 80:
+        append_performance_advice(
+            advice, seen, "performance-display-command-budget-high", "warning",
+            "Display commands are close to the manifest budget",
+            "The page is near the configured display-command cap; future UI states may overflow or trigger degraded rendering.",
+            "Raise the budget only after measuring the target, or simplify repeated decoration and offscreen content.",
+            "", {"displayCommandBudgetPercent": display_percent})
+    return advice
+
+
 def append_developer_advice(advice: list[dict],
                             seen: set[tuple[str, str, str]],
                             code: str,
@@ -609,6 +867,13 @@ def collect_developer_advice(report: dict) -> list[dict]:
 
 def enrich_report(report: dict) -> dict:
     report.pop("developerAdvice", None)
+    report.pop("performanceSummary", None)
+    report.pop("performanceAdvice", None)
+    performance_summary = collect_performance_summary(report)
+    report["performanceSummary"] = performance_summary
+    performance_advice = collect_performance_advice(report, performance_summary)
+    if performance_advice:
+        report["performanceAdvice"] = performance_advice
     advice = collect_developer_advice(report)
     if advice:
         report["developerAdvice"] = advice
@@ -821,6 +1086,7 @@ def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_
     pipeline = pipeline_report.get("pipeline", {}) if isinstance(pipeline_report, dict) else {}
     summary = pipeline_report.get("summary", {}) if isinstance(pipeline_report, dict) else {}
     frame_update = pipeline_report.get("frameUpdate", {}) if isinstance(pipeline_report, dict) else {}
+    timings = pipeline_report.get("timingsUs", {}) if isinstance(pipeline_report, dict) else {}
     target_viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
     shape = target_viewport.get("shape", "")
     return {
@@ -848,6 +1114,7 @@ def responsive_profile_from_pipeline(target: str, target_config: dict, pipeline_
             "estimatedHeapBytes": int(pipeline.get("estimatedHeapBytes", 0) or 0),
         },
         "frameUpdate": frame_update if isinstance(frame_update, dict) else {},
+        "timingsUs": timings if isinstance(timings, dict) else {},
         "diagnostics": {
             "total": int(summary.get("total", 0) or 0),
             "info": int(summary.get("info", 0) or 0),
@@ -1287,6 +1554,7 @@ def sample_package_roots(samples_dir: Path) -> list[Path]:
 def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> dict:
     errors, warnings, infos = diagnostic_status_from_report(report_path)
     report = load_json_if_exists(report_path)
+    performance = report.get("performanceSummary", {}) if isinstance(report.get("performanceSummary", {}), dict) else {}
     targets = []
     for profile in report.get("responsiveProfiles", []):
         if not isinstance(profile, dict):
@@ -1304,6 +1572,8 @@ def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> d
         "errors": errors,
         "warnings": warnings,
         "infos": infos,
+        "performance": str(performance.get("rating", "unknown")),
+        "performanceScore": int(performance.get("score", 0) or 0),
         "targets": targets,
         "report": str(report_path),
     }
@@ -1325,6 +1595,7 @@ def format_doctor_summary(row: dict) -> str:
         f"diagnostics={int(row.get('errors', 0) or 0)}/"
         f"{int(row.get('warnings', 0) or 0)}/"
         f"{int(row.get('infos', 0) or 0)} "
+        f"perf={row.get('performance', 'unknown')}/{int(row.get('performanceScore', 0) or 0)} "
         f"targets={target_text} report={row.get('report', '')}"
     )
 

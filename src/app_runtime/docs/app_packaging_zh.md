@@ -779,7 +779,12 @@ classic script 和 HTML inline script，不执行 JavaScript。当前会识别 `
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote
 reference 诊断、`scriptApiDiagnostics`、`imageDiagnostics`、`fontDiagnostics`、package-resource warnings 和
-`pipelineDiagnostics`。`runtimeBudgetEstimate`
+`pipelineDiagnostics`。CLI 还会从同一份 package 和 pipeline 数据派生 `performanceSummary`
+和可选 `performanceAdvice[]`，量化静态预检阶段可判断的性能风险：对象数量、layer/display
+command 数量、framebuffer bytes、估算 pipeline heap、资源预算占比和 full-frame present
+规模。存在伪浏览器 diagnostics 时，summary 也会携带桌面工具侧阶段耗时微秒数
+（`timingsUs`），用于判断 parse、layout、paint 或 present 哪一步占主导；这些耗时是归因数据，
+不是设备 FPS。`runtimeBudgetEstimate`
 是 package-preflight 估算：它报告打包阶段已知的 resource/font 用量和 manifest/target budget
 上限；真实运行时的 queue/handle/timer/listener 计数来自 host/runtime capture 路径中的
 `AppBudgetSnapshot`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、面向内存的管线统计、
