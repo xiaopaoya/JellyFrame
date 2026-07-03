@@ -292,6 +292,11 @@ ADVICE_BY_CODE = {
         "explanation": "JellyFrame V0 exposes host-injected wall-clock time through Date.now(); a no-argument Date() call is not documented as host-clock controlled.",
         "action": "Use new Date(Date.now()) when a Date object is needed, or keep Date.now() as the stored numeric timestamp.",
     },
+    "script-api-deferred": {
+        "title": "JavaScript API is outside the current runtime subset",
+        "explanation": "The script references a browser API that is documented as deferred in the current JellyFrame JavaScript subset.",
+        "action": "Use the documented V0 substitute when one exists, or move this behavior behind a desktop build step or future host/runtime capability.",
+    },
     "font-family-unmatched": {
         "title": "CSS font-family is not a manifest runtime font",
         "explanation": "A custom primary font-family was used in CSS but no manifest .jffont family matches it.",

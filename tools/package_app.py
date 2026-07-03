@@ -760,6 +760,36 @@ SCRIPT_API_USAGE_WARNINGS = [
         "pattern": re.compile(r"(?:\bnew\s+Date\s*\(\s*\)|(?<![\w.])Date\s*\(\s*\))"),
         "message": "script uses Date() without an explicit value; JellyFrame host time is exposed through Date.now()",
     },
+    {
+        "api": "fetch",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"(?<![\w.])fetch\s*\("),
+        "message": "script uses fetch(), which is deferred until bounded Promise/microtask support is available; use XMLHttpRequest GET V0",
+    },
+    {
+        "api": "Promise",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bPromise\b"),
+        "message": "script uses Promise, which is deferred until JellyFrame has bounded microtask support",
+    },
+    {
+        "api": "querySelector",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bquerySelector(?:All)?\s*\("),
+        "message": "script uses querySelector/querySelectorAll, which is deferred; use IDs, classes and small explicit DOM references",
+    },
+    {
+        "api": "innerHTML",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\binnerHTML\b"),
+        "message": "script uses innerHTML, which is deferred; use textContent or DOM creation APIs",
+    },
+    {
+        "api": "dynamic import",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bimport\s*\("),
+        "message": "script uses dynamic import, which is deferred; bundle to classic package-local scripts before packaging",
+    },
 ]
 
 

@@ -772,7 +772,9 @@ classic script 和 HTML inline script，不执行 JavaScript。当前会识别 `
 工具会输出 `script-capability-missing` warning；CLI 的 `developerAdvice[]` 会把它解释为
 “补 manifest capability，并确认 target profile 支持”。这项检查不进入 MCU runtime，也不替代
 真实 host 授权。无参 `Date()` / `new Date()` 会输出 `script-host-time-ambiguous`；
-需要宿主时钟时使用 `Date.now()`，需要 Date 对象时使用 `new Date(Date.now())`。
+需要宿主时钟时使用 `Date.now()`，需要 Date 对象时使用 `new Date(Date.now())`。`fetch()`、
+`Promise`、`querySelector`、`innerHTML` 和动态 `import()` 等延后 API 会输出
+`script-api-deferred`。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote

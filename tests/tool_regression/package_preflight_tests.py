@@ -278,6 +278,29 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(warnings[0]["code"], "script-host-time-ambiguous")
         self.assertEqual(warnings[0]["api"], "Date")
 
+    def test_script_api_diagnostics_warn_for_deferred_web_apis(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-script-deferred-api-diagnostics-") as directory:
+            root = Path(directory)
+            script = root / "scripts" / "app.js"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                "fetch('/data.json');\n"
+                "Promise.resolve(1);\n"
+                "document.querySelector('.card');\n"
+                "view.innerHTML = '<b>unsafe</b>';\n"
+                "import('./chunk.js');\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
+
+        self.assertEqual(diagnostics["entryCount"], 5)
+        self.assertEqual(
+            sorted(warning["api"] for warning in warnings),
+            ["Promise", "dynamic import", "fetch", "innerHTML", "querySelector"],
+        )
+        self.assertTrue(all(warning["code"] == "script-api-deferred" for warning in warnings))
+
     def test_runtime_budget_estimate_reports_package_known_usage(self):
         resources = [
             {"size": 100},
@@ -576,6 +599,11 @@ class PackagePreflightTests(unittest.TestCase):
                 "source": "/scripts/app.js",
             }, {
                 "level": "warning",
+                "code": "script-api-deferred",
+                "message": "script uses fetch",
+                "source": "/scripts/app.js",
+            }, {
+                "level": "warning",
                 "code": "future-diagnostic-code",
                 "message": "future warning shape",
                 "source": "future",
@@ -619,6 +647,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("service-target-unsupported", codes)
         self.assertIn("script-capability-missing", codes)
         self.assertIn("script-host-time-ambiguous", codes)
+        self.assertIn("script-api-deferred", codes)
         self.assertIn("future-diagnostic-code", codes)
         self.assertIn("layout-text-overflow", codes)
         self.assertIn("visual-scroll-container", codes)
