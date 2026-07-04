@@ -10,8 +10,9 @@ interfaces and host contracts. These docs should stay close to the code.
 3. [app_author_guide.md](app_author_guide.md) if you are writing apps.
 4. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
 5. [developer_capability_matrix.md](developer_capability_matrix.md)
-6. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
-7. The module document for the area you want to use, port or inspect.
+6. [html_living_standard_support_table.md](html_living_standard_support_table.md) if you need to search HTML Living Standard feature support.
+7. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
+8. The module document for the area you want to use, port or inspect.
 
 ## Technical Documents
 
@@ -80,6 +81,10 @@ interfaces and host contracts. These docs should stay close to the code.
   component recipes for buttons, cards, scroll lists and bottom navigation.
 - [developer_capability_matrix.md](developer_capability_matrix.md): the primary
   can-do/cannot-do contract.
+- [html_living_standard_support_table.md](html_living_standard_support_table.md):
+  full searchable HTML Living Standard support table.
+- [html_living_standard_support_table.csv](html_living_standard_support_table.csv):
+  machine-readable version of the same table for editor/tooling integrations.
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish
   control and motion design system.
 - [versioning.md](versioning.md): versioning and release discipline.

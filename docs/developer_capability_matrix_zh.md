@@ -26,6 +26,31 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 - **延后**：刻意不支持；不要依赖。
 - **壳层限定**：只存在于桌面例程或 Win32 验证壳，不属于平台无关核心。
 
+## HTML Living Standard 支持表
+
+本能力矩阵是面向 app 作者的可读契约，负责解释 JellyFrame 重要子集和降级行为。
+如果要在使用某个标签、DOM API 或浏览器行为前查支持性，请使用 HTML Living Standard
+全量支持表：
+
+- 面向人阅读：[html_living_standard_support_table_zh.md](html_living_standard_support_table_zh.md)
+- 面向工具消费：[html_living_standard_support_table.csv](html_living_standard_support_table.csv)
+
+全量表故意保持完整、便于搜索；能力矩阵保持更短，只解释 app 作者最可能依赖的行为细节。
+
+全量表里的状态含义：
+
+- `supported`：可按 JellyFrame 文档化子集使用。
+- `partial`：只有子集、降级或普通元素保留；详细行为看本能力矩阵。
+- `host_dependent`：依赖 manifest capability、target profile、宿主服务、codec、文本后端或预算。
+- `unsupported`：不要在 JellyFrame app 中依赖。
+- `out_of_scope`：规范说明文字、旧浏览器兼容机制，或 app runtime 明确排除的浏览器级能力。
+
+当前从 HTML LS 审计中得到的扩展候选包括 `details` / `summary`、`title` / `lang` /
+`dir` 等标准反射属性、有界表单控件行为，以及只放在 `graphics.canvas2d` 内的可选
+Canvas 补充。navigation/history、browsing context、Workers、Worklets、完整媒体、
+Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语法仍是明确
+非目标；除非未来产品 profile 把它们做成宿主持有 capability，否则不进入页面可依赖能力。
+
 ## 最适合的项目
 
 适合：

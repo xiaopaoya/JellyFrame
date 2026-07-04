@@ -28,6 +28,38 @@ part of the app syntax contract.
 - **Deferred**: intentionally absent; do not depend on it.
 - **Shell-only**: available in desktop examples, not in platform-neutral core.
 
+## HTML Living Standard Support Table
+
+This matrix is the readable contract for important JellyFrame subsets and
+degradation behavior. For exhaustive lookup before using a tag, DOM API or
+browser behavior, use the full HTML Living Standard support table:
+
+- Human-readable: [html_living_standard_support_table.md](html_living_standard_support_table.md)
+- Machine-readable: [html_living_standard_support_table.csv](html_living_standard_support_table.csv)
+
+The full table is intentionally exhaustive and searchable. This matrix stays
+shorter and explains the behaviors that app authors are most likely to depend
+on.
+
+Status values in the full table mean:
+
+- `supported`: usable in the documented JellyFrame subset.
+- `partial`: supported only as a subset, fallback or ordinary-element
+  preservation; check this matrix for details.
+- `host_dependent`: requires a manifest capability, target profile, host
+  service, codec, text backend or budget.
+- `unsupported`: do not rely on it in JellyFrame apps.
+- `out_of_scope`: specification prose, legacy browser compatibility machinery or
+  browser-scale behavior outside the app runtime contract.
+
+Current expansion candidates from the HTML LS pass are `details` / `summary`,
+standard reflected attributes such as `title` / `lang` / `dir`, bounded
+form-control behavior, and optional Canvas additions inside `graphics.canvas2d`.
+Browser-scale systems such as navigation/history, browsing contexts, Workers,
+Worklets, full media, Shadow DOM, Custom Elements lifecycle, Microdata export
+and XML/XHTML syntax are explicit non-goals unless a future product profile
+creates a separate host-owned capability.
+
 ## Best Fit
 
 JellyFrame works best for:
