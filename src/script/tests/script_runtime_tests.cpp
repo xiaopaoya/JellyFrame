@@ -486,6 +486,42 @@ void javascript_element_style_hidden_and_disabled_properties_work() {
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "style/hidden/disabled mark layout dirty");
 }
 
+void javascript_standard_reflected_attributes_work() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<html dir='ltr'><head><title>Old</title></head><body>"
+        "<details id='panel'><summary>More</summary></details>"
+        "<input id='name' maxlength='5' min='1' max='9' step='2'></body></html>");
+    clear_dirty_flags(*document);
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var panel = document.getElementById('panel');"
+        "var name = document.getElementById('name');"
+        "panel.title = 'Tip';"
+        "panel.lang = 'zh-CN';"
+        "panel.dir = 'rtl';"
+        "panel.open = true;"
+        "name.readOnly = true;"
+        "name.maxLength = 3;"
+        "name.min = '2';"
+        "name.max = '8';"
+        "name.step = '3';"
+        "var beforeTitle = document.title;"
+        "document.title = 'New';"
+        "document.dir = 'rtl';"
+        "beforeTitle + ':' + document.title + ':' + document.dir + ':' + "
+        "panel.title + ':' + panel.lang + ':' + panel.dir + ':' + panel.open + ':' + "
+        "name.readOnly + ':' + name.maxLength + ':' + name.min + ':' + name.max + ':' + name.step");
+
+    check(result.ok, "reflected attribute script succeeds");
+    check(result.value == "Old:New:rtl:Tip:zh-CN:rtl:true:true:3:2:8:3",
+          "standard reflected attributes round-trip through JS");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U,
+          "reflected attributes mark layout/style dirty");
+}
+
 void javascript_element_style_extended_properties_work() {
     HtmlParser parser;
     auto document = parser.parse("<body><div id='dial'></div></body>");
@@ -1202,6 +1238,7 @@ int main() {
         javascript_id_and_document_body_reflect_dom_attributes();
         javascript_class_list_subset_mutates_class_attribute();
         javascript_element_style_hidden_and_disabled_properties_work();
+        javascript_standard_reflected_attributes_work();
         javascript_element_style_extended_properties_work();
         javascript_input_event_reads_live_value();
         javascript_timeout_runs_when_host_pumps_time();

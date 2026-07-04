@@ -1124,6 +1124,83 @@ jerry_value_t node_set_class_name(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t node_get_reflected_string_attribute(const jerry_call_info_t* call_info_p,
+                                                  const char* attribute_name) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    return jerry_string_sz(node->attribute(attribute_name).c_str());
+}
+
+jerry_value_t node_set_reflected_string_attribute(const jerry_call_info_t* call_info_p,
+                                                  const jerry_value_t args_p[],
+                                                  const jerry_length_t args_count,
+                                                  const char* attribute_name) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element) {
+        node->set_attribute(attribute_name, args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+#define JELLYFRAME_REFLECTED_STRING_ACCESSOR(js_name, attr_name) \
+    jerry_value_t node_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        return node_get_reflected_string_attribute(call_info_p, attr_name); \
+    } \
+    jerry_value_t node_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        return node_set_reflected_string_attribute(call_info_p, args_p, args_count, attr_name); \
+    }
+
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(title, "title")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(lang, "lang")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(dir, "dir")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(min, "min")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(max, "max")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(step, "step")
+
+#undef JELLYFRAME_REFLECTED_STRING_ACCESSOR
+
+jerry_value_t node_get_reflected_int_attribute(const jerry_call_info_t* call_info_p,
+                                               const char* attribute_name,
+                                               int missing_value) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_number(missing_value);
+    }
+    const std::string& value = node->attribute(attribute_name);
+    if (value.empty()) {
+        return jerry_number(missing_value);
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(value.c_str(), &end, 10);
+    return jerry_number(end != value.c_str() ? static_cast<int>(parsed) : missing_value);
+}
+
+jerry_value_t node_set_reflected_int_attribute(const jerry_call_info_t* call_info_p,
+                                               const jerry_value_t args_p[],
+                                               const jerry_length_t args_count,
+                                               const char* attribute_name) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element && args_count > 0) {
+        node->set_attribute(attribute_name, std::to_string(int_from_value(args_p[0], -1)));
+    }
+    return jerry_undefined();
+}
+
+#define JELLYFRAME_REFLECTED_INT_ACCESSOR(js_name, attr_name, missing_value) \
+    jerry_value_t node_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        return node_get_reflected_int_attribute(call_info_p, attr_name, missing_value); \
+    } \
+    jerry_value_t node_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        return node_set_reflected_int_attribute(call_info_p, args_p, args_count, attr_name); \
+    }
+
+JELLYFRAME_REFLECTED_INT_ACCESSOR(maxLength, "maxlength", -1)
+JELLYFRAME_REFLECTED_INT_ACCESSOR(minLength, "minlength", -1)
+
+#undef JELLYFRAME_REFLECTED_INT_ACCESSOR
+
 std::vector<std::string> class_tokens_for(const Node& node) {
     std::vector<std::string> tokens;
     const std::string& value = node.attribute("class");
@@ -1312,6 +1389,48 @@ jerry_value_t node_set_disabled(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t node_get_read_only(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && has_attribute(*node, "readonly"));
+}
+
+jerry_value_t node_set_read_only(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr) {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("readonly", "");
+        } else {
+            node->remove_attribute("readonly");
+        }
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_open(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t[],
+                            const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && has_attribute(*node, "open"));
+}
+
+jerry_value_t node_set_open(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t args_p[],
+                            const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr) {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("open", "");
+        } else {
+            node->remove_attribute("open");
+        }
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t node_get_value(const jerry_call_info_t* call_info_p,
                              const jerry_value_t[],
                              const jerry_length_t) {
@@ -1391,6 +1510,18 @@ jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
 jerry_value_t document_get_body(const jerry_call_info_t* call_info_p,
                                 const jerry_value_t[],
                                 const jerry_length_t);
+jerry_value_t document_get_title_attr(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t[],
+                                      const jerry_length_t);
+jerry_value_t document_set_title_attr(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count);
+jerry_value_t document_get_dir(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t[],
+                               const jerry_length_t);
+jerry_value_t document_set_dir(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count);
 jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count);
@@ -2809,6 +2940,9 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
     define_accessor(object.get(), "id", node_get_id, node_set_id);
     define_accessor(object.get(), "className", node_get_class_name, node_set_class_name);
+    define_accessor(object.get(), "title", node_get_title, node_set_title);
+    define_accessor(object.get(), "lang", node_get_lang, node_set_lang);
+    define_accessor(object.get(), "dir", node_get_dir, node_set_dir);
     define_accessor(object.get(), "classList", node_get_class_list, node_ignore_setter);
     define_accessor(object.get(), "parentElement", node_get_parent_element, node_ignore_setter);
     define_accessor(object.get(), "children", node_get_children, node_ignore_setter);
@@ -2816,10 +2950,17 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     define_accessor(object.get(), "style", node_get_style_object, node_ignore_setter);
     define_accessor(object.get(), "hidden", node_get_hidden, node_set_hidden);
     define_accessor(object.get(), "disabled", node_get_disabled, node_set_disabled);
+    define_accessor(object.get(), "open", node_get_open, node_set_open);
     if (is_form_control(node)) {
         define_accessor(object.get(), "value", node_get_value, node_set_value);
         define_accessor(object.get(), "checked", node_get_checked, node_set_checked);
         define_accessor(object.get(), "selectedIndex", node_get_selected_index, node_set_selected_index);
+        define_accessor(object.get(), "readOnly", node_get_read_only, node_set_read_only);
+        define_accessor(object.get(), "maxLength", node_get_maxLength, node_set_maxLength);
+        define_accessor(object.get(), "minLength", node_get_minLength, node_set_minLength);
+        define_accessor(object.get(), "min", node_get_min, node_set_min);
+        define_accessor(object.get(), "max", node_get_max, node_set_max);
+        define_accessor(object.get(), "step", node_get_step, node_set_step);
     }
     set_method(object.get(), "appendChild", node_append_child);
     set_method(object.get(), "removeChild", node_remove_child);
@@ -2847,6 +2988,8 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         define_accessor(object.get(), "hidden", document_get_hidden, node_ignore_setter);
         define_accessor(object.get(), "visibilityState", document_get_visibility_state, node_ignore_setter);
         define_accessor(object.get(), "body", document_get_body, node_ignore_setter);
+        define_accessor(object.get(), "title", document_get_title_attr, document_set_title_attr);
+        define_accessor(object.get(), "dir", document_get_dir, document_set_dir);
         set_method(object.get(), "getElementById", document_get_element_by_id);
         set_method(object.get(), "querySelector", document_query_selector);
         set_method(object.get(), "querySelectorAll", document_query_selector_all);
@@ -3073,6 +3216,61 @@ jerry_value_t document_get_body(const jerry_call_info_t* call_info_p,
     }
     Node* body = find_first_element_by_tag(*document, "body");
     return body != nullptr ? make_node_wrapper(*runtime, *body, false) : jerry_null();
+}
+
+Node* document_direction_element(Node& document) {
+    if (Node* html = find_first_element_by_tag(document, "html")) {
+        return html;
+    }
+    if (Node* body = find_first_element_by_tag(document, "body")) {
+        return body;
+    }
+    return &document;
+}
+
+jerry_value_t document_get_title_attr(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t[],
+                                      const jerry_length_t) {
+    Node* document = native_node(call_info_p->this_value);
+    if (document == nullptr) {
+        return jerry_string_sz("");
+    }
+    Node* title = find_first_element_by_tag(*document, "title");
+    return jerry_string_sz(title != nullptr ? title->text_content().c_str() : "");
+}
+
+jerry_value_t document_set_title_attr(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    Node* document = native_node(call_info_p->this_value);
+    if (document == nullptr) {
+        return jerry_undefined();
+    }
+    Node* title = find_first_element_by_tag(*document, "title");
+    if (title == nullptr) {
+        Node& created = document->append_child(make_element("title"));
+        title = &created;
+    }
+    title->set_text_content(args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    return jerry_undefined();
+}
+
+jerry_value_t document_get_dir(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t[],
+                               const jerry_length_t) {
+    Node* document = native_node(call_info_p->this_value);
+    return jerry_string_sz(document != nullptr ? document_direction_element(*document)->attribute("dir").c_str() : "");
+}
+
+jerry_value_t document_set_dir(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count) {
+    Node* document = native_node(call_info_p->this_value);
+    if (document != nullptr) {
+        document_direction_element(*document)->set_attribute(
+            "dir", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
 }
 
 jerry_value_t document_query_selector(const jerry_call_info_t* call_info_p,

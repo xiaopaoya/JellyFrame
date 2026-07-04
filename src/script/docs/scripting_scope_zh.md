@@ -35,6 +35,9 @@ API 表面。
 - `element.setAttribute(name, value)`。
 - `element.getAttribute(name)`。
 - `node.textContent` getter/setter。
+- `document.title` 读取/写入第一个 `title` 元素文本。
+- `document.dir` 反射 `html` 上的文档方向属性；简化文档中会 fallback 到 body/document。
+- element 字符串反射属性：`title`、`lang` 和 `dir`。
 - `jellyframe_win32_browser --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
   因此脚本 mutation 会影响最终渲染输出。
 
@@ -51,6 +54,9 @@ API 表面。
 - JavaScript listener 复用现有 C++ capture/target/bubble 事件流，并可在 native input dispatch
   过程中修改 DOM。
 - scripting 构建中的 Win32 browser shell 支持 `--script file.js`，并在脚本事件回调弄脏 DOM 后重绘。
+- `details` 内的 `summary` 走普通事件路径。点击或焦点激活会作为默认动作切换父
+  `details.open`，`click.preventDefault()` 可阻止该切换。disclosure 状态变化会派发普通
+  `toggle` 事件；不暴露 `ToggleEvent` 类。
 
 ## Form Controls
 
@@ -61,7 +67,13 @@ API 表面。
   - `radio.checked`
   - `select.value`
   - `select.selectedIndex`
+  - `input.readOnly` / `textarea.readOnly`
+  - `input.maxLength` / `textarea.maxLength`
+  - `input.minLength` / `textarea.minLength`，仅作为反射
+  - `input.min` / `input.max` / `input.step`
 - 原生文本输入、Backspace、checkbox/radio/select 激活和 range 拖动会更新 JavaScript 可见的控件状态。
+- 文本输入类控件在用户输入路径遵守 `readonly` 和 `maxlength`。脚本写 `value` 仍是程序性状态修改。
+- Range 控件会用 `min`、`max` 和 `step` 处理指针/按键移动。
 - 原生输入派发会通过现有 C++ 事件流触发 JavaScript 可观察的 `input` 和 `change` 事件。
 - JavaScript 修改表单状态后会标记 DOM dirty，宿主可以据此重绘轻量原生风格控件。
 - Win32 壳可以运行 `samples/apps/loose` 中的小型应用式示例。
@@ -161,7 +173,7 @@ API 表面。
   - 面向同一安全 CSS 属性子集的 `element.style.getPropertyValue(name)`、
     `setProperty(name, value)` 和 `removeProperty(name)`，以及 `--progress`
     这类 CSS custom property
-  - `element.hidden` 和 `element.disabled`
+  - `element.hidden`、`element.disabled` 和 `element.open`
 - `matches`/`closest`/`querySelector(All)` 支持的 selector 刻意保持很小：tag、`.class`、`#id`、
   `[attr]`、`[attr=value]` 和同一 compound 内组合，例如 `button.primary`。
   Descendant/child combinator 目前仍只在 CSS 中支持。

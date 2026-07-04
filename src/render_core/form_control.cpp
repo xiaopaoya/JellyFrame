@@ -1,5 +1,7 @@
 ﻿#include "render_core/form_control.h"
 
+#include "render_core/text_scan.h"
+
 #include <algorithm>
 #include <cerrno>
 #include <cctype>
@@ -26,6 +28,36 @@ int parse_int_attribute(const Node& node, const std::string& name, int fallback)
         return fallback;
     }
     return static_cast<int>(parsed);
+}
+
+int max_length_for(const Node& node) {
+    const int value = parse_int_attribute(node, "maxlength", -1);
+    return value >= 0 ? value : -1;
+}
+
+std::size_t codepoint_count(std::string_view text) {
+    std::size_t count = 0;
+    for (std::size_t index = 0; index < text.size();) {
+        consume_utf8_codepoint(text, index);
+        ++count;
+    }
+    return count;
+}
+
+std::string_view clamp_append_text(const std::string& current, std::string_view text, int max_length) {
+    if (max_length < 0) {
+        return text;
+    }
+    const std::size_t current_count = codepoint_count(current);
+    if (current_count >= static_cast<std::size_t>(max_length)) {
+        return {};
+    }
+    const std::size_t remaining = static_cast<std::size_t>(max_length) - current_count;
+    std::size_t index = 0;
+    for (std::size_t count = 0; count < remaining && index < text.size(); ++count) {
+        consume_utf8_codepoint(text, index);
+    }
+    return text.substr(0, index);
 }
 
 void append_descendant_text(const Node& node, std::string& output) {
@@ -292,6 +324,10 @@ bool is_text_entry_control(const Node& node) {
         kind == FormControlKind::Date || kind == FormControlKind::Time || kind == FormControlKind::Color;
 }
 
+bool is_readonly_text_control(const Node& node) {
+    return is_text_entry_control(node) && has_attribute(node, "readonly");
+}
+
 FormControlState& ensure_form_control_state(const Node& node) {
     if (!node.form_control_state) {
         node.form_control_state = std::make_unique<FormControlState>(make_initial_state(node));
@@ -332,10 +368,15 @@ std::string form_control_display_text(const Node& node) {
 }
 
 bool append_text_to_control(Node& node, std::string_view text) {
-    if (is_disabled_form_control(node) || !is_text_entry_control(node) || text.empty()) {
+    if (is_disabled_form_control(node) || is_readonly_text_control(node) ||
+        !is_text_entry_control(node) || text.empty()) {
         return false;
     }
     FormControlState& state = ensure_form_control_state(node);
+    text = clamp_append_text(state.value, text, max_length_for(node));
+    if (text.empty()) {
+        return false;
+    }
     state.value.append(text.data(), text.size());
     state.dirty = true;
     mark_dirty(node, DomDirtyPaint);
@@ -343,7 +384,7 @@ bool append_text_to_control(Node& node, std::string_view text) {
 }
 
 bool backspace_control(Node& node) {
-    if (is_disabled_form_control(node) || !is_text_entry_control(node)) {
+    if (is_disabled_form_control(node) || is_readonly_text_control(node) || !is_text_entry_control(node)) {
         return false;
     }
     FormControlState& state = ensure_form_control_state(node);
@@ -357,7 +398,7 @@ bool backspace_control(Node& node) {
 }
 
 bool complete_text_control_from_datalist(Node& node) {
-    if (is_disabled_form_control(node) || !is_text_entry_control(node)) {
+    if (is_disabled_form_control(node) || is_readonly_text_control(node) || !is_text_entry_control(node)) {
         return false;
     }
     const std::string& list_id = node.attribute("list");
@@ -373,6 +414,12 @@ bool complete_text_control_from_datalist(Node& node) {
     std::string completed;
     if (!first_datalist_option_value(*datalist, state.value, completed) || completed == state.value) {
         return false;
+    }
+    if (const int max_length = max_length_for(node); max_length >= 0) {
+        completed = std::string(clamp_append_text(std::string(), completed, max_length));
+        if (completed == state.value) {
+            return false;
+        }
     }
     state.value = std::move(completed);
     state.dirty = true;

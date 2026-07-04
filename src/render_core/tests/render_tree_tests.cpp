@@ -42,6 +42,18 @@ const RenderObject* find_first_text(const RenderObject& object) {
     return nullptr;
 }
 
+bool render_text_exists(const RenderObject& object, const std::string& text) {
+    if (object.type == RenderObjectType::Text && object.node != nullptr && object.node->text == text) {
+        return true;
+    }
+    for (const auto& child : object.children) {
+        if (render_text_exists(*child, text)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
     for (const Diagnostic& diagnostic : sink.diagnostics()) {
         if (diagnostic.code == code) {
@@ -110,6 +122,23 @@ void hidden_attribute_skips_rendering() {
     check(find_first_by_tag(*render_tree, "p") != nullptr, "visible paragraph rendered");
     const RenderObject* text = find_first_text(*render_tree);
     check(text != nullptr && text->node != nullptr && text->node->text == "Shown", "hidden text skipped");
+}
+
+void closed_details_renders_only_first_summary() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><details><summary>More</summary><summary>Alt</summary><p>Hidden</p></details>"
+        "<details open><summary>Open</summary><p>Shown</p></details></body>");
+    StyleResolver resolver(css_parser.parse(""));
+    RenderTreeBuilder builder(resolver);
+    auto render_tree = builder.build(*document);
+
+    check(render_text_exists(*render_tree, "More"), "closed details renders first summary");
+    check(!render_text_exists(*render_tree, "Alt"), "closed details skips later summary");
+    check(!render_text_exists(*render_tree, "Hidden"), "closed details skips content");
+    check(render_text_exists(*render_tree, "Open"), "open details renders summary");
+    check(render_text_exists(*render_tree, "Shown"), "open details renders content");
 }
 
 void formatting_whitespace_text_is_skipped() {
@@ -197,6 +226,7 @@ int main() {
         render_tree_carries_computed_style_and_text_inheritance();
         closed_dialog_is_not_rendered_by_default();
         hidden_attribute_skips_rendering();
+        closed_details_renders_only_first_summary();
         formatting_whitespace_text_is_skipped();
         render_tree_respects_object_budget();
         render_tree_reports_object_budget_diagnostic();

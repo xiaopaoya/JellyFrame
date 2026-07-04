@@ -327,6 +327,105 @@ void datalist_completion_updates_text_control() {
           "datalist completion marks document dirty for repaint");
 }
 
+void text_input_respects_readonly_and_maxlength() {
+    auto pipeline = build_form_pipeline(
+        "<body><input id='code' value='A' maxlength='3'><input id='locked' readonly value='R'></body>",
+        "input { display: block; width: 120px; height: 24px; }");
+    Node* code = find_by_id(*pipeline.document, "code");
+    Node* locked = find_by_id(*pipeline.document, "locked");
+    check(code != nullptr && locked != nullptr, "maxlength and readonly inputs exist");
+
+    InputController input(*pipeline.layer_tree);
+    input.set_focused_node(code);
+    check(input.text_input("BCD"), "maxlength accepts partial input");
+    check(form_control_display_text(*code) == "ABC", "maxlength clamps user text input");
+    check(!input.text_input("E"), "maxlength rejects input when full");
+
+    input.set_focused_node(locked);
+    check(!input.text_input("X"), "readonly input rejects user text");
+    check(form_control_display_text(*locked) == "R", "readonly value unchanged");
+    KeyInput key;
+    key.code = KeyCode::Backspace;
+    check(!input.key_down(key), "readonly rejects backspace");
+}
+
+void summary_toggles_details_open_state() {
+    auto pipeline = build_form_pipeline(
+        "<body><details id='panel'><summary id='sum'>More</summary><p>Hidden</p></details></body>",
+        "details, summary, p { display: block; width: 120px; height: 24px; }");
+    Node* details = find_by_id(*pipeline.document, "panel");
+    Node* summary = find_by_id(*pipeline.document, "sum");
+    const LayoutBox* summary_box = find_box_by_id(*pipeline.layout_tree, "sum");
+    check(details != nullptr && summary != nullptr && summary_box != nullptr, "details summary exists");
+
+    int toggles = 0;
+    details->add_event_listener("toggle", [&](Event&) { ++toggles; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = summary_box->rect.x + 2;
+    pointer.y = summary_box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+
+    check(details->attributes.find("open") != details->attributes.end(), "summary click opens details");
+    check(toggles == 1, "summary click dispatches toggle");
+
+    input.set_focused_node(summary);
+    check(input.activate_focused(), "focused summary activates");
+    check(details->attributes.find("open") == details->attributes.end(), "focused summary closes details");
+    check(toggles == 2, "focused summary dispatches toggle");
+}
+
+void summary_click_prevent_default_blocks_details_toggle() {
+    auto pipeline = build_form_pipeline(
+        "<body><details id='panel'><summary id='sum'>More</summary><p>Hidden</p></details></body>",
+        "details, summary, p { display: block; width: 120px; height: 24px; }");
+    Node* details = find_by_id(*pipeline.document, "panel");
+    Node* summary = find_by_id(*pipeline.document, "sum");
+    const LayoutBox* summary_box = find_box_by_id(*pipeline.layout_tree, "sum");
+    check(details != nullptr && summary != nullptr && summary_box != nullptr,
+          "preventDefault summary exists");
+
+    int toggles = 0;
+    summary->add_event_listener("click", [](Event& event) { event.prevent_default(); });
+    details->add_event_listener("toggle", [&](Event&) { ++toggles; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = summary_box->rect.x + 2;
+    pointer.y = summary_box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+
+    check(details->attributes.find("open") == details->attributes.end(),
+          "preventDefault blocks summary default toggle");
+    check(toggles == 0, "preventDefault blocks toggle event");
+}
+
+void range_uses_min_max_step_attributes() {
+    auto pipeline = build_form_pipeline("<body><input id='level' type='range' min='10' max='20' step='5'></body>");
+    Node* range = find_by_id(*pipeline.document, "level");
+    const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "level");
+    check(range != nullptr && box != nullptr, "range exists");
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = box->rect.x + box->rect.width - 1;
+    pointer.y = box->rect.y + box->rect.height / 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+
+    check(ensure_form_control_state(*range).value == "20", "range max/step applies to pointer input");
+}
+
 void deep_form_control_helpers_are_iterative() {
     auto document = make_element("document");
     Node& body = document->append_child(make_element("body"));
@@ -556,6 +655,10 @@ int main() {
         select_click_cycles_selected_option();
         unchanged_form_activation_stays_clean();
         datalist_completion_updates_text_control();
+        text_input_respects_readonly_and_maxlength();
+        summary_toggles_details_open_state();
+        summary_click_prevent_default_blocks_details_toggle();
+        range_uses_min_max_step_attributes();
         deep_form_control_helpers_are_iterative();
         select_arrow_keys_work_through_optgroups();
         disabled_control_ignores_pointer_and_text_input();

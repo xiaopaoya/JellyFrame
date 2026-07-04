@@ -52,13 +52,13 @@ Status values in the full table mean:
 - `out_of_scope`: specification prose, legacy browser compatibility machinery or
   browser-scale behavior outside the app runtime contract.
 
-Current expansion candidates from the HTML LS pass are `details` / `summary`,
-standard reflected attributes such as `title` / `lang` / `dir`, bounded
-form-control behavior, and optional Canvas additions inside `graphics.canvas2d`.
-Browser-scale systems such as navigation/history, browsing contexts, Workers,
-Worklets, full media, Shadow DOM, Custom Elements lifecycle, Microdata export
-and XML/XHTML syntax are explicit non-goals unless a future product profile
-creates a separate host-owned capability.
+The first follow-up pass moved low-cost tail items into the supported subset:
+`details` / `summary` disclosure, `title` / `lang` / `dir` reflection,
+`document.title`, `document.dir`, `readOnly`, `maxLength` and range `min` /
+`max` / `step` reflection. Browser-scale systems such as navigation/history,
+browsing contexts, Workers, Worklets, full media, Shadow DOM, Custom Elements
+lifecycle, Microdata export and XML/XHTML syntax are explicit non-goals unless a
+future product profile creates a separate host-owned capability.
 
 ## Best Fit
 
@@ -119,6 +119,7 @@ JellyFrame is not ready for:
 | Quirks mode | Deferred | Always ignored. JellyFrame targets modern authored pages. |
 | Template contents | Lazy | `template` is hidden by default style; template DOM semantics are not implemented. |
 | Custom elements | Subset | Unknown tags create elements and can be styled as ordinary boxes; lifecycle callbacks are absent. |
+| `details` / `summary` | Subset | Closed `details` renders only the first `summary`; open `details` renders summary and content. Pointer or focused activation on that summary toggles the `open` attribute and dispatches a `toggle` event; `click.preventDefault()` blocks the default toggle. The `name` grouping behavior, `ToggleEvent` class and browser disclosure marker styling are not implemented. |
 
 ## DOM Model
 
@@ -281,11 +282,12 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 | --- | --- | --- |
 | `button` | Works | Native-lite painted box, shrink-wrap-ish default, click events. |
 | `input type=text` and default input | Works | Value state, UTF-8 text input from host, Backspace. |
+| `readonly` / `maxlength` | Subset | Text-entry controls honor `readonly` and `maxlength` for user input. Script `value` writes remain programmatic state changes; full constraint validation UI is not implemented. |
 | `input list` / `datalist` | Subset | Options are not shown as a popup. Focused text inputs can accept the first matching datalist option with Tab/Enter. |
 | `textarea` | Subset | Value-like state and basic painting; full multiline editing is limited. |
 | `input type=checkbox` | Works | Checked state, click activation, input/change events. |
 | `input type=radio` | Subset | Checked state and painting; full same-name group exclusivity is limited. |
-| `input type=range` | Works | Track/thumb painting, pointer drag updates value. |
+| `input type=range` | Works | Track/thumb painting; pointer drag updates value and uses `min`, `max` and `step`. |
 | `select` / `option` / `optgroup` | Subset | Paints selected option; click cycles options in validation shell; Up/Down moves across options, including options inside `optgroup`. Popup/grouped menu UI is not implemented. |
 | `progress` / `meter` | Works | Value bar painting from attributes. |
 | Date/color/file controls | Deferred | Use text/select/range fallbacks for now. |
@@ -320,6 +322,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Classic document scripts | Subset | In scripting builds, pseudo/Win32 shells execute inline classic `<script>` and local external `<script src>` through host callbacks. |
 | `window` / `document` | Subset | Bound objects expose the methods below. |
 | `document.body` | Works | Returns the first `body` element wrapper or `null`. It is read-only in V0. |
+| `document.title` / `document.dir` | Works | `document.title` reads/writes the first `title` element text. `document.dir` reflects the document direction attribute on the `html` element, with body/document fallback for simplified documents. |
 | `document.getElementById` | Works | Returns wrapper or `null`. |
 | `document.createElement` | Works | Creates a detached element owned by the runtime until it is attached. Creation is bounded by `HostBudgets::max_detached_dom_nodes`. |
 | `document.createTextNode` | Works | Creates a detached text node with the same detached-node budget. |
@@ -328,15 +331,16 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `textContent` | Works | Getter/setter; unchanged text avoids dirty work. A sole existing text child is updated in place; replacing mixed children remains structural. |
 | `id` | Works | Reflected to the `id` attribute and uses the normal style/layout dirty path. |
 | `className` | Works | Reflected to the `class` attribute and uses the normal style/layout dirty path. |
+| `title` / `lang` / `dir` | Works | Reflected string attributes on element wrappers. `lang` and `dir` reflection does not imply full language-specific shaping or bidirectional layout. |
 | `classList` | Subset | Minimal DOMTokenList-like helper for `contains(token)`, `add(...tokens)`, `remove(...tokens)` and `toggle(token[, force])`. Tokens with whitespace are ignored instead of throwing. The helper reflects to `class` and uses the normal dirty path; full DOMTokenList semantics, iteration and `replace()` are deferred. |
 | `children` / `parentElement` | Subset | Snapshot element-child array and parent wrapper/null. |
 | `matches` / `closest` | Subset | Simple tag, `.class`, `#id`, `[attr]` and `[attr=value]` selectors. No combinators. |
 | `dataset` | Subset | Existing `data-*` attributes are exposed as camelCase snapshot properties for event delegation. Dynamic new keys are deferred. |
 | `element.style` | Subset | Mutable inline style object for common safe CSS properties: `display`, `color`, `background*`, `textAlign`, `textTransform`, `fontSize`, `fontWeight`, `lineHeight`, size/min/max size, `boxSizing`, margin/padding shorthands and sides, `opacity`, `transform`, `borderRadius`, inset/position, `whiteSpace`, `textOverflow`, `overflow` and `zIndex`. `style.getPropertyValue(name)`, `style.setProperty(name, value)` and `style.removeProperty(name)` accept the same safe CSS property subset plus CSS custom properties such as `--progress`. |
-| `hidden` / `disabled` properties | Subset | Boolean reflection. `hidden` removes rendering; disabled form controls do not activate or accept text input. |
+| `hidden` / `disabled` / `open` properties | Subset | Boolean reflection. `hidden` removes rendering; disabled form controls do not activate or accept text input; `open` reflects details disclosure state. |
 | `addEventListener` / `removeEventListener` | Works | JS callbacks are bridged to core event dispatch. |
 | Event object | Subset | `type`, `target`, `currentTarget`, phase, cancel/propagation APIs, mouse/wheel fields. |
-| Form properties | Subset | `value`, `checked`, `selectedIndex` on relevant controls. |
+| Form properties | Subset | `value`, `checked`, `selectedIndex`, `readOnly`, `maxLength`, `minLength`, `min`, `max` and `step` on relevant controls. Full validity state, selection APIs and browser form submission are deferred. |
 | Timers | Works | Host-pumped `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`; callback budget controlled by host. |
 | Script execution watchdog | Host/runtime optional | `JerryScriptRuntimeOptions::max_execution_check_count` and `HostBudgets::max_script_execution_checks` can interrupt runaway evals and callbacks with `script execution budget exceeded` when the linked JerryScript library was built with `JERRY_VM_HALT=ON`. If that JerryScript feature is absent, JellyFrame reports the watchdog as unsupported and does not fake preemption. The Win32 validation shell can require this path with `--require-script-watchdog` plus bounded check options for recovery smoke tests. |
 | Promise/microtask queue | Deferred | Do not rely on browser task semantics. |

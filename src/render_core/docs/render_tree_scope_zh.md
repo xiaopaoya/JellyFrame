@@ -48,6 +48,9 @@ DOM + computed style
 - `display:none` 节点不创建 render object。
 - `head`、`script`、`style`、`meta`、`link`、`title`、`template` 和 `noscript`
   通过默认样式排除在 render tree 外。
+- 闭合的 `details` 只为第一个 `summary` 子节点创建 render object；打开的
+  `details` 会渲染 summary 和普通内容。这是小型 disclosure 子集，不包含完整浏览器
+  marker 或 `name` 分组行为。
 - 非保留上下文中的纯格式化空白文本节点会在 render tree 构建阶段被跳过，避免
   缩进换行污染 block、flex 和 grid 布局。
 - Text nodes 继承父 render object 的文字颜色和字号。
@@ -59,8 +62,9 @@ DOM + computed style
 ## 明确延后
 
 - Anonymous block/inline box generation。
-- Pseudo-elements。
-- List marker renderers。
+- 完整 pseudo-element layout。当前 `::before`/`::after` generated text 子集基于
+  display command。
+- 完整 list marker renderers。现有轻量列表标记同样基于 display command。
 - Replaced-element intrinsic sizing。
 - 完整 CSS stacking-context 语义。
 - Paint invalidation 和 retained display lists。

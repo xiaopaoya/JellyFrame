@@ -38,6 +38,9 @@ JellyFrame 将输入接线和核心引擎分开：
   - overflow clipping
   - 命中文本节点时归一化为最近的 element target
 - 输入合成：`mouseover`、`mouseout`、`mousemove`、`mousedown`、`mouseup`、`click` 和 `wheel`。
+- `details` 内 `summary` 的默认 disclosure 行为：未被取消的指针/焦点激活 click
+  会切换父 `details` 的 `open` 属性，并派发普通 `toggle` 事件。不实现
+  `ToggleEvent` 和 `details[name]` 分组。
 - 核心 input controller 内部追踪 hover、active 和 focus state。
 - `StyleResolver` 会从样式表中提取动态 pseudo-class 提示。只有出现
   `:hover`、`:active`、`:focus` 或 `:focus-within` 时，对应输入状态变化才会标记
@@ -50,7 +53,8 @@ JellyFrame 将输入接线和核心引擎分开：
 - 直接调用 C++ `add_event_listener()` 属于 host-trusted 路径。嵌入式 port 如果允许第三方或动态 native listener
   注册，应使用 `add_event_listener_bounded()` 或更严格的 runtime wrapper。
 - 不支持 shadow DOM、slots 或 composed paths。
-- 不支持 form、anchor、editing 或 selection 默认行为。
+- 除上方有界 `details`/`summary` disclosure 动作外，不支持 form、anchor、editing 或
+  selection 默认行为。
 - 不支持 `pointer-events` CSS 属性。
 - 不支持 touch 或 pointer capture。
 - 不支持 transform 后坐标 hit testing。

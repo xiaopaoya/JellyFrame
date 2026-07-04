@@ -72,6 +72,24 @@ bool is_replaced_control(const Node& node) {
         node.tag_name == "audio" || node.tag_name == "iframe";
 }
 
+bool is_first_summary_child(const Node& parent, const Node& child) {
+    for (const auto& sibling : parent.children) {
+        if (sibling->type == NodeType::Element && sibling->tag_name == "summary") {
+            return sibling.get() == &child;
+        }
+    }
+    return false;
+}
+
+bool should_descend_into_child(const Node& parent, const Node& child) {
+    if (parent.type == NodeType::Element && parent.tag_name == "details" &&
+        parent.attributes.find("open") == parent.attributes.end()) {
+        return child.type == NodeType::Element && child.tag_name == "summary" &&
+            is_first_summary_child(parent, child);
+    }
+    return true;
+}
+
 void apply_style_override(Style& style, const Node& node, const std::vector<StyleOverride>* overrides) {
     if (overrides == nullptr || overrides->empty()) {
         return;
@@ -184,7 +202,9 @@ RenderObjectPtr RenderTreeBuilder::build_with_arena(const Node& document, Monoto
 
         if (!is_replaced_control(node)) {
             for (auto it = node.children.rbegin(); it != node.children.rend(); ++it) {
-                pending.push_back(PendingNode{it->get(), object_raw});
+                if (should_descend_into_child(node, *it->get())) {
+                    pending.push_back(PendingNode{it->get(), object_raw});
+                }
             }
         }
     }

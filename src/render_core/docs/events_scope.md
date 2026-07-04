@@ -47,6 +47,10 @@ controllers and UI driver libraries.
 - text-node hits normalized to the nearest element target
 - Input synthesis for `mouseover`, `mouseout`, `mousemove`, `mousedown`,
   `mouseup`, `click` and `wheel`.
+- Default disclosure action for `summary` inside `details`: an uncanceled
+  pointer/focused activation click toggles the parent `details` `open`
+  attribute and dispatches a plain `toggle` event. `ToggleEvent` and
+  `details[name]` grouping are not implemented.
 - Hover, active and focus state tracking inside the core input controller.
 - `StyleResolver` extracts dynamic pseudo-class hints from the stylesheet.
   Input state changes mark style/layout dirty only when selectors use the
@@ -65,7 +69,8 @@ controllers and UI driver libraries.
   expose third-party or dynamic native listener registration should use
   `add_event_listener_bounded()` or a stricter runtime wrapper.
 - No shadow DOM, slots or composed paths.
-- No default form, anchor, editing or selection behavior.
+- No default form, anchor, editing or selection behavior beyond the bounded
+  `details`/`summary` disclosure action above.
 - No `pointer-events` CSS property.
 - No touch or pointer capture.
 - No transformed coordinate hit testing.

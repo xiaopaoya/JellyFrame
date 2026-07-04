@@ -49,6 +49,10 @@ DOM + computed style
 - `display:none` nodes do not create render objects.
 - `head`, `script`, `style`, `meta`, `link`, `title`, `template` and `noscript`
   stay out of the render tree through default style.
+- Closed `details` elements create render objects only for their first
+  `summary` child. Open `details` elements render the summary and normal
+  content. This is a small disclosure subset, not full browser marker or
+  `name`-group behavior.
 - Pure formatting whitespace text nodes outside preserving contexts are skipped
   during render-tree construction so indentation does not pollute block, flex
   or grid layout.
@@ -62,8 +66,10 @@ DOM + computed style
 ## Deliberately Deferred
 
 - Anonymous block/inline box generation.
-- Pseudo-elements.
-- List marker renderers.
+- Full pseudo-element layout. The current `::before`/`::after` generated-text
+  subset is display-command based.
+- Full list marker renderers. Native-lite list markers are display-command
+  based.
 - Replaced-element intrinsic sizing.
 - Full CSS stacking-context semantics.
 - Paint invalidation and retained display lists.

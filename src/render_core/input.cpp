@@ -1,6 +1,7 @@
 ﻿#include "render_core/input.h"
 
 #include "render_core/dom.h"
+#include "render_core/event.h"
 #include "render_core/form_control.h"
 
 #include <algorithm>
@@ -34,7 +35,24 @@ bool focusable_node(const Node* node) {
     }
     return node->tag_name == "button" || node->tag_name == "input" ||
         node->tag_name == "select" || node->tag_name == "textarea" ||
+        (node->tag_name == "summary" && node->parent != nullptr && node->parent->tag_name == "details") ||
         (node->tag_name == "a" && !node->attribute("href").empty());
+}
+
+bool toggle_details_from_summary(const Node* node) {
+    if (node == nullptr || node->type != NodeType::Element || node->tag_name != "summary" ||
+        node->parent == nullptr || node->parent->tag_name != "details") {
+        return false;
+    }
+    Node* details = mutable_node(node->parent);
+    if (details->attributes.find("open") != details->attributes.end()) {
+        details->remove_attribute("open");
+    } else {
+        details->set_attribute("open", "");
+    }
+    Event event("toggle", false, false);
+    dispatch_event(*details, event);
+    return true;
 }
 
 void mark_interaction_style_dirty(const Node* node, bool enabled) {
@@ -178,6 +196,9 @@ const Node* InputController::pointer_up(const PointerInput& input) {
         }
         MouseEvent click = make_mouse_event("click", input);
         dispatch_mouse_event(target, click);
+        if (!click.default_prevented()) {
+            toggle_details_from_summary(active_node_);
+        }
     }
     set_active_node(nullptr);
     return target;
@@ -286,6 +307,9 @@ bool InputController::activate_focused() {
     PointerInput synthetic;
     MouseEvent click = make_mouse_event("click", synthetic);
     dispatch_mouse_event(focused_node_, click);
+    if (!click.default_prevented()) {
+        toggle_details_from_summary(focused_node_);
+    }
     return true;
 }
 

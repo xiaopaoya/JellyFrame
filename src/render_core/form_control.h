@@ -37,6 +37,7 @@ FormControlKind form_control_kind(const Node& node);
 bool is_form_control(const Node& node);
 bool is_disabled_form_control(const Node& node);
 bool is_text_entry_control(const Node& node);
+bool is_readonly_text_control(const Node& node);
 FormControlState& ensure_form_control_state(const Node& node);
 const FormControlState* form_control_state_if_created(const Node& node);
 std::string form_control_display_text(const Node& node);

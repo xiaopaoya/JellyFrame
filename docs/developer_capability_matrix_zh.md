@@ -45,11 +45,12 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 - `unsupported`：不要在 JellyFrame app 中依赖。
 - `out_of_scope`：规范说明文字、旧浏览器兼容机制，或 app runtime 明确排除的浏览器级能力。
 
-当前从 HTML LS 审计中得到的扩展候选包括 `details` / `summary`、`title` / `lang` /
-`dir` 等标准反射属性、有界表单控件行为，以及只放在 `graphics.canvas2d` 内的可选
-Canvas 补充。navigation/history、browsing context、Workers、Worklets、完整媒体、
-Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语法仍是明确
-非目标；除非未来产品 profile 把它们做成宿主持有 capability，否则不进入页面可依赖能力。
+第一批后续工作已经把低成本尾项推进到支持子集：`details` / `summary` disclosure、
+`title` / `lang` / `dir` 反射、`document.title`、`document.dir`、`readOnly`、
+`maxLength` 和 range `min` / `max` / `step` 反射。navigation/history、browsing
+context、Workers、Worklets、完整媒体、Shadow DOM、Custom Elements 生命周期、Microdata
+export 和 XML/XHTML 语法仍是明确非目标；除非未来产品 profile 把它们做成宿主持有
+capability，否则不进入页面可依赖能力。
 
 ## 最适合的项目
 
@@ -107,6 +108,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | Quirks mode | 延后 | 完全抛弃。JellyFrame 只面向现代作者写法。 |
 | `template` | 懒处理 | 默认样式隐藏；template 内容语义未实现。 |
 | 自定义元素 | 子集 | 未知标签可成为普通元素并被样式化；无生命周期回调。 |
+| `details` / `summary` | 子集 | 闭合的 `details` 只渲染第一个 `summary`；打开的 `details` 会渲染 summary 和内容。点击 summary 或在其获得焦点时激活，会切换 `open` 属性并派发 `toggle` 事件；`click.preventDefault()` 可阻止默认切换。`name` 分组行为、`ToggleEvent` 类和浏览器默认 disclosure marker 样式未实现。 |
 
 ## DOM 模型
 
@@ -266,11 +268,12 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | --- | --- | --- |
 | `button` | 可用 | 轻量原生风格绘制，默认近似按内容收缩，支持 click。 |
 | `input type=text` 和默认 input | 可用 | 有 value 状态，宿主可输入 UTF-8 文本，支持 Backspace。 |
+| `readonly` / `maxlength` | 子集 | 文本输入类控件会在用户输入路径遵守 `readonly` 和 `maxlength`。脚本写 `value` 仍是程序性状态修改；完整 constraint validation UI 未实现。 |
 | `input list` / `datalist` | 子集 | 不显示原生 popup。获得焦点的文本输入框可用 Tab/Enter 接受第一个匹配的 datalist option。 |
 | `textarea` | 子集 | value-like 状态和基础绘制；完整多行编辑有限。 |
 | `input type=checkbox` | 可用 | checked 状态、点击激活、input/change 事件。 |
 | `input type=radio` | 子集 | checked 状态和绘制；同 name 互斥组仍有限。 |
-| `input type=range` | 可用 | track/thumb 绘制，拖动更新 value。 |
+| `input type=range` | 可用 | track/thumb 绘制，拖动更新 value，并使用 `min`、`max` 和 `step`。 |
 | `select` / `option` / `optgroup` | 子集 | 绘制当前选中项；验证壳点击会循环选项；Up/Down 可跨 `optgroup` 在 option 间移动。无 popup/分组菜单 UI。 |
 | `progress` / `meter` | 可用 | 根据属性绘制 value bar。 |
 | 日期/颜色/文件控件 | 延后 | 暂用 text/select/range fallback。 |
@@ -305,6 +308,7 @@ JerryScript 源码树时可用。
 | Classic document scripts | 子集 | scripting 构建中，伪浏览器/Win32 壳会执行 inline classic `<script>`，并通过宿主 callback 加载本地外部 `<script src>`。 |
 | `window` / `document` | 子集 | 暴露下列方法。 |
 | `document.body` | 可用 | 返回第一个 `body` element wrapper 或 `null`。V0 中只读。 |
+| `document.title` / `document.dir` | 可用 | `document.title` 读取/写入第一个 `title` 元素文本。`document.dir` 反射 `html` 元素上的文档方向属性；简化文档中会 fallback 到 body/document。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
 | `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；数量受 `HostBudgets::max_detached_dom_nodes` 限制。 |
 | `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |
@@ -313,15 +317,16 @@ JerryScript 源码树时可用。
 | `textContent` | 可用 | getter/setter；同值设置不会触发 dirty。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。 |
 | `id` | 可用 | 反射到 `id` attribute，并走现有 style/layout dirty 路径。 |
 | `className` | 可用 | 反射到 `class` attribute，并走现有 style/layout dirty 路径。 |
+| `title` / `lang` / `dir` | 可用 | element wrapper 上的字符串属性反射。`lang` 和 `dir` 反射不等于完整语言特定 shaping 或 bidi layout。 |
 | `classList` | 子集 | 极小 DOMTokenList-like helper，支持 `contains(token)`、`add(...tokens)`、`remove(...tokens)` 和 `toggle(token[, force])`。含空白 token 会被忽略而不是抛异常。它反射到 `class` 并走正常 dirty 路径；完整 DOMTokenList 语义、迭代和 `replace()` 延后。 |
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
 | `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |
 | `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
-| `hidden` / `disabled` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入。 |
+| `hidden` / `disabled` / `open` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 状态。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |
-| 表单属性 | 子集 | 相关控件上的 `value`、`checked`、`selectedIndex`。 |
+| 表单属性 | 子集 | 相关控件上的 `value`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max` 和 `step`。完整 validity state、selection API 和浏览器表单提交延后。 |
 | Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |
 | 脚本执行 watchdog | 宿主/runtime 可选 | 当链接的 JerryScript 使用 `JERRY_VM_HALT=ON` 构建时，`JerryScriptRuntimeOptions::max_execution_check_count` 与 `HostBudgets::max_script_execution_checks` 可中断失控 eval 和 callback，并给出 `script execution budget exceeded`。若 JerryScript 缺少该特性，JellyFrame 会报告 watchdog 不可用，不伪造抢占。Win32 验证壳可用 `--require-script-watchdog` 和有界 check 参数强制验收这条 recovery 路径。 |
 | Promise/microtask | 延后 | 不要依赖浏览器 task 语义。 |

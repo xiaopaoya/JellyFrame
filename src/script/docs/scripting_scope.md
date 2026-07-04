@@ -40,6 +40,10 @@ surface.
 - `element.setAttribute(name, value)`.
 - `element.getAttribute(name)`.
 - `node.textContent` getter/setter.
+- `document.title` reads/writes the first `title` element text.
+- `document.dir` reflects the document direction attribute on `html`, with a
+  body/document fallback for simplified documents.
+- Element string reflection for `title`, `lang` and `dir`.
 - `jellyframe_win32_browser --script file.js` binds the parsed page DOM before
   script execution, so script mutations affect the rendered output.
 
@@ -60,6 +64,10 @@ surface.
   flow and can mutate the DOM during native input dispatch.
 - The Win32 browser shell accepts `--script file.js` in scripting builds and
   rerenders when script event callbacks dirty the DOM.
+- `summary` inside `details` participates in the normal event path. A click or
+  focused activation toggles the parent `details.open` as a default action, and
+  `click.preventDefault()` blocks that toggle. The resulting disclosure change
+  dispatches a plain `toggle` event; the `ToggleEvent` class is not exposed.
 
 ## Form Controls
 
@@ -70,8 +78,15 @@ surface.
   - `radio.checked`
   - `select.value`
   - `select.selectedIndex`
+  - `input.readOnly` / `textarea.readOnly`
+  - `input.maxLength` / `textarea.maxLength`
+  - `input.minLength` / `textarea.minLength` as reflection only
+  - `input.min` / `input.max` / `input.step`
 - Native text input, Backspace, checkbox/radio/select activation and range
   movement update JavaScript-visible control state.
+- Text-entry controls honor `readonly` and `maxlength` for user input paths.
+  Script `value` writes remain programmatic state changes.
+- Range controls use `min`, `max` and `step` for pointer/key movement.
 - Native input dispatch fires JS-observable `input` and `change` events through
   the existing C++ event flow.
 - JavaScript changes to form state mark the DOM dirty so the host can rerender
@@ -193,7 +208,7 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `element.style.getPropertyValue(name)`, `setProperty(name, value)` and
     `removeProperty(name)` for the same safe CSS property subset plus CSS
     custom properties such as `--progress`
-  - `element.hidden` and `element.disabled`
+  - `element.hidden`, `element.disabled` and `element.open`
 - Supported `matches`/`closest`/`querySelector(All)` selectors are intentionally
   small: tag, `.class`, `#id`, `[attr]`, `[attr=value]` and same-compound
   combinations such as `button.primary`. Descendant/child combinators remain
