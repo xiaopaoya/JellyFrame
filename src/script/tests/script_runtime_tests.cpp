@@ -730,6 +730,7 @@ void element_specific_reflected_idl_properties_work() {
         "<html><head><meta id='meta' name='viewport' content='width=device-width'></head><body>"
         "<a id='link' download='demo.txt' ping='p' rel='nofollow' referrerpolicy='no-referrer'>Open</a>"
         "<data id='data' value='42'>Answer</data><time id='time' datetime='2026-07-05'>Today</time>"
+        "<img id='image' alt='Cloud'>"
         "</body></html>");
 
     JerryScriptRuntime runtime;
@@ -739,18 +740,21 @@ void element_specific_reflected_idl_properties_work() {
         "var link = document.getElementById('link');"
         "var data = document.getElementById('data');"
         "var time = document.getElementById('time');"
-        "var before = meta.name + ':' + meta.content + ':' + link.text + ':' + data.value + ':' + time.dateTime;"
+        "var image = document.getElementById('image');"
+        "var before = meta.name + ':' + meta.content + ':' + link.text + ':' + data.value + ':' + "
+        "time.dateTime + ':' + image.alt;"
         "meta.httpEquiv = 'refresh'; meta.media = 'screen'; meta.content = 'ok';"
         "link.text = 'Launch'; link.download = 'new.txt'; link.ping = 'a b'; link.rel = 'noopener';"
-        "link.referrerPolicy = 'origin'; data.value = '84'; time.dateTime = '2026-07-06';"
+        "link.referrerPolicy = 'origin'; data.value = '84'; time.dateTime = '2026-07-06'; image.alt = 'Rain';"
         "before + ':' + meta.getAttribute('http-equiv') + ':' + meta.media + ':' + meta.content + ':' + "
         "link.textContent + ':' + link.download + ':' + link.ping + ':' + link.rel + ':' + "
-        "link.referrerPolicy + ':' + data.getAttribute('value') + ':' + time.getAttribute('datetime')");
+        "link.referrerPolicy + ':' + data.getAttribute('value') + ':' + time.getAttribute('datetime') + ':' + "
+        "image.getAttribute('alt')");
 
     check(result.ok, "element-specific reflected IDL script succeeds");
     check(result.value ==
-              "viewport:width=device-width:Open:42:2026-07-05:refresh:screen:ok:"
-              "Launch:new.txt:a b:noopener:origin:84:2026-07-06",
+              "viewport:width=device-width:Open:42:2026-07-05:Cloud:refresh:screen:ok:"
+              "Launch:new.txt:a b:noopener:origin:84:2026-07-06:Rain",
           "element-specific IDL properties reflect bounded content attributes");
 }
 

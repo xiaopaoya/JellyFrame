@@ -319,7 +319,7 @@ JerryScript 源码树时可用。
 | `id` | 可用 | 反射到 `id` attribute，并走现有 style/layout dirty 路径。 |
 | `className` | 可用 | 反射到 `class` attribute，并走现有 style/layout dirty 路径。 |
 | `title` / `lang` / `dir` | 可用 | element wrapper 上的字符串属性反射。`lang` 和 `dir` 反射不等于完整语言特定 shaping 或 bidi layout。 |
-| 元素专用反射属性 | 子集 | 对纯内容属性形式的常见低成本 IDL 反射提供支持：`meta.name/content/httpEquiv/media`、`data.value`、`time.dateTime`、anchor 的 `text/download/ping/rel`，以及以字符串形式反射但不做浏览器 policy 规范化的 anchor `referrerPolicy`。导航、资源加载、ping 发送和完整 URL 工具仍不实现。 |
+| 元素专用反射属性 | 子集 | 对纯内容属性形式的常见低成本 IDL 反射提供支持：`meta.name/content/httpEquiv/media`、`data.value`、`time.dateTime`、`img.alt`、anchor 的 `text/download/ping/rel`，以及以字符串形式反射但不做浏览器 policy 规范化的 anchor `referrerPolicy`。导航、资源加载、图片解码、ping 发送和完整 URL 工具仍不实现。 |
 | `classList` | 子集 | 极小 DOMTokenList-like helper，支持 `contains(token)`、`add(...tokens)`、`remove(...tokens)` 和 `toggle(token[, force])`。含空白 token 会被忽略而不是抛异常。它反射到 `class` 并走正常 dirty 路径；完整 DOMTokenList 语义、迭代和 `replace()` 延后。 |
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
