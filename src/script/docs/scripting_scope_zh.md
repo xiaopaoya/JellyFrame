@@ -53,6 +53,11 @@ API 表面。
 - Event object 方法：`preventDefault`、`stopPropagation` 和 `stopImmediatePropagation`。
 - JavaScript listener 复用现有 C++ capture/target/bubble 事件流，并可在 native input dispatch
   过程中修改 DOM。
+- 支持函数型 `on*` handler property，但只限 JellyFrame 实际派发的事件：`onclick`、
+  `oninput`、`onchange`、`ontoggle`、mouse/wheel handlers、`onfocus`/`onblur`、
+  `document.onvisibilitychange`、`window.ononline`/`window.onoffline`，以及可穿戴按下反馈别名
+  `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`。设置为 `null` 或非函数会清除
+  handler。它们消耗与 `addEventListener` 相同的 listener 预算，并走同一 runtime 清理路径。
 - scripting 构建中的 Win32 browser shell 支持 `--script file.js`，并在脚本事件回调弄脏 DOM 后重绘。
 - `details` 内的 `summary` 走普通事件路径。点击或焦点激活会作为默认动作切换父
   `details.open`，`click.preventDefault()` 可阻止该切换。disclosure 状态变化会派发普通
@@ -195,6 +200,8 @@ API 表面。
   逗号、伪类、`:has()` 或 live NodeList。
 - 完整 DOMTokenList 语义。`classList` 只支持 `contains`/`add`/`remove`/`toggle`；
   迭代、`replace()` 和非法 token 的异常行为延后。
+- 完整 `GlobalEventHandlers`、HTML inline event handler attribute 和浏览器级 handler 编译语义。
+  请使用 `addEventListener` 或上方文档化的函数型 `on*` property 子集。
 - 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
 - 超出单次求值范围的 promise/job pump。
 - `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、完整

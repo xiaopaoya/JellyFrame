@@ -33,6 +33,7 @@ struct ScriptEventListener {
     jerry_value_t target_object = 0;
     EventListenerOptions options;
     bool active = false;
+    bool property_handler = false;
 };
 
 struct ScriptTimer {
@@ -101,6 +102,19 @@ struct ScriptRuntimeAccess {
         runtime.add_script_event_listener(node, std::move(type), callback, options);
     }
 
+    static void set_script_event_handler(JerryScriptRuntime& runtime,
+                                         Node& node,
+                                         std::string type,
+                                         jerry_value_t callback) {
+        runtime.set_script_event_handler(node, std::move(type), callback);
+    }
+
+    static jerry_value_t get_script_event_handler(JerryScriptRuntime& runtime,
+                                                  Node& node,
+                                                  const std::string& type) {
+        return runtime.get_script_event_handler(node, type);
+    }
+
     static void remove_script_event_listener(JerryScriptRuntime& runtime,
                                              Node& node,
                                              std::string type,
@@ -114,6 +128,18 @@ struct ScriptRuntimeAccess {
                                           jerry_value_t target,
                                           EventListenerOptions options) {
         runtime.add_window_event_listener(std::move(type), callback, target, options);
+    }
+
+    static void set_window_event_handler(JerryScriptRuntime& runtime,
+                                         std::string type,
+                                         jerry_value_t callback,
+                                         jerry_value_t target) {
+        runtime.set_window_event_handler(std::move(type), callback, target);
+    }
+
+    static jerry_value_t get_window_event_handler(JerryScriptRuntime& runtime,
+                                                  const std::string& type) {
+        return runtime.get_window_event_handler(type);
     }
 
     static void remove_window_event_listener(JerryScriptRuntime& runtime,
@@ -1546,6 +1572,42 @@ jerry_value_t window_add_event_listener(const jerry_call_info_t* call_info_p,
 jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
                                            const jerry_value_t args_p[],
                                            const jerry_length_t args_count);
+#define JELLYFRAME_NODE_EVENT_HANDLER_LIST(X) \
+    X(onclick, "click") \
+    X(oninput, "input") \
+    X(onchange, "change") \
+    X(ontoggle, "toggle") \
+    X(onpointerdown, "pointerdown") \
+    X(onpointerup, "pointerup") \
+    X(ontouchstart, "touchstart") \
+    X(ontouchend, "touchend") \
+    X(onwheel, "wheel") \
+    X(onmousedown, "mousedown") \
+    X(onmouseup, "mouseup") \
+    X(onmousemove, "mousemove") \
+    X(onmouseover, "mouseover") \
+    X(onmouseout, "mouseout") \
+    X(onfocus, "focus") \
+    X(onblur, "blur") \
+    X(onvisibilitychange, "visibilitychange")
+
+#define JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(X) \
+    X(ononline, "online") \
+    X(onoffline, "offline")
+
+#define JELLYFRAME_DECLARE_NODE_EVENT_HANDLER(js_name, event_type) \
+    jerry_value_t node_get_##js_name(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t); \
+    jerry_value_t node_set_##js_name(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t);
+
+#define JELLYFRAME_DECLARE_WINDOW_EVENT_HANDLER(js_name, event_type) \
+    jerry_value_t window_get_##js_name(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t); \
+    jerry_value_t window_set_##js_name(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t);
+
+JELLYFRAME_NODE_EVENT_HANDLER_LIST(JELLYFRAME_DECLARE_NODE_EVENT_HANDLER)
+JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DECLARE_WINDOW_EVENT_HANDLER)
+
+#undef JELLYFRAME_DECLARE_NODE_EVENT_HANDLER
+#undef JELLYFRAME_DECLARE_WINDOW_EVENT_HANDLER
 jerry_value_t node_matches(const jerry_call_info_t* call_info_p,
                            const jerry_value_t args_p[],
                            const jerry_length_t args_count);
@@ -2951,6 +3013,10 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     define_accessor(object.get(), "hidden", node_get_hidden, node_set_hidden);
     define_accessor(object.get(), "disabled", node_get_disabled, node_set_disabled);
     define_accessor(object.get(), "open", node_get_open, node_set_open);
+#define JELLYFRAME_DEFINE_NODE_EVENT_HANDLER(js_name, event_type) \
+    define_accessor(object.get(), #js_name, node_get_##js_name, node_set_##js_name);
+    JELLYFRAME_NODE_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_NODE_EVENT_HANDLER)
+#undef JELLYFRAME_DEFINE_NODE_EVENT_HANDLER
     if (is_form_control(node)) {
         define_accessor(object.get(), "value", node_get_value, node_set_value);
         define_accessor(object.get(), "checked", node_get_checked, node_set_checked);
@@ -3354,6 +3420,96 @@ jerry_value_t document_get_visibility_state(const jerry_call_info_t* call_info_p
     return jerry_string_sz(hidden ? "hidden" : "visible");
 }
 
+jerry_value_t node_get_event_handler(const jerry_call_info_t* call_info_p, const char* type) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr) {
+        return jerry_null();
+    }
+    return ScriptRuntimeAccess::get_script_event_handler(*runtime, *node, type);
+}
+
+jerry_value_t node_set_event_handler(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t args_p[],
+                                     const jerry_length_t args_count,
+                                     const char* type) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node != nullptr && runtime != nullptr) {
+        ScriptRuntimeAccess::set_script_event_handler(
+            *runtime,
+            *node,
+            type,
+            args_count > 0 && jerry_value_is_function(args_p[0]) ? args_p[0] : jerry_undefined());
+    }
+    return jerry_undefined();
+}
+
+#define JELLYFRAME_DEFINE_NODE_EVENT_HANDLER_ACCESSOR(js_name, event_type) \
+    jerry_value_t node_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        return node_get_event_handler(call_info_p, event_type); \
+    } \
+    jerry_value_t node_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        return node_set_event_handler(call_info_p, args_p, args_count, event_type); \
+    }
+
+JELLYFRAME_NODE_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_NODE_EVENT_HANDLER_ACCESSOR)
+
+#undef JELLYFRAME_DEFINE_NODE_EVENT_HANDLER_ACCESSOR
+
+JerryScriptRuntime* runtime_from_window_call(const jerry_call_info_t* call_info_p) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr) {
+        runtime = native_runtime(call_info_p->function);
+    }
+    return runtime;
+}
+
+JerryValue window_event_target_from_call(const jerry_call_info_t* call_info_p) {
+    JerryValue global(jerry_current_realm());
+    JerryValue window(jerry_object_get_sz(global.get(), "window"));
+    if (jerry_value_is_object(window.get())) {
+        return window;
+    }
+    return JerryValue(jerry_value_copy(call_info_p->this_value));
+}
+
+jerry_value_t window_get_event_handler(const jerry_call_info_t* call_info_p, const char* type) {
+    JerryScriptRuntime* runtime = runtime_from_window_call(call_info_p);
+    if (runtime == nullptr) {
+        return jerry_null();
+    }
+    return ScriptRuntimeAccess::get_window_event_handler(*runtime, type);
+}
+
+jerry_value_t window_set_event_handler(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count,
+                                       const char* type) {
+    JerryScriptRuntime* runtime = runtime_from_window_call(call_info_p);
+    if (runtime != nullptr) {
+        JerryValue target(window_event_target_from_call(call_info_p));
+        ScriptRuntimeAccess::set_window_event_handler(
+            *runtime,
+            type,
+            args_count > 0 && jerry_value_is_function(args_p[0]) ? args_p[0] : jerry_undefined(),
+            target.get());
+    }
+    return jerry_undefined();
+}
+
+#define JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER_ACCESSOR(js_name, event_type) \
+    jerry_value_t window_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        return window_get_event_handler(call_info_p, event_type); \
+    } \
+    jerry_value_t window_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        return window_set_event_handler(call_info_p, args_p, args_count, event_type); \
+    }
+
+JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER_ACCESSOR)
+
+#undef JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER_ACCESSOR
+
 jerry_value_t node_add_event_listener(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count) {
@@ -3506,6 +3662,10 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(window_object.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_runtime_method(window_object.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(window_object.get(), "removeEventListener", window_remove_event_listener, *this);
+#define JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER(js_name, event_type) \
+    define_accessor(window_object.get(), #js_name, window_get_##js_name, window_set_##js_name);
+    JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER)
+#undef JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER
     set_runtime_method(global.get(), "setTimeout", script_set_timeout, *this);
     set_runtime_method(global.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(global.get(), "setInterval", script_set_interval, *this);
@@ -3514,6 +3674,10 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
+#define JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER(js_name, event_type) \
+    define_accessor(global.get(), #js_name, window_get_##js_name, window_set_##js_name);
+    JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER)
+#undef JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER
     JerryValue date_object(jerry_object_get_sz(global.get(), "Date"));
     if (jerry_value_is_object(date_object.get())) {
         set_runtime_method(date_object.get(), "now", script_date_now, *this);
@@ -3534,6 +3698,9 @@ void JerryScriptRuntime::bind_document(Node& document) {
         set_property(global.get(), "localStorage", local_storage.get());
     }
 }
+
+#undef JELLYFRAME_NODE_EVENT_HANDLER_LIST
+#undef JELLYFRAME_WINDOW_EVENT_HANDLER_LIST
 
 void JerryScriptRuntime::bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) {
     app_host_ = &host;
@@ -3951,6 +4118,73 @@ void JerryScriptRuntime::remove_script_event_listener(Node& node, std::string ty
     }
 }
 
+void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, std::uint32_t callback_value) {
+    for (const auto& listener : event_listeners_) {
+        if (!listener->active || !listener->property_handler || listener->node != &node ||
+            listener->type != type) {
+            continue;
+        }
+        listener->active = false;
+        if (listener->listener_id != 0) {
+            node.remove_event_listener(listener->listener_id);
+            listener->listener_id = 0;
+        }
+        if (listener->callback != 0) {
+            jerry_value_free(listener->callback);
+            listener->callback = 0;
+        }
+        break;
+    }
+    event_listeners_.erase(std::remove_if(event_listeners_.begin(), event_listeners_.end(),
+        [](const std::unique_ptr<ScriptEventListener>& listener) {
+            return !listener->active;
+        }), event_listeners_.end());
+    if (!jerry_value_is_function(callback_value) ||
+        event_listeners_.size() >= std::max<std::size_t>(1, options_.max_event_listeners)) {
+        return;
+    }
+
+    auto listener = std::make_unique<ScriptEventListener>();
+    listener->runtime = this;
+    listener->node = &node;
+    listener->type = std::move(type);
+    listener->callback = jerry_value_copy(callback_value);
+    listener->active = true;
+    listener->property_handler = true;
+
+    ScriptEventListener* raw = listener.get();
+    listener->listener_id = node.add_event_listener(listener->type, [raw](Event& event) {
+        if (raw == nullptr || !raw->active || raw->runtime == nullptr || raw->callback == 0) {
+            return;
+        }
+
+        JerryValue this_value(event.current_target() != nullptr
+            ? make_node_wrapper(*raw->runtime, *const_cast<Node*>(event.current_target()), false)
+            : jerry_undefined());
+        JerryValue event_object(make_event_object(*raw->runtime, event));
+        const jerry_value_t event_arg = event_object.get();
+        JerryValue result(run_with_execution_budget(*raw->runtime, [&]() {
+            return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
+        }));
+        if (jerry_value_is_exception(result.get())) {
+            JerryValue exception_value(jerry_exception_value(result.release(), true));
+            (void) exception_value;
+        }
+    });
+
+    event_listeners_.push_back(std::move(listener));
+}
+
+std::uint32_t JerryScriptRuntime::get_script_event_handler(Node& node, const std::string& type) const {
+    for (const auto& listener : event_listeners_) {
+        if (listener->active && listener->property_handler && listener->node == &node &&
+            listener->type == type && listener->callback != 0) {
+            return jerry_value_copy(listener->callback);
+        }
+    }
+    return jerry_null();
+}
+
 void JerryScriptRuntime::add_window_event_listener(std::string type,
                                                    std::uint32_t callback_value,
                                                    std::uint32_t target_value,
@@ -3991,31 +4225,72 @@ void JerryScriptRuntime::remove_window_event_listener(std::string type, std::uin
     }
 }
 
+void JerryScriptRuntime::set_window_event_handler(std::string type,
+                                                  std::uint32_t callback_value,
+                                                  std::uint32_t target_value) {
+    for (const auto& listener : event_listeners_) {
+        if (!listener->active || !listener->property_handler || listener->node != nullptr ||
+            listener->type != type) {
+            continue;
+        }
+        listener->active = false;
+        if (listener->callback != 0) {
+            jerry_value_free(listener->callback);
+            listener->callback = 0;
+        }
+        if (listener->target_object != 0) {
+            jerry_value_free(listener->target_object);
+            listener->target_object = 0;
+        }
+        break;
+    }
+    event_listeners_.erase(std::remove_if(event_listeners_.begin(), event_listeners_.end(),
+        [](const std::unique_ptr<ScriptEventListener>& listener) {
+            return !listener->active;
+        }), event_listeners_.end());
+    if (!jerry_value_is_function(callback_value) ||
+        event_listeners_.size() >= std::max<std::size_t>(1, options_.max_event_listeners)) {
+        return;
+    }
+    auto listener = std::make_unique<ScriptEventListener>();
+    listener->runtime = this;
+    listener->type = std::move(type);
+    listener->callback = jerry_value_copy(callback_value);
+    listener->target_object = jerry_value_copy(target_value);
+    listener->active = true;
+    listener->property_handler = true;
+    event_listeners_.push_back(std::move(listener));
+}
+
+std::uint32_t JerryScriptRuntime::get_window_event_handler(const std::string& type) const {
+    for (const auto& listener : event_listeners_) {
+        if (listener->active && listener->property_handler && listener->node == nullptr &&
+            listener->type == type && listener->callback != 0) {
+            return jerry_value_copy(listener->callback);
+        }
+    }
+    return jerry_null();
+}
+
 void JerryScriptRuntime::dispatch_window_event(const char* type) {
+    struct PendingWindowEventCallback {
+        jerry_value_t callback = 0;
+        jerry_value_t target = 0;
+    };
+    std::vector<PendingWindowEventCallback> callbacks;
     for (const auto& listener : event_listeners_) {
         if (!listener->active || listener->node != nullptr || listener->callback == 0 ||
             listener->type != type) {
             continue;
         }
-        JerryValue callback(jerry_value_copy(listener->callback));
-        JerryValue this_value(listener->target_object != 0
-            ? jerry_value_copy(listener->target_object)
-            : jerry_undefined());
-        JerryValue event_object(make_window_event_object(type, this_value.get()));
-        const jerry_value_t event_arg = event_object.get();
-        JerryValue result(run_with_execution_budget(*this, [&]() {
-            return jerry_call(callback.get(), this_value.get(), &event_arg, 1);
-        }));
-        if (jerry_value_is_exception(result.get())) {
-            JerryValue exception_value(jerry_exception_value(result.release(), true));
-            (void) exception_value;
-        }
+        callbacks.push_back(PendingWindowEventCallback{
+            jerry_value_copy(listener->callback),
+            listener->target_object != 0 ? jerry_value_copy(listener->target_object) : jerry_undefined(),
+        });
         if (listener->options.once) {
             listener->active = false;
-            if (listener->callback != 0) {
-                jerry_value_free(listener->callback);
-                listener->callback = 0;
-            }
+            jerry_value_free(listener->callback);
+            listener->callback = 0;
             if (listener->target_object != 0) {
                 jerry_value_free(listener->target_object);
                 listener->target_object = 0;
@@ -4028,6 +4303,20 @@ void JerryScriptRuntime::dispatch_window_event(const char* type) {
                                               return !listener->active;
                                           }),
                            event_listeners_.end());
+
+    for (PendingWindowEventCallback& entry : callbacks) {
+        JerryValue callback(entry.callback);
+        JerryValue this_value(entry.target);
+        JerryValue event_object(make_window_event_object(type, this_value.get()));
+        const jerry_value_t event_arg = event_object.get();
+        JerryValue result(run_with_execution_budget(*this, [&]() {
+            return jerry_call(callback.get(), this_value.get(), &event_arg, 1);
+        }));
+        if (jerry_value_is_exception(result.get())) {
+            JerryValue exception_value(jerry_exception_value(result.release(), true));
+            (void) exception_value;
+        }
+    }
 }
 
 void JerryScriptRuntime::clear_script_event_listeners() {

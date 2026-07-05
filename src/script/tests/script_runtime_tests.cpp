@@ -332,6 +332,42 @@ void javascript_event_prevent_default_and_remove_listener_work() {
     check(button->text_content() == "1", "removed listener no longer mutates DOM");
 }
 
+void javascript_event_handler_properties_work() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "button exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var log = '';"
+        "function first() { log += 'first;'; }"
+        "function second(event) { this.textContent = event.type; log += this.textContent + ';'; }"
+        "button.onclick = first;"
+        "var firstGetter = button.onclick === first;"
+        "button.onclick = second;"
+        "var secondGetter = button.onclick === second;"
+        "String(firstGetter) + ':' + String(secondGetter)");
+    check(result.ok && result.value == "true:true", "event handler property getter reflects active callback");
+    check(runtime.statistics().event_listener_count == 1, "property handler replaces old handler");
+
+    Event click("click", true, true);
+    dispatch_event(*button, click);
+    result = runtime.eval("log");
+    check(result.ok && result.value == "click;", "event handler property runs with element this value");
+    check(button->text_content() == "click", "event handler this value mutates target node");
+
+    result = runtime.eval("button.onclick = null; String(button.onclick)");
+    check(result.ok && result.value == "null", "event handler property can be cleared");
+    check(runtime.statistics().event_listener_count == 0, "clearing handler releases listener slot");
+
+    dispatch_event(*button, click);
+    result = runtime.eval("log");
+    check(result.ok && result.value == "click;", "cleared event handler no longer runs");
+}
+
 void javascript_form_properties_mutate_control_state() {
     HtmlParser parser;
     auto document = parser.parse(
@@ -1024,6 +1060,11 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     result = runtime.eval(
         "var networkEvents = '';"
         "function removedNetworkListener() { networkEvents += 'x'; }"
+        "window.ononline = function (event) {"
+        "  networkEvents += 'prop-' + event.type + ':' + String(event.target === window) + ';';"
+        "  window.ononline = null;"
+        "};"
+        "onoffline = function (event) { networkEvents += 'prop-' + event.type + ':' + String(event.target === window) + ';'; };"
         "window.addEventListener('online', function (event) {"
         "  networkEvents += event.type + ':' + String(event.target === window) + ';';"
         "});"
@@ -1034,8 +1075,9 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     check(result.ok, "window network listeners install");
     check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::NetworkStatusChanged, network_snapshot}),
           "network system event handled");
-    result = runtime.eval("String(navigator.onLine) + ':' + networkEvents");
-    check(result.ok && result.value == "true:online:true;", "navigator.onLine and window online event update");
+    result = runtime.eval("String(navigator.onLine) + ':' + networkEvents + ':' + String(window.ononline)");
+    check(result.ok && result.value == "true:prop-online:true;online:true;:null",
+          "navigator.onLine and window online event update");
 
     network_snapshot.network_online = false;
     check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::NetworkStatusChanged, network_snapshot}),
@@ -1043,11 +1085,12 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::NetworkStatusChanged, network_snapshot}),
           "unchanged offline event handled without redispatch");
     result = runtime.eval("String(navigator.onLine) + ':' + networkEvents");
-    check(result.ok && result.value == "false:online:true;offline;",
+    check(result.ok && result.value == "false:prop-online:true;online:true;prop-offline:true;offline;",
           "window offline event fires once and only on state change");
 
     result = runtime.eval(
         "var visibilityEvents = 0;"
+        "document.onvisibilitychange = function () { visibilityEvents += 100; };"
         "document.addEventListener('visibilitychange', function () {"
         "  visibilityEvents += document.hidden ? 1 : 10;"
         "});"
@@ -1059,7 +1102,7 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     check(runtime.handle_system_event(AppSystemEvent{1, AppSystemEventKind::ScreenStateChanged, hidden_snapshot}),
           "screen system event handled");
     result = runtime.eval("String(document.hidden) + ':' + document.visibilityState + ':' + String(visibilityEvents)");
-    check(result.ok && result.value == "true:hidden:1", "document visibility state updates");
+    check(result.ok && result.value == "true:hidden:101", "document visibility state updates");
 }
 
 void javascript_date_now_uses_host_time() {
@@ -1231,6 +1274,7 @@ int main() {
         javascript_click_listener_mutates_dom();
         javascript_generic_click_event_does_not_fake_mouse_coordinates();
         javascript_event_prevent_default_and_remove_listener_work();
+        javascript_event_handler_properties_work();
         javascript_form_properties_mutate_control_state();
         javascript_embedded_ui_helpers_support_event_delegation();
         javascript_query_selector_subset_works();

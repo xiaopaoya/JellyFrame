@@ -52,13 +52,14 @@ Status values in the full table mean:
 - `out_of_scope`: specification prose, legacy browser compatibility machinery or
   browser-scale behavior outside the app runtime contract.
 
-The first follow-up pass moved low-cost tail items into the supported subset:
+The first follow-up passes moved low-cost tail items into the supported subset:
 `details` / `summary` disclosure, `title` / `lang` / `dir` reflection,
 `document.title`, `document.dir`, `readOnly`, `maxLength` and range `min` /
-`max` / `step` reflection. Browser-scale systems such as navigation/history,
-browsing contexts, Workers, Worklets, full media, Shadow DOM, Custom Elements
-lifecycle, Microdata export and XML/XHTML syntax are explicit non-goals unless a
-future product profile creates a separate host-owned capability.
+`max` / `step` reflection, plus `on*` handler properties for events JellyFrame
+actually dispatches. Browser-scale systems such as navigation/history, browsing
+contexts, Workers, Worklets, full media, Shadow DOM, Custom Elements lifecycle,
+Microdata export and XML/XHTML syntax are explicit non-goals unless a future
+product profile creates a separate host-owned capability.
 
 ## Best Fit
 
@@ -339,6 +340,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | `element.style` | Subset | Mutable inline style object for common safe CSS properties: `display`, `color`, `background*`, `textAlign`, `textTransform`, `fontSize`, `fontWeight`, `lineHeight`, size/min/max size, `boxSizing`, margin/padding shorthands and sides, `opacity`, `transform`, `borderRadius`, inset/position, `whiteSpace`, `textOverflow`, `overflow` and `zIndex`. `style.getPropertyValue(name)`, `style.setProperty(name, value)` and `style.removeProperty(name)` accept the same safe CSS property subset plus CSS custom properties such as `--progress`. |
 | `hidden` / `disabled` / `open` properties | Subset | Boolean reflection. `hidden` removes rendering; disabled form controls do not activate or accept text input; `open` reflects details disclosure state. |
 | `addEventListener` / `removeEventListener` | Works | JS callbacks are bridged to core event dispatch. |
+| `on*` event handler properties | Subset | Function-valued handler properties are supported only for events JellyFrame actually dispatches: `onclick`, `oninput`, `onchange`, `ontoggle`, mouse/wheel handlers, `onfocus`/`onblur`, `document.onvisibilitychange`, `window.ononline`/`window.onoffline`, and wearable aliases `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`. Setting `null` or a non-function clears the handler. These handlers share the normal listener budget and cleanup path. Full `GlobalEventHandlers`, inline HTML event handler attributes and browser event-handler compilation semantics are not implemented. |
 | Event object | Subset | `type`, `target`, `currentTarget`, phase, cancel/propagation APIs, mouse/wheel fields. |
 | Form properties | Subset | `value`, `checked`, `selectedIndex`, `readOnly`, `maxLength`, `minLength`, `min`, `max` and `step` on relevant controls. Full validity state, selection APIs and browser form submission are deferred. |
 | Timers | Works | Host-pumped `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`; callback budget controlled by host. |

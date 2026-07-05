@@ -45,12 +45,12 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 - `unsupported`：不要在 JellyFrame app 中依赖。
 - `out_of_scope`：规范说明文字、旧浏览器兼容机制，或 app runtime 明确排除的浏览器级能力。
 
-第一批后续工作已经把低成本尾项推进到支持子集：`details` / `summary` disclosure、
+前几批后续工作已经把低成本尾项推进到支持子集：`details` / `summary` disclosure、
 `title` / `lang` / `dir` 反射、`document.title`、`document.dir`、`readOnly`、
-`maxLength` 和 range `min` / `max` / `step` 反射。navigation/history、browsing
-context、Workers、Worklets、完整媒体、Shadow DOM、Custom Elements 生命周期、Microdata
-export 和 XML/XHTML 语法仍是明确非目标；除非未来产品 profile 把它们做成宿主持有
-capability，否则不进入页面可依赖能力。
+`maxLength`、range `min` / `max` / `step` 反射，以及 JellyFrame 实际派发事件的
+`on*` handler property。navigation/history、browsing context、Workers、Worklets、完整媒体、
+Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语法仍是明确非目标；
+除非未来产品 profile 把它们做成宿主持有 capability，否则不进入页面可依赖能力。
 
 ## 最适合的项目
 
@@ -325,6 +325,7 @@ JerryScript 源码树时可用。
 | `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
 | `hidden` / `disabled` / `open` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 状态。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
+| `on*` event handler properties | 子集 | 只为 JellyFrame 实际派发的事件支持函数型 handler property：`onclick`、`oninput`、`onchange`、`ontoggle`、mouse/wheel handlers、`onfocus`/`onblur`、`document.onvisibilitychange`、`window.ononline`/`window.onoffline`，以及可穿戴按下反馈别名 `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`。设置为 `null` 或非函数会清除 handler。它们复用普通 listener 预算和 runtime 清理路径。不实现完整 `GlobalEventHandlers`、HTML inline event handler attribute 或浏览器级 handler 编译语义。 |
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |
 | 表单属性 | 子集 | 相关控件上的 `value`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max` 和 `step`。完整 validity state、selection API 和浏览器表单提交延后。 |
 | Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |

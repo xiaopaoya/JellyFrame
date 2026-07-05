@@ -62,6 +62,13 @@ surface.
   `stopImmediatePropagation`.
 - JavaScript listeners run through the existing C++ capture/target/bubble event
   flow and can mutate the DOM during native input dispatch.
+- Function-valued `on*` handler properties are supported for the events
+  JellyFrame actually dispatches: `onclick`, `oninput`, `onchange`, `ontoggle`,
+  mouse/wheel handlers, `onfocus`/`onblur`, `document.onvisibilitychange`,
+  `window.ononline`/`window.onoffline`, plus wearable aliases
+  `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`. Setting `null` or
+  a non-function clears the handler. These handlers consume the same listener
+  budget and cleanup path as `addEventListener`.
 - The Win32 browser shell accepts `--script file.js` in scripting builds and
   rerenders when script event callbacks dirty the DOM.
 - `summary` inside `details` participates in the normal event path. A click or
@@ -234,6 +241,9 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Full DOMTokenList semantics. `classList` is limited to
   `contains`/`add`/`remove`/`toggle`; iteration, `replace()` and exception
   behavior for invalid tokens are deferred.
+- Full `GlobalEventHandlers`, inline HTML event handler attributes and browser
+  event-handler compilation semantics. Use `addEventListener` or the documented
+  function-valued `on*` property subset above.
 - Dynamic `dataset` property creation or native mutation through new arbitrary keys.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
