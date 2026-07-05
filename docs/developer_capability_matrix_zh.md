@@ -306,7 +306,7 @@ JerryScript 源码树时可用。
 | API | 状态 | 行为 |
 | --- | --- | --- |
 | Classic document scripts | 子集 | scripting 构建中，伪浏览器/Win32 壳会执行 inline classic `<script>`，并通过宿主 callback 加载本地外部 `<script src>`。 |
-| `window` / `document` | 子集 | 暴露下列方法。`window`、`self` 和 `document.defaultView` 指向同一个 JellyFrame window 对象。包内文档暴露 `origin === "null"`、`isSecureContext === false`、`crossOriginIsolated === false`；不建模浏览器 URL/origin/security-policy 机制。 |
+| `window` / `document` | 子集 | 暴露下列方法。`window`、`window.window`、`self` 和 `document.defaultView` 指向同一个 JellyFrame window 对象；`window.document` 指向绑定的包内文档，`window.navigator` 指向嵌入式 Navigator 子集。包内文档暴露 `origin === "null"`、`isSecureContext === false`、`crossOriginIsolated === false`；不建模浏览器 URL/origin/security-policy 机制。 |
 | `document.head` / `document.body` | 可用 | 返回第一个 `head` / `body` element wrapper 或 `null`。V0 中只读，不暗示资源加载或 live document collection。 |
 | `document.title` / `document.dir` / `document.readyState` / `document.defaultView` / `document.hasFocus()` | 可用 | `document.title` 读取/写入第一个 `title` 元素文本。`document.dir` 反射 `html` 元素上的文档方向属性；简化文档中会 fallback 到 body/document。`document.readyState` 在 JellyFrame 绑定包内文档后始终为 `complete`；不模拟浏览器加载过程中的中间状态。`document.defaultView` 返回绑定的 JellyFrame `window`。`document.hasFocus()` 跟随嵌入式生命周期；宿主将文档标记为 hidden 时返回 false。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |

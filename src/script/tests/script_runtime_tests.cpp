@@ -689,10 +689,12 @@ void javascript_small_document_and_text_idl_tail_works() {
         "label.innerText = 'Done';"
         "before + ':' + label.textContent + ':' + document.head.tagName + ':' + document.hasFocus() + ':' + "
         "(document.defaultView === window) + ':' + (self === window) + ':' + "
+        "(window.window === window) + ':' + (window.document === document) + ':' + "
+        "(window.navigator === navigator) + ':' + "
         "origin + ':' + isSecureContext + ':' + crossOriginIsolated");
 
     check(result.ok, "small document/text IDL tail script succeeds");
-    check(result.value == "Ready:Done:head:true:true:true:null:false:false",
+    check(result.value == "Ready:Done:head:true:true:true:true:true:true:null:false:false",
           "innerText, document focus/defaultView and global environment constants are exposed");
 }
 
