@@ -1416,6 +1416,7 @@ JELLYFRAME_REFLECTED_STRING_ACCESSOR(rel, "rel")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(referrerPolicy, "referrerpolicy")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(dateTime, "datetime")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(alt, "alt")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(htmlFor, "for")
 
 #undef JELLYFRAME_REFLECTED_STRING_ACCESSOR
 
@@ -3740,6 +3741,9 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     }
     if (node.type == NodeType::Element && node.tag_name == "img") {
         define_accessor(object.get(), "alt", node_get_alt, node_set_alt);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "label") {
+        define_accessor(object.get(), "htmlFor", node_get_htmlFor, node_set_htmlFor);
     }
     set_method(object.get(), "appendChild", node_append_child);
     set_method(object.get(), "removeChild", node_remove_child);
