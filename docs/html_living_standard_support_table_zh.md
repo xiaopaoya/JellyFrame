@@ -20,8 +20,8 @@ CSS 不包含在本表中；CSS 全量审计表等待独立 CSS 审计完成后�
 
 | Status | Rows |
 | --- | ---: |
-| `supported` | 147 |
-| `partial` | 1434 |
+| `supported` | 146 |
+| `partial` | 1435 |
 | `host_dependent` | 201 |
 | `unsupported` | 1241 |
 | `out_of_scope` | 264 |
@@ -2017,7 +2017,7 @@ CSS 不包含在本表中；CSS 全量审计表等待独立 CSS 审计完成后�
 | html-ls:interface-member:HTMLElement.lang:ce097e1ff6 | webidl-member-attribute | api-surface | HTMLElement.lang |  | `supported` | HTMLElement.lang reflects the lang attribute. Text shaping/language selection remains font-backend owned. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
 | html-ls:interface-member:HTMLElement.translate:b6da2feeaa | webidl-member-attribute | api-surface | HTMLElement.translate |  | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Generic JellyFrame element wrapper subset; per-element browser interfaces are not complete. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
 | html-ls:interface-member:HTMLElement.dir:19ad574bb4 | webidl-member-attribute | api-surface | HTMLElement.dir |  | `supported` | HTMLElement.dir reflects the dir attribute. Full bidirectional layout is still outside the text subset. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
-| html-ls:interface-member:HTMLElement.hidden:d4e78fe402 | webidl-member-attribute | api-surface | HTMLElement.hidden |  | `supported` | HTMLElement.hidden reflects the hidden attribute, which removes the element from render-tree construction. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
+| html-ls:interface-member:HTMLElement.hidden:d4e78fe402 | webidl-member-attribute | api-surface | HTMLElement.hidden |  | `partial` | Supported only as the boolean hidden-attribute rendering subset. JellyFrame removes hidden elements from rendering, but does not implement hidden="until-found" or find-in-page reveal behavior. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
 | html-ls:interface-member:HTMLElement.inert:7d7e7ebdfe | webidl-member-attribute | api-surface | HTMLElement.inert |  | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Generic JellyFrame element wrapper subset; per-element browser interfaces are not complete. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
 | html-ls:interface-member:HTMLElement.click:320d4b2b37 | webidl-member-operation | api-surface | HTMLElement.click |  | `partial` | element.click() dispatches a synthetic click and runs JellyFrame bounded control/details activation; browser navigation and form submission activation are not implemented. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
 | html-ls:interface-member:HTMLElement.accessKey:94930a2c52 | webidl-member-attribute | api-surface | HTMLElement.accessKey |  | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Generic JellyFrame element wrapper subset; per-element browser interfaces are not complete. | [link](https://html.spec.whatwg.org/multipage/dom.html) |
