@@ -204,6 +204,7 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `document.querySelector(simpleSelector)` / `element.querySelector(simpleSelector)`
   - `document.querySelectorAll(simpleSelector)` / `element.querySelectorAll(simpleSelector)`,
     returning a static array snapshot
+  - `document.head` / `document.body` as read-only first-element wrappers or `null`
   - `element.dataset` snapshot properties for existing `data-*` attributes
   - `element.style` for a small inline-style property set:
     `display`, `color`, `background`, `backgroundColor`, `backgroundImage`, `textAlign`,
@@ -216,6 +217,20 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
     `removeProperty(name)` for the same safe CSS property subset plus CSS
     custom properties such as `--progress`
   - `element.hidden`, `element.disabled` and `element.open`
+  - `document.readyState`, exposed as `complete` after the package document is
+    bound
+  - `document.defaultView` and `document.hasFocus()` for the embedded document
+    lifecycle
+  - `window.self`, global `self`, `origin`, `isSecureContext` and
+    `crossOriginIsolated` as fixed package-environment values
+  - `element.innerText` as a lightweight `textContent` alias; it is not the
+    browser layout-aware rendered-text algorithm
+  - `element.click()` for the bounded JellyFrame activation subset
+  - common form-control IDL reflection: `type`, `name`, `placeholder`,
+    `required`, `defaultValue`, input `defaultChecked`, textarea
+    `rows`/`cols`/`wrap`/`textLength`, select `size`, option
+    `label`/`defaultSelected`/`value`/`text`/`index`,
+    optgroup `label`, and progress/meter numeric properties
 - Supported `matches`/`closest`/`querySelector(All)` selectors are intentionally
   small: tag, `.class`, `#id`, `[attr]`, `[attr=value]` and same-compound
   combinations such as `button.primary`. Descendant/child combinators remain

@@ -306,15 +306,15 @@ JerryScript 源码树时可用。
 | API | 状态 | 行为 |
 | --- | --- | --- |
 | Classic document scripts | 子集 | scripting 构建中，伪浏览器/Win32 壳会执行 inline classic `<script>`，并通过宿主 callback 加载本地外部 `<script src>`。 |
-| `window` / `document` | 子集 | 暴露下列方法。 |
-| `document.body` | 可用 | 返回第一个 `body` element wrapper 或 `null`。V0 中只读。 |
-| `document.title` / `document.dir` | 可用 | `document.title` 读取/写入第一个 `title` 元素文本。`document.dir` 反射 `html` 元素上的文档方向属性；简化文档中会 fallback 到 body/document。 |
+| `window` / `document` | 子集 | 暴露下列方法。`window`、`self` 和 `document.defaultView` 指向同一个 JellyFrame window 对象。包内文档暴露 `origin === "null"`、`isSecureContext === false`、`crossOriginIsolated === false`；不建模浏览器 URL/origin/security-policy 机制。 |
+| `document.head` / `document.body` | 可用 | 返回第一个 `head` / `body` element wrapper 或 `null`。V0 中只读，不暗示资源加载或 live document collection。 |
+| `document.title` / `document.dir` / `document.readyState` / `document.defaultView` / `document.hasFocus()` | 可用 | `document.title` 读取/写入第一个 `title` 元素文本。`document.dir` 反射 `html` 元素上的文档方向属性；简化文档中会 fallback 到 body/document。`document.readyState` 在 JellyFrame 绑定包内文档后始终为 `complete`；不模拟浏览器加载过程中的中间状态。`document.defaultView` 返回绑定的 JellyFrame `window`。`document.hasFocus()` 跟随嵌入式生命周期；宿主将文档标记为 hidden 时返回 false。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
 | `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；数量受 `HostBudgets::max_detached_dom_nodes` 限制。 |
 | `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |
 | `appendChild` / `removeChild` | 可用 | 移动节点、防止环、标记 dirty。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
 | `setAttribute` / `getAttribute` / `removeAttribute` | 可用 | 绑定层会 lowercase 属性名。 |
-| `textContent` | 可用 | getter/setter；同值设置不会触发 dirty。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。 |
+| `textContent` / `innerText` | 可用 / 子集 | `textContent` getter/setter；同值设置不会触发 dirty。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。`innerText` 在 element wrapper 上作为轻量 `textContent` 别名暴露；不执行浏览器 layout-aware rendered-text 算法。 |
 | `id` | 可用 | 反射到 `id` attribute，并走现有 style/layout dirty 路径。 |
 | `className` | 可用 | 反射到 `class` attribute，并走现有 style/layout dirty 路径。 |
 | `title` / `lang` / `dir` | 可用 | element wrapper 上的字符串属性反射。`lang` 和 `dir` 反射不等于完整语言特定 shaping 或 bidi layout。 |
@@ -324,10 +324,11 @@ JerryScript 源码树时可用。
 | `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |
 | `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
 | `hidden` / `disabled` / `open` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 状态。 |
+| `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio/select 状态变化会派发 `input`/`change`，未被取消的 `summary.click()` 会切换父 `details`。不实现浏览器导航/提交 activation。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
 | `on*` event handler properties | 子集 | 只为 JellyFrame 实际派发的事件支持函数型 handler property：`onclick`、`oninput`、`onchange`、`ontoggle`、mouse/wheel handlers、`onfocus`/`onblur`、`document.onvisibilitychange`、`window.ononline`/`window.onoffline`，以及可穿戴按下反馈别名 `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`。设置为 `null` 或非函数会清除 handler。它们复用普通 listener 预算和 runtime 清理路径。不实现完整 `GlobalEventHandlers`、HTML inline event handler attribute 或浏览器级 handler 编译语义。 |
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |
-| 表单属性 | 子集 | 相关控件上的 `value`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max` 和 `step`。完整 validity state、selection API 和浏览器表单提交延后。 |
+| 表单属性 | 子集 | 相关控件上的常用 IDL 属性：`value`、`defaultValue`、input `defaultChecked`、`type`、`name`、`placeholder`、`required`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max`、`step`，textarea 的 `rows`/`cols`/`wrap`/`textLength`，select 的 `size`，option 的 `label`/`defaultSelected`/`value`/`text`/`index`，optgroup 的 `label`，以及 progress/meter 数值 `value`/`min`/`max`、meter 的 `low`/`high`/`optimum` 和 progress 的 `position`。完整 validity state、labels collections、selection API、picker UI 和浏览器表单提交延后。 |
 | Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |
 | 脚本执行 watchdog | 宿主/runtime 可选 | 当链接的 JerryScript 使用 `JERRY_VM_HALT=ON` 构建时，`JerryScriptRuntimeOptions::max_execution_check_count` 与 `HostBudgets::max_script_execution_checks` 可中断失控 eval 和 callback，并给出 `script execution budget exceeded`。若 JerryScript 缺少该特性，JellyFrame 会报告 watchdog 不可用，不伪造抢占。Win32 验证壳可用 `--require-script-watchdog` 和有界 check 参数强制验收这条 recovery 路径。 |
 | Promise/microtask | 延后 | 不要依赖浏览器 task 语义。 |

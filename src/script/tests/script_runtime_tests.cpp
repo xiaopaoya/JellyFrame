@@ -392,6 +392,66 @@ void javascript_form_properties_mutate_control_state() {
     check(result.value == "Ada:true:b:1", "form properties stringify expected state");
 }
 
+void javascript_form_idl_reflection_subset_works() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body>"
+        "<input id='name' type='text' name='user' value='Ada' placeholder='Name'>"
+        "<button id='go' type='button' name='action' value='save'>Go</button>"
+        "<select id='mode' name='mode' size='1'><option value='a'>Alpha</option>"
+        "<optgroup id='group' label='More'><option id='beta'>Beta</option></optgroup></select>"
+        "<textarea id='note' name='note' rows='3' cols='12' wrap='soft'>Hi</textarea>"
+        "<progress id='load' value='25' max='100'></progress>"
+        "<meter id='battery' min='0' max='10' value='7' low='2' high='8' optimum='9'></meter>"
+        "</body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var name = document.getElementById('name');"
+        "var go = document.getElementById('go');"
+        "var mode = document.getElementById('mode');"
+        "var beta = document.getElementById('beta');"
+        "var group = document.getElementById('group');"
+        "var note = document.getElementById('note');"
+        "var load = document.getElementById('load');"
+        "var battery = document.getElementById('battery');"
+        "name.required = true;"
+        "name.defaultValue = 'Grace';"
+        "name.defaultChecked = true;"
+        "name.checked = false;"
+        "note.defaultValue = 'Memo';"
+        "note.rows = 4;"
+        "note.cols = 16;"
+        "note.placeholder = 'Memo';"
+        "mode.required = true;"
+        "mode.size = 2;"
+        "beta.defaultSelected = true;"
+        "beta.value = 'b';"
+        "beta.text = 'Beta Prime';"
+        "group.label = 'Extra';"
+        "load.value = 50;"
+        "battery.value = 6;"
+        "battery.low = '3';"
+        "name.type + ':' + name.name + ':' + name.required + ':' + name.defaultValue + ':' + "
+        "name.defaultChecked + ':' + name.checked + ':' + "
+        "go.type + ':' + go.name + ':' + go.value + ':' + "
+        "mode.type + ':' + mode.name + ':' + mode.required + ':' + mode.size + ':' + "
+        "beta.index + ':' + beta.label + ':' + beta.defaultSelected + ':' + beta.value + ':' + "
+        "beta.text + ':' + group.label + ':' + "
+        "note.type + ':' + note.rows + ':' + note.cols + ':' + note.wrap + ':' + note.placeholder + ':' + "
+        "note.defaultValue + ':' + note.textLength + ':' + "
+        "load.value + ':' + load.max + ':' + load.position + ':' + "
+        "battery.value + ':' + battery.min + ':' + battery.max + ':' + battery.low + ':' + "
+        "battery.high + ':' + battery.optimum + ':' + typeof battery.low");
+
+    check(result.ok, "form IDL reflection script succeeds");
+    check(result.value == "text:user:true:Grace:true:false:button:action:save:select-one:mode:true:2:"
+                          "1:Beta Prime:true:b:Beta Prime:Extra:"
+                          "textarea:4:16:soft:Memo:Memo:4:50:100:0.5:6:0:10:3:8:9:number",
+          "form/progress/meter IDL subset reflects expected values");
+}
+
 void javascript_embedded_ui_helpers_support_event_delegation() {
     HtmlParser parser;
     auto document = parser.parse(
@@ -556,6 +616,61 @@ void javascript_standard_reflected_attributes_work() {
           "standard reflected attributes round-trip through JS");
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U,
           "reflected attributes mark layout/style dirty");
+}
+
+void javascript_document_ready_state_and_element_click_work() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body>"
+        "<button id='button'>0</button>"
+        "<input id='check' type='checkbox'>"
+        "<details id='panel'><summary id='summary'>More</summary><p>Hidden</p></details>"
+        "</body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var check = document.getElementById('check');"
+        "var panel = document.getElementById('panel');"
+        "var summary = document.getElementById('summary');"
+        "var log = document.readyState + ';';"
+        "button.onclick = function (event) { log += event.type + ':' + event.clientX + ';'; };"
+        "check.onchange = function () { log += 'change:' + check.checked + ';'; };"
+        "panel.ontoggle = function () { log += 'toggle:' + panel.open + ';'; };"
+        "button.click();"
+        "check.click();"
+        "summary.click();"
+        "log + String(check.checked) + ':' + String(panel.open)");
+
+    check(result.ok, "document readyState and element click script succeeds");
+    check(result.value == "complete;click:0;change:true;toggle:true;true:true",
+          "readyState is complete and click() dispatches bounded activation behavior");
+
+    result = runtime.eval(
+        "summary.onclick = function (event) { event.preventDefault(); };"
+        "summary.click();"
+        "String(panel.open)");
+    check(result.ok && result.value == "true", "preventDefault blocks summary click default toggle");
+}
+
+void javascript_small_document_and_text_idl_tail_works() {
+    HtmlParser parser;
+    auto document = parser.parse("<html><head><title>Demo</title></head><body><p id='label'>Ready</p></body></html>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var label = document.getElementById('label');"
+        "var before = label.innerText;"
+        "label.innerText = 'Done';"
+        "before + ':' + label.textContent + ':' + document.head.tagName + ':' + document.hasFocus() + ':' + "
+        "(document.defaultView === window) + ':' + (self === window) + ':' + "
+        "origin + ':' + isSecureContext + ':' + crossOriginIsolated");
+
+    check(result.ok, "small document/text IDL tail script succeeds");
+    check(result.value == "Ready:Done:head:true:true:true:null:false:false",
+          "innerText, document focus/defaultView and global environment constants are exposed");
 }
 
 void javascript_element_style_extended_properties_work() {
@@ -1276,6 +1391,7 @@ int main() {
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_event_handler_properties_work();
         javascript_form_properties_mutate_control_state();
+        javascript_form_idl_reflection_subset_works();
         javascript_embedded_ui_helpers_support_event_delegation();
         javascript_query_selector_subset_works();
         javascript_class_name_reflects_class_attribute();
@@ -1283,6 +1399,8 @@ int main() {
         javascript_class_list_subset_mutates_class_attribute();
         javascript_element_style_hidden_and_disabled_properties_work();
         javascript_standard_reflected_attributes_work();
+        javascript_document_ready_state_and_element_click_work();
+        javascript_small_document_and_text_idl_tail_works();
         javascript_element_style_extended_properties_work();
         javascript_input_event_reads_live_value();
         javascript_timeout_runs_when_host_pumps_time();

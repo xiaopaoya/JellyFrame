@@ -30,8 +30,8 @@
 
 | 能力 | 状态 | Manifest |
 | --- | --- | --- |
-| DOM 查询/修改 | 子集 | 无需额外 capability。使用 `document.body`、`getElementById`、简单 selector 的 `querySelector`、`createElement`、`appendChild`、`textContent`、`id`、`className` 和小型 `classList` helper。 |
-| 事件 | 可用 | 使用 `addEventListener`、文档化的 `on*` handler property、事件委托、`dataset`、`matches`/`closest` 子集。不支持 HTML inline event attribute。 |
+| DOM 查询/修改 | 子集 | 无需额外 capability。使用 `document.head`、`document.body`、`document.readyState`、`document.defaultView`、`document.hasFocus()`、简单 selector 的 `querySelector`、`createElement`、`appendChild`、`textContent`、轻量 `innerText`、`id`、`className`、常用表单控件 IDL 属性和小型 `classList` helper。 |
+| 事件 | 可用 | 使用 `addEventListener`、文档化的 `on*` handler property、`element.click()`、事件委托、`dataset`、`matches`/`closest` 子集。不支持 HTML inline event attribute。 |
 | 时间 / Timer / rAF | 有界 | `Date.now()` 读取宿主注入时间；timer/rAF 无需额外 capability，但受 frame policy 和预算限制。 |
 | `XMLHttpRequest` GET | 宿主可选 | `network.fetch`。只用于运行时数据，不加载页面资源。 |
 | `localStorage` | 宿主可选 | `storage.kv`。这是 app 私有小型 KV shadow，不是浏览器持久存储全集。 |

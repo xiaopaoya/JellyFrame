@@ -159,7 +159,7 @@ API 表面。
 - 面向嵌入式 app 的 DOM helpers：
   - `element.children`
   - `element.parentElement`
-  - `document.body` 作为只读的第一个 `body` wrapper
+  - `document.head` / `document.body`，只读返回第一个元素 wrapper 或 `null`
   - 反射到 `id` attribute 的 `element.id`
   - 反射到 `class` attribute 的 `element.className`
   - 极小 DOMTokenList-like helper：`element.classList.contains/add/remove/toggle`
@@ -179,6 +179,17 @@ API 表面。
     `setProperty(name, value)` 和 `removeProperty(name)`，以及 `--progress`
     这类 CSS custom property
   - `element.hidden`、`element.disabled` 和 `element.open`
+  - `document.readyState`，包内文档绑定后固定暴露为 `complete`
+  - `document.defaultView` 和 `document.hasFocus()`，用于嵌入式文档生命周期判断
+  - `window.self`、global `self`、`origin`、`isSecureContext` 和
+    `crossOriginIsolated`，作为固定包环境值
+  - `element.innerText` 作为轻量 `textContent` 别名；不执行浏览器
+    layout-aware rendered-text 算法
+  - `element.click()`，覆盖 JellyFrame 有界 activation 子集
+  - 常用表单控件 IDL 反射：`type`、`name`、`placeholder`、`required`、
+    `defaultValue`、input `defaultChecked`，textarea 的 `rows`/`cols`/`wrap`/`textLength`，
+    select 的 `size`，option 的 `label`/`defaultSelected`/`value`/`text`/`index`，
+    optgroup 的 `label`，以及 progress/meter 数值属性
 - `matches`/`closest`/`querySelector(All)` 支持的 selector 刻意保持很小：tag、`.class`、`#id`、
   `[attr]`、`[attr=value]` 和同一 compound 内组合，例如 `button.primary`。
   Descendant/child combinator 目前仍只在 CSS 中支持。

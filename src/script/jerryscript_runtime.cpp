@@ -7,6 +7,7 @@
 #include "render_core/canvas2d.h"
 #include "render_core/form_control.h"
 #include "render_core/style.h"
+#include "render_core/text_scan.h"
 
 #include <jerryscript.h>
 
@@ -470,6 +471,52 @@ bool has_attribute(const Node& node, const std::string& name) {
     return node.attributes.find(name) != node.attributes.end();
 }
 
+bool is_progress_or_meter(const Node& node) {
+    return node.type == NodeType::Element && (node.tag_name == "progress" || node.tag_name == "meter");
+}
+
+bool is_option_or_optgroup(const Node& node) {
+    return node.type == NodeType::Element && (node.tag_name == "option" || node.tag_name == "optgroup");
+}
+
+Node* closest_ancestor_select(Node& node) {
+    for (Node* current = node.parent; current != nullptr; current = current->parent) {
+        if (current->type == NodeType::Element && current->tag_name == "select") {
+            return current;
+        }
+    }
+    return nullptr;
+}
+
+int option_index_in_select(const Node& select, const Node& option) {
+    int index = 0;
+    std::vector<const Node*> pending;
+    pending.push_back(&select);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current->type == NodeType::Element && current->tag_name == "option") {
+            if (current == &option) {
+                return index;
+            }
+            ++index;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+    return -1;
+}
+
+std::size_t utf8_codepoint_count(std::string_view text) {
+    std::size_t count = 0;
+    for (std::size_t index = 0; index < text.size();) {
+        consume_utf8_codepoint(text, index);
+        ++count;
+    }
+    return count;
+}
+
 std::string data_attribute_to_dataset_key(std::string_view attribute_name) {
     if (attribute_name.rfind("data-", 0) != 0 || attribute_name.size() <= 5) {
         return {};
@@ -882,6 +929,23 @@ int int_from_value(jerry_value_t value, int fallback = 0) {
     return static_cast<int>(std::round(number));
 }
 
+double numeric_attribute(const Node& node, const char* name, double fallback) {
+    const std::string& value = node.attribute(name);
+    if (value.empty()) {
+        return fallback;
+    }
+    char* end = nullptr;
+    const double parsed = std::strtod(value.c_str(), &end);
+    return end != value.c_str() && std::isfinite(parsed) ? parsed : fallback;
+}
+
+std::string number_attribute_value(jerry_value_t value) {
+    const double number = double_from_value(value, 0.0);
+    std::ostringstream stream;
+    stream << number;
+    return stream.str();
+}
+
 EventListenerOptions listener_options_from_value(jerry_value_t value) {
     EventListenerOptions options;
     if (jerry_value_is_boolean(value)) {
@@ -1181,11 +1245,93 @@ jerry_value_t node_set_reflected_string_attribute(const jerry_call_info_t* call_
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(title, "title")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(lang, "lang")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(dir, "dir")
-JELLYFRAME_REFLECTED_STRING_ACCESSOR(min, "min")
-JELLYFRAME_REFLECTED_STRING_ACCESSOR(max, "max")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(step, "step")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(name, "name")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(placeholder, "placeholder")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(wrap, "wrap")
 
 #undef JELLYFRAME_REFLECTED_STRING_ACCESSOR
+
+jerry_value_t node_get_reflected_number_attribute(const jerry_call_info_t* call_info_p,
+                                                  const char* attribute_name,
+                                                  double missing_value) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_number(missing_value);
+    }
+    return jerry_number(numeric_attribute(*node, attribute_name, missing_value));
+}
+
+jerry_value_t node_set_reflected_number_attribute(const jerry_call_info_t* call_info_p,
+                                                  const jerry_value_t args_p[],
+                                                  const jerry_length_t args_count,
+                                                  const char* attribute_name) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element && args_count > 0) {
+        node->set_attribute(attribute_name, number_attribute_value(args_p[0]));
+    }
+    return jerry_undefined();
+}
+
+#define JELLYFRAME_REFLECTED_NUMBER_ACCESSOR(js_name, attr_name, missing_value) \
+    jerry_value_t node_get_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t[], const jerry_length_t) { \
+        return node_get_reflected_number_attribute(call_info_p, attr_name, missing_value); \
+    } \
+    jerry_value_t node_set_##js_name(const jerry_call_info_t* call_info_p, const jerry_value_t args_p[], const jerry_length_t args_count) { \
+        return node_set_reflected_number_attribute(call_info_p, args_p, args_count, attr_name); \
+    }
+
+JELLYFRAME_REFLECTED_NUMBER_ACCESSOR(low, "low", 0.0)
+JELLYFRAME_REFLECTED_NUMBER_ACCESSOR(high, "high", 1.0)
+JELLYFRAME_REFLECTED_NUMBER_ACCESSOR(optimum, "optimum", 0.0)
+
+#undef JELLYFRAME_REFLECTED_NUMBER_ACCESSOR
+
+jerry_value_t node_get_min(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t[],
+                           const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    if (node->tag_name == "meter") {
+        return jerry_number(numeric_attribute(*node, "min", 0.0));
+    }
+    return jerry_string_sz(node->attribute("min").c_str());
+}
+
+jerry_value_t node_set_min(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element) {
+        node->set_attribute("min", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_max(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t[],
+                           const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    if (node->tag_name == "progress" || node->tag_name == "meter") {
+        return jerry_number(numeric_attribute(*node, "max", 1.0));
+    }
+    return jerry_string_sz(node->attribute("max").c_str());
+}
+
+jerry_value_t node_set_max(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element) {
+        node->set_attribute("max", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
 
 jerry_value_t node_get_reflected_int_attribute(const jerry_call_info_t* call_info_p,
                                                const char* attribute_name,
@@ -1224,6 +1370,9 @@ jerry_value_t node_set_reflected_int_attribute(const jerry_call_info_t* call_inf
 
 JELLYFRAME_REFLECTED_INT_ACCESSOR(maxLength, "maxlength", -1)
 JELLYFRAME_REFLECTED_INT_ACCESSOR(minLength, "minlength", -1)
+JELLYFRAME_REFLECTED_INT_ACCESSOR(rows, "rows", 2)
+JELLYFRAME_REFLECTED_INT_ACCESSOR(cols, "cols", 20)
+JELLYFRAME_REFLECTED_INT_ACCESSOR(size, "size", 0)
 
 #undef JELLYFRAME_REFLECTED_INT_ACCESSOR
 
@@ -1457,10 +1606,256 @@ jerry_value_t node_set_open(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t node_get_required(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && has_attribute(*node, "required"));
+}
+
+jerry_value_t node_set_required(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr) {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("required", "");
+        } else {
+            node->remove_attribute("required");
+        }
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_default_value(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t[],
+                                     const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    if (node->tag_name == "textarea") {
+        return jerry_string_sz(node->text_content().c_str());
+    }
+    return jerry_string_sz(node->attribute("value").c_str());
+}
+
+jerry_value_t node_set_default_value(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t args_p[],
+                                     const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    const std::string value = args_count > 0 ? value_to_string(args_p[0]) : std::string();
+    if (node->tag_name == "textarea") {
+        node->set_text_content(value);
+    } else {
+        node->set_attribute("value", value);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_type(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t[],
+                            const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element) {
+        return jerry_undefined();
+    }
+    if (node->tag_name == "textarea") {
+        return jerry_string_sz("textarea");
+    }
+    if (node->tag_name == "select") {
+        return jerry_string_sz("select-one");
+    }
+    if (node->tag_name == "button") {
+        const std::string type = ascii_lowercase(node->attribute("type"));
+        if (type == "button" || type == "reset" || type == "submit") {
+            return jerry_string_sz(type.c_str());
+        }
+        return jerry_string_sz("submit");
+    }
+    if (node->tag_name == "input") {
+        const std::string type = ascii_lowercase(node->attribute("type"));
+        static constexpr std::string_view kSupportedInputTypes[] = {
+            "checkbox", "color", "date", "datetime-local", "file", "radio", "range", "text", "time",
+        };
+        if (std::find(std::begin(kSupportedInputTypes), std::end(kSupportedInputTypes), std::string_view(type)) !=
+            std::end(kSupportedInputTypes)) {
+            return jerry_string_sz(type.c_str());
+        }
+        return jerry_string_sz("text");
+    }
+    return jerry_string_sz(node->attribute("type").c_str());
+}
+
+jerry_value_t node_set_type(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t args_p[],
+                            const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element &&
+        (node->tag_name == "input" || node->tag_name == "button")) {
+        node->set_attribute("type", args_count > 0 ? ascii_lowercase(value_to_string(args_p[0])) : std::string());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_text_length(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t[],
+                                   const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || node->tag_name != "textarea") {
+        return jerry_number(0);
+    }
+    return jerry_number(static_cast<double>(utf8_codepoint_count(form_control_value(*node))));
+}
+
+jerry_value_t node_get_position(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || node->tag_name != "progress") {
+        return jerry_number(-1);
+    }
+    if (!has_attribute(*node, "value")) {
+        return jerry_number(-1);
+    }
+    const double max = std::max(0.0, numeric_attribute(*node, "max", 1.0));
+    if (max <= 0.0) {
+        return jerry_number(-1);
+    }
+    const double value = std::max(0.0, std::min(numeric_attribute(*node, "value", 0.0), max));
+    return jerry_number(value / max);
+}
+
+jerry_value_t node_get_label(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t[],
+                             const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || !is_option_or_optgroup(*node)) {
+        return jerry_undefined();
+    }
+    const std::string& label = node->attribute("label");
+    return jerry_string_sz(!label.empty() || node->tag_name == "optgroup" ? label.c_str() : node->text_content().c_str());
+}
+
+jerry_value_t node_set_label(const jerry_call_info_t* call_info_p,
+                             const jerry_value_t args_p[],
+                             const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && is_option_or_optgroup(*node)) {
+        node->set_attribute("label", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_default_selected(const jerry_call_info_t* call_info_p,
+                                        const jerry_value_t[],
+                                        const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && node->type == NodeType::Element &&
+                         node->tag_name == "option" && has_attribute(*node, "selected"));
+}
+
+jerry_value_t node_set_default_selected(const jerry_call_info_t* call_info_p,
+                                        const jerry_value_t args_p[],
+                                        const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element && node->tag_name == "option") {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("selected", "");
+        } else {
+            node->remove_attribute("selected");
+        }
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_default_checked(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t[],
+                                       const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && node->type == NodeType::Element &&
+                         node->tag_name == "input" && has_attribute(*node, "checked"));
+}
+
+jerry_value_t node_set_default_checked(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element && node->tag_name == "input") {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("checked", "");
+        } else {
+            node->remove_attribute("checked");
+        }
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_option_value(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || node->tag_name != "option") {
+        return jerry_undefined();
+    }
+    const std::string& value = node->attribute("value");
+    return jerry_string_sz(!value.empty() ? value.c_str() : node->text_content().c_str());
+}
+
+jerry_value_t node_set_option_value(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element && node->tag_name == "option") {
+        node->set_attribute("value", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_option_text(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t[],
+                                   const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || node->tag_name != "option") {
+        return jerry_undefined();
+    }
+    return jerry_string_sz(node->text_content().c_str());
+}
+
+jerry_value_t node_set_option_text(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t args_p[],
+                                   const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element && node->tag_name == "option") {
+        node->set_text_content(args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_option_index(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t[],
+                                    const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || node->tag_name != "option") {
+        return jerry_number(-1);
+    }
+    Node* select = closest_ancestor_select(*node);
+    return jerry_number(select != nullptr ? option_index_in_select(*select, *node) : -1);
+}
+
 jerry_value_t node_get_value(const jerry_call_info_t* call_info_p,
                              const jerry_value_t[],
                              const jerry_length_t) {
     Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && is_progress_or_meter(*node)) {
+        return jerry_number(numeric_attribute(*node, "value", 0.0));
+    }
+    if (node != nullptr && node->type == NodeType::Element && node->tag_name == "button") {
+        return jerry_string_sz(node->attribute("value").c_str());
+    }
     if (node == nullptr || !is_form_control(*node)) {
         return jerry_undefined();
     }
@@ -1471,6 +1866,14 @@ jerry_value_t node_set_value(const jerry_call_info_t* call_info_p,
                              const jerry_value_t args_p[],
                              const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && is_progress_or_meter(*node)) {
+        node->set_attribute("value", args_count > 0 ? number_attribute_value(args_p[0]) : std::string());
+        return jerry_undefined();
+    }
+    if (node != nullptr && node->type == NodeType::Element && node->tag_name == "button") {
+        node->set_attribute("value", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return jerry_undefined();
+    }
     if (node == nullptr || !is_form_control(*node)) {
         return jerry_undefined();
     }
@@ -1536,6 +1939,9 @@ jerry_value_t document_get_element_by_id(const jerry_call_info_t* call_info_p,
 jerry_value_t document_get_body(const jerry_call_info_t* call_info_p,
                                 const jerry_value_t[],
                                 const jerry_length_t);
+jerry_value_t document_get_head(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t);
 jerry_value_t document_get_title_attr(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t[],
                                       const jerry_length_t);
@@ -1560,6 +1966,18 @@ jerry_value_t document_get_hidden(const jerry_call_info_t* call_info_p,
 jerry_value_t document_get_visibility_state(const jerry_call_info_t* call_info_p,
                                             const jerry_value_t args_p[],
                                             const jerry_length_t args_count);
+jerry_value_t document_get_ready_state(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count);
+jerry_value_t document_get_default_view(const jerry_call_info_t* call_info_p,
+                                        const jerry_value_t args_p[],
+                                        const jerry_length_t args_count);
+jerry_value_t document_has_focus(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count);
+jerry_value_t node_click(const jerry_call_info_t* call_info_p,
+                         const jerry_value_t args_p[],
+                         const jerry_length_t args_count);
 jerry_value_t node_add_event_listener(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count);
@@ -3000,6 +3418,9 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
 
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
+    if (node.type == NodeType::Element) {
+        define_accessor(object.get(), "innerText", node_get_text_content, node_set_text_content);
+    }
     define_accessor(object.get(), "id", node_get_id, node_set_id);
     define_accessor(object.get(), "className", node_get_class_name, node_set_class_name);
     define_accessor(object.get(), "title", node_get_title, node_set_title);
@@ -3017,8 +3438,13 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     define_accessor(object.get(), #js_name, node_get_##js_name, node_set_##js_name);
     JELLYFRAME_NODE_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_NODE_EVENT_HANDLER)
 #undef JELLYFRAME_DEFINE_NODE_EVENT_HANDLER
-    if (is_form_control(node)) {
+    const bool form_control = is_form_control(node);
+    if (form_control || is_progress_or_meter(node)) {
         define_accessor(object.get(), "value", node_get_value, node_set_value);
+    }
+    if (form_control) {
+        define_accessor(object.get(), "type", node_get_type, node_set_type);
+        define_accessor(object.get(), "name", node_get_name, node_set_name);
         define_accessor(object.get(), "checked", node_get_checked, node_set_checked);
         define_accessor(object.get(), "selectedIndex", node_get_selected_index, node_set_selected_index);
         define_accessor(object.get(), "readOnly", node_get_read_only, node_set_read_only);
@@ -3028,6 +3454,48 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         define_accessor(object.get(), "max", node_get_max, node_set_max);
         define_accessor(object.get(), "step", node_get_step, node_set_step);
     }
+    if (node.type == NodeType::Element && (node.tag_name == "input" || node.tag_name == "textarea")) {
+        define_accessor(object.get(), "placeholder", node_get_placeholder, node_set_placeholder);
+        define_accessor(object.get(), "defaultValue", node_get_default_value, node_set_default_value);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "input") {
+        define_accessor(object.get(), "defaultChecked", node_get_default_checked, node_set_default_checked);
+    }
+    if (node.type == NodeType::Element &&
+        (node.tag_name == "input" || node.tag_name == "select" || node.tag_name == "textarea")) {
+        define_accessor(object.get(), "required", node_get_required, node_set_required);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "textarea") {
+        define_accessor(object.get(), "rows", node_get_rows, node_set_rows);
+        define_accessor(object.get(), "cols", node_get_cols, node_set_cols);
+        define_accessor(object.get(), "wrap", node_get_wrap, node_set_wrap);
+        define_accessor(object.get(), "textLength", node_get_text_length, node_ignore_setter);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "select") {
+        define_accessor(object.get(), "size", node_get_size, node_set_size);
+    }
+    if (is_progress_or_meter(node)) {
+        define_accessor(object.get(), "max", node_get_max, node_set_max);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "meter") {
+        define_accessor(object.get(), "min", node_get_min, node_set_min);
+        define_accessor(object.get(), "low", node_get_low, node_set_low);
+        define_accessor(object.get(), "high", node_get_high, node_set_high);
+        define_accessor(object.get(), "optimum", node_get_optimum, node_set_optimum);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "progress") {
+        define_accessor(object.get(), "position", node_get_position, node_ignore_setter);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "option") {
+        define_accessor(object.get(), "label", node_get_label, node_set_label);
+        define_accessor(object.get(), "defaultSelected", node_get_default_selected, node_set_default_selected);
+        define_accessor(object.get(), "value", node_get_option_value, node_set_option_value);
+        define_accessor(object.get(), "text", node_get_option_text, node_set_option_text);
+        define_accessor(object.get(), "index", node_get_option_index, node_ignore_setter);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "optgroup") {
+        define_accessor(object.get(), "label", node_get_label, node_set_label);
+    }
     set_method(object.get(), "appendChild", node_append_child);
     set_method(object.get(), "removeChild", node_remove_child);
     set_method(object.get(), "setAttribute", element_set_attribute);
@@ -3035,6 +3503,7 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     set_method(object.get(), "removeAttribute", element_remove_attribute);
     set_method(object.get(), "addEventListener", node_add_event_listener);
     set_method(object.get(), "removeEventListener", node_remove_event_listener);
+    set_method(object.get(), "click", node_click);
     set_method(object.get(), "matches", node_matches);
     set_method(object.get(), "closest", node_closest);
     set_method(object.get(), "querySelector", node_query_selector);
@@ -3053,6 +3522,9 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     if (document_methods) {
         define_accessor(object.get(), "hidden", document_get_hidden, node_ignore_setter);
         define_accessor(object.get(), "visibilityState", document_get_visibility_state, node_ignore_setter);
+        define_accessor(object.get(), "readyState", document_get_ready_state, node_ignore_setter);
+        define_accessor(object.get(), "defaultView", document_get_default_view, node_ignore_setter);
+        define_accessor(object.get(), "head", document_get_head, node_ignore_setter);
         define_accessor(object.get(), "body", document_get_body, node_ignore_setter);
         define_accessor(object.get(), "title", document_get_title_attr, document_set_title_attr);
         define_accessor(object.get(), "dir", document_get_dir, document_set_dir);
@@ -3061,6 +3533,7 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         set_method(object.get(), "querySelectorAll", document_query_selector_all);
         set_method(object.get(), "createElement", document_create_element);
         set_method(object.get(), "createTextNode", document_create_text_node);
+        set_method(object.get(), "hasFocus", document_has_focus);
     }
 
     return object.release();
@@ -3284,6 +3757,18 @@ jerry_value_t document_get_body(const jerry_call_info_t* call_info_p,
     return body != nullptr ? make_node_wrapper(*runtime, *body, false) : jerry_null();
 }
 
+jerry_value_t document_get_head(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    Node* document = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr) {
+        return jerry_null();
+    }
+    Node* head = find_first_element_by_tag(*document, "head");
+    return head != nullptr ? make_node_wrapper(*runtime, *head, false) : jerry_null();
+}
+
 Node* document_direction_element(Node& document) {
     if (Node* html = find_first_element_by_tag(document, "html")) {
         return html;
@@ -3418,6 +3903,53 @@ jerry_value_t document_get_visibility_state(const jerry_call_info_t* call_info_p
     JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
     const bool hidden = runtime != nullptr && ScriptRuntimeAccess::system_state(*runtime).document_hidden;
     return jerry_string_sz(hidden ? "hidden" : "visible");
+}
+
+jerry_value_t document_get_ready_state(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t) {
+    return jerry_string_sz("complete");
+}
+
+jerry_value_t document_get_default_view(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t) {
+    JerryValue global(jerry_current_realm());
+    return jerry_object_get_sz(global.get(), "window");
+}
+
+jerry_value_t document_has_focus(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    return jerry_boolean(runtime == nullptr || !ScriptRuntimeAccess::system_state(*runtime).document_hidden);
+}
+
+jerry_value_t node_click(const jerry_call_info_t* call_info_p,
+                         const jerry_value_t[],
+                         const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || is_disabled_form_control(*node)) {
+        return jerry_undefined();
+    }
+    if (is_form_control(*node) && form_control_kind(*node) != FormControlKind::Range) {
+        if (activate_form_control(*node)) {
+            Event input("input", true, false);
+            dispatch_event(*node, input);
+            Event change("change", true, false);
+            dispatch_event(*node, change);
+        }
+    }
+    MouseEvent click("click", 0, 0);
+    dispatch_event(*node, click);
+    if (!click.default_prevented() && node->tag_name == "summary" &&
+        node->parent != nullptr && node->parent->tag_name == "details") {
+        Node* details = node->parent;
+        if (has_attribute(*details, "open")) {
+            details->remove_attribute("open");
+        } else {
+            details->set_attribute("open", "");
+        }
+        Event toggle("toggle", false, false);
+        dispatch_event(*details, toggle);
+    }
+    return jerry_undefined();
 }
 
 jerry_value_t node_get_event_handler(const jerry_call_info_t* call_info_p, const char* type) {
@@ -3650,9 +4182,17 @@ void JerryScriptRuntime::bind_document(Node& document) {
 
     set_property(window_object.get(), "document", document_object.get());
     set_property(window_object.get(), "window", window_object.get());
+    set_property(window_object.get(), "self", window_object.get());
+    set_property(window_object.get(), "origin", string_to_value("null").get());
+    set_bool_property(window_object.get(), "isSecureContext", false);
+    set_bool_property(window_object.get(), "crossOriginIsolated", false);
     set_property(window_object.get(), "navigator", navigator_object.get());
     set_property(global.get(), "document", document_object.get());
     set_property(global.get(), "window", window_object.get());
+    set_property(global.get(), "self", window_object.get());
+    set_property(global.get(), "origin", string_to_value("null").get());
+    set_bool_property(global.get(), "isSecureContext", false);
+    set_bool_property(global.get(), "crossOriginIsolated", false);
     set_property(global.get(), "navigator", navigator_object.get());
     set_runtime_method(window_object.get(), "setTimeout", script_set_timeout, *this);
     set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
