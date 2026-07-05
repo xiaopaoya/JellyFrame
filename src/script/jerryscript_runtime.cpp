@@ -489,6 +489,27 @@ bool is_option_or_optgroup(const Node& node) {
     return node.type == NodeType::Element && (node.tag_name == "option" || node.tag_name == "optgroup");
 }
 
+bool document_collection_image(const Node& node) {
+    return node.type == NodeType::Element && node.tag_name == "img";
+}
+
+bool document_collection_embed(const Node& node) {
+    return node.type == NodeType::Element && node.tag_name == "embed";
+}
+
+bool document_collection_link(const Node& node) {
+    return node.type == NodeType::Element && (node.tag_name == "a" || node.tag_name == "area") &&
+           has_attribute(node, "href");
+}
+
+bool document_collection_form(const Node& node) {
+    return node.type == NodeType::Element && node.tag_name == "form";
+}
+
+bool document_collection_script(const Node& node) {
+    return node.type == NodeType::Element && node.tag_name == "script";
+}
+
 Node* closest_ancestor_select(Node& node) {
     for (Node* current = node.parent; current != nullptr; current = current->parent) {
         if (current->type == NodeType::Element && current->tag_name == "select") {
@@ -2091,6 +2112,24 @@ jerry_value_t document_get_dir(const jerry_call_info_t* call_info_p,
 jerry_value_t document_set_dir(const jerry_call_info_t* call_info_p,
                                const jerry_value_t args_p[],
                                const jerry_length_t args_count);
+jerry_value_t document_get_images(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count);
+jerry_value_t document_get_embeds(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count);
+jerry_value_t document_get_links(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count);
+jerry_value_t document_get_forms(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count);
+jerry_value_t document_get_scripts(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t args_p[],
+                                   const jerry_length_t args_count);
+jerry_value_t document_get_elements_by_name(const jerry_call_info_t* call_info_p,
+                                            const jerry_value_t args_p[],
+                                            const jerry_length_t args_count);
 jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count);
@@ -3691,7 +3730,14 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         define_accessor(object.get(), "body", document_get_body, node_ignore_setter);
         define_accessor(object.get(), "title", document_get_title_attr, document_set_title_attr);
         define_accessor(object.get(), "dir", document_get_dir, document_set_dir);
+        define_accessor(object.get(), "images", document_get_images, node_ignore_setter);
+        define_accessor(object.get(), "embeds", document_get_embeds, node_ignore_setter);
+        define_accessor(object.get(), "plugins", document_get_embeds, node_ignore_setter);
+        define_accessor(object.get(), "links", document_get_links, node_ignore_setter);
+        define_accessor(object.get(), "forms", document_get_forms, node_ignore_setter);
+        define_accessor(object.get(), "scripts", document_get_scripts, node_ignore_setter);
         set_method(object.get(), "getElementById", document_get_element_by_id);
+        set_method(object.get(), "getElementsByName", document_get_elements_by_name);
         set_method(object.get(), "querySelector", document_query_selector);
         set_method(object.get(), "querySelectorAll", document_query_selector_all);
         set_method(object.get(), "createElement", document_create_element);
@@ -4019,6 +4065,102 @@ jerry_value_t document_query_selector_all(const jerry_call_info_t* call_info_p,
         (void) result;
     }
     return array.release();
+}
+
+jerry_value_t make_node_snapshot_array(JerryScriptRuntime& runtime, const std::vector<Node*>& matches) {
+    JerryValue array(jerry_array(static_cast<jerry_length_t>(matches.size())));
+    for (std::size_t index = 0; index < matches.size(); ++index) {
+        JerryValue wrapped(make_node_wrapper(runtime, *matches[index], false));
+        JerryValue result(jerry_object_set_index(array.get(), static_cast<jerry_length_t>(index), wrapped.get()));
+        (void) result;
+    }
+    return array.release();
+}
+
+void collect_document_elements(Node& root, bool (*predicate)(const Node&), std::vector<Node*>& output) {
+    std::vector<Node*> pending;
+    for (auto it = root.children.rbegin(); it != root.children.rend(); ++it) {
+        pending.push_back(it->get());
+    }
+    while (!pending.empty()) {
+        Node* node = pending.back();
+        pending.pop_back();
+        if (predicate(*node)) {
+            output.push_back(node);
+        }
+        for (auto it = node->children.rbegin(); it != node->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+}
+
+jerry_value_t document_collection_from_predicate(const jerry_call_info_t* call_info_p,
+                                                 bool (*predicate)(const Node&)) {
+    Node* document = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr) {
+        return jerry_array(0);
+    }
+    std::vector<Node*> matches;
+    collect_document_elements(*document, predicate, matches);
+    return make_node_snapshot_array(*runtime, matches);
+}
+
+jerry_value_t document_get_images(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    return document_collection_from_predicate(call_info_p, document_collection_image);
+}
+
+jerry_value_t document_get_embeds(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    return document_collection_from_predicate(call_info_p, document_collection_embed);
+}
+
+jerry_value_t document_get_links(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    return document_collection_from_predicate(call_info_p, document_collection_link);
+}
+
+jerry_value_t document_get_forms(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    return document_collection_from_predicate(call_info_p, document_collection_form);
+}
+
+jerry_value_t document_get_scripts(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t[],
+                                   const jerry_length_t) {
+    return document_collection_from_predicate(call_info_p, document_collection_script);
+}
+
+jerry_value_t document_get_elements_by_name(const jerry_call_info_t* call_info_p,
+                                            const jerry_value_t args_p[],
+                                            const jerry_length_t args_count) {
+    Node* document = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr || args_count < 1) {
+        return jerry_array(0);
+    }
+    const std::string name = value_to_string(args_p[0]);
+    std::vector<Node*> matches;
+    std::vector<Node*> pending;
+    for (auto it = document->children.rbegin(); it != document->children.rend(); ++it) {
+        pending.push_back(it->get());
+    }
+    while (!pending.empty()) {
+        Node* node = pending.back();
+        pending.pop_back();
+        if (node->type == NodeType::Element && node->attribute("name") == name) {
+            matches.push_back(node);
+        }
+        for (auto it = node->children.rbegin(); it != node->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+    return make_node_snapshot_array(*runtime, matches);
 }
 
 jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,

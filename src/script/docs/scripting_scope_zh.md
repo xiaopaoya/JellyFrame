@@ -167,6 +167,8 @@ API 表面。
   - `element.closest(simpleSelector)`
   - `document.querySelector(simpleSelector)` / `element.querySelector(simpleSelector)`
   - `document.querySelectorAll(simpleSelector)` / `element.querySelectorAll(simpleSelector)`，返回静态数组快照
+  - `document.images`、`embeds`、`plugins`、`links`、`forms`、`scripts` 和
+    `getElementsByName()`，作为静态数组快照暴露，不是浏览器 live collection
   - 面向已有 `data-*` 属性的 `element.dataset` 快照 property
   - 小型 inline-style 属性集合 `element.style`：
     `display`、`color`、`background`、`backgroundColor`、`backgroundImage`、`textAlign`、

@@ -698,6 +698,32 @@ void javascript_small_document_and_text_idl_tail_works() {
           "innerText, document focus/defaultView and global environment constants are exposed");
 }
 
+void document_static_collections_work() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<html><head><script></script></head><body>"
+        "<img id='hero' name='asset'><a id='home' href='#home'>Home</a><a id='plain'>Plain</a>"
+        "<form id='form' name='account'><input name='account'></form><embed id='plugin'>"
+        "</body></html>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var images = document.images;"
+        "var before = images.length + ':' + images[0].id + ':' + "
+        "document.links.length + ':' + document.links[0].id + ':' + "
+        "document.forms.length + ':' + document.forms[0].id + ':' + "
+        "document.scripts.length + ':' + document.embeds.length + ':' + document.plugins.length + ':' + "
+        "document.getElementsByName('account').length;"
+        "var added = document.createElement('img');"
+        "document.body.appendChild(added);"
+        "before + ':' + images.length + ':' + document.images.length");
+
+    check(result.ok, "document static collection script succeeds");
+    check(result.value == "1:hero:1:home:1:form:1:1:1:2:1:2",
+          "document collections expose static snapshots for common element sets");
+}
+
 void javascript_element_style_extended_properties_work() {
     HtmlParser parser;
     auto document = parser.parse("<body><div id='dial'></div></body>");
@@ -1427,6 +1453,7 @@ int main() {
         javascript_standard_reflected_attributes_work();
         javascript_document_ready_state_and_element_click_work();
         javascript_small_document_and_text_idl_tail_works();
+        document_static_collections_work();
         javascript_element_style_extended_properties_work();
         javascript_input_event_reads_live_value();
         javascript_timeout_runs_when_host_pumps_time();

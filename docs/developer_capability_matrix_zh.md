@@ -309,6 +309,7 @@ JerryScript 源码树时可用。
 | `window` / `document` | 子集 | 暴露下列方法。`window`、`window.window`、`self` 和 `document.defaultView` 指向同一个 JellyFrame window 对象；`window.document` 指向绑定的包内文档，`window.navigator` 指向嵌入式 Navigator 子集。包内文档暴露 `origin === "null"`、`isSecureContext === false`、`crossOriginIsolated === false`；不建模浏览器 URL/origin/security-policy 机制。 |
 | `document.head` / `document.body` | 可用 | 返回第一个 `head` / `body` element wrapper 或 `null`。V0 中只读，不暗示资源加载或 live document collection。 |
 | `document.title` / `document.dir` / `document.readyState` / `document.defaultView` / `document.hasFocus()` | 可用 | `document.title` 读取/写入第一个 `title` 元素文本。`document.dir` 反射 `html` 元素上的文档方向属性；简化文档中会 fallback 到 body/document。`document.readyState` 在 JellyFrame 绑定包内文档后始终为 `complete`；不模拟浏览器加载过程中的中间状态。`document.defaultView` 返回绑定的 JellyFrame `window`。`document.hasFocus()` 跟随嵌入式生命周期；宿主将文档标记为 hidden 时返回 false。 |
+| Document collections | 子集 | `document.images`、`embeds`、`plugins`、`links`、`forms`、`scripts` 和 `getElementsByName()` 返回静态数组快照。它们不是 live HTMLCollection，不提供 named lookup 或浏览器 collection 方法。`links` 包含带 `href` 的 `a`/`area` 元素；`plugins` 与 `embeds` 返回同一类 embed 快照。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
 | `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；数量受 `HostBudgets::max_detached_dom_nodes` 限制。 |
 | `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |

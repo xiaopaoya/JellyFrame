@@ -205,6 +205,9 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `document.querySelectorAll(simpleSelector)` / `element.querySelectorAll(simpleSelector)`,
     returning a static array snapshot
   - `document.head` / `document.body` as read-only first-element wrappers or `null`
+  - `document.images`, `embeds`, `plugins`, `links`, `forms`, `scripts` and
+    `getElementsByName()` as static array snapshots, not live browser
+    collections
   - `element.dataset` snapshot properties for existing `data-*` attributes
   - `element.style` for a small inline-style property set:
     `display`, `color`, `background`, `backgroundColor`, `backgroundImage`, `textAlign`,
