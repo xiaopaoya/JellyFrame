@@ -333,8 +333,18 @@ std::string value_to_string(jerry_value_t value) {
     return jerry_string_to_std_string(string_value.get());
 }
 
+JerryValue string_to_value(std::string_view value) {
+    return JerryValue(jerry_string(reinterpret_cast<const jerry_char_t*>(value.data()),
+                                   static_cast<jerry_size_t>(value.size()),
+                                   JERRY_ENCODING_UTF8));
+}
+
+JerryValue string_to_value(const char* value) {
+    return string_to_value(std::string_view(value != nullptr ? value : ""));
+}
+
 JerryValue string_to_value(const std::string& value) {
-    return JerryValue(jerry_string_sz(value.c_str()));
+    return string_to_value(std::string_view(value));
 }
 
 JerryValue evaluate_script(std::string_view source, std::string_view source_name) {
@@ -515,6 +525,133 @@ std::size_t utf8_codepoint_count(std::string_view text) {
         ++count;
     }
     return count;
+}
+
+bool html_binary_string_from_utf8(std::string_view text, std::string& output) {
+    output.clear();
+    output.reserve(text.size());
+    for (std::size_t index = 0; index < text.size();) {
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
+        if (codepoint > 0xffU) {
+            return false;
+        }
+        output.push_back(static_cast<char>(codepoint));
+    }
+    return true;
+}
+
+void append_utf8_codepoint(std::string& output, std::uint32_t codepoint) {
+    if (codepoint <= 0x7fU) {
+        output.push_back(static_cast<char>(codepoint));
+    } else if (codepoint <= 0x7ffU) {
+        output.push_back(static_cast<char>(0xc0U | (codepoint >> 6U)));
+        output.push_back(static_cast<char>(0x80U | (codepoint & 0x3fU)));
+    } else if (codepoint <= 0xffffU) {
+        output.push_back(static_cast<char>(0xe0U | (codepoint >> 12U)));
+        output.push_back(static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3fU)));
+        output.push_back(static_cast<char>(0x80U | (codepoint & 0x3fU)));
+    } else {
+        output.push_back(static_cast<char>(0xf0U | (codepoint >> 18U)));
+        output.push_back(static_cast<char>(0x80U | ((codepoint >> 12U) & 0x3fU)));
+        output.push_back(static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3fU)));
+        output.push_back(static_cast<char>(0x80U | (codepoint & 0x3fU)));
+    }
+}
+
+std::string html_binary_string_to_utf8(std::string_view bytes) {
+    std::string output;
+    output.reserve(bytes.size());
+    for (const unsigned char byte : bytes) {
+        append_utf8_codepoint(output, byte);
+    }
+    return output;
+}
+
+std::string base64_encode(std::string_view input) {
+    static constexpr char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string output;
+    output.reserve(((input.size() + 2U) / 3U) * 4U);
+    for (std::size_t index = 0; index < input.size(); index += 3U) {
+        const unsigned a = static_cast<unsigned char>(input[index]);
+        const bool have_b = index + 1U < input.size();
+        const bool have_c = index + 2U < input.size();
+        const unsigned b = have_b ? static_cast<unsigned char>(input[index + 1U]) : 0U;
+        const unsigned c = have_c ? static_cast<unsigned char>(input[index + 2U]) : 0U;
+        output.push_back(kAlphabet[(a >> 2U) & 0x3fU]);
+        output.push_back(kAlphabet[((a & 0x03U) << 4U) | ((b >> 4U) & 0x0fU)]);
+        output.push_back(have_b ? kAlphabet[((b & 0x0fU) << 2U) | ((c >> 6U) & 0x03U)] : '=');
+        output.push_back(have_c ? kAlphabet[c & 0x3fU] : '=');
+    }
+    return output;
+}
+
+int base64_value(char ch) {
+    if (ch >= 'A' && ch <= 'Z') {
+        return ch - 'A';
+    }
+    if (ch >= 'a' && ch <= 'z') {
+        return ch - 'a' + 26;
+    }
+    if (ch >= '0' && ch <= '9') {
+        return ch - '0' + 52;
+    }
+    if (ch == '+') {
+        return 62;
+    }
+    if (ch == '/') {
+        return 63;
+    }
+    return -1;
+}
+
+bool is_ascii_whitespace(char ch) {
+    return ch == '\t' || ch == '\n' || ch == '\f' || ch == '\r' || ch == ' ';
+}
+
+bool base64_decode_html(std::string_view input, std::string& output) {
+    std::string compact;
+    compact.reserve(input.size());
+    for (const char ch : input) {
+        if (!is_ascii_whitespace(ch)) {
+            compact.push_back(ch);
+        }
+    }
+    if (compact.size() % 4U == 1U) {
+        return false;
+    }
+    while (compact.size() % 4U != 0U) {
+        compact.push_back('=');
+    }
+
+    output.clear();
+    output.reserve((compact.size() / 4U) * 3U);
+    for (std::size_t index = 0; index < compact.size(); index += 4U) {
+        const char c0 = compact[index];
+        const char c1 = compact[index + 1U];
+        const char c2 = compact[index + 2U];
+        const char c3 = compact[index + 3U];
+        const bool pad2 = c2 == '=';
+        const bool pad3 = c3 == '=';
+        if (c0 == '=' || c1 == '=' || (pad2 && !pad3) ||
+            ((pad2 || pad3) && index + 4U != compact.size())) {
+            return false;
+        }
+        const int v0 = base64_value(c0);
+        const int v1 = base64_value(c1);
+        const int v2 = pad2 ? 0 : base64_value(c2);
+        const int v3 = pad3 ? 0 : base64_value(c3);
+        if (v0 < 0 || v1 < 0 || v2 < 0 || v3 < 0) {
+            return false;
+        }
+        output.push_back(static_cast<char>((v0 << 2U) | (v1 >> 4U)));
+        if (!pad2) {
+            output.push_back(static_cast<char>(((v1 & 0x0f) << 4U) | (v2 >> 2U)));
+        }
+        if (!pad3) {
+            output.push_back(static_cast<char>(((v2 & 0x03) << 6U) | v3));
+        }
+    }
+    return true;
 }
 
 std::string data_attribute_to_dataset_key(std::string_view attribute_name) {
@@ -2106,6 +2243,32 @@ jerry_value_t script_date_now(const jerry_call_info_t* call_info_p,
         runtime = native_runtime(call_info_p->this_value);
     }
     return jerry_number(runtime != nullptr ? static_cast<double>(ScriptRuntimeAccess::current_time_ms(*runtime)) : 0.0);
+}
+
+jerry_value_t script_btoa(const jerry_call_info_t*,
+                          const jerry_value_t args_p[],
+                          const jerry_length_t args_count) {
+    if (args_count == 0) {
+        return throw_type_error("btoa requires an input string");
+    }
+    std::string binary;
+    if (!html_binary_string_from_utf8(value_to_string(args_p[0]), binary)) {
+        return throw_type_error("btoa input contains characters outside the byte range");
+    }
+    return jerry_string_sz(base64_encode(binary).c_str());
+}
+
+jerry_value_t script_atob(const jerry_call_info_t*,
+                          const jerry_value_t args_p[],
+                          const jerry_length_t args_count) {
+    if (args_count == 0) {
+        return throw_type_error("atob requires an input string");
+    }
+    std::string decoded;
+    if (!base64_decode_html(value_to_string(args_p[0]), decoded)) {
+        return throw_type_error("atob input is not valid base64");
+    }
+    return string_to_value(html_binary_string_to_utf8(decoded)).release();
 }
 
 jerry_value_t make_geolocation_error_object(int code, const char* message) {
@@ -4200,6 +4363,8 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(window_object.get(), "clearInterval", script_clear_timer, *this);
     set_runtime_method(window_object.get(), "requestAnimationFrame", script_request_animation_frame, *this);
     set_runtime_method(window_object.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
+    set_method(window_object.get(), "btoa", script_btoa);
+    set_method(window_object.get(), "atob", script_atob);
     set_runtime_method(window_object.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(window_object.get(), "removeEventListener", window_remove_event_listener, *this);
 #define JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER(js_name, event_type) \
@@ -4212,6 +4377,8 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "clearInterval", script_clear_timer, *this);
     set_runtime_method(global.get(), "requestAnimationFrame", script_request_animation_frame, *this);
     set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
+    set_method(global.get(), "btoa", script_btoa);
+    set_method(global.get(), "atob", script_atob);
     set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
 #define JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER(js_name, event_type) \

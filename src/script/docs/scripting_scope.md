@@ -223,6 +223,9 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
     lifecycle
   - `window.self`, global `self`, `origin`, `isSecureContext` and
     `crossOriginIsolated` as fixed package-environment values
+  - `window.btoa` / `window.atob` and global `btoa` / `atob` for Base64
+    conversion; invalid input currently throws JellyFrame `TypeError` rather
+    than DOMException `InvalidCharacterError`
   - `element.innerText` as a lightweight `textContent` alias; it is not the
     browser layout-aware rendered-text algorithm
   - `element.click()` for the bounded JellyFrame activation subset

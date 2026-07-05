@@ -134,6 +134,29 @@ void runtime_can_restart() {
     }
 }
 
+void base64_helpers_follow_html_binary_string_subset() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "btoa('Jelly') + ':' + atob('SmVsbHk=') + ':' + "
+        "atob(' U20 ') + ':' + window.btoa('\\u00ff') + ':' + "
+        "atob('AA==').charCodeAt(0) + ':' + atob('/w==').charCodeAt(0)");
+
+    check(result.ok, "base64 helpers evaluate");
+    check(result.value == "SmVsbHk=:Jelly:Sm:/w==:0:255", "base64 helper values match expected subset");
+
+    result = runtime.eval(
+        "var bad = 0;"
+        "try { btoa('\\u0100'); } catch (e) { bad += 1; }"
+        "try { atob('%%%'); } catch (e) { bad += 1; }"
+        "try { btoa(); } catch (e) { bad += 1; }"
+        "try { atob(); } catch (e) { bad += 1; }"
+        "bad");
+    check(result.ok && result.value == "4", "base64 helpers reject invalid input");
+}
+
 void inline_document_script_mutates_dom() {
     HtmlParser parser;
     auto document = parser.parse(
@@ -1381,6 +1404,7 @@ int main() {
         execution_watchdog_interrupts_timer_callback_when_supported();
         host_budgets_enable_script_execution_watchdog_when_supported();
         runtime_can_restart();
+        base64_helpers_follow_html_binary_string_subset();
         inline_document_script_mutates_dom();
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();

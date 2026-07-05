@@ -183,6 +183,9 @@ API 表面。
   - `document.defaultView` 和 `document.hasFocus()`，用于嵌入式文档生命周期判断
   - `window.self`、global `self`、`origin`、`isSecureContext` 和
     `crossOriginIsolated`，作为固定包环境值
+  - `window.btoa` / `window.atob` 和 global `btoa` / `atob`，用于 Base64
+    转换；非法输入目前抛 JellyFrame `TypeError`，不是 DOMException
+    `InvalidCharacterError`
   - `element.innerText` 作为轻量 `textContent` 别名；不执行浏览器
     layout-aware rendered-text 算法
   - `element.click()`，覆盖 JellyFrame 有界 activation 子集
