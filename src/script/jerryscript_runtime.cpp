@@ -1407,8 +1407,28 @@ JELLYFRAME_REFLECTED_STRING_ACCESSOR(step, "step")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(name, "name")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(placeholder, "placeholder")
 JELLYFRAME_REFLECTED_STRING_ACCESSOR(wrap, "wrap")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(content, "content")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(httpEquiv, "http-equiv")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(media, "media")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(download, "download")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(ping, "ping")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(rel, "rel")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(referrerPolicy, "referrerpolicy")
+JELLYFRAME_REFLECTED_STRING_ACCESSOR(dateTime, "datetime")
 
 #undef JELLYFRAME_REFLECTED_STRING_ACCESSOR
+
+jerry_value_t node_get_value_attribute(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t[],
+                                       const jerry_length_t) {
+    return node_get_reflected_string_attribute(call_info_p, "value");
+}
+
+jerry_value_t node_set_value_attribute(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count) {
+    return node_set_reflected_string_attribute(call_info_p, args_p, args_count, "value");
+}
 
 jerry_value_t node_get_reflected_number_attribute(const jerry_call_info_t* call_info_p,
                                                   const char* attribute_name,
@@ -3697,6 +3717,25 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     }
     if (node.type == NodeType::Element && node.tag_name == "optgroup") {
         define_accessor(object.get(), "label", node_get_label, node_set_label);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "meta") {
+        define_accessor(object.get(), "name", node_get_name, node_set_name);
+        define_accessor(object.get(), "content", node_get_content, node_set_content);
+        define_accessor(object.get(), "httpEquiv", node_get_httpEquiv, node_set_httpEquiv);
+        define_accessor(object.get(), "media", node_get_media, node_set_media);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "data") {
+        define_accessor(object.get(), "value", node_get_value_attribute, node_set_value_attribute);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "time") {
+        define_accessor(object.get(), "dateTime", node_get_dateTime, node_set_dateTime);
+    }
+    if (node.type == NodeType::Element && node.tag_name == "a") {
+        define_accessor(object.get(), "download", node_get_download, node_set_download);
+        define_accessor(object.get(), "ping", node_get_ping, node_set_ping);
+        define_accessor(object.get(), "rel", node_get_rel, node_set_rel);
+        define_accessor(object.get(), "referrerPolicy", node_get_referrerPolicy, node_set_referrerPolicy);
+        define_accessor(object.get(), "text", node_get_text_content, node_set_text_content);
     }
     set_method(object.get(), "appendChild", node_append_child);
     set_method(object.get(), "removeChild", node_remove_child);
