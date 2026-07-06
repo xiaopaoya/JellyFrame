@@ -210,8 +210,8 @@ package 错误、管线错误或阻塞字体问题都会使命令失败。外部
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  src\\render_core\\samples\\pages\\modern\article_cards.html `
-  src\\render_core\\samples\\pages\\modern\article_cards.css `
+  src\render_core\samples\pages\modern\article_cards.html `
+  src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -247,12 +247,12 @@ layout 和 paint：
 检查中间结构：
 
 ```powershell
-.\build\Release\jellyframe_dom_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html
-.\build\Release\jellyframe_cssom_dump.exe src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_style_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_render_tree_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_layer_tree_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_pipeline_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
+.\build\Release\jellyframe_dom_dump.exe src\render_core\samples\pages\modern\search_home.html
+.\build\Release\jellyframe_cssom_dump.exe src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_style_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_render_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_layer_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_pipeline_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
 ```
 
 嵌入字体包前收集文本资源信息：
@@ -260,9 +260,9 @@ layout 和 paint：
 ```powershell
 .\build\Release\jellyframe_font_resource_check.exe `
   --font-budget 16x16 `
-  samples\apps\loose\weather.html `
-  samples\apps\loose\weather.css `
-  samples\apps\loose\weather.js
+  samples\apps\packages\watch_weather\index.html `
+  samples\apps\packages\watch_weather\styles\app.css `
+  samples\apps\packages\watch_weather\scripts\app.js
 ```
 
 发布前建议对多个设备 profile 跑 responsive 检查。它不会打开窗口，也不会启用完整浏览器级
@@ -305,18 +305,14 @@ cmake --build build-script --config Release
 
 ```powershell
 .\build-script\Release\jellyframe_win32_browser.exe `
-  samples\apps\loose\weather.html `
-  samples\apps\loose\weather.css `
-  --script samples\apps\loose\weather.js
+  --app samples\apps\packages\watch_weather
 ```
 
 运行 timer 驱动页面：
 
 ```powershell
 .\build-script\Release\jellyframe_win32_browser.exe `
-  samples\apps\loose\clock.html `
-  samples\apps\loose\clock.css `
-  --script samples\apps\loose\clock.js
+  --app tools\templates\apps\clock
 ```
 
 Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 classic
@@ -369,10 +365,9 @@ Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 c
   复制使用，不是穷尽兼容性测试 fixture。
 - `src/render_core/samples/pages/modern`：观察现代 HTML/CSS 合理降级的样例。
 - `src/script/samples/classic`：runtime、DOM mutation、事件和脚本加载探针。
-- `samples/apps/loose/weather.*`：select 驱动的天气面板。
-- `samples/apps/loose/clock.*`：timer 驱动时钟。
-- `samples/apps/loose/timer.*`：计时器/秒表 UI。
-- `samples/apps/loose/calculator.*`：按钮驱动计算器。
+- `samples/apps/loose/jelly_motion.*`：聚焦 transition/keyframe 的动效 fixture。
+- `samples/apps/loose/jelly_launcher_mock.*`：小型启动器风格视觉 fixture。
+- `tools/templates/apps/weather`、`clock`、`timer` 和 `calculator`：常见可穿戴工作流的可复制起始 app package。
 
 把示例 app 打包成生成式资源表、debug 目录或安装式 `.jfapp`：
 

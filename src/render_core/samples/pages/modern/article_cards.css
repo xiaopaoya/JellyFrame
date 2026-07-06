@@ -26,6 +26,5 @@
 }
 
 .story:where(.featured) {
-  box-shadow: 0 12px 36px rgb(15 23 42 / 20%);
+  border: 1px solid #cbd5e1;
 }
-

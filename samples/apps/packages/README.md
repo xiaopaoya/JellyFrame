@@ -16,6 +16,13 @@ to check whether a package remains usable on the common wearable shapes:
 python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
 ```
 
+`watch_weather`, `jelly_controls`, `jelly_component_recipes` and
+`jelly_watch_face` are the primary showcase/recipe packages and should keep
+their target gates aligned with current trial targets. Capability smoke packages
+such as audio, font policy and focused Canvas demos may intentionally omit hard
+gates or carry warnings because they exist to exercise one subsystem rather than
+represent a polished release app.
+
 Current packages:
 
 - `watch_weather`: watch weather app with package resources and optional data.

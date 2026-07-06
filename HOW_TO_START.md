@@ -240,8 +240,8 @@ Render a page to BMP or PPM without opening a window:
 
 ```powershell
 .\build\Release\jellyframe_pseudo_browser.exe `
-  src\\render_core\\samples\\pages\\modern\article_cards.html `
-  src\\render_core\\samples\\pages\\modern\article_cards.css `
+  src\render_core\samples\pages\modern\article_cards.html `
+  src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
 ```
 
@@ -278,12 +278,12 @@ that the in-bundle bitmap font participates in layout and paint:
 Inspect intermediate structures:
 
 ```powershell
-.\build\Release\jellyframe_dom_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html
-.\build\Release\jellyframe_cssom_dump.exe src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_style_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_render_tree_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_layer_tree_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
-.\build\Release\jellyframe_pipeline_dump.exe src\\render_core\\samples\\pages\\modern\search_home.html src\\render_core\\samples\\pages\\modern\search_home.css
+.\build\Release\jellyframe_dom_dump.exe src\render_core\samples\pages\modern\search_home.html
+.\build\Release\jellyframe_cssom_dump.exe src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_style_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_render_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_layer_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\Release\jellyframe_pipeline_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
 ```
 
 Collect text resources before embedding a font pack:
@@ -291,9 +291,9 @@ Collect text resources before embedding a font pack:
 ```powershell
 .\build\Release\jellyframe_font_resource_check.exe `
   --font-budget 16x16 `
-  samples\apps\loose\weather.html `
-  samples\apps\loose\weather.css `
-  samples\apps\loose\weather.js
+  samples\apps\packages\watch_weather\index.html `
+  samples\apps\packages\watch_weather\styles\app.css `
+  samples\apps\packages\watch_weather\scripts\app.js
 ```
 
 Before release, run a responsive check across the device profiles you care
@@ -338,18 +338,14 @@ Run a scripted page in the interactive Win32 shell:
 
 ```powershell
 .\build-script\Release\jellyframe_win32_browser.exe `
-  samples\apps\loose\weather.html `
-  samples\apps\loose\weather.css `
-  --script samples\apps\loose\weather.js
+  --app samples\apps\packages\watch_weather
 ```
 
 Run a timer-driven page:
 
 ```powershell
 .\build-script\Release\jellyframe_win32_browser.exe `
-  samples\apps\loose\clock.html `
-  samples\apps\loose\clock.css `
-  --script samples\apps\loose\clock.js
+  --app tools\templates\apps\clock
 ```
 
 The Win32 shell automatically collects inline classic scripts and host-loadable
@@ -408,10 +404,10 @@ Notes:
   degradation.
 - `src/script/samples/classic`: minimal scripting probes for runtime, DOM mutation,
   events and script loading.
-- `samples/apps/loose/weather.*`: select-driven weather panel.
-- `samples/apps/loose/clock.*`: timer-driven clock.
-- `samples/apps/loose/timer.*`: timer/stopwatch UI.
-- `samples/apps/loose/calculator.*`: button-driven calculator.
+- `samples/apps/loose/jelly_motion.*`: focused transition/keyframe motion fixture.
+- `samples/apps/loose/jelly_launcher_mock.*`: small launcher-style visual fixture.
+- `tools/templates/apps/weather`, `clock`, `timer` and `calculator`: copyable
+  starter app packages for common wearable workflows.
 
 Package the sample app into a generated resource table, debug directory or
 installable `.jfapp`:

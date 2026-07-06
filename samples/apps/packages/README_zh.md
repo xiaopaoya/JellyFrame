@@ -15,6 +15,11 @@
 python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
 ```
 
+`watch_weather`、`jelly_controls`、`jelly_component_recipes` 和
+`jelly_watch_face` 是主要展示/recipes package，应保持 target gate 与当前试用目标对齐。
+音频、字体策略和聚焦 Canvas 的 smoke package 可以故意不声明 hard gate，或保留 warning；
+它们用于验收某个子系统，不代表 polished release app。
+
 当前 package：
 
 - `watch_weather`：包含 package 资源和可选数据能力的手表天气 app。
