@@ -24,7 +24,7 @@ body {
   border-radius: 50%;
   background: linear-gradient(to bottom, #174543, #0d2428);
   border: 2px solid #83f1d2;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, .34);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, .28);
   overflow: hidden;
 }
 
