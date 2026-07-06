@@ -1,5 +1,7 @@
 # Engine Architecture
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
 with smaller data structures and explicit feature cuts for wearable targets.
@@ -109,7 +111,8 @@ source order, then runs selector matching and cascade comparison.
 
 - Rule indexing is intentionally simple and allocation-light.
 - Selector support is limited but useful: compound, descendant, child,
-  attribute and `:root`.
+  adjacent/general sibling, attribute, `:root`, selected dynamic pseudo-classes,
+  and the documented `:is()` / `:where()` subset.
 - Unsupported modern selectors are skipped before CSSOM insertion when possible.
 - Render objects keep a compact block/inline/text shape; layout adds small
   dedicated paths for common flex rows and responsive grid-card patterns.
@@ -118,14 +121,18 @@ source order, then runs selector matching and cascade comparison.
   churn.
 - Layer tree supports sparse clipping, opacity boundaries, positioned stacking
   hints and conservative compositing boundaries.
-- Display list uses rectangles, gradients and text only.
-- Display invalidation diagnostics can map dirty rectangles to affected layers
-  and display commands, but retained display-list reuse is still deferred.
+- Display list uses bounded rectangle, gradient, text and image-surface-handle
+  commands. Canvas output enters the same path as a bounded image surface.
+- Dirty-region planning can repaint paint-only changes against the existing
+  frame, compare previous/current layout for bounded layout-dirty frames, and
+  expose display-invalidation diagnostics over affected layers and commands.
+  Full retained display-list diffing is still deferred.
 - Text layout accepts `TextMeasureProvider`; text output accepts `TextPainter`.
   Core fallback is tiny, while the Win32 browser uses GDI for both measurement
   and painting.
-- Event dispatch is platform-neutral and currently uses C++ callbacks, not
-  JavaScript functions.
+- Event dispatch is platform-neutral. Core users can attach C++ callbacks;
+  optional JerryScript builds also bind the documented `addEventListener` and
+  `on*` handler subset through the same event path.
 
 ## Deferred Engineering Areas
 
@@ -135,7 +142,7 @@ should not be treated as available behavior until they appear in the capability
 matrix:
 
 - Dedicated selector-module internals.
-- Finer retained subtree and retained display-list reuse.
+- Finer retained subtree and retained display-list diffing.
 - Computed-style sharing for repeated class patterns.
 - A broader DOM ownership/arena policy.
 - Tile or scanline presentation paths for targets that cannot keep the chosen

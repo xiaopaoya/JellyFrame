@@ -1,5 +1,7 @@
 # Script
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Optional JerryScript integration.
 
 This layer binds the documented JellyFrame DOM/event/timer subset to

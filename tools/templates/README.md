@@ -1,5 +1,7 @@
 # Templates
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Starter app templates for JellyFrame packages.
 
 Templates are used by tools and by developers learning the supported subset.

@@ -1,5 +1,7 @@
 # HTML Tree Builder Scope
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Last checked against the WHATWG HTML Living Standard on 2026-06-13:
 
 - Parsing model: https://html.spec.whatwg.org/multipage/parsing.html

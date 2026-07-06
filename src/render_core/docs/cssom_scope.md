@@ -1,5 +1,7 @@
 # CSSOM And Cascade Scope
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Last checked against CSSOM and CSS Cascade references on 2026-06-13:
 
 - CSSOM: https://www.w3.org/TR/cssom-1/

@@ -1,5 +1,7 @@
 # Jelly Canvas Smoke
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 Canvas 2D V0.3 小示例，用于趋势线和简单图表。页面结构和文字仍由普通 DOM/CSS
 完成；Canvas 只承担有界数据图形。
 

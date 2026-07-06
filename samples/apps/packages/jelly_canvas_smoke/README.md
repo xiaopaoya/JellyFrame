@@ -1,5 +1,7 @@
 # Jelly Canvas Smoke
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Small Canvas 2D V0.3 sample for trend lines and simple charts. The page still uses
 ordinary DOM/CSS for structure and text; Canvas is only used for the bounded
 data graphic.

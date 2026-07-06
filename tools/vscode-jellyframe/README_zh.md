@@ -1,5 +1,7 @@
 # JellyFrame VS Code 工具
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 这是 JellyFrame app package 的薄开发扩展。它不会实现第二套 parser 或 packer；
 所有命令都委托给 `tools/jellyframe_cli.py`。
 

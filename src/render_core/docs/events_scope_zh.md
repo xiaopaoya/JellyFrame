@@ -1,5 +1,7 @@
 # Events 与 Hit Testing 裁剪范围
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 
 JellyFrame 将输入接线和核心引擎分开：
 

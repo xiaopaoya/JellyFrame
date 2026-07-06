@@ -1,5 +1,7 @@
 # Ports
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Port-support code and board-facing experiments live here.
 
 The platform-neutral engine remains in `src/`. Port directories may contain

@@ -1,5 +1,7 @@
 # 版本规则
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 JellyFrame Engine 使用轻量语义化版本规则：
 
 ```text
@@ -18,6 +20,9 @@ MAJOR.MINOR.PATCH[-stage]
 - 当前源码版本记录在 `VERSION`。
 - 面向用户可见的变更记录在 `CHANGELOG.md` 和 `CHANGELOG_zh.md`。
 - 公开文档提供英文和中文版本。中文文件使用 `_zh` 后缀。
+- 公开 Markdown 文档顶部带一行轻量新鲜度信息：
+  `最后更新：YYYY-MM-DD；适用版本：VERSION`。当文档的契约、示例或操作说明变化时更新这行。
+  活跃开发时文档可以短暂晚于代码，但过久未更新的文件应当一眼可见。
 - 授权条款以 `LICENSE`、`COMMERCIAL.md` 和 README 的授权说明为准。
 - 早期版本预计保持小步、里程碑式发布。
 

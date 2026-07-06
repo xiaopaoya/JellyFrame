@@ -1,5 +1,7 @@
 # ESP32-S3 Board Adapters
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Board-local display and touch adapters live here. They are optional ESP-IDF
 bring-up code and must stay outside the platform-neutral engine.
 

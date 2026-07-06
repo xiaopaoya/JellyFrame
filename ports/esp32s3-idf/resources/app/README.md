@@ -1,5 +1,7 @@
 # ESP32-S3 App Resource
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Local app resource bundle used by the ESP32-S3 smoke demo and board bring-up
 profiles.
 

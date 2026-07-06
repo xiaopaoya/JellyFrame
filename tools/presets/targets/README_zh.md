@@ -1,5 +1,7 @@
 # Target Presets
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 这些文件是 packaging 和 validation tools 使用的设备能力 preset。
 
 请保持 preset 保守。一个 preset 应描述 app 可以稳定依赖的能力，而不是某块开发板暴露的全部

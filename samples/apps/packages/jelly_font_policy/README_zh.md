@@ -1,5 +1,7 @@
 # Jelly Font Policy
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 这个小 package 用来验收 app 字体策略路径：
 
 - CSS 声明两个包内 family：`Jelly Tiny CN` 和 `Jelly Tiny Symbols`。

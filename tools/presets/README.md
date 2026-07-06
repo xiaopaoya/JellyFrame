@@ -1,5 +1,7 @@
 # Presets
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Target and packaging presets used by JellyFrame desktop tools.
 
 Presets describe device-oriented budgets and capabilities in data files so app

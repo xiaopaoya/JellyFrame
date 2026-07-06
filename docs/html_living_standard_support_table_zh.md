@@ -1,5 +1,7 @@
 # HTML Living Standard 支持表
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 这是 JellyFrame 面向 App 作者的 HTML Living Standard 特性支持表。使用某个 HTML 标签、DOM API 或浏览器行为前，可以先在本文中 Ctrl+F 搜索。
 
 本文保留所有已审计行，包括不支持项和超出范围项，目的不是宣称完整浏览器兼容，而是让支持边界可检索、可维护、未来可被 VS Code 扩展消费。

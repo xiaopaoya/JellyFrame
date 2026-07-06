@@ -1,5 +1,7 @@
 # Samples
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 根 `samples` 只保存 JellyFrame app 和 app package 生命周期验收样例。原生桌面工具源码位于
 `../tools/native`。
 

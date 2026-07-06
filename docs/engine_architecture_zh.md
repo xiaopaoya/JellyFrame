@@ -1,5 +1,7 @@
 # 引擎架构
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
 
@@ -90,18 +92,22 @@ Style resolution 时，resolver 只收集相关 buckets，按 source order 排�
 ## 当前取舍
 
 - Rule indexing 刻意保持简单、低分配。
-- Selector 支持有限但实用：compound、descendant、child、attribute 和 `:root`。
+- Selector 支持有限但实用：compound、descendant、child、adjacent/general sibling、
+  attribute、`:root`、部分动态伪类，以及文档化的 `:is()` / `:where()` 子集。
 - 不支持的现代 selectors 尽量在插入 CSSOM 前跳过。
 - Render object 保持紧凑的 block/inline/text 形态；layout 为常见 flex row
   和响应式 grid card 模式提供小型专用路径。
 - Render tree、layout tree 和 layer tree builder 都同时提供 heap 与 `MonotonicArena`
   分配路径；嵌入式 benchmark 使用 arena 路径以减少小对象堆抖动。
 - Layer tree 支持稀疏裁剪、opacity 边界、positioned stacking hints 和保守 compositing boundaries。
-- Display list 只使用 rectangles、gradients 和 text。
-- Display invalidation 诊断可以把 dirty rectangles 映射到受影响的 layers 和 display commands，
-  但 retained display-list reuse 仍延后。
+- Display list 使用有界 rectangles、gradients、text 和 image-surface-handle commands。
+  Canvas 输出通过同一条有界 image surface 路径进入显示列表。
+- Dirty-region planning 可以让 paint-only 变更复用现有 frame，对有界 layout-dirty
+  frame 比较 previous/current layout，并提供 affected layers / display commands 的
+  display-invalidation 诊断。完整 retained display-list diffing 仍延后。
 - 文本 layout 接受 `TextMeasureProvider`；文本输出接受 `TextPainter`。core fallback 保持很小，Win32 browser 同时使用 GDI 测量和绘制。
-- Event dispatch 保持平台无关；当前使用 C++ callbacks，还不是 JavaScript functions。
+- Event dispatch 保持平台无关。核心用户可以挂 C++ callbacks；可选 JerryScript 构建也会把文档化的
+  `addEventListener` 和 `on*` handler 子集接到同一条事件路径。
 
 ## 延后工程领域
 
@@ -109,7 +115,7 @@ Style resolution 时，resolver 只收集相关 buckets，按 source order 排�
 也不应在能力矩阵明确写入前视为可用行为：
 
 - 独立 selector 模块内部结构。
-- 更细的 retained subtree 和 retained display-list 复用。
+- 更细的 retained subtree 和 retained display-list diffing。
 - 面向重复 class pattern 的 computed-style sharing。
 - 更完整的 DOM ownership/arena 策略。
 - 面向无法保留所选 framebuffer 表示的目标设备的 tile 或 scanline presentation 路径。

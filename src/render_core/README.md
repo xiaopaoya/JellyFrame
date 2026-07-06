@@ -1,5 +1,7 @@
 # Render Core
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 `render_core` is JellyFrame's platform-neutral Living Standard/CSS subset and
 software rendering pipeline.
 

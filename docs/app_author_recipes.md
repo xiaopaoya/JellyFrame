@@ -1,5 +1,7 @@
 # App Component Recipes
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 These recipes are copyable starting points for small wearable apps. They use the
 documented JellyFrame subset and avoid browser-only behavior.
 

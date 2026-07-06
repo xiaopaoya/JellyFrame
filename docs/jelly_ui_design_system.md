@@ -1,5 +1,7 @@
 # JellyFrame Gel Interface System
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This document defines JellyFrame's first native visual and motion system. It
 interprets the `Jelly` name through the shared qualities of jellyfish and gel:
 soft membranes, translucent thickness, inner glow, buoyancy and gentle pressure

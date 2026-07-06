@@ -1,5 +1,7 @@
 # Render Tree 裁剪范围
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 最后对照实现源码的时间：2026-06-13。
 
 - Blink layout tree sources:
@@ -67,7 +69,9 @@ DOM + computed style
 - 完整 list marker renderers。现有轻量列表标记同样基于 display command。
 - Replaced-element intrinsic sizing。
 - 完整 CSS stacking-context 语义。
-- Paint invalidation 和 retained display lists。
+- 浏览器级 paint invalidation 和 retained display-list diffing。JellyFrame 已有有界
+  DOM dirty flags、dirty-region planning，以及 paint-only 或 stable-layout 变更的
+  repaint 路径；这里延后的是更细的 display-command/subtree diffing。
 - Fragmentation 和 multi-column layout。
 - 完整 CSS flex/grid layout algorithms，包括 named grid lines、显式 placement、
   dense packing、baseline alignment 和完整 track sizing。

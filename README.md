@@ -1,4 +1,6 @@
-﻿# JellyFrame
+# JellyFrame
+
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 

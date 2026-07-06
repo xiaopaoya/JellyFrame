@@ -1,5 +1,7 @@
 # App Runtime Tests
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 These tests belong to `jellyframe_app_runtime`.
 
 They cover platform-neutral app-runtime helpers such as bounded async queues,

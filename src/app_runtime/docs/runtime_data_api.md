@@ -1,5 +1,7 @@
 # Runtime Data API Plan
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This document defines how optional runtime data services are exposed to
 JavaScript. User-facing syntax should stay a documented subset of Web platform
 APIs whenever practical, so app authors do not need to learn JellyFrame-only

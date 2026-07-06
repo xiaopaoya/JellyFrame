@@ -1,5 +1,7 @@
 # Target Presets
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Device capability presets consumed by packaging and validation tools.
 
 Keep these files conservative. A preset should describe what an app can rely on,

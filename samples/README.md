@@ -1,5 +1,7 @@
 # Samples
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Root samples are for JellyFrame apps and app-package lifecycle validation.
 Native desktop tools live in `../tools/native`.
 

@@ -1,5 +1,7 @@
 # Software Renderer Scope
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 
 JellyFrame now has a CPU-only validation renderer. It is meant to prove the full
 pipeline can produce pixels without assuming a GPU, display controller or

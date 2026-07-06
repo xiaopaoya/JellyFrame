@@ -1,5 +1,7 @@
 # 开发者能力矩阵
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 
 这份文档是 JellyFrame 面向应用开发者的实际能力契约。开发者在使用某个 HTML
 标签、CSS 属性、DOM/JS API、事件或渲染能力前，应能通过这里判断：它现在能不能工作、
@@ -348,7 +350,7 @@ JerryScript 源码树时可用。
 
 | 功能 | 状态 | 行为 |
 | --- | --- | --- |
-| Display list | 可用 | 矩形、边框、渐变、文本命令，包含近似文本字重。 |
+| Display list | 可用 | 矩形、边框、渐变、文本和 image-surface-handle 命令，包含近似文本字重。Canvas 输出通过同一条有界 image command 路径集成。 |
 | CPU framebuffer | 可用 | 软件 rasterizer/compositor 可输出 BMP/PPM。带预算的 compositor 会在分配前拒绝过大的主 framebuffer。 |
 | 嵌入式 framebuffer adapter | 可用 | `embedded_framebuffer` 可把 `HostFrameBufferView` 转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit 单色 buffer，并通过 callback flush dirty rects。转换按 rectangle/format 分派；RGB565/BGR565 target 可选择开启 4x4 ordered dithering；可选 `EmbeddedFrameBufferPresentStats` 会报告 converted pixels、packed bytes、clipped/empty rects 和 flush count，供开发板 bring-up 对齐真实 panel 指标。 |
 | Source-over alpha | 可用 | straight-alpha 合成。 |
@@ -382,7 +384,7 @@ JerryScript 源码树时可用。
 | 增量 style/layout | 子集 | paint-only 表单控件状态变化可在 Win32 验证壳中复用 render/layout，只重建 layer/display commands。受保护的 same-box 单行文本路径也可在更新后文本测量结果仍匹配旧 layout box 时复用 render/layout。受保护的 style/class 路径会在 render tree 形状不变、所有影响 layout 的 style 字段不变时复用 layout；color、background、opacity、transform 等 paint/compositor 变化可以走这条路径。transform 变化会复用 animation invalidation helper，因此旧 bounds 和新 bounds 都会重绘。换行文本、影响 layout 的 style、未知结构变化和树结构变化仍重建 render/layout。 |
 | Dirty rectangle repaint | 子集 | `dirty_region` 会通过对比旧/新 layout box，或对 paint-only 变化复用同一份 layout，为直接文本、属性、表单控件绘制变化计算有界重绘区域。树结构变化保守重绘 viewport。若估算 dirty area 过大，宿主也可以选择全帧重绘，避免局部 flush 反而更贵。软件 compositor 会在 clip replay 前丢掉重复或被完全包含的 dirty rectangles，避免同一区域被反复清屏/重绘。 |
 | Animation invalidation | 子集 | `animation_invalidation` 可根据上一帧/当前帧的 animation style overrides，在当前 layout tree 上生成局部 dirty rectangles，覆盖 opacity/color paint-only 动画和 translate/scale/rotate transform 前后位置。 |
-| Display invalidation 诊断 | 可用 | `analyze_display_invalidation(...)` 会报告 dirty rectangles 对 layer 和 display command 的覆盖情况。它只提供诊断；retained display-list reuse 仍延后。 |
+| Display invalidation 诊断 | 可用 | `analyze_display_invalidation(...)` 会报告 dirty rectangles 对 layer 和 display command 的覆盖情况。Frame planning 已能让 paint-only 和 stable-layout 变更复用现有 frame/layout 状态；完整 retained display-list diffing 仍延后。 |
 | Frame dirty 诊断 | 可用 | Win32 脚本化 capture 会报告本轮 dirty flag 分布（`tree`、`attributes`、`text`、`style`、`layout`、`paint`、`render_or_layout`）、`text_stable`、`style_stable` 等 frame-update 原因，以及最终 `layer_tree layers=N display_commands=N` 计数。开发者可据此判断页面帧耗时主要来自 layout 型 DOM 变化、便宜的 paint-only 更新，还是 display-command-heavy 页面。 |
 | Per-app budget snapshot | 可用 | `AppBudgetSnapshot` 报告当前 app instance、role/state、host service 队列、host handle/bytes、app fonts、system events、localStorage shadow 计数、frame-loop callback 上限、active animations，以及宿主提供时的 script timer/listener/detached-node 计数。Win32 frame capture 会打印这个摘要；MCU port 可采样同一个只含计数的结构用于串口 diagnostics 或恢复决策。 |
 | Budget recovery | 可用 V0 | `app_budget_recovery_for_snapshot(...)` 会把耗尽的 runtime budget 分类为 `none`、`warn` 或 `terminate-app`。队列、handle、font、system-event 和 script object 耗尽会升级为 `budget-exceeded` app recovery；frame callback 与 active-animation 上限只警告，因为 frame policy 可以节流。Win32 system-shell 模式会输出 `budget_recovery_teardown reason=budget-exceeded` 并回到 launcher，用于验收坏 app 不拖垮系统。 |

@@ -1,5 +1,7 @@
 # Script Cases
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Classic-script samples for the optional JerryScript bridge.
 
 The embedded core only supports the documented local classic-script subset.

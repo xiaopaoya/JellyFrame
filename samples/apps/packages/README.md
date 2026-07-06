@@ -1,5 +1,7 @@
 # App Examples
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Complete JellyFrame source-package examples live here. Each app should include
 `jellyframe.app.json`, local HTML/CSS/classic JavaScript and any bounded local
 resources needed for preview or packaging.

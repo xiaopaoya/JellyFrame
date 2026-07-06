@@ -1,5 +1,7 @@
 # Jelly Font Policy
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Small package used to validate the app font policy path:
 
 - CSS declares two package families: `Jelly Tiny CN` and `Jelly Tiny Symbols`.

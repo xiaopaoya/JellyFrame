@@ -1,5 +1,7 @@
 # Script Samples
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Samples in this directory exercise the optional JerryScript bridge.
 
 - `classic`: classic-script probes for DOM mutation, event listeners, timers and

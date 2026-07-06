@@ -1,5 +1,7 @@
 # Service Status
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 用于验证可选数据、媒体和定位服务边界的小型 runtime 示例。
 
 它声明网络、存储、音频播放和定位能力，并通过 `backgroundServices` 表达 app 在

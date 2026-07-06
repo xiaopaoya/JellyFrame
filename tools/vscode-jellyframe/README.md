@@ -1,5 +1,7 @@
 # JellyFrame Tools for VS Code
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This is a thin developer extension for JellyFrame app packages. It does not
 implement its own parser or packer; every command delegates to
 `tools/jellyframe_cli.py`.

@@ -1,5 +1,7 @@
 # App Load Telemetry
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 `AppLoadTelemetry` is a small hardware-neutral summary for host scheduling,
 DVFS and low-power decisions. It does not read clocks, start threads, touch
 drivers or change the frame loop. The host feeds it facts it already knows for

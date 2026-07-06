@@ -1,4 +1,6 @@
-﻿# 嵌入式 HAL API
+# 嵌入式 HAL API
+
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
 
 
 这份文档是 ESP32-S3、RTOS host 或具体开发板需要实现的接口清单。`jellyframe_render_core`

@@ -1,5 +1,7 @@
 # HTML Living Standard Support Table
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This is the searchable JellyFrame support table for HTML Living Standard features. Use it before choosing a tag, DOM API or browser-facing behavior in an app.
 
 The table intentionally contains every audited row, including unsupported and out-of-scope items, so app authors can use Ctrl+F before they write code.

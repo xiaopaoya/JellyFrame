@@ -1,5 +1,7 @@
 # Tool Regression Tests
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This directory contains lightweight regression tests for developer tooling.
 They focus on package/check behavior that should stay stable independently from
 the render-core and app-runtime C++ unit suites.

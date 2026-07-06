@@ -1,5 +1,7 @@
 # Audio Smoke
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Small package used to validate the Win32 host-owned audio path.
 
 The app carries a roughly one-second PCM WAV package audio resource and declares

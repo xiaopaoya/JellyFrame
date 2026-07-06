@@ -1,5 +1,7 @@
 # App Runtime
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 `app_runtime` contains hardware-neutral helpers for installable JellyFrame apps.
 
 It owns contracts and small bounded data structures for:

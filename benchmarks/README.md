@@ -1,5 +1,7 @@
 # Benchmarks
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Root-level benchmarks are reserved for future cross-subproject and app-lifecycle
 benchmarks.
 

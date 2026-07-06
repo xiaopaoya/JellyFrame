@@ -1,5 +1,7 @@
 # Render Core Samples
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Samples in this directory exercise the platform-neutral render pipeline only.
 They should not depend on `.jfapp` manifests, app registries, network services,
 storage services or JerryScript.

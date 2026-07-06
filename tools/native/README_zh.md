@@ -1,5 +1,7 @@
 # Native Tools
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 这里保存用于检查 JellyFrame 输出的 C++ 桌面工具。示例页面和 app package 位于
 `../../samples`。
 

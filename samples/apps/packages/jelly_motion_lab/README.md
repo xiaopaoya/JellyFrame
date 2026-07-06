@@ -1,5 +1,7 @@
 # Jelly Motion Lab
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Packaged animation fixture for validating watch-style JellyFrame motion. It
 uses standard CSS `@keyframes`, `transform`, `opacity`, transitions and
 `requestAnimationFrame`; no custom motion API is required.

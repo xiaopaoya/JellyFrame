@@ -1,5 +1,7 @@
 # Optional Host Services Contract
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This document makes image/audio/lightweight-video, network data requests,
 semantic device data and installable app bundles concrete enough for board ports. It complements
 `host_abstraction.md` and `embedded_hal_api.md`: those documents define

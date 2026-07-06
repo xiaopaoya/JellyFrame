@@ -1,7 +1,13 @@
-﻿# JellyFrame Documentation Index
+# JellyFrame Documentation Index
+
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
+
+Each public Markdown document starts with a short freshness line:
+`Last updated: YYYY-MM-DD; Applies to: VERSION`. Treat it as the quick signal
+for whether a document needs another pass after code changes.
 
 ## First-Time Reading Order
 

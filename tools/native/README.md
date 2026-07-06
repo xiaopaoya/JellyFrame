@@ -1,5 +1,7 @@
 # Native Tools
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This directory contains native C++ desktop tools used to inspect JellyFrame
 output. Sample pages and app packages live in `../../samples`.
 

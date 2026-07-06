@@ -1,5 +1,7 @@
 # Host Abstraction Draft
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 
 JellyFrame's core should stay independent from filesystems, network stacks,
 windowing systems, display controllers, timers, input hardware and font APIs.

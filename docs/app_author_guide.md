@@ -1,5 +1,7 @@
 # App Author Guide
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This is the short contract for people writing JellyFrame apps. JellyFrame is
 not a mini browser. It is a Web-shaped embedded UI runtime: HTML gives
 structure, CSS gives a documented small-screen styling subset, JavaScript adds

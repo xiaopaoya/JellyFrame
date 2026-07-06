@@ -1,5 +1,7 @@
 # CSSOM 与 Cascade 裁剪范围
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 最后对照 CSSOM 和 CSS Cascade 相关资料的时间：2026-06-13。
 
 - CSSOM: https://www.w3.org/TR/cssom-1/

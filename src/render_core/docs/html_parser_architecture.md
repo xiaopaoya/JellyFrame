@@ -1,5 +1,7 @@
 # HTML Parser Architecture Notes
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Last reviewed against implementation sources on 2026-06-13:
 
 - Chromium/Blink parser sources:

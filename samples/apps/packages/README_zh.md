@@ -1,5 +1,7 @@
 # 应用示例
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 这里保存完整 JellyFrame source-package 示例。每个 app 都应包含
 `jellyframe.app.json`、本地 HTML/CSS/classic JavaScript，以及预览或打包所需的有界本地资源。
 

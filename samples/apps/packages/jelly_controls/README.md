@@ -1,5 +1,7 @@
 # Jelly Controls
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Small installable package demonstrating the JellyFrame Gel Interface System.
 
 - Uses standard HTML controls and tiny JavaScript.

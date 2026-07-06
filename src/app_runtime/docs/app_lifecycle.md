@@ -1,5 +1,7 @@
 # App Lifecycle
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 This document is the app-author view of JellyFrame lifecycle behavior. It
 summarizes what an app can rely on when it is installed, launched, suspended,
 resumed, terminated or uninstalled. Host and board-port implementation details

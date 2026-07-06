@@ -1,5 +1,7 @@
 # HTML Tokenizer 裁剪范围
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 最后对照 WHATWG HTML Living Standard 的时间：2026-06-13。
 
 - Parsing model: https://html.spec.whatwg.org/multipage/parsing.html

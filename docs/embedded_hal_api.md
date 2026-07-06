@@ -1,4 +1,6 @@
-﻿# Embedded HAL API
+# Embedded HAL API
+
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
 
 
 This document is the implementation checklist for a board or RTOS host such as

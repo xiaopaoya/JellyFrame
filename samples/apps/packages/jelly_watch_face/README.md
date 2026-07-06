@@ -1,5 +1,7 @@
 # Jelly Watch Face
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Analog watch-face sample for the `transform: rotate(...)`,
 `transform-origin`, `border-radius: 50%` and `conic-gradient()` progress-ring
 subsets. The hands use classic JavaScript to update `element.style.transform`

@@ -1,5 +1,7 @@
 # Source
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Platform-neutral JellyFrame source code.
 
 - `render_core/`: HTML/CSS parsing, DOM, style, layout, layer, paint,

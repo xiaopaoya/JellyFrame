@@ -1,5 +1,7 @@
 # Render Tree Scope
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Last checked against implementation sources on 2026-06-13:
 
 - Blink layout tree sources:
@@ -72,7 +74,10 @@ DOM + computed style
   based.
 - Replaced-element intrinsic sizing.
 - Full CSS stacking-context semantics.
-- Paint invalidation and retained display lists.
+- Browser-grade paint invalidation and retained display-list diffing. JellyFrame
+  already has bounded DOM dirty flags, dirty-region planning and repaint paths
+  for paint-only or stable-layout changes; this deferred item is about finer
+  display-command/subtree diffing.
 - Fragmentation and multi-column layout.
 - Full CSS flex/grid layout algorithms, including named grid lines, explicit
   placement, dense packing, baseline alignment and full track sizing.

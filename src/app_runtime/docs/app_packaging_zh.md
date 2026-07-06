@@ -1,5 +1,7 @@
 # App Packaging
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
 然后在桌面离线生成无需文件系统、网络栈或复杂压缩归档即可加载的资源。

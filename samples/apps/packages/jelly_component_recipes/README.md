@@ -1,5 +1,7 @@
 # Component Recipes
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 Small app-author recipes for common wearable UI structure.
 
 - Top bar, round-first status card, card stack, compact buttons, control rows

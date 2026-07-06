@@ -1,5 +1,7 @@
 # CSS Parser 裁剪范围
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 最后对照 CSS Syntax Module Level 3、Media Queries 和浏览器 parser 源码结构的时间：
 2026-06-16。
 

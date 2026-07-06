@@ -1,5 +1,7 @@
 # Watch Weather 示例
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 一个紧凑的手表天气 source package，用于验证 package 结构、本地资源、包内 BMP 图片、XHR
 数据更新、system-state JS binding、事件委托、小屏 grid 布局，以及 Win32/pseudo-browser
 预览路径的一致性。

@@ -1,5 +1,7 @@
 # Audio Smoke
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 用于验证 Win32 host-owned audio 路径的小型 package。
 
 这个 app 携带一个 1 秒左右的 PCM WAV 包内音频资源，并声明通用

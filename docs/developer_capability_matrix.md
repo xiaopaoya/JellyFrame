@@ -1,5 +1,7 @@
 # Developer Capability Matrix
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 
 This document is the practical contract for application authors using JellyFrame.
 It describes what the engine can do today, what it deliberately degrades, and
@@ -363,7 +365,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 
 | Feature | Status | Behavior |
 | --- | --- | --- |
-| Display list | Works | Rectangles, borders, gradients and text commands, including approximate text weight. |
+| Display list | Works | Rectangles, borders, gradients, text and image-surface-handle commands, including approximate text weight. Canvas output is integrated through the same bounded image command path. |
 | CPU framebuffer | Works | Software rasterizer/compositor can produce BMP/PPM. Budgeted compositor renders reject oversized primary framebuffers before allocation. |
 | Embedded framebuffer adapter | Works | `embedded_framebuffer` converts `HostFrameBufferView` into caller-owned RGBA8888/BGRA8888, RGB565/BGR565, RGB332, Gray8 or 1-bit monochrome buffers and flushes dirty rects through a callback. Conversion is dispatched per rectangle/format, RGB565/BGR565 targets may enable 4x4 ordered dithering, and optional `EmbeddedFrameBufferPresentStats` reports converted pixels, packed bytes, clipped/empty rects and flush count for board bring-up. |
 | Source-over alpha | Works | Straight-alpha composition. |
@@ -397,7 +399,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Incremental style/layout | Subset | Paint-only form-control state changes can reuse render/layout in the Win32 validation shell and rebuild only layer/display commands. A guarded same-box single-line text path can also reuse render/layout when the updated text measures to the existing layout box. A guarded style/class path reuses layout when the render tree shape and all layout-affecting style fields stay unchanged; paint/compositor changes such as color, background, opacity and transform can use this path. Transform changes reuse the animation invalidation helper so old and new bounds are repainted. Wrapping text, layout-affecting style, unknown structural changes and tree changes still rebuild render/layout. |
 | Dirty rectangle repaint | Subset | `dirty_region` computes bounded repaint rects for direct text/attribute/form-control paint changes by comparing old and new layout boxes, or by reusing the same layout for paint-only changes. Tree mutations conservatively repaint the viewport. Hosts may also choose full-frame repaint when estimated dirty area is too large for partial flush to pay off. The software compositor drops duplicate or fully contained dirty rectangles before replaying clips, avoiding repeated clear/repaint work for the same area. |
 | Animation invalidation | Subset | `animation_invalidation` uses previous/current animation style overrides and the current layout tree to produce local dirty rectangles for opacity/color paint-only animation and translate/scale/rotate transform before/after bounds. |
-| Display invalidation diagnostics | Works | `analyze_display_invalidation(...)` reports dirty-rectangle coverage over layers and display commands. This is diagnostic only; retained display-list reuse is still deferred. |
+| Display invalidation diagnostics | Works | `analyze_display_invalidation(...)` reports dirty-rectangle coverage over layers and display commands. Frame planning can reuse existing frame/layout state for paint-only and stable-layout changes; full retained display-list diffing is still deferred. |
 | Frame dirty diagnostics | Works | Win32 scripted capture reports the per-run dirty flag distribution (`tree`, `attributes`, `text`, `style`, `layout`, `paint`, `render_or_layout`), frame-update reasons such as `text_stable` and `style_stable`, and final `layer_tree layers=N display_commands=N` counts. Use this to find whether an app is spending frames on layout-producing DOM changes, cheap paint-only updates or display-command-heavy pages. |
 | Per-app budget snapshot | Works | `AppBudgetSnapshot` reports the active app instance, role/state, host service queues, host handles/bytes, app fonts, system events, localStorage-shadow counters, frame-loop callback caps, active animations and script timer/listener/detached-node counts when the host supplies them. Win32 frame capture prints this summary; MCU ports can sample the same counter-only structure for serial diagnostics or recovery decisions. |
 | Budget recovery | Works V0 | `app_budget_recovery_for_snapshot(...)` classifies exhausted runtime budgets into `none`, `warn` or `terminate-app`. Queue/handle/font/system-event/script-object exhaustion is treated as `budget-exceeded` app recovery; frame callback and active-animation caps are warnings because frame policy can throttle them. Win32 system-shell mode reports `budget_recovery_teardown reason=budget-exceeded` and returns to the launcher for the validation fixture. |

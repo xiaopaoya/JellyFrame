@@ -1,5 +1,7 @@
 # Authorized File Broker
 
+> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+
 JellyFrame does not expose a raw filesystem API to ordinary apps. App-private
 storage remains the default persistence model. General file access is reserved
 for system components, file-manager apps or user-approved app actions, and must

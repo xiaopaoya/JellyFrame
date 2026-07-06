@@ -1,5 +1,7 @@
 # 授权文件 Broker
 
+> 最后更新：2026-07-07；适用版本：0.5.0-dev
+
 JellyFrame 不向普通 app 暴露裸文件系统 API。默认持久化模型仍是 app-private storage。
 通用文件访问只保留给系统组件、文件管理器 app，或用户明确批准的 app 操作，并且必须通过宿主持有的
 broker。
