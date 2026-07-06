@@ -489,6 +489,43 @@ bool is_option_or_optgroup(const Node& node) {
     return node.type == NodeType::Element && (node.tag_name == "option" || node.tag_name == "optgroup");
 }
 
+bool is_labelable_element(const Node& node) {
+    if (node.type != NodeType::Element) {
+        return false;
+    }
+    if (node.tag_name == "input") {
+        return ascii_lowercase(node.attribute("type")) != "hidden";
+    }
+    return node.tag_name == "button" || node.tag_name == "meter" || node.tag_name == "output" ||
+           node.tag_name == "progress" || node.tag_name == "select" || node.tag_name == "textarea";
+}
+
+Node& root_node(Node& node) {
+    Node* current = &node;
+    while (current->parent != nullptr) {
+        current = current->parent;
+    }
+    return *current;
+}
+
+Node* first_labelable_descendant(Node& node) {
+    std::vector<Node*> pending;
+    for (auto it = node.children.rbegin(); it != node.children.rend(); ++it) {
+        pending.push_back(it->get());
+    }
+    while (!pending.empty()) {
+        Node* current = pending.back();
+        pending.pop_back();
+        if (is_labelable_element(*current)) {
+            return current;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+    return nullptr;
+}
+
 bool document_collection_image(const Node& node) {
     return node.type == NodeType::Element && node.tag_name == "img";
 }
@@ -1430,6 +1467,22 @@ jerry_value_t node_set_value_attribute(const jerry_call_info_t* call_info_p,
                                        const jerry_value_t args_p[],
                                        const jerry_length_t args_count) {
     return node_set_reflected_string_attribute(call_info_p, args_p, args_count, "value");
+}
+
+jerry_value_t node_get_label_control(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t[],
+                                     const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element || node->tag_name != "label") {
+        return jerry_null();
+    }
+    const std::string& for_id = node->attribute("for");
+    Node* control = !for_id.empty() ? find_by_id(root_node(*node), for_id) : first_labelable_descendant(*node);
+    if (control == nullptr || !is_labelable_element(*control)) {
+        return jerry_null();
+    }
+    return make_node_wrapper(*runtime, *control, false);
 }
 
 jerry_value_t node_get_reflected_number_attribute(const jerry_call_info_t* call_info_p,
@@ -3744,6 +3797,7 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     }
     if (node.type == NodeType::Element && node.tag_name == "label") {
         define_accessor(object.get(), "htmlFor", node_get_htmlFor, node_set_htmlFor);
+        define_accessor(object.get(), "control", node_get_label_control, node_ignore_setter);
     }
     set_method(object.get(), "appendChild", node_append_child);
     set_method(object.get(), "removeChild", node_remove_child);

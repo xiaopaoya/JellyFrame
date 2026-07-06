@@ -232,8 +232,8 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `element.innerText` as a lightweight `textContent` alias; it is not the
     browser layout-aware rendered-text algorithm
   - low-cost element-specific IDL reflection for `meta.name/content/httpEquiv/media`,
-    `data.value`, `time.dateTime`, `img.alt`, `label.htmlFor` and anchor
-    `text/download/ping/rel/referrerPolicy`
+    `data.value`, `time.dateTime`, `img.alt`, `label.htmlFor`, bounded
+    `label.control` lookup and anchor `text/download/ping/rel/referrerPolicy`
   - `element.click()` for the bounded JellyFrame activation subset
   - common form-control IDL reflection: `type`, `name`, `placeholder`,
     `required`, `defaultValue`, input `defaultChecked`, textarea

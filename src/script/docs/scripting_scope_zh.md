@@ -191,7 +191,8 @@ API 表面。
   - `element.innerText` 作为轻量 `textContent` 别名；不执行浏览器
     layout-aware rendered-text 算法
   - 低成本元素专用 IDL 反射：`meta.name/content/httpEquiv/media`、`data.value`、
-    `time.dateTime`、`img.alt`、`label.htmlFor` 和 anchor `text/download/ping/rel/referrerPolicy`
+    `time.dateTime`、`img.alt`、`label.htmlFor`、有界 `label.control` 查找和
+    anchor `text/download/ping/rel/referrerPolicy`
   - `element.click()`，覆盖 JellyFrame 有界 activation 子集
   - 常用表单控件 IDL 反射：`type`、`name`、`placeholder`、`required`、
     `defaultValue`、input `defaultChecked`，textarea 的 `rows`/`cols`/`wrap`/`textLength`，
