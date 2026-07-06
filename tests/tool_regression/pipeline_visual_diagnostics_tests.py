@@ -71,6 +71,12 @@ def main() -> int:
             "horizontal overflow detail should include viewport")
     require("overflowRight=240" in horizontal.get("detail", ""),
             "horizontal overflow detail should include overflowRight")
+    require('node="div.wide"' in horizontal.get("detail", ""),
+            "horizontal overflow detail should include compact node label when a layout box caused it")
+    require('path="' in horizontal.get("detail", "") and "div.wide" in horizontal.get("detail", ""),
+            "horizontal overflow detail should include stable DOM path when a layout box caused it")
+    require("boxOverflowRight=240" in horizontal.get("detail", ""),
+            "horizontal overflow detail should include box overflow metrics")
 
     vertical_report = run_pseudo_browser(
         exe,

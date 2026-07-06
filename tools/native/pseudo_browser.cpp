@@ -57,6 +57,14 @@ struct LayoutBounds {
     bool valid = false;
 };
 
+struct HorizontalOverflowOffender {
+    const LayoutBox* box = nullptr;
+    int overflow_left = 0;
+    int overflow_right = 0;
+    std::size_t depth = 0;
+    int area = 0;
+};
+
 struct PipelineTimings {
     long long read_input_us = 0;
     long long parse_html_us = 0;
@@ -164,6 +172,32 @@ void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bo
     }
 }
 
+void find_horizontal_overflow_offender(const LayoutBox& box,
+                                       int viewport_width,
+                                       std::size_t depth,
+                                       HorizontalOverflowOffender& offender) {
+    const int left = box.rect.x;
+    const int right = box.rect.x + box.rect.width;
+    const int overflow_left = std::max(0, -left);
+    const int overflow_right = std::max(0, right - viewport_width);
+    const int score = overflow_left + overflow_right;
+    if (score > 0 && box.node != nullptr) {
+        const int area = std::max(0, box.rect.width) * std::max(0, box.rect.height);
+        const int current_score = offender.overflow_left + offender.overflow_right;
+        if (offender.box == nullptr ||
+            score > current_score ||
+            (score == current_score && depth > offender.depth) ||
+            (score == current_score && depth == offender.depth && area < offender.area)) {
+            offender = HorizontalOverflowOffender{&box, overflow_left, overflow_right, depth, area};
+        }
+    }
+    for (const auto& child : box.children) {
+        if (child) {
+            find_horizontal_overflow_offender(*child, viewport_width, depth + 1, offender);
+        }
+    }
+}
+
 int scroll_container_content_bottom(const LayoutBox& box) {
     int bottom = box.rect.y;
     for (const auto& child : box.children) {
@@ -228,12 +262,24 @@ std::string bounds_detail(const char* name, const LayoutBounds& bounds) {
     return detail.str();
 }
 
-std::string horizontal_overflow_detail(const LayoutBounds& bounds, int viewport_width, int viewport_height) {
+std::string horizontal_overflow_detail(const LayoutBounds& bounds,
+                                       int viewport_width,
+                                       int viewport_height,
+                                       const HorizontalOverflowOffender& offender) {
     std::ostringstream detail;
     detail << bounds_detail("paintBounds", bounds)
            << " viewport=" << viewport_width << 'x' << viewport_height
            << " overflowLeft=" << (bounds.valid ? std::max(0, -bounds.left) : 0)
            << " overflowRight=" << (bounds.valid ? std::max(0, bounds.right - viewport_width) : 0);
+    if (offender.box != nullptr) {
+        detail << " node=" << quote_detail_value(dom_node_label(offender.box->node), 48)
+               << " path=" << quote_detail_value(dom_node_path(offender.box->node), 160)
+               << " boxLeft=" << offender.box->rect.x
+               << " boxRight=" << (offender.box->rect.x + offender.box->rect.width)
+               << " boxWidth=" << offender.box->rect.width
+               << " boxOverflowLeft=" << offender.overflow_left
+               << " boxOverflowRight=" << offender.overflow_right;
+    }
     return detail.str();
 }
 
@@ -247,12 +293,17 @@ void report_visual_diagnostics(const BrowserOptions& options,
         ? std::max(options.viewport_height, layout_bounds.bottom)
         : options.viewport_height;
     if (paint_bounds.valid && (paint_bounds.left < 0 || paint_bounds.right > options.viewport_width)) {
+        HorizontalOverflowOffender offender;
+        find_horizontal_overflow_offender(layout_tree, options.viewport_width, 0, offender);
         report_diagnostic(&diagnostics,
                           DiagnosticStage::Layout,
                           DiagnosticSeverity::Warning,
                           "visual-horizontal-overflow",
                           "Paint output extends outside the viewport horizontally",
-                          horizontal_overflow_detail(paint_bounds, options.viewport_width, options.viewport_height));
+                          horizontal_overflow_detail(paint_bounds,
+                                                     options.viewport_width,
+                                                     options.viewport_height,
+                                                     offender));
     }
     if (paint_bounds.valid && (paint_bounds.top < 0 || paint_bounds.bottom > content_height)) {
         report_diagnostic(&diagnostics,
