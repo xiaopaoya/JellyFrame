@@ -329,7 +329,8 @@ Responsive profile 还会携带小型 `diagnosticSamples[]` 列表。它只保�
 诊断，例如窄屏文本溢出，不会把整份伪浏览器日志复制到每个 profile。对常见布局诊断，
 样本会尽量带上解析后的 `text`、`node`、`path`、`metrics.measuredWidth`、
 `metrics.availableWidth`、`metrics.boxHeight`、`metrics.contentHeight`、
-`metrics.overflowY`、`paintBounds` 和 `viewport` 等字段。`developerAdvice[]` 会消费这些样本，从而把建议指向
+`metrics.overflowY`、`metrics.boxOverflowLeft`、`metrics.boxOverflowRight`、
+`paintBounds` 和 `viewport` 等字段。`developerAdvice[]` 会消费这些样本，从而把建议指向
 具体 target 和最小可行动 detail。部分建议还会携带类似
 `app_author_recipes.md#scroll-list` 的 `recipe` 字符串；它只是文档指针，不是运行时能力开关。
 

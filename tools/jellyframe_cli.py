@@ -828,22 +828,29 @@ def collect_developer_advice(report: dict) -> list[dict]:
         target = str(profile.get("target", ""))
         status = str(profile.get("status", ""))
         layout = profile.get("layout", {}) if isinstance(profile.get("layout", {}), dict) else {}
+        sample_codes = {
+            str(diagnostic.get("code", ""))
+            for diagnostic in profile.get("diagnosticSamples", [])
+            if isinstance(diagnostic, dict)
+        }
         if status == "horizontal-overflow" or bool(layout.get("horizontalOverflow", False)):
-            append_developer_advice(advice,
-                                    seen,
-                                    "visual-horizontal-overflow",
-                                    "warning",
-                                    "",
-                                    "Responsive profile reports horizontal overflow.",
-                                    target)
+            if "visual-horizontal-overflow" not in sample_codes:
+                append_developer_advice(advice,
+                                        seen,
+                                        "visual-horizontal-overflow",
+                                        "warning",
+                                        "",
+                                        "Responsive profile reports horizontal overflow.",
+                                        target)
         if status == "scroll-needed" or bool(layout.get("verticalOverflow", False)):
-            append_developer_advice(advice,
-                                    seen,
-                                    "visual-scroll-needed",
-                                    "info",
-                                    "",
-                                    "Responsive profile reports content taller than the viewport.",
-                                    target)
+            if "visual-scroll-needed" not in sample_codes:
+                append_developer_advice(advice,
+                                        seen,
+                                        "visual-scroll-needed",
+                                        "info",
+                                        "",
+                                        "Responsive profile reports content taller than the viewport.",
+                                        target)
         gate = profile.get("gate", {})
         if isinstance(gate, dict) and gate.get("decision") in {"warn", "reject"}:
             append_developer_advice(advice,

@@ -412,7 +412,8 @@ overflow, without copying the whole pseudo-browser log into every profile.
 For common layout diagnostics the samples include parsed fields such as `text`,
 `node`, `path`, `metrics.measuredWidth`, `metrics.availableWidth`,
 `metrics.boxHeight`, `metrics.contentHeight`, `metrics.overflowY`,
-`paintBounds` and `viewport` when the pipeline can determine them. `developerAdvice[]` uses these
+`metrics.boxOverflowLeft`, `metrics.boxOverflowRight`, `paintBounds` and
+`viewport` when the pipeline can determine them. `developerAdvice[]` uses these
 samples to point app authors at the affected target and the smallest actionable
 detail. Some advice entries also carry a `recipe` string such as
 `app_author_recipes.md#scroll-list`; this is a documentation pointer, not a

@@ -673,6 +673,11 @@ class PackagePreflightTests(unittest.TestCase):
                     "severity": "warning",
                     "code": "layout-text-overflow",
                     "detail": "text=\"Daily\" measuredWidth=45 availableWidth=30 contentWidth=30 fontSize=16 node=\"button.tab\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>button.tab:nth-of-type(2)\"",
+                }, {
+                    "stage": "layout",
+                    "severity": "warning",
+                    "code": "visual-horizontal-overflow",
+                    "detail": "paintBounds=\"0,0..412,300\" viewport=172x320 overflowRight=240 node=\"div.wide\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>div.wide:nth-of-type(1)\" boxLeft=0 boxRight=412 boxWidth=412 boxOverflowRight=240",
                 }],
                 "gate": {"decision": "warn", "reasons": ["horizontal-overflow"]},
             }],
@@ -712,6 +717,12 @@ class PackagePreflightTests(unittest.TestCase):
                             entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>section#hours" and
                             entry.get("metrics", {}).get("overflowY") == 64 and
                             entry.get("recipe") == "app_author_recipes.md#scroll-list"
+                            for entry in advice))
+        self.assertTrue(any(entry["code"] == "visual-horizontal-overflow" and
+                            entry.get("target") == "rect-172x320" and
+                            entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>div.wide:nth-of-type(1)" and
+                            entry.get("metrics", {}).get("boxOverflowRight") == 240 and
+                            entry.get("recipe") == "app_author_recipes.md#narrow-targets"
                             for entry in advice))
 
     def test_responsive_profile_carries_diagnostic_samples(self):
