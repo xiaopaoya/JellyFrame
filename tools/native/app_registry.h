@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace jellyframe_example {
@@ -52,6 +53,24 @@ struct InstalledAppEntry {
 
 struct InstalledAppRegistry {
     std::vector<InstalledAppEntry> apps;
+};
+
+struct AppManagerAppState {
+    InstalledAppEntry app;
+    bool launchable = false;
+    bool rollback_ready = false;
+};
+
+struct AppManagerStateSummary {
+    std::size_t app_count = 0;
+    std::size_t launchable_count = 0;
+    std::size_t failed_count = 0;
+    std::size_t rollback_ready_count = 0;
+};
+
+struct AppManagerState {
+    std::vector<AppManagerAppState> apps;
+    AppManagerStateSummary summary;
 };
 
 inline std::filesystem::path registry_json_path(const std::filesystem::path& store) {
@@ -374,13 +393,42 @@ inline const InstalledAppEntry* find_installed_app(const InstalledAppRegistry& r
     return nullptr;
 }
 
+inline bool installed_app_launchable(const InstalledAppEntry& entry) {
+    return entry.enabled && entry.status == "installed";
+}
+
+inline bool installed_app_rollback_ready(const InstalledAppEntry& entry) {
+    return entry.has_rollback && !entry.rollback_bundle_file.empty();
+}
+
+inline AppManagerState app_manager_state_from_registry(const InstalledAppRegistry& registry) {
+    AppManagerState state;
+    state.apps.reserve(registry.apps.size());
+    for (const InstalledAppEntry& entry : registry.apps) {
+        AppManagerAppState app_state;
+        app_state.app = entry;
+        app_state.launchable = installed_app_launchable(entry);
+        app_state.rollback_ready = installed_app_rollback_ready(entry);
+        state.summary.app_count += 1;
+        state.summary.launchable_count += app_state.launchable ? 1 : 0;
+        state.summary.failed_count += entry.status == "failed" ? 1 : 0;
+        state.summary.rollback_ready_count += app_state.rollback_ready ? 1 : 0;
+        state.apps.push_back(std::move(app_state));
+    }
+    return state;
+}
+
+inline AppManagerState load_app_manager_state(const std::filesystem::path& store) {
+    return app_manager_state_from_registry(load_installed_app_registry(store));
+}
+
 inline std::filesystem::path find_installed_app_bundle_path(const std::filesystem::path& store, std::string_view app_id) {
     const InstalledAppRegistry registry = load_installed_app_registry(store);
     const InstalledAppEntry* entry = find_installed_app(registry, app_id);
     if (entry == nullptr) {
         throw std::runtime_error("app is not installed: " + std::string(app_id));
     }
-    if (!entry->enabled || entry->status != "installed") {
+    if (!installed_app_launchable(*entry)) {
         throw std::runtime_error("app is not launchable: " + std::string(app_id));
     }
     return installed_app_bundle_path(store, *entry);

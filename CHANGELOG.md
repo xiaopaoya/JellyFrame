@@ -41,7 +41,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   status and user approval before committing the `.jfapp`.
 - Added `tools/app_registry.py state`, a launcher-friendly app-manager state
   report with derived `launchable`, `rollbackReady`, summary counts and failure
-  details.
+  details. The Win32 system shell now consumes the same derived state helper for
+  launchability and rollback badges.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

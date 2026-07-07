@@ -2689,25 +2689,26 @@ bool replace_once(std::string& text, std::string_view marker, std::string_view r
 }
 
 std::string build_launcher_app_list_html(const std::filesystem::path& registry_store) {
-    const jellyframe_example::InstalledAppRegistry registry =
-        jellyframe_example::load_installed_app_registry(registry_store);
+    const jellyframe_example::AppManagerState state =
+        jellyframe_example::load_app_manager_state(registry_store);
     std::ostringstream html;
-    if (registry.apps.empty()) {
+    if (state.apps.empty()) {
         html << "<section class='empty'><p>No installed apps.</p>"
              << "<p class='hint'>Use --install-bundle app.jfapp with --registry-store.</p></section>";
     }
-    for (const jellyframe_example::InstalledAppEntry& app : registry.apps) {
+    for (const jellyframe_example::AppManagerAppState& app_state : state.apps) {
+        const jellyframe_example::InstalledAppEntry& app = app_state.app;
         html << "<article class='app'>"
              << "<h2 class='name'>" << html_escape_text(app.name) << "</h2>"
              << "<p class='meta'>" << html_escape_text(app.id) << " - v"
              << html_escape_text(app.version_name) << " - "
-             << html_escape_text(app.status) << (app.has_rollback ? " - rollback ready" : "") << " - "
+             << html_escape_text(app.status) << (app_state.rollback_ready ? " - rollback ready" : "") << " - "
              << (app.enabled ? "enabled" : "disabled") << " - "
              << app.bundle_size << " bytes</p>"
              << (app.has_failure ? "<p class='meta'>failure: " + html_escape_text(app.failure_reason) + "</p>" : "")
              << "<div class='actions'>"
              << "<button class='primary' data-action='launch' data-app-id='" << html_escape_text(app.id) << "'"
-             << ((!app.enabled || app.status != "installed") ? " disabled" : "") << ">Launch</button>"
+             << (!app_state.launchable ? " disabled" : "") << ">Launch</button>"
              << "<button data-action='" << (app.enabled ? "disable" : "enable") << "' data-app-id='"
              << html_escape_text(app.id) << "'>" << (app.enabled ? "Disable" : "Enable") << "</button>"
              << "<button class='danger' data-action='delete' data-app-id='" << html_escape_text(app.id) << "'>Delete</button>"

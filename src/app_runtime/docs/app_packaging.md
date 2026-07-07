@@ -815,7 +815,9 @@ python tools/jellyframe_cli.py registry state `
 
 The state report schema is `tools/schemas/jellyframe.app_manager.state.schema.json`.
 It exposes `launchable`, `rollbackReady`, summary counts and stable failure
-details derived from the persistent registry.
+details derived from the persistent registry. The Win32 system-shell UI uses the
+same derived state helper for launchability and rollback badges, so launcher
+behavior matches the JSON report instead of re-implementing registry rules.
 
 The Win32 shell can then display the installed-app registry, launch apps through
 the rendered system-shell UI and delete inactive apps:

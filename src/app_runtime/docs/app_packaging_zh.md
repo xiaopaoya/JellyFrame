@@ -684,6 +684,8 @@ python tools/jellyframe_cli.py registry state `
 
 state report schema 是 `tools/schemas/jellyframe.app_manager.state.schema.json`。
 它提供由持久 registry 派生出的 `launchable`、`rollbackReady`、summary 计数和稳定 failure 详情。
+Win32 system-shell UI 也使用同一套派生 state helper 判断可启动状态和 rollback 标记，避免各个
+launcher 重复实现 registry 规则。
 
 随后 Win32 壳可以显示 installed-app registry，通过渲染出的 system-shell UI 启动 app，并删除非活动
 app：
