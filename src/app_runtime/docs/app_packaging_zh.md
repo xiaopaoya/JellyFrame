@@ -697,6 +697,10 @@ python tools/jellyframe_cli.py registry delete-data `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
+python tools/jellyframe_cli.py registry rollback `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
 .\build\Release\jellyframe_win32_browser.exe `
   --registry-store build/installed_apps `
   --delete-app-data org.jellyframe.examples.weather
@@ -704,9 +708,12 @@ python tools/jellyframe_cli.py registry delete-data `
 
 registry mock 会先校验 `.jfapp` header、section range、CRC32 和 manifest summary，再把 bundle
 复制到 staging，最后用原子 JSON 写入提交 `registry.json`。Win32 system-shell 模式使用同一份
-registry 格式完成 app discovery、launch、非活动 app deletion 和显式数据删除。桌面 registry store 中的 app
-私有数据位于 `data/<sanitized-app-id>`。删除 app 默认删除这份数据；`--keep-data` 会保留数据，
-`delete-data` / `--delete-app-data` 可在不移除已安装 bundle 的情况下单独删除数据。
+registry 格式完成 app discovery、launch、非活动 app deletion、显式数据删除和 V0 回滚验收。
+更新 app 时会保留上一版 bundle 作为 rollback 目标，并记录 `status`、`enabled`、
+`updatedAtUtc` 等产品状态字段；回滚会交换当前版本和上一版 bundle 元数据，不触碰 app 私有数据。
+桌面 registry store 中的 app 私有数据位于 `data/<sanitized-app-id>`。删除 app 默认删除这份数据；
+`--keep-data` 会保留数据，`delete-data` / `--delete-app-data` 可在不移除已安装 bundle 的情况下
+单独删除数据。
 
 render-core 伪浏览器继续作为独立 HTML/CSS 页面和 package entry 预检的确定性 CI 壳。
 App/package 截图与人工调试应走 Win32 shell，这样同一路径能覆盖 package loading、scripting、

@@ -1,6 +1,6 @@
 # Tool Regression Tests
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.6.0-dev
 
 This directory contains lightweight regression tests for developer tooling.
 They focus on package/check behavior that should stay stable independently from
@@ -17,8 +17,8 @@ intentional missing-glyph warning stable and captures the sample through Win32
 with `--use-app-fonts`.
 
 `win32_browser_cli_tests.py` checks CLI/help/error contracts for the interactive
-Win32 shell, including the authorized file-broker smoke command and the bad-app
-system survival smoke.
+Win32 shell, including registry install/update/rollback command mode, the
+authorized file-broker smoke command and the bad-app system survival smoke.
 
 Generated reports and screenshots must stay under `build*/test_outputs` or
 `out/`; do not commit those outputs.

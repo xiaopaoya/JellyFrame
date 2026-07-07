@@ -824,6 +824,10 @@ python tools/jellyframe_cli.py registry delete-data `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
+python tools/jellyframe_cli.py registry rollback `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
 .\build\Release\jellyframe_win32_browser.exe `
   --registry-store build/installed_apps `
   --delete-app-data org.jellyframe.examples.weather
@@ -832,11 +836,14 @@ python tools/jellyframe_cli.py registry delete-data `
 The registry mock validates the `.jfapp` header, section ranges, CRC32 and
 manifest summary, copies the bundle through staging and commits `registry.json`
 with an atomic write. The Win32 system-shell mode uses this same registry format
-for app discovery, launch, inactive-app deletion and explicit data deletion.
-Desktop app-private data lives under `data/<sanitized-app-id>` in the registry
-store. Removing an app deletes that data by default; `--keep-data` retains it,
-and `delete-data` / `--delete-app-data` erases data without removing the
-installed bundle.
+for app discovery, launch, inactive-app deletion, explicit data deletion and V0
+rollback validation. Updating an app keeps the previous bundle as the rollback
+target and records product-state fields such as `status`, `enabled` and
+`updatedAtUtc`; rolling back swaps the current and previous bundle metadata
+without touching app-private data. Desktop app-private data lives under
+`data/<sanitized-app-id>` in the registry store. Removing an app deletes that
+data by default; `--keep-data` retains it, and `delete-data` /
+`--delete-app-data` erases data without removing the installed bundle.
 
 The render-core pseudo browser remains the deterministic CI shell for standalone
 HTML/CSS pages and package entry preflight. App/package capture and human

@@ -10,6 +10,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- The desktop installed-app registry now has the first app-distribution V0
+  state model: entries carry `status`, `enabled`, `updatedAtUtc` and optional
+  `rollback` metadata. Updating a `.jfapp` keeps the previous bundle as a
+  rollback target; `tools/app_registry.py rollback` and Win32
+  `--rollback-app ID` validate rollback without changing app-private data.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

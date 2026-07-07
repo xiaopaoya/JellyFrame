@@ -10,6 +10,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 桌面 installed-app registry 增加第一版 app distribution V0 状态模型：entry
+  带有 `status`、`enabled`、`updatedAtUtc` 和可选 `rollback` 元数据。更新
+  `.jfapp` 时会保留上一版 bundle 作为回滚目标；`tools/app_registry.py rollback`
+  和 Win32 `--rollback-app ID` 可在不修改 app 私有数据的情况下验收回滚。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

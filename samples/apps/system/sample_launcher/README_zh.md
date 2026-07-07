@@ -8,3 +8,8 @@
 当前 Win32 宿主会把已安装 app 列表注入到 `<!-- JELLYFRAME_APP_LIST -->`，
 把状态文本注入到 `<!-- JELLYFRAME_STATUS -->`。未来可以用系统 API 替换这层
 模板桥接，而不改变渲染管线。
+
+桌面 registry mock 现在提供 V0 app-manager 状态：已安装 app 带有 `status`、
+`enabled`、更新时间和可选 rollback 元数据。Win32 壳可通过 `--install-bundle`、
+`--remove-app`、`--delete-app-data` 和 `--rollback-app` 验证安装、删除、清数据和回滚。
+这个示例只负责渲染这些记录；真实产品仍需自己实现下载、签名校验、权限提示和持久启动器 UX。

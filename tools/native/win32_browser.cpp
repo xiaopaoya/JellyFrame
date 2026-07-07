@@ -487,6 +487,7 @@ struct BrowserOptions {
     std::string install_bundle_path;
     std::string launch_app_id;
     std::string remove_app_id;
+    std::string rollback_app_id;
     std::string delete_app_data_id;
     std::string authorized_file_smoke_dir;
     int system_survival_smoke_cycles = 0;
@@ -2578,6 +2579,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --install-bundle PATH          Install .jfapp into registry store.\n"
         << "  --launch-app ID                Launch installed app id.\n"
         << "  --remove-app ID                Remove installed app id.\n"
+        << "  --rollback-app ID              Roll an installed app back to its previous bundle.\n"
         << "  --keep-data                    Keep app-private data with --remove-app.\n"
         << "  --delete-app-data ID           Delete app-private data without removing the app.\n"
         << "  --authorized-file-smoke DIR    Run Win32 authorized file-broker validation.\n"
@@ -2693,6 +2695,7 @@ std::string build_launcher_app_list_html(const std::filesystem::path& registry_s
              << "<h2 class='name'>" << html_escape_text(app.name) << "</h2>"
              << "<p class='meta'>" << html_escape_text(app.id) << " - v"
              << html_escape_text(app.version_name) << " - "
+             << html_escape_text(app.status) << (app.has_rollback ? " - rollback ready" : "") << " - "
              << app.bundle_size << " bytes</p>"
              << "<div class='actions'>"
              << "<button class='primary' data-action='launch' data-app-id='" << html_escape_text(app.id) << "'>Launch</button>"
@@ -6078,6 +6081,14 @@ int main(int argc, char** argv) {
             options.remove_app_id = argv[++i];
             continue;
         }
+        if (arg == "--rollback-app") {
+            if (i + 1 >= argc) {
+                std::cerr << "--rollback-app requires an installed app id\n";
+                return 1;
+            }
+            options.rollback_app_id = argv[++i];
+            continue;
+        }
         if (arg == "--delete-app-data") {
             if (i + 1 >= argc) {
                 std::cerr << "--delete-app-data requires an installed app id\n";
@@ -6186,10 +6197,10 @@ int main(int argc, char** argv) {
         return run_system_survival_smoke(options.system_survival_smoke_cycles);
     }
 
-    if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() ||
+    if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() || !options.rollback_app_id.empty() ||
         !options.delete_app_data_id.empty() || !options.launch_app_id.empty()) {
         if (options.registry_store_path.empty()) {
-            std::cerr << "--registry-store is required for install/remove/delete-data/launch app manager commands\n";
+            std::cerr << "--registry-store is required for install/remove/rollback/delete-data/launch app manager commands\n";
             return 1;
         }
     }
@@ -6209,6 +6220,12 @@ int main(int argc, char** argv) {
             std::cout << "removed " << removed.id
                       << (options.remove_keep_data ? " data-retained" : " data-deleted") << '\n';
         }
+        if (!options.rollback_app_id.empty()) {
+            const auto restored =
+                jellyframe_example::rollback_installed_app(options.registry_store_path, options.rollback_app_id);
+            options.startup_status = "Rolled back " + restored.name + ".";
+            std::cout << "rolled-back " << restored.id << " " << restored.version_name << '\n';
+        }
         if (!options.delete_app_data_id.empty()) {
             const bool deleted =
                 jellyframe_example::delete_registry_app_data(options.registry_store_path, options.delete_app_data_id);
@@ -6221,7 +6238,16 @@ int main(int argc, char** argv) {
         }
     } catch (const std::exception& error) {
         std::cerr << "app manager command failed: " << error.what() << '\n';
-            return 1;
+        return 1;
+    }
+
+    const bool app_manager_command_only =
+        (!options.install_bundle_path.empty() || !options.remove_app_id.empty() ||
+         !options.rollback_app_id.empty() || !options.delete_app_data_id.empty()) &&
+        options.launch_app_id.empty() && options.app_path.empty() && positional.empty() &&
+        !options.capture && !options.capture_frames;
+    if (app_manager_command_only) {
+        return 0;
     }
 
     if (!options.audio_smoke_source.empty()) {

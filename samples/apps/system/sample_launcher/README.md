@@ -10,3 +10,11 @@ The Win32 host currently injects the installed app list into
 `<!-- JELLYFRAME_APP_LIST -->` and the status line into
 `<!-- JELLYFRAME_STATUS -->`. A future system API can replace this template
 bridge without changing the render pipeline.
+
+The desktop registry mock now exposes V0 app-manager state: installed apps have
+`status`, `enabled`, update time and optional rollback metadata. The Win32 shell
+can install, remove, clear data and roll back apps through command-line
+operations such as `--install-bundle`, `--remove-app`, `--delete-app-data` and
+`--rollback-app`. This sample only renders those records; real products still
+own download, signature verification, permission prompts and persistent
+launcher UX.

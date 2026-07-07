@@ -1,7 +1,14 @@
+import json
+import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 from pathlib import Path
+
+JFAPP_HEADER_FORMAT = "<8sHHIIIIIIIIIII"
+JFAPP_MAGIC = b"JFAPPV0\0"
+JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
 
 
 def run_case(exe: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -17,6 +24,44 @@ def run_case(exe: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def write_jfapp(path: Path, app_id: str, version_code: int, version_name: str, entry: str) -> None:
+    summary = json.dumps(
+        {
+            "id": app_id,
+            "name": "Rollback Probe",
+            "versionName": version_name,
+            "versionCode": version_code,
+            "entry": entry,
+            "script": "classic",
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    summary_offset = JFAPP_HEADER_SIZE
+    summary_size = len(summary)
+    index_offset = summary_offset + summary_size
+    header = struct.pack(
+        JFAPP_HEADER_FORMAT,
+        JFAPP_MAGIC,
+        JFAPP_HEADER_SIZE,
+        0,
+        0,
+        summary_offset,
+        summary_size,
+        index_offset,
+        0,
+        index_offset,
+        0,
+        index_offset,
+        0,
+        0,
+        0,
+    )
+    bundle = bytearray(header + summary)
+    crc = zlib.crc32(bundle) & 0xFFFFFFFF
+    struct.pack_into("<I", bundle, 48, crc)
+    path.write_bytes(bundle)
 
 
 def main() -> int:
@@ -37,6 +82,7 @@ def main() -> int:
             "--help must document host battery injection")
     require("--keep-data" in help_result.stdout, "--help must document app data retention")
     require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
+    require("--rollback-app" in help_result.stdout, "--help must document app rollback")
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
@@ -92,6 +138,27 @@ def main() -> int:
                 "authorized file smoke must gate manage operations")
         require("authorized_file_smoke result=ok" in file_result.stdout,
                 "authorized file smoke must report success")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+        store = Path(directory) / "store"
+        first = Path(directory) / "rollback-v1.jfapp"
+        second = Path(directory) / "rollback-v2.jfapp"
+        write_jfapp(first, "org.jellyframe.rollback-probe", 1, "1.0.0", "/v1.html")
+        write_jfapp(second, "org.jellyframe.rollback-probe", 2, "2.0.0", "/v2.html")
+        install_first = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(first)])
+        require(install_first.returncode == 0, "win32 registry install v1 must pass")
+        install_second = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(second)])
+        require(install_second.returncode == 0, "win32 registry install v2 must pass")
+        rollback_result = run_case(exe, ["--registry-store", str(store), "--rollback-app", "org.jellyframe.rollback-probe"])
+        require(rollback_result.returncode == 0, "win32 registry rollback must pass")
+        require("rolled-back org.jellyframe.rollback-probe 1.0.0" in rollback_result.stdout,
+                "win32 registry rollback must report restored version")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        app = registry["apps"][0]
+        require(app["versionCode"] == 1, "win32 registry rollback must restore version code")
+        require(app["entry"] == "/v1.html", "win32 registry rollback must restore entry point")
+        require(app["rollback"]["versionCode"] == 2, "win32 registry rollback must preserve current version as rollback")
+        require(app["rollback"]["entry"] == "/v2.html", "win32 registry rollback must preserve current entry as rollback")
 
     survival_result = run_case(exe, ["--system-survival-smoke", "12"])
     require(survival_result.returncode == 0, "system survival smoke must pass")

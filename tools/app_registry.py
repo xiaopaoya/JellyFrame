@@ -17,6 +17,9 @@ JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
 JFAPP_ENTRY_SIZE = 28
 REGISTRY_FORMAT = "jellyframe.installed_apps.registry"
 REGISTRY_VERSION = 0
+APP_STATUS_INSTALLED = "installed"
+APP_STATUS_DISABLED = "disabled"
+APP_STATUS_FAILED = "failed"
 DEFAULT_MAX_APPS = 32
 DEFAULT_MAX_BUNDLE_BYTES = 4 * 1024 * 1024
 
@@ -170,10 +173,13 @@ def bundle_filename(summary: dict, sha256: str) -> str:
 
 def make_registry_entry(bundle_info: dict, bundle_file: str) -> dict:
     summary = bundle_info["summary"]
+    now = utc_now()
     return {
         "id": summary["id"],
         "name": summary.get("name", summary["id"]),
         "role": summary.get("role", "app"),
+        "status": APP_STATUS_INSTALLED,
+        "enabled": True,
         "versionName": summary.get("versionName", "0.0.0"),
         "versionCode": int(summary.get("versionCode", 0) or 0),
         "entry": summary.get("entry", "/index.html"),
@@ -186,8 +192,44 @@ def make_registry_entry(bundle_info: dict, bundle_file: str) -> dict:
         "bundleSha256": bundle_info["sha256"],
         "resourceCount": bundle_info["resourceCount"],
         "payloadBytes": bundle_info["payloadBytes"],
-        "installedAtUtc": utc_now(),
+        "installedAtUtc": now,
+        "updatedAtUtc": now,
     }
+
+
+def rollback_record_from_entry(entry: dict) -> dict:
+    keys = [
+        "id",
+        "name",
+        "role",
+        "versionName",
+        "versionCode",
+        "entry",
+        "minJellyFrame",
+        "script",
+        "networkAllowed",
+        "bundleFile",
+        "bundleSize",
+        "bundleCrc32",
+        "bundleSha256",
+        "resourceCount",
+        "payloadBytes",
+        "installedAtUtc",
+        "updatedAtUtc",
+    ]
+    return {key: entry[key] for key in keys if key in entry}
+
+
+def apply_rollback_record(base_entry: dict, rollback: dict) -> dict:
+    restored = dict(base_entry)
+    current_record = rollback_record_from_entry(base_entry)
+    for key, value in rollback.items():
+        restored[key] = value
+    restored["status"] = APP_STATUS_INSTALLED
+    restored["enabled"] = True
+    restored["updatedAtUtc"] = utc_now()
+    restored["rollback"] = current_record
+    return restored
 
 
 def install_bundle(store: Path, bundle_path: Path, max_apps: int, max_bundle_bytes: int) -> dict:
@@ -214,21 +256,31 @@ def install_bundle(store: Path, bundle_path: Path, max_apps: int, max_bundle_byt
             fail("staged bundle hash changed during copy")
         os.replace(stage_path, final_path)
         entry = make_registry_entry(bundle_info, final_name)
+        obsolete_rollback_file = None
         if old_entry is None:
             apps.append(entry)
         else:
+            old_file = old_entry.get("bundleFile")
+            old_rollback = old_entry.get("rollback", {})
+            if isinstance(old_rollback, dict):
+                rollback_file = old_rollback.get("bundleFile")
+                if isinstance(rollback_file, str) and rollback_file and rollback_file not in {old_file, final_name}:
+                    obsolete_rollback_file = rollback_file
+            entry["installedAtUtc"] = old_entry.get("installedAtUtc", entry["installedAtUtc"])
+            if isinstance(old_file, str) and old_file and old_file != final_name:
+                entry["rollback"] = rollback_record_from_entry(old_entry)
+            elif isinstance(old_rollback, dict) and old_rollback:
+                entry["rollback"] = old_rollback
             apps[apps.index(old_entry)] = entry
         atomic_write_json(registry_path(store), sorted_registry(registry))
     finally:
         if stage_path.exists():
             stage_path.unlink()
 
-    if old_entry is not None:
-        old_file = old_entry.get("bundleFile")
-        if isinstance(old_file, str) and old_file and old_file != final_name:
-            old_path = bundles_dir(store) / old_file
-            if old_path.exists():
-                old_path.unlink()
+    if old_entry is not None and obsolete_rollback_file:
+        obsolete_path = bundles_dir(store) / obsolete_rollback_file
+        if obsolete_path.exists():
+            obsolete_path.unlink()
     return entry
 
 
@@ -257,9 +309,36 @@ def remove_app(store: Path, app_id: str, delete_data: bool = True) -> dict:
         path = bundles_dir(store) / bundle_file
         if path.exists():
             path.unlink()
+    rollback = entry.get("rollback", {})
+    if isinstance(rollback, dict):
+        rollback_file = rollback.get("bundleFile")
+        if isinstance(rollback_file, str) and rollback_file and rollback_file != bundle_file:
+            rollback_path = bundles_dir(store) / rollback_file
+            if rollback_path.exists():
+                rollback_path.unlink()
     entry["dataDeleted"] = delete_app_data(store, app_id) if delete_data else False
     entry["dataRetained"] = not delete_data
     return entry
+
+
+def rollback_app(store: Path, app_id: str) -> dict:
+    store = store.resolve()
+    registry = load_registry(store)
+    apps = registry["apps"]
+    entry = next((app for app in apps if app.get("id") == app_id), None)
+    if entry is None:
+        fail(f"app is not installed: {app_id}")
+    rollback = entry.get("rollback")
+    if not isinstance(rollback, dict) or not rollback.get("bundleFile"):
+        fail(f"app has no rollback bundle: {app_id}")
+    rollback_file = rollback.get("bundleFile")
+    rollback_path = bundles_dir(store) / str(rollback_file)
+    if not rollback_path.is_file():
+        fail(f"rollback bundle is missing: {rollback_path}")
+    restored = apply_rollback_record(entry, rollback)
+    apps[apps.index(entry)] = restored
+    atomic_write_json(registry_path(store), sorted_registry(registry))
+    return restored
 
 
 def find_app(store: Path, app_id: str) -> dict:
@@ -299,7 +378,12 @@ def cmd_list(args: argparse.Namespace) -> int:
         if not apps:
             print("no installed apps")
         for app in apps:
-            print(f"{app.get('id')} {app.get('versionName')} {app.get('name')} {app.get('bundleSize')} bytes")
+            status = app.get("status", APP_STATUS_INSTALLED)
+            rollback = " rollback-ready" if isinstance(app.get("rollback"), dict) else ""
+            print(
+                f"{app.get('id')} {app.get('versionName')} {status}{rollback} "
+                f"{app.get('name')} {app.get('bundleSize')} bytes"
+            )
     return 0
 
 
@@ -320,6 +404,15 @@ def cmd_delete_data(args: argparse.Namespace) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"deleted-data {args.app_id}" if deleted else f"no-data {args.app_id}")
+    return 0
+
+
+def cmd_rollback(args: argparse.Namespace) -> int:
+    entry = rollback_app(args.store, args.app_id)
+    if args.json:
+        print(json.dumps(entry, ensure_ascii=False, indent=2))
+    else:
+        print(f"rolled-back {entry.get('id')} {entry.get('versionName')}")
     return 0
 
 
@@ -362,6 +455,12 @@ def build_parser() -> argparse.ArgumentParser:
     delete_data.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
     delete_data.add_argument("--json", action="store_true", help="Print deletion result as JSON.")
     delete_data.set_defaults(func=cmd_delete_data)
+
+    rollback = subparsers.add_parser("rollback", help="Rollback an installed app to its previous bundle.")
+    add_store_arg(rollback)
+    rollback.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    rollback.add_argument("--json", action="store_true", help="Print restored entry as JSON.")
+    rollback.set_defaults(func=cmd_rollback)
 
     path = subparsers.add_parser("path", help="Print the installed bundle path for an app.")
     add_store_arg(path)

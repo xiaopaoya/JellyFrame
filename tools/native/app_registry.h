@@ -19,6 +19,8 @@ struct InstalledAppEntry {
     std::string id;
     std::string name;
     std::string role = "app";
+    std::string status = "installed";
+    bool enabled = true;
     std::string version_name;
     int version_code = 0;
     std::string entry = "/index.html";
@@ -28,6 +30,20 @@ struct InstalledAppEntry {
     std::size_t bundle_size = 0;
     std::size_t resource_count = 0;
     std::string installed_at_utc;
+    std::string updated_at_utc;
+    bool has_rollback = false;
+    std::string rollback_name;
+    std::string rollback_role = "app";
+    std::string rollback_version_name;
+    int rollback_version_code = 0;
+    std::string rollback_entry = "/index.html";
+    std::string rollback_script_mode = "classic";
+    bool rollback_network_allowed = false;
+    std::string rollback_bundle_file;
+    std::size_t rollback_bundle_size = 0;
+    std::size_t rollback_resource_count = 0;
+    std::string rollback_installed_at_utc;
+    std::string rollback_updated_at_utc;
 };
 
 struct InstalledAppRegistry {
@@ -183,11 +199,14 @@ inline InstalledAppEntry parse_registry_entry(std::string_view object_text) {
     json_find_string(object, "id", entry.id);
     json_find_string(object, "name", entry.name);
     json_find_string(object, "role", entry.role);
+    json_find_string(object, "status", entry.status);
     json_find_string(object, "versionName", entry.version_name);
     json_find_string(object, "entry", entry.entry);
     json_find_string(object, "script", entry.script_mode);
     json_find_string(object, "bundleFile", entry.bundle_file);
     json_find_string(object, "installedAtUtc", entry.installed_at_utc);
+    json_find_string(object, "updatedAtUtc", entry.updated_at_utc);
+    json_find_bool(object, "enabled", entry.enabled);
     json_find_int(object, "versionCode", entry.version_code);
     int parsed_size = 0;
     if (json_find_int(object, "bundleSize", parsed_size) && parsed_size > 0) {
@@ -203,6 +222,33 @@ inline InstalledAppEntry parse_registry_entry(std::string_view object_text) {
     }
     if (entry.version_name.empty()) {
         entry.version_name = "0.0.0";
+    }
+    if (entry.status.empty()) {
+        entry.status = "installed";
+    }
+    std::size_t rollback_open = 0;
+    std::size_t rollback_close = 0;
+    if (json_find_object_range(object, "rollback", rollback_open, rollback_close)) {
+        const std::string rollback(object.data() + rollback_open, rollback_close - rollback_open);
+        json_find_string(rollback, "name", entry.rollback_name);
+        json_find_string(rollback, "role", entry.rollback_role);
+        json_find_string(rollback, "versionName", entry.rollback_version_name);
+        json_find_string(rollback, "entry", entry.rollback_entry);
+        json_find_string(rollback, "script", entry.rollback_script_mode);
+        json_find_string(rollback, "bundleFile", entry.rollback_bundle_file);
+        json_find_string(rollback, "installedAtUtc", entry.rollback_installed_at_utc);
+        json_find_string(rollback, "updatedAtUtc", entry.rollback_updated_at_utc);
+        json_find_bool(rollback, "networkAllowed", entry.rollback_network_allowed);
+        json_find_int(rollback, "versionCode", entry.rollback_version_code);
+        int rollback_size = 0;
+        if (json_find_int(rollback, "bundleSize", rollback_size) && rollback_size > 0) {
+            entry.rollback_bundle_size = static_cast<std::size_t>(rollback_size);
+        }
+        int rollback_count = 0;
+        if (json_find_int(rollback, "resourceCount", rollback_count) && rollback_count > 0) {
+            entry.rollback_resource_count = static_cast<std::size_t>(rollback_count);
+        }
+        entry.has_rollback = !entry.rollback_bundle_file.empty();
     }
     return entry;
 }
@@ -252,6 +298,8 @@ inline void write_installed_app_registry(const std::filesystem::path& store, con
         output << "      \"id\": \"" << json_escape_text(app.id) << "\",\n";
         output << "      \"name\": \"" << json_escape_text(app.name) << "\",\n";
         output << "      \"role\": \"" << json_escape_text(app.role) << "\",\n";
+        output << "      \"status\": \"" << json_escape_text(app.status) << "\",\n";
+        output << "      \"enabled\": " << (app.enabled ? "true" : "false") << ",\n";
         output << "      \"versionName\": \"" << json_escape_text(app.version_name) << "\",\n";
         output << "      \"versionCode\": " << app.version_code << ",\n";
         output << "      \"entry\": \"" << json_escape_text(app.entry) << "\",\n";
@@ -260,7 +308,27 @@ inline void write_installed_app_registry(const std::filesystem::path& store, con
         output << "      \"bundleFile\": \"" << json_escape_text(app.bundle_file) << "\",\n";
         output << "      \"bundleSize\": " << app.bundle_size << ",\n";
         output << "      \"resourceCount\": " << app.resource_count << ",\n";
-        output << "      \"installedAtUtc\": \"" << json_escape_text(app.installed_at_utc) << "\"\n";
+        output << "      \"installedAtUtc\": \"" << json_escape_text(app.installed_at_utc) << "\",\n";
+        output << "      \"updatedAtUtc\": \"" << json_escape_text(app.updated_at_utc.empty() ? app.installed_at_utc : app.updated_at_utc) << "\"";
+        if (app.has_rollback && !app.rollback_bundle_file.empty()) {
+            output << ",\n";
+            output << "      \"rollback\": {\n";
+            output << "        \"name\": \"" << json_escape_text(app.rollback_name.empty() ? app.name : app.rollback_name) << "\",\n";
+            output << "        \"role\": \"" << json_escape_text(app.rollback_role.empty() ? "app" : app.rollback_role) << "\",\n";
+            output << "        \"versionName\": \"" << json_escape_text(app.rollback_version_name) << "\",\n";
+            output << "        \"versionCode\": " << app.rollback_version_code << ",\n";
+            output << "        \"entry\": \"" << json_escape_text(app.rollback_entry.empty() ? "/index.html" : app.rollback_entry) << "\",\n";
+            output << "        \"script\": \"" << json_escape_text(app.rollback_script_mode.empty() ? "classic" : app.rollback_script_mode) << "\",\n";
+            output << "        \"networkAllowed\": " << (app.rollback_network_allowed ? "true" : "false") << ",\n";
+            output << "        \"bundleFile\": \"" << json_escape_text(app.rollback_bundle_file) << "\",\n";
+            output << "        \"bundleSize\": " << app.rollback_bundle_size << ",\n";
+            output << "        \"resourceCount\": " << app.rollback_resource_count << ",\n";
+            output << "        \"installedAtUtc\": \"" << json_escape_text(app.rollback_installed_at_utc.empty() ? app.installed_at_utc : app.rollback_installed_at_utc) << "\",\n";
+            output << "        \"updatedAtUtc\": \"" << json_escape_text(app.rollback_updated_at_utc) << "\"\n";
+            output << "      }\n";
+        } else {
+            output << "\n";
+        }
         output << "    }" << (index + 1 < registry.apps.size() ? "," : "") << "\n";
     }
     output << "  ]\n";
@@ -291,6 +359,9 @@ inline std::filesystem::path find_installed_app_bundle_path(const std::filesyste
     if (entry == nullptr) {
         throw std::runtime_error("app is not installed: " + std::string(app_id));
     }
+    if (!entry->enabled || entry->status != "installed") {
+        throw std::runtime_error("app is not launchable: " + std::string(app_id));
+    }
     return installed_app_bundle_path(store, *entry);
 }
 
@@ -318,6 +389,8 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
     entry.id = package.manifest.id;
     entry.name = package.manifest.name;
     entry.role = package.manifest.role.empty() ? "app" : package.manifest.role;
+    entry.status = "installed";
+    entry.enabled = true;
     entry.version_name = package.manifest.version_name.empty() ? "0.0.0" : package.manifest.version_name;
     entry.version_code = package.manifest.version_code;
     entry.entry = package.manifest.entry;
@@ -327,26 +400,112 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
     entry.bundle_size = bundle_size;
     entry.resource_count = package.bundle_entries.size();
     entry.installed_at_utc = utc_now_compact();
+    entry.updated_at_utc = entry.installed_at_utc;
 
     auto existing = std::find_if(registry.apps.begin(), registry.apps.end(), [&](const InstalledAppEntry& app) {
         return app.id == entry.id;
     });
-    std::string old_bundle_file;
+    std::string obsolete_rollback_file;
     if (existing == registry.apps.end()) {
         registry.apps.push_back(entry);
     } else {
-        old_bundle_file = existing->bundle_file;
+        entry.installed_at_utc = existing->installed_at_utc.empty() ? entry.installed_at_utc : existing->installed_at_utc;
+        if (existing->has_rollback &&
+            existing->rollback_bundle_file != existing->bundle_file &&
+            existing->rollback_bundle_file != entry.bundle_file) {
+            obsolete_rollback_file = existing->rollback_bundle_file;
+        }
+        if (existing->bundle_file != entry.bundle_file) {
+            entry.has_rollback = true;
+            entry.rollback_name = existing->name;
+            entry.rollback_role = existing->role;
+            entry.rollback_version_name = existing->version_name;
+            entry.rollback_version_code = existing->version_code;
+            entry.rollback_entry = existing->entry;
+            entry.rollback_script_mode = existing->script_mode;
+            entry.rollback_network_allowed = existing->network_allowed;
+            entry.rollback_bundle_file = existing->bundle_file;
+            entry.rollback_bundle_size = existing->bundle_size;
+            entry.rollback_resource_count = existing->resource_count;
+            entry.rollback_installed_at_utc = existing->installed_at_utc;
+            entry.rollback_updated_at_utc = existing->updated_at_utc;
+        } else {
+            entry.has_rollback = existing->has_rollback;
+            entry.rollback_name = existing->rollback_name;
+            entry.rollback_role = existing->rollback_role;
+            entry.rollback_version_name = existing->rollback_version_name;
+            entry.rollback_version_code = existing->rollback_version_code;
+            entry.rollback_entry = existing->rollback_entry;
+            entry.rollback_script_mode = existing->rollback_script_mode;
+            entry.rollback_network_allowed = existing->rollback_network_allowed;
+            entry.rollback_bundle_file = existing->rollback_bundle_file;
+            entry.rollback_bundle_size = existing->rollback_bundle_size;
+            entry.rollback_resource_count = existing->rollback_resource_count;
+            entry.rollback_installed_at_utc = existing->rollback_installed_at_utc;
+            entry.rollback_updated_at_utc = existing->rollback_updated_at_utc;
+        }
         *existing = entry;
     }
     std::sort(registry.apps.begin(), registry.apps.end(), [](const InstalledAppEntry& left, const InstalledAppEntry& right) {
         return left.id < right.id;
     });
     write_installed_app_registry(absolute_store, registry);
-    if (!old_bundle_file.empty() && old_bundle_file != bundle_file) {
+    if (!obsolete_rollback_file.empty()) {
         std::error_code error;
-        std::filesystem::remove(registry_bundles_dir(absolute_store) / old_bundle_file, error);
+        std::filesystem::remove(registry_bundles_dir(absolute_store) / obsolete_rollback_file, error);
     }
     return entry;
+}
+
+inline InstalledAppEntry rollback_installed_app(const std::filesystem::path& store, std::string_view app_id) {
+    const std::filesystem::path absolute_store = std::filesystem::absolute(store);
+    InstalledAppRegistry registry = load_installed_app_registry(absolute_store);
+    auto existing = std::find_if(registry.apps.begin(), registry.apps.end(), [&](const InstalledAppEntry& app) {
+        return app.id == app_id;
+    });
+    if (existing == registry.apps.end()) {
+        throw std::runtime_error("app is not installed: " + std::string(app_id));
+    }
+    if (!existing->has_rollback || existing->rollback_bundle_file.empty()) {
+        throw std::runtime_error("app has no rollback bundle: " + std::string(app_id));
+    }
+    const std::filesystem::path rollback_path = registry_bundles_dir(absolute_store) / existing->rollback_bundle_file;
+    if (!std::filesystem::is_regular_file(rollback_path)) {
+        throw std::runtime_error("rollback bundle is missing: " + rollback_path.string());
+    }
+
+    InstalledAppEntry restored = *existing;
+    restored.name = existing->rollback_name.empty() ? existing->name : existing->rollback_name;
+    restored.role = existing->rollback_role.empty() ? "app" : existing->rollback_role;
+    restored.version_name = existing->rollback_version_name;
+    restored.version_code = existing->rollback_version_code;
+    restored.entry = existing->rollback_entry.empty() ? "/index.html" : existing->rollback_entry;
+    restored.script_mode = existing->rollback_script_mode.empty() ? "classic" : existing->rollback_script_mode;
+    restored.network_allowed = existing->rollback_network_allowed;
+    restored.bundle_file = existing->rollback_bundle_file;
+    restored.bundle_size = existing->rollback_bundle_size;
+    restored.resource_count = existing->rollback_resource_count;
+    restored.status = "installed";
+    restored.enabled = true;
+    restored.installed_at_utc = existing->rollback_installed_at_utc.empty() ?
+        existing->installed_at_utc : existing->rollback_installed_at_utc;
+    restored.updated_at_utc = utc_now_compact();
+    restored.has_rollback = true;
+    restored.rollback_name = existing->name;
+    restored.rollback_role = existing->role;
+    restored.rollback_version_name = existing->version_name;
+    restored.rollback_version_code = existing->version_code;
+    restored.rollback_entry = existing->entry;
+    restored.rollback_script_mode = existing->script_mode;
+    restored.rollback_network_allowed = existing->network_allowed;
+    restored.rollback_bundle_file = existing->bundle_file;
+    restored.rollback_bundle_size = existing->bundle_size;
+    restored.rollback_resource_count = existing->resource_count;
+    restored.rollback_installed_at_utc = existing->installed_at_utc;
+    restored.rollback_updated_at_utc = existing->updated_at_utc;
+    *existing = restored;
+    write_installed_app_registry(absolute_store, registry);
+    return restored;
 }
 
 inline bool delete_registry_app_data(const std::filesystem::path& store, std::string_view app_id) {
@@ -382,6 +541,9 @@ inline InstalledAppEntry remove_bundle_from_registry(const std::filesystem::path
     write_installed_app_registry(absolute_store, registry);
     std::error_code error;
     std::filesystem::remove(installed_app_bundle_path(absolute_store, removed), error);
+    if (removed.has_rollback && !removed.rollback_bundle_file.empty() && removed.rollback_bundle_file != removed.bundle_file) {
+        std::filesystem::remove(registry_bundles_dir(absolute_store) / removed.rollback_bundle_file, error);
+    }
     if (delete_data) {
         delete_registry_app_data(absolute_store, app_id);
     }
