@@ -4174,6 +4174,10 @@ private:
                 rebuild();
                 InvalidateRect(hwnd_, nullptr, FALSE);
             }
+        } else {
+            configure_system_shell("Unsupported launcher action: " + action + ".");
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return true;
     }

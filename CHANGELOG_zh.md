@@ -37,6 +37,7 @@ JellyFrame Engine 的重要变更记录在这里。
 - 更新宿主 optional-service 文档，明确当前安装/更新流程由宿主持有：worker 下载、宿主签名验证、
   install candidate 校验、transaction report、派生 launcher state，以及非固件操作必须具备 fallback。
 - 示例 Win32 launcher UI 增加 rollback 操作，并把动作区改成适合小屏的两列网格。
+- Win32 system-shell 遇到不支持的 launcher `data-action` 时会在状态行报告，不再静默吞掉。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

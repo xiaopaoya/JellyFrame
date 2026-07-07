@@ -49,6 +49,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   non-firmware fallback expectations.
 - Added a rollback action to the sample Win32 launcher UI and changed its action
   row to a compact two-column grid for small watch screens.
+- Win32 system-shell launcher actions now report unsupported `data-action`
+  values in the shell status instead of silently swallowing them.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow
