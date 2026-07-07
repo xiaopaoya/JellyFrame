@@ -57,6 +57,23 @@
       "description": "Persistent launch status. rollback-ready is derived from rollback metadata and is not a status value.",
       "enum": ["installed", "disabled", "failed"]
     },
+    "failureRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "failedAtUtc"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "failedAtUtc": {
+          "$ref": "#/$defs/utcStamp"
+        }
+      }
+    },
     "rollbackRecord": {
       "type": "object",
       "additionalProperties": false,
@@ -203,6 +220,9 @@
         },
         "updatedAtUtc": {
           "$ref": "#/$defs/utcStamp"
+        },
+        "failure": {
+          "$ref": "#/$defs/failureRecord"
         },
         "rollback": {
           "$ref": "#/$defs/rollbackRecord"

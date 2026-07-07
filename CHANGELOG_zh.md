@@ -26,6 +26,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - App 安装现在应用第一版 update policy：用更低 `versionCode` 覆盖已安装 app 默认会被拒绝；
   如请求 install transaction report，会输出 `downgrade-blocked`；必须显式使用
   `--allow-downgrade` 才允许。面向用户的常规回退仍应使用 rollback 命令。
+- Installed-app registry entry 现在有 V0 `failure` 记录。失败 app 会被禁用启动，launcher
+  可以显示稳定 reason，显式 enable 会清除 failure 记录。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

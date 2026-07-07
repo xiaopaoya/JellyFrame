@@ -2704,6 +2704,7 @@ std::string build_launcher_app_list_html(const std::filesystem::path& registry_s
              << html_escape_text(app.status) << (app.has_rollback ? " - rollback ready" : "") << " - "
              << (app.enabled ? "enabled" : "disabled") << " - "
              << app.bundle_size << " bytes</p>"
+             << (app.has_failure ? "<p class='meta'>failure: " + html_escape_text(app.failure_reason) + "</p>" : "")
              << "<div class='actions'>"
              << "<button class='primary' data-action='launch' data-app-id='" << html_escape_text(app.id) << "'"
              << ((!app.enabled || app.status != "installed") ? " disabled" : "") << ">Launch</button>"
@@ -4100,6 +4101,14 @@ private:
             InvalidateRect(hwnd_, nullptr, FALSE);
             set_title("launched " + app_id);
         } catch (const std::exception& error) {
+            const std::string message = error.what();
+            if (message.find("not launchable") == std::string::npos) {
+                try {
+                    jellyframe_example::mark_installed_app_failed(
+                        options_.registry_store_path, app_id, "launch-failed", message);
+                } catch (const std::exception&) {
+                }
+            }
             configure_system_shell(std::string("Launch failed: ") + error.what());
             rebuild();
             InvalidateRect(hwnd_, nullptr, FALSE);
@@ -4156,6 +4165,13 @@ private:
     void recover_active_app_after_failure(const std::exception& error) {
         std::cerr << "rebuild failed: " << error.what() << '\n';
         if (!options_.registry_store_path.empty() && !system_shell_mode_) {
+            if (!active_app_id_.empty()) {
+                try {
+                    jellyframe_example::mark_installed_app_failed(
+                        options_.registry_store_path, active_app_id_, "load-failed", error.what());
+                } catch (const std::exception&) {
+                }
+            }
             reset_image_services();
             const AppTeardownResult teardown = app_runtime_.terminate_current(AppTeardownReason::LoadFailure);
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
@@ -6357,6 +6373,13 @@ int main(int argc, char** argv) {
                 return 0;
             }
         } catch (const std::exception& error) {
+            if (!options.registry_store_path.empty() && !options.launch_app_id.empty()) {
+                try {
+                    jellyframe_example::mark_installed_app_failed(
+                        options.registry_store_path, options.launch_app_id, "load-failed", error.what());
+                } catch (const std::exception&) {
+                }
+            }
             std::cerr << "app load failed: " << error.what() << '\n';
             return 1;
         }

@@ -176,6 +176,31 @@ def main() -> int:
         require(app["rollback"]["versionCode"] == 2, "win32 registry rollback must preserve current version as rollback")
         require(app["rollback"]["entry"] == "/v2.html", "win32 registry rollback must preserve current entry as rollback")
 
+    with tempfile.TemporaryDirectory(prefix="jellyframe-failed-app-") as directory:
+        store = Path(directory) / "store"
+        bad_bundle = Path(directory) / "bad-entry.jfapp"
+        bad_capture = Path(directory) / "bad-entry.bmp"
+        write_jfapp(bad_bundle, "org.jellyframe.bad-entry", 1, "1.0.0", "/missing.html")
+        install_bad = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(bad_bundle)])
+        require(install_bad.returncode == 0, "win32 bad-entry install must pass before launch validation")
+        launch_bad = run_case(
+            exe,
+            [
+                "--registry-store",
+                str(store),
+                "--launch-app",
+                "org.jellyframe.bad-entry",
+                "--capture",
+                str(bad_capture),
+            ],
+        )
+        require(launch_bad.returncode != 0, "win32 bad-entry launch must fail")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        app = registry["apps"][0]
+        require(app["status"] == "failed", "win32 bad-entry launch must mark app failed")
+        require(app["enabled"] is False, "win32 bad-entry launch must disable failed app")
+        require(app["failure"]["reason"] == "load-failed", "win32 bad-entry launch must record failure reason")
+
     survival_result = run_case(exe, ["--system-survival-smoke", "12"])
     require(survival_result.returncode == 0, "system survival smoke must pass")
     require("system_survival_smoke cycles=12 recovered=12" in survival_result.stdout,

@@ -538,7 +538,29 @@ def set_app_enabled(store: Path, app_id: str, enabled: bool) -> dict:
         fail(f"app is not installed: {app_id}")
     entry["enabled"] = enabled
     entry["status"] = APP_STATUS_INSTALLED if enabled else APP_STATUS_DISABLED
+    if enabled:
+        entry.pop("failure", None)
     entry["updatedAtUtc"] = utc_now()
+    atomic_write_json(registry_path(store), sorted_registry(registry))
+    return entry
+
+
+def mark_app_failed(store: Path, app_id: str, reason: str, message: str = "") -> dict:
+    store = store.resolve()
+    registry = load_registry(store)
+    apps = registry["apps"]
+    entry = next((app for app in apps if app.get("id") == app_id), None)
+    if entry is None:
+        fail(f"app is not installed: {app_id}")
+    now = utc_now()
+    entry["enabled"] = False
+    entry["status"] = APP_STATUS_FAILED
+    entry["updatedAtUtc"] = now
+    entry["failure"] = {
+        "reason": reason,
+        "message": message,
+        "failedAtUtc": now,
+    }
     atomic_write_json(registry_path(store), sorted_registry(registry))
     return entry
 
@@ -675,6 +697,15 @@ def cmd_disable(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mark_failed(args: argparse.Namespace) -> int:
+    entry = mark_app_failed(args.store, args.app_id, args.reason, args.message)
+    if args.json:
+        print(json.dumps(entry, ensure_ascii=False, indent=2))
+    else:
+        print(f"failed {entry.get('id')} {entry.get('failure', {}).get('reason', '')}")
+    return 0
+
+
 def cmd_path(args: argparse.Namespace) -> int:
     print(app_bundle_path(args.store, args.app_id))
     return 0
@@ -735,6 +766,14 @@ def build_parser() -> argparse.ArgumentParser:
     disable.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
     disable.add_argument("--json", action="store_true", help="Print updated entry as JSON.")
     disable.set_defaults(func=cmd_disable)
+
+    mark_failed = subparsers.add_parser("mark-failed", help="Mark an installed app as failed and not launchable.")
+    add_store_arg(mark_failed)
+    mark_failed.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    mark_failed.add_argument("--reason", required=True, help="Stable failure reason.")
+    mark_failed.add_argument("--message", default="", help="Human-readable failure detail.")
+    mark_failed.add_argument("--json", action="store_true", help="Print updated entry as JSON.")
+    mark_failed.set_defaults(func=cmd_mark_failed)
 
     path = subparsers.add_parser("path", help="Print the installed bundle path for an app.")
     add_store_arg(path)

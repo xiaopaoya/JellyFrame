@@ -867,7 +867,8 @@ target and records product-state fields such as `status`, `enabled` and
 documents this desktop schema and treats `rollback-ready` as a derived state.
 Rolling back swaps the current and previous bundle metadata without touching
 app-private data. Disabling an app keeps bundle and data but rejects launch until
-it is enabled again. Desktop app-private data lives under
+it is enabled again. A failed launch/load can mark the entry `failed` with a
+`failure` reason; explicit enable clears that failure record. Desktop app-private data lives under
 `data/<sanitized-app-id>` in the registry store. Removing an app deletes that
 data by default; `--keep-data` retains it, and `delete-data` /
 `--delete-app-data` erases data without removing the installed bundle.

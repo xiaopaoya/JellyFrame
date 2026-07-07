@@ -291,6 +291,35 @@ class AppRegistryTests(unittest.TestCase):
             enabled = app_registry.set_app_enabled(store, "org.example.weather", True)
             self.assertTrue(enabled["enabled"])
             self.assertEqual(enabled["status"], app_registry.APP_STATUS_INSTALLED)
+            self.assertNotIn("failure", enabled)
+
+    def test_mark_failed_records_reason_and_enable_clears_failure(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory)
+            bundle = store / "weather-v1.jfapp"
+            write_jfapp(bundle, version_code=1, version_name="1.0.0")
+            app_registry.install_bundle(store, bundle, app_registry.DEFAULT_MAX_APPS, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+
+            failed = app_registry.mark_app_failed(store, "org.example.weather", "load-failed", "entry missing")
+            self.assertFalse(failed["enabled"])
+            self.assertEqual(failed["status"], app_registry.APP_STATUS_FAILED)
+            self.assertEqual(failed["failure"]["reason"], "load-failed")
+            self.assertEqual(failed["failure"]["message"], "entry missing")
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = app_registry.main([
+                    "enable",
+                    "--store",
+                    str(store),
+                    "--id",
+                    "org.example.weather",
+                ])
+
+            self.assertEqual(result, 0)
+            enabled = app_registry.find_app(store, "org.example.weather")
+            self.assertTrue(enabled["enabled"])
+            self.assertEqual(enabled["status"], app_registry.APP_STATUS_INSTALLED)
+            self.assertNotIn("failure", enabled)
 
     def test_rollback_swaps_current_and_previous_bundle(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:

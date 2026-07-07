@@ -31,6 +31,10 @@ struct InstalledAppEntry {
     std::size_t resource_count = 0;
     std::string installed_at_utc;
     std::string updated_at_utc;
+    bool has_failure = false;
+    std::string failure_reason;
+    std::string failure_message;
+    std::string failed_at_utc;
     bool has_rollback = false;
     std::string rollback_name;
     std::string rollback_role = "app";
@@ -226,6 +230,15 @@ inline InstalledAppEntry parse_registry_entry(std::string_view object_text) {
     if (entry.status.empty()) {
         entry.status = "installed";
     }
+    std::size_t failure_open = 0;
+    std::size_t failure_close = 0;
+    if (json_find_object_range(object, "failure", failure_open, failure_close)) {
+        const std::string failure(object.data() + failure_open, failure_close - failure_open);
+        json_find_string(failure, "reason", entry.failure_reason);
+        json_find_string(failure, "message", entry.failure_message);
+        json_find_string(failure, "failedAtUtc", entry.failed_at_utc);
+        entry.has_failure = !entry.failure_reason.empty();
+    }
     std::size_t rollback_open = 0;
     std::size_t rollback_close = 0;
     if (json_find_object_range(object, "rollback", rollback_open, rollback_close)) {
@@ -310,6 +323,14 @@ inline void write_installed_app_registry(const std::filesystem::path& store, con
         output << "      \"resourceCount\": " << app.resource_count << ",\n";
         output << "      \"installedAtUtc\": \"" << json_escape_text(app.installed_at_utc) << "\",\n";
         output << "      \"updatedAtUtc\": \"" << json_escape_text(app.updated_at_utc.empty() ? app.installed_at_utc : app.updated_at_utc) << "\"";
+        if (app.has_failure && !app.failure_reason.empty()) {
+            output << ",\n";
+            output << "      \"failure\": {\n";
+            output << "        \"reason\": \"" << json_escape_text(app.failure_reason) << "\",\n";
+            output << "        \"message\": \"" << json_escape_text(app.failure_message) << "\",\n";
+            output << "        \"failedAtUtc\": \"" << json_escape_text(app.failed_at_utc) << "\"\n";
+            output << "      }";
+        }
         if (app.has_rollback && !app.rollback_bundle_file.empty()) {
             output << ",\n";
             output << "      \"rollback\": {\n";
@@ -419,6 +440,10 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
         entry.installed_at_utc = existing->installed_at_utc.empty() ? entry.installed_at_utc : existing->installed_at_utc;
         entry.enabled = existing->enabled;
         entry.status = existing->status;
+        entry.has_failure = existing->has_failure;
+        entry.failure_reason = existing->failure_reason;
+        entry.failure_message = existing->failure_message;
+        entry.failed_at_utc = existing->failed_at_utc;
         if (existing->has_rollback &&
             existing->rollback_bundle_file != existing->bundle_file &&
             existing->rollback_bundle_file != entry.bundle_file) {
@@ -531,6 +556,37 @@ inline InstalledAppEntry set_installed_app_enabled(const std::filesystem::path& 
     existing->enabled = enabled;
     existing->status = enabled ? "installed" : "disabled";
     existing->updated_at_utc = utc_now_compact();
+    if (enabled) {
+        existing->has_failure = false;
+        existing->failure_reason.clear();
+        existing->failure_message.clear();
+        existing->failed_at_utc.clear();
+    }
+    const InstalledAppEntry updated = *existing;
+    write_installed_app_registry(absolute_store, registry);
+    return updated;
+}
+
+inline InstalledAppEntry mark_installed_app_failed(const std::filesystem::path& store,
+                                                   std::string_view app_id,
+                                                   std::string_view reason,
+                                                   std::string_view message) {
+    const std::filesystem::path absolute_store = std::filesystem::absolute(store);
+    InstalledAppRegistry registry = load_installed_app_registry(absolute_store);
+    auto existing = std::find_if(registry.apps.begin(), registry.apps.end(), [&](const InstalledAppEntry& app) {
+        return app.id == app_id;
+    });
+    if (existing == registry.apps.end()) {
+        throw std::runtime_error("app is not installed: " + std::string(app_id));
+    }
+    const std::string now = utc_now_compact();
+    existing->enabled = false;
+    existing->status = "failed";
+    existing->updated_at_utc = now;
+    existing->has_failure = true;
+    existing->failure_reason = std::string(reason);
+    existing->failure_message = std::string(message);
+    existing->failed_at_utc = now;
     const InstalledAppEntry updated = *existing;
     write_installed_app_registry(absolute_store, registry);
     return updated;

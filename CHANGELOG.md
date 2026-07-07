@@ -32,6 +32,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   when an install transaction report is requested, and requires explicit
   `--allow-downgrade`. Normal user-facing rollback should still use the
   rollback command.
+- Installed-app registry entries now have a V0 `failure` record for failed apps.
+  Failed apps are disabled for launch, the launcher can display a stable reason,
+  and explicit enable clears the failure record.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

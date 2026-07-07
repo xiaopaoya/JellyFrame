@@ -13,4 +13,4 @@
 `enabled`、更新时间和可选 rollback 元数据。Win32 壳可通过 `--install-bundle`、
 `--remove-app`、`--delete-app-data`、`--rollback-app`、`--enable-app` 和
 `--disable-app` 验证安装、删除、清数据、回滚和启用状态切换。这个示例只负责渲染这些记录并切换
-enabled 状态；真实产品仍需自己实现下载、签名校验、权限提示和持久启动器 UX。
+enabled 状态，也会显示 failure reason；真实产品仍需自己实现下载、签名校验、权限提示和持久启动器 UX。
