@@ -18,6 +18,9 @@ JellyFrame Engine 的重要变更记录在这里。
   install --report` 会写入独立报告；`jellyframe_cli.py install --root --report`
   会把 `installTransaction` 合并进 package/preflight report，让 app 作者在同一份
   文件里看到 action、完整性、rollback 可用性和数据策略。
+- 新增 `tools/schemas/jellyframe.installed_apps.registry.schema.json`，用于桌面
+  installed-app registry mock。持久 `status` 只保留 `installed`、`disabled` 和
+  `failed`；`rollback-ready` 仍是由 rollback 元数据派生出的展示状态。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

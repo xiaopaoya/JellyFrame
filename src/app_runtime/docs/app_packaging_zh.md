@@ -715,7 +715,8 @@ registry mock 会先校验 `.jfapp` header、section range、CRC32 和 manifest 
 复制到 staging，最后用原子 JSON 写入提交 `registry.json`。Win32 system-shell 模式使用同一份
 registry 格式完成 app discovery、launch、非活动 app deletion、显式数据删除和 V0 回滚验收。
 更新 app 时会保留上一版 bundle 作为 rollback 目标，并记录 `status`、`enabled`、
-`updatedAtUtc` 等产品状态字段；回滚会交换当前版本和上一版 bundle 元数据，不触碰 app 私有数据。
+`updatedAtUtc` 等产品状态字段；`tools/schemas/jellyframe.installed_apps.registry.schema.json`
+记录这个桌面 schema，并把 `rollback-ready` 视为派生状态。回滚会交换当前版本和上一版 bundle 元数据，不触碰 app 私有数据。
 桌面 registry store 中的 app 私有数据位于 `data/<sanitized-app-id>`。删除 app 默认删除这份数据；
 `--keep-data` 会保留数据，`delete-data` / `--delete-app-data` 可在不移除已安装 bundle 的情况下
 单独删除数据。

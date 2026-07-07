@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jellyframe.dev/schemas/jellyframe.installed_apps.registry.schema.json",
+  "title": "JellyFrame Installed App Registry",
+  "description": "Desktop/system-shell registry mock for installed .jfapp bundles. This is a host contract fixture, not a complete app store schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "apps"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "jellyframe.installed_apps.registry"
+    },
+    "formatVersion": {
+      "const": 0
+    },
+    "apps": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/installedApp"
+      }
+    }
+  },
+  "$defs": {
+    "appId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+    },
+    "appPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/([^:\\\\]*$)"
+    },
+    "hex8": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "utcStamp": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "enum": ["app", "launcher", "watchface", "settings"]
+    },
+    "scriptMode": {
+      "enum": ["none", "classic"]
+    },
+    "status": {
+      "description": "Persistent launch status. rollback-ready is derived from rollback metadata and is not a status value.",
+      "enum": ["installed", "disabled", "failed"]
+    },
+    "rollbackRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["versionName", "versionCode", "bundleFile"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/appId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "versionName": {
+          "type": "string"
+        },
+        "versionCode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry": {
+          "$ref": "#/$defs/appPath"
+        },
+        "minJellyFrame": {
+          "type": "string"
+        },
+        "script": {
+          "$ref": "#/$defs/scriptMode"
+        },
+        "networkAllowed": {
+          "type": "boolean"
+        },
+        "bundleFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundleSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bundleCrc32": {
+          "$ref": "#/$defs/hex8"
+        },
+        "bundleSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "resourceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "payloadBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "installedAtUtc": {
+          "$ref": "#/$defs/utcStamp"
+        },
+        "updatedAtUtc": {
+          "$ref": "#/$defs/utcStamp"
+        }
+      }
+    },
+    "installedApp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "role",
+        "status",
+        "enabled",
+        "versionName",
+        "versionCode",
+        "entry",
+        "script",
+        "networkAllowed",
+        "bundleFile",
+        "bundleSize",
+        "resourceCount",
+        "installedAtUtc",
+        "updatedAtUtc"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/appId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "versionName": {
+          "type": "string"
+        },
+        "versionCode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry": {
+          "$ref": "#/$defs/appPath"
+        },
+        "minJellyFrame": {
+          "type": "string"
+        },
+        "script": {
+          "$ref": "#/$defs/scriptMode"
+        },
+        "networkAllowed": {
+          "type": "boolean"
+        },
+        "bundleFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundleSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bundleCrc32": {
+          "$ref": "#/$defs/hex8"
+        },
+        "bundleSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "resourceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "payloadBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "installedAtUtc": {
+          "$ref": "#/$defs/utcStamp"
+        },
+        "updatedAtUtc": {
+          "$ref": "#/$defs/utcStamp"
+        },
+        "rollback": {
+          "$ref": "#/$defs/rollbackRecord"
+        }
+      }
+    }
+  }
+}

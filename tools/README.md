@@ -1,6 +1,6 @@
 # Tools
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.6.0-dev
 
 Desktop developer tools for packaging, validation and editor integration.
 
@@ -11,6 +11,8 @@ Desktop developer tools for packaging, validation and editor integration.
   release performance baseline.
 - `native/`: C++ inspection tools, pseudo browser, Win32 shell and font-pack
   generator.
+- `schemas/`: JSON Schemas for app manifests and desktop/system-shell tool
+  inputs such as the installed-app registry mock.
 - `vscode-jellyframe/`: VS Code extension helper.
 
 Tools may use Python, Node.js or desktop file I/O. The embedded runtime must not

@@ -20,6 +20,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   --root --report` merges `installTransaction` into the package/preflight report
   so app authors can see action, integrity, rollback availability and data
   policy in one file.
+- Added `tools/schemas/jellyframe.installed_apps.registry.schema.json` for the
+  desktop installed-app registry mock. The schema keeps persistent `status`
+  values to `installed`, `disabled` and `failed`; `rollback-ready` remains a
+  derived display state from rollback metadata.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

@@ -846,8 +846,10 @@ with an atomic write. The Win32 system-shell mode uses this same registry format
 for app discovery, launch, inactive-app deletion, explicit data deletion and V0
 rollback validation. Updating an app keeps the previous bundle as the rollback
 target and records product-state fields such as `status`, `enabled` and
-`updatedAtUtc`; rolling back swaps the current and previous bundle metadata
-without touching app-private data. Desktop app-private data lives under
+`updatedAtUtc`; `tools/schemas/jellyframe.installed_apps.registry.schema.json`
+documents this desktop schema and treats `rollback-ready` as a derived state.
+Rolling back swaps the current and previous bundle metadata without touching
+app-private data. Desktop app-private data lives under
 `data/<sanitized-app-id>` in the registry store. Removing an app deletes that
 data by default; `--keep-data` retains it, and `delete-data` /
 `--delete-app-data` erases data without removing the installed bundle.
