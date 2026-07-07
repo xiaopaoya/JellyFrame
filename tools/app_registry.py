@@ -419,6 +419,20 @@ def rollback_app(store: Path, app_id: str) -> dict:
     return restored
 
 
+def set_app_enabled(store: Path, app_id: str, enabled: bool) -> dict:
+    store = store.resolve()
+    registry = load_registry(store)
+    apps = registry["apps"]
+    entry = next((app for app in apps if app.get("id") == app_id), None)
+    if entry is None:
+        fail(f"app is not installed: {app_id}")
+    entry["enabled"] = enabled
+    entry["status"] = APP_STATUS_INSTALLED if enabled else APP_STATUS_DISABLED
+    entry["updatedAtUtc"] = utc_now()
+    atomic_write_json(registry_path(store), sorted_registry(registry))
+    return entry
+
+
 def find_app(store: Path, app_id: str) -> dict:
     registry = load_registry(store.resolve())
     for app in registry["apps"]:
@@ -502,6 +516,24 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_enable(args: argparse.Namespace) -> int:
+    entry = set_app_enabled(args.store, args.app_id, True)
+    if args.json:
+        print(json.dumps(entry, ensure_ascii=False, indent=2))
+    else:
+        print(f"enabled {entry.get('id')}")
+    return 0
+
+
+def cmd_disable(args: argparse.Namespace) -> int:
+    entry = set_app_enabled(args.store, args.app_id, False)
+    if args.json:
+        print(json.dumps(entry, ensure_ascii=False, indent=2))
+    else:
+        print(f"disabled {entry.get('id')}")
+    return 0
+
+
 def cmd_path(args: argparse.Namespace) -> int:
     print(app_bundle_path(args.store, args.app_id))
     return 0
@@ -548,6 +580,18 @@ def build_parser() -> argparse.ArgumentParser:
     rollback.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
     rollback.add_argument("--json", action="store_true", help="Print restored entry as JSON.")
     rollback.set_defaults(func=cmd_rollback)
+
+    enable = subparsers.add_parser("enable", help="Enable an installed app for launch.")
+    add_store_arg(enable)
+    enable.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    enable.add_argument("--json", action="store_true", help="Print updated entry as JSON.")
+    enable.set_defaults(func=cmd_enable)
+
+    disable = subparsers.add_parser("disable", help="Disable an installed app without deleting data or bundles.")
+    add_store_arg(disable)
+    disable.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    disable.add_argument("--json", action="store_true", help="Print updated entry as JSON.")
+    disable.set_defaults(func=cmd_disable)
 
     path = subparsers.add_parser("path", help="Print the installed bundle path for an app.")
     add_store_arg(path)

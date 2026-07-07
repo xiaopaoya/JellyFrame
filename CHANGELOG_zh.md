@@ -21,6 +21,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 新增 `tools/schemas/jellyframe.installed_apps.registry.schema.json`，用于桌面
   installed-app registry mock。持久 `status` 只保留 `installed`、`disabled` 和
   `failed`；`rollback-ready` 仍是由 rollback 元数据派生出的展示状态。
+- 桌面 registry 与 Win32 壳新增 V0 enable/disable app-manager 命令。禁用 app 会保留
+  bundle 和数据，但 launch lookup 会拒绝它，直到重新启用。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

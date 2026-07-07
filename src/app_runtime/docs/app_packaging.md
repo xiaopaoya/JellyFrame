@@ -835,6 +835,14 @@ python tools/jellyframe_cli.py registry rollback `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
+python tools/jellyframe_cli.py registry disable `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
+python tools/jellyframe_cli.py registry enable `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
 .\build\Release\jellyframe_win32_browser.exe `
   --registry-store build/installed_apps `
   --delete-app-data org.jellyframe.examples.weather
@@ -849,7 +857,8 @@ target and records product-state fields such as `status`, `enabled` and
 `updatedAtUtc`; `tools/schemas/jellyframe.installed_apps.registry.schema.json`
 documents this desktop schema and treats `rollback-ready` as a derived state.
 Rolling back swaps the current and previous bundle metadata without touching
-app-private data. Desktop app-private data lives under
+app-private data. Disabling an app keeps bundle and data but rejects launch until
+it is enabled again. Desktop app-private data lives under
 `data/<sanitized-app-id>` in the registry store. Removing an app deletes that
 data by default; `--keep-data` retains it, and `delete-data` /
 `--delete-app-data` erases data without removing the installed bundle.

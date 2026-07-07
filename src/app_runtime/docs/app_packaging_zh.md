@@ -706,6 +706,14 @@ python tools/jellyframe_cli.py registry rollback `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
+python tools/jellyframe_cli.py registry disable `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
+python tools/jellyframe_cli.py registry enable `
+  --store build/installed_apps `
+  --id org.jellyframe.examples.weather
+
 .\build\Release\jellyframe_win32_browser.exe `
   --registry-store build/installed_apps `
   --delete-app-data org.jellyframe.examples.weather
@@ -717,6 +725,7 @@ registry 格式完成 app discovery、launch、非活动 app deletion、显式�
 更新 app 时会保留上一版 bundle 作为 rollback 目标，并记录 `status`、`enabled`、
 `updatedAtUtc` 等产品状态字段；`tools/schemas/jellyframe.installed_apps.registry.schema.json`
 记录这个桌面 schema，并把 `rollback-ready` 视为派生状态。回滚会交换当前版本和上一版 bundle 元数据，不触碰 app 私有数据。
+禁用 app 会保留 bundle 和数据，但拒绝启动，直到重新启用。
 桌面 registry store 中的 app 私有数据位于 `data/<sanitized-app-id>`。删除 app 默认删除这份数据；
 `--keep-data` 会保留数据，`delete-data` / `--delete-app-data` 可在不移除已安装 bundle 的情况下
 单独删除数据。

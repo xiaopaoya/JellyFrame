@@ -24,6 +24,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   desktop installed-app registry mock. The schema keeps persistent `status`
   values to `installed`, `disabled` and `failed`; `rollback-ready` remains a
   derived display state from rollback metadata.
+- The desktop registry and Win32 shell now expose V0 enable/disable app-manager
+  commands. Disabled apps keep their bundle and data but are rejected by launch
+  lookup until re-enabled.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

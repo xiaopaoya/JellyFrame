@@ -226,6 +226,21 @@ class AppRegistryTests(unittest.TestCase):
             self.assertEqual(data["action"], "install")
             self.assertEqual(data["app"]["id"], "org.example.weather")
 
+    def test_disable_and_enable_app_updates_launch_state(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory)
+            bundle = store / "weather-v1.jfapp"
+            write_jfapp(bundle, version_code=1, version_name="1.0.0")
+            app_registry.install_bundle(store, bundle, app_registry.DEFAULT_MAX_APPS, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+
+            disabled = app_registry.set_app_enabled(store, "org.example.weather", False)
+            self.assertFalse(disabled["enabled"])
+            self.assertEqual(disabled["status"], app_registry.APP_STATUS_DISABLED)
+
+            enabled = app_registry.set_app_enabled(store, "org.example.weather", True)
+            self.assertTrue(enabled["enabled"])
+            self.assertEqual(enabled["status"], app_registry.APP_STATUS_INSTALLED)
+
     def test_rollback_swaps_current_and_previous_bundle(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
             store = Path(directory)

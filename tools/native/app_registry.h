@@ -508,6 +508,25 @@ inline InstalledAppEntry rollback_installed_app(const std::filesystem::path& sto
     return restored;
 }
 
+inline InstalledAppEntry set_installed_app_enabled(const std::filesystem::path& store,
+                                                   std::string_view app_id,
+                                                   bool enabled) {
+    const std::filesystem::path absolute_store = std::filesystem::absolute(store);
+    InstalledAppRegistry registry = load_installed_app_registry(absolute_store);
+    auto existing = std::find_if(registry.apps.begin(), registry.apps.end(), [&](const InstalledAppEntry& app) {
+        return app.id == app_id;
+    });
+    if (existing == registry.apps.end()) {
+        throw std::runtime_error("app is not installed: " + std::string(app_id));
+    }
+    existing->enabled = enabled;
+    existing->status = enabled ? "installed" : "disabled";
+    existing->updated_at_utc = utc_now_compact();
+    const InstalledAppEntry updated = *existing;
+    write_installed_app_registry(absolute_store, registry);
+    return updated;
+}
+
 inline bool delete_registry_app_data(const std::filesystem::path& store, std::string_view app_id) {
     const std::filesystem::path path = registry_app_data_dir(std::filesystem::absolute(store), app_id);
     std::error_code exists_error;
