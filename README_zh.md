@@ -69,6 +69,9 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+Release 测试二进制会显式保持 `assert(...)` 生效，因此这条命令用于捕获真实正确性问题，
+不只是进程崩溃。CI 还会额外运行一轮 Debug CTest。
+
 第一次拉取仓库后，建议再跑一次面向试用者的样例自检。它会验证所有完整 app package，
 并在三类常见可穿戴 target 上输出响应式和字体诊断报告：
 

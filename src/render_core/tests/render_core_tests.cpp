@@ -1,5 +1,9 @@
 #include <iostream>
 
+#if defined(JELLYFRAME_TEST_ASSERTS_ENABLED) && defined(NDEBUG)
+#error "JellyFrame test targets must run with assert() enabled."
+#endif
+
 int tokenizer_tests_main();
 int arena_tests_main();
 int animation_timeline_tests_main();

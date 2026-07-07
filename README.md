@@ -82,6 +82,10 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+Release test binaries explicitly keep `assert(...)` enabled, so this command is
+intended to catch correctness failures rather than only process crashes.
+CI also runs a separate Debug CTest pass.
+
 After cloning the repository for the first time, run the trial-oriented sample
 self-check. It validates every complete app package and reports responsive/font
 diagnostics across common wearable targets. The command leaves detailed JSON

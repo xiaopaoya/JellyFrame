@@ -77,8 +77,7 @@ AppLoadTelemetry analyze_app_load(const AppLoadTelemetryInput& input) {
     const bool saturated =
         input.present_pending ||
         service_near_full ||
-        telemetry.has_callback_backlog ||
-        (input.dirty_region != nullptr && telemetry.dirty_area_percent >= 90);
+        telemetry.has_callback_backlog;
 
     if (!input.frame_policy.presents_frames &&
         !has_frame_work &&

@@ -158,6 +158,16 @@ function(add_jellyframe_tool target)
     target_link_libraries(${target} PRIVATE jellyframe_render_core)
 endfunction()
 
+function(jellyframe_enable_test_asserts target)
+    target_compile_definitions(${target} PRIVATE JELLYFRAME_TEST_ASSERTS_ENABLED=1)
+    target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JELLYFRAME_TEST_CONFIG_DEBUG=1>)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(${target} PRIVATE -UNDEBUG)
+    endif()
+endfunction()
+
 if(JELLYFRAME_BUILD_EXAMPLES)
     add_jellyframe_tool(jellyframe_demo tools/native/basic_demo.cpp)
     add_jellyframe_tool(jellyframe_dom_dump tools/native/dom_dump.cpp)
@@ -233,6 +243,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/render_core_tests.cpp
         ${JELLYFRAME_RENDER_CORE_TEST_SOURCES}
     )
+    jellyframe_enable_test_asserts(jellyframe_render_core_tests)
     add_test(NAME jellyframe_render_core_tests COMMAND jellyframe_render_core_tests)
 
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
@@ -262,6 +273,7 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_APP_RUNTIME_TEST_SOURCES}
     )
     target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_app_runtime)
+    jellyframe_enable_test_asserts(jellyframe_app_runtime_tests)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
 
     if(Python3_Interpreter_FOUND)
@@ -590,6 +602,7 @@ if(JELLYFRAME_BUILD_TESTS)
             ${JELLYFRAME_SCRIPT_TEST_SOURCES}
         )
         target_link_libraries(jellyframe_script_tests PRIVATE jellyframe_script)
+        jellyframe_enable_test_asserts(jellyframe_script_tests)
         add_test(NAME jellyframe_script_tests COMMAND jellyframe_script_tests)
     endif()
 endif()

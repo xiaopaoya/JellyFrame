@@ -131,14 +131,17 @@ std::size_t HostServiceCompletionQueue::discard_app_instance(std::uint32_t app_i
     const std::size_t old_size = size_;
     std::size_t kept = 0;
     for (std::size_t i = 0; i < old_size; ++i) {
-        const HostServiceCompletion& completion = completions_[(head_ + i) % capacity_];
+        const HostServiceCompletion completion = completions_[(head_ + i) % capacity_];
         if (completion.app_instance_id == app_instance_id) {
             continue;
         }
-        completions_[kept++] = completion;
+        completions_[(head_ + kept) % capacity_] = completion;
+        ++kept;
     }
-    head_ = 0;
     size_ = kept;
+    if (size_ == 0) {
+        head_ = 0;
+    }
     return old_size - kept;
 }
 

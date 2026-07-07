@@ -254,8 +254,8 @@ void arc_stroke_draws_ring_pixels() {
     Canvas2DRegistry registry(Canvas2DPolicy{
         true,
         1,
-        64,
-        64,
+        256,
+        256,
         16,
         16,
     });
@@ -276,8 +276,8 @@ void fill_path_fills_closed_polygon() {
     Canvas2DRegistry registry(Canvas2DPolicy{
         true,
         1,
-        64,
-        64,
+        256,
+        256,
         16,
         16,
     });
@@ -334,8 +334,8 @@ void text_metrics_and_fill_text_use_bound_backend() {
     Canvas2DRegistry registry(Canvas2DPolicy{
         true,
         1,
-        64,
-        64,
+        768,
+        768,
         32,
         24,
     });
@@ -347,7 +347,7 @@ void text_metrics_and_fill_text_use_bound_backend() {
     const Canvas2DTextMetrics metrics = registry.measure_text(*canvas, "Hi");
     assert(metrics.width == 16.0);
     assert(registry.set_fill_style(*canvas, "#abcdef"));
-    assert(registry.fill_text(*canvas, "Hi", 3.0, 18.0));
+    assert(registry.fill_text(*canvas, "Hi", 3.0, 22.0));
     const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
     assert(surface != nullptr);
     bool found_marker = false;

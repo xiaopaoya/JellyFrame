@@ -89,11 +89,13 @@ void storage_mock_can_drop_pending_by_instance_or_app() {
     assert(storage.submit_set(host, "theme", "dark").accepted());
     assert(storage.submit_set(host, "mode", "quiet").accepted());
     assert(storage.drop_pending_app_instance(first.id) == 2);
+    assert(host.requests().cancel_app_instance(first.id) == 2);
     assert(!storage.complete_next(host));
 
-    host.launch("org.example.settings", AppRole::App);
+    const AppInstance second = host.launch("org.example.settings", AppRole::App);
     assert(storage.submit_set(host, "theme", "light").accepted());
     assert(storage.drop_pending_app("org.example.settings") == 1);
+    assert(host.requests().cancel_app_instance(second.id) == 1);
     assert(!storage.complete_next(host));
 }
 

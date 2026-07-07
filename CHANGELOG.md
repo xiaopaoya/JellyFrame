@@ -125,6 +125,17 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   styles can now receive CanvasGradient objects; pure solid-color paths keep the
   existing fast fill route.
 
+### Fixed
+
+- Release CTest is now a meaningful correctness gate: CMake explicitly keeps
+  `assert(...)` enabled for C++ test binaries and the test entry points fail to
+  compile if `NDEBUG` leaks back in. CI also runs a Debug CTest pass.
+- Fixed previously hidden test/setup issues in Canvas 2D text painting,
+  app-service worker budgets and storage lifecycle request cleanup.
+- Fixed wraparound discard compaction in host completion and system-event ring
+  queues, which could overwrite not-yet-read entries while removing stale app
+  records.
+
 ### Changed
 
 - Low-depth embedded framebuffer conversion is now dispatched per rectangle and

@@ -355,15 +355,17 @@ void worker_group_pump_processes_multiple_services_with_fixed_budgets() {
 void worker_group_pump_stops_before_next_worker_when_completion_queue_is_full() {
     AppRuntimeHost host = make_host(4, 1);
     host.launch("org.example.group-full", AppRole::App);
-    assert(host.push_completion(HostServiceCompletion{
-        99,
-        HostServiceJobKind::Other,
-        HostServiceStatus::Completed,
-        host.current_app_instance_id(),
-        0,
-        0,
-        0,
-    }));
+    for (std::size_t index = 0; index < host.completions().capacity(); ++index) {
+        assert(host.push_completion(HostServiceCompletion{
+            static_cast<std::uint32_t>(99 + index),
+            HostServiceJobKind::Other,
+            HostServiceStatus::Completed,
+            host.current_app_instance_id(),
+            0,
+            0,
+            0,
+        }));
+    }
     assert(host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
     assert(host.submit_current(HostServiceJobKind::StorageKv).accepted);
 
@@ -487,7 +489,7 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
     AppPrivateKvStorageMock storage(AppPrivateKvPolicy{true, 16, 32, kIterations + 2, kIterations * 48});
     ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, kIterations});
     assert(images.add_fixture(ImageDecodeFixture{"/img/icon.raw", 8, 8, 8, HostPixelFormat::Rgb565, {}}));
-    AudioCommandMock audio(AudioPlaybackPolicy{true, 128, 4});
+    AudioCommandMock audio(AudioPlaybackPolicy{true, 128, kIterations});
     assert(audio.add_source(AudioSourceFixture{"/audio/tone.wav", 1000}));
     AppSensorSampleMock sensors(AppSensorSamplePolicy{true, false, false, false, kIterations});
     assert(sensors.add_fixture(AppSensorSampleFixture{AppSensorKind::Accelerometer, 1000, 0.1f, 0.2f, 0.3f}));

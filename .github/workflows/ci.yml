@@ -48,6 +48,23 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
 
+      - name: Configure Debug
+        shell: pwsh
+        run: >
+          cmake -S . -B build-debug
+          -DJELLYFRAME_BUILD_EXAMPLES=ON
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_BUILD_BENCHMARKS=ON
+          -DJELLYFRAME_BUILD_SCRIPTING=OFF
+
+      - name: Build Debug
+        shell: pwsh
+        run: cmake --build build-debug --config Debug --parallel
+
+      - name: Run Debug CTest
+        shell: pwsh
+        run: ctest --test-dir build-debug -C Debug --output-on-failure
+
       - name: Check Python tools
         shell: pwsh
         run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py tools\app_registry.py tools\benchmark_guard.py

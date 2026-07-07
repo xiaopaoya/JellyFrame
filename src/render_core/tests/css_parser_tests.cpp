@@ -149,8 +149,10 @@ void supports_queries_apply_representative_supported_properties() {
 }
 
 void style_struct_size_has_embedded_guardrail() {
+#if !defined(JELLYFRAME_TEST_CONFIG_DEBUG)
     check(sizeof(Style) <= 1024, "Style should stay within the embedded size guardrail");
     check(sizeof(DisplayCommand) <= 160, "DisplayCommand should stay compact for display-list reuse");
+#endif
 }
 
 void flattens_layers_and_plain_media() {

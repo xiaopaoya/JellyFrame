@@ -98,6 +98,16 @@ JellyFrame Engine 的重要变更记录在这里。
   `CanvasGradient.addColorStop` 子集。`fillStyle` 和 `strokeStyle` 现在可以接收
   CanvasGradient 对象；纯色路径继续走原有快速填充。
 
+### 修复
+
+- Release CTest 现在是有效的正确性 gate：CMake 会对 C++ 测试二进制显式保持
+  `assert(...)` 生效，并在测试入口发现 `NDEBUG` 泄漏时直接编译失败。CI 也会额外
+  运行 Debug CTest。
+- 修复先前被 Release 断言关闭掩盖的 Canvas 2D 文本绘制测试、app service worker
+  预算设置和 storage lifecycle 请求清理问题。
+- 修复 host completion 与 system-event 环形队列在 wraparound 后 discard app 记录时
+  可能覆盖尚未读取条目的压缩逻辑。
+
 ### 变更
 
 - 低色深 embedded framebuffer 转换现在按 rectangle 和 pixel format 分派，减少 RGB565/BGR565

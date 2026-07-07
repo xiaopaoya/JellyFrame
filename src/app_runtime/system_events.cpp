@@ -73,14 +73,17 @@ std::size_t AppSystemEventQueue::discard_app_instance(std::uint32_t app_instance
     const std::size_t old_size = size_;
     std::size_t kept = 0;
     for (std::size_t index = 0; index < old_size; ++index) {
-        const AppSystemEvent& event = events_[(head_ + index) % capacity_];
+        const AppSystemEvent event = events_[(head_ + index) % capacity_];
         if (event.app_instance_id == app_instance_id) {
             continue;
         }
-        events_[kept++] = event;
+        events_[(head_ + kept) % capacity_] = event;
+        ++kept;
     }
-    head_ = 0;
     size_ = kept;
+    if (size_ == 0) {
+        head_ = 0;
+    }
     return old_size - kept;
 }
 
