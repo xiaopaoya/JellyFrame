@@ -1692,8 +1692,67 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    if bool(args.root) == bool(args.bundle):
-        raise SystemExit("install requires exactly one of --root or --bundle")
+    selected_inputs = [bool(args.root), bool(args.bundle), bool(getattr(args, "candidate", None))]
+    if sum(1 for selected in selected_inputs if selected) != 1:
+        raise SystemExit("install requires exactly one of --root, --bundle or --candidate")
+    if getattr(args, "candidate", None):
+        try:
+            bundle_path, _bundle, bundle_info, previous, candidate = app_registry.validate_install_candidate(
+                args.store,
+                args.candidate,
+                app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+                allow_untrusted=getattr(args, "allow_untrusted_signature", False),
+                allow_downgrade=getattr(args, "allow_downgrade", False),
+            )
+        except SystemExit as error:
+            if args.report:
+                try:
+                    candidate = app_registry.load_install_candidate(args.candidate)
+                    bundle_path = candidate["bundlePath"]
+                    bundle = app_registry.read_bundle(bundle_path, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+                    bundle_info = app_registry.parse_jfapp(bundle)
+                    previous = app_registry.existing_app_entry(args.store, bundle_info["summary"]["id"])
+                    reason = str(error).removeprefix("jellyframe_app_registry: ").split(":")[0].strip()
+                    transaction = app_registry.build_failed_install_transaction_report(
+                        args.store,
+                        bundle_path,
+                        bundle_info,
+                        previous,
+                        reason or "candidate-rejected",
+                        source_kind="install-candidate",
+                        preflight_report=str(args.candidate),
+                        allow_downgrade=getattr(args, "allow_downgrade", False),
+                    )
+                    write_install_transaction_report(args.report, transaction, merge=False)
+                except SystemExit:
+                    pass
+            raise
+        entry = app_registry.install_bundle(
+            args.store,
+            bundle_path,
+            app_registry.DEFAULT_MAX_APPS,
+            app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+            allow_downgrade=getattr(args, "allow_downgrade", False),
+        )
+        if args.report:
+            transaction = app_registry.build_install_transaction_report(
+                args.store,
+                bundle_path,
+                entry,
+                previous,
+                source_kind="install-candidate",
+                preflight_report=str(args.candidate),
+                allow_downgrade=getattr(args, "allow_downgrade", False),
+            )
+            transaction["candidate"] = {
+                "path": str(args.candidate),
+                "signatureStatus": app_registry.candidate_signature_status(candidate),
+                "userApproval": bool(candidate.get("userApproval")),
+                "download": candidate.get("download", {}) if isinstance(candidate.get("download", {}), dict) else {},
+            }
+            write_install_transaction_report(args.report, transaction, merge=False)
+        print(f"installed-candidate {entry['id']} {entry['versionName']} ({entry['bundleSize']} bytes)")
+        return 0
     if args.root:
         if args.report is None:
             args.report = args.store / "last-install.report.json"
@@ -1915,6 +1974,7 @@ def main() -> int:
     install.add_argument("--store", required=True, type=Path, help="Installed-app registry directory.")
     install.add_argument("--root", type=Path, help="Source app package directory. Runs validation and pipeline diagnostics.")
     install.add_argument("--bundle", type=Path, help="Existing .jfapp bundle to install.")
+    install.add_argument("--candidate", type=Path, help="Host-prepared install candidate JSON.")
     install.add_argument("--report", type=Path, help="Output JSON report path for --root installs.")
     install.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
     install.add_argument("--target", help="Optional target preset id used for package diagnostics.")
@@ -1924,6 +1984,8 @@ def main() -> int:
     install.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
     install.add_argument("--allow-downgrade", action="store_true",
                          help="Allow installing a lower versionCode over the current app.")
+    install.add_argument("--allow-untrusted-signature", action="store_true",
+                         help="Permit unsigned/untrusted install candidates for desktop bring-up only.")
     add_font_preflight_args(install)
     add_responsive_args(install)
     install.set_defaults(func=cmd_install)

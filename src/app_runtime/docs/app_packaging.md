@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.6.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store
@@ -87,6 +87,13 @@ Runtime bundle boundary:
 - Installation reports completion through a UI-frame completion event, then the
   launcher refreshes on a later frame.
 - Failed staging can be discarded without corrupting the committed app table.
+- For desktop/product bring-up, a host can hand JellyFrame tools a local
+  install-candidate JSON after download and signature verification. The V0
+  schema lives at `tools/schemas/jellyframe.install_candidate.schema.json`.
+  `jellyframe_cli.py install --candidate candidate.json` validates the declared
+  SHA-256, signature status, user approval and update policy, then commits the
+  referenced local `.jfapp`. It still does not perform network download or
+  cryptographic signature verification inside JellyFrame.
 
 Runtime data and storage boundary:
 
@@ -813,6 +820,11 @@ The lower-level registry helper remains available for installing an existing
 python tools/jellyframe_cli.py registry install `
   --store build/installed_apps `
   --bundle build/watch_weather.jfapp
+
+python tools/jellyframe_cli.py install `
+  --store build/installed_apps `
+  --candidate build/watch_weather.install_candidate.json `
+  --report build/watch_weather.candidate.install.report.json
 
 python tools/jellyframe_cli.py registry install `
   --store build/installed_apps `

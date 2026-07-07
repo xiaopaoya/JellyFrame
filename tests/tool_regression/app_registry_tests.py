@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import io
 import json
 import sys
@@ -59,6 +60,36 @@ def write_jfapp(
     crc = zlib.crc32(bundle) & 0xffffffff
     struct.pack_into("<I", bundle, 48, crc)
     path.write_bytes(bundle)
+
+
+def write_install_candidate(
+    path: Path,
+    bundle: Path,
+    signature_status: str = "trusted",
+    user_approval: bool = True,
+    sha256: str | None = None,
+) -> None:
+    digest = sha256 if sha256 is not None else hashlib.sha256(bundle.read_bytes()).hexdigest()
+    data = {
+        "format": app_registry.INSTALL_CANDIDATE_FORMAT,
+        "formatVersion": app_registry.INSTALL_CANDIDATE_VERSION,
+        "bundle": {
+            "path": bundle.name,
+            "sha256": digest,
+            "size": bundle.stat().st_size,
+        },
+        "signature": {
+            "status": signature_status,
+            "scheme": "host-test",
+            "publisher": "JellyFrame Tests",
+        },
+        "userApproval": user_approval,
+        "download": {
+            "source": "https://example.invalid/app.jfapp",
+            "transport": "host-owned",
+        },
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def write_registry(store: Path, app_id: str = "org.example.weather") -> None:
@@ -226,6 +257,79 @@ class AppRegistryTests(unittest.TestCase):
             self.assertEqual(data["source"]["kind"], "bundle")
             self.assertEqual(data["action"], "install")
             self.assertEqual(data["app"]["id"], "org.example.weather")
+
+    def test_install_candidate_requires_trusted_signature_and_approval(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-candidate-") as directory:
+            root = Path(directory)
+            store = root / "store"
+            bundle = root / "weather-v1.jfapp"
+            candidate = root / "candidate.json"
+            report = root / "candidate.report.json"
+            write_jfapp(bundle, version_code=1, version_name="1.0.0")
+            write_install_candidate(candidate, bundle, signature_status="untrusted")
+
+            with self.assertRaises(SystemExit):
+                app_registry.main([
+                    "install-candidate",
+                    "--store",
+                    str(store),
+                    "--candidate",
+                    str(candidate),
+                    "--report",
+                    str(report),
+                ])
+
+            failed = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(failed["result"], "failed")
+            self.assertEqual(failed["failure"]["reason"], "signature-not-trusted")
+            self.assertFalse(app_registry.registry_path(store).exists())
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = app_registry.main([
+                    "install-candidate",
+                    "--store",
+                    str(store),
+                    "--candidate",
+                    str(candidate),
+                    "--allow-untrusted-signature",
+                    "--report",
+                    str(report),
+                ])
+
+            self.assertEqual(result, 0)
+            installed = app_registry.find_app(store, "org.example.weather")
+            self.assertEqual(installed["versionCode"], 1)
+            ok = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(ok["source"]["kind"], "install-candidate")
+            self.assertEqual(ok["candidate"]["signatureStatus"], "untrusted")
+
+    def test_jellyframe_cli_candidate_install_writes_transaction_report(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-candidate-") as directory:
+            root = Path(directory)
+            store = root / "store"
+            bundle = root / "weather-v1.jfapp"
+            candidate = root / "candidate.json"
+            report = root / "cli-candidate.report.json"
+            write_jfapp(bundle, version_code=1, version_name="1.0.0")
+            write_install_candidate(candidate, bundle)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = jellyframe_cli.cmd_install(SimpleNamespace(
+                    root=None,
+                    bundle=None,
+                    candidate=candidate,
+                    store=store,
+                    report=report,
+                    allow_downgrade=False,
+                    allow_untrusted_signature=False,
+                ))
+
+            self.assertEqual(result, 0)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["format"], "jellyframe.install.transaction")
+            self.assertEqual(data["source"]["kind"], "install-candidate")
+            self.assertEqual(data["candidate"]["signatureStatus"], "trusted")
+            self.assertEqual(app_registry.find_app(store, "org.example.weather")["versionCode"], 1)
 
     def test_downgrade_is_blocked_unless_explicitly_allowed(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:

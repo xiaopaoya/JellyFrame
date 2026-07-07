@@ -28,6 +28,9 @@ JellyFrame Engine 的重要变更记录在这里。
   `--allow-downgrade` 才允许。面向用户的常规回退仍应使用 rollback 命令。
 - Installed-app registry entry 现在有 V0 `failure` 记录。失败 app 会被禁用启动，launcher
   可以显示稳定 reason，显式 enable 会清除 failure 记录。
+- 新增 V0 host install candidate。`jellyframe_cli.py install --candidate` 和
+  `tools/app_registry.py install-candidate` 会校验宿主准备的本地 JSON，其中包含已下载
+  bundle 路径、SHA-256、宿主签名校验状态和用户批准状态，再提交 `.jfapp`。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

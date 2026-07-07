@@ -35,6 +35,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Installed-app registry entries now have a V0 `failure` record for failed apps.
   Failed apps are disabled for launch, the launcher can display a stable reason,
   and explicit enable clears the failure record.
+- Added V0 host install candidates. `jellyframe_cli.py install --candidate` and
+  `tools/app_registry.py install-candidate` validate a host-prepared local JSON
+  containing the downloaded bundle path, SHA-256, host signature-verification
+  status and user approval before committing the `.jfapp`.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

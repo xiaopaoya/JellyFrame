@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jellyframe.dev/schemas/jellyframe.install_candidate.schema.json",
+  "title": "JellyFrame Install Candidate",
+  "description": "Host-prepared local install candidate for a downloaded .jfapp bundle. The host owns network download, TLS, signature verification and user approval; JellyFrame tools validate the declared result before committing the local bundle.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "bundle", "signature", "userApproval"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "jellyframe.install_candidate"
+    },
+    "formatVersion": {
+      "const": 0
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "description": "Result produced by host-owned signature verification. Only trusted is accepted by default.",
+          "enum": ["trusted", "unsigned", "untrusted", "invalid"]
+        },
+        "scheme": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "keyId": {
+          "type": "string"
+        }
+      }
+    },
+    "userApproval": {
+      "description": "True only after the host/system shell has obtained the required user or system approval.",
+      "type": "boolean"
+    },
+    "download": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "completedAtUtc": {
+          "type": "string"
+        },
+        "transport": {
+          "type": "string"
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

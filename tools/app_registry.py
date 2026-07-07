@@ -17,6 +17,8 @@ JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
 JFAPP_ENTRY_SIZE = 28
 REGISTRY_FORMAT = "jellyframe.installed_apps.registry"
 REGISTRY_VERSION = 0
+INSTALL_CANDIDATE_FORMAT = "jellyframe.install_candidate"
+INSTALL_CANDIDATE_VERSION = 0
 APP_STATUS_INSTALLED = "installed"
 APP_STATUS_DISABLED = "disabled"
 APP_STATUS_FAILED = "failed"
@@ -63,6 +65,25 @@ def read_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         fail(f"invalid JSON {path}: {error}")
+
+
+def load_install_candidate(path: Path) -> dict:
+    candidate = read_json(path)
+    if candidate.get("format") != INSTALL_CANDIDATE_FORMAT:
+        fail(f"install candidate format must be {INSTALL_CANDIDATE_FORMAT}: {path}")
+    if int(candidate.get("formatVersion", -1)) != INSTALL_CANDIDATE_VERSION:
+        fail(f"unsupported install candidate formatVersion: {path}")
+    bundle = candidate.get("bundle", {})
+    if not isinstance(bundle, dict):
+        fail(f"install candidate bundle must be an object: {path}")
+    bundle_path = bundle.get("path")
+    if not isinstance(bundle_path, str) or not bundle_path:
+        fail(f"install candidate bundle.path is required: {path}")
+    resolved_bundle = Path(bundle_path)
+    if not resolved_bundle.is_absolute():
+        resolved_bundle = path.parent / resolved_bundle
+    candidate["bundlePath"] = resolved_bundle
+    return candidate
 
 
 def atomic_write_json(path: Path, value: dict) -> None:
@@ -472,6 +493,44 @@ def build_failed_install_transaction_report(
     }
 
 
+def candidate_signature_status(candidate: dict) -> str:
+    signature = candidate.get("signature", {})
+    if not isinstance(signature, dict):
+        return ""
+    status = signature.get("status", "")
+    return status if isinstance(status, str) else ""
+
+
+def validate_install_candidate(
+    store: Path,
+    candidate_path: Path,
+    max_bundle_bytes: int,
+    allow_untrusted: bool = False,
+    allow_downgrade: bool = False,
+) -> tuple[Path, bytes, dict, dict | None, dict]:
+    candidate = load_install_candidate(candidate_path)
+    bundle_path = candidate["bundlePath"]
+    bundle = read_bundle(bundle_path, max_bundle_bytes)
+    bundle_info = parse_jfapp(bundle)
+    expected_sha256 = candidate.get("bundle", {}).get("sha256", "")
+    if expected_sha256 and expected_sha256 != bundle_info["sha256"]:
+        fail("bundle-hash-mismatch: install candidate bundle sha256 mismatch")
+    signature_status = candidate_signature_status(candidate)
+    if signature_status != "trusted" and not allow_untrusted:
+        fail("signature-not-trusted: install candidate signature is not trusted")
+    if candidate.get("userApproval") is not True:
+        fail("user-approval-required: install candidate requires user approval")
+    previous = existing_app_entry(store, bundle_info["summary"]["id"])
+    decision = update_policy_decision(previous, bundle_info["summary"], allow_downgrade)
+    if not decision["allowed"]:
+        fail(
+            "downgrade install is blocked: "
+            f"{bundle_info['summary']['id']} {decision['incomingVersionCode']} < "
+            f"{decision['previousVersionCode']}; use --allow-downgrade or rollback"
+        )
+    return bundle_path, bundle, bundle_info, previous, candidate
+
+
 def delete_app_data(store: Path, app_id: str) -> bool:
     store = store.resolve()
     path = app_data_dir(store, app_id)
@@ -632,6 +691,71 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_install_candidate(args: argparse.Namespace) -> int:
+    try:
+        bundle_path, _bundle, bundle_info, previous, candidate = validate_install_candidate(
+            args.store,
+            args.candidate,
+            args.max_bundle_bytes,
+            allow_untrusted=args.allow_untrusted_signature,
+            allow_downgrade=args.allow_downgrade,
+        )
+    except SystemExit as error:
+        if args.report:
+            try:
+                candidate = load_install_candidate(args.candidate)
+                bundle_path = candidate["bundlePath"]
+                bundle = read_bundle(bundle_path, args.max_bundle_bytes)
+                bundle_info = parse_jfapp(bundle)
+                previous = existing_app_entry(args.store, bundle_info["summary"]["id"])
+                reason = str(error).removeprefix("jellyframe_app_registry: ").split(":")[0].strip()
+                atomic_write_json(
+                    args.report,
+                    build_failed_install_transaction_report(
+                        args.store,
+                        bundle_path,
+                        bundle_info,
+                        previous,
+                        reason or "candidate-rejected",
+                        source_kind="install-candidate",
+                        preflight_report=str(args.candidate),
+                        allow_downgrade=args.allow_downgrade,
+                    ),
+                )
+            except SystemExit:
+                pass
+        raise
+    entry = install_bundle(
+        args.store,
+        bundle_path,
+        args.max_apps,
+        args.max_bundle_bytes,
+        allow_downgrade=args.allow_downgrade,
+    )
+    if args.report:
+        report = build_install_transaction_report(
+            args.store,
+            bundle_path,
+            entry,
+            previous,
+            source_kind="install-candidate",
+            preflight_report=str(args.candidate),
+            allow_downgrade=args.allow_downgrade,
+        )
+        report["candidate"] = {
+            "path": str(args.candidate),
+            "signatureStatus": candidate_signature_status(candidate),
+            "userApproval": bool(candidate.get("userApproval")),
+            "download": candidate.get("download", {}) if isinstance(candidate.get("download", {}), dict) else {},
+        }
+        atomic_write_json(args.report, report)
+    if args.json:
+        print(json.dumps(entry, ensure_ascii=False, indent=2))
+    else:
+        print(f"installed-candidate {entry['id']} {entry['versionName']} ({entry['bundleSize']} bytes)")
+    return 0
+
+
 def cmd_list(args: argparse.Namespace) -> int:
     registry = sorted_registry(load_registry(args.store.resolve()))
     if args.json:
@@ -730,6 +854,24 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--allow-downgrade", action="store_true",
                          help="Allow installing a lower versionCode over the current app.")
     install.set_defaults(func=cmd_install)
+
+    install_candidate = subparsers.add_parser(
+        "install-candidate",
+        help="Validate a host-prepared install candidate JSON and install its local .jfapp bundle.",
+    )
+    add_store_arg(install_candidate)
+    install_candidate.add_argument("--candidate", required=True, type=Path,
+                                   help="Host-prepared install candidate JSON.")
+    install_candidate.add_argument("--max-apps", type=int, default=DEFAULT_MAX_APPS, help="Maximum installed apps.")
+    install_candidate.add_argument("--max-bundle-bytes", type=int, default=DEFAULT_MAX_BUNDLE_BYTES,
+                                   help="Maximum accepted bundle size.")
+    install_candidate.add_argument("--allow-downgrade", action="store_true",
+                                   help="Allow installing a lower versionCode over the current app.")
+    install_candidate.add_argument("--allow-untrusted-signature", action="store_true",
+                                   help="Permit unsigned/untrusted candidates for desktop bring-up only.")
+    install_candidate.add_argument("--json", action="store_true", help="Print installed entry as JSON.")
+    install_candidate.add_argument("--report", type=Path, help="Write an install transaction JSON report.")
+    install_candidate.set_defaults(func=cmd_install_candidate)
 
     list_apps = subparsers.add_parser("list", help="List installed apps.")
     add_store_arg(list_apps)

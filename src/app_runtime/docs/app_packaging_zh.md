@@ -1,6 +1,6 @@
 # App Packaging
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-07；适用版本：0.6.0-dev
 
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
@@ -59,6 +59,10 @@ JellyFrame 的第三方 app 目标是安装到 flash/外部存储的 bundle，�
 - 下载、hash/签名校验、manifest/budget 校验和 flash 写入都属于宿主异步 job。
 - 安装完成后通过 completion event 通知 UI，启动器下一帧刷新列表。
 - 失败时 staging 区可直接丢弃，不能破坏已提交的 app 表。
+- 桌面或产品 bring-up 时，宿主可在完成下载和签名校验后，把本地 install-candidate JSON
+  交给 JellyFrame 工具。V0 schema 位于 `tools/schemas/jellyframe.install_candidate.schema.json`。
+  `jellyframe_cli.py install --candidate candidate.json` 会校验声明的 SHA-256、签名状态、用户批准和
+  update policy，然后提交引用的本地 `.jfapp`。JellyFrame 仍不负责网络下载或密码学签名验证。
 
 运行时数据与存储边界：
 
@@ -684,6 +688,11 @@ app：
 python tools/jellyframe_cli.py registry install `
   --store build/installed_apps `
   --bundle build/watch_weather.jfapp
+
+python tools/jellyframe_cli.py install `
+  --store build/installed_apps `
+  --candidate build/watch_weather.install_candidate.json `
+  --report build/watch_weather.candidate.install.report.json
 
 python tools/jellyframe_cli.py registry install `
   --store build/installed_apps `
