@@ -39,6 +39,16 @@ JavaScript running inside a normal app cannot install, mount, delete or update
 another app directly. Future system components can expose those flows through
 trusted roles and host-owned brokers, not through a general browser API.
 
+Trusted launcher/system-shell apps are regular JellyFrame packages with a system
+role, for example `role: "launcher"` plus capabilities such as
+`system.launcher` and `system.appManager`. Those capabilities are interpreted by
+the host. They do not create a web API that ordinary third-party apps can call.
+The Win32 sample launcher currently uses package HTML plus host-injected app
+list markup; its `data-action` buttons are consumed only while the shell is in
+system-shell mode. A normal installed app can use `data-*` attributes for its
+own UI, but those attributes cannot launch, enable, disable, roll back or delete
+other apps.
+
 ## Launch And Frame Loop
 
 At launch, the host loads package resources, builds DOM/style/layout/layers, and

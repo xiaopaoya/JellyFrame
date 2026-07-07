@@ -29,6 +29,12 @@ completion 会被丢弃，handle 会被释放，不能再修改后续 app。
 普通 app 内运行的 JavaScript 不能直接安装、挂载、删除或更新其他 app。未来系统组件可以通过受信
 role 和宿主持有 broker 暴露这类流程，而不是提供通用浏览器 API。
 
+受信 launcher/system-shell app 仍是普通 JellyFrame 包，只是 manifest 中使用系统角色，例如
+`role: "launcher"`，并声明 `system.launcher`、`system.appManager` 等 capability。这些 capability
+由宿主解释，不会生成普通第三方 app 可调用的 Web API。当前 Win32 示例 launcher 使用包内 HTML 加宿主注入的
+app 列表 markup；其中的 `data-action` 按钮只会在 shell 处于 system-shell mode 时被消费。普通已安装 app
+当然可以在自己的 UI 中使用 `data-*` 属性，但这些属性不能启动、启用、禁用、回滚或删除其他 app。
+
 ## 启动与帧循环
 
 启动时，宿主加载包内资源，构建 DOM/style/layout/layer，并通过和 Win32 调试壳相同的渲染管线绘制首帧。

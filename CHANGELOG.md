@@ -51,6 +51,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   row to a compact two-column grid for small watch screens.
 - Win32 system-shell launcher actions now report unsupported `data-action`
   values in the shell status instead of silently swallowing them.
+- Clarified the app lifecycle documentation for trusted launcher/system-shell
+  roles: `system.launcher` and `system.appManager` are host-interpreted
+  capabilities, and Win32 `data-action` handling is not available to ordinary
+  installed apps.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow
