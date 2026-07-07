@@ -27,6 +27,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - The desktop registry and Win32 shell now expose V0 enable/disable app-manager
   commands. Disabled apps keep their bundle and data but are rejected by launch
   lookup until re-enabled.
+- App installs now apply the first update policy: replacing an installed app
+  with a lower `versionCode` is rejected by default, reports `downgrade-blocked`
+  when an install transaction report is requested, and requires explicit
+  `--allow-downgrade`. Normal user-facing rollback should still use the
+  rollback command.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

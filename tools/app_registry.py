@@ -22,6 +22,7 @@ APP_STATUS_DISABLED = "disabled"
 APP_STATUS_FAILED = "failed"
 DEFAULT_MAX_APPS = 32
 DEFAULT_MAX_BUNDLE_BYTES = 4 * 1024 * 1024
+UPDATE_POLICY_REJECT_DOWNGRADE = "reject-downgrade"
 
 
 def fail(message: str) -> None:
@@ -220,6 +221,24 @@ def rollback_record_from_entry(entry: dict) -> dict:
     return {key: entry[key] for key in keys if key in entry}
 
 
+def update_policy_decision(previous: dict | None, summary: dict, allow_downgrade: bool = False) -> dict:
+    incoming_code = int(summary.get("versionCode", 0) or 0)
+    previous_code = int(previous.get("versionCode", 0) or 0) if previous else 0
+    action = "install" if previous is None else ("reinstall" if previous_code == incoming_code else "update")
+    downgrade = previous is not None and incoming_code < previous_code
+    allowed = not downgrade or allow_downgrade
+    reason = "" if allowed else "downgrade-blocked"
+    return {
+        "policy": UPDATE_POLICY_REJECT_DOWNGRADE,
+        "allowed": allowed,
+        "allowDowngrade": allow_downgrade,
+        "action": action,
+        "reason": reason,
+        "previousVersionCode": previous_code,
+        "incomingVersionCode": incoming_code,
+    }
+
+
 def apply_rollback_record(base_entry: dict, rollback: dict) -> dict:
     restored = dict(base_entry)
     current_record = rollback_record_from_entry(base_entry)
@@ -232,7 +251,13 @@ def apply_rollback_record(base_entry: dict, rollback: dict) -> dict:
     return restored
 
 
-def install_bundle(store: Path, bundle_path: Path, max_apps: int, max_bundle_bytes: int) -> dict:
+def install_bundle(
+    store: Path,
+    bundle_path: Path,
+    max_apps: int,
+    max_bundle_bytes: int,
+    allow_downgrade: bool = False,
+) -> dict:
     store = store.resolve()
     bundle_path = bundle_path.resolve()
     bundle = read_bundle(bundle_path, max_bundle_bytes)
@@ -243,6 +268,13 @@ def install_bundle(store: Path, bundle_path: Path, max_apps: int, max_bundle_byt
     old_entry = next((app for app in apps if app.get("id") == app_id), None)
     if old_entry is None and len(apps) >= max_apps:
         fail(f"registry is full: {len(apps)} >= {max_apps}")
+    decision = update_policy_decision(old_entry, bundle_info["summary"], allow_downgrade)
+    if not decision["allowed"]:
+        fail(
+            "downgrade install is blocked: "
+            f"{app_id} {decision['incomingVersionCode']} < {decision['previousVersionCode']}; "
+            "use --allow-downgrade or rollback"
+        )
 
     final_name = bundle_filename(bundle_info["summary"], bundle_info["sha256"])
     final_path = bundles_dir(store) / final_name
@@ -267,6 +299,8 @@ def install_bundle(store: Path, bundle_path: Path, max_apps: int, max_bundle_byt
                 if isinstance(rollback_file, str) and rollback_file and rollback_file not in {old_file, final_name}:
                     obsolete_rollback_file = rollback_file
             entry["installedAtUtc"] = old_entry.get("installedAtUtc", entry["installedAtUtc"])
+            entry["enabled"] = bool(old_entry.get("enabled", entry["enabled"]))
+            entry["status"] = old_entry.get("status", entry["status"])
             if isinstance(old_file, str) and old_file and old_file != final_name:
                 entry["rollback"] = rollback_record_from_entry(old_entry)
             elif isinstance(old_rollback, dict) and old_rollback:
@@ -304,9 +338,11 @@ def build_install_transaction_report(
     previous: dict | None,
     source_kind: str = "bundle",
     preflight_report: str = "",
+    allow_downgrade: bool = False,
 ) -> dict:
     rollback = entry.get("rollback")
     rollback_available = isinstance(rollback, dict) and bool(rollback.get("bundleFile"))
+    policy = update_policy_decision(previous, entry, allow_downgrade)
     return {
         "format": "jellyframe.install.transaction",
         "formatVersion": 0,
@@ -317,6 +353,7 @@ def build_install_transaction_report(
         },
         "store": str(store.resolve()),
         "action": install_action(previous, entry),
+        "result": "ok",
         "app": {
             "id": entry.get("id", ""),
             "name": entry.get("name", ""),
@@ -349,6 +386,7 @@ def build_install_transaction_report(
             "versionCode": int(rollback.get("versionCode", 0) or 0) if rollback_available else 0,
             "bundleFile": rollback.get("bundleFile", "") if rollback_available else "",
         },
+        "updatePolicy": policy,
         "dataPolicy": {
             "appPrivateDataTouched": False,
             "appPrivateDataPolicy": "retained",
@@ -358,6 +396,78 @@ def build_install_transaction_report(
             "staging": "bundle-copy-then-atomic-replace",
             "registryCommit": "atomic-json-replace",
             "rollbackBundleRetained": rollback_available,
+        },
+    }
+
+
+def build_failed_install_transaction_report(
+    store: Path,
+    bundle_path: Path,
+    bundle_info: dict,
+    previous: dict | None,
+    reason: str,
+    source_kind: str = "bundle",
+    preflight_report: str = "",
+    allow_downgrade: bool = False,
+) -> dict:
+    summary = bundle_info["summary"]
+    return {
+        "format": "jellyframe.install.transaction",
+        "formatVersion": 0,
+        "source": {
+            "kind": source_kind,
+            "bundle": str(bundle_path),
+            "preflightReport": preflight_report,
+        },
+        "store": str(store.resolve()),
+        "action": update_policy_decision(previous, summary, allow_downgrade)["action"],
+        "result": "failed",
+        "failure": {
+            "reason": reason,
+            "message": (
+                f"incoming versionCode {int(summary.get('versionCode', 0) or 0)} is lower than "
+                f"installed versionCode {int(previous.get('versionCode', 0) or 0) if previous else 0}"
+                if reason == "downgrade-blocked" else reason
+            ),
+        },
+        "app": {
+            "id": summary.get("id", ""),
+            "name": summary.get("name", summary.get("id", "")),
+            "role": summary.get("role", "app"),
+            "versionName": summary.get("versionName", ""),
+            "versionCode": int(summary.get("versionCode", 0) or 0),
+            "entry": summary.get("entry", "/index.html"),
+            "script": summary.get("script", "classic"),
+        },
+        "previous": {
+            "installed": previous is not None,
+            "versionName": previous.get("versionName", "") if previous else "",
+            "versionCode": int(previous.get("versionCode", 0) or 0) if previous else 0,
+            "bundleFile": previous.get("bundleFile", "") if previous else "",
+        },
+        "bundle": {
+            "size": int(bundle_info.get("size", 0) or 0),
+            "crc32": bundle_info.get("crc32", ""),
+            "sha256": bundle_info.get("sha256", ""),
+            "resourceCount": int(bundle_info.get("resourceCount", 0) or 0),
+            "payloadBytes": int(bundle_info.get("payloadBytes", 0) or 0),
+            "integrity": "validated-header-ranges-crc32-sha256",
+        },
+        "rollback": {
+            "available": isinstance(previous, dict) and bool(previous.get("bundleFile")),
+            "versionName": previous.get("versionName", "") if previous else "",
+            "versionCode": int(previous.get("versionCode", 0) or 0) if previous else 0,
+            "bundleFile": previous.get("bundleFile", "") if previous else "",
+        },
+        "updatePolicy": update_policy_decision(previous, summary, allow_downgrade),
+        "dataPolicy": {
+            "appPrivateDataTouched": False,
+            "appPrivateDataPolicy": "retained",
+        },
+        "transaction": {
+            "staging": "not-started",
+            "registryCommit": "not-started",
+            "rollbackBundleRetained": isinstance(previous, dict) and bool(previous.get("bundleFile")),
         },
     }
 
@@ -456,11 +566,42 @@ def cmd_install(args: argparse.Namespace) -> int:
     bundle = read_bundle(args.bundle, args.max_bundle_bytes)
     bundle_info = parse_jfapp(bundle)
     previous = existing_app_entry(args.store, bundle_info["summary"]["id"])
-    entry = install_bundle(args.store, args.bundle, args.max_apps, args.max_bundle_bytes)
+    decision = update_policy_decision(previous, bundle_info["summary"], args.allow_downgrade)
+    if not decision["allowed"]:
+        if args.report:
+            atomic_write_json(
+                args.report,
+                build_failed_install_transaction_report(
+                    args.store,
+                    args.bundle,
+                    bundle_info,
+                    previous,
+                    decision["reason"],
+                    allow_downgrade=args.allow_downgrade,
+                ),
+            )
+        fail(
+            "downgrade install is blocked: "
+            f"{bundle_info['summary']['id']} {decision['incomingVersionCode']} < "
+            f"{decision['previousVersionCode']}; use --allow-downgrade or rollback"
+        )
+    entry = install_bundle(
+        args.store,
+        args.bundle,
+        args.max_apps,
+        args.max_bundle_bytes,
+        allow_downgrade=args.allow_downgrade,
+    )
     if args.report:
         atomic_write_json(
             args.report,
-            build_install_transaction_report(args.store, args.bundle, entry, previous),
+            build_install_transaction_report(
+                args.store,
+                args.bundle,
+                entry,
+                previous,
+                allow_downgrade=args.allow_downgrade,
+            ),
         )
     if args.json:
         print(json.dumps(entry, ensure_ascii=False, indent=2))
@@ -555,6 +696,8 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Maximum accepted bundle size.")
     install.add_argument("--json", action="store_true", help="Print installed entry as JSON.")
     install.add_argument("--report", type=Path, help="Write an install transaction JSON report.")
+    install.add_argument("--allow-downgrade", action="store_true",
+                         help="Allow installing a lower versionCode over the current app.")
     install.set_defaults(func=cmd_install)
 
     list_apps = subparsers.add_parser("list", help="List installed apps.")

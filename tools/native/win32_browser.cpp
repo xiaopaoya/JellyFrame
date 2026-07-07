@@ -494,6 +494,7 @@ struct BrowserOptions {
     std::string authorized_file_smoke_dir;
     int system_survival_smoke_cycles = 0;
     bool remove_keep_data = false;
+    bool allow_downgrade = false;
     std::string audio_smoke_source;
     int audio_smoke_ms = 1000;
     std::string startup_status;
@@ -2584,6 +2585,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --rollback-app ID              Roll an installed app back to its previous bundle.\n"
         << "  --enable-app ID                Enable an installed app for launch.\n"
         << "  --disable-app ID               Disable an installed app without deleting data or bundles.\n"
+        << "  --allow-downgrade              Permit installing a lower versionCode over the current app.\n"
         << "  --keep-data                    Keep app-private data with --remove-app.\n"
         << "  --delete-app-data ID           Delete app-private data without removing the app.\n"
         << "  --authorized-file-smoke DIR    Run Win32 authorized file-broker validation.\n"
@@ -6086,6 +6088,10 @@ int main(int argc, char** argv) {
             options.install_bundle_path = argv[++i];
             continue;
         }
+        if (arg == "--allow-downgrade") {
+            options.allow_downgrade = true;
+            continue;
+        }
         if (arg == "--launch-app") {
             if (i + 1 >= argc) {
                 std::cerr << "--launch-app requires an installed app id\n";
@@ -6246,7 +6252,10 @@ int main(int argc, char** argv) {
     try {
         if (!options.install_bundle_path.empty()) {
             const auto installed = jellyframe_example::install_bundle_into_registry(
-                options.registry_store_path, options.install_bundle_path, kMaxInputBytes);
+                options.registry_store_path,
+                options.install_bundle_path,
+                kMaxInputBytes,
+                options.allow_downgrade);
             options.startup_status = "Installed " + installed.name + ".";
             std::cout << "installed " << installed.id << " " << installed.version_name << '\n';
         }

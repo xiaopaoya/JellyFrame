@@ -85,6 +85,7 @@ def main() -> int:
     require("--rollback-app" in help_result.stdout, "--help must document app rollback")
     require("--enable-app" in help_result.stdout, "--help must document app enable")
     require("--disable-app" in help_result.stdout, "--help must document app disable")
+    require("--allow-downgrade" in help_result.stdout, "--help must document explicit downgrade installs")
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
@@ -151,6 +152,10 @@ def main() -> int:
         require(install_first.returncode == 0, "win32 registry install v1 must pass")
         install_second = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(second)])
         require(install_second.returncode == 0, "win32 registry install v2 must pass")
+        blocked_downgrade = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(first)])
+        require(blocked_downgrade.returncode != 0, "win32 registry downgrade must be blocked by default")
+        require("downgrade install is blocked" in blocked_downgrade.stdout,
+                "win32 registry downgrade must explain the update policy")
         disable_result = run_case(exe, ["--registry-store", str(store), "--disable-app", "org.jellyframe.rollback-probe"])
         require(disable_result.returncode == 0, "win32 registry disable must pass")
         disabled_launch = run_case(exe, ["--registry-store", str(store), "--launch-app", "org.jellyframe.rollback-probe"])

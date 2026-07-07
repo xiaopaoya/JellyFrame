@@ -793,6 +793,10 @@ the validated bundle identity, rollback availability and the data-retention
 policy. For existing bundle installs, `tools/app_registry.py install --report`
 can write the same transaction report as a standalone file.
 
+Install/update rejects lower `versionCode` packages by default. Use rollback for
+normal user-facing recovery. `--allow-downgrade` exists for explicit maintenance
+or factory workflows and is reported in `installTransaction.updatePolicy`.
+
 The Win32 shell can then display the installed-app registry, launch apps through
 the rendered system-shell UI and delete inactive apps:
 
@@ -809,6 +813,11 @@ The lower-level registry helper remains available for installing an existing
 python tools/jellyframe_cli.py registry install `
   --store build/installed_apps `
   --bundle build/watch_weather.jfapp
+
+python tools/jellyframe_cli.py registry install `
+  --store build/installed_apps `
+  --bundle build/watch_weather_old.jfapp `
+  --allow-downgrade
 
 python tools/jellyframe_cli.py registry list --store build/installed_apps
 

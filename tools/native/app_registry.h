@@ -367,7 +367,8 @@ inline std::filesystem::path find_installed_app_bundle_path(const std::filesyste
 
 inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::path& store,
                                                      const std::filesystem::path& bundle_path,
-                                                     std::size_t max_input_bytes) {
+                                                     std::size_t max_input_bytes,
+                                                     bool allow_downgrade = false) {
     const std::filesystem::path absolute_store = std::filesystem::absolute(store);
     const std::filesystem::path absolute_bundle = std::filesystem::absolute(bundle_path);
     AppPackage package = load_jfapp_bundle(absolute_bundle, max_input_bytes);
@@ -409,7 +410,15 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
     if (existing == registry.apps.end()) {
         registry.apps.push_back(entry);
     } else {
+        if (!allow_downgrade && entry.version_code < existing->version_code) {
+            throw std::runtime_error(
+                "downgrade install is blocked: " + entry.id + " " +
+                std::to_string(entry.version_code) + " < " +
+                std::to_string(existing->version_code) + "; use --allow-downgrade or rollback");
+        }
         entry.installed_at_utc = existing->installed_at_utc.empty() ? entry.installed_at_utc : existing->installed_at_utc;
+        entry.enabled = existing->enabled;
+        entry.status = existing->status;
         if (existing->has_rollback &&
             existing->rollback_bundle_file != existing->bundle_file &&
             existing->rollback_bundle_file != entry.bundle_file) {

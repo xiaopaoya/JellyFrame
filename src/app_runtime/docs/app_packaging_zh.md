@@ -665,6 +665,10 @@ python tools/jellyframe_cli.py install `
 bundle 身份、rollback 可用性和数据保留策略。安装已有 bundle 时，`tools/app_registry.py
 install --report` 可把同样的 transaction report 写成独立文件。
 
+安装/更新默认拒绝更低 `versionCode` 的 package。普通用户可见的恢复应使用 rollback；
+`--allow-downgrade` 只用于明确的维护或工厂流程，并会写入
+`installTransaction.updatePolicy`。
+
 随后 Win32 壳可以显示 installed-app registry，通过渲染出的 system-shell UI 启动 app，并删除非活动
 app：
 
@@ -680,6 +684,11 @@ app：
 python tools/jellyframe_cli.py registry install `
   --store build/installed_apps `
   --bundle build/watch_weather.jfapp
+
+python tools/jellyframe_cli.py registry install `
+  --store build/installed_apps `
+  --bundle build/watch_weather_old.jfapp `
+  --allow-downgrade
 
 python tools/jellyframe_cli.py registry list --store build/installed_apps
 

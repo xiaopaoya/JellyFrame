@@ -217,6 +217,7 @@ class AppRegistryTests(unittest.TestCase):
                     bundle=bundle,
                     store=store,
                     report=report,
+                    allow_downgrade=False,
                 ))
 
             self.assertEqual(result, 0)
@@ -225,6 +226,45 @@ class AppRegistryTests(unittest.TestCase):
             self.assertEqual(data["source"]["kind"], "bundle")
             self.assertEqual(data["action"], "install")
             self.assertEqual(data["app"]["id"], "org.example.weather")
+
+    def test_downgrade_is_blocked_unless_explicitly_allowed(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory)
+            first = store / "weather-v1.jfapp"
+            second = store / "weather-v2.jfapp"
+            report = store / "downgrade.report.json"
+            write_jfapp(first, version_code=1, version_name="1.0.0")
+            write_jfapp(second, version_code=2, version_name="2.0.0")
+            app_registry.install_bundle(store, second, app_registry.DEFAULT_MAX_APPS, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+
+            with self.assertRaises(SystemExit):
+                app_registry.main([
+                    "install",
+                    "--store",
+                    str(store),
+                    "--bundle",
+                    str(first),
+                    "--report",
+                    str(report),
+                ])
+
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["result"], "failed")
+            self.assertEqual(data["failure"]["reason"], "downgrade-blocked")
+            self.assertEqual(app_registry.find_app(store, "org.example.weather")["versionCode"], 2)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = app_registry.main([
+                    "install",
+                    "--store",
+                    str(store),
+                    "--bundle",
+                    str(first),
+                    "--allow-downgrade",
+                ])
+
+            self.assertEqual(result, 0)
+            self.assertEqual(app_registry.find_app(store, "org.example.weather")["versionCode"], 1)
 
     def test_disable_and_enable_app_updates_launch_state(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
@@ -236,6 +276,17 @@ class AppRegistryTests(unittest.TestCase):
             disabled = app_registry.set_app_enabled(store, "org.example.weather", False)
             self.assertFalse(disabled["enabled"])
             self.assertEqual(disabled["status"], app_registry.APP_STATUS_DISABLED)
+
+            updated_bundle = store / "weather-v2.jfapp"
+            write_jfapp(updated_bundle, version_code=2, version_name="2.0.0")
+            updated = app_registry.install_bundle(
+                store,
+                updated_bundle,
+                app_registry.DEFAULT_MAX_APPS,
+                app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+            )
+            self.assertFalse(updated["enabled"])
+            self.assertEqual(updated["status"], app_registry.APP_STATUS_DISABLED)
 
             enabled = app_registry.set_app_enabled(store, "org.example.weather", True)
             self.assertTrue(enabled["enabled"])

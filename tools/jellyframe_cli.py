@@ -1707,11 +1707,34 @@ def cmd_install(args: argparse.Namespace) -> int:
             bundle = app_registry.read_bundle(args.output_bundle, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
             bundle_info = app_registry.parse_jfapp(bundle)
             previous = app_registry.existing_app_entry(args.store, bundle_info["summary"]["id"])
+            decision = app_registry.update_policy_decision(
+                previous,
+                bundle_info["summary"],
+                getattr(args, "allow_downgrade", False),
+            )
+            if not decision["allowed"]:
+                transaction = app_registry.build_failed_install_transaction_report(
+                    args.store,
+                    args.output_bundle,
+                    bundle_info,
+                    previous,
+                    decision["reason"],
+                    source_kind="source",
+                    preflight_report=str(args.report),
+                    allow_downgrade=getattr(args, "allow_downgrade", False),
+                )
+                write_install_transaction_report(args.report, transaction, merge=True)
+                raise SystemExit(
+                    "downgrade install is blocked: "
+                    f"{bundle_info['summary']['id']} {decision['incomingVersionCode']} < "
+                    f"{decision['previousVersionCode']}; use --allow-downgrade or rollback"
+                )
             entry = app_registry.install_bundle(
                 args.store,
                 args.output_bundle,
                 app_registry.DEFAULT_MAX_APPS,
                 app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+                allow_downgrade=getattr(args, "allow_downgrade", False),
             )
             transaction = app_registry.build_install_transaction_report(
                 args.store,
@@ -1720,6 +1743,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 previous,
                 source_kind="source",
                 preflight_report=str(args.report),
+                allow_downgrade=getattr(args, "allow_downgrade", False),
             )
             write_install_transaction_report(args.report, transaction, merge=True)
             print(f"installed {entry['id']} {entry['versionName']} ({entry['bundleSize']} bytes)")
@@ -1727,14 +1751,42 @@ def cmd_install(args: argparse.Namespace) -> int:
     bundle = app_registry.read_bundle(args.bundle, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
     bundle_info = app_registry.parse_jfapp(bundle)
     previous = app_registry.existing_app_entry(args.store, bundle_info["summary"]["id"])
+    decision = app_registry.update_policy_decision(
+        previous,
+        bundle_info["summary"],
+        getattr(args, "allow_downgrade", False),
+    )
+    if not decision["allowed"]:
+        if args.report:
+            transaction = app_registry.build_failed_install_transaction_report(
+                args.store,
+                args.bundle,
+                bundle_info,
+                previous,
+                decision["reason"],
+                allow_downgrade=getattr(args, "allow_downgrade", False),
+            )
+            write_install_transaction_report(args.report, transaction, merge=False)
+        raise SystemExit(
+            "downgrade install is blocked: "
+            f"{bundle_info['summary']['id']} {decision['incomingVersionCode']} < "
+            f"{decision['previousVersionCode']}; use --allow-downgrade or rollback"
+        )
     entry = app_registry.install_bundle(
         args.store,
         args.bundle,
         app_registry.DEFAULT_MAX_APPS,
         app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+        allow_downgrade=getattr(args, "allow_downgrade", False),
     )
     if args.report:
-        transaction = app_registry.build_install_transaction_report(args.store, args.bundle, entry, previous)
+        transaction = app_registry.build_install_transaction_report(
+            args.store,
+            args.bundle,
+            entry,
+            previous,
+            allow_downgrade=getattr(args, "allow_downgrade", False),
+        )
         write_install_transaction_report(args.report, transaction, merge=False)
     print(f"installed {entry['id']} {entry['versionName']} ({entry['bundleSize']} bytes)")
     return 0
@@ -1870,6 +1922,8 @@ def main() -> int:
     install.add_argument("--include", default="jellyframe_esp32s3_resources.h", help=argparse.SUPPRESS)
     install.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
     install.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
+    install.add_argument("--allow-downgrade", action="store_true",
+                         help="Allow installing a lower versionCode over the current app.")
     add_font_preflight_args(install)
     add_responsive_args(install)
     install.set_defaults(func=cmd_install)
