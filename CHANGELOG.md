@@ -47,6 +47,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   host-owned install/update flow: worker download, host signature verification,
   install candidate validation, transaction reports, derived launcher state and
   non-firmware fallback expectations.
+- Added a rollback action to the sample Win32 launcher UI and changed its action
+  row to a compact two-column grid for small watch screens.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

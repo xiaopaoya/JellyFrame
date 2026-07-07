@@ -2711,6 +2711,9 @@ std::string build_launcher_app_list_html(const std::filesystem::path& registry_s
              << (!app_state.launchable ? " disabled" : "") << ">Launch</button>"
              << "<button data-action='" << (app.enabled ? "disable" : "enable") << "' data-app-id='"
              << html_escape_text(app.id) << "'>" << (app.enabled ? "Disable" : "Enable") << "</button>"
+             << (app_state.rollback_ready ?
+                 "<button data-action='rollback' data-app-id='" + html_escape_text(app.id) + "'>Rollback</button>" :
+                 "")
              << "<button class='danger' data-action='delete' data-app-id='" << html_escape_text(app.id) << "'>Delete</button>"
              << "</div></article>";
     }
@@ -4146,6 +4149,18 @@ private:
             launch_installed_app(app_id);
         } else if (action == "delete") {
             delete_installed_app(app_id);
+        } else if (action == "rollback") {
+            try {
+                const auto restored =
+                    jellyframe_example::rollback_installed_app(options_.registry_store_path, app_id);
+                configure_system_shell("Rolled back " + restored.name + " to v" + restored.version_name + ".");
+                rebuild();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            } catch (const std::exception& error) {
+                configure_system_shell(std::string("Rollback failed: ") + error.what());
+                rebuild();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            }
         } else if (action == "enable" || action == "disable") {
             const bool enabled = action == "enable";
             try {

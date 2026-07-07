@@ -101,13 +101,14 @@ h1 {
 }
 
 .actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 button {
   height: 34px;
-  padding: 0 12px;
+  padding: 0 8px;
   color: var(--ink);
   background-color: rgba(74, 190, 218, 0.18);
   background: linear-gradient(to right, rgba(112, 224, 238, 0.26), rgba(42, 142, 184, 0.16));
