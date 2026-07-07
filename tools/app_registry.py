@@ -284,6 +284,84 @@ def install_bundle(store: Path, bundle_path: Path, max_apps: int, max_bundle_byt
     return entry
 
 
+def existing_app_entry(store: Path, app_id: str) -> dict | None:
+    registry = load_registry(store.resolve())
+    return next((app for app in registry.get("apps", []) if app.get("id") == app_id), None)
+
+
+def install_action(previous: dict | None, entry: dict) -> str:
+    if previous is None:
+        return "install"
+    if previous.get("bundleFile") == entry.get("bundleFile"):
+        return "reinstall"
+    return "update"
+
+
+def build_install_transaction_report(
+    store: Path,
+    bundle_path: Path,
+    entry: dict,
+    previous: dict | None,
+    source_kind: str = "bundle",
+    preflight_report: str = "",
+) -> dict:
+    rollback = entry.get("rollback")
+    rollback_available = isinstance(rollback, dict) and bool(rollback.get("bundleFile"))
+    return {
+        "format": "jellyframe.install.transaction",
+        "formatVersion": 0,
+        "source": {
+            "kind": source_kind,
+            "bundle": str(bundle_path),
+            "preflightReport": preflight_report,
+        },
+        "store": str(store.resolve()),
+        "action": install_action(previous, entry),
+        "app": {
+            "id": entry.get("id", ""),
+            "name": entry.get("name", ""),
+            "role": entry.get("role", "app"),
+            "status": entry.get("status", APP_STATUS_INSTALLED),
+            "enabled": bool(entry.get("enabled", True)),
+            "versionName": entry.get("versionName", ""),
+            "versionCode": int(entry.get("versionCode", 0) or 0),
+            "entry": entry.get("entry", "/index.html"),
+            "script": entry.get("script", "classic"),
+        },
+        "previous": {
+            "installed": previous is not None,
+            "versionName": previous.get("versionName", "") if previous else "",
+            "versionCode": int(previous.get("versionCode", 0) or 0) if previous else 0,
+            "bundleFile": previous.get("bundleFile", "") if previous else "",
+        },
+        "bundle": {
+            "file": entry.get("bundleFile", ""),
+            "size": int(entry.get("bundleSize", 0) or 0),
+            "crc32": entry.get("bundleCrc32", ""),
+            "sha256": entry.get("bundleSha256", ""),
+            "resourceCount": int(entry.get("resourceCount", 0) or 0),
+            "payloadBytes": int(entry.get("payloadBytes", 0) or 0),
+            "integrity": "validated-header-ranges-crc32-sha256",
+        },
+        "rollback": {
+            "available": rollback_available,
+            "versionName": rollback.get("versionName", "") if rollback_available else "",
+            "versionCode": int(rollback.get("versionCode", 0) or 0) if rollback_available else 0,
+            "bundleFile": rollback.get("bundleFile", "") if rollback_available else "",
+        },
+        "dataPolicy": {
+            "appPrivateDataTouched": False,
+            "appPrivateDataPolicy": "retained",
+            "note": "Install, update and rollback preserve app-private data; remove/delete-data commands own data deletion.",
+        },
+        "transaction": {
+            "staging": "bundle-copy-then-atomic-replace",
+            "registryCommit": "atomic-json-replace",
+            "rollbackBundleRetained": rollback_available,
+        },
+    }
+
+
 def delete_app_data(store: Path, app_id: str) -> bool:
     store = store.resolve()
     path = app_data_dir(store, app_id)
@@ -361,7 +439,15 @@ def app_bundle_path(store: Path, app_id: str) -> Path:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
+    bundle = read_bundle(args.bundle, args.max_bundle_bytes)
+    bundle_info = parse_jfapp(bundle)
+    previous = existing_app_entry(args.store, bundle_info["summary"]["id"])
     entry = install_bundle(args.store, args.bundle, args.max_apps, args.max_bundle_bytes)
+    if args.report:
+        atomic_write_json(
+            args.report,
+            build_install_transaction_report(args.store, args.bundle, entry, previous),
+        )
     if args.json:
         print(json.dumps(entry, ensure_ascii=False, indent=2))
     else:
@@ -436,6 +522,7 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--max-bundle-bytes", type=int, default=DEFAULT_MAX_BUNDLE_BYTES,
                          help="Maximum accepted bundle size.")
     install.add_argument("--json", action="store_true", help="Print installed entry as JSON.")
+    install.add_argument("--report", type=Path, help="Write an install transaction JSON report.")
     install.set_defaults(func=cmd_install)
 
     list_apps = subparsers.add_parser("list", help="List installed apps.")

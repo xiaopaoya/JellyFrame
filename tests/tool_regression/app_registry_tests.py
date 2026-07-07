@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import struct
 import zlib
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -13,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import app_registry  # noqa: E402
+import jellyframe_cli  # noqa: E402
 
 
 def write_jfapp(
@@ -170,6 +172,59 @@ class AppRegistryTests(unittest.TestCase):
             self.assertEqual(updated["rollback"]["versionCode"], 1)
             self.assertTrue((app_registry.bundles_dir(store) / updated["bundleFile"]).is_file())
             self.assertTrue((app_registry.bundles_dir(store) / updated["rollback"]["bundleFile"]).is_file())
+
+    def test_install_report_marks_update_and_rollback_availability(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory)
+            first = store / "weather-v1.jfapp"
+            second = store / "weather-v2.jfapp"
+            report = store / "install.report.json"
+            write_jfapp(first, version_code=1, version_name="1.0.0")
+            write_jfapp(second, version_code=2, version_name="2.0.0")
+            app_registry.install_bundle(store, first, app_registry.DEFAULT_MAX_APPS, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = app_registry.main([
+                    "install",
+                    "--store",
+                    str(store),
+                    "--bundle",
+                    str(second),
+                    "--report",
+                    str(report),
+                ])
+
+            self.assertEqual(result, 0)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["format"], "jellyframe.install.transaction")
+            self.assertEqual(data["action"], "update")
+            self.assertEqual(data["previous"]["versionCode"], 1)
+            self.assertEqual(data["app"]["versionCode"], 2)
+            self.assertTrue(data["rollback"]["available"])
+            self.assertEqual(data["rollback"]["versionCode"], 1)
+            self.assertFalse(data["dataPolicy"]["appPrivateDataTouched"])
+
+    def test_jellyframe_cli_bundle_install_writes_transaction_report(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory) / "store"
+            bundle = Path(directory) / "weather-v1.jfapp"
+            report = Path(directory) / "cli-install.report.json"
+            write_jfapp(bundle, version_code=1, version_name="1.0.0")
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = jellyframe_cli.cmd_install(SimpleNamespace(
+                    root=None,
+                    bundle=bundle,
+                    store=store,
+                    report=report,
+                ))
+
+            self.assertEqual(result, 0)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["format"], "jellyframe.install.transaction")
+            self.assertEqual(data["source"]["kind"], "bundle")
+            self.assertEqual(data["action"], "install")
+            self.assertEqual(data["app"]["id"], "org.example.weather")
 
     def test_rollback_swaps_current_and_previous_bundle(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:

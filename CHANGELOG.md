@@ -15,6 +15,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `rollback` metadata. Updating a `.jfapp` keeps the previous bundle as a
   rollback target; `tools/app_registry.py rollback` and Win32
   `--rollback-app ID` validate rollback without changing app-private data.
+- Registry installs can now emit a V0 install transaction report. `tools/app_registry.py
+  install --report` writes a standalone report, while `jellyframe_cli.py install
+  --root --report` merges `installTransaction` into the package/preflight report
+  so app authors can see action, integrity, rollback availability and data
+  policy in one file.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

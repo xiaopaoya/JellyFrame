@@ -786,6 +786,13 @@ python tools/jellyframe_cli.py install `
   --report build/watch_weather.install.report.json
 ```
 
+For source-package installs, the report remains the normal package/preflight
+report and gains an `installTransaction` section after the bundle is committed.
+That section records whether the operation was an install, update or reinstall,
+the validated bundle identity, rollback availability and the data-retention
+policy. For existing bundle installs, `tools/app_registry.py install --report`
+can write the same transaction report as a standalone file.
+
 The Win32 shell can then display the installed-app registry, launch apps through
 the rendered system-shell UI and delete inactive apps:
 

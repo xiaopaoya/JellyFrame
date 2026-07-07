@@ -1568,6 +1568,15 @@ def cmd_registry(args: argparse.Namespace) -> int:
     return app_registry.main(registry_args)
 
 
+def write_install_transaction_report(report_path: Path, transaction: dict, merge: bool) -> None:
+    if merge and report_path.is_file():
+        report = json.loads(report_path.read_text(encoding="utf-8-sig"))
+        report["installTransaction"] = transaction
+        write_json_report(report_path, report)
+        return
+    write_json_report(report_path, transaction)
+
+
 def sample_package_roots(samples_dir: Path) -> list[Path]:
     if not samples_dir.is_dir():
         raise SystemExit(f"samples directory does not exist: {samples_dir}")
@@ -1695,20 +1704,40 @@ def cmd_install(args: argparse.Namespace) -> int:
             package_result = cmd_package(args)
             if package_result != 0:
                 return package_result
-            return app_registry.main([
-                "install",
-                "--store",
-                str(args.store),
-                "--bundle",
-                str(args.output_bundle),
-            ])
-    return app_registry.main([
-        "install",
-        "--store",
-        str(args.store),
-        "--bundle",
-        str(args.bundle),
-    ])
+            bundle = app_registry.read_bundle(args.output_bundle, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+            bundle_info = app_registry.parse_jfapp(bundle)
+            previous = app_registry.existing_app_entry(args.store, bundle_info["summary"]["id"])
+            entry = app_registry.install_bundle(
+                args.store,
+                args.output_bundle,
+                app_registry.DEFAULT_MAX_APPS,
+                app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+            )
+            transaction = app_registry.build_install_transaction_report(
+                args.store,
+                args.output_bundle,
+                entry,
+                previous,
+                source_kind="source",
+                preflight_report=str(args.report),
+            )
+            write_install_transaction_report(args.report, transaction, merge=True)
+            print(f"installed {entry['id']} {entry['versionName']} ({entry['bundleSize']} bytes)")
+            return 0
+    bundle = app_registry.read_bundle(args.bundle, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+    bundle_info = app_registry.parse_jfapp(bundle)
+    previous = app_registry.existing_app_entry(args.store, bundle_info["summary"]["id"])
+    entry = app_registry.install_bundle(
+        args.store,
+        args.bundle,
+        app_registry.DEFAULT_MAX_APPS,
+        app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+    )
+    if args.report:
+        transaction = app_registry.build_install_transaction_report(args.store, args.bundle, entry, previous)
+        write_install_transaction_report(args.report, transaction, merge=False)
+    print(f"installed {entry['id']} {entry['versionName']} ({entry['bundleSize']} bytes)")
+    return 0
 
 
 def add_manifest_package_args(parser: argparse.ArgumentParser) -> None:

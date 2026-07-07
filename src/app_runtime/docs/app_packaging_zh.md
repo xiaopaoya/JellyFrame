@@ -660,6 +660,11 @@ python tools/jellyframe_cli.py install `
   --report build/watch_weather.install.report.json
 ```
 
+源码包安装时，这份 report 仍是普通 package/preflight report；bundle 提交后会额外包含
+`installTransaction` 字段。该字段记录本次操作是 install、update 还是 reinstall，已校验的
+bundle 身份、rollback 可用性和数据保留策略。安装已有 bundle 时，`tools/app_registry.py
+install --report` 可把同样的 transaction report 写成独立文件。
+
 随后 Win32 壳可以显示 installed-app registry，通过渲染出的 system-shell UI 启动 app，并删除非活动
 app：
 

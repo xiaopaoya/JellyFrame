@@ -14,6 +14,10 @@ JellyFrame Engine 的重要变更记录在这里。
   带有 `status`、`enabled`、`updatedAtUtc` 和可选 `rollback` 元数据。更新
   `.jfapp` 时会保留上一版 bundle 作为回滚目标；`tools/app_registry.py rollback`
   和 Win32 `--rollback-app ID` 可在不修改 app 私有数据的情况下验收回滚。
+- Registry 安装现在可输出 V0 install transaction report。`tools/app_registry.py
+  install --report` 会写入独立报告；`jellyframe_cli.py install --root --report`
+  会把 `installTransaction` 合并进 package/preflight report，让 app 作者在同一份
+  文件里看到 action、完整性、rollback 可用性和数据策略。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。
