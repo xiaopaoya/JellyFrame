@@ -425,6 +425,43 @@ class AppRegistryTests(unittest.TestCase):
             self.assertEqual(enabled["status"], app_registry.APP_STATUS_INSTALLED)
             self.assertNotIn("failure", enabled)
 
+    def test_state_report_exposes_launcher_friendly_derived_fields(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory)
+            weather_v1 = store / "weather-v1.jfapp"
+            weather_v2 = store / "weather-v2.jfapp"
+            bad = store / "bad-v1.jfapp"
+            report = store / "state.report.json"
+            write_jfapp(weather_v1, version_code=1, version_name="1.0.0")
+            write_jfapp(weather_v2, version_code=2, version_name="2.0.0")
+            write_jfapp(bad, app_id="org.example.bad", version_code=1, version_name="1.0.0")
+            app_registry.install_bundle(store, weather_v1, app_registry.DEFAULT_MAX_APPS, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+            app_registry.install_bundle(store, weather_v2, app_registry.DEFAULT_MAX_APPS, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+            app_registry.install_bundle(store, bad, app_registry.DEFAULT_MAX_APPS, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+            app_registry.mark_app_failed(store, "org.example.bad", "load-failed", "missing entry")
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = app_registry.main([
+                    "state",
+                    "--store",
+                    str(store),
+                    "--output",
+                    str(report),
+                ])
+
+            self.assertEqual(result, 0)
+            state = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(state["format"], app_registry.APP_MANAGER_STATE_FORMAT)
+            self.assertEqual(state["summary"]["appCount"], 2)
+            self.assertEqual(state["summary"]["launchableCount"], 1)
+            self.assertEqual(state["summary"]["failedCount"], 1)
+            self.assertEqual(state["summary"]["rollbackReadyCount"], 1)
+            apps = {entry["id"]: entry for entry in state["apps"]}
+            self.assertTrue(apps["org.example.weather"]["launchable"])
+            self.assertTrue(apps["org.example.weather"]["rollbackReady"])
+            self.assertFalse(apps["org.example.bad"]["launchable"])
+            self.assertEqual(apps["org.example.bad"]["failure"]["reason"], "load-failed")
+
     def test_rollback_swaps_current_and_previous_bundle(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
             store = Path(directory)

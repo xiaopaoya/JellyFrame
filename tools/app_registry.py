@@ -19,6 +19,8 @@ REGISTRY_FORMAT = "jellyframe.installed_apps.registry"
 REGISTRY_VERSION = 0
 INSTALL_CANDIDATE_FORMAT = "jellyframe.install_candidate"
 INSTALL_CANDIDATE_VERSION = 0
+APP_MANAGER_STATE_FORMAT = "jellyframe.app_manager.state"
+APP_MANAGER_STATE_VERSION = 0
 APP_STATUS_INSTALLED = "installed"
 APP_STATUS_DISABLED = "disabled"
 APP_STATUS_FAILED = "failed"
@@ -115,6 +117,48 @@ def sorted_registry(registry: dict) -> dict:
     registry = dict(registry)
     registry["apps"] = sorted(registry.get("apps", []), key=lambda app: str(app.get("id", "")))
     return registry
+
+
+def app_manager_state_from_registry(store: Path, registry: dict) -> dict:
+    apps = []
+    for entry in sorted_registry(registry).get("apps", []):
+        rollback = entry.get("rollback")
+        failure = entry.get("failure")
+        status = entry.get("status", APP_STATUS_INSTALLED)
+        enabled = bool(entry.get("enabled", True))
+        rollback_ready = isinstance(rollback, dict) and bool(rollback.get("bundleFile"))
+        failure_record = failure if isinstance(failure, dict) else {}
+        apps.append({
+            "id": entry.get("id", ""),
+            "name": entry.get("name", entry.get("id", "")),
+            "role": entry.get("role", "app"),
+            "versionName": entry.get("versionName", ""),
+            "versionCode": int(entry.get("versionCode", 0) or 0),
+            "status": status,
+            "enabled": enabled,
+            "launchable": enabled and status == APP_STATUS_INSTALLED,
+            "rollbackReady": rollback_ready,
+            "bundleSize": int(entry.get("bundleSize", 0) or 0),
+            "updatedAtUtc": entry.get("updatedAtUtc", entry.get("installedAtUtc", "")),
+            "failure": {
+                "reason": failure_record.get("reason", ""),
+                "message": failure_record.get("message", ""),
+                "failedAtUtc": failure_record.get("failedAtUtc", ""),
+            } if failure_record else {},
+        })
+    return {
+        "format": APP_MANAGER_STATE_FORMAT,
+        "formatVersion": APP_MANAGER_STATE_VERSION,
+        "store": str(store.resolve()),
+        "generatedAtUtc": utc_now(),
+        "apps": apps,
+        "summary": {
+            "appCount": len(apps),
+            "launchableCount": sum(1 for app in apps if app["launchable"]),
+            "failedCount": sum(1 for app in apps if app["status"] == APP_STATUS_FAILED),
+            "rollbackReadyCount": sum(1 for app in apps if app["rollbackReady"]),
+        },
+    }
 
 
 def read_bundle(path: Path, max_bundle_bytes: int) -> bytes:
@@ -774,6 +818,21 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_state(args: argparse.Namespace) -> int:
+    state = app_manager_state_from_registry(args.store, load_registry(args.store.resolve()))
+    if args.output:
+        atomic_write_json(args.output, state)
+    if args.json or not args.output:
+        print(json.dumps(state, ensure_ascii=False, indent=2))
+    else:
+        summary = state["summary"]
+        print(
+            f"state apps={summary['appCount']} launchable={summary['launchableCount']} "
+            f"failed={summary['failedCount']} rollback-ready={summary['rollbackReadyCount']}"
+        )
+    return 0
+
+
 def cmd_remove(args: argparse.Namespace) -> int:
     entry = remove_app(args.store, args.app_id, delete_data=not args.keep_data)
     if args.json:
@@ -877,6 +936,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_store_arg(list_apps)
     list_apps.add_argument("--json", action="store_true", help="Print registry JSON.")
     list_apps.set_defaults(func=cmd_list)
+
+    state = subparsers.add_parser("state", help="Print a launcher-friendly app manager state report.")
+    add_store_arg(state)
+    state.add_argument("--json", action="store_true", help="Print state JSON.")
+    state.add_argument("--output", type=Path, help="Write state JSON to a file.")
+    state.set_defaults(func=cmd_state)
 
     remove = subparsers.add_parser("remove", help="Remove an installed app.")
     add_store_arg(remove)

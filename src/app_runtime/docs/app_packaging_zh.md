@@ -673,6 +673,18 @@ install --report` 可把同样的 transaction report 写成独立文件。
 `--allow-downgrade` 只用于明确的维护或工厂流程，并会写入
 `installTransaction.updatePolicy`。
 
+启动器和 system shell 应优先消费派生出的 app-manager state report，而不是直接重复解析原始
+registry 字段：
+
+```powershell
+python tools/jellyframe_cli.py registry state `
+  --store build/installed_apps `
+  --output build/app_manager.state.json
+```
+
+state report schema 是 `tools/schemas/jellyframe.app_manager.state.schema.json`。
+它提供由持久 registry 派生出的 `launchable`、`rollbackReady`、summary 计数和稳定 failure 详情。
+
 随后 Win32 壳可以显示 installed-app registry，通过渲染出的 system-shell UI 启动 app，并删除非活动
 app：
 

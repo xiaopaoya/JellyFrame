@@ -804,6 +804,19 @@ Install/update rejects lower `versionCode` packages by default. Use rollback for
 normal user-facing recovery. `--allow-downgrade` exists for explicit maintenance
 or factory workflows and is reported in `installTransaction.updatePolicy`.
 
+Launchers and system shells should consume the derived app-manager state report
+instead of re-reading raw registry fields directly:
+
+```powershell
+python tools/jellyframe_cli.py registry state `
+  --store build/installed_apps `
+  --output build/app_manager.state.json
+```
+
+The state report schema is `tools/schemas/jellyframe.app_manager.state.schema.json`.
+It exposes `launchable`, `rollbackReady`, summary counts and stable failure
+details derived from the persistent registry.
+
 The Win32 shell can then display the installed-app registry, launch apps through
 the rendered system-shell UI and delete inactive apps:
 

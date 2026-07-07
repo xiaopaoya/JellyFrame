@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jellyframe.dev/schemas/jellyframe.app_manager.state.schema.json",
+  "title": "JellyFrame App Manager State",
+  "description": "Launcher-friendly derived state for installed apps. This is generated from the registry and does not replace the persistent registry schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "store", "generatedAtUtc", "apps", "summary"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "jellyframe.app_manager.state"
+    },
+    "formatVersion": {
+      "const": 0
+    },
+    "store": {
+      "type": "string"
+    },
+    "generatedAtUtc": {
+      "type": "string"
+    },
+    "apps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/app"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appCount", "launchableCount", "failedCount", "rollbackReadyCount"],
+      "properties": {
+        "appCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "launchableCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rollbackReadyCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "role",
+        "versionName",
+        "versionCode",
+        "status",
+        "enabled",
+        "launchable",
+        "rollbackReady",
+        "bundleSize",
+        "updatedAtUtc",
+        "failure"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "enum": ["app", "launcher", "watchface", "settings"]
+        },
+        "versionName": {
+          "type": "string"
+        },
+        "versionCode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": ["installed", "disabled", "failed"]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "launchable": {
+          "type": "boolean"
+        },
+        "rollbackReady": {
+          "type": "boolean"
+        },
+        "bundleSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "updatedAtUtc": {
+          "type": "string"
+        },
+        "failure": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "failedAtUtc": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
