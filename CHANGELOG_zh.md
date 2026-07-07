@@ -34,6 +34,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - 新增 `tools/app_registry.py state`，输出面向 launcher 的 app-manager state report，
   包含派生的 `launchable`、`rollbackReady`、summary 计数和 failure 详情。Win32 system shell
   也复用同一套派生 state helper 判断可启动状态和 rollback 标记。
+- 更新宿主 optional-service 文档，明确当前安装/更新流程由宿主持有：worker 下载、宿主签名验证、
+  install candidate 校验、transaction report、派生 launcher state，以及非固件操作必须具备 fallback。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

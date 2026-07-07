@@ -947,27 +947,41 @@ Installable third-party apps are managed by the system shell/app manager.
 
 Recommended install flow:
 
-1. Download or receive `.jfapp` into staging.
-2. Validate header, manifest summary, target device, version, budgets and
-   hash/signature.
-3. Validate sorted resource index, offsets, sizes, normalized paths and total
-   size.
-4. Write the bundle store.
-5. Atomically commit the installed-app registry.
-6. Post a completion event so the launcher refreshes its app list.
+1. Download or receive `.jfapp` bytes into a host-owned staging area. This can
+   run in a network/update worker; it must not block the UI task.
+2. Verify transport, signature and user approval in host code. JellyFrame does
+   not provide TLS, app-store policy or cryptographic signature authority.
+3. Write a local install candidate JSON containing the staged bundle path,
+   SHA-256, host signature-verification status, user approval and update policy.
+4. Pass that candidate to `jellyframe_cli.py install --candidate` or
+   `tools/app_registry.py install-candidate`. The tool re-checks hash,
+   signature status, user approval, bundle integrity, version policy and budget
+   limits before committing.
+5. Copy the bundle through staging into the bundle store and atomically commit
+   `registry.json`.
+6. Produce an install transaction report. The launcher then refreshes from the
+   derived app-manager state report instead of re-deriving registry fields.
 
-Recommended registry fields:
+Persistent registry fields:
 
 ```text
-app_id
-version_name / version_code
-display_name
-icon_resource_path
-permissions / capabilities
-bundle_offset
-bundle_size
-validation_state
+id
+name
+role
+status              installed | disabled | failed
+enabled             true | false
+versionName / versionCode
+entry / script
+networkAllowed
+bundleFile / bundleSize / resourceCount
+installedAtUtc / updatedAtUtc
+rollback            previous bundle metadata when available
+failure             reason/message/failedAtUtc when the app is quarantined
 ```
+
+`rollback-ready` is a derived launcher state, not a persistent `status` value.
+Launchers should consume `tools/app_registry.py state`, whose JSON schema is
+`tools/schemas/jellyframe.app_manager.state.schema.json`.
 
 Desktop registry data model:
 
@@ -982,9 +996,19 @@ Desktop registry data model:
 Rules:
 
 - Active app JavaScript cannot directly install and mount a new bundle.
+- Installed apps cannot download and install remote pages as executable UI.
+  Network fetch is an app capability for data, not a remote code loader.
 - Failed installs discard staging and must not corrupt the committed registry.
 - Updates write the new bundle fully before atomically switching the registry.
+- Lower `versionCode` installs are rejected by default; explicit downgrade is a
+  maintenance/factory operation, not normal user update flow.
+- Failed apps should be marked `failed`, disabled for launch and left with data
+  intact until the user or system shell decides whether to enable, rollback,
+  delete data or remove the app.
 - Deleting the active app should first switch back to the system shell.
+- Any non-firmware operation must have a host fallback path. A bad app or broken
+  update may lose its own state, but it must not require reflashing firmware to
+  recover the runtime, launcher or other apps.
 
 ## System Data Events
 

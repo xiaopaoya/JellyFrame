@@ -779,25 +779,38 @@ struct HostStorageResponse {
 
 推荐安装流程：
 
-1. 下载或接收 `.jfapp` 到 staging 区。
-2. 校验 header、manifest summary、目标设备、版本、预算、hash/签名。
-3. 校验资源索引排序、offset/size、路径规范化和总大小。
-4. 写入 bundle store。
-5. 原子提交 installed-app registry。
-6. 投递 completion event，启动器刷新 app 列表。
+1. 将 `.jfapp` 下载或接收到宿主持有的 staging 区。这个过程可以在 network/update worker 中完成，
+   不能阻塞 UI task。
+2. 由宿主完成传输校验、签名验证和用户批准。JellyFrame 不提供 TLS、应用商店策略或密码学签名权威。
+3. 写出本地 install candidate JSON，其中包含 staged bundle 路径、SHA-256、宿主签名验证状态、
+   用户批准状态和 update policy。
+4. 将 candidate 交给 `jellyframe_cli.py install --candidate` 或
+   `tools/app_registry.py install-candidate`。工具会在提交前重新检查 hash、签名状态、用户批准、
+   bundle 完整性、版本策略和预算限制。
+5. 通过 staging 将 bundle 写入 bundle store，并原子提交 `registry.json`。
+6. 生成 install transaction report。启动器随后从派生 app-manager state report 刷新，而不是重复推导
+   registry 字段。
 
-推荐 registry 记录：
+持久 registry 字段：
 
 ```text
-app_id
-version_name / version_code
-display_name
-icon_resource_path
-permissions / capabilities
-bundle_offset
-bundle_size
-validation_state
+id
+name
+role
+status              installed | disabled | failed
+enabled             true | false
+versionName / versionCode
+entry / script
+networkAllowed
+bundleFile / bundleSize / resourceCount
+installedAtUtc / updatedAtUtc
+rollback            可用时记录上一版 bundle 元数据
+failure             app 被隔离时记录 reason/message/failedAtUtc
 ```
+
+`rollback-ready` 是 launcher 派生状态，不是持久 `status` 值。启动器应消费
+`tools/app_registry.py state`，其 JSON schema 是
+`tools/schemas/jellyframe.app_manager.state.schema.json`。
 
 桌面 registry 数据模型：
 
@@ -811,9 +824,15 @@ validation_state
 规则：
 
 - 活动 app 的 JS 不能直接安装并挂载新 bundle。
+- 已安装 app 不能下载并安装远程页面作为可执行 UI。网络请求是 app 的数据能力，不是远程代码加载器。
 - 安装失败只能丢弃 staging，不能破坏已提交 registry。
 - 升级应先完整写入新 bundle，再原子切换 registry。
+- 更低 `versionCode` 的安装默认拒绝；显式 downgrade 是维护/工厂流程，不是普通用户更新路径。
+- 失败 app 应标记为 `failed` 并禁止启动，同时保留数据，直到用户或 system shell 决定 enable、
+  rollback、delete data 或 remove。
 - 删除活动 app 时应先切回系统 shell。
+- 任何非固件操作都必须有宿主 fallback。坏 app 或损坏更新可以丢失自身状态，但不能要求重新烧写固件
+  才能恢复 runtime、launcher 或其他 app。
 
 ## System Data Events
 

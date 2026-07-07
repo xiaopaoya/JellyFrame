@@ -43,6 +43,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   report with derived `launchable`, `rollbackReady`, summary counts and failure
   details. The Win32 system shell now consumes the same derived state helper for
   launchability and rollback badges.
+- Updated host optional-service documentation to describe the current
+  host-owned install/update flow: worker download, host signature verification,
+  install candidate validation, transaction reports, derived launcher state and
+  non-firmware fallback expectations.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow
