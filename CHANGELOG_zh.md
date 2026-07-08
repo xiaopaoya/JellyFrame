@@ -40,6 +40,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - Win32 system-shell 遇到不支持的 launcher `data-action` 时会在状态行报告，不再静默吞掉。
 - 生命周期文档补充受信 launcher/system-shell role：`system.launcher` 和 `system.appManager`
   是宿主解释的 capability，Win32 `data-action` 处理不会暴露给普通已安装 app。
+- CLI 新增 `--runtime-log`，可把 Win32 frame-script capture 日志合并进同一份 package report，
+  生成 `runtimeMetrics` 和测得的 performance summary 字段。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

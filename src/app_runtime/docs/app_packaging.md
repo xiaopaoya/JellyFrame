@@ -1000,6 +1000,10 @@ the summary also carries desktop tool-side stage timings in microseconds
 (`timingsUs`) so authors can see whether parse, layout, paint or present
 dominated that validation run. These timings are attribution data, not device
 FPS.
+If you also have a saved Win32 frame-script or capture log, pass it through
+`--runtime-log` and the CLI will merge the observed frame-update, present-estimate
+and load-telemetry counters into the same report as `runtimeMetrics` plus
+measured performance-summary fields.
 `runtimeBudgetEstimate` is a package-preflight estimate:
 it reports package-known resource/font usage and manifest/target budget limits,
 while live queue/handle/timer/listener counters come from `AppBudgetSnapshot`

@@ -814,6 +814,44 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("performance-layer-count", codes)
         self.assertIn("performance-resource-budget-high", codes)
 
+    def test_runtime_capture_log_merges_measured_performance_summary(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-runtime-capture-") as directory:
+            root = Path(directory)
+            report_path = root / "report.json"
+            runtime_log = root / "frame.log"
+            runtime_log.write_text(
+                "\n".join([
+                    "diagnostics: 1",
+                    "JellyFrame Win32 browser frame capture",
+                    "  output_dir=out/motion_lab_frames",
+                    "  montage=out/motion_lab_montage.bmp",
+                    "  frames=30",
+                    "  frame_step_ms=33",
+                    "  viewport=300x300",
+                    "  scripting=off",
+                    "  dirty_local=30 full=1 clean=0",
+                    "  frame_update idle=0 repaint=30 rebuild=1 first_paint=1 paint_dirty=30 text_stable=0 style_stable=0 layout_previous=0 tree_dirty=0 framebuffer_mismatch=0",
+                    "  frame_repaint dirty_rect=30 full_frame=1 full_first_paint=1 full_tree_dirty=0 full_framebuffer_mismatch=0 full_resolved_mismatch=0 full_paint_dirty=0 dirty_paint_dirty=30 dirty_text_stable=0 dirty_style_stable=0 dirty_layout_previous=0",
+                    "  scroll_blits full=31 fast=0 copied_pixels=2790000",
+                    "  present_estimate_rgb565 frames=31 full=1 dirty=30 source_rects=91 clipped_rects=91 empty_rects=0 flushes=91 converted_pixels=1247508 packed_bytes=2495016",
+                    "  load_telemetry samples=31 sleep=0 lowfreq=0 normal=19 boost=12 overloaded=1 drop_animation=1 callback_backlog=0 service_backlog=0 max_dirty=97%",
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            jellyframe_cli.merge_runtime_capture_report(report_path, runtime_log)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(report["runtimeMetrics"]["summary"]["frames"], 31)
+        self.assertEqual(report["performanceSummary"]["source"], "package-preflight-estimate+runtime-capture")
+        self.assertEqual(report["performanceSummary"]["measuredFrameCount"], 31)
+        self.assertEqual(report["performanceSummary"]["measuredFullFrameCount"], 1)
+        self.assertEqual(report["performanceSummary"]["measuredConvertedPixels"], 1247508)
+        self.assertEqual(report["performanceSummary"]["measuredLoadOverloadedFrames"], 1)
+        codes = {entry["code"] for entry in report["performanceAdvice"]}
+        self.assertIn("performance-runtime-overloaded", codes)
+        self.assertIn("performance-runtime-drop-animation", codes)
+        self.assertIn("performance-runtime-dirty-area-high", codes)
+
     def test_requested_targets_are_explicit_opt_in(self):
         class Args:
             target = "round-300"

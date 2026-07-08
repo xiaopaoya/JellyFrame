@@ -55,6 +55,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   roles: `system.launcher` and `system.appManager` are host-interpreted
   capabilities, and Win32 `data-action` handling is not available to ordinary
   installed apps.
+- Added `--runtime-log` support to the CLI so Win32 frame-script capture logs
+  can be merged into the same package report as `runtimeMetrics` and measured
+  performance-summary fields.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow

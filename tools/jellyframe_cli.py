@@ -201,6 +201,86 @@ def load_json_if_exists(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+def parse_metric_value(value: str) -> int | str:
+    cleaned = value.rstrip("%")
+    if re.fullmatch(r"-?\d+", cleaned):
+        return int(cleaned)
+    return cleaned
+
+
+def parse_runtime_capture_log(log_path: Path) -> dict:
+    if not log_path.is_file():
+        raise SystemExit(f"missing runtime log: {log_path}")
+    metrics: dict = {
+        "format": "jellyframe.runtime.capture.metrics.v0",
+        "source": str(log_path),
+        "presentEstimateRgb565": {},
+        "frameUpdate": {},
+        "frameRepaint": {},
+        "scrollBlits": {},
+        "loadTelemetry": {},
+    }
+    key_map = {
+        "present_estimate_rgb565": "presentEstimateRgb565",
+        "frame_update": "frameUpdate",
+        "frame_repaint": "frameRepaint",
+        "scroll_blits": "scrollBlits",
+        "load_telemetry": "loadTelemetry",
+        "frame_policy_samples": "framePolicySamples",
+        "host_completion_batches": "hostCompletionBatches",
+        "system_event_batches": "systemEventBatches",
+        "app_budget": "appBudget",
+        "app_budget_script": "appBudgetScript",
+    }
+    for raw_line in log_path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("[") or line.startswith("diagnostics:"):
+            continue
+        match = re.match(r"^(?P<name>[a-z0-9_]+)\s+(?P<body>.+)$", line)
+        if not match:
+            continue
+        mapped = key_map.get(match.group("name"))
+        if not mapped:
+            continue
+        parsed: dict = {}
+        for token in match.group("body").split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            parsed[key] = parse_metric_value(value)
+        metrics[mapped] = parsed
+    present = metrics.get("presentEstimateRgb565", {}) if isinstance(metrics.get("presentEstimateRgb565", {}), dict) else {}
+    load_telemetry = metrics.get("loadTelemetry", {}) if isinstance(metrics.get("loadTelemetry", {}), dict) else {}
+    frame_update = metrics.get("frameUpdate", {}) if isinstance(metrics.get("frameUpdate", {}), dict) else {}
+    scroll_blits = metrics.get("scrollBlits", {}) if isinstance(metrics.get("scrollBlits", {}), dict) else {}
+    metrics["summary"] = {
+        "frames": int(present.get("frames", 0) or 0),
+        "fullFrames": int(present.get("full", 0) or 0),
+        "dirtyFrames": int(present.get("dirty", 0) or 0),
+        "flushes": int(present.get("flushes", 0) or 0),
+        "convertedPixels": int(present.get("converted_pixels", 0) or 0),
+        "packedBytes": int(present.get("packed_bytes", 0) or 0),
+        "scrollCopiedPixels": int(scroll_blits.get("copied_pixels", 0) or 0),
+        "loadSamples": int(load_telemetry.get("samples", 0) or 0),
+        "loadOverloaded": int(load_telemetry.get("overloaded", 0) or 0),
+        "loadDropAnimation": int(load_telemetry.get("drop_animation", 0) or 0),
+        "frameUpdateRepaint": int(frame_update.get("repaint", 0) or 0),
+        "maxDirtyPercent": int(load_telemetry.get("max_dirty", 0) or 0),
+    }
+    return metrics
+
+
+def merge_runtime_capture_report(package_report_path: Path, runtime_log_path: Path) -> None:
+    metrics = parse_runtime_capture_log(runtime_log_path)
+    report = load_json_if_exists(package_report_path)
+    if not report:
+        report = {
+            "format": "jellyframe.package.report",
+        }
+    report["runtimeMetrics"] = metrics
+    write_json_report(package_report_path, report)
+
+
 ADVICE_BY_CODE = {
     "visual-horizontal-overflow": {
         "title": "Content paints outside the target width",
@@ -664,8 +744,10 @@ def collect_performance_summary(report: dict) -> dict:
     resource_used = int(resource_budget.get("used", 0) or 0)
     resource_limit = int(resource_budget.get("limit", 0) or 0)
     display_limit = int(display_budget.get("limit", 0) or 0)
+    runtime_metrics = report.get("runtimeMetrics", {}) if isinstance(report.get("runtimeMetrics", {}), dict) else {}
+    runtime_summary = runtime_metrics.get("summary", {}) if isinstance(runtime_metrics.get("summary", {}), dict) else {}
 
-    return {
+    summary = {
         "model": "jellyframe.package.performance-summary.v0",
         "source": "package-preflight-estimate",
         "rating": perf_rating(max_score),
@@ -687,6 +769,24 @@ def collect_performance_summary(report: dict) -> dict:
             "Use Win32 frame-script capture or port telemetry for actual milliseconds, DMA wait and flush-done timing.",
         ],
     }
+    if runtime_metrics:
+        summary["source"] = "package-preflight-estimate+runtime-capture"
+        summary["runtimeCaptureSource"] = str(runtime_metrics.get("source", ""))
+        summary["measuredFrameCount"] = int(runtime_summary.get("frames", 0) or 0)
+        summary["measuredFullFrameCount"] = int(runtime_summary.get("fullFrames", 0) or 0)
+        summary["measuredDirtyFrameCount"] = int(runtime_summary.get("dirtyFrames", 0) or 0)
+        summary["measuredFlushCount"] = int(runtime_summary.get("flushes", 0) or 0)
+        summary["measuredConvertedPixels"] = int(runtime_summary.get("convertedPixels", 0) or 0)
+        summary["measuredPackedBytes"] = int(runtime_summary.get("packedBytes", 0) or 0)
+        summary["measuredScrollCopiedPixels"] = int(runtime_summary.get("scrollCopiedPixels", 0) or 0)
+        summary["measuredLoadSamples"] = int(runtime_summary.get("loadSamples", 0) or 0)
+        summary["measuredLoadOverloadedFrames"] = int(runtime_summary.get("loadOverloaded", 0) or 0)
+        summary["measuredDropAnimationFrames"] = int(runtime_summary.get("loadDropAnimation", 0) or 0)
+        summary["measuredMaxDirtyPercent"] = int(runtime_summary.get("maxDirtyPercent", 0) or 0)
+        summary["notes"] = summary["notes"] + [
+            "Runtime metrics were merged from a Win32 frame-script or capture log.",
+        ]
+    return summary
 
 
 def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
@@ -745,6 +845,30 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
             "The page is near the configured display-command cap; future UI states may overflow or trigger degraded rendering.",
             "Raise the budget only after measuring the target, or simplify repeated decoration and offscreen content.",
             "", {"displayCommandBudgetPercent": display_percent})
+
+    runtime_metrics = report.get("runtimeMetrics", {}) if isinstance(report.get("runtimeMetrics", {}), dict) else {}
+    runtime_summary = runtime_metrics.get("summary", {}) if isinstance(runtime_metrics.get("summary", {}), dict) else {}
+    if int(runtime_summary.get("loadOverloaded", 0) or 0) > 0:
+        append_performance_advice(
+            advice, seen, "performance-runtime-overloaded", "warning",
+            "Runtime capture reported overloaded frames",
+            "The Win32 frame-script log shows overloaded frames, which means the page or host work could not stay within the selected frame budget.",
+            "Reduce display-command density, cut expensive effects, or move slow work into host jobs until the overloaded counter stops increasing.",
+            "", {"loadOverloadedFrames": int(runtime_summary.get("loadOverloaded", 0) or 0)})
+    if int(runtime_summary.get("loadDropAnimation", 0) or 0) > 0:
+        append_performance_advice(
+            advice, seen, "performance-runtime-drop-animation", "warning",
+            "Runtime capture dropped animation frames",
+            "The frame-script log shows animation drops, which usually means the target cannot afford the current animation load every frame.",
+            "Lower animation frequency, simplify transforms/easing, or keep the animated region smaller so the dirty-rect path can stay cheap.",
+            "", {"dropAnimationFrames": int(runtime_summary.get("loadDropAnimation", 0) or 0)})
+    if int(runtime_summary.get("maxDirtyPercent", 0) or 0) >= 90:
+        append_performance_advice(
+            advice, seen, "performance-runtime-dirty-area-high", "info",
+            "Runtime capture shows a large dirty area",
+            "The runtime log reports that the dirty area regularly approaches the full viewport.",
+            "Check whether layout changes or large repaints are forcing full-screen work; try to keep scrolling and animations on smaller dirty rectangles.",
+            "", {"maxDirtyPercent": int(runtime_summary.get("maxDirtyPercent", 0) or 0)})
     return advice
 
 
@@ -1285,6 +1409,8 @@ def cmd_package(args: argparse.Namespace) -> int:
         return package_result
     merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
     merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
+    if getattr(args, "runtime_log", None):
+        merge_runtime_capture_report(args.report, args.runtime_log)
     return enforce_diagnostics_policy(args)
 
 
@@ -1313,6 +1439,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
         command.extend(["--viewport-height", str(height)])
     result = run_command(command)
     if result == 0:
+        if getattr(args, "runtime_log", None):
+            merge_runtime_capture_report(args.report, args.runtime_log)
         return enforce_diagnostics_policy(args)
     return result
 
@@ -1431,6 +1559,8 @@ def cmd_check(args: argparse.Namespace) -> int:
         font_result = run_font_resource_check(args)
         if font_result != 0:
             return font_result
+    if getattr(args, "runtime_log", None):
+        merge_runtime_capture_report(args.report, args.runtime_log)
     policy_result = enforce_diagnostics_policy(args)
     if policy_result != 0:
         return policy_result
@@ -1864,6 +1994,8 @@ def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--build-dir", default=default_build_dir(), type=Path, help="Directory containing built tools.")
     parser.add_argument("--skip-check", action="store_true", help="Skip developer preflight checks.")
     parser.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
+    parser.add_argument("--runtime-log", type=Path,
+                        help="Optional Win32 frame-script or runtime capture log to merge into the report.")
 
 
 def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:

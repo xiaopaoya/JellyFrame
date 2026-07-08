@@ -849,6 +849,9 @@ command 数量、framebuffer bytes、估算 pipeline heap、资源预算占比�
 `AppBudgetSnapshot`。管线诊断包含伪浏览器格式/版本标记、输出 viewport、面向内存的管线统计、
 severity 汇总，以及 parser、style、layout、layer、renderer 代码实际发出的 diagnostics。
 已知不支持或降级的特性应给出明确原因；未知恢复至少应包含触发字段或片段。
+如果你保存了 Win32 frame-script 或 capture 日志，可以通过 `--runtime-log` 交给 CLI；它会把
+frame-update、present-estimate 和 load-telemetry 计数合并进同一份 report，写入 `runtimeMetrics`
+和测得的 `performanceSummary` 字段。
 
 当 report 由 `tools/jellyframe_cli.py` 写出时，CLI 还会从 package warnings、管线
 diagnostics、responsive profiles 和字体 diagnostics 派生 `developerAdvice[]`。这个字段面向
