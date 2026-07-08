@@ -526,6 +526,52 @@ class PackagePreflightTests(unittest.TestCase):
         intent = package_app.service_intent_report(normalized, {"id": "round-300"})
         self.assertFalse(intent["requested"]["storageKv"])
 
+    def test_manifest_validation_requires_schema_required_fields(self):
+        base = {
+            "format": "jellyframe.app",
+            "formatVersion": 0,
+            "id": "org.example.strict",
+            "version": {"name": "1.0.0", "code": 1},
+            "entry": "/index.html",
+            "runtime": {"minJellyFrame": "0.5.0", "script": "classic"},
+            "viewport": {"designWidth": 300, "designHeight": 300},
+            "budgets": {"maxResourceBytes": 4096},
+            "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
+        }
+        for key in ("version", "entry", "runtime", "viewport", "budgets", "targets"):
+            candidate = dict(base)
+            candidate.pop(key)
+            with self.assertRaises(SystemExit):
+                package_app.validate_manifest(candidate)
+
+    def test_manifest_validation_rejects_incomplete_nested_required_fields(self):
+        cases = [
+            {"version": {"code": 1}},
+            {"version": {"name": "1.0.0"}},
+            {"runtime": {"script": "classic"}},
+            {"runtime": {"minJellyFrame": "0.5.0"}},
+            {"budgets": {}},
+            {"targets": {}},
+            {"targets": {"round-300": {"output": "jfapp"}}},
+            {"targets": {"round-300": {"viewport": {"width": 300, "height": 300}}}},
+        ]
+        base = {
+            "format": "jellyframe.app",
+            "formatVersion": 0,
+            "id": "org.example.strict",
+            "version": {"name": "1.0.0", "code": 1},
+            "entry": "/index.html",
+            "runtime": {"minJellyFrame": "0.5.0", "script": "classic"},
+            "viewport": {"designWidth": 300, "designHeight": 300},
+            "budgets": {"maxResourceBytes": 4096},
+            "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
+        }
+        for patch in cases:
+            candidate = dict(base)
+            candidate.update(patch)
+            with self.assertRaises(SystemExit):
+                package_app.validate_manifest(candidate)
+
     def test_responsive_profile_status_and_report_merge(self):
         pipeline_report = {
             "viewport": {"width": 320, "height": 240},

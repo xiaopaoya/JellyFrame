@@ -55,6 +55,7 @@
         "height": 300,
         "shape": "round"
       },
+      "output": "jfapp",
       "budgets": {
         "maxAppFonts": 2,
         "maxAppFontBytes": 1024,

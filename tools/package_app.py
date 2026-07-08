@@ -322,7 +322,38 @@ def parse_background_service_policy(manifest: dict) -> dict:
     }
 
 
+def required_object(parent: dict, key: str) -> dict:
+    if key not in parent:
+        fail(f"manifest {key} is required")
+    value = parent.get(key)
+    if not isinstance(value, dict):
+        fail(f"manifest {key} must be an object")
+    return value
+
+
+def required_string(parent: dict, key: str, source: str) -> str:
+    if key not in parent:
+        fail(f"{source}.{key} is required")
+    value = parent.get(key)
+    if not isinstance(value, str) or not value:
+        fail(f"{source}.{key} must be a non-empty string")
+    return value
+
+
+def required_int(parent: dict, key: str, source: str, minimum: int | None = None) -> int:
+    if key not in parent:
+        fail(f"{source}.{key} is required")
+    value = parent.get(key)
+    if not isinstance(value, int) or isinstance(value, bool):
+        fail(f"{source}.{key} must be an integer")
+    if minimum is not None and value < minimum:
+        fail(f"{source}.{key} must be >= {minimum}")
+    return value
+
+
 def validate_manifest(manifest: dict) -> dict:
+    if not isinstance(manifest, dict):
+        fail("manifest root must be an object")
     if manifest.get("format") != "jellyframe.app":
         fail('manifest format must be "jellyframe.app"')
     if int_field(manifest, "formatVersion", -1) != 0:
@@ -330,19 +361,22 @@ def validate_manifest(manifest: dict) -> dict:
     app_id = manifest.get("id")
     if not isinstance(app_id, str) or not app_id:
         fail("manifest id is required")
-    entry = normalize_app_path(str(manifest.get("entry", "/index.html")))
-    version = manifest.get("version", {})
-    if not isinstance(version, dict):
-        version = {}
-    runtime = manifest.get("runtime", {})
-    if not isinstance(runtime, dict):
-        runtime = {}
-    viewport = manifest.get("viewport", {})
-    if not isinstance(viewport, dict):
-        viewport = {}
-    budgets = manifest.get("budgets", {})
-    if not isinstance(budgets, dict):
-        budgets = {}
+    if "entry" not in manifest:
+        fail("manifest entry is required")
+    entry = normalize_app_path(required_string(manifest, "entry", "manifest"))
+    version = required_object(manifest, "version")
+    version_name = required_string(version, "name", "manifest version")
+    version_code = required_int(version, "code", "manifest version", 0)
+    runtime = required_object(manifest, "runtime")
+    min_jellyframe = required_string(runtime, "minJellyFrame", "manifest runtime")
+    script_mode = required_string(runtime, "script", "manifest runtime")
+    if script_mode not in {"none", "classic"}:
+        fail("manifest runtime.script must be one of: none, classic")
+    viewport = required_object(manifest, "viewport")
+    required_int(viewport, "designWidth", "manifest viewport", 1)
+    required_int(viewport, "designHeight", "manifest viewport", 1)
+    budgets = required_object(manifest, "budgets")
+    required_int(budgets, "maxResourceBytes", "manifest budgets", 1)
     permissions = manifest.get("permissions", [])
     if not isinstance(permissions, list):
         permissions = []
@@ -377,9 +411,22 @@ def validate_manifest(manifest: dict) -> dict:
                 "sizes": font.get("sizes", []),
                 "weights": font.get("weights", []),
             })
-    targets = manifest.get("targets", {})
-    if not isinstance(targets, dict):
-        targets = {}
+    targets = required_object(manifest, "targets")
+    if not targets:
+        fail("manifest targets must contain at least one target")
+    for target_name, target_config in targets.items():
+        if not isinstance(target_name, str) or not target_name:
+            fail("manifest targets keys must be non-empty strings")
+        if not isinstance(target_config, dict):
+            fail(f"manifest targets.{target_name} must be an object")
+        if "viewport" not in target_config or not isinstance(target_config.get("viewport"), dict):
+            fail(f"manifest targets.{target_name}.viewport must be an object")
+        target_viewport = target_config["viewport"]
+        required_int(target_viewport, "width", f"manifest targets.{target_name}.viewport", 1)
+        required_int(target_viewport, "height", f"manifest targets.{target_name}.viewport", 1)
+        output = required_string(target_config, "output", f"manifest targets.{target_name}")
+        if output not in {"cpp", "debug-dir", "jfapp"}:
+            fail(f"manifest targets.{target_name}.output must be one of: cpp, debug-dir, jfapp")
     role = manifest.get("role", "app")
     if not isinstance(role, str) or role not in {"app", "launcher", "watchface", "settings"}:
         fail("manifest role must be one of: app, launcher, watchface, settings")
@@ -397,11 +444,11 @@ def validate_manifest(manifest: dict) -> dict:
         "id": app_id,
         "name": manifest.get("name", app_id),
         "role": role,
-        "versionName": version.get("name", "0.0.0"),
-        "versionCode": int_field(version, "code", 0),
+        "versionName": version_name,
+        "versionCode": version_code,
         "entry": entry,
-        "minJellyFrame": runtime.get("minJellyFrame", ""),
-        "script": runtime.get("script", "classic"),
+        "minJellyFrame": min_jellyframe,
+        "script": script_mode,
         "viewport": viewport,
         "budgets": budgets,
         "fonts": fonts,
