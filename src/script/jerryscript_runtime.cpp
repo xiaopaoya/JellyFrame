@@ -89,6 +89,12 @@ struct ScriptCanvasGradient {
     std::uint32_t id = 0;
 };
 
+struct ScriptNodeBinding {
+    JerryScriptRuntime* runtime = nullptr;
+    Node* node = nullptr;
+    bool active = false;
+};
+
 struct ScriptRuntimeAccess {
     static bool can_adopt_detached_node(const JerryScriptRuntime& runtime) {
         return runtime.can_adopt_detached_node();
@@ -233,6 +239,22 @@ struct ScriptRuntimeAccess {
         return runtime.create_canvas_gradient(gradient_id);
     }
 
+    static ScriptNodeBinding* bind_script_node(JerryScriptRuntime& runtime, Node& node) {
+        return runtime.bind_script_node(node);
+    }
+
+    static Node* resolve_script_node(JerryScriptRuntime& runtime, const ScriptNodeBinding& binding) {
+        return runtime.resolve_script_node(binding);
+    }
+
+    static void forget_script_node_binding(JerryScriptRuntime& runtime, ScriptNodeBinding& binding) {
+        runtime.forget_script_node_binding(binding);
+    }
+
+    static void invalidate_script_node(JerryScriptRuntime& runtime, Node& node) {
+        runtime.invalidate_script_node(node);
+    }
+
     static const JerryScriptRuntimeOptions& options(const JerryScriptRuntime& runtime) {
         return runtime.options_;
     }
@@ -262,6 +284,24 @@ void free_script_event_binding(void* native_p, jerry_object_native_info_t*) {
     delete static_cast<ScriptEventBinding*>(native_p);
 }
 
+void script_node_destroyed(Node& node, void* context) {
+    auto* runtime = static_cast<JerryScriptRuntime*>(context);
+    if (runtime != nullptr) {
+        ScriptRuntimeAccess::invalidate_script_node(*runtime, node);
+    }
+}
+
+void free_script_node_binding(void* native_p, jerry_object_native_info_t*) {
+    auto* binding = static_cast<ScriptNodeBinding*>(native_p);
+    if (binding == nullptr) {
+        return;
+    }
+    if (binding->runtime != nullptr) {
+        ScriptRuntimeAccess::forget_script_node_binding(*binding->runtime, *binding);
+    }
+    delete binding;
+}
+
 void script_node_event_listener_removed(void* context) {
     auto* listener = static_cast<ScriptEventListener*>(context);
     if (listener == nullptr) {
@@ -272,7 +312,7 @@ void script_node_event_listener_removed(void* context) {
     listener->active = false;
 }
 
-const jerry_object_native_info_t kNodeNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kNodeNativeInfo = {free_script_node_binding, 0, 0};
 const jerry_object_native_info_t kRuntimeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kEventNativeInfo = {free_script_event_binding, 0, 0};
 const jerry_object_native_info_t kXhrNativeInfo = {nullptr, 0, 0};
@@ -464,7 +504,11 @@ Node* native_node(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
         return nullptr;
     }
-    return static_cast<Node*>(jerry_object_get_native_ptr(object, &kNodeNativeInfo));
+    auto* binding = static_cast<ScriptNodeBinding*>(jerry_object_get_native_ptr(object, &kNodeNativeInfo));
+    if (binding == nullptr || binding->runtime == nullptr) {
+        return nullptr;
+    }
+    return ScriptRuntimeAccess::resolve_script_node(*binding->runtime, *binding);
 }
 
 JerryScriptRuntime* native_runtime(const jerry_value_t object) {
@@ -472,6 +516,11 @@ JerryScriptRuntime* native_runtime(const jerry_value_t object) {
         return nullptr;
     }
     return static_cast<JerryScriptRuntime*>(jerry_object_get_native_ptr(object, &kRuntimeNativeInfo));
+}
+
+void bind_native_node(jerry_value_t object, JerryScriptRuntime& runtime, Node& node) {
+    jerry_object_set_native_ptr(object, &kNodeNativeInfo, ScriptRuntimeAccess::bind_script_node(runtime, node));
+    jerry_object_set_native_ptr(object, &kRuntimeNativeInfo, &runtime);
 }
 
 Node* find_by_id(Node& node, const std::string& id) {
@@ -1791,11 +1840,12 @@ jerry_value_t node_get_class_list(const jerry_call_info_t* call_info_p,
                                   const jerry_value_t[],
                                   const jerry_length_t) {
     Node* node = native_node(call_info_p->this_value);
-    if (node == nullptr || node->type != NodeType::Element) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element) {
         return jerry_undefined();
     }
     JerryValue object(jerry_object());
-    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, node);
+    bind_native_node(object.get(), *runtime, *node);
     set_method(object.get(), "contains", class_list_contains);
     set_method(object.get(), "add", class_list_add);
     set_method(object.get(), "remove", class_list_remove);
@@ -3275,9 +3325,8 @@ JELLYFRAME_STYLE_ACCESSOR(zIndex, "z-index")
 #undef JELLYFRAME_STYLE_ACCESSOR
 
 jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
-    (void) runtime;
     JerryValue object(jerry_object());
-    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
+    bind_native_node(object.get(), runtime, node);
     define_accessor(object.get(), "display", style_get_display, style_set_display);
     define_accessor(object.get(), "color", style_get_color, style_set_color);
     define_accessor(object.get(), "background", style_get_background, style_set_background);
@@ -3680,8 +3729,7 @@ jerry_value_t canvas_create_linear_gradient(const jerry_call_info_t* call_info_p
 
 jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     JerryValue object(jerry_object());
-    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
-    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    bind_native_node(object.get(), runtime, node);
     define_accessor(object.get(), "fillStyle", canvas_get_fill_style, canvas_set_fill_style);
     define_accessor(object.get(), "strokeStyle", canvas_get_stroke_style, canvas_set_stroke_style);
     define_accessor(object.get(), "lineWidth", canvas_get_line_width, canvas_set_line_width);
@@ -3745,8 +3793,7 @@ jerry_value_t node_get_style_object(const jerry_call_info_t* call_info_p,
 
 jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool document_methods) {
     JerryValue object(jerry_object());
-    jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, &node);
-    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    bind_native_node(object.get(), runtime, node);
 
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
     if (node.type == NodeType::Element) {
@@ -4573,6 +4620,64 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
 
 } // namespace
 
+ScriptNodeBinding* JerryScriptRuntime::bind_script_node(Node& node) {
+    auto* binding = new ScriptNodeBinding{this, &node, true};
+    node_bindings_.push_back(binding);
+    if (std::find(observed_nodes_.begin(), observed_nodes_.end(), &node) == observed_nodes_.end()) {
+        node.set_destroy_observer(script_node_destroyed, this);
+        observed_nodes_.push_back(&node);
+    }
+    return binding;
+}
+
+Node* JerryScriptRuntime::resolve_script_node(const ScriptNodeBinding& binding) const {
+    if (binding.runtime != this || !binding.active) {
+        return nullptr;
+    }
+    return binding.node;
+}
+
+void JerryScriptRuntime::forget_script_node_binding(ScriptNodeBinding& binding) {
+    auto it = std::find(node_bindings_.begin(), node_bindings_.end(), &binding);
+    if (it != node_bindings_.end()) {
+        node_bindings_.erase(it);
+    }
+    binding.runtime = nullptr;
+    binding.node = nullptr;
+    binding.active = false;
+}
+
+void JerryScriptRuntime::invalidate_script_node(Node& node) {
+    for (ScriptNodeBinding* binding : node_bindings_) {
+        if (binding != nullptr && binding->node == &node) {
+            binding->node = nullptr;
+            binding->active = false;
+        }
+    }
+    for (Node*& observed : observed_nodes_) {
+        if (observed == &node) {
+            observed = nullptr;
+        }
+    }
+}
+
+void JerryScriptRuntime::clear_script_node_bindings() {
+    for (Node* node : observed_nodes_) {
+        if (node != nullptr) {
+            node->clear_destroy_observer(script_node_destroyed, this);
+        }
+    }
+    observed_nodes_.clear();
+    for (ScriptNodeBinding* binding : node_bindings_) {
+        if (binding != nullptr) {
+            binding->runtime = nullptr;
+            binding->node = nullptr;
+            binding->active = false;
+        }
+    }
+    node_bindings_.clear();
+}
+
 JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
     : options_(options) {
     if (g_runtime_active) {
@@ -4610,6 +4715,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
         clear_script_event_listeners();
         clear_animation_frame_callbacks();
         clear_timers();
+        clear_script_node_bindings();
         if (canvas_2d_ != nullptr) {
             canvas_2d_->clear();
         }
@@ -4627,6 +4733,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     clear_script_event_listeners();
     clear_animation_frame_callbacks();
     clear_timers();
+    clear_script_node_bindings();
     detached_nodes_.clear_detached_nodes();
     if (canvas_2d_ != nullptr) {
         canvas_2d_->clear();

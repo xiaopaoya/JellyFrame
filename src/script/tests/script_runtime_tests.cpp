@@ -268,6 +268,40 @@ void javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_clea
     check(runtime.statistics().event_listener_count == 0, "destroyed node listener is cleared on rebind");
 }
 
+void javascript_cached_destroyed_node_wrappers_are_invalidated() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><main id='app'>"
+        "<button id='gone' class='old' style='display:block'>Tap</button>"
+        "<canvas id='chart' width='8' height='8'></canvas>"
+        "</main></body>");
+
+    Canvas2DRegistry canvas;
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(canvas);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var app = document.getElementById('app');"
+        "var gone = document.getElementById('gone');"
+        "var oldStyle = gone.style;"
+        "var oldClasses = gone.classList;"
+        "var ctx = document.getElementById('chart').getContext('2d');"
+        "app.textContent = 'replacement';"
+        "var textResult = 'ok';"
+        "try { gone.textContent; } catch (e) { textResult = 'invalid'; }"
+        "var attrResult = 'ok';"
+        "try { gone.setAttribute('data-x', '1'); } catch (e) { attrResult = 'invalid'; }"
+        "oldStyle.display = 'none';"
+        "oldClasses.add('new');"
+        "ctx.fillRect(0, 0, 2, 2);"
+        "textResult + ':' + attrResult + ':' + String(gone.parentElement === null)");
+
+    check(result.ok, "destroyed cached wrappers script succeeds");
+    check(result.value == "invalid:invalid:true", "destroyed node wrappers are inert");
+    check(find_first_by_tag(*document, "button") == nullptr, "destroyed button is gone");
+    check(find_first_by_tag(*document, "canvas") == nullptr, "destroyed canvas is gone");
+}
+
 void javascript_detached_node_budget_is_bounded() {
     HtmlParser parser;
     auto document = parser.parse("<body><main id='app'></main></body>");
@@ -1527,6 +1561,7 @@ int main() {
         document_create_and_append_element();
         remove_child_keeps_wrapper_usable();
         javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_cleanup();
+        javascript_cached_destroyed_node_wrappers_are_invalidated();
         javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
         javascript_generic_click_event_does_not_fake_mouse_coordinates();

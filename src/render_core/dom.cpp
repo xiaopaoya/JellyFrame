@@ -129,6 +129,13 @@ Node::Node(NodeType node_type)
     : type(node_type) {}
 
 Node::~Node() {
+    DestroyObserver observer = destroy_observer_;
+    void* context = destroy_observer_context_;
+    destroy_observer_ = nullptr;
+    destroy_observer_context_ = nullptr;
+    if (observer != nullptr) {
+        observer(*this, context);
+    }
     destroy_node_list_iterative(children);
 }
 
@@ -282,6 +289,18 @@ bool Node::has_class(const std::string& class_name) const {
         }
     }
     return false;
+}
+
+void Node::set_destroy_observer(DestroyObserver observer, void* context) {
+    destroy_observer_ = observer;
+    destroy_observer_context_ = context;
+}
+
+void Node::clear_destroy_observer(DestroyObserver observer, void* context) {
+    if (destroy_observer_ == observer && destroy_observer_context_ == context) {
+        destroy_observer_ = nullptr;
+        destroy_observer_context_ = nullptr;
+    }
 }
 
 std::unique_ptr<Node> make_element(std::string tag_name) {

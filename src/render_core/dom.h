@@ -68,6 +68,8 @@ private:
 };
 
 struct Node : public EventTarget {
+    using DestroyObserver = void (*)(Node& node, void* context);
+
     explicit Node(NodeType node_type);
     ~Node();
 
@@ -91,6 +93,12 @@ struct Node : public EventTarget {
     std::string text_content() const;
     const std::string& attribute(const std::string& name) const;
     bool has_class(const std::string& class_name) const;
+    void set_destroy_observer(DestroyObserver observer, void* context);
+    void clear_destroy_observer(DestroyObserver observer, void* context);
+
+private:
+    DestroyObserver destroy_observer_ = nullptr;
+    void* destroy_observer_context_ = nullptr;
 };
 
 std::unique_ptr<Node> make_element(std::string tag_name);
