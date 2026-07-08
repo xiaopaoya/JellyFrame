@@ -1,6 +1,6 @@
 # Tools
 
-> Last updated: 2026-07-07; Applies to: 0.6.0-dev
+> Last updated: 2026-07-09; Applies to: 0.6.0-dev
 
 Desktop developer tools for packaging, validation and editor integration.
 
@@ -30,3 +30,8 @@ python tools\benchmark_guard.py --build-dir build\Release --report build\benchma
 `doctor` is the broad repository smoke check for trial users. It validates every
 complete sample package, runs the render-core preflight path over common
 wearable targets and leaves JSON reports under `build/doctor_reports`.
+
+Use `--runtime-log` to merge Win32 frame-script/capture counters into a package
+report, and `--port-telemetry` to merge real board data such as frame time, DMA
+wait, flush-done time and internal-RAM peaks. Both stay in desktop tooling and do
+not add embedded runtime cost.

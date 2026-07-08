@@ -293,6 +293,25 @@ void text_input_updates_focused_control_value() {
     check(input_events == 2, "text input events dispatched");
 }
 
+void text_input_backspace_removes_whole_utf8_scalar() {
+    auto pipeline = build_form_pipeline("<body><input id='name' value='Hi'></body>",
+                                        "input { width: 120px; height: 24px; }");
+    Node* input_node = find_by_id(*pipeline.document, "name");
+    check(input_node != nullptr, "utf8 input exists");
+
+    InputController input(*pipeline.layer_tree);
+    input.set_focused_node(input_node);
+    check(input.text_input("\xe4\xb8\xad"), "utf8 text input accepted");
+    check(form_control_display_text(*input_node) == "Hi\xe4\xb8\xad", "utf8 text input appended");
+
+    KeyInput key;
+    key.code = KeyCode::Backspace;
+    check(input.key_down(key), "utf8 backspace accepted");
+    check(form_control_display_text(*input_node) == "Hi", "utf8 backspace removes one scalar");
+    check(input.key_down(key), "ascii backspace accepted after utf8");
+    check(form_control_display_text(*input_node) == "H", "ascii backspace still works");
+}
+
 void datalist_completion_updates_text_control() {
     auto pipeline = build_form_pipeline(
         "<body><input id='search' list='suggest'><datalist id='suggest'>"
@@ -649,7 +668,8 @@ int main() {
         pointer_events_without_dynamic_style_keep_document_clean();
         click_requires_same_active_target();
         wheel_dispatches_to_hit_target();
-        text_input_updates_focused_control_value();
+    text_input_updates_focused_control_value();
+    text_input_backspace_removes_whole_utf8_scalar();
         checkbox_click_toggles_checked_state();
         range_drag_updates_value();
         select_click_cycles_selected_option();

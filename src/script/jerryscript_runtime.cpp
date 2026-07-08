@@ -37,6 +37,13 @@ struct ScriptEventListener {
     bool property_handler = false;
 };
 
+struct ScriptEventBinding {
+    Event* event = nullptr;
+    bool active = false;
+    bool cancelable = false;
+    bool default_prevented = false;
+};
+
 struct ScriptTimer {
     std::uint32_t id = 0;
     std::uint64_t due_ms = 0;
@@ -251,9 +258,23 @@ namespace {
 
 bool g_runtime_active = false;
 
+void free_script_event_binding(void* native_p, jerry_object_native_info_t*) {
+    delete static_cast<ScriptEventBinding*>(native_p);
+}
+
+void script_node_event_listener_removed(void* context) {
+    auto* listener = static_cast<ScriptEventListener*>(context);
+    if (listener == nullptr) {
+        return;
+    }
+    listener->node = nullptr;
+    listener->listener_id = 0;
+    listener->active = false;
+}
+
 const jerry_object_native_info_t kNodeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kRuntimeNativeInfo = {nullptr, 0, 0};
-const jerry_object_native_info_t kEventNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kEventNativeInfo = {free_script_event_binding, 0, 0};
 const jerry_object_native_info_t kXhrNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kLocalStorageNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kAudioNativeInfo = {nullptr, 0, 0};
@@ -984,11 +1005,19 @@ jerry_value_t throw_type_error(const char* message) {
     return jerry_throw_sz(JERRY_ERROR_TYPE, message);
 }
 
-Event* native_event(const jerry_value_t object) {
+ScriptEventBinding* native_event_binding(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
         return nullptr;
     }
-    return static_cast<Event*>(jerry_object_get_native_ptr(object, &kEventNativeInfo));
+    return static_cast<ScriptEventBinding*>(jerry_object_get_native_ptr(object, &kEventNativeInfo));
+}
+
+Event* native_event(const jerry_value_t object) {
+    ScriptEventBinding* binding = native_event_binding(object);
+    if (binding == nullptr || !binding->active) {
+        return nullptr;
+    }
+    return binding->event;
 }
 
 ScriptXmlHttpRequest* native_xhr(const jerry_value_t object) {
@@ -1154,36 +1183,48 @@ EventListenerOptions listener_options_from_value(jerry_value_t value) {
     return options;
 }
 
+void set_bool_property(jerry_value_t object, const char* name, bool value);
+
 jerry_value_t event_prevent_default(const jerry_call_info_t* call_info_p,
                                     const jerry_value_t[],
                                     const jerry_length_t) {
-    Event* event = native_event(call_info_p->this_value);
-    if (event == nullptr) {
+    ScriptEventBinding* binding = native_event_binding(call_info_p->this_value);
+    if (binding == nullptr) {
         return throw_type_error("preventDefault called on non-event object");
     }
-    event->prevent_default();
+    if (binding->active && binding->event != nullptr) {
+        binding->event->prevent_default();
+        binding->default_prevented = binding->event->default_prevented();
+    } else if (binding->cancelable) {
+        binding->default_prevented = true;
+    }
+    set_bool_property(call_info_p->this_value, "defaultPrevented", binding->default_prevented);
     return jerry_undefined();
 }
 
 jerry_value_t event_stop_propagation(const jerry_call_info_t* call_info_p,
                                      const jerry_value_t[],
                                      const jerry_length_t) {
-    Event* event = native_event(call_info_p->this_value);
-    if (event == nullptr) {
+    ScriptEventBinding* binding = native_event_binding(call_info_p->this_value);
+    if (binding == nullptr) {
         return throw_type_error("stopPropagation called on non-event object");
     }
-    event->stop_propagation();
+    if (binding->active && binding->event != nullptr) {
+        binding->event->stop_propagation();
+    }
     return jerry_undefined();
 }
 
 jerry_value_t event_stop_immediate_propagation(const jerry_call_info_t* call_info_p,
                                                const jerry_value_t[],
                                                const jerry_length_t) {
-    Event* event = native_event(call_info_p->this_value);
-    if (event == nullptr) {
+    ScriptEventBinding* binding = native_event_binding(call_info_p->this_value);
+    if (binding == nullptr) {
         return throw_type_error("stopImmediatePropagation called on non-event object");
     }
-    event->stop_immediate_propagation();
+    if (binding->active && binding->event != nullptr) {
+        binding->event->stop_immediate_propagation();
+    }
     return jerry_undefined();
 }
 
@@ -1250,7 +1291,8 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
 
 jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
     JerryValue object(jerry_object());
-    jerry_object_set_native_ptr(object.get(), &kEventNativeInfo, &event);
+    auto* binding = new ScriptEventBinding{&event, true, event.cancelable(), event.default_prevented()};
+    jerry_object_set_native_ptr(object.get(), &kEventNativeInfo, binding);
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
 
     set_property(object.get(), "type", string_to_value(event.type()).get());
@@ -1293,6 +1335,18 @@ jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
     set_method(object.get(), "stopPropagation", event_stop_propagation);
     set_method(object.get(), "stopImmediatePropagation", event_stop_immediate_propagation);
     return object.release();
+}
+
+void invalidate_event_object(jerry_value_t object) {
+    ScriptEventBinding* binding = native_event_binding(object);
+    if (binding == nullptr) {
+        return;
+    }
+    if (binding->event != nullptr) {
+        binding->default_prevented = binding->event->default_prevented();
+    }
+    binding->event = nullptr;
+    binding->active = false;
 }
 
 jerry_value_t make_window_event_object(const char* type, jerry_value_t target) {
@@ -5024,6 +5078,9 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
     listener->type = std::move(type);
     listener->callback = jerry_value_copy(callback_value);
     listener->active = true;
+    listener->options = options;
+    listener->options.cleanup = script_node_event_listener_removed;
+    listener->options.cleanup_context = listener.get();
 
     ScriptEventListener* raw = listener.get();
     listener->listener_id = node.add_event_listener(listener->type, [raw](Event& event) {
@@ -5039,11 +5096,12 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
         JerryValue result(run_with_execution_budget(*raw->runtime, [&]() {
             return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
         }));
+        invalidate_event_object(event_object.get());
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
         }
-    }, options);
+    }, listener->options);
 
     event_listeners_.push_back(std::move(listener));
 }
@@ -5101,6 +5159,8 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
     listener->callback = jerry_value_copy(callback_value);
     listener->active = true;
     listener->property_handler = true;
+    listener->options.cleanup = script_node_event_listener_removed;
+    listener->options.cleanup_context = listener.get();
 
     ScriptEventListener* raw = listener.get();
     listener->listener_id = node.add_event_listener(listener->type, [raw](Event& event) {
@@ -5116,11 +5176,12 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
         JerryValue result(run_with_execution_budget(*raw->runtime, [&]() {
             return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
         }));
+        invalidate_event_object(event_object.get());
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
         }
-    });
+    }, listener->options);
 
     event_listeners_.push_back(std::move(listener));
 }

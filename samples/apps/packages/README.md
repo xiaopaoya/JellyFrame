@@ -1,6 +1,6 @@
 # App Examples
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-09; Applies to: 0.5.0-dev
 
 Complete JellyFrame source-package examples live here. Each app should include
 `jellyframe.app.json`, local HTML/CSS/classic JavaScript and any bounded local
@@ -19,9 +19,12 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 `watch_weather`, `jelly_controls`, `jelly_component_recipes` and
 `jelly_watch_face` are the primary showcase/recipe packages and should keep
 their target gates aligned with current trial targets. Capability smoke packages
-such as audio, font policy and focused Canvas demos may intentionally omit hard
-gates or carry warnings because they exist to exercise one subsystem rather than
-represent a polished release app.
+such as audio, font policy, motion stress and focused Canvas demos may
+intentionally omit hard gates or carry explainable warnings because they exist
+to exercise one subsystem rather than represent a polished release app. The
+default `doctor` still scans them so subsystem smoke packages cannot hide
+errors; judge trial showcase quality primarily from the gated showcase/recipe
+packages.
 
 Current packages:
 

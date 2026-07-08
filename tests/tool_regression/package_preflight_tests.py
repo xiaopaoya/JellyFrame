@@ -369,6 +369,32 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(estimate["appFonts"], {"used": 1, "limit": 1, "exhausted": True})
         self.assertEqual(estimate["appFontBytes"], {"used": 32, "limit": 64, "exhausted": False})
 
+    def test_total_resource_budget_warning_reports_packaged_sum(self):
+        warnings = package_app.collect_resource_budget_warnings(
+            [{"size": 100}, {"size": 50}],
+            {"maxResourceBytes": 128})
+
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["code"], "resource-budget-exceeded")
+        self.assertEqual(warnings[0]["used"], 150)
+        self.assertEqual(warnings[0]["limit"], 128)
+
+    def test_resource_discovery_rejects_symlinks_when_supported(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-symlink-resource-") as directory:
+            root = Path(directory)
+            (root / "index.html").write_text("<body>ok</body>", encoding="utf-8")
+            target = root / "outside.txt"
+            target.write_text("secret", encoding="utf-8")
+            link = root / "assets" / "linked.txt"
+            link.parent.mkdir()
+            try:
+                link.symlink_to(target)
+            except OSError as exc:
+                self.skipTest(f"symlink creation unavailable: {exc}")
+
+            with self.assertRaises(SystemExit):
+                package_app.discover_resources(root, 0)
+
     def test_service_intent_report_summarizes_manifest_capabilities(self):
         manifest = package_app.validate_manifest({
             "format": "jellyframe.app",
@@ -851,6 +877,67 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("performance-runtime-overloaded", codes)
         self.assertIn("performance-runtime-drop-animation", codes)
         self.assertIn("performance-runtime-dirty-area-high", codes)
+
+    def test_port_telemetry_log_merges_real_device_performance_summary(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-port-telemetry-") as directory:
+            root = Path(directory)
+            report_path = root / "report.json"
+            telemetry_log = root / "port.log"
+            telemetry_log.write_text(
+                "port_telemetry frames=30 full=1 dirty=29 flushes=58 converted_pixels=900000 "
+                "packed_bytes=1800000 frame_ms_avg=36.5 frame_ms_max=57.0 "
+                "dma_wait_ms_avg=5.2 dma_wait_ms_max=11.0 "
+                "flush_done_ms_avg=13.5 flush_done_ms_max=27.0 "
+                "internal_ram_peak=330000 psram_peak=120000\n",
+                encoding="utf-8",
+            )
+            jellyframe_cli.merge_port_telemetry_report(report_path, telemetry_log)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        summary = report["performanceSummary"]
+        self.assertEqual(report["portTelemetry"]["summary"]["frames"], 30)
+        self.assertEqual(summary["source"], "package-preflight-estimate+port-telemetry")
+        self.assertEqual(summary["measuredPortFrameCount"], 30)
+        self.assertEqual(summary["measuredPortFullFrameCount"], 1)
+        self.assertEqual(summary["measuredPortDirtyFrameCount"], 29)
+        self.assertEqual(summary["measuredPortFlushCount"], 58)
+        self.assertEqual(summary["measuredPortConvertedPixels"], 900000)
+        self.assertEqual(summary["measuredPortPackedBytes"], 1800000)
+        self.assertEqual(summary["measuredPortAverageFrameMs"], 36.5)
+        self.assertEqual(summary["measuredPortMaxFrameMs"], 57.0)
+        self.assertEqual(summary["measuredPortAverageDmaWaitMs"], 5.2)
+        self.assertEqual(summary["measuredPortAverageFlushDoneMs"], 13.5)
+        self.assertEqual(summary["measuredPortInternalRamPeakBytes"], 330000)
+        codes = {entry["code"] for entry in report["performanceAdvice"]}
+        self.assertIn("performance-port-frame-time-high", codes)
+        self.assertIn("performance-port-dma-wait-high", codes)
+        self.assertIn("performance-port-flush-done-high", codes)
+        self.assertIn("performance-port-internal-ram-high", codes)
+
+    def test_port_telemetry_json_accepts_camel_case_metrics(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-port-telemetry-json-") as directory:
+            root = Path(directory)
+            report_path = root / "report.json"
+            telemetry_log = root / "port.json"
+            telemetry_log.write_text(json.dumps({
+                "format": "jellyframe.port.telemetry.metrics.v0",
+                "metrics": {
+                    "frames": 12,
+                    "fullFrames": 1,
+                    "dirtyFrames": 11,
+                    "averageFrameMs": 18.25,
+                    "maxFrameMs": 24.0,
+                    "averageDmaWaitMs": 1.5,
+                    "averageFlushDoneMs": 4.0,
+                    "internalRamPeakBytes": 128000,
+                },
+            }), encoding="utf-8")
+            jellyframe_cli.merge_port_telemetry_report(report_path, telemetry_log)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(report["portTelemetry"]["summary"]["frames"], 12)
+        self.assertEqual(report["performanceSummary"]["measuredPortAverageFrameMs"], 18.25)
+        self.assertNotIn("performanceAdvice", report)
 
     def test_requested_targets_are_explicit_opt_in(self):
         class Args:

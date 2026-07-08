@@ -35,6 +35,14 @@ void AppXmlHttpRequest::set_ready_state(AppXhrReadyState state) {
     push_event(AppXhrEventKind::ReadyStateChange);
 }
 
+void AppXmlHttpRequest::abandon_active_job() {
+    if (job_id_ == 0) {
+        return;
+    }
+    abandoned_job_id_ = job_id_;
+    job_id_ = 0;
+}
+
 AppXhrStatus AppXmlHttpRequest::open(std::string method, std::string url, bool async) {
     if (!async) {
         return AppXhrStatus::SyncNotSupported;
@@ -47,6 +55,7 @@ AppXhrStatus AppXmlHttpRequest::open(std::string method, std::string url, bool a
         return AppXhrStatus::InvalidUrl;
     }
 
+    abandon_active_job();
     reset();
     url_ = std::move(url);
     response_url_ = url_;
@@ -74,7 +83,9 @@ AppXhrStatus AppXmlHttpRequest::send(AppRuntimeHost& host,
 
 void AppXmlHttpRequest::abort(AppRuntimeHost& host) {
     if (job_id_ != 0) {
-        host.requests().cancel_pending(job_id_);
+        if (!host.requests().cancel_pending(job_id_)) {
+            abandoned_job_id_ = job_id_;
+        }
     }
     job_id_ = 0;
     sent_ = false;
@@ -100,6 +111,13 @@ void AppXmlHttpRequest::finish_error(AppXhrEventKind terminal_event) {
 bool AppXmlHttpRequest::handle_completion(AppRuntimeHost& host,
                                           NetworkFetchMock& network,
                                           const HostServiceCompletion& completion) {
+    if (completion.kind == HostServiceJobKind::NetworkFetch && completion.job_id == abandoned_job_id_) {
+        if (completion.handle != 0) {
+            network.release_response(host, completion.handle);
+        }
+        abandoned_job_id_ = 0;
+        return true;
+    }
     if (completion.kind != HostServiceJobKind::NetworkFetch || completion.job_id != job_id_) {
         return false;
     }

@@ -119,6 +119,22 @@ void keeps_first_duplicate_attribute() {
     check(input.attributes[1].name == "disabled", "attribute after duplicate");
 }
 
+void tokenizer_attribute_budget_consumes_extra_attributes_without_storing_them() {
+    HtmlTokenizer tokenizer;
+    HtmlTokenizerOptions options;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+    options.max_attributes_per_tag = 2;
+
+    const auto tokens = tokenizer.tokenize("<div a=1 b=2 c=3 d=4></div>", options);
+    const HtmlToken& div = token_at(tokens, 0, HtmlTokenType::StartTag);
+    check(div.attributes.size() == 2, "tokenizer caps stored attributes");
+    check(div.attributes[0].name == "a" && div.attributes[1].name == "b", "tokenizer keeps first attributes");
+    check(has_diagnostic_code(diagnostics, "html-tokenizer-attribute-limit"),
+          "tokenizer reports attribute cap");
+    check(token_at(tokens, 1, HtmlTokenType::EndTag).name == "div", "tokenizer still reaches end tag");
+}
+
 void parser_consumes_token_stream() {
     HtmlParser parser;
     auto document = parser.parse("<!doctype html><body><p>Hello &amp; welcome</p><br><p>again</p></body>");
@@ -238,6 +254,7 @@ int main() {
         treats_textarea_and_title_as_rcdata();
         decodes_common_named_and_numeric_references();
         keeps_first_duplicate_attribute();
+        tokenizer_attribute_budget_consumes_extra_attributes_without_storing_them();
         parser_consumes_token_stream();
         parser_treats_non_void_self_closing_as_start_tag();
         parser_preserves_dom_text_whitespace();

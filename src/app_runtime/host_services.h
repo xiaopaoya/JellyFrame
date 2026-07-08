@@ -81,19 +81,23 @@ public:
 
     bool pop_next(HostServiceRequest& request);
     bool pop_next(HostServiceJobKind kind, HostServiceRequest& request);
+    bool pop_pending(std::uint32_t job_id, HostServiceRequest& request);
     bool cancel_pending(std::uint32_t job_id);
+    bool finish(std::uint32_t job_id);
     std::size_t cancel_app_instance(std::uint32_t app_instance_id);
     void clear();
 
     std::size_t size() const { return requests_.size(); }
+    std::size_t in_flight_size() const { return in_progress_.size(); }
     std::size_t capacity() const { return capacity_; }
     bool empty() const { return requests_.empty(); }
-    bool full() const { return requests_.size() >= capacity_; }
+    bool full() const { return requests_.size() + in_progress_.size() >= capacity_; }
 
 private:
     std::size_t capacity_ = 0;
     std::uint32_t next_job_id_ = 1;
     std::vector<HostServiceRequest> requests_;
+    std::vector<HostServiceRequest> in_progress_;
 };
 
 class HostServiceCompletionQueue {

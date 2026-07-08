@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -37,6 +38,20 @@ bool contains_rect(Rect outer, Rect inner) {
         inner.y >= outer.y &&
         inner.x + inner.width <= outer.x + outer.width &&
         inner.y + inner.height <= outer.y + outer.height;
+}
+
+bool checked_pixel_count(int width, int height, std::size_t& output) {
+    output = 0;
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    const std::size_t w = static_cast<std::size_t>(width);
+    const std::size_t h = static_cast<std::size_t>(height);
+    if (w > std::numeric_limits<std::size_t>::max() / h) {
+        return false;
+    }
+    output = w * h;
+    return true;
 }
 
 Rect target_rect(const FrameBuffer& target) {
@@ -844,24 +859,24 @@ int round_transform_offset(float value) {
 }
 
 bool offscreen_fits_budget(Rect bounds, SoftwareCompositor::Options options) {
-    if (bounds.width <= 0 || bounds.height <= 0) {
+    std::size_t pixels = 0;
+    if (!checked_pixel_count(bounds.width, bounds.height, pixels)) {
         return false;
     }
     if (options.max_offscreen_pixels == 0) {
         return true;
     }
-    const std::size_t pixels = static_cast<std::size_t>(bounds.width) * static_cast<std::size_t>(bounds.height);
     return pixels <= options.max_offscreen_pixels;
 }
 
 bool framebuffer_fits_budget(int width, int height, SoftwareCompositor::Options options) {
-    if (width <= 0 || height <= 0) {
+    std::size_t pixels = 0;
+    if (!checked_pixel_count(width, height, pixels)) {
         return false;
     }
     if (options.max_framebuffer_pixels == 0) {
         return true;
     }
-    const std::size_t pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
     return pixels <= options.max_framebuffer_pixels;
 }
 
@@ -891,9 +906,15 @@ FrameBuffer::FrameBuffer(int width_in, int height_in, Color clear_color) {
 }
 
 void FrameBuffer::resize(int new_width, int new_height, Color clear_color) {
-    width = std::max(0, new_width);
-    height = std::max(0, new_height);
-    const std::size_t pixel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    std::size_t pixel_count = 0;
+    if (!checked_pixel_count(new_width, new_height, pixel_count)) {
+        width = 0;
+        height = 0;
+        pixels.clear();
+        return;
+    }
+    width = new_width;
+    height = new_height;
     pixels.assign(pixel_count, clear_color);
 }
 
@@ -1035,9 +1056,13 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                       diagnostics_);
             break;
         }
-        FrameBuffer text_buffer(rect.width, rect.height, Color{0, 0, 0, 0});
+        const Rect visible = intersect_rect(rect, clip);
+        if (empty_rect(visible)) {
+            break;
+        }
+        FrameBuffer text_buffer(visible.width, visible.height, Color{0, 0, 0, 0});
         draw_text(text_buffer,
-                  Rect{0, 0, rect.width, rect.height},
+                  Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
                   command.color,
                   command.text,
                   command.font_size,
@@ -1047,7 +1072,7 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                   command.text_single_line,
                   text_painter_,
                   diagnostics_);
-        composite_buffer_clipped(target, text_buffer, rect.x, rect.y, clip, 1.0F);
+        composite_buffer_clipped(target, text_buffer, visible.x, visible.y, clip, 1.0F);
         break;
     }
     case DisplayCommandType::Image: {
@@ -1081,9 +1106,13 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
             }
             break;
         }
-        FrameBuffer image_buffer(rect.width, rect.height, Color{0, 0, 0, 0});
+        const Rect visible = intersect_rect(rect, clip);
+        if (empty_rect(visible)) {
+            break;
+        }
+        FrameBuffer image_buffer(visible.width, visible.height, Color{0, 0, 0, 0});
         if (!image_painter_.paint(image_buffer,
-                                  Rect{0, 0, rect.width, rect.height},
+                                  Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
                                   command.image_handle,
                                   command.object_fit,
                                   command.object_position,
@@ -1095,9 +1124,11 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                               "paint-image-fallback",
                               "Image command could not be painted; placeholder was used",
                               std::to_string(command.image_handle));
-            fill_rect(image_buffer, Rect{0, 0, rect.width, rect.height}, Color{226, 232, 240, 255});
+            fill_rect(image_buffer,
+                      Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
+                      Color{226, 232, 240, 255});
         }
-        composite_buffer_clipped(target, image_buffer, rect.x, rect.y, clip, 1.0F);
+        composite_buffer_clipped(target, image_buffer, visible.x, visible.y, clip, 1.0F);
         break;
     }
     }

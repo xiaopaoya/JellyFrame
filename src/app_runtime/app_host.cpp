@@ -96,6 +96,7 @@ std::size_t AppRuntimeHost::clear_current_fonts() {
 }
 
 bool AppRuntimeHost::push_completion(const HostServiceCompletion& completion) {
+    requests_.finish(completion.job_id);
     return completions_.push(completion);
 }
 

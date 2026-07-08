@@ -1,6 +1,6 @@
 # JellyFrame 上手指南
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-09；适用版本：0.6.0-dev
 
 本文面向第一次打开这个仓库的开发者，说明 JellyFrame 是什么、仓库如何组织、如何编译运行、
 Release 目录里每个 exe 是做什么的，以及应该按什么顺序阅读项目。
@@ -203,6 +203,35 @@ package 错误、管线错误或阻塞字体问题都会使命令失败。外部
 ```
 
 有效性能数据应使用 Release build。
+
+如果你已经从 Win32 frame-script capture 或真实开发板拿到运行日志，可以把它们合并进同一份
+package report，便于判断卡顿来自页面复杂度、dirty 区过大、panel flush、DMA wait 还是
+internal RAM 压力：
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root build\my_weather `
+  --target round-300 `
+  --report build\my_weather.report.json `
+  --build-dir build\Release `
+  --runtime-log build\capture.log
+
+python tools\jellyframe_cli.py check `
+  --root build\my_weather `
+  --target round-300 `
+  --report build\my_weather.port.report.json `
+  --build-dir build\Release `
+  --port-telemetry build\port.log
+```
+
+真实 port 日志可以先用最小文本格式：
+
+```text
+port_telemetry frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+```
+
+CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary` 和
+`performanceAdvice[]`。
 
 ## 9. 渲染页面并检查管线
 

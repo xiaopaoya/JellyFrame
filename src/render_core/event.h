@@ -25,6 +25,8 @@ enum class EventKind {
 struct EventListenerOptions {
     bool capture = false;
     bool once = false;
+    void (*cleanup)(void* context) = nullptr;
+    void* cleanup_context = nullptr;
 };
 
 class Event {

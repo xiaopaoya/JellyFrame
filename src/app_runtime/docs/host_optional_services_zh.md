@@ -82,7 +82,7 @@ completion queue worker  -> UI/main
 resource cache   host-owned surfaces/buffers/audio handles/bundles
 ```
 
-`HostAsyncCapabilities::max_in_flight_jobs` 限制 request queue 中未完成 job 数量。
+`HostAsyncCapabilities::max_in_flight_jobs` 限制 queued 与 worker 已取走但尚未完成的 job 总数。
 `HostAsyncCapabilities::max_completion_events_per_frame` 限制每帧最多消费的 completion event 数量。
 
 当前 `app_runtime` helper 对应：

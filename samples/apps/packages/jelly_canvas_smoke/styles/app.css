@@ -1,20 +1,22 @@
 html,
 body {
   margin: 0;
-  width: 300px;
-  height: 300px;
+  width: 100%;
+  height: 100%;
   background: #07151f;
   color: #f7fff6;
   font-family: system-ui;
 }
 
 .screen {
-  width: 300px;
-  height: 300px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
   padding: 18px;
   display: grid;
   gap: 10px;
   background: linear-gradient(#0f2c3a, #07151f);
+  overflow: hidden;
 }
 
 .hero {
@@ -39,9 +41,9 @@ h1 {
 
 .trend {
   display: block;
-  width: 220px;
+  width: 100%;
   height: 96px;
-  margin-left: 22px;
+  margin-left: 0;
   border-radius: 18px;
   background: #0b1f2a;
 }
@@ -68,4 +70,56 @@ h1 {
   display: block;
   font-size: 12px;
   color: #a9d7cc;
+}
+
+@media (max-height: 260px) {
+  .screen {
+    padding: 14px;
+    gap: 8px;
+  }
+
+  .hero {
+    padding: 9px 13px;
+  }
+
+  h1 {
+    font-size: 38px;
+    line-height: 42px;
+  }
+
+  .trend {
+    height: 70px;
+  }
+
+  .stats article {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 200px) {
+  .screen {
+    padding: 14px;
+  }
+
+  h1 {
+    font-size: 32px;
+    line-height: 36px;
+  }
+
+  .trend {
+    height: 82px;
+  }
+
+  .stats {
+    gap: 7px;
+  }
+
+  .stats article {
+    padding: 8px 9px;
+  }
+
+  .stats strong {
+    font-size: 18px;
+    line-height: 22px;
+  }
 }

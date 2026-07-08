@@ -1,6 +1,6 @@
 # App Packaging
 
-> 最后更新：2026-07-07；适用版本：0.6.0-dev
+> 最后更新：2026-07-09；适用版本：0.6.0-dev
 
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
@@ -361,8 +361,11 @@ JellyFrame 应使用严格的本地路径子集：
 - 绝对 app 路径以 `/` 开头。
 - 相对路径按引用它的资源目录解析。
 - `.` 忽略；`..` 如果逃出 app root 就拒绝。
+- 拒绝 symlink。packer 在读取字节前也会确认解析后的资源路径仍在 app root 内。
 - 构建工具把分隔符规范化为 `/`，拒绝重复规范化路径，并按路径排序。
 - CSS `url(...)`、`<link href>`、`<script src>`、图片和字体使用同一个 resolver。
+- `budgets.maxResourceBytes` 会作为单资源上限执行，同时报告总资源字节数；总量超限会产生
+  `resource-budget-exceeded`，方便嵌入式 target 按产品策略警告或拒绝。
 
 这些规则与当前 ESP32-S3 bring-up 接近，也能让 MCU loader 很小。
 
@@ -852,6 +855,18 @@ severity 汇总，以及 parser、style、layout、layer、renderer 代码实际
 如果你保存了 Win32 frame-script 或 capture 日志，可以通过 `--runtime-log` 交给 CLI；它会把
 frame-update、present-estimate 和 load-telemetry 计数合并进同一份 report，写入 `runtimeMetrics`
 和测得的 `performanceSummary` 字段。
+如果你有真实设备或 port 层日志，可以通过 `--port-telemetry` 合并到同一份 report。该文件可以是
+JSON，也可以包含一行简单文本：
+
+```text
+port_telemetry frames=60 full=1 dirty=59 flushes=90 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+```
+
+CLI 会把它写入 `portTelemetry`，并在 `performanceSummary` 中补充
+`measuredPortAverageFrameMs`、`measuredPortMaxFrameMs`、`measuredPortAverageDmaWaitMs`、
+`measuredPortAverageFlushDoneMs` 和 `measuredPortInternalRamPeakBytes` 等字段。超过 30 FPS
+预算、DMA/flush 时间或 internal RAM 压力明显偏高时，`performanceAdvice[]` 会给出面向 app
+作者和 port 作者的分层建议。这仍是桌面工具输入，不是 MCU runtime 需要解析的格式。
 
 当 report 由 `tools/jellyframe_cli.py` 写出时，CLI 还会从 package warnings、管线
 diagnostics、responsive profiles 和字体 diagnostics 派生 `developerAdvice[]`。这个字段面向

@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-09; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -58,6 +58,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Added `--runtime-log` support to the CLI so Win32 frame-script capture logs
   can be merged into the same package report as `runtimeMetrics` and measured
   performance-summary fields.
+- Added `--port-telemetry` support to the CLI so real board/port logs can be
+  merged into package reports as `portTelemetry` plus measured performance
+  fields for frame time, DMA wait, flush-done time and internal-RAM peaks.
+  Port telemetry is desktop tooling input only and adds no embedded runtime
+  parsing cost.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow
@@ -185,6 +190,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   records.
 
 ### Changed
+
+- Tightened the trial app-author path: the weather template and `watch_weather`
+  sample no longer rely on unsupported generated-content font sizing, and
+  smoke samples now avoid avoidable narrow-target overflow where it was cheap to
+  fix. Documentation now distinguishes polished showcase/recipe packages from
+  subsystem smoke packages that may intentionally carry explainable warnings.
 
 - Low-depth embedded framebuffer conversion is now dispatched per rectangle and
   pixel format, reducing per-pixel branch and stride recomputation overhead on

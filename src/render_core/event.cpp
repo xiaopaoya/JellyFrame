@@ -174,10 +174,34 @@ struct EventTarget::ListenerStore {
         }
         return nullptr;
     }
+
+    static void mark_removed(Listener& listener) {
+        if (listener.removed) {
+            return;
+        }
+        listener.removed = true;
+        if (listener.options.cleanup != nullptr) {
+            listener.options.cleanup(listener.options.cleanup_context);
+            listener.options.cleanup = nullptr;
+            listener.options.cleanup_context = nullptr;
+        }
+    }
+
+    void mark_all_removed() {
+        for (ListenerGroup& group : groups) {
+            for (Listener& listener : group.listeners) {
+                mark_removed(listener);
+            }
+        }
+    }
 };
 
 EventTarget::EventTarget() = default;
-EventTarget::~EventTarget() = default;
+EventTarget::~EventTarget() {
+    if (listeners_) {
+        listeners_->mark_all_removed();
+    }
+}
 
 EventTarget::ListenerId EventTarget::add_event_listener(std::string type,
                                                         ListenerCallback callback,
@@ -219,7 +243,7 @@ bool EventTarget::remove_event_listener(ListenerId id) {
     for (EventTarget::ListenerStore::ListenerGroup& group : listeners_->groups) {
         for (ListenerStore::Listener& listener : group.listeners) {
             if (listener.id == id && !listener.removed) {
-                listener.removed = true;
+                ListenerStore::mark_removed(listener);
                 return true;
             }
         }
@@ -264,7 +288,7 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         callback(event);
         if (once) {
             if (ListenerStore::Listener* once_listener = listeners_->find_listener(listener_id)) {
-                once_listener->removed = true;
+                ListenerStore::mark_removed(*once_listener);
             }
         }
         if (event.immediate_propagation_stopped()) {

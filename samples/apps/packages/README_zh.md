@@ -1,6 +1,6 @@
 # 应用示例
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-09；适用版本：0.5.0-dev
 
 这里保存完整 JellyFrame source-package 示例。每个 app 都应包含
 `jellyframe.app.json`、本地 HTML/CSS/classic JavaScript，以及预览或打包所需的有界本地资源。
@@ -17,8 +17,10 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 
 `watch_weather`、`jelly_controls`、`jelly_component_recipes` 和
 `jelly_watch_face` 是主要展示/recipes package，应保持 target gate 与当前试用目标对齐。
-音频、字体策略和聚焦 Canvas 的 smoke package 可以故意不声明 hard gate，或保留 warning；
-它们用于验收某个子系统，不代表 polished release app。
+音频、字体策略、动效压力和聚焦 Canvas 的 smoke package 可以故意不声明 hard gate，或保留
+可解释 warning；它们用于验收某个子系统，不代表 polished release app。默认 `doctor` 会继续
+扫描这些包，保证子系统 smoke 没有 error；判断外部试用展示质量时，应优先看声明了 target gate
+的展示/recipes package。
 
 当前 package：
 

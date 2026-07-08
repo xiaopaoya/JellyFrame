@@ -62,7 +62,9 @@ AppStorageLifecycleApplyResult apply_app_storage_lifecycle_decision(
     std::size_t max_flush_ops) {
     AppStorageLifecycleApplyResult result;
     if (decision.flush_pending_writes) {
-        const AppPrivateKvFlushResult flushed = storage.flush_pending(host, max_flush_ops);
+        const AppPrivateKvFlushResult flushed = app_instance_id != 0
+            ? storage.flush_pending_app_instance(host, app_instance_id, max_flush_ops)
+            : storage.flush_pending_app(host, app_id, max_flush_ops);
         result.flushed_pending_writes = flushed.flushed;
         result.remaining_pending_writes = flushed.remaining_pending;
         result.flush_stopped_before_empty = flushed.stopped_before_empty;
@@ -77,7 +79,9 @@ AppStorageLifecycleApplyResult apply_app_storage_lifecycle_decision(
         result.deleted_persistent_items = storage.clear_app(app_id);
     }
     if (!decision.flush_pending_writes) {
-        result.remaining_pending_writes = storage.pending_count();
+        result.remaining_pending_writes = app_instance_id != 0
+            ? storage.pending_count_app_instance(app_instance_id)
+            : storage.pending_count_app(app_id);
     }
     return result;
 }

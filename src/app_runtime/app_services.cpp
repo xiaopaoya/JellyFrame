@@ -2041,6 +2041,68 @@ AppPrivateKvFlushResult AppPrivateKvStorageMock::flush_pending(AppRuntimeHost& h
     return result;
 }
 
+AppPrivateKvFlushResult AppPrivateKvStorageMock::flush_pending_app_instance(AppRuntimeHost& host,
+                                                                            std::uint32_t app_instance_id,
+                                                                            std::size_t max_ops) {
+    AppPrivateKvFlushResult result;
+    while (max_ops == 0 || result.flushed < max_ops) {
+        const auto pending = std::find_if(pending_.begin(),
+                                          pending_.end(),
+                                          [app_instance_id](const PendingOp& op) {
+                                              return op.app_instance_id == app_instance_id;
+                                          });
+        if (pending == pending_.end()) {
+            break;
+        }
+        HostServiceRequest request;
+        if (!host.requests().pop_pending(pending->job_id, request)) {
+            result.stopped_before_empty = true;
+            break;
+        }
+        if (!host.push_completion(complete_request(host, request))) {
+            result.stopped_before_empty = true;
+            break;
+        }
+        ++result.flushed;
+    }
+    result.remaining_pending = pending_count_app_instance(app_instance_id);
+    if (result.remaining_pending != 0 && max_ops != 0 && result.flushed >= max_ops) {
+        result.stopped_before_empty = true;
+    }
+    return result;
+}
+
+AppPrivateKvFlushResult AppPrivateKvStorageMock::flush_pending_app(AppRuntimeHost& host,
+                                                                   const std::string& app_id,
+                                                                   std::size_t max_ops) {
+    AppPrivateKvFlushResult result;
+    while (max_ops == 0 || result.flushed < max_ops) {
+        const auto pending = std::find_if(pending_.begin(),
+                                          pending_.end(),
+                                          [&app_id](const PendingOp& op) {
+                                              return op.app_id == app_id;
+                                          });
+        if (pending == pending_.end()) {
+            break;
+        }
+        HostServiceRequest request;
+        if (!host.requests().pop_pending(pending->job_id, request)) {
+            result.stopped_before_empty = true;
+            break;
+        }
+        if (!host.push_completion(complete_request(host, request))) {
+            result.stopped_before_empty = true;
+            break;
+        }
+        ++result.flushed;
+    }
+    result.remaining_pending = pending_count_app(app_id);
+    if (result.remaining_pending != 0 && max_ops != 0 && result.flushed >= max_ops) {
+        result.stopped_before_empty = true;
+    }
+    return result;
+}
+
 std::size_t AppPrivateKvStorageMock::pending_count() const {
     return pending_.size();
 }

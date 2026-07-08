@@ -71,6 +71,59 @@ void request_queue_can_pop_by_kind_without_consuming_other_jobs() {
     assert(queue.empty());
 }
 
+void request_queue_counts_worker_owned_jobs_against_capacity() {
+    HostServiceRequestQueue queue(2);
+    const auto first = queue.submit(HostServiceJobKind::NetworkFetch, 1);
+    const auto second = queue.submit(HostServiceJobKind::ImageDecode, 1);
+    assert(first.accepted);
+    assert(second.accepted);
+
+    HostServiceRequest request;
+    assert(queue.pop_next(request));
+    assert(queue.size() == 1);
+    assert(queue.in_flight_size() == 1);
+    assert(queue.full());
+    const auto third = queue.submit(HostServiceJobKind::StorageKv, 1);
+    assert(!third.accepted);
+
+    assert(queue.finish(request.job_id));
+    assert(queue.in_flight_size() == 0);
+    const auto fourth = queue.submit(HostServiceJobKind::StorageKv, 1);
+    assert(fourth.accepted);
+}
+
+void request_queue_cancels_in_progress_app_jobs() {
+    HostServiceRequestQueue queue(3);
+    const auto first = queue.submit(HostServiceJobKind::NetworkFetch, 7);
+    const auto second = queue.submit(HostServiceJobKind::ImageDecode, 8);
+    assert(first.accepted);
+    assert(second.accepted);
+
+    HostServiceRequest request;
+    assert(queue.pop_next(request));
+    assert(queue.in_flight_size() == 1);
+    assert(queue.cancel_app_instance(request.app_instance_id) == 1);
+    assert(queue.in_flight_size() == 0);
+    assert(!queue.finish(request.job_id));
+}
+
+void request_queue_can_pop_specific_pending_job() {
+    HostServiceRequestQueue queue(4);
+    const auto first = queue.submit(HostServiceJobKind::NetworkFetch, 1);
+    const auto second = queue.submit(HostServiceJobKind::StorageKv, 1);
+    const auto third = queue.submit(HostServiceJobKind::ImageDecode, 1);
+    assert(first.accepted);
+    assert(second.accepted);
+    assert(third.accepted);
+
+    HostServiceRequest request;
+    assert(queue.pop_pending(second.job_id, request));
+    assert(request.job_id == second.job_id);
+    assert(queue.size() == 2);
+    assert(queue.in_flight_size() == 1);
+    assert(!queue.pop_pending(second.job_id, request));
+}
+
 void completion_queue_drains_with_frame_budget() {
     HostServiceCompletionQueue queue(4);
     assert(queue.push(HostServiceCompletion{1, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 7}));
@@ -235,6 +288,9 @@ int main() {
     request_queue_is_bounded_and_priority_ordered();
     request_queue_cancels_pending_jobs();
     request_queue_can_pop_by_kind_without_consuming_other_jobs();
+    request_queue_counts_worker_owned_jobs_against_capacity();
+    request_queue_cancels_in_progress_app_jobs();
+    request_queue_can_pop_specific_pending_job();
     completion_queue_drains_with_frame_budget();
     completion_queue_rejects_overflow();
     completion_queue_preserves_fifo_after_wraparound();

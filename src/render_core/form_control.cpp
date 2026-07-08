@@ -60,6 +60,19 @@ std::string_view clamp_append_text(const std::string& current, std::string_view 
     return text.substr(0, index);
 }
 
+void remove_last_utf8_codepoint(std::string& text) {
+    if (text.empty()) {
+        return;
+    }
+    std::size_t previous = 0;
+    std::size_t index = 0;
+    while (index < text.size()) {
+        previous = index;
+        consume_utf8_codepoint(text, index);
+    }
+    text.resize(previous);
+}
+
 void append_descendant_text(const Node& node, std::string& output) {
     std::vector<const Node*> pending;
     pending.push_back(&node);
@@ -391,7 +404,7 @@ bool backspace_control(Node& node) {
     if (state.value.empty()) {
         return false;
     }
-    state.value.pop_back();
+    remove_last_utf8_codepoint(state.value);
     state.dirty = true;
     mark_dirty(node, DomDirtyPaint);
     return true;
@@ -435,7 +448,7 @@ bool activate_form_control(Node& node) {
     if (state.kind == FormControlKind::Checkbox) {
         state.checked = !state.checked;
         state.dirty = true;
-        mark_dirty(node, DomDirtyPaint);
+        mark_dirty(node, DomDirtyStyle | DomDirtyPaint);
         return true;
     }
     if (state.kind == FormControlKind::Radio) {
@@ -444,7 +457,7 @@ bool activate_form_control(Node& node) {
         }
         state.checked = true;
         state.dirty = true;
-        mark_dirty(node, DomDirtyPaint);
+        mark_dirty(node, DomDirtyStyle | DomDirtyPaint);
         return true;
     }
     if (state.kind == FormControlKind::Select) {
@@ -535,7 +548,7 @@ bool set_form_control_checked(Node& node, bool checked) {
     }
     state.checked = checked;
     state.dirty = true;
-    mark_dirty(node, DomDirtyPaint);
+    mark_dirty(node, DomDirtyStyle | DomDirtyPaint);
     return true;
 }
 

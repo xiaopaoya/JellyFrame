@@ -78,6 +78,7 @@ public:
     }
 
 private:
+    void abandon_active_job();
     void set_ready_state(AppXhrReadyState state);
     void push_event(AppXhrEventKind kind);
     void finish_error(AppXhrEventKind terminal_event);
@@ -85,6 +86,7 @@ private:
     AppXhrReadyState ready_state_ = AppXhrReadyState::Unsent;
     std::uint16_t status_ = 0;
     std::uint32_t job_id_ = 0;
+    std::uint32_t abandoned_job_id_ = 0;
     bool sent_ = false;
     std::string url_;
     std::string response_text_;

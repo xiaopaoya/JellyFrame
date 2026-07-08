@@ -1,18 +1,19 @@
 html,
 body {
   margin: 0;
-  width: 300px;
-  height: 300px;
+  width: 100%;
+  height: 100%;
   background: #08111f;
   color: #f8fbff;
 }
 
 .app {
   box-sizing: border-box;
-  width: 300px;
-  height: 300px;
+  width: 100%;
+  height: 100%;
   padding: 32px 28px;
   background: #102942;
+  overflow: hidden;
 }
 
 .orb {
@@ -85,4 +86,33 @@ button {
   color: #102018;
   font-size: 13px;
   font-weight: 700;
+}
+
+@media (max-width: 200px) {
+  .app {
+    padding: 22px 16px;
+  }
+
+  .orb {
+    width: 122px;
+    height: 122px;
+    border-radius: 61px;
+    margin: 4px auto 10px auto;
+    padding-top: 18px;
+  }
+
+  h1 {
+    font-size: 24px;
+    line-height: 28px;
+  }
+
+  .panel {
+    width: 100%;
+    min-height: 74px;
+    padding: 9px 11px;
+  }
+
+  button {
+    width: 100%;
+  }
 }

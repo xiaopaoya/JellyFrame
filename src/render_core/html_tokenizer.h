@@ -32,6 +32,7 @@ struct HtmlToken {
 struct HtmlTokenizerOptions {
     bool emit_comments = false;
     DiagnosticSink* diagnostics = nullptr;
+    std::size_t max_attributes_per_tag = 0;
 };
 
 class HtmlTokenSink {

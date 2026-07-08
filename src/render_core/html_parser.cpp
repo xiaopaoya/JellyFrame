@@ -3,6 +3,8 @@
 #include "render_core/html_tokenizer.h"
 #include "render_core/html_tree_builder.h"
 
+#include <limits>
+
 namespace jellyframe {
 
 std::unique_ptr<Node> HtmlParser::parse(const std::string& source) const {
@@ -23,6 +25,10 @@ HtmlParseResult HtmlParser::parse_with_diagnostics(const std::string& source, co
     HtmlTreeBuilder tree_builder(*root, options);
     HtmlTokenizerOptions tokenizer_options;
     tokenizer_options.diagnostics = options.diagnostics;
+    tokenizer_options.max_attributes_per_tag =
+        options.max_attributes_per_element >= std::numeric_limits<std::size_t>::max()
+        ? options.max_attributes_per_element
+        : options.max_attributes_per_element + 1;
     tokenizer.tokenize_to_sink(source, tree_builder, tokenizer_options);
     clear_dirty_flags(*root);
     const HtmlParserDiagnosticFlags flags = tree_builder.diagnostics();

@@ -1,6 +1,6 @@
 # JellyFrame 移植工作指导
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-09；适用版本：0.6.0-dev
 
 
 本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及当前核心已经提供了哪些可直接使用的能力。
@@ -213,6 +213,21 @@ internal RAM 压力处理建议：
 - `FrameScratch::release()` / `AppFrameScratch::release()` 可在息屏、切 app、退出当前 app 或内存压力回调中调用。
   这部分可以由 JellyFrame 平台无关层安全释放；真实 DMA buffer、panel draw buffer、strip buffer 是否可释放，
   仍取决于 port 是否已经收到 flush-done/transfer-done。
+
+真实设备性能日志建议：
+
+- port 层应在开发/验收构建中导出帧数、full/dirty frame 数、flush 次数、RGB565 packed bytes、
+  平均/最大 frame ms、平均/最大 DMA wait ms、平均/最大 flush-done ms，以及 internal RAM/PSRAM 峰值。
+- 这些数字可以写成 JSON，也可以写成一行文本，例如：
+
+  ```text
+  port_telemetry frames=60 full=1 dirty=59 flushes=90 packed_bytes=2100000 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 dma_wait_ms_max=6.5 flush_done_ms_avg=7.4 flush_done_ms_max=15.0 internal_ram_peak=180000 psram_peak=900000
+  ```
+
+- 桌面侧使用 `python tools\jellyframe_cli.py check ... --port-telemetry path\to\port.log`
+  或 `package ... --port-telemetry ...` 合并进 app report。核心不会在 MCU 上解析这份文件。
+- 如果 frame time 高但 DMA/flush 低，优先看 app 页面复杂度、dirty 区和 display command；如果 DMA/flush 高，
+  优先看 port 的 strip 大小、bus speed、flush rect 数、internal DMA buffer 和 flush-done 等待策略。
 
 ### P4：文本与中文字库
 

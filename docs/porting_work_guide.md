@@ -1,6 +1,6 @@
 # JellyFrame Porting Work Guide
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-09; Applies to: 0.6.0-dev
 
 
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
@@ -282,6 +282,23 @@ Internal RAM pressure guidance:
   pure software scratch containers; real DMA buffers, panel draw buffers and
   strip buffers still depend on the port's flush-done/transfer-done ownership
   boundary.
+
+Recommended real-device performance telemetry:
+
+- Development or acceptance builds should report frame count, full/dirty frame
+  count, flush count, RGB565 packed bytes, average/max frame ms, average/max DMA
+  wait ms, average/max flush-done ms and internal-RAM/PSRAM peaks.
+- The log can be JSON or one simple text line:
+
+  ```text
+  port_telemetry frames=60 full=1 dirty=59 flushes=90 packed_bytes=2100000 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 dma_wait_ms_max=6.5 flush_done_ms_avg=7.4 flush_done_ms_max=15.0 internal_ram_peak=180000 psram_peak=900000
+  ```
+
+- On desktop, merge it with `python tools\jellyframe_cli.py check ... --port-telemetry path\to\port.log`
+  or `package ... --port-telemetry ...`. The MCU runtime does not parse this file.
+- If frame time is high but DMA/flush is low, inspect app complexity, dirty area
+  and display-command count. If DMA/flush is high, inspect strip height, bus
+  speed, flush-rect count, internal DMA buffers and flush-done waiting policy.
 
 ### P4: Text And Chinese Fonts
 

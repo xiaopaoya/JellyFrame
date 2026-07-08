@@ -1181,6 +1181,10 @@ def effective_budgets(manifest: dict, target_config: dict) -> dict:
 
 
 def build_resource_entry(root: Path, path: Path, app_path: str, max_resource_bytes: int) -> dict:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        fail(f"resource path escapes app root: {app_path}")
     data = path.read_bytes()
     if max_resource_bytes > 0 and len(data) > max_resource_bytes:
         fail(f"resource exceeds maxResourceBytes: {app_path} ({len(data)} bytes)")
@@ -1215,6 +1219,8 @@ def discover_resources(root: Path, max_resource_bytes: int) -> list[dict]:
     resources = []
     seen = set()
     for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            fail(f"resource symlinks are not allowed: {path.relative_to(root).as_posix()}")
         if not path.is_file() or path.name == "jellyframe.app.json":
             continue
         relative_path = path.relative_to(root)
@@ -1226,6 +1232,21 @@ def discover_resources(root: Path, max_resource_bytes: int) -> list[dict]:
         seen.add(app_path)
         resources.append(build_resource_entry(root, path, app_path, max_resource_bytes))
     return resources
+
+
+def collect_resource_budget_warnings(resources: list[dict], budgets: dict) -> list[dict]:
+    limit = int_field(budgets, "maxResourceBytes", 0)
+    used = sum(resource["size"] for resource in resources)
+    if limit <= 0 or used <= limit:
+        return []
+    return [{
+        "level": "warning",
+        "code": "resource-budget-exceeded",
+        "message": f"total packaged resources exceed maxResourceBytes: {used} > {limit}",
+        "source": "jellyframe.app.json:budgets.maxResourceBytes",
+        "used": used,
+        "limit": limit,
+    }]
 
 
 def classify_reference(value: str) -> str:
@@ -1839,6 +1860,7 @@ def main() -> int:
     budgets = effective_budgets(manifest, target_config)
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
+    warnings.extend(collect_resource_budget_warnings(resources, budgets))
     warnings.extend(collect_audio_resource_warnings(manifest, resources))
     warnings.extend(collect_service_target_warnings(manifest, target_config))
     script_api_diagnostics, script_api_warnings = collect_script_api_diagnostics(manifest, resources)

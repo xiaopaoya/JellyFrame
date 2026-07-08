@@ -208,6 +208,31 @@ def parse_metric_value(value: str) -> int | str:
     return cleaned
 
 
+def parse_port_metric_value(value: str) -> int | float | str:
+    cleaned = value.rstrip("%")
+    if re.fullmatch(r"-?\d+", cleaned):
+        return int(cleaned)
+    if re.fullmatch(r"-?\d+\.\d+", cleaned):
+        return float(cleaned)
+    return cleaned
+
+
+def metric_number(metrics: dict, *keys: str) -> int | float:
+    for key in keys:
+        value = metrics.get(key)
+        if isinstance(value, (int, float)):
+            return value
+    return 0
+
+
+def metric_int(metrics: dict, *keys: str) -> int:
+    return int(metric_number(metrics, *keys) or 0)
+
+
+def metric_float(metrics: dict, *keys: str) -> float:
+    return float(metric_number(metrics, *keys) or 0.0)
+
+
 def parse_runtime_capture_log(log_path: Path) -> dict:
     if not log_path.is_file():
         raise SystemExit(f"missing runtime log: {log_path}")
@@ -278,6 +303,121 @@ def merge_runtime_capture_report(package_report_path: Path, runtime_log_path: Pa
             "format": "jellyframe.package.report",
         }
     report["runtimeMetrics"] = metrics
+    write_json_report(package_report_path, report)
+
+
+PORT_TELEMETRY_ALIASES = {
+    "frames": "frames",
+    "frame_count": "frames",
+    "full": "fullFrames",
+    "full_frames": "fullFrames",
+    "dirty": "dirtyFrames",
+    "dirty_frames": "dirtyFrames",
+    "flushes": "flushes",
+    "flush_count": "flushes",
+    "converted_pixels": "convertedPixels",
+    "packed_bytes": "packedBytes",
+    "flush_bytes": "packedBytes",
+    "frame_ms_avg": "averageFrameMs",
+    "avg_frame_ms": "averageFrameMs",
+    "frame_ms_max": "maxFrameMs",
+    "max_frame_ms": "maxFrameMs",
+    "dma_wait_ms_avg": "averageDmaWaitMs",
+    "avg_dma_wait_ms": "averageDmaWaitMs",
+    "dma_wait_ms_max": "maxDmaWaitMs",
+    "max_dma_wait_ms": "maxDmaWaitMs",
+    "flush_done_ms_avg": "averageFlushDoneMs",
+    "avg_flush_done_ms": "averageFlushDoneMs",
+    "flush_done_ms_max": "maxFlushDoneMs",
+    "max_flush_done_ms": "maxFlushDoneMs",
+    "internal_ram_peak": "internalRamPeakBytes",
+    "internal_ram_peak_bytes": "internalRamPeakBytes",
+    "psram_peak": "psramPeakBytes",
+    "psram_peak_bytes": "psramPeakBytes",
+}
+
+
+def normalize_port_telemetry_values(raw: dict) -> dict:
+    metrics: dict = {}
+    for key, value in raw.items():
+        mapped = PORT_TELEMETRY_ALIASES.get(str(key), str(key))
+        if isinstance(value, str):
+            metrics[mapped] = parse_port_metric_value(value)
+        else:
+            metrics[mapped] = value
+    return metrics
+
+
+def parse_port_telemetry_log(log_path: Path) -> dict:
+    if not log_path.is_file():
+        raise SystemExit(f"missing port telemetry: {log_path}")
+    text = log_path.read_text(encoding="utf-8-sig")
+    source = str(log_path)
+    json_error = ""
+    try:
+        loaded = json.loads(text)
+        if not isinstance(loaded, dict):
+            raise ValueError("port telemetry JSON root must be an object")
+        raw_metrics = loaded.get("metrics", loaded)
+        if not isinstance(raw_metrics, dict):
+            raise ValueError("port telemetry metrics must be an object")
+        metrics = normalize_port_telemetry_values(raw_metrics)
+    except json.JSONDecodeError:
+        metrics = {}
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or line.startswith("["):
+                continue
+            match = re.match(r"^(?:port_telemetry|jellyframe_port_telemetry)\s+(?P<body>.+)$", line)
+            if not match:
+                continue
+            parsed = {}
+            for token in match.group("body").split():
+                if "=" not in token:
+                    continue
+                key, value = token.split("=", 1)
+                parsed[key] = parse_port_metric_value(value)
+            metrics.update(normalize_port_telemetry_values(parsed))
+    except ValueError as error:
+        json_error = str(error)
+        metrics = {}
+    if not metrics:
+        if json_error:
+            raise SystemExit(f"invalid port telemetry JSON: {json_error}")
+        raise SystemExit(
+            "port telemetry did not contain JSON metrics or a 'port_telemetry key=value ...' line"
+        )
+    return {
+        "format": "jellyframe.port.telemetry.metrics.v0",
+        "source": source,
+        "summary": {
+            "frames": metric_int(metrics, "frames"),
+            "fullFrames": metric_int(metrics, "fullFrames"),
+            "dirtyFrames": metric_int(metrics, "dirtyFrames"),
+            "flushes": metric_int(metrics, "flushes"),
+            "convertedPixels": metric_int(metrics, "convertedPixels"),
+            "packedBytes": metric_int(metrics, "packedBytes"),
+            "averageFrameMs": metric_float(metrics, "averageFrameMs"),
+            "maxFrameMs": metric_float(metrics, "maxFrameMs"),
+            "averageDmaWaitMs": metric_float(metrics, "averageDmaWaitMs"),
+            "maxDmaWaitMs": metric_float(metrics, "maxDmaWaitMs"),
+            "averageFlushDoneMs": metric_float(metrics, "averageFlushDoneMs"),
+            "maxFlushDoneMs": metric_float(metrics, "maxFlushDoneMs"),
+            "internalRamPeakBytes": metric_int(metrics, "internalRamPeakBytes"),
+            "psramPeakBytes": metric_int(metrics, "psramPeakBytes"),
+        },
+        "metrics": metrics,
+    }
+
+
+def merge_port_telemetry_report(package_report_path: Path, port_telemetry_path: Path) -> None:
+    telemetry = parse_port_telemetry_log(port_telemetry_path)
+    report = load_json_if_exists(package_report_path)
+    if not report:
+        report = {
+            "format": "jellyframe.package.report",
+        }
+    report["portTelemetry"] = telemetry
     write_json_report(package_report_path, report)
 
 
@@ -746,6 +886,8 @@ def collect_performance_summary(report: dict) -> dict:
     display_limit = int(display_budget.get("limit", 0) or 0)
     runtime_metrics = report.get("runtimeMetrics", {}) if isinstance(report.get("runtimeMetrics", {}), dict) else {}
     runtime_summary = runtime_metrics.get("summary", {}) if isinstance(runtime_metrics.get("summary", {}), dict) else {}
+    port_telemetry = report.get("portTelemetry", {}) if isinstance(report.get("portTelemetry", {}), dict) else {}
+    port_summary = port_telemetry.get("summary", {}) if isinstance(port_telemetry.get("summary", {}), dict) else {}
 
     summary = {
         "model": "jellyframe.package.performance-summary.v0",
@@ -785,6 +927,26 @@ def collect_performance_summary(report: dict) -> dict:
         summary["measuredMaxDirtyPercent"] = int(runtime_summary.get("maxDirtyPercent", 0) or 0)
         summary["notes"] = summary["notes"] + [
             "Runtime metrics were merged from a Win32 frame-script or capture log.",
+        ]
+    if port_telemetry:
+        summary["source"] = summary["source"] + "+port-telemetry"
+        summary["portTelemetrySource"] = str(port_telemetry.get("source", ""))
+        summary["measuredPortFrameCount"] = int(port_summary.get("frames", 0) or 0)
+        summary["measuredPortFullFrameCount"] = int(port_summary.get("fullFrames", 0) or 0)
+        summary["measuredPortDirtyFrameCount"] = int(port_summary.get("dirtyFrames", 0) or 0)
+        summary["measuredPortFlushCount"] = int(port_summary.get("flushes", 0) or 0)
+        summary["measuredPortConvertedPixels"] = int(port_summary.get("convertedPixels", 0) or 0)
+        summary["measuredPortPackedBytes"] = int(port_summary.get("packedBytes", 0) or 0)
+        summary["measuredPortAverageFrameMs"] = float(port_summary.get("averageFrameMs", 0) or 0)
+        summary["measuredPortMaxFrameMs"] = float(port_summary.get("maxFrameMs", 0) or 0)
+        summary["measuredPortAverageDmaWaitMs"] = float(port_summary.get("averageDmaWaitMs", 0) or 0)
+        summary["measuredPortMaxDmaWaitMs"] = float(port_summary.get("maxDmaWaitMs", 0) or 0)
+        summary["measuredPortAverageFlushDoneMs"] = float(port_summary.get("averageFlushDoneMs", 0) or 0)
+        summary["measuredPortMaxFlushDoneMs"] = float(port_summary.get("maxFlushDoneMs", 0) or 0)
+        summary["measuredPortInternalRamPeakBytes"] = int(port_summary.get("internalRamPeakBytes", 0) or 0)
+        summary["measuredPortPsramPeakBytes"] = int(port_summary.get("psramPeakBytes", 0) or 0)
+        summary["notes"] = summary["notes"] + [
+            "Port telemetry was merged from a real-device or board-port log.",
         ]
     return summary
 
@@ -869,6 +1031,43 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
             "The runtime log reports that the dirty area regularly approaches the full viewport.",
             "Check whether layout changes or large repaints are forcing full-screen work; try to keep scrolling and animations on smaller dirty rectangles.",
             "", {"maxDirtyPercent": int(runtime_summary.get("maxDirtyPercent", 0) or 0)})
+    port_telemetry = report.get("portTelemetry", {}) if isinstance(report.get("portTelemetry", {}), dict) else {}
+    port_summary = port_telemetry.get("summary", {}) if isinstance(port_telemetry.get("summary", {}), dict) else {}
+    average_frame_ms = float(port_summary.get("averageFrameMs", 0) or 0)
+    max_frame_ms = float(port_summary.get("maxFrameMs", 0) or 0)
+    if average_frame_ms > 33.4 or max_frame_ms > 50.0:
+        append_performance_advice(
+            advice, seen, "performance-port-frame-time-high", "warning",
+            "Real-device frame time is above the 30 FPS budget",
+            "The port telemetry reports measured frame time that can make touch scrolling or animation feel delayed on a wearable screen.",
+            "Compare DMA wait, flush-done time and dirty area. Prefer dirty rectangles or scroll-strip paths before adding retained-rendering complexity.",
+            "", {"averageFrameMs": average_frame_ms, "maxFrameMs": max_frame_ms})
+    average_dma_wait_ms = float(port_summary.get("averageDmaWaitMs", 0) or 0)
+    max_dma_wait_ms = float(port_summary.get("maxDmaWaitMs", 0) or 0)
+    if average_dma_wait_ms > 4.0 or max_dma_wait_ms > 10.0:
+        append_performance_advice(
+            advice, seen, "performance-port-dma-wait-high", "info",
+            "Panel DMA wait is a visible part of frame time",
+            "The real port spends measurable time waiting for panel/DMA completion after JellyFrame has prepared pixels.",
+            "Make sure the host waits for flush completion at the frame boundary, uses internal RAM only for DMA-visible strips, and avoids full-frame flushes during scroll.",
+            "", {"averageDmaWaitMs": average_dma_wait_ms, "maxDmaWaitMs": max_dma_wait_ms})
+    average_flush_done_ms = float(port_summary.get("averageFlushDoneMs", 0) or 0)
+    max_flush_done_ms = float(port_summary.get("maxFlushDoneMs", 0) or 0)
+    if average_flush_done_ms > 12.0 or max_flush_done_ms > 25.0:
+        append_performance_advice(
+            advice, seen, "performance-port-flush-done-high", "warning",
+            "Panel flush completion is expensive",
+            "The real port reports high flush-done time, so the panel transfer path may dominate the user-visible frame.",
+            "Check bus speed, flush rectangle count, RGB565 packing, strip height and whether the port accidentally copies full frames.",
+            "", {"averageFlushDoneMs": average_flush_done_ms, "maxFlushDoneMs": max_flush_done_ms})
+    internal_ram_peak = int(port_summary.get("internalRamPeakBytes", 0) or 0)
+    if internal_ram_peak > 256 * 1024:
+        append_performance_advice(
+            advice, seen, "performance-port-internal-ram-high", "warning",
+            "Real port reports high internal RAM pressure",
+            "The port telemetry says the frame path uses a large amount of internal RAM, which can starve RTOS stacks, DMA buffers and host services.",
+            "Keep full framebuffers and decoded resources in PSRAM when possible; reserve internal RAM for DMA-visible strips, small scratch buffers and RTOS-critical work.",
+            "", {"internalRamPeakBytes": internal_ram_peak})
     return advice
 
 
@@ -1411,6 +1610,8 @@ def cmd_package(args: argparse.Namespace) -> int:
     merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
     if getattr(args, "runtime_log", None):
         merge_runtime_capture_report(args.report, args.runtime_log)
+    if getattr(args, "port_telemetry", None):
+        merge_port_telemetry_report(args.report, args.port_telemetry)
     return enforce_diagnostics_policy(args)
 
 
@@ -1441,6 +1642,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
     if result == 0:
         if getattr(args, "runtime_log", None):
             merge_runtime_capture_report(args.report, args.runtime_log)
+        if getattr(args, "port_telemetry", None):
+            merge_port_telemetry_report(args.report, args.port_telemetry)
         return enforce_diagnostics_policy(args)
     return result
 
@@ -1561,6 +1764,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             return font_result
     if getattr(args, "runtime_log", None):
         merge_runtime_capture_report(args.report, args.runtime_log)
+    if getattr(args, "port_telemetry", None):
+        merge_port_telemetry_report(args.report, args.port_telemetry)
     policy_result = enforce_diagnostics_policy(args)
     if policy_result != 0:
         return policy_result
@@ -1996,6 +2201,8 @@ def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strict", action="store_true", help="Fail when diagnostics contain warnings.")
     parser.add_argument("--runtime-log", type=Path,
                         help="Optional Win32 frame-script or runtime capture log to merge into the report.")
+    parser.add_argument("--port-telemetry", type=Path,
+                        help="Optional real-device port telemetry JSON or 'port_telemetry key=value' log.")
 
 
 def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:
@@ -2051,6 +2258,10 @@ def main() -> int:
     preview.add_argument("--target", help="Optional target preset id used for viewport defaults.")
     preview.add_argument("--width", type=int, default=0, help="Optional viewport width override.")
     preview.add_argument("--height", type=int, default=0, help="Optional viewport height override.")
+    preview.add_argument("--runtime-log", type=Path,
+                         help="Optional Win32 frame-script or runtime capture log to merge into the report.")
+    preview.add_argument("--port-telemetry", type=Path,
+                         help="Optional real-device port telemetry JSON or 'port_telemetry key=value' log.")
     add_font_preflight_args(preview)
     add_responsive_args(preview)
     preview.add_argument("--namespace", default="jellyframe_esp32s3", help=argparse.SUPPRESS)

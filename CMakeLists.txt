@@ -470,7 +470,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_canvas_smoke_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
-                    "layer_tree layers=1 display_commands=15")
+                    "layer_tree layers=2 display_commands=15")
 
             add_test(
                 NAME jellyframe_win32_canvas_gauges_frame_script

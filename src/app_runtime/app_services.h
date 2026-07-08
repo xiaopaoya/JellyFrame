@@ -646,6 +646,12 @@ public:
     bool release_value(AppRuntimeHost& host, std::uint32_t handle);
     std::size_t collect_released_values(const AppRuntimeHost& host);
     AppPrivateKvFlushResult flush_pending(AppRuntimeHost& host, std::size_t max_ops = 0);
+    AppPrivateKvFlushResult flush_pending_app_instance(AppRuntimeHost& host,
+                                                       std::uint32_t app_instance_id,
+                                                       std::size_t max_ops = 0);
+    AppPrivateKvFlushResult flush_pending_app(AppRuntimeHost& host,
+                                              const std::string& app_id,
+                                              std::size_t max_ops = 0);
     std::size_t pending_count() const;
     std::size_t pending_count_app_instance(std::uint32_t app_instance_id) const;
     std::size_t pending_count_app(const std::string& app_id) const;

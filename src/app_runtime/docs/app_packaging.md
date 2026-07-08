@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-07-07; Applies to: 0.6.0-dev
+> Last updated: 2026-07-09; Applies to: 0.6.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store
@@ -454,10 +454,15 @@ JellyFrame should use a strict local path subset:
 - Absolute app paths start with `/`.
 - Relative paths resolve against the referring resource directory.
 - `.` is ignored; `..` is rejected when it escapes the app root.
+- Symlinks are rejected. The packer also verifies resolved resource paths stay
+  inside the app root before reading bytes.
 - Build tools normalize separators to `/`, reject duplicate normalized paths
   and sort entries by normalized path.
 - CSS `url(...)`, `<link href>`, `<script src>`, images and fonts all use the
   same resolver.
+- `budgets.maxResourceBytes` is enforced per resource and reported for the
+  total packaged resource bytes. A total overrun emits
+  `resource-budget-exceeded` so embedded targets can reject or warn by policy.
 
 These rules match the current ESP32-S3 bring-up closely and keep the MCU loader
 small.
@@ -1004,6 +1009,21 @@ If you also have a saved Win32 frame-script or capture log, pass it through
 `--runtime-log` and the CLI will merge the observed frame-update, present-estimate
 and load-telemetry counters into the same report as `runtimeMetrics` plus
 measured performance-summary fields.
+If you have real-device or board-port measurements, pass them through
+`--port-telemetry`. The input may be JSON, or it may contain one simple text
+line:
+
+```text
+port_telemetry frames=60 full=1 dirty=59 flushes=90 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+```
+
+The CLI writes this as `portTelemetry` and adds measured fields such as
+`measuredPortAverageFrameMs`, `measuredPortMaxFrameMs`,
+`measuredPortAverageDmaWaitMs`, `measuredPortAverageFlushDoneMs` and
+`measuredPortInternalRamPeakBytes` to `performanceSummary`. When the data points
+at a 30 FPS miss, panel/DMA wait or high internal-RAM pressure,
+`performanceAdvice[]` reports the likely layer. This is a desktop-tool input
+format, not something the MCU runtime has to parse.
 `runtimeBudgetEstimate` is a package-preflight estimate:
 it reports package-known resource/font usage and manifest/target budget limits,
 while live queue/handle/timer/listener counters come from `AppBudgetSnapshot`

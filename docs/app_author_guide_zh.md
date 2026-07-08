@@ -1,6 +1,6 @@
 # App 作者手册
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-09；适用版本：0.6.0-dev
 
 这是一份给 JellyFrame app 作者的短契约。JellyFrame 不是迷你浏览器，而是一个 Web 形状的嵌入式
 UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，JavaScript 负责有界本地交互，manifest
@@ -40,7 +40,16 @@ python tools\jellyframe_cli.py check `
 framebuffer bytes、估算 pipeline heap、资源预算占比和 full-frame present 规模。`check` 调用
 伪浏览器时，summary 还会带桌面工具侧阶段耗时，例如 parse、layout、paint、present 的微秒数。
 这些耗时适合判断“时间花在哪一步”，但仍不是设备 FPS。真实帧耗时、DMA wait 和 panel flush 时间
-仍应通过 Win32 frame-script capture 或设备 telemetry 获取。
+仍应通过 Win32 frame-script capture 或设备 telemetry 获取。保存 Win32 capture 日志后可在
+`check` / `package` 中加 `--runtime-log path\to\capture.log`；保存真实 port 日志后可加
+`--port-telemetry path\to\port.log`。port 日志最小只需要一行：
+
+```text
+port_telemetry frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+```
+
+这些数据会进入同一份 report 的 `runtimeMetrics` / `portTelemetry` 和 `performanceAdvice[]`，
+便于区分是页面复杂、dirty 区过大、panel flush 慢，还是 port 的 internal RAM 使用方式需要调整。
 
 诊断标题和解释会尽量复用 Web/CSS 规范中已有的表达：parse error、invalid declaration、
 unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己的 `code` 字段只作为

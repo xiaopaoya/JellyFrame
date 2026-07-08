@@ -249,6 +249,25 @@ void remove_child_keeps_wrapper_usable() {
     check(statistics.detached_nodes.aggregate.node_count == 2, "detached statistics include subtree");
 }
 
+void javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_cleanup() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><main id='app'><button id='gone'>Tap</button></main></body>");
+    auto second_document = parser.parse("<body><p>Next</p></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var app = document.getElementById('app');"
+        "var gone = document.getElementById('gone');"
+        "gone.addEventListener('click', function () { app.textContent = 'bad'; });"
+        "app.textContent = 'replacement';"
+        "'done'");
+    check(result.ok, "listener subtree destruction script succeeds");
+
+    runtime.bind_document(*second_document);
+    check(runtime.statistics().event_listener_count == 0, "destroyed node listener is cleared on rebind");
+}
+
 void javascript_detached_node_budget_is_bounded() {
     HtmlParser parser;
     auto document = parser.parse("<body><main id='app'></main></body>");
@@ -353,6 +372,36 @@ void javascript_event_prevent_default_and_remove_listener_work() {
     MouseEvent second("click", 2, 2);
     check(dispatch_event(*button, second), "removed listener no longer prevents default");
     check(button->text_content() == "1", "removed listener no longer mutates DOM");
+}
+
+void javascript_event_object_survives_after_dispatch_as_snapshot() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "button exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var saved = null;"
+        "button.addEventListener('click', function (event) {"
+        "  saved = event;"
+        "  event.preventDefault();"
+        "});"
+        "'ready'");
+    check(result.ok, "event snapshot listener registration succeeds");
+
+    Event click("click", true, true);
+    check(!dispatch_event(*button, click), "live event preventDefault still affects dispatch");
+
+    const ScriptEvaluationResult escaped = runtime.eval(
+        "saved.stopPropagation();"
+        "saved.stopImmediatePropagation();"
+        "saved.preventDefault();"
+        "saved.type + ':' + String(saved.defaultPrevented)");
+    check(escaped.ok, "escaped event methods remain safe after dispatch");
+    check(escaped.value == "click:true", "escaped event keeps snapshot fields");
 }
 
 void javascript_event_handler_properties_work() {
@@ -1477,10 +1526,12 @@ int main() {
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();
         remove_child_keeps_wrapper_usable();
+        javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_cleanup();
         javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
         javascript_generic_click_event_does_not_fake_mouse_coordinates();
         javascript_event_prevent_default_and_remove_listener_work();
+        javascript_event_object_survives_after_dispatch_as_snapshot();
         javascript_event_handler_properties_work();
         javascript_form_properties_mutate_control_state();
         javascript_form_idl_reflection_subset_works();

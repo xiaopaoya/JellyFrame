@@ -20,6 +20,7 @@ std::uint16_t next_generation(std::uint16_t generation) {
 HostServiceRequestQueue::HostServiceRequestQueue(std::size_t capacity)
     : capacity_(capacity) {
     requests_.reserve(capacity_);
+    in_progress_.reserve(capacity_);
 }
 
 HostServiceSubmitResult HostServiceRequestQueue::submit(HostServiceJobKind kind,
@@ -49,6 +50,7 @@ bool HostServiceRequestQueue::pop_next(HostServiceRequest& request) {
         }
     }
     request = *best;
+    in_progress_.push_back(request);
     requests_.erase(best);
     return true;
 }
@@ -67,7 +69,21 @@ bool HostServiceRequestQueue::pop_next(HostServiceJobKind kind, HostServiceReque
         return false;
     }
     request = *best;
+    in_progress_.push_back(request);
     requests_.erase(best);
+    return true;
+}
+
+bool HostServiceRequestQueue::pop_pending(std::uint32_t job_id, HostServiceRequest& request) {
+    const auto it = std::find_if(requests_.begin(), requests_.end(), [job_id](const HostServiceRequest& candidate) {
+        return candidate.job_id == job_id;
+    });
+    if (it == requests_.end()) {
+        return false;
+    }
+    request = *it;
+    in_progress_.push_back(request);
+    requests_.erase(it);
     return true;
 }
 
@@ -82,6 +98,17 @@ bool HostServiceRequestQueue::cancel_pending(std::uint32_t job_id) {
     return true;
 }
 
+bool HostServiceRequestQueue::finish(std::uint32_t job_id) {
+    const auto it = std::find_if(in_progress_.begin(), in_progress_.end(), [job_id](const HostServiceRequest& request) {
+        return request.job_id == job_id;
+    });
+    if (it == in_progress_.end()) {
+        return false;
+    }
+    in_progress_.erase(it);
+    return true;
+}
+
 std::size_t HostServiceRequestQueue::cancel_app_instance(std::uint32_t app_instance_id) {
     const auto old_size = requests_.size();
     requests_.erase(std::remove_if(requests_.begin(),
@@ -90,11 +117,19 @@ std::size_t HostServiceRequestQueue::cancel_app_instance(std::uint32_t app_insta
                                        return request.app_instance_id == app_instance_id;
                                    }),
                     requests_.end());
-    return old_size - requests_.size();
+    const auto old_in_progress_size = in_progress_.size();
+    in_progress_.erase(std::remove_if(in_progress_.begin(),
+                                      in_progress_.end(),
+                                      [app_instance_id](const HostServiceRequest& request) {
+                                          return request.app_instance_id == app_instance_id;
+                                      }),
+                       in_progress_.end());
+    return (old_size - requests_.size()) + (old_in_progress_size - in_progress_.size());
 }
 
 void HostServiceRequestQueue::clear() {
     requests_.clear();
+    in_progress_.clear();
 }
 
 HostServiceCompletionQueue::HostServiceCompletionQueue(std::size_t capacity)

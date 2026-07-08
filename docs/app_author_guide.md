@@ -1,6 +1,6 @@
 # App Author Guide
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-09; Applies to: 0.6.0-dev
 
 This is the short contract for people writing JellyFrame apps. JellyFrame is
 not a mini browser. It is a Web-shaped embedded UI runtime: HTML gives
@@ -47,7 +47,17 @@ ran during `check`, the same summary also includes desktop tool-side stage
 timings such as parse, layout, paint and present microseconds. These timings are
 useful attribution, but they are still not device FPS. Use Win32 frame-script
 capture or device telemetry for actual frame time, DMA wait and panel flush
-time.
+time. Add `--runtime-log path\to\capture.log` to `check` / `package` for saved
+Win32 logs, or `--port-telemetry path\to\port.log` for real port logs. A port
+log can start as one text line:
+
+```text
+port_telemetry frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+```
+
+The CLI merges these into `runtimeMetrics` / `portTelemetry` and
+`performanceAdvice[]`, which helps separate page complexity, dirty area, panel
+flush, DMA wait and port-side internal-RAM pressure.
 
 Diagnostic titles and explanations try to reuse Web/CSS vocabulary when it
 matches the failure: parse error, invalid declaration, unsupported value,

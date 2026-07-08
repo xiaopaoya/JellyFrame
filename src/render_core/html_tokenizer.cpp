@@ -349,6 +349,7 @@ private:
         current_token_.type = type;
         current_attribute_ = HtmlAttribute{};
         has_current_attribute_ = false;
+        attribute_limit_reported_ = false;
     }
 
     void begin_attribute() {
@@ -362,7 +363,16 @@ private:
             has_current_attribute_ = false;
             return;
         }
-        if (!is_duplicate_attribute(current_token_, current_attribute_.name)) {
+        if (options_.max_attributes_per_tag != 0 &&
+            current_token_.attributes.size() >= options_.max_attributes_per_tag) {
+            if (!attribute_limit_reported_) {
+                report(DiagnosticSeverity::Warning,
+                       "html-tokenizer-attribute-limit",
+                       "HTML tokenizer attribute budget was reached; extra attributes were consumed and ignored",
+                       current_token_.name);
+                attribute_limit_reported_ = true;
+            }
+        } else if (!is_duplicate_attribute(current_token_, current_attribute_.name)) {
             current_token_.attributes.push_back(std::move(current_attribute_));
         } else {
             report(DiagnosticSeverity::Warning,
@@ -1015,6 +1025,7 @@ private:
     HtmlToken current_token_;
     HtmlAttribute current_attribute_;
     bool has_current_attribute_ = false;
+    bool attribute_limit_reported_ = false;
     std::string raw_text_end_tag_;
 };
 

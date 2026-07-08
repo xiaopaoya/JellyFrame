@@ -121,6 +121,56 @@ void xhr_abort_cancels_pending_request() {
     check(events[2] == AppXhrEventKind::LoadEnd, "xhr abort loadend");
 }
 
+void xhr_abort_consumes_late_worker_completion() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.late-abort", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    check(network.add_fixture(NetworkFetchFixture{"/data/late.txt", 200, "text/plain", "late"}), "late fixture");
+
+    AppXmlHttpRequest xhr;
+    check(xhr.open("GET", "/data/late.txt", true) == AppXhrStatus::Ok, "xhr late open");
+    take_events(xhr);
+    check(xhr.send(host, network) == AppXhrStatus::Ok, "xhr late send");
+
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request), "worker owns request");
+    check(host.requests().in_flight_size() == 1, "request counted in flight");
+    xhr.abort(host);
+    check(host.requests().in_flight_size() == 1, "abort cannot cancel worker-owned request");
+    take_events(xhr);
+
+    check(host.push_completion(network.complete_request(host, request)), "late completion queued");
+    check(host.requests().in_flight_size() == 0, "late completion releases in-flight slot");
+    const std::vector<HostServiceCompletion> completions = pump(host);
+    check(completions.size() == 1, "late completion pumped");
+    check(xhr.handle_completion(host, network, completions.front()), "late completion consumed");
+    check(host.handles().active_count() == 0, "late response handle released");
+    check(take_events(xhr).empty(), "late completion does not emit extra events after abort");
+}
+
+void xhr_reopen_consumes_late_previous_completion() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.reopen", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    check(network.add_fixture(NetworkFetchFixture{"/data/old.txt", 200, "text/plain", "old"}), "old fixture");
+
+    AppXmlHttpRequest xhr;
+    check(xhr.open("GET", "/data/old.txt", true) == AppXhrStatus::Ok, "xhr old open");
+    take_events(xhr);
+    check(xhr.send(host, network) == AppXhrStatus::Ok, "xhr old send");
+
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request), "worker owns old request");
+    check(xhr.open("GET", "/data/new.txt", true) == AppXhrStatus::Ok, "xhr reopen");
+
+    check(host.push_completion(network.complete_request(host, request)), "old completion queued");
+    const std::vector<HostServiceCompletion> completions = pump(host);
+    check(completions.size() == 1, "old completion pumped");
+    check(xhr.handle_completion(host, network, completions.front()), "old completion consumed");
+    check(host.handles().active_count() == 0, "old response handle released");
+    check(xhr.ready_state() == AppXhrReadyState::Opened, "reopened xhr state preserved");
+}
+
 void xhr_missing_response_record_releases_handle() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.missing-record", AppRole::App);
@@ -159,6 +209,8 @@ int main() {
     xhr_rejects_non_subset_calls();
     xhr_send_failure_becomes_error_event();
     xhr_abort_cancels_pending_request();
+    xhr_abort_consumes_late_worker_completion();
+    xhr_reopen_consumes_late_previous_completion();
     xhr_missing_response_record_releases_handle();
     return 0;
 }

@@ -1,6 +1,6 @@
 # How To Start With JellyFrame
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-09; Applies to: 0.6.0-dev
 
 This guide is for developers opening the repository for the first time. It
 explains what JellyFrame is, how the project is organized, how to build and run
@@ -233,6 +233,35 @@ Run the virtual board benchmark:
 ```
 
 Use Release builds for meaningful performance numbers.
+
+If you have a saved Win32 frame-script capture log or real-board port telemetry,
+merge it into the same package report to separate page complexity from dirty
+area, panel flush, DMA wait and internal-RAM pressure:
+
+```powershell
+python tools\jellyframe_cli.py check `
+  --root build\my_weather `
+  --target round-300 `
+  --report build\my_weather.report.json `
+  --build-dir build\Release `
+  --runtime-log build\capture.log
+
+python tools\jellyframe_cli.py check `
+  --root build\my_weather `
+  --target round-300 `
+  --report build\my_weather.port.report.json `
+  --build-dir build\Release `
+  --port-telemetry build\port.log
+```
+
+A real port can start with this minimal text format:
+
+```text
+port_telemetry frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+```
+
+The CLI writes the merged data to `runtimeMetrics` / `portTelemetry`,
+`performanceSummary` and `performanceAdvice[]`.
 
 ## 9. Render Pages And Inspect The Pipeline
 

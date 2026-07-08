@@ -109,7 +109,7 @@ completion queue worker  -> UI/main
 resource cache   host-owned surfaces/buffers/audio handles/bundles
 ```
 
-`HostAsyncCapabilities::max_in_flight_jobs` caps pending jobs.
+`HostAsyncCapabilities::max_in_flight_jobs` caps queued plus worker-owned jobs.
 `HostAsyncCapabilities::max_completion_events_per_frame` caps completions
 consumed per UI frame.
 
