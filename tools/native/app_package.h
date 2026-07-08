@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace jellyframe_example {
@@ -100,6 +101,12 @@ struct PackageResourceContext {
 };
 
 inline std::string read_text_file_limited(const std::filesystem::path& path, std::size_t max_input_bytes) {
+    std::error_code size_error;
+    const std::uintmax_t file_size = std::filesystem::file_size(path, size_error);
+    if (size_error || file_size > max_input_bytes) {
+        return {};
+    }
+
     std::ifstream file(path, std::ios::binary);
     if (!file) {
         return {};
@@ -124,6 +131,12 @@ inline std::string read_text_file_limited(const std::filesystem::path& path, std
 
 inline std::vector<std::uint8_t> read_binary_file_limited(const std::filesystem::path& path,
                                                           std::size_t max_input_bytes) {
+    std::error_code size_error;
+    const std::uintmax_t file_size = std::filesystem::file_size(path, size_error);
+    if (size_error || file_size > max_input_bytes) {
+        return {};
+    }
+
     std::ifstream file(path, std::ios::binary);
     if (!file) {
         return {};
