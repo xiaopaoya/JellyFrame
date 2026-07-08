@@ -7,6 +7,9 @@
 
 当前核心已经足够支持第一版“静态资源 + 软件渲染 + RGB565 局部提交 + 触摸/按键输入 + bitmap 字体 + 可选 JerryScript”的开发板 bring-up。尚未具备无完整 framebuffer 的 tiled renderer、生产级复杂文字 shaping、图片解码和网络资源栈。
 
+桌面工具可以启用 `JELLYFRAME_ENABLE_IMAGE_FILE_IO` 来写出 BMP/PPM 截图。
+嵌入式 port 默认应保持该宏未定义；只有板级 debug 构建明确需要文件系统截图 helper 时再启用。
+
 ## 当前可确定的核心契约
 
 这些接口已经存在，可作为移植开发的稳定入口：

@@ -8,7 +8,9 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#ifdef JELLYFRAME_ENABLE_IMAGE_FILE_IO
 #include <fstream>
+#endif
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -1294,6 +1296,7 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
     }
 }
 
+#ifdef JELLYFRAME_ENABLE_IMAGE_FILE_IO
 void write_ppm(const FrameBuffer& frame_buffer, const std::string& path) {
     std::ofstream output(path, std::ios::binary);
     if (!output) {
@@ -1383,6 +1386,7 @@ void write_image(const FrameBuffer& frame_buffer, const std::string& path) {
     }
     write_bmp(frame_buffer, path);
 }
+#endif
 
 std::size_t count_non_background_pixels(const FrameBuffer& frame_buffer, Color background) {
     std::size_t count = 0;

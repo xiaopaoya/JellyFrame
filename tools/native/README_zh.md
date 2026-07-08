@@ -1,6 +1,6 @@
 # Native Tools
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-09；适用版本：0.6.0-dev
 
 这里保存用于检查 JellyFrame 输出的 C++ 桌面工具。示例页面和 app package 位于
 `../../samples`。
@@ -69,7 +69,9 @@ JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来�
 `require-script-watchdog` 只用于 Win32/scripted recovery 验收。它们映射到宿主的脚本执行预算，
 并要求 JerryScript 构建启用 VM halt；app 作者不需要、也不应该依赖任何私有 JavaScript 语法。
 
-这些 native 工具可以使用桌面文件 I/O；嵌入式核心不依赖这些入口。
+这些 native 工具可以使用桌面文件 I/O。桌面 CMake 构建通过
+`JELLYFRAME_ENABLE_IMAGE_FILE_IO=ON` 暴露 framebuffer 图片写出函数；嵌入式或
+RTOS port 可以不定义该开关，使 render_core 不暴露文件写出入口。
 
 `jellyframe_font_pack_gen` 用 BDF 输入生成离线 bitmap font pack。它既能输出固件用
 C++ `BitmapFont` header，也能输出运行时 `.jffont` supplement。`--coverage-bits 1`

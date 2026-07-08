@@ -10,6 +10,7 @@ option(JELLYFRAME_BUILD_EXAMPLES "Build JellyFrame native validation and dump to
 option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
+option(JELLYFRAME_ENABLE_IMAGE_FILE_IO "Expose desktop image file writers from render_core" ON)
 
 set(JERRYSCRIPT_ROOT "" CACHE PATH "JerryScript source or install root")
 set(JERRYSCRIPT_INCLUDE_DIR "" CACHE PATH "JerryScript include directory")
@@ -77,6 +78,9 @@ target_include_directories(jellyframe_render_core
 )
 
 target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
+if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
+    target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)
+endif()
 
 if(MSVC)
     target_compile_options(jellyframe_render_core PRIVATE /W4)

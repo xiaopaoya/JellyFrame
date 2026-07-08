@@ -560,6 +560,10 @@ rectangles, bitmap fonts, input events and optional JerryScript. The remaining
 board-port work is to add the real display driver, input driver, font resources,
 run-loop policy and hardware measurements.
 
+Desktop tools can enable `JELLYFRAME_ENABLE_IMAGE_FILE_IO` to write BMP/PPM
+captures. Embedded ports should leave that macro undefined unless a board-side
+debug build intentionally wants filesystem-backed capture helpers.
+
 If a product target requires any of the following, plan core work first:
 
 - Tiled rendering without a full RGBA framebuffer.

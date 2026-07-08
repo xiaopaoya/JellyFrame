@@ -1,6 +1,6 @@
 # Native Tools
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-09; Applies to: 0.6.0-dev
 
 This directory contains native C++ desktop tools used to inspect JellyFrame
 output. Sample pages and app packages live in `../../samples`.
@@ -80,8 +80,10 @@ Use `script-watchdog-checks N`, `script-watchdog-interval N` and
 to the host script-execution budget and require a JerryScript build with VM halt
 support; page authors should not rely on private JavaScript syntax for this.
 
-Native tools may use desktop file I/O. The embedded core does not depend on these
-entry points.
+Native tools may use desktop file I/O. Desktop CMake builds expose framebuffer
+image writers through `JELLYFRAME_ENABLE_IMAGE_FILE_IO=ON`; embedded or RTOS
+ports can leave that definition disabled so render_core does not expose file
+writer entry points.
 
 `jellyframe_font_pack_gen` generates offline bitmap font packs from BDF input.
 It can emit both a firmware C++ `BitmapFont` header and a runtime `.jffont`

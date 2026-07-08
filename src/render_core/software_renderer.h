@@ -116,9 +116,11 @@ private:
                          float inherited_opacity = 1.0F) const;
 };
 
+#ifdef JELLYFRAME_ENABLE_IMAGE_FILE_IO
 void write_ppm(const FrameBuffer& frame_buffer, const std::string& path);
 void write_bmp(const FrameBuffer& frame_buffer, const std::string& path);
 void write_image(const FrameBuffer& frame_buffer, const std::string& path);
+#endif
 std::size_t count_non_background_pixels(const FrameBuffer& frame_buffer, Color background);
 HostFrameBufferView frame_buffer_view(const FrameBuffer& frame_buffer);
 bool present_frame(const FrameBuffer& frame_buffer,
