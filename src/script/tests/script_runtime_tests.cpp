@@ -1308,6 +1308,59 @@ void javascript_audio_subset_uses_bound_host() {
     check(result.ok && result.value == "error:true:thrown", "Audio play rejection dispatches error before throwing");
 }
 
+void javascript_service_objects_are_invalidated_after_clear_and_rebind() {
+    HtmlParser parser;
+    auto first_document = parser.parse("<body></body>");
+    auto second_document = parser.parse("<body><p>next</p></body>");
+
+    AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 2});
+    host.launch("org.example.service-rebind", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    AppLocalStorageShadow storage(AppPrivateKvPolicy{true, 16, 32, 4, 128});
+    FakeAudioHost audio_host;
+
+    JerryScriptRuntime runtime;
+    runtime.bind_app_services(host, network);
+    runtime.bind_local_storage(storage);
+    runtime.bind_audio_host(ScriptAudioHost{fake_audio_play, &audio_host});
+    runtime.bind_document(*first_document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var SavedXHR = XMLHttpRequest;"
+        "var xhr = new XMLHttpRequest();"
+        "var SavedAudio = Audio;"
+        "var tone = new Audio('/tone.wav');"
+        "var store = localStorage;"
+        "store.setItem('before', 'ok');"
+        "'armed'");
+    check(result.ok && result.value == "armed", "service objects are created before clear");
+    check(runtime.statistics().xml_http_request_count == 1, "one active XHR before clear");
+    check(runtime.statistics().audio_element_count == 1, "one active Audio before clear");
+
+    runtime.clear_app_services();
+    runtime.bind_document(*second_document);
+    result = runtime.eval(
+        "var types = [typeof XMLHttpRequest, typeof Audio, typeof localStorage].join(':');"
+        "var xhrOpen = true;"
+        "try { xhr.open('GET', '/late'); } catch (e) { xhrOpen = false; }"
+        "var xhrCtor = true;"
+        "try { new SavedXHR(); } catch (e) { xhrCtor = false; }"
+        "var audioPlay = true;"
+        "try { tone.play(); } catch (e) { audioPlay = false; }"
+        "var audioCtor = true;"
+        "try { new SavedAudio('/late.wav'); } catch (e) { audioCtor = false; }"
+        "var storageWrite = true;"
+        "try { store.setItem('after', 'bad'); } catch (e) { storageWrite = false; }"
+        "types + '|' + [xhrOpen, xhrCtor, audioPlay, audioCtor, storageWrite].join(':')");
+
+    check(result.ok, "cleared service objects script evaluates");
+    check(result.value == "undefined:undefined:undefined|false:false:false:false:false",
+          "cleared services remove globals and invalidate cached objects");
+    check(runtime.statistics().xml_http_request_count == 0, "cleared XHR is not active");
+    check(runtime.statistics().audio_element_count == 0, "cleared Audio is not active");
+    check(storage.get_item("after", nullptr) == AppLocalStorageStatus::NotFound,
+          "cleared localStorage object cannot write after service clear");
+}
+
 void javascript_runtime_respects_timer_and_listener_budgets() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>Go</button></body>");
@@ -1597,6 +1650,7 @@ int main() {
         javascript_local_storage_subset_uses_bound_shadow();
         javascript_local_storage_quota_error_is_reported();
         javascript_audio_subset_uses_bound_host();
+        javascript_service_objects_are_invalidated_after_clear_and_rebind();
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_system_state_exposes_web_adjacent_subset();
         javascript_date_now_uses_host_time();

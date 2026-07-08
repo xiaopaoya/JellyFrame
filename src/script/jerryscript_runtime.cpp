@@ -65,6 +65,7 @@ struct ScriptXmlHttpRequest {
     jerry_value_t object = 0;
     std::array<jerry_value_t, 6> callbacks{};
     bool active = false;
+    bool js_object_alive = false;
 };
 
 struct ScriptAudioElement {
@@ -76,6 +77,7 @@ struct ScriptAudioElement {
     std::array<jerry_value_t, 2> property_callbacks{};
     std::array<jerry_value_t, 2> event_listeners{};
     bool active = false;
+    bool js_object_alive = false;
 };
 
 struct ScriptGeolocationRequest {
@@ -92,6 +94,12 @@ struct ScriptCanvasGradient {
 struct ScriptNodeBinding {
     JerryScriptRuntime* runtime = nullptr;
     Node* node = nullptr;
+    bool active = false;
+};
+
+struct ScriptLocalStorageBinding {
+    JerryScriptRuntime* runtime = nullptr;
+    AppLocalStorageShadow* storage = nullptr;
     bool active = false;
 };
 
@@ -255,6 +263,21 @@ struct ScriptRuntimeAccess {
         runtime.invalidate_script_node(node);
     }
 
+    static ScriptLocalStorageBinding* bind_script_local_storage(JerryScriptRuntime& runtime,
+                                                                AppLocalStorageShadow& storage) {
+        return runtime.bind_script_local_storage(storage);
+    }
+
+    static AppLocalStorageShadow* resolve_script_local_storage(JerryScriptRuntime& runtime,
+                                                               const ScriptLocalStorageBinding& binding) {
+        return runtime.resolve_script_local_storage(binding);
+    }
+
+    static void forget_script_local_storage_binding(JerryScriptRuntime& runtime,
+                                                    ScriptLocalStorageBinding& binding) {
+        runtime.forget_script_local_storage_binding(binding);
+    }
+
     static const JerryScriptRuntimeOptions& options(const JerryScriptRuntime& runtime) {
         return runtime.options_;
     }
@@ -302,6 +325,33 @@ void free_script_node_binding(void* native_p, jerry_object_native_info_t*) {
     delete binding;
 }
 
+void free_script_xhr(void* native_p, jerry_object_native_info_t*) {
+    auto* xhr = static_cast<ScriptXmlHttpRequest*>(native_p);
+    if (xhr != nullptr) {
+        xhr->js_object_alive = false;
+        xhr->object = 0;
+    }
+}
+
+void free_script_audio(void* native_p, jerry_object_native_info_t*) {
+    auto* audio = static_cast<ScriptAudioElement*>(native_p);
+    if (audio != nullptr) {
+        audio->js_object_alive = false;
+        audio->object = 0;
+    }
+}
+
+void free_script_local_storage_binding(void* native_p, jerry_object_native_info_t*) {
+    auto* binding = static_cast<ScriptLocalStorageBinding*>(native_p);
+    if (binding == nullptr) {
+        return;
+    }
+    if (binding->runtime != nullptr) {
+        ScriptRuntimeAccess::forget_script_local_storage_binding(*binding->runtime, *binding);
+    }
+    delete binding;
+}
+
 void script_node_event_listener_removed(void* context) {
     auto* listener = static_cast<ScriptEventListener*>(context);
     if (listener == nullptr) {
@@ -315,9 +365,9 @@ void script_node_event_listener_removed(void* context) {
 const jerry_object_native_info_t kNodeNativeInfo = {free_script_node_binding, 0, 0};
 const jerry_object_native_info_t kRuntimeNativeInfo = {nullptr, 0, 0};
 const jerry_object_native_info_t kEventNativeInfo = {free_script_event_binding, 0, 0};
-const jerry_object_native_info_t kXhrNativeInfo = {nullptr, 0, 0};
-const jerry_object_native_info_t kLocalStorageNativeInfo = {nullptr, 0, 0};
-const jerry_object_native_info_t kAudioNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kXhrNativeInfo = {free_script_xhr, 0, 0};
+const jerry_object_native_info_t kLocalStorageNativeInfo = {free_script_local_storage_binding, 0, 0};
+const jerry_object_native_info_t kAudioNativeInfo = {free_script_audio, 0, 0};
 const jerry_object_native_info_t kCanvasGradientNativeInfo = {nullptr, 0, 0};
 
 class JerryValue {
@@ -1073,21 +1123,28 @@ ScriptXmlHttpRequest* native_xhr(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
         return nullptr;
     }
-    return static_cast<ScriptXmlHttpRequest*>(jerry_object_get_native_ptr(object, &kXhrNativeInfo));
+    auto* xhr = static_cast<ScriptXmlHttpRequest*>(jerry_object_get_native_ptr(object, &kXhrNativeInfo));
+    return xhr != nullptr && xhr->active ? xhr : nullptr;
 }
 
 AppLocalStorageShadow* native_local_storage(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
         return nullptr;
     }
-    return static_cast<AppLocalStorageShadow*>(jerry_object_get_native_ptr(object, &kLocalStorageNativeInfo));
+    auto* binding =
+        static_cast<ScriptLocalStorageBinding*>(jerry_object_get_native_ptr(object, &kLocalStorageNativeInfo));
+    if (binding == nullptr || binding->runtime == nullptr) {
+        return nullptr;
+    }
+    return ScriptRuntimeAccess::resolve_script_local_storage(*binding->runtime, *binding);
 }
 
 ScriptAudioElement* native_audio(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
         return nullptr;
     }
-    return static_cast<ScriptAudioElement*>(jerry_object_get_native_ptr(object, &kAudioNativeInfo));
+    auto* audio = static_cast<ScriptAudioElement*>(jerry_object_get_native_ptr(object, &kAudioNativeInfo));
+    return audio != nullptr && audio->active ? audio : nullptr;
 }
 
 ScriptCanvasGradient* native_canvas_gradient(const jerry_value_t object) {
@@ -2408,6 +2465,11 @@ void set_property(jerry_value_t object, const char* name, jerry_value_t value) {
     (void) result;
 }
 
+void delete_property(jerry_value_t object, const char* name) {
+    JerryValue result(jerry_object_delete_sz(object, name));
+    (void) result;
+}
+
 void set_number_property(jerry_value_t object, const char* name, double value) {
     set_property(object, name, JerryValue(jerry_number(value)).get());
 }
@@ -2776,12 +2838,17 @@ jerry_value_t xhr_construct(const jerry_call_info_t* call_info_p,
         !jerry_value_is_object(call_info_p->this_value)) {
         return throw_type_error("XMLHttpRequest must be constructed with new");
     }
+    if (ScriptRuntimeAccess::app_host(*runtime) == nullptr ||
+        ScriptRuntimeAccess::network_fetch(*runtime) == nullptr) {
+        return throw_type_error("XMLHttpRequest network service is not bound");
+    }
     ScriptXmlHttpRequest* xhr = ScriptRuntimeAccess::create_xml_http_request(*runtime);
     if (xhr == nullptr) {
         return jerry_throw_sz(JERRY_ERROR_RANGE, "XMLHttpRequest budget exceeded");
     }
 
     xhr->object = jerry_value_copy(call_info_p->this_value);
+    xhr->js_object_alive = true;
     jerry_object_set_native_ptr(call_info_p->this_value, &kXhrNativeInfo, xhr);
     jerry_object_set_native_ptr(call_info_p->this_value, &kRuntimeNativeInfo, runtime);
     return jerry_undefined();
@@ -3013,9 +3080,12 @@ jerry_value_t local_storage_get_length(const jerry_call_info_t* call_info_p,
     return jerry_number(static_cast<double>(storage != nullptr ? storage->length() : 0));
 }
 
-jerry_value_t make_local_storage_object(AppLocalStorageShadow& storage) {
+jerry_value_t make_local_storage_object(JerryScriptRuntime& runtime, AppLocalStorageShadow& storage) {
     JerryValue object(jerry_object());
-    jerry_object_set_native_ptr(object.get(), &kLocalStorageNativeInfo, &storage);
+    jerry_object_set_native_ptr(object.get(),
+                                &kLocalStorageNativeInfo,
+                                ScriptRuntimeAccess::bind_script_local_storage(runtime, storage));
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
     define_accessor(object.get(), "length", local_storage_get_length, node_ignore_setter);
     set_method(object.get(), "getItem", local_storage_get_item);
     set_method(object.get(), "setItem", local_storage_set_item);
@@ -3033,12 +3103,16 @@ jerry_value_t audio_construct(const jerry_call_info_t* call_info_p,
         !jerry_value_is_object(call_info_p->this_value)) {
         return throw_type_error("Audio must be constructed with new");
     }
+    if (ScriptRuntimeAccess::audio_host(*runtime).play == nullptr) {
+        return throw_type_error("Audio host is not bound");
+    }
     ScriptAudioElement* audio =
         ScriptRuntimeAccess::create_audio_element(*runtime, args_count > 0 ? value_to_string(args_p[0]) : "");
     if (audio == nullptr) {
         return jerry_throw_sz(JERRY_ERROR_RANGE, "Audio element budget exceeded");
     }
     audio->object = jerry_value_copy(call_info_p->this_value);
+    audio->js_object_alive = true;
     jerry_object_set_native_ptr(call_info_p->this_value, &kAudioNativeInfo, audio);
     jerry_object_set_native_ptr(call_info_p->this_value, &kRuntimeNativeInfo, runtime);
     return jerry_undefined();
@@ -4678,6 +4752,41 @@ void JerryScriptRuntime::clear_script_node_bindings() {
     node_bindings_.clear();
 }
 
+ScriptLocalStorageBinding* JerryScriptRuntime::bind_script_local_storage(AppLocalStorageShadow& storage) {
+    auto* binding = new ScriptLocalStorageBinding{this, &storage, true};
+    local_storage_bindings_.push_back(binding);
+    return binding;
+}
+
+AppLocalStorageShadow* JerryScriptRuntime::resolve_script_local_storage(
+    const ScriptLocalStorageBinding& binding) const {
+    if (binding.runtime != this || !binding.active) {
+        return nullptr;
+    }
+    return binding.storage;
+}
+
+void JerryScriptRuntime::forget_script_local_storage_binding(ScriptLocalStorageBinding& binding) {
+    auto it = std::find(local_storage_bindings_.begin(), local_storage_bindings_.end(), &binding);
+    if (it != local_storage_bindings_.end()) {
+        local_storage_bindings_.erase(it);
+    }
+    binding.runtime = nullptr;
+    binding.storage = nullptr;
+    binding.active = false;
+}
+
+void JerryScriptRuntime::clear_script_local_storage_bindings() {
+    for (ScriptLocalStorageBinding* binding : local_storage_bindings_) {
+        if (binding != nullptr) {
+            binding->runtime = nullptr;
+            binding->storage = nullptr;
+            binding->active = false;
+        }
+    }
+    local_storage_bindings_.clear();
+}
+
 JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
     : options_(options) {
     if (g_runtime_active) {
@@ -4716,6 +4825,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
         clear_animation_frame_callbacks();
         clear_timers();
         clear_script_node_bindings();
+        clear_script_local_storage_bindings();
         if (canvas_2d_ != nullptr) {
             canvas_2d_->clear();
         }
@@ -4734,6 +4844,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     clear_animation_frame_callbacks();
     clear_timers();
     clear_script_node_bindings();
+    clear_script_local_storage_bindings();
     detached_nodes_.clear_detached_nodes();
     if (canvas_2d_ != nullptr) {
         canvas_2d_->clear();
@@ -4797,16 +4908,25 @@ void JerryScriptRuntime::bind_document(Node& document) {
         JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
         set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
         set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
+    } else {
+        delete_property(window_object.get(), "XMLHttpRequest");
+        delete_property(global.get(), "XMLHttpRequest");
     }
     if (audio_host_.play != nullptr) {
         JerryValue audio_constructor(make_audio_constructor(*this));
         set_property(window_object.get(), "Audio", audio_constructor.get());
         set_property(global.get(), "Audio", audio_constructor.get());
+    } else {
+        delete_property(window_object.get(), "Audio");
+        delete_property(global.get(), "Audio");
     }
     if (local_storage_ != nullptr) {
-        JerryValue local_storage(make_local_storage_object(*local_storage_));
+        JerryValue local_storage(make_local_storage_object(*this, *local_storage_));
         set_property(window_object.get(), "localStorage", local_storage.get());
         set_property(global.get(), "localStorage", local_storage.get());
+    } else {
+        delete_property(window_object.get(), "localStorage");
+        delete_property(global.get(), "localStorage");
     }
 }
 
@@ -4846,7 +4966,10 @@ void JerryScriptRuntime::clear_canvas_2d() {
 }
 
 void JerryScriptRuntime::clear_app_services() {
+    clear_xml_http_requests();
+    clear_audio_elements();
     clear_geolocation_requests();
+    clear_script_local_storage_bindings();
     app_host_ = nullptr;
     network_fetch_ = nullptr;
     location_snapshot_ = nullptr;
@@ -5146,8 +5269,18 @@ ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
     output.timer_count = timers_.size();
     output.animation_frame_callback_count = animation_frame_callbacks_.size();
     output.event_listener_count = event_listeners_.size();
-    output.xml_http_request_count = xml_http_requests_.size();
-    output.audio_element_count = audio_elements_.size();
+    output.xml_http_request_count =
+        static_cast<std::size_t>(std::count_if(xml_http_requests_.begin(),
+                                               xml_http_requests_.end(),
+                                               [](const std::unique_ptr<ScriptXmlHttpRequest>& xhr) {
+                                                   return xhr->active;
+                                               }));
+    output.audio_element_count =
+        static_cast<std::size_t>(std::count_if(audio_elements_.begin(),
+                                               audio_elements_.end(),
+                                               [](const std::unique_ptr<ScriptAudioElement>& audio) {
+                                                   return audio->active;
+                                               }));
     output.geolocation_request_count = geolocation_requests_.size();
     output.detached_nodes = detached_nodes_.detached_statistics();
     return output;
@@ -5569,9 +5702,15 @@ void JerryScriptRuntime::clear_animation_frame_callbacks() {
 ScriptXmlHttpRequest* JerryScriptRuntime::create_xml_http_request() {
     xml_http_requests_.erase(std::remove_if(xml_http_requests_.begin(), xml_http_requests_.end(),
         [](const std::unique_ptr<ScriptXmlHttpRequest>& xhr) {
-            return !xhr->active;
+            return !xhr->active && !xhr->js_object_alive;
         }), xml_http_requests_.end());
-    if (xml_http_requests_.size() >= std::max<std::size_t>(1, options_.max_xml_http_requests)) {
+    const auto active_count =
+        static_cast<std::size_t>(std::count_if(xml_http_requests_.begin(),
+                                               xml_http_requests_.end(),
+                                               [](const std::unique_ptr<ScriptXmlHttpRequest>& xhr) {
+                                                   return xhr->active;
+                                               }));
+    if (active_count >= std::max<std::size_t>(1, options_.max_xml_http_requests)) {
         return nullptr;
     }
     auto xhr = std::make_unique<ScriptXmlHttpRequest>();
@@ -5598,16 +5737,26 @@ void JerryScriptRuntime::clear_xml_http_requests() {
             }
         }
         xhr->active = false;
+        xhr->runtime = nullptr;
     }
-    xml_http_requests_.clear();
+    xml_http_requests_.erase(std::remove_if(xml_http_requests_.begin(), xml_http_requests_.end(),
+        [](const std::unique_ptr<ScriptXmlHttpRequest>& xhr) {
+            return !xhr->js_object_alive;
+        }), xml_http_requests_.end());
 }
 
 ScriptAudioElement* JerryScriptRuntime::create_audio_element(std::string src) {
     audio_elements_.erase(std::remove_if(audio_elements_.begin(), audio_elements_.end(),
         [](const std::unique_ptr<ScriptAudioElement>& audio) {
-            return !audio->active;
+            return !audio->active && !audio->js_object_alive;
         }), audio_elements_.end());
-    if (audio_elements_.size() >= std::max<std::size_t>(1, options_.max_audio_elements)) {
+    const auto active_count =
+        static_cast<std::size_t>(std::count_if(audio_elements_.begin(),
+                                               audio_elements_.end(),
+                                               [](const std::unique_ptr<ScriptAudioElement>& audio) {
+                                                   return audio->active;
+                                               }));
+    if (active_count >= std::max<std::size_t>(1, options_.max_audio_elements)) {
         return nullptr;
     }
     auto audio = std::make_unique<ScriptAudioElement>();
@@ -5642,8 +5791,12 @@ void JerryScriptRuntime::clear_audio_elements() {
             }
         }
         audio->active = false;
+        audio->runtime = nullptr;
     }
-    audio_elements_.clear();
+    audio_elements_.erase(std::remove_if(audio_elements_.begin(), audio_elements_.end(),
+        [](const std::unique_ptr<ScriptAudioElement>& audio) {
+            return !audio->js_object_alive;
+        }), audio_elements_.end());
 }
 
 ScriptGeolocationRequest* JerryScriptRuntime::create_geolocation_request(std::uint32_t job_id,

@@ -27,6 +27,7 @@ struct ScriptEventListener;
 struct ScriptGeolocationRequest;
 struct ScriptCanvasGradient;
 struct ScriptNodeBinding;
+struct ScriptLocalStorageBinding;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
 
@@ -138,6 +139,7 @@ private:
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
     std::vector<std::unique_ptr<ScriptCanvasGradient>> canvas_gradients_;
     std::vector<ScriptNodeBinding*> node_bindings_;
+    std::vector<ScriptLocalStorageBinding*> local_storage_bindings_;
     std::vector<Node*> observed_nodes_;
     JerryScriptRuntimeOptions options_;
     AppRuntimeHost* app_host_ = nullptr;
@@ -193,6 +195,10 @@ private:
     void forget_script_node_binding(ScriptNodeBinding& binding);
     void invalidate_script_node(Node& node);
     void clear_script_node_bindings();
+    ScriptLocalStorageBinding* bind_script_local_storage(AppLocalStorageShadow& storage);
+    AppLocalStorageShadow* resolve_script_local_storage(const ScriptLocalStorageBinding& binding) const;
+    void forget_script_local_storage_binding(ScriptLocalStorageBinding& binding);
+    void clear_script_local_storage_bindings();
 };
 
 } // namespace jellyframe
