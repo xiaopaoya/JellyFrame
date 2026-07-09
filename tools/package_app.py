@@ -1059,6 +1059,104 @@ def html_sources_for_resource(resource: dict) -> list[str]:
         return []
 
 
+def css_sources_for_resource(resource: dict) -> list[tuple[str, str]]:
+    kind = resource_kind_name(resource["kind"])
+    suffix = resource["file"].suffix.lower()
+    try:
+        text = resource["file"].read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        return []
+    if kind == "Stylesheet":
+        return [(resource["path"], text)]
+    if suffix not in {".html", ".htm"}:
+        return []
+    return [(resource["path"], match.group(1))
+            for match in re.finditer(r"<style\b[^>]*>(.*?)</style>", text, flags=re.I | re.S)]
+
+
+def keyframe_blocks(css_text: str):
+    pattern = re.compile(r"@(?:-[a-z]+-)?keyframes\s+[-_a-zA-Z][-_a-zA-Z0-9]*\s*\{", flags=re.I)
+    for match in pattern.finditer(css_text):
+        depth = 1
+        index = match.end()
+        begin = index
+        while index < len(css_text) and depth:
+            if css_text[index] == "{":
+                depth += 1
+            elif css_text[index] == "}":
+                depth -= 1
+            index += 1
+        if depth == 0:
+            yield css_text[begin:index - 1]
+
+
+def collect_animation_diagnostics(resources: list[dict]) -> tuple[dict, list[dict]]:
+    supported_properties = {"opacity", "transform", "color", "background", "background-color"}
+    layout_properties = {
+        "width", "height", "min-width", "min-height", "max-width", "max-height",
+        "top", "right", "bottom", "left", "margin", "margin-top", "margin-right",
+        "margin-bottom", "margin-left", "padding", "padding-top", "padding-right",
+        "padding-bottom", "padding-left", "display", "position", "flex", "flex-grow",
+        "flex-shrink", "flex-basis", "flex-direction", "flex-wrap", "gap", "row-gap",
+        "column-gap", "grid", "grid-template-columns", "grid-template-rows",
+    }
+    unsupported_timing = re.compile(r"\b(?:cubic-bezier|steps|linear)\s*\(|\b(?:step-start|step-end)\b", flags=re.I)
+    timing_declaration = re.compile(
+        r"\b(?:animation(?:-timing-function)?|transition-timing-function)\s*:\s*([^;{}]+)",
+        flags=re.I,
+    )
+    frame_declaration = re.compile(r"(?:from|to|(?:\d+(?:\.\d+)?)%)\s*\{([^{}]*)\}", flags=re.I | re.S)
+    declaration_property = re.compile(r"(?:^|;)\s*([-_a-zA-Z][-_a-zA-Z0-9]*)\s*:")
+    entries = []
+    warnings = []
+    seen = set()
+
+    def add(source: str, code: str, message: str, property_name: str = "") -> None:
+        key = (source, code, property_name)
+        if key in seen:
+            return
+        seen.add(key)
+        entry = {"source": source, "warningCode": code}
+        if property_name:
+            entry["property"] = property_name
+        entries.append(entry)
+        warning = {"level": "warning", "code": code, "message": message, "source": source}
+        if property_name:
+            warning["property"] = property_name
+        warnings.append(warning)
+
+    for resource in resources:
+        for source_path, source_text in css_sources_for_resource(resource):
+            css_text = strip_css_comments(source_text)
+            for match in timing_declaration.finditer(css_text):
+                if unsupported_timing.search(match.group(1)):
+                    add(source_path,
+                        "css-animation-timing-function-unsupported",
+                        "animation timing uses a function outside JellyFrame's linear/ease/ease-in/ease-out/ease-in-out subset")
+            for block in keyframe_blocks(css_text):
+                for frame in frame_declaration.finditer(block):
+                    for property_match in declaration_property.finditer(frame.group(1)):
+                        property_name = property_match.group(1).lower()
+                        if property_name in supported_properties or property_name.startswith("--"):
+                            continue
+                        if property_name in layout_properties:
+                            add(source_path,
+                                "css-animation-layout-property",
+                                f"keyframe animates {property_name}, which requires repeated style/layout work and is outside JellyFrame's low-cost animation subset",
+                                property_name)
+                        else:
+                            add(source_path,
+                                "css-animation-keyframe-property-unsupported",
+                                f"keyframe property {property_name} is outside JellyFrame's supported animation subset",
+                                property_name)
+    return {
+        "model": "static-css-animation-preflight",
+        "entries": entries,
+        "entryCount": len(entries),
+        "warningCount": len(warnings),
+    }, warnings
+
+
 def strip_html_inert_content(text: str) -> str:
     text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
     text = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.I | re.S)
@@ -2306,6 +2404,8 @@ def main() -> int:
     warnings.extend(collect_service_target_warnings(manifest, target_config))
     html_api_diagnostics, html_api_warnings = collect_html_api_diagnostics(resources)
     warnings.extend(html_api_warnings)
+    animation_diagnostics, animation_warnings = collect_animation_diagnostics(resources)
+    warnings.extend(animation_warnings)
     script_api_diagnostics, script_api_warnings = collect_script_api_diagnostics(manifest, resources)
     warnings.extend(script_api_warnings)
     image_diagnostics, image_warnings = collect_image_diagnostics(resources, target_config)
@@ -2345,6 +2445,7 @@ def main() -> int:
         "staticModules": module_diagnostics,
         "serviceIntent": service_intent_report(manifest, target_config),
         "htmlApiDiagnostics": html_api_diagnostics,
+        "animationDiagnostics": animation_diagnostics,
         "scriptApiDiagnostics": script_api_diagnostics,
         "imageDiagnostics": image_diagnostics,
         "fontDiagnostics": font_diagnostics,

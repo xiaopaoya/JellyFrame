@@ -425,6 +425,46 @@ class PackagePreflightTests(unittest.TestCase):
         )
         self.assertTrue(all(warning["code"] == "script-canvas-api-deferred" for warning in warnings))
 
+    def test_animation_diagnostics_warn_for_costly_or_unsupported_keyframes(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-animation-diagnostics-") as directory:
+            root = Path(directory)
+            stylesheet = root / "styles" / "app.css"
+            stylesheet.parent.mkdir(parents=True, exist_ok=True)
+            stylesheet.write_text(
+                ".card { animation: grow 240ms cubic-bezier(.2, .8, .2, 1); }\n"
+                "@keyframes grow { from { width: 12px; opacity: 0; } to { width: 96px; border-radius: 50%; opacity: 1; } }\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, stylesheet, "/styles/app.css", 0)]
+
+            diagnostics, warnings = package_app.collect_animation_diagnostics(resources)
+
+        self.assertEqual(diagnostics["entryCount"], 3)
+        self.assertEqual(diagnostics["warningCount"], 3)
+        self.assertEqual(
+            sorted((warning["code"], warning.get("property", "")) for warning in warnings),
+            [
+                ("css-animation-keyframe-property-unsupported", "border-radius"),
+                ("css-animation-layout-property", "width"),
+                ("css-animation-timing-function-unsupported", ""),
+            ],
+        )
+
+    def test_animation_diagnostics_accepts_low_cost_keyframes_and_easing(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-animation-supported-diagnostics-") as directory:
+            root = Path(directory)
+            page = root / "index.html"
+            page.write_text(
+                "<style>.card { animation: pop 180ms ease-out; } "
+                "@keyframes pop { from { opacity: 0; transform: translateY(8px); } "
+                "to { opacity: 1; transform: translateY(0); background-color: #ffffff; } }</style>",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, page, "/index.html", 0)]
+
+            diagnostics, warnings = package_app.collect_animation_diagnostics(resources)
+
+        self.assertEqual(diagnostics["entryCount"], 0)
+        self.assertEqual(warnings, [])
+
     def test_script_api_diagnostics_accept_simple_query_selector_subset(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-script-query-selector-diagnostics-") as directory:
             root = Path(directory)

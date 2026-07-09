@@ -25,7 +25,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Responsive sizing | Subset | Use `@media`, percentage sizing, `max-width: 100%`, `box-sizing: border-box`, `gap` and `aspect-ratio`. |
 | Radius/shadow/gradient | Subset | Rounded rectangles, percentage radius, lightweight shadow, linear gradients, two-stop `conic-gradient()` progress rings and two-color center-circle `radial-gradient()` highlights are supported. Complex blur/mask/filter are deferred. |
 | Text overflow | Diagnostic subset | `white-space: nowrap` / `text-overflow` express intent; actual overflow is reported. |
-| Animation | Subset | Prefer opacity, color, background-color and translate/scale/rotate. Avoid layout-property animation. |
+| Animation | Subset | Keyframes support opacity, color, background/background-color and documented transform forms. Timing supports linear/ease/ease-in/ease-out/ease-in-out; package checks flag layout animation and unsupported easing before runtime. |
 | Complex browser CSS | Unsupported/deferred | Do not rely on full grid/flex, container queries, `:has()`, full pseudo-elements or filter/backdrop-filter. |
 
 ## JavaScript

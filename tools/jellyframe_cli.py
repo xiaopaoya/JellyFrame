@@ -774,6 +774,21 @@ ADVICE_BY_CODE = {
         "explanation": "The page exceeds the configured active animation budget for the target.",
         "action": "Reduce concurrent animations, pause offscreen effects, or merge visual motion into one smaller transform/canvas region.",
     },
+    "css-animation-layout-property": {
+        "title": "Keyframe animation changes layout",
+        "explanation": "The keyframe targets a layout property. Repeating layout work is deliberately excluded from JellyFrame's low-cost animation subset.",
+        "action": "Animate transform or opacity on a fixed-size layer. Use an explicit app state change when the layout itself must change.",
+    },
+    "css-animation-timing-function-unsupported": {
+        "title": "Animation timing function is outside the supported subset",
+        "explanation": "The stylesheet uses a parameterized or step timing function that JellyFrame does not evaluate.",
+        "action": "Use linear, ease, ease-in, ease-out, or ease-in-out. For a custom motion curve, use a small number of explicit app states.",
+    },
+    "css-animation-keyframe-property-unsupported": {
+        "title": "Keyframe property is outside the animation subset",
+        "explanation": "Only opacity, transform, color, background, and background-color are supported in keyframes.",
+        "action": "Move the visual effect to a supported property, a fixed-size canvas region, or a discrete state transition.",
+    },
     "layer-transform-unsupported": {
         "title": "Transform is outside the compositing subset",
         "explanation": "The element uses a transform form that cannot be represented by the current layer/display-list subset.",

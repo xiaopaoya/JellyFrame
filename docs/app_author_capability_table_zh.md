@@ -25,7 +25,7 @@
 | 响应式 | 子集 | 使用 `@media`、百分比 sizing、`max-width: 100%`、`box-sizing: border-box`、`gap`、`aspect-ratio`。 |
 | 圆角/阴影/渐变 | 子集 | 支持圆角矩形、百分比圆角、轻量阴影、线性渐变、两段 `conic-gradient()` 进度环和两色中心圆形 `radial-gradient()` 高光。复杂 blur/mask/filter 延后。 |
 | 文本溢出 | 诊断子集 | `white-space: nowrap` / `text-overflow` 可表达意图；实际溢出会进 report。 |
-| 动画 | 子集 | 优先 opacity、color、background-color、translate/scale/rotate。避免 layout 属性动画。 |
+| 动画 | 子集 | 关键帧支持 opacity、color、background/background-color 与已文档化的 transform 形式；timing 支持 linear/ease/ease-in/ease-out/ease-in-out，打包前会标记 layout 动画与不支持的 easing。 |
 | 复杂浏览器 CSS | 不支持/延后 | 不依赖完整 grid/flex、container query、`:has()`、完整 pseudo-elements、filter/backdrop-filter。 |
 
 ## JavaScript

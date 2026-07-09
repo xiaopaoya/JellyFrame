@@ -200,6 +200,9 @@ For fuller button, card, scroll-list and fixed bottom-nav recipes, see
 | `font-family-unmatched` | CSS names a custom font not declared in manifest. | Use `system-ui` or declare a matching `.jffont` family. |
 | `font-missing-glyphs` | Target fonts do not cover all text. | Use the generated `*.used_chars.txt` to build and declare an app font supplement. |
 | `style-property-unsupported` | CSS property is not in the subset. | Replace it with a documented property or use Canvas/resource art. |
+| `css-animation-layout-property` | A keyframe changes size, position, spacing or another layout property. | Animate `transform` or `opacity` on a fixed-size layer; make actual layout changes discrete app states. |
+| `css-animation-timing-function-unsupported` | A stylesheet uses parameterized or step easing. | Use `linear`, `ease`, `ease-in`, `ease-out` or `ease-in-out`. |
+| `css-animation-keyframe-property-unsupported` | A keyframe targets a property outside the low-cost animation subset. | Limit keyframes to `opacity`, `transform`, `color`, `background` or `background-color`. |
 | `script-capability-missing` | JavaScript uses a host-backed API, but manifest does not request the matching capability. | Declare the reported capability and keep a visible fallback for hosts that deny it. |
 | `script-api-deferred` | JavaScript uses a browser API outside the current runtime subset, such as `fetch`, `WebSocket`, `DataTransfer`, workers or dynamic import. | Use the documented V0 substitute, usually XHR GET or a host-owned service, or remove the browser-only path. |
 | `script-api-subset` | JavaScript uses a supported API outside JellyFrame's subset, commonly complex `querySelector`. | Keep selectors simple or use explicit IDs/classes and stored element references. |

@@ -176,6 +176,9 @@ body {
 | `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |
 | `style-property-unsupported` | CSS 属性不在支持子集。 | 换成文档化属性，或用 Canvas/资源图表达效果。 |
+| `css-animation-layout-property` | 关键帧改变了尺寸、位置、间距或其他 layout 属性。 | 在固定尺寸图层上动画 `transform` 或 `opacity`；真正的布局改变应做成离散 app state。 |
+| `css-animation-timing-function-unsupported` | 样式表使用了参数化或阶梯式 easing。 | 使用 `linear`、`ease`、`ease-in`、`ease-out` 或 `ease-in-out`。 |
+| `css-animation-keyframe-property-unsupported` | 关键帧目标属性不在低成本动画子集内。 | 关键帧只使用 `opacity`、`transform`、`color`、`background` 或 `background-color`。 |
 | `script-capability-missing` | JavaScript 使用了宿主支持 API，但 manifest 没有请求对应 capability。 | 声明报告里给出的 capability，并为宿主拒绝授权保留可见 fallback。 |
 | `script-api-deferred` | JavaScript 使用了当前 runtime 子集外的浏览器 API，例如 `fetch`、`WebSocket`、`DataTransfer`、workers 或动态 import。 | 使用文档化 V0 替代路径，通常是 XHR GET 或宿主持有服务；否则移除浏览器专属路径。 |
 | `script-api-subset` | JavaScript 使用了 JellyFrame 已支持 API 的子集外语法，常见于复杂 `querySelector`。 | 保持 selector 简单，或使用明确 ID/class 与已保存的元素引用。 |
