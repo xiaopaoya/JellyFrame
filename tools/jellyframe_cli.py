@@ -1522,7 +1522,7 @@ def collect_developer_advice(report: dict) -> list[dict]:
                                     seen,
                                     str(diagnostic.get("code", "")),
                                     str(diagnostic.get("severity", "warning")),
-                                    "",
+                                    str(diagnostic.get("stage", "")),
                                     str(diagnostic.get("detail", "")))
 
     for profile in report.get("responsiveProfiles", []):
@@ -1570,7 +1570,7 @@ def collect_developer_advice(report: dict) -> list[dict]:
                                     seen,
                                     str(diagnostic.get("code", "")),
                                     str(diagnostic.get("severity", "warning")),
-                                    "",
+                                    str(diagnostic.get("stage", "")),
                                     str(diagnostic.get("detail", "")),
                                     target)
 

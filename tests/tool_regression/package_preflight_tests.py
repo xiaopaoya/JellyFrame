@@ -902,6 +902,26 @@ class PackagePreflightTests(unittest.TestCase):
             self.assertNotEqual(by_code[code]["title"], "Diagnostic needs app author review")
             self.assertTrue(by_code[code]["action"])
 
+    def test_unclassified_pipeline_diagnostic_keeps_stage_and_detail(self):
+        report = {
+            "pipelineDiagnostics": {
+                "diagnostics": [{
+                    "stage": "style",
+                    "severity": "warning",
+                    "code": "style-future-subset-warning",
+                    "detail": "property=\"fancy-mode\" value=\"sparkle\"",
+                }],
+            },
+        }
+
+        advice = jellyframe_cli.collect_developer_advice(report)
+
+        self.assertEqual(len(advice), 1)
+        self.assertEqual(advice[0]["code"], "style-future-subset-warning")
+        self.assertEqual(advice[0]["source"], "style")
+        self.assertIn("property=\"fancy-mode\"", advice[0]["detail"])
+        self.assertEqual(advice[0]["title"], "Diagnostic needs app author review")
+
     def test_write_json_report_adds_performance_summary_and_advice(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-performance-report-") as directory:
             report_path = Path(directory) / "report.json"

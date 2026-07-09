@@ -79,6 +79,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   stylesheet resource failures, image decode/cache diagnostics, app font
   resource failures, paint fallbacks, system event rejection and common HTML/CSS
   parser recovery.
+- Unclassified pipeline diagnostics in `developerAdvice[]` now preserve the
+  originating stage/source plus detail text, so a newly added diagnostic still
+  tells app authors where to look before a dedicated advice template exists.
 - `jellyframe_cli.py doctor` now accepts `--sample` and `--exclude-sample` so
   trial users and maintainers can run a focused sample subset without changing
   the default full sample health check.
