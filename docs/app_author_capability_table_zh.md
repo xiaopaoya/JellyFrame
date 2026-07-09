@@ -10,7 +10,7 @@
 | 能力 | 状态 | 建议 |
 | --- | --- | --- |
 | 普通结构标签 | 可用 | 使用 `div`、`section`、`header`、`main`、`footer`、`ul`、`li`、`p`、`span`。未知标签会当普通元素处理。 |
-| 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont` 补充包。 |
+| 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont` 补充含。 |
 | 表单控件 | Form V0 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。`required`、文本 `minlength`/`maxlength`、checkbox/radio 必填状态和 required select 可配合本地 `submit` 使用；不提供浏览器校验弹窗或页面导航。 |
 | 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">`。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
 | Canvas | 可选 | 需要 manifest `graphics.canvas2d`，并确认 target 支持。适合小图表/仪表，不适合重写整个 UI。 |
@@ -40,7 +40,7 @@
 | `localStorage` | 宿主可选 | `storage.kv`。这是 app 私有小型 KV shadow，不是浏览器持久存储全集。 |
 | `Audio()` | 宿主可选 | `media.audio.playback`。真实 codec/I2S 由 host 提供。 |
 | `navigator.geolocation` | 宿主可选 | `location.position`。只提供离散定位快照。 |
-| Canvas 2D | 宿主可选子集 | `graphics.canvas2d`。只在 `getContext("2d")` 后分配 backing store。包含有界 canvas-to-canvas `drawImage()` 的 3/5/9 参数形式和最近邻缩放；`<img>`、`ImageBitmap` 与视频 source 仍延后。 |
+| Canvas 2D | 宿主可选子集 | `graphics.canvas2d`。只在 `getContext("2d")` 后分配 backing store。含含有界 canvas-to-canvas `drawImage()` 的 3/5/9 参数形式和最近邻缩放；`<img>`、`ImageBitmap` 与视频 source 仍延后。 |
 | 宿主时间 | 可用 | 使用 `Date.now()`。除非后续明确文档化，不要假设 `new Date()` 已受宿主时钟控制。 |
 | 宿主计算任务 | 宿主可选合同 | `compute.jobs` 预留有字节预算的具名宿主任务；它暂时不是 JS Worker、线程、消息端口或任意代码执行 API。 |
 | 视频帧预览 | 宿主可选实验合同 | `media.video.frame` 为产品宿主的 MJPEG 或显式启用的 H.264 baseline 预览提供有界最新帧句柄。它不是 `<video>` 或 JS 媒体 API。 |

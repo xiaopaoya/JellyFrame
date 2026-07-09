@@ -4064,6 +4064,25 @@ jerry_value_t canvas_create_linear_gradient(const jerry_call_info_t* call_info_p
     return gradient_id != 0 ? make_canvas_gradient(*runtime, gradient_id) : jerry_null();
 }
 
+jerry_value_t canvas_create_radial_gradient(const jerry_call_info_t* call_info_p,
+                                            const jerry_value_t args_p[],
+                                            const jerry_length_t args_count) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (registry == nullptr || runtime == nullptr || args_count < 6) {
+        return jerry_null();
+    }
+    const std::uint32_t gradient_id =
+        registry->create_radial_gradient(double_from_value(args_p[0]),
+                                         double_from_value(args_p[1]),
+                                         double_from_value(args_p[2]),
+                                         double_from_value(args_p[3]),
+                                         double_from_value(args_p[4]),
+                                         double_from_value(args_p[5]));
+    return gradient_id != 0 ? make_canvas_gradient(*runtime, gradient_id) : jerry_null();
+}
+
 jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     JerryValue object(jerry_object());
     bind_native_node(object.get(), runtime, node);
@@ -4088,6 +4107,7 @@ jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     set_method(object.get(), "fillText", canvas_fill_text);
     set_method(object.get(), "drawImage", canvas_draw_image);
     set_method(object.get(), "createLinearGradient", canvas_create_linear_gradient);
+    set_method(object.get(), "createRadialGradient", canvas_create_radial_gradient);
     return object.release();
 }
 

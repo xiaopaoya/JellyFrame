@@ -34,6 +34,12 @@ struct Canvas2DPoint {
 enum class Canvas2DPaintKind {
     Solid,
     LinearGradient,
+    RadialGradient,
+};
+
+enum class Canvas2DGradientKind {
+    Linear,
+    Radial,
 };
 
 struct Canvas2DPaintStyle {
@@ -47,12 +53,15 @@ struct Canvas2DGradientStop {
     Color color{0, 0, 0, 255};
 };
 
-struct Canvas2DLinearGradient {
+struct Canvas2DGradient {
     std::uint32_t id = 0;
+    Canvas2DGradientKind kind = Canvas2DGradientKind::Linear;
     double x0 = 0.0;
     double y0 = 0.0;
     double x1 = 0.0;
     double y1 = 0.0;
+    double r0 = 0.0;
+    double r1 = 0.0;
     std::vector<Canvas2DGradientStop> stops;
 };
 
@@ -135,6 +144,8 @@ public:
                     int destination_width,
                     int destination_height);
     std::uint32_t create_linear_gradient(double x0, double y0, double x1, double y1);
+    std::uint32_t create_radial_gradient(double x0, double y0, double r0,
+                                         double x1, double y1, double r1);
     bool add_color_stop(std::uint32_t gradient_id, double offset, std::string_view color);
 
 private:
@@ -144,12 +155,12 @@ private:
     std::uint32_t next_handle_ = 1;
     std::uint32_t next_gradient_id_ = 1;
     std::vector<Canvas2DSurface> surfaces_;
-    std::vector<Canvas2DLinearGradient> gradients_;
+    std::vector<Canvas2DGradient> gradients_;
 
     Canvas2DSurface* mutable_surface(std::uint32_t handle);
     Canvas2DSurface* surface_for(Node& node);
     const Canvas2DSurface* surface_for(const Node& node) const;
-    const Canvas2DLinearGradient* gradient(std::uint32_t gradient_id) const;
+    const Canvas2DGradient* gradient(std::uint32_t gradient_id) const;
     bool gradient_exists(std::uint32_t gradient_id) const;
     std::size_t total_pixels() const;
 };

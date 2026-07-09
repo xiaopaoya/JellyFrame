@@ -14,7 +14,7 @@ HTML/CSS/DOM/script runtime，目标是保留“像写小网页一样写应用�
 ## 语法契约
 
 App 作者写进 HTML、CSS 和 JavaScript 的内容应当是明确记录的 Web 平台子集。
-JellyFrame 自有配置应放在 `jellyframe.app.json`、CLI/tool 参数、frame script、
+JellyFrame 自有配置应放在 cjellyframe.app.jsonc、CLI/tool 参数、frame script、
 package report 或宿主/移植接口里，而不是伪装成页面私有语法。页面内资源和数据请求应使用
 `/assets/icon.bmp`、`/data/weather.json` 或相对 URL 这样的 package-local 标准路径；
 私有 URL scheme 不属于 app 语法契约。

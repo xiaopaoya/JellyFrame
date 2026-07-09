@@ -28,5 +28,12 @@
   sourceCtx.stroke();
 
   ctx.clearRect(0, 0, 220, 96);
+  var glow = ctx.createRadialGradient(110, 48, 6, 110, 48, 118);
+  if (glow) {
+    glow.addColorStop(0, "#1d6f82");
+    glow.addColorStop(1, "#0b1f2a");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, 220, 96);
+  }
   ctx.drawImage(source, 0, 0, 110, 48, 0, 0, 220, 96);
 }());

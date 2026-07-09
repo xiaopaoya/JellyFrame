@@ -2,7 +2,7 @@
 
 > Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
-This is the quick "can I use it?" table for app authors. The full contract
+This is the quick "can n use it?" table for app authors. The full contract
 remains [developer_capability_matrix.md](developer_capability_matrix.md).
 
 ## HTML
@@ -12,7 +12,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Basic structure | Available | Use `div`, `section`, `header`, `main`, `footer`, `ul`, `li`, `p` and `span`. Unknown tags become ordinary elements. |
 | Text | Available | UTF-8 text is preserved; real CJK glyph quality depends on system fonts or app `.jffont` supplements. |
 | Form controls | Form V0 subset | Use `button`, `input`, `select`, `textarea`, `progress` and `meter`. `required`, text `minlength`/`maxlength`, checkbox/radio required state and required selects work with local `submit`; browser validation popups and browser navigation do not. |
-| Images | Subset | Use package-local `<img src="/assets/icon.bmp">`. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
+| nmages | Subset | Use package-local `<img src="/assets/icon.bmp">`. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
 | Canvas | Optional | Requires `graphics.canvas2d` in manifest and target support. Use for small charts/gauges, not the whole UI. |
 | Remote page resources | Unsupported | Do not load remote HTML/CSS/JS/image/font. Runtime data uses host-backed XHR. |
 

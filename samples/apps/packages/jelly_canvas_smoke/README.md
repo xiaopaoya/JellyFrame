@@ -2,7 +2,7 @@
 
 > Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
-Small Canvas 2D V0.4 sample for trend lines and simple charts. It draws the chart once into a compact source canvas and uses bounded canvas-to-canvas `drawImage()` scaling for the visible graph. The page still uses
+Small Canvas 2D V0.4 sample for trend lines and simple charts. It draws the chart once into a compact source canvas, uses a bounded two-stop concentric `createRadialGradient()` background, and uses canvas-to-canvas `drawImage()` scaling for the visible graph. The page still uses
 ordinary DOM/CSS for structure and text; Canvas is only used for the bounded
 data graphic.
 

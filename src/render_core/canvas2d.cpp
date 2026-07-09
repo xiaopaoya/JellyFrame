@@ -224,9 +224,9 @@ Color with_coverage(Color color, int coverage) {
     return color;
 }
 
-const Canvas2DLinearGradient* find_gradient(const std::vector<Canvas2DLinearGradient>& gradients,
+const Canvas2DGradient* find_gradient(const std::vector<Canvas2DGradient>& gradients,
                                             std::uint32_t gradient_id) {
-    for (const Canvas2DLinearGradient& gradient : gradients) {
+    for (const Canvas2DGradient& gradient : gradients) {
         if (gradient.id == gradient_id) {
             return &gradient;
         }
@@ -248,19 +248,12 @@ Color lerp_color(Color from, Color to, double t) {
     };
 }
 
-Color sample_linear_gradient(const Canvas2DLinearGradient& gradient, double x, double y) {
+Color sample_gradient_stops(const Canvas2DGradient& gradient, double offset) {
     if (gradient.stops.empty()) {
         return Color{0, 0, 0, 0};
     }
     if (gradient.stops.size() == 1) {
         return gradient.stops.front().color;
-    }
-    const double dx = gradient.x1 - gradient.x0;
-    const double dy = gradient.y1 - gradient.y0;
-    const double length_squared = dx * dx + dy * dy;
-    double offset = 0.0;
-    if (length_squared > 0.000001) {
-        offset = ((x - gradient.x0) * dx + (y - gradient.y0) * dy) / length_squared;
     }
     offset = std::max(0.0, std::min(1.0, offset));
 
@@ -276,13 +269,39 @@ Color sample_linear_gradient(const Canvas2DLinearGradient& gradient, double x, d
     return gradient.stops.back().color;
 }
 
+Color sample_linear_gradient(const Canvas2DGradient& gradient, double x, double y) {
+    const double dx = gradient.x1 - gradient.x0;
+    const double dy = gradient.y1 - gradient.y0;
+    const double length_squared = dx * dx + dy * dy;
+    double offset = 0.0;
+    if (length_squared > 0.000001) {
+        offset = ((x - gradient.x0) * dx + (y - gradient.y0) * dy) / length_squared;
+    }
+    return sample_gradient_stops(gradient, offset);
+}
+
+Color sample_radial_gradient(const Canvas2DGradient& gradient, double x, double y) {
+    const double dx = x - gradient.x0;
+    const double dy = y - gradient.y0;
+    const double radius = std::sqrt(dx * dx + dy * dy);
+    return sample_gradient_stops(gradient, (radius - gradient.r0) / (gradient.r1 - gradient.r0));
+}
+
 Color color_for_style(const Canvas2DPaintStyle& style,
-                      const std::vector<Canvas2DLinearGradient>& gradients,
+                      const std::vector<Canvas2DGradient>& gradients,
                       double x,
                       double y) {
     if (style.kind == Canvas2DPaintKind::LinearGradient) {
-        if (const Canvas2DLinearGradient* gradient = find_gradient(gradients, style.gradient_id)) {
-            return sample_linear_gradient(*gradient, x, y);
+        if (const Canvas2DGradient* gradient = find_gradient(gradients, style.gradient_id)) {
+            if (gradient->kind == Canvas2DGradientKind::Linear) {
+                return sample_linear_gradient(*gradient, x, y);
+            }
+        }
+    } else if (style.kind == Canvas2DPaintKind::RadialGradient) {
+        if (const Canvas2DGradient* gradient = find_gradient(gradients, style.gradient_id)) {
+            if (gradient->kind == Canvas2DGradientKind::Radial) {
+                return sample_radial_gradient(*gradient, x, y);
+            }
         }
     }
     return style.color;
@@ -369,12 +388,12 @@ void fill_rect_paint(Canvas2DSurface& surface,
                      int height,
                      const Canvas2DPaintStyle& style,
                      double global_alpha,
-                     const std::vector<Canvas2DLinearGradient>& gradients) {
+                     const std::vector<Canvas2DGradient>& gradients) {
     if (style.kind == Canvas2DPaintKind::Solid) {
         fill_rect_pixels(surface, x, y, width, height, with_global_alpha(style.color, global_alpha));
         return;
     }
-    const Canvas2DLinearGradient* gradient = find_gradient(gradients, style.gradient_id);
+    const Canvas2DGradient* gradient = find_gradient(gradients, style.gradient_id);
     if (gradient == nullptr) {
         return;
     }
@@ -390,7 +409,7 @@ void fill_rect_paint(Canvas2DSurface& surface,
     }
     for (int row = top; row < bottom; ++row) {
         for (int column = left; column < right; ++column) {
-            const Color color = with_global_alpha(sample_linear_gradient(*gradient, column + 0.5, row + 0.5),
+            const Color color = with_global_alpha(color_for_style(style, gradients, column + 0.5, row + 0.5),
                                                   global_alpha);
             blend_pixel(surface, column, row, color);
         }
@@ -403,7 +422,7 @@ void draw_line(Canvas2DSurface& surface,
                const Canvas2DPaintStyle& style,
                double global_alpha,
                int line_width,
-               const std::vector<Canvas2DLinearGradient>& gradients) {
+               const std::vector<Canvas2DGradient>& gradients) {
     const double x0 = static_cast<double>(from.x);
     const double y0 = static_cast<double>(from.y);
     const double dx = static_cast<double>(to.x - from.x);
@@ -510,7 +529,7 @@ bool fill_polygon(Canvas2DSurface& surface,
                   const std::vector<Canvas2DPoint>& points,
                   const Canvas2DPaintStyle& style,
                   double global_alpha,
-                  const std::vector<Canvas2DLinearGradient>& gradients) {
+                  const std::vector<Canvas2DGradient>& gradients) {
     if (points.size() < 3 || surface.width <= 0 || surface.height <= 0) {
         return false;
     }
@@ -665,7 +684,7 @@ const Canvas2DSurface* Canvas2DRegistry::surface_for(const Node& node) const {
     return nullptr;
 }
 
-const Canvas2DLinearGradient* Canvas2DRegistry::gradient(std::uint32_t gradient_id) const {
+const Canvas2DGradient* Canvas2DRegistry::gradient(std::uint32_t gradient_id) const {
     return find_gradient(gradients_, gradient_id);
 }
 
@@ -695,20 +714,27 @@ bool Canvas2DRegistry::set_stroke_style(Node& node, std::string_view value) {
 
 bool Canvas2DRegistry::set_fill_gradient(Node& node, std::uint32_t gradient_id) {
     Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
-    if (surface == nullptr || !gradient_exists(gradient_id)) {
+    const Canvas2DGradient* found = gradient(gradient_id);
+    if (surface == nullptr || found == nullptr) {
         return false;
     }
-    surface->state.fill_style = Canvas2DPaintStyle{Canvas2DPaintKind::LinearGradient, Color{0, 0, 0, 255}, gradient_id};
+    const Canvas2DPaintKind kind = found->kind == Canvas2DGradientKind::Radial
+                                       ? Canvas2DPaintKind::RadialGradient
+                                       : Canvas2DPaintKind::LinearGradient;
+    surface->state.fill_style = Canvas2DPaintStyle{kind, Color{0, 0, 0, 255}, gradient_id};
     return true;
 }
 
 bool Canvas2DRegistry::set_stroke_gradient(Node& node, std::uint32_t gradient_id) {
     Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
-    if (surface == nullptr || !gradient_exists(gradient_id)) {
+    const Canvas2DGradient* found = gradient(gradient_id);
+    if (surface == nullptr || found == nullptr) {
         return false;
     }
-    surface->state.stroke_style =
-        Canvas2DPaintStyle{Canvas2DPaintKind::LinearGradient, Color{0, 0, 0, 255}, gradient_id};
+    const Canvas2DPaintKind kind = found->kind == Canvas2DGradientKind::Radial
+                                       ? Canvas2DPaintKind::RadialGradient
+                                       : Canvas2DPaintKind::LinearGradient;
+    surface->state.stroke_style = Canvas2DPaintStyle{kind, Color{0, 0, 0, 255}, gradient_id};
     return true;
 }
 
@@ -1040,7 +1066,8 @@ std::uint32_t Canvas2DRegistry::create_linear_gradient(double x0, double y0, dou
         !std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(x1) || !std::isfinite(y1)) {
         return 0;
     }
-    Canvas2DLinearGradient gradient;
+    Canvas2DGradient gradient;
+    gradient.kind = Canvas2DGradientKind::Linear;
     gradient.id = next_gradient_id_++;
     if (next_gradient_id_ == 0) {
         next_gradient_id_ = 1;
@@ -1053,19 +1080,50 @@ std::uint32_t Canvas2DRegistry::create_linear_gradient(double x0, double y0, dou
     return gradients_.back().id;
 }
 
+std::uint32_t Canvas2DRegistry::create_radial_gradient(double x0,
+                                                        double y0,
+                                                        double r0,
+                                                        double x1,
+                                                        double y1,
+                                                        double r1) {
+    if (!policy_.enabled || gradients_.size() >= policy_.max_gradients ||
+        !std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(r0) ||
+        !std::isfinite(x1) || !std::isfinite(y1) || !std::isfinite(r1) ||
+        x0 != x1 || y0 != y1 || r0 < 0.0 || r1 <= r0) {
+        return 0;
+    }
+    Canvas2DGradient gradient;
+    gradient.id = next_gradient_id_++;
+    if (next_gradient_id_ == 0) {
+        next_gradient_id_ = 1;
+    }
+    gradient.kind = Canvas2DGradientKind::Radial;
+    gradient.x0 = x0;
+    gradient.y0 = y0;
+    gradient.x1 = x1;
+    gradient.y1 = y1;
+    gradient.r0 = r0;
+    gradient.r1 = r1;
+    gradients_.push_back(std::move(gradient));
+    return gradients_.back().id;
+}
+
 bool Canvas2DRegistry::add_color_stop(std::uint32_t gradient_id, double offset, std::string_view color) {
     if (!std::isfinite(offset) || offset < 0.0 || offset > 1.0) {
         return false;
     }
-    Canvas2DLinearGradient* found = nullptr;
-    for (Canvas2DLinearGradient& gradient : gradients_) {
+    Canvas2DGradient* found = nullptr;
+    for (Canvas2DGradient& gradient : gradients_) {
         if (gradient.id == gradient_id) {
             found = &gradient;
             break;
         }
     }
     Color parsed;
-    if (found == nullptr || found->stops.size() >= policy_.max_gradient_stops || !parse_canvas_color(color, parsed)) {
+    const std::size_t max_stops = found != nullptr && found->kind == Canvas2DGradientKind::Radial
+                                      ? std::min<std::size_t>(2, policy_.max_gradient_stops)
+                                      : policy_.max_gradient_stops;
+    if (found == nullptr || found->stops.size() >= max_stops || !parse_canvas_color(color, parsed)) {
         return false;
     }
     found->stops.push_back(Canvas2DGradientStop{offset, parsed});

@@ -330,6 +330,34 @@ void linear_gradient_fills_rect_and_is_budgeted() {
     assert(no_gradient_registry.create_linear_gradient(0.0, 0.0, 8.0, 0.0) == 0);
 }
 
+void radial_gradient_fills_rect_with_two_stop_concentric_subset() {
+    Canvas2DPolicy policy;
+    policy.max_surfaces = 1;
+    policy.max_surface_pixels = 64;
+    policy.max_total_pixels = 64;
+    policy.default_width = 8;
+    policy.default_height = 8;
+    policy.max_gradients = 3;
+    policy.max_gradient_stops = 4;
+    Canvas2DRegistry registry(policy);
+    auto canvas = make_element("canvas");
+    const std::uint32_t gradient = registry.create_radial_gradient(4.0, 4.0, 0.0, 4.0, 4.0, 4.0);
+    assert(gradient != 0);
+    assert(registry.add_color_stop(gradient, 0.0, "#000000"));
+    assert(registry.add_color_stop(gradient, 1.0, "#ffffff"));
+    assert(!registry.add_color_stop(gradient, 0.5, "#ff0000"));
+    assert(registry.set_fill_gradient(*canvas, gradient));
+    assert(registry.fill_rect(*canvas, 0, 0, 8, 8));
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    assert(surface != nullptr);
+    const Color center = surface->pixels[4 * surface->width + 4];
+    const Color edge = surface->pixels[0 * surface->width + 4];
+    assert(center.r < 80);
+    assert(edge.r > 220);
+    assert(registry.create_radial_gradient(4.0, 4.0, 0.0, 5.0, 4.0, 4.0) == 0);
+    assert(registry.create_radial_gradient(4.0, 4.0, 4.0, 4.0, 4.0, 4.0) == 0);
+}
+
 void draw_image_copies_canvas_surface_without_new_allocation() {
     Canvas2DRegistry registry(Canvas2DPolicy{
         true,
@@ -405,6 +433,7 @@ int main() {
     arc_stroke_draws_ring_pixels();
     fill_path_fills_closed_polygon();
     linear_gradient_fills_rect_and_is_budgeted();
+    radial_gradient_fills_rect_with_two_stop_concentric_subset();
     draw_image_copies_canvas_surface_without_new_allocation();
     text_metrics_and_fill_text_use_bound_backend();
     std::cout << "canvas2d tests passed\n";
