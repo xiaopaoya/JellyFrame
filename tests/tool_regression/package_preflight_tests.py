@@ -657,6 +657,16 @@ class PackagePreflightTests(unittest.TestCase):
             report_path.write_text(json.dumps({
                 "format": "jellyframe.package.report",
                 "warnings": [{"code": "package-warning"}],
+                "performanceSummary": {
+                    "rating": "watch",
+                    "score": 4,
+                    "bottlenecks": [
+                        {"code": "performance-stage-paint"},
+                        {"code": "performance-display-command-count"},
+                        {"code": "performance-port-frame-time-high"},
+                        {"code": "performance-extra"},
+                    ],
+                },
                 "pipelineDiagnostics": {
                     "summary": {"error": 0, "warning": 1, "info": 2},
                 },
@@ -675,14 +685,34 @@ class PackagePreflightTests(unittest.TestCase):
 
             summary = jellyframe_cli.doctor_summary_from_report("sample", "ok", report_path)
             formatted = jellyframe_cli.format_doctor_summary(summary)
+            report_path.write_text(json.dumps({
+                "format": "jellyframe.package.report",
+                "performanceSummary": {
+                    "rating": "ok",
+                    "score": 2,
+                    "bottlenecks": [{"code": "performance-full-frame-present"}],
+                },
+            }), encoding="utf-8")
+            ok_summary = jellyframe_cli.doctor_summary_from_report("sample", "ok", report_path)
+            ok_formatted = jellyframe_cli.format_doctor_summary(ok_summary)
 
         self.assertEqual(summary["warnings"], 5)
         self.assertEqual(summary["infos"], 3)
+        self.assertEqual(summary["performance"], "watch")
+        self.assertEqual(summary["performanceScore"], 4)
+        self.assertEqual(summary["bottlenecks"], [
+            "performance-stage-paint",
+            "performance-display-command-count",
+            "performance-port-frame-time-high",
+        ])
         self.assertEqual(summary["targets"][0]["gate"], "accept")
         self.assertIn("sample: ok diagnostics=0/5/3", formatted)
-        self.assertIn("perf=unknown/0", formatted)
+        self.assertIn("perf=watch/4", formatted)
+        self.assertIn("bottlenecks=performance-stage-paint,performance-display-command-count,performance-port-frame-time-high", formatted)
         self.assertIn("round-300:fits/accept", formatted)
         self.assertIn("rect-172x320:diagnostics-warning/warn", formatted)
+        self.assertEqual(ok_summary["bottlenecks"], [])
+        self.assertIn("bottlenecks=-", ok_formatted)
 
     def test_developer_advice_is_derived_from_report_diagnostics(self):
         report = {

@@ -2334,6 +2334,19 @@ def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> d
     errors, warnings, infos = diagnostic_status_from_report(report_path)
     report = load_json_if_exists(report_path)
     performance = report.get("performanceSummary", {}) if isinstance(report.get("performanceSummary", {}), dict) else {}
+    bottlenecks = []
+    if int(performance.get("score", 0) or 0) >= 3:
+        raw_bottlenecks = performance.get("bottlenecks", [])
+        if not isinstance(raw_bottlenecks, list):
+            raw_bottlenecks = []
+        for item in raw_bottlenecks:
+            if not isinstance(item, dict):
+                continue
+            code = str(item.get("code", ""))
+            if code:
+                bottlenecks.append(code)
+            if len(bottlenecks) >= 3:
+                break
     targets = []
     for profile in report.get("responsiveProfiles", []):
         if not isinstance(profile, dict):
@@ -2353,6 +2366,7 @@ def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> d
         "infos": infos,
         "performance": str(performance.get("rating", "unknown")),
         "performanceScore": int(performance.get("score", 0) or 0),
+        "bottlenecks": bottlenecks,
         "targets": targets,
         "report": str(report_path),
     }
@@ -2375,6 +2389,7 @@ def format_doctor_summary(row: dict) -> str:
         f"{int(row.get('warnings', 0) or 0)}/"
         f"{int(row.get('infos', 0) or 0)} "
         f"perf={row.get('performance', 'unknown')}/{int(row.get('performanceScore', 0) or 0)} "
+        f"bottlenecks={','.join(row.get('bottlenecks', []) or []) or '-'} "
         f"targets={target_text} report={row.get('report', '')}"
     )
 
