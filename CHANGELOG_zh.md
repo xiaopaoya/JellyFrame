@@ -53,6 +53,9 @@ JellyFrame Engine 的重要变更记录在这里。
   system event reject 和常见 HTML/CSS parser recovery，并给出面向 app 作者的修复建议。
 - `jellyframe_cli.py doctor` 新增 `--sample` 和 `--exclude-sample`，便于试用者或维护者只运行
   某个样例子集，同时不改变默认全样例健康检查。
+- `jelly_component_recipes` 示例新增确定性的 Win32 滚动 capture 脚本，CTest 会验证该示例的
+  内部滚动路径使用 dirty repaint，且没有非首帧 full repaint。这给 port 作者提供了稳定的
+  桌面基线，便于再对比真实 panel flush telemetry。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。

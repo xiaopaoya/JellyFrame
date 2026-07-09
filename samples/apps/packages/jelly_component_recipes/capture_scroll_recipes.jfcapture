@@ -1,0 +1,17 @@
+# JellyFrame deterministic component-recipes scroll capture.
+#
+#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_component_recipes --frame-script samples/apps/packages/jelly_component_recipes/capture_scroll_recipes.jfcapture
+
+output-dir out/component_recipes_scroll_frames
+montage out/component_recipes_scroll_montage.bmp
+frames 12
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 4
+gap 6
+
+event 2 wheel 150 150 -96
+event 3 wheel 150 150 -96
+event 4 wheel 150 150 -96
+event 5 wheel 150 150 -96

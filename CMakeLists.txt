@@ -450,6 +450,16 @@ if(JELLYFRAME_BUILD_TESTS)
                 "scroll_containers scrolls=3 strip_blits=3 full_repaints=0 dirty_repaints=3")
 
         add_test(
+            NAME jellyframe_win32_component_recipes_scroll_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_component_recipes
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_component_recipes/capture_scroll_recipes.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_component_recipes_scroll_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "scroll_containers scrolls=4 strip_blits=0 full_repaints=0 dirty_repaints=4")
+
+        add_test(
             NAME jellyframe_win32_package_image_fixture
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_image_fixture_tests.py

@@ -77,6 +77,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - `jellyframe_cli.py doctor` now accepts `--sample` and `--exclude-sample` so
   trial users and maintainers can run a focused sample subset without changing
   the default full sample health check.
+- The `jelly_component_recipes` sample now includes a deterministic Win32 scroll
+  capture script, and CTest verifies the sample's internal scroll path uses dirty
+  repaint without a non-initial full repaint. This gives port authors a stable
+  desktop baseline before comparing real panel flush telemetry.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow
