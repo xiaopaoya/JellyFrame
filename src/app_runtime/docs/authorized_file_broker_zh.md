@@ -1,6 +1,6 @@
 # 授权文件 Broker
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 JellyFrame 不向普通 app 暴露裸文件系统 API。默认持久化模型仍是 app-private storage。
 通用文件访问只保留给系统组件、文件管理器 app，或用户明确批准的 app 操作，并且必须通过宿主持有的
@@ -15,6 +15,25 @@ broker。
 - `file.manage`：为受信文件管理器和系统组件流程提供 list、rename、delete、create。
 
 这些名称只声明意图。host/profile 仍必须授予同名能力；每次操作仍必须来自用户批准，或来自受信系统组件。
+
+## V0 UX 与 API 决策
+
+V0 继续把通用文件访问保留为 host/system-shell broker 契约，不作为普通 app JavaScript API 暴露。
+
+普通 app 默认应使用 app-private storage。只有当用户通过产品 UI 发起明确文件动作时，例如
+“导入这个文件”、“导出这份日志”或“替换选中的图片”，host 才记录已批准的 operation、逻辑路径范围、
+字节预算，以及授权是一次性还是持久授权，然后提交有界 broker job。App 仍然不会拿到原生路径或
+filesystem handle。
+
+受信系统组件和文件管理器 app 只有在 host 以对应角色启动它们时，才可以使用
+`trusted_system_component=true`。这个角色属于产品策略，不是安装式第三方 app 可以自行设置的字段。
+
+所有会修改数据的操作都应先 staging，再在校验后 commit。write、rename 和 delete 失败时必须 rollback
+或保持旧 entry 不变。用户取消、timeout、介质移除、quota 失败和不支持的操作都应返回稳定 broker
+status，不能导致 runtime 崩溃，也不能要求重新烧写固件才能恢复。
+
+未来如要增加 JavaScript surface，应等这套 UX 验证后再加入。它更适合是一个绑定 manifest capability
+和 host 授权的小型 async broker API，而不是复制桌面浏览器 File System Access。
 
 ## 核心契约
 

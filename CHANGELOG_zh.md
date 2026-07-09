@@ -40,6 +40,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - Win32 system-shell 遇到不支持的 launcher `data-action` 时会在状态行报告，不再静默吞掉。
 - 生命周期文档补充受信 launcher/system-shell role：`system.launcher` 和 `system.appManager`
   是宿主解释的 capability，Win32 `data-action` 处理不会暴露给普通已安装 app。
+- 授权 file-broker 文档明确 V0 UX/API 决策：通用文件访问仍是 host/system-shell broker 契约；
+  普通 app 默认继续使用 app-private storage；受信文件管理器/系统组件角色由 host 授予；文件修改操作
+  必须 staging 并可 rollback，不能要求重新烧写固件恢复。
 - CLI 新增 `--runtime-log`，可把 Win32 frame-script capture 日志合并进同一份 package report，
   生成 `runtimeMetrics` 和测得的 performance summary 字段。
 - CLI 新增 `--port-telemetry`，可把真实开发板/port 日志合并进 package report，生成

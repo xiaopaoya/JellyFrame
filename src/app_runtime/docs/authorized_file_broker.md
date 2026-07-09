@@ -1,6 +1,6 @@
 # Authorized File Broker
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 JellyFrame does not expose a raw filesystem API to ordinary apps. App-private
 storage remains the default persistence model. General file access is reserved
@@ -19,6 +19,33 @@ The standard manifest capability names are:
 These names are only intent declarations. A host/profile must still grant the
 same capability, and every operation must be user-approved or come from a
 trusted system component.
+
+## V0 UX And API Decision
+
+V0 keeps general file access as a host/system-shell broker contract, not an
+ordinary app JavaScript API.
+
+Ordinary apps should use app-private storage unless the user starts a specific
+file action through product UI, such as "import this file", "export this log" or
+"replace this selected picture". The host records the approved operation,
+logical path scope, byte budget and whether the approval is one-shot or
+persistent, then submits a bounded broker job. The app still does not receive a
+native path or filesystem handle.
+
+Trusted system components and file-manager apps may use
+`trusted_system_component=true` when the host has launched them in that role.
+That role is product policy, not something an installed third-party app can set
+for itself.
+
+Every mutating operation should stage first, then commit only after validation.
+Write, rename and delete failures must roll back or leave the old entry intact.
+User cancellation, timeout, media removal, quota failure and unsupported
+operation should all return stable broker status without crashing the runtime or
+requiring firmware reflashing.
+
+A future JavaScript surface should be added only after this UX is validated. It
+should likely remain a small async broker API tied to manifest capabilities and
+host approval, not a clone of desktop browser File System Access.
 
 ## Core Contract
 

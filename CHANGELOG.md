@@ -55,6 +55,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   roles: `system.launcher` and `system.appManager` are host-interpreted
   capabilities, and Win32 `data-action` handling is not available to ordinary
   installed apps.
+- Clarified the authorized file-broker V0 UX/API decision. General file access
+  remains a host/system-shell broker contract, ordinary apps keep using
+  app-private storage by default, trusted file-manager/system roles are
+  host-assigned, and mutating file operations must stage and roll back without
+  requiring firmware reflashing.
 - Added `--runtime-log` support to the CLI so Win32 frame-script capture logs
   can be merged into the same package report as `runtimeMetrics` and measured
   performance-summary fields.
