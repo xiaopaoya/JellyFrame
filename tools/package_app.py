@@ -911,6 +911,18 @@ SCRIPT_API_USAGE_WARNINGS = [
         "pattern": re.compile(r"\b(?:createImageBitmap|ImageBitmap|new\s+Image)\b"),
         "message": "script uses a browser image source for Canvas, which is deferred; drawImage() currently accepts an already allocated canvas source only",
     },
+    {
+        "api": "Canvas matrix transform",
+        "code": "script-canvas-api-deferred",
+        "pattern": re.compile(r"\.\s*(?:scale|rotate|transform|setTransform)\s*\("),
+        "message": "script uses a Canvas scale/rotate/matrix transform, which is deferred; use pixel-aligned translate()/resetTransform() or CSS transform for a composited element",
+    },
+    {
+        "api": "Canvas compositing/effects",
+        "code": "script-canvas-api-deferred",
+        "pattern": re.compile(r"\.\s*(?:clip|globalCompositeOperation|filter|shadowBlur|shadowColor|shadowOffsetX|shadowOffsetY)\b"),
+        "message": "script uses Canvas clipping, compositing, filter or shadow state, which is outside the bounded Canvas subset; use DOM/CSS layers or a pre-rendered package asset",
+    },
 ]
 
 

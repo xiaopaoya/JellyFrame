@@ -400,6 +400,8 @@ class PackagePreflightTests(unittest.TestCase):
                 "ctx.getImageData(0, 0, 1, 1);\n"
                 "ctx.createPattern(canvas, 'repeat');\n"
                 "ctx.createConicGradient(0, 0, 0);\n"
+                "ctx.scale(2, 2); ctx.rotate(0.5); ctx.setTransform(1, 0, 0, 1, 0, 0);\n"
+                "ctx.shadowBlur = 8; ctx.globalCompositeOperation = 'multiply';\n"
                 "createImageBitmap(blob);\n"
                 "var image = new Image();\n",
                 encoding="utf-8")
@@ -408,12 +410,18 @@ class PackagePreflightTests(unittest.TestCase):
             diagnostics, warnings = package_app.collect_script_api_diagnostics(
                 {"capabilities": ["graphics.canvas2d"]}, resources)
 
-        self.assertEqual(diagnostics["entryCount"], 3)
+        self.assertEqual(diagnostics["entryCount"], 5)
         self.assertEqual(diagnostics["missingCapabilityCount"], 0)
-        self.assertEqual(diagnostics["warningCount"], 3)
+        self.assertEqual(diagnostics["warningCount"], 5)
         self.assertEqual(
             sorted(warning["api"] for warning in warnings),
-            ["Canvas ImageData", "Canvas pattern/conic gradient", "browser Canvas image source"],
+            [
+                "Canvas ImageData",
+                "Canvas compositing/effects",
+                "Canvas matrix transform",
+                "Canvas pattern/conic gradient",
+                "browser Canvas image source",
+            ],
         )
         self.assertTrue(all(warning["code"] == "script-canvas-api-deferred" for warning in warnings))
 
