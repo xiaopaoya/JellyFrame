@@ -1447,6 +1447,34 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     check(result.ok && result.value == "true:hidden:101", "document visibility state updates");
 }
 
+void javascript_location_hash_routes_within_one_app() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+
+    ScriptEvaluationResult result = runtime.eval(
+        "var routeEvents = '';"
+        "window.onhashchange = function (event) { routeEvents += event.type + ':' + location.hash + ';'; };"
+        "window.addEventListener('hashchange', function (event) { routeEvents += 'listener:' + String(event.target === window) + ';'; });"
+        "location.hash = 'settings';"
+        "location.hash = '#settings';"
+        "window.location.hash = '#about';"
+        "String(location.hash) + ':' + routeEvents");
+    check(result.ok, "location hash route script evaluates");
+    check(result.value == "#about:hashchange:#settings;listener:true;hashchange:#about;listener:true;",
+          "location hash updates and dispatches one window event per route change");
+
+    result = runtime.eval("String(typeof location.assign) + ':' + String(typeof history)");
+    check(result.ok && result.value == "undefined:undefined",
+          "location subset does not imply navigation or history support");
+
+    auto rebound_document = parser.parse("<body></body>");
+    runtime.bind_document(*rebound_document);
+    result = runtime.eval("String(location.hash)");
+    check(result.ok && result.value.empty(), "location route fragment resets for a new document");
+}
+
 void javascript_date_now_uses_host_time() {
     HtmlParser parser;
     auto document = parser.parse("<body></body>");
@@ -1685,6 +1713,7 @@ int main() {
         javascript_service_objects_are_invalidated_after_clear_and_rebind();
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_system_state_exposes_web_adjacent_subset();
+        javascript_location_hash_routes_within_one_app();
         javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();
         javascript_form_submission_and_form_data_work();

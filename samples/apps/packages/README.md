@@ -48,3 +48,5 @@ Current packages:
   `--use-app-fonts` validation.
 - `jelly_static_modules`: package-time static local ES-module graph that becomes
   one classic device script before preview or packaging.
+- `jelly_route_tabs`: bounded `location.hash` tab routing inside one running app
+  without browser navigation or history.

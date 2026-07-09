@@ -192,6 +192,25 @@ export function formatMinutes(value) {
 module、`modulepreload`、`export *`、re-export declaration 和 inline module script 会被拒绝或延后。
 `runtime.script` 仍应写为 `"classic"`：它描述生成后的设备 payload，而不是源码 authoring 形式。
 
+## App 内路由
+
+小型设置流或 tab 集合可使用 fragment route，它不会更新 host URL，也不会创建 browser history：
+
+```js
+function renderRoute() {
+  var route = location.hash || "#home";
+  document.getElementById("page").textContent = route.slice(1);
+}
+
+window.addEventListener("hashchange", renderRoute);
+location.hash = "settings";
+renderRoute();
+```
+
+支持面只有 `location.hash`、`hashchange` 和 `onhashchange`。`history`、
+`location.assign()`、远程导航和跨 app 路由均不可用。完整 package 参见
+`jelly_route_tabs`。
+
 ## 窄屏目标
 
 对 `172x320`，先减少横向决策：

@@ -150,6 +150,7 @@ private:
     ScriptAudioHost audio_host_;
     Node* bound_document_ = nullptr;
     ScriptSystemState system_state_;
+    std::string route_fragment_;
     std::uint32_t execution_watchdog_depth_ = 0;
     std::uint32_t execution_watchdog_remaining_ = 0;
     bool execution_watchdog_interrupted_ = false;
@@ -173,6 +174,8 @@ private:
     void set_window_event_handler(std::string type, std::uint32_t callback_value, std::uint32_t target_value);
     std::uint32_t get_window_event_handler(const std::string& type) const;
     void dispatch_window_event(const char* type);
+    std::string location_hash() const;
+    void set_location_hash(std::string value);
     void clear_script_event_listeners();
     std::uint32_t add_timer(std::uint32_t callback_value, std::uint32_t delay_ms, bool repeat);
     void clear_timer(std::uint32_t id);

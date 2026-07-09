@@ -204,6 +204,26 @@ re-export declarations and inline module scripts are rejected or deferred. Keep
 `runtime.script` as `"classic"`: it describes the generated device payload, not
 the source authoring form.
 
+## App-Local Routes
+
+Use a fragment route for a small settings flow or tab set inside one app. It
+updates no host URL and adds no browsing history:
+
+```js
+function renderRoute() {
+  var route = location.hash || "#home";
+  document.getElementById("page").textContent = route.slice(1);
+}
+
+window.addEventListener("hashchange", renderRoute);
+location.hash = "settings";
+renderRoute();
+```
+
+The supported surface is `location.hash`, `hashchange` and `onhashchange`.
+`history`, `location.assign()`, remote navigation and cross-app routing are not
+available. See `jelly_route_tabs` for a complete package.
+
 ## Narrow Targets
 
 For `172x320`, reduce horizontal decisions first:

@@ -1,6 +1,6 @@
 # 应用示例
 
-> 最后更新：2026-07-09；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 这里保存完整 JellyFrame source-package 示例。每个 app 都应包含
 `jellyframe.app.json`、本地 HTML/CSS/classic JavaScript，以及预览或打包所需的有界本地资源。
@@ -36,3 +36,5 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 - `jelly_audio_smoke`：用于 Win32 host-owned audio smoke 路径的包内音频资源示例。
 - `jelly_font_policy`：用于说明 CSS `font-family` 与 `.jffont` 补充包策略的示例，
   覆盖两个 runtime family、缺字诊断和 Win32 `--use-app-fonts` 验收。
+- `jelly_static_modules`：展示打包期静态本地 ES-module 图如何在 preview 或 packaging 前变成一个 classic device script。
+- `jelly_route_tabs`：展示一个运行中 app 内有界的 `location.hash` tab 路由，不引入浏览器导航或 history。

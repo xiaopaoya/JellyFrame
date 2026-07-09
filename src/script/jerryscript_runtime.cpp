@@ -299,6 +299,14 @@ struct ScriptRuntimeAccess {
         return runtime.execution_watchdog_interrupted_;
     }
 
+    static std::string location_hash(const JerryScriptRuntime& runtime) {
+        return runtime.location_hash();
+    }
+
+    static void set_location_hash(JerryScriptRuntime& runtime, std::string value) {
+        runtime.set_location_hash(std::move(value));
+    }
+
     static bool& execution_watchdog_interrupt_pending(JerryScriptRuntime& runtime) {
         return runtime.execution_watchdog_interrupt_pending_;
     }
@@ -2450,7 +2458,8 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
 
 #define JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(X) \
     X(ononline, "online") \
-    X(onoffline, "offline")
+    X(onoffline, "offline") \
+    X(onhashchange, "hashchange")
 
 #define JELLYFRAME_DECLARE_NODE_EVENT_HANDLER(js_name, event_type) \
     jerry_value_t node_get_##js_name(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t); \
@@ -2722,6 +2731,31 @@ jerry_value_t make_navigator_object(JerryScriptRuntime& runtime) {
         JerryValue geolocation(make_geolocation_object(runtime));
         set_property(object.get(), "geolocation", geolocation.get());
     }
+    return object.release();
+}
+
+jerry_value_t location_get_hash(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t[],
+                                const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    return string_to_value(runtime != nullptr ? ScriptRuntimeAccess::location_hash(*runtime) : std::string()).release();
+}
+
+jerry_value_t location_set_hash(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime != nullptr) {
+        ScriptRuntimeAccess::set_location_hash(*runtime,
+                                               args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t make_location_object(JerryScriptRuntime& runtime) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    define_accessor(object.get(), "hash", location_get_hash, location_set_hash);
     return object.release();
 }
 
@@ -5055,12 +5089,14 @@ void JerryScriptRuntime::bind_document(Node& document) {
         canvas_2d_->clear();
     }
     bound_document_ = &document;
+    route_fragment_.clear();
 
     JerryValue global(jerry_current_realm());
     jerry_object_set_native_ptr(global.get(), &kRuntimeNativeInfo, this);
     JerryValue document_object(make_node_wrapper(*this, document, true));
     JerryValue window_object(jerry_object());
     JerryValue navigator_object(make_navigator_object(*this));
+    JerryValue location_object(make_location_object(*this));
     jerry_object_set_native_ptr(window_object.get(), &kRuntimeNativeInfo, this);
 
     set_property(window_object.get(), "document", document_object.get());
@@ -5070,6 +5106,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_bool_property(window_object.get(), "isSecureContext", false);
     set_bool_property(window_object.get(), "crossOriginIsolated", false);
     set_property(window_object.get(), "navigator", navigator_object.get());
+    set_property(window_object.get(), "location", location_object.get());
     set_property(global.get(), "document", document_object.get());
     set_property(global.get(), "window", window_object.get());
     set_property(global.get(), "self", window_object.get());
@@ -5077,6 +5114,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_bool_property(global.get(), "isSecureContext", false);
     set_bool_property(global.get(), "crossOriginIsolated", false);
     set_property(global.get(), "navigator", navigator_object.get());
+    set_property(global.get(), "location", location_object.get());
     set_runtime_method(window_object.get(), "setTimeout", script_set_timeout, *this);
     set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(window_object.get(), "setInterval", script_set_interval, *this);
@@ -5729,6 +5767,21 @@ std::uint32_t JerryScriptRuntime::get_window_event_handler(const std::string& ty
         }
     }
     return jerry_null();
+}
+
+std::string JerryScriptRuntime::location_hash() const {
+    return route_fragment_.empty() ? std::string() : "#" + route_fragment_;
+}
+
+void JerryScriptRuntime::set_location_hash(std::string value) {
+    if (!value.empty() && value.front() == '#') {
+        value.erase(0, 1);
+    }
+    if (value == route_fragment_) {
+        return;
+    }
+    route_fragment_ = std::move(value);
+    dispatch_window_event("hashchange");
 }
 
 void JerryScriptRuntime::dispatch_window_event(const char* type) {
