@@ -92,6 +92,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - `scriptApiDiagnostics.missingCapabilityCount` now counts only missing
   manifest capabilities; deferred/subset API warnings are reported through the
   new `warningCount` total instead of being mislabeled as capability gaps.
+- Package reports now include `htmlApiDiagnostics`, a static preflight scan for
+  browser-only markup such as `iframe`, `embed`, `object`, Shadow DOM `slot`,
+  image maps and browser form submission.
 - `jellyframe_cli.py doctor` now accepts `--sample` and `--exclude-sample` so
   trial users and maintainers can run a focused sample subset without changing
   the default full sample health check.

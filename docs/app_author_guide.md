@@ -200,6 +200,8 @@ For fuller button, card, scroll-list and fixed bottom-nav recipes, see
 | `font-family-unmatched` | CSS names a custom font not declared in manifest. | Use `system-ui` or declare a matching `.jffont` family. |
 | `font-missing-glyphs` | Target fonts do not cover all text. | Use the generated `*.used_chars.txt` to build and declare an app font supplement. |
 | `style-property-unsupported` | CSS property is not in the subset. | Replace it with a documented property or use Canvas/resource art. |
+| `html-element-unsupported` | Markup uses a browser/platform element such as `iframe`, `object`, `embed`, `slot` or image-map tags. | Replace it with package-local images, explicit controls, Canvas, or a host-owned service. |
+| `html-form-submit-deferred` | A `<form>` asks for browser action/method submission. | Handle the control in app JavaScript and request the required host capability, such as `network.fetch`, when needed. |
 | `target-gate-not-accepted` | A target claimed by the app failed its release gate. | Fix the listed overflow/scroll/diagnostic reasons, or lower the gate to `warn` while experimental. |
 
 ## When To Use Canvas

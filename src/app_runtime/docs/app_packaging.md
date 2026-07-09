@@ -994,10 +994,17 @@ target profile supports it" for real capability mismatches. In the JSON summary,
 APIs. This check does not enter the MCU runtime and does not replace real host
 authorization.
 
+Package reports also include `htmlApiDiagnostics`, a lightweight static scan over
+package-local HTML files. It reports browser/platform markup that is easy to
+mistake for supported embedded behavior, such as `iframe`, `embed`, `object`,
+Shadow DOM `slot`, image maps and `form action`/`method` submission. Unknown
+custom tags still remain ordinary elements; this preflight only warns for
+features with strong browser semantics that JellyFrame does not implement.
+
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,
 CRC32/SHA-256 checksums, service intent, `runtimeBudgetEstimate`,
-`scriptApiDiagnostics`, `imageDiagnostics`, `fontDiagnostics`, local/remote reference diagnostics,
+`htmlApiDiagnostics`, `scriptApiDiagnostics`, `imageDiagnostics`, `fontDiagnostics`, local/remote reference diagnostics,
 package-resource warnings and
 `pipelineDiagnostics`. The CLI also derives `performanceSummary` and optional
 `performanceAdvice[]` from the same package and pipeline data. These fields

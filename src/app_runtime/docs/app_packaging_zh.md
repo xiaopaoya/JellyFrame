@@ -840,9 +840,14 @@ classic script 和 HTML inline script，不执行 JavaScript。当前会识别 `
 `missingCapabilityCount` 只统计缺失 manifest capability 的项目，`warningCount`
 统计所有脚本预检 warning，包括延后或子集 API。
 
+Package report 还包含 `htmlApiDiagnostics`，这是对 package-local HTML 文件的轻量静态扫描。
+它会提示容易被误认为“浏览器能力已支持”的平台语义标签或行为，例如 `iframe`、`embed`、
+`object`、Shadow DOM `slot`、image map，以及 `form action`/`method` 提交。未知自定义标签仍会
+作为普通元素保留；这项预检只针对 JellyFrame 明确不实现的强浏览器语义能力。
+
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote
-reference 诊断、`scriptApiDiagnostics`、`imageDiagnostics`、`fontDiagnostics`、package-resource warnings 和
+reference 诊断、`htmlApiDiagnostics`、`scriptApiDiagnostics`、`imageDiagnostics`、`fontDiagnostics`、package-resource warnings 和
 `pipelineDiagnostics`。CLI 还会从同一份 package 和 pipeline 数据派生 `performanceSummary`
 和可选 `performanceAdvice[]`，量化静态预检阶段可判断的性能风险：对象数量、layer/display
 command 数量、framebuffer bytes、估算 pipeline heap、资源预算占比和 full-frame present

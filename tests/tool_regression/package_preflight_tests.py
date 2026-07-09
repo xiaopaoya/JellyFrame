@@ -261,6 +261,32 @@ class PackagePreflightTests(unittest.TestCase):
         )
         self.assertTrue(all(warning["code"] == "script-capability-missing" for warning in warnings))
 
+    def test_html_api_diagnostics_warn_for_browser_only_markup(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-html-api-diagnostics-") as directory:
+            root = Path(directory)
+            html = root / "index.html"
+            html.write_text(
+                "<!-- <iframe src='/ignored'></iframe> -->\n"
+                "<script>const markup = '<object></object>';</script>\n"
+                "<iframe src='/remote'></iframe>\n"
+                "<object data='/plugin'></object>\n"
+                "<form action='/submit' method='post'><button>Go</button></form>\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, html, "/index.html", 0)]
+
+            diagnostics, warnings = package_app.collect_html_api_diagnostics(resources)
+
+        self.assertEqual(diagnostics["entryCount"], 3)
+        self.assertEqual(diagnostics["warningCount"], 3)
+        self.assertEqual(
+            sorted((warning["code"], warning["tag"]) for warning in warnings),
+            [
+                ("html-element-unsupported", "iframe"),
+                ("html-element-unsupported", "object"),
+                ("html-form-submit-deferred", "form"),
+            ],
+        )
+
     def test_script_api_diagnostics_warn_for_ambient_date_construction(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-script-date-diagnostics-") as directory:
             root = Path(directory)
@@ -754,6 +780,16 @@ class PackagePreflightTests(unittest.TestCase):
                 "source": "/scripts/app.js",
             }, {
                 "level": "warning",
+                "code": "html-element-unsupported",
+                "message": "<iframe> is outside JellyFrame's app HTML subset",
+                "source": "/index.html",
+            }, {
+                "level": "warning",
+                "code": "html-form-submit-deferred",
+                "message": "form action/method submission is not implemented",
+                "source": "/index.html",
+            }, {
+                "level": "warning",
                 "code": "future-diagnostic-code",
                 "message": "future warning shape",
                 "source": "future",
@@ -804,6 +840,8 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("script-host-time-ambiguous", codes)
         self.assertIn("script-api-deferred", codes)
         self.assertIn("script-api-subset", codes)
+        self.assertIn("html-element-unsupported", codes)
+        self.assertIn("html-form-submit-deferred", codes)
         self.assertIn("future-diagnostic-code", codes)
         self.assertIn("layout-text-overflow", codes)
         self.assertIn("visual-scroll-container", codes)

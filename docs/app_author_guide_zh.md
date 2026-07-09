@@ -176,6 +176,8 @@ body {
 | `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |
 | `style-property-unsupported` | CSS 属性不在支持子集。 | 换成文档化属性，或用 Canvas/资源图表达效果。 |
+| `html-element-unsupported` | markup 使用了 `iframe`、`object`、`embed`、`slot` 或 image-map 这类浏览器/平台语义元素。 | 改成包内图片、显式控件、Canvas，或宿主持有的服务。 |
+| `html-form-submit-deferred` | `<form>` 依赖浏览器 action/method 提交。 | 用 app JavaScript 处理控件；需要网络时声明并使用 `network.fetch` 对应宿主能力。 |
 | `target-gate-not-accepted` | app 声明的 target 没过发布 gate。 | 修复列出的 overflow/scroll/diagnostic 原因；仍试验时可先把 gate 降为 `warn`。 |
 
 ## 什么时候用 Canvas

@@ -865,6 +865,15 @@ QUERY_SELECTOR_CALL_RE = re.compile(
     re.S,
 )
 
+HTML_UNSUPPORTED_ELEMENT_MESSAGES = {
+    "iframe": "nested browsing contexts and iframe navigation are not implemented",
+    "embed": "plugin/embed loading is outside the embedded runtime",
+    "object": "object/plugin resource loading is outside the embedded runtime",
+    "slot": "Shadow DOM slots are not implemented",
+    "map": "image maps are not implemented; use explicit buttons or hit regions",
+    "area": "image maps are not implemented; use explicit buttons or hit regions",
+}
+
 
 def has_top_level_selector_syntax(selector: str) -> bool:
     depth = 0
@@ -958,6 +967,82 @@ def collect_query_selector_diagnostics(resource_path: str, source_text: str, see
                 "selector": selector,
             })
     return entries, warnings
+
+
+def html_sources_for_resource(resource: dict) -> list[str]:
+    suffix = resource["file"].suffix.lower()
+    if suffix not in {".html", ".htm"}:
+        return []
+    try:
+        return [resource["file"].read_text(encoding="utf-8-sig")]
+    except UnicodeDecodeError:
+        return []
+
+
+def strip_html_inert_content(text: str) -> str:
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+    text = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"<style\b[^>]*>.*?</style>", " ", text, flags=re.I | re.S)
+    return text
+
+
+def collect_html_api_diagnostics(resources: list[dict]) -> tuple[dict, list[dict]]:
+    entries = []
+    warnings = []
+    seen = set()
+    unsupported_pattern = re.compile(
+        r"<\s*(iframe|embed|object|slot|map|area)\b",
+        flags=re.I,
+    )
+    form_submit_pattern = re.compile(
+        r"<\s*form\b(?=[^>]*(?:\baction\s*=|\bmethod\s*=))[^>]*>",
+        flags=re.I | re.S,
+    )
+    for resource in resources:
+        for source_text in html_sources_for_resource(resource):
+            searchable = strip_html_inert_content(source_text)
+            for match in unsupported_pattern.finditer(searchable):
+                tag = match.group(1).lower()
+                key = (resource["path"], "html-element-unsupported", tag)
+                if key in seen:
+                    continue
+                seen.add(key)
+                message = HTML_UNSUPPORTED_ELEMENT_MESSAGES[tag]
+                entries.append({
+                    "tag": tag,
+                    "source": resource["path"],
+                    "warningCode": "html-element-unsupported",
+                })
+                warnings.append({
+                    "level": "warning",
+                    "code": "html-element-unsupported",
+                    "message": f"<{tag}> is outside JellyFrame's app HTML subset: {message}",
+                    "source": resource["path"],
+                    "tag": tag,
+                })
+            if form_submit_pattern.search(searchable):
+                key = (resource["path"], "html-form-submit-deferred")
+                if key in seen:
+                    continue
+                seen.add(key)
+                entries.append({
+                    "tag": "form",
+                    "source": resource["path"],
+                    "warningCode": "html-form-submit-deferred",
+                })
+                warnings.append({
+                    "level": "warning",
+                    "code": "html-form-submit-deferred",
+                    "message": "form action/method submission is not implemented; handle the control with app script or host services",
+                    "source": resource["path"],
+                    "tag": "form",
+                })
+    return {
+        "model": "static-html-api-preflight",
+        "entries": entries,
+        "entryCount": len(entries),
+        "warningCount": len(warnings),
+    }, warnings
 
 
 def script_sources_for_resource(resource: dict) -> list[str]:
@@ -1913,6 +1998,8 @@ def main() -> int:
     warnings.extend(collect_resource_budget_warnings(resources, budgets))
     warnings.extend(collect_audio_resource_warnings(manifest, resources))
     warnings.extend(collect_service_target_warnings(manifest, target_config))
+    html_api_diagnostics, html_api_warnings = collect_html_api_diagnostics(resources)
+    warnings.extend(html_api_warnings)
     script_api_diagnostics, script_api_warnings = collect_script_api_diagnostics(manifest, resources)
     warnings.extend(script_api_warnings)
     image_diagnostics, image_warnings = collect_image_diagnostics(resources, target_config)
@@ -1950,6 +2037,7 @@ def main() -> int:
         ],
         "references": references,
         "serviceIntent": service_intent_report(manifest, target_config),
+        "htmlApiDiagnostics": html_api_diagnostics,
         "scriptApiDiagnostics": script_api_diagnostics,
         "imageDiagnostics": image_diagnostics,
         "fontDiagnostics": font_diagnostics,

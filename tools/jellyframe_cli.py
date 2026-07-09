@@ -853,6 +853,16 @@ ADVICE_BY_CODE = {
         "explanation": "The tokenizer encountered markup that does not form a valid HTML tag name.",
         "action": "Check nearby '<' and '>' characters and escape literal comparison signs in text.",
     },
+    "html-element-unsupported": {
+        "title": "HTML element is outside the app subset",
+        "explanation": "The markup uses a browser/platform element that JellyFrame does not implement as a real embedded app feature.",
+        "action": "Replace iframe/embed/object/slot/image-map style markup with package-local images, explicit buttons, Canvas, or host-owned services.",
+    },
+    "html-form-submit-deferred": {
+        "title": "Browser form submission is not implemented",
+        "explanation": "JellyFrame renders form controls, but it does not run browser navigation or HTTP form submission.",
+        "action": "Handle the form action in app JavaScript using supported control APIs and an allowed host service such as XMLHttpRequest GET V0.",
+    },
     "target-gate-not-accepted": {
         "title": "Target gate is not accepted",
         "explanation": "The app declared this target as publish-gated and the responsive profile violates that gate.",
