@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -95,6 +95,9 @@ the end:
 ```powershell
 python tools\jellyframe_cli.py doctor --build-dir build\Release
 ```
+
+Use `--sample watch_weather` for a focused run, or `--exclude-sample NAME` when
+you are iterating on one heavier sample suite.
 
 Render a static page to an image:
 

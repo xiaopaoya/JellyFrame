@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-07-09; Applies to: 0.6.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store

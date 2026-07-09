@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -42,6 +42,17 @@ JellyFrame Engine 的重要变更记录在这里。
   是宿主解释的 capability，Win32 `data-action` 处理不会暴露给普通已安装 app。
 - CLI 新增 `--runtime-log`，可把 Win32 frame-script capture 日志合并进同一份 package report，
   生成 `runtimeMetrics` 和测得的 performance summary 字段。
+- CLI 新增 `--port-telemetry`，可把真实开发板/port 日志合并进 package report，生成
+  `portTelemetry`，并把 frame time、DMA wait、flush-done time 和 internal-RAM 峰值写入
+  measured performance 字段。Port telemetry 只属于桌面工具输入，不增加嵌入式运行时解析成本。
+- Package report 现在包含 `performanceSummary.bottlenecks[]`，用短列表向 app 作者提示最可能的
+  性能瓶颈来源；`performanceAdvice[]` 也会解释慢管线阶段、非首帧 full-frame repaint、
+  scroll-strip telemetry、runtime overload、dirty area，以及 port 侧 frame/DMA/flush/RAM 压力。
+- `developerAdvice[]` 覆盖更多 runtime/render diagnostics，包括 animation keyframes、
+  package/script/stylesheet resource failure、图片 decode/cache、app 字体资源、paint fallback、
+  system event reject 和常见 HTML/CSS parser recovery，并给出面向 app 作者的修复建议。
+- `jellyframe_cli.py doctor` 新增 `--sample` 和 `--exclude-sample`，便于试用者或维护者只运行
+  某个样例子集，同时不改变默认全样例健康检查。
 - layout text-overflow 诊断现在除紧凑 `node` 标签外，还会输出类似选择器的
   `path` 字段。CLI report 和 VS Code helper 会把该路径带入 `diagnosticSamples[]`
   与 `developerAdvice[]`，便于定位窄屏 target 上需要修复的元素。
@@ -132,6 +143,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 修复
 
+- 修正部分公开文档顶部新鲜度行误写为未来 `0.6.0-dev` 的问题；当前源码版本仍是
+  `0.5.0-dev`。
 - Release CTest 现在是有效的正确性 gate：CMake 会对 C++ 测试二进制显式保持
   `assert(...)` 生效，并在测试入口发现 `NDEBUG` 泄漏时直接编译失败。CI 也会额外
   运行 Debug CTest。

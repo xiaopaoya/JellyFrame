@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-07-09; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -63,6 +63,20 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   fields for frame time, DMA wait, flush-done time and internal-RAM peaks.
   Port telemetry is desktop tooling input only and adds no embedded runtime
   parsing cost.
+- Package reports now include `performanceSummary.bottlenecks[]`, a short
+  app-author-oriented list of likely performance causes derived from preflight,
+  Win32 capture or port telemetry data. `performanceAdvice[]` now also explains
+  slow measured pipeline stages, unexpected full-frame repaint, scroll-strip
+  telemetry, runtime overload, dirty area and port-side frame/DMA/flush/RAM
+  pressure.
+- `developerAdvice[]` now covers more runtime/render diagnostics with specific
+  app-author repair text, including animation keyframe issues, package/script/
+  stylesheet resource failures, image decode/cache diagnostics, app font
+  resource failures, paint fallbacks, system event rejection and common HTML/CSS
+  parser recovery.
+- `jellyframe_cli.py doctor` now accepts `--sample` and `--exclude-sample` so
+  trial users and maintainers can run a focused sample subset without changing
+  the default full sample health check.
 - Layout text-overflow diagnostics now include a selector-like `path` field in
   addition to the compact `node` label. CLI reports and the VS Code helper carry
   that path into `diagnosticSamples[]` and `developerAdvice[]`, making narrow
@@ -180,6 +194,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- Corrected public documentation freshness lines that had drifted to the future
+  `0.6.0-dev` label while the source version is still `0.5.0-dev`.
 - Release CTest is now a meaningful correctness gate: CMake explicitly keeps
   `assert(...)` enabled for C++ test binaries and the test entry points fail to
   compile if `NDEBUG` leaks back in. CI also runs a Debug CTest pass.

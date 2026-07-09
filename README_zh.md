@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -78,6 +78,9 @@ Release 测试二进制会显式保持 `assert(...)` 生效，因此这条命令
 ```powershell
 python tools\jellyframe_cli.py doctor --build-dir build\Release
 ```
+
+只想检查某一个样例时可加 `--sample watch_weather`；迭代较重的样例套件时可用
+`--exclude-sample NAME` 临时跳过。
 
 把静态页面渲染成图片：
 

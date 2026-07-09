@@ -1,6 +1,6 @@
 # JellyFrame Porting Work Guide
 
-> Last updated: 2026-07-09; Applies to: 0.6.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
