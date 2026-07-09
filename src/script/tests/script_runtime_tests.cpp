@@ -1528,6 +1528,38 @@ void javascript_geolocation_uses_bound_location_service() {
     }
 }
 
+void javascript_form_submission_and_form_data_work() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><form id='account'><input id='name' name='name' required>"
+        "<input id='agree' name='agree' type='checkbox' required value='yes'>"
+        "<button id='send' name='action' value='save'>Save</button></form></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var form = document.getElementById('account');"
+        "var name = document.getElementById('name');"
+        "var agree = document.getElementById('agree');"
+        "var send = document.getElementById('send');"
+        "var invalidCount = 0; var submitterId = 'none'; var submitValue = 'none';"
+        "name.addEventListener('invalid', function () { invalidCount++; });"
+        "form.addEventListener('submit', function (event) {"
+        "  submitterId = event.submitter.id;"
+        "  submitValue = new FormData(form).get('name') + ':' + new FormData(form).get('agree');"
+        "  event.preventDefault();"
+        "});"
+        "form.requestSubmit(send);"
+        "name.value = 'Ada'; agree.checked = true;"
+        "form.requestSubmit(send);"
+        "var data = new FormData(form);"
+        "data.append('tag', 'one'); data.append('tag', 'two'); data.set('tag', 'three');"
+        "String(invalidCount) + ':' + submitterId + ':' + submitValue + ':' + data.get('tag') + ':' +"
+        "String(data.getAll('tag').length) + ':' + String(data.has('name')) + ':' + String(form.checkValidity());");
+    check(result.ok && result.value == "1:send:Ada:yes:three:1:true:true",
+          "form validation, submit event and FormData subset work through JavaScript");
+}
+
 void javascript_canvas_2d_is_optional_and_lazy() {
     HtmlParser parser;
     auto document = parser.parse("<body><canvas id='chart' width='8' height='8'></canvas></body>");
@@ -1655,6 +1687,7 @@ int main() {
         javascript_system_state_exposes_web_adjacent_subset();
         javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();
+        javascript_form_submission_and_form_data_work();
         javascript_canvas_2d_is_optional_and_lazy();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';

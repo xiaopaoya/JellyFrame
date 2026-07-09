@@ -10,6 +10,13 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 新增 Form V0，本地嵌入式流程可使用 `form.checkValidity()`、
+  `form.reportValidity()`、`form.requestSubmit([submitter])`、带
+  `event.submitter` 的可取消 `SubmitEvent` 形状 `submit`，以及字符串 entry 的
+  `FormData`。required 控件、text/textarea 长度边界、required checkbox/radio group
+  与 required select value 现可在无浏览器 popup 的条件下校验。submit button 和
+  `HTMLElement.click()` 复用同一条有界默认动作路径。该能力刻意不引入页面导航、自动 HTTP POST、
+  文件上传、reset、完整 `ValidityState` 或常驻 form-data snapshot。
 - 桌面 installed-app registry 增加第一版 app distribution V0 状态模型：entry
   带有 `status`、`enabled`、`updatedAtUtc` 和可选 `rollback` 元数据。更新
   `.jfapp` 时会保留上一版 bundle 作为回滚目标；`tools/app_registry.py rollback`

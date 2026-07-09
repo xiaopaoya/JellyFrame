@@ -1,6 +1,6 @@
 # App 组件 Recipes
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 这些 recipes 是给小屏可穿戴 app 作者复制改写的起点。它们只使用 JellyFrame 文档化子集，
 不依赖浏览器专有行为。
@@ -139,6 +139,34 @@
 ```
 
 只有当滚动是设计的一部分时，才在 manifest target gate 中设置 `allowScroll: true`。
+
+## 本地表单流程
+
+设置、配网和账号类流程使用本地 `submit` 事件：页面内维护表单状态、先在本地校验，再由
+JavaScript 调用已获准的宿主服务。不要设置 `action` 或 `method`：JellyFrame 不会导航、编码
+multipart payload，也不会执行浏览器 form POST。
+
+```html
+<form id="wifi-form">
+  <input name="network" required maxlength="32">
+  <input name="password" required minlength="8" maxlength="63">
+  <button type="submit">Connect</button>
+</form>
+```
+
+```js
+const form = document.getElementById("wifi-form");
+form.addEventListener("submit", function (event) {
+  event.preventDefault();
+  const fields = new FormData(form);
+  // 在这里调用文档化、受 capability gate 约束的宿主服务。
+  // 不要期待页面跳转或自动网络请求。
+});
+```
+
+`form.checkValidity()` 和 `form.reportValidity()` 返回布尔值，并向每个无效控件派发不冒泡的
+`invalid`。没有浏览器校验弹窗。`FormData` 只保存字符串 entry，支持 `append`、`set`、
+`delete`、`get`、`getAll` 和 `has`。
 
 ## 窄屏目标
 

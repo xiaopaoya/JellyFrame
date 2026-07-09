@@ -49,6 +49,7 @@ add_library(jellyframe_render_core
     src/render_core/embedded_framebuffer.cpp
     src/render_core/event.cpp
     src/render_core/form_control.cpp
+    src/render_core/form_submission.cpp
     src/render_core/frame_loop.cpp
     src/render_core/frame_update.cpp
     src/render_core/hit_test.cpp
@@ -220,6 +221,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/embedded_framebuffer_tests.cpp
         src/render_core/tests/css_parser_tests.cpp
         src/render_core/tests/event_tests.cpp
+        src/render_core/tests/form_submission_tests.cpp
         src/render_core/tests/frame_loop_tests.cpp
         src/render_core/tests/frame_update_tests.cpp
         src/render_core/tests/hit_test_tests.cpp

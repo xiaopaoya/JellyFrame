@@ -999,9 +999,12 @@ authorization.
 Package reports also include `htmlApiDiagnostics`, a lightweight static scan over
 package-local HTML files. It reports browser/platform markup that is easy to
 mistake for supported embedded behavior, such as `iframe`, `embed`, `object`,
-Shadow DOM `slot`, image maps and `form action`/`method` submission. Unknown
-custom tags still remain ordinary elements; this preflight only warns for
-features with strong browser semantics that JellyFrame does not implement.
+Shadow DOM `slot`, image maps and `form action`/`method` submission. Form V0
+does support local `requestSubmit()`, constraint checks, cancellable `submit`
+events and `FormData`; the warning applies only to browser navigation and
+automatic HTTP submission. Unknown custom tags still remain ordinary elements;
+this preflight only warns for features with strong browser semantics that
+JellyFrame does not implement.
 
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,

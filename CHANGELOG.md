@@ -10,6 +10,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added Form V0 for local embedded flows: `form.checkValidity()`,
+  `form.reportValidity()`, `form.requestSubmit([submitter])`, cancellable
+  `SubmitEvent`-shaped `submit` with `event.submitter`, and string-entry
+  `FormData`. Required controls, text/textarea length bounds, required
+  checkbox/radio groups and required select values now validate without a
+  browser popup. Submit buttons and `HTMLElement.click()` use the same bounded
+  default-action path. This deliberately does not add navigation, automatic
+  HTTP POST, file upload, reset, full `ValidityState` or a persistent form-data
+  snapshot.
 - The desktop installed-app registry now has the first app-distribution V0
   state model: entries carry `status`, `enabled`, `updatedAtUtc` and optional
   `rollback` metadata. Updating a `.jfapp` keeps the previous bundle as a

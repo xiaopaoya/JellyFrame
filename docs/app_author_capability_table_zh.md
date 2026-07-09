@@ -1,6 +1,6 @@
 # App 作者能力速查表
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 这份表给 app 作者快速判断“能不能用”。完整边界仍以
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md) 为准。
@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | 普通结构标签 | 可用 | 使用 `div`、`section`、`header`、`main`、`footer`、`ul`、`li`、`p`、`span`。未知标签会当普通元素处理。 |
 | 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont` 补充包。 |
-| 表单控件 | 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。复杂浏览器默认 UI 不保证一致。 |
+| 表单控件 | Form V0 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。`required`、文本 `minlength`/`maxlength`、checkbox/radio 必填状态和 required select 可配合本地 `submit` 使用；不提供浏览器校验弹窗或页面导航。 |
 | 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">`。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
 | Canvas | 可选 | 需要 manifest `graphics.canvas2d`，并确认 target 支持。适合小图表/仪表，不适合重写整个 UI。 |
 | 远程页面资源 | 不支持 | 不要远程加载 HTML/CSS/JS/image/font。运行时数据请求走 XHR host service。 |
@@ -34,6 +34,7 @@
 | --- | --- | --- |
 | DOM 查询/修改 | 子集 | 无需额外 capability。使用 `document.head`、`document.body`、`document.readyState`、`document.defaultView`、`document.hasFocus()`、简单 selector 的 `querySelector`、`createElement`、`appendChild`、`textContent`、轻量 `innerText`、`id`、`className`、常用表单控件 IDL 属性和小型 `classList` helper。 |
 | 事件 | 可用 | 使用 `addEventListener`、文档化的 `on*` handler property、`element.click()`、事件委托、`dataset`、`matches`/`closest` 子集。不支持 HTML inline event attribute。 |
+| 本地表单 / `FormData` | Form V0 子集 | 使用 `form.checkValidity()`、`reportValidity()`、`requestSubmit([submitter])`、可取消的 `submit` 事件及 `event.submitter`，以及 `new FormData(form)`。在事件处理器中通过已获准的宿主服务提交数据。 |
 | 时间 / Timer / rAF | 有界 | `Date.now()` 读取宿主注入时间；timer/rAF 无需额外 capability，但受 frame policy 和预算限制。 |
 | `XMLHttpRequest` GET | 宿主可选 | `network.fetch`。只用于运行时数据，不加载页面资源。 |
 | `localStorage` | 宿主可选 | `storage.kv`。这是 app 私有小型 KV shadow，不是浏览器持久存储全集。 |

@@ -1,6 +1,6 @@
 # App Component Recipes
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 These recipes are copyable starting points for small wearable apps. They use the
 documented JellyFrame subset and avoid browser-only behavior.
@@ -146,6 +146,36 @@ navigation outside that area.
 
 In the manifest target gate, set `allowScroll: true` only when scrolling is part
 of the design.
+
+## Local Form Flow
+
+Use a local `submit` event for settings, pairing and account-like flows. Keep
+the form state in the page, validate it locally, then call an allowed host
+service from JavaScript. Do not set `action` or `method`: JellyFrame does not
+navigate, encode multipart payloads or perform browser form POSTs.
+
+```html
+<form id="wifi-form">
+  <input name="network" required maxlength="32">
+  <input name="password" required minlength="8" maxlength="63">
+  <button type="submit">Connect</button>
+</form>
+```
+
+```js
+const form = document.getElementById("wifi-form");
+form.addEventListener("submit", function (event) {
+  event.preventDefault();
+  const fields = new FormData(form);
+  // Invoke the documented, capability-gated host service here.
+  // Do not expect a page navigation or automatic network request.
+});
+```
+
+`form.checkValidity()` and `form.reportValidity()` return a boolean and dispatch
+non-bubbling `invalid` on each invalid control. There is no browser validation
+popup. `FormData` supports string entries with `append`, `set`, `delete`, `get`,
+`getAll` and `has`.
 
 ## Narrow Targets
 

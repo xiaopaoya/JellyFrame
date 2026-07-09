@@ -6,6 +6,7 @@
 #include "app_runtime/xml_http_request.h"
 #include "render_core/canvas2d.h"
 #include "render_core/form_control.h"
+#include "render_core/form_submission.h"
 #include "render_core/style.h"
 #include "render_core/text_scan.h"
 
@@ -89,6 +90,10 @@ struct ScriptGeolocationRequest {
 
 struct ScriptCanvasGradient {
     std::uint32_t id = 0;
+};
+
+struct ScriptFormData {
+    std::vector<FormDataEntry> entries;
 };
 
 struct ScriptNodeBinding {
@@ -352,6 +357,10 @@ void free_script_local_storage_binding(void* native_p, jerry_object_native_info_
     delete binding;
 }
 
+void free_script_form_data(void* native_p, jerry_object_native_info_t*) {
+    delete static_cast<ScriptFormData*>(native_p);
+}
+
 void script_node_event_listener_removed(void* context) {
     auto* listener = static_cast<ScriptEventListener*>(context);
     if (listener == nullptr) {
@@ -369,6 +378,7 @@ const jerry_object_native_info_t kXhrNativeInfo = {free_script_xhr, 0, 0};
 const jerry_object_native_info_t kLocalStorageNativeInfo = {free_script_local_storage_binding, 0, 0};
 const jerry_object_native_info_t kAudioNativeInfo = {free_script_audio, 0, 0};
 const jerry_object_native_info_t kCanvasGradientNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kFormDataNativeInfo = {free_script_form_data, 0, 0};
 
 class JerryValue {
 public:
@@ -1154,6 +1164,13 @@ ScriptCanvasGradient* native_canvas_gradient(const jerry_value_t object) {
     return static_cast<ScriptCanvasGradient*>(jerry_object_get_native_ptr(object, &kCanvasGradientNativeInfo));
 }
 
+ScriptFormData* native_form_data(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    return static_cast<ScriptFormData*>(jerry_object_get_native_ptr(object, &kFormDataNativeInfo));
+}
+
 std::size_t xhr_event_index(AppXhrEventKind kind) {
     return static_cast<std::size_t>(kind);
 }
@@ -1435,6 +1452,16 @@ jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
         set_number_property(object.get(), "deltaX", wheel.delta_x);
         set_number_property(object.get(), "deltaY", wheel.delta_y);
         set_number_property(object.get(), "deltaMode", wheel.delta_mode);
+    }
+    if (const auto* submit = dynamic_cast<const SubmitEvent*>(&event)) {
+        if (submit->submitter() != nullptr) {
+            set_property(object.get(), "submitter",
+                         JerryValue(make_node_wrapper(runtime,
+                                                      *const_cast<Node*>(submit->submitter()),
+                                                      false)).get());
+        } else {
+            set_property(object.get(), "submitter", jerry_null());
+        }
     }
 
     set_method(object.get(), "preventDefault", event_prevent_default);
@@ -3095,6 +3122,176 @@ jerry_value_t make_local_storage_object(JerryScriptRuntime& runtime, AppLocalSto
     return object.release();
 }
 
+jerry_value_t form_data_construct(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    if (jerry_value_is_undefined(call_info_p->new_target) || !jerry_value_is_object(call_info_p->this_value)) {
+        return throw_type_error("FormData must be constructed with new");
+    }
+    std::vector<FormDataEntry> entries;
+    if (args_count > 0) {
+        Node* form = native_node(args_p[0]);
+        if (form == nullptr || form->type != NodeType::Element || form->tag_name != "form") {
+            return throw_type_error("FormData constructor requires a form element");
+        }
+        entries = collect_form_data(*form);
+    }
+    auto* data = new ScriptFormData;
+    data->entries = std::move(entries);
+    jerry_object_set_native_ptr(call_info_p->this_value, &kFormDataNativeInfo, data);
+    return jerry_undefined();
+}
+
+jerry_value_t form_data_append(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count) {
+    ScriptFormData* data = native_form_data(call_info_p->this_value);
+    if (data == nullptr || args_count < 2) {
+        return throw_type_error("FormData.append requires name and value");
+    }
+    data->entries.push_back(FormDataEntry{value_to_string(args_p[0]), value_to_string(args_p[1])});
+    return jerry_undefined();
+}
+
+jerry_value_t form_data_delete(const jerry_call_info_t* call_info_p,
+                               const jerry_value_t args_p[],
+                               const jerry_length_t args_count) {
+    ScriptFormData* data = native_form_data(call_info_p->this_value);
+    if (data == nullptr || args_count < 1) {
+        return throw_type_error("FormData.delete requires a name");
+    }
+    const std::string name = value_to_string(args_p[0]);
+    data->entries.erase(std::remove_if(data->entries.begin(), data->entries.end(),
+                                       [&](const FormDataEntry& entry) { return entry.name == name; }),
+                        data->entries.end());
+    return jerry_undefined();
+}
+
+jerry_value_t form_data_get(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t args_p[],
+                            const jerry_length_t args_count) {
+    ScriptFormData* data = native_form_data(call_info_p->this_value);
+    if (data == nullptr || args_count < 1) {
+        return throw_type_error("FormData.get requires a name");
+    }
+    const std::string name = value_to_string(args_p[0]);
+    for (const FormDataEntry& entry : data->entries) {
+        if (entry.name == name) {
+            return jerry_string_sz(entry.value.c_str());
+        }
+    }
+    return jerry_null();
+}
+
+jerry_value_t form_data_get_all(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    ScriptFormData* data = native_form_data(call_info_p->this_value);
+    if (data == nullptr || args_count < 1) {
+        return throw_type_error("FormData.getAll requires a name");
+    }
+    const std::string name = value_to_string(args_p[0]);
+    std::size_t count = 0;
+    for (const FormDataEntry& entry : data->entries) {
+        count += entry.name == name ? 1U : 0U;
+    }
+    JerryValue result(jerry_array(static_cast<jerry_length_t>(count)));
+    std::size_t index = 0;
+    for (const FormDataEntry& entry : data->entries) {
+        if (entry.name == name) {
+            JerryValue value(jerry_string_sz(entry.value.c_str()));
+            JerryValue set(jerry_object_set_index(result.get(), static_cast<jerry_length_t>(index++), value.get()));
+            (void) set;
+        }
+    }
+    return result.release();
+}
+
+jerry_value_t form_data_has(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t args_p[],
+                            const jerry_length_t args_count) {
+    ScriptFormData* data = native_form_data(call_info_p->this_value);
+    if (data == nullptr || args_count < 1) {
+        return throw_type_error("FormData.has requires a name");
+    }
+    const std::string name = value_to_string(args_p[0]);
+    return jerry_boolean(std::any_of(data->entries.begin(), data->entries.end(),
+                                     [&](const FormDataEntry& entry) { return entry.name == name; }));
+}
+
+jerry_value_t form_data_set(const jerry_call_info_t* call_info_p,
+                            const jerry_value_t args_p[],
+                            const jerry_length_t args_count) {
+    ScriptFormData* data = native_form_data(call_info_p->this_value);
+    if (data == nullptr || args_count < 2) {
+        return throw_type_error("FormData.set requires name and value");
+    }
+    const std::string name = value_to_string(args_p[0]);
+    const std::string value = value_to_string(args_p[1]);
+    auto first = std::find_if(data->entries.begin(), data->entries.end(),
+                              [&](const FormDataEntry& entry) { return entry.name == name; });
+    if (first == data->entries.end()) {
+        data->entries.push_back(FormDataEntry{name, value});
+        return jerry_undefined();
+    }
+    first->value = value;
+    data->entries.erase(std::remove_if(std::next(first), data->entries.end(),
+                                       [&](const FormDataEntry& entry) { return entry.name == name; }),
+                        data->entries.end());
+    return jerry_undefined();
+}
+
+void install_form_data_members(jerry_value_t object) {
+    set_method(object, "append", form_data_append);
+    set_method(object, "delete", form_data_delete);
+    set_method(object, "get", form_data_get);
+    set_method(object, "getAll", form_data_get_all);
+    set_method(object, "has", form_data_has);
+    set_method(object, "set", form_data_set);
+}
+
+jerry_value_t make_form_data_constructor() {
+    JerryValue constructor(jerry_function_external(form_data_construct));
+    JerryValue prototype(jerry_object());
+    install_form_data_members(prototype.get());
+    set_property(constructor.get(), "prototype", prototype.get());
+    return constructor.release();
+}
+
+jerry_value_t form_check_validity(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    Node* form = native_node(call_info_p->this_value);
+    if (form == nullptr || form->type != NodeType::Element || form->tag_name != "form") {
+        return throw_type_error("checkValidity requires a form element");
+    }
+    return jerry_boolean(check_form_validity(*form));
+}
+
+jerry_value_t form_report_validity(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t[],
+                                   const jerry_length_t) {
+    return form_check_validity(call_info_p, nullptr, 0);
+}
+
+jerry_value_t form_request_submit(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    Node* form = native_node(call_info_p->this_value);
+    if (form == nullptr || form->type != NodeType::Element || form->tag_name != "form") {
+        return throw_type_error("requestSubmit requires a form element");
+    }
+    Node* submitter = nullptr;
+    if (args_count > 0 && !jerry_value_is_undefined(args_p[0]) && !jerry_value_is_null(args_p[0])) {
+        submitter = native_node(args_p[0]);
+        if (submitter == nullptr || form_owner(*submitter) != form || !is_form_submitter(*submitter)) {
+            return throw_type_error("requestSubmit submitter must belong to this form");
+        }
+    }
+    request_form_submit(*form, submitter);
+    return jerry_undefined();
+}
+
 jerry_value_t audio_construct(const jerry_call_info_t* call_info_p,
                               const jerry_value_t args_p[],
                               const jerry_length_t args_count) {
@@ -3986,6 +4183,11 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     set_method(object.get(), "closest", node_closest);
     set_method(object.get(), "querySelector", node_query_selector);
     set_method(object.get(), "querySelectorAll", node_query_selector_all);
+    if (node.type == NodeType::Element && node.tag_name == "form") {
+        set_method(object.get(), "checkValidity", form_check_validity);
+        set_method(object.get(), "reportValidity", form_report_validity);
+        set_method(object.get(), "requestSubmit", form_request_submit);
+    }
     if (node.type == NodeType::Element && node.tag_name == "canvas") {
         set_method(object.get(), "getContext", canvas_get_context);
     }
@@ -4530,6 +4732,9 @@ jerry_value_t node_click(const jerry_call_info_t* call_info_p,
         Event toggle("toggle", false, false);
         dispatch_event(*details, toggle);
     }
+    if (!click.default_prevented()) {
+        request_form_submit_from_control(*node);
+    }
     return jerry_undefined();
 }
 
@@ -4894,6 +5099,9 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_method(global.get(), "btoa", script_btoa);
     set_method(global.get(), "atob", script_atob);
+    JerryValue form_data_constructor(make_form_data_constructor());
+    set_property(window_object.get(), "FormData", form_data_constructor.get());
+    set_property(global.get(), "FormData", form_data_constructor.get());
     set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
 #define JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER(js_name, event_type) \

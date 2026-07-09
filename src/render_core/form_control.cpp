@@ -152,7 +152,7 @@ std::string option_text(const Node& option) {
 
 std::string option_value(const Node& option) {
     const std::string& value = option.attribute("value");
-    return value.empty() ? option_text(option) : value;
+    return has_attribute(option, "value") ? value : option_text(option);
 }
 
 const Node* root_of(const Node& node) {

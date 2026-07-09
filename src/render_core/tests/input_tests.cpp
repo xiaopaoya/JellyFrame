@@ -660,6 +660,33 @@ void focus_navigation_skips_disabled_and_activates() {
     check(input.focus_previous() == select, "focus wraps backward");
 }
 
+void submit_button_runs_form_default_action_after_click() {
+    auto pipeline = build_form_pipeline(
+        "<body><form id='form'><input id='name' name='name' value='Ada'><button id='send'>Send</button></form></body>",
+        "input, button { display: block; width: 120px; height: 24px; }");
+    Node* form = find_by_id(*pipeline.document, "form");
+    const LayoutBox* button_box = find_box_by_id(*pipeline.layout_tree, "send");
+    check(form != nullptr && button_box != nullptr, "submit input fixture exists");
+
+    int submits = 0;
+    form->add_event_listener("submit", [&](Event& event) {
+        ++submits;
+        event.prevent_default();
+    });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = button_box->rect.x + 2;
+    pointer.y = button_box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+
+    check(submits == 1, "submit button dispatches form submit after click");
+}
+
 } // namespace
 
 int main() {
@@ -683,6 +710,7 @@ int main() {
         select_arrow_keys_work_through_optgroups();
         disabled_control_ignores_pointer_and_text_input();
         focus_navigation_skips_disabled_and_activates();
+        submit_button_runs_form_default_action_after_click();
     } catch (const std::exception& error) {
         std::cerr << "input test failed: " << error.what() << '\n';
         return 1;

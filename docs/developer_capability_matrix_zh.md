@@ -269,9 +269,9 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 
 | 元素/功能 | 状态 | 行为 |
 | --- | --- | --- |
-| `button` | 可用 | 轻量原生风格绘制，默认近似按内容收缩，支持 click。 |
+| `button` | 可用 / submit 子集 | 轻量原生风格绘制，默认近似按内容收缩，支持 click。form 内默认按钮或 `type=submit` 按钮会在 click 默认动作未被阻止时先执行有界校验，再派发可取消 `submit`。 |
 | `input type=text` 和默认 input | 可用 | 有 value 状态，宿主可输入 UTF-8 文本，支持 Backspace。 |
-| `readonly` / `maxlength` | 子集 | 文本输入类控件会在用户输入路径遵守 `readonly` 和 `maxlength`。脚本写 `value` 仍是程序性状态修改；完整 constraint validation UI 未实现。 |
+| `readonly` / `maxlength` | 子集 | 文本输入类控件会在用户输入路径遵守 `readonly` 和 `maxlength`。脚本写 `value` 仍是程序性状态修改；V0 校验会报告程序写入后超过 `maxlength` 的值。 |
 | `input list` / `datalist` | 子集 | 不显示原生 popup。获得焦点的文本输入框可用 Tab/Enter 接受第一个匹配的 datalist option。 |
 | `textarea` | 子集 | value-like 状态和基础绘制；完整多行编辑有限。 |
 | `input type=checkbox` | 可用 | checked 状态、点击激活、input/change 事件。 |
@@ -280,7 +280,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `select` / `option` / `optgroup` | 子集 | 绘制当前选中项；验证壳点击会循环选项；Up/Down 可跨 `optgroup` 在 option 间移动。无 popup/分组菜单 UI。 |
 | `progress` / `meter` | 可用 | 根据属性绘制 value bar。 |
 | 日期/颜色/文件控件 | 延后 | 暂用 text/select/range fallback。 |
-| 表单验证 | 延后 | 无 constraint validation UI 或 form submit。 |
+| 表单验证 / form submission | 子集 | `form.checkValidity()`、`form.reportValidity()` 和 submit 激活会检查 `required`、text/textarea `minlength`/`maxlength`、required checkbox/radio group 和 required select value。无效控件会收到不冒泡 `invalid`，但不绘制浏览器 popup。`form.requestSubmit([submitter])` 会在校验成功并收集数据后派发可取消、带 `submitter` 的 `SubmitEvent` 形状 `submit`。browser navigation、action/method POST、multipart/file upload、pattern/type/date 校验、`form.submit()`、reset 和完整 `ValidityState` 仍未实现。 |
 | IME | 壳层相关 | 核心接收 UTF-8 文本；平台壳负责输入法集成。 |
 
 ## 事件与输入
@@ -329,11 +329,11 @@ JerryScript 源码树时可用。
 | `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |
 | `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
 | `hidden` / `disabled` / `open` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 状态。 |
-| `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio/select 状态变化会派发 `input`/`change`，未被取消的 `summary.click()` 会切换父 `details`。不实现浏览器导航/提交 activation。 |
+| `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio/select 状态变化会派发 `input`/`change`，未被取消的 `summary.click()` 会切换父 `details`，未取消的 form submit button 会进入有界提交路径。不实现 browser navigation。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
 | `on*` event handler properties | 子集 | 只为 JellyFrame 实际派发的事件支持函数型 handler property：`onclick`、`oninput`、`onchange`、`ontoggle`、mouse/wheel handlers、`onfocus`/`onblur`、`document.onvisibilitychange`、`window.ononline`/`window.onoffline`，以及可穿戴按下反馈别名 `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`。设置为 `null` 或非函数会清除 handler。它们复用普通 listener 预算和 runtime 清理路径。不实现完整 `GlobalEventHandlers`、HTML inline event handler attribute 或浏览器级 handler 编译语义。 |
-| Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。 |
-| 表单属性 | 子集 | 相关控件上的常用 IDL 属性：`value`、`defaultValue`、input `defaultChecked`、`type`、`name`、`placeholder`、`required`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max`、`step`，textarea 的 `rows`/`cols`/`wrap`/`textLength`，select 的 `size`，option 的 `label`/`defaultSelected`/`value`/`text`/`index`，optgroup 的 `label`，以及 progress/meter 数值 `value`/`min`/`max`、meter 的 `low`/`high`/`optimum` 和 progress 的 `position`。完整 validity state、labels collections、selection API、picker UI 和浏览器表单提交延后。 |
+| Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。form `submit` event 还会暴露 `submitter` wrapper。 |
+| 表单属性 / `FormData` | 子集 | 相关控件上的常用 IDL 属性：`value`、`defaultValue`、input `defaultChecked`、`type`、`name`、`placeholder`、`required`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max`、`step`，textarea 的 `rows`/`cols`/`wrap`/`textLength`，select 的 `size`，option 的 `label`/`defaultSelected`/`value`/`text`/`index`，optgroup 的 `label`，以及 progress/meter 数值 `value`/`min`/`max`、meter 的 `low`/`high`/`optimum` 和 progress 的 `position`。form wrapper 提供 `checkValidity()`、`reportValidity()`、`requestSubmit()`；`new FormData(form)` 以及 `append`/`set`/`delete`/`get`/`getAll`/`has` 覆盖字符串 form entry。完整 `ValidityState`、labels collections、selection API、picker UI、file entry、迭代、reset 和浏览器表单导航延后。 |
 | Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |
 | 脚本执行 watchdog | 宿主/runtime 可选 | 当链接的 JerryScript 使用 `JERRY_VM_HALT=ON` 构建时，`JerryScriptRuntimeOptions::max_execution_check_count` 与 `HostBudgets::max_script_execution_checks` 可中断失控 eval 和 callback，并给出 `script execution budget exceeded`。若 JerryScript 缺少该特性，JellyFrame 会报告 watchdog 不可用，不伪造抢占。Win32 验证壳可用 `--require-script-watchdog` 和有界 check 参数强制验收这条 recovery 路径。 |
 | `btoa` / `atob` | 部分支持 | 绑定 document 的 runtime 会在 `window` 和 global 暴露 Base64 helper。`btoa` 接受 HTML binary string，并拒绝超过 255 的 code point；`atob` 忽略 ASCII whitespace、容忍缺省 padding，并拒绝非法输入。错误目前使用 JellyFrame `TypeError`，不是 DOMException `InvalidCharacterError`。 |

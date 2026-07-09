@@ -18,6 +18,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/render_core/embedded_framebuffer.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/event.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/form_control.cpp"
+        "${JELLYFRAME_ROOT}/src/render_core/form_submission.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/frame_loop.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/frame_update.cpp"
         "${JELLYFRAME_ROOT}/src/render_core/hit_test.cpp"
