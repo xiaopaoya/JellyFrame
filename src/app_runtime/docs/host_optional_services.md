@@ -43,12 +43,14 @@ codec or package-install workers a shared boundary while keeping DOM, JS, layout
 and framebuffer ownership on the UI task.
 
 `src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` provide
-the first platform-neutral mocks: `NetworkFetchMock`, `ImageDecodeMock`,
+the first platform-neutral mocks: `AppComputeJobMock`, `NetworkFetchMock`, `ImageDecodeMock`,
 `AppPrivateKvStorageMock` and `AudioCommandMock`. They exist for desktop
 validation and end-to-end contract tests. They still do not access real
 networking, filesystems, codecs, audio devices or flash; product hosts should
 replace their worker implementation while keeping the same request/completion/
 handle semantics.
+
+`AppComputeJobMock` defines the same boundary for named compute operations: only a bounded operation name, byte input, timeout and byte result may cross to a host worker. A product host supplies its own worker implementation while preserving the request/completion/handle contract; worker code still cannot receive DOM, JerryScript, layout, display-list or framebuffer access. This contract is not a Web Worker, Service Worker, MessagePort or arbitrary JavaScript callback API.
 
 Network, image, audio, sensor and location mocks also expose stale-pending
 collection hooks for lifecycle boundaries. After an app switch, exit or crash,

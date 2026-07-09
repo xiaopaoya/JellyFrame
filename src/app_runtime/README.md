@@ -11,7 +11,7 @@ It owns contracts and small bounded data structures for:
   queues and host handles together without performing platform I/O.
 - App-instance-scoped async requests and completions.
 - Host-owned resource handles with generation checks.
-- App lifecycle, package install/update/delete, network fetch, private storage,
+- App lifecycle, package install/update/delete, bounded host compute jobs, network fetch, private storage,
   image/audio host-service mocks and system-event plumbing.
 - Fixed-size host data snapshots for battery, weather, activity, location and
   sensor summaries, filtered by explicit access policy before any app-visible

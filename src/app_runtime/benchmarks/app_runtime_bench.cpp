@@ -1,4 +1,5 @@
-﻿#include "app_runtime/app_host.h"
+#include "app_runtime/app_host.h"
+#include "app_runtime/app_compute_jobs.h"
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_budget.h"
 #include "app_runtime/app_host_data.h"
@@ -215,6 +216,29 @@ void bench_service_worker_group_pump(std::size_t capacity) {
         pump_app_host_service_workers(host, slots, 3);
         accepted.clear();
         host.pump_frame_completions(accepted);
+    }
+}
+
+void bench_compute_job_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.compute", AppRole::App);
+    AppComputeJobMock compute(AppComputeJobPolicy{true, 16, 32, capacity});
+    compute.add_fixture("summarize", AppComputeJobResult{HostServiceStatus::Completed, 0, {1, 2, 3, 4}});
+    for (std::size_t i = 0; i < capacity; ++i) {
+        compute.submit(host, AppComputeJobRequest{"summarize", {9, 8, 7}, 1000});
+    }
+    for (std::size_t i = 0; i < capacity; ++i) {
+        compute.complete_next(host);
+    }
+    std::vector<HostServiceCompletion> accepted;
+    while (!host.completions().empty()) {
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+        for (const HostServiceCompletion& completion : accepted) {
+            if (completion.handle != 0) {
+                compute.release_result(host, completion.handle);
+            }
+        }
     }
 }
 
@@ -766,6 +790,9 @@ int run_app_runtime_bench(int argc, char** argv) {
     }));
     print_result("app_runtime_service_worker_group_pump", iterations, average_microseconds(iterations, [&] {
         bench_service_worker_group_pump(capacity);
+    }));
+    print_result("app_runtime_compute_job_mock", iterations, average_microseconds(iterations, [&] {
+        bench_compute_job_mock(capacity);
     }));
     print_result("app_runtime_network_fetch_mock", iterations, average_microseconds(iterations, [&] {
         bench_network_fetch_mock(capacity);

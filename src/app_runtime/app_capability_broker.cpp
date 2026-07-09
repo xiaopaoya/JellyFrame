@@ -6,7 +6,8 @@
 namespace jellyframe {
 namespace {
 
-constexpr std::array<std::string_view, 20> kKnownCapabilities = {
+constexpr std::array<std::string_view, 21> kKnownCapabilities = {
+    "compute.jobs",
     "network.fetch",
     "storage.kv",
     "file.read",

@@ -337,6 +337,10 @@ std::string app_storage_failure_detail(AppPrivateKvOperation operation,
 AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDeviceCapabilities& capabilities,
                                                                  const AppPrivateKvPolicy& storage_policy) {
     AppServiceHostProfile profile;
+    profile.allow_compute_jobs = capabilities.compute.supports_compute_jobs;
+    profile.max_compute_input_bytes = capabilities.compute.max_compute_input_bytes;
+    profile.max_compute_result_bytes = capabilities.compute.max_compute_result_bytes;
+    profile.max_compute_jobs_per_app = capabilities.compute.max_compute_jobs_per_app;
     profile.allow_network_fetch = capabilities.has_network && capabilities.network.supports_fetch;
     profile.max_network_url_bytes = capabilities.network.max_request_bytes == 0
         ? profile.max_network_url_bytes
@@ -382,6 +386,12 @@ AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDevic
 AppServicePolicies app_service_policies_for_app(const AppServiceManifestCapabilities& manifest,
                                                 const AppServiceHostProfile& profile) {
     AppServicePolicies policies;
+    policies.compute = AppComputeJobPolicy{
+        manifest.compute_jobs && profile.allow_compute_jobs,
+        profile.max_compute_input_bytes,
+        profile.max_compute_result_bytes,
+        profile.max_compute_jobs_per_app,
+    };
     policies.network = NetworkFetchPolicy{
         manifest.network_fetch && profile.allow_network_fetch,
         profile.max_network_url_bytes,

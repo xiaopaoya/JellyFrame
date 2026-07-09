@@ -1,6 +1,6 @@
 # Host Abstraction Draft
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 
 JellyFrame's core should stay independent from filesystems, network stacks,
@@ -51,7 +51,7 @@ policy can use:
 - input sources such as touch, pointer, wheel, crown, focus buttons, keyboard
   and text input;
 - heap and maximum single-allocation estimates;
-- optional async jobs, media decode/playback, runtime network fetch and
+- optional async jobs, bounded named compute jobs, media decode/playback, runtime network fetch and
   installable bundle-store capabilities;
 - explicit `HostBudgets`;
 - whether monotonic time, filesystem and network services exist.
@@ -63,16 +63,24 @@ and network as optional host services, not core assumptions.
 
 ## Slow Work And Optional Services
 
-`HostDeviceCapabilities` now splits slow-service facts into four groups:
+`HostDeviceCapabilities` now splits slow-service facts into five groups:
 
 - `async`: whether the host can run jobs outside the UI task, whether jobs are
   cancellable and how many completion events can be consumed per frame;
+- `compute`: bounded named host algorithms, including input/result byte caps and
+  the per-app in-flight job cap;
 - `media`: image decode, audio playback, lightweight video decode and hard
   size/buffer caps;
 - `network`: runtime data fetch capability, request/response caps and the
   remote-page-resource switch;
 - `app_bundles`: third-party flash bundle installation, integrity checks and
   capacity caps.
+
+`compute` is deliberately not a JavaScript Worker, thread, message port or
+arbitrary-code facility. A product host may offer a named operation such as a
+sensor aggregation or DSP preprocessing step, execute it off the UI task, and
+return a bounded opaque result. Its worker must never access DOM, JerryScript,
+layout, display lists or framebuffers.
 
 These fields do not mean the core calls hardware directly. They are a policy
 contract shared by ports, desktop tools, packagers and future JS APIs. If an app
@@ -84,7 +92,7 @@ Recommended execution boundary:
 
 - The UI/main task exclusively owns DOM, JerryScript, style/layout/layer, dirty
   regions and the framebuffer.
-- Decode, network, install and file I/O work runs only in host workers, RTOS
+- Decode, named compute jobs, network, install and file I/O work runs only in host workers, RTOS
   tasks or system services.
 - Workers post small completion events back to the UI queue.
 - The UI frame loop consumes a bounded number of completion events, then marks

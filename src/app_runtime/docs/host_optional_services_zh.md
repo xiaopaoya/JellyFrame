@@ -33,9 +33,11 @@ app 加载失败或运行错误后执行同一套资源释放规则。
 可以共享同一个边界，同时 DOM、JS、layout 和 framebuffer 仍只属于 UI task。
 
 `src/app_runtime/app_services.h` / `src/app_runtime/app_services.cpp` 提供第一版平台无关 mock：
-`NetworkFetchMock`、`ImageDecodeMock`、`AppPrivateKvStorageMock` 和 `AudioCommandMock`。
+`AppComputeJobMock`、`NetworkFetchMock`、`ImageDecodeMock`、`AppPrivateKvStorageMock` 和 `AudioCommandMock`。
 它们用于桌面验证和端到端契约测试，仍不访问真实网络、文件系统、codec、音频设备或 flash；真实产品
 host 应以相同 request/completion/handle 语义替换其 worker 实现。
+
+`AppComputeJobMock` 为具名计算操作定义相同边界：只有有界 operation name、字节 input、timeout 和字节 result 能跨入宿主 worker。产品 host 应在保持 request/completion/handle 合同的前提下提供自己的 worker 实现；worker code 仍不能访问 DOM、JerryScript、layout、display list 或 framebuffer。该合同不是 Web Worker、Service Worker、MessagePort 或任意 JavaScript callback API。
 
 network、image、audio、sensor 和 location mock 还提供生命周期边界用的 stale pending 清理接口。
 app 切换、退出或 crash 后，服务侧应丢弃 `app_instance_id` 不再等于

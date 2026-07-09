@@ -42,6 +42,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | `navigator.geolocation` | Host optional | `location.position`. Discrete position snapshots only. |
 | Canvas 2D | Host optional | `graphics.canvas2d`. Backing storage is allocated only after `getContext("2d")`. |
 | Host time | Available | Use `Date.now()`. Do not assume `new Date()` is host-clock controlled unless documented later. |
+| Host compute jobs | Host optional contract | `compute.jobs` reserves bounded named host work with byte budgets. It is not a JS Worker, thread, message port or arbitrary-code API yet. |
 | Weather/activity/battery | Host/system only | Weather app data should use XHR JSON; activity and battery summaries are not ordinary app JS APIs yet. |
 | App-local routes | Bounded | `location.hash`, `hashchange` and `onhashchange` switch state inside the current app only. URL loading, `history`, navigation and cross-app routes are absent. |
 | Static local modules | Package-time subset | One external `type="module"` entry and package-local static `.js` imports are bundled to classic script at package time. Dynamic `import()`, remote modules and `modulepreload` are deferred. |

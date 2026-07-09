@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "render_core/host.h"
 
@@ -19,6 +19,7 @@ enum class HostServiceJobKind {
     AuthorizedFile,
     BundleInstall,
     BundleRemove,
+    ComputeJob,
     Other,
 };
 
@@ -41,6 +42,7 @@ enum class HostServiceHandleKind {
     LocationSnapshot,
     FileBrokerResult,
     BundleRecord,
+    ComputeResult,
     Other,
 };
 

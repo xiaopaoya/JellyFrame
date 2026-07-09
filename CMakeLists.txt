@@ -92,6 +92,7 @@ endif()
 add_library(jellyframe_app_runtime
     src/app_runtime/app_budget.cpp
     src/app_runtime/app_capability_broker.cpp
+    src/app_runtime/app_compute_jobs.cpp
     src/app_runtime/app_device_services.cpp
     src/app_runtime/app_font_set.cpp
     src/app_runtime/app_frame_policy.cpp
@@ -254,6 +255,7 @@ if(JELLYFRAME_BUILD_TESTS)
 
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
         src/app_runtime/tests/app_capability_broker_tests.cpp
+        src/app_runtime/tests/app_compute_jobs_tests.cpp
         src/app_runtime/tests/app_device_services_tests.cpp
         src/app_runtime/tests/app_frame_policy_tests.cpp
         src/app_runtime/tests/app_host_data_tests.cpp

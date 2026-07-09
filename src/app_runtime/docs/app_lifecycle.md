@@ -96,6 +96,7 @@ V0. They remain host policy inputs.
 Apps request services through manifest capabilities and the selected target
 profile must also allow them.
 
+- `compute.jobs` declares bounded named host work. It is a port/system contract only in V0: no JavaScript Worker, arbitrary background callback or message-port API is exposed.
 - `network.fetch` enables the asynchronous `XMLHttpRequest` GET V0 subset.
 - `storage.kv` enables the tiny `localStorage` subset only when the host binds a
   non-blocking app-private shadow.

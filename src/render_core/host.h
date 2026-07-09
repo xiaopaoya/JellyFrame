@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "render_core/geometry.h"
 
@@ -121,6 +121,13 @@ struct HostAsyncCapabilities {
     std::size_t max_completion_events_per_frame = 0;
 };
 
+struct HostComputeCapabilities {
+    bool supports_compute_jobs = false;
+    std::size_t max_compute_input_bytes = 0;
+    std::size_t max_compute_result_bytes = 0;
+    std::size_t max_compute_jobs_per_app = 0;
+};
+
 struct HostMediaCapabilities {
     bool supports_image_decode = false;
     bool supports_audio_playback = false;
@@ -175,6 +182,7 @@ struct HostDeviceCapabilities {
     HostMemoryCapabilities memory;
     HostAsyncCapabilities async;
     HostMediaCapabilities media;
+    HostComputeCapabilities compute;
     HostNetworkCapabilities network;
     HostSensorCapabilities sensors;
     HostLocationCapabilities location;

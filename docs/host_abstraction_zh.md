@@ -1,6 +1,6 @@
 # 宿主抽象草案
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 
 JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显示控制器、timer、输入硬件和字体 API。
@@ -41,7 +41,7 @@ JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显
 - 屏幕尺寸、DPI、首选像素格式、是否支持局部提交、是否能保留完整 framebuffer；
 - touch、pointer、wheel、crown、focus buttons、keyboard 和 text input 等输入来源；
 - heap 与最大单次分配估计；
-- 异步 job、媒体 decode/playback、runtime network fetch 和 installable bundle store 的可选能力；
+- 异步 job、有界具名 compute job、媒体 decode/playback、runtime network fetch 和 installable bundle store 的可选能力；
 - 显式 `HostBudgets`；
 - 是否存在 monotonic time、filesystem 和 network 服务。
 
@@ -51,12 +51,17 @@ JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显
 
 ## 慢任务与可选服务
 
-`HostDeviceCapabilities` 现在把慢任务相关能力拆成四组：
+`HostDeviceCapabilities` 现在把慢任务相关能力拆成五组：
 
 - `async`：宿主是否能在 UI task 外执行 job，是否支持取消，以及每帧 completion event 上限；
+- `compute`：宿主具名算法的输入/结果字节上限与每个 app 的 in-flight job 上限；
 - `media`：图片 decode、音频 playback、轻量视频 decode 能力和硬尺寸/缓冲上限；
 - `network`：运行时数据 fetch 能力，请求/响应大小上限，远程页面资源开关；
 - `app_bundles`：第三方 flash bundle 的安装、完整性校验和容量上限。
+
+`compute` 刻意不是 JavaScript Worker、线程、message port 或任意代码执行能力。产品宿主可以提供
+诸如传感器聚合、DSP 预处理这样的具名 operation，在 UI task 外执行，再返回有界的不透明结果。其 worker
+不得访问 DOM、JerryScript、layout、display list 或 framebuffer。
 
 这些字段不是要求核心直接调用硬件。它们是 port、桌面调试器、打包器和未来 JS API
 对齐策略的描述：某个 app 声明需要 `network.fetch` 或 `media.audio.playback` 时，工具可以在打包/安装前
@@ -65,7 +70,7 @@ JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显
 推荐的执行边界：
 
 - UI/main task 独占 DOM、JerryScript、style/layout/layer、dirty region 和 framebuffer。
-- Decode/network/install/file I/O 只能在 host worker、RTOS task 或系统服务中执行。
+- Decode/具名 compute job/network/install/file I/O 只能在 host worker、RTOS task 或系统服务中执行。
 - Worker 完成后只把小型 completion event 投回 UI 队列。
 - UI 帧循环按预算消费有限 completion events，再标记 DOM dirty 或派发 JS event。
 - Worker 不得直接持有 DOM 节点裸指针，不得调用 layout/render，不得写 framebuffer。

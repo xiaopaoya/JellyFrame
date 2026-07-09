@@ -74,6 +74,7 @@ suspended 或 screen-off 时，宿主应停止前台输入、timer、`requestAni
 
 App 通过 manifest capability 请求服务，所选 target profile 也必须允许对应服务。
 
+- `compute.jobs` 表示有界的具名宿主计算工作。V0 仅是 port/system contract：不暴露 JavaScript Worker、任意后台 callback 或 message-port API。
 - `network.fetch` 启用异步 `XMLHttpRequest` GET V0 子集。
 - `storage.kv` 只在宿主绑定非阻塞 app 私有 shadow 时启用极小 `localStorage` 子集。
 - `media.audio.playback` 启用宿主可选的 `Audio()` V0 子集。

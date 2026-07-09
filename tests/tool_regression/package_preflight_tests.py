@@ -498,6 +498,7 @@ class PackagePreflightTests(unittest.TestCase):
             "budgets": {"maxResourceBytes": 4096},
             "permissions": ["network"],
             "capabilities": [
+                "compute.jobs",
                 "network.fetch",
                 "storage.kv",
                 "graphics.canvas2d",
@@ -520,11 +521,11 @@ class PackagePreflightTests(unittest.TestCase):
         })
 
         intent = package_app.service_intent_report(manifest, {"id": "round-300"})
-
         self.assertEqual(intent["target"], "round-300")
         self.assertEqual(
             intent["requested"],
             {
+                "computeJobs": True,
                 "networkFetch": True,
                 "storageKv": True,
                 "canvas2d": True,
@@ -539,6 +540,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(
             intent["targetSupport"],
             {
+                "computeJobs": "unknown",
                 "networkFetch": "unknown",
                 "storageKv": "unknown",
                 "canvas2d": "unknown",
@@ -557,6 +559,7 @@ class PackagePreflightTests(unittest.TestCase):
         supported_intent = package_app.service_intent_report(manifest, {
             "id": "round-300",
             "hostServices": {
+                "computeJobs": True,
                 "networkFetch": True,
                 "storageKv": True,
                 "canvas2d": False,
@@ -568,6 +571,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(
             supported_intent["targetSupport"],
             {
+                "computeJobs": "supported",
                 "networkFetch": "supported",
                 "storageKv": "supported",
                 "canvas2d": "unsupported",
@@ -583,6 +587,7 @@ class PackagePreflightTests(unittest.TestCase):
         warnings = package_app.collect_service_target_warnings(manifest, {
             "id": "round-300",
             "hostServices": {
+                "computeJobs": False,
                 "networkFetch": True,
                 "storageKv": False,
                 "canvas2d": False,
@@ -593,7 +598,14 @@ class PackagePreflightTests(unittest.TestCase):
         })
         self.assertEqual(
             [warning["service"] for warning in warnings],
-            ["storageKv", "canvas2d", "audioPlayback", "sensorAccelerometer", "locationPosition"],
+            [
+                "computeJobs",
+                "storageKv",
+                "canvas2d",
+                "audioPlayback",
+                "sensorAccelerometer",
+                "locationPosition",
+            ],
         )
         self.assertTrue(all(warning["code"] == "service-target-unsupported" for warning in warnings))
 

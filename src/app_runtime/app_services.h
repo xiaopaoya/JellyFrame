@@ -476,7 +476,15 @@ struct AppPrivateKvPolicy {
     std::size_t max_bytes_per_app = 4096;
 };
 
+struct AppComputeJobPolicy {
+    bool enabled = false;
+    std::size_t max_input_bytes = 0;
+    std::size_t max_result_bytes = 0;
+    std::size_t max_jobs_per_app = 0;
+};
+
 struct AppServiceManifestCapabilities {
+    bool compute_jobs = false;
     bool network_fetch = false;
     bool storage_kv = false;
     bool image_decode = false;
@@ -489,6 +497,11 @@ struct AppServiceManifestCapabilities {
 };
 
 struct AppServiceHostProfile {
+    bool allow_compute_jobs = false;
+    std::size_t max_compute_input_bytes = 0;
+    std::size_t max_compute_result_bytes = 0;
+    std::size_t max_compute_jobs_per_app = 0;
+
     bool allow_network_fetch = false;
     std::size_t max_network_url_bytes = 256;
     std::size_t max_network_response_bytes = 4096;
@@ -521,6 +534,7 @@ struct AppServiceHostProfile {
 };
 
 struct AppServicePolicies {
+    AppComputeJobPolicy compute;
     NetworkFetchPolicy network;
     AppPrivateKvPolicy storage;
     ImageDecodePolicy image;

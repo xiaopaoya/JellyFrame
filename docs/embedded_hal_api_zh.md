@@ -1,6 +1,6 @@
 # 嵌入式 HAL API
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 
 这份文档是 ESP32-S3、RTOS host 或具体开发板需要实现的接口清单。`jellyframe_render_core`
@@ -43,6 +43,7 @@ struct HostDeviceCapabilities {
     HostMemoryCapabilities memory;
     HostAsyncCapabilities async;
     HostMediaCapabilities media;
+    HostComputeCapabilities compute;
     HostNetworkCapabilities network;
     HostAppBundleCapabilities app_bundles;
     HostBudgets budgets;
@@ -59,6 +60,7 @@ struct HostDeviceCapabilities {
 - `input`：touch、pointer、wheel、crown、focus buttons、keyboard 和 UTF-8 text input 是否可用；
 - `memory`：总 heap、最大单次分配和建议 framebuffer 预算；
 - `async`：宿主是否能把解码、网络、安装等慢任务放到 UI task 外执行，以及每帧最多回收多少完成事件；
+- `compute`：可选具名宿主算法的输入/结果上限和每 app in-flight job 数；它不是 JavaScript Worker 或任意代码执行能力；
 - `media`：可选图片/音频/轻量视频能力、首选解码输出格式和尺寸/缓冲上限；
 - `network`：可选 runtime data fetch 能力、请求/响应上限，以及是否允许远程页面资源；
 - `app_bundles`：可选第三方 flash bundle 安装能力、完整性校验和安装数量/大小上限；
@@ -88,6 +90,7 @@ JellyFrame 的 UI/main task 拥有 DOM、script、layout、layer 和 framebuffer
 - flash 文件遍历、大资源读取和第三方 app 安装；
 - 网络请求、DNS/TLS、HTTP body 读取；
 - 图片、音频、视频解码；
+- 有界具名 compute operation，例如传感器聚合或 DSP 预处理；
 - 大字体/资源表校验。
 
 推荐宿主提供一个很薄的异步队列：
@@ -101,6 +104,9 @@ pump_completions(max_events) -> completion events
 completion event 只能在 UI/main task 的帧边界被消费。事件里应包含 job id、状态、资源句柄或错误码；
 不要让 worker 线程直接改 DOM、执行 JS、重建 layout 或写 framebuffer。这样能保证第三方 app 发起
 网络请求、播放音频或安装包校验时，系统 app/启动器和当前页面仍能响应输入。
+
+对于 compute job，应保持 operation 词表小且由产品宿主定义。只复制有界字节到宿主拥有的 job 存储，
+返回不透明 handle 或有界结果记录。worker 不得访问 DOM、JerryScript、layout、display list 或 framebuffer 内存。
 
 具体 request、completion、surface/audio/fetch/bundle handle 生命周期见 `host_optional_services_zh.md`。
 

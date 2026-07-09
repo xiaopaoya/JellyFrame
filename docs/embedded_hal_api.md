@@ -1,6 +1,6 @@
 # Embedded HAL API
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 
 This document is the implementation checklist for a board or RTOS host such as
@@ -53,6 +53,7 @@ struct HostDeviceCapabilities {
     HostMemoryCapabilities memory;
     HostAsyncCapabilities async;
     HostMediaCapabilities media;
+    HostComputeCapabilities compute;
     HostNetworkCapabilities network;
     HostAppBundleCapabilities app_bundles;
     HostBudgets budgets;
@@ -73,6 +74,9 @@ the app host. Current fields are descriptive, not a mandatory runtime registry:
   budget;
 - `async`: whether slow decode/network/install work can run outside the UI task
   and how many completion events may be consumed per frame;
+- `compute`: optional named host algorithms with bounded input/output and
+  per-app in-flight job counts; it is not a JavaScript Worker or arbitrary-code
+  execution facility;
 - `media`: optional image/audio/lightweight-video services, preferred decoded
   pixel formats and hard size/buffer caps;
 - `network`: optional runtime data fetch service, request/response caps and
@@ -111,6 +115,7 @@ Potentially blocking work must not run synchronously inside that task:
 - flash directory scans, large resource reads and third-party app installation;
 - network requests, DNS/TLS and HTTP body reads;
 - image, audio and video decoding;
+- bounded named compute operations such as sensor aggregation or DSP preprocessing;
 - large font/resource-table validation.
 
 Recommended host shape:
@@ -126,6 +131,11 @@ a job id, status, resource handle or error code. Worker tasks must never mutate
 DOM, run JavaScript, rebuild layout or write the framebuffer directly. This lets
 third-party apps request data, play audio or install packages without stalling
 the system shell or the active page.
+
+For compute jobs, keep the operation vocabulary product-defined and small. Copy
+only bounded bytes into host-owned job storage; return an opaque handle or a
+bounded result record. The worker must not touch DOM, JerryScript, layout,
+display lists or framebuffer memory.
 
 Request, completion and surface/audio/fetch/bundle handle lifetimes are detailed
 in `host_optional_services.md`.
