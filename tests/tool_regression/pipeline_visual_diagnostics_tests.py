@@ -87,6 +87,14 @@ def main() -> int:
     )
     require("visual-vertical-paint-overflow" in diagnostic_codes(vertical_report),
             "vertical paint overflow should be reported")
+    vertical = next(entry for entry in vertical_report.get("diagnostics", [])
+                    if entry.get("code") == "visual-vertical-paint-overflow")
+    require('node="div.up"' in vertical.get("detail", ""),
+            "vertical overflow detail should include compact node label when a layout box caused it")
+    require('path="' in vertical.get("detail", "") and "div.up" in vertical.get("detail", ""),
+            "vertical overflow detail should include stable DOM path when a layout box caused it")
+    require("boxOverflowTop=10" in vertical.get("detail", ""),
+            "vertical overflow detail should include box overflow metrics")
 
     dense_html = "<body>" + "".join("<i></i>" for _ in range(600)) + "</body>"
     dense_report = run_pseudo_browser(

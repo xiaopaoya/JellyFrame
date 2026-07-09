@@ -852,6 +852,26 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(profile["diagnosticSamples"][0]["path"], "body:nth-of-type(1)>main:nth-of-type(1)>button.tab:nth-of-type(1)")
         self.assertEqual(profile["diagnosticSamples"][0]["metrics"]["measuredWidth"], 60)
 
+    def test_visual_vertical_overflow_sample_carries_box_metrics(self):
+        profile = jellyframe_cli.responsive_profile_from_pipeline("round-300", {
+            "viewport": {"width": 300, "height": 300, "shape": "round"},
+        }, {
+            "viewport": {"width": 300, "height": 300},
+            "summary": {"warning": 1},
+            "diagnostics": [{
+                "stage": "layout",
+                "severity": "warning",
+                "code": "visual-vertical-paint-overflow",
+                "detail": "paintBounds=(8,-10)-(38,20) contentHeight=300 node=\"div.up\" path=\"body:nth-of-type(1)>div.up:nth-of-type(1)\" boxTop=-10 boxBottom=10 boxHeight=20 boxOverflowTop=10 boxOverflowBottom=0",
+            }],
+        })
+
+        sample = profile["diagnosticSamples"][0]
+        self.assertEqual(sample["code"], "visual-vertical-paint-overflow")
+        self.assertEqual(sample["path"], "body:nth-of-type(1)>div.up:nth-of-type(1)")
+        self.assertEqual(sample["metrics"]["boxTop"], -10)
+        self.assertEqual(sample["metrics"]["boxOverflowTop"], 10)
+
     def test_write_json_report_adds_developer_advice(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-advice-report-") as directory:
             report_path = Path(directory) / "report.json"

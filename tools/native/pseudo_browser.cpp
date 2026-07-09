@@ -65,6 +65,14 @@ struct HorizontalOverflowOffender {
     int area = 0;
 };
 
+struct VerticalOverflowOffender {
+    const LayoutBox* box = nullptr;
+    int overflow_top = 0;
+    int overflow_bottom = 0;
+    std::size_t depth = 0;
+    int area = 0;
+};
+
 struct PipelineTimings {
     long long read_input_us = 0;
     long long parse_html_us = 0;
@@ -198,6 +206,32 @@ void find_horizontal_overflow_offender(const LayoutBox& box,
     }
 }
 
+void find_vertical_overflow_offender(const LayoutBox& box,
+                                     int content_height,
+                                     std::size_t depth,
+                                     VerticalOverflowOffender& offender) {
+    const int top = box.rect.y;
+    const int bottom = box.rect.y + box.rect.height;
+    const int overflow_top = std::max(0, -top);
+    const int overflow_bottom = std::max(0, bottom - content_height);
+    const int score = overflow_top + overflow_bottom;
+    if (score > 0 && box.node != nullptr) {
+        const int area = std::max(0, box.rect.width) * std::max(0, box.rect.height);
+        const int current_score = offender.overflow_top + offender.overflow_bottom;
+        if (offender.box == nullptr ||
+            score > current_score ||
+            (score == current_score && depth > offender.depth) ||
+            (score == current_score && depth == offender.depth && area < offender.area)) {
+            offender = VerticalOverflowOffender{&box, overflow_top, overflow_bottom, depth, area};
+        }
+    }
+    for (const auto& child : box.children) {
+        if (child) {
+            find_vertical_overflow_offender(*child, content_height, depth + 1, offender);
+        }
+    }
+}
+
 int scroll_container_content_bottom(const LayoutBox& box) {
     int bottom = box.rect.y;
     for (const auto& child : box.children) {
@@ -283,6 +317,24 @@ std::string horizontal_overflow_detail(const LayoutBounds& bounds,
     return detail.str();
 }
 
+std::string vertical_overflow_detail(const LayoutBounds& bounds,
+                                     int content_height,
+                                     const VerticalOverflowOffender& offender) {
+    std::ostringstream detail;
+    detail << bounds_detail("paintBounds", bounds)
+           << " contentHeight=" << content_height;
+    if (offender.box != nullptr) {
+        detail << " node=" << quote_detail_value(dom_node_label(offender.box->node), 48)
+               << " path=" << quote_detail_value(dom_node_path(offender.box->node), 160)
+               << " boxTop=" << offender.box->rect.y
+               << " boxBottom=" << (offender.box->rect.y + offender.box->rect.height)
+               << " boxHeight=" << offender.box->rect.height
+               << " boxOverflowTop=" << offender.overflow_top
+               << " boxOverflowBottom=" << offender.overflow_bottom;
+    }
+    return detail.str();
+}
+
 void report_visual_diagnostics(const BrowserOptions& options,
                                const PipelineStatistics& statistics,
                                const LayoutBox& layout_tree,
@@ -306,13 +358,14 @@ void report_visual_diagnostics(const BrowserOptions& options,
                                                      offender));
     }
     if (paint_bounds.valid && (paint_bounds.top < 0 || paint_bounds.bottom > content_height)) {
+        VerticalOverflowOffender offender;
+        find_vertical_overflow_offender(layout_tree, content_height, 0, offender);
         report_diagnostic(&diagnostics,
                           DiagnosticStage::Layout,
                           DiagnosticSeverity::Warning,
                           "visual-vertical-paint-overflow",
                           "Paint output extends outside the resolved content bounds vertically",
-                          bounds_detail("paintBounds", paint_bounds) +
-                              " contentHeight=" + std::to_string(content_height));
+                          vertical_overflow_detail(paint_bounds, content_height, offender));
     }
     if (content_height > options.viewport_height) {
         report_diagnostic(&diagnostics,

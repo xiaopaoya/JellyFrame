@@ -82,6 +82,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Unclassified pipeline diagnostics in `developerAdvice[]` now preserve the
   originating stage/source plus detail text, so a newly added diagnostic still
   tells app authors where to look before a dedicated advice template exists.
+- `visual-vertical-paint-overflow` diagnostics now include the likely layout box
+  node/path and top/bottom overflow metrics when a real layout box caused the
+  overflow, matching the existing horizontal-overflow attribution style.
 - `jellyframe_cli.py doctor` now accepts `--sample` and `--exclude-sample` so
   trial users and maintainers can run a focused sample subset without changing
   the default full sample health check.
