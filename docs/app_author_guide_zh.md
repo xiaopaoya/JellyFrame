@@ -32,6 +32,7 @@ python tools\jellyframe_cli.py check `
 ```
 
 然后优先读 JSON report 末尾的 `developerAdvice[]`。它是低层 diagnostics 面向 app 作者的解释和修复建议。
+Package report 还会包含 `animationDiagnostics`，在 runtime parser 实际处理样式表前提前识别常见的高成本或不支持 CSS 动画写法。
 部分建议会带 `recipe` 字段，指向 [app_author_recipes_zh.md](app_author_recipes_zh.md)
 中的可复制写法。
 

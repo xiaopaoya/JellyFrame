@@ -449,6 +449,23 @@ class PackagePreflightTests(unittest.TestCase):
             ],
         )
 
+    def test_animation_diagnostics_feed_app_author_advice(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-animation-advice-") as directory:
+            root = Path(directory)
+            stylesheet = root / "app.css"
+            stylesheet.write_text(
+                "@keyframes resize { from { width: 12px; } to { width: 96px; } }",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, stylesheet, "/app.css", 0)]
+            diagnostics, warnings = package_app.collect_animation_diagnostics(resources)
+
+        self.assertEqual(diagnostics["entryCount"], 1)
+        advice = jellyframe_cli.collect_developer_advice({"warnings": warnings})
+        self.assertEqual(len(advice), 1)
+        self.assertEqual(advice[0]["code"], "css-animation-layout-property")
+        self.assertEqual(advice[0]["source"], "/app.css")
+        self.assertIn("fixed-size layer", advice[0]["action"])
+
     def test_animation_diagnostics_accepts_low_cost_keyframes_and_easing(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-animation-supported-diagnostics-") as directory:
             root = Path(directory)
