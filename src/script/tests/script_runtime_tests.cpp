@@ -38,6 +38,18 @@ Node* find_first_by_tag(Node& node, const std::string& tag_name) {
     return nullptr;
 }
 
+Node* find_by_id(Node& node, const std::string& id) {
+    if (node.type == NodeType::Element && node.attribute("id") == id) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        if (Node* found = find_by_id(*child, id)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 void expression_returns_value() {
     JerryScriptRuntime runtime;
     const ScriptEvaluationResult result = runtime.eval("1 + 2", "expression.js");
@@ -1657,6 +1669,34 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     check((subtree_dirty_flags(*document) & DomDirtyPaint) != 0U, "canvas drawing marks paint dirty");
 }
 
+void javascript_canvas_draw_image_copies_and_scales_canvas_source() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><canvas id='src' width='4' height='4'></canvas><canvas id='dst' width='8' height='8'></canvas></body>");
+    Node* source = find_by_id(*document, "src");
+    Node* destination = find_by_id(*document, "dst");
+    check(source != nullptr && destination != nullptr, "canvas drawImage nodes exist");
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 2, 64, 128, 8, 8});
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(registry);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var src = document.getElementById('src');"
+        "var dst = document.getElementById('dst');"
+        "var a = src.getContext('2d'); var b = dst.getContext('2d');"
+        "a.fillStyle = '#ff0000'; a.fillRect(0, 0, 2, 2);"
+        "b.drawImage(src, 0, 0);"
+        "b.drawImage(src, 4, 0, 2, 2);"
+        "b.drawImage(src, 0, 0, 2, 2, 2, 2, 4, 4);"
+        "'ok';");
+    check(result.ok && result.value == "ok", "canvas drawImage script succeeds");
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*destination));
+    check(surface != nullptr && surface->pixels[0].r == 255 &&
+              surface->pixels[0 * surface->width + 4].r == 255 &&
+              surface->pixels[2 * surface->width + 2].r == 255 &&
+              surface->pixels[5 * surface->width + 5].r == 255,
+          "canvas drawImage script covers standard overloads");
+}
+
 } // namespace
 
 int main() {
@@ -1718,6 +1758,7 @@ int main() {
         javascript_geolocation_uses_bound_location_service();
         javascript_form_submission_and_form_data_work();
         javascript_canvas_2d_is_optional_and_lazy();
+        javascript_canvas_draw_image_copies_and_scales_canvas_source();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

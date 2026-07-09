@@ -330,6 +330,35 @@ void linear_gradient_fills_rect_and_is_budgeted() {
     assert(no_gradient_registry.create_linear_gradient(0.0, 0.0, 8.0, 0.0) == 0);
 }
 
+void draw_image_copies_canvas_surface_without_new_allocation() {
+    Canvas2DRegistry registry(Canvas2DPolicy{
+        true,
+        2,
+        64,
+        128,
+        8,
+        8,
+    });
+    auto source = make_element("canvas");
+    source->set_attribute("width", "4");
+    source->set_attribute("height", "4");
+    auto destination = make_element("canvas");
+    destination->set_attribute("width", "8");
+    destination->set_attribute("height", "8");
+    assert(registry.set_fill_style(*source, "#ff0000"));
+    assert(registry.fill_rect(*source, 0, 0, 2, 2));
+    const std::uint32_t source_handle = registry.handle_for(*source);
+    assert(source_handle != 0);
+    assert(registry.draw_image(*destination, *source, 0, 0, 2, 2, 2, 2, 4, 4));
+    const Canvas2DSurface* target = registry.surface(registry.handle_for(*destination));
+    assert(target != nullptr);
+    assert(target->pixels[2 * target->width + 2].r == 255);
+    assert(target->pixels[5 * target->width + 5].r == 255);
+    assert(target->pixels[1 * target->width + 1].a == 0);
+    assert(registry.handle_for(*source) == source_handle);
+    assert(!registry.draw_image(*destination, *destination, 0, 0, 1, 1, 0, 0, 1, 1));
+}
+
 void text_metrics_and_fill_text_use_bound_backend() {
     Canvas2DRegistry registry(Canvas2DPolicy{
         true,
@@ -376,6 +405,7 @@ int main() {
     arc_stroke_draws_ring_pixels();
     fill_path_fills_closed_polygon();
     linear_gradient_fills_rect_and_is_budgeted();
+    draw_image_copies_canvas_surface_without_new_allocation();
     text_metrics_and_fill_text_use_bound_backend();
     std::cout << "canvas2d tests passed\n";
     return 0;

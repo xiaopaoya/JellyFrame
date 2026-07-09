@@ -36,7 +36,7 @@ Current packages:
   sheet and button jelly animations.
 - `jelly_watch_face`: analog watch face using `transform: rotate(...)` and
   `transform-origin` for hands.
-- `jelly_canvas_smoke`: optional Canvas 2D V0.3 trend-line and bar-chart sample.
+- `jelly_canvas_smoke`: optional Canvas 2D V0.4 trend-line and bar-chart sample using bounded canvas-to-canvas drawImage scaling.
 - `jelly_canvas_gauges`: optional Canvas 2D gauge/ring sample using `arc`,
   `fill`, `globalAlpha`, Canvas text, linear gradients and bounded path drawing.
 - `jelly_service_status`: optional network/audio/location service-boundary

@@ -605,6 +605,17 @@ int run_render_core_microbench(int argc, char** argv) {
         canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
         canvas_registry.fill_text(*canvas, "82%", 42.0, 44.0);
     }));
+    auto canvas_source = make_element("canvas");
+    canvas_source->set_attribute("width", "24");
+    canvas_source->set_attribute("height", "16");
+    Canvas2DRegistry canvas_copy_registry(Canvas2DPolicy{true, 2, 120 * 80, 120 * 80 + 24 * 16, 120, 80});
+    canvas_copy_registry.ensure_surface(*canvas);
+    canvas_copy_registry.set_fill_style(*canvas_source, "#2dd4bf");
+    canvas_copy_registry.fill_rect(*canvas_source, 0, 0, 24, 16);
+    print_result("canvas2d_draw_image_scaled", iterations, average_microseconds(iterations, [&] {
+        canvas_copy_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        canvas_copy_registry.draw_image(*canvas, *canvas_source, 0, 0, 24, 16, 12, 8, 96, 64);
+    }));
     const std::uint32_t canvas_gradient = canvas_registry.create_linear_gradient(0.0, 0.0, 120.0, 0.0);
     canvas_registry.add_color_stop(canvas_gradient, 0.0, "#0f766e");
     canvas_registry.add_color_stop(canvas_gradient, 1.0, "#facc15");

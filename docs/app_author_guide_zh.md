@@ -64,7 +64,7 @@ unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己�
 - 简单 DOM 结构、ID/class、文本、表单和按钮。
 - Block/inline layout、简化 flex、实用 grid-card 子集、小装饰用 absolute positioning 和固定底部栏。
 - `box-sizing: border-box`、百分比 sizing、`max-width: 100%`、`gap`、`aspect-ratio`、
-  单值百分比 `border-radius`、轻量渐变、圆角矩形、近似阴影，以及声明后可用的 Canvas 2D V0.3。
+  单值百分比 `border-radius`、轻量渐变、圆角矩形、近似阴影，以及声明后可用的 Canvas 2D V0.4。
 - DOM event、click/pointer/touch alias、focus、基础表单状态、timer 和有界 `requestAnimationFrame`。
 - manifest 与 host target 同时允许时的 XHR GET、极小 `localStorage`、Audio V0 和 geolocation V0。
 - Win32 壳中的包内 BMP 图片，以及产品 PNG/JPEG/WebP decoder 可接入的 host image codec adapter 边界。
@@ -185,7 +185,7 @@ body {
 
 ## 什么时候用 Canvas
 
-Canvas 2D V0.3 适合自定义仪表、圆环、小图表和用 DOM 很难低成本表达的装饰。使用前声明
+Canvas 2D V0.4 适合自定义仪表、圆环、小图表和用 DOM 很难低成本表达的装饰。使用前声明
 `graphics.canvas2d`，并保持 canvas 尺寸小。除非 app 本身就是图形优先，否则不要用 Canvas 重写整个 UI。
 
 ## 分享 app 前

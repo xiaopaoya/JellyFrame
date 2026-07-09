@@ -76,7 +76,7 @@ Stable authoring pieces today:
   positioning for small decorations and fixed bottom bars.
 - `box-sizing: border-box`, percentage sizing, `max-width: 100%`, `gap`,
   `aspect-ratio`, single-value percentage `border-radius`, lightweight
-  gradients, rounded rectangles, approximate shadows and Canvas 2D V0.3 when
+  gradients, rounded rectangles, approximate shadows and Canvas 2D V0.4 when
   declared.
 - DOM events, click/pointer/touch aliases, focus, basic form state, timers and
   bounded `requestAnimationFrame`.
@@ -209,7 +209,7 @@ For fuller button, card, scroll-list and fixed bottom-nav recipes, see
 
 ## When To Use Canvas
 
-Use Canvas 2D V0.3 for custom gauges, rings, tiny charts and decorations that
+Use Canvas 2D V0.4 for custom gauges, rings, tiny charts and decorations that
 would otherwise require many DOM nodes. Declare `graphics.canvas2d` and keep the
 canvas small. Do not use Canvas to rebuild the whole UI unless the app is truly
 graphics-first.

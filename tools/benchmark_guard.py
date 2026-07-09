@@ -40,6 +40,7 @@ SUITES: dict[str, SuiteConfig] = {
             "dirty_rect_replay_contained": 30000.0,
             "scroll_blit_plan": 50.0,
             "canvas2d_path_stroke": 15000.0,
+            "canvas2d_draw_image_scaled": 20000.0,
             "canvas2d_linear_gradient_fill_rect": 60000.0,
         },
     ),

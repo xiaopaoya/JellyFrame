@@ -531,7 +531,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
             "Network fetch is runtime data only; remote HTML, CSS, script and image loaders remain disabled.",
             "Storage is app-private KV only; cookies, IndexedDB, Cache API and general filesystem access are absent.",
             "Audio playback is host-owned; Audio() V0 is available only when the host binds an audio adapter.",
-            "Canvas 2D is an optional bounded drawing surface; backing storage should be allocated only after getContext(\"2d\").",
+            "Canvas 2D is an optional bounded drawing surface; backing storage should be allocated only after getContext(\"2d\"). drawImage() V0.4 accepts allocated canvas sources only; image and video sources remain deferred.",
             "Sensor and location data are semantic host services; apps never receive raw hardware handles.",
         ],
     }

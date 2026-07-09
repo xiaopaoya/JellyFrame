@@ -124,6 +124,16 @@ public:
     bool stroke(Node& node);
     Canvas2DTextMetrics measure_text(Node& node, std::string_view text);
     bool fill_text(Node& node, std::string_view text, double x, double y, double max_width = 0.0);
+    bool draw_image(Node& destination,
+                    const Node& source,
+                    int source_x,
+                    int source_y,
+                    int source_width,
+                    int source_height,
+                    int destination_x,
+                    int destination_y,
+                    int destination_width,
+                    int destination_height);
     std::uint32_t create_linear_gradient(double x0, double y0, double x1, double y1);
     bool add_color_stop(std::uint32_t gradient_id, double offset, std::string_view color);
 

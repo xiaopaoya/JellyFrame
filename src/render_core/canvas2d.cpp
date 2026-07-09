@@ -993,6 +993,48 @@ bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, do
     return true;
 }
 
+bool Canvas2DRegistry::draw_image(Node& destination,
+                                  const Node& source,
+                                  int source_x,
+                                  int source_y,
+                                  int source_width,
+                                  int source_height,
+                                  int destination_x,
+                                  int destination_y,
+                                  int destination_width,
+                                  int destination_height) {
+    if (&destination == &source || source_width <= 0 || source_height <= 0 ||
+        destination_width <= 0 || destination_height <= 0) {
+        return false;
+    }
+    Canvas2DSurface* target = mutable_surface(ensure_surface(destination));
+    const Canvas2DSurface* input = surface_for(source);
+    if (target == nullptr || input == nullptr || source_x < 0 || source_y < 0 ||
+        source_x > input->width - source_width || source_y > input->height - source_height) {
+        return false;
+    }
+
+    const int left = std::max(0, destination_x);
+    const int top = std::max(0, destination_y);
+    const int right = std::min(target->width, destination_x + destination_width);
+    const int bottom = std::min(target->height, destination_y + destination_height);
+    if (left >= right || top >= bottom) {
+        return true;
+    }
+    for (int y = top; y < bottom; ++y) {
+        const std::int64_t scaled_y = static_cast<std::int64_t>(y - destination_y) * source_height;
+        const int input_y = source_y + static_cast<int>(scaled_y / destination_height);
+        for (int x = left; x < right; ++x) {
+            const std::int64_t scaled_x = static_cast<std::int64_t>(x - destination_x) * source_width;
+            const int input_x = source_x + static_cast<int>(scaled_x / destination_width);
+            const Color color = input->pixels[static_cast<std::size_t>(input_y) * input->width + input_x];
+            blend_pixel(*target, x, y, with_global_alpha(color, target->state.global_alpha));
+        }
+    }
+    mark_dirty(destination, DomDirtyPaint);
+    return true;
+}
+
 std::uint32_t Canvas2DRegistry::create_linear_gradient(double x0, double y0, double x1, double y1) {
     if (!policy_.enabled || gradients_.size() >= policy_.max_gradients ||
         !std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(x1) || !std::isfinite(y1)) {

@@ -39,6 +39,10 @@ h1 {
   font-weight: 700;
 }
 
+.canvas-source {
+  display: none;
+}
+
 .trend {
   display: block;
   width: 100%;

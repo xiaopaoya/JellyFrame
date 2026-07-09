@@ -4015,6 +4015,38 @@ jerry_value_t canvas_stroke(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t canvas_draw_image(const jerry_call_info_t* call_info_p,
+                                const jerry_value_t args_p[],
+                                const jerry_length_t args_count) {
+    Node* destination = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, destination);
+    Node* source = args_count > 0 ? native_node(args_p[0]) : nullptr;
+    if (registry == nullptr || destination == nullptr || source == nullptr ||
+        source->type != NodeType::Element || source->tag_name != "canvas") {
+        return jerry_undefined();
+    }
+    const Canvas2DSurface* source_surface = registry->surface(registry->handle_for(*source));
+    if (source_surface == nullptr) {
+        return jerry_undefined();
+    }
+    if (args_count == 3) {
+        registry->draw_image(*destination, *source, 0, 0, source_surface->width, source_surface->height,
+                             int_from_value(args_p[1]), int_from_value(args_p[2]),
+                             source_surface->width, source_surface->height);
+    } else if (args_count == 5) {
+        registry->draw_image(*destination, *source, 0, 0, source_surface->width, source_surface->height,
+                             int_from_value(args_p[1]), int_from_value(args_p[2]),
+                             int_from_value(args_p[3]), int_from_value(args_p[4]));
+    } else if (args_count == 9) {
+        registry->draw_image(*destination, *source,
+                             int_from_value(args_p[1]), int_from_value(args_p[2]),
+                             int_from_value(args_p[3]), int_from_value(args_p[4]),
+                             int_from_value(args_p[5]), int_from_value(args_p[6]),
+                             int_from_value(args_p[7]), int_from_value(args_p[8]));
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t canvas_create_linear_gradient(const jerry_call_info_t* call_info_p,
                                             const jerry_value_t args_p[],
                                             const jerry_length_t args_count) {
@@ -4054,6 +4086,7 @@ jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     set_method(object.get(), "stroke", canvas_stroke);
     set_method(object.get(), "measureText", canvas_measure_text);
     set_method(object.get(), "fillText", canvas_fill_text);
+    set_method(object.get(), "drawImage", canvas_draw_image);
     set_method(object.get(), "createLinearGradient", canvas_create_linear_gradient);
     return object.release();
 }

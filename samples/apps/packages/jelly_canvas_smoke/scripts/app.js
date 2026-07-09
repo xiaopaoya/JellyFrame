@@ -1,27 +1,32 @@
 (function () {
   var canvas = document.getElementById("trend");
+  var source = document.getElementById("trend-source");
   var ctx = canvas && canvas.getContext ? canvas.getContext("2d") : null;
-  if (!ctx) {
+  var sourceCtx = source && source.getContext ? source.getContext("2d") : null;
+  if (!ctx || !sourceCtx) {
     return;
   }
 
   var bars = [28, 44, 38, 62, 55, 70, 48, 76, 68, 84, 66, 90];
-  ctx.clearRect(0, 0, 220, 96);
-  ctx.fillStyle = "#123040";
-  ctx.fillRect(0, 0, 220, 96);
+  sourceCtx.clearRect(0, 0, 110, 48);
+  sourceCtx.fillStyle = "#123040";
+  sourceCtx.fillRect(0, 0, 110, 48);
 
-  ctx.fillStyle = "#2dd4bf";
+  sourceCtx.fillStyle = "#2dd4bf";
   for (var i = 0; i < bars.length; i += 1) {
     var h = bars[i];
-    ctx.fillRect(12 + i * 16, 88 - h, 8, h);
+    sourceCtx.fillRect(6 + i * 8, 44 - Math.floor(h / 2), 4, Math.floor(h / 2));
   }
 
-  ctx.strokeStyle = "#f7fff6";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(12, 80);
+  sourceCtx.strokeStyle = "#f7fff6";
+  sourceCtx.lineWidth = 1;
+  sourceCtx.beginPath();
+  sourceCtx.moveTo(6, 40);
   for (var j = 0; j < bars.length; j += 1) {
-    ctx.lineTo(16 + j * 16, 88 - bars[j]);
+    sourceCtx.lineTo(8 + j * 8, 44 - Math.floor(bars[j] / 2));
   }
-  ctx.stroke();
+  sourceCtx.stroke();
+
+  ctx.clearRect(0, 0, 220, 96);
+  ctx.drawImage(source, 0, 0, 110, 48, 0, 0, 220, 96);
 }());
