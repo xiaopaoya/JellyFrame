@@ -176,6 +176,9 @@ body {
 | `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |
 | `style-property-unsupported` | CSS 属性不在支持子集。 | 换成文档化属性，或用 Canvas/资源图表达效果。 |
+| `script-capability-missing` | JavaScript 使用了宿主支持 API，但 manifest 没有请求对应 capability。 | 声明报告里给出的 capability，并为宿主拒绝授权保留可见 fallback。 |
+| `script-api-deferred` | JavaScript 使用了当前 runtime 子集外的浏览器 API，例如 `fetch`、`WebSocket`、`DataTransfer`、workers 或动态 import。 | 使用文档化 V0 替代路径，通常是 XHR GET 或宿主持有服务；否则移除浏览器专属路径。 |
+| `script-api-subset` | JavaScript 使用了 JellyFrame 已支持 API 的子集外语法，常见于复杂 `querySelector`。 | 保持 selector 简单，或使用明确 ID/class 与已保存的元素引用。 |
 | `html-element-unsupported` | markup 使用了 `iframe`、`object`、`embed`、`slot` 或 image-map 这类浏览器/平台语义元素。 | 改成包内图片、显式控件、Canvas，或宿主持有的服务。 |
 | `html-form-submit-deferred` | `<form>` 依赖浏览器 action/method 提交。 | 用 app JavaScript 处理控件；需要网络时声明并使用 `network.fetch` 对应宿主能力。 |
 | `target-gate-not-accepted` | app 声明的 target 没过发布 gate。 | 修复列出的 overflow/scroll/diagnostic 原因；仍试验时可先把 gate 降为 `warn`。 |

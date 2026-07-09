@@ -64,6 +64,8 @@ JellyFrame Engine 的重要变更记录在这里。
   延后/子集 API warning 会进入新的 `warningCount` 总数，不再被误标成 capability 缺口。
 - Package report 新增 `htmlApiDiagnostics`，用于静态提示 `iframe`、`embed`、`object`、
   Shadow DOM `slot`、image map 和浏览器 form submission 等浏览器专属 markup。
+- 脚本 API 预检现在也会提示延后的浏览器通信、拖放和 worker API，例如 `WebSocket`、
+  `EventSource`、`BroadcastChannel`、`DataTransfer`、Web Workers 和 `serviceWorker`。
 - `jellyframe_cli.py doctor` 新增 `--sample` 和 `--exclude-sample`，便于试用者或维护者只运行
   某个样例子集，同时不改变默认全样例健康检查。
 - `jelly_component_recipes` 示例新增确定性的 Win32 滚动 capture 脚本，CTest 会验证该示例的

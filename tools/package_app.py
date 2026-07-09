@@ -843,6 +843,42 @@ SCRIPT_API_USAGE_WARNINGS = [
         "pattern": re.compile(r"\bimport\s*\("),
         "message": "script uses dynamic import, which is deferred; bundle to classic package-local scripts before packaging",
     },
+    {
+        "api": "WebSocket",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bWebSocket\s*\("),
+        "message": "script uses WebSocket, which is outside the current networking subset; use XMLHttpRequest GET V0 or a host-owned service",
+    },
+    {
+        "api": "EventSource",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bEventSource\s*\("),
+        "message": "script uses EventSource/server-sent events, which are outside the current networking subset; use host-owned polling or push services",
+    },
+    {
+        "api": "BroadcastChannel",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bBroadcastChannel\s*\("),
+        "message": "script uses BroadcastChannel/web messaging, which is outside the current app isolation model",
+    },
+    {
+        "api": "DataTransfer",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\b(?:DataTransfer|DataTransferItemList|DataTransferItem|dataTransfer)\b"),
+        "message": "script uses drag-and-drop DataTransfer APIs, which are outside the wearable input subset",
+    },
+    {
+        "api": "Worker",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"(?<![\w.])(?:Worker|SharedWorker)\s*\("),
+        "message": "script uses Web Workers, which are not part of the JellyFrame app runtime; use host services for background work",
+    },
+    {
+        "api": "serviceWorker",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bserviceWorker\b"),
+        "message": "script uses serviceWorker, which is not part of the JellyFrame app runtime or install/update model",
+    },
 ]
 
 

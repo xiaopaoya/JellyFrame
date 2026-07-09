@@ -200,6 +200,9 @@ For fuller button, card, scroll-list and fixed bottom-nav recipes, see
 | `font-family-unmatched` | CSS names a custom font not declared in manifest. | Use `system-ui` or declare a matching `.jffont` family. |
 | `font-missing-glyphs` | Target fonts do not cover all text. | Use the generated `*.used_chars.txt` to build and declare an app font supplement. |
 | `style-property-unsupported` | CSS property is not in the subset. | Replace it with a documented property or use Canvas/resource art. |
+| `script-capability-missing` | JavaScript uses a host-backed API, but manifest does not request the matching capability. | Declare the reported capability and keep a visible fallback for hosts that deny it. |
+| `script-api-deferred` | JavaScript uses a browser API outside the current runtime subset, such as `fetch`, `WebSocket`, `DataTransfer`, workers or dynamic import. | Use the documented V0 substitute, usually XHR GET or a host-owned service, or remove the browser-only path. |
+| `script-api-subset` | JavaScript uses a supported API outside JellyFrame's subset, commonly complex `querySelector`. | Keep selectors simple or use explicit IDs/classes and stored element references. |
 | `html-element-unsupported` | Markup uses a browser/platform element such as `iframe`, `object`, `embed`, `slot` or image-map tags. | Replace it with package-local images, explicit controls, Canvas, or a host-owned service. |
 | `html-form-submit-deferred` | A `<form>` asks for browser action/method submission. | Handle the control in app JavaScript and request the required host capability, such as `network.fetch`, when needed. |
 | `target-gate-not-accepted` | A target claimed by the app failed its release gate. | Fix the listed overflow/scroll/diagnostic reasons, or lower the gate to `warn` while experimental. |

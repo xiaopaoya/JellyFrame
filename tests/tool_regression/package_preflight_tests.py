@@ -317,18 +317,37 @@ class PackagePreflightTests(unittest.TestCase):
                 "view.innerHTML = '<b>unsafe</b>';\n"
                 "view.getBoundingClientRect();\n"
                 "view.setPointerCapture(1);\n"
-                "import('./chunk.js');\n",
+                "import('./chunk.js');\n"
+                "new WebSocket('wss://example.invalid');\n"
+                "new EventSource('/events');\n"
+                "new BroadcastChannel('app');\n"
+                "drop.dataTransfer.getData('text/plain');\n"
+                "new Worker('/worker.js');\n"
+                "navigator.serviceWorker.register('/sw.js');\n",
                 encoding="utf-8")
             resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
 
             diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
 
-        self.assertEqual(diagnostics["entryCount"], 6)
+        self.assertEqual(diagnostics["entryCount"], 12)
         self.assertEqual(diagnostics["missingCapabilityCount"], 0)
-        self.assertEqual(diagnostics["warningCount"], 6)
+        self.assertEqual(diagnostics["warningCount"], 12)
         self.assertEqual(
             sorted(warning["api"] for warning in warnings),
-            ["Promise", "dynamic import", "fetch", "getBoundingClientRect", "innerHTML", "pointer capture"],
+            [
+                "BroadcastChannel",
+                "DataTransfer",
+                "EventSource",
+                "Promise",
+                "WebSocket",
+                "Worker",
+                "dynamic import",
+                "fetch",
+                "getBoundingClientRect",
+                "innerHTML",
+                "pointer capture",
+                "serviceWorker",
+            ],
         )
         self.assertTrue(all(warning["code"] == "script-api-deferred" for warning in warnings))
 

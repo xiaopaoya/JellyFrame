@@ -95,6 +95,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Package reports now include `htmlApiDiagnostics`, a static preflight scan for
   browser-only markup such as `iframe`, `embed`, `object`, Shadow DOM `slot`,
   image maps and browser form submission.
+- Script API preflight now also reports deferred browser communication,
+  drag-and-drop and worker APIs such as `WebSocket`, `EventSource`,
+  `BroadcastChannel`, `DataTransfer`, Web Workers and `serviceWorker`.
 - `jellyframe_cli.py doctor` now accepts `--sample` and `--exclude-sample` so
   trial users and maintainers can run a focused sample subset without changing
   the default full sample health check.
