@@ -27,6 +27,8 @@
     var nextY = 44 - Math.floor(bars[j] / 2);
     if (j === 0) {
       sourceCtx.lineTo(nextX, nextY);
+    } else if (j % 3 === 0) {
+      sourceCtx.bezierCurveTo(nextX - 6, 44 - Math.floor(bars[j - 1] / 2), nextX - 2, nextY, nextX, nextY);
     } else {
       sourceCtx.quadraticCurveTo(nextX - 4, 44 - Math.floor(bars[j - 1] / 2), nextX, nextY);
     }

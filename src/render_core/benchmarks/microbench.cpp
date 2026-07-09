@@ -652,6 +652,17 @@ int run_render_core_microbench(int argc, char** argv) {
         }
         canvas_registry.stroke(*canvas);
     }));
+    print_result("canvas2d_bezier_curve_stroke", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.begin_path(*canvas);
+        canvas_registry.move_to(*canvas, 4, 64);
+        for (int index = 0; index < 6; ++index) {
+            canvas_registry.bezier_curve_to(*canvas,
+                                            8.0 + index * 18.0, 8.0 + (index % 3) * 14.0,
+                                            16.0 + index * 18.0, 12.0 + (index % 2) * 20.0,
+                                            22.0 + index * 18.0, 60.0 - (index % 4) * 10.0);
+        }
+        canvas_registry.stroke(*canvas);
+    }));
     print_style_statistics(resolver.statistics());
 
     return 0;

@@ -1669,6 +1669,25 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     check((subtree_dirty_flags(*document) & DomDirtyPaint) != 0U, "canvas drawing marks paint dirty");
 }
 
+void javascript_canvas_bezier_curve_to_strokes_path() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><canvas id='canvas' width='16' height='16'></canvas></body>");
+    Node* canvas = find_by_id(*document, "canvas");
+    check(canvas != nullptr, "canvas bezier path node exists");
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 256, 256, 16, 16});
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(registry);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var ctx = document.getElementById('canvas').getContext('2d');"
+        "ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(1, 12);"
+        "ctx.bezierCurveTo(4, 0, 12, 0, 15, 12); ctx.stroke(); 'ok';");
+    check(result.ok && result.value == "ok", "canvas bezierCurveTo script succeeds");
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    check(surface != nullptr && surface->pixels[4 * surface->width + 8].a > 0,
+          "canvas bezierCurveTo script strokes curved middle");
+}
+
 void javascript_canvas_quadratic_curve_to_strokes_path() {
     HtmlParser parser;
     auto document = parser.parse("<body><canvas id='canvas' width='16' height='16'></canvas></body>");
@@ -1825,6 +1844,7 @@ int main() {
         javascript_form_submission_and_form_data_work();
         javascript_canvas_2d_is_optional_and_lazy();
         javascript_canvas_quadratic_curve_to_strokes_path();
+        javascript_canvas_bezier_curve_to_strokes_path();
         javascript_canvas_translate_is_pixel_aligned_and_saved();
         javascript_canvas_radial_gradient_uses_concentric_two_stop_subset();
         javascript_canvas_draw_image_copies_and_scales_canvas_source();
