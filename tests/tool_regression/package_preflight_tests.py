@@ -391,6 +391,32 @@ class PackagePreflightTests(unittest.TestCase):
         )
         self.assertTrue(all(warning["code"] == "script-api-deferred" for warning in warnings))
 
+    def test_script_api_diagnostics_warn_for_canvas_apis_outside_subset(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-script-canvas-api-diagnostics-") as directory:
+            root = Path(directory)
+            script = root / "scripts" / "app.js"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                "ctx.getImageData(0, 0, 1, 1);\n"
+                "ctx.createPattern(canvas, 'repeat');\n"
+                "ctx.createConicGradient(0, 0, 0);\n"
+                "createImageBitmap(blob);\n"
+                "var image = new Image();\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics(
+                {"capabilities": ["graphics.canvas2d"]}, resources)
+
+        self.assertEqual(diagnostics["entryCount"], 3)
+        self.assertEqual(diagnostics["missingCapabilityCount"], 0)
+        self.assertEqual(diagnostics["warningCount"], 3)
+        self.assertEqual(
+            sorted(warning["api"] for warning in warnings),
+            ["Canvas ImageData", "Canvas pattern/conic gradient", "browser Canvas image source"],
+        )
+        self.assertTrue(all(warning["code"] == "script-canvas-api-deferred" for warning in warnings))
+
     def test_script_api_diagnostics_accept_simple_query_selector_subset(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-script-query-selector-diagnostics-") as directory:
             root = Path(directory)

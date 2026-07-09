@@ -608,6 +608,12 @@ ADVICE_BY_CODE = {
         "explanation": "The script references a browser API that is documented as deferred in the current JellyFrame JavaScript subset.",
         "action": "Use the documented V0 substitute when one exists, or move this behavior behind a desktop build step or future host/runtime capability.",
     },
+    "script-canvas-api-deferred": {
+        "title": "Canvas API is outside the bounded subset",
+        "explanation": "The app uses Canvas pixel readback, pattern/conic-gradient, or browser image-source behavior that would add unbounded memory, decode or raster work.",
+        "action": "Use Canvas paths, linear/radial gradients, or canvas-to-canvas drawImage(). For package images, use the documented host image path instead of ImageBitmap/ImageData.",
+        "recipe": "app_author_capability_table.md#canvas-2d",
+    },
     "script-api-subset": {
         "title": "JavaScript API uses only a JellyFrame subset",
         "explanation": "The script references a Web API that exists in JellyFrame, but not with full browser semantics.",

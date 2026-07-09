@@ -893,6 +893,24 @@ SCRIPT_API_USAGE_WARNINGS = [
         "pattern": re.compile(r"\bserviceWorker\b"),
         "message": "script uses serviceWorker, which is not part of the JellyFrame app runtime or install/update model",
     },
+    {
+        "api": "Canvas ImageData",
+        "code": "script-canvas-api-deferred",
+        "pattern": re.compile(r"\b(?:getImageData|putImageData|createImageData)\s*\("),
+        "message": "script uses Canvas ImageData APIs, which are deferred because pixel readback/allocation is outside the bounded Canvas subset",
+    },
+    {
+        "api": "Canvas pattern/conic gradient",
+        "code": "script-canvas-api-deferred",
+        "pattern": re.compile(r"\b(?:createPattern|createConicGradient)\s*\("),
+        "message": "script uses a Canvas pattern or conic-gradient API, which is outside the bounded Canvas subset; use supported linear/radial gradients or a package-local image",
+    },
+    {
+        "api": "browser Canvas image source",
+        "code": "script-canvas-api-deferred",
+        "pattern": re.compile(r"\b(?:createImageBitmap|ImageBitmap|new\s+Image)\b"),
+        "message": "script uses a browser image source for Canvas, which is deferred; drawImage() currently accepts an already allocated canvas source only",
+    },
 ]
 
 
