@@ -35,11 +35,10 @@
   }
   sourceCtx.stroke();
 
-  sourceCtx.save();
   sourceCtx.translate(3, 2);
   sourceCtx.fillStyle = "#f7fff6";
   sourceCtx.fillRect(0, 0, 4, 4);
-  sourceCtx.restore();
+  sourceCtx.resetTransform();
 
   ctx.clearRect(0, 0, 220, 96);
   var glow = ctx.createRadialGradient(110, 48, 6, 110, 48, 118);

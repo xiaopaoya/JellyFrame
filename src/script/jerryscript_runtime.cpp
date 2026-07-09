@@ -4005,6 +4005,17 @@ jerry_value_t canvas_translate(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t canvas_reset_transform(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t[],
+                                     const jerry_length_t) {
+    Node* node = nullptr;
+    Canvas2DRegistry* registry = canvas_registry_for(call_info_p->this_value, node);
+    if (registry != nullptr && node != nullptr) {
+        registry->reset_transform(*node);
+    }
+    return jerry_undefined();
+}
+
 jerry_value_t canvas_arc(const jerry_call_info_t* call_info_p,
                          const jerry_value_t args_p[],
                          const jerry_length_t args_count) {
@@ -4144,6 +4155,7 @@ jerry_value_t make_canvas_2d_context(JerryScriptRuntime& runtime, Node& node) {
     set_method(object.get(), "quadraticCurveTo", canvas_quadratic_curve_to);
     set_method(object.get(), "bezierCurveTo", canvas_bezier_curve_to);
     set_method(object.get(), "translate", canvas_translate);
+    set_method(object.get(), "resetTransform", canvas_reset_transform);
     set_method(object.get(), "arc", canvas_arc);
     set_method(object.get(), "closePath", canvas_close_path);
     set_method(object.get(), "fill", canvas_fill);

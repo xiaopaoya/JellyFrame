@@ -351,6 +351,17 @@ void bezier_curve_to_generates_bounded_smooth_path() {
     assert(!limited.bezier_curve_to(*limited_canvas, 4.0, 0.0, 12.0, 0.0, 15.0, 12.0));
 }
 
+void reset_transform_clears_pixel_aligned_translation() {
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    auto canvas = make_element("canvas");
+    assert(registry.set_fill_style(*canvas, "#ff0000"));
+    assert(registry.translate(*canvas, 3.0, 2.0));
+    assert(registry.reset_transform(*canvas));
+    assert(registry.fill_rect(*canvas, 0, 0, 1, 1));
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    assert(surface != nullptr && surface->pixels[0].r == 255);
+}
+
 void quadratic_curve_to_generates_bounded_smooth_path() {
     Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 256, 256, 16, 16});
     auto canvas = make_element("canvas");
@@ -495,6 +506,7 @@ int main() {
     fill_path_fills_closed_polygon();
     linear_gradient_fills_rect_and_is_budgeted();
     translate_offsets_drawing_and_restore_resets_offset();
+    reset_transform_clears_pixel_aligned_translation();
     quadratic_curve_to_generates_bounded_smooth_path();
     bezier_curve_to_generates_bounded_smooth_path();
     radial_gradient_fills_rect_with_two_stop_concentric_subset();

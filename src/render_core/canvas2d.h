@@ -116,6 +116,7 @@ public:
     bool set_global_alpha(Node& node, double value);
     bool set_font(Node& node, std::string_view value);
     bool translate(Node& node, double x, double y);
+    bool reset_transform(Node& node);
     Color fill_style(const Node& node) const;
     Color stroke_style(const Node& node) const;
     int line_width(const Node& node) const;

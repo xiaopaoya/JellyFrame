@@ -867,6 +867,16 @@ bool Canvas2DRegistry::translate(Node& node, double x, double y) {
     return true;
 }
 
+bool Canvas2DRegistry::reset_transform(Node& node) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr) {
+        return false;
+    }
+    surface->state.translate_x = 0;
+    surface->state.translate_y = 0;
+    return true;
+}
+
 Color Canvas2DRegistry::fill_style(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
     return surface != nullptr ? surface->state.fill_style.color : Color{0, 0, 0, 255};

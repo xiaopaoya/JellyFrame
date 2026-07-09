@@ -1707,6 +1707,23 @@ void javascript_canvas_quadratic_curve_to_strokes_path() {
           "canvas quadraticCurveTo script strokes curved middle");
 }
 
+void javascript_canvas_reset_transform_clears_translation() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><canvas id='canvas' width='8' height='8'></canvas></body>");
+    Node* canvas = find_by_id(*document, "canvas");
+    check(canvas != nullptr, "canvas reset transform node exists");
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(registry);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var ctx = document.getElementById('canvas').getContext('2d');"
+        "ctx.fillStyle = '#ff0000'; ctx.translate(3, 2); ctx.resetTransform(); ctx.fillRect(0, 0, 1, 1); 'ok';");
+    check(result.ok && result.value == "ok", "canvas resetTransform script succeeds");
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    check(surface != nullptr && surface->pixels[0].r == 255, "canvas resetTransform clears translation");
+}
+
 void javascript_canvas_translate_is_pixel_aligned_and_saved() {
     HtmlParser parser;
     auto document = parser.parse("<body><canvas id='canvas' width='8' height='8'></canvas></body>");
@@ -1846,6 +1863,7 @@ int main() {
         javascript_canvas_quadratic_curve_to_strokes_path();
         javascript_canvas_bezier_curve_to_strokes_path();
         javascript_canvas_translate_is_pixel_aligned_and_saved();
+        javascript_canvas_reset_transform_clears_translation();
         javascript_canvas_radial_gradient_uses_concentric_two_stop_subset();
         javascript_canvas_draw_image_copies_and_scales_canvas_source();
     } catch (const std::exception& error) {
