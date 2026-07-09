@@ -30,6 +30,8 @@ python tools\benchmark_guard.py --build-dir build\Release --report build\benchma
 `doctor` is the broad repository smoke check for trial users. It validates every
 complete sample package, runs the render-core preflight path over common
 wearable targets and leaves JSON reports under `build/doctor_reports`.
+Use `--sample name` or `--exclude-sample name` when you only want a focused
+subset; both options may be repeated or passed comma-separated names.
 
 Use `--runtime-log` to merge Win32 frame-script/capture counters into a package
 report, and `--port-telemetry` to merge real board data such as frame time, DMA

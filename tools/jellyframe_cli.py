@@ -2302,6 +2302,34 @@ def sample_package_roots(samples_dir: Path) -> list[Path]:
     return roots
 
 
+def parse_sample_name_filters(values: list[str] | None) -> list[str]:
+    names: list[str] = []
+    for value in values or []:
+        for item in str(value).split(","):
+            name = item.strip()
+            if name and name not in names:
+                names.append(name)
+    return names
+
+
+def filter_sample_roots(roots: list[Path],
+                        include_values: list[str] | None,
+                        exclude_values: list[str] | None) -> list[Path]:
+    include_names = parse_sample_name_filters(include_values)
+    exclude_names = set(parse_sample_name_filters(exclude_values))
+    by_name = {root.name: root for root in roots}
+    if include_names:
+        missing = [name for name in include_names if name not in by_name]
+        if missing:
+            raise SystemExit("unknown sample package(s): " + ", ".join(missing))
+        selected = [by_name[name] for name in include_names if name not in exclude_names]
+    else:
+        selected = [root for root in roots if root.name not in exclude_names]
+    if not selected:
+        raise SystemExit("no sample packages selected")
+    return selected
+
+
 def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> dict:
     errors, warnings, infos = diagnostic_status_from_report(report_path)
     report = load_json_if_exists(report_path)
@@ -2356,6 +2384,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     roots = sample_package_roots(args.samples_dir)
     if not roots:
         raise SystemExit(f"no sample packages found in {args.samples_dir}")
+    roots = filter_sample_roots(roots,
+                                getattr(args, "sample", None),
+                                getattr(args, "exclude_sample", None))
     args.report_dir.mkdir(parents=True, exist_ok=True)
     print(
         "JellyFrame doctor: "
@@ -2725,6 +2756,10 @@ def main() -> int:
                         help="Directory containing source-package samples.")
     doctor.add_argument("--report-dir", default=repo_root() / "build" / "doctor_reports", type=Path,
                         help="Directory for per-sample JSON reports.")
+    doctor.add_argument("--sample", action="append",
+                        help="Only check named sample package(s). May be repeated or comma-separated.")
+    doctor.add_argument("--exclude-sample", action="append",
+                        help="Skip named sample package(s). May be repeated or comma-separated.")
     doctor.add_argument("--target", help="Primary target preset id passed to package diagnostics.")
     doctor.add_argument("--targets", default="round-300,rect-320x240,rect-172x320",
                         help="Comma-separated responsive target preset ids.")

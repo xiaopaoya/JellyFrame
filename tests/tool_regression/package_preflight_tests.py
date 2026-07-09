@@ -1037,6 +1037,28 @@ class PackagePreflightTests(unittest.TestCase):
         Args.targets = "round-300, rect-320x240,round-300"
         self.assertEqual(jellyframe_cli.requested_targets(Args()), ["round-300", "rect-320x240"])
 
+    def test_doctor_sample_filters_are_explicit_and_stable(self):
+        roots = [
+            Path("samples/apps/packages/jelly_controls"),
+            Path("samples/apps/packages/watch_weather"),
+            Path("samples/apps/packages/jelly_motion_lab"),
+        ]
+
+        selected = jellyframe_cli.filter_sample_roots(
+            roots,
+            ["watch_weather,jelly_controls"],
+            ["jelly_controls"],
+        )
+        self.assertEqual([root.name for root in selected], ["watch_weather"])
+
+        selected = jellyframe_cli.filter_sample_roots(roots, None, ["jelly_motion_lab"])
+        self.assertEqual([root.name for root in selected], ["jelly_controls", "watch_weather"])
+
+        with self.assertRaises(SystemExit):
+            jellyframe_cli.filter_sample_roots(roots, ["missing"], None)
+        with self.assertRaises(SystemExit):
+            jellyframe_cli.filter_sample_roots(roots, None, ["jelly_controls,watch_weather,jelly_motion_lab"])
+
     def test_font_family_usage_matches_manifest_fonts(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-font-family-") as directory:
             root = Path(directory)
