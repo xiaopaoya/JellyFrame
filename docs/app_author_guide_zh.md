@@ -177,6 +177,11 @@ body {
 | `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |
 | `style-property-unsupported` | CSS 属性不在支持子集。 | 换成文档化属性，或用 Canvas/资源图表达效果。 |
+| `html-node-limit` / `html-depth-limit` / `html-attribute-limit` | 解析的 markup 超过有界 DOM budget，后续节点、后代或属性被丢弃。 | 扁平化过多 wrapper，长列表做虚拟化，状态只保留在少量属性中。只有获得实机内存数据后再提高 DOM budget。 |
+| `css-rule-limit` / `css-declaration-limit` | CSS parser 跳过了后续 rule、selector 项、keyframe 或 declaration。 | 合并重复规则，移除未使用变体，拆分过大的规则；提高 parser budget 前先测量 style 成本。 |
+| `layout-box-limit` / `layout-depth-limit` / `render-object-limit` | 可见层级的一部分在 layout 或 rendering 前被跳过。 | 减少可见嵌套和重复控件；优先虚拟化列表，而不是盲目提高结构性 budget。 |
+| `layer-limit` / `display-command-limit` | layer 或 paint command 生成到达上限，可能降低保真度或省略绘制。 | 减少重叠、clip、shadow、gradient 与重复装饰；composited motion 保持在少量元素上。 |
+| `resource-budget-exceeded` / `font-budget-exceeded` | 总 package resource 或 runtime font supplement 超过配置 budget。 | 压缩/移除资源，subset `.jffont` glyph 和未使用的 weight；提高上限前先测量 flash/RAM。 |
 | `css-animation-layout-property` | 关键帧改变了尺寸、位置、间距或其他 layout 属性。 | 在固定尺寸图层上动画 `transform` 或 `opacity`；真正的布局改变应做成离散 app state。 |
 | `css-animation-timing-function-unsupported` | 样式表使用了参数化或阶梯式 easing。 | 使用 `linear`、`ease`、`ease-in`、`ease-out` 或 `ease-in-out`。 |
 | `css-animation-keyframe-property-unsupported` | 关键帧目标属性不在低成本动画子集内。 | 关键帧只使用 `opacity`、`transform`、`color`、`background` 或 `background-color`。 |
