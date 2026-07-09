@@ -1,14 +1,15 @@
 # Service Status
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 Small runtime-service sample for optional data, media and location service
 boundaries.
 
-It declares network, storage, audio playback and location capabilities, then uses
-`backgroundServices` to express which work may continue while the app is
-suspended or the screen is off. The manifest is only an intent signal: the host
-profile still decides which background activity is allowed on a given device.
+It declares network, storage, audio playback, location and semantic sensor
+capabilities, then uses `backgroundServices` to express which work may continue
+while the app is suspended or the screen is off. The manifest is only an intent
+signal: the host profile still decides which background activity is allowed on a
+given device.
 
 The page uses only local HTML/CSS/JS. It reads `navigator.onLine` and
 `document.hidden`, requests `/data/service-status.json` through
@@ -26,7 +27,8 @@ Deterministic Win32 validation:
 ```
 
 The capture summary should include non-zero network/location host completions,
-system events handled by script and `service_activity` counters. In the bundled
-script, network activity stops while the screen is hidden, audio remains
-allowed, and sensors/location are throttled during screen-off or low-power
-frames.
+system events handled by script, filtered `host_data` location/sensor summaries
+and `service_activity` counters. In the bundled script, network activity stops
+while the screen is hidden, audio remains allowed, and sensors/location are
+throttled during screen-off or low-power frames. Sensor summary injection is a
+Win32 host-data validation path, not an app-visible JavaScript sensor API.

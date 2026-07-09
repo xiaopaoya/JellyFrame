@@ -61,9 +61,10 @@ JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来�
 `event FRAME time-ms VALUE` 可为依赖 `Date.now()` 的表盘、计时器和天气样例注入确定性宿主时间。
 这是壳层调试命令，不是 app 可见语法。
 
-`event FRAME battery PERCENT CHARGING`、`event FRAME weather TEMP_C_X10 CONDITION`
-和 `event FRAME activity STEPS ACTIVE_MINUTES` 可在 Win32 capture 中验证 host-data snapshot
-路径。它们只更新壳层过滤后的 debug summary，不暴露 JavaScript API。
+`event FRAME battery PERCENT CHARGING`、`event FRAME weather TEMP_C_X10 CONDITION`、
+`event FRAME activity STEPS ACTIVE_MINUTES`、`event FRAME location LATITUDE LONGITUDE ACCURACY_M`
+和 `event FRAME sensor KIND VALUE [Y Z]` 可在 Win32 capture 中验证 host-data snapshot 路径。
+它们只更新壳层过滤后的 debug summary，不暴露 JavaScript API。
 
 `script-watchdog-checks N`、`script-watchdog-interval N` 和
 `require-script-watchdog` 只用于 Win32/scripted recovery 验收。它们映射到宿主的脚本执行预算，

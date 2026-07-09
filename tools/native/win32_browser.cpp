@@ -448,11 +448,20 @@ enum class ScriptedFrameEventKind {
     Battery,
     Weather,
     Activity,
+    Location,
+    Sensor,
     PointerMove,
     PointerDown,
     PointerUp,
     Click,
     Wheel,
+};
+
+enum class ScriptedHostSensorKind {
+    Accelerometer,
+    Gyroscope,
+    HeartRate,
+    AmbientLight,
 };
 
 struct ScriptedFrameEvent {
@@ -462,7 +471,13 @@ struct ScriptedFrameEvent {
     int y = 0;
     int delta_y = 0;
     std::uint64_t value = 0;
+    double latitude = 0.0;
+    double longitude = 0.0;
+    float scalar = 0.0f;
+    float sensor_y = 0.0f;
+    float sensor_z = 0.0f;
     AppWeatherCondition weather_condition = AppWeatherCondition::Unknown;
+    ScriptedHostSensorKind sensor_kind = ScriptedHostSensorKind::Accelerometer;
 };
 
 struct ParsedFrameEvent {
@@ -2120,6 +2135,30 @@ bool parse_u64_token(const std::string& value, std::uint64_t& out) {
     }
 }
 
+bool parse_double_token(const std::string& value, double& out) {
+    if (value.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    const double parsed = std::strtod(value.c_str(), &end);
+    if (end == value.c_str() || end == nullptr || *end != '\0' || !std::isfinite(parsed)) {
+        return false;
+    }
+    out = parsed;
+    return true;
+}
+
+bool parse_float_token(const std::string& value, float& out) {
+    double parsed = 0.0;
+    if (!parse_double_token(value, parsed) ||
+        parsed < -static_cast<double>(std::numeric_limits<float>::max()) ||
+        parsed > static_cast<double>(std::numeric_limits<float>::max())) {
+        return false;
+    }
+    out = static_cast<float>(parsed);
+    return true;
+}
+
 bool parse_int_option(const char* option, const char* value, int min_value, int max_value, int& out) {
     int parsed = 0;
     if (!parse_int_token(value, parsed) || parsed < min_value || parsed > max_value) {
@@ -2195,6 +2234,22 @@ bool parse_weather_condition_token(const std::string& value, AppWeatherCondition
         out = AppWeatherCondition::Storm;
     } else if (key == "fog") {
         out = AppWeatherCondition::Fog;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool parse_sensor_kind_token(const std::string& value, ScriptedHostSensorKind& out) {
+    const std::string key = ascii_lowercase_local(value);
+    if (key == "accelerometer") {
+        out = ScriptedHostSensorKind::Accelerometer;
+    } else if (key == "gyroscope") {
+        out = ScriptedHostSensorKind::Gyroscope;
+    } else if (key == "heart-rate" || key == "heartrate") {
+        out = ScriptedHostSensorKind::HeartRate;
+    } else if (key == "ambient-light" || key == "ambientlight") {
+        out = ScriptedHostSensorKind::AmbientLight;
     } else {
         return false;
     }
@@ -2287,6 +2342,56 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
         }
         if (!parse_int_token(fields[3], parsed.event.y) || parsed.event.y < 0) {
             parsed.error = "activity minutes must be a non-negative integer";
+            return parsed;
+        }
+    } else if (kind == "location") {
+        if (fields.size() != 5) {
+            parsed.error = "location events require FRAME:location:LATITUDE:LONGITUDE:ACCURACY_M";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::Location;
+        if (!parse_double_token(fields[2], parsed.event.latitude) ||
+            parsed.event.latitude < -90.0 || parsed.event.latitude > 90.0) {
+            parsed.error = "location latitude must be a number in [-90, 90]";
+            return parsed;
+        }
+        if (!parse_double_token(fields[3], parsed.event.longitude) ||
+            parsed.event.longitude < -180.0 || parsed.event.longitude > 180.0) {
+            parsed.error = "location longitude must be a number in [-180, 180]";
+            return parsed;
+        }
+        if (!parse_float_token(fields[4], parsed.event.scalar) || parsed.event.scalar < 0.0f) {
+            parsed.error = "location accuracy must be a non-negative number";
+            return parsed;
+        }
+    } else if (kind == "sensor") {
+        if (fields.size() < 4) {
+            parsed.error = "sensor events require FRAME:sensor:KIND:VALUE[:Y:Z]";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::Sensor;
+        if (!parse_sensor_kind_token(fields[2], parsed.event.sensor_kind)) {
+            parsed.error = "sensor kind must be accelerometer, gyroscope, heart-rate or ambient-light";
+            return parsed;
+        }
+        const bool vector_sensor = parsed.event.sensor_kind == ScriptedHostSensorKind::Accelerometer ||
+            parsed.event.sensor_kind == ScriptedHostSensorKind::Gyroscope;
+        if (vector_sensor && fields.size() != 6) {
+            parsed.error = "accelerometer and gyroscope events require FRAME:sensor:KIND:X:Y:Z";
+            return parsed;
+        }
+        if (!vector_sensor && fields.size() != 4) {
+            parsed.error = "heart-rate and ambient-light events require FRAME:sensor:KIND:VALUE";
+            return parsed;
+        }
+        if (!parse_float_token(fields[3], parsed.event.scalar)) {
+            parsed.error = "sensor value must be a number";
+            return parsed;
+        }
+        if (vector_sensor &&
+            (!parse_float_token(fields[4], parsed.event.sensor_y) ||
+             !parse_float_token(fields[5], parsed.event.sensor_z))) {
+            parsed.error = "sensor vector y and z must be numbers";
             return parsed;
         }
     } else if (kind == "pointer-move" || kind == "pointer-down" ||
@@ -2513,12 +2618,12 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
             std::string event_spec;
             if (fields.size() == 2) {
                 event_spec = fields[1];
-            } else if (fields.size() >= 3 && fields.size() <= 6) {
+            } else if (fields.size() >= 3 && fields.size() <= 7) {
                 event_spec = event_spec_from_fields(fields);
             } else {
                 std::ostringstream message;
                 message << path << ':' << line_number
-                        << ": event expects FRAME:kind[:x:y[:delta]] or FRAME kind [x y [delta]]";
+                        << ": event expects FRAME:kind[:args...] or FRAME kind [args...]";
                 error = message.str();
                 return false;
             }
@@ -2570,7 +2675,8 @@ void print_win32_browser_usage(std::ostream& output) {
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
         << "                                 pointer-up, wheel, network-online/offline,\n"
         << "                                 screen-visible/hidden, low-power-on/off,\n"
-        << "                                 time-ms, battery, weather, activity.\n"
+        << "                                 time-ms, battery, weather, activity,\n"
+        << "                                 location, sensor.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
         << "  --use-app-fonts                Use package .jffont resources when available.\n"
@@ -2598,7 +2704,9 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  event FRAME:time-ms:VALUE | event FRAME time-ms VALUE\n"
         << "  event FRAME battery PERCENT CHARGING\n"
         << "  event FRAME weather TEMP_C_X10 CONDITION\n"
-        << "  event FRAME activity STEPS ACTIVE_MINUTES\n";
+        << "  event FRAME activity STEPS ACTIVE_MINUTES\n"
+        << "  event FRAME location LATITUDE LONGITUDE ACCURACY_M\n"
+        << "  event FRAME sensor KIND VALUE [Y Z]\n";
 }
 
 const Node* find_first_element(const Node& node, const char* tag_name) {
@@ -3373,7 +3481,19 @@ public:
                   << " temp_x10=" << host_data.weather.temperature_c_x10
                   << " activity=" << (host_data.has.activity ? "yes" : "no")
                   << " steps=" << host_data.activity.steps
-                  << " minutes=" << host_data.activity.active_minutes << '\n';
+                  << " minutes=" << host_data.activity.active_minutes
+                  << " location=" << (host_data.has.location ? "yes" : "no")
+                  << " lat=" << host_data.location.latitude
+                  << " lon=" << host_data.location.longitude
+                  << " accuracy_m=" << host_data.location.accuracy_m
+                  << " accelerometer=" << (host_data.has.accelerometer ? "yes" : "no")
+                  << " accel_x=" << host_data.sensors.accelerometer_x
+                  << " gyroscope=" << (host_data.has.gyroscope ? "yes" : "no")
+                  << " gyro_x=" << host_data.sensors.gyroscope_x
+                  << " heart_rate=" << (host_data.has.heart_rate ? "yes" : "no")
+                  << " bpm=" << host_data.sensors.heart_rate_bpm
+                  << " ambient_light=" << (host_data.has.ambient_light ? "yes" : "no")
+                  << " lux=" << host_data.sensors.ambient_light_lux << '\n';
         const AppBudgetSnapshot budget = current_app_budget_snapshot();
         std::cout << "  app_budget instance=" << budget.app_instance_id
                   << " role=" << app_role_name(budget.role)
@@ -3484,6 +3604,10 @@ private:
     Canvas2DRegistry debug_canvas_{Canvas2DPolicy{true, 4, 300 * 300, 300 * 300, 300, 150}};
     AppLocationSnapshotMock debug_location_{AppLocationSnapshotPolicy{false, 2}};
     bool debug_location_enabled_ = false;
+    bool debug_sensor_accelerometer_enabled_ = false;
+    bool debug_sensor_gyroscope_enabled_ = false;
+    bool debug_sensor_heart_rate_enabled_ = false;
+    bool debug_sensor_ambient_light_enabled_ = false;
     AppHostDataSnapshot debug_host_data_;
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_, &debug_canvas_};
@@ -3581,6 +3705,40 @@ private:
                 debug_host_data_.activity.timestamp_ms = current_time_ms();
                 debug_host_data_.activity.steps = static_cast<std::uint32_t>(event.x);
                 debug_host_data_.activity.active_minutes = static_cast<std::uint32_t>(event.y);
+                break;
+            case ScriptedFrameEventKind::Location:
+                debug_host_data_.has.location = true;
+                debug_host_data_.location.timestamp_ms = current_time_ms();
+                debug_host_data_.location.latitude = event.latitude;
+                debug_host_data_.location.longitude = event.longitude;
+                debug_host_data_.location.accuracy_m = event.scalar;
+                debug_location_.set_fixture(AppLocationSnapshotFixture{
+                    current_time_ms(), event.latitude, event.longitude, event.scalar, 0.0f, 0.0f});
+                break;
+            case ScriptedFrameEventKind::Sensor:
+                debug_host_data_.sensors.timestamp_ms = current_time_ms();
+                switch (event.sensor_kind) {
+                case ScriptedHostSensorKind::Accelerometer:
+                    debug_host_data_.has.accelerometer = true;
+                    debug_host_data_.sensors.accelerometer_x = event.scalar;
+                    debug_host_data_.sensors.accelerometer_y = event.sensor_y;
+                    debug_host_data_.sensors.accelerometer_z = event.sensor_z;
+                    break;
+                case ScriptedHostSensorKind::Gyroscope:
+                    debug_host_data_.has.gyroscope = true;
+                    debug_host_data_.sensors.gyroscope_x = event.scalar;
+                    debug_host_data_.sensors.gyroscope_y = event.sensor_y;
+                    debug_host_data_.sensors.gyroscope_z = event.sensor_z;
+                    break;
+                case ScriptedHostSensorKind::HeartRate:
+                    debug_host_data_.has.heart_rate = true;
+                    debug_host_data_.sensors.heart_rate_bpm = event.scalar;
+                    break;
+                case ScriptedHostSensorKind::AmbientLight:
+                    debug_host_data_.has.ambient_light = true;
+                    debug_host_data_.sensors.ambient_light_lux = event.scalar;
+                    break;
+                }
                 break;
             case ScriptedFrameEventKind::PointerMove:
                 handle_pointer_move(0, pointer_lparam(event.x, event.y));
@@ -3707,6 +3865,10 @@ private:
         policy.weather = true;
         policy.activity = true;
         policy.services.location_position = debug_location_enabled_;
+        policy.services.sensor_accelerometer = debug_sensor_accelerometer_enabled_;
+        policy.services.sensor_gyroscope = debug_sensor_gyroscope_enabled_;
+        policy.services.sensor_heart_rate = debug_sensor_heart_rate_enabled_;
+        policy.services.sensor_ambient_light = debug_sensor_ambient_light_enabled_;
         return policy;
     }
 
@@ -4333,6 +4495,10 @@ private:
                 ? background_policy_from_manifest(page.package_manifest)
                 : AppBackgroundServicePolicy{};
             debug_location_enabled_ = page.package_mode && page.package_manifest.location_position_allowed;
+            debug_sensor_accelerometer_enabled_ = page.package_mode && page.package_manifest.sensor_accelerometer_allowed;
+            debug_sensor_gyroscope_enabled_ = page.package_mode && page.package_manifest.sensor_gyroscope_allowed;
+            debug_sensor_heart_rate_enabled_ = page.package_mode && page.package_manifest.sensor_heart_rate_allowed;
+            debug_sensor_ambient_light_enabled_ = page.package_mode && page.package_manifest.sensor_ambient_light_allowed;
             debug_location_.set_policy(AppLocationSnapshotPolicy{debug_location_enabled_, 2});
             if (page.package_mode) {
                 add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_);

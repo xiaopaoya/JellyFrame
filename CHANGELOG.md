@@ -102,9 +102,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   boundary for fixed-size battery, weather, activity, location and sensor
   summaries. The filter strips every field by default and is not a JavaScript
   API yet.
-- Win32 frame scripts can now inject debug host-data summaries with
-  `battery`, `weather` and `activity` events, and frame capture reports the
-  filtered `host_data` line for system-shell and future runtime-data validation.
+- Win32 frame scripts can now inject debug host-data summaries with `battery`,
+  `weather`, `activity`, `location` and `sensor` events, and frame capture
+  reports the filtered `host_data` line for system-shell and future runtime-data
+  validation.
 - Added `tools/benchmark_guard.py`, a broad CI smoke guard for render-core and
   app-runtime microbenchmarks. CI now checks style/custom-property resolution,
   full pipeline, dirty-rect replay, scroll-blit planning, Canvas 2D path and

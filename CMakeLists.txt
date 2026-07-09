@@ -410,6 +410,16 @@ if(JELLYFRAME_BUILD_TESTS)
                 "service_activity network=18 audio=36 sensors=16 location=16 pause_audio=0 throttle_sensors=20 throttle_location=20")
 
         add_test(
+            NAME jellyframe_win32_service_status_host_data_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status/capture_system_events.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_service_status_host_data_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "host_data battery=yes percent=88 charging=1 weather=rain temp_x10=213 activity=yes steps=6400 minutes=32 location=yes lat=31\\.2304 lon=121\\.474 accuracy_m=8 accelerometer=yes accel_x=0\\.1 gyroscope=no gyro_x=0 heart_rate=yes bpm=72 ambient_light=no lux=0")
+
+        add_test(
             NAME jellyframe_win32_scroll_probe_frame_script
             COMMAND $<TARGET_FILE:jellyframe_win32_browser>
                     --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_probe

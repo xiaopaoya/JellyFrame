@@ -1,6 +1,6 @@
 # Runtime Data API 规划
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 本文定义可选 runtime data services 如何暴露给 JavaScript。面向用户的语法应尽量保持为 Web 平台 API
 的文档化子集，避免 app 作者学习 JellyFrame 专用的数据 API。
@@ -136,8 +136,8 @@ V0 支持面应限制在：
 battery、weather、activity、location 和 sensor。V0 中它刻意不暴露给 JavaScript；宿主可用于
 system shell 状态、diagnostics 或未来产品 profile binding。任何 app 可见 surface 出现前，都必须先经过
 `AppHostDataAccessPolicy` 过滤。
-Win32 壳可通过 frame script 注入 debug battery/weather/activity summary，并在 capture 输出中打印过滤后的
-`host_data` 摘要。
+Win32 壳可通过 frame script 注入 debug battery/weather/activity/location/sensor summary，并在
+capture 输出中打印过滤后的 `host_data` 摘要。
 
 V0 app 可见映射：
 

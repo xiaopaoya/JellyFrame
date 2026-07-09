@@ -18,6 +18,9 @@ event 8 battery 88 1
 event 10 weather 213 rain
 event 12 screen-hidden
 event 14 activity 6400 32
+event 16 location 31.2304 121.4737 8
+event 17 sensor accelerometer 0.1 0.0 9.8
+event 18 sensor heart-rate 72
 event 18 low-power-on
 event 24 network-online
 event 30 screen-visible

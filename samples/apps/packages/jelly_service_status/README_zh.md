@@ -1,11 +1,11 @@
 # Service Status
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0-dev
 
 用于验证可选数据、媒体和定位服务边界的小型 runtime 示例。
 
-它声明网络、存储、音频播放和定位能力，并通过 `backgroundServices` 表达 app 在
-suspended 或 screen-off 状态下希望继续哪些后台活动。manifest 只表示意图；
+它声明网络、存储、音频播放、定位和语义传感器能力，并通过 `backgroundServices` 表达
+app 在 suspended 或 screen-off 状态下希望继续哪些后台活动。manifest 只表示意图；
 真实设备上仍必须由宿主 profile 决定是否批准。
 
 页面只使用本地 HTML/CSS/JS。它读取 `navigator.onLine` 和 `document.hidden`，
@@ -21,6 +21,8 @@ suspended 或 screen-off 状态下希望继续哪些后台活动。manifest 只�
   --frame-script samples\apps\packages\jelly_service_status\capture_system_events.jfcapture
 ```
 
-capture 汇总中应能看到非零 network/location host completion、脚本处理的 system event，以及
-`service_activity` 计数。这个脚本里，screen hidden 期间 network 会按 manifest 策略停止，
-audio 继续允许，sensors/location 会在息屏或低功耗帧中被节流。
+capture 汇总中应能看到非零 network/location host completion、脚本处理的 system event、
+过滤后的 `host_data` location/sensor 摘要，以及 `service_activity` 计数。这个脚本里，
+screen hidden 期间 network 会按 manifest 策略停止，audio 继续允许，sensors/location 会在
+息屏或低功耗帧中被节流。Sensor summary 注入只是 Win32 host-data 验收路径，不代表 app 已有
+JavaScript sensor API。

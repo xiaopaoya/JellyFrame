@@ -1,6 +1,6 @@
 # Runtime Data API Plan
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 This document defines how optional runtime data services are exposed to
 JavaScript. User-facing syntax should stay a documented subset of Web platform
@@ -161,8 +161,9 @@ summary for battery, weather, activity, location and sensors. It is deliberately
 not exposed to JavaScript in V0. Hosts may use it for system shell state,
 diagnostics or future product-profile bindings, and must pass it through
 `AppHostDataAccessPolicy` before any app-visible surface is added.
-The Win32 shell can inject debug battery/weather/activity summaries through
-frame scripts and prints the filtered `host_data` summary in capture output.
+The Win32 shell can inject debug battery/weather/activity/location/sensor
+summaries through frame scripts and prints the filtered `host_data` summary in
+capture output.
 
 V0 app-visible mapping:
 
