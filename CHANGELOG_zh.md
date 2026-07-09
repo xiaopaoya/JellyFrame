@@ -58,6 +58,8 @@ JellyFrame Engine 的重要变更记录在这里。
   因此新增诊断即使还没有专属 advice 模板，也能告诉 app 作者从哪里开始排查。
 - `visual-vertical-paint-overflow` 现在会在能归因到真实 layout box 时输出可能的 node/path 以及
   上下越界 metrics，与现有横向溢出定位口径一致。
+- `developerAdvice[]` 现在会把结构化的文本溢出、scroll container、横向/纵向绘制溢出诊断
+  转成更具体的修复动作，直接指出可能的元素/文本和像素越界量，而不是只重复 diagnostic code。
 - `jellyframe_cli.py doctor` 新增 `--sample` 和 `--exclude-sample`，便于试用者或维护者只运行
   某个样例子集，同时不改变默认全样例健康检查。
 - `jelly_component_recipes` 示例新增确定性的 Win32 滚动 capture 脚本，CTest 会验证该示例的

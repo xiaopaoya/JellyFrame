@@ -872,6 +872,33 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(sample["metrics"]["boxTop"], -10)
         self.assertEqual(sample["metrics"]["boxOverflowTop"], 10)
 
+    def test_developer_advice_uses_structured_visual_metrics(self):
+        report = {
+            "responsiveProfiles": [{
+                "target": "round-300",
+                "diagnosticSamples": [{
+                    "stage": "layout",
+                    "severity": "warning",
+                    "code": "visual-vertical-paint-overflow",
+                    "detail": "paintBounds=(8,-10)-(38,20) contentHeight=300 node=\"div.up\" path=\"body:nth-of-type(1)>div.up:nth-of-type(1)\" boxTop=-10 boxBottom=10 boxHeight=20 boxOverflowTop=10 boxOverflowBottom=0",
+                }, {
+                    "stage": "layout",
+                    "severity": "warning",
+                    "code": "layout-text-overflow",
+                    "detail": "text=\"Hourly\" measuredWidth=60 availableWidth=34 contentWidth=34 fontSize=16 node=\"button.tab\" path=\"body:nth-of-type(1)>button.tab:nth-of-type(1)\"",
+                }],
+            }],
+        }
+
+        advice = jellyframe_cli.collect_developer_advice(report)
+        by_code = {entry["code"]: entry for entry in advice}
+
+        self.assertIn("div.up", by_code["visual-vertical-paint-overflow"]["action"])
+        self.assertIn("10px above the viewport", by_code["visual-vertical-paint-overflow"]["action"])
+        self.assertIn("Hourly", by_code["layout-text-overflow"]["action"])
+        self.assertIn("60px", by_code["layout-text-overflow"]["action"])
+        self.assertIn("34px", by_code["layout-text-overflow"]["action"])
+
     def test_write_json_report_adds_developer_advice(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-advice-report-") as directory:
             report_path = Path(directory) / "report.json"

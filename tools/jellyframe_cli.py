@@ -940,6 +940,95 @@ def diagnostic_metrics_from_detail(parsed: dict) -> dict:
     return metrics
 
 
+def detail_location(parsed: dict) -> str:
+    node = str(parsed.get("node", "") or "")
+    path = str(parsed.get("path", "") or "")
+    if node and path:
+        return f"{node} ({path})"
+    return node or path
+
+
+def overflow_phrase(parsed: dict, negative_key: str, positive_key: str,
+                    negative_label: str, positive_label: str) -> str:
+    parts = []
+    negative = parsed.get(negative_key)
+    positive = parsed.get(positive_key)
+    if isinstance(negative, int) and negative > 0:
+        parts.append(f"{negative}px {negative_label}")
+    if isinstance(positive, int) and positive > 0:
+        parts.append(f"{positive}px {positive_label}")
+    return " and ".join(parts)
+
+
+def specialize_developer_advice(entry: dict, code: str, parsed: dict) -> None:
+    location = detail_location(parsed)
+    if code in {"layout-text-overflow", "layout-text-overflow-ellipsis"}:
+        text = str(parsed.get("text", "") or "")
+        measured = parsed.get("measuredWidth")
+        available = parsed.get("availableWidth") or parsed.get("contentWidth")
+        if text and isinstance(measured, int) and isinstance(available, int):
+            entry["action"] = (
+                f'Text "{text}" measures {measured}px but only {available}px is available. '
+                "Shorten the label, reserve more width, reduce font-size, allow wrapping, "
+                "or use a target-specific media rule."
+            )
+        elif location:
+            entry["action"] = (
+                f"Check {location}; its text is wider than the layout box. "
+                "Shorten the label, reserve more width, reduce font-size, allow wrapping, "
+                "or use a target-specific media rule."
+            )
+        return
+
+    if code == "visual-horizontal-overflow":
+        overflow = overflow_phrase(parsed, "boxOverflowLeft", "boxOverflowRight",
+                                   "past the left edge", "past the right edge")
+        if overflow:
+            subject = location or "The likely source element"
+            entry["action"] = (
+                f"{subject} paints {overflow}. Use max-width: 100%, box-sizing: border-box, "
+                "shorter labels, a vertical stack, or an explicit scroll container."
+            )
+        return
+
+    if code == "visual-vertical-paint-overflow":
+        overflow = overflow_phrase(parsed, "boxOverflowTop", "boxOverflowBottom",
+                                   "above the viewport", "below the viewport")
+        if overflow:
+            subject = location or "The likely source element"
+            entry["action"] = (
+                f"{subject} paints {overflow}. Move fixed or absolute elements back inside "
+                "the viewport, reduce vertical spacing, or put long content in an "
+                "overflow: auto container."
+            )
+        return
+
+    if code == "visual-scroll-container":
+        box_height = parsed.get("boxHeight")
+        content_height = parsed.get("contentHeight")
+        overflow_y = parsed.get("overflowY")
+        if isinstance(box_height, int) and isinstance(content_height, int):
+            subject = location or "This scroll container"
+            suffix = f" with {overflow_y}px clipped" if isinstance(overflow_y, int) else ""
+            entry["action"] = (
+                f"{subject} shows {box_height}px of {content_height}px content{suffix}. "
+                "Make sure it is reachable by touch/wheel/key input, keep fixed navigation "
+                "outside it, and verify the target gate allows scroll."
+            )
+        return
+
+    if code == "visual-scroll-needed":
+        content_height = parsed.get("contentHeight")
+        viewport_height = parsed.get("viewportHeight")
+        if isinstance(content_height, int) and isinstance(viewport_height, int):
+            entry["action"] = (
+                f"The page content is {content_height}px tall in a {viewport_height}px target. "
+                "If scrolling is intended, put long content in an explicit overflow: auto "
+                "container and allow scroll in the target gate; otherwise reduce vertical "
+                "padding, card count, or fixed heights."
+            )
+
+
 def ratio_percent(used: int, limit: int) -> int:
     if limit <= 0:
         return 0
@@ -1499,6 +1588,7 @@ def append_developer_advice(advice: list[dict],
         metrics = diagnostic_metrics_from_detail(parsed_detail)
         if metrics:
             entry["metrics"] = metrics
+        specialize_developer_advice(entry, code, parsed_detail)
     advice.append(entry)
 
 

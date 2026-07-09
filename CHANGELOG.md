@@ -85,6 +85,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - `visual-vertical-paint-overflow` diagnostics now include the likely layout box
   node/path and top/bottom overflow metrics when a real layout box caused the
   overflow, matching the existing horizontal-overflow attribution style.
+- `developerAdvice[]` now turns structured text, scroll-container, horizontal
+  and vertical paint-overflow diagnostics into more specific actions that name
+  the likely element/text and pixel overflow instead of only repeating the
+  diagnostic code.
 - `jellyframe_cli.py doctor` now accepts `--sample` and `--exclude-sample` so
   trial users and maintainers can run a focused sample subset without changing
   the default full sample health check.
