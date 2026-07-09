@@ -39,25 +39,27 @@ app-author view of the lower-level diagnostics. Some advice entries include a
 `recipe` field that points at a copyable pattern in
 [app_author_recipes.md](app_author_recipes.md).
 
-If the page feels slow, inspect `performanceSummary` and `performanceAdvice[]`
-next. These fields quantify preflight complexity: DOM/render/layout object
-counts, layer and display-command counts, framebuffer bytes, estimated pipeline
-heap, resource budget use and full-frame present scale. When the pseudo browser
-ran during `check`, the same summary also includes desktop tool-side stage
-timings such as parse, layout, paint and present microseconds. These timings are
-useful attribution, but they are still not device FPS. Use Win32 frame-script
-capture or device telemetry for actual frame time, DMA wait and panel flush
-time. Add `--runtime-log path\to\capture.log` to `check` / `package` for saved
-Win32 logs, or `--port-telemetry path\to\port.log` for real port logs. A port
-log can start as one text line:
+If the page feels slow, inspect `performanceSummary.bottlenecks[]` and
+`performanceAdvice[]` next. These fields quantify preflight complexity:
+DOM/render/layout object counts, layer and display-command counts, framebuffer
+bytes, estimated pipeline heap, resource budget use and full-frame present
+scale. When the pseudo browser ran during `check`, the same summary also
+includes desktop tool-side stage timings such as parse, layout, paint and
+present microseconds. These timings help answer "where did the time go?", but
+they are still not device FPS. Use Win32 frame-script capture or device
+telemetry for actual frame time, DMA wait and panel flush time. Add
+`--runtime-log path\to\capture.log` to `check` / `package` for saved Win32 logs,
+or `--port-telemetry path\to\port.log` for real port logs. A port log can start
+as one text line:
 
 ```text
 port_telemetry frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
 ```
 
-The CLI merges these into `runtimeMetrics` / `portTelemetry` and
-`performanceAdvice[]`, which helps separate page complexity, dirty area, panel
-flush, DMA wait and port-side internal-RAM pressure.
+The CLI merges these into `runtimeMetrics` / `portTelemetry`,
+`performanceSummary.bottlenecks[]` and `performanceAdvice[]`, which helps
+separate page complexity, dirty area, panel flush, DMA wait and port-side
+internal-RAM pressure.
 
 Diagnostic titles and explanations try to reuse Web/CSS vocabulary when it
 matches the failure: parse error, invalid declaration, unsupported value,

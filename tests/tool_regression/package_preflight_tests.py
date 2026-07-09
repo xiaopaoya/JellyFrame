@@ -880,7 +880,11 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(report["performanceSummary"]["maxTotalPipelineUs"], 15000)
         self.assertEqual(report["performanceSummary"]["slowestMeasuredStage"], {"stage": "paint", "us": 9000})
         self.assertEqual(report["performanceSummary"]["resourceBudgetPercent"], 90)
+        bottleneck_codes = {entry["code"] for entry in report["performanceSummary"]["bottlenecks"]}
+        self.assertIn("performance-stage-paint", bottleneck_codes)
+        self.assertIn("performance-full-frame-present", bottleneck_codes)
         codes = {entry["code"] for entry in report["performanceAdvice"]}
+        self.assertIn("performance-stage-paint", codes)
         self.assertIn("performance-pipeline-heap-estimate", codes)
         self.assertIn("performance-display-command-count", codes)
         self.assertIn("performance-layer-count", codes)
@@ -919,10 +923,14 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(report["performanceSummary"]["measuredFullFrameCount"], 1)
         self.assertEqual(report["performanceSummary"]["measuredConvertedPixels"], 1247508)
         self.assertEqual(report["performanceSummary"]["measuredLoadOverloadedFrames"], 1)
+        bottleneck_codes = {entry["code"] for entry in report["performanceSummary"]["bottlenecks"]}
+        self.assertIn("performance-runtime-overloaded", bottleneck_codes)
+        self.assertIn("performance-dirty-area-high", bottleneck_codes)
         codes = {entry["code"] for entry in report["performanceAdvice"]}
         self.assertIn("performance-runtime-overloaded", codes)
         self.assertIn("performance-runtime-drop-animation", codes)
         self.assertIn("performance-runtime-dirty-area-high", codes)
+        self.assertIn("performance-runtime-scroll-strip-active", codes)
 
     def test_port_telemetry_log_merges_real_device_performance_summary(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-port-telemetry-") as directory:
@@ -954,6 +962,9 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(summary["measuredPortAverageDmaWaitMs"], 5.2)
         self.assertEqual(summary["measuredPortAverageFlushDoneMs"], 13.5)
         self.assertEqual(summary["measuredPortInternalRamPeakBytes"], 330000)
+        bottleneck_codes = {entry["code"] for entry in summary["bottlenecks"]}
+        self.assertIn("performance-port-frame-time-high", bottleneck_codes)
+        self.assertIn("performance-port-flush-done-high", bottleneck_codes)
         codes = {entry["code"] for entry in report["performanceAdvice"]}
         self.assertIn("performance-port-frame-time-high", codes)
         self.assertIn("performance-port-dma-wait-high", codes)

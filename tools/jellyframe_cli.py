@@ -776,6 +776,129 @@ def top_timing_stage(timings: dict) -> dict:
     return {"stage": top_name, "us": top_us} if top_name else {}
 
 
+def timing_stage_guidance(stage: str) -> dict:
+    guidance = {
+        "parse": {
+            "title": "HTML/CSS parse time is the largest measured stage",
+            "explanation": "The desktop preflight spent most of its pipeline time parsing source text.",
+            "action": "Reduce large inline styles/scripts, split repeated markup into generated data at build time, and keep selectors simple.",
+        },
+        "style": {
+            "title": "Style resolution is the largest measured stage",
+            "explanation": "The desktop preflight spent most of its pipeline time matching selectors and applying declarations.",
+            "action": "Prefer class/id selectors, reduce selector fan-out, and avoid many nearly identical rules over large node sets.",
+        },
+        "layout": {
+            "title": "Layout is the largest measured stage",
+            "explanation": "The desktop preflight spent most of its pipeline time computing box sizes and positions.",
+            "action": "Reduce nested layout, avoid over-constrained fixed sizes, keep flex/grid structures shallow, and use explicit scroll containers for long lists.",
+        },
+        "layer": {
+            "title": "Layer building is the largest measured stage",
+            "explanation": "The desktop preflight spent most of its pipeline time building layers and display commands.",
+            "action": "Reduce positioned or overlapping decoration, collapse repeated effects, and keep generated content small.",
+        },
+        "paint": {
+            "title": "Paint is the largest measured stage",
+            "explanation": "The desktop preflight spent most of its pipeline time rasterizing pixels.",
+            "action": "Shrink dirty areas, reduce large gradients/shadows/canvas paths, avoid full-frame repaint during animation, and pre-render static heavy art when it is cheaper.",
+        },
+        "present": {
+            "title": "Present is the largest measured stage",
+            "explanation": "The desktop preflight spent most of its pipeline time preparing the framebuffer for display.",
+            "action": "Keep updates on dirty rectangles or scroll-strip paths, reduce full-frame repaint, and confirm panel/DMA costs with port telemetry.",
+        },
+    }
+    return guidance.get(stage, {
+        "title": "A measured pipeline stage dominates preflight time",
+        "explanation": "The desktop preflight reports one pipeline stage as the largest measured cost.",
+        "action": "Inspect the stage name and compare it with DOM size, display commands, dirty area and port telemetry before optimizing.",
+    })
+
+
+def append_bottleneck(bottlenecks: list[dict],
+                      seen: set[tuple[str, str]],
+                      code: str,
+                      title: str,
+                      target: str = "",
+                      metrics: dict | None = None) -> None:
+    key = (code, target)
+    if key in seen:
+        return
+    seen.add(key)
+    entry = {
+        "code": code,
+        "title": title,
+    }
+    if target:
+        entry["target"] = target
+    if metrics:
+        entry["metrics"] = metrics
+    bottlenecks.append(entry)
+
+
+def performance_bottlenecks(summary: dict) -> list[dict]:
+    bottlenecks: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    if int(summary.get("score", 0) or 0) >= 3:
+        append_bottleneck(
+            bottlenecks, seen, "performance-risk-score",
+            "Preflight score says this app needs measurement on target hardware.",
+            "", {"score": int(summary.get("score", 0) or 0), "rating": str(summary.get("rating", "unknown"))})
+    slow_stage = summary.get("slowestMeasuredStage", {})
+    if isinstance(slow_stage, dict) and int(slow_stage.get("us", 0) or 0) >= 5000:
+        stage = str(slow_stage.get("stage", ""))
+        append_bottleneck(
+            bottlenecks, seen, f"performance-stage-{stage or 'unknown'}",
+            timing_stage_guidance(stage).get("title", "A measured pipeline stage dominates preflight time."),
+            "", {"stage": stage, "us": int(slow_stage.get("us", 0) or 0)})
+    if int(summary.get("fullFramePresentTargets", 0) or 0) > 0:
+        append_bottleneck(
+            bottlenecks, seen, "performance-full-frame-present",
+            "At least one target needs a full-frame present in preflight.",
+            "", {"targets": int(summary.get("fullFramePresentTargets", 0) or 0)})
+    for target in summary.get("perTarget", []):
+        if not isinstance(target, dict):
+            continue
+        name = str(target.get("target", "default"))
+        if int(target.get("displayCommands", 0) or 0) > 96:
+            append_bottleneck(
+                bottlenecks, seen, "performance-display-command-count",
+                "This target has a large display command list.",
+                name, {"displayCommands": int(target.get("displayCommands", 0) or 0)})
+        if int(target.get("layers", 0) or 0) > 16:
+            append_bottleneck(
+                bottlenecks, seen, "performance-layer-count",
+                "This target builds many layers.",
+                name, {"layers": int(target.get("layers", 0) or 0)})
+        if int(target.get("estimatedHeapBytes", 0) or 0) > 512 * 1024:
+            append_bottleneck(
+                bottlenecks, seen, "performance-pipeline-heap-estimate",
+                "This target has a high estimated pipeline heap.",
+                name, {"estimatedHeapBytes": int(target.get("estimatedHeapBytes", 0) or 0)})
+    if int(summary.get("measuredLoadOverloadedFrames", 0) or 0) > 0:
+        append_bottleneck(
+            bottlenecks, seen, "performance-runtime-overloaded",
+            "Runtime capture reported frames over budget.",
+            "", {"frames": int(summary.get("measuredLoadOverloadedFrames", 0) or 0)})
+    if int(summary.get("measuredMaxDirtyPercent", 0) or 0) >= 90:
+        append_bottleneck(
+            bottlenecks, seen, "performance-dirty-area-high",
+            "Runtime capture reports a near-full-screen dirty area.",
+            "", {"maxDirtyPercent": int(summary.get("measuredMaxDirtyPercent", 0) or 0)})
+    if float(summary.get("measuredPortAverageFrameMs", 0) or 0) > 33.4:
+        append_bottleneck(
+            bottlenecks, seen, "performance-port-frame-time-high",
+            "Real-device average frame time is above a 30 FPS budget.",
+            "", {"averageFrameMs": float(summary.get("measuredPortAverageFrameMs", 0) or 0)})
+    if float(summary.get("measuredPortAverageFlushDoneMs", 0) or 0) > 12.0:
+        append_bottleneck(
+            bottlenecks, seen, "performance-port-flush-done-high",
+            "Panel flush completion is a likely real-device bottleneck.",
+            "", {"averageFlushDoneMs": float(summary.get("measuredPortAverageFlushDoneMs", 0) or 0)})
+    return bottlenecks[:8]
+
+
 def append_performance_advice(advice: list[dict],
                               seen: set[tuple[str, str]],
                               code: str,
@@ -948,6 +1071,9 @@ def collect_performance_summary(report: dict) -> dict:
         summary["notes"] = summary["notes"] + [
             "Port telemetry was merged from a real-device or board-port log.",
         ]
+    bottlenecks = performance_bottlenecks(summary)
+    if bottlenecks:
+        summary["bottlenecks"] = bottlenecks
     return summary
 
 
@@ -962,6 +1088,17 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
         layers = int(target.get("layers", 0) or 0)
         heap = int(target.get("estimatedHeapBytes", 0) or 0)
         framebuffer = int(target.get("framebufferBytes", 0) or 0)
+        timings = target.get("timingsUs", {}) if isinstance(target.get("timingsUs", {}), dict) else {}
+        slow_stage = top_timing_stage(timings)
+        if int(slow_stage.get("us", 0) or 0) >= 5000:
+            stage = str(slow_stage.get("stage", ""))
+            guidance = timing_stage_guidance(stage)
+            append_performance_advice(
+                advice, seen, f"performance-stage-{stage or 'unknown'}", "info",
+                guidance["title"],
+                guidance["explanation"],
+                guidance["action"],
+                name, {"stage": stage, "us": int(slow_stage.get("us", 0) or 0)})
         if heap > 512 * 1024:
             append_performance_advice(
                 advice, seen, "performance-pipeline-heap-estimate", "warning",
@@ -976,6 +1113,14 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
                 "The first paint uses a full-frame repaint/present. On RGB565 panels this is often dominated by conversion, DMA and panel flush time.",
                 "Keep scrolling and animations on dirty rectangles or scroll-strip paths; use port telemetry to confirm converted pixels, packed bytes and DMA wait.",
                 name, {"framebufferBytes": framebuffer})
+        frame_update = target.get("frameUpdate", {}) if isinstance(target.get("frameUpdate", {}), dict) else {}
+        if frame_update.get("repaint") == "full-frame" and frame_update.get("reason") != "first-paint":
+            append_performance_advice(
+                advice, seen, "performance-unexpected-full-frame-repaint", "warning",
+                "A target is repainting the full frame after first paint",
+                "Full-frame repaint outside initial load usually hides dirty-rect wins and can make scrolling or animation feel delayed.",
+                "Look for layout-changing animation, viewport-sized invalidation, framebuffer mismatch, or host events that mark the whole tree dirty.",
+                name, {"reason": str(frame_update.get("reason", "")), "action": str(frame_update.get("action", ""))})
         if commands > 96:
             append_performance_advice(
                 advice, seen, "performance-display-command-count", "warning",
@@ -1031,6 +1176,15 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
             "The runtime log reports that the dirty area regularly approaches the full viewport.",
             "Check whether layout changes or large repaints are forcing full-screen work; try to keep scrolling and animations on smaller dirty rectangles.",
             "", {"maxDirtyPercent": int(runtime_summary.get("maxDirtyPercent", 0) or 0)})
+    scroll_copied_pixels = int(runtime_summary.get("scrollCopiedPixels", 0) or 0)
+    converted_pixels = int(runtime_summary.get("convertedPixels", 0) or 0)
+    if scroll_copied_pixels > 0 and converted_pixels > 0:
+        append_performance_advice(
+            advice, seen, "performance-runtime-scroll-strip-active", "info",
+            "Runtime capture used the scroll-strip path",
+            "The Win32 capture reports scroll-strip copies, so scroll work is staying on the cheaper incremental path instead of repainting only from scratch.",
+            "Keep fixed headers/nav outside the scroll area and watch converted pixels; if converted pixels still grows toward full-screen cost, inspect dirty area diagnostics.",
+            "", {"scrollCopiedPixels": scroll_copied_pixels, "convertedPixels": converted_pixels})
     port_telemetry = report.get("portTelemetry", {}) if isinstance(report.get("portTelemetry", {}), dict) else {}
     port_summary = port_telemetry.get("summary", {}) if isinstance(port_telemetry.get("summary", {}), dict) else {}
     average_frame_ms = float(port_summary.get("averageFrameMs", 0) or 0)

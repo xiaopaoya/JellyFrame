@@ -332,6 +332,7 @@ function reportHtml() {
   const references = report?.references || [];
   const developerAdvice = report?.developerAdvice || [];
   const performanceSummary = report?.performanceSummary || {};
+  const performanceBottlenecks = performanceSummary?.bottlenecks || [];
   const performanceAdvice = report?.performanceAdvice || [];
   const pipeline = report?.pipelineDiagnostics || {};
   const summary = pipeline.summary || {};
@@ -375,6 +376,7 @@ function reportHtml() {
         · Max framebuffer: ${escapeHtml(performanceSummary.maxFramebufferBytes || 0)} bytes
         · Max display commands: ${escapeHtml(performanceSummary.maxDisplayCommands || 0)}
       </p>
+      ${renderList(performanceBottlenecks, (item) => `<li class="advice"><strong>${escapeHtml(item.title || item.code || "Performance bottleneck")}${item.target ? ` <span class="muted">[${escapeHtml(item.target)}]</span>` : ""}</strong>${item.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(item.metrics))}</code></span>` : ""}</li>`)}
       ${renderList(performanceAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Performance item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
     ` : "<p class=\"muted\">No performance summary in the latest report.</p>"}
     <h2>Pipeline Diagnostics</h2>
