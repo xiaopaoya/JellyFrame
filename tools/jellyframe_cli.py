@@ -422,6 +422,66 @@ def merge_port_telemetry_report(package_report_path: Path, port_telemetry_path: 
 
 
 ADVICE_BY_CODE = {
+    "html-node-limit": {
+        "title": "DOM node budget was reached",
+        "explanation": "Later parsed nodes were dropped to keep the target's memory use bounded.",
+        "action": "Reduce repeated markup, virtualize long lists, or increase maxDomNodes only after measuring the target memory cost.",
+    },
+    "html-depth-limit": {
+        "title": "DOM nesting is too deep for the target",
+        "explanation": "Deeper descendants were dropped because nested compatibility markup is intentionally capped on MCU targets.",
+        "action": "Flatten wrapper elements, remove decorative nesting, and prefer one semantic container with classes over nested divs.",
+    },
+    "html-attribute-limit": {
+        "title": "Element attribute budget was reached",
+        "explanation": "Extra attributes were ignored after the per-element limit.",
+        "action": "Keep runtime state in a small number of meaningful attributes or data-* fields; move large metadata to package data or script constants.",
+    },
+    "css-rule-limit": {
+        "title": "CSS rule budget was reached",
+        "explanation": "Later rules, selector-list items or keyframes were skipped to retain deterministic parser memory use.",
+        "action": "Merge repeated rules, keep selectors focused, remove unused variants, or raise maxCssRules only after measuring style-resolution cost.",
+    },
+    "css-declaration-limit": {
+        "title": "CSS declaration budget was reached",
+        "explanation": "Later declarations in a rule were skipped, so part of the intended style may be absent.",
+        "action": "Split overgrown rules, remove redundant declarations, and keep component styles small and reusable.",
+    },
+    "layout-box-limit": {
+        "title": "Layout box budget was reached",
+        "explanation": "Remaining render objects were skipped before layout, so visible UI can be missing.",
+        "action": "Reduce visible hierarchy and repeated controls, virtualize lists, or raise maxLayoutBoxes only with device memory evidence.",
+    },
+    "layout-depth-limit": {
+        "title": "Layout nesting depth was reached",
+        "explanation": "Nested layout beyond the configured depth was skipped.",
+        "action": "Flatten layout containers and avoid chains of wrappers whose only purpose is spacing or decoration.",
+    },
+    "render-object-limit": {
+        "title": "Render object budget was reached",
+        "explanation": "Remaining visible DOM nodes were omitted from the render tree.",
+        "action": "Reduce visible elements, replace repeated decoration with one canvas or asset, and virtualize long lists before increasing maxRenderObjects.",
+    },
+    "layer-limit": {
+        "title": "Layer budget was reached",
+        "explanation": "Later stacking, clipping or composited boxes were folded into parent layers and may lose fidelity.",
+        "action": "Reduce overlap, positioned effects, clips and independent shadows; keep composited motion to a small number of elements.",
+    },
+    "display-command-limit": {
+        "title": "Display command budget was reached",
+        "explanation": "Later paint commands were clipped, so parts of the page may not render.",
+        "action": "Simplify repeated decoration, gradients and generated content; reduce visible list items or use one bounded canvas region for dense charts.",
+    },
+    "resource-budget-exceeded": {
+        "title": "Total package resources exceed the target budget",
+        "explanation": "The package can fit each resource individually but exceeds the configured total resource budget.",
+        "action": "Compress or remove unused assets, subset fonts, reduce duplicate media, or raise maxResourceBytes only after checking flash and RAM impact on the device.",
+    },
+    "font-budget-exceeded": {
+        "title": "Runtime font supplement exceeds its budget",
+        "explanation": "The declared .jffont count, bytes or glyphs exceed the app font limit.",
+        "action": "Generate a smaller character subset, remove unused weights/sizes, or increase font budgets only after measuring app-font RAM and flash use.",
+    },
     "visual-horizontal-overflow": {
         "title": "Content paints outside the target width",
         "explanation": "One or more boxes extend beyond the viewport on this target.",
