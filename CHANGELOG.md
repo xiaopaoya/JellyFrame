@@ -10,6 +10,7 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added package-time static local ES-module authoring V0. One external `type="module"` entry can use a bounded acyclic package-local `.js` graph; the packager emits a classic bundle and removes module sources from final package resources. `preview` now validates that prepared package through Win32, and `--debug-dir` includes a runnable manifest. Dynamic/remote loading and a runtime module loader remain absent.
 - Added Form V0 for local embedded flows: `form.checkValidity()`,
   `form.reportValidity()`, `form.requestSubmit([submitter])`, cancellable
   `SubmitEvent`-shaped `submit` with `event.submitter`, and string-entry

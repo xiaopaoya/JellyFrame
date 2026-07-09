@@ -43,7 +43,8 @@
 | Canvas 2D | 宿主可选 | `graphics.canvas2d`。只在 `getContext("2d")` 后分配 backing store。 |
 | 宿主时间 | 可用 | 使用 `Date.now()`。除非后续明确文档化，不要假设 `new Date()` 已受宿主时钟控制。 |
 | 天气/活动/电量 | 宿主/system only | 天气 app 数据应使用 XHR JSON；活动和电量 summary 目前不是普通 app JS API。 |
-| Promise/fetch/modules/innerHTML | 延后 | 不要依赖。 |
+| 静态本地模块 | 打包期子集 | 一个外部 `type="module"` 入口及包内静态 `.js` import 会在打包期合成为 classic script。动态 `import()`、远程模块与 `modulepreload` 延后。 |
+| Promise/fetch/innerHTML | 延后 | 不要依赖。 |
 | querySelector/querySelectorAll | 子集 | 仅支持简单 tag、`.class`、`#id`、`[attr]`、`[attr=value]` 和同一 compound 组合；复杂 selector 会诊断。 |
 
 ## 资源和字体

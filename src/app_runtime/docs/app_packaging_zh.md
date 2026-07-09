@@ -610,7 +610,7 @@ python tools/jellyframe_cli.py preview `
   --output build/watch_weather.ppm
 ```
 
-`package`、`check`、`preview` 和源码包 `install` 默认先运行 package validation，再通过临时 render-core
+`package`、`check`、`preview` 和源码包 `install` 默认先运行 package validation。`preview` 随后准备与 `.jfapp`/C++ output 相同的临时 debug package，因此 static module source 会在 Win32 执行 script 前合并；之后再通过临时 render-core
 伪浏览器对 package entry HTML 跑一遍管线，让 parser/style/layout/layer diagnostics
 来自真正处理 markup 和 CSS 的组件。`preview` 随后用 Win32 shell capture path 生成实际
 app/package 图片。随后会默认运行字体资源预检，使用 `16x16` glyph 预算估算；可以用
@@ -827,7 +827,7 @@ request/completion/handle 契约，`app_service_policies_for_app(...)` 会把这
 策略合成。核心不会执行真实网络或文件系统 I/O。
 
 Package report 还包含 `scriptApiDiagnostics`。这是打包期静态检查，只扫描 package-local
-classic script 和 HTML inline script，不执行 JavaScript。当前会识别 `XMLHttpRequest`、
+classic script、打包期静态 module source 和 HTML inline script，不执行 JavaScript。当前会识别 `XMLHttpRequest`、
 `localStorage`、`Audio()`、`navigator.geolocation.getCurrentPosition(...)` 和
 `getContext("2d")`。如果脚本使用这些宿主支持 API，但 manifest 没有声明对应 capability，
 工具会输出 `script-capability-missing` warning；CLI 的 `developerAdvice[]` 会把它解释为

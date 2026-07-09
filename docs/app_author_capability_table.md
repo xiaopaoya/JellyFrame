@@ -43,7 +43,8 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Canvas 2D | Host optional | `graphics.canvas2d`. Backing storage is allocated only after `getContext("2d")`. |
 | Host time | Available | Use `Date.now()`. Do not assume `new Date()` is host-clock controlled unless documented later. |
 | Weather/activity/battery | Host/system only | Weather app data should use XHR JSON; activity and battery summaries are not ordinary app JS APIs yet. |
-| Promise/fetch/modules/innerHTML | Deferred | Do not rely on them yet. |
+| Static local modules | Package-time subset | One external `type="module"` entry and package-local static `.js` imports are bundled to classic script at package time. Dynamic `import()`, remote modules and `modulepreload` are deferred. |
+| Promise/fetch/innerHTML | Deferred | Do not rely on them yet. |
 | querySelector/querySelectorAll | Subset | Simple tag, `.class`, `#id`, `[attr]`, `[attr=value]` and same-compound combinations only; complex selectors are diagnosed. |
 
 ## Resources And Fonts

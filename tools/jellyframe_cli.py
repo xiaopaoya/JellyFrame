@@ -165,7 +165,7 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
     if validate_only:
         command.append("--validate-only")
     else:
-        if args.output_cpp:
+        if getattr(args, "output_cpp", None):
             command.extend(["--output-cpp", str(args.output_cpp)])
         if getattr(args, "output_bundle", None):
             command.extend(["--output-bundle", str(args.output_bundle)])
@@ -2111,18 +2111,27 @@ def cmd_preview(args: argparse.Namespace) -> int:
     viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
     width = args.width or int(viewport.get("width", 0) or 0)
     height = args.height or int(viewport.get("height", 0) or 0)
-    command = [
-        str(win32_browser),
-        "--capture",
-        str(args.output),
-        "--app",
-        str(args.root),
-    ]
-    if width:
-        command.extend(["--viewport-width", str(width)])
-    if height:
-        command.extend(["--viewport-height", str(height)])
-    result = run_command(command)
+    with tempfile.TemporaryDirectory(prefix="jellyframe-preview-package-") as directory:
+        previous_debug_dir = getattr(args, "debug_dir", None)
+        args.debug_dir = Path(directory) / "package"
+        package_result = run_command(package_command(args, False))
+        args.debug_dir = previous_debug_dir
+        if package_result != 0:
+            return package_result
+        merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
+        merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
+        command = [
+            str(win32_browser),
+            "--capture",
+            str(args.output),
+            "--app",
+            str(Path(directory) / "package"),
+        ]
+        if width:
+            command.extend(["--viewport-width", str(width)])
+        if height:
+            command.extend(["--viewport-height", str(height)])
+        result = run_command(command)
     if result == 0:
         if getattr(args, "runtime_log", None):
             merge_runtime_capture_report(args.report, args.runtime_log)
@@ -2155,7 +2164,22 @@ def resource_files_from_report(root: Path, report_path: Path) -> list[str]:
         if kind == "Other" and Path(resource_path).suffix.lower() not in text_other_suffixes:
             continue
         relative = resource_path[1:] if resource_path.startswith("/") else resource_path
-        files.append(str(root / Path(*relative.split("/"))))
+        candidate = root / Path(*relative.split("/"))
+        if candidate.is_file():
+            files.append(str(candidate))
+
+    static_modules = report.get("staticModules", {})
+    if isinstance(static_modules, dict) and static_modules.get("enabled"):
+        for module in static_modules.get("modules", []):
+            if not isinstance(module, dict):
+                continue
+            module_path = module.get("path", "")
+            if not isinstance(module_path, str) or not module_path:
+                continue
+            relative = module_path[1:] if module_path.startswith("/") else module_path
+            candidate = root / Path(*relative.split("/"))
+            if candidate.is_file() and str(candidate) not in files:
+                files.append(str(candidate))
     return files
 
 

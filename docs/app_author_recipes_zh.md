@@ -168,6 +168,30 @@ form.addEventListener("submit", function (event) {
 `invalid`。没有浏览器校验弹窗。`FormData` 只保存字符串 entry，支持 `append`、`set`、
 `delete`、`get`、`getAll` 和 `has`。
 
+## 静态本地模块
+
+较大的 app 可以在源码中使用一个静态本地 module 入口，同时让设备 runtime 继续执行文档化的
+classic-script 路径。打包会把 module 标签替换为一个生成的 classic bundle。
+
+```html
+<script type="module" src="scripts/app.js"></script>
+```
+
+```js
+// scripts/app.js
+import { formatMinutes } from "./time.js";
+document.getElementById("value").textContent = formatMinutes(42);
+
+// scripts/time.js
+export function formatMinutes(value) {
+  return value + "m";
+}
+```
+
+只使用 package-local `.js` 文件，保持一个 module entry 和无环的静态图。动态 `import()`、远程
+module、`modulepreload`、`export *`、re-export declaration 和 inline module script 会被拒绝或延后。
+`runtime.script` 仍应写为 `"classic"`：它描述生成后的设备 payload，而不是源码 authoring 形式。
+
 ## 窄屏目标
 
 对 `172x320`，先减少横向决策：

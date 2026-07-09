@@ -177,6 +177,33 @@ non-bubbling `invalid` on each invalid control. There is no browser validation
 popup. `FormData` supports string entries with `append`, `set`, `delete`, `get`,
 `getAll` and `has`.
 
+## Static Local Modules
+
+For a larger app, keep the device runtime on the documented classic-script path
+while using one static local module entry in source. Packaging replaces the
+module tag with one generated classic bundle.
+
+```html
+<script type="module" src="scripts/app.js"></script>
+```
+
+```js
+// scripts/app.js
+import { formatMinutes } from "./time.js";
+document.getElementById("value").textContent = formatMinutes(42);
+
+// scripts/time.js
+export function formatMinutes(value) {
+  return value + "m";
+}
+```
+
+Use package-local `.js` files only. Keep one module entry and an acyclic static
+graph. `dynamic import()`, remote modules, `modulepreload`, `export *`,
+re-export declarations and inline module scripts are rejected or deferred. Keep
+`runtime.script` as `"classic"`: it describes the generated device payload, not
+the source authoring form.
+
 ## Narrow Targets
 
 For `172x320`, reduce horizontal decisions first:

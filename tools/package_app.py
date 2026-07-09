@@ -5,6 +5,7 @@ import json
 import shutil
 import re
 import struct
+import tempfile
 import zlib
 from pathlib import Path, PurePosixPath
 
@@ -1081,12 +1082,18 @@ def collect_html_api_diagnostics(resources: list[dict]) -> tuple[dict, list[dict
     }, warnings
 
 
-def script_sources_for_resource(resource: dict) -> list[str]:
+def script_sources_for_resource(resource: dict) -> list[tuple[str, str]]:
+    diagnostic_sources = resource.get("scriptDiagnosticSources")
+    if isinstance(diagnostic_sources, list):
+        return [(str(source["path"]), str(source["text"]))
+                for source in diagnostic_sources
+                if isinstance(source, dict) and isinstance(source.get("path"), str) and
+                isinstance(source.get("text"), str)]
     suffix = resource["file"].suffix.lower()
     kind = resource_kind_name(resource["kind"])
     if kind == "ClassicScript":
         try:
-            return [resource["file"].read_text(encoding="utf-8-sig")]
+            return [(resource["path"], resource["file"].read_text(encoding="utf-8-sig"))]
         except UnicodeDecodeError:
             return []
     if suffix not in {".html", ".htm"}:
@@ -1095,9 +1102,10 @@ def script_sources_for_resource(resource: dict) -> list[str]:
         text = resource["file"].read_text(encoding="utf-8-sig")
     except UnicodeDecodeError:
         return []
-    return [match.group(1) for match in re.finditer(r"<script\b(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script>",
-                                                    text,
-                                                    flags=re.I | re.S)]
+    return [(resource["path"], match.group(1))
+            for match in re.finditer(r"<script\b(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script>",
+                                     text,
+                                     flags=re.I | re.S)]
 
 
 def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tuple[dict, list[dict]]:
@@ -1110,14 +1118,14 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
     missing_capability_count = 0
     seen = set()
     for resource in resources:
-        for source_text in script_sources_for_resource(resource):
+        for source_path, source_text in script_sources_for_resource(resource):
             searchable = strip_script_comments_and_strings(source_text)
             searchable_with_strings = strip_script_comments(source_text)
             for api in SCRIPT_API_CAPABILITIES:
                 source = searchable_with_strings if api.get("preserveStrings") else searchable
                 if not api["pattern"].search(source):
                     continue
-                key = (resource["path"], api["api"], api["capability"])
+                key = (source_path, api["api"], api["capability"])
                 if key in seen:
                     continue
                 seen.add(key)
@@ -1125,7 +1133,7 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                 entry = {
                     "api": api["api"],
                     "capability": api["capability"],
-                    "source": resource["path"],
+                    "source": source_path,
                     "declared": declared_capability,
                 }
                 entries.append(entry)
@@ -1135,20 +1143,20 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                         "level": "warning",
                         "code": "script-capability-missing",
                         "message": f"script uses {api['api']} but manifest does not declare {api['capability']}",
-                        "source": resource["path"],
+                        "source": source_path,
                         "api": api["api"],
                         "capability": api["capability"],
                     })
             for usage in SCRIPT_API_USAGE_WARNINGS:
                 if not usage["pattern"].search(searchable):
                     continue
-                key = (resource["path"], usage["code"], usage["api"])
+                key = (source_path, usage["code"], usage["api"])
                 if key in seen:
                     continue
                 seen.add(key)
                 entries.append({
                     "api": usage["api"],
-                    "source": resource["path"],
+                    "source": source_path,
                     "declared": True,
                     "warningCode": usage["code"],
                 })
@@ -1156,14 +1164,14 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                     "level": "warning",
                     "code": usage["code"],
                     "message": usage["message"],
-                    "source": resource["path"],
+                    "source": source_path,
                     "api": usage["api"],
                 })
-            query_entries, query_warnings = collect_query_selector_diagnostics(resource["path"], source_text, seen)
+            query_entries, query_warnings = collect_query_selector_diagnostics(source_path, source_text, seen)
             entries.extend(query_entries)
             warnings.extend(query_warnings)
     return {
-        "model": "static-classic-script-api-capability-preflight",
+        "model": "static-script-api-capability-preflight",
         "entries": entries,
         "entryCount": len(entries),
         "missingCapabilityCount": missing_capability_count,
@@ -1367,6 +1375,219 @@ def build_resource_entry(root: Path, path: Path, app_path: str, max_resource_byt
         "crc32": f"{zlib.crc32(data) & 0xffffffff:08x}",
         "sha256": hashlib.sha256(data).hexdigest(),
         "relativeFile": path.relative_to(root).as_posix(),
+    }
+
+
+def build_generated_resource_entry(staging_root: Path,
+                                   app_path: str,
+                                   data: bytes,
+                                   kind: str,
+                                   max_resource_bytes: int) -> dict:
+    if max_resource_bytes > 0 and len(data) > max_resource_bytes:
+        fail(f"generated resource exceeds maxResourceBytes: {app_path} ({len(data)} bytes)")
+    relative = PurePosixPath(app_path.lstrip("/"))
+    file = staging_root.joinpath(*relative.parts)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_bytes(data)
+    return {
+        "path": app_path,
+        "file": file,
+        "kind": kind,
+        "size": len(data),
+        "crc32": f"{zlib.crc32(data) & 0xffffffff:08x}",
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "relativeFile": relative.as_posix(),
+        "generated": True,
+    }
+
+
+MODULE_SCRIPT_RE = re.compile(
+    r'<script\b(?=[^>]*\btype\s*=\s*(["\'])module\1)(?=[^>]*\bsrc\s*=\s*(["\'])([^"\']+)\2)[^>]*>\s*</script\s*>',
+    flags=re.I | re.S,
+)
+MODULE_IMPORT_RE = re.compile(r'^\s*import\s+(.+?)\s+from\s+(["\'])([^"\']+)\2\s*;?', flags=re.M)
+MODULE_SIDE_EFFECT_IMPORT_RE = re.compile(r'^\s*import\s+(["\'])([^"\']+)\1\s*;?', flags=re.M)
+MODULE_NAMED_EXPORT_RE = re.compile(r'^\s*export\s*{\s*([^}]+)\s*}\s*;?\s*$', flags=re.M)
+MODULE_DECL_EXPORT_RE = re.compile(r'\bexport\s+(const|let|var|function|class)\s+([A-Za-z_$][\w$]*)')
+
+
+def module_symbol(path: str) -> str:
+    return f"__jf_module_{fnv1a_32(path):08x}"
+
+
+def module_default_symbol(path: str) -> str:
+    return f"__jf_default_{fnv1a_32(path):08x}"
+
+
+def parse_module_named_bindings(spec: str, source: str) -> list[tuple[str, str]]:
+    bindings = []
+    for item in spec.split(","):
+        parts = [part.strip() for part in re.split(r"\s+as\s+", item.strip(), maxsplit=1, flags=re.I)]
+        if not parts[0]:
+            fail(f"empty named import/export binding in module: {source}")
+        bindings.append((parts[0], parts[-1]))
+    return bindings
+
+
+def compile_static_module(path: str, source: str, dependency_symbols: dict[str, str]) -> str:
+    exports = []
+    default_symbol = module_default_symbol(path)
+
+    def replace_import(match: re.Match) -> str:
+        spec = match.group(1).strip()
+        ref = match.group(3)
+        dependency = resolve_reference(ref, path)
+        symbol = dependency_symbols.get(dependency)
+        if symbol is None:
+            fail(f"module import is not part of the static local graph: {path} -> {ref}")
+        statements = []
+        if spec.startswith("{") and spec.endswith("}"):
+            for imported, local in parse_module_named_bindings(spec[1:-1], path):
+                statements.append(f"var {local} = {symbol}.{imported};")
+        elif spec.startswith("* as "):
+            local = spec[5:].strip()
+            if not re.fullmatch(r"[A-Za-z_$][\w$]*", local):
+                fail(f"unsupported namespace import in module: {path}")
+            statements.append(f"var {local} = {symbol};")
+        else:
+            pieces = [piece.strip() for piece in spec.split(",", 1)]
+            default_local = pieces[0]
+            if not re.fullmatch(r"[A-Za-z_$][\w$]*", default_local):
+                fail(f"unsupported default import in module: {path}")
+            statements.append(f"var {default_local} = {symbol}.default;")
+            if len(pieces) == 2:
+                named = pieces[1]
+                if not named.startswith("{") or not named.endswith("}"):
+                    fail(f"unsupported mixed import in module: {path}")
+                for imported, local in parse_module_named_bindings(named[1:-1], path):
+                    statements.append(f"var {local} = {symbol}.{imported};")
+        return "\n".join(statements)
+
+    source = MODULE_IMPORT_RE.sub(replace_import, source)
+
+    def replace_side_effect_import(match: re.Match) -> str:
+        ref = match.group(2)
+        dependency = resolve_reference(ref, path)
+        if dependency not in dependency_symbols:
+            fail(f"module import is not part of the static local graph: {path} -> {ref}")
+        return ""
+
+    source = MODULE_SIDE_EFFECT_IMPORT_RE.sub(replace_side_effect_import, source)
+
+    def replace_named_export(match: re.Match) -> str:
+        for local, exported in parse_module_named_bindings(match.group(1), path):
+            exports.append((exported, local))
+        return ""
+
+    source = MODULE_NAMED_EXPORT_RE.sub(replace_named_export, source)
+
+    def replace_decl_export(match: re.Match) -> str:
+        exports.append((match.group(2), match.group(2)))
+        return f"{match.group(1)} {match.group(2)}"
+
+    source = MODULE_DECL_EXPORT_RE.sub(replace_decl_export, source)
+    default_function = re.compile(r"\bexport\s+default\s+(function|class)\s+([A-Za-z_$][\w$]*)")
+    default_match = default_function.search(source)
+    if default_match:
+        exports.append(("default", default_match.group(2)))
+        source = default_function.sub(lambda match: f"{match.group(1)} {match.group(2)}", source, count=1)
+    elif re.search(r"\bexport\s+default\b", source):
+        source = re.sub(r"\bexport\s+default\s+", f"var {default_symbol} = ", source, count=1)
+        exports.append(("default", default_symbol))
+
+    if re.search(r"^\s*(?:import|export)\b", source, flags=re.M):
+        fail(f"unsupported ES module syntax in {path}; use static local import/export declarations only")
+    assignments = ", ".join(f"{name}: {value}" for name, value in exports)
+    return f"var {module_symbol(path)} = (function() {{\n{source}\nreturn {{{assignments}}};\n}})();\n"
+
+
+def module_import_references(source: str) -> list[str]:
+    matches = []
+    for match in MODULE_IMPORT_RE.finditer(source):
+        matches.append((match.start(), match.group(3)))
+    for match in MODULE_SIDE_EFFECT_IMPORT_RE.finditer(source):
+        matches.append((match.start(), match.group(2)))
+    return [reference for _, reference in sorted(matches)]
+
+
+def collect_module_graph(resources: list[dict], entry: str) -> tuple[dict, list[str], str, list[dict]]:
+    resources_by_path = {resource["path"]: resource for resource in resources}
+    entry_resource = resources_by_path.get(entry)
+    if entry_resource is None:
+        fail(f"entry resource is not packaged: {entry}")
+    entry_html = entry_resource["file"].read_text(encoding="utf-8-sig")
+    module_tags = list(MODULE_SCRIPT_RE.finditer(entry_html))
+    if not module_tags:
+        return {}, [], entry_html, []
+    if len(module_tags) != 1:
+        fail("static ES module authoring V0 accepts exactly one external type=module entry script")
+    entry_module = resolve_reference(module_tags[0].group(3), entry)
+    graph = {}
+    order = []
+    visiting = set()
+
+    def visit(path: str) -> None:
+        if path in graph:
+            return
+        if path in visiting:
+            fail(f"static ES module import cycle is not supported: {path}")
+        resource = resources_by_path.get(path)
+        if resource is None or resource_kind_name(resource["kind"]) != "ClassicScript":
+            fail(f"module import must resolve to a packaged local .js file: {path}")
+        visiting.add(path)
+        source = resource["file"].read_text(encoding="utf-8-sig")
+        dependencies = []
+        for ref in module_import_references(source):
+            dependency = resolve_reference(ref, path)
+            if not dependency.endswith(".js"):
+                fail(f"module import must target a local .js file: {path} -> {ref}")
+            dependencies.append(dependency)
+            visit(dependency)
+        graph[path] = {"source": source, "dependencies": dependencies}
+        visiting.remove(path)
+        order.append(path)
+
+    visit(entry_module)
+    replacement = '<script src="/__jellyframe/modules.bundle.js"></script>'
+    transformed_html = entry_html[:module_tags[0].start()] + replacement + entry_html[module_tags[0].end():]
+    entries = [{"path": path, "dependencies": graph[path]["dependencies"]} for path in order]
+    return graph, order, transformed_html, entries
+
+
+def apply_static_module_bundle(resources: list[dict],
+                               entry: str,
+                               staging_root: Path,
+                               max_resource_bytes: int) -> tuple[list[dict], dict]:
+    graph, order, transformed_html, entries = collect_module_graph(resources, entry)
+    if not order:
+        return resources, {"model": "static-local-es-modules", "enabled": False, "entryCount": 0}
+    bundle_path = "/__jellyframe/modules.bundle.js"
+    if any(resource["path"] == bundle_path for resource in resources):
+        fail(f"generated module bundle path is already occupied: {bundle_path}")
+    dependency_symbols = {path: module_symbol(path) for path in order}
+    bundle = "// Generated by JellyFrame static module bundler.\n"
+    for path in order:
+        bundle += compile_static_module(path, graph[path]["source"], dependency_symbols)
+    module_paths = set(order)
+    output = [resource for resource in resources if resource["path"] not in module_paths and resource["path"] != entry]
+    output.append(build_generated_resource_entry(
+        staging_root, entry, transformed_html.encode("utf-8"), "jellyframe::HostResourceKind::Other", max_resource_bytes))
+    bundle_resource = build_generated_resource_entry(
+        staging_root, bundle_path, bundle.encode("utf-8"), "jellyframe::HostResourceKind::ClassicScript", max_resource_bytes)
+    bundle_resource["scriptDiagnosticSources"] = [
+        {"path": path, "text": graph[path]["source"]} for path in order
+    ]
+    output.append(bundle_resource)
+    return sorted(output, key=lambda item: item["path"]), {
+        "model": "static-local-es-modules",
+        "enabled": True,
+        "entry": entries[-1]["path"],
+        "entryCount": 1,
+        "moduleCount": len(order),
+        "modules": entries,
+        "bundlePath": bundle_path,
+        "sourceBytes": sum(len(graph[path]["source"].encode("utf-8")) for path in order),
+        "bundleBytes": len(bundle.encode("utf-8")),
     }
 
 
@@ -1878,6 +2099,9 @@ def write_debug_dir(root: Path, output_dir: Path, manifest: dict, resources: lis
         target = output_dir / resource["relativeFile"]
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(resource["file"], target)
+    (output_dir / "jellyframe.app.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8")
     (output_dir / "jellyframe.package.json").write_text(
         json.dumps({
             "format": "jellyframe.package.debug",
@@ -2031,6 +2255,9 @@ def main() -> int:
     budgets = effective_budgets(manifest, target_config)
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
+    module_staging = tempfile.TemporaryDirectory(prefix="jellyframe-static-modules-")
+    resources, module_diagnostics = apply_static_module_bundle(
+        resources, manifest["entry"], Path(module_staging.name), max_resource_bytes)
     warnings.extend(collect_resource_budget_warnings(resources, budgets))
     warnings.extend(collect_audio_resource_warnings(manifest, resources))
     warnings.extend(collect_service_target_warnings(manifest, target_config))
@@ -2072,6 +2299,7 @@ def main() -> int:
             for resource in resources
         ],
         "references": references,
+        "staticModules": module_diagnostics,
         "serviceIntent": service_intent_report(manifest, target_config),
         "htmlApiDiagnostics": html_api_diagnostics,
         "scriptApiDiagnostics": script_api_diagnostics,
@@ -2086,7 +2314,7 @@ def main() -> int:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.debug_dir:
-        write_debug_dir(root, Path(args.debug_dir).resolve(), manifest, resources, report)
+        write_debug_dir(root, Path(args.debug_dir).resolve(), raw_manifest, resources, report)
 
     print(
         f"packaged {manifest['id']} resources={len(resources)} "
@@ -2099,6 +2327,7 @@ def main() -> int:
     )
     for warning in warnings:
         print(f"{warning['level']}: {warning['message']}")
+    module_staging.cleanup()
     return 0
 
 

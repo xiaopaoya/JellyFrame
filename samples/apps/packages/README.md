@@ -1,6 +1,6 @@
 # App Examples
 
-> Last updated: 2026-07-09; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0-dev
 
 Complete JellyFrame source-package examples live here. Each app should include
 `jellyframe.app.json`, local HTML/CSS/classic JavaScript and any bounded local
@@ -46,3 +46,5 @@ Current packages:
 - `jelly_font_policy`: package font-family and `.jffont` supplement policy
   sample with two runtime families, missing-glyph diagnostics and Win32
   `--use-app-fonts` validation.
+- `jelly_static_modules`: package-time static local ES-module graph that becomes
+  one classic device script before preview or packaging.

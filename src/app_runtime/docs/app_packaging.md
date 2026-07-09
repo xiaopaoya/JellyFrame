@@ -730,7 +730,7 @@ python tools/jellyframe_cli.py preview `
   --output build/watch_weather.ppm
 ```
 
-`package`, `check`, `preview` and source-package `install` run package validation first, then run a
+`package`, `check`, `preview` and source-package `install` run package validation first. `preview` then prepares the same temporary debug package that `.jfapp`/C++ output uses, so static module source is bundled before Win32 evaluates scripts. They then run a
 temporary render-core pseudo-browser pass over the package entry HTML so
 parser/style/layout/layer diagnostics come from the components that handled the
 markup and CSS. `preview` then uses the Win32 shell capture path for the actual
@@ -976,7 +976,7 @@ host/profile policy. No real network or filesystem I/O is performed by the
 core.
 
 Package reports also include `scriptApiDiagnostics`. This is a packaging-time
-static check over package-local classic scripts and HTML inline scripts; it
+static check over package-local classic scripts, package-time static module sources and HTML inline scripts; it
 does not execute JavaScript. It currently recognizes `XMLHttpRequest`,
 `localStorage`, `Audio()`, `navigator.geolocation.getCurrentPosition(...)` and
 `getContext("2d")`. If a script uses one of these host-backed APIs without the

@@ -338,7 +338,7 @@ JerryScript 源码树时可用。
 | 脚本执行 watchdog | 宿主/runtime 可选 | 当链接的 JerryScript 使用 `JERRY_VM_HALT=ON` 构建时，`JerryScriptRuntimeOptions::max_execution_check_count` 与 `HostBudgets::max_script_execution_checks` 可中断失控 eval 和 callback，并给出 `script execution budget exceeded`。若 JerryScript 缺少该特性，JellyFrame 会报告 watchdog 不可用，不伪造抢占。Win32 验证壳可用 `--require-script-watchdog` 和有界 check 参数强制验收这条 recovery 路径。 |
 | `btoa` / `atob` | 部分支持 | 绑定 document 的 runtime 会在 `window` 和 global 暴露 Base64 helper。`btoa` 接受 HTML binary string，并拒绝超过 255 的 code point；`atob` 忽略 ASCII whitespace、容忍缺省 padding，并拒绝非法输入。错误目前使用 JellyFrame `TypeError`，不是 DOMException `InvalidCharacterError`。 |
 | Promise/microtask | 延后 | 不要依赖浏览器 task 语义。 |
-| Modules/import | 延后 | `type="module"`、dynamic import 和 module loading 会跳过。 |
+| Modules/import | 打包期子集 | 一个外部 `type="module"` 入口可 import 一个有界、无环的 package-local `.js` 图。打包器会改写入口 HTML 并生成一个 classic bundle；原 module 不会留在最终 resources 中。支持 named/default/namespace import、named/default export 和副作用 import。inline module script、多个 module entry、循环、re-export、`export *`、远程/非 JS path、`modulepreload` 与动态 `import()` 仍延后。 |
 | `querySelector` / `querySelectorAll` | 子集 | 支持 document/element 上的简单 selector：tag、`.class`、`#id`、`[attr]`、`[attr=value]` 及同一 compound 内组合，例如 `button.primary`。返回静态 wrapper/数组快照，不是 live NodeList。不支持 descendant/child/sibling combinator、逗号、伪类、`:has()` 或完整 CSS selector API；复杂字面量会在 package report 中输出 `script-api-subset`。 |
 | `innerHTML` | 延后 | 使用 DOM creation APIs。 |
 | XHR/fetch/storage | 部分支持 | scripting 构建已支持异步 `XMLHttpRequest` GET V0；绑定非阻塞 `AppLocalStorageShadow` 时支持极小 `localStorage` 子集；`fetch()` 等 Promise/microtask 有界后再考虑。 |

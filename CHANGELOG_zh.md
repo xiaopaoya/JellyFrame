@@ -10,6 +10,7 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 新增打包期静态本地 ES-module authoring V0。一个外部 `type="module"` 入口可使用有界、无环的 package-local `.js` 图；打包器生成 classic bundle，并从最终 package resources 移除原 module。`preview` 现通过 Win32 验收同一 prepared package，`--debug-dir` 也包含可运行 manifest。动态/远程加载和 runtime module loader 仍不存在。
 - 新增 Form V0，本地嵌入式流程可使用 `form.checkValidity()`、
   `form.reportValidity()`、`form.requestSubmit([submitter])`、带
   `event.submitter` 的可取消 `SubmitEvent` 形状 `submit`，以及字符串 entry 的

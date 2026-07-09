@@ -147,6 +147,46 @@ class PackagePreflightTests(unittest.TestCase):
             ],
         )
 
+    def test_static_local_modules_bundle_without_runtime_loader(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-static-modules-") as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "index.html").write_text(
+                '<body><script type="module" src="scripts/app.js"></script></body>',
+                encoding="utf-8")
+            (root / "scripts" / "app.js").write_text(
+                'import { value as answer } from "./value.js"; window.answer = answer;',
+                encoding="utf-8")
+            (root / "scripts" / "value.js").write_text('export const value = 42;', encoding="utf-8")
+            resources = package_app.discover_resources(root, 4096)
+            with tempfile.TemporaryDirectory(prefix="jellyframe-static-modules-stage-") as staging:
+                packaged, diagnostics = package_app.apply_static_module_bundle(
+                    resources, "/index.html", Path(staging), 4096)
+                paths = {resource["path"] for resource in packaged}
+                entry = next(resource for resource in packaged if resource["path"] == "/index.html")
+                bundle = next(resource for resource in packaged if resource["path"] == "/__jellyframe/modules.bundle.js")
+                entry_text = entry["file"].read_text(encoding="utf-8")
+                bundle_text = bundle["file"].read_text(encoding="utf-8")
+
+        self.assertTrue(diagnostics["enabled"])
+        self.assertEqual(diagnostics["moduleCount"], 2)
+        self.assertEqual(paths, {"/index.html", "/__jellyframe/modules.bundle.js"})
+        self.assertIn('src="/__jellyframe/modules.bundle.js"', entry_text)
+        self.assertNotIn("import", bundle_text)
+
+    def test_static_local_modules_reject_import_cycles(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-static-modules-cycle-") as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "index.html").write_text(
+                '<script type="module" src="scripts/a.js"></script>', encoding="utf-8")
+            (root / "scripts" / "a.js").write_text('import "./b.js";', encoding="utf-8")
+            (root / "scripts" / "b.js").write_text('import "./a.js";', encoding="utf-8")
+            resources = package_app.discover_resources(root, 4096)
+            with tempfile.TemporaryDirectory(prefix="jellyframe-static-modules-stage-") as staging:
+                with self.assertRaises(SystemExit):
+                    package_app.apply_static_module_bundle(resources, "/index.html", Path(staging), 4096)
+
     def test_audio_files_remain_generic_package_resources(self):
         self.assertEqual(
             package_app.resource_kind(Path("audio/tone.wav")),
