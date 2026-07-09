@@ -483,11 +483,23 @@ struct AppComputeJobPolicy {
     std::size_t max_jobs_per_app = 0;
 };
 
+struct AppVideoFramePolicy {
+    bool enabled = false;
+    bool allow_mjpeg = false;
+    bool allow_h264 = false;
+    HostPixelFormat pixel_format = HostPixelFormat::Unknown;
+    int max_width = 0;
+    int max_height = 0;
+    int max_fps = 0;
+    std::size_t max_frame_bytes = 0;
+};
+
 struct AppServiceManifestCapabilities {
     bool compute_jobs = false;
     bool network_fetch = false;
     bool storage_kv = false;
     bool image_decode = false;
+    bool video_frame = false;
     bool audio_playback = false;
     bool sensor_accelerometer = false;
     bool sensor_gyroscope = false;
@@ -519,6 +531,15 @@ struct AppServiceHostProfile {
     std::size_t max_decoded_image_bytes = 0;
     std::size_t max_pending_image_decodes = 1;
 
+    bool allow_video_frame = false;
+    bool allow_video_mjpeg = false;
+    bool allow_video_h264 = false;
+    HostPixelFormat video_frame_format = HostPixelFormat::Unknown;
+    int max_video_width = 0;
+    int max_video_height = 0;
+    int max_video_fps = 0;
+    std::size_t max_video_frame_bytes = 0;
+
     bool allow_audio_playback = false;
     std::size_t max_audio_source_url_bytes = 256;
     std::size_t max_audio_streams = 1;
@@ -538,6 +559,7 @@ struct AppServicePolicies {
     NetworkFetchPolicy network;
     AppPrivateKvPolicy storage;
     ImageDecodePolicy image;
+    AppVideoFramePolicy video_frame;
     AudioPlaybackPolicy audio;
     bool sensor_accelerometer = false;
     bool sensor_gyroscope = false;

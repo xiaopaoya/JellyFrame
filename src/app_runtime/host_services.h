@@ -43,6 +43,7 @@ enum class HostServiceHandleKind {
     FileBrokerResult,
     BundleRecord,
     ComputeResult,
+    VideoFrame,
     Other,
 };
 

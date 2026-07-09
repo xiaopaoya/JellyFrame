@@ -668,6 +668,10 @@ Rules:
   can run under QEMU + Octal PSRAM, but the 320x192 baseline sample remains
   below real-time, so it is only an experimental profile.
 - Video frame buffers are host-owned; UI references the latest frame handle.
+- Replace a displayed frame only after the new handle is allocated. Ports must
+  budget one additional handle/frame allocation per simultaneously displayed
+  source; if that allocation is unavailable, retain the old frame and report a
+  budget failure rather than flashing an empty preview.
 - If `supports_h264` is false, packaging/installation tools should reject apps
   declaring H.264 or emit an explicit degradation diagnostic.
 - If decode is backlogged, drop old frames.

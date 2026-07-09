@@ -84,7 +84,7 @@ layout, display lists or framebuffers.
 
 These fields do not mean the core calls hardware directly. They are a policy
 contract shared by ports, desktop tools, packagers and future JS APIs. If an app
-declares `network.fetch` or `media.audio.playback`, tools can compare that against
+declares `network.fetch`, `media.audio.playback` or `media.video.frame`, tools can compare that against
 the target profile before packaging or installation, and runtime bindings can
 decide whether to expose the API.
 

@@ -14,6 +14,7 @@ int app_services_tests_main();
 int app_storage_lifecycle_policy_tests_main();
 int authorized_file_broker_tests_main();
 int app_service_worker_tests_main();
+int app_video_frames_tests_main();
 int app_host_tests_main();
 int app_lifecycle_tests_main();
 int app_load_telemetry_tests_main();
@@ -46,6 +47,7 @@ int main() {
     failed += run_test("app_lifecycle", app_lifecycle_tests_main);
     failed += run_test("app_load_telemetry", app_load_telemetry_tests_main);
     failed += run_test("app_service_worker", app_service_worker_tests_main);
+    failed += run_test("app_video_frames", app_video_frames_tests_main);
     failed += run_test("app_services", app_services_tests_main);
     failed += run_test("app_storage_lifecycle_policy", app_storage_lifecycle_policy_tests_main);
     failed += run_test("authorized_file_broker", authorized_file_broker_tests_main);

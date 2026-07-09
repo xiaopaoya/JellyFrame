@@ -134,7 +134,8 @@ ESP32-S3 解码实验包给出的方向可以接受，但要明确边界：
   必须有最大宽高、最大 decoded bytes、最大并发数；大图应在打包期缩放或拒绝。
 - **音频 playback**：可选加入。核心/JS 只控制 play/pause/stop/volume 和接收 ended/error 事件；
   PCM buffer、I2S、codec、GMF/ADF pipeline 由宿主持有。
-- **视频 decode**：只作为实验性 host service。第一阶段优先支持低分辨率 MJPEG frame provider；
+- **视频 decode**：只作为实验性 host service。第一阶段采用有界的 `media.video.frame` 最新帧 provider：
+  每个 source 同时只有一个 in-flight request，返回 host-owned RGB565 surface handle，并在积压前丢弃旧帧。
   H.264 可以作为 `supports_h264` 标记下的可选 frame decode profile，但不承诺 `<video>`，
   不进入常规 layout 必需能力，也不列入默认 ESP32-S3 profile。
 - **图像作为页面资源**：可以先让 `<img>`/CSS background 使用固定占位盒；接入 image decode 后再替换为真实 surface。

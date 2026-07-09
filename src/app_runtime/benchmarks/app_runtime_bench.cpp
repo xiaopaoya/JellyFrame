@@ -6,6 +6,7 @@
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
+#include "app_runtime/app_video_frames.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
@@ -239,6 +240,29 @@ void bench_compute_job_mock(std::size_t capacity) {
                 compute.release_result(host, completion.handle);
             }
         }
+    }
+}
+
+void bench_video_frame_provider_mock(std::size_t capacity) {
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 64, 1});
+    host.launch("org.example.preview", AppRole::App);
+    AppVideoFrameProviderMock video(AppVideoFramePolicy{
+        true, true, false, HostPixelFormat::Rgb565, 8, 8, 15, 128,
+    });
+    video.add_fixture(AppVideoFrameFixture{
+        "/preview.mjpg", AppVideoFrameCodec::Mjpeg, 2, 2, 2,
+        HostPixelFormat::Rgb565, 100, std::vector<std::uint8_t>(8, 7),
+    });
+    std::vector<HostServiceCompletion> accepted;
+    for (std::size_t i = 0; i < capacity; ++i) {
+        video.request_next_frame(host, {"/preview.mjpg", AppVideoFrameCodec::Mjpeg, 1000});
+        video.complete_next(host);
+        accepted.clear();
+        host.pump_frame_completions(accepted);
+    }
+    const std::uint32_t handle = video.latest_frame_handle("/preview.mjpg");
+    if (handle != 0) {
+        video.release_frame(host, handle);
     }
 }
 
@@ -793,6 +817,9 @@ int run_app_runtime_bench(int argc, char** argv) {
     }));
     print_result("app_runtime_compute_job_mock", iterations, average_microseconds(iterations, [&] {
         bench_compute_job_mock(capacity);
+    }));
+    print_result("app_runtime_video_frame_provider_mock", iterations, average_microseconds(iterations, [&] {
+        bench_video_frame_provider_mock(capacity);
     }));
     print_result("app_runtime_network_fetch_mock", iterations, average_microseconds(iterations, [&] {
         bench_network_fetch_mock(capacity);

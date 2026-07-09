@@ -554,6 +554,8 @@ struct HostVideoFrame {
 - H.264 不进入 ESP32-S3 默认 profile。2026-06-20 复测证明它在 QEMU + Octal PSRAM 下可跑通，
   但 320x192 baseline 样本仍低于实时，只能作为实验 profile。
 - video frame buffer 由宿主持有，UI 只拿最新 frame handle。
+- 只有新 handle 分配成功后才能替换正在显示的帧。port 必须为每个同时显示的 source 预留一个额外的
+  handle/frame allocation；若该分配不可用，应保留旧帧并报告 budget failure，而不是闪成空白 preview。
 - 如果 `supports_h264` 为 false，打包/安装工具应拒绝声明 H.264 的 app，或给出降级诊断。
 - 如果解码积压，丢弃旧帧，不追赶历史帧。
 - 若 dirty repaint 无法跟上，暂停视频或降低 fps。

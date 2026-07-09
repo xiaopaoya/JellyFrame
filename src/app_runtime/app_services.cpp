@@ -363,6 +363,15 @@ AppServiceHostProfile app_service_host_profile_from_capabilities(const HostDevic
         ? profile.max_pending_image_decodes
         : capabilities.async.max_in_flight_jobs;
 
+    profile.allow_video_frame = capabilities.media.supports_video_decode;
+    profile.allow_video_mjpeg = capabilities.media.supports_mjpeg;
+    profile.allow_video_h264 = capabilities.media.supports_h264;
+    profile.video_frame_format = capabilities.media.preferred_video_frame_format;
+    profile.max_video_width = capabilities.media.max_video_width;
+    profile.max_video_height = capabilities.media.max_video_height;
+    profile.max_video_fps = capabilities.media.max_video_fps;
+    profile.max_video_frame_bytes = capabilities.media.max_video_frame_bytes;
+
     profile.allow_audio_playback = capabilities.media.supports_audio_playback;
     profile.max_audio_streams = capabilities.media.max_audio_streams == 0
         ? profile.max_audio_streams
@@ -411,6 +420,16 @@ AppServicePolicies app_service_policies_for_app(const AppServiceManifestCapabili
         profile.max_image_height,
         profile.max_decoded_image_bytes,
         profile.max_pending_image_decodes,
+    };
+    policies.video_frame = AppVideoFramePolicy{
+        manifest.video_frame && profile.allow_video_frame,
+        profile.allow_video_mjpeg,
+        profile.allow_video_h264,
+        profile.video_frame_format,
+        profile.max_video_width,
+        profile.max_video_height,
+        profile.max_video_fps,
+        profile.max_video_frame_bytes,
     };
     policies.audio = AudioPlaybackPolicy{
         manifest.audio_playback && profile.allow_audio_playback,

@@ -170,10 +170,12 @@ Current recommendation:
 - **Audio playback**: optional. Core/JS controls play/pause/stop/volume and
   receives ended/error events; PCM buffers, I2S, codecs and GMF/ADF pipelines
   remain host-owned.
-- **Video decode**: experimental. The first useful shape is a low-resolution
-  MJPEG frame provider. H.264 may be exposed only behind a `supports_h264`
-  target profile as optional frame decode; do not promise `<video>` or make it
-  required for normal layout. H.264 is not in the default ESP32-S3 profile.
+- **Video decode**: experimental. The first useful shape is the bounded
+  `media.video.frame` latest-frame provider: one in-flight request per source,
+  a host-owned RGB565 surface handle, and stale frames dropped before they can
+  accumulate. H.264 may be exposed only behind a `supports_h264` target profile;
+  do not promise `<video>` or make it required for normal layout. H.264 is not
+  in the default ESP32-S3 profile.
 - **Images in pages**: before image decode is wired, `<img>` and CSS backgrounds
   may use placeholder boxes. Once wired, decoded surfaces can replace them on a
   later dirty repaint.

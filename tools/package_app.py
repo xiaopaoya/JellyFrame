@@ -432,6 +432,7 @@ def validate_manifest(manifest: dict) -> dict:
     if not isinstance(role, str) or role not in {"app", "launcher", "watchface", "settings"}:
         fail("manifest role must be one of: app, launcher, watchface, settings")
     compute_jobs_allowed = "compute.jobs" in capabilities
+    video_frame_allowed = "media.video.frame" in capabilities
     network_allowed = "network" in permissions or "network.fetch" in capabilities
     storage_kv_allowed = "storage.kv" in capabilities
     canvas2d_allowed = "graphics.canvas2d" in capabilities
@@ -458,6 +459,7 @@ def validate_manifest(manifest: dict) -> dict:
         "permissions": permissions,
         "capabilities": capabilities,
         "computeJobsAllowed": compute_jobs_allowed,
+        "videoFrameAllowed": video_frame_allowed,
         "networkAllowed": network_allowed,
         "storageKvAllowed": storage_kv_allowed,
         "canvas2dAllowed": canvas2d_allowed,
@@ -496,6 +498,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
         "target": target_id if isinstance(target_id, str) else "",
         "requested": {
             "computeJobs": bool(manifest.get("computeJobsAllowed")),
+            "videoFrame": bool(manifest.get("videoFrameAllowed")),
             "networkFetch": bool(manifest.get("networkAllowed")),
             "storageKv": bool(manifest.get("storageKvAllowed")),
             "canvas2d": bool(manifest.get("canvas2dAllowed")),
@@ -508,6 +511,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
         },
         "targetSupport": {
             "computeJobs": support_state("computeJobs"),
+            "videoFrame": support_state("videoFrame"),
             "networkFetch": support_state("networkFetch"),
             "storageKv": support_state("storageKv"),
             "canvas2d": support_state("canvas2d"),
@@ -541,6 +545,7 @@ def collect_service_target_warnings(manifest: dict, target_config: dict) -> list
     source = f"target:{target_id}" if isinstance(target_id, str) and target_id else "target"
     requests = [
         ("computeJobs", bool(manifest.get("computeJobsAllowed")), "compute.jobs"),
+        ("videoFrame", bool(manifest.get("videoFrameAllowed")), "media.video.frame"),
         ("networkFetch", bool(manifest.get("networkAllowed")), "network.fetch"),
         ("storageKv", bool(manifest.get("storageKvAllowed")), "storage.kv"),
         ("canvas2d", bool(manifest.get("canvas2dAllowed")), "graphics.canvas2d"),
@@ -597,6 +602,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
             })
     known_capabilities = {
         "compute.jobs",
+        "media.video.frame",
         "network.fetch",
         "storage.kv",
         "file.read",
@@ -2327,6 +2333,7 @@ def main() -> int:
         f"packaged {manifest['id']} resources={len(resources)} "
         f"bytes={report['totalResourceBytes']} network_allowed={manifest['networkAllowed']} "
         f"storage_kv_allowed={manifest['storageKvAllowed']} "
+        f"video_frame_allowed={manifest['videoFrameAllowed']} "
         f"canvas2d_allowed={manifest['canvas2dAllowed']} "
         f"audio_playback_allowed={manifest['audioPlaybackAllowed']} "
         f"background_services={json.dumps(manifest['backgroundServices'], separators=(',', ':'))} "

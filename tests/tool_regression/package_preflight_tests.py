@@ -499,6 +499,7 @@ class PackagePreflightTests(unittest.TestCase):
             "permissions": ["network"],
             "capabilities": [
                 "compute.jobs",
+                "media.video.frame",
                 "network.fetch",
                 "storage.kv",
                 "graphics.canvas2d",
@@ -526,6 +527,7 @@ class PackagePreflightTests(unittest.TestCase):
             intent["requested"],
             {
                 "computeJobs": True,
+                "videoFrame": True,
                 "networkFetch": True,
                 "storageKv": True,
                 "canvas2d": True,
@@ -541,6 +543,7 @@ class PackagePreflightTests(unittest.TestCase):
             intent["targetSupport"],
             {
                 "computeJobs": "unknown",
+                "videoFrame": "unknown",
                 "networkFetch": "unknown",
                 "storageKv": "unknown",
                 "canvas2d": "unknown",
@@ -560,6 +563,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "round-300",
             "hostServices": {
                 "computeJobs": True,
+                "videoFrame": True,
                 "networkFetch": True,
                 "storageKv": True,
                 "canvas2d": False,
@@ -572,6 +576,7 @@ class PackagePreflightTests(unittest.TestCase):
             supported_intent["targetSupport"],
             {
                 "computeJobs": "supported",
+                "videoFrame": "supported",
                 "networkFetch": "supported",
                 "storageKv": "supported",
                 "canvas2d": "unsupported",
@@ -588,6 +593,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "round-300",
             "hostServices": {
                 "computeJobs": False,
+                "videoFrame": False,
                 "networkFetch": True,
                 "storageKv": False,
                 "canvas2d": False,
@@ -600,6 +606,7 @@ class PackagePreflightTests(unittest.TestCase):
             [warning["service"] for warning in warnings],
             [
                 "computeJobs",
+                "videoFrame",
                 "storageKv",
                 "canvas2d",
                 "audioPlayback",

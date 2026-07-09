@@ -49,6 +49,7 @@ SUITES: dict[str, SuiteConfig] = {
         thresholds_us={
             "app_runtime_completion_queue": 2000.0,
             "app_runtime_compute_job_mock": 5000.0,
+            "app_runtime_video_frame_provider_mock": 5000.0,
             "app_runtime_handle_table_churn": 5000.0,
             "app_runtime_system_event_queue": 2000.0,
             "app_runtime_font_family_measure": 5000.0,

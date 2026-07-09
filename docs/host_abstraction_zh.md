@@ -64,7 +64,7 @@ JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显
 不得访问 DOM、JerryScript、layout、display list 或 framebuffer。
 
 这些字段不是要求核心直接调用硬件。它们是 port、桌面调试器、打包器和未来 JS API
-对齐策略的描述：某个 app 声明需要 `network.fetch` 或 `media.audio.playback` 时，工具可以在打包/安装前
+对齐策略的描述：某个 app 声明需要 `network.fetch`、`media.audio.playback` 或 `media.video.frame` 时，工具可以在打包/安装前
 比对目标 profile，运行时也能在绑定 API 前决定是否暴露能力。
 
 推荐的执行边界：
