@@ -194,6 +194,7 @@ For fuller button, card, scroll-list and fixed bottom-nav recipes, see
 | --- | --- | --- |
 | `layout-text-overflow` | Text does not fit its box. Reports usually include `text`, `node`, `path`, measured width and available width. | Shorten the label, widen the box, reduce font size, or use a narrow-target media rule. |
 | `visual-horizontal-overflow` | Paint extends outside the target width. Reports include `paintBounds`, viewport and overflow pixels; when a layout box can be blamed, `node`, `path` and `boxOverflow*` fields point to it. | Add `max-width: 100%`, use `box-sizing: border-box`, stack columns, or put long content in a scroll container. |
+| `visual-vertical-paint-overflow` | Paint extends above or below the target height. Reports can include `node`, `path`, `boxTop`, `boxBottom`, `boxOverflowTop` and `boxOverflowBottom`. | Move fixed/absolute elements back inside the viewport, reduce vertical spacing, or turn long content into an explicit scroll container. |
 | `visual-scroll-needed` | Page is taller than the viewport. | Decide whether scrolling is intended. If yes, use an explicit `overflow: auto` area and allow it in the target gate. |
 | `visual-scroll-container` | An internal scroll area clips content. Reports usually include `node`, `path`, `boxHeight`, `contentHeight` and `overflowY`. | Verify the reported container is reachable by touch/wheel/key input and keep fixed navigation outside it. |
 | `font-family-unmatched` | CSS names a custom font not declared in manifest. | Use `system-ui` or declare a matching `.jffont` family. |

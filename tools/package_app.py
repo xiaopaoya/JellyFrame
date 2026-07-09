@@ -986,6 +986,7 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
     declared = {capability for capability in capabilities if isinstance(capability, str)}
     entries = []
     warnings = []
+    missing_capability_count = 0
     seen = set()
     for resource in resources:
         for source_text in script_sources_for_resource(resource):
@@ -1008,6 +1009,7 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                 }
                 entries.append(entry)
                 if not declared_capability:
+                    missing_capability_count += 1
                     warnings.append({
                         "level": "warning",
                         "code": "script-capability-missing",
@@ -1043,7 +1045,8 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
         "model": "static-classic-script-api-capability-preflight",
         "entries": entries,
         "entryCount": len(entries),
-        "missingCapabilityCount": len(warnings),
+        "missingCapabilityCount": missing_capability_count,
+        "warningCount": len(warnings),
     }, warnings
 
 

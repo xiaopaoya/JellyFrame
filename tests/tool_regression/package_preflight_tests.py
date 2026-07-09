@@ -249,6 +249,8 @@ class PackagePreflightTests(unittest.TestCase):
             }, resources)
 
         self.assertEqual(diagnostics["entryCount"], 5)
+        self.assertEqual(diagnostics["missingCapabilityCount"], 3)
+        self.assertEqual(diagnostics["warningCount"], 3)
         self.assertEqual(
             sorted((warning["api"], warning["capability"]) for warning in warnings),
             [
@@ -296,6 +298,8 @@ class PackagePreflightTests(unittest.TestCase):
             diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
 
         self.assertEqual(diagnostics["entryCount"], 6)
+        self.assertEqual(diagnostics["missingCapabilityCount"], 0)
+        self.assertEqual(diagnostics["warningCount"], 6)
         self.assertEqual(
             sorted(warning["api"] for warning in warnings),
             ["Promise", "dynamic import", "fetch", "getBoundingClientRect", "innerHTML", "pointer capture"],
@@ -333,6 +337,8 @@ class PackagePreflightTests(unittest.TestCase):
             diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
 
         self.assertEqual(diagnostics["entryCount"], 1)
+        self.assertEqual(diagnostics["missingCapabilityCount"], 0)
+        self.assertEqual(diagnostics["warningCount"], 1)
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0]["code"], "script-api-subset")
         self.assertEqual(warnings[0]["api"], "querySelector")

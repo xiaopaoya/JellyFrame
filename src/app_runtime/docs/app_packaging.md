@@ -988,8 +988,11 @@ documented host-clock path. Deferred browser APIs such as `fetch()`, `Promise`,
 Complex `querySelector` / `querySelectorAll` string literals are reported as
 `script-api-subset` because the runtime supports only a simple selector subset.
 CLI `developerAdvice[]` explains this as "declare the capability and verify the
-target profile supports it". This check does not enter the MCU runtime and does
-not replace real host authorization.
+target profile supports it" for real capability mismatches. In the JSON summary,
+`missingCapabilityCount` counts only missing manifest capabilities, while
+`warningCount` counts all script preflight warnings including deferred or subset
+APIs. This check does not enter the MCU runtime and does not replace real host
+authorization.
 
 The JSON report is intended for CI and editor integrations. It contains app
 metadata, selected target config, effective budgets, resource sizes,

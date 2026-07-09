@@ -836,7 +836,9 @@ classic script 和 HTML inline script，不执行 JavaScript。当前会识别 `
 需要宿主时钟时使用 `Date.now()`，需要 Date 对象时使用 `new Date(Date.now())`。`fetch()`、
 `Promise`、`innerHTML` 和动态 `import()` 等延后 API 会输出
 `script-api-deferred`；复杂 `querySelector` / `querySelectorAll` 字面量会输出
-`script-api-subset`，因为运行时只支持简单 selector 子集。
+`script-api-subset`，因为运行时只支持简单 selector 子集。JSON summary 中的
+`missingCapabilityCount` 只统计缺失 manifest capability 的项目，`warningCount`
+统计所有脚本预检 warning，包括延后或子集 API。
 
 JSON report 面向 CI 和编辑器集成，包含 app 元信息、选中的 target config、effective budgets、
 资源大小、CRC32/SHA-256 校验、service intent、`runtimeBudgetEstimate`、local/remote

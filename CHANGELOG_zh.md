@@ -60,6 +60,8 @@ JellyFrame Engine 的重要变更记录在这里。
   上下越界 metrics，与现有横向溢出定位口径一致。
 - `developerAdvice[]` 现在会把结构化的文本溢出、scroll container、横向/纵向绘制溢出诊断
   转成更具体的修复动作，直接指出可能的元素/文本和像素越界量，而不是只重复 diagnostic code。
+- `scriptApiDiagnostics.missingCapabilityCount` 现在只统计缺失的 manifest capability；
+  延后/子集 API warning 会进入新的 `warningCount` 总数，不再被误标成 capability 缺口。
 - `jellyframe_cli.py doctor` 新增 `--sample` 和 `--exclude-sample`，便于试用者或维护者只运行
   某个样例子集，同时不改变默认全样例健康检查。
 - `jelly_component_recipes` 示例新增确定性的 Win32 滚动 capture 脚本，CTest 会验证该示例的
