@@ -40,7 +40,7 @@
 | `localStorage` | 宿主可选 | `storage.kv`。这是 app 私有小型 KV shadow，不是浏览器持久存储全集。 |
 | `Audio()` | 宿主可选 | `media.audio.playback`。真实 codec/I2S 由 host 提供。 |
 | `navigator.geolocation` | 宿主可选 | `location.position`。只提供离散定位快照。 |
-| Canvas 2D | 宿主可选子集 | `graphics.canvas2d`。只在 `getContext("2d")` 后分配 backing store。包含 canvas-to-canvas `drawImage()` 的 3/5/9 参数形式和最近邻缩放、双 stop 同心 `createRadialGradient()`，以及由 `save()`/`restore()` 保存的像素对齐 `translate(x, y)`。`<img>`、`ImageBitmap`、视频 source、焦点/非同心或多 stop 径向渐变、scale、rotate、通用矩阵与像素 API 仍延后。 |
+| Canvas 2D | 宿主可选子集 | `graphics.canvas2d`。只在 `getContext("2d")` 后分配 backing store。包含 canvas-to-canvas `drawImage()` 的 3/5/9 参数形式和最近邻缩放、双 stop 同心 `createRadialGradient()`，以及由 `save()`/`restore()` 保存的像素对齐 `translate(x, y)`，和有界 `quadraticCurveTo()` path tessellation。`<img>`、`ImageBitmap`、视频 source、焦点/非同心或多 stop 径向渐变、scale、rotate、通用矩阵与像素 API 仍延后。 |
 | 宿主时间 | 可用 | 使用 `Date.now()`。除非后续明确文档化，不要假设 `new Date()` 已受宿主时钟控制。 |
 | 宿主计算任务 | 宿主可选合同 | `compute.jobs` 预留有字节预算的具名宿主任务；它暂时不是 JS Worker、线程、消息端口或任意代码执行 API。 |
 | 视频帧预览 | 宿主可选实验合同 | `media.video.frame` 为产品宿主的 MJPEG 或显式启用的 H.264 baseline 预览提供有界最新帧句柄。它不是 `<video>` 或 JS 媒体 API。 |

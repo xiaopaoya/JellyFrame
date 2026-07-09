@@ -488,6 +488,38 @@ bool push_path_point(Canvas2DSurface& surface, const Canvas2DPolicy& policy, Can
     return true;
 }
 
+bool append_quadratic_points(Canvas2DSurface& surface,
+                             const Canvas2DPolicy& policy,
+                             double control_x,
+                             double control_y,
+                             double x,
+                             double y) {
+    if (surface.path.empty() || !std::isfinite(control_x) || !std::isfinite(control_y) ||
+        !std::isfinite(x) || !std::isfinite(y)) {
+        return false;
+    }
+    const Canvas2DPoint start = surface.path.back();
+    const double span = std::max({std::abs(control_x - start.x), std::abs(control_y - start.y),
+                                  std::abs(x - control_x), std::abs(y - control_y)});
+    const int segments = std::max(2, std::min(24, static_cast<int>(std::ceil(span / 4.0))));
+    if (surface.path.size() + static_cast<std::size_t>(segments) >
+        std::max<std::size_t>(1, policy.max_path_points)) {
+        return false;
+    }
+    for (int index = 1; index <= segments; ++index) {
+        const double t = static_cast<double>(index) / static_cast<double>(segments);
+        const double inv = 1.0 - t;
+        const int px = static_cast<int>(std::round(inv * inv * start.x + 2.0 * inv * t * control_x + t * t * x));
+        const int py = static_cast<int>(std::round(inv * inv * start.y + 2.0 * inv * t * control_y + t * t * y));
+        if (surface.path.back().x != px || surface.path.back().y != py) {
+            if (!push_path_point(surface, policy, Canvas2DPoint{px, py})) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool append_arc_points(Canvas2DSurface& surface,
                        const Canvas2DPolicy& policy,
                        double x,
@@ -947,6 +979,36 @@ bool Canvas2DRegistry::line_to(Node& node, int x, int y) {
         return false;
     }
     return push_path_point(*surface, policy_, Canvas2DPoint{translated_x, translated_y});
+}
+
+bool Canvas2DRegistry::quadratic_curve_to(Node& node,
+                                              double control_x,
+                                              double control_y,
+                                              double x,
+                                              double y) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || !std::isfinite(control_x) || !std::isfinite(control_y) ||
+        !std::isfinite(x) || !std::isfinite(y)) {
+        return false;
+    }
+    const double translated_control_x = control_x + surface->state.translate_x;
+    const double translated_control_y = control_y + surface->state.translate_y;
+    const double translated_x = x + surface->state.translate_x;
+    const double translated_y = y + surface->state.translate_y;
+    const double minimum = static_cast<double>(std::numeric_limits<int>::min());
+    const double maximum = static_cast<double>(std::numeric_limits<int>::max());
+    if (!std::isfinite(translated_control_x) || !std::isfinite(translated_control_y) ||
+        !std::isfinite(translated_x) || !std::isfinite(translated_y) ||
+        translated_control_x < minimum || translated_control_x > maximum ||
+        translated_control_y < minimum || translated_control_y > maximum ||
+        translated_x < minimum || translated_x > maximum ||
+        translated_y < minimum || translated_y > maximum) {
+        return false;
+    }
+    surface->path_closed = false;
+    return append_quadratic_points(*surface, policy_,
+                                   translated_control_x, translated_control_y,
+                                   translated_x, translated_y);
 }
 
 bool Canvas2DRegistry::arc(Node& node,

@@ -130,6 +130,7 @@ public:
     bool begin_path(Node& node);
     bool move_to(Node& node, int x, int y);
     bool line_to(Node& node, int x, int y);
+    bool quadratic_curve_to(Node& node, double control_x, double control_y, double x, double y);
     bool arc(Node& node, double x, double y, double radius, double start_angle, double end_angle, bool anticlockwise);
     bool close_path(Node& node);
     bool fill(Node& node);

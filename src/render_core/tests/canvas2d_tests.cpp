@@ -330,6 +330,27 @@ void linear_gradient_fills_rect_and_is_budgeted() {
     assert(no_gradient_registry.create_linear_gradient(0.0, 0.0, 8.0, 0.0) == 0);
 }
 
+void quadratic_curve_to_generates_bounded_smooth_path() {
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 256, 256, 16, 16});
+    auto canvas = make_element("canvas");
+    assert(registry.set_stroke_style(*canvas, "#ffffff"));
+    assert(registry.begin_path(*canvas));
+    assert(registry.move_to(*canvas, 1, 12));
+    assert(registry.quadratic_curve_to(*canvas, 8.0, 0.0, 15.0, 12.0));
+    assert(registry.stroke(*canvas));
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    assert(surface != nullptr);
+    assert(surface->pixels[12 * surface->width + 1].a > 0);
+    assert(surface->pixels[6 * surface->width + 8].a > 0);
+    assert(surface->pixels[12 * surface->width + 15].a > 0);
+
+    Canvas2DRegistry limited(Canvas2DPolicy{true, 1, 256, 256, 16, 16, 2});
+    auto limited_canvas = make_element("canvas");
+    assert(limited.begin_path(*limited_canvas));
+    assert(limited.move_to(*limited_canvas, 0, 0));
+    assert(!limited.quadratic_curve_to(*limited_canvas, 8.0, 0.0, 15.0, 12.0));
+}
+
 void translate_offsets_drawing_and_restore_resets_offset() {
     Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
     auto canvas = make_element("canvas");
@@ -453,6 +474,7 @@ int main() {
     fill_path_fills_closed_polygon();
     linear_gradient_fills_rect_and_is_budgeted();
     translate_offsets_drawing_and_restore_resets_offset();
+    quadratic_curve_to_generates_bounded_smooth_path();
     radial_gradient_fills_rect_with_two_stop_concentric_subset();
     draw_image_copies_canvas_surface_without_new_allocation();
     text_metrics_and_fill_text_use_bound_backend();

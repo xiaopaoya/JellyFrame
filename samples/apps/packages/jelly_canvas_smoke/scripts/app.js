@@ -23,7 +23,13 @@
   sourceCtx.beginPath();
   sourceCtx.moveTo(6, 40);
   for (var j = 0; j < bars.length; j += 1) {
-    sourceCtx.lineTo(8 + j * 8, 44 - Math.floor(bars[j] / 2));
+    var nextX = 8 + j * 8;
+    var nextY = 44 - Math.floor(bars[j] / 2);
+    if (j === 0) {
+      sourceCtx.lineTo(nextX, nextY);
+    } else {
+      sourceCtx.quadraticCurveTo(nextX - 4, 44 - Math.floor(bars[j - 1] / 2), nextX, nextY);
+    }
   }
   sourceCtx.stroke();
 

@@ -641,6 +641,17 @@ int run_render_core_microbench(int argc, char** argv) {
         canvas_registry.fill_rect(*canvas, 0, 0, 96, 64);
         canvas_registry.restore(*canvas);
     }));
+    canvas_registry.begin_path(*canvas);
+    canvas_registry.move_to(*canvas, 4, 64);
+    print_result("canvas2d_quadratic_curve_stroke", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.begin_path(*canvas);
+        canvas_registry.move_to(*canvas, 4, 64);
+        for (int index = 0; index < 8; ++index) {
+            canvas_registry.quadratic_curve_to(*canvas, 10.0 + index * 14.0, 10.0 + (index % 3) * 12.0,
+                                               18.0 + index * 14.0, 60.0 - (index % 4) * 10.0);
+        }
+        canvas_registry.stroke(*canvas);
+    }));
     print_style_statistics(resolver.statistics());
 
     return 0;
