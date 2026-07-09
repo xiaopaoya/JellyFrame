@@ -841,6 +841,37 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(report["developerAdvice"][0]["code"], "visual-scroll-needed")
         self.assertIn("action", report["developerAdvice"][0])
 
+    def test_common_runtime_diagnostics_have_specific_developer_advice(self):
+        report = {
+            "pipelineDiagnostics": {
+                "diagnostics": [
+                    {"severity": "warning", "code": "paint-image-fallback"},
+                    {"severity": "warning", "code": "script-execution-budget-exceeded"},
+                    {"severity": "warning", "code": "package-resource-rejected"},
+                    {"severity": "warning", "code": "animation-keyframes-missing"},
+                    {"severity": "warning", "code": "image-decode-budget"},
+                    {"severity": "warning", "code": "system-event-rejected"},
+                    {"severity": "warning", "code": "style-radial-gradient-unsupported"},
+                ],
+            },
+        }
+
+        advice = jellyframe_cli.collect_developer_advice(report)
+        by_code = {entry["code"]: entry for entry in advice}
+
+        for code in (
+            "paint-image-fallback",
+            "script-execution-budget-exceeded",
+            "package-resource-rejected",
+            "animation-keyframes-missing",
+            "image-decode-budget",
+            "system-event-rejected",
+            "style-radial-gradient-unsupported",
+        ):
+            self.assertIn(code, by_code)
+            self.assertNotEqual(by_code[code]["title"], "Diagnostic needs app author review")
+            self.assertTrue(by_code[code]["action"])
+
     def test_write_json_report_adds_performance_summary_and_advice(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-performance-report-") as directory:
             report_path = Path(directory) / "report.json"

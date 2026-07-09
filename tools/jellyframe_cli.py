@@ -457,6 +457,12 @@ ADVICE_BY_CODE = {
         "explanation": "This page generates a dense display list for the current viewport.",
         "action": "Reduce decorative layers, shadows, gradients, generated content, or repeated nodes. Prefer one canvas/chart or one background effect over many overlapping DOM boxes.",
     },
+    "visual-vertical-paint-overflow": {
+        "title": "Content paints outside the target height",
+        "explanation": "Paint output extends above or below the viewport. On small screens this usually means fixed positioning, negative offsets, or content that needs an explicit scroll area.",
+        "action": "Move fixed or absolute elements back inside the viewport, reduce vertical spacing, or put long content in an overflow: auto container with a target gate that allows scroll.",
+        "recipe": "app_author_recipes.md#scroll-list",
+    },
     "style-property-unsupported": {
         "title": "CSS property is outside the supported subset",
         "explanation": "The declaration uses a property that is not implemented by the current JellyFrame CSS subset.",
@@ -472,10 +478,20 @@ ADVICE_BY_CODE = {
         "explanation": "Generated content exists only as a small decoration/text subset.",
         "action": "Keep ::before/::after to content, simple box styling and low-cost decoration. Put richer styling on a real element.",
     },
+    "style-after-declaration-ignored": {
+        "title": "::after declaration was ignored",
+        "explanation": "A generated-content declaration was parsed but its value is outside the supported pseudo-element subset.",
+        "action": "Keep generated content to short text or simple decorative boxes. Use a real element or Canvas for richer decoration.",
+    },
     "style-conic-gradient-unsupported": {
         "title": "conic-gradient() is outside the supported subset",
         "explanation": "JellyFrame supports only a small progress-ring-oriented conic-gradient subset.",
         "action": "Use two-color or simple stop conic gradients centered in the element, or use Canvas 2D for custom gauges.",
+    },
+    "style-radial-gradient-unsupported": {
+        "title": "radial-gradient() is outside the supported subset",
+        "explanation": "JellyFrame supports only a small center-circle radial-gradient subset for highlights and simple depth.",
+        "action": "Use a two-color centered radial gradient, switch large backgrounds to linear-gradient(), or pre-render the effect as an image.",
     },
     "layer-conic-gradient-area-budget": {
         "title": "Conic gradient exceeds the paint budget",
@@ -497,10 +513,55 @@ ADVICE_BY_CODE = {
         "explanation": "The at-rule was parsed as CSS input but does not match the supported at-rule subset.",
         "action": "Use supported @media rules and simple selectors, or move target-specific choices into manifest targets and plain CSS rules.",
     },
+    "css-at-rule-malformed": {
+        "title": "CSS at-rule is malformed",
+        "explanation": "The parser could not recover a valid at-rule from the source text.",
+        "action": "Check the at-rule syntax against standard CSS grammar, then reduce it to the documented @media/keyframes subset JellyFrame supports.",
+    },
+    "css-at-rule-ignored": {
+        "title": "CSS at-rule was ignored",
+        "explanation": "The at-rule is valid CSS input, but it does not affect JellyFrame's documented app subset.",
+        "action": "Remove the rule or replace it with a supported @media rule, manifest target gate, or build-time transform.",
+    },
     "css-selector-skipped": {
         "title": "CSS selector is unsupported",
         "explanation": "The selector requires semantics outside the supported selector subset and the rule was not applied.",
         "action": "Use simple class, id, element, descendant or documented pseudo-class selectors. Avoid browser-only selector tricks in app UI.",
+    },
+    "css-rule-malformed": {
+        "title": "CSS rule is malformed",
+        "explanation": "The parser recovered from a CSS rule that did not match standard declaration-block syntax.",
+        "action": "Fix the rule syntax first; if the rule is valid browser CSS, reduce selectors and values to the JellyFrame subset.",
+    },
+    "css-declaration-malformed": {
+        "title": "CSS declaration is malformed",
+        "explanation": "A declaration could not be parsed as a standard property/value pair.",
+        "action": "Check for missing colons, semicolons, braces or unsupported nested syntax. Keep values in the documented CSS subset.",
+    },
+    "style-inline-declaration-malformed": {
+        "title": "Inline style declaration is malformed",
+        "explanation": "An element's style attribute contains a declaration the parser could not read as standard CSS.",
+        "action": "Fix the inline style syntax or move the declaration into a stylesheet so the same subset rules are easier to inspect.",
+    },
+    "css-keyframes-malformed": {
+        "title": "@keyframes rule is malformed",
+        "explanation": "The animation keyframes block could not be parsed as the supported CSS keyframes subset.",
+        "action": "Use simple from/to or percentage keyframes and only animate documented low-cost properties such as opacity and transform.",
+    },
+    "css-keyframe-malformed": {
+        "title": "A keyframe selector is malformed",
+        "explanation": "One keyframe entry could not be parsed as a supported from/to or percentage selector.",
+        "action": "Use from, to, or numeric percentage selectors. Avoid ranges, timeline selectors or browser-only animation syntax.",
+    },
+    "css-keyframe-selector-ignored": {
+        "title": "A keyframe selector was ignored",
+        "explanation": "The keyframe selector is outside the supported animation subset.",
+        "action": "Use from, to, or simple percentage selectors, and test the animation in Win32 frame-script capture.",
+    },
+    "css-keyframes-empty": {
+        "title": "@keyframes rule has no usable frames",
+        "explanation": "The animation name exists, but no supported keyframes remained after parsing.",
+        "action": "Add at least two supported keyframes and keep animated properties to opacity or transform where possible.",
     },
     "script-type-unsupported": {
         "title": "Script type is unsupported",
@@ -511,6 +572,26 @@ ADVICE_BY_CODE = {
         "title": "Script resource could not be loaded",
         "explanation": "The script is missing, not packaged, or outside the local package resource model.",
         "action": "Reference package-local scripts only and verify they appear in the package report resources list.",
+    },
+    "script-loader-missing": {
+        "title": "No script loader is available",
+        "explanation": "The render pipeline found a script element, but this execution path was not given a script loader.",
+        "action": "Run the app through the app runtime or Win32 browser when JavaScript is required; keep pseudo-browser-only checks for render-core validation.",
+    },
+    "script-resource-missing": {
+        "title": "Script resource is missing",
+        "explanation": "A package-local script path could not be resolved from the app package.",
+        "action": "Fix the script src path and confirm the file appears in the package report resources list.",
+    },
+    "script-resource-rejected": {
+        "title": "Script resource was rejected",
+        "explanation": "The package loader rejected the script because it violated the resource contract or size limit.",
+        "action": "Keep scripts package-local, small enough for the configured input limit, and encoded as UTF-8 text.",
+    },
+    "script-execution-budget-exceeded": {
+        "title": "Script execution exceeded the runtime budget",
+        "explanation": "The script watchdog or operation budget stopped JavaScript to protect the app host and system shell.",
+        "action": "Break long work into smaller callbacks, avoid unbounded loops, reduce per-frame DOM updates, and verify with Win32 frame-script capture.",
     },
     "script-capability-missing": {
         "title": "JavaScript API is used without a manifest capability",
@@ -582,6 +663,31 @@ ADVICE_BY_CODE = {
         "explanation": "A local stylesheet, script, image, font or other resource path could not be found in the package.",
         "action": "Fix the path, keep it package-local, and rerun check/package before testing on device.",
     },
+    "package-resource-missing": {
+        "title": "Package resource is missing",
+        "explanation": "A runtime loader asked for a package resource that is not present in the current app bundle.",
+        "action": "Fix the local path, rebuild the .jfapp/debug package, and confirm the resource appears in the package report.",
+    },
+    "package-resource-rejected": {
+        "title": "Package resource was rejected",
+        "explanation": "The package loader rejected a resource because it violated local path, size, type or containment rules.",
+        "action": "Keep resources package-local, avoid symlinks or escaped paths, and keep text resources below the configured source package limit.",
+    },
+    "package-resource-crc-mismatch": {
+        "title": "Package resource integrity check failed",
+        "explanation": "A .jfapp resource payload did not match its recorded CRC.",
+        "action": "Rebuild or reinstall the app package. Treat this as a corrupted package or interrupted transfer until proven otherwise.",
+    },
+    "stylesheet-resource-missing": {
+        "title": "Stylesheet resource is missing",
+        "explanation": "A package-local stylesheet path could not be resolved from the app package.",
+        "action": "Fix the stylesheet href path and confirm the file appears in the package report resources list.",
+    },
+    "stylesheet-resource-rejected": {
+        "title": "Stylesheet resource was rejected",
+        "explanation": "The package loader rejected the stylesheet because it violated the resource contract or size limit.",
+        "action": "Keep stylesheets package-local, small enough for the configured input limit, and encoded as UTF-8 text.",
+    },
     "manifest-field-unknown": {
         "title": "Manifest contains an unknown field",
         "explanation": "The field is not part of the documented manifest contract consumed by current tooling.",
@@ -626,6 +732,126 @@ ADVICE_BY_CODE = {
         "title": ".jffont resource is invalid",
         "explanation": "The declared runtime font supplement could not be parsed as a JellyFrame bitmap font resource.",
         "action": "Regenerate it with jellyframe_font_pack_gen and verify the manifest points at the generated .jffont file.",
+    },
+    "app-font-resource-missing": {
+        "title": "App font resource is missing",
+        "explanation": "A manifest-declared app font could not be loaded from the package at runtime.",
+        "action": "Fix fonts[].source, rebuild the package, and confirm the .jffont resource appears in the font diagnostics.",
+    },
+    "app-font-resource-invalid": {
+        "title": "App font resource is invalid",
+        "explanation": "A manifest-declared font exists but could not be parsed as a runtime .jffont supplement.",
+        "action": "Regenerate the .jffont resource and keep fonts[].sizes, weights and license metadata in sync with the generated file.",
+    },
+    "animation-keyframe-property-unsupported": {
+        "title": "Animation targets an unsupported property",
+        "explanation": "The keyframe contains a property that cannot be animated by JellyFrame's low-cost animation subset.",
+        "action": "Animate opacity or transform where possible. For layout-changing animation, redesign around a smaller dirty region or use a host-driven state transition.",
+    },
+    "animation-keyframe-declaration-ignored": {
+        "title": "Animation keyframe declaration was ignored",
+        "explanation": "A keyframe declaration uses a value outside the supported animation subset.",
+        "action": "Keep keyframe values simple, documented and measurable in Win32 frame-script capture.",
+    },
+    "animation-keyframes-empty": {
+        "title": "Animation has no usable keyframes",
+        "explanation": "After parsing and subset filtering, the animation timeline has no frames to play.",
+        "action": "Add from/to or percentage keyframes using supported animated properties.",
+    },
+    "animation-keyframes-missing": {
+        "title": "Animation references missing keyframes",
+        "explanation": "An element requested an animation name that was not found in the parsed stylesheet keyframes.",
+        "action": "Check the animation-name spelling, make sure @keyframes is packaged with the page, and keep keyframes in the supported subset.",
+    },
+    "animation-active-limit": {
+        "title": "Too many animations are active",
+        "explanation": "The page exceeds the configured active animation budget for the target.",
+        "action": "Reduce concurrent animations, pause offscreen effects, or merge visual motion into one smaller transform/canvas region.",
+    },
+    "layer-transform-unsupported": {
+        "title": "Transform is outside the compositing subset",
+        "explanation": "The element uses a transform form that cannot be represented by the current layer/display-list subset.",
+        "action": "Use documented translate/scale/rotate forms, simplify transform composition, or pre-render the transformed decoration.",
+    },
+    "paint-framebuffer-budget": {
+        "title": "Framebuffer allocation exceeded the paint budget",
+        "explanation": "The renderer refused a framebuffer size that would exceed the configured pixel or memory budget.",
+        "action": "Reduce target framebuffer size, avoid oversized offscreen/canvas surfaces, and verify the port keeps full framebuffers out of scarce internal RAM.",
+    },
+    "paint-offscreen-budget": {
+        "title": "Offscreen paint surface exceeded the budget",
+        "explanation": "A clipped, shadowed, transformed or composited path requested too much temporary pixel memory.",
+        "action": "Shrink the effect area, reduce shadow/gradient/canvas size, or pre-render static art when it is cheaper than runtime offscreen paint.",
+    },
+    "paint-image-fallback": {
+        "title": "Image paint used a fallback path",
+        "explanation": "The renderer could not draw the image with the requested fast path or decoded surface.",
+        "action": "Check image dimensions, codec support, object-fit/object-position values and target image decoder capability.",
+    },
+    "paint-non-ascii-fallback": {
+        "title": "Text used the non-ASCII fallback path",
+        "explanation": "Visible text contains characters outside the current fast bitmap/system font coverage.",
+        "action": "Generate and declare a .jffont supplement for the used characters, then rerun package font diagnostics.",
+    },
+    "paint-text-backend-failed": {
+        "title": "Text backend could not paint a run",
+        "explanation": "The configured text painter rejected or failed one text run.",
+        "action": "Check font coverage, font size, backend availability and app .jffont declarations before testing on device.",
+    },
+    "image-decode-request": {
+        "title": "Image decode request was queued",
+        "explanation": "The host image service accepted an asynchronous decode request.",
+        "action": "This is normally informational. If the image appears late, check cache state, decode completion and host image worker budget.",
+    },
+    "image-decode-completion": {
+        "title": "Image decode completion was received",
+        "explanation": "The host image service returned a decoded image result to the app runtime.",
+        "action": "This is normally informational. If rendering still falls back, inspect codec, dimensions and decoded surface budget.",
+    },
+    "image-decode-unsupported": {
+        "title": "Image codec is not supported by the host",
+        "explanation": "The app asked the host image service to decode a format this target does not provide.",
+        "action": "Use a target-supported codec, add a product image decoder adapter, or replace the asset with a package-local supported image.",
+    },
+    "image-decode-invalid": {
+        "title": "Image data is invalid",
+        "explanation": "The host image decoder could not parse the resource as the requested image format.",
+        "action": "Regenerate the image asset and verify package image diagnostics before testing on device.",
+    },
+    "image-decode-budget": {
+        "title": "Image decode exceeded the host budget",
+        "explanation": "The decoded image would exceed the target's pixel, byte or cache budget.",
+        "action": "Reduce image dimensions, compress/subset assets, or use CSS/canvas decoration when it is cheaper for the target.",
+    },
+    "image-cache-state": {
+        "title": "Image cache state changed",
+        "explanation": "The host image cache reported its debug state for this app.",
+        "action": "Use this as telemetry when diagnosing late images or cache churn; it is not usually a release-blocking issue.",
+    },
+    "image-cache-stale-entry": {
+        "title": "Image cache entry became stale",
+        "explanation": "A cached decoded surface no longer matches the current app/resource generation.",
+        "action": "This should recover automatically. If it repeats, check app reload/rebind paths and resource versioning.",
+    },
+    "system-event-rejected": {
+        "title": "System event was rejected",
+        "explanation": "A host or debug script tried to inject a system event that was not accepted by the current runtime policy or queue budget.",
+        "action": "Check event type, target app instance, queue capacity and foreground/background policy before relying on this event.",
+    },
+    "html-unmatched-end-tag": {
+        "title": "HTML parser recovered from an unmatched end tag",
+        "explanation": "The markup contains a closing tag that did not match the open element stack.",
+        "action": "Fix the HTML structure. Browser recovery may hide this on desktop, but JellyFrame apps should keep markup small and explicit.",
+    },
+    "html-non-void-self-closing": {
+        "title": "HTML parser recovered from a non-void self-closing tag",
+        "explanation": "A non-void HTML element was written with self-closing syntax.",
+        "action": "Use explicit start and end tags for non-void elements, for example <div></div> instead of <div />.",
+    },
+    "html-empty-tag-name": {
+        "title": "HTML parser found an empty tag name",
+        "explanation": "The tokenizer encountered markup that does not form a valid HTML tag name.",
+        "action": "Check nearby '<' and '>' characters and escape literal comparison signs in text.",
     },
     "target-gate-not-accepted": {
         "title": "Target gate is not accepted",
