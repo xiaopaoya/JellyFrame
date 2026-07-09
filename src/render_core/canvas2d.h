@@ -73,6 +73,8 @@ struct Canvas2DState {
     int font_size = 10;
     int font_weight = 400;
     std::uint32_t font_family_hash = 0;
+    int translate_x = 0;
+    int translate_y = 0;
     std::string font = "10px sans-serif";
 };
 
@@ -113,6 +115,7 @@ public:
     bool set_line_width(Node& node, double value);
     bool set_global_alpha(Node& node, double value);
     bool set_font(Node& node, std::string_view value);
+    bool translate(Node& node, double x, double y);
     Color fill_style(const Node& node) const;
     Color stroke_style(const Node& node) const;
     int line_width(const Node& node) const;
@@ -144,7 +147,10 @@ public:
                     int destination_width,
                     int destination_height);
     std::uint32_t create_linear_gradient(double x0, double y0, double x1, double y1);
+    std::uint32_t create_linear_gradient(Node& node, double x0, double y0, double x1, double y1);
     std::uint32_t create_radial_gradient(double x0, double y0, double r0,
+                                         double x1, double y1, double r1);
+    std::uint32_t create_radial_gradient(Node& node, double x0, double y0, double r0,
                                          double x1, double y1, double r1);
     bool add_color_stop(std::uint32_t gradient_id, double offset, std::string_view color);
 

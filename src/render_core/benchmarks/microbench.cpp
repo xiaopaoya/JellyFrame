@@ -633,6 +633,14 @@ int run_render_core_microbench(int argc, char** argv) {
         canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
         canvas_registry.fill_rect(*canvas, 0, 0, 120, 80);
     }));
+    canvas_registry.set_fill_style(*canvas, "#2dd4bf");
+    print_result("canvas2d_translate_fill_rect", iterations, average_microseconds(iterations, [&] {
+        canvas_registry.clear_rect(*canvas, 0, 0, 120, 80);
+        canvas_registry.save(*canvas);
+        canvas_registry.translate(*canvas, 12.0, 8.0);
+        canvas_registry.fill_rect(*canvas, 0, 0, 96, 64);
+        canvas_registry.restore(*canvas);
+    }));
     print_style_statistics(resolver.statistics());
 
     return 0;

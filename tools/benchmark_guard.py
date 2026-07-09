@@ -43,6 +43,7 @@ SUITES: dict[str, SuiteConfig] = {
             "canvas2d_draw_image_scaled": 20000.0,
             "canvas2d_linear_gradient_fill_rect": 60000.0,
             "canvas2d_radial_gradient_fill_rect": 60000.0,
+            "canvas2d_translate_fill_rect": 10000.0,
         },
     ),
     "app-runtime": SuiteConfig(

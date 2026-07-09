@@ -330,6 +330,25 @@ void linear_gradient_fills_rect_and_is_budgeted() {
     assert(no_gradient_registry.create_linear_gradient(0.0, 0.0, 8.0, 0.0) == 0);
 }
 
+void translate_offsets_drawing_and_restore_resets_offset() {
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    auto canvas = make_element("canvas");
+    assert(registry.set_fill_style(*canvas, "#ff0000"));
+    assert(registry.translate(*canvas, 2.4, 1.6));
+    assert(registry.fill_rect(*canvas, 0, 0, 1, 1));
+    assert(registry.save(*canvas));
+    assert(registry.translate(*canvas, 2.0, 0.0));
+    assert(registry.fill_rect(*canvas, 0, 0, 1, 1));
+    assert(registry.restore(*canvas));
+    assert(registry.fill_rect(*canvas, 1, 0, 1, 1));
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    assert(surface != nullptr);
+    assert(surface->pixels[2 * surface->width + 2].r == 255);
+    assert(surface->pixels[2 * surface->width + 4].r == 255);
+    assert(surface->pixels[2 * surface->width + 3].r == 255);
+    assert(!registry.translate(*canvas, std::numeric_limits<double>::infinity(), 0.0));
+}
+
 void radial_gradient_fills_rect_with_two_stop_concentric_subset() {
     Canvas2DPolicy policy;
     policy.max_surfaces = 1;
@@ -433,6 +452,7 @@ int main() {
     arc_stroke_draws_ring_pixels();
     fill_path_fills_closed_polygon();
     linear_gradient_fills_rect_and_is_budgeted();
+    translate_offsets_drawing_and_restore_resets_offset();
     radial_gradient_fills_rect_with_two_stop_concentric_subset();
     draw_image_copies_canvas_surface_without_new_allocation();
     text_metrics_and_fill_text_use_bound_backend();

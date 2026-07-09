@@ -15,6 +15,15 @@ constexpr std::uint32_t kCanvasHandleMask = 0x80000000U;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kTwoPi = kPi * 2.0;
 
+bool translated_coordinate(int value, int translation, int& result) {
+    const std::int64_t translated = static_cast<std::int64_t>(value) + translation;
+    if (translated < std::numeric_limits<int>::min() || translated > std::numeric_limits<int>::max()) {
+        return false;
+    }
+    result = static_cast<int>(translated);
+    return true;
+}
+
 int parse_positive_int(const std::string& value, int fallback) {
     if (value.empty()) {
         return fallback;
@@ -769,6 +778,24 @@ bool Canvas2DRegistry::set_font(Node& node, std::string_view value) {
     return true;
 }
 
+bool Canvas2DRegistry::translate(Node& node, double x, double y) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr || !std::isfinite(x) || !std::isfinite(y)) {
+        return false;
+    }
+    const long delta_x = std::lround(x);
+    const long delta_y = std::lround(y);
+    const long next_x = static_cast<long>(surface->state.translate_x) + delta_x;
+    const long next_y = static_cast<long>(surface->state.translate_y) + delta_y;
+    if (next_x < std::numeric_limits<int>::min() || next_x > std::numeric_limits<int>::max() ||
+        next_y < std::numeric_limits<int>::min() || next_y > std::numeric_limits<int>::max()) {
+        return false;
+    }
+    surface->state.translate_x = static_cast<int>(next_x);
+    surface->state.translate_y = static_cast<int>(next_y);
+    return true;
+}
+
 Color Canvas2DRegistry::fill_style(const Node& node) const {
     const Canvas2DSurface* surface = surface_for(node);
     return surface != nullptr ? surface->state.fill_style.color : Color{0, 0, 0, 255};
@@ -818,7 +845,13 @@ bool Canvas2DRegistry::clear_rect(Node& node, int x, int y, int width, int heigh
     if (surface == nullptr) {
         return false;
     }
-    overwrite_rect_pixels(*surface, x, y, width, height, Color{0, 0, 0, 0});
+    int left = 0;
+    int top = 0;
+    if (!translated_coordinate(x, surface->state.translate_x, left) ||
+        !translated_coordinate(y, surface->state.translate_y, top)) {
+        return false;
+    }
+    overwrite_rect_pixels(*surface, left, top, width, height, Color{0, 0, 0, 0});
     mark_dirty(node, DomDirtyPaint);
     return true;
 }
@@ -828,7 +861,14 @@ bool Canvas2DRegistry::fill_rect(Node& node, int x, int y, int width, int height
     if (surface == nullptr) {
         return false;
     }
-    fill_rect_paint(*surface, x, y, width, height, surface->state.fill_style, surface->state.global_alpha, gradients_);
+    int left = 0;
+    int top = 0;
+    if (!translated_coordinate(x, surface->state.translate_x, left) ||
+        !translated_coordinate(y, surface->state.translate_y, top)) {
+        return false;
+    }
+    fill_rect_paint(*surface, left, top, width, height,
+                    surface->state.fill_style, surface->state.global_alpha, gradients_);
     mark_dirty(node, DomDirtyPaint);
     return true;
 }
@@ -839,19 +879,25 @@ bool Canvas2DRegistry::stroke_rect(Node& node, int x, int y, int width, int heig
         return false;
     }
     const int line = std::max(1, surface->state.line_width);
-    fill_rect_paint(*surface, x, y, width, line, surface->state.stroke_style, surface->state.global_alpha, gradients_);
+    int left = 0;
+    int top = 0;
+    if (!translated_coordinate(x, surface->state.translate_x, left) ||
+        !translated_coordinate(y, surface->state.translate_y, top)) {
+        return false;
+    }
+    fill_rect_paint(*surface, left, top, width, line, surface->state.stroke_style, surface->state.global_alpha, gradients_);
     fill_rect_paint(*surface,
-                    x,
-                    y + height - line,
+                    left,
+                    top + height - line,
                     width,
                     line,
                     surface->state.stroke_style,
                     surface->state.global_alpha,
                     gradients_);
-    fill_rect_paint(*surface, x, y, line, height, surface->state.stroke_style, surface->state.global_alpha, gradients_);
+    fill_rect_paint(*surface, left, top, line, height, surface->state.stroke_style, surface->state.global_alpha, gradients_);
     fill_rect_paint(*surface,
-                    x + width - line,
-                    y,
+                    left + width - line,
+                    top,
                     line,
                     height,
                     surface->state.stroke_style,
@@ -878,7 +924,13 @@ bool Canvas2DRegistry::move_to(Node& node, int x, int y) {
     }
     surface->path.clear();
     surface->path_closed = false;
-    push_path_point(*surface, policy_, Canvas2DPoint{x, y});
+    int translated_x = 0;
+    int translated_y = 0;
+    if (!translated_coordinate(x, surface->state.translate_x, translated_x) ||
+        !translated_coordinate(y, surface->state.translate_y, translated_y)) {
+        return false;
+    }
+    push_path_point(*surface, policy_, Canvas2DPoint{translated_x, translated_y});
     return true;
 }
 
@@ -888,7 +940,13 @@ bool Canvas2DRegistry::line_to(Node& node, int x, int y) {
         return false;
     }
     surface->path_closed = false;
-    return push_path_point(*surface, policy_, Canvas2DPoint{x, y});
+    int translated_x = 0;
+    int translated_y = 0;
+    if (!translated_coordinate(x, surface->state.translate_x, translated_x) ||
+        !translated_coordinate(y, surface->state.translate_y, translated_y)) {
+        return false;
+    }
+    return push_path_point(*surface, policy_, Canvas2DPoint{translated_x, translated_y});
 }
 
 bool Canvas2DRegistry::arc(Node& node,
@@ -903,7 +961,8 @@ bool Canvas2DRegistry::arc(Node& node,
         return false;
     }
     surface->path_closed = false;
-    return append_arc_points(*surface, policy_, x, y, radius, start_angle, end_angle, anticlockwise);
+    return append_arc_points(*surface, policy_, x + surface->state.translate_x, y + surface->state.translate_y,
+                             radius, start_angle, end_angle, anticlockwise);
 }
 
 bool Canvas2DRegistry::close_path(Node& node) {
@@ -983,8 +1042,8 @@ bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, do
                                  surface->state.font_size,
                                  surface->state.font_weight,
                                  surface->state.font_family_hash);
-    const int left = static_cast<int>(std::round(x));
-    const int baseline = static_cast<int>(std::round(y));
+    const int left = static_cast<int>(std::round(x)) + surface->state.translate_x;
+    const int baseline = static_cast<int>(std::round(y)) + surface->state.translate_y;
     int width = max_width > 0.0 ? static_cast<int>(std::round(max_width)) : metrics.width;
     if (width <= 0) {
         width = metrics.width;
@@ -1040,6 +1099,10 @@ bool Canvas2DRegistry::draw_image(Node& destination,
         return false;
     }
 
+    if (!translated_coordinate(destination_x, target->state.translate_x, destination_x) ||
+        !translated_coordinate(destination_y, target->state.translate_y, destination_y)) {
+        return false;
+    }
     const int left = std::max(0, destination_x);
     const int top = std::max(0, destination_y);
     const int right = std::min(target->width, destination_x + destination_width);
@@ -1080,6 +1143,21 @@ std::uint32_t Canvas2DRegistry::create_linear_gradient(double x0, double y0, dou
     return gradients_.back().id;
 }
 
+std::uint32_t Canvas2DRegistry::create_linear_gradient(Node& node,
+                                                        double x0,
+                                                        double y0,
+                                                        double x1,
+                                                        double y1) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr) {
+        return 0;
+    }
+    return create_linear_gradient(x0 + surface->state.translate_x,
+                                  y0 + surface->state.translate_y,
+                                  x1 + surface->state.translate_x,
+                                  y1 + surface->state.translate_y);
+}
+
 std::uint32_t Canvas2DRegistry::create_radial_gradient(double x0,
                                                         double y0,
                                                         double r0,
@@ -1106,6 +1184,25 @@ std::uint32_t Canvas2DRegistry::create_radial_gradient(double x0,
     gradient.r1 = r1;
     gradients_.push_back(std::move(gradient));
     return gradients_.back().id;
+}
+
+std::uint32_t Canvas2DRegistry::create_radial_gradient(Node& node,
+                                                        double x0,
+                                                        double y0,
+                                                        double r0,
+                                                        double x1,
+                                                        double y1,
+                                                        double r1) {
+    Canvas2DSurface* surface = mutable_surface(ensure_surface(node));
+    if (surface == nullptr) {
+        return 0;
+    }
+    return create_radial_gradient(x0 + surface->state.translate_x,
+                                  y0 + surface->state.translate_y,
+                                  r0,
+                                  x1 + surface->state.translate_x,
+                                  y1 + surface->state.translate_y,
+                                  r1);
 }
 
 bool Canvas2DRegistry::add_color_stop(std::uint32_t gradient_id, double offset, std::string_view color) {

@@ -1669,6 +1669,28 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     check((subtree_dirty_flags(*document) & DomDirtyPaint) != 0U, "canvas drawing marks paint dirty");
 }
 
+void javascript_canvas_translate_is_pixel_aligned_and_saved() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><canvas id='canvas' width='8' height='8'></canvas></body>");
+    Node* canvas = find_by_id(*document, "canvas");
+    check(canvas != nullptr, "canvas translate node exists");
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(registry);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var ctx = document.getElementById('canvas').getContext('2d');"
+        "ctx.fillStyle = '#ff0000'; ctx.translate(2.4, 1.6); ctx.fillRect(0, 0, 1, 1);"
+        "ctx.save(); ctx.translate(2, 0); ctx.fillRect(0, 0, 1, 1); ctx.restore();"
+        "ctx.fillRect(1, 0, 1, 1); 'ok';");
+    check(result.ok && result.value == "ok", "canvas translate script succeeds");
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    check(surface != nullptr && surface->pixels[2 * surface->width + 2].r == 255 &&
+              surface->pixels[2 * surface->width + 3].r == 255 &&
+              surface->pixels[2 * surface->width + 4].r == 255,
+          "canvas translate uses rounded integer offsets and save restore");
+}
+
 void javascript_canvas_radial_gradient_uses_concentric_two_stop_subset() {
     HtmlParser parser;
     auto document = parser.parse("<body><canvas id='canvas' width='8' height='8'></canvas></body>");
@@ -1783,6 +1805,7 @@ int main() {
         javascript_geolocation_uses_bound_location_service();
         javascript_form_submission_and_form_data_work();
         javascript_canvas_2d_is_optional_and_lazy();
+        javascript_canvas_translate_is_pixel_aligned_and_saved();
         javascript_canvas_radial_gradient_uses_concentric_two_stop_subset();
         javascript_canvas_draw_image_copies_and_scales_canvas_source();
     } catch (const std::exception& error) {
