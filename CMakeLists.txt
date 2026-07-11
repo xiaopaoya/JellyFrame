@@ -537,6 +537,16 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_win32_route_tabs_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_route_tabs
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_route_tabs/capture_route_tabs.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "dirty_local=3 full=1 clean=0")
+
+            add_test(
                 NAME jellyframe_win32_motion_lab_low_power_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_win32_browser>
                         --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab

@@ -1,0 +1,18 @@
+# JellyFrame deterministic app-local route capture.
+# Run with:
+#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_route_tabs --frame-script samples/apps/packages/jelly_route_tabs/capture_route_tabs.jfcapture
+
+output-dir out/route_tabs_frames
+montage out/route_tabs_montage.bmp
+frames 9
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 3
+gap 6
+
+# Switch routes through ordinary buttons. Each click updates location.hash and
+# the app redraws its local state through hashchange; no browser navigation runs.
+event 2 click 150 278
+event 4 click 235 278
+event 6 click 50 278
