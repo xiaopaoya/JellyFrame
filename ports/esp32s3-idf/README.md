@@ -1,6 +1,6 @@
 # JellyFrame ESP32-S3 ESP-IDF Port
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0-dev
 
 This directory is a first hardware bring-up path for ESP32-S3. It keeps the
 engine core platform-neutral and builds a small ESP-IDF app around the HAL
@@ -9,7 +9,9 @@ shape described in `docs/embedded_hal_api.md`.
 ## What Runs Now
 
 - Builds `src/render_core` as an ESP-IDF component named `jellyframe_render_core`.
-- Runs a synthetic HTML/CSS pipeline benchmark from `app_main`.
+- Provides three mutually exclusive startup modes: the one-shot synthetic
+  benchmark, an interactive retained Timer UI task, and a deterministic
+  retained-scroll workload.
 - Loads static HTML/CSS/classic-script resources through a bounded host
   resource bundle before the benchmark.
 - Measures parser, style/render tree, layout, layer tree, framebuffer rendering
@@ -23,18 +25,21 @@ shape described in `docs/embedded_hal_api.md`.
 - Provides a thin RGB565 panel flush hook in `main/jellyframe_esp32s3_hal.*`.
 - Provides an optional Waveshare ESP32-S3-Touch-LCD-1.47 board adapter for the
   172x320 JD9853 LCD and AXS5106L touch controller. It is disabled by default
-  and should be enabled only for physical-board bring-up. The adapter is a
-  validation profile, not yet a product backend: touch is still a probe task
-  and final input routing should go through the normal board input queue.
+  and should be enabled only for physical-board bring-up. The adapter owns a
+  bounded board-input queue; its touch task only enqueues events, while the UI
+  task exclusively owns DOM, layout, composition, framebuffer presentation and
+  input dispatch.
 
 JerryScript is intentionally not part of this first bring-up. Add it after the
 core pipeline and framebuffer path are stable on the board.
 
 The bring-up default raises `CONFIG_ESP_MAIN_TASK_STACK_SIZE` to `32768` bytes
-because the smoke app still runs parser, layout, framebuffer and validation code
-from `app_main`. Treat this as a validation default, not a final product target:
-a real board shell should move work into an owned UI task, keep persistent
-buffers and re-measure stack high-water marks.
+for the legacy one-shot benchmark. The interactive and scroll modes create a
+separate owned UI task with the same initial stack budget, persistent retained
+trees and persistent framebuffers. This remains a validation runtime, not a
+product shell: JerryScript, app installation, service workers and low-power
+policy are intentionally outside this port path. Always record stack
+high-water marks before reducing either stack budget.
 
 ## Build And Flash
 
@@ -47,8 +52,28 @@ idf.py build
 idf.py -p COMx flash monitor
 ```
 
+For the WS147 retained modes, use their complete defaults files rather than
+overlaying the Timer bring-up file:
+
+```powershell
+# Deterministic 30 Hz retained-scroll measurement.
+idf.py -B build-ws147-scroll -D SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults build
+
+# Interactive retained scroll demo. Apply after the benchmark defaults.
+idf.py -B build-ws147-scroll-demo -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_scroll_demo.defaults" build
+```
+
+The first file selects the scroll run mode and the WS147 hardware profile. The
+second only disables automatic scrolling and selects the full-list workload;
+do not combine either with `sdkconfig.ws147_bringup.defaults`, which selects the
+Timer run mode.
+
 Useful `menuconfig` entries:
 
+- `JellyFrame ESP32-S3 benchmark -> Startup run mode`
+- `JellyFrame ESP32-S3 benchmark -> UI task stack size`
+- `JellyFrame ESP32-S3 benchmark -> Scroll benchmark step in pixels`
+- `JellyFrame ESP32-S3 benchmark -> Retained scroll benchmark workload`
 - `JellyFrame ESP32-S3 benchmark -> Synthetic card count`
 - `JellyFrame ESP32-S3 benchmark -> Benchmark iterations`
 - `JellyFrame ESP32-S3 benchmark -> Viewport width`
@@ -63,6 +88,15 @@ The checked-in `sdkconfig.ws147_bringup.defaults` profile targets the Waveshare
 1.47 board with a `172x320` viewport, 16 MB flash layout and octal PSRAM.
 It expects ESP-IDF 5.x APIs, including the new `i2c_master` driver used by
 ESP-IDF 5.3.x.
+
+For the retained-scroll measurement, set startup mode to `Run retained scroll
+benchmark`, leave `Automatically advance the scroll workload` enabled, choose
+one workload, then capture at least one cumulative `ui_task_telemetry` line.
+The workload schedules against a 33.3 ms deadline rather than the generic UI
+idle cadence. Its packed panel path converts into one internal DMA buffer and
+waits for each panel DMA completion before reusing that buffer. `panel_dma_wait`
+is therefore part of the measured present cost, not asynchronous work carried
+into the next frame.
 
 ## Flash Layout
 
@@ -253,25 +287,31 @@ dirty rectangle. Use it when your panel driver accepts a source stride or when
 you choose to submit full-width row windows.
 
 For drivers such as `esp_lcd_panel_draw_bitmap` that expect a tightly packed
-dirty-rectangle buffer, use `packed_flush` and provide a scratch buffer:
+dirty-rectangle buffer, use `packed_flush`. The primary retained UI path gives
+`EmbeddedPackedRgb565Sink` a persistent tightly packed RGB565 destination;
+the render core converts each dirty rectangle into that buffer before invoking
+the callback. Its signature additionally receives an optional metrics output:
 
 ```cpp
-std::uint16_t* rgb565_pixels = persistent_rgb565_buffer;
-std::uint16_t* scratch_pixels = persistent_scratch_buffer;
+bool your_packed_rect_flush(const std::uint16_t* pixels,
+                            jellyframe::Rect dirty,
+                            jellyframe_esp32s3::Rgb565PackedFlushMetrics* metrics,
+                            void* context);
 
 jellyframe_esp32s3::Rgb565Panel panel;
-panel.pixels = rgb565_pixels;
 panel.width = width;
 panel.height = height;
 panel.stride_pixels = width;
 panel.packed_flush = your_packed_rect_flush;
-panel.scratch_pixels = scratch_pixels;
-panel.scratch_pixel_capacity = scratch_pixel_count;
+panel.packed_pixels = persistent_rgb565_buffer;
+panel.packed_pixel_capacity = static_cast<std::size_t>(width) * height;
 ```
 
-The HAL passes full-width tight rectangles directly when possible. For
-partial-width dirty rectangles, it packs rows into `scratch_pixels` before
-calling `packed_flush`. A real `packed_flush` implementation can call:
+Set `metrics->convert_us`, `window_setup_us`, `dma_submit_us`, `dma_wait_us`
+and `chunks` when the driver can report them. The WS147 callback waits for each
+DMA transfer before it reuses its internal chunk buffer, so the metric and the
+buffer lifetime have the same boundary. A real `packed_flush` implementation
+can call:
 
 ```cpp
 esp_lcd_panel_draw_bitmap(panel_handle,
@@ -282,8 +322,10 @@ esp_lcd_panel_draw_bitmap(panel_handle,
                           pixels);
 ```
 
-The QEMU smoke path exercises both a full-frame strided flush and a padded-stride
-partial dirty rectangle that requires scratch packing. It logs flush count,
+The legacy QEMU smoke path also exercises a full-frame strided flush and a
+padded-stride partial dirty rectangle that requires `scratch_pixels` packing.
+That compatibility adapter remains available through `make_rgb565_sink()`;
+the retained UI path does not allocate it. The smoke log records flush count,
 dirty pixels, transferred bytes, scratch usage and failed flushes.
 
 For `esp_lcd_panel_draw_bitmap`, be careful with partial-width dirty rectangles:
@@ -309,12 +351,14 @@ to forward them into `InputController`. Text events are copied from a fixed
 16-byte buffer with bounded length handling, so an unterminated hardware buffer
 cannot read past the event object.
 
-The current P4/P5/P6 smoke path is still a validation harness. It proves that
-bitmap font callbacks, focus navigation, activation, text input, checkbox state,
-bounded queue overflow accounting and dirty-rectangle presentation all connect
-to the mainline core. It is not yet the final board run loop: a real port still
-needs persistent frame buffers, real panel/touch drivers, timer pumping,
-low-power policy and product-level resource packaging.
+The P4/P5/P6 smoke path remains a validation harness. It proves that bitmap
+font callbacks, focus navigation, activation, text input, checkbox state,
+bounded queue overflow accounting and dirty-rectangle presentation connect to
+the mainline core. The Timer and scroll startup modes add a retained UI loop
+with persistent framebuffers, real panel/touch drivers, bounded input pumping
+and port telemetry. They are not yet a final board shell: low-power policy,
+app lifecycle isolation and product-level resource packaging still need their
+own host integration.
 
 ## Board Bring-Up Checklist
 

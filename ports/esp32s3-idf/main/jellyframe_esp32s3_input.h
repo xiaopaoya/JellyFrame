@@ -60,8 +60,12 @@ struct BoardInputDispatchStats {
     std::uint32_t activation_events = 0;
 };
 
+using BoardInputEventObserver = void (*)(const BoardInputEvent& event, void* context);
+
 BoardInputDispatchStats dispatch_input_events(BoardInputQueue& queue,
                                               jellyframe::InputController& controller,
-                                              std::size_t max_events);
+                                              std::size_t max_events,
+                                              BoardInputEventObserver observer = nullptr,
+                                              void* observer_context = nullptr);
 
 } // namespace jellyframe_esp32s3

@@ -26,6 +26,17 @@ bool valid_dirty_rect(const Rgb565Panel& panel, jellyframe::Rect dirty_rect) {
         dirty_rect.y <= panel.height - dirty_rect.height;
 }
 
+bool valid_packed_dirty_rect(const Rgb565Panel& panel, jellyframe::Rect dirty_rect) {
+    return panel.width > 0 &&
+        panel.height > 0 &&
+        dirty_rect.x >= 0 &&
+        dirty_rect.y >= 0 &&
+        dirty_rect.width > 0 &&
+        dirty_rect.height > 0 &&
+        dirty_rect.x <= panel.width - dirty_rect.width &&
+        dirty_rect.y <= panel.height - dirty_rect.height;
+}
+
 std::uint32_t dirty_pixel_count(jellyframe::Rect dirty_rect) {
     if (dirty_rect.width <= 0 || dirty_rect.height <= 0) {
         return 0;
@@ -39,6 +50,13 @@ bool flush_rgb565_rect(jellyframe::Rect dirty_rect, void* context) {
         return false;
     }
     auto* panel = static_cast<Rgb565Panel*>(context);
+    if (panel->framebuffer_convert_start_us != 0) {
+        const std::uint64_t now_us = esp_timer_get_time();
+        panel->framebuffer_convert_us += now_us - panel->framebuffer_convert_start_us;
+        // A multi-rect present converts each following rectangle after this
+        // callback returns, so this is its next conversion start point.
+        panel->framebuffer_convert_start_us = now_us;
+    }
     const std::uint32_t dirty_pixels = dirty_pixel_count(dirty_rect);
     ++panel->flush_count;
     panel->flushed_pixels += dirty_pixels;
@@ -58,6 +76,42 @@ bool flush_rgb565_rect(jellyframe::Rect dirty_rect, void* context) {
                                  stride,
                                  dirty_rect,
                                  panel->flush_context);
+    if (!ok) {
+        ++panel->failed_flush_count;
+    }
+    return ok;
+}
+
+bool flush_packed_rgb565_rect(const std::uint16_t* pixels, jellyframe::Rect dirty_rect, void* context) {
+    if (context == nullptr || pixels == nullptr) {
+        return false;
+    }
+    auto* panel = static_cast<Rgb565Panel*>(context);
+    if (!valid_packed_dirty_rect(*panel, dirty_rect)) {
+        return false;
+    }
+    if (panel->framebuffer_convert_start_us != 0) {
+        const std::uint64_t now_us = esp_timer_get_time();
+        panel->framebuffer_convert_us += now_us - panel->framebuffer_convert_start_us;
+        panel->framebuffer_convert_start_us = now_us;
+    }
+    const std::uint32_t dirty_pixels = dirty_pixel_count(dirty_rect);
+    ++panel->flush_count;
+    ++panel->packed_flush_count;
+    panel->flushed_pixels += dirty_pixels;
+    panel->flushed_bytes += dirty_pixels * sizeof(std::uint16_t);
+    panel->last_dirty_rect = dirty_rect;
+    if (panel->packed_flush == nullptr) {
+        return true;
+    }
+
+    Rgb565PackedFlushMetrics metrics;
+    const bool ok = panel->packed_flush(pixels, dirty_rect, &metrics, panel->flush_context);
+    panel->panel_convert_us += metrics.convert_us;
+    panel->panel_window_setup_us += metrics.window_setup_us;
+    panel->panel_dma_submit_us += metrics.dma_submit_us;
+    panel->panel_dma_wait_us += metrics.dma_wait_us;
+    panel->panel_dma_chunks += metrics.chunks;
     if (!ok) {
         ++panel->failed_flush_count;
     }
@@ -97,8 +151,15 @@ bool flush_rgb565_packed_rect(Rgb565Panel& panel, jellyframe::Rect dirty_rect) {
         static_cast<std::size_t>(dirty_rect.x);
 
     ++panel.packed_flush_count;
+    Rgb565PackedFlushMetrics metrics;
     if (dirty_rect.x == 0 && dirty_rect.width == stride) {
-        return panel.packed_flush(source, dirty_rect, panel.flush_context);
+        const bool ok = panel.packed_flush(source, dirty_rect, &metrics, panel.flush_context);
+        panel.panel_convert_us += metrics.convert_us;
+        panel.panel_window_setup_us += metrics.window_setup_us;
+        panel.panel_dma_submit_us += metrics.dma_submit_us;
+        panel.panel_dma_wait_us += metrics.dma_wait_us;
+        panel.panel_dma_chunks += metrics.chunks;
+        return ok;
     }
 
     if (panel.scratch_pixels == nullptr || panel.scratch_pixel_capacity < dirty_pixels) {
@@ -106,6 +167,7 @@ bool flush_rgb565_packed_rect(Rgb565Panel& panel, jellyframe::Rect dirty_rect) {
     }
 
     const std::size_t row_bytes = static_cast<std::size_t>(dirty_rect.width) * sizeof(std::uint16_t);
+    const std::uint64_t copy_start = esp_timer_get_time();
     for (int row = 0; row < dirty_rect.height; ++row) {
         const std::uint16_t* source_row = source + static_cast<std::size_t>(row) *
             static_cast<std::size_t>(stride);
@@ -113,8 +175,15 @@ bool flush_rgb565_packed_rect(Rgb565Panel& panel, jellyframe::Rect dirty_rect) {
             static_cast<std::size_t>(dirty_rect.width);
         std::memcpy(target_row, source_row, row_bytes);
     }
+    panel.scratch_copy_us += static_cast<std::uint64_t>(esp_timer_get_time() - copy_start);
     ++panel.scratch_flush_count;
-    return panel.packed_flush(panel.scratch_pixels, dirty_rect, panel.flush_context);
+    const bool ok = panel.packed_flush(panel.scratch_pixels, dirty_rect, &metrics, panel.flush_context);
+    panel.panel_convert_us += metrics.convert_us;
+    panel.panel_window_setup_us += metrics.window_setup_us;
+    panel.panel_dma_submit_us += metrics.dma_submit_us;
+    panel.panel_dma_wait_us += metrics.dma_wait_us;
+    panel.panel_dma_chunks += metrics.chunks;
+    return ok;
 }
 
 jellyframe::EmbeddedFrameBufferSink make_rgb565_sink(Rgb565Panel& panel) {
@@ -130,6 +199,17 @@ jellyframe::EmbeddedFrameBufferSink make_rgb565_sink(Rgb565Panel& panel) {
             static_cast<std::size_t>(stride) * sizeof(std::uint16_t),
         },
         flush_rgb565_rect,
+        &panel,
+    };
+}
+
+jellyframe::EmbeddedPackedRgb565Sink make_packed_rgb565_sink(Rgb565Panel& panel) {
+    return jellyframe::EmbeddedPackedRgb565Sink{
+        jellyframe::EmbeddedPixelFormat::Rgb565,
+        panel.packed_pixels,
+        panel.packed_pixel_capacity,
+        false,
+        flush_packed_rgb565_rect,
         &panel,
     };
 }

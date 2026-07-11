@@ -70,11 +70,16 @@ std::uint32_t BoardInputQueue::dropped_count() const {
 
 BoardInputDispatchStats dispatch_input_events(BoardInputQueue& queue,
                                               jellyframe::InputController& controller,
-                                              std::size_t max_events) {
+                                              std::size_t max_events,
+                                              BoardInputEventObserver observer,
+                                              void* observer_context) {
     BoardInputDispatchStats stats;
     BoardInputEvent event;
     while (stats.dispatched < max_events && queue.dequeue(event)) {
         ++stats.dispatched;
+        if (observer != nullptr) {
+            observer(event, observer_context);
+        }
         switch (event.kind) {
         case BoardInputKind::PointerDown:
             controller.pointer_down(jellyframe::PointerInput{

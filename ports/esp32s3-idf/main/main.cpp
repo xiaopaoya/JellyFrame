@@ -2,6 +2,7 @@
 #include "jellyframe_esp32s3_hal.h"
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
+#include "jellyframe_esp32s3_ui_task.h"
 #include "boards/waveshare_touch_lcd_boards.h"
 
 #include "render_core/bitmap_font.h"
@@ -149,6 +150,7 @@ bool probe_strided_flush(const std::uint16_t* pixels,
 
 bool probe_packed_flush(const std::uint16_t* pixels,
                         Rect dirty_rect,
+                        jellyframe_esp32s3::Rgb565PackedFlushMetrics* metrics,
                         void* context) {
     if (pixels == nullptr || dirty_rect.width <= 0 || dirty_rect.height <= 0 || context == nullptr) {
         return false;
@@ -160,6 +162,10 @@ bool probe_packed_flush(const std::uint16_t* pixels,
     probe->pixels += dirty_pixels;
     probe->bytes += dirty_pixels * sizeof(std::uint16_t);
     probe->last_dirty = dirty_rect;
+    if (metrics != nullptr) {
+        *metrics = {};
+        metrics->chunks = 1;
+    }
     return true;
 }
 
@@ -592,7 +598,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
              static_cast<unsigned>(panel.flushed_bytes - flush_bytes_before_dirty));
 }
 
-void run_benchmark() {
+[[maybe_unused]] void run_benchmark() {
     jellyframe_esp32s3::boards::BoardRuntime board_runtime =
         jellyframe_esp32s3::boards::initialize_selected_board();
     const auto& board = board_runtime.profile;
@@ -810,8 +816,22 @@ extern "C" void app_main(void) {
     if (jellyframe_esp32s3::boards::selected_board_probe_only_enabled()) {
         jellyframe_esp32s3::boards::run_selected_board_probe_only();
     }
+#if CONFIG_JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK
+    if (!jellyframe_esp32s3::start_timer_ui_task()) {
+        ESP_LOGE(tag, "failed to start Timer UI task");
+    } else {
+        ESP_LOGI(tag, "Timer UI task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    if (!jellyframe_esp32s3::start_scroll_benchmark_task()) {
+        ESP_LOGE(tag, "failed to start scroll benchmark task");
+    } else {
+        ESP_LOGI(tag, "scroll benchmark task started");
+    }
+#else
     run_benchmark();
     ESP_LOGI(tag, "benchmark complete");
+#endif
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

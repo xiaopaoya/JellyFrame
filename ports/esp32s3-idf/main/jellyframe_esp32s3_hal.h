@@ -15,8 +15,17 @@ using Rgb565PanelFlushCallback = bool (*)(const std::uint16_t* pixels,
                                           jellyframe::Rect dirty_rect,
                                           void* context);
 
+struct Rgb565PackedFlushMetrics {
+    std::uint32_t convert_us = 0;
+    std::uint32_t window_setup_us = 0;
+    std::uint32_t dma_submit_us = 0;
+    std::uint32_t dma_wait_us = 0;
+    std::uint32_t chunks = 0;
+};
+
 using Rgb565PackedRectFlushCallback = bool (*)(const std::uint16_t* pixels,
                                                jellyframe::Rect dirty_rect,
+                                               Rgb565PackedFlushMetrics* metrics,
                                                void* context);
 
 struct Rgb565Panel {
@@ -29,18 +38,31 @@ struct Rgb565Panel {
     void* flush_context = nullptr;
     std::uint16_t* scratch_pixels = nullptr;
     std::size_t scratch_pixel_capacity = 0;
+    std::uint16_t* packed_pixels = nullptr;
+    std::size_t packed_pixel_capacity = 0;
     std::uint32_t flush_count = 0;
     std::uint32_t packed_flush_count = 0;
     std::uint32_t scratch_flush_count = 0;
     std::uint32_t failed_flush_count = 0;
     std::uint32_t flushed_pixels = 0;
     std::uint32_t flushed_bytes = 0;
+    // Set by the UI task immediately before present_frame(); consumed by the
+    // flush callback after the Core has converted the next dirty rectangle.
+    std::uint64_t framebuffer_convert_start_us = 0;
+    std::uint64_t framebuffer_convert_us = 0;
+    std::uint64_t scratch_copy_us = 0;
+    std::uint64_t panel_convert_us = 0;
+    std::uint64_t panel_window_setup_us = 0;
+    std::uint64_t panel_dma_submit_us = 0;
+    std::uint64_t panel_dma_wait_us = 0;
+    std::uint32_t panel_dma_chunks = 0;
     jellyframe::Rect last_dirty_rect{};
 };
 
 jellyframe::HostClock make_clock();
 
 jellyframe::EmbeddedFrameBufferSink make_rgb565_sink(Rgb565Panel& panel);
+jellyframe::EmbeddedPackedRgb565Sink make_packed_rgb565_sink(Rgb565Panel& panel);
 
 std::size_t rgb565_buffer_pixels(int width, int height, int stride_pixels = 0);
 

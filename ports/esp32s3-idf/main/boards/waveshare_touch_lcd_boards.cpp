@@ -339,7 +339,10 @@ esp_err_t ws147_set_window(esp_lcd_panel_io_handle_t io, int x_start, int y_star
     return ws147_lcd_tx_param(io, LCD_CMD_RASET, row_data, sizeof(row_data));
 }
 
-bool ws147_packed_flush(const std::uint16_t* pixels, jellyframe::Rect dirty_rect, void* context) {
+bool ws147_packed_flush(const std::uint16_t* pixels,
+                        jellyframe::Rect dirty_rect,
+                        Rgb565PackedFlushMetrics* metrics,
+                        void* context) {
     auto* display = static_cast<Ws147DisplayContext*>(context);
     if (display == nullptr || display->lcd_io == nullptr || pixels == nullptr ||
         dirty_rect.width <= 0 || dirty_rect.height <= 0) {
@@ -353,6 +356,9 @@ bool ws147_packed_flush(const std::uint16_t* pixels, jellyframe::Rect dirty_rect
         return false;
     }
 
+    if (metrics != nullptr) {
+        *metrics = {};
+    }
     ws147_lock_lcd(*display);
     for (int y = 0; y < dirty_rect.height; y += rows_per_chunk) {
         const int rows = std::min(rows_per_chunk, dirty_rect.height - y);
@@ -364,19 +370,34 @@ bool ws147_packed_flush(const std::uint16_t* pixels, jellyframe::Rect dirty_rect
         }
         const std::uint16_t* source =
             pixels + static_cast<std::size_t>(y) * static_cast<std::size_t>(dirty_rect.width);
+        const std::uint64_t convert_start = esp_timer_get_time();
         for (std::size_t i = 0; i < pixels_in_chunk; ++i) {
             color_buffer[i] = ws147_panel_rgb565(source[i]);
         }
-        if (ws147_set_window(display->lcd_io,
-                             dirty_rect.x,
-                             dirty_rect.y + y,
-                             dirty_rect.x + dirty_rect.width,
-                             dirty_rect.y + y + rows) != ESP_OK ||
-            esp_lcd_panel_io_tx_color(display->lcd_io,
-                                      LCD_CMD_RAMWR,
-                                      color_buffer,
-                                      pixels_in_chunk * sizeof(std::uint16_t)) != ESP_OK ||
-            !ws147_wait_lcd_color_done(*display)) {
+        const std::uint64_t after_convert = esp_timer_get_time();
+        const esp_err_t window_result = ws147_set_window(display->lcd_io,
+                                                           dirty_rect.x,
+                                                           dirty_rect.y + y,
+                                                           dirty_rect.x + dirty_rect.width,
+                                                           dirty_rect.y + y + rows);
+        const std::uint64_t after_window = esp_timer_get_time();
+        const esp_err_t submit_result = window_result == ESP_OK
+            ? esp_lcd_panel_io_tx_color(display->lcd_io,
+                                        LCD_CMD_RAMWR,
+                                        color_buffer,
+                                        pixels_in_chunk * sizeof(std::uint16_t))
+            : window_result;
+        const std::uint64_t after_submit = esp_timer_get_time();
+        const bool completed = submit_result == ESP_OK && ws147_wait_lcd_color_done(*display);
+        const std::uint64_t after_wait = esp_timer_get_time();
+        if (metrics != nullptr) {
+            metrics->convert_us += static_cast<std::uint32_t>(after_convert - convert_start);
+            metrics->window_setup_us += static_cast<std::uint32_t>(after_window - after_convert);
+            metrics->dma_submit_us += static_cast<std::uint32_t>(after_submit - after_window);
+            metrics->dma_wait_us += static_cast<std::uint32_t>(after_wait - after_submit);
+            ++metrics->chunks;
+        }
+        if (window_result != ESP_OK || submit_result != ESP_OK || !completed) {
             ws147_unlock_lcd(*display);
             return false;
         }
@@ -658,8 +679,8 @@ void release_waveshare_147(Ws147DisplayContext& display) {
     if (display.dma_pixels != nullptr) {
         heap_caps_free(display.dma_pixels);
         display.dma_pixels = nullptr;
-        display.dma_pixel_capacity = 0;
     }
+    display.dma_pixel_capacity = 0;
     display.input_queue = nullptr;
     display.touch_down = false;
 }

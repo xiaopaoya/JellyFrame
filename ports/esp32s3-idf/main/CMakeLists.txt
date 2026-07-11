@@ -9,7 +9,7 @@ set(JELLYFRAME_ESP32S3_RESOURCE_REPORT
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-    file(GLOB_RECURSE JELLYFRAME_ESP32S3_RESOURCE_INPUTS
+    file(GLOB_RECURSE JELLYFRAME_ESP32S3_RESOURCE_INPUTS CONFIGURE_DEPENDS
         "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.css"
         "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.html"
         "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.js"
@@ -40,6 +40,7 @@ idf_component_register(
         "jellyframe_esp32s3_hal.cpp"
         "jellyframe_esp32s3_input.cpp"
         "jellyframe_esp32s3_resources.cpp"
+        "jellyframe_esp32s3_ui_task.cpp"
         "boards/waveshare_touch_lcd_boards.cpp"
         "${JELLYFRAME_ESP32S3_GENERATED_RESOURCES}"
     INCLUDE_DIRS

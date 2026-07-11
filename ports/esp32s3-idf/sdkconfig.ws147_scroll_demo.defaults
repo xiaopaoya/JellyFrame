@@ -1,0 +1,3 @@
+# Interactive WS147 list demo. Combine after sdkconfig.ws147_scroll_benchmark.defaults.
+# CONFIG_JELLYFRAME_ESP32S3_SCROLL_AUTORUN is not set
+CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_FULL=y
