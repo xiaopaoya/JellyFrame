@@ -3329,22 +3329,21 @@ bool resolve_css_vars(std::string_view value,
         }
 
         const std::string_view body = value.substr(start + 4, close - start - 4);
-        const std::vector<std::string> args = split_function_arguments(body);
-        if (args.empty()) {
+        const std::size_t comma = body.find(',');
+        const std::string name_token = trim(body.substr(0, comma));
+        if (name_token.empty()) {
             output.append(value.substr(start, close - start + 1));
             return false;
         }
-        const std::string name = lowercase(trim(args[0]));
+        const std::string name = lowercase(name_token);
         std::string replacement;
         const auto found = custom_properties.find(name);
         if (found != custom_properties.end()) {
             if (!resolve_css_vars(found->second, custom_properties, replacement, depth + 1)) {
                 return false;
             }
-        } else if (args.size() >= 2) {
-            const std::size_t fallback_begin = body.find(',');
-            if (fallback_begin == std::string_view::npos ||
-                !resolve_css_vars(body.substr(fallback_begin + 1), custom_properties, replacement, depth + 1)) {
+        } else if (comma != std::string_view::npos) {
+            if (!resolve_css_vars(body.substr(comma + 1), custom_properties, replacement, depth + 1)) {
                 return false;
             }
             replacement = trim(replacement);
