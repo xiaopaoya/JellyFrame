@@ -15,7 +15,7 @@ expensive, hard to bound, or not useful on constrained devices.
 ## Syntax Contract
 
 App-authored HTML, CSS and JavaScript should be a documented subset of the Web
-platform. JellyFrame-specific configuration belongs in cjellyframe.app.jsonc,
+platform. JellyFrame-specific configuration belongs in `jellyframe.app.json`,
 CLI/tool options, frame scripts, package reports or host/port interfaces, not in
 private page syntax. Use package-local standard paths such as `/assets/icon.bmp`,
 `/data/weather.json` or relative URLs inside pages; private URL schemes are not

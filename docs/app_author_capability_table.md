@@ -1,8 +1,8 @@
 # App Author Capability Table
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0-dev
 
-This is the quick "can n use it?" table for app authors. The full contract
+This is the quick "can I use it?" table for app authors. The full contract
 remains [developer_capability_matrix.md](developer_capability_matrix.md).
 
 ## HTML
