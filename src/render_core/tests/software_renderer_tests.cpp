@@ -445,6 +445,70 @@ void dirty_render_skips_contained_dirty_rects() {
     check(frame_buffer.pixel(10, 10).r == 0, "normalized dirty rect still paints content");
 }
 
+void compositor_skips_covered_opaque_fill_prefix() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 8, 8};
+    DisplayCommand red = black_fill(Rect{0, 0, 8, 8});
+    red.color = Color{220, 38, 38, 255};
+    DisplayCommand green = black_fill(Rect{0, 0, 8, 8});
+    green.color = Color{22, 163, 74, 255};
+    DisplayCommand blue = black_fill(Rect{0, 0, 8, 8});
+    blue.color = Color{37, 99, 235, 255};
+    root.display_list = {red, green, blue};
+
+    FrameBuffer frame_buffer(8, 8, Color{255, 0, 255, 255});
+    const Rect dirty{1, 1, 6, 6};
+    SoftwareCompositor().render_into(root, frame_buffer, Color{255, 255, 255, 255}, &dirty, 1);
+
+    const Color painted = frame_buffer.pixel(3, 3);
+    check(painted.r == 37 && painted.g == 99 && painted.b == 235,
+          "last opaque prefix fill covers the dirty clip");
+    check(frame_buffer.pixel(0, 0).r == 255 && frame_buffer.pixel(0, 0).b == 255,
+          "opaque prefix optimization keeps pixels outside dirty clip");
+}
+
+void compositor_keeps_non_fill_prefix_side_effects() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 8, 8};
+    DisplayCommand text;
+    text.type = DisplayCommandType::Text;
+    text.rect = Rect{1, 1, 4, 4};
+    text.color = Color{0, 0, 0, 255};
+    text.text = "x";
+    root.display_list.push_back(std::move(text));
+    DisplayCommand cover = black_fill(Rect{0, 0, 8, 8});
+    cover.color = Color{255, 255, 255, 255};
+    root.display_list.push_back(std::move(cover));
+
+    TextPaintCounter counter;
+    FrameBuffer frame_buffer(8, 8, Color{0, 0, 0, 255});
+    SoftwareCompositor compositor(TextPainter{counting_text_painter, &counter});
+    compositor.render_into(root, frame_buffer, Color{255, 0, 255, 255});
+
+    check(counter.calls == 1, "non-fill prefix remains rasterized before opaque cover");
+    check(frame_buffer.pixel(2, 2).r == 255, "later opaque fill still determines final pixels");
+}
+
+void compositor_keeps_rounded_fill_underpaint() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 8, 8};
+    DisplayCommand red = black_fill(Rect{0, 0, 8, 8});
+    red.color = Color{220, 38, 38, 255};
+    DisplayCommand blue = black_fill(Rect{0, 0, 8, 8});
+    blue.color = Color{37, 99, 235, 255};
+    blue.border_radius = 3;
+    root.display_list = {red, blue};
+
+    FrameBuffer frame_buffer(8, 8, Color{0, 0, 0, 255});
+    SoftwareCompositor().render_into(root, frame_buffer, Color{255, 255, 255, 255});
+
+    check(frame_buffer.pixel(0, 0).r == 220, "rounded fill keeps opaque underpaint at corner");
+    check(frame_buffer.pixel(4, 4).b == 235, "rounded fill paints its covered center");
+}
+
 DisplayCommand white_fill(Rect rect) {
     DisplayCommand command;
     command.type = DisplayCommandType::FillRect;
@@ -875,6 +939,9 @@ int main() {
         dirty_render_only_updates_requested_clip();
         dirty_render_preserves_original_rounded_geometry();
         dirty_render_skips_contained_dirty_rects();
+        compositor_skips_covered_opaque_fill_prefix();
+        compositor_keeps_non_fill_prefix_side_effects();
+        compositor_keeps_rounded_fill_underpaint();
         rasterizer_reports_text_fallback();
         dirty_text_clip_preserves_original_text_geometry();
         compositor_smooths_scaled_layers();

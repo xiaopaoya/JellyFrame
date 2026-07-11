@@ -145,3 +145,45 @@ jobs:
       - name: Check whitespace
         shell: pwsh
         run: git diff --check
+
+  windows-scripting:
+    name: Windows scripting bridge tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout JellyFrame
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Checkout JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Build JerryScript
+        shell: pwsh
+        run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+
+      - name: Configure scripting build
+        shell: pwsh
+        run: >
+          cmake -S . -B build-scripting
+          -DJELLYFRAME_BUILD_EXAMPLES=ON
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_BUILD_BENCHMARKS=ON
+          -DJELLYFRAME_BUILD_SCRIPTING=ON
+          -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
+
+      - name: Build scripting tests
+        shell: pwsh
+        run: cmake --build build-scripting --config Release --parallel
+
+      - name: Run scripting CTest
+        shell: pwsh
+        run: ctest --test-dir build-scripting -C Release --output-on-failure

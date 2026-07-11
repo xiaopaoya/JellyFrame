@@ -1,6 +1,6 @@
 # App Author Guide
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0-dev
 
 This is the short contract for people writing JellyFrame apps. JellyFrame is
 not a mini browser. It is a Web-shaped embedded UI runtime: HTML gives
@@ -41,6 +41,12 @@ patterns before the runtime parser evaluates the stylesheet. Some advice entries
 `recipe` field that points at a copyable pattern in
 [app_author_recipes.md](app_author_recipes.md).
 
+Advice created for a responsive target also includes `targetViewport` and, when
+the target is gated, `targetGate.decision` / `targetGate.reasons`. Font advice
+includes `font.missingNonAsciiSample`, `font.targetFontProfile` or unmatched
+CSS families when those details are available. Editors and report viewers can
+show the affected target and exact font decision without re-parsing diagnostics.
+
 If the page feels slow, inspect `performanceSummary.bottlenecks[]` and
 `performanceAdvice[]` next. These fields quantify preflight complexity:
 DOM/render/layout object counts, layer and display-command counts, framebuffer
@@ -55,13 +61,16 @@ or `--port-telemetry path\to\port.log` for real port logs. A port log can start
 as one text line:
 
 ```text
-port_telemetry frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+port_telemetry case=scroll_benchmark_cumulative workload=full frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
 ```
 
 The CLI merges these into `runtimeMetrics` / `portTelemetry`,
 `performanceSummary.bottlenecks[]` and `performanceAdvice[]`, which helps
 separate page complexity, dirty area, panel flush, DMA wait and port-side
-internal-RAM pressure.
+internal-RAM pressure. When comparing controlled device runs, include stable
+`case=` and `workload=` labels; the CLI preserves them in `portTelemetry.summary`
+and surfaces them as measured-port metadata rather than mixing incomparable
+captures.
 
 Diagnostic titles and explanations try to reuse Web/CSS vocabulary when it
 matches the failure: parse error, invalid declaration, unsupported value,

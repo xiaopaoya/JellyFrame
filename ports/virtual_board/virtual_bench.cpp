@@ -180,6 +180,10 @@ bool virtual_flush(Rect dirty, void* context) {
     return true;
 }
 
+bool virtual_packed_rgb565_flush(const std::uint16_t* pixels, Rect dirty, void* context) {
+    return pixels != nullptr && virtual_flush(dirty, context);
+}
+
 void reset_panel(VirtualPanel& panel) {
     panel.flushes = 0;
     panel.pixels = 0;
@@ -380,6 +384,26 @@ int run_virtual_bench(int argc, char** argv) {
     const std::uint64_t last_flush_pixels = panel.pixels;
     const std::uint64_t last_flushes = panel.flushes;
 
+    auto packed_rgb565 = std::make_unique<std::uint16_t[]>(
+        static_cast<std::size_t>(options.width) * static_cast<std::size_t>(options.height));
+    EmbeddedPackedRgb565Sink packed_sink{
+        EmbeddedPixelFormat::Rgb565,
+        packed_rgb565.get(),
+        static_cast<std::size_t>(options.width) * static_cast<std::size_t>(options.height),
+        false,
+        virtual_packed_rgb565_flush,
+        &panel,
+    };
+    EmbeddedFrameBufferPresentStats packed_present_stats;
+    const double packed_present_rgb565_us = average_microseconds(options.iterations, [&] {
+        reset_panel(panel);
+        if (!present_to_packed_rgb565(frame_buffer_view(frame_buffer), &full_dirty, 1, packed_sink,
+                                      &packed_present_stats)) {
+            std::cerr << "packed present_frame failed\n";
+            std::exit(2);
+        }
+    });
+
     EmbeddedFrameBufferPresentStats dirty_present_stats;
     const double dirty_present_rgb565_us = average_microseconds(options.iterations, [&] {
         reset_panel(panel);
@@ -397,6 +421,19 @@ int run_virtual_bench(int argc, char** argv) {
     const std::uint64_t dirty_flush_pixels = panel.pixels;
     const std::uint64_t dirty_flushes = panel.flushes;
 
+    EmbeddedFrameBufferPresentStats packed_dirty_present_stats;
+    const double packed_dirty_present_rgb565_us = average_microseconds(options.iterations, [&] {
+        reset_panel(panel);
+        if (!present_to_packed_rgb565(frame_buffer_view(frame_buffer),
+                                      typical_dirty_rects.data(),
+                                      typical_dirty_rects.size(),
+                                      packed_sink,
+                                      &packed_dirty_present_stats)) {
+            std::cerr << "packed dirty present_frame failed\n";
+            std::exit(2);
+        }
+    });
+
     EmbeddedFrameBufferPresentStats scroll_present_stats;
     const double scroll_present_rgb565_us = average_microseconds(options.iterations, [&] {
         reset_panel(panel);
@@ -413,6 +450,19 @@ int run_virtual_bench(int argc, char** argv) {
     const std::uint64_t scroll_flush_bytes = panel.bytes;
     const std::uint64_t scroll_flush_pixels = panel.pixels;
     const std::uint64_t scroll_flushes = panel.flushes;
+
+    EmbeddedFrameBufferPresentStats packed_scroll_present_stats;
+    const double packed_scroll_present_rgb565_us = average_microseconds(options.iterations, [&] {
+        reset_panel(panel);
+        if (!present_to_packed_rgb565(frame_buffer_view(frame_buffer),
+                                      &scroll_strip_rect,
+                                      1,
+                                      packed_sink,
+                                      &packed_scroll_present_stats)) {
+            std::cerr << "packed scroll present_frame failed\n";
+            std::exit(2);
+        }
+    });
 
     const double full_pipeline_us = average_microseconds(options.iterations, [&] {
         auto local_document = html_parser.parse(html, html_options);
@@ -447,14 +497,17 @@ int run_virtual_bench(int argc, char** argv) {
     print_metric("flatten_layers_cpu_avg_us", flatten_layers_us);
     print_metric("render_frame_cpu_avg_us", render_frame_us);
     print_metric("present_rgb565_cpu_avg_us", present_rgb565_us);
+    print_metric("packed_present_rgb565_cpu_avg_us", packed_present_rgb565_us);
     print_metric("virtual_flush_avg_us", virtual_flush_us);
     print_metric("dirty_render_frame_cpu_avg_us", dirty_render_frame_us);
     print_metric("dirty_present_rgb565_cpu_avg_us", dirty_present_rgb565_us);
+    print_metric("packed_dirty_present_rgb565_cpu_avg_us", packed_dirty_present_rgb565_us);
     print_metric("dirty_virtual_flush_avg_us", dirty_virtual_flush_us);
     print_metric("dirty_frame_estimate_us", dirty_frame_estimate_us);
     print_metric("dirty_frame_estimate_fps", 1000000.0 / dirty_frame_estimate_us);
     print_metric("scroll_strip_render_cpu_avg_us", scroll_strip_render_frame_us);
     print_metric("scroll_strip_present_cpu_avg_us", scroll_present_rgb565_us);
+    print_metric("packed_scroll_strip_present_cpu_avg_us", packed_scroll_present_rgb565_us);
     print_metric("scroll_strip_flush_avg_us", scroll_virtual_flush_us);
     print_metric("scroll_strip_frame_estimate_us", scroll_strip_frame_estimate_us);
     print_metric("scroll_strip_frame_estimate_fps", 1000000.0 / scroll_strip_frame_estimate_us);

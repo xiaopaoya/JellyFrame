@@ -6,6 +6,8 @@
 
 namespace jellyframe {
 
+struct FrameBuffer;
+
 enum class ScrollBlitMode {
     None,
     FastBlit,
@@ -31,5 +33,11 @@ ScrollBlitPlan plan_vertical_scroll_blit(int viewport_width,
                                          int content_height,
                                          int previous_scroll_y,
                                          int requested_scroll_y);
+
+// Moves the reusable rows for a FastBlit plan inside a framebuffer viewport.
+// The caller must repaint plan.exposed_strip afterwards.
+bool apply_vertical_scroll_blit(FrameBuffer& framebuffer,
+                                Rect viewport,
+                                const ScrollBlitPlan& plan);
 
 } // namespace jellyframe

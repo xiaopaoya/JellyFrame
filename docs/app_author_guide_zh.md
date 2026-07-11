@@ -1,6 +1,6 @@
 # App 作者手册
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-12；适用版本：0.5.0-dev
 
 这是一份给 JellyFrame app 作者的短契约。JellyFrame 不是迷你浏览器，而是一个 Web 形状的嵌入式
 UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，JavaScript 负责有界本地交互，manifest
@@ -36,6 +36,11 @@ Package report 还会包含 `animationDiagnostics`，在 runtime parser 实际�
 部分建议会带 `recipe` 字段，指向 [app_author_recipes_zh.md](app_author_recipes_zh.md)
 中的可复制写法。
 
+针对某个 responsive target 生成的建议还会带有 `targetViewport`；若 target 被 gate，带有
+`targetGate.decision` / `targetGate.reasons`。字体建议在可用时带有
+`font.missingNonAsciiSample`、`font.targetFontProfile` 或未匹配的 CSS family。编辑器或报告查看器
+无需重新解析 diagnostics，就能显示受影响的目标和精确字体决定。
+
 如果页面感觉卡顿，下一步看 `performanceSummary.bottlenecks[]` 和 `performanceAdvice[]`。
 这些字段会量化预检阶段能可靠判断的复杂度：DOM/render/layout 对象数量、layer 与 display command
 数量、framebuffer bytes、估算 pipeline heap、资源预算占比和 full-frame present 规模。`check`
@@ -46,12 +51,14 @@ Package report 还会包含 `animationDiagnostics`，在 runtime parser 实际�
 `--port-telemetry path\to\port.log`。port 日志最小只需要一行：
 
 ```text
-port_telemetry frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
+port_telemetry case=scroll_benchmark_cumulative workload=full frames=60 frame_ms_avg=24.5 frame_ms_max=38.0 dma_wait_ms_avg=2.1 flush_done_ms_avg=7.4 internal_ram_peak=180000
 ```
 
 这些数据会进入同一份 report 的 `runtimeMetrics` / `portTelemetry`、
 `performanceSummary.bottlenecks[]` 和 `performanceAdvice[]`，便于区分是页面复杂、dirty 区过大、
-panel flush 慢，还是 port 的 internal RAM 使用方式需要调整。
+panel flush 慢，还是 port 的 internal RAM 使用方式需要调整。比较受控实机测量时应携带稳定的
+`case=` 和 `workload=` 标签；CLI 会把它们保留在 `portTelemetry.summary` 并作为 measured-port
+元数据输出，避免把不可比的 capture 混在一起。
 
 诊断标题和解释会尽量复用 Web/CSS 规范中已有的表达：parse error、invalid declaration、
 unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己的 `code` 字段只作为

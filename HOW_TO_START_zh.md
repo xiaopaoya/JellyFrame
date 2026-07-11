@@ -325,10 +325,13 @@ python third_party\jerryscript\tools\build.py --clean
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build-script `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
-  -DJERRYSCRIPT_ROOT="$jerryRoot" `
-  -DJERRYSCRIPT_LIBRARIES="$jerryRoot\build\lib\MinSizeRel\jerry-core.lib;$jerryRoot\build\lib\MinSizeRel\jerry-port.lib"
+  -DJERRYSCRIPT_ROOT="$jerryRoot"
 cmake --build build-script --config Release
 ```
+
+标准 JerryScript build tree 只需传入 `JERRYSCRIPT_ROOT`：CMake 会从 build output
+自动发现 `jerry-core`、`jerry-ext` 和 `jerry-port`。只有非标准安装布局才需要手动设置
+`JERRYSCRIPT_LIBRARIES`。
 
 在交互式 Win32 壳中运行带脚本页面：
 

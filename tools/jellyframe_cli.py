@@ -233,6 +233,14 @@ def metric_float(metrics: dict, *keys: str) -> float:
     return float(metric_number(metrics, *keys) or 0.0)
 
 
+def metric_text(metrics: dict, *keys: str) -> str:
+    for key in keys:
+        value = metrics.get(key)
+        if value is not None:
+            return str(value)
+    return ""
+
+
 def parse_runtime_capture_log(log_path: Path) -> dict:
     if not log_path.is_file():
         raise SystemExit(f"missing runtime log: {log_path}")
@@ -368,7 +376,7 @@ def parse_port_telemetry_log(log_path: Path) -> dict:
             line = raw_line.strip()
             if not line or line.startswith("#") or line.startswith("["):
                 continue
-            match = re.match(r"^(?:port_telemetry|jellyframe_port_telemetry)\s+(?P<body>.+)$", line)
+            match = re.search(r"\b(?:port_telemetry|jellyframe_port_telemetry)\s+(?P<body>.+)$", line)
             if not match:
                 continue
             parsed = {}
@@ -391,6 +399,9 @@ def parse_port_telemetry_log(log_path: Path) -> dict:
         "format": "jellyframe.port.telemetry.metrics.v0",
         "source": source,
         "summary": {
+            "case": metric_text(metrics, "case"),
+            "app": metric_text(metrics, "app"),
+            "workload": metric_text(metrics, "workload"),
             "frames": metric_int(metrics, "frames"),
             "fullFrames": metric_int(metrics, "fullFrames"),
             "dirtyFrames": metric_int(metrics, "dirtyFrames"),
@@ -1120,6 +1131,107 @@ def specialize_developer_advice(entry: dict, code: str, parsed: dict) -> None:
             )
 
 
+def apply_target_context(entry: dict | None, profile: dict, gate: dict | None = None) -> None:
+    if entry is None:
+        return
+    viewport = profile.get("viewport", {})
+    if isinstance(viewport, dict) and viewport:
+        entry["targetViewport"] = {
+            key: viewport[key]
+            for key in ("width", "height", "shape")
+            if key in viewport
+        }
+    if not isinstance(gate, dict):
+        return
+    reasons = [str(reason) for reason in gate.get("reasons", []) if str(reason)]
+    entry["targetGate"] = {
+        "decision": str(gate.get("decision", "")),
+        "reasons": reasons,
+    }
+    if entry.get("code") != "target-gate-not-accepted":
+        return
+    target = str(entry.get("target", "target"))
+    reason_text = ", ".join(reasons) if reasons else "its responsive diagnostics"
+    entry["action"] = (
+        f"Target {target} is gated because of {reason_text}. Open its diagnostic samples, "
+        "apply the linked layout/scroll/font fixes, then keep the target at warn or reject "
+        "until it is visually verified."
+    )
+
+
+def font_sample_codepoints(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item.get("codepoint", "")) for item in value
+            if isinstance(item, dict) and item.get("codepoint")]
+
+
+def enrich_font_advice(advice: list[dict],
+                        seen: set[tuple[str, str, str]],
+                        font_diagnostics: dict) -> None:
+    missing_count = int(font_diagnostics.get("missingNonAsciiCodepointCount", 0) or 0)
+    missing_sample = font_sample_codepoints(font_diagnostics.get("missingNonAsciiSample"))
+    target_profile = str(font_diagnostics.get("targetFontProfile", "") or "")
+    missing_entries = [entry for entry in advice if entry.get("code") == "font-missing-glyphs"]
+    if missing_count > 0 and not missing_entries:
+        detail = f"missingNonAsciiCodepointCount={missing_count}"
+        if missing_sample:
+            detail += f' missingNonAsciiSample="{", ".join(missing_sample)}"'
+        entry = append_developer_advice(advice,
+                                        seen,
+                                        "font-missing-glyphs",
+                                        "warning",
+                                        "jellyframe.app.json",
+                                        detail)
+        if entry is not None:
+            missing_entries.append(entry)
+    if missing_entries:
+        font_context = {
+            "missingNonAsciiCodepointCount": missing_count,
+            "missingNonAsciiSample": missing_sample,
+        }
+        if target_profile:
+            font_context["targetFontProfile"] = target_profile
+        for entry in missing_entries:
+            entry["font"] = font_context
+            if missing_count:
+                sample_text = ", ".join(missing_sample) if missing_sample else "the reported non-ASCII characters"
+                entry["action"] = (
+                    f"Generate a .jffont subset covering {sample_text} ({missing_count} missing non-ASCII "
+                    "codepoint(s)), declare it in manifest fonts[], then rerun the default font preflight."
+                )
+
+    usage = font_diagnostics.get("fontFamilyUsage", {})
+    entries = usage.get("entries", []) if isinstance(usage, dict) else []
+    unmatched = [
+        {"family": str(item.get("family", "")), "source": str(item.get("source", ""))}
+        for item in entries
+        if isinstance(item, dict) and item.get("status") == "unmatched-primary"
+    ]
+    family_entries = [entry for entry in advice if entry.get("code") == "font-family-unmatched"]
+    if unmatched and not family_entries:
+        for item in unmatched:
+            entry = append_developer_advice(advice,
+                                            seen,
+                                            "font-family-unmatched",
+                                            "warning",
+                                            item["source"] or "styles",
+                                            f'fontFamily="{item["family"]}"')
+            if entry is not None:
+                family_entries.append(entry)
+    if family_entries:
+        for entry in family_entries:
+            source = str(entry.get("source", ""))
+            matching = [item for item in unmatched if not source or item["source"] == source]
+            entry["font"] = {"unmatchedPrimaryFamilies": matching or unmatched}
+            families = ", ".join(item["family"] for item in matching or unmatched if item["family"])
+            if families:
+                entry["action"] = (
+                    f"Declare a manifest .jffont family matching {families}, or change this CSS rule to "
+                    "system-ui/sans-serif before relying on it across targets."
+                )
+
+
 def ratio_percent(used: int, limit: int) -> int:
     if limit <= 0:
         return 0
@@ -1464,6 +1576,12 @@ def collect_performance_summary(report: dict) -> dict:
     if port_telemetry:
         summary["source"] = summary["source"] + "+port-telemetry"
         summary["portTelemetrySource"] = str(port_telemetry.get("source", ""))
+        if port_summary.get("case"):
+            summary["measuredPortCase"] = str(port_summary["case"])
+        if port_summary.get("app"):
+            summary["measuredPortApp"] = str(port_summary["app"])
+        if port_summary.get("workload"):
+            summary["measuredPortWorkload"] = str(port_summary["workload"])
         summary["measuredPortFrameCount"] = int(port_summary.get("frames", 0) or 0)
         summary["measuredPortFullFrameCount"] = int(port_summary.get("fullFrames", 0) or 0)
         summary["measuredPortDirtyFrameCount"] = int(port_summary.get("dirtyFrames", 0) or 0)
@@ -1644,10 +1762,10 @@ def append_developer_advice(advice: list[dict],
                             target: str = "") -> None:
     template = advice_template_for_code(code)
     if not template:
-        return
+        return None
     key = (code, source or target, detail[:120])
     if key in seen:
-        return
+        return None
     seen.add(key)
     entry = {
         "code": code,
@@ -1681,6 +1799,7 @@ def append_developer_advice(advice: list[dict],
             entry["metrics"] = metrics
         specialize_developer_advice(entry, code, parsed_detail)
     advice.append(entry)
+    return entry
 
 
 def collect_developer_advice(report: dict) -> list[dict]:
@@ -1716,6 +1835,7 @@ def collect_developer_advice(report: dict) -> list[dict]:
         target = str(profile.get("target", ""))
         status = str(profile.get("status", ""))
         layout = profile.get("layout", {}) if isinstance(profile.get("layout", {}), dict) else {}
+        gate = profile.get("gate", {})
         sample_codes = {
             str(diagnostic.get("code", ""))
             for diagnostic in profile.get("diagnosticSamples", [])
@@ -1723,59 +1843,49 @@ def collect_developer_advice(report: dict) -> list[dict]:
         }
         if status == "horizontal-overflow" or bool(layout.get("horizontalOverflow", False)):
             if "visual-horizontal-overflow" not in sample_codes:
-                append_developer_advice(advice,
-                                        seen,
-                                        "visual-horizontal-overflow",
-                                        "warning",
-                                        "",
-                                        "Responsive profile reports horizontal overflow.",
-                                        target)
+                entry = append_developer_advice(advice,
+                                                seen,
+                                                "visual-horizontal-overflow",
+                                                "warning",
+                                                "",
+                                                "Responsive profile reports horizontal overflow.",
+                                                target)
+                apply_target_context(entry, profile, gate if isinstance(gate, dict) else None)
         if status == "scroll-needed" or bool(layout.get("verticalOverflow", False)):
             if "visual-scroll-needed" not in sample_codes:
-                append_developer_advice(advice,
-                                        seen,
-                                        "visual-scroll-needed",
-                                        "info",
-                                        "",
-                                        "Responsive profile reports content taller than the viewport.",
-                                        target)
-        gate = profile.get("gate", {})
+                entry = append_developer_advice(advice,
+                                                seen,
+                                                "visual-scroll-needed",
+                                                "info",
+                                                "",
+                                                "Responsive profile reports content taller than the viewport.",
+                                                target)
+                apply_target_context(entry, profile, gate if isinstance(gate, dict) else None)
         if isinstance(gate, dict) and gate.get("decision") in {"warn", "reject"}:
-            append_developer_advice(advice,
-                                    seen,
-                                    "target-gate-not-accepted",
-                                    "error" if gate.get("decision") == "reject" else "warning",
-                                    "",
-                                    "Target gate reasons: " + ", ".join(gate.get("reasons", [])),
-                                    target)
+            entry = append_developer_advice(advice,
+                                            seen,
+                                            "target-gate-not-accepted",
+                                            "error" if gate.get("decision") == "reject" else "warning",
+                                            "",
+                                            "Target gate reasons: " + ", ".join(
+                                                str(reason) for reason in gate.get("reasons", [])),
+                                            target)
+            apply_target_context(entry, profile, gate)
         for diagnostic in profile.get("diagnosticSamples", []):
             if not isinstance(diagnostic, dict):
                 continue
-            append_developer_advice(advice,
-                                    seen,
-                                    str(diagnostic.get("code", "")),
-                                    str(diagnostic.get("severity", "warning")),
-                                    str(diagnostic.get("stage", "")),
-                                    str(diagnostic.get("detail", "")),
-                                    target)
+            entry = append_developer_advice(advice,
+                                            seen,
+                                            str(diagnostic.get("code", "")),
+                                            str(diagnostic.get("severity", "warning")),
+                                            str(diagnostic.get("stage", "")),
+                                            str(diagnostic.get("detail", "")),
+                                            target)
+            apply_target_context(entry, profile, gate if isinstance(gate, dict) else None)
 
     font_diagnostics = report.get("fontDiagnostics", {})
     if isinstance(font_diagnostics, dict):
-        if int(font_diagnostics.get("missingNonAsciiCodepointCount", 0) or 0) > 0:
-            append_developer_advice(advice,
-                                    seen,
-                                    "font-missing-glyphs",
-                                    "warning",
-                                    "jellyframe.app.json",
-                                    "Target/app fonts miss non-ASCII source codepoints.")
-        usage = font_diagnostics.get("fontFamilyUsage", {})
-        if isinstance(usage, dict) and int(usage.get("unmatchedPrimaryCount", 0) or 0) > 0:
-            append_developer_advice(advice,
-                                    seen,
-                                    "font-family-unmatched",
-                                    "warning",
-                                    "styles",
-                                    "One or more CSS primary font families do not match manifest fonts.")
+        enrich_font_advice(advice, seen, font_diagnostics)
 
     return advice
 

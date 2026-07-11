@@ -1,6 +1,7 @@
 ﻿#include "render_core/embedded_framebuffer.h"
 
 #include <algorithm>
+#include <array>
 
 namespace jellyframe {
 namespace {
@@ -44,10 +45,33 @@ int bayer4_threshold(int x, int y) {
     return static_cast<int>(kBayer4[y & 3][x & 3]);
 }
 
+constexpr std::array<std::uint8_t, 256> make_quantize_table(int bits) {
+    std::array<std::uint8_t, 256> table{};
+    const int max_value = (1 << bits) - 1;
+    for (int value = 0; value <= 255; ++value) {
+        table[static_cast<std::size_t>(value)] = static_cast<std::uint8_t>(
+            (value * max_value + 127) / 255);
+    }
+    return table;
+}
+
+constexpr std::array<std::uint8_t, 256> kQuantize5 = make_quantize_table(5);
+constexpr std::array<std::uint8_t, 256> kQuantize6 = make_quantize_table(6);
+
 std::uint8_t quantize_channel(std::uint8_t channel, int bits, int x, int y, bool ordered_dither) {
     const int max_value = (1 << bits) - 1;
     const int bias = ordered_dither ? bayer4_threshold(x, y) * 16 : 127;
     return static_cast<std::uint8_t>(std::min(max_value, (static_cast<int>(channel) * max_value + bias) / 255));
+}
+
+std::uint16_t pack_565_opaque_no_dither(Color color, bool bgr) {
+    const std::uint16_t r = kQuantize5[color.r];
+    const std::uint16_t g = kQuantize6[color.g];
+    const std::uint16_t b = kQuantize5[color.b];
+    if (bgr) {
+        return static_cast<std::uint16_t>((b << 11) | (g << 5) | r);
+    }
+    return static_cast<std::uint16_t>((r << 11) | (g << 5) | b);
 }
 
 std::uint16_t pack_565(Color color, bool bgr, int x, int y, bool ordered_dither) {
@@ -103,6 +127,28 @@ bool valid_target(const EmbeddedFrameBufferTarget& target) {
     return target.byte_size >= required;
 }
 
+bool is_packed_rgb565_format(EmbeddedPixelFormat format) {
+    return format == EmbeddedPixelFormat::Rgb565 || format == EmbeddedPixelFormat::Bgr565;
+}
+
+bool valid_packed_rgb565_sink(const EmbeddedPackedRgb565Sink& sink) {
+    return is_packed_rgb565_format(sink.format) && sink.pixels != nullptr && sink.pixel_capacity != 0;
+}
+
+bool packed_rect_pixel_count(Rect rect, std::size_t capacity, std::size_t& pixel_count) {
+    if (rect.width <= 0 || rect.height <= 0) {
+        pixel_count = 0;
+        return false;
+    }
+    const std::size_t width = static_cast<std::size_t>(rect.width);
+    const std::size_t height = static_cast<std::size_t>(rect.height);
+    if (width > capacity / height) {
+        return false;
+    }
+    pixel_count = width * height;
+    return true;
+}
+
 void convert_rect(const HostFrameBufferView& frame, EmbeddedFrameBufferTarget& target, Rect dirty) {
     const std::size_t stride = actual_stride(target);
 
@@ -142,6 +188,23 @@ void convert_rect(const HostFrameBufferView& frame, EmbeddedFrameBufferTarget& t
     case EmbeddedPixelFormat::Rgb565:
     case EmbeddedPixelFormat::Bgr565: {
         const bool bgr = target.format == EmbeddedPixelFormat::Bgr565;
+        if (!target.ordered_dither) {
+            for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+                const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                    static_cast<std::size_t>(frame.stride_pixels);
+                std::uint8_t* target_row = target.pixels + stride * static_cast<std::size_t>(y);
+                for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                    const Color color = source_row[x];
+                    const std::uint16_t packed = color.a == 255
+                        ? pack_565_opaque_no_dither(color, bgr)
+                        : pack_565(color, bgr, x, y, false);
+                    std::uint8_t* pixel = target_row + static_cast<std::size_t>(x) * 2U;
+                    pixel[0] = static_cast<std::uint8_t>(packed & 0xffU);
+                    pixel[1] = static_cast<std::uint8_t>(packed >> 8);
+                }
+            }
+            break;
+        }
         for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
             const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
                 static_cast<std::size_t>(frame.stride_pixels);
@@ -204,6 +267,36 @@ void convert_rect(const HostFrameBufferView& frame, EmbeddedFrameBufferTarget& t
     }
 }
 
+void convert_packed_rgb565_rect(const HostFrameBufferView& frame,
+                                const EmbeddedPackedRgb565Sink& sink,
+                                Rect dirty) {
+    const bool bgr = sink.format == EmbeddedPixelFormat::Bgr565;
+    std::uint16_t* target = sink.pixels;
+    if (!sink.ordered_dither) {
+        for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+            for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+                const Color color = source_row[x];
+                const std::uint16_t packed = color.a == 255
+                    ? pack_565_opaque_no_dither(color, bgr)
+                    : pack_565(color, bgr, x, y, false);
+                *target++ = packed;
+            }
+        }
+        return;
+    }
+
+    for (int y = dirty.y; y < dirty.y + dirty.height; ++y) {
+            const Color* source_row = frame.pixels + static_cast<std::size_t>(y) *
+                static_cast<std::size_t>(frame.stride_pixels);
+        for (int x = dirty.x; x < dirty.x + dirty.width; ++x) {
+            const std::uint16_t packed = pack_565(source_row[x], bgr, x, y, true);
+            *target++ = packed;
+        }
+    }
+}
+
 bool present_callback(const HostFrameBufferView& frame,
                       const Rect* dirty_rects,
                       std::size_t dirty_rect_count,
@@ -213,6 +306,17 @@ bool present_callback(const HostFrameBufferView& frame,
     }
     auto* sink = static_cast<EmbeddedFrameBufferSink*>(context);
     return present_to_embedded_framebuffer(frame, dirty_rects, dirty_rect_count, *sink);
+}
+
+bool packed_rgb565_present_callback(const HostFrameBufferView& frame,
+                                    const Rect* dirty_rects,
+                                    std::size_t dirty_rect_count,
+                                    void* context) {
+    if (context == nullptr) {
+        return false;
+    }
+    auto* sink = static_cast<EmbeddedPackedRgb565Sink*>(context);
+    return present_to_packed_rgb565(frame, dirty_rects, dirty_rect_count, *sink);
 }
 
 } // namespace
@@ -314,6 +418,56 @@ bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
     return true;
 }
 
+bool present_to_packed_rgb565(const HostFrameBufferView& frame,
+                              const Rect* dirty_rects,
+                              std::size_t dirty_rect_count,
+                              EmbeddedPackedRgb565Sink& sink,
+                              EmbeddedFrameBufferPresentStats* stats) {
+    if (stats != nullptr) {
+        *stats = EmbeddedFrameBufferPresentStats{};
+    }
+    if (frame.width <= 0 || frame.height <= 0 || frame.pixels == nullptr ||
+        frame.stride_pixels < frame.width || !valid_packed_rgb565_sink(sink)) {
+        return false;
+    }
+
+    const Rect full{0, 0, frame.width, frame.height};
+    const bool full_present = dirty_rects == nullptr || dirty_rect_count == 0;
+    const std::size_t count = full_present ? 1U : dirty_rect_count;
+    if (stats != nullptr) {
+        stats->full_present = full_present;
+        stats->source_rects = count;
+    }
+
+    for (std::size_t index = 0; index < count; ++index) {
+        const Rect source_rect = full_present ? full : dirty_rects[index];
+        const Rect dirty = intersect_rect(source_rect, full);
+        if (empty_rect(dirty)) {
+            if (stats != nullptr) {
+                ++stats->empty_rects;
+            }
+            continue;
+        }
+        std::size_t pixel_count = 0;
+        if (!packed_rect_pixel_count(dirty, sink.pixel_capacity, pixel_count)) {
+            return false;
+        }
+        convert_packed_rgb565_rect(frame, sink, dirty);
+        if (stats != nullptr) {
+            ++stats->clipped_rects;
+            stats->converted_pixels += pixel_count;
+            stats->packed_bytes += static_cast<std::uint64_t>(pixel_count) * sizeof(std::uint16_t);
+        }
+        if (sink.flush != nullptr && !sink.flush(sink.pixels, dirty, sink.flush_context)) {
+            return false;
+        }
+        if (stats != nullptr && sink.flush != nullptr) {
+            ++stats->flushes;
+        }
+    }
+    return true;
+}
+
 EmbeddedFrameBufferPresentStats estimate_embedded_framebuffer_present_stats(int width,
                                                                             int height,
                                                                             EmbeddedPixelFormat format,
@@ -348,6 +502,10 @@ EmbeddedFrameBufferPresentStats estimate_embedded_framebuffer_present_stats(int 
 
 HostFrameSink embedded_frame_sink(EmbeddedFrameBufferSink& sink) {
     return HostFrameSink{present_callback, &sink};
+}
+
+HostFrameSink embedded_packed_rgb565_sink(EmbeddedPackedRgb565Sink& sink) {
+    return HostFrameSink{packed_rgb565_present_callback, &sink};
 }
 
 } // namespace jellyframe

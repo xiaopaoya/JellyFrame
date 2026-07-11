@@ -30,6 +30,33 @@ if(JERRYSCRIPT_ROOT)
         set(JERRYSCRIPT_INCLUDE_DIR "${_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR}" CACHE PATH
             "JerryScript include directory" FORCE)
     endif()
+
+    if(NOT JERRYSCRIPT_LIBRARIES)
+        set(_JELLYFRAME_JERRYSCRIPT_LIBRARY_DIRS
+            "${JERRYSCRIPT_ROOT}/build/lib/Release"
+            "${JERRYSCRIPT_ROOT}/build/lib/MinSizeRel"
+            "${JERRYSCRIPT_ROOT}/build/lib/RelWithDebInfo"
+            "${JERRYSCRIPT_ROOT}/build/lib/Debug")
+        set(_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES "")
+        foreach(_JELLYFRAME_JERRYSCRIPT_LIBRARY_NAME IN ITEMS jerry-core jerry-ext jerry-port)
+            unset(_JELLYFRAME_JERRYSCRIPT_LIBRARY CACHE)
+            unset(_JELLYFRAME_JERRYSCRIPT_LIBRARY)
+            find_library(_JELLYFRAME_JERRYSCRIPT_LIBRARY
+                NAMES ${_JELLYFRAME_JERRYSCRIPT_LIBRARY_NAME}
+                PATHS ${_JELLYFRAME_JERRYSCRIPT_LIBRARY_DIRS}
+                NO_DEFAULT_PATH)
+            if(NOT _JELLYFRAME_JERRYSCRIPT_LIBRARY)
+                set(_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES "")
+                break()
+            endif()
+            list(APPEND _JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES
+                 "${_JELLYFRAME_JERRYSCRIPT_LIBRARY}")
+        endforeach()
+        if(_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES)
+            set(JERRYSCRIPT_LIBRARIES "${_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES}" CACHE STRING
+                "JerryScript libraries" FORCE)
+        endif()
+    endif()
 endif()
 
 add_library(jellyframe_render_core

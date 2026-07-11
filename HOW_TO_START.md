@@ -358,10 +358,13 @@ Configure JellyFrame with scripting:
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build-script `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
-  -DJERRYSCRIPT_ROOT="$jerryRoot" `
-  -DJERRYSCRIPT_LIBRARIES="$jerryRoot\build\lib\MinSizeRel\jerry-core.lib;$jerryRoot\build\lib\MinSizeRel\jerry-port.lib"
+  -DJERRYSCRIPT_ROOT="$jerryRoot"
 cmake --build build-script --config Release
 ```
+
+With a standard JerryScript build tree, `JERRYSCRIPT_ROOT` is sufficient:
+CMake discovers `jerry-core`, `jerry-ext` and `jerry-port` from its build
+output. Set `JERRYSCRIPT_LIBRARIES` only for a nonstandard install layout.
 
 Run a scripted page in the interactive Win32 shell:
 

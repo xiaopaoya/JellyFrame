@@ -1,6 +1,8 @@
 #include "render_core/scroll_blit.h"
+#include "render_core/software_renderer.h"
 
 #include <cassert>
+#include <climits>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -66,6 +68,36 @@ void invalid_viewport_falls_back_to_full_repaint() {
     check(std::string(scroll_blit_mode_name(plan.mode)) == "full-repaint", "mode name is stable");
 }
 
+void framebuffer_fast_blit_moves_rows_without_allocating() {
+    FrameBuffer framebuffer(6, 6, Color{0, 0, 0, 255});
+    for (int y = 0; y < framebuffer.height; ++y) {
+        for (int x = 0; x < framebuffer.width; ++x) {
+            framebuffer.pixel(x, y) = Color{static_cast<std::uint8_t>(y * 10 + x), 0, 0, 255};
+        }
+    }
+    const ScrollBlitPlan plan = plan_vertical_scroll_blit(4, 4, 20, 0, 1);
+    check(apply_vertical_scroll_blit(framebuffer, Rect{1, 1, 4, 4}, plan),
+          "framebuffer fast blit applies valid plan");
+    check(framebuffer.pixel(1, 1).r == 21 && framebuffer.pixel(4, 3).r == 44,
+          "framebuffer fast blit moves reusable rows upward");
+    check(!apply_vertical_scroll_blit(framebuffer, Rect{1, 1, 4, 4}, ScrollBlitPlan{}),
+          "framebuffer fast blit rejects non-fast plan");
+    check(!apply_vertical_scroll_blit(framebuffer, Rect{INT_MAX, 0, 1, 1}, plan),
+          "framebuffer fast blit rejects overflowing viewport coordinates");
+
+    FrameBuffer reverse_framebuffer(6, 6, Color{0, 0, 0, 255});
+    for (int y = 0; y < reverse_framebuffer.height; ++y) {
+        for (int x = 0; x < reverse_framebuffer.width; ++x) {
+            reverse_framebuffer.pixel(x, y) = Color{static_cast<std::uint8_t>(y * 10 + x), 0, 0, 255};
+        }
+    }
+    const ScrollBlitPlan reverse_plan = plan_vertical_scroll_blit(4, 4, 20, 1, 0);
+    check(apply_vertical_scroll_blit(reverse_framebuffer, Rect{1, 1, 4, 4}, reverse_plan),
+          "framebuffer fast blit applies reverse plan");
+    check(reverse_framebuffer.pixel(1, 2).r == 11 && reverse_framebuffer.pixel(4, 4).r == 34,
+          "framebuffer fast blit moves reusable rows downward without corrupting sources");
+}
+
 } // namespace
 
 int main() {
@@ -75,6 +107,7 @@ int main() {
         scroll_inputs_are_clamped_to_content_bounds();
         large_scroll_falls_back_to_full_repaint();
         invalid_viewport_falls_back_to_full_repaint();
+        framebuffer_fast_blit_moves_rows_without_allocating();
     } catch (const std::exception& error) {
         std::cerr << "scroll blit tests failed: " << error.what() << '\n';
         return 1;

@@ -924,6 +924,11 @@ class PackagePreflightTests(unittest.TestCase):
                 "source": "/styles/app.css",
             }, {
                 "level": "warning",
+                "code": "font-missing-glyphs",
+                "message": "source text uses codepoints not covered by target profile or app fonts",
+                "source": "jellyframe.app.json",
+            }, {
+                "level": "warning",
                 "code": "service-target-unsupported",
                 "message": "target does not support requested service",
                 "source": "jellyframe.app.json",
@@ -978,6 +983,7 @@ class PackagePreflightTests(unittest.TestCase):
             },
             "responsiveProfiles": [{
                 "target": "rect-172x320",
+                "viewport": {"width": 172, "height": 320, "shape": "rect"},
                 "status": "horizontal-overflow",
                 "layout": {"horizontalOverflow": True},
                 "diagnostics": {"warning": 1, "error": 0},
@@ -995,8 +1001,17 @@ class PackagePreflightTests(unittest.TestCase):
                 "gate": {"decision": "warn", "reasons": ["horizontal-overflow"]},
             }],
             "fontDiagnostics": {
+                "targetFontProfile": "tiny-plus-symbols",
                 "missingNonAsciiCodepointCount": 1,
-                "fontFamilyUsage": {"unmatchedPrimaryCount": 1},
+                "missingNonAsciiSample": [{"codepoint": "U+4ECA"}],
+                "fontFamilyUsage": {
+                    "unmatchedPrimaryCount": 1,
+                    "entries": [{
+                        "family": "Gel Display",
+                        "source": "/styles/app.css",
+                        "status": "unmatched-primary",
+                    }],
+                },
             },
         }
 
@@ -1037,8 +1052,22 @@ class PackagePreflightTests(unittest.TestCase):
                             entry.get("target") == "rect-172x320" and
                             entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>div.wide:nth-of-type(1)" and
                             entry.get("metrics", {}).get("boxOverflowRight") == 240 and
+                            entry.get("targetViewport", {}).get("width") == 172 and
+                            entry.get("targetGate", {}).get("decision") == "warn" and
                             entry.get("recipe") == "app_author_recipes.md#narrow-targets"
                             for entry in advice))
+        self.assertTrue(any(entry["code"] == "target-gate-not-accepted" and
+                            entry.get("targetGate", {}).get("reasons") == ["horizontal-overflow"] and
+                            "rect-172x320" in entry.get("action", "")
+                            for entry in advice))
+        font_missing = [entry for entry in advice if entry["code"] == "font-missing-glyphs"]
+        self.assertEqual(len(font_missing), 1)
+        self.assertEqual(font_missing[0]["font"]["missingNonAsciiSample"], ["U+4ECA"])
+        self.assertEqual(font_missing[0]["font"]["targetFontProfile"], "tiny-plus-symbols")
+        self.assertIn("U+4ECA", font_missing[0]["action"])
+        font_family = [entry for entry in advice if entry["code"] == "font-family-unmatched"]
+        self.assertEqual(len(font_family), 1)
+        self.assertEqual(font_family[0]["font"]["unmatchedPrimaryFamilies"][0]["family"], "Gel Display")
 
     def test_responsive_profile_carries_diagnostic_samples(self):
         profile = jellyframe_cli.responsive_profile_from_pipeline("rect-172x320", {
@@ -1303,7 +1332,8 @@ class PackagePreflightTests(unittest.TestCase):
             report_path = root / "report.json"
             telemetry_log = root / "port.log"
             telemetry_log.write_text(
-                "port_telemetry frames=30 full=1 dirty=29 flushes=58 converted_pixels=900000 "
+                "I (18245) JellyFrameUi: port_telemetry case=scroll_benchmark_cumulative app=org.jellyframe.bringup.scroll workload=cards "
+                "frames=30 full=1 dirty=29 flushes=58 converted_pixels=900000 "
                 "packed_bytes=1800000 frame_ms_avg=36.5 frame_ms_max=57.0 "
                 "dma_wait_ms_avg=5.2 dma_wait_ms_max=11.0 "
                 "flush_done_ms_avg=13.5 flush_done_ms_max=27.0 "
@@ -1314,8 +1344,11 @@ class PackagePreflightTests(unittest.TestCase):
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
         summary = report["performanceSummary"]
+        self.assertEqual(report["portTelemetry"]["summary"]["case"], "scroll_benchmark_cumulative")
+        self.assertEqual(report["portTelemetry"]["summary"]["workload"], "cards")
         self.assertEqual(report["portTelemetry"]["summary"]["frames"], 30)
         self.assertEqual(summary["source"], "package-preflight-estimate+port-telemetry")
+        self.assertEqual(summary["measuredPortWorkload"], "cards")
         self.assertEqual(summary["measuredPortFrameCount"], 30)
         self.assertEqual(summary["measuredPortFullFrameCount"], 1)
         self.assertEqual(summary["measuredPortDirtyFrameCount"], 29)

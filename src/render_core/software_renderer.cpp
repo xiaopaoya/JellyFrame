@@ -213,16 +213,70 @@ int rounded_rect_coverage(Rect rect, int radius, int x, int y) {
     return (covered * 255 + 8) / 16;
 }
 
+void fill_opaque_region(FrameBuffer& target, Rect rect, Rect clip, Color color) {
+    const Rect visible = clipped_target_rect(target, rect, clip);
+    for (int y = visible.y; y < visible.y + visible.height; ++y) {
+        Color* row = target.pixels.data() + static_cast<std::size_t>(y * target.width + visible.x);
+        std::fill(row, row + visible.width, color);
+    }
+}
+
+void fill_opaque_rounded_rect(FrameBuffer& target, Rect rect, Rect clip, Color color, int border_radius) {
+    border_radius = std::min(border_radius, std::min(rect.width, rect.height) / 2);
+    if (border_radius <= 0) {
+        fill_opaque_region(target, rect, clip, color);
+        return;
+    }
+
+    fill_opaque_region(target,
+                       Rect{rect.x, rect.y + border_radius, rect.width, rect.height - border_radius * 2},
+                       clip,
+                       color);
+    fill_opaque_region(target,
+                       Rect{rect.x + border_radius, rect.y, rect.width - border_radius * 2, border_radius},
+                       clip,
+                       color);
+    fill_opaque_region(target,
+                       Rect{rect.x + border_radius,
+                            rect.y + rect.height - border_radius,
+                            rect.width - border_radius * 2,
+                            border_radius},
+                       clip,
+                       color);
+
+    const Rect corners[] = {
+        Rect{rect.x, rect.y, border_radius, border_radius},
+        Rect{rect.x + rect.width - border_radius, rect.y, border_radius, border_radius},
+        Rect{rect.x, rect.y + rect.height - border_radius, border_radius, border_radius},
+        Rect{rect.x + rect.width - border_radius,
+             rect.y + rect.height - border_radius,
+             border_radius,
+             border_radius},
+    };
+    for (const Rect corner : corners) {
+        const Rect visible = clipped_target_rect(target, corner, clip);
+        for (int y = visible.y; y < visible.y + visible.height; ++y) {
+            Color* row = target.pixels.data() + static_cast<std::size_t>(y * target.width + visible.x);
+            for (int x = visible.x; x < visible.x + visible.width; ++x) {
+                const int coverage = rounded_rect_coverage(rect, border_radius, x, y);
+                if (coverage == 255) {
+                    row[x - visible.x] = color;
+                } else if (coverage > 0) {
+                    blend_pixel(target, x, y, with_coverage(color, coverage));
+                }
+            }
+        }
+    }
+}
+
 void fill_rect(FrameBuffer& target, Rect rect, Color color, int border_radius = 0) {
-    Rect clipped = clipped_target_rect(target, rect);
+    const Rect clip = target_rect(target);
+    const Rect clipped = clipped_target_rect(target, rect, clip);
     if (empty_rect(clipped) || color.a == 0) {
         return;
     }
-    if (color.a == 255 && border_radius <= 0) {
-        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-            Color* row = target.pixels.data() + static_cast<std::size_t>(y * target.width + clipped.x);
-            std::fill(row, row + clipped.width, color);
-        }
+    if (color.a == 255) {
+        fill_opaque_rounded_rect(target, rect, clip, color, border_radius);
         return;
     }
     for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
@@ -237,15 +291,12 @@ void fill_rect(FrameBuffer& target, Rect rect, Color color, int border_radius = 
 }
 
 void fill_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color, int border_radius = 0) {
-    Rect clipped = clipped_target_rect(target, rect, clip);
+    const Rect clipped = clipped_target_rect(target, rect, clip);
     if (empty_rect(clipped) || color.a == 0) {
         return;
     }
-    if (color.a == 255 && border_radius <= 0) {
-        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-            Color* row = target.pixels.data() + static_cast<std::size_t>(y * target.width + clipped.x);
-            std::fill(row, row + clipped.width, color);
-        }
+    if (color.a == 255) {
+        fill_opaque_rounded_rect(target, rect, clip, color, border_radius);
         return;
     }
     for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
@@ -882,18 +933,60 @@ bool framebuffer_fits_budget(int width, int height, SoftwareCompositor::Options 
     return pixels <= options.max_framebuffer_pixels;
 }
 
+struct OpaqueFillPrefix {
+    std::size_t first_command = 0;
+    bool covers_clip = false;
+};
+
+OpaqueFillPrefix opaque_fill_prefix(const DisplayList& display_list,
+                                    Rect clip,
+                                    int offset_x,
+                                    int offset_y) {
+    OpaqueFillPrefix prefix;
+    for (std::size_t index = 0; index < display_list.size(); ++index) {
+        const DisplayCommand& command = display_list[index];
+        if (command.type != DisplayCommandType::FillRect ||
+            command.color.a != 255 ||
+            command.border_radius != 0) {
+            break;
+        }
+        Rect rect = command.rect;
+        rect.x += offset_x;
+        rect.y += offset_y;
+        if (contains_rect(rect, clip)) {
+            prefix.first_command = index;
+            prefix.covers_clip = true;
+        }
+    }
+    return prefix;
+}
+
+bool root_opaque_fill_covers(const LayerNode& root, Rect clip) {
+    if (root.type == LayerType::Composited || root.opacity < 0.999F || root.has_transform) {
+        return false;
+    }
+    if (root.has_clip && !contains_rect(root.clip_rect, clip)) {
+        return false;
+    }
+    return opaque_fill_prefix(root.display_list, clip, 0, 0).covers_clip;
+}
+
 void rasterize_with_opacity(const SoftwareRasterizer& rasterizer,
                             const DisplayList& display_list,
                             FrameBuffer& target,
                             Rect clip,
                             int offset_x,
                             int offset_y,
-                            float opacity) {
+                            float opacity,
+                            std::size_t first_command = 0) {
     if (opacity >= 0.999F) {
-        rasterizer.rasterize(display_list, target, clip, offset_x, offset_y);
+        for (std::size_t index = first_command; index < display_list.size(); ++index) {
+            rasterizer.rasterize(display_list[index], target, clip, offset_x, offset_y);
+        }
         return;
     }
-    for (const DisplayCommand& source : display_list) {
+    for (std::size_t index = first_command; index < display_list.size(); ++index) {
+        const DisplayCommand& source = display_list[index];
         DisplayCommand command = source;
         command.color = with_opacity(command.color, opacity);
         command.color2 = with_opacity(command.color2, opacity);
@@ -1182,14 +1275,19 @@ void SoftwareCompositor::render_into(const LayerNode& root,
         return;
     }
     if (dirty_rects == nullptr || dirty_rect_count == 0) {
-        target.clear(background);
-        composite_layer(root, target, Rect{0, 0, target.width, target.height}, 0, 0, 1.0F);
+        const Rect full_target = target_rect(target);
+        if (!root_opaque_fill_covers(root, full_target)) {
+            target.clear(background);
+        }
+        composite_layer(root, target, full_target, 0, 0, 1.0F);
         return;
     }
     if (dirty_rect_count == 1) {
         const Rect dirty = intersect_rect(dirty_rects[0], target_rect(target));
         if (!empty_rect(dirty)) {
-            fill_rect(target, dirty, background);
+            if (!root_opaque_fill_covers(root, dirty)) {
+                fill_rect(target, dirty, background);
+            }
             composite_layer(root, target, dirty, 0, 0, 1.0F);
         }
         return;
@@ -1197,7 +1295,9 @@ void SoftwareCompositor::render_into(const LayerNode& root,
     const std::vector<Rect> normalized_dirty_rects =
         normalize_dirty_rects(dirty_rects, dirty_rect_count, target_rect(target));
     for (const Rect dirty : normalized_dirty_rects) {
-        fill_rect(target, dirty, background);
+        if (!root_opaque_fill_covers(root, dirty)) {
+            fill_rect(target, dirty, background);
+        }
         composite_layer(root, target, dirty, 0, 0, 1.0F);
     }
 }
@@ -1290,7 +1390,17 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         return;
     }
 
-    rasterize_with_opacity(rasterizer_, layer.display_list, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity);
+    const OpaqueFillPrefix prefix = layer_opacity >= 0.999F
+        ? opaque_fill_prefix(layer.display_list, layer_clip, layer_offset_x, layer_offset_y)
+        : OpaqueFillPrefix{};
+    rasterize_with_opacity(rasterizer_,
+                           layer.display_list,
+                           target,
+                           layer_clip,
+                           layer_offset_x,
+                           layer_offset_y,
+                           layer_opacity,
+                           prefix.first_command);
     for (const auto& child : layer.children) {
         composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity);
     }

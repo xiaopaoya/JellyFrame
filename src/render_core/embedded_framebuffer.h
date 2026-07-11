@@ -31,9 +31,24 @@ struct EmbeddedFrameBufferTarget {
 
 using EmbeddedFlushCallback = bool (*)(Rect dirty_rect, void* context);
 
+// Receives a tightly packed, host-native RGB565/BGR565 word buffer for one
+// dirty rectangle. The callback must consume it before returning.
+using EmbeddedPackedRgb565FlushCallback = bool (*)(const std::uint16_t* pixels,
+                                                    Rect dirty_rect,
+                                                    void* context);
+
 struct EmbeddedFrameBufferSink {
     EmbeddedFrameBufferTarget target;
     EmbeddedFlushCallback flush = nullptr;
+    void* flush_context = nullptr;
+};
+
+struct EmbeddedPackedRgb565Sink {
+    EmbeddedPixelFormat format = EmbeddedPixelFormat::Rgb565;
+    std::uint16_t* pixels = nullptr;
+    std::size_t pixel_capacity = 0;
+    bool ordered_dither = false;
+    EmbeddedPackedRgb565FlushCallback flush = nullptr;
     void* flush_context = nullptr;
 };
 
@@ -60,6 +75,15 @@ bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,
                                      EmbeddedFrameBufferSink& sink,
                                      EmbeddedFrameBufferPresentStats* stats = nullptr);
 
+// Converts each clipped dirty rectangle directly into sink.pixels. This avoids
+// a persistent full-size RGB565 target when the host can synchronously flush a
+// compact rectangle buffer.
+bool present_to_packed_rgb565(const HostFrameBufferView& frame,
+                              const Rect* dirty_rects,
+                              std::size_t dirty_rect_count,
+                              EmbeddedPackedRgb565Sink& sink,
+                              EmbeddedFrameBufferPresentStats* stats = nullptr);
+
 EmbeddedFrameBufferPresentStats estimate_embedded_framebuffer_present_stats(int width,
                                                                             int height,
                                                                             EmbeddedPixelFormat format,
@@ -67,5 +91,6 @@ EmbeddedFrameBufferPresentStats estimate_embedded_framebuffer_present_stats(int 
                                                                             std::size_t dirty_rect_count = 0);
 
 HostFrameSink embedded_frame_sink(EmbeddedFrameBufferSink& sink);
+HostFrameSink embedded_packed_rgb565_sink(EmbeddedPackedRgb565Sink& sink);
 
 } // namespace jellyframe

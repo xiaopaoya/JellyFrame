@@ -21,10 +21,26 @@ struct FlushProbe {
     Rect last;
 };
 
+struct PackedFlushProbe {
+    int count = 0;
+    Rect last;
+    std::uint16_t first = 0;
+    std::uint16_t second = 0;
+};
+
 bool record_flush(Rect rect, void* context) {
     auto* probe = static_cast<FlushProbe*>(context);
     ++probe->count;
     probe->last = rect;
+    return true;
+}
+
+bool record_packed_flush(const std::uint16_t* pixels, Rect rect, void* context) {
+    auto* probe = static_cast<PackedFlushProbe*>(context);
+    ++probe->count;
+    probe->last = rect;
+    probe->first = pixels[0];
+    probe->second = rect.width * rect.height > 1 ? pixels[1] : 0;
     return true;
 }
 
@@ -99,6 +115,74 @@ void rgb565_ordered_dither_varies_quantization() {
         differs = differs || target_bytes[index] != target_bytes[0] || target_bytes[index + 1] != target_bytes[1];
     }
     check(differs, "ordered dither varies packed rgb565 values");
+}
+
+void rgb565_opaque_fast_path_matches_reference_quantization() {
+    constexpr int width = 256;
+    FrameBuffer source(width, 1, Color{0, 0, 0, 255});
+    for (int x = 0; x < width; ++x) {
+        source.pixel(x, 0) = Color{static_cast<std::uint8_t>(x),
+                                   static_cast<std::uint8_t>(255 - x),
+                                   static_cast<std::uint8_t>((x * 73) & 0xff),
+                                   255};
+    }
+
+    std::vector<std::uint8_t> target_bytes(
+        embedded_framebuffer_min_size(width, 1, EmbeddedPixelFormat::Rgb565), 0);
+    EmbeddedFrameBufferSink sink{
+        EmbeddedFrameBufferTarget{width,
+                                  1,
+                                  EmbeddedPixelFormat::Rgb565,
+                                  target_bytes.data(),
+                                  target_bytes.size(),
+                                  0},
+        nullptr,
+        nullptr};
+
+    check(present_to_embedded_framebuffer(frame_buffer_view(source), nullptr, 0, sink),
+          "rgb565 opaque fast path succeeds");
+    for (int x = 0; x < width; ++x) {
+        const Color color = source.pixel(x, 0);
+        const std::uint16_t r = static_cast<std::uint16_t>((color.r * 31U + 127U) / 255U);
+        const std::uint16_t g = static_cast<std::uint16_t>((color.g * 63U + 127U) / 255U);
+        const std::uint16_t b = static_cast<std::uint16_t>((color.b * 31U + 127U) / 255U);
+        const std::uint16_t expected = static_cast<std::uint16_t>((r << 11) | (g << 5) | b);
+        const std::size_t offset = static_cast<std::size_t>(x) * 2U;
+        const std::uint16_t actual = static_cast<std::uint16_t>(target_bytes[offset]) |
+            static_cast<std::uint16_t>(target_bytes[offset + 1]) << 8;
+        check(actual == expected, "rgb565 opaque fast path preserves quantization");
+    }
+}
+
+void packed_rgb565_present_uses_compact_dirty_buffer() {
+    FrameBuffer source(4, 3, Color{0, 0, 0, 255});
+    source.pixel(1, 1) = Color{255, 0, 0, 255};
+    source.pixel(2, 1) = Color{0, 255, 0, 255};
+    std::uint16_t packed_pixels[2]{};
+    PackedFlushProbe probe;
+    EmbeddedPackedRgb565Sink sink{
+        EmbeddedPixelFormat::Rgb565,
+        packed_pixels,
+        2,
+        false,
+        record_packed_flush,
+        &probe};
+    EmbeddedFrameBufferPresentStats stats;
+    const Rect dirty{1, 1, 2, 1};
+
+    check(present_to_packed_rgb565(frame_buffer_view(source), &dirty, 1, sink, &stats),
+          "packed rgb565 present succeeds");
+    check(probe.count == 1 && probe.last.x == 1 && probe.last.width == 2,
+          "packed rgb565 flush receives dirty rect");
+    check(probe.first == 0xf800 && probe.second == 0x07e0,
+          "packed rgb565 buffer is tightly packed in source order");
+    check(stats.converted_pixels == 2 && stats.packed_bytes == 4 && stats.flushes == 1,
+          "packed rgb565 present stats match dirty rect");
+
+    sink.pixel_capacity = 1;
+    check(!present_to_packed_rgb565(frame_buffer_view(source), &dirty, 1, sink),
+          "packed rgb565 rejects insufficient compact buffer");
+
 }
 
 void mono_present_packs_bits() {
@@ -212,6 +296,8 @@ int main() {
         stride_and_size_are_bounded();
         rgb565_present_respects_dirty_rect();
         rgb565_ordered_dither_varies_quantization();
+        rgb565_opaque_fast_path_matches_reference_quantization();
+        packed_rgb565_present_uses_compact_dirty_buffer();
         mono_present_packs_bits();
         host_frame_sink_wrapper_presents();
         invalid_target_fails_cleanly();

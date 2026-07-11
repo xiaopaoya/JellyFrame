@@ -1,6 +1,6 @@
 # 嵌入式 Framebuffer 后端
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-11；适用版本：0.5.0-dev
 
 
 `src/render_core/embedded_framebuffer.h` 提供第一版可部署的嵌入式 presentation
@@ -69,6 +69,30 @@ present_to_embedded_framebuffer(frame_buffer_view(frame_buffer),
 `stats` 会报告本帧是否 full present、输入 rectangles 中多少被裁剪/跳过、实际转换了多少像素、
 这些 rectangles 紧凑打包后约多少字节，以及成功触发了多少次 flush callback。它是可选项；
 普通渲染路径不传统计指针，不承担额外存储成本。
+
+### 紧凑 RGB565 Present
+
+`EmbeddedPackedRgb565Sink` 面向一次同步消费一个 dirty rectangle 的串行屏宿主。它直接把像素转换到
+调用方提供的紧凑 `std::uint16_t` buffer，避免保留整屏 RGB565 target，也避免一次 rectangle copy。
+其中 word 使用宿主原生整数表示；面板 adapter 仍负责总线字节序。
+
+```cpp
+std::uint16_t packed_pixels[max_dirty_rect_pixels];
+EmbeddedPackedRgb565Sink packed{
+    EmbeddedPixelFormat::Rgb565,
+    packed_pixels,
+    max_dirty_rect_pixels,
+    false,
+    flush_packed_rect_to_panel,
+    panel_context};
+
+HostFrameSink sink = embedded_packed_rgb565_sink(packed);
+present_frame(frame_buffer, sink, dirty_rects, dirty_rect_count);
+```
+
+该 buffer 必须能容纳最大可接受 dirty rectangle；`flush` callback 返回前必须已消费或复制这些像素。
+此路径只支持 RGB565/BGR565。线性 framebuffer 和异步多缓冲策略应继续使用
+`EmbeddedFrameBufferSink`。
 
 桌面验收工具如果只需要同口径统计、不持有目标 buffer，也可以调用估算入口：
 

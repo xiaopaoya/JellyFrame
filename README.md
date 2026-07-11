@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -167,10 +167,13 @@ python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_H
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build-script `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
-  -DJERRYSCRIPT_ROOT="$jerryRoot" `
-  -DJERRYSCRIPT_LIBRARIES="$jerryRoot\build\lib\MinSizeRel\jerry-core.lib;$jerryRoot\build\lib\MinSizeRel\jerry-port.lib"
+  -DJERRYSCRIPT_ROOT="$jerryRoot"
 cmake --build build-script --config Release
 ```
+
+When `JERRYSCRIPT_ROOT` points to a normal JerryScript build tree, CMake finds
+the `jerry-core`, `jerry-ext` and `jerry-port` libraries automatically. Supply
+`JERRYSCRIPT_LIBRARIES` only for a nonstandard install layout.
 
 The scripting shell supports classic inline/local scripts, small DOM mutation
 APIs, event listeners, form properties, host-pumped timers, host-optional XHR V0

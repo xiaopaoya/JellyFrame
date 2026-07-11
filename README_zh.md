@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-12；适用版本：0.5.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -149,10 +149,13 @@ python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_H
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build-script `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
-  -DJERRYSCRIPT_ROOT="$jerryRoot" `
-  -DJERRYSCRIPT_LIBRARIES="$jerryRoot\build\lib\MinSizeRel\jerry-core.lib;$jerryRoot\build\lib\MinSizeRel\jerry-port.lib"
+  -DJERRYSCRIPT_ROOT="$jerryRoot"
 cmake --build build-script --config Release
 ```
+
+`JERRYSCRIPT_ROOT` 指向标准 JerryScript build tree 时，CMake 会自动发现
+`jerry-core`、`jerry-ext` 和 `jerry-port`；只有非标准安装布局才需要手动传入
+`JERRYSCRIPT_LIBRARIES`。
 
 脚本壳支持 classic inline/local scripts、小型 DOM mutation API、event listeners、
 表单属性、宿主泵动 timers、宿主可选 XHR V0 和极小 `localStorage` V0。ES modules、远程页面加载、

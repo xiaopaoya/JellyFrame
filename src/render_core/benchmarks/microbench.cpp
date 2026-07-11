@@ -390,6 +390,14 @@ int run_render_core_microbench(int argc, char** argv) {
         (void)plan;
     }));
 
+    FrameBuffer scroll_blit_target(320, 240, Color{15, 23, 42, 255});
+    const ScrollBlitPlan scroll_blit_plan = plan_vertical_scroll_blit(320, 240, 720, 96, 112);
+    print_result("scroll_framebuffer_blit", iterations, average_microseconds(iterations, [&] {
+        if (!apply_vertical_scroll_blit(scroll_blit_target, Rect{0, 0, 320, 240}, scroll_blit_plan)) {
+            throw std::runtime_error("scroll framebuffer blit plan was rejected");
+        }
+    }));
+
     LayerNode scale_root;
     scale_root.type = LayerType::Root;
     scale_root.bounds = Rect{0, 0, 160, 160};

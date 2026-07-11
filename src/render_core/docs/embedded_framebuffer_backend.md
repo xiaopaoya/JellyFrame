@@ -1,6 +1,6 @@
 # Embedded Framebuffer Backend
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-11; Applies to: 0.5.0-dev
 
 
 `src/render_core/embedded_framebuffer.h` provides the first deployable presentation
@@ -77,6 +77,33 @@ rectangles were clipped or skipped, how many pixels were converted, the tightly
 packed byte count for those rectangles, and how many flush callbacks were
 accepted. It is optional; normal rendering paths can omit it and pay no storage
 cost.
+
+### Compact RGB565 Present
+
+`EmbeddedPackedRgb565Sink` is for serial-panel hosts that synchronously consume
+one dirty rectangle at a time. It converts directly into a caller-owned compact
+`std::uint16_t` buffer, avoiding a persistent full-screen RGB565 target and a
+second rectangle copy. Its words use the host's native integer representation;
+the panel adapter remains responsible for wire byte order.
+
+```cpp
+std::uint16_t packed_pixels[max_dirty_rect_pixels];
+EmbeddedPackedRgb565Sink packed{
+    EmbeddedPixelFormat::Rgb565,
+    packed_pixels,
+    max_dirty_rect_pixels,
+    false,
+    flush_packed_rect_to_panel,
+    panel_context};
+
+HostFrameSink sink = embedded_packed_rgb565_sink(packed);
+present_frame(frame_buffer, sink, dirty_rects, dirty_rect_count);
+```
+
+The packed buffer must hold the largest accepted dirty rectangle, and its flush
+callback must consume or copy the pixels before returning. This path supports
+only RGB565/BGR565; linear framebuffers and asynchronous multi-buffer policies
+should continue using `EmbeddedFrameBufferSink`.
 
 Desktop validation tools can use the same accounting without owning a target
 buffer:
