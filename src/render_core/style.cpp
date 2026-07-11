@@ -3358,17 +3358,18 @@ bool resolve_css_vars(std::string_view value,
     return true;
 }
 
-CssDeclaration resolve_declaration_value(const CssDeclaration& declaration,
-                                         const CustomPropertyMap& custom_properties) {
+const CssDeclaration& resolve_declaration_value(const CssDeclaration& declaration,
+                                                const CustomPropertyMap& custom_properties,
+                                                CssDeclaration& scratch) {
     if (declaration.value.find("var(") == std::string::npos) {
         return declaration;
     }
-    CssDeclaration resolved = declaration;
+    scratch = declaration;
     std::string value;
     if (resolve_css_vars(declaration.value, custom_properties, value)) {
-        resolved.value = trim(value);
+        scratch.value = trim(value);
     }
-    return resolved;
+    return scratch;
 }
 
 void mark_slot(CascadeSlot& slot,
@@ -3680,11 +3681,13 @@ void apply_declarations(Style& style,
                         CssPseudoElement pseudo_element,
                         const CustomPropertyMap& custom_properties,
                         DiagnosticSink* diagnostics) {
+    CssDeclaration resolved_scratch;
     for (const CssDeclaration& declaration : declarations) {
         if (is_custom_property_name(declaration.property)) {
             continue;
         }
-        const CssDeclaration resolved_declaration = resolve_declaration_value(declaration, custom_properties);
+        const CssDeclaration& resolved_declaration =
+            resolve_declaration_value(declaration, custom_properties, resolved_scratch);
         if (pseudo_element != CssPseudoElement::None) {
             CascadeSlot* slot = cascade_slot_for_generated_property(slots, pseudo_element, resolved_declaration.property);
             if (slot != nullptr) {
