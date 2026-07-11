@@ -909,6 +909,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(summary["targets"][0]["gate"], "accept")
         self.assertIn("sample: ok diagnostics=0/5/3", formatted)
         self.assertIn("perf=watch/4", formatted)
+        self.assertIn("measured=-", formatted)
         self.assertIn("bottlenecks=performance-stage-paint,performance-display-command-count,performance-port-frame-time-high", formatted)
         self.assertIn("round-300:fits/accept", formatted)
         self.assertIn("rect-172x320:diagnostics-warning/warn", formatted)
@@ -1234,6 +1235,32 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(advice[0]["source"], "style")
         self.assertIn("property=\"fancy-mode\"", advice[0]["detail"])
         self.assertEqual(advice[0]["title"], "Diagnostic needs app author review")
+        self.assertEqual(advice[0]["diagnosticContext"], {
+            "code": "style-future-subset-warning",
+            "stage": "style",
+            "subject": "fancy-mode",
+            "excerpt": "property=\"fancy-mode\" value=\"sparkle\"",
+        })
+
+    def test_display_command_density_advice_keeps_measured_context(self):
+        report = {
+            "pipelineDiagnostics": {
+                "diagnostics": [{
+                    "stage": "layer-tree",
+                    "severity": "warning",
+                    "code": "visual-display-command-density",
+                    "detail": "flattenedDisplayCommands=740 densityLimit=625 viewportPixels=30000 commandsPerKPixel=24",
+                }],
+            },
+        }
+
+        advice = jellyframe_cli.collect_developer_advice(report)
+
+        self.assertEqual(len(advice), 1)
+        self.assertIn("740 display commands", advice[0]["action"])
+        self.assertIn("24 commands per 1,000 pixels", advice[0]["action"])
+        self.assertEqual(advice[0]["metrics"]["densityLimit"], 625)
+        self.assertEqual(advice[0]["diagnosticContext"]["stage"], "layer-tree")
 
     def test_write_json_report_adds_performance_summary_and_advice(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-performance-report-") as directory:
@@ -1325,6 +1352,15 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("performance-runtime-drop-animation", codes)
         self.assertIn("performance-runtime-dirty-area-high", codes)
         self.assertIn("performance-runtime-scroll-strip-active", codes)
+
+    def test_runtime_capture_log_ignores_non_numeric_measurement_values(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-runtime-capture-text-") as directory:
+            log_path = Path(directory) / "partial.log"
+            log_path.write_text("frame_update repaint=dirty\n", encoding="utf-8")
+            metrics = jellyframe_cli.parse_runtime_capture_log(log_path)
+
+        self.assertEqual(metrics["frameUpdate"]["repaint"], "dirty")
+        self.assertEqual(metrics["summary"]["frameUpdateRepaint"], 0)
 
     def test_port_telemetry_log_merges_real_device_performance_summary(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-port-telemetry-") as directory:
@@ -1425,6 +1461,19 @@ class PackagePreflightTests(unittest.TestCase):
             jellyframe_cli.filter_sample_roots(roots, ["missing"], None)
         with self.assertRaises(SystemExit):
             jellyframe_cli.filter_sample_roots(roots, None, ["jelly_controls,watch_weather,jelly_motion_lab"])
+
+    def test_doctor_sample_artifacts_require_explicit_existing_mappings(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-doctor-artifacts-") as directory:
+            runtime_log = Path(directory) / "weather.capture.log"
+            runtime_log.write_text("frame_update repaint=dirty\n", encoding="utf-8")
+            mappings = jellyframe_cli.parse_doctor_sample_artifacts(
+                [f"watch_weather={runtime_log}"], "--runtime-log")
+
+        self.assertEqual(mappings, {"watch_weather": runtime_log})
+        with self.assertRaises(SystemExit):
+            jellyframe_cli.parse_doctor_sample_artifacts(["watch_weather"], "--runtime-log")
+        with self.assertRaises(SystemExit):
+            jellyframe_cli.parse_doctor_sample_artifacts(["watch_weather=missing.log"], "--runtime-log")
 
     def test_font_family_usage_matches_manifest_fonts(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-font-family-") as directory:

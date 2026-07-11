@@ -107,6 +107,14 @@ def main() -> int:
     codes = diagnostic_codes(dense_report)
     require("visual-display-command-density" in codes, "display command density should be reported")
     require("visual-scroll-needed" in codes, "vertical overflow should be reported as scroll-needed")
+    density = next(entry for entry in dense_report.get("diagnostics", [])
+                   if entry.get("code") == "visual-display-command-density")
+    require("flattenedDisplayCommands=" in density.get("detail", ""),
+            "density diagnostic should include the measured command count")
+    require("viewportPixels=10000" in density.get("detail", ""),
+            "density diagnostic should include the target pixel area")
+    require("commandsPerKPixel=" in density.get("detail", ""),
+            "density diagnostic should include a bounded command density")
 
     scroll_container_report = run_pseudo_browser(
         exe,

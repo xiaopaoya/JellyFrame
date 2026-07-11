@@ -46,6 +46,13 @@ the target is gated, `targetGate.decision` / `targetGate.reasons`. Font advice
 includes `font.missingNonAsciiSample`, `font.targetFontProfile` or unmatched
 CSS families when those details are available. Editors and report viewers can
 show the affected target and exact font decision without re-parsing diagnostics.
+Every advice entry also carries `diagnosticContext`: the emitting stage, a
+best-effort field/property/element subject when the diagnostic provides one,
+and a bounded source excerpt. This is especially useful for a newly introduced
+or otherwise unclassified degradation: the report remains actionable before a
+more specific advice template exists. High display-command density additionally
+reports the command count, viewport pixel area and density heuristic rather
+than guessing which DOM node caused it.
 
 If the page feels slow, inspect `performanceSummary.bottlenecks[]` and
 `performanceAdvice[]` next. These fields quantify preflight complexity:
@@ -71,6 +78,19 @@ internal-RAM pressure. When comparing controlled device runs, include stable
 `case=` and `workload=` labels; the CLI preserves them in `portTelemetry.summary`
 and surfaces them as measured-port metadata rather than mixing incomparable
 captures.
+
+For a repository-wide trial pass, `doctor` accepts the same measurements as
+explicit sample mappings. This prevents an unrelated log from being attached to
+the wrong package:
+
+```powershell
+python tools\jellyframe_cli.py doctor `
+  --runtime-log jelly_motion_lab=build\motion.capture.log `
+  --port-telemetry jelly_scroll_container=build\scroll.port.log
+```
+
+The summary prints `measured=` so reviewers can distinguish static preflight
+from a report that includes Win32 or device evidence.
 
 Diagnostic titles and explanations try to reuse Web/CSS vocabulary when it
 matches the failure: parse error, invalid declaration, unsupported value,

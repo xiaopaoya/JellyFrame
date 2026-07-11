@@ -41,6 +41,11 @@ Package report 还会包含 `animationDiagnostics`，在 runtime parser 实际�
 `font.missingNonAsciiSample`、`font.targetFontProfile` 或未匹配的 CSS family。编辑器或报告查看器
 无需重新解析 diagnostics，就能显示受影响的目标和精确字体决定。
 
+每条建议还带 `diagnosticContext`：发出诊断的阶段、诊断提供时可识别的字段/属性/元素，以及有长度上限的
+输入片段。这样即使是刚出现、暂时没有专用建议模板的降级，报告也能先告诉作者从哪里排查；后续再补更精确的
+建议。display command 密度过高时还会报告命令数、目标像素面积和密度启发阈值，而不会猜测某个并不可靠的 DOM
+归因。
+
 如果页面感觉卡顿，下一步看 `performanceSummary.bottlenecks[]` 和 `performanceAdvice[]`。
 这些字段会量化预检阶段能可靠判断的复杂度：DOM/render/layout 对象数量、layer 与 display command
 数量、framebuffer bytes、估算 pipeline heap、资源预算占比和 full-frame present 规模。`check`
@@ -59,6 +64,17 @@ port_telemetry case=scroll_benchmark_cumulative workload=full frames=60 frame_ms
 panel flush 慢，还是 port 的 internal RAM 使用方式需要调整。比较受控实机测量时应携带稳定的
 `case=` 和 `workload=` 标签；CLI 会把它们保留在 `portTelemetry.summary` 并作为 measured-port
 元数据输出，避免把不可比的 capture 混在一起。
+
+需要批量验收仓库 sample 时，`doctor` 也能以明确的 sample 映射接收同样的实测数据，避免把无关日志
+错误地附到另一个 package：
+
+```powershell
+python tools\jellyframe_cli.py doctor `
+  --runtime-log jelly_motion_lab=build\motion.capture.log `
+  --port-telemetry jelly_scroll_container=build\scroll.port.log
+```
+
+汇总行会输出 `measured=`，方便审阅者区分纯静态预检与已经合并 Win32/实机证据的报告。
 
 诊断标题和解释会尽量复用 Web/CSS 规范中已有的表达：parse error、invalid declaration、
 unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己的 `code` 字段只作为

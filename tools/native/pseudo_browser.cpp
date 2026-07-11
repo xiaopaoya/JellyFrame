@@ -378,17 +378,24 @@ void report_visual_diagnostics(const BrowserOptions& options,
     }
     report_scroll_container_diagnostics(layout_tree, diagnostics);
 
-    const int viewport_area = std::max(1, options.viewport_width * options.viewport_height);
+    const std::size_t viewport_area = std::max<std::size_t>(
+        1,
+        static_cast<std::size_t>(std::max(1, options.viewport_width)) *
+            static_cast<std::size_t>(std::max(1, options.viewport_height)));
     const std::size_t density_limit =
-        std::max<std::size_t>(512, static_cast<std::size_t>(viewport_area / 48));
+        std::max<std::size_t>(512, viewport_area / 48);
     if (statistics.flattened_display_commands > density_limit) {
+        const std::size_t kilopixel_units = std::max<std::size_t>(1, viewport_area / 1000);
         report_diagnostic(&diagnostics,
                           DiagnosticStage::LayerTree,
                           DiagnosticSeverity::Warning,
                           "visual-display-command-density",
                           "Display command density is high for a small embedded viewport",
                           "flattenedDisplayCommands=" + std::to_string(statistics.flattened_display_commands) +
-                              " densityLimit=" + std::to_string(density_limit));
+                              " densityLimit=" + std::to_string(density_limit) +
+                              " viewportPixels=" + std::to_string(viewport_area) +
+                              " commandsPerKPixel=" +
+                                  std::to_string(statistics.flattened_display_commands / kilopixel_units));
     }
 }
 

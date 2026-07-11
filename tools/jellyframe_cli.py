@@ -287,18 +287,18 @@ def parse_runtime_capture_log(log_path: Path) -> dict:
     frame_update = metrics.get("frameUpdate", {}) if isinstance(metrics.get("frameUpdate", {}), dict) else {}
     scroll_blits = metrics.get("scrollBlits", {}) if isinstance(metrics.get("scrollBlits", {}), dict) else {}
     metrics["summary"] = {
-        "frames": int(present.get("frames", 0) or 0),
-        "fullFrames": int(present.get("full", 0) or 0),
-        "dirtyFrames": int(present.get("dirty", 0) or 0),
-        "flushes": int(present.get("flushes", 0) or 0),
-        "convertedPixels": int(present.get("converted_pixels", 0) or 0),
-        "packedBytes": int(present.get("packed_bytes", 0) or 0),
-        "scrollCopiedPixels": int(scroll_blits.get("copied_pixels", 0) or 0),
-        "loadSamples": int(load_telemetry.get("samples", 0) or 0),
-        "loadOverloaded": int(load_telemetry.get("overloaded", 0) or 0),
-        "loadDropAnimation": int(load_telemetry.get("drop_animation", 0) or 0),
-        "frameUpdateRepaint": int(frame_update.get("repaint", 0) or 0),
-        "maxDirtyPercent": int(load_telemetry.get("max_dirty", 0) or 0),
+        "frames": metric_int(present, "frames"),
+        "fullFrames": metric_int(present, "full"),
+        "dirtyFrames": metric_int(present, "dirty"),
+        "flushes": metric_int(present, "flushes"),
+        "convertedPixels": metric_int(present, "converted_pixels"),
+        "packedBytes": metric_int(present, "packed_bytes"),
+        "scrollCopiedPixels": metric_int(scroll_blits, "copied_pixels"),
+        "loadSamples": metric_int(load_telemetry, "samples"),
+        "loadOverloaded": metric_int(load_telemetry, "overloaded"),
+        "loadDropAnimation": metric_int(load_telemetry, "drop_animation"),
+        "frameUpdateRepaint": metric_int(frame_update, "repaint"),
+        "maxDirtyPercent": metric_int(load_telemetry, "max_dirty"),
     }
     return metrics
 
@@ -1037,9 +1037,31 @@ def diagnostic_metrics_from_detail(parsed: dict) -> dict:
         "contentHeight",
         "overflowY",
         "viewportHeight",
+        "flattenedDisplayCommands",
+        "densityLimit",
+        "viewportPixels",
+        "commandsPerKPixel",
     )
     metrics = {key: parsed[key] for key in keys if key in parsed}
     return metrics
+
+
+def diagnostic_context(source: str, code: str, detail: str, parsed: dict) -> dict:
+    """Keep unknown diagnostics actionable without prescribing a false cause."""
+    subject = ""
+    for key in ("property", "field", "attribute", "selector", "element", "node", "path"):
+        value = str(parsed.get(key, "") or "")
+        if value:
+            subject = value
+            break
+    context = {"code": code}
+    if source:
+        context["stage"] = source
+    if subject:
+        context["subject"] = subject
+    if detail:
+        context["excerpt"] = detail[:240]
+    return context
 
 
 def detail_location(parsed: dict) -> str:
@@ -1128,6 +1150,22 @@ def specialize_developer_advice(entry: dict, code: str, parsed: dict) -> None:
                 "If scrolling is intended, put long content in an explicit overflow: auto "
                 "container and allow scroll in the target gate; otherwise reduce vertical "
                 "padding, card count, or fixed heights."
+            )
+        return
+
+    if code == "visual-display-command-density":
+        commands = parsed.get("flattenedDisplayCommands")
+        density_limit = parsed.get("densityLimit")
+        per_kpixel = parsed.get("commandsPerKPixel")
+        if isinstance(commands, int) and isinstance(density_limit, int):
+            density_phrase = (
+                f" ({per_kpixel} commands per 1,000 pixels)"
+                if isinstance(per_kpixel, int) else ""
+            )
+            entry["action"] = (
+                f"This target emits {commands} display commands{density_phrase}; the embedded "
+                f"density heuristic is {density_limit}. Reduce repeated decoration, gradients, "
+                "shadows or generated content, and measure again before raising a budget."
             )
 
 
@@ -1783,6 +1821,7 @@ def append_developer_advice(advice: list[dict],
     if target:
         entry["target"] = target
     parsed_detail = parse_diagnostic_detail(detail)
+    entry["diagnosticContext"] = diagnostic_context(source, code, detail, parsed_detail)
     if parsed_detail:
         if "text" in parsed_detail:
             entry["text"] = parsed_detail["text"]
@@ -2649,6 +2688,24 @@ def filter_sample_roots(roots: list[Path],
     return selected
 
 
+def parse_doctor_sample_artifacts(values: list[str] | None, option_name: str) -> dict[str, Path]:
+    """Parse explicit SAMPLE=PATH mappings for optional measured doctor inputs."""
+    artifacts: dict[str, Path] = {}
+    for value in values or []:
+        sample, separator, path_text = str(value).partition("=")
+        sample = sample.strip()
+        path_text = path_text.strip()
+        if not separator or not sample or not path_text:
+            raise SystemExit(f"{option_name} must use SAMPLE=PATH")
+        if sample in artifacts:
+            raise SystemExit(f"{option_name} was specified more than once for sample: {sample}")
+        path = Path(path_text).expanduser()
+        if not path.is_file():
+            raise SystemExit(f"{option_name} file does not exist for sample {sample}: {path}")
+        artifacts[sample] = path
+    return artifacts
+
+
 def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> dict:
     errors, warnings, infos = diagnostic_status_from_report(report_path)
     report = load_json_if_exists(report_path)
@@ -2685,6 +2742,7 @@ def doctor_summary_from_report(sample: str, status: str, report_path: Path) -> d
         "infos": infos,
         "performance": str(performance.get("rating", "unknown")),
         "performanceScore": int(performance.get("score", 0) or 0),
+        "measuredSources": str(performance.get("source", "") or ""),
         "bottlenecks": bottlenecks,
         "targets": targets,
         "report": str(report_path),
@@ -2708,6 +2766,7 @@ def format_doctor_summary(row: dict) -> str:
         f"{int(row.get('warnings', 0) or 0)}/"
         f"{int(row.get('infos', 0) or 0)} "
         f"perf={row.get('performance', 'unknown')}/{int(row.get('performanceScore', 0) or 0)} "
+        f"measured={row.get('measuredSources', '') or '-'} "
         f"bottlenecks={','.join(row.get('bottlenecks', []) or []) or '-'} "
         f"targets={target_text} report={row.get('report', '')}"
     )
@@ -2721,6 +2780,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     roots = filter_sample_roots(roots,
                                 getattr(args, "sample", None),
                                 getattr(args, "exclude_sample", None))
+    runtime_logs = parse_doctor_sample_artifacts(getattr(args, "runtime_log", None), "--runtime-log")
+    port_telemetry = parse_doctor_sample_artifacts(getattr(args, "port_telemetry", None), "--port-telemetry")
+    selected_names = {root.name for root in roots}
+    for option_name, artifacts in (("--runtime-log", runtime_logs), ("--port-telemetry", port_telemetry)):
+        unselected = sorted(set(artifacts) - selected_names)
+        if unselected:
+            raise SystemExit(
+                f"{option_name} names sample(s) excluded from this doctor run: " + ", ".join(unselected))
     args.report_dir.mkdir(parents=True, exist_ok=True)
     print(
         "JellyFrame doctor: "
@@ -2750,6 +2817,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             command.append("--no-font-check")
         if args.strict:
             command.append("--strict")
+        if root.name in runtime_logs:
+            command.extend(["--runtime-log", str(runtime_logs[root.name])])
+        if root.name in port_telemetry:
+            command.extend(["--port-telemetry", str(port_telemetry[root.name])])
         result = run_command(command)
         status = "ok" if result == 0 else "failed"
         print(f"doctor sample {root.name}: {status} report={report}")
@@ -3101,6 +3172,10 @@ def main() -> int:
                         help="Skip font resource preflight while checking samples.")
     doctor.add_argument("--strict", action="store_true",
                         help="Fail when sample diagnostics contain warnings.")
+    doctor.add_argument("--runtime-log", action="append", metavar="SAMPLE=PATH",
+                        help="Merge a Win32 capture/runtime log for one sample; may be repeated.")
+    doctor.add_argument("--port-telemetry", action="append", metavar="SAMPLE=PATH",
+                        help="Merge real-device telemetry for one sample; may be repeated.")
     doctor.add_argument("--fail-fast", action="store_true",
                         help="Stop after the first failed sample.")
     doctor.set_defaults(func=cmd_doctor)
