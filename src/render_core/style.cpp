@@ -4301,6 +4301,18 @@ bool node_has_inline_custom_property(const Node& node) {
     return node.type == NodeType::Element && node.attribute("style").find("--") != std::string::npos;
 }
 
+bool subtree_has_inline_custom_property(const Node& node) {
+    if (node_has_inline_custom_property(node)) {
+        return true;
+    }
+    for (const auto& child : node.children) {
+        if (subtree_has_inline_custom_property(*child)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void StyleResolver::apply_custom_properties_for_node(CustomPropertyMap& inherited, const Node& node) const {
     if (node.type != NodeType::Element) {
         return;
@@ -4360,6 +4372,20 @@ const CustomPropertyMap& StyleResolver::custom_properties_for(const Node& node, 
     const auto existing = context.custom_property_cache.find(&node);
     if (existing != context.custom_property_cache.end()) {
         return existing->second;
+    }
+    if (!has_custom_property_declarations_) {
+        const Node* root = &node;
+        while (root->parent != nullptr) {
+            root = root->parent;
+        }
+        if (context.custom_property_scan_root != root) {
+            context.custom_property_scan_root = root;
+            context.has_inline_custom_properties = subtree_has_inline_custom_property(*root);
+        }
+        if (!context.has_inline_custom_properties) {
+            static const CustomPropertyMap kEmptyCustomProperties;
+            return kEmptyCustomProperties;
+        }
     }
     CustomPropertyMap inherited;
     if (node.parent != nullptr) {

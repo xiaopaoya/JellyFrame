@@ -1,6 +1,6 @@
 # Render Core Benchmarks
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0-dev
 
 Microbenchmarks in this directory measure the platform-neutral render pipeline:
 HTML parsing, CSS parsing, style resolution, render tree, layout, layer tree,
@@ -21,6 +21,9 @@ Retained repaint probes:
 - `custom_property_style_resolve` measures batched style resolution for a
   theme-heavy tree that uses inherited CSS custom properties and `var(...)`.
   It exercises `StyleResolveContext` custom-property caching.
+- `style_resolve` measures the equivalent batched resolver path for a normal
+  page with no custom properties. It guards the invariant that an unused
+  custom-property feature does not allocate per-node cache entries.
 - `dirty_rect_replay_contained` measures software compositor replay when dirty
   rectangles contain duplicates or nested rectangles. The compositor normalizes
   those rectangles before clearing and replaying commands.

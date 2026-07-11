@@ -345,6 +345,8 @@ using CustomPropertyMap = std::unordered_map<std::string, std::string>;
 
 struct StyleResolveContext {
     std::unordered_map<const Node*, CustomPropertyMap> custom_property_cache;
+    const Node* custom_property_scan_root = nullptr;
+    bool has_inline_custom_properties = false;
 };
 
 class StyleResolver {

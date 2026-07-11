@@ -227,6 +227,31 @@ void resolves_simple_css_custom_properties() {
               button_style.border_color.b == 0x55,
           "var fallback resolves");
     check(button_style.width == -1, "unresolved var keeps property fallback");
+
+    StyleResolveContext custom_context;
+    const Style contextual_button_style = resolver.resolve(*button, custom_context);
+    check(contextual_button_style.color.r == 0xdc && contextual_button_style.color.g == 0x26 &&
+              contextual_button_style.color.b == 0x26,
+          "contextual custom property resolution keeps inherited value");
+
+    auto plain_document = html_parser.parse("<body><main><button>Go</button></main></body>");
+    Node* plain_button = find_first_by_tag(*plain_document, "button");
+    StyleResolver plain_resolver(parse("button { color: #123456; }"));
+    StyleResolveContext plain_context;
+    const Style plain_style = plain_resolver.resolve(*plain_button, plain_context);
+    check(plain_style.color.r == 0x12 && plain_style.color.g == 0x34 && plain_style.color.b == 0x56,
+          "plain contextual style resolves without custom properties");
+    check(plain_context.custom_property_cache.empty(),
+          "plain contextual style does not allocate empty custom property cache entries");
+
+    auto inline_document = html_parser.parse(
+        "<body style='--accent:#654321'><button class='inline'>Go</button></body>");
+    Node* inline_button = find_first_by_tag(*inline_document, "button");
+    StyleResolver inline_resolver(parse(".inline { color: var(--accent); }"));
+    StyleResolveContext inline_context;
+    const Style inline_style = inline_resolver.resolve(*inline_button, inline_context);
+    check(inline_style.color.r == 0x65 && inline_style.color.g == 0x43 && inline_style.color.b == 0x21,
+          "inline custom property still inherits through contextual resolution");
 }
 
 void linear_gradient_background_applies_without_breaking_fallbacks() {

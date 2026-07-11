@@ -223,6 +223,17 @@ int run_render_core_microbench(int argc, char** argv) {
     auto document = html_parser.parse(html);
     auto stylesheet = css_parser.parse(css);
 
+    std::vector<const Node*> nodes;
+    collect_nodes(*document, nodes);
+    print_result("style_resolve", iterations, average_microseconds(iterations, [&] {
+        StyleResolver style_resolver(stylesheet);
+        StyleResolveContext context;
+        for (const Node* node : nodes) {
+            const Style style = style_resolver.resolve(*node, context);
+            (void)style;
+        }
+    }));
+
     auto custom_document = html_parser.parse(make_custom_property_html(card_count));
     auto custom_stylesheet = css_parser.parse(make_custom_property_css());
     std::vector<const Node*> custom_nodes;
