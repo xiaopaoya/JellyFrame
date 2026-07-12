@@ -73,6 +73,11 @@ small wearable devices.
 - `coalesce_dirty_rects_into(...)` is an optional generic present planner. A
   port can supply a per-rectangle setup cost and an extra-area limit to reduce
   a dirty list before presenting it; no panel or DMA detail enters Render Core.
+- Opacity-only animation frames may reuse an existing composited layer and its
+  display list through `apply_opacity_overrides_to_layer_tree(...)`. The helper
+  accepts only existing layer-owned opacity overrides; transform, color,
+  background, missing-layer and structural cases retain the conservative layer
+  rebuild path.
 - The responsive grid subset is computed with bounded integer auto-placement,
   clamped spans and compact per-row occupancy bit masks rather than a full
   track-sizing engine.

@@ -1,4 +1,5 @@
 ﻿#include "render_core/css_parser.h"
+#include "render_core/animation_timeline.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
@@ -246,6 +247,34 @@ void opacity_layer_flattens_alpha() {
         }
     }
     check(found_translucent_fill, "flatten applies layer opacity");
+}
+
+void opacity_overrides_reuse_existing_composited_layers() {
+    auto pipeline = build_pipeline("<body><section class='fade'>Faded</section></body>",
+                                   ".fade { opacity: .5; background: #000000; }");
+    const LayoutBox* box = find_layout_by_class(*pipeline.layout_tree, "fade");
+    check(box != nullptr && box->node != nullptr, "opacity override target exists");
+
+    LayerTreeOverrideScratch scratch;
+    scratch.pending.reserve(count_layers(*pipeline.layer_tree));
+    StyleOverride opacity;
+    opacity.node = box->node;
+    opacity.has_opacity = true;
+    opacity.opacity = 0.25F;
+    check(apply_opacity_overrides_to_layer_tree(*pipeline.layer_tree, {opacity}, scratch),
+          "opacity-only override reuses existing layer");
+    const LayerNode* updated = find_layer_with_reason(*pipeline.layer_tree, LayerReasonOpacity);
+    check(updated != nullptr && updated->opacity > 0.24F && updated->opacity < 0.26F,
+          "opacity override updates compositing state without rebuilding display commands");
+    check(scratch.pending.empty(), "opacity override scratch is cleared after use");
+
+    StyleOverride unsupported = opacity;
+    unsupported.has_color = true;
+    unsupported.color = Color{255, 0, 0, 255};
+    check(!apply_opacity_overrides_to_layer_tree(*pipeline.layer_tree, {unsupported}, scratch),
+          "color override conservatively rejects layer reuse");
+    check(updated->opacity > 0.24F && updated->opacity < 0.26F,
+          "rejected override leaves cached layer unchanged");
 }
 
 void flatten_into_reuses_storage_and_matches_flatten() {
@@ -940,6 +969,7 @@ int main() {
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();
         opacity_layer_flattens_alpha();
+        opacity_overrides_reuse_existing_composited_layers();
         flatten_into_reuses_storage_and_matches_flatten();
         rounded_equal_border_emits_stroke_command();
         linear_gradient_background_emits_gradient_command();

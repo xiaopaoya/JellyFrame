@@ -12,6 +12,7 @@
 namespace jellyframe {
 
 struct LayerNode;
+struct StyleOverride;
 
 struct LayerNodeDeleter {
     bool arena_owned = false;
@@ -76,6 +77,18 @@ struct LayerNode {
     std::vector<LayerNodePtr> children;
 };
 
+struct LayerTreeOverrideScratch {
+    std::vector<LayerNode*> pending;
+
+    void clear() {
+        pending.clear();
+    }
+
+    void release() {
+        std::vector<LayerNode*>().swap(pending);
+    }
+};
+
 struct LayerTreeBuilderOptions {
     std::size_t max_layers = 1024;
     std::size_t max_display_commands = 8192;
@@ -105,5 +118,11 @@ private:
 
 std::size_t count_layers(const LayerNode& layer);
 std::size_t count_layer_display_commands(const LayerNode& layer);
+
+// Applies only opacity overrides whose nodes already own a layer. Returning
+// false leaves the tree unchanged so callers can take the conservative rebuild.
+bool apply_opacity_overrides_to_layer_tree(LayerNode& root,
+                                           const std::vector<StyleOverride>& overrides,
+                                           LayerTreeOverrideScratch& scratch);
 
 } // namespace jellyframe

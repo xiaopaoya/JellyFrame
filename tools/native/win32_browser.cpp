@@ -3567,6 +3567,7 @@ private:
     bool scripted_time_enabled_ = false;
     std::uint64_t scripted_now_ms_ = 0;
     FrameScratch frame_scratch_;
+    LayerTreeOverrideScratch layer_override_scratch_;
     FrameBuffer frame_buffer_;
     Color page_background_{255, 255, 255, 255};
     std::vector<std::uint32_t> blit_pixels_;
@@ -5087,7 +5088,9 @@ private:
                     frame_scratch_.dirty_region);
             }
             apply_animation_overrides_to_cached_trees();
-            auto next_layer_tree = layer_builder.build(*layout_tree_);
+            const bool reused_opacity_layers = animation_only_dirty && layer_tree_ != nullptr &&
+                apply_opacity_overrides_to_layer_tree(*layer_tree_, style_overrides_, layer_override_scratch_);
+            auto next_layer_tree = reused_opacity_layers ? LayerNodePtr{} : layer_builder.build(*layout_tree_);
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
             if (!animation_only_dirty) {
@@ -5101,7 +5104,9 @@ private:
             }
             const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
-            layer_tree_ = std::move(next_layer_tree);
+            if (next_layer_tree != nullptr) {
+                layer_tree_ = std::move(next_layer_tree);
+            }
             evict_unused_image_surfaces();
             if (!dirty_rects.empty() &&
                 dirty_region_should_repaint_incrementally(dirty_region,

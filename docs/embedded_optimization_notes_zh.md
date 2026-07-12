@@ -50,6 +50,9 @@
   一律留在 port。通用可选 helper 只有在 port 主动调用时才产生工作，每条 port 优化路径都必须有软件 fallback。
 - `coalesce_dirty_rects_into(...)` 是可选的通用提交规划器。port 可提供单矩形提交开销和额外面积上限，
   在提交前缩减 dirty list；Render Core 不接收任何 panel 或 DMA 细节。
+- opacity-only 动画帧可通过 `apply_opacity_overrides_to_layer_tree(...)` 复用已有 composited layer
+  及其 display list。该 helper 只接受目标节点已经拥有 layer 的 opacity override；transform、color、
+  background、缺 layer 或结构变化仍保守重建 layer tree。
 - 响应式 grid 子集使用有界整数 auto-placement、clamped span 和紧凑的逐行
   occupancy bit mask，而不是完整 track-sizing engine。
 - `MonotonicArena` 已可用于文档生命周期分配。Render tree、layout tree 和 layer tree builder

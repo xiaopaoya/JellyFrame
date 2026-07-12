@@ -1,5 +1,6 @@
 ﻿#include "render_core/layer_tree.h"
 
+#include "render_core/animation_timeline.h"
 #include "render_core/form_control.h"
 #include "render_core/text_normalization.h"
 #include "render_core/text_scan.h"
@@ -1312,6 +1313,45 @@ LayerNodePtr LayerTreeBuilder::make_layer_node(MonotonicArena* arena) const {
         return LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
     }
     return LayerNodePtr(&arena->create<LayerNode>(), LayerNodeDeleter{true});
+}
+
+bool apply_opacity_overrides_to_layer_tree(LayerNode& root,
+                                           const std::vector<StyleOverride>& overrides,
+                                           LayerTreeOverrideScratch& scratch) {
+    if (overrides.empty()) {
+        return false;
+    }
+
+    auto find_layer = [&](const Node* node) -> LayerNode* {
+        scratch.clear();
+        scratch.pending.push_back(&root);
+        while (!scratch.pending.empty()) {
+            LayerNode* current = scratch.pending.back();
+            scratch.pending.pop_back();
+            if (current->box != nullptr && current->box->node == node) {
+                return current;
+            }
+            for (const LayerNodePtr& child : current->children) {
+                scratch.pending.push_back(child.get());
+            }
+        }
+        return nullptr;
+    };
+
+    // Validate every override first so a rejected batch cannot leave a partial frame.
+    for (const StyleOverride& override : overrides) {
+        if (override.node == nullptr || !override.has_opacity || override.has_color ||
+            override.has_background_color || override.has_transform || find_layer(override.node) == nullptr) {
+            scratch.clear();
+            return false;
+        }
+    }
+    for (const StyleOverride& override : overrides) {
+        LayerNode* layer = find_layer(override.node);
+        layer->opacity = override.opacity;
+    }
+    scratch.clear();
+    return true;
 }
 
 std::size_t count_layers(const LayerNode& layer) {

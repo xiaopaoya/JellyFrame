@@ -516,6 +516,34 @@ int run_render_core_microbench(int argc, char** argv) {
         }));
     }
 
+    auto opacity_document = html_parser.parse("<body><div class='fade'>Fade</div></body>");
+    StyleResolver opacity_resolver(css_parser.parse(
+        ".fade { display: block; width: 80px; height: 36px; opacity: .5; background: #123456; }"));
+    RenderTreeBuilder opacity_render_builder(opacity_resolver);
+    auto opacity_render_tree = opacity_render_builder.build(*opacity_document);
+    LayoutEngine opacity_layout_engine(opacity_resolver, fixed_text_measure());
+    auto opacity_layout_tree = opacity_layout_engine.layout(*opacity_render_tree, 160);
+    LayerTreeBuilder opacity_layer_builder;
+    auto opacity_layer_tree = opacity_layer_builder.build(*opacity_layout_tree);
+    const LayoutBox* opacity_box = find_first_layout_by_class(*opacity_layout_tree, "fade");
+    if (opacity_box != nullptr && opacity_box->node != nullptr) {
+        std::vector<StyleOverride> opacity_overrides(1);
+        opacity_overrides.front().node = opacity_box->node;
+        opacity_overrides.front().has_opacity = true;
+        LayerTreeOverrideScratch opacity_scratch;
+        opacity_scratch.pending.reserve(count_layers(*opacity_layer_tree));
+        bool lower_opacity = false;
+        print_result("opacity_layer_override_reuse", iterations, average_microseconds(iterations, [&] {
+            opacity_overrides.front().opacity = lower_opacity ? 0.25F : 0.75F;
+            lower_opacity = !lower_opacity;
+            if (!apply_opacity_overrides_to_layer_tree(*opacity_layer_tree,
+                                                       opacity_overrides,
+                                                       opacity_scratch)) {
+                throw std::runtime_error("opacity layer override reuse was rejected");
+            }
+        }));
+    }
+
     auto text_document = html_parser.parse("<body><p id='frame'>01</p></body>");
     auto text_stylesheet = css_parser.parse("p { margin: 0; font-size: 10px; line-height: 12px; }");
     StyleResolver text_resolver(text_stylesheet);
