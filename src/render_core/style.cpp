@@ -2435,6 +2435,7 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
         {"outline-color", CascadeProperty::OutlineColor},
         {"outline-width", CascadeProperty::OutlineWidth},
         {"overflow", CascadeProperty::Overflow},
+        {"overflow-y", CascadeProperty::Overflow},
         {"padding-bottom", CascadeProperty::PaddingBottom},
         {"padding-left", CascadeProperty::PaddingLeft},
         {"padding-right", CascadeProperty::PaddingRight},
@@ -2947,10 +2948,13 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             style.outline_color = color;
         }
         return true;
-    } else if (property == "overflow") {
+    } else if (property == "overflow" || property == "overflow-y") {
         const std::string lowered = lowercase(trim(value));
-        if (lowered != "visible" && lowered != "hidden" && lowered != "scroll" &&
-            lowered != "auto" && lowered != "clip") {
+        const bool supported = property == "overflow-y"
+            ? (lowered == "auto" || lowered == "scroll")
+            : (lowered == "visible" || lowered == "hidden" || lowered == "scroll" ||
+               lowered == "auto" || lowered == "clip");
+        if (!supported) {
             return false;
         }
         style.overflow = lowered;

@@ -33,7 +33,7 @@
 
 .content-scroll {
   height: 196px;
-  overflow: auto;
+  overflow-y: auto;
 }
 ```
 
@@ -127,7 +127,7 @@
 ```css
 .content-scroll {
   height: 196px;
-  overflow: auto;
+  overflow-y: auto;
 }
 
 .bottom-nav {

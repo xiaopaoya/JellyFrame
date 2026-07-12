@@ -1,6 +1,6 @@
 # App 作者能力速查表
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-12；适用版本：0.5.0-dev
 
 这份表给 app 作者快速判断“能不能用”。完整边界仍以
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md) 为准。
@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | 基础颜色/背景 | 可用 | 使用 hex、命名色、`rgb()`、`rgba()`。 |
 | Layout | 子集 | 优先 block、简化 flex、grid-card 子集、固定底栏和明确滚动容器。 |
-| 响应式 | 子集 | 使用 `@media`、百分比 sizing、`max-width: 100%`、`box-sizing: border-box`、`gap`、`aspect-ratio`。 |
+| 响应式 | 子集 | 使用 `@media`、百分比 sizing、`max-width: 100%`、`box-sizing: border-box`、`gap`、`aspect-ratio`。固定高度纵向滚动容器使用文档化的 `overflow-y: auto` 子集。 |
 | 圆角/阴影/渐变 | 子集 | 支持圆角矩形、百分比圆角、轻量阴影、线性渐变、两段 `conic-gradient()` 进度环和两色中心圆形 `radial-gradient()` 高光。复杂 blur/mask/filter 延后。 |
 | 文本溢出 | 诊断子集 | `white-space: nowrap` / `text-overflow` 可表达意图；实际溢出会进 report。 |
 | 动画 | 子集 | 关键帧支持 opacity、color、background/background-color 与已文档化的 transform 形式；timing 支持 linear/ease/ease-in/ease-out/ease-in-out，打包前会标记 layout 动画与不支持的 easing。 |

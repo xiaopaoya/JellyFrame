@@ -111,6 +111,16 @@ void overflow_hidden_creates_clip_layer() {
     check(layer->has_clip, "overflow layer has clip");
 }
 
+void overflow_y_auto_creates_vertical_scroll_clip_layer() {
+    auto pipeline = build_pipeline("<body><section class='list'><p>One</p><p>Two</p></section></body>",
+                                   ".list { overflow-y: auto; height: 20px; background: #ffffff; }");
+
+    const LayerNode* layer = find_layer_with_reason(*pipeline.layer_tree, LayerReasonOverflowClip);
+    check(layer != nullptr, "overflow-y auto layer exists");
+    check(layer->type == LayerType::Clip, "overflow-y auto uses the vertical scroll clip layer");
+    check(layer->has_clip, "overflow-y auto layer has clip");
+}
+
 void scroll_container_offsets_descendant_paint() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -925,6 +935,7 @@ void canvas_element_emits_image_display_command_when_surface_resolves() {
 int main() {
     try {
         overflow_hidden_creates_clip_layer();
+        overflow_y_auto_creates_vertical_scroll_clip_layer();
         scroll_container_offsets_descendant_paint();
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();

@@ -12,7 +12,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Basic structure | Available | Use `div`, `section`, `header`, `main`, `footer`, `ul`, `li`, `p` and `span`. Unknown tags become ordinary elements. |
 | Text | Available | UTF-8 text is preserved; real CJK glyph quality depends on system fonts or app `.jffont` supplements. |
 | Form controls | Form V0 subset | Use `button`, `input`, `select`, `textarea`, `progress` and `meter`. `required`, text `minlength`/`maxlength`, checkbox/radio required state and required selects work with local `submit`; browser validation popups and browser navigation do not. |
-| nmages | Subset | Use package-local `<img src="/assets/icon.bmp">`. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
+| Images | Subset | Use package-local `<img src="/assets/icon.bmp">`. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
 | Canvas | Optional | Requires `graphics.canvas2d` in manifest and target support. Use for small charts/gauges, not the whole UI. |
 | Remote page resources | Unsupported | Do not load remote HTML/CSS/JS/image/font. Runtime data uses host-backed XHR. |
 
@@ -22,7 +22,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | --- | --- | --- |
 | Color/background | Available | Use hex, named colors, `rgb()` and `rgba()`. |
 | Layout | Subset | Prefer block, simplified flex, grid-card layouts, fixed bottom bars and explicit scroll containers. |
-| Responsive sizing | Subset | Use `@media`, percentage sizing, `max-width: 100%`, `box-sizing: border-box`, `gap` and `aspect-ratio`. |
+| Responsive sizing | Subset | Use `@media`, percentage sizing, `max-width: 100%`, `box-sizing: border-box`, `gap` and `aspect-ratio`. Use `overflow-y: auto` for the documented fixed-height vertical scroll-container subset. |
 | Radius/shadow/gradient | Subset | Rounded rectangles, percentage radius, lightweight shadow, linear gradients, two-stop `conic-gradient()` progress rings and two-color center-circle `radial-gradient()` highlights are supported. Complex blur/mask/filter are deferred. |
 | Text overflow | Diagnostic subset | `white-space: nowrap` / `text-overflow` express intent; actual overflow is reported. |
 | Animation | Subset | Keyframes support opacity, color, background/background-color and documented transform forms. Timing supports linear/ease/ease-in/ease-out/ease-in-out; package checks flag layout animation and unsupported easing before runtime. |

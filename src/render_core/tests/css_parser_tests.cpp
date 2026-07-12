@@ -127,6 +127,8 @@ void supports_queries_apply_representative_supported_properties() {
         "@supports (object-fit: cover) { .probe { object-fit: cover; image-rendering: pixelated; } }"
         "@supports (border-right: 2px solid #123456) { .probe { border-right: 2px solid #123456; } }"
         "@supports (text-overflow: ellipsis) { .probe { white-space: nowrap; text-overflow: ellipsis; } }"
+        "@supports (overflow-y: auto) { .probe { overflow-y: auto; } }"
+        "@supports (overflow-y: hidden) { .probe { color: #ff0000; } }"
         "@supports (background-image: radial-gradient(#fff, #000)) { .probe { background-image: radial-gradient(#fff, #000); } }"
         "@supports (unknown-property: 1px) { .probe { color: #ff0000; } }");
 
@@ -143,6 +145,7 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.image_rendering == ImageRendering::Pixelated, "image-rendering applies after @supports");
     check(style.border_width.right == 2, "border-right applies after @supports");
     check(style.white_space_nowrap && style.text_overflow_ellipsis, "text overflow controls apply after @supports");
+    check(style.overflow == "auto", "overflow-y auto applies after @supports");
     check(style.background_paint == BackgroundPaintKind::RadialGradient,
           "background-image radial-gradient applies after @supports");
     check(style.color.r == 0 && style.color.g == 0 && style.color.b == 0, "unsupported @supports block is not applied");
@@ -860,6 +863,26 @@ void after_generated_content_and_text_overflow_apply() {
     check(style.after_left_specified && style.after_left == 4, "after left parsed");
 }
 
+void overflow_y_uses_the_vertical_scroll_subset() {
+    auto list = make_element("section");
+    StyleResolver resolver(parse(
+        "section { overflow: visible; overflow-y: auto; }"
+        "section.reverse { overflow-y: scroll; overflow: hidden; }"
+        "section.hidden-y { overflow: auto; overflow-y: hidden; }"));
+
+    const Style vertical_style = resolver.resolve(*list);
+    check(vertical_style.overflow == "auto", "overflow-y overrides an earlier overflow declaration");
+
+    list->attributes["class"] = "reverse";
+    const Style shorthand_style = resolver.resolve(*list);
+    check(shorthand_style.overflow == "hidden", "later overflow shorthand overrides overflow-y in the shared subset");
+
+    list->attributes["class"] = "hidden-y";
+    const Style unsupported_axis_style = resolver.resolve(*list);
+    check(unsupported_axis_style.overflow == "auto",
+          "unsupported overflow-y hidden preserves the earlier supported overflow fallback");
+}
+
 void fixed_two_column_grid_template_applies() {
     auto list = make_element("dl");
     StyleResolver resolver(parse("dl { display: grid; grid-template-columns: 120px 1fr; gap: .8rem; }"));
@@ -1048,6 +1071,7 @@ int main() {
         text_transform_parses_and_inherits();
         font_family_declares_runtime_family_hash_and_inherits();
         after_generated_content_and_text_overflow_apply();
+        overflow_y_uses_the_vertical_scroll_subset();
         fixed_two_column_grid_template_applies();
         repeated_fixed_grid_template_applies();
         modern_length_functions_and_flex_wrap_apply();

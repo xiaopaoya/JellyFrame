@@ -35,7 +35,7 @@ one explicit child.
 
 .content-scroll {
   height: 196px;
-  overflow: auto;
+  overflow-y: auto;
 }
 ```
 
@@ -133,7 +133,7 @@ navigation outside that area.
 ```css
 .content-scroll {
   height: 196px;
-  overflow: auto;
+  overflow-y: auto;
 }
 
 .bottom-nav {

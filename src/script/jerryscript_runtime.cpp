@@ -941,6 +941,7 @@ bool is_script_writable_style_property(const std::string& property) {
         "white-space",
         "text-overflow",
         "overflow",
+        "overflow-y",
         "z-index",
     };
     return std::find(std::begin(kWritableProperties), std::end(kWritableProperties), std::string_view(property)) !=

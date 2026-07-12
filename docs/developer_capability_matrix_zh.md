@@ -214,7 +214,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `text-decoration` / `text-decoration-line` | 子集 | `none`、`underline`、`line-through` 会绘制便宜的实线装饰。颜色/粗细/style 变体和 wavy/double 延后。 |
 | `text-shadow` | 子集 | 第一条 shadow 会绘制为偏移文本；blur 只用于解析兼容，不做真实模糊；多重阴影暂不栅格化。 |
 | `box-sizing` | 可用 | `content-box`、`border-box`。 |
-| `overflow` | 子集 | `visible`、`hidden`、`clip`、`auto`、`scroll`；会形成裁剪 layer。V0 原生滚动容器支持固定尺寸的垂直 `auto`/`scroll` 区域，由宿主提供 scroll offset，并参与裁切绘制和命中测试。Win32 壳会把 wheel/arrow/drag 默认动作先交给最近的可滚容器，不能滚时才回退页面滚动；dirty 面积在预算内时只重绘容器视口；frame policy 允许 present 时会追加有界的宿主侧惯性尾巴，并开启可选轻量滚动提示。保守的 strip-blit 快路径只用于安全的矩形、不透明、无覆盖容器；圆角、半透明、重叠容器会回退到 dirty repaint。水平滚动延后。 |
+| `overflow` / `overflow-y` | 子集 | `overflow` 接受 `visible`、`hidden`、`clip`、`auto`、`scroll`。标准 `overflow-y` 只接受 `auto` 和 `scroll`，是显式纵向滚动的推荐写法；其他轴专属值会被拒绝，不会悄悄裁切两个轴。V0 原生滚动容器支持固定尺寸的垂直 `auto`/`scroll` 区域，由宿主提供 scroll offset，并参与裁切绘制和命中测试。Win32 壳会把 wheel/arrow/drag 默认动作先交给最近的可滚容器，不能滚时才回退页面滚动；dirty 面积在预算内时只重绘容器视口；frame policy 允许 present 时会追加有界的宿主侧惯性尾巴，并开启可选轻量滚动提示。保守的 strip-blit 快路径只用于安全的矩形、不透明、无覆盖容器；圆角、半透明、重叠容器会回退到 dirty repaint。`overflow-x` 和横向滚动仍延后。 |
 | `white-space` | 子集 | `normal` 和 `nowrap`。`nowrap` 会继承到文本 layout，阻止便宜换行。 |
 | `text-overflow` | 诊断子集 | 接受 `clip` 和 `ellipsis`，用于表达作者意图。当前渲染仍通过盒/文本后端裁剪；当测量文本宽度超过可用盒时，layout diagnostics 会给出 warning。浏览器级 ellipsis shaping 延后。 |
 | `opacity` | 子集 | 0..1；软件合成中创建 composited layer。 |
@@ -329,7 +329,7 @@ JerryScript 源码树时可用。
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
 | `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |
-| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
+| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow`、`overflowY` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
 | `hidden` / `disabled` / `open` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 状态。 |
 | `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio/select 状态变化会派发 `input`/`change`，未被取消的 `summary.click()` 会切换父 `details`，未取消的 form submit button 会进入有界提交路径。不实现 browser navigation。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |

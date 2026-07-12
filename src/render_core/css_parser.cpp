@@ -810,6 +810,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "overflow") {
         return supported_keyword(value, {"visible", "hidden", "clip", "auto", "scroll"});
     }
+    if (property == "overflow-y") {
+        return supported_keyword(value, {"auto", "scroll"});
+    }
     if (property == "white-space") {
         return supported_keyword(value, {"normal", "nowrap"});
     }
