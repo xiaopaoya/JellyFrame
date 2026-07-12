@@ -218,6 +218,7 @@ struct TimerUiTaskContext {
     std::unique_ptr<jellyframe::Node> document;
     jellyframe::Stylesheet stylesheet;
     PipelineCache pipeline;
+    std::unique_ptr<jellyframe::InputController> input_controller;
     std::unique_ptr<jellyframe::FrameBuffer> frame_buffer;
     std::unique_ptr<std::uint16_t[]> packed_rgb565;
     Rgb565Panel panel;
@@ -245,6 +246,39 @@ struct TimerUiTaskContext {
     jellyframe::Rect framebuffer_scroll_viewport{};
     jellyframe::ScrollBlitPlan framebuffer_scroll_blit{};
 };
+
+struct InputInteractionState {
+    const jellyframe::Node* hovered = nullptr;
+    const jellyframe::Node* active = nullptr;
+    const jellyframe::Node* focused = nullptr;
+};
+
+InputInteractionState take_input_interaction_state(TimerUiTaskContext& context) {
+    if (!context.input_controller) {
+        return {};
+    }
+    const InputInteractionState state{
+        context.input_controller->hovered_node(),
+        context.input_controller->active_node(),
+        context.input_controller->focused_node(),
+    };
+    context.input_controller.reset();
+    return state;
+}
+
+void bind_input_controller(TimerUiTaskContext& context, InputInteractionState state) {
+    if (!context.pipeline.layer_tree) {
+        return;
+    }
+    const jellyframe::InteractionInvalidationOptions invalidation{
+        false,
+        false,
+        false,
+    };
+    context.input_controller = std::make_unique<jellyframe::InputController>(
+        *context.pipeline.layer_tree, invalidation);
+    context.input_controller->set_interaction_state(state.hovered, state.active, state.focused);
+}
 
 jellyframe::Node* find_by_id(jellyframe::Node& root, const std::string& id) {
     std::vector<jellyframe::Node*> stack;
@@ -625,6 +659,7 @@ void observe_scroll_input(const BoardInputEvent& event, void* raw_context) {
 }
 
 bool rebuild_pipeline(TimerUiTaskContext& context) {
+    const InputInteractionState input_state = take_input_interaction_state(context);
     context.pipeline.render_tree.reset();
     context.pipeline.layout_tree.reset();
     context.pipeline.layer_tree.reset();
@@ -651,7 +686,11 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
 
     jellyframe::LayerTreeBuilder layer_builder(make_layer_tree_options(context));
     context.pipeline.layer_tree = layer_builder.build(*context.pipeline.layout_tree, context.pipeline.layer_arena);
-    return context.pipeline.layer_tree != nullptr;
+    if (!context.pipeline.layer_tree) {
+        return false;
+    }
+    bind_input_controller(context, input_state);
+    return true;
 }
 
 jellyframe::FramePipelineCacheState cache_state(const TimerUiTaskContext& context) {
@@ -721,6 +760,8 @@ bool render_and_present(TimerUiTaskContext& context,
 
     if (update_plan.action == jellyframe::FrameUpdateAction::RepaintExisting &&
         context.pipeline.layout_tree != nullptr) {
+        // The controller references the layer tree, so retire it before a paint-only rebuild.
+        const InputInteractionState input_state = take_input_interaction_state(context);
         const std::uint64_t layer_build_start = esp_timer_get_time();
         context.pipeline.layer_tree.reset();
         context.pipeline.layer_arena.reset();
@@ -732,6 +773,7 @@ bool render_and_present(TimerUiTaskContext& context,
         if (!context.pipeline.layer_tree) {
             return false;
         }
+        bind_input_controller(context, input_state);
     }
 
     const bool can_reuse_scroll_pixels = context.has_framebuffer_scroll_blit &&
@@ -953,13 +995,17 @@ void run_timer_ui_task(void* raw_context) {
             continue;
         }
 
-        jellyframe::InputController controller(*context->pipeline.layer_tree);
         const jellyframe::FrameLoopWorkPlan work_plan =
             jellyframe::plan_frame_loop_work(pending, loop_options);
+        if (!context->input_controller) {
+            ESP_LOGE(kTag, "ui task input controller is unavailable");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
         context->scroll_drag_delta = 0;
         const BoardInputDispatchStats input_stats =
             dispatch_input_events(context->input_queue,
-                                  controller,
+                                  *context->input_controller,
                                   work_plan.input_events_to_dispatch,
                                   observe_scroll_input,
                                   context.get());

@@ -54,7 +54,8 @@ bool is_successful_control(const Node& node) {
     if (kind == FormControlKind::Button || kind == FormControlKind::File) {
         return false;
     }
-    return kind != FormControlKind::Checkbox && kind != FormControlKind::Radio || form_control_checked(node);
+    return (kind != FormControlKind::Checkbox && kind != FormControlKind::Radio) ||
+        form_control_checked(node);
 }
 
 bool radio_group_checked(const Node& form, const std::string& name) {
