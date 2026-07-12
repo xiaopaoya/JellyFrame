@@ -1,6 +1,6 @@
 # JellyFrame ESP32-S3 ESP-IDF Port
 
-> Last updated: 2026-07-12; Applies to: 0.5.0-dev
+> Last updated: 2026-07-13; Applies to: 0.5.0-dev
 
 This directory is a first hardware bring-up path for ESP32-S3. It keeps the
 engine core platform-neutral and builds a small ESP-IDF app around the HAL
@@ -327,6 +327,15 @@ padded-stride partial dirty rectangle that requires `scratch_pixels` packing.
 That compatibility adapter remains available through `make_rgb565_sink()`;
 the retained UI path does not allocate it. The smoke log records flush count,
 dirty pixels, transferred bytes, scratch usage and failed flushes.
+
+`coalesce_dirty_rects_into(...)` remains disabled in the default WS147 port
+path. On 2026-07-13, a three-adjacent-block workload reduced three flushes to
+one with a net present-time gain, but a dispersed three-block workload correctly
+kept all three rectangles and still regressed p95 frame time because the port
+paid the planning cost. Treat coalescing as an opt-in experiment only: compare
+it against a no-merge control, measure timer/wrapper overhead separately, and
+keep a direct original-rectangle fallback. Do not move this decision into
+Render Core or enable it solely from a board profile.
 
 For `esp_lcd_panel_draw_bitmap`, be careful with partial-width dirty rectangles:
 the API does not carry a source stride, so passing `pixels + y * stride + x`
