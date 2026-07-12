@@ -146,6 +146,48 @@ void scroll_container_offsets_descendant_paint() {
     check(found_shifted_child, "scroll offset moves second row into viewport");
 }
 
+void scroll_container_keeps_absolute_sibling_navigation_fixed() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main id='screen'><section id='list'><div></div><div></div><div></div></section>"
+        "<nav id='bottom-nav'></nav></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#screen { position: relative; width: 100px; height: 120px; }"
+        "#list { width: 100px; height: 80px; overflow: scroll; }"
+        "#list div { width: 100px; height: 40px; background: #000000; }"
+        "#bottom-nav { position: absolute; left: 0; bottom: 0; width: 100px; height: 20px; background: #ff0000; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 120, 120);
+    LayerTreeBuilderOptions options;
+    options.scroll_resolver = ScrollOffsetResolver{fixed_scroll_offset, nullptr};
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    DisplayList flattened = layer_tree_builder.flatten(*layer_tree);
+
+    bool found_shifted_list_row = false;
+    bool found_fixed_navigation = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::FillRect) {
+            continue;
+        }
+        if (command.color.r == 0 && command.color.g == 0 && command.color.b == 0 &&
+            command.rect.y == 16 && command.rect.height == 40) {
+            found_shifted_list_row = true;
+        }
+        if (command.color.r == 255 && command.color.g == 0 && command.color.b == 0 &&
+            command.rect.x == 0 && command.rect.y == 100 &&
+            command.rect.width == 100 && command.rect.height == 20) {
+            found_fixed_navigation = true;
+        }
+    }
+    check(found_shifted_list_row, "scroll container shifts only its own content");
+    check(found_fixed_navigation, "absolute navigation sibling stays outside the scroll transform");
+}
+
 void scroll_indicator_is_opt_in_overlay() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -884,6 +926,7 @@ int main() {
     try {
         overflow_hidden_creates_clip_layer();
         scroll_container_offsets_descendant_paint();
+        scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();
         opacity_layer_flattens_alpha();
         flatten_into_reuses_storage_and_matches_flatten();
