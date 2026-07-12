@@ -91,12 +91,15 @@ ESP-IDF 5.3.x.
 
 For the retained-scroll measurement, set startup mode to `Run retained scroll
 benchmark`, leave `Automatically advance the scroll workload` enabled, choose
-one workload, then capture at least one cumulative `ui_task_telemetry` line.
+one workload, then capture at least one cumulative `port_telemetry` line.
 The workload schedules against a 33.3 ms deadline rather than the generic UI
 idle cadence. Its packed panel path converts into one internal DMA buffer and
 waits for each panel DMA completion before reusing that buffer. `panel_dma_wait`
 is therefore part of the measured present cost, not asynchronous work carried
-into the next frame.
+into the next frame. Each cumulative line is followed by `pipeline_arena` used
+and capacity counters. After the first retained build, capacity should remain
+stable during paint-only scroll frames; a capacity increase identifies a larger
+pipeline rebuild, while an unbounded increase is a regression to investigate.
 
 ## Flash Layout
 

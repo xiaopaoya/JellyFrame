@@ -200,8 +200,10 @@ internal RAM 压力处理建议：
   internal RGB565 target。
 - 需要 DMA-capable internal RAM 时，只保留 1-2 个小 strip/tile buffer，例如 8-32 行，按 dirty rect 转换、
   flush、等待完成，再复用。
-- render/layout/layer 的 `MonotonicArena` 如果用于 retained tree，就会跨帧保留；如果产品选择每次全量
-  rebuild，可在 present 后 reset 这些 arena，但会牺牲 CPU。不要把这类 arena 放 internal RAM，除非测量证明必要。
+- 用于 retained tree 的 render/layout/layer `MonotonicArena` 可在重建之间调用
+  `rewind()`：析构存活对象但保留 backing blocks，避免反复堆分配。只有在对应 tree
+  已不再被引用且需要归还容量时，例如 app exit 或 memory pressure，才调用 `reset()`。
+  不要把三类 arena 都放 internal RAM，除非测量证明必要。
 - 离屏合成 buffer 是 `SoftwareCompositor::render_into` 内部临时对象，函数返回后释放；应通过
   `max_offscreen_pixels` 限制它，避免大 opacity/transform layer 临时吃光 internal heap。
 - RGB565/BGR565 屏幕如出现渐变色带，可在 `EmbeddedFrameBufferTarget::ordered_dither` 开启 4x4
@@ -220,7 +222,9 @@ internal RAM 压力处理建议：
 真实设备性能日志建议：
 
 - port 层应在开发/验收构建中导出帧数、full/dirty frame 数、flush 次数、RGB565 packed bytes、
-  平均/最大 frame ms、平均/最大 DMA wait ms、平均/最大 flush-done ms，以及 internal RAM/PSRAM 峰值。
+  平均/最大 frame ms、平均/最大 DMA wait ms、平均/最大 flush-done ms、internal RAM/PSRAM 峰值，
+  以及每个 retained arena 的 used/capacity bytes。热身后 paint-only frame 的 arena capacity 应稳定；
+  app exit 或 memory pressure 时必须由 port 显式归还容量。
 - 这些数字可以写成 JSON，也可以写成一行文本，例如：
 
   ```text

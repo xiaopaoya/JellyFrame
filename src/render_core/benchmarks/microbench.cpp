@@ -271,6 +271,13 @@ int run_render_core_microbench(int argc, char** argv) {
     MonotonicArena layer_arena;
     auto layer_tree = layer_tree_builder.build(*layout_tree, layer_arena);
 
+    MonotonicArena reused_layer_arena;
+    print_result("layer_tree_rebuild_arena_rewind", iterations, average_microseconds(iterations, [&] {
+        auto reused_layer_tree = layer_tree_builder.build(*layout_tree, reused_layer_arena);
+        reused_layer_tree.reset();
+        reused_layer_arena.rewind();
+    }));
+
     print_result("flatten_layers", iterations, average_microseconds(iterations, [&] {
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
         (void)display_list;

@@ -485,6 +485,15 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<unsigned>(telemetry.min_largest_internal),
              static_cast<unsigned>(telemetry.initial_largest_spiram),
              static_cast<unsigned>(telemetry.min_largest_spiram));
+
+    ESP_LOGI(kTag,
+             "pipeline_arena render_used=%u render_capacity=%u layout_used=%u layout_capacity=%u layer_used=%u layer_capacity=%u",
+             static_cast<unsigned>(context.pipeline.render_arena.used_bytes()),
+             static_cast<unsigned>(context.pipeline.render_arena.capacity_bytes()),
+             static_cast<unsigned>(context.pipeline.layout_arena.used_bytes()),
+             static_cast<unsigned>(context.pipeline.layout_arena.capacity_bytes()),
+             static_cast<unsigned>(context.pipeline.layer_arena.used_bytes()),
+             static_cast<unsigned>(context.pipeline.layer_arena.capacity_bytes()));
 }
 
 bool load_timer_document(TimerUiTaskContext& context) {
@@ -663,9 +672,9 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
     context.pipeline.render_tree.reset();
     context.pipeline.layout_tree.reset();
     context.pipeline.layer_tree.reset();
-    context.pipeline.render_arena.reset();
-    context.pipeline.layout_arena.reset();
-    context.pipeline.layer_arena.reset();
+    context.pipeline.render_arena.rewind();
+    context.pipeline.layout_arena.rewind();
+    context.pipeline.layer_arena.rewind();
 
     jellyframe::StyleResolver resolver(context.stylesheet);
     jellyframe::RenderTreeBuilder render_builder(resolver,
@@ -764,7 +773,7 @@ bool render_and_present(TimerUiTaskContext& context,
         const InputInteractionState input_state = take_input_interaction_state(context);
         const std::uint64_t layer_build_start = esp_timer_get_time();
         context.pipeline.layer_tree.reset();
-        context.pipeline.layer_arena.reset();
+        context.pipeline.layer_arena.rewind();
         jellyframe::LayerTreeBuilder layer_builder(make_layer_tree_options(context));
         context.pipeline.layer_tree = layer_builder.build(*context.pipeline.layout_tree,
                                                            context.pipeline.layer_arena);

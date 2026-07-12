@@ -255,10 +255,12 @@ Internal RAM pressure guidance:
 - If DMA-capable internal RAM is required, keep only one or two small strip/tile
   buffers, for example 8-32 rows, convert each dirty region chunk, flush it,
   wait for completion and reuse the scratch buffer.
-- Render/layout/layer `MonotonicArena` storage is retained across frames when
-  used for retained trees. A product may reset those arenas after `present` only
-  if it chooses full rebuilds every frame, trading RAM for CPU. Do not put those
-  arenas in internal RAM unless measurements prove it is necessary.
+- Render/layout/layer `MonotonicArena` storage can be reused across retained
+  rebuilds with `rewind()`: live objects are destroyed while backing blocks stay
+  allocated, avoiding repeated heap allocation. Call `reset()` only when the
+  corresponding tree is no longer referenced and capacity should be returned,
+  such as app exit or memory pressure. Do not put those arenas in internal RAM
+  unless measurements prove it is necessary.
 - The offscreen compositing buffer is temporary inside
   `SoftwareCompositor::render_into` and is released when the call returns. Keep
   `max_offscreen_pixels` low enough that large opacity/transform layers cannot
@@ -287,7 +289,10 @@ Recommended real-device performance telemetry:
 
 - Development or acceptance builds should report frame count, full/dirty frame
   count, flush count, RGB565 packed bytes, average/max frame ms, average/max DMA
-  wait ms, average/max flush-done ms and internal-RAM/PSRAM peaks.
+  wait ms, average/max flush-done ms, internal-RAM/PSRAM peaks and each retained
+  arena's used/capacity bytes. After warm-up, paint-only frames should retain a
+  stable arena capacity; the port must release it deliberately on app exit or
+  memory pressure.
 - The log can be JSON or one simple text line:
 
   ```text

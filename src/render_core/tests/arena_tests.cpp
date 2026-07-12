@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -81,6 +82,35 @@ void reset_releases_blocks() {
     check(arena.capacity_bytes() == 0, "reset clears capacity accounting");
 }
 
+void rewind_reuses_blocks_after_destroying_live_objects() {
+    std::vector<int> log;
+    MonotonicArena arena(64);
+    auto& first = arena.create<Tracked>(log, 1);
+    void* first_storage = &first;
+    arena.allocate(128, alignof(std::max_align_t));
+    const std::size_t initial_blocks = arena.block_count();
+    const std::size_t initial_capacity = arena.capacity_bytes();
+
+    arena.rewind();
+
+    check(log.size() == 1 && log[0] == 1, "rewind destroys live objects");
+    check(arena.used_bytes() == 0, "rewind clears used byte accounting");
+    check(arena.block_count() == initial_blocks, "rewind retains blocks");
+    check(arena.capacity_bytes() == initial_capacity, "rewind retains capacity");
+
+    auto& second = arena.create<Tracked>(log, 2);
+    check(&second == first_storage, "rewind reuses the first block storage");
+    arena.reset();
+    check(log.size() == 2 && log[1] == 2, "reset destroys objects created after rewind");
+}
+
+void rejects_unrepresentable_allocations() {
+    MonotonicArena arena(64);
+    check(arena.allocate(std::numeric_limits<std::size_t>::max(), alignof(std::max_align_t)) == nullptr,
+          "arena rejects allocation sizes that overflow alignment headroom");
+    check(arena.block_count() == 0, "rejected allocation does not create a block");
+}
+
 } // namespace
 
 int main() {
@@ -89,6 +119,8 @@ int main() {
         grows_by_blocks();
         destroys_non_trivial_objects_in_reverse_order();
         reset_releases_blocks();
+        rewind_reuses_blocks_after_destroying_live_objects();
+        rejects_unrepresentable_allocations();
     } catch (const std::exception& error) {
         std::cerr << "arena test failed: " << error.what() << '\n';
         return 1;

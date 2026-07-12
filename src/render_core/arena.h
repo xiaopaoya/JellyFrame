@@ -31,6 +31,9 @@ public:
         return *object;
     }
 
+    // Destroys live objects but retains allocated blocks for the next build.
+    void rewind();
+    // Destroys live objects and releases all allocated blocks.
     void reset();
     std::size_t used_bytes() const;
     std::size_t capacity_bytes() const;
@@ -56,8 +59,10 @@ private:
     std::size_t block_size_;
     std::vector<Block> blocks_;
     std::vector<Destructor> destructors_;
+    std::size_t next_block_index_ = 0;
 
     Block& add_block(std::size_t min_capacity);
+    void destroy_live_objects();
 };
 
 } // namespace jellyframe

@@ -2,13 +2,18 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <limits>
 
 namespace jellyframe {
 namespace {
 
-std::size_t align_up(std::size_t value, std::size_t alignment) {
+bool align_up(std::size_t value, std::size_t alignment, std::size_t& aligned) {
     const std::size_t mask = alignment - 1U;
-    return (value + mask) & ~mask;
+    if (value > std::numeric_limits<std::size_t>::max() - mask) {
+        return false;
+    }
+    aligned = (value + mask) & ~mask;
+    return true;
 }
 
 } // namespace
@@ -28,31 +33,60 @@ void* MonotonicArena::allocate(std::size_t size, std::size_t alignment) {
     if ((alignment & (alignment - 1U)) != 0U || alignment > alignof(std::max_align_t)) {
         return nullptr;
     }
+    if (size > std::numeric_limits<std::size_t>::max() - alignment) {
+        return nullptr;
+    }
 
     if (blocks_.empty()) {
         add_block(size + alignment);
     }
 
-    Block* block = &blocks_.back();
-    std::size_t aligned = align_up(block->used, alignment);
-    if (aligned + size > block->capacity) {
-        block = &add_block(size + alignment);
-        aligned = align_up(block->used, alignment);
+    for (std::size_t index = next_block_index_; index < blocks_.size(); ++index) {
+        Block& block = blocks_[index];
+        std::size_t aligned = 0;
+        if (!align_up(block.used, alignment, aligned)) {
+            continue;
+        }
+        if (aligned <= block.capacity && size <= block.capacity - aligned) {
+            void* result = block.bytes.get() + aligned;
+            block.used = aligned + size;
+            next_block_index_ = index;
+            return result;
+        }
     }
 
-    void* result = block->bytes.get() + aligned;
-    block->used = aligned + size;
+    Block& block = add_block(size + alignment);
+    std::size_t aligned = 0;
+    if (!align_up(block.used, alignment, aligned)) {
+        return nullptr;
+    }
+    void* result = block.bytes.get() + aligned;
+    block.used = aligned + size;
+    next_block_index_ = blocks_.size() - 1;
     return result;
 }
 
+void MonotonicArena::rewind() {
+    destroy_live_objects();
+    for (Block& block : blocks_) {
+        block.used = 0;
+    }
+    next_block_index_ = 0;
+}
+
 void MonotonicArena::reset() {
+    destroy_live_objects();
+    blocks_.clear();
+    next_block_index_ = 0;
+}
+
+void MonotonicArena::destroy_live_objects() {
     for (auto it = destructors_.rbegin(); it != destructors_.rend(); ++it) {
         if (it->destroy != nullptr) {
             it->destroy(it->object);
         }
     }
     destructors_.clear();
-    blocks_.clear();
 }
 
 std::size_t MonotonicArena::used_bytes() const {
@@ -76,7 +110,7 @@ std::size_t MonotonicArena::block_count() const {
 }
 
 MonotonicArena::Block& MonotonicArena::add_block(std::size_t min_capacity) {
-    const std::size_t capacity = std::max(block_size_, align_up(min_capacity, alignof(std::max_align_t)));
+    const std::size_t capacity = std::max(block_size_, min_capacity);
     Block block;
     block.bytes = std::make_unique<std::uint8_t[]>(capacity);
     block.capacity = capacity;
