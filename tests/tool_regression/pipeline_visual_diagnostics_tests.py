@@ -55,6 +55,7 @@ def main() -> int:
 
     exe = Path(sys.argv[1])
     require(exe.exists(), f"missing executable: {exe}")
+    repo_root = Path(__file__).resolve().parents[2]
 
     overflow_report = run_pseudo_browser(
         exe,
@@ -154,6 +155,20 @@ def main() -> int:
             "nested scroll diagnostic should identify the overflowing ancestor")
     require('ancestorPath="' in nested_scroll.get("detail", "") and "section#feed" in nested_scroll.get("detail", ""),
             "nested scroll diagnostic should include the ancestor DOM path")
+
+    timer_template = repo_root / "tools" / "templates" / "apps" / "timer"
+    timer_template_report = run_pseudo_browser(
+        exe,
+        (timer_template / "index.html").read_text(encoding="utf-8"),
+        (timer_template / "styles" / "app.css").read_text(encoding="utf-8"),
+        300,
+        300,
+    )
+    timer_template_codes = diagnostic_codes(timer_template_report)
+    require("layout-text-overflow" not in timer_template_codes,
+            "timer template should fit its default round-300 text layout")
+    require("visual-horizontal-overflow" not in timer_template_codes,
+            "timer template should fit its default round-300 width")
 
     print("pipeline visual diagnostics tests passed")
     return 0
