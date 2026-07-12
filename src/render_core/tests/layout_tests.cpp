@@ -337,6 +337,42 @@ void max_width_percent_clamps_nested_border_box() {
           "nested border-box percent item stays inside clamped card");
 }
 
+void max_width_percent_clamps_nested_flex_grid_items() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main id='screen'><section id='grid'><article id='left'><div id='left-inner'></div></article>"
+        "<article id='right'><div id='right-inner'></div></article></section></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#screen { display: flex; box-sizing: border-box; width: 172px; padding: 6px; border: 1px solid #000; }"
+        "#grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; flex: 1; min-width: 0; }"
+        "article { box-sizing: border-box; width: 300px; max-width: 100%; padding: 5px; border: 1px solid #000; }"
+        "article div { box-sizing: border-box; width: 100%; height: 18px; padding: 3px; border: 1px solid #000; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 172, 320);
+
+    const LayoutBox* screen = find_first_by_id(*layout_tree, "screen");
+    const LayoutBox* grid = find_first_by_id(*layout_tree, "grid");
+    const LayoutBox* left = find_first_by_id(*layout_tree, "left");
+    const LayoutBox* right = find_first_by_id(*layout_tree, "right");
+    const LayoutBox* left_inner = find_first_by_id(*layout_tree, "left-inner");
+    const LayoutBox* right_inner = find_first_by_id(*layout_tree, "right-inner");
+    check(screen != nullptr && grid != nullptr && left != nullptr && right != nullptr &&
+              left_inner != nullptr && right_inner != nullptr,
+          "nested flex grid fixture boxes exist");
+    const int screen_content_right = screen->rect.x + screen->rect.width -
+        screen->style.border_width.right - screen->style.padding.right;
+    check(grid->rect.x + grid->rect.width <= screen_content_right,
+          "flex grid fits its border-box parent on a narrow target");
+    check(left->rect.x + left->rect.width <= grid->rect.x + grid->rect.width &&
+              right->rect.x + right->rect.width <= grid->rect.x + grid->rect.width,
+          "max-width clamps each grid card inside the flex item");
+    check(left_inner->rect.x + left_inner->rect.width <= left->rect.x + left->rect.width &&
+              right_inner->rect.x + right_inner->rect.width <= right->rect.x + right->rect.width,
+          "nested percent children stay inside clamped grid cards");
+}
+
 void grid_places_fixed_columns_and_spans() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -412,6 +448,7 @@ int main() {
         percentage_width_and_height_use_containing_box();
         border_box_percent_width_accounts_for_edges();
         max_width_percent_clamps_nested_border_box();
+        max_width_percent_clamps_nested_flex_grid_items();
         grid_places_fixed_columns_and_spans();
         nowrap_text_overflow_reports_diagnostic();
     } catch (const std::exception& error) {
