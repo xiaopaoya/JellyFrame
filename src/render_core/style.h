@@ -30,9 +30,11 @@ enum class TextAlign : std::uint8_t {
 
 enum class JustifyContent : std::uint8_t {
     Start,
+    End,
     Center,
     SpaceAround,
     SpaceBetween,
+    SpaceEvenly,
 };
 
 enum class AlignItems : std::uint8_t {

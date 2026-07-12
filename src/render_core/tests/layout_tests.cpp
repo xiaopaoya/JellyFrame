@@ -185,6 +185,33 @@ void flex_row_justifies_and_aligns_items() {
     check(a->rect.y == 20 && b->rect.y == 20, "center alignment places items vertically");
 }
 
+void flex_row_supports_end_and_space_evenly_justification() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main id='end'><div id='end-a'></div><div id='end-b'></div></main>"
+        "<main id='even'><div id='even-a'></div><div id='even-b'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; width: 200px; height: 20px; }"
+        "#end { justify-content: flex-end; }"
+        "#even { justify-content: space-evenly; }"
+        "div { width: 40px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 240);
+
+    const LayoutBox* end_a = find_first_by_id(*layout_tree, "end-a");
+    const LayoutBox* end_b = find_first_by_id(*layout_tree, "end-b");
+    const LayoutBox* even_a = find_first_by_id(*layout_tree, "even-a");
+    const LayoutBox* even_b = find_first_by_id(*layout_tree, "even-b");
+    check(end_a != nullptr && end_b != nullptr && even_a != nullptr && even_b != nullptr,
+          "extended justify-content fixture boxes exist");
+    check(end_a->rect.x == 120 && end_b->rect.x == 160,
+          "flex-end places the row against the content end");
+    check(even_a->rect.x == 40 && even_b->rect.x == 120,
+          "space-evenly distributes equal leading, internal and trailing space");
+}
+
 void flex_wrap_stacks_lines_with_row_gap() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -441,6 +468,7 @@ int main() {
         flex_row_distributes_grow_space();
         flex_row_shrinks_basis_widths();
         flex_row_justifies_and_aligns_items();
+        flex_row_supports_end_and_space_evenly_justification();
         flex_wrap_stacks_lines_with_row_gap();
         positioned_layout_offsets_without_flow_space();
         relative_layout_offsets_visual_box_only();

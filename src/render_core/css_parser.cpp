@@ -864,7 +864,8 @@ bool is_supported_declaration_feature(std::string_view feature) {
     }
     if (property == "justify-content") {
         return supported_keyword(value, {"start", "flex-start", "normal", "center",
-                                        "space-around", "space-between"});
+                                        "end", "flex-end", "space-around", "space-between",
+                                        "space-evenly"});
     }
     if (property == "align-items") {
         return supported_keyword(value, {"stretch", "normal", "start", "flex-start",

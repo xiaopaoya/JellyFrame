@@ -3074,10 +3074,14 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         const std::string lowered = lowercase(trim(value));
         if (lowered == "center") {
             style.justify_content = JustifyContent::Center;
+        } else if (lowered == "flex-end" || lowered == "end") {
+            style.justify_content = JustifyContent::End;
         } else if (lowered == "space-around") {
             style.justify_content = JustifyContent::SpaceAround;
         } else if (lowered == "space-between") {
             style.justify_content = JustifyContent::SpaceBetween;
+        } else if (lowered == "space-evenly") {
+            style.justify_content = JustifyContent::SpaceEvenly;
         } else if (lowered == "flex-start" || lowered == "start" || lowered == "normal") {
             style.justify_content = JustifyContent::Start;
         } else {

@@ -235,7 +235,7 @@ clear older supported fallback declarations.
 | `top` / `right` / `bottom` / `left` | Subset | Length and `auto` values. Absolute/fixed boxes use parent content box or viewport-like origin. Percentages, shrink-to-fit, full containing-block rules and sticky scrolling are absent. |
 | `z-index` | Subset | Integer or `auto`; layer-local ordering only. |
 | `transform` | Subset | `translate()`/`translateX()`/`translateY()`, `scale()`/`scaleX()`/`scaleY()` and `rotate()`/`rotateZ()` are parsed into a composited layer and painted by the software compositor. Angles support `deg`, `turn`, `rad` and `grad`. `transform-origin` supports common keywords and percentages. `skew()`, `matrix()`, perspective and 3D transforms are unsupported and diagnosed/ignored. |
-| `justify-content` | Subset | `start`, `flex-start`, `normal`, `center`, `space-around`, `space-between` in simplified flex rows. |
+| `justify-content` | Subset | `start`, `flex-start`, `normal`, `end`, `flex-end`, `center`, `space-around`, `space-between`, `space-evenly` in simplified flex rows. |
 | `align-items` | Subset | `stretch`, `normal`, `start`, `flex-start`, `center`, `end`, `flex-end` in simplified flex rows. |
 | `flex` | Subset | Shorthand supports common `none`, `auto`, `<grow>`, `<grow> <basis>` and `<grow> <shrink> <basis>` forms for simplified row flex layouts. Full Flexbox grammar is absent. |
 | `flex-grow` / `flex-shrink` / `flex-basis` | Subset | Non-negative numeric grow/shrink factors and supported length/`auto` basis values participate in the simplified row sizing pass. |

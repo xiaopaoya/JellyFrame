@@ -265,13 +265,19 @@ FlexJustifyPlacement flex_justify_placement(JustifyContent justify_content,
                                             int in_flow_count) {
     FlexJustifyPlacement placement;
     placement.cursor_x = content_x;
-    if (justify_content == JustifyContent::Center) {
-        placement.cursor_x += std::max(0, (content_width - total_child_width) / 2);
+    const int free_space = std::max(0, content_width - total_child_width);
+    if (justify_content == JustifyContent::End) {
+        placement.cursor_x += free_space;
+    } else if (justify_content == JustifyContent::Center) {
+        placement.cursor_x += free_space / 2;
     } else if (justify_content == JustifyContent::SpaceAround) {
-        placement.extra_gap = in_flow_count == 0 ? 0 : std::max(0, (content_width - total_child_width) / in_flow_count);
+        placement.extra_gap = in_flow_count == 0 ? 0 : free_space / in_flow_count;
         placement.cursor_x += placement.extra_gap / 2;
     } else if (justify_content == JustifyContent::SpaceBetween && in_flow_count > 1) {
-        placement.extra_gap = std::max(0, (content_width - total_child_width) / (in_flow_count - 1));
+        placement.extra_gap = free_space / (in_flow_count - 1);
+    } else if (justify_content == JustifyContent::SpaceEvenly && in_flow_count > 0) {
+        placement.extra_gap = free_space / (in_flow_count + 1);
+        placement.cursor_x += placement.extra_gap;
     }
     return placement;
 }

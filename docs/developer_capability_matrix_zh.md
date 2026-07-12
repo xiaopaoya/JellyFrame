@@ -222,7 +222,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `top` / `right` / `bottom` / `left` | 子集 | 支持长度和 `auto`。Absolute/fixed box 使用父内容框或近似 viewport 原点。百分比、shrink-to-fit、完整 containing-block 规则和 sticky 滚动行为不支持。 |
 | `z-index` | 子集 | 整数或 `auto`；目前是 layer-local ordering。 |
 | `transform` | 子集 | `translate()`/`translateX()`/`translateY()`、`scale()`/`scaleX()`/`scaleY()` 和 `rotate()`/`rotateZ()` 会解析为 composited layer，并由软件合成器绘制。角度支持 `deg`、`turn`、`rad` 和 `grad`。`transform-origin` 支持常用关键字和百分比。`skew()`、`matrix()`、perspective 和 3D transform 不支持，会诊断并忽略。 |
-| `justify-content` | 子集 | `start`、`flex-start`、`normal`、`center`、`space-around`、`space-between`，用于简化 flex row。 |
+| `justify-content` | 子集 | `start`、`flex-start`、`normal`、`end`、`flex-end`、`center`、`space-around`、`space-between`、`space-evenly`，用于简化 flex row。 |
 | `align-items` | 子集 | `stretch`、`normal`、`start`、`flex-start`、`center`、`end`、`flex-end`，用于简化 flex row。 |
 | `flex` | 子集 | Shorthand 支持常见 `none`、`auto`、`<grow>`、`<grow> <basis>` 和 `<grow> <shrink> <basis>` 形式，用于简化 row flex layout。完整 Flexbox 语法不支持。 |
 | `flex-grow` / `flex-shrink` / `flex-basis` | 子集 | 非负数字 grow/shrink 因子和受支持长度/`auto` basis 会参与简化 row sizing pass。 |

@@ -127,6 +127,7 @@ void supports_queries_apply_representative_supported_properties() {
         "@supports (object-fit: cover) { .probe { object-fit: cover; image-rendering: pixelated; } }"
         "@supports (border-right: 2px solid #123456) { .probe { border-right: 2px solid #123456; } }"
         "@supports (text-overflow: ellipsis) { .probe { white-space: nowrap; text-overflow: ellipsis; } }"
+        "@supports (justify-content: space-evenly) { .probe { justify-content: space-evenly; } }"
         "@supports (overflow-y: auto) { .probe { overflow-y: auto; } }"
         "@supports (overflow-y: hidden) { .probe { color: #ff0000; } }"
         "@supports (background-image: radial-gradient(#fff, #000)) { .probe { background-image: radial-gradient(#fff, #000); } }"
@@ -145,6 +146,8 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.image_rendering == ImageRendering::Pixelated, "image-rendering applies after @supports");
     check(style.border_width.right == 2, "border-right applies after @supports");
     check(style.white_space_nowrap && style.text_overflow_ellipsis, "text overflow controls apply after @supports");
+    check(style.justify_content == JustifyContent::SpaceEvenly,
+          "space-evenly justification applies after @supports");
     check(style.overflow == "auto", "overflow-y auto applies after @supports");
     check(style.background_paint == BackgroundPaintKind::RadialGradient,
           "background-image radial-gradient applies after @supports");
