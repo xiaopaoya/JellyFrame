@@ -1,0 +1,29 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.tests.opacity-layer-reuse",
+  "name": "Opacity Layer Reuse",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.5.0",
+    "script": "none"
+  },
+  "viewport": {
+    "designWidth": 160,
+    "designHeight": 160,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 16384,
+    "maxDomNodes": 32,
+    "maxCssRules": 16,
+    "maxDisplayCommands": 128,
+    "maxActiveAnimations": 2
+  },
+  "capabilities": []
+}

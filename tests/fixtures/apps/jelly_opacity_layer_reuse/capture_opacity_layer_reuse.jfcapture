@@ -1,0 +1,12 @@
+# Deterministic opacity-only animation capture.
+
+output-dir out/opacity_layer_reuse_frames
+montage out/opacity_layer_reuse_montage.bmp
+frames 24
+step-ms 33
+start-ms 1000
+viewport 160 160
+columns 6
+gap 4
+animation-fps 30
+animation-callbacks 2

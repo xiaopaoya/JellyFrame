@@ -564,6 +564,15 @@ if(JELLYFRAME_BUILD_TESTS)
                     "frame_policy_samples=30 input=30 timers=30 animation=14 present=30")
 
             add_test(
+                NAME jellyframe_win32_opacity_layer_reuse_frame_script
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_opacity_layer_reuse
+                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_opacity_layer_reuse/capture_opacity_layer_reuse.jfcapture
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_opacity_layer_reuse_frame_script PROPERTIES
+                PASS_REGULAR_EXPRESSION "animation_layer_reuse opacity=[1-9]")
+
+            add_test(
                 NAME jellyframe_win32_motion_lab_soak_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_win32_browser>
                         --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab

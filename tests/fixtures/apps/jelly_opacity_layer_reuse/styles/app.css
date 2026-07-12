@@ -1,0 +1,29 @@
+html, body {
+  margin: 0;
+  background: #08151f;
+}
+
+.screen {
+  width: 160px;
+  height: 160px;
+  padding: 32px;
+  background: #102d3b;
+}
+
+.pulse {
+  width: 96px;
+  height: 48px;
+  padding: 12px 0;
+  color: #efffff;
+  text-align: center;
+  font-size: 16px;
+  background: #2bafc3;
+  border-radius: 18px;
+  opacity: .72;
+  animation: fade-pulse 300ms ease-in-out infinite alternate;
+}
+
+@keyframes fade-pulse {
+  from { opacity: .28; }
+  to { opacity: .92; }
+}

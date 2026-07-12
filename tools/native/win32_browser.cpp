@@ -3459,6 +3459,7 @@ public:
                   << " full_repaints=" << scroll_container_counters_.full_repaints
                   << " dirty_repaints=" << scroll_container_counters_.dirty_repaints
                   << " inertia=" << scroll_container_counters_.inertia_steps << '\n';
+        std::cout << "  animation_layer_reuse opacity=" << opacity_layer_reuse_frames_ << '\n';
         std::cout << "  present_estimate_rgb565 frames=" << present_estimate_counters_.frames
                   << " full=" << present_estimate_counters_.full_frames
                   << " dirty=" << present_estimate_counters_.dirty_frames
@@ -3568,6 +3569,7 @@ private:
     std::uint64_t scripted_now_ms_ = 0;
     FrameScratch frame_scratch_;
     LayerTreeOverrideScratch layer_override_scratch_;
+    std::size_t opacity_layer_reuse_frames_ = 0;
     FrameBuffer frame_buffer_;
     Color page_background_{255, 255, 255, 255};
     std::vector<std::uint32_t> blit_pixels_;
@@ -4517,6 +4519,7 @@ private:
             style_overrides_.clear();
             previous_style_overrides_.clear();
             clear_animation_overrides_after_render_ = false;
+            opacity_layer_reuse_frames_ = 0;
             pending_shell_action_.clear();
             pending_shell_app_id_.clear();
             dirty_region_statistics_ = DirtyRegionStatistics{};
@@ -5090,6 +5093,9 @@ private:
             apply_animation_overrides_to_cached_trees();
             const bool reused_opacity_layers = animation_only_dirty && layer_tree_ != nullptr &&
                 apply_opacity_overrides_to_layer_tree(*layer_tree_, style_overrides_, layer_override_scratch_);
+            if (reused_opacity_layers) {
+                ++opacity_layer_reuse_frames_;
+            }
             auto next_layer_tree = reused_opacity_layers ? LayerNodePtr{} : layer_builder.build(*layout_tree_);
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
