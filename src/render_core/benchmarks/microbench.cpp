@@ -2,6 +2,7 @@
 #include "render_core/animation_timeline.h"
 #include "render_core/animation_invalidation.h"
 #include "render_core/canvas2d.h"
+#include "render_core/dirty_region.h"
 #include "render_core/frame_scratch.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
@@ -12,6 +13,7 @@
 #include "render_core/style_repaint.h"
 #include "render_core/text_repaint.h"
 
+#include <array>
 #include <cerrno>
 #include <chrono>
 #include <climits>
@@ -20,6 +22,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace jellyframe;
 
@@ -380,6 +383,25 @@ int run_render_core_microbench(int argc, char** argv) {
                                Color{255, 255, 255, 255},
                                contained_dirty_rects.data(),
                                contained_dirty_rects.size());
+    }));
+
+    const std::array<Rect, 3> adjacent_dirty_rects{{
+        Rect{20, 40, 20, 29},
+        Rect{42, 40, 20, 29},
+        Rect{64, 40, 20, 29},
+    }};
+    const DirtyRectCoalescingOptions dirty_rect_coalescing_options{8, 256, 10};
+    std::vector<Rect> coalesced_dirty_rects;
+    coalesced_dirty_rects.reserve(adjacent_dirty_rects.size());
+    print_result("dirty_rect_coalescing_adjacent", iterations, average_microseconds(iterations, [&] {
+        coalesce_dirty_rects_into(adjacent_dirty_rects.data(),
+                                  adjacent_dirty_rects.size(),
+                                  Rect{0, 0, 172, 320},
+                                  dirty_rect_coalescing_options,
+                                  coalesced_dirty_rects);
+        if (coalesced_dirty_rects.size() != 1) {
+            throw std::runtime_error("adjacent dirty rectangles did not coalesce");
+        }
     }));
 
     print_result("scroll_blit_plan", iterations, average_microseconds(iterations, [&] {
