@@ -1049,7 +1049,7 @@ def diagnostic_metrics_from_detail(parsed: dict) -> dict:
 def diagnostic_context(source: str, code: str, detail: str, parsed: dict) -> dict:
     """Keep unknown diagnostics actionable without prescribing a false cause."""
     subject = ""
-    for key in ("property", "field", "attribute", "selector", "element", "node", "path"):
+    for key in ("property", "field", "attribute", "selector", "element", "node", "path", "tag", "api"):
         value = str(parsed.get(key, "") or "")
         if value:
             subject = value
@@ -1167,6 +1167,40 @@ def specialize_developer_advice(entry: dict, code: str, parsed: dict) -> None:
                 f"density heuristic is {density_limit}. Reduce repeated decoration, gradients, "
                 "shadows or generated content, and measure again before raising a budget."
             )
+
+    if code == "script-api-deferred":
+        api = str(parsed.get("api", "") or "")
+        alternatives = {
+            "fetch": "Use XMLHttpRequest GET V0 when the manifest and host allow network.fetch.",
+            "Promise": "Use bounded callback-style host completions; Promise/microtask scheduling is not available.",
+            "innerHTML": "Use textContent or explicit DOM creation APIs.",
+            "getBoundingClientRect": "Keep geometry in declared CSS or wait for a documented host layout snapshot.",
+            "pointer capture": "Track pointerdown/pointermove/pointerup inside the app viewport without pointer capture.",
+            "dynamic import": "Bundle static package-local modules at package time or keep classic scripts.",
+            "WebSocket": "Use XMLHttpRequest GET V0 for bounded polling, or ask the host for a semantic push service.",
+            "EventSource": "Use host-owned polling or a semantic push service instead of a browser event stream.",
+            "BroadcastChannel": "Use app-local state or a host-owned system event; cross-app browser messaging is unavailable.",
+            "DataTransfer": "Use pointer/touch events and app-local drag state; browser drag-and-drop payloads are unavailable.",
+            "Worker": "Submit bounded compute work through a host service; workers cannot access the app DOM or renderer.",
+            "serviceWorker": "Use the host app lifecycle and package updater; Service Worker is not part of the runtime model.",
+        }
+        if api in alternatives:
+            entry["action"] = alternatives[api]
+        return
+
+    if code == "html-element-unsupported":
+        tag = str(parsed.get("tag", "") or "")
+        alternatives = {
+            "iframe": "Keep content package-local; use an explicit app route or a host-owned login/map/media service instead of an embedded browsing context.",
+            "embed": "Use a declared package resource and a supported host decoder instead of browser plugin content.",
+            "object": "Use a declared package resource, Canvas within its capability budget, or a host-owned service instead of an object document.",
+            "slot": "Compose the small component tree directly; Custom Elements and Shadow DOM slots are unavailable.",
+            "map": "Use explicit buttons or Canvas hit regions; image-map navigation is unavailable.",
+            "area": "Use explicit buttons or Canvas hit regions; image-map navigation is unavailable.",
+        }
+        if tag in alternatives:
+            entry["action"] = alternatives[tag]
+        return
 
 
 def apply_target_context(entry: dict | None, profile: dict, gate: dict | None = None) -> None:
@@ -1797,7 +1831,8 @@ def append_developer_advice(advice: list[dict],
                             severity: str,
                             source: str = "",
                             detail: str = "",
-                            target: str = "") -> None:
+                            target: str = "",
+                            metadata: dict | None = None) -> dict | None:
     template = advice_template_for_code(code)
     if not template:
         return None
@@ -1821,6 +1856,12 @@ def append_developer_advice(advice: list[dict],
     if target:
         entry["target"] = target
     parsed_detail = parse_diagnostic_detail(detail)
+    if isinstance(metadata, dict):
+        for key in ("api", "tag", "capability", "selector", "property", "field", "attribute", "element"):
+            value = metadata.get(key)
+            if isinstance(value, (str, int, float)) and str(value):
+                parsed_detail.setdefault(key, value)
+                entry[key] = value
     entry["diagnosticContext"] = diagnostic_context(source, code, detail, parsed_detail)
     if parsed_detail:
         if "text" in parsed_detail:
@@ -1854,7 +1895,8 @@ def collect_developer_advice(report: dict) -> list[dict]:
                                 str(warning.get("level", "warning")),
                                 str(warning.get("source", "")),
                                 str(warning.get("message", "")),
-                                str(warning.get("target", "")))
+                                str(warning.get("target", "")),
+                                warning)
 
     pipeline = report.get("pipelineDiagnostics", {})
     if isinstance(pipeline, dict):

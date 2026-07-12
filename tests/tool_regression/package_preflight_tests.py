@@ -1161,6 +1161,33 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(report["developerAdvice"][0]["code"], "visual-scroll-needed")
         self.assertIn("action", report["developerAdvice"][0])
 
+    def test_developer_advice_preserves_browser_api_and_element_context(self):
+        report = {
+            "warnings": [{
+                "level": "warning",
+                "code": "script-api-deferred",
+                "message": "script uses WebSocket, which is outside the current networking subset",
+                "source": "/scripts/live.js",
+                "api": "WebSocket",
+            }, {
+                "level": "warning",
+                "code": "html-element-unsupported",
+                "message": "<iframe> is outside JellyFrame's app HTML subset",
+                "source": "/index.html",
+                "tag": "iframe",
+            }],
+        }
+
+        advice = jellyframe_cli.collect_developer_advice(report)
+        by_code = {entry["code"]: entry for entry in advice}
+
+        self.assertEqual(by_code["script-api-deferred"]["api"], "WebSocket")
+        self.assertEqual(by_code["script-api-deferred"]["diagnosticContext"]["subject"], "WebSocket")
+        self.assertIn("semantic push service", by_code["script-api-deferred"]["action"])
+        self.assertEqual(by_code["html-element-unsupported"]["tag"], "iframe")
+        self.assertEqual(by_code["html-element-unsupported"]["diagnosticContext"]["subject"], "iframe")
+        self.assertIn("embedded browsing context", by_code["html-element-unsupported"]["action"])
+
     def test_common_runtime_diagnostics_have_specific_developer_advice(self):
         report = {
             "pipelineDiagnostics": {
