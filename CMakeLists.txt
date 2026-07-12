@@ -335,6 +335,13 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_cli_template_trial_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/template_trial_tests.py
+                        $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
                 NAME jellyframe_cli_check_audio_smoke_package
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
