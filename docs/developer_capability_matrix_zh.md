@@ -1,6 +1,6 @@
 # 开发者能力矩阵
 
-> 最后更新：2026-07-12；适用版本：0.5.0-dev
+> 最后更新：2026-07-13；适用版本：0.5.0-dev
 
 
 这份文档是 JellyFrame 面向应用开发者的实际能力契约。开发者在使用某个 HTML
@@ -384,7 +384,7 @@ JerryScript 源码树时可用。
 | Dirty propagation | 可用 | mutation 会把 dirty bits OR 到当前节点和祖先。 |
 | Dirty check | 可用 | 因为祖先保存聚合 dirty bits，根节点检查为 O(1)。 |
 | Dirty clear | 可用 | 清理时跳过干净分支。 |
-| 宿主合并重绘 | 子集 | Win32 壳会在 input/script callback 后只对 dirty DOM 重绘。Win32 壳的 viewport scroll 会复用已有完整内容 framebuffer，并在可行时通过移动行和只复制新露出行来更新可见 blit buffer。 |
+| 宿主合并重绘 | 子集 | Win32 壳会在 input/script callback 后只对 dirty DOM 重绘。Win32 壳的 viewport scroll 会复用已有完整内容 framebuffer，并在可行时通过移动行和只复制新露出行来更新可见 blit buffer。port 可选择调用 `coalesce_dirty_rects_into(...)`，以有界的额外绘制面积换取更少的通用 present 调用；成本策略由 port 自己提供，未使用的 app 不会为此付费。 |
 | 增量 style/layout | 子集 | paint-only 表单控件状态变化可在 Win32 验证壳中复用 render/layout，只重建 layer/display commands。受保护的 same-box 单行文本路径也可在更新后文本测量结果仍匹配旧 layout box 时复用 render/layout。受保护的 style/class 路径会在 render tree 形状不变、所有影响 layout 的 style 字段不变时复用 layout；color、background、opacity、transform 等 paint/compositor 变化可以走这条路径。transform 变化会复用 animation invalidation helper，因此旧 bounds 和新 bounds 都会重绘。换行文本、影响 layout 的 style、未知结构变化和树结构变化仍重建 render/layout。 |
 | Dirty rectangle repaint | 子集 | `dirty_region` 会通过对比旧/新 layout box，或对 paint-only 变化复用同一份 layout，为直接文本、属性、表单控件绘制变化计算有界重绘区域。树结构变化保守重绘 viewport。若估算 dirty area 过大，宿主也可以选择全帧重绘，避免局部 flush 反而更贵。软件 compositor 会在 clip replay 前丢掉重复或被完全包含的 dirty rectangles，避免同一区域被反复清屏/重绘。 |
 | Animation invalidation | 子集 | `animation_invalidation` 可根据上一帧/当前帧的 animation style overrides，在当前 layout tree 上生成局部 dirty rectangles，覆盖 opacity/color paint-only 动画和 translate/scale/rotate transform 前后位置。 |

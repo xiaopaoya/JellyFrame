@@ -1,6 +1,6 @@
 # Embedded HAL API
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-13; Applies to: 0.5.0-dev
 
 
 This document is the implementation checklist for a board or RTOS host such as
@@ -340,6 +340,13 @@ know when a device flush is complete. Therefore:
   reuses the scratch buffer;
 - if even the RGBA framebuffer does not fit, the current core is not enough yet;
   add a tiled/scanline compositor first.
+
+Before presenting a bounded dirty list, a port may optionally call
+`coalesce_dirty_rects_into(...)`. Supply a measured per-rectangle setup cost
+and a maximum extra-area percentage; keep the original list when its estimated
+cost is lower. This is only a portable planning utility, not a panel/DMA API.
+Do not enable it from a board profile without comparing both variants on real
+hardware, including flush count, panel bytes, DMA wait and frame latency.
 
 During bring-up, pass `EmbeddedFrameBufferPresentStats` to
 `present_to_embedded_framebuffer(...)` and log it next to the real panel data:

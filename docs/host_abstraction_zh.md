@@ -1,6 +1,6 @@
 # 宿主抽象草案
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-13；适用版本：0.5.0-dev
 
 
 JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显示控制器、timer、输入硬件和字体 API。
@@ -142,10 +142,19 @@ callback。支持的 target 格式包括 RGBA8888、BGRA8888、RGB565、BGR565�
 和 1-bit 单色打包。它不调度 DMA，也不拥有 flush completion；真实 port 仍必须遵守
 `HostFrameSink` 的 buffer 生命周期边界。
 
+### 优化边界
+
+Render Core 可以提供平台无关的规划工具，但绝不选择显示控制器、DMA、总线或 SoC 策略。port
+拥有硬件实现，只有本机测量证明成本模型合适时才可选择调用通用核心工具。可选工具在宿主没有调用时
+不得带来常驻运行或内存成本；每条优化后的 port 路径都必须保留正确的软件 fallback。
+
+`coalesce_dirty_rects_into(...)` 是一个 opt-in 工具：它先裁剪输入矩形，再按 port 提供的通用
+成本策略决定是否合并。成本单位是等价像素面积加单矩形提交开销，并带额外面积上限。它不了解 panel
+协议或 DMA，也不改变核心帧规划。宿主可将输出交给任何 `HostFrameSink`，也可在合并无收益时保留原矩形。
+
 仍然缺少：
 
 - 更细粒度的 layer/display-command invalidation；
-- 可调 dirty rectangle 合并策略；
 - 无完整 framebuffer 设备所需的 tiled/scanline presentation。
 
 ## Vendor 与 LVGL 后端策略

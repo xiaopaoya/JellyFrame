@@ -1,6 +1,6 @@
 # Developer Capability Matrix
 
-> Last updated: 2026-07-12; Applies to: 0.5.0-dev
+> Last updated: 2026-07-13; Applies to: 0.5.0-dev
 
 
 This document is the practical contract for application authors using JellyFrame.
@@ -400,7 +400,7 @@ local JerryScript tree configured through `JERRYSCRIPT_ROOT`.
 | Dirty propagation | Works | Mutations OR dirty bits onto the changed node and ancestors. |
 | Dirty check | Works | Root check is O(1) because ancestor propagation keeps aggregate bits. |
 | Dirty clear | Works | Skips clean branches. |
-| Host coalescing | Subset | Win32 shell rerenders only after dirty input/script callbacks. Viewport scroll in the Win32 shell reuses the existing full-content framebuffer and updates the visible blit buffer by moving rows plus copying only newly exposed rows when possible. |
+| Host coalescing | Subset | Win32 shell rerenders only after dirty input/script callbacks. Viewport scroll in the Win32 shell reuses the existing full-content framebuffer and updates the visible blit buffer by moving rows plus copying only newly exposed rows when possible. Ports may opt into `coalesce_dirty_rects_into(...)` to trade a bounded amount of extra painted area for fewer generic present calls; the port supplies the cost policy and unused apps do not pay for it. |
 | Incremental style/layout | Subset | Paint-only form-control state changes can reuse render/layout in the Win32 validation shell and rebuild only layer/display commands. A guarded same-box single-line text path can also reuse render/layout when the updated text measures to the existing layout box. A guarded style/class path reuses layout when the render tree shape and all layout-affecting style fields stay unchanged; paint/compositor changes such as color, background, opacity and transform can use this path. Transform changes reuse the animation invalidation helper so old and new bounds are repainted. Wrapping text, layout-affecting style, unknown structural changes and tree changes still rebuild render/layout. |
 | Dirty rectangle repaint | Subset | `dirty_region` computes bounded repaint rects for direct text/attribute/form-control paint changes by comparing old and new layout boxes, or by reusing the same layout for paint-only changes. Tree mutations conservatively repaint the viewport. Hosts may also choose full-frame repaint when estimated dirty area is too large for partial flush to pay off. The software compositor drops duplicate or fully contained dirty rectangles before replaying clips, avoiding repeated clear/repaint work for the same area. |
 | Animation invalidation | Subset | `animation_invalidation` uses previous/current animation style overrides and the current layout tree to produce local dirty rectangles for opacity/color paint-only animation and translate/scale/rotate transform before/after bounds. |

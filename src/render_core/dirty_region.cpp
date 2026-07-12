@@ -53,6 +53,25 @@ std::size_t saturating_add(std::size_t left, std::size_t right) {
     return left + right;
 }
 
+std::size_t saturating_multiply(std::size_t left, std::size_t right) {
+    if (left == 0 || right == 0) {
+        return 0;
+    }
+    if (left > std::numeric_limits<std::size_t>::max() / right) {
+        return std::numeric_limits<std::size_t>::max();
+    }
+    return left * right;
+}
+
+std::size_t percent_of_area(std::size_t area, int percent) {
+    if (area == 0 || percent <= 0) {
+        return 0;
+    }
+    const std::size_t safe_percent = static_cast<std::size_t>(percent);
+    return saturating_add(saturating_multiply(area / 100U, safe_percent),
+                          saturating_multiply(area % 100U, safe_percent) / 100U);
+}
+
 std::size_t area_for_percent(std::size_t area, int percent) {
     if (percent <= 0) {
         return 0;
@@ -62,6 +81,26 @@ std::size_t area_for_percent(std::size_t area, int percent) {
     }
     const auto safe_percent = static_cast<std::size_t>(percent);
     return (area / 100U) * safe_percent + ((area % 100U) * safe_percent) / 100U;
+}
+
+std::size_t rect_cost(Rect rect, std::size_t per_rect_overhead_pixels) {
+    return saturating_add(rect_area(rect), per_rect_overhead_pixels);
+}
+
+std::size_t rect_list_area(const std::vector<Rect>& rects) {
+    std::size_t area = 0;
+    for (Rect rect : rects) {
+        area = saturating_add(area, rect_area(rect));
+    }
+    return area;
+}
+
+std::size_t rect_list_cost(const std::vector<Rect>& rects, std::size_t per_rect_overhead_pixels) {
+    std::size_t cost = 0;
+    for (Rect rect : rects) {
+        cost = saturating_add(cost, rect_cost(rect, per_rect_overhead_pixels));
+    }
+    return cost;
 }
 
 Rect expand_rect(Rect rect, int amount) {
@@ -300,6 +339,93 @@ bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
     }
     const std::size_t dirty_area = dirty_region_area(result);
     return dirty_area <= area_for_percent(viewport_area, max_area_percent);
+}
+
+void coalesce_dirty_rects_into(const Rect* input,
+                               std::size_t input_count,
+                               Rect viewport,
+                               const DirtyRectCoalescingOptions& options,
+                               std::vector<Rect>& output,
+                               DirtyRectCoalescingResult* result) {
+    output.clear();
+    DirtyRectCoalescingResult local_result;
+    if (input == nullptr || input_count == 0 || empty_rect(viewport)) {
+        if (result != nullptr) {
+            *result = local_result;
+        }
+        return;
+    }
+
+    for (std::size_t index = 0; index < input_count; ++index) {
+        const Rect clipped = intersect_rect(input[index], viewport);
+        if (empty_rect(clipped)) {
+            continue;
+        }
+        output.push_back(clipped);
+        ++local_result.input_rect_count;
+        local_result.input_area = saturating_add(local_result.input_area, rect_area(clipped));
+    }
+    local_result.estimated_cost_before = rect_list_cost(output, options.per_rect_overhead_pixels);
+
+    const std::size_t max_rects = std::max<std::size_t>(1, options.max_rects);
+    const int max_extra_area_percent = std::max(0, options.max_extra_area_percent);
+    while (output.size() > 1) {
+        const bool forced = output.size() > max_rects;
+        std::size_t best_left = output.size();
+        std::size_t best_right = output.size();
+        std::size_t best_extra_area = std::numeric_limits<std::size_t>::max();
+        std::size_t best_merged_cost = std::numeric_limits<std::size_t>::max();
+        std::size_t best_savings = 0;
+
+        for (std::size_t left = 0; left + 1 < output.size(); ++left) {
+            for (std::size_t right = left + 1; right < output.size(); ++right) {
+                const Rect merged = union_rect(output[left], output[right]);
+                const std::size_t pair_area = saturating_add(rect_area(output[left]), rect_area(output[right]));
+                const std::size_t merged_area = rect_area(merged);
+                const std::size_t extra_area = merged_area > pair_area ? merged_area - pair_area : 0;
+                const std::size_t pair_cost = saturating_add(
+                    rect_cost(output[left], options.per_rect_overhead_pixels),
+                    rect_cost(output[right], options.per_rect_overhead_pixels));
+                const std::size_t merged_cost = rect_cost(merged, options.per_rect_overhead_pixels);
+                const bool profitable =
+                    extra_area <= percent_of_area(pair_area, max_extra_area_percent) && merged_cost < pair_cost;
+                if (!profitable && !forced) {
+                    continue;
+                }
+
+                const std::size_t savings = pair_cost > merged_cost ? pair_cost - merged_cost : 0;
+                const bool better = best_left == output.size() ||
+                                    (forced
+                                         ? (extra_area < best_extra_area ||
+                                            (extra_area == best_extra_area && merged_cost < best_merged_cost))
+                                         : (savings > best_savings ||
+                                            (savings == best_savings && extra_area < best_extra_area)));
+                if (better) {
+                    best_left = left;
+                    best_right = right;
+                    best_extra_area = extra_area;
+                    best_merged_cost = merged_cost;
+                    best_savings = savings;
+                }
+            }
+        }
+        if (best_left == output.size()) {
+            break;
+        }
+
+        output[best_left] = union_rect(output[best_left], output[best_right]);
+        output.erase(output.begin() + static_cast<std::ptrdiff_t>(best_right));
+        if (forced) {
+            ++local_result.forced_merges;
+        }
+    }
+
+    local_result.output_rect_count = output.size();
+    local_result.output_area = rect_list_area(output);
+    local_result.estimated_cost_after = rect_list_cost(output, options.per_rect_overhead_pixels);
+    if (result != nullptr) {
+        *result = local_result;
+    }
 }
 
 DirtyRegionResult compute_dirty_region(const Node& document,

@@ -1,6 +1,6 @@
 # 嵌入式优化说明
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-13；适用版本：0.5.0-dev
 
 
 目前尚未明确目标 CPU、内存布局、显示控制器和指令集，所以当前优化集中在小型可穿戴设备通用的重要约束上。
@@ -44,6 +44,10 @@
 - `FrameScratch` 和 `AppFrameScratch` 提供帧级临时容器复用。dirty-region bounds、dirty rectangles、
   animation style overrides 和 host completion batch/accepted list 可以跨帧保留 capacity，每帧清空；
   睡眠、切换 app 或内存告急时可显式 `release()` 归还容量。
+- Render Core 只拥有平台无关的渲染与提交规划；panel controller、总线、DMA、cache 和 SoC 特定加速
+  一律留在 port。通用可选 helper 只有在 port 主动调用时才产生工作，每条 port 优化路径都必须有软件 fallback。
+- `coalesce_dirty_rects_into(...)` 是可选的通用提交规划器。port 可提供单矩形提交开销和额外面积上限，
+  在提交前缩减 dirty list；Render Core 不接收任何 panel 或 DMA 细节。
 - 响应式 grid 子集使用有界整数 auto-placement、clamped span 和紧凑的逐行
   occupancy bit mask，而不是完整 track-sizing engine。
 - `MonotonicArena` 已可用于文档生命周期分配。Render tree、layout tree 和 layer tree builder

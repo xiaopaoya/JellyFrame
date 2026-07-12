@@ -1,6 +1,6 @@
 # Host Abstraction Draft
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-13; Applies to: 0.5.0-dev
 
 
 JellyFrame's core should stay independent from filesystems, network stacks,
@@ -177,10 +177,25 @@ formats are RGBA8888, BGRA8888, RGB565, BGR565, RGB332, Gray8 and 1-bit
 monochrome packing. It does not schedule DMA or own flush completion; a real
 port must still respect the `HostFrameSink` buffer-lifetime boundary.
 
+### Optimization Boundary
+
+Render Core may provide portable planning utilities, but it never selects a
+display-controller, DMA, bus or SoC strategy. A port owns the hardware
+realization and may opt into a generic core utility only when its own measured
+cost model justifies it. Optional utilities must have no steady runtime or
+memory cost until a host calls them, and every optimized port path must retain
+a correct software fallback.
+
+`coalesce_dirty_rects_into(...)` is one such opt-in utility. It clips an input
+list, then may merge rectangles using a port-supplied generic cost policy:
+equivalent pixel area plus a per-rectangle setup cost and an extra-area limit.
+It knows nothing about panel protocols or DMA and does not change core frame
+planning. A host may pass its output to any `HostFrameSink`, or simply retain
+the original rectangles when coalescing is not beneficial.
+
 Still missing:
 
 - finer-grained layer/display-command invalidation;
-- tunable dirty rectangle coalescing policy;
 - tiled/scanline presentation for devices that cannot keep a full framebuffer.
 
 ## Vendor And LVGL Backend Policy

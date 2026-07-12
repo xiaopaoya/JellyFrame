@@ -441,6 +441,97 @@ void dirty_region_cost_helpers_bound_incremental_repaint() {
           "dirty area fallback reason name");
 }
 
+void dirty_rect_coalescing_keeps_distant_rects_without_overhead() {
+    const Rect input[] = {Rect{0, 0, 10, 10}, Rect{80, 0, 10, 10}};
+    std::vector<Rect> output;
+    output.reserve(2);
+    const std::size_t reserved_capacity = output.capacity();
+    DirtyRectCoalescingResult result;
+    coalesce_dirty_rects_into(input,
+                              2,
+                              Rect{0, 0, 100, 100},
+                              DirtyRectCoalescingOptions{8, 0, 100},
+                              output,
+                              &result);
+    check(output.size() == 2, "zero-overhead coalescing preserves distant rects");
+    check(result.input_area == 200 && result.output_area == 200,
+          "zero-overhead coalescing reports exact area");
+    check(result.estimated_cost_before == 200 && result.estimated_cost_after == 200,
+          "zero-overhead coalescing preserves cost");
+    check(output.capacity() == reserved_capacity,
+          "caller-owned coalescing scratch avoids allocation when capacity is reused");
+}
+
+void dirty_rect_coalescing_uses_generic_per_rect_cost() {
+    const Rect input[] = {Rect{0, 0, 10, 10}, Rect{12, 0, 10, 10}};
+    std::vector<Rect> output;
+    DirtyRectCoalescingResult result;
+    coalesce_dirty_rects_into(input,
+                              2,
+                              Rect{0, 0, 100, 100},
+                              DirtyRectCoalescingOptions{8, 30, 25},
+                              output,
+                              &result);
+    check(output.size() == 1, "per-rect setup cost merges nearby rects");
+    check(output.front().x == 0 && output.front().width == 22,
+          "nearby rect merge keeps enclosing bounds");
+    check(result.estimated_cost_before == 260 && result.estimated_cost_after == 250,
+          "coalescing reduces equivalent-pixel cost");
+}
+
+void dirty_rect_coalescing_respects_extra_area_budget() {
+    const Rect input[] = {Rect{0, 0, 10, 10}, Rect{40, 0, 10, 10}};
+    std::vector<Rect> output;
+    coalesce_dirty_rects_into(input,
+                              2,
+                              Rect{0, 0, 100, 100},
+                              DirtyRectCoalescingOptions{8, 100, 20},
+                              output);
+    check(output.size() == 2, "extra-area budget rejects expensive merge");
+}
+
+void dirty_rect_coalescing_forces_deterministic_low_extra_merge() {
+    const Rect input[] = {Rect{0, 0, 10, 10}, Rect{12, 0, 10, 10}, Rect{80, 0, 10, 10}};
+    std::vector<Rect> output;
+    DirtyRectCoalescingResult result;
+    coalesce_dirty_rects_into(input,
+                              3,
+                              Rect{0, 0, 100, 100},
+                              DirtyRectCoalescingOptions{2, 0, 0},
+                              output,
+                              &result);
+    check(output.size() == 2, "max rect count forces a merge");
+    check(output.front().x == 0 && output.front().width == 22,
+          "forced merge selects least extra-area pair deterministically");
+    check(result.forced_merges == 1, "forced merge is observable to the host");
+}
+
+void dirty_rect_coalescing_clips_and_handles_large_areas() {
+    const Rect input[] = {Rect{-10, 0, 20, 10}, Rect{20, 20, 0, 4}, Rect{200, 0, 10, 10}};
+    std::vector<Rect> output;
+    DirtyRectCoalescingResult result;
+    coalesce_dirty_rects_into(input,
+                              3,
+                              Rect{0, 0, 100, 100},
+                              DirtyRectCoalescingOptions{8, 0, 100},
+                              output,
+                              &result);
+    check(output.size() == 1 && output.front().x == 0 && output.front().width == 10,
+          "coalescing discards empty and out-of-viewport input");
+    check(result.input_rect_count == 1 && result.input_area == 100,
+          "coalescing statistics count clipped input only");
+
+    const Rect large[] = {Rect{0, 0, 2147483647, 2147483647}};
+    coalesce_dirty_rects_into(large,
+                              1,
+                              Rect{0, 0, 2147483647, 2147483647},
+                              DirtyRectCoalescingOptions{},
+                              output,
+                              &result);
+    check(result.input_area == result.output_area && result.output_area > 0,
+          "coalescing area accounting handles maximum representable rectangles");
+}
+
 } // namespace
 
 int main() {
@@ -458,6 +549,11 @@ int main() {
         clipped_dirty_bounds_report_empty_after_clipping();
         dirty_region_statistics_accumulate_modes_reasons_and_area();
         dirty_region_cost_helpers_bound_incremental_repaint();
+        dirty_rect_coalescing_keeps_distant_rects_without_overhead();
+        dirty_rect_coalescing_uses_generic_per_rect_cost();
+        dirty_rect_coalescing_respects_extra_area_budget();
+        dirty_rect_coalescing_forces_deterministic_low_extra_merge();
+        dirty_rect_coalescing_clips_and_handles_large_areas();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

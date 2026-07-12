@@ -45,6 +45,24 @@ struct DirtyRegionResult {
     DirtyRegionFallbackReason fallback_reason = DirtyRegionFallbackReason::None;
 };
 
+// Optional host-side present planning. The cost unit is an equivalent pixel:
+// ports may model a flush setup cost without exposing display-specific types.
+struct DirtyRectCoalescingOptions {
+    std::size_t max_rects = 8;
+    std::size_t per_rect_overhead_pixels = 0;
+    int max_extra_area_percent = 100;
+};
+
+struct DirtyRectCoalescingResult {
+    std::size_t input_rect_count = 0;
+    std::size_t output_rect_count = 0;
+    std::size_t input_area = 0;
+    std::size_t output_area = 0;
+    std::size_t estimated_cost_before = 0;
+    std::size_t estimated_cost_after = 0;
+    std::size_t forced_merges = 0;
+};
+
 struct DirtyNodeBounds {
     const Node* node = nullptr;
     Rect bounds;
@@ -80,6 +98,16 @@ int dirty_region_area_percent(const DirtyRegionResult& result, Rect viewport);
 bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
                                                Rect viewport,
                                                int max_area_percent);
+
+// Clips input to viewport and optionally merges rectangles when doing so lowers
+// the caller-defined present cost. This utility never changes frame planning;
+// ports opt in and retain ownership of the resulting presentation policy.
+void coalesce_dirty_rects_into(const Rect* input,
+                               std::size_t input_count,
+                               Rect viewport,
+                               const DirtyRectCoalescingOptions& options,
+                               std::vector<Rect>& output,
+                               DirtyRectCoalescingResult* result = nullptr);
 
 DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* previous_layout,

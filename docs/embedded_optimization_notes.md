@@ -1,6 +1,6 @@
 # Embedded Optimization Notes
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-13; Applies to: 0.5.0-dev
 
 
 The exact target CPU, memory map, display controller and instruction set are not
@@ -63,6 +63,13 @@ small wearable devices.
   completion batch/accepted lists can keep capacity across frames and be cleared
   each frame. Sleep, app switching and memory-pressure paths can call
   `release()` to return that capacity.
+- Render Core owns only portable render and present planning. Panel-controller,
+  bus, DMA, cache and SoC-specific acceleration stays in the port. Generic
+  optional helpers must be dormant unless a port calls them and every port
+  optimization needs a software fallback.
+- `coalesce_dirty_rects_into(...)` is an optional generic present planner. A
+  port can supply a per-rectangle setup cost and an extra-area limit to reduce
+  a dirty list before presenting it; no panel or DMA detail enters Render Core.
 - The responsive grid subset is computed with bounded integer auto-placement,
   clamped spans and compact per-row occupancy bit masks rather than a full
   track-sizing engine.

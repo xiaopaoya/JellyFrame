@@ -1,6 +1,6 @@
 # 嵌入式 HAL API
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-13；适用版本：0.5.0-dev
 
 
 这份文档是 ESP32-S3、RTOS host 或具体开发板需要实现的接口清单。`jellyframe_render_core`
@@ -284,6 +284,11 @@ buffer。如果底层 SPI/8080/RGB panel flush 是异步 DMA，宿主必须在 `
 - 如果屏幕只能从 internal DMA-capable RAM 读，推荐写自定义 `HostFrameSink`：按 dirty rect 分行或分 tile
   从 RGBA framebuffer 转换到一个很小的 internal DMA scratch buffer，提交并等待该 strip 完成，再处理下一段；
 - 如果连 RGBA framebuffer 本身也放不下，当前核心还不能满足，需要先实现 tiled/scanline compositor。
+
+提交有界 dirty list 前，port 可选择调用 `coalesce_dirty_rects_into(...)`。传入实测的单矩形提交开销和
+允许的额外面积百分比；若原矩形列表的估算成本更低就保留原列表。它只是平台无关的规划工具，不是
+panel/DMA API。未经实机对比 flush count、panel bytes、DMA wait 与 frame latency 前，不应仅凭 board
+profile 默认启用。
 
 bring-up 阶段建议在 `present_to_embedded_framebuffer(...)` 传入 `EmbeddedFrameBufferPresentStats`，
 并把以下字段与真实 panel 指标一起打印：
