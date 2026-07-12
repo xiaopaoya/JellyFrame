@@ -1,6 +1,6 @@
 # App 组件 Recipes
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-12；适用版本：0.5.0-dev
 
 这些 recipes 是给小屏可穿戴 app 作者复制改写的起点。它们只使用 JellyFrame 文档化子集，
 不依赖浏览器专有行为。
@@ -139,6 +139,10 @@
 ```
 
 只有当滚动是设计的一部分时，才在 manifest target gate 中设置 `allowScroll: true`。
+
+每个 route 保持一个主纵向滚动区域。如果内部卡片也需要移动，把内容放进外层列表，或改为
+不溢出的固定高度控件。两个实际溢出的滚动容器嵌套时会竞争触控拖动输入；`check` 会报告
+`visual-nested-scroll-container`，并给出内外两个 DOM path。
 
 ## 本地表单流程
 

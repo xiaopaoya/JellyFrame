@@ -134,6 +134,27 @@ def main() -> int:
     require('path="' in scroll_container.get("detail", "") and "section#hours" in scroll_container.get("detail", ""),
             "scroll container diagnostic should include stable DOM path")
 
+    nested_scroll_report = run_pseudo_browser(
+        exe,
+        "<body><section id='feed'><article id='agenda'><p>1</p><p>2</p><p>3</p></article><p>4</p><p>5</p></section></body>",
+        "body { margin: 0; }"
+        "#feed { width: 100px; height: 56px; overflow: auto; }"
+        "#agenda { width: 100px; height: 32px; overflow: scroll; }"
+        "p { display: block; width: 100px; height: 20px; margin: 0; }",
+        120,
+        100,
+    )
+    require("visual-nested-scroll-container" in diagnostic_codes(nested_scroll_report),
+            "nested overflowing scroll containers should report gesture competition")
+    nested_scroll = next(entry for entry in nested_scroll_report.get("diagnostics", [])
+                         if entry.get("code") == "visual-nested-scroll-container")
+    require('node="article#agenda"' in nested_scroll.get("detail", ""),
+            "nested scroll diagnostic should identify the inner scroll container")
+    require('ancestorNode="section#feed"' in nested_scroll.get("detail", ""),
+            "nested scroll diagnostic should identify the overflowing ancestor")
+    require('ancestorPath="' in nested_scroll.get("detail", "") and "section#feed" in nested_scroll.get("detail", ""),
+            "nested scroll diagnostic should include the ancestor DOM path")
+
     print("pipeline visual diagnostics tests passed")
     return 0
 

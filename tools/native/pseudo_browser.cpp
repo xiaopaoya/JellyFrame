@@ -260,28 +260,61 @@ std::string quote_detail_value(const std::string& value, std::size_t max_chars =
     return output;
 }
 
-void report_scroll_container_diagnostics(const LayoutBox& box, VectorDiagnosticSink& diagnostics) {
-    if ((box.style.overflow == "auto" || box.style.overflow == "scroll") && box.rect.height > 0) {
-        const int content_bottom = scroll_container_content_bottom(box);
-        const int overflow_px = content_bottom - (box.rect.y + box.rect.height);
-        if (overflow_px > 0) {
-            std::ostringstream detail;
-            detail << "node=" << quote_detail_value(dom_node_label(box.node), 48)
-                   << " path=" << quote_detail_value(dom_node_path(box.node), 160)
-                   << " boxHeight=" << box.rect.height
-                   << " contentHeight=" << (box.rect.height + overflow_px)
-                   << " overflowY=" << overflow_px;
+bool is_vertical_scroll_container(const LayoutBox& box) {
+    return (box.style.overflow == "auto" || box.style.overflow == "scroll") && box.rect.height > 0;
+}
+
+int scroll_container_overflow_y(const LayoutBox& box) {
+    if (!is_vertical_scroll_container(box)) {
+        return 0;
+    }
+    return std::max(0, scroll_container_content_bottom(box) - (box.rect.y + box.rect.height));
+}
+
+void report_scroll_container_diagnostics(const LayoutBox& box,
+                                         VectorDiagnosticSink& diagnostics,
+                                         const LayoutBox* scrollable_ancestor = nullptr) {
+    const int overflow_px = scroll_container_overflow_y(box);
+    const LayoutBox* next_scrollable_ancestor = scrollable_ancestor;
+    if (overflow_px > 0) {
+        std::ostringstream detail;
+        detail << "node=" << quote_detail_value(dom_node_label(box.node), 48)
+               << " path=" << quote_detail_value(dom_node_path(box.node), 160)
+               << " boxHeight=" << box.rect.height
+               << " contentHeight=" << (box.rect.height + overflow_px)
+               << " overflowY=" << overflow_px;
+        report_diagnostic(&diagnostics,
+                          DiagnosticStage::Layout,
+                          DiagnosticSeverity::Info,
+                          "visual-scroll-container",
+                          "Scrollable container has clipped vertical content",
+                          detail.str());
+
+        if (scrollable_ancestor != nullptr) {
+            const int ancestor_overflow_y = scroll_container_overflow_y(*scrollable_ancestor);
+            std::ostringstream nested_detail;
+            nested_detail << "node=" << quote_detail_value(dom_node_label(box.node), 48)
+                          << " path=" << quote_detail_value(dom_node_path(box.node), 160)
+                          << " ancestorNode=" << quote_detail_value(dom_node_label(scrollable_ancestor->node), 48)
+                          << " ancestorPath=" << quote_detail_value(dom_node_path(scrollable_ancestor->node), 160)
+                          << " boxHeight=" << box.rect.height
+                          << " contentHeight=" << (box.rect.height + overflow_px)
+                          << " overflowY=" << overflow_px
+                          << " ancestorBoxHeight=" << scrollable_ancestor->rect.height
+                          << " ancestorContentHeight=" << (scrollable_ancestor->rect.height + ancestor_overflow_y)
+                          << " ancestorOverflowY=" << ancestor_overflow_y;
             report_diagnostic(&diagnostics,
                               DiagnosticStage::Layout,
                               DiagnosticSeverity::Info,
-                              "visual-scroll-container",
-                              "Scrollable container has clipped vertical content",
-                              detail.str());
+                              "visual-nested-scroll-container",
+                              "Nested scroll containers compete for vertical gesture input",
+                              nested_detail.str());
         }
+        next_scrollable_ancestor = &box;
     }
     for (const auto& child : box.children) {
         if (child) {
-            report_scroll_container_diagnostics(*child, diagnostics);
+            report_scroll_container_diagnostics(*child, diagnostics, next_scrollable_ancestor);
         }
     }
 }

@@ -523,6 +523,12 @@ ADVICE_BY_CODE = {
         "action": "Make sure the container is reachable by touch/wheel/key input, keep fixed navigation outside it, and verify the target gate allows this scroll behavior.",
         "recipe": "app_author_recipes.md#scroll-list",
     },
+    "visual-nested-scroll-container": {
+        "title": "Nested scroll areas compete for gestures",
+        "explanation": "Both an inner and outer scroll area have clipped vertical content, so touch drag routing can be hard to discover on a small screen.",
+        "action": "Keep one primary vertical scroll area per route. Move the inner content into the outer list, or make the inner area fixed-height without overflow.",
+        "recipe": "app_author_recipes.md#scroll-list",
+    },
     "visual-display-command-density": {
         "title": "Display command density is high",
         "explanation": "This page generates a dense display list for the current viewport.",
@@ -1036,6 +1042,9 @@ def diagnostic_metrics_from_detail(parsed: dict) -> dict:
         "boxHeight",
         "contentHeight",
         "overflowY",
+        "ancestorBoxHeight",
+        "ancestorContentHeight",
+        "ancestorOverflowY",
         "viewportHeight",
         "flattenedDisplayCommands",
         "densityLimit",
@@ -1139,6 +1148,19 @@ def specialize_developer_advice(entry: dict, code: str, parsed: dict) -> None:
                 "Make sure it is reachable by touch/wheel/key input, keep fixed navigation "
                 "outside it, and verify the target gate allows scroll."
             )
+        return
+
+    if code == "visual-nested-scroll-container":
+        ancestor_node = str(parsed.get("ancestorNode", "") or "")
+        ancestor_path = str(parsed.get("ancestorPath", "") or "")
+        outer_location = (f"{ancestor_node} ({ancestor_path})" if ancestor_node and ancestor_path
+                          else ancestor_node or ancestor_path or "the outer scroll container")
+        subject = location or "The inner scroll container"
+        entry["action"] = (
+            f"{subject} and {outer_location} both need vertical scrolling. Keep one primary "
+            "vertical scroll area per route; move the inner content into the outer list, or "
+            "make the inner area fixed-height without overflow."
+        )
         return
 
     if code == "visual-scroll-needed":

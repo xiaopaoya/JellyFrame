@@ -1,6 +1,6 @@
 # App Component Recipes
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0-dev
 
 These recipes are copyable starting points for small wearable apps. They use the
 documented JellyFrame subset and avoid browser-only behavior.
@@ -146,6 +146,11 @@ navigation outside that area.
 
 In the manifest target gate, set `allowScroll: true` only when scrolling is part
 of the design.
+
+Keep one primary vertical scroll area per route. If an inner card also needs to
+move, put its content in the outer list or redesign it as a fixed-height
+control. Nested overflowing scroll areas compete for touch drag input and are
+reported by `check` as `visual-nested-scroll-container` with both DOM paths.
 
 ## Local Form Flow
 

@@ -980,6 +980,11 @@ class PackagePreflightTests(unittest.TestCase):
                     "severity": "info",
                     "code": "visual-scroll-container",
                     "detail": "node=\"section#hours\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>section#hours\" boxHeight=80 contentHeight=144 overflowY=64",
+                }, {
+                    "stage": "layout",
+                    "severity": "info",
+                    "code": "visual-nested-scroll-container",
+                    "detail": "node=\"article#agenda\" path=\"body:nth-of-type(1)>main:nth-of-type(1)>article#agenda\" ancestorNode=\"section#feed\" ancestorPath=\"body:nth-of-type(1)>main:nth-of-type(1)>section#feed\" boxHeight=48 contentHeight=120 overflowY=72 ancestorBoxHeight=160 ancestorContentHeight=320 ancestorOverflowY=160",
                 }],
             },
             "responsiveProfiles": [{
@@ -1030,6 +1035,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("future-diagnostic-code", codes)
         self.assertIn("layout-text-overflow", codes)
         self.assertIn("visual-scroll-container", codes)
+        self.assertIn("visual-nested-scroll-container", codes)
         self.assertIn("visual-horizontal-overflow", codes)
         self.assertIn("target-gate-not-accepted", codes)
         self.assertIn("font-missing-glyphs", codes)
@@ -1047,6 +1053,12 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertTrue(any(entry["code"] == "visual-scroll-container" and
                             entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>section#hours" and
                             entry.get("metrics", {}).get("overflowY") == 64 and
+                            entry.get("recipe") == "app_author_recipes.md#scroll-list"
+                            for entry in advice))
+        self.assertTrue(any(entry["code"] == "visual-nested-scroll-container" and
+                            entry.get("path") == "body:nth-of-type(1)>main:nth-of-type(1)>article#agenda" and
+                            entry.get("metrics", {}).get("ancestorOverflowY") == 160 and
+                            "section#feed" in entry.get("action", "") and
                             entry.get("recipe") == "app_author_recipes.md#scroll-list"
                             for entry in advice))
         self.assertTrue(any(entry["code"] == "visual-horizontal-overflow" and
