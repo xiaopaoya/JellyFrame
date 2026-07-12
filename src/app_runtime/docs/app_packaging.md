@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store
@@ -1057,6 +1057,12 @@ optional source/target/detail, then adds a short explanation and first repair
 action. It does not replace the lower-level diagnostic fields and is not
 consumed by the MCU runtime. Unknown future diagnostic codes still receive a
 generic review item so authors have a visible place to start.
+
+When the original warning identifies an API, HTML tag, capability, selector or
+layout element, the advice preserves it as `api`, `tag`, `capability`,
+`selector` or `path` and repeats the best available subject in
+`diagnosticContext`. Editor integrations should use those fields for precise
+highlighting; `action` is the human-facing first repair, not a parser contract.
 
 Install/update/delete lifecycle:
 

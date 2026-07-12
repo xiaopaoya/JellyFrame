@@ -1,6 +1,6 @@
 # App Packaging
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-12；适用版本：0.5.0-dev
 
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
@@ -883,6 +883,10 @@ diagnostics、responsive profiles 和字体 diagnostics 派生 `developerAdvice[
 app 作者和编辑器集成：每条保留稳定诊断 `code`、severity，以及可选 source/target/detail，
 再补一段简短解释和优先修复动作。它不替代底层 diagnostics，也不进入 MCU runtime。未来新增但还没
 专门写 advice 文案的诊断码仍会得到通用 review 项，避免 app 作者只看到沉默的失败。
+
+原始 warning 能识别 API、HTML tag、capability、selector 或 layout 元素时，advice 会保留为
+`api`、`tag`、`capability`、`selector` 或 `path`，并在 `diagnosticContext` 中重复最佳可用 subject。
+编辑器集成应使用这些字段做精确定位；`action` 是面向人的首个修复建议，不是供解析依赖的契约。
 
 安装/升级/删除生命周期：
 
