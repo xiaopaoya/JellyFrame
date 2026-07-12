@@ -5296,7 +5296,7 @@ private:
 
     void collect_transition_candidate_styles(const RenderObject& object,
                                              std::vector<std::pair<const Node*, Style>>& output) const {
-        if (object.node != nullptr && object.style.transition_count != 0) {
+        if (object.node != nullptr && !object.style.transitions.empty()) {
             output.push_back({object.node, object.style});
         }
         for (const auto& child : object.children) {
@@ -5308,7 +5308,7 @@ private:
                                                 const RenderObject& object,
                                                 std::uint64_t now_ms) {
         bool started = false;
-        if (object.node != nullptr && object.style.transition_count != 0) {
+        if (object.node != nullptr && !object.style.transitions.empty()) {
             for (const auto& entry : previous_styles) {
                 if (entry.first == object.node) {
                     started = animation_timeline_.start_transitions(*object.node, entry.second, object.style, now_ms) ||
@@ -5327,8 +5327,10 @@ private:
                                                     std::uint64_t now_ms,
                                                     std::vector<KeyframeAnimationKey>& live_keys) {
         bool started = false;
-        if (object.node != nullptr && object.style.animation_count != 0 && style_resolver_ != nullptr) {
-            for (std::size_t index = 0; index < object.style.animation_count; ++index) {
+        if (object.node != nullptr && !object.style.animations.empty() && style_resolver_ != nullptr) {
+            const std::size_t animation_count =
+                std::min<std::size_t>(kMaxStyleAnimations, object.style.animations.size());
+            for (std::size_t index = 0; index < animation_count; ++index) {
                 const StyleAnimation& animation = object.style.animations[index];
                 if (animation.name.empty() || animation.duration_ms == 0) {
                     continue;

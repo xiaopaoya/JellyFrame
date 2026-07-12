@@ -107,6 +107,9 @@ struct StyleAnimation {
     AnimationDirection direction = AnimationDirection::Normal;
 };
 
+constexpr std::size_t kMaxStyleTransitions = 4;
+constexpr std::size_t kMaxStyleAnimations = 4;
+
 struct Transform2D {
     float translate_x = 0.0F;
     float translate_y = 0.0F;
@@ -227,10 +230,8 @@ struct Style {
     bool text_align_specified = false;
     JustifyContent justify_content = JustifyContent::Start;
     AlignItems align_items = AlignItems::Stretch;
-    std::array<StyleTransition, 4> transitions{};
-    std::size_t transition_count = 0;
-    std::array<StyleAnimation, 4> animations{};
-    std::size_t animation_count = 0;
+    std::vector<StyleTransition> transitions;
+    std::vector<StyleAnimation> animations;
 };
 
 struct CssDeclaration {

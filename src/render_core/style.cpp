@@ -672,23 +672,19 @@ bool parse_font_family_hash(const std::string& raw_value, std::uint32_t& output)
 }
 
 void set_style_transitions(Style& style, const std::vector<StyleTransition>& transitions) {
-    style.transition_count = std::min<std::size_t>(style.transitions.size(), transitions.size());
-    for (std::size_t index = 0; index < style.transition_count; ++index) {
-        style.transitions[index] = transitions[index];
-    }
+    const std::size_t count = std::min<std::size_t>(kMaxStyleTransitions, transitions.size());
+    style.transitions.assign(transitions.begin(), transitions.begin() + static_cast<std::ptrdiff_t>(count));
 }
 
 void set_style_animations(Style& style, const std::vector<StyleAnimation>& animations) {
-    style.animation_count = std::min<std::size_t>(style.animations.size(), animations.size());
-    for (std::size_t index = 0; index < style.animation_count; ++index) {
-        style.animations[index] = animations[index];
-    }
+    const std::size_t count = std::min<std::size_t>(kMaxStyleAnimations, animations.size());
+    style.animations.assign(animations.begin(), animations.begin() + static_cast<std::ptrdiff_t>(count));
 }
 
 bool parse_transition_shorthand(const std::string& raw_value, Style& style) {
     const std::string lowered = lowercase(trim(raw_value));
     if (lowered == "none") {
-        style.transition_count = 0;
+        style.transitions.clear();
         return true;
     }
     std::vector<StyleTransition> parsed;
@@ -788,7 +784,7 @@ bool is_animation_name_token(const std::string& raw_value) {
 bool parse_animation_shorthand(const std::string& raw_value, Style& style) {
     const std::string lowered = lowercase(trim(raw_value));
     if (lowered == "none") {
-        style.animation_count = 0;
+        style.animations.clear();
         return true;
     }
     std::vector<StyleAnimation> parsed;
@@ -855,10 +851,8 @@ bool parse_animation_shorthand(const std::string& raw_value, Style& style) {
 }
 
 void ensure_animation_entries(Style& style) {
-    if (style.animation_count == 0) {
-        StyleAnimation animation;
-        style.animations[0] = std::move(animation);
-        style.animation_count = 1;
+    if (style.animations.empty()) {
+        style.animations.emplace_back();
     }
 }
 
@@ -866,7 +860,7 @@ bool parse_animation_longhand(const std::string& property, const std::string& ra
     if (property == "animation-name") {
         const std::string lowered = lowercase(trim(raw_value));
         if (lowered == "none") {
-            style.animation_count = 0;
+            style.animations.clear();
             return true;
         }
         std::vector<std::string> names;
@@ -880,9 +874,10 @@ bool parse_animation_longhand(const std::string& property, const std::string& ra
         if (names.empty()) {
             return false;
         }
-        const std::size_t old_count = style.animation_count;
-        style.animation_count = std::min<std::size_t>(style.animations.size(), std::max(old_count, names.size()));
-        for (std::size_t index = 0; index < style.animation_count; ++index) {
+        const std::size_t count = std::min<std::size_t>(
+            kMaxStyleAnimations, std::max(style.animations.size(), names.size()));
+        style.animations.resize(count);
+        for (std::size_t index = 0; index < style.animations.size(); ++index) {
             style.animations[index].name = names[std::min(index, names.size() - 1)];
         }
         return true;
@@ -893,7 +888,7 @@ bool parse_animation_longhand(const std::string& property, const std::string& ra
     if (values.empty()) {
         return false;
     }
-    for (std::size_t index = 0; index < style.animation_count; ++index) {
+    for (std::size_t index = 0; index < style.animations.size(); ++index) {
         const std::string& value = values[std::min(index, values.size() - 1)];
         if (property == "animation-duration") {
             std::uint32_t ms = 0;
@@ -948,17 +943,16 @@ bool parse_transition_longhand(const std::string& property, const std::string& r
         return true;
     }
 
-    if (style.transition_count == 0) {
+    if (style.transitions.empty()) {
         StyleTransition transition;
         transition.property = AnimatableProperty::All;
-        style.transitions[0] = transition;
-        style.transition_count = 1;
+        style.transitions.push_back(transition);
     }
     const std::vector<std::string> values = split_comma_components(raw_value);
     if (values.empty()) {
         return false;
     }
-    for (std::size_t index = 0; index < style.transition_count; ++index) {
+    for (std::size_t index = 0; index < style.transitions.size(); ++index) {
         const std::string& value = values[std::min(index, values.size() - 1)];
         if (property == "transition-duration") {
             std::uint32_t ms = 0;
@@ -980,13 +974,11 @@ bool parse_transition_longhand(const std::string& property, const std::string& r
             style.transitions[index].timing = timing;
         }
     }
-    std::size_t output = 0;
-    for (std::size_t index = 0; index < style.transition_count; ++index) {
-        if (style.transitions[index].duration_ms > 0) {
-            style.transitions[output++] = style.transitions[index];
-        }
-    }
-    style.transition_count = output;
+    style.transitions.erase(
+        std::remove_if(style.transitions.begin(), style.transitions.end(), [](const StyleTransition& transition) {
+            return transition.duration_ms == 0;
+        }),
+        style.transitions.end());
     return true;
 }
 

@@ -115,25 +115,11 @@ Style animated_style(float opacity, const char* transform, Color background) {
     style.opacity = opacity;
     style.transform = transform;
     style.background_color = background;
-    style.transitions[0] = StyleTransition{
-        AnimatableProperty::Opacity,
-        180,
-        0,
-        AnimationTimingFunction::EaseOut,
+    style.transitions = {
+        StyleTransition{AnimatableProperty::Opacity, 180, 0, AnimationTimingFunction::EaseOut},
+        StyleTransition{AnimatableProperty::Transform, 180, 0, AnimationTimingFunction::EaseOut},
+        StyleTransition{AnimatableProperty::BackgroundColor, 180, 0, AnimationTimingFunction::Linear},
     };
-    style.transitions[1] = StyleTransition{
-        AnimatableProperty::Transform,
-        180,
-        0,
-        AnimationTimingFunction::EaseOut,
-    };
-    style.transitions[2] = StyleTransition{
-        AnimatableProperty::BackgroundColor,
-        180,
-        0,
-        AnimationTimingFunction::Linear,
-    };
-    style.transition_count = 3;
     return style;
 }
 

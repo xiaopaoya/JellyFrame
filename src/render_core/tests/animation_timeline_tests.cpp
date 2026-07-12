@@ -57,7 +57,7 @@ void css_transition_and_transform_subset_is_parsed() {
         ".card { transition: opacity 200ms linear, transform .1s ease-out; "
         "opacity: .5; transform: translate(10px, 4px) scale(.9); }"));
     const Style style = resolver.resolve(*element);
-    check(style.transition_count == 2, "transition shorthand creates bounded transition entries");
+    check(style.transitions.size() == 2, "transition shorthand creates bounded transition entries");
     check(style.transitions[0].duration_ms == 200, "transition duration ms parsed");
     check(style.transitions[0].property == AnimatableProperty::Opacity, "transition property parsed");
     check(style.opacity > 0.49F && style.opacity < 0.51F, "opacity parsed");
@@ -97,7 +97,7 @@ void css_keyframes_animation_subset_is_parsed() {
     element->attributes["class"] = "dot";
     StyleResolver resolver(stylesheet);
     const Style style = resolver.resolve(*element);
-    check(style.animation_count == 1, "animation shorthand creates bounded animation entry");
+    check(style.animations.size() == 1, "animation shorthand creates bounded animation entry");
     check(style.animations[0].name == "pulse", "animation name parsed");
     check(style.animations[0].duration_ms == 200, "animation duration parsed");
     check(style.animations[0].infinite, "infinite iteration count parsed");
@@ -107,9 +107,23 @@ void css_keyframes_animation_subset_is_parsed() {
     StyleResolver longhand_resolver(parser.parse(
         ".dot { animation-duration: 120ms; animation-name: pulse; animation-timing-function: linear; }"));
     const Style longhand = longhand_resolver.resolve(*element);
-    check(longhand.animation_count == 1, "animation longhands keep partial entries");
+    check(longhand.animations.size() == 1, "animation longhands keep partial entries");
     check(longhand.animations[0].name == "pulse", "animation-name preserves earlier duration");
     check(longhand.animations[0].duration_ms == 120, "animation-duration before name is preserved");
+}
+
+void animation_and_transition_entries_stay_bounded() {
+    CssParser parser;
+    auto element = make_element("div");
+    element->attributes["class"] = "probe";
+    StyleResolver resolver(parser.parse(
+        ".probe { transition: opacity 1ms, color 2ms, transform 3ms, background-color 4ms, opacity 5ms; "
+        "animation: a 1ms, b 2ms, c 3ms, d 4ms, e 5ms; }"));
+    const Style style = resolver.resolve(*element);
+    check(style.transitions.size() == kMaxStyleTransitions,
+          "transition storage remains bounded after parsing");
+    check(style.animations.size() == kMaxStyleAnimations,
+          "animation storage remains bounded after parsing");
 }
 
 void animation_timeline_samples_paint_only_properties() {
@@ -122,10 +136,11 @@ void animation_timeline_samples_paint_only_properties() {
     to.opacity = 1.0F;
     to.background_color = Color{100, 0, 0, 255};
     to.color = Color{0, 255, 255, 255};
-    to.transitions[0] = StyleTransition{AnimatableProperty::Opacity, 100, 0, AnimationTimingFunction::Linear};
-    to.transitions[1] = StyleTransition{AnimatableProperty::BackgroundColor, 100, 0, AnimationTimingFunction::Linear};
-    to.transitions[2] = StyleTransition{AnimatableProperty::Color, 100, 0, AnimationTimingFunction::Linear};
-    to.transition_count = 3;
+    to.transitions = {
+        StyleTransition{AnimatableProperty::Opacity, 100, 0, AnimationTimingFunction::Linear},
+        StyleTransition{AnimatableProperty::BackgroundColor, 100, 0, AnimationTimingFunction::Linear},
+        StyleTransition{AnimatableProperty::Color, 100, 0, AnimationTimingFunction::Linear},
+    };
 
     AnimationTimeline timeline;
     check(timeline.start_transitions(*node, from, to, 0), "timeline starts transitions");
@@ -313,6 +328,7 @@ int main() {
     try {
         css_transition_and_transform_subset_is_parsed();
         css_keyframes_animation_subset_is_parsed();
+        animation_and_transition_entries_stay_bounded();
         animation_timeline_samples_paint_only_properties();
         animation_timeline_samples_keyframes_subset();
         keyframe_unsupported_properties_report_diagnostics();

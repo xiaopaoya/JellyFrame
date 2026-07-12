@@ -24,7 +24,8 @@ bool property_matches(AnimatableProperty transition_property, AnimatedTransition
 }
 
 const StyleTransition* transition_for_property(const Style& style, AnimatedTransitionProperty property) {
-    for (std::size_t index = 0; index < style.transition_count; ++index) {
+    const std::size_t transition_count = std::min<std::size_t>(kMaxStyleTransitions, style.transitions.size());
+    for (std::size_t index = 0; index < transition_count; ++index) {
         const StyleTransition& transition = style.transitions[index];
         if (transition.duration_ms > 0 && property_matches(transition.property, property)) {
             return &transition;

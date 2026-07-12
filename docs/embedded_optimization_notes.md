@@ -22,6 +22,9 @@ small wearable devices.
 - Unsupported modern CSS is skipped at block/rule boundaries, avoiding recovery
   loops.
 - Style cascade slots use a fixed array instead of a per-node hash map.
+- Transition and keyframe-animation entry storage is lazy and capped at four
+  entries each. A style without either feature carries only empty-vector
+  metadata and performs no entry allocation.
 - Style resolution caches bounded id/class/tag candidate rule sets inside
   `StyleResolver`; final selector matching still runs per node, so descendant,
   child and attribute selector semantics remain correct.

@@ -18,6 +18,8 @@
 - 边框被输出为 fill rectangles。
 - 不支持的现代 CSS 在 block/rule 边界跳过，避免恢复循环。
 - Style cascade slots 使用固定数组，不为每个节点创建级联 hash map。
+- transition 和 keyframe-animation 条目存储是惰性的，且各自最多四项。没有这些特性的 style
+  仅携带空 vector 元数据，不会分配条目存储。
 - Style resolution 在 `StyleResolver` 内缓存有界的 id/class/tag 候选规则集合；最终选择器匹配仍逐节点执行，
   因此 descendant、child 和 attribute selector 语义保持正确。
 - DOM attributes 使用紧凑顺序 `AttributeList`，不再为每个节点维护 attribute hash map。
