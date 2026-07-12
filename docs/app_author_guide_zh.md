@@ -135,7 +135,7 @@ Manifest 不是样板文件，而是 app 契约的一部分。
 - card、row、image 和 canvas 使用 `max-width: 100%`。
 - 窄屏优先使用纵向 stack。
 - label 保持短小。使用 `Hourly`、`Daily`、`Air` 这类短词，避免长 tab 文本。
-- 长内容放进一个明确的 `overflow: auto` 容器。
+- 长内容放进一个明确的 `overflow-y: auto` 容器。
 - 固定底部导航放在 scroll container 外。
 - 避免在 `172x320` 上放很多横向按钮。
 - 用 `@media (max-width: ...)` 和 `@media (max-height: ...)` 缩减 padding、card 数、列数和字号。
@@ -195,8 +195,9 @@ body {
 | `layout-text-overflow` | 文本放不进盒子。报告通常包含 `text`、`node`、`path`、测量宽度和可用宽度。 | 缩短 label、加宽盒子、减小字号，或为窄屏写 media rule。 |
 | `visual-horizontal-overflow` | 绘制内容超出 target 宽度。报告包含 `paintBounds`、viewport 和越界像素；如果能归因到具体布局盒，还会给出 `node`、`path` 和 `boxOverflow*` 字段。 | 加 `max-width: 100%`、用 `box-sizing: border-box`、改纵向布局，或把长内容放进 scroll container。 |
 | `visual-vertical-paint-overflow` | 绘制内容超出 target 高度，可能在上方或下方被裁。报告可包含 `node`、`path`、`boxTop`、`boxBottom`、`boxOverflowTop` 和 `boxOverflowBottom`。 | 把 fixed/absolute 元素移回 viewport 内，减少纵向间距，或把长内容改成明确的 scroll container。 |
-| `visual-scroll-needed` | 页面比 viewport 高。 | 判断是否需要滚动。需要就使用明确 `overflow: auto` 区域并在 target gate 允许滚动。 |
+| `visual-scroll-needed` | 页面比 viewport 高。 | 判断是否需要滚动。需要就使用明确 `overflow-y: auto` 区域并在 target gate 允许滚动。 |
 | `visual-scroll-container` | 内部滚动区域裁切了内容。报告通常包含 `node`、`path`、`boxHeight`、`contentHeight` 和 `overflowY`。 | 确认报告中的容器可被触摸/滚轮/按键滚动，并把固定导航放在滚动容器外。 |
+| `visual-nested-scroll-container` | 内外滚动区域都裁切了纵向内容。 | 每个 route 保持一个主纵向滚动区域；把内部内容并入外层列表，或改为不溢出的固定高度控件。 |
 | `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |
 | `style-property-unsupported` | CSS 属性不在支持子集。 | 换成文档化属性，或用 Canvas/资源图表达效果。 |
