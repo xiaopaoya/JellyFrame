@@ -330,6 +330,9 @@ PORT_TELEMETRY_ALIASES = {
     "avg_frame_ms": "averageFrameMs",
     "frame_ms_max": "maxFrameMs",
     "max_frame_ms": "maxFrameMs",
+    "frame_ms_p95": "p95FrameMs",
+    "present_ms_avg": "averagePresentMs",
+    "present_ms_p95": "p95PresentMs",
     "dma_wait_ms_avg": "averageDmaWaitMs",
     "avg_dma_wait_ms": "averageDmaWaitMs",
     "dma_wait_ms_max": "maxDmaWaitMs",
@@ -342,6 +345,14 @@ PORT_TELEMETRY_ALIASES = {
     "internal_ram_peak_bytes": "internalRamPeakBytes",
     "psram_peak": "psramPeakBytes",
     "psram_peak_bytes": "psramPeakBytes",
+    "panel_scroll_mode": "panelScrollMode",
+    "panel_scroll_steps": "panelScrollSteps",
+    "panel_scroll_fallbacks": "panelScrollFallbacks",
+    "panel_scroll_wraps": "panelScrollWraps",
+    "panel_scroll_cpu_blits_elided": "panelScrollCpuBlitsElided",
+    "panel_scroll_recovery_compose_ms_total": "panelScrollRecoveryComposeMsTotal",
+    "framebuffer_scroll_blits": "framebufferScrollBlits",
+    "framebuffer_scroll_blit_ms_per_step": "framebufferScrollBlitMsPerStep",
 }
 
 
@@ -410,12 +421,23 @@ def parse_port_telemetry_log(log_path: Path) -> dict:
             "packedBytes": metric_int(metrics, "packedBytes"),
             "averageFrameMs": metric_float(metrics, "averageFrameMs"),
             "maxFrameMs": metric_float(metrics, "maxFrameMs"),
+            "p95FrameMs": metric_float(metrics, "p95FrameMs"),
+            "averagePresentMs": metric_float(metrics, "averagePresentMs"),
+            "p95PresentMs": metric_float(metrics, "p95PresentMs"),
             "averageDmaWaitMs": metric_float(metrics, "averageDmaWaitMs"),
             "maxDmaWaitMs": metric_float(metrics, "maxDmaWaitMs"),
             "averageFlushDoneMs": metric_float(metrics, "averageFlushDoneMs"),
             "maxFlushDoneMs": metric_float(metrics, "maxFlushDoneMs"),
             "internalRamPeakBytes": metric_int(metrics, "internalRamPeakBytes"),
             "psramPeakBytes": metric_int(metrics, "psramPeakBytes"),
+            "panelScrollMode": metric_int(metrics, "panelScrollMode"),
+            "panelScrollSteps": metric_int(metrics, "panelScrollSteps"),
+            "panelScrollFallbacks": metric_int(metrics, "panelScrollFallbacks"),
+            "panelScrollWraps": metric_int(metrics, "panelScrollWraps"),
+            "panelScrollCpuBlitsElided": metric_int(metrics, "panelScrollCpuBlitsElided"),
+            "panelScrollRecoveryComposeMsTotal": metric_float(metrics, "panelScrollRecoveryComposeMsTotal"),
+            "framebufferScrollBlits": metric_int(metrics, "framebufferScrollBlits"),
+            "framebufferScrollBlitMsPerStep": metric_float(metrics, "framebufferScrollBlitMsPerStep"),
         },
         "metrics": metrics,
     }
@@ -1684,12 +1706,23 @@ def collect_performance_summary(report: dict) -> dict:
         summary["measuredPortPackedBytes"] = int(port_summary.get("packedBytes", 0) or 0)
         summary["measuredPortAverageFrameMs"] = float(port_summary.get("averageFrameMs", 0) or 0)
         summary["measuredPortMaxFrameMs"] = float(port_summary.get("maxFrameMs", 0) or 0)
+        summary["measuredPortP95FrameMs"] = float(port_summary.get("p95FrameMs", 0) or 0)
+        summary["measuredPortAveragePresentMs"] = float(port_summary.get("averagePresentMs", 0) or 0)
+        summary["measuredPortP95PresentMs"] = float(port_summary.get("p95PresentMs", 0) or 0)
         summary["measuredPortAverageDmaWaitMs"] = float(port_summary.get("averageDmaWaitMs", 0) or 0)
         summary["measuredPortMaxDmaWaitMs"] = float(port_summary.get("maxDmaWaitMs", 0) or 0)
         summary["measuredPortAverageFlushDoneMs"] = float(port_summary.get("averageFlushDoneMs", 0) or 0)
         summary["measuredPortMaxFlushDoneMs"] = float(port_summary.get("maxFlushDoneMs", 0) or 0)
         summary["measuredPortInternalRamPeakBytes"] = int(port_summary.get("internalRamPeakBytes", 0) or 0)
         summary["measuredPortPsramPeakBytes"] = int(port_summary.get("psramPeakBytes", 0) or 0)
+        summary["measuredPortPanelScrollMode"] = int(port_summary.get("panelScrollMode", 0) or 0)
+        summary["measuredPortPanelScrollSteps"] = int(port_summary.get("panelScrollSteps", 0) or 0)
+        summary["measuredPortPanelScrollFallbacks"] = int(port_summary.get("panelScrollFallbacks", 0) or 0)
+        summary["measuredPortPanelScrollWraps"] = int(port_summary.get("panelScrollWraps", 0) or 0)
+        summary["measuredPortPanelScrollCpuBlitsElided"] = int(
+            port_summary.get("panelScrollCpuBlitsElided", 0) or 0)
+        summary["measuredPortPanelScrollRecoveryComposeMsTotal"] = float(
+            port_summary.get("panelScrollRecoveryComposeMsTotal", 0) or 0)
         summary["notes"] = summary["notes"] + [
             "Port telemetry was merged from a real-device or board-port log.",
         ]
@@ -1818,6 +1851,51 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
             "The port telemetry reports measured frame time that can make touch scrolling or animation feel delayed on a wearable screen.",
             "Compare DMA wait, flush-done time and dirty area. Prefer dirty rectangles or scroll-strip paths before adding retained-rendering complexity.",
             "", {"averageFrameMs": average_frame_ms, "maxFrameMs": max_frame_ms})
+    panel_scroll_mode = int(port_summary.get("panelScrollMode", 0) or 0)
+    panel_scroll_steps = int(port_summary.get("panelScrollSteps", 0) or 0)
+    panel_scroll_fallbacks = int(port_summary.get("panelScrollFallbacks", 0) or 0)
+    panel_scroll_wraps = int(port_summary.get("panelScrollWraps", 0) or 0)
+    panel_scroll_cpu_blits_elided = int(port_summary.get("panelScrollCpuBlitsElided", 0) or 0)
+    p95_frame_ms = float(port_summary.get("p95FrameMs", 0) or 0)
+    p95_present_ms = float(port_summary.get("p95PresentMs", 0) or 0)
+    if panel_scroll_mode and panel_scroll_steps:
+        append_performance_advice(
+            advice, seen, "performance-port-panel-scroll-active", "info",
+            "Panel scroll strip path was active",
+            "The port used its opt-in panel-scroll path for a strict full-viewport scroll workload.",
+            "Keep this path restricted to the documented opaque full-viewport fixture until the board port has equivalent recovery evidence for broader content.",
+            "", {"panelScrollSteps": panel_scroll_steps, "panelScrollWraps": panel_scroll_wraps,
+                 "panelScrollCpuBlitsElided": panel_scroll_cpu_blits_elided})
+    if panel_scroll_fallbacks:
+        append_performance_advice(
+            advice, seen, "performance-port-panel-scroll-fallback", "warning",
+            "Panel scroll fell back to a normal present",
+            "The board rejected or could not complete one or more panel-scroll steps, so it reconstructed a normal framebuffer frame.",
+            "Inspect panel geometry, overlays, DMA completion and callback errors. Do not enable this port optimization by default while fallbacks occur.",
+            "", {"panelScrollFallbacks": panel_scroll_fallbacks})
+    if panel_scroll_mode and panel_scroll_steps and panel_scroll_cpu_blits_elided == 0:
+        append_performance_advice(
+            advice, seen, "performance-port-panel-scroll-cpu-copy", "info",
+            "Panel scroll still repeats a CPU framebuffer move",
+            "The panel path is active, but the telemetry did not confirm that the duplicate CPU row move was elided.",
+            "Keep the normal framebuffer fallback, then make the board path compose and pack only the exposed strip; full-recompose before any normal present.",
+            "", {"panelScrollSteps": panel_scroll_steps,
+                 "panelScrollCpuBlitsElided": panel_scroll_cpu_blits_elided})
+    if panel_scroll_mode and p95_present_ms > 0 and p95_present_ms <= 5.0 and p95_frame_ms > 16.7:
+        append_performance_advice(
+            advice, seen, "performance-port-panel-scroll-cpu-bound", "info",
+            "Panel transfer is fast; CPU scroll work now dominates",
+            "The measured panel present p95 is small relative to frame p95, so additional bus tuning is unlikely to improve perceived scroll smoothness.",
+            "Use layer-build, compose and framebuffer-scroll telemetry to remove duplicate row copies or reduce visible-strip composition before changing panel DMA settings.",
+            "", {"p95FrameMs": p95_frame_ms, "p95PresentMs": p95_present_ms,
+                 "panelScrollCpuBlitsElided": panel_scroll_cpu_blits_elided})
+    if panel_scroll_mode and panel_scroll_steps >= 100 and panel_scroll_wraps == 0:
+        append_performance_advice(
+            advice, seen, "performance-port-panel-scroll-wrap-unverified", "warning",
+            "Panel scroll ring wrap was not observed",
+            "The panel-scroll workload ran for many steps but did not record a physical GRAM wrap event.",
+            "Use a content extent that crosses the panel height, verify the wrap counter with a visual capture, and keep the feature opt-in until ring recovery is evidenced.",
+            "", {"panelScrollSteps": panel_scroll_steps, "panelScrollWraps": panel_scroll_wraps})
     average_dma_wait_ms = float(port_summary.get("averageDmaWaitMs", 0) or 0)
     max_dma_wait_ms = float(port_summary.get("maxDmaWaitMs", 0) or 0)
     if average_dma_wait_ms > 4.0 or max_dma_wait_ms > 10.0:

@@ -65,6 +65,11 @@ panel flush 慢，还是 port 的 internal RAM 使用方式需要调整。比较
 `case=` 和 `workload=` 标签；CLI 会把它们保留在 `portTelemetry.summary` 并作为 measured-port
 元数据输出，避免把不可比的 capture 混在一起。
 
+若 port 使用 opt-in panel-scroll 路径，还应保留 `panel_scroll_mode`、
+`panel_scroll_steps`、`panel_scroll_fallbacks`、`panel_scroll_wraps`、
+`panel_scroll_cpu_blits_elided` 和 frame/present p95。报告会据此区分 panel
+传输慢与 panel 已经很快但 CPU 侧滚动仍慢；`fallback=0` 本身不能替代物理 ring wrap 的证据。
+
 需要批量验收仓库 sample 时，`doctor` 也能以明确的 sample 映射接收同样的实测数据，避免把无关日志
 错误地附到另一个 package：
 

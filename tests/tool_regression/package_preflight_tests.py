@@ -1437,9 +1437,12 @@ class PackagePreflightTests(unittest.TestCase):
                 "I (18245) JellyFrameUi: port_telemetry case=scroll_benchmark_cumulative app=org.jellyframe.bringup.scroll workload=cards "
                 "frames=30 full=1 dirty=29 flushes=58 converted_pixels=900000 "
                 "packed_bytes=1800000 frame_ms_avg=36.5 frame_ms_max=57.0 "
+                "frame_ms_p95=20.0 present_ms_avg=1.33 present_ms_p95=1.0 "
                 "dma_wait_ms_avg=5.2 dma_wait_ms_max=11.0 "
                 "flush_done_ms_avg=13.5 flush_done_ms_max=27.0 "
-                "internal_ram_peak=330000 psram_peak=120000\n",
+                "internal_ram_peak=330000 psram_peak=120000 panel_scroll_mode=1 "
+                "panel_scroll_steps=29 panel_scroll_fallbacks=0 panel_scroll_wraps=0 "
+                "panel_scroll_cpu_blits_elided=29\n",
                 encoding="utf-8",
             )
             jellyframe_cli.merge_port_telemetry_report(report_path, telemetry_log)
@@ -1459,9 +1462,13 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(summary["measuredPortPackedBytes"], 1800000)
         self.assertEqual(summary["measuredPortAverageFrameMs"], 36.5)
         self.assertEqual(summary["measuredPortMaxFrameMs"], 57.0)
+        self.assertEqual(summary["measuredPortP95FrameMs"], 20.0)
+        self.assertEqual(summary["measuredPortP95PresentMs"], 1.0)
         self.assertEqual(summary["measuredPortAverageDmaWaitMs"], 5.2)
         self.assertEqual(summary["measuredPortAverageFlushDoneMs"], 13.5)
         self.assertEqual(summary["measuredPortInternalRamPeakBytes"], 330000)
+        self.assertEqual(summary["measuredPortPanelScrollSteps"], 29)
+        self.assertEqual(summary["measuredPortPanelScrollCpuBlitsElided"], 29)
         bottleneck_codes = {entry["code"] for entry in summary["bottlenecks"]}
         self.assertIn("performance-port-frame-time-high", bottleneck_codes)
         self.assertIn("performance-port-flush-done-high", bottleneck_codes)
@@ -1470,6 +1477,8 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("performance-port-dma-wait-high", codes)
         self.assertIn("performance-port-flush-done-high", codes)
         self.assertIn("performance-port-internal-ram-high", codes)
+        self.assertIn("performance-port-panel-scroll-active", codes)
+        self.assertIn("performance-port-panel-scroll-cpu-bound", codes)
 
     def test_port_telemetry_json_accepts_camel_case_metrics(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-port-telemetry-json-") as directory:

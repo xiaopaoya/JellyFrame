@@ -79,6 +79,13 @@ internal-RAM pressure. When comparing controlled device runs, include stable
 and surfaces them as measured-port metadata rather than mixing incomparable
 captures.
 
+For a port that reports an opt-in panel-scroll path, preserve
+`panel_scroll_mode`, `panel_scroll_steps`, `panel_scroll_fallbacks`,
+`panel_scroll_wraps` and `panel_scroll_cpu_blits_elided` with frame/present
+p95. The report then distinguishes a slow panel transfer from CPU-side scroll
+work that remains after the panel path is fast; do not treat a zero-fallback
+result as proof of physical ring-wrap recovery without the wrap evidence.
+
 For a repository-wide trial pass, `doctor` accepts the same measurements as
 explicit sample mappings. This prevents an unrelated log from being attached to
 the wrong package:
