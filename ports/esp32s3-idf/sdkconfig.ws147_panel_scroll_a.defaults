@@ -1,0 +1,4 @@
+# Phase D A control: full-screen opaque retained list using framebuffer
+# scroll-blit plus normal dirty-rectangle presentation.
+CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL=y
+# CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION is not set

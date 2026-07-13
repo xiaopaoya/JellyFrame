@@ -1,0 +1,4 @@
+# Phase D B experiment: same fixture as A, with the opt-in JD9853 physical
+# GRAM ring callback. This profile must not be used for general UI workloads.
+CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL=y
+CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION=y

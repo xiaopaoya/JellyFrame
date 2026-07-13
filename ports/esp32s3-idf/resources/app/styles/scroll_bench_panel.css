@@ -1,0 +1,42 @@
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #10242d;
+  color: #f3fbfd;
+  font-family: system-ui, sans-serif;
+}
+
+#feed {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: #10242d;
+}
+
+#feed article {
+  height: 40px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  align-items: center;
+  background-color: #18404d;
+  color: #f3fbfd;
+  font-size: 13px;
+}
+
+#feed article:nth-child(even) {
+  background-color: #12343f;
+}
+
+#feed article strong {
+  color: #9fe36a;
+  font-size: 11px;
+}
+
+#feed article span {
+  color: #f3fbfd;
+  font-size: 13px;
+}

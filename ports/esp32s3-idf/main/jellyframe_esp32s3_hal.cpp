@@ -45,6 +45,16 @@ std::uint32_t dirty_pixel_count(jellyframe::Rect dirty_rect) {
         static_cast<std::uint32_t>(dirty_rect.height);
 }
 
+void accumulate_packed_metrics(Rgb565Panel& panel, const Rgb565PackedFlushMetrics& metrics) {
+    panel.panel_convert_us += metrics.convert_us;
+    panel.panel_window_setup_us += metrics.window_setup_us;
+    panel.panel_scroll_setup_us += metrics.scroll_setup_us;
+    panel.panel_dma_submit_us += metrics.dma_submit_us;
+    panel.panel_dma_wait_us += metrics.dma_wait_us;
+    panel.panel_dma_chunks += metrics.chunks;
+    panel.packed_scroll_wrap_count += metrics.scroll_wraps;
+}
+
 bool flush_rgb565_rect(jellyframe::Rect dirty_rect, void* context) {
     if (context == nullptr) {
         return false;
@@ -106,12 +116,18 @@ bool flush_packed_rgb565_rect(const std::uint16_t* pixels, jellyframe::Rect dirt
     }
 
     Rgb565PackedFlushMetrics metrics;
-    const bool ok = panel->packed_flush(pixels, dirty_rect, &metrics, panel->flush_context);
-    panel->panel_convert_us += metrics.convert_us;
-    panel->panel_window_setup_us += metrics.window_setup_us;
-    panel->panel_dma_submit_us += metrics.dma_submit_us;
-    panel->panel_dma_wait_us += metrics.dma_wait_us;
-    panel->panel_dma_chunks += metrics.chunks;
+    const bool use_scroll_callback = panel->packed_scroll_active && panel->packed_scroll_flush != nullptr;
+    const bool ok = use_scroll_callback
+        ? panel->packed_scroll_flush(pixels,
+                                     dirty_rect,
+                                     panel->packed_scroll_delta_y,
+                                     &metrics,
+                                     panel->flush_context)
+        : panel->packed_flush(pixels, dirty_rect, &metrics, panel->flush_context);
+    accumulate_packed_metrics(*panel, metrics);
+    if (use_scroll_callback && ok) {
+        ++panel->packed_scroll_flush_count;
+    }
     if (!ok) {
         ++panel->failed_flush_count;
     }
@@ -154,11 +170,7 @@ bool flush_rgb565_packed_rect(Rgb565Panel& panel, jellyframe::Rect dirty_rect) {
     Rgb565PackedFlushMetrics metrics;
     if (dirty_rect.x == 0 && dirty_rect.width == stride) {
         const bool ok = panel.packed_flush(source, dirty_rect, &metrics, panel.flush_context);
-        panel.panel_convert_us += metrics.convert_us;
-        panel.panel_window_setup_us += metrics.window_setup_us;
-        panel.panel_dma_submit_us += metrics.dma_submit_us;
-        panel.panel_dma_wait_us += metrics.dma_wait_us;
-        panel.panel_dma_chunks += metrics.chunks;
+        accumulate_packed_metrics(panel, metrics);
         return ok;
     }
 
@@ -178,11 +190,48 @@ bool flush_rgb565_packed_rect(Rgb565Panel& panel, jellyframe::Rect dirty_rect) {
     panel.scratch_copy_us += static_cast<std::uint64_t>(esp_timer_get_time() - copy_start);
     ++panel.scratch_flush_count;
     const bool ok = panel.packed_flush(panel.scratch_pixels, dirty_rect, &metrics, panel.flush_context);
-    panel.panel_convert_us += metrics.convert_us;
-    panel.panel_window_setup_us += metrics.window_setup_us;
-    panel.panel_dma_submit_us += metrics.dma_submit_us;
-    panel.panel_dma_wait_us += metrics.dma_wait_us;
-    panel.panel_dma_chunks += metrics.chunks;
+    accumulate_packed_metrics(panel, metrics);
+    return ok;
+}
+
+bool flush_rgb565_packed_scroll_strip(const jellyframe::HostFrameBufferView& frame,
+                                      Rgb565Panel& panel,
+                                      jellyframe::Rect exposed_strip,
+                                      int scroll_delta_y) {
+    if (panel.packed_scroll_flush == nullptr || scroll_delta_y == 0 ||
+        !valid_packed_dirty_rect(panel, exposed_strip) || frame.pixels == nullptr ||
+        frame.width != panel.width || frame.height != panel.height) {
+        return false;
+    }
+    const int expected_height = scroll_delta_y < 0 ? -scroll_delta_y : scroll_delta_y;
+    if (exposed_strip.width != panel.width || exposed_strip.x != 0 ||
+        exposed_strip.height != expected_height) {
+        return false;
+    }
+
+    panel.packed_scroll_active = true;
+    panel.packed_scroll_delta_y = scroll_delta_y;
+    jellyframe::EmbeddedPackedRgb565Sink sink = make_packed_rgb565_sink(panel);
+    const jellyframe::HostFrameSink frame_sink = jellyframe::embedded_packed_rgb565_sink(sink);
+    const bool ok = frame_sink.present != nullptr &&
+        frame_sink.present(frame, &exposed_strip, 1, frame_sink.context);
+    panel.packed_scroll_active = false;
+    panel.packed_scroll_delta_y = 0;
+    if (!ok) {
+        ++panel.packed_scroll_fallback_count;
+    } else {
+        panel.packed_scroll_mapped = true;
+    }
+    return ok;
+}
+
+bool reset_rgb565_packed_scroll(Rgb565Panel& panel) {
+    panel.packed_scroll_active = false;
+    panel.packed_scroll_delta_y = 0;
+    const bool ok = panel.reset_scroll == nullptr || panel.reset_scroll(panel.flush_context);
+    if (ok) {
+        panel.packed_scroll_mapped = false;
+    }
     return ok;
 }
 

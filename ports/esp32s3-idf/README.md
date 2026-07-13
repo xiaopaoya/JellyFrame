@@ -65,6 +65,11 @@ idf.py -B build-ws147-scroll -D SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchm
 
 # Interactive retained scroll demo. Apply after the benchmark defaults.
 idf.py -B build-ws147-scroll-demo -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_scroll_demo.defaults" build
+
+# Phase D control (A) and experimental physical-GRAM ring path (B).
+# Both use the same full-screen, opaque, single-scroll-viewport fixture.
+idf.py -B build-ws147-panel-a -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_a.defaults" build
+idf.py -B build-ws147-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults" build
 ```
 
 The first file selects the scroll run mode and the WS147 hardware profile. The
@@ -72,12 +77,24 @@ second only disables automatic scrolling and selects the full-list workload;
 do not combine either with `sdkconfig.ws147_bringup.defaults`, which selects the
 Timer run mode.
 
+`panel-a` and `panel-b` are a paired measurement fixture, not a general scroll
+optimization switch. The fixture has one opaque rectangular 172x320 scroll
+viewport, no fixed overlay, no scroll indicator and exactly one exposed strip
+per step. A uses the existing CPU framebuffer scroll-blit plus normal dirty
+present. B keeps the same Core plan and framebuffer update, but writes only the
+exposed strip through the WS147 callback's verified physical-GRAM ring mapping.
+The callback is board-local; the Render Core has no JD9853 commands or panel
+state. B is disabled by default and resets `VSCSAD` to zero before any normal
+present. Invalid geometry, a second dirty area, mixed content, callback failure
+or reset failure leaves the path on A rather than attempting a partial repair.
+
 Useful `menuconfig` entries:
 
 - `JellyFrame ESP32-S3 benchmark -> Startup run mode`
 - `JellyFrame ESP32-S3 benchmark -> UI task stack size`
 - `JellyFrame ESP32-S3 benchmark -> Scroll benchmark step in pixels`
 - `JellyFrame ESP32-S3 benchmark -> Retained scroll benchmark workload`
+- `JellyFrame ESP32-S3 benchmark -> Experimental WS147 physical-GRAM scroll A/B path`
 - `JellyFrame ESP32-S3 benchmark -> Synthetic card count`
 - `JellyFrame ESP32-S3 benchmark -> Benchmark iterations`
 - `JellyFrame ESP32-S3 benchmark -> Viewport width`
@@ -105,6 +122,17 @@ and capacity counters, including the optional clipped text/image surface. After
 the first retained build, capacity should remain stable during paint-only scroll
 frames; a capacity increase identifies a larger pipeline rebuild, while an
 unbounded increase is a regression to investigate.
+
+For Phase D, first run A for ten minutes, then B for ten minutes after a fresh
+flash. Save the final cumulative `port_telemetry` and `pipeline_arena` lines
+from each run. The B result is valid only when `workload=panel`,
+`panel_scroll_mode=1`, `panel_scroll_steps` advances, `panel_scroll_fallbacks=0`
+and the observed list has no seams or corrupted rows through repeated ring
+wraps. Record `panel_scroll_wraps`, frame/present p95, DMA timing, internal and
+PSRAM watermarks, watchdog/reset status and a 30 fps visual capture. Do not
+compare the older 240 px internal-list workloads with this fixture: their
+rounded container, header/footer and indicator create mixed dirty regions and
+cannot exercise the single-strip contract.
 
 ## Flash Layout
 
@@ -329,6 +357,13 @@ esp_lcd_panel_draw_bitmap(panel_handle,
                           dirty.y + dirty.height,
                           pixels);
 ```
+
+`packed_scroll_flush` is a separate optional board callback for a panel with a
+verified hardware scroll-address contract. It receives the already packed,
+full-width exposed strip and the existing Core `ScrollBlitPlan` delta. It must
+reject every shape it cannot prove safe and provide `reset_scroll`; the HAL
+then performs a normal full present after reset. It is intentionally not a
+Render Core capability and should remain unbound on generic displays.
 
 The legacy QEMU smoke path also exercises a full-frame strided flush and a
 padded-stride partial dirty rectangle that requires `scratch_pixels` packing.

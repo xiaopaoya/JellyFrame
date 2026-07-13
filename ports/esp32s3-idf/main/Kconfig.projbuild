@@ -100,7 +100,26 @@ config JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_BACKGROUND
 config JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_CLEAR
     bool "Transparent clear-and-clip baseline"
 
+config JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL
+    bool "Full-screen opaque panel-scroll A/B fixture"
+    help
+        Uses one full 172x320 rectangular overflow viewport with no indicator,
+        rounded corners, transparent pixels or overlapping UI. It is the only
+        valid workload for the experimental WS147 physical-GRAM scroll path.
+
 endchoice
+
+config JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
+    bool "Experimental WS147 physical-GRAM scroll A/B path"
+    depends on JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK && JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL && JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
+    default n
+    help
+        Experimental, disabled-by-default A/B path for the Waveshare 1.47
+        JD9853 panel. Each eligible scroll step sends only the unique exposed
+        full-width strip through the verified physical GRAM ring mapping.
+        Any mixed dirty update, invalid viewport, callback error or panel
+        uncertainty immediately resets the scroll address and falls back to
+        the normal framebuffer scroll-blit present path.
 
 config JELLYFRAME_BENCH_CARD_COUNT
     int "Synthetic card count"

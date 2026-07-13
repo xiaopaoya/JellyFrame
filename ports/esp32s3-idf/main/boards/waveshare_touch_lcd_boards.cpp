@@ -55,6 +55,8 @@ constexpr i2c_port_t kWs147I2cPort = I2C_NUM_0;
 constexpr int kWs147I2cClockHz = 400000;
 constexpr int kWs147I2cTimeoutMs = 100;
 constexpr int kWs147LcdXGap = 34;
+constexpr std::uint8_t kWs147CmdVerticalScrollDefinition = 0x33;
+constexpr std::uint8_t kWs147CmdVerticalScrollStart = 0x37;
 constexpr std::uint8_t kWs147AxsTouchPointsReg = 0x01;
 constexpr std::uint8_t kWs147AxsMaxPoints = 2;
 
@@ -68,6 +70,8 @@ struct Ws147DisplayContext {
     TaskHandle_t touch_task = nullptr;
     std::uint16_t* dma_pixels = nullptr;
     std::size_t dma_pixel_capacity = 0;
+    bool panel_scroll_configured = false;
+    std::uint16_t panel_scroll_start = 0;
     BoardInputQueue* input_queue = nullptr;
     bool touch_task_stop = false;
     bool touch_down = false;
@@ -409,6 +413,144 @@ bool ws147_packed_flush(const std::uint16_t* pixels,
     return true;
 }
 
+void ws147_accumulate_metrics(Rgb565PackedFlushMetrics& target,
+                              const Rgb565PackedFlushMetrics& source) {
+    target.convert_us += source.convert_us;
+    target.window_setup_us += source.window_setup_us;
+    target.scroll_setup_us += source.scroll_setup_us;
+    target.dma_submit_us += source.dma_submit_us;
+    target.dma_wait_us += source.dma_wait_us;
+    target.chunks += source.chunks;
+    target.scroll_wraps += source.scroll_wraps;
+}
+
+bool ws147_configure_panel_scroll(Ws147DisplayContext& display,
+                                  Rgb565PackedFlushMetrics* metrics) {
+    if (display.panel_scroll_configured) {
+        return true;
+    }
+    constexpr int height = CONFIG_JELLYFRAME_WS147_LCD_HEIGHT;
+    const std::uint8_t definition[6] = {
+        0, 0,
+        static_cast<std::uint8_t>((height >> 8) & 0xff),
+        static_cast<std::uint8_t>(height & 0xff),
+        0, 0,
+    };
+    const std::uint64_t start = esp_timer_get_time();
+    ws147_lock_lcd(display);
+    const esp_err_t result = ws147_lcd_tx_param(display.lcd_io,
+                                                  kWs147CmdVerticalScrollDefinition,
+                                                  definition,
+                                                  sizeof(definition));
+    ws147_unlock_lcd(display);
+    if (metrics != nullptr) {
+        metrics->scroll_setup_us += static_cast<std::uint32_t>(esp_timer_get_time() - start);
+    }
+    if (result != ESP_OK) {
+        return false;
+    }
+    display.panel_scroll_configured = true;
+    display.panel_scroll_start = 0;
+    return true;
+}
+
+bool ws147_set_panel_scroll_start(Ws147DisplayContext& display,
+                                  std::uint16_t start_row,
+                                  Rgb565PackedFlushMetrics* metrics) {
+    constexpr int height = CONFIG_JELLYFRAME_WS147_LCD_HEIGHT;
+    if (start_row >= height) {
+        return false;
+    }
+    const std::uint8_t data[2] = {
+        static_cast<std::uint8_t>((start_row >> 8) & 0xff),
+        static_cast<std::uint8_t>(start_row & 0xff),
+    };
+    const std::uint64_t start = esp_timer_get_time();
+    ws147_lock_lcd(display);
+    const esp_err_t result = ws147_lcd_tx_param(display.lcd_io,
+                                                  kWs147CmdVerticalScrollStart,
+                                                  data,
+                                                  sizeof(data));
+    ws147_unlock_lcd(display);
+    if (metrics != nullptr) {
+        metrics->scroll_setup_us += static_cast<std::uint32_t>(esp_timer_get_time() - start);
+    }
+    if (result != ESP_OK) {
+        return false;
+    }
+    display.panel_scroll_start = start_row;
+    return true;
+}
+
+bool ws147_packed_scroll_flush(const std::uint16_t* pixels,
+                               jellyframe::Rect exposed_strip,
+                               int scroll_delta_y,
+                               Rgb565PackedFlushMetrics* metrics,
+                               void* context) {
+    auto* display = static_cast<Ws147DisplayContext*>(context);
+    constexpr int width = CONFIG_JELLYFRAME_WS147_LCD_WIDTH;
+    constexpr int height = CONFIG_JELLYFRAME_WS147_LCD_HEIGHT;
+    if (scroll_delta_y <= -height || scroll_delta_y >= height) {
+        return false;
+    }
+    const int rows = scroll_delta_y < 0 ? -scroll_delta_y : scroll_delta_y;
+    if (display == nullptr || pixels == nullptr || metrics == nullptr || display->lcd_io == nullptr ||
+        exposed_strip.x != 0 || exposed_strip.width != width || exposed_strip.height != rows ||
+        exposed_strip.y < 0 || exposed_strip.y > height - rows || rows <= 0 || rows >= height ||
+        ((scroll_delta_y > 0) != (exposed_strip.y + rows == height)) ||
+        ((scroll_delta_y < 0) != (exposed_strip.y == 0))) {
+        return false;
+    }
+
+    *metrics = {};
+    if (!ws147_configure_panel_scroll(*display, metrics)) {
+        return false;
+    }
+    const int old_start = display->panel_scroll_start;
+    const int next_start = (old_start + scroll_delta_y + height) % height;
+    const int physical_start = scroll_delta_y > 0 ? old_start : next_start;
+    if (!ws147_set_panel_scroll_start(*display, static_cast<std::uint16_t>(next_start), metrics)) {
+        return false;
+    }
+
+    const int first_rows = std::min(rows, height - physical_start);
+    Rgb565PackedFlushMetrics part_metrics;
+    if (!ws147_packed_flush(pixels,
+                            jellyframe::Rect{0, physical_start, width, first_rows},
+                            &part_metrics,
+                            display)) {
+        return false;
+    }
+    ws147_accumulate_metrics(*metrics, part_metrics);
+    if (first_rows != rows) {
+        part_metrics = {};
+        if (!ws147_packed_flush(pixels + static_cast<std::size_t>(first_rows) * width,
+                                jellyframe::Rect{0, 0, width, rows - first_rows},
+                                &part_metrics,
+                                display)) {
+            return false;
+        }
+        ws147_accumulate_metrics(*metrics, part_metrics);
+        ++metrics->scroll_wraps;
+    }
+    return true;
+}
+
+bool ws147_reset_panel_scroll(void* context) {
+    auto* display = static_cast<Ws147DisplayContext*>(context);
+    if (display == nullptr || display->lcd_io == nullptr) {
+        return false;
+    }
+    if (!display->panel_scroll_configured && display->panel_scroll_start == 0) {
+        return true;
+    }
+    if (!ws147_set_panel_scroll_start(*display, 0, nullptr)) {
+        return false;
+    }
+    display->panel_scroll_configured = false;
+    return true;
+}
+
 Ws147TouchPoint ws147_map_touch_point(std::uint16_t raw_x, std::uint16_t raw_y) {
     Ws147TouchPoint point{};
     point.raw_x = raw_x;
@@ -636,17 +778,29 @@ BoardRuntime initialize_waveshare_147() {
     esp_err_t err = ws147_init_lcd(display);
     if (err != ESP_OK) {
         ESP_LOGE(kTag, "waveshare 1.47 LCD init failed: %s", esp_err_to_name(err));
-        return BoardRuntime{kWaveshare147Profile, false, "JD9853 init failed", nullptr, &display};
+        return BoardRuntime{kWaveshare147Profile, false, "JD9853 init failed", nullptr, nullptr, nullptr, &display};
     }
 
     err = ws147_init_i2c_and_probe_touch(display);
     if (err != ESP_OK) {
         ESP_LOGW(kTag, "waveshare 1.47 display initialized; touch probe failed: %s", esp_err_to_name(err));
-        return BoardRuntime{kWaveshare147Profile, true, "hardware display initialized; touch probe failed", ws147_packed_flush, &display};
+        return BoardRuntime{kWaveshare147Profile,
+                            true,
+                            "hardware display initialized; touch probe failed",
+                            ws147_packed_flush,
+                            ws147_packed_scroll_flush,
+                            ws147_reset_panel_scroll,
+                            &display};
     }
 
     ESP_LOGI(kTag, "waveshare 1.47 hardware display initialized and AXS5106L detected");
-    return BoardRuntime{kWaveshare147Profile, true, "hardware display initialized; touch detected", ws147_packed_flush, &display};
+    return BoardRuntime{kWaveshare147Profile,
+                        true,
+                        "hardware display initialized; touch detected",
+                        ws147_packed_flush,
+                        ws147_packed_scroll_flush,
+                        ws147_reset_panel_scroll,
+                        &display};
 }
 
 void release_waveshare_147(Ws147DisplayContext& display) {
@@ -681,6 +835,8 @@ void release_waveshare_147(Ws147DisplayContext& display) {
         display.dma_pixels = nullptr;
     }
     display.dma_pixel_capacity = 0;
+    display.panel_scroll_configured = false;
+    display.panel_scroll_start = 0;
     display.input_queue = nullptr;
     display.touch_down = false;
 }
@@ -727,6 +883,8 @@ void release_board_runtime(BoardRuntime& runtime) {
     runtime.hardware_display_ready = false;
     runtime.hardware_status = "released";
     runtime.packed_flush = nullptr;
+    runtime.packed_scroll_flush = nullptr;
+    runtime.reset_scroll = nullptr;
     runtime.flush_context = nullptr;
 }
 

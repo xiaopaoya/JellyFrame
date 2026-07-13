@@ -36,6 +36,8 @@ struct BoardRuntime {
     bool hardware_display_ready = false;
     const char* hardware_status = "";
     Rgb565PackedRectFlushCallback packed_flush = nullptr;
+    Rgb565PackedScrollFlushCallback packed_scroll_flush = nullptr;
+    Rgb565PanelScrollResetCallback reset_scroll = nullptr;
     void* flush_context = nullptr;
 };
 
