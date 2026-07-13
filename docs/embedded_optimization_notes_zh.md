@@ -46,6 +46,9 @@
 - `FrameScratch` 和 `AppFrameScratch` 提供帧级临时容器复用。dirty-region bounds、dirty rectangles、
   animation style overrides 和 host completion batch/accepted list 可以跨帧保留 capacity，每帧清空；
   睡眠、切换 app 或内存告急时可显式 `release()` 归还容量。
+- `SoftwareCompositor::Scratch` 是可选的调用方持有 scratch，用于裁切 text/image repaint 的临时 surface。
+  只应在持久 UI loop 中复用：首次遇到裁切命令时分配，随后保留所需最大 surface；切 app 或 memory pressure
+  时可调用 `release()` 归还容量。
 - Render Core 只拥有平台无关的渲染与提交规划；panel controller、总线、DMA、cache 和 SoC 特定加速
   一律留在 port。通用可选 helper 只有在 port 主动调用时才产生工作，每条 port 优化路径都必须有软件 fallback。
 - `coalesce_dirty_rects_into(...)` 是可选的通用提交规划器。port 可提供单矩形提交开销和额外面积上限，

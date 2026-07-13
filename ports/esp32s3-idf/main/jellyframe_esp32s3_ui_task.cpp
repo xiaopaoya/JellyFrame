@@ -215,6 +215,7 @@ struct TimerUiTaskContext {
     jellyframe::TextPainter text_painter{};
     jellyframe::FrameScratch frame_scratch;
     jellyframe::AppFrameScratch app_scratch;
+    jellyframe::SoftwareCompositor::Scratch compositor_scratch;
     std::unique_ptr<jellyframe::Node> document;
     jellyframe::Stylesheet stylesheet;
     PipelineCache pipeline;
@@ -487,13 +488,17 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<unsigned>(telemetry.min_largest_spiram));
 
     ESP_LOGI(kTag,
-             "pipeline_arena render_used=%u render_capacity=%u layout_used=%u layout_capacity=%u layer_used=%u layer_capacity=%u",
+             "pipeline_arena render_used=%u render_capacity=%u layout_used=%u layout_capacity=%u layer_used=%u layer_capacity=%u clip_surface_used=%u clip_surface_capacity=%u",
              static_cast<unsigned>(context.pipeline.render_arena.used_bytes()),
              static_cast<unsigned>(context.pipeline.render_arena.capacity_bytes()),
              static_cast<unsigned>(context.pipeline.layout_arena.used_bytes()),
              static_cast<unsigned>(context.pipeline.layout_arena.capacity_bytes()),
              static_cast<unsigned>(context.pipeline.layer_arena.used_bytes()),
-             static_cast<unsigned>(context.pipeline.layer_arena.capacity_bytes()));
+             static_cast<unsigned>(context.pipeline.layer_arena.capacity_bytes()),
+             static_cast<unsigned>(context.compositor_scratch.rasterizer.temporary_surface.pixels.size() *
+                                   sizeof(jellyframe::Color)),
+             static_cast<unsigned>(context.compositor_scratch.rasterizer.temporary_surface.pixels.capacity() *
+                                   sizeof(jellyframe::Color)));
 }
 
 bool load_timer_document(TimerUiTaskContext& context) {
@@ -829,7 +834,8 @@ bool render_and_present(TimerUiTaskContext& context,
                            *context.frame_buffer,
                            kBackground,
                            compose_dirty_rects,
-                           compose_dirty_count);
+                           compose_dirty_count,
+                           &context.compositor_scratch);
     const std::uint64_t compose_us = static_cast<std::uint64_t>(esp_timer_get_time() - compose_start);
     context.telemetry.compose_us += compose_us;
     if (can_reuse_scroll_pixels && compose_dirty_rects == scroll_reuse_dirty_rects.data()) {

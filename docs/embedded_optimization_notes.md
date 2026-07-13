@@ -66,6 +66,10 @@ small wearable devices.
   completion batch/accepted lists can keep capacity across frames and be cleared
   each frame. Sleep, app switching and memory-pressure paths can call
   `release()` to return that capacity.
+- `SoftwareCompositor::Scratch` is optional caller-owned storage for clipped
+  text/image repaint surfaces. Reuse it only in a persistent render loop; it
+  allocates on the first clipped command, keeps the largest needed surface for
+  later frames and can be released on app switch or memory pressure.
 - Render Core owns only portable render and present planning. Panel-controller,
   bus, DMA, cache and SoC-specific acceleration stays in the port. Generic
   optional helpers must be dormant unless a port calls them and every port

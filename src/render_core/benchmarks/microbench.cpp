@@ -392,6 +392,25 @@ int run_render_core_microbench(int argc, char** argv) {
                                contained_dirty_rects.size());
     }));
 
+    DisplayCommand clipped_text;
+    clipped_text.type = DisplayCommandType::Text;
+    clipped_text.rect = Rect{0, 0, 240, 24};
+    clipped_text.color = Color{15, 23, 42, 255};
+    clipped_text.text = "Retained dirty text";
+    clipped_text.font_size = 14;
+    const Rect text_dirty{120, 0, 24, 24};
+    SoftwareRasterizer text_rasterizer;
+    print_result("dirty_text_clip_transient_surface", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(240, 24, Color{255, 255, 255, 255});
+        text_rasterizer.rasterize(clipped_text, target, text_dirty);
+    }));
+
+    SoftwareRasterizerScratch text_scratch;
+    FrameBuffer scratch_target(240, 24, Color{255, 255, 255, 255});
+    print_result("dirty_text_clip_reused_surface", iterations, average_microseconds(iterations, [&] {
+        text_rasterizer.rasterize(clipped_text, scratch_target, text_dirty, 0, 0, &text_scratch);
+    }));
+
     const std::array<Rect, 3> adjacent_dirty_rects{{
         Rect{20, 40, 20, 29},
         Rect{42, 40, 20, 29},

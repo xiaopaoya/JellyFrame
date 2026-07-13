@@ -290,9 +290,10 @@ Recommended real-device performance telemetry:
 - Development or acceptance builds should report frame count, full/dirty frame
   count, flush count, RGB565 packed bytes, average/max frame ms, average/max DMA
   wait ms, average/max flush-done ms, internal-RAM/PSRAM peaks and each retained
-  arena's used/capacity bytes. After warm-up, paint-only frames should retain a
-  stable arena capacity; the port must release it deliberately on app exit or
-  memory pressure.
+  arena's used/capacity bytes. If the port opts into `SoftwareCompositor::Scratch`,
+  report its used/capacity bytes too. After warm-up, paint-only frames should
+  retain stable capacities; the port must release them deliberately on app exit
+  or memory pressure.
 - The log can be JSON or one simple text line:
 
   ```text

@@ -224,7 +224,8 @@ internal RAM 压力处理建议：
 - port 层应在开发/验收构建中导出帧数、full/dirty frame 数、flush 次数、RGB565 packed bytes、
   平均/最大 frame ms、平均/最大 DMA wait ms、平均/最大 flush-done ms、internal RAM/PSRAM 峰值，
   以及每个 retained arena 的 used/capacity bytes。热身后 paint-only frame 的 arena capacity 应稳定；
-  app exit 或 memory pressure 时必须由 port 显式归还容量。
+  若 port 选择使用 `SoftwareCompositor::Scratch`，也应报告其 used/capacity bytes。app exit 或
+  memory pressure 时必须由 port 显式归还这些容量。
 - 这些数字可以写成 JSON，也可以写成一行文本，例如：
 
   ```text

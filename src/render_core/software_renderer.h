@@ -27,6 +27,13 @@ struct FrameBuffer {
     const Color& pixel(int x, int y) const;
 };
 
+// Optional caller-owned storage for clipped text and image commands.
+struct SoftwareRasterizerScratch {
+    FrameBuffer temporary_surface;
+
+    void release();
+};
+
 using TextPaintCallback = bool (*)(FrameBuffer& target,
                                    Rect rect,
                                    Color color,
@@ -73,7 +80,18 @@ public:
     SoftwareRasterizer(TextPainter text_painter, ImagePainter image_painter, DiagnosticSink* diagnostics = nullptr);
 
     void rasterize(const DisplayList& display_list, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
-    void rasterize(const DisplayCommand& command, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
+    void rasterize(const DisplayList& display_list,
+                   FrameBuffer& target,
+                   Rect clip,
+                   int offset_x,
+                   int offset_y,
+                   SoftwareRasterizerScratch* scratch) const;
+    void rasterize(const DisplayCommand& command,
+                   FrameBuffer& target,
+                   Rect clip,
+                   int offset_x = 0,
+                   int offset_y = 0,
+                   SoftwareRasterizerScratch* scratch = nullptr) const;
 
 private:
     TextPainter text_painter_;
@@ -90,6 +108,12 @@ public:
         bool smooth_scaled_layers = true;
     };
 
+    struct Scratch {
+        SoftwareRasterizerScratch rasterizer;
+
+        void release();
+    };
+
     SoftwareCompositor();
     explicit SoftwareCompositor(TextPainter text_painter);
     SoftwareCompositor(TextPainter text_painter, Options options);
@@ -102,7 +126,8 @@ public:
                      FrameBuffer& target,
                      Color background,
                      const Rect* dirty_rects,
-                     std::size_t dirty_rect_count) const;
+                     std::size_t dirty_rect_count,
+                     Scratch* scratch = nullptr) const;
 
 private:
     SoftwareRasterizer rasterizer_;
@@ -113,7 +138,8 @@ private:
                          Rect clip,
                          int offset_x,
                          int offset_y,
-                         float inherited_opacity = 1.0F) const;
+                         float inherited_opacity = 1.0F,
+                         SoftwareRasterizerScratch* scratch = nullptr) const;
 };
 
 #ifdef JELLYFRAME_ENABLE_IMAGE_FILE_IO

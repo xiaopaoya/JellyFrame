@@ -978,10 +978,11 @@ void rasterize_with_opacity(const SoftwareRasterizer& rasterizer,
                             int offset_x,
                             int offset_y,
                             float opacity,
-                            std::size_t first_command = 0) {
+                            std::size_t first_command = 0,
+                            SoftwareRasterizerScratch* scratch = nullptr) {
     if (opacity >= 0.999F) {
         for (std::size_t index = first_command; index < display_list.size(); ++index) {
-            rasterizer.rasterize(display_list[index], target, clip, offset_x, offset_y);
+            rasterizer.rasterize(display_list[index], target, clip, offset_x, offset_y, scratch);
         }
         return;
     }
@@ -990,7 +991,7 @@ void rasterize_with_opacity(const SoftwareRasterizer& rasterizer,
         DisplayCommand command = source;
         command.color = with_opacity(command.color, opacity);
         command.color2 = with_opacity(command.color2, opacity);
-        rasterizer.rasterize(command, target, clip, offset_x, offset_y);
+        rasterizer.rasterize(command, target, clip, offset_x, offset_y, scratch);
     }
 }
 
@@ -1015,6 +1016,12 @@ void FrameBuffer::resize(int new_width, int new_height, Color clear_color) {
 
 void FrameBuffer::clear(Color clear_color) {
     std::fill(pixels.begin(), pixels.end(), clear_color);
+}
+
+void SoftwareRasterizerScratch::release() {
+    FrameBuffer{}.pixels.swap(temporary_surface.pixels);
+    temporary_surface.width = 0;
+    temporary_surface.height = 0;
 }
 
 bool FrameBuffer::contains(int x, int y) const {
@@ -1048,8 +1055,17 @@ void SoftwareRasterizer::rasterize(const DisplayList& display_list,
                                    Rect clip,
                                    int offset_x,
                                    int offset_y) const {
+    rasterize(display_list, target, clip, offset_x, offset_y, nullptr);
+}
+
+void SoftwareRasterizer::rasterize(const DisplayList& display_list,
+                                   FrameBuffer& target,
+                                   Rect clip,
+                                   int offset_x,
+                                   int offset_y,
+                                   SoftwareRasterizerScratch* scratch) const {
     for (const DisplayCommand& command : display_list) {
-        rasterize(command, target, clip, offset_x, offset_y);
+        rasterize(command, target, clip, offset_x, offset_y, scratch);
     }
 }
 
@@ -1057,7 +1073,8 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                                    FrameBuffer& target,
                                    Rect clip,
                                    int offset_x,
-                                   int offset_y) const {
+                                   int offset_y,
+                                   SoftwareRasterizerScratch* scratch) const {
     Rect rect = command.rect;
     rect.x += offset_x;
     rect.y += offset_y;
@@ -1155,7 +1172,9 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         if (empty_rect(visible)) {
             break;
         }
-        FrameBuffer text_buffer(visible.width, visible.height, Color{0, 0, 0, 0});
+        FrameBuffer local_buffer;
+        FrameBuffer& text_buffer = scratch != nullptr ? scratch->temporary_surface : local_buffer;
+        text_buffer.resize(visible.width, visible.height, Color{0, 0, 0, 0});
         draw_text(text_buffer,
                   Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
                   command.color,
@@ -1205,7 +1224,9 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         if (empty_rect(visible)) {
             break;
         }
-        FrameBuffer image_buffer(visible.width, visible.height, Color{0, 0, 0, 0});
+        FrameBuffer local_buffer;
+        FrameBuffer& image_buffer = scratch != nullptr ? scratch->temporary_surface : local_buffer;
+        image_buffer.resize(visible.width, visible.height, Color{0, 0, 0, 0});
         if (!image_painter_.paint(image_buffer,
                                   Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
                                   command.image_handle,
@@ -1263,14 +1284,19 @@ FrameBuffer SoftwareCompositor::render(const LayerNode& root,
 }
 
 void SoftwareCompositor::render_into(const LayerNode& root, FrameBuffer& target, Color background) const {
-    render_into(root, target, background, nullptr, 0);
+    render_into(root, target, background, nullptr, 0, nullptr);
+}
+
+void SoftwareCompositor::Scratch::release() {
+    rasterizer.release();
 }
 
 void SoftwareCompositor::render_into(const LayerNode& root,
                                      FrameBuffer& target,
                                      Color background,
                                      const Rect* dirty_rects,
-                                     std::size_t dirty_rect_count) const {
+                                     std::size_t dirty_rect_count,
+                                     Scratch* scratch) const {
     if (target.width <= 0 || target.height <= 0) {
         return;
     }
@@ -1279,7 +1305,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
         if (!root_opaque_fill_covers(root, full_target)) {
             target.clear(background);
         }
-        composite_layer(root, target, full_target, 0, 0, 1.0F);
+        composite_layer(root, target, full_target, 0, 0, 1.0F, scratch != nullptr ? &scratch->rasterizer : nullptr);
         return;
     }
     if (dirty_rect_count == 1) {
@@ -1288,7 +1314,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
             if (!root_opaque_fill_covers(root, dirty)) {
                 fill_rect(target, dirty, background);
             }
-            composite_layer(root, target, dirty, 0, 0, 1.0F);
+            composite_layer(root, target, dirty, 0, 0, 1.0F, scratch != nullptr ? &scratch->rasterizer : nullptr);
         }
         return;
     }
@@ -1298,7 +1324,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
         if (!root_opaque_fill_covers(root, dirty)) {
             fill_rect(target, dirty, background);
         }
-        composite_layer(root, target, dirty, 0, 0, 1.0F);
+        composite_layer(root, target, dirty, 0, 0, 1.0F, scratch != nullptr ? &scratch->rasterizer : nullptr);
     }
 }
 
@@ -1307,7 +1333,8 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                          Rect clip,
                                          int offset_x,
                                          int offset_y,
-                                         float inherited_opacity) const {
+                                         float inherited_opacity,
+                                         SoftwareRasterizerScratch* scratch) const {
     const int transform_x = round_transform_offset(layer.transform.translate_x);
     const int transform_y = round_transform_offset(layer.transform.translate_y);
     const int layer_offset_x = offset_x + transform_x;
@@ -1358,9 +1385,11 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                    layer_clip,
                                    layer_offset_x,
                                    layer_offset_y,
-                                   layer_opacity);
+                                   layer_opacity,
+                                   0,
+                                   scratch);
             for (const auto& child : layer.children) {
-                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity);
+                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity, scratch);
             }
             return;
         }
@@ -1369,9 +1398,9 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         const int child_offset_x = layer_offset_x - offscreen_bounds.x;
         const int child_offset_y = layer_offset_y - offscreen_bounds.y;
         const Rect offscreen_clip{0, 0, offscreen_bounds.width, offscreen_bounds.height};
-        rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y);
+        rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y, scratch);
         for (const auto& child : layer.children) {
-            composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F);
+            composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F, scratch);
         }
         if (has_scale_or_rotate) {
             composite_transformed_buffer(target,
@@ -1400,9 +1429,10 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                            layer_offset_x,
                            layer_offset_y,
                            layer_opacity,
-                           prefix.first_command);
+                           prefix.first_command,
+                           scratch);
     for (const auto& child : layer.children) {
-        composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity);
+        composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity, scratch);
     }
 }
 

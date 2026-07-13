@@ -97,9 +97,10 @@ idle cadence. Its packed panel path converts into one internal DMA buffer and
 waits for each panel DMA completion before reusing that buffer. `panel_dma_wait`
 is therefore part of the measured present cost, not asynchronous work carried
 into the next frame. Each cumulative line is followed by `pipeline_arena` used
-and capacity counters. After the first retained build, capacity should remain
-stable during paint-only scroll frames; a capacity increase identifies a larger
-pipeline rebuild, while an unbounded increase is a regression to investigate.
+and capacity counters, including the optional clipped text/image surface. After
+the first retained build, capacity should remain stable during paint-only scroll
+frames; a capacity increase identifies a larger pipeline rebuild, while an
+unbounded increase is a regression to investigate.
 
 ## Flash Layout
 

@@ -632,6 +632,82 @@ void dirty_text_clip_preserves_original_text_geometry() {
     check(frame_buffer.pixel(22, 5).r == 255, "partial text clip does not recenter text inside dirty rect");
 }
 
+void rasterizer_scratch_reuses_clipped_command_storage() {
+    FrameBuffer frame_buffer(40, 10, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer(TextPainter{center_pixel_text_painter, nullptr});
+    SoftwareRasterizerScratch scratch;
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 40, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "center";
+    command.font_size = 10;
+    command.text_single_line = true;
+    const Rect dirty{20, 0, 5, 10};
+
+    rasterizer.rasterize(command, frame_buffer, dirty, 0, 0, &scratch);
+    const std::size_t capacity = scratch.temporary_surface.pixels.capacity();
+    check(capacity >= 50, "scratch retains clipped text surface storage");
+
+    rasterizer.rasterize(command, frame_buffer, dirty, 0, 0, &scratch);
+    check(scratch.temporary_surface.pixels.capacity() == capacity,
+          "repeated clipped text paint reuses scratch storage");
+    check(frame_buffer.pixel(20, 5).r == 0, "scratch preserves clipped text output");
+
+    scratch.release();
+    check(scratch.temporary_surface.pixels.empty() && scratch.temporary_surface.pixels.capacity() == 0,
+          "scratch release returns temporary surface storage");
+}
+
+void compositor_scratch_reuses_clipped_command_storage() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 40, 10};
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 40, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "center";
+    command.font_size = 10;
+    command.text_single_line = true;
+    root.display_list.push_back(command);
+
+    FrameBuffer frame_buffer(40, 10, Color{255, 255, 255, 255});
+    SoftwareCompositor::Scratch scratch;
+    const Rect dirty{20, 0, 5, 10};
+    SoftwareCompositor compositor(TextPainter{center_pixel_text_painter, nullptr});
+    compositor.render_into(root, frame_buffer, Color{255, 255, 255, 255}, &dirty, 1, &scratch);
+    const std::size_t capacity = scratch.rasterizer.temporary_surface.pixels.capacity();
+    check(capacity >= 50, "compositor retains clipped command scratch storage");
+
+    compositor.render_into(root, frame_buffer, Color{255, 255, 255, 255}, &dirty, 1, &scratch);
+    check(scratch.rasterizer.temporary_surface.pixels.capacity() == capacity,
+          "compositor reuses clipped command scratch storage");
+}
+
+void rasterizer_scratch_reuses_clipped_image_storage() {
+    FrameBuffer frame_buffer(40, 10, Color{255, 255, 255, 255});
+    ImagePaintProbe probe;
+    probe.expected_handle = 41;
+    SoftwareRasterizer rasterizer({}, ImagePainter{probe_image_painter, &probe});
+    SoftwareRasterizerScratch scratch;
+    DisplayCommand command;
+    command.type = DisplayCommandType::Image;
+    command.rect = Rect{0, 0, 40, 10};
+    command.image_handle = probe.expected_handle;
+    const Rect dirty{20, 0, 5, 10};
+
+    rasterizer.rasterize(command, frame_buffer, dirty, 0, 0, &scratch);
+    const std::size_t capacity = scratch.temporary_surface.pixels.capacity();
+    check(capacity >= 50, "scratch retains clipped image surface storage");
+
+    rasterizer.rasterize(command, frame_buffer, dirty, 0, 0, &scratch);
+    check(probe.calls == 2, "image painter runs for each clipped repaint");
+    check(scratch.temporary_surface.pixels.capacity() == capacity,
+          "repeated clipped image paint reuses scratch storage");
+    check(frame_buffer.pixel(20, 0).r == 220, "scratch preserves clipped image output");
+}
+
 struct FrameSinkProbe {
     int width = 0;
     int height = 0;
@@ -944,6 +1020,9 @@ int main() {
         compositor_keeps_rounded_fill_underpaint();
         rasterizer_reports_text_fallback();
         dirty_text_clip_preserves_original_text_geometry();
+        rasterizer_scratch_reuses_clipped_command_storage();
+        compositor_scratch_reuses_clipped_command_storage();
+        rasterizer_scratch_reuses_clipped_image_storage();
         compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
         compositor_rejects_oversized_framebuffer_before_allocation();
