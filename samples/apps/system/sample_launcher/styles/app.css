@@ -1,11 +1,14 @@
 :root {
-  --surface: #071923;
-  --ink: #f6fbff;
-  --muted: rgba(210, 245, 255, 0.72);
-  --gel: rgba(74, 190, 218, 0.24);
-  --edge: rgba(122, 232, 238, 0.70);
-  --lime: rgba(184, 244, 118, 0.58);
-  --coral: rgba(255, 132, 112, 0.62);
+  --canvas: #06171d;
+  --canvas-band: #0a2731;
+  --ink: #f4fcfd;
+  --muted: rgba(204, 233, 238, 0.72);
+  --line: rgba(135, 223, 226, 0.34);
+  --gel: rgba(76, 178, 190, 0.16);
+  --gel-deep: rgba(38, 118, 138, 0.28);
+  --mint: #b9ed8e;
+  --coral: #ffac9c;
+  --amber: #ffd28f;
 }
 
 body {
@@ -15,8 +18,8 @@ body {
   height: 100%;
   box-sizing: border-box;
   overflow: hidden;
-  background-color: var(--surface);
-  background: linear-gradient(#0b2b38, #071923);
+  background-color: var(--canvas);
+  background: linear-gradient(#0b2d37, var(--canvas));
   color: var(--ink);
   font-size: 14px;
 }
@@ -28,157 +31,265 @@ body {
 }
 
 .top {
+  min-height: 58px;
   display: grid;
-  gap: 4px;
-  padding: 12px;
-  background-color: rgba(74, 190, 218, 0.12);
-  background: linear-gradient(rgba(90, 198, 222, 0.18), rgba(20, 70, 92, 0.12));
-  border: 1px solid rgba(122, 232, 238, 0.42);
-  border-radius: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.eyebrow,
+.hint,
+.app-role,
+.meta,
+.empty-copy {
+  margin: 0;
+  color: var(--muted);
 }
 
 .eyebrow {
-  margin: 0;
-  color: var(--lime);
-  font-size: 12px;
+  color: var(--mint);
+  font-size: 11px;
   font-weight: 700;
 }
 
-h1 {
+h1,
+h2,
+p {
   margin: 0;
+}
+
+h1 {
+  font-size: 27px;
   color: var(--ink);
-  font-size: 28px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.32);
 }
 
 .hint {
-  margin: 0;
-  color: var(--muted);
+  padding-bottom: 3px;
   font-size: 12px;
+  text-align: right;
 }
 
 .status {
   margin: 0;
-  padding: 9px 11px;
-  background-color: rgba(184, 244, 118, 0.16);
-  background: linear-gradient(rgba(206, 252, 150, 0.24), rgba(90, 184, 164, 0.12));
-  color: var(--ink);
-  border: 1px solid rgba(184, 244, 118, 0.52);
-  border-radius: 16px;
-}
-
-.apps {
-  height: 370px;
-  display: grid;
-  gap: 10px;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.store-summary,
-.badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.store-summary {
   padding: 8px 10px;
-  background-color: rgba(30, 99, 118, 0.24);
-  border: 1px solid rgba(122, 232, 238, 0.38);
-  border-radius: 14px;
+  color: var(--ink);
+  background-color: rgba(115, 203, 172, 0.16);
+  border-left: 3px solid var(--mint);
+  font-size: 12px;
+}
+
+.confirmation {
+  padding: 10px;
+  background-color: rgba(255, 210, 143, 0.10);
+  border: 1px solid rgba(255, 210, 143, 0.42);
+  border-radius: 8px;
+}
+
+.confirmation-title {
+  color: var(--amber);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirmation-copy {
+  margin-top: 3px;
   color: var(--muted);
   font-size: 11px;
 }
 
-.badge {
-  padding: 3px 7px;
-  background-color: rgba(74, 190, 218, 0.18);
-  border: 1px solid rgba(122, 232, 238, 0.38);
-  border-radius: 10px;
+.confirmation-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.store-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.summary-item {
+  min-height: 52px;
+  padding: 4px 9px;
+  border-left: 1px solid var(--line);
+}
+
+.summary-item:first-child {
+  border-left: 0;
+}
+
+.summary-item span {
+  display: block;
   color: var(--muted);
   font-size: 10px;
 }
 
-.badge.update {
+.summary-item strong {
+  display: block;
   color: var(--ink);
-  background-color: rgba(184, 244, 118, 0.20);
-  border-color: rgba(184, 244, 118, 0.52);
+  font-size: 18px;
 }
 
-.empty,
+.apps {
+  display: grid;
+  gap: 10px;
+  height: 384px;
+  overflow: auto;
+  padding: 1px 2px 12px 0;
+}
+
+.empty {
+  padding: 20px 2px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.empty-title {
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.empty-copy {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
 .app {
   display: grid;
-  gap: 8px;
-  padding: 14px 12px 12px;
+  gap: 10px;
+  padding: 13px 12px 12px;
   background-color: var(--gel);
-  background: linear-gradient(rgba(124, 228, 240, 0.30), rgba(42, 142, 184, 0.18));
-  border: 1px solid var(--edge);
-  border-radius: 20px;
-  overflow: hidden;
-  transition: transform 180ms ease-out, background-color 180ms ease-out, opacity 180ms ease-out;
+  background: linear-gradient(rgba(117, 221, 226, 0.20), rgba(24, 82, 99, 0.22));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  transition: transform 160ms ease-out, background-color 160ms ease-out, opacity 160ms ease-out;
 }
 
-.app:focus-within,
-.app:active {
-  transform: translate(0px, 1px) scale(0.99);
-  background-color: rgba(74, 190, 218, 0.34);
-  background: linear-gradient(rgba(182, 246, 252, 0.36), rgba(72, 184, 210, 0.20));
+.app:focus-within {
+  background-color: var(--gel-deep);
+  border-color: rgba(182, 245, 244, 0.68);
+}
+
+.app-heading {
+  position: relative;
+  min-height: 42px;
+  padding-right: 64px;
+}
+
+.app-identity {
+  min-width: 0;
 }
 
 .name {
-  margin: 0;
   color: var(--ink);
   font-size: 18px;
 }
 
 .meta {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.state-label,
+.rollback-note,
+.failure-note {
+  font-size: 10px;
+}
+
+.state-label {
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: 3px 6px;
+  color: var(--mint);
+  background-color: rgba(185, 237, 142, 0.12);
+  border: 1px solid rgba(185, 237, 142, 0.36);
+  border-radius: 8px;
+}
+
+.state-label.paused {
+  color: var(--amber);
+  background-color: rgba(255, 210, 143, 0.10);
+  border-color: rgba(255, 210, 143, 0.30);
+}
+
+.state-label.recovery,
+.failure-note {
+  color: var(--coral);
+  background-color: rgba(255, 172, 156, 0.08);
+  border-color: rgba(255, 172, 156, 0.32);
+}
+
+.rollback-note,
+.failure-note {
+  padding: 6px 8px;
+  border-left: 2px solid var(--mint);
+  background-color: rgba(185, 237, 142, 0.08);
+}
+
+.failure-note {
+  border-left-color: var(--coral);
+  border-top: 1px solid rgba(255, 172, 156, 0.18);
+  border-bottom: 1px solid rgba(255, 172, 156, 0.18);
 }
 
 .actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
+  padding-top: 2px;
 }
 
 button {
   height: 34px;
-  padding: 0 8px;
+  padding: 0 7px;
   color: var(--ink);
-  background-color: rgba(74, 190, 218, 0.18);
-  background: linear-gradient(to right, rgba(112, 224, 238, 0.26), rgba(42, 142, 184, 0.16));
-  border: 1px solid var(--edge);
-  border-radius: 17px;
+  background-color: rgba(73, 162, 178, 0.16);
+  border: 1px solid rgba(151, 231, 233, 0.36);
+  border-radius: 7px;
+  font-size: 12px;
   font-weight: 700;
   text-align: center;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.28);
-  transition: transform 160ms ease-out, background-color 160ms ease-out, opacity 160ms ease-out;
+  transition: transform 140ms ease-out, background-color 140ms ease-out, opacity 140ms ease-out;
+}
+
+button.primary {
+  color: #102417;
+  background-color: rgba(185, 237, 142, 0.88);
+  border-color: rgba(224, 255, 192, 0.78);
+}
+
+button.secondary {
+  background-color: rgba(123, 217, 227, 0.24);
+}
+
+button.utility {
+  color: var(--muted);
+}
+
+button.danger {
+  color: var(--coral);
+  background-color: rgba(255, 172, 156, 0.08);
+  border-color: rgba(255, 172, 156, 0.30);
 }
 
 button:focus,
 button:active {
-  transform: translate(0px, 1px) scale(0.96);
-  background-color: rgba(255, 255, 255, 0.16);
-  background: linear-gradient(rgba(220, 255, 255, 0.30), rgba(80, 186, 216, 0.14));
-  outline: 1px solid rgba(220,255,255,0.46);
+  transform: translate(0px, 1px) scale(0.98);
+  background-color: rgba(220, 255, 255, 0.22);
+  outline: 1px solid rgba(220, 255, 255, 0.50);
 }
 
-button.primary {
-  background-color: rgba(184, 244, 118, 0.26);
-  background: linear-gradient(rgba(214, 252, 160, 0.34), rgba(104, 206, 186, 0.18));
-  border-color: rgba(184, 244, 118, 0.62);
+button.primary:focus,
+button.primary:active {
+  background-color: rgba(214, 255, 178, 0.94);
 }
 
-button.danger {
-  background-color: rgba(255, 132, 112, 0.20);
-  background: linear-gradient(rgba(255, 178, 160, 0.24), rgba(182, 108, 150, 0.14));
-  border-color: var(--coral);
-}
-
-button.danger.subtle {
-  background-color: rgba(255, 132, 112, 0.12);
-  border-color: rgba(255, 132, 112, 0.38);
+button:disabled {
+  opacity: 0.42;
 }

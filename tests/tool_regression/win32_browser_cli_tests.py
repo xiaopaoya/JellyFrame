@@ -1,4 +1,5 @@
 import json
+import hashlib
 import struct
 import subprocess
 import sys
@@ -65,6 +66,32 @@ def write_jfapp(path: Path, app_id: str, version_code: int, version_name: str, e
     path.write_bytes(bundle)
 
 
+def write_install_candidate(
+    path: Path,
+    bundle: Path,
+    *,
+    signature_status: str = "trusted",
+    user_approval: bool = True,
+    sha256: str | None = None,
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "format": "jellyframe.install_candidate",
+                "formatVersion": 0,
+                "bundle": {
+                    "path": bundle.name,
+                    "sha256": sha256 or hashlib.sha256(bundle.read_bytes()).hexdigest(),
+                },
+                "signature": {"status": signature_status},
+                "userApproval": user_approval,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: win32_browser_cli_tests.py PATH_TO_EXE")
@@ -82,6 +109,7 @@ def main() -> int:
     require("event FRAME battery PERCENT CHARGING" in help_result.stdout,
             "--help must document host battery injection")
     require("--keep-data" in help_result.stdout, "--help must document app data retention")
+    require("--install-candidate" in help_result.stdout, "--help must document verified candidate installs")
     require("--delete-app-data" in help_result.stdout, "--help must document standalone app data deletion")
     require("--rollback-app" in help_result.stdout, "--help must document app rollback")
     require("--enable-app" in help_result.stdout, "--help must document app enable")
@@ -177,6 +205,79 @@ def main() -> int:
         require(app["rollback"]["versionCode"] == 2, "win32 registry rollback must preserve current version as rollback")
         require(app["rollback"]["entry"] == "/v2.html", "win32 registry rollback must preserve current entry as rollback")
 
+        bundles = store / "bundles"
+        staging = store / "staging"
+        stale_stage = staging / "interrupted-update.staging"
+        orphan_bundle = bundles / "interrupted-update.jfapp"
+        stale_stage.write_bytes(b"partial")
+        orphan_bundle.write_bytes(b"partial")
+        recovery_result = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(first)])
+        require(recovery_result.returncode == 0, "registry recovery install must pass")
+        require(not stale_stage.exists(), "registry recovery must remove stale staging files")
+        require(not orphan_bundle.exists(), "registry recovery must remove orphaned bundles")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        app = registry["apps"][0]
+        require((bundles / app["bundleFile"]).is_file(), "registry recovery must retain the current bundle")
+        require((bundles / app["rollback"]["bundleFile"]).is_file(), "registry recovery must retain the rollback bundle")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-install-candidate-") as directory:
+        root = Path(directory)
+        store = root / "store"
+        bundle = root / "candidate.jfapp"
+        candidate = root / "candidate.json"
+        write_jfapp(bundle, "org.jellyframe.candidate-probe", 1, "1.0.0", "/index.html")
+        write_install_candidate(candidate, bundle)
+        installed = run_case(exe, ["--registry-store", str(store), "--install-candidate", str(candidate)])
+        require(installed.returncode == 0, f"trusted approved install candidate must pass: {installed.stdout}")
+        require("installed-candidate org.jellyframe.candidate-probe 1.0.0" in installed.stdout,
+                "candidate install must report the installed app")
+
+        update_bundle = root / "candidate-v2.jfapp"
+        update_candidate = root / "candidate-v2.json"
+        write_jfapp(update_bundle, "org.jellyframe.candidate-probe", 2, "2.0.0", "/v2.html")
+        write_install_candidate(update_candidate, update_bundle)
+        updated = run_case(exe, ["--registry-store", str(store), "--install-candidate", str(update_candidate)])
+        require(updated.returncode == 0, "verified candidate update must pass")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        app = registry["apps"][0]
+        require(app["versionCode"] == 2 and app["rollback"]["versionCode"] == 1,
+                "candidate update must retain the previous bundle for rollback")
+
+        untrusted = root / "untrusted.json"
+        write_install_candidate(untrusted, bundle, signature_status="untrusted")
+        result = run_case(exe, ["--registry-store", str(store), "--install-candidate", str(untrusted)])
+        require(result.returncode != 0 and "signature-not-trusted" in result.stdout,
+                "untrusted install candidate must be rejected")
+
+        not_approved = root / "not-approved.json"
+        write_install_candidate(not_approved, bundle, user_approval=False)
+        result = run_case(exe, ["--registry-store", str(store), "--install-candidate", str(not_approved)])
+        require(result.returncode != 0 and "user-approval-required" in result.stdout,
+                "unapproved install candidate must be rejected")
+
+        bad_hash = root / "bad-hash.json"
+        write_install_candidate(bad_hash, bundle, sha256="0" * 64)
+        result = run_case(exe, ["--registry-store", str(store), "--install-candidate", str(bad_hash)])
+        require(result.returncode != 0 and "bundle-hash-mismatch" in result.stdout,
+                "candidate with a mismatched bundle hash must be rejected")
+
+        trailing_data = root / "trailing-data.json"
+        write_install_candidate(trailing_data, bundle)
+        trailing_data.write_text(trailing_data.read_text(encoding="utf-8") + "\nnot-json\n", encoding="utf-8")
+        result = run_case(exe, ["--registry-store", str(store), "--install-candidate", str(trailing_data)])
+        require(result.returncode != 0 and "invalid install candidate" in result.stdout,
+                "candidate JSON with trailing data must be rejected")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        require(registry["apps"][0]["versionCode"] == 2,
+                "rejected candidates must leave the currently launchable version unchanged")
+
+        conflicting = run_case(
+            exe,
+            ["--registry-store", str(store), "--install-bundle", str(bundle), "--install-candidate", str(candidate)],
+        )
+        require(conflicting.returncode != 0 and "cannot be used together" in conflicting.stdout,
+                "raw bundle and verified candidate install inputs must be mutually exclusive")
+
     with tempfile.TemporaryDirectory(prefix="jellyframe-launcher-action-") as directory:
         root = Path(directory)
         store = root / "store"
@@ -189,6 +290,39 @@ def main() -> int:
         app_data = store / "data" / app_id
         app_data.mkdir(parents=True)
         (app_data / "state.txt").write_text("keep", encoding="utf-8")
+        confirmation_result = run_case(
+            exe,
+            [
+                "--registry-store", str(store),
+                "--launcher-app", "samples/apps/system/sample_launcher",
+                "--capture-frames", str(frames),
+                "--frame-count", "2",
+                "--frame-event", "1:click:270:300",
+            ],
+        )
+        require(confirmation_result.returncode == 0, "launcher destructive-action confirmation must capture")
+        require("diagnostics: 0" in confirmation_result.stdout,
+                "launcher confirmation fixture must remain inside the documented rendering subset")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        require(len(registry["apps"]) == 1, "first destructive-action click must not remove the installed bundle")
+        require(app_data.is_dir(), "first destructive-action click must preserve app-private data")
+
+        cancel_result = run_case(
+            exe,
+            [
+                "--registry-store", str(store),
+                "--launcher-app", "samples/apps/system/sample_launcher",
+                "--capture-frames", str(frames),
+                "--frame-count", "3",
+                "--frame-event", "1:click:270:300",
+                "--frame-event", "2:click:270:227",
+            ],
+        )
+        require(cancel_result.returncode == 0, "launcher destructive-action cancellation must capture")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        require(len(registry["apps"]) == 1, "cancelled destructive action must preserve the installed bundle")
+        require(app_data.is_dir(), "cancelled destructive action must preserve app-private data")
+
         action_result = run_case(
             exe,
             [
@@ -196,12 +330,13 @@ def main() -> int:
                 "--launcher-app", "samples/apps/system/sample_launcher",
                 "--capture-frames", str(frames),
                 "--frame-count", "3",
-                "--frame-event", "1:click:100:414",
+                "--frame-event", "1:click:270:300",
+                "--frame-event", "2:click:100:227",
             ],
         )
-        require(action_result.returncode == 0, "launcher remove-keep-data action must capture")
+        require(action_result.returncode == 0, "launcher confirmed remove-keep-data action must capture")
         require("diagnostics: 0" in action_result.stdout,
-                "launcher action fixture must remain inside the documented rendering subset")
+                "launcher confirmed action fixture must remain inside the documented rendering subset")
         registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
         require(not registry["apps"], "launcher remove-keep-data action must remove the installed bundle")
         require(app_data.is_dir(), "launcher remove-keep-data action must preserve app-private data")

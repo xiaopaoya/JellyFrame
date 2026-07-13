@@ -80,6 +80,7 @@ constexpr UINT kScriptTimerPeriodMs = 16;
 constexpr int kIncrementalDirtyAreaLimitPercent = 70;
 constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_launcher";
 constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
+constexpr const char* kLauncherConfirmationMarker = "<!-- JELLYFRAME_CONFIRMATION -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
 constexpr int kMaxDebugPackageImageWidth = 256;
 constexpr int kMaxDebugPackageImageHeight = 256;
@@ -496,6 +497,7 @@ struct BrowserOptions {
     std::string registry_store_path;
     std::string launcher_app_path = kDefaultLauncherAppPath;
     std::string install_bundle_path;
+    std::string install_candidate_path;
     std::string launch_app_id;
     std::string remove_app_id;
     std::string rollback_app_id;
@@ -2682,6 +2684,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --registry-store DIR           Run system-shell/app-manager mode.\n"
         << "  --launcher-app PATH            Launcher app used with --registry-store.\n"
         << "  --install-bundle PATH          Install .jfapp into registry store.\n"
+        << "  --install-candidate PATH       Install a host-verified candidate JSON into registry store.\n"
         << "  --launch-app ID                Launch installed app id.\n"
         << "  --remove-app ID                Remove installed app id.\n"
         << "  --rollback-app ID              Roll an installed app back to its previous bundle.\n"
@@ -2794,44 +2797,55 @@ bool replace_once(std::string& text, std::string_view marker, std::string_view r
 
 std::string build_launcher_store_summary_html(const jellyframe_example::AppManagerState& state) {
     std::ostringstream html;
-    html << "<section class='store-summary'>"
-         << "<span>Installed " << state.summary.app_count << "</span>"
-         << "<span>Ready " << state.summary.launchable_count << "</span>"
-         << "<span>Updates " << state.summary.rollback_ready_count << "</span>"
-         << "<span>Recovery " << state.summary.failed_count << "</span>"
+    html << "<section class='store-summary' aria-label='App library overview'>"
+         << "<div class='summary-item'><span>Installed</span><strong>" << state.summary.app_count << "</strong></div>"
+         << "<div class='summary-item'><span>Ready</span><strong>" << state.summary.launchable_count << "</strong></div>"
+         << "<div class='summary-item'><span>Rollback</span><strong>" << state.summary.rollback_ready_count << "</strong></div>"
+         << "<div class='summary-item'><span>Recovery</span><strong>" << state.summary.failed_count << "</strong></div>"
          << "</section>";
     return html.str();
+}
+
+const char* launcher_app_state_label(const jellyframe_example::AppManagerAppState& app_state) {
+    if (app_state.app.has_failure) {
+        return "Needs review";
+    }
+    return app_state.launchable ? "Ready" : "Paused";
+}
+
+const char* launcher_app_state_class(const jellyframe_example::AppManagerAppState& app_state) {
+    if (app_state.app.has_failure) {
+        return "recovery";
+    }
+    return app_state.launchable ? "ready" : "paused";
 }
 
 std::string build_launcher_app_list_html(const jellyframe_example::AppManagerState& state) {
     std::ostringstream html;
     if (state.apps.empty()) {
-        html << "<section class='empty'><p>No installed apps.</p>"
-             << "<p class='hint'>Use --install-bundle app.jfapp with --registry-store.</p></section>";
+        html << "<section class='empty'><p class='empty-title'>No apps installed</p>"
+             << "<p class='empty-copy'>Verified installs appear here after the host approves them.</p></section>";
     }
     for (const jellyframe_example::AppManagerAppState& app_state : state.apps) {
         const jellyframe_example::InstalledAppEntry& app = app_state.app;
-        html << "<article class='app'>"
-             << "<h2 class='name'>" << html_escape_text(app.name) << "</h2>"
-             << "<p class='meta'>" << html_escape_text(app.id) << " - v"
-             << html_escape_text(app.version_name) << " - " << app.bundle_size << " bytes</p>"
-             << "<div class='badges'>"
-             << "<span class='badge'>" << html_escape_text(app.status) << "</span>"
-             << "<span class='badge'>" << (app.enabled ? "enabled" : "disabled") << "</span>"
-             << (app_state.rollback_ready ? "<span class='badge update'>rollback ready</span>" : "")
+        const std::string escaped_id = html_escape_text(app.id);
+        html << "<article class='app app-" << launcher_app_state_class(app_state) << "'>"
+             << "<div class='app-heading'><span class='state-label state-" << launcher_app_state_class(app_state) << "'>"
+             << launcher_app_state_label(app_state) << "</span><div class='app-identity'><h2 class='name'>"
+             << html_escape_text(app.name) << "</h2><p class='meta'>v"
+             << html_escape_text(app.version_name) << " | " << app.bundle_size << " bytes</p></div>"
              << "</div>"
-             << (app.has_failure ? "<p class='meta'>failure: " + html_escape_text(app.failure_reason) + "</p>" : "")
+             << (app_state.rollback_ready ? "<p class='rollback-note'>Previous version available</p>" : "")
+             << (app.has_failure ? "<p class='failure-note'>Recovery: " + html_escape_text(app.failure_reason) + "</p>" : "")
              << "<div class='actions'>"
-             << "<button class='primary' data-action='launch' data-app-id='" << html_escape_text(app.id) << "'"
-             << (!app_state.launchable ? " disabled" : "") << ">Launch</button>"
-             << "<button data-action='" << (app.enabled ? "disable" : "enable") << "' data-app-id='"
-             << html_escape_text(app.id) << "'>" << (app.enabled ? "Disable" : "Enable") << "</button>"
-             << (app_state.rollback_ready ?
-                 "<button data-action='rollback' data-app-id='" + html_escape_text(app.id) + "'>Rollback</button>" :
-                 "")
-             << "<button data-action='clear-data' data-app-id='" << html_escape_text(app.id) << "'>Clear data</button>"
-             << "<button class='danger' data-action='remove-delete-data' data-app-id='" << html_escape_text(app.id) << "'>Remove + data</button>"
-             << "<button class='danger subtle' data-action='remove-keep-data' data-app-id='" << html_escape_text(app.id) << "'>Remove / keep data</button>"
+             << "<button class='primary' data-action='launch' data-app-id='" << escaped_id << "'"
+             << (!app_state.launchable ? " disabled" : "") << ">Open</button>"
+             << "<button class='secondary' data-action='" << (app.enabled ? "disable" : "enable")
+             << "' data-app-id='" << escaped_id << "'>" << (app.enabled ? "Pause" : "Enable") << "</button>"
+             << (app_state.rollback_ready ? "<button class='utility' data-action='rollback' data-app-id='" + escaped_id + "'>Rollback</button>" : "")
+             << "<button class='utility' data-action='clear-data' data-app-id='" << escaped_id << "'>Clear data</button>"
+             << "<button class='utility' data-action='remove-keep-data' data-app-id='" << escaped_id << "'>Remove</button>"
+             << "<button class='danger' data-action='remove-delete-data' data-app-id='" << escaped_id << "'>Remove data</button>"
              << "</div></article>";
     }
     return html.str();
@@ -2842,6 +2856,48 @@ std::string build_launcher_status_html(const std::string& status) {
         return {};
     }
     return "<p class='status'>" + html_escape_text(status) + "</p>";
+}
+
+bool launcher_action_requires_confirmation(std::string_view action) {
+    return action == "clear-data" || action == "remove-keep-data" || action == "remove-delete-data";
+}
+
+std::string build_launcher_confirmation_html(const jellyframe_example::AppManagerState& state,
+                                             std::string_view action,
+                                             std::string_view app_id) {
+    if (action.empty() || app_id.empty()) {
+        return {};
+    }
+    const auto found = std::find_if(state.apps.begin(), state.apps.end(), [&](const auto& app_state) {
+        return app_state.app.id == app_id;
+    });
+    if (found == state.apps.end()) {
+        return {};
+    }
+    const std::string name = html_escape_text(found->app.name);
+    std::string title;
+    std::string copy;
+    std::string confirm_label;
+    if (action == "clear-data") {
+        title = "Clear app data?";
+        copy = "The app stays installed. Its private data will be removed.";
+        confirm_label = "Clear data";
+    } else if (action == "remove-keep-data") {
+        title = "Remove " + name + "?";
+        copy = "The bundle is removed. Private app data is retained.";
+        confirm_label = "Remove app";
+    } else if (action == "remove-delete-data") {
+        title = "Remove " + name + " and data?";
+        copy = "The bundle and private app data will be removed.";
+        confirm_label = "Remove all";
+    } else {
+        return {};
+    }
+    return "<section class='confirmation'><p class='confirmation-title'>" + title + "</p>"
+        "<p class='confirmation-copy'>" + copy + "</p><div class='confirmation-actions'>"
+        "<button class='danger' data-action='confirm-destructive' data-app-id='" + html_escape_text(std::string(app_id)) + "'>" +
+        confirm_label + "</button><button class='utility' data-action='cancel-confirmation' data-app-id='" +
+        html_escape_text(std::string(app_id)) + "'>Cancel</button></div></section>";
 }
 
 std::string load_launcher_resource(const jellyframe_example::AppPackage& package,
@@ -2872,10 +2928,17 @@ std::string load_launcher_entry_html(const jellyframe_example::AppPackage& packa
     return html;
 }
 
-void inject_launcher_markup(std::string& html, const std::string& app_list_html, const std::string& status_html) {
+void inject_launcher_markup(std::string& html,
+                            const std::string& app_list_html,
+                            const std::string& status_html,
+                            const std::string& confirmation_html) {
     if (!replace_once(html, kLauncherStatusMarker, status_html) && !status_html.empty()) {
         const std::size_t main_end = html.find("</main>");
         html.insert(main_end == std::string::npos ? html.size() : main_end, status_html);
+    }
+    if (!replace_once(html, kLauncherConfirmationMarker, confirmation_html) && !confirmation_html.empty()) {
+        const std::size_t main_end = html.find("</main>");
+        html.insert(main_end == std::string::npos ? html.size() : main_end, confirmation_html);
     }
     if (!replace_once(html, kLauncherAppListMarker, app_list_html)) {
         const std::size_t main_end = html.find("</main>");
@@ -2885,14 +2948,17 @@ void inject_launcher_markup(std::string& html, const std::string& app_list_html,
 
 std::string build_system_shell_html(const std::filesystem::path& launcher_app_path,
                                     const std::filesystem::path& registry_store,
-                                    const std::string& status) {
+                                    const std::string& status,
+                                    std::string_view confirmation_action = {},
+                                    std::string_view confirmation_app_id = {}) {
     const auto package = jellyframe_example::load_app_package(launcher_app_path, kMaxInputBytes);
     const jellyframe_example::AppManagerState state =
         jellyframe_example::load_app_manager_state(registry_store);
     std::string html = load_launcher_entry_html(package);
     inject_launcher_markup(html,
                            build_launcher_store_summary_html(state) + build_launcher_app_list_html(state),
-                           build_launcher_status_html(status));
+                           build_launcher_status_html(status),
+                           build_launcher_confirmation_html(state, confirmation_action, confirmation_app_id));
     return html;
 }
 
@@ -3635,6 +3701,8 @@ private:
     LoadTelemetryDebugCounters load_telemetry_counters_;
     std::string pending_shell_action_;
     std::string pending_shell_app_id_;
+    std::string confirmation_action_;
+    std::string confirmation_app_id_;
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
         BrowserApp* app = nullptr;
@@ -4253,7 +4321,11 @@ private:
         options_.script_path.clear();
         try {
             options_.inline_html =
-                build_system_shell_html(options_.launcher_app_path, options_.registry_store_path, status);
+                build_system_shell_html(options_.launcher_app_path,
+                                        options_.registry_store_path,
+                                        status,
+                                        confirmation_action_,
+                                        confirmation_app_id_);
             options_.inline_css = load_system_shell_css(options_.launcher_app_path);
         } catch (const std::exception& error) {
             options_.inline_html = emergency_launcher_error_html(error.what());
@@ -4348,6 +4420,19 @@ private:
         }
     }
 
+    void clear_shell_confirmation() {
+        confirmation_action_.clear();
+        confirmation_app_id_.clear();
+    }
+
+    void request_shell_confirmation(const std::string& action, const std::string& app_id) {
+        confirmation_action_ = action;
+        confirmation_app_id_ = app_id;
+        configure_system_shell("Confirm the selected data change.");
+        rebuild();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+
     bool process_shell_action_if_needed() {
         if (pending_shell_action_.empty() || pending_shell_app_id_.empty()) {
             return false;
@@ -4356,6 +4441,35 @@ private:
         const std::string app_id = std::move(pending_shell_app_id_);
         pending_shell_action_.clear();
         pending_shell_app_id_.clear();
+        if (action == "cancel-confirmation") {
+            clear_shell_confirmation();
+            configure_system_shell("No changes made.");
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return true;
+        }
+        if (launcher_action_requires_confirmation(action)) {
+            request_shell_confirmation(action, app_id);
+            return true;
+        }
+        if (action == "confirm-destructive") {
+            if (confirmation_action_.empty() || confirmation_app_id_ != app_id) {
+                configure_system_shell("No pending data change to confirm.");
+                rebuild();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return true;
+            }
+            const std::string confirmed_action = std::move(confirmation_action_);
+            clear_shell_confirmation();
+            if (confirmed_action == "clear-data") {
+                clear_installed_app_data(app_id);
+            } else if (confirmed_action == "remove-keep-data") {
+                remove_installed_app(app_id, false);
+            } else {
+                remove_installed_app(app_id, true);
+            }
+            return true;
+        }
         if (action == "launch") {
             launch_installed_app(app_id);
         } else if (action == "remove-delete-data" || action == "delete") {
@@ -6337,6 +6451,14 @@ int main(int argc, char** argv) {
             options.install_bundle_path = argv[++i];
             continue;
         }
+        if (arg == "--install-candidate") {
+            if (i + 1 >= argc) {
+                std::cerr << "--install-candidate requires a candidate JSON file\n";
+                return 1;
+            }
+            options.install_candidate_path = argv[++i];
+            continue;
+        }
         if (arg == "--allow-downgrade") {
             options.allow_downgrade = true;
             continue;
@@ -6489,7 +6611,12 @@ int main(int argc, char** argv) {
         return run_system_survival_smoke(options.system_survival_smoke_cycles);
     }
 
-    if (!options.install_bundle_path.empty() || !options.remove_app_id.empty() || !options.rollback_app_id.empty() ||
+    if ((!options.install_bundle_path.empty() && !options.install_candidate_path.empty())) {
+        std::cerr << "--install-bundle and --install-candidate cannot be used together\n";
+        return 1;
+    }
+
+    if (!options.install_bundle_path.empty() || !options.install_candidate_path.empty() || !options.remove_app_id.empty() || !options.rollback_app_id.empty() ||
         !options.enable_app_id.empty() || !options.disable_app_id.empty() ||
         !options.delete_app_data_id.empty() || !options.launch_app_id.empty()) {
         if (options.registry_store_path.empty()) {
@@ -6507,6 +6634,15 @@ int main(int argc, char** argv) {
                 options.allow_downgrade);
             options.startup_status = "Installed " + installed.name + ".";
             std::cout << "installed " << installed.id << " " << installed.version_name << '\n';
+        }
+        if (!options.install_candidate_path.empty()) {
+            const auto installed = jellyframe_example::install_candidate_into_registry(
+                options.registry_store_path,
+                options.install_candidate_path,
+                kMaxInputBytes,
+                options.allow_downgrade);
+            options.startup_status = "Installed verified " + installed.name + ".";
+            std::cout << "installed-candidate " << installed.id << " " << installed.version_name << '\n';
         }
         if (!options.remove_app_id.empty()) {
             const auto removed =
@@ -6550,7 +6686,7 @@ int main(int argc, char** argv) {
     }
 
     const bool app_manager_command_only =
-        (!options.install_bundle_path.empty() || !options.remove_app_id.empty() ||
+        (!options.install_bundle_path.empty() || !options.install_candidate_path.empty() || !options.remove_app_id.empty() ||
          !options.rollback_app_id.empty() || !options.enable_app_id.empty() ||
          !options.disable_app_id.empty() || !options.delete_app_data_id.empty()) &&
         options.launch_app_id.empty() && options.app_path.empty() && positional.empty() &&

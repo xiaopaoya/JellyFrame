@@ -3,14 +3,18 @@
 #include "app_package.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -55,6 +59,111 @@ struct InstalledAppRegistry {
     std::vector<InstalledAppEntry> apps;
 };
 
+struct InstallCandidate {
+    std::filesystem::path bundle_path;
+    std::string bundle_sha256;
+};
+
+inline void sha256_transform(std::array<std::uint32_t, 8>& state, const std::uint8_t* block) {
+    static constexpr std::array<std::uint32_t, 64> kRoundConstants = {
+        0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U, 0x3956c25bU, 0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U,
+        0xd807aa98U, 0x12835b01U, 0x243185beU, 0x550c7dc3U, 0x72be5d74U, 0x80deb1feU, 0x9bdc06a7U, 0xc19bf174U,
+        0xe49b69c1U, 0xefbe4786U, 0x0fc19dc6U, 0x240ca1ccU, 0x2de92c6fU, 0x4a7484aaU, 0x5cb0a9dcU, 0x76f988daU,
+        0x983e5152U, 0xa831c66dU, 0xb00327c8U, 0xbf597fc7U, 0xc6e00bf3U, 0xd5a79147U, 0x06ca6351U, 0x14292967U,
+        0x27b70a85U, 0x2e1b2138U, 0x4d2c6dfcU, 0x53380d13U, 0x650a7354U, 0x766a0abbU, 0x81c2c92eU, 0x92722c85U,
+        0xa2bfe8a1U, 0xa81a664bU, 0xc24b8b70U, 0xc76c51a3U, 0xd192e819U, 0xd6990624U, 0xf40e3585U, 0x106aa070U,
+        0x19a4c116U, 0x1e376c08U, 0x2748774cU, 0x34b0bcb5U, 0x391c0cb3U, 0x4ed8aa4aU, 0x5b9cca4fU, 0x682e6ff3U,
+        0x748f82eeU, 0x78a5636fU, 0x84c87814U, 0x8cc70208U, 0x90befffaU, 0xa4506cebU, 0xbef9a3f7U, 0xc67178f2U,
+    };
+    std::array<std::uint32_t, 64> words{};
+    for (std::size_t index = 0; index < 16; ++index) {
+        words[index] = (static_cast<std::uint32_t>(block[index * 4]) << 24U) |
+            (static_cast<std::uint32_t>(block[index * 4 + 1]) << 16U) |
+            (static_cast<std::uint32_t>(block[index * 4 + 2]) << 8U) |
+            static_cast<std::uint32_t>(block[index * 4 + 3]);
+    }
+    for (std::size_t index = 16; index < words.size(); ++index) {
+        const std::uint32_t s0 = ((words[index - 15] >> 7U) | (words[index - 15] << 25U)) ^
+            ((words[index - 15] >> 18U) | (words[index - 15] << 14U)) ^ (words[index - 15] >> 3U);
+        const std::uint32_t s1 = ((words[index - 2] >> 17U) | (words[index - 2] << 15U)) ^
+            ((words[index - 2] >> 19U) | (words[index - 2] << 13U)) ^ (words[index - 2] >> 10U);
+        words[index] = words[index - 16] + s0 + words[index - 7] + s1;
+    }
+    std::uint32_t a = state[0];
+    std::uint32_t b = state[1];
+    std::uint32_t c = state[2];
+    std::uint32_t d = state[3];
+    std::uint32_t e = state[4];
+    std::uint32_t f = state[5];
+    std::uint32_t g = state[6];
+    std::uint32_t h = state[7];
+    for (std::size_t index = 0; index < words.size(); ++index) {
+        const std::uint32_t s1 = ((e >> 6U) | (e << 26U)) ^ ((e >> 11U) | (e << 21U)) ^ ((e >> 25U) | (e << 7U));
+        const std::uint32_t choice = (e & f) ^ (~e & g);
+        const std::uint32_t temp1 = h + s1 + choice + kRoundConstants[index] + words[index];
+        const std::uint32_t s0 = ((a >> 2U) | (a << 30U)) ^ ((a >> 13U) | (a << 19U)) ^ ((a >> 22U) | (a << 10U));
+        const std::uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
+        const std::uint32_t temp2 = s0 + majority;
+        h = g;
+        g = f;
+        f = e;
+        e = d + temp1;
+        d = c;
+        c = b;
+        b = a;
+        a = temp1 + temp2;
+    }
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
+    state[5] += f;
+    state[6] += g;
+    state[7] += h;
+}
+
+inline std::string sha256_file_hex(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("failed to open bundle for hashing: " + path.string());
+    }
+    std::array<std::uint32_t, 8> state = {
+        0x6a09e667U, 0xbb67ae85U, 0x3c6ef372U, 0xa54ff53aU,
+        0x510e527fU, 0x9b05688cU, 0x1f83d9abU, 0x5be0cd19U,
+    };
+    std::array<std::uint8_t, 64> block{};
+    std::uint64_t byte_count = 0;
+    while (input.read(reinterpret_cast<char*>(block.data()), static_cast<std::streamsize>(block.size()))) {
+        byte_count += block.size();
+        sha256_transform(state, block.data());
+    }
+    const std::streamsize tail_count = input.gcount();
+    if (!input.eof() && input.fail()) {
+        throw std::runtime_error("failed while hashing bundle: " + path.string());
+    }
+    byte_count += static_cast<std::uint64_t>(tail_count);
+    block[static_cast<std::size_t>(tail_count)] = 0x80U;
+    for (std::size_t index = static_cast<std::size_t>(tail_count) + 1; index < block.size(); ++index) {
+        block[index] = 0;
+    }
+    if (tail_count >= 56) {
+        sha256_transform(state, block.data());
+        block.fill(0);
+    }
+    const std::uint64_t bit_count = byte_count * 8U;
+    for (std::size_t index = 0; index < 8; ++index) {
+        block[63 - index] = static_cast<std::uint8_t>(bit_count >> (index * 8U));
+    }
+    sha256_transform(state, block.data());
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (const std::uint32_t word : state) {
+        output << std::setw(8) << word;
+    }
+    return output.str();
+}
+
 struct AppManagerAppState {
     InstalledAppEntry app;
     bool launchable = false;
@@ -71,6 +180,11 @@ struct AppManagerStateSummary {
 struct AppManagerState {
     std::vector<AppManagerAppState> apps;
     AppManagerStateSummary summary;
+};
+
+struct RegistryStorageRecovery {
+    std::size_t stale_staging_files_removed = 0;
+    std::size_t orphan_bundle_files_removed = 0;
 };
 
 inline std::filesystem::path registry_json_path(const std::filesystem::path& store) {
@@ -139,6 +253,264 @@ inline std::string sanitize_registry_filename(std::string_view value) {
 
 inline std::filesystem::path registry_app_data_dir(const std::filesystem::path& store, std::string_view app_id) {
     return registry_data_dir(store) / sanitize_registry_filename(app_id);
+}
+
+inline void candidate_json_skip_whitespace(std::string_view text, std::size_t& position) {
+    while (position < text.size() && std::isspace(static_cast<unsigned char>(text[position])) != 0) {
+        ++position;
+    }
+}
+
+inline bool candidate_json_read_string(std::string_view text, std::size_t& position, std::string& output) {
+    if (position >= text.size() || text[position] != '"') {
+        return false;
+    }
+    output.clear();
+    ++position;
+    while (position < text.size()) {
+        const char ch = text[position++];
+        if (ch == '"') {
+            return true;
+        }
+        if (ch == '\\') {
+            if (position >= text.size()) {
+                return false;
+            }
+            const char escaped = text[position++];
+            output.push_back(escaped == 'n' ? '\n' : escaped == 'r' ? '\r' : escaped == 't' ? '\t' : escaped);
+            continue;
+        }
+        output.push_back(ch);
+    }
+    return false;
+}
+
+inline bool candidate_json_value_end(std::string_view text, std::size_t position, std::size_t& end) {
+    if (position >= text.size()) {
+        return false;
+    }
+    if (text[position] == '"') {
+        std::string ignored;
+        if (!candidate_json_read_string(text, position, ignored)) {
+            return false;
+        }
+        end = position;
+        return true;
+    }
+    if (text[position] != '{' && text[position] != '[') {
+        while (position < text.size() && text[position] != ',' && text[position] != '}') {
+            ++position;
+        }
+        end = position;
+        return true;
+    }
+    int depth = 0;
+    bool in_string = false;
+    bool escaped = false;
+    for (; position < text.size(); ++position) {
+        const char ch = text[position];
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '{' || ch == '[') {
+            ++depth;
+        } else if (ch == '}' || ch == ']') {
+            if (--depth == 0) {
+                end = position + 1;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+inline bool candidate_json_is_single_object(std::string_view text) {
+    std::size_t position = 0;
+    candidate_json_skip_whitespace(text, position);
+    if (position >= text.size() || text[position] != '{') {
+        return false;
+    }
+    std::size_t end = 0;
+    if (!candidate_json_value_end(text, position, end)) {
+        return false;
+    }
+    candidate_json_skip_whitespace(text, end);
+    return end == text.size();
+}
+
+inline bool candidate_json_find_direct_value(std::string_view object,
+                                             std::string_view key,
+                                             std::string_view& value) {
+    std::size_t position = 0;
+    candidate_json_skip_whitespace(object, position);
+    if (position >= object.size() || object[position++] != '{') {
+        return false;
+    }
+    while (position < object.size()) {
+        candidate_json_skip_whitespace(object, position);
+        if (position < object.size() && object[position] == '}') {
+            return false;
+        }
+        std::string member;
+        if (!candidate_json_read_string(object, position, member)) {
+            return false;
+        }
+        candidate_json_skip_whitespace(object, position);
+        if (position >= object.size() || object[position++] != ':') {
+            return false;
+        }
+        candidate_json_skip_whitespace(object, position);
+        const std::size_t value_begin = position;
+        std::size_t value_end = 0;
+        if (!candidate_json_value_end(object, position, value_end)) {
+            return false;
+        }
+        if (member == key) {
+            value = object.substr(value_begin, value_end - value_begin);
+            return true;
+        }
+        position = value_end;
+        candidate_json_skip_whitespace(object, position);
+        if (position < object.size() && object[position] == ',') {
+            ++position;
+            continue;
+        }
+        return false;
+    }
+    return false;
+}
+
+inline bool candidate_json_find_direct_string(std::string_view object, std::string_view key, std::string& value) {
+    std::string_view encoded;
+    if (!candidate_json_find_direct_value(object, key, encoded)) {
+        return false;
+    }
+    std::size_t position = 0;
+    if (!candidate_json_read_string(encoded, position, value)) {
+        return false;
+    }
+    candidate_json_skip_whitespace(encoded, position);
+    return position == encoded.size();
+}
+
+inline bool candidate_json_find_direct_int(std::string_view object, std::string_view key, int& value) {
+    std::string_view encoded;
+    if (!candidate_json_find_direct_value(object, key, encoded)) {
+        return false;
+    }
+    std::size_t position = 0;
+    candidate_json_skip_whitespace(encoded, position);
+    if (position >= encoded.size() || !std::isdigit(static_cast<unsigned char>(encoded[position]))) {
+        return false;
+    }
+    int parsed = 0;
+    while (position < encoded.size() && std::isdigit(static_cast<unsigned char>(encoded[position])) != 0) {
+        if (parsed > 100000000) {
+            return false;
+        }
+        parsed = parsed * 10 + (encoded[position++] - '0');
+    }
+    candidate_json_skip_whitespace(encoded, position);
+    if (position != encoded.size()) {
+        return false;
+    }
+    value = parsed;
+    return true;
+}
+
+inline bool candidate_json_find_direct_bool(std::string_view object, std::string_view key, bool& value) {
+    std::string_view encoded;
+    if (!candidate_json_find_direct_value(object, key, encoded)) {
+        return false;
+    }
+    std::size_t position = 0;
+    candidate_json_skip_whitespace(encoded, position);
+    const std::string_view literal = encoded.substr(position);
+    const std::size_t end = literal.find_last_not_of(" \t\r\n");
+    const std::string_view trimmed = end == std::string_view::npos ? std::string_view{} : literal.substr(0, end + 1);
+    if (trimmed == "true") {
+        value = true;
+        return true;
+    }
+    if (trimmed == "false") {
+        value = false;
+        return true;
+    }
+    return false;
+}
+
+inline bool candidate_is_sha256(std::string_view value) {
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](char ch) {
+        return std::isxdigit(static_cast<unsigned char>(ch)) != 0;
+    });
+}
+
+inline InstallCandidate load_verified_install_candidate(const std::filesystem::path& candidate_path,
+                                                        std::size_t max_bundle_bytes) {
+    const std::filesystem::path absolute_candidate = std::filesystem::absolute(candidate_path);
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(absolute_candidate, error)) {
+        throw std::runtime_error("install candidate is not a regular file: " + absolute_candidate.string());
+    }
+    const std::uintmax_t candidate_size = std::filesystem::file_size(absolute_candidate, error);
+    if (error || candidate_size > 128U * 1024U) {
+        throw std::runtime_error("install candidate is too large or unreadable: " + absolute_candidate.string());
+    }
+    const std::string candidate = read_text_file_limited(absolute_candidate, 128U * 1024U);
+    std::string format;
+    int format_version = -1;
+    std::string_view bundle;
+    std::string_view signature;
+    bool user_approval = false;
+    if (!candidate_json_is_single_object(candidate) ||
+        !candidate_json_find_direct_string(candidate, "format", format) || format != "jellyframe.install_candidate" ||
+        !candidate_json_find_direct_int(candidate, "formatVersion", format_version) || format_version != 0 ||
+        !candidate_json_find_direct_value(candidate, "bundle", bundle) ||
+        !candidate_json_find_direct_value(candidate, "signature", signature) ||
+        !candidate_json_find_direct_bool(candidate, "userApproval", user_approval)) {
+        throw std::runtime_error("invalid install candidate: required fields are missing or malformed");
+    }
+    std::string bundle_path_text;
+    std::string expected_sha256;
+    std::string signature_status;
+    if (!candidate_json_find_direct_string(bundle, "path", bundle_path_text) || bundle_path_text.empty() ||
+        !candidate_json_find_direct_string(bundle, "sha256", expected_sha256) || !candidate_is_sha256(expected_sha256)) {
+        throw std::runtime_error("invalid install candidate: bundle.path and bundle.sha256 are required");
+    }
+    if (!candidate_json_find_direct_string(signature, "status", signature_status) || signature_status != "trusted") {
+        throw std::runtime_error("signature-not-trusted: install candidate signature is not trusted");
+    }
+    if (!user_approval) {
+        throw std::runtime_error("user-approval-required: install candidate requires user approval");
+    }
+    std::filesystem::path bundle_path(bundle_path_text);
+    if (!bundle_path.is_absolute()) {
+        bundle_path = absolute_candidate.parent_path() / bundle_path;
+    }
+    bundle_path = std::filesystem::absolute(bundle_path);
+    if (!std::filesystem::is_regular_file(bundle_path, error)) {
+        throw std::runtime_error("install candidate bundle is not a regular file: " + bundle_path.string());
+    }
+    const std::uintmax_t bundle_size = std::filesystem::file_size(bundle_path, error);
+    if (error || bundle_size > max_bundle_bytes) {
+        throw std::runtime_error("install candidate bundle is too large or unreadable: " + bundle_path.string());
+    }
+    std::transform(expected_sha256.begin(), expected_sha256.end(), expected_sha256.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    if (sha256_file_hex(bundle_path) != expected_sha256) {
+        throw std::runtime_error("bundle-hash-mismatch: install candidate bundle sha256 mismatch");
+    }
+    return {bundle_path, std::move(expected_sha256)};
 }
 
 inline std::string utc_now_compact() {
@@ -312,6 +684,60 @@ inline InstalledAppRegistry load_installed_app_registry(const std::filesystem::p
     return registry;
 }
 
+inline RegistryStorageRecovery recover_registry_storage(const std::filesystem::path& store,
+                                                        std::filesystem::path preserved_bundle = {}) {
+    const std::filesystem::path absolute_store = std::filesystem::absolute(store);
+    if (!preserved_bundle.empty()) {
+        preserved_bundle = std::filesystem::absolute(preserved_bundle).lexically_normal();
+    }
+    const InstalledAppRegistry registry = load_installed_app_registry(absolute_store);
+    RegistryStorageRecovery recovery;
+    std::unordered_set<std::string> referenced_bundles;
+    referenced_bundles.reserve(registry.apps.size() * 2U);
+    for (const InstalledAppEntry& app : registry.apps) {
+        referenced_bundles.insert(app.bundle_file);
+        if (app.has_rollback && !app.rollback_bundle_file.empty()) {
+            referenced_bundles.insert(app.rollback_bundle_file);
+        }
+    }
+
+    std::error_code error;
+    const std::filesystem::path staging = registry_staging_dir(absolute_store);
+    std::filesystem::create_directories(staging, error);
+    error.clear();
+    for (std::filesystem::directory_iterator it(staging, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file(error)) {
+            error.clear();
+            continue;
+        }
+        std::error_code remove_error;
+        if (std::filesystem::remove(it->path(), remove_error)) {
+            ++recovery.stale_staging_files_removed;
+        }
+    }
+
+    error.clear();
+    const std::filesystem::path bundles = registry_bundles_dir(absolute_store);
+    std::filesystem::create_directories(bundles, error);
+    error.clear();
+    for (std::filesystem::directory_iterator it(bundles, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file(error) || it->path().extension() != ".jfapp") {
+            error.clear();
+            continue;
+        }
+        const std::string filename = it->path().filename().string();
+        if (referenced_bundles.find(filename) != referenced_bundles.end() ||
+            (!preserved_bundle.empty() && it->path().lexically_normal() == preserved_bundle)) {
+            continue;
+        }
+        std::error_code remove_error;
+        if (std::filesystem::remove(it->path(), remove_error)) {
+            ++recovery.orphan_bundle_files_removed;
+        }
+    }
+    return recovery;
+}
+
 inline void write_installed_app_registry(const std::filesystem::path& store, const InstalledAppRegistry& registry) {
     std::filesystem::create_directories(store);
     std::filesystem::path temp_path = registry_json_path(store);
@@ -440,11 +866,26 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
                                                      bool allow_downgrade = false) {
     const std::filesystem::path absolute_store = std::filesystem::absolute(store);
     const std::filesystem::path absolute_bundle = std::filesystem::absolute(bundle_path);
+    recover_registry_storage(absolute_store, absolute_bundle);
     AppPackage package = load_jfapp_bundle(absolute_bundle, max_input_bytes);
     InstalledAppRegistry registry = load_installed_app_registry(absolute_store);
+    auto existing = std::find_if(registry.apps.begin(), registry.apps.end(), [&](const InstalledAppEntry& app) {
+        return app.id == package.manifest.id;
+    });
+    if (existing != registry.apps.end() && !allow_downgrade && package.manifest.version_code < existing->version_code) {
+        throw std::runtime_error(
+            "downgrade install is blocked: " + package.manifest.id + " " +
+            std::to_string(package.manifest.version_code) + " < " +
+            std::to_string(existing->version_code) + "; use --allow-downgrade or rollback");
+    }
     const std::size_t bundle_size = file_size_or_zero(absolute_bundle);
+    const std::string bundle_sha256 = sha256_file_hex(absolute_bundle);
     const std::string bundle_file = sanitize_registry_filename(package.manifest.id) + "-" +
-        std::to_string(package.manifest.version_code) + "-" + std::to_string(bundle_size) + ".jfapp";
+        std::to_string(package.manifest.version_code) + "-" + bundle_sha256.substr(0, 12) + ".jfapp";
+    if (existing != registry.apps.end() && existing->bundle_file == bundle_file &&
+        std::filesystem::is_regular_file(installed_app_bundle_path(absolute_store, *existing))) {
+        return *existing;
+    }
     std::filesystem::create_directories(registry_bundles_dir(absolute_store));
     std::filesystem::create_directories(registry_staging_dir(absolute_store));
     const std::filesystem::path stage_path = registry_staging_dir(absolute_store) / (bundle_file + ".staging");
@@ -472,19 +913,10 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
     entry.installed_at_utc = utc_now_compact();
     entry.updated_at_utc = entry.installed_at_utc;
 
-    auto existing = std::find_if(registry.apps.begin(), registry.apps.end(), [&](const InstalledAppEntry& app) {
-        return app.id == entry.id;
-    });
     std::string obsolete_rollback_file;
     if (existing == registry.apps.end()) {
         registry.apps.push_back(entry);
     } else {
-        if (!allow_downgrade && entry.version_code < existing->version_code) {
-            throw std::runtime_error(
-                "downgrade install is blocked: " + entry.id + " " +
-                std::to_string(entry.version_code) + " < " +
-                std::to_string(existing->version_code) + "; use --allow-downgrade or rollback");
-        }
         entry.installed_at_utc = existing->installed_at_utc.empty() ? entry.installed_at_utc : existing->installed_at_utc;
         entry.enabled = existing->enabled;
         entry.status = existing->status;
@@ -537,6 +969,14 @@ inline InstalledAppEntry install_bundle_into_registry(const std::filesystem::pat
         std::filesystem::remove(registry_bundles_dir(absolute_store) / obsolete_rollback_file, error);
     }
     return entry;
+}
+
+inline InstalledAppEntry install_candidate_into_registry(const std::filesystem::path& store,
+                                                         const std::filesystem::path& candidate_path,
+                                                         std::size_t max_input_bytes,
+                                                         bool allow_downgrade = false) {
+    const InstallCandidate candidate = load_verified_install_candidate(candidate_path, max_input_bytes);
+    return install_bundle_into_registry(store, candidate.bundle_path, max_input_bytes, allow_downgrade);
 }
 
 inline InstalledAppEntry rollback_installed_app(const std::filesystem::path& store, std::string_view app_id) {
