@@ -491,6 +491,36 @@ if(JELLYFRAME_BUILD_TESTS)
                 "scroll_containers scrolls=9 strip_blits=0 full_repaints=0 dirty_repaints=9 inertia=6")
 
         add_test(
+            NAME jellyframe_win32_scroll_container_drag_no_inertia_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_drag_no_inertia.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_scroll_container_drag_no_inertia_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "scroll_containers scrolls=2 strip_blits=0 full_repaints=0 dirty_repaints=2 inertia=0")
+
+        add_test(
+            NAME jellyframe_win32_scroll_container_drag_inertia_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_drag_inertia.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_scroll_container_drag_inertia_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "scroll_containers scrolls=11 strip_blits=0 full_repaints=0 dirty_repaints=11 inertia=8")
+
+        add_test(
+            NAME jellyframe_win32_scroll_container_drag_edge_stop_frame_script
+            COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
+                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_drag_edge_stop.jfcapture
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_scroll_container_drag_edge_stop_frame_script PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "scroll_containers scrolls=6 strip_blits=0 full_repaints=0 dirty_repaints=6 inertia=4")
+
+        add_test(
             NAME jellyframe_win32_scroll_container_strip_blit_frame_script
             COMMAND $<TARGET_FILE:jellyframe_win32_browser>
                     --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_blit_probe

@@ -311,7 +311,7 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 | `MouseEvent` | Works | `clientX`, `clientY`, `button`, `buttons`, modifier fields. |
 | `WheelEvent` | Works | `deltaX`, `deltaY`, `deltaMode`, modifiers. |
 | Hit testing | Works | Layer/layout based, with clipping and z-order hints. |
-| Pointer move/down/up | Works | Platform-neutral input controller dispatches mouse-like events plus `pointerdown`/`pointerup` aliases. |
+| Pointer move/down/up | Subset | Platform-neutral input dispatches mouse-like events plus `pointerdown`/`pointerup` aliases. Scroll drag is host default behavior, not HTML Drag and Drop. `setPointerCapture()`, `pointercancel`, `touch-action`, multitouch and full Pointer Events fields are deferred. |
 | Click synthesis | Works | Same target down/up creates click. |
 | Hash anchor click | Shell-only | Win32 shell handles `<a href="#id">` as viewport scroll. Core only dispatches the click event. |
 | Focus tracking | Subset | Input controller stores focused node and drives `:focus` / `:focus-within` style matching. |

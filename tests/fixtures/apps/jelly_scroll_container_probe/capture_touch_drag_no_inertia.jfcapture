@@ -1,0 +1,15 @@
+# Slow drag: crosses the drag threshold, then settles below the inertia threshold.
+
+output-dir out/scroll_drag_no_inertia_frames
+montage out/scroll_drag_no_inertia_montage.bmp
+frames 12
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 4
+gap 6
+
+event 2 pointer-down 150 142
+event 3 pointer-move 150 137
+event 4 pointer-move 150 136
+event 5 pointer-up 150 136

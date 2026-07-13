@@ -1,0 +1,15 @@
+# Flick toward the lower boundary. Inertia must stop after the container clamps.
+
+output-dir out/scroll_drag_edge_stop_frames
+montage out/scroll_drag_edge_stop_montage.bmp
+frames 18
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 6
+gap 6
+
+event 2 pointer-down 150 142
+event 3 pointer-move 150 82
+event 4 pointer-move 150 22
+event 5 pointer-up 150 22

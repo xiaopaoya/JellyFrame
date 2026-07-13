@@ -296,7 +296,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `MouseEvent` | 可用 | `clientX`、`clientY`、`button`、`buttons`、modifier 字段。 |
 | `WheelEvent` | 可用 | `deltaX`、`deltaY`、`deltaMode`、modifier 字段。 |
 | Hit testing | 可用 | 基于 layer/layout geometry，考虑裁剪和 z-order hint。 |
-| Pointer move/down/up | 可用 | 平台无关 input controller 派发 mouse-like events，并提供 `pointerdown`/`pointerup` aliases。 |
+| Pointer move/down/up | 子集 | 平台无关 input controller 派发 mouse-like events，并提供 `pointerdown`/`pointerup` aliases。滚动拖动是宿主默认行为，不是 HTML Drag and Drop；`setPointerCapture()`、`pointercancel`、`touch-action`、多指输入和完整 Pointer Events 字段仍延后。 |
 | Click synthesis | 可用 | 同一目标 down/up 合成 click。 |
 | Hash anchor click | 壳层限定 | Win32 壳会把 `<a href="#id">` 处理为 viewport scroll。核心只派发 click 事件。 |
 | Focus tracking | 子集 | input controller 保存 focused node，并驱动 `:focus` / `:focus-within` 样式匹配。 |

@@ -1,0 +1,16 @@
+# Fast flick: release while the final delta is large enough to arm bounded inertia.
+
+output-dir out/scroll_drag_inertia_frames
+montage out/scroll_drag_inertia_montage.bmp
+frames 14
+step-ms 33
+start-ms 1000
+viewport 300 300
+columns 4
+gap 6
+
+event 2 pointer-down 150 142
+event 3 pointer-move 150 122
+event 4 pointer-move 150 102
+event 5 pointer-move 150 82
+event 6 pointer-up 150 82

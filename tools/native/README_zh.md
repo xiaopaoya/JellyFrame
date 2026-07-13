@@ -1,6 +1,6 @@
 # Native Tools
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-13；适用版本：0.5.0-dev
 
 这里保存用于检查 JellyFrame 输出的 C++ 桌面工具。示例页面和 app package 位于
 `../../samples`。
@@ -57,6 +57,21 @@ JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来�
 在帧脚本中使用 `animation-fps 0` 和 `animation-callbacks 0`，或命令行传入
 `--animation-fps 0 --animation-callbacks 0`，可以验证低功耗 profile：宿主应停止非必要动效，
 但不需要修改 app 源码。
+
+## 列表拖动验收
+
+下面的确定性列表 fixture 用于检查常见宿主式纵向拖动。这是 scroll gesture，不是 HTML Drag and
+Drop，也不是完整 Pointer Events 一致性验收。
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
+.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
+.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
+```
+
+脚本会在 `out/` 写入逐帧 BMP 和拼图。慢拖必须报告 `inertia=0`；快速甩动必须报告正的 inertia
+计数；边界甩动必须在容器到达边界后停止。既有的
+`capture_touch_scroll_container.jfcapture` 仍是紧凑的 drag-plus-inertia 回归 fixture。
 
 `event FRAME time-ms VALUE` 可为依赖 `Date.now()` 的表盘、计时器和天气样例注入确定性宿主时间。
 这是壳层调试命令，不是 app 可见语法。

@@ -1,6 +1,6 @@
 # Native Tools
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-13; Applies to: 0.5.0-dev
 
 This directory contains native C++ desktop tools used to inspect JellyFrame
 output. Sample pages and app packages live in `../../samples`.
@@ -65,6 +65,24 @@ builds.
 Use `animation-fps 0` and `animation-callbacks 0` in a frame script, or pass
 `--animation-fps 0 --animation-callbacks 0`, to validate low-power profiles
 where the host must stop nonessential motion without changing app source.
+
+## List Drag Acceptance
+
+Use the deterministic list fixture to inspect standard host-style vertical drag
+behavior. These are scroll gestures, not HTML Drag and Drop or complete Pointer
+Events conformance.
+
+```powershell
+.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
+.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
+.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
+```
+
+The scripts write per-frame BMPs and a montage under `out/`. The slow drag must
+report `inertia=0`; the flick must report a positive inertia count; the edge
+flick must stop once its scroll container reaches its bound. The existing
+`capture_touch_scroll_container.jfcapture` remains the compact drag-plus-inertia
+regression fixture.
 
 Use `event FRAME time-ms VALUE` to inject deterministic host time for
 `Date.now()`-driven watch faces, timers and weather samples. This is a shell
