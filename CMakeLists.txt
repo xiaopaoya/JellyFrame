@@ -261,6 +261,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/render_tree_tests.cpp
         src/render_core/tests/layer_tree_tests.cpp
         src/render_core/tests/scroll_blit_tests.cpp
+        src/render_core/tests/scroll_gesture_tests.cpp
         src/render_core/tests/software_renderer_tests.cpp
         src/render_core/tests/style_repaint_tests.cpp
         src/render_core/tests/text_adapter_tests.cpp

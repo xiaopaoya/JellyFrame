@@ -27,6 +27,7 @@ int pipeline_statistics_tests_main();
 int render_tree_tests_main();
 int layer_tree_tests_main();
 int scroll_blit_tests_main();
+int scroll_gesture_tests_main();
 int software_renderer_tests_main();
 int style_repaint_tests_main();
 int text_adapter_tests_main();
@@ -73,6 +74,7 @@ int main() {
     failed += run_test("render_tree", render_tree_tests_main);
     failed += run_test("layer_tree", layer_tree_tests_main);
     failed += run_test("scroll_blit", scroll_blit_tests_main);
+    failed += run_test("scroll_gesture", scroll_gesture_tests_main);
     failed += run_test("software_renderer", software_renderer_tests_main);
     failed += run_test("style_repaint", style_repaint_tests_main);
     failed += run_test("text_adapter", text_adapter_tests_main);

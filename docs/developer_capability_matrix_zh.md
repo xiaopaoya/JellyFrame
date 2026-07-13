@@ -214,7 +214,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `text-decoration` / `text-decoration-line` | 子集 | `none`、`underline`、`line-through` 会绘制便宜的实线装饰。颜色/粗细/style 变体和 wavy/double 延后。 |
 | `text-shadow` | 子集 | 第一条 shadow 会绘制为偏移文本；blur 只用于解析兼容，不做真实模糊；多重阴影暂不栅格化。 |
 | `box-sizing` | 可用 | `content-box`、`border-box`。 |
-| `overflow` / `overflow-y` | 子集 | `overflow` 接受 `visible`、`hidden`、`clip`、`auto`、`scroll`。标准 `overflow-y` 只接受 `auto` 和 `scroll`，是显式纵向滚动的推荐写法；其他轴专属值会被拒绝，不会悄悄裁切两个轴。V0 原生滚动容器支持固定尺寸的垂直 `auto`/`scroll` 区域，由宿主提供 scroll offset，并参与裁切绘制和命中测试。Win32 壳会把 wheel/arrow/drag 默认动作先交给最近的可滚容器，不能滚时才回退页面滚动；dirty 面积在预算内时只重绘容器视口；frame policy 允许 present 时会追加有界的宿主侧惯性尾巴，并开启可选轻量滚动提示。保守的 strip-blit 快路径只用于安全的矩形、不透明、无覆盖容器；圆角、半透明、重叠容器会回退到 dirty repaint。`overflow-x` 和横向滚动仍延后。 |
+| `overflow` / `overflow-y` | 子集 | `overflow` 接受 `visible`、`hidden`、`clip`、`auto`、`scroll`。标准 `overflow-y` 只接受 `auto` 和 `scroll`，是显式纵向滚动的推荐写法；其他轴专属值会被拒绝，不会悄悄裁切两个轴。V0 原生滚动容器支持固定尺寸的垂直 `auto`/`scroll` 区域，由宿主提供 scroll offset，并参与裁切绘制和命中测试。`VerticalScrollGesture` 是零分配的宿主 helper，统一 tap/drag 阈值、开始拖动后取消控件激活以及有界惯性；宿主不驱动它时不会产生工作。Win32 壳会把 wheel/arrow/drag 默认动作先交给最近的可滚容器，不能滚时才回退页面滚动；ESP32-S3 retained-scroll demo 对队列触控使用相同规则。宿主在 dirty 面积预算内只重绘容器视口。保守的 strip-blit 快路径只用于安全的矩形、不透明、无覆盖容器；圆角、半透明、重叠容器会回退到 dirty repaint。`overflow-x` 和横向滚动仍延后。 |
 | `white-space` | 子集 | `normal` 和 `nowrap`。`nowrap` 会继承到文本 layout，阻止便宜换行。 |
 | `text-overflow` | 诊断子集 | 接受 `clip` 和 `ellipsis`，用于表达作者意图。当前渲染仍通过盒/文本后端裁剪；当测量文本宽度超过可用盒时，layout diagnostics 会给出 warning。浏览器级 ellipsis shaping 延后。 |
 | `opacity` | 子集 | 0..1；软件合成中创建 composited layer。 |

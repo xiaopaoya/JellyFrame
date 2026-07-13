@@ -29,6 +29,10 @@ shape described in `docs/embedded_hal_api.md`.
   bounded board-input queue; its touch task only enqueues events, while the UI
   task exclusively owns DOM, layout, composition, framebuffer presentation and
   input dispatch.
+- The retained-scroll demo distinguishes taps from vertical drags with the
+  shared allocation-free `VerticalScrollGesture`; once a drag crosses its small
+  threshold, it cancels the pressed control and runs a bounded inertia tail.
+  This is a host gesture policy, not an extra DOM or renderer feature.
 
 JerryScript is intentionally not part of this first bring-up. Add it after the
 core pipeline and framebuffer path are stable on the board.

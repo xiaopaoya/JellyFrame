@@ -60,7 +60,7 @@ struct BoardInputDispatchStats {
     std::uint32_t activation_events = 0;
 };
 
-using BoardInputEventObserver = void (*)(const BoardInputEvent& event, void* context);
+using BoardInputEventObserver = bool (*)(const BoardInputEvent& event, void* context);
 
 BoardInputDispatchStats dispatch_input_events(BoardInputQueue& queue,
                                               jellyframe::InputController& controller,

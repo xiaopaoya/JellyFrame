@@ -77,8 +77,13 @@ BoardInputDispatchStats dispatch_input_events(BoardInputQueue& queue,
     BoardInputEvent event;
     while (stats.dispatched < max_events && queue.dequeue(event)) {
         ++stats.dispatched;
-        if (observer != nullptr) {
-            observer(event, observer_context);
+        if (observer != nullptr && observer(event, observer_context)) {
+            if (event.kind == BoardInputKind::PointerDown ||
+                event.kind == BoardInputKind::PointerMove ||
+                event.kind == BoardInputKind::PointerUp) {
+                ++stats.pointer_events;
+            }
+            continue;
         }
         switch (event.kind) {
         case BoardInputKind::PointerDown:

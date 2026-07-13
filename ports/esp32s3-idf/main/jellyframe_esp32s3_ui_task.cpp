@@ -22,6 +22,7 @@
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 #include "render_core/scroll_blit.h"
+#include "render_core/scroll_gesture.h"
 #include "render_core/text_repaint.h"
 
 #include "esp_heap_caps.h"
@@ -238,9 +239,8 @@ struct TimerUiTaskContext {
     jellyframe::Node* scroll_node = nullptr;
     int scroll_y = 0;
     int scroll_direction = 1;
-    bool scroll_drag_active = false;
-    int scroll_drag_last_y = 0;
-    int scroll_drag_delta = 0;
+    jellyframe::VerticalScrollGesture scroll_gesture;
+    int pending_scroll_drag_delta = 0;
     bool has_explicit_dirty_rect = false;
     jellyframe::Rect explicit_dirty_rect{};
     bool has_framebuffer_scroll_blit = false;
@@ -636,10 +636,10 @@ bool point_in_rect(int x, int y, const jellyframe::Rect& rect) {
     return x >= rect.x && y >= rect.y && x < rect.x + rect.width && y < rect.y + rect.height;
 }
 
-void observe_scroll_input(const BoardInputEvent& event, void* raw_context) {
+bool observe_scroll_input(const BoardInputEvent& event, void* raw_context) {
     auto* context = static_cast<TimerUiTaskContext*>(raw_context);
     if (context == nullptr || !context->scroll_benchmark) {
-        return;
+        return false;
     }
 
     switch (event.kind) {
@@ -648,28 +648,35 @@ void observe_scroll_input(const BoardInputEvent& event, void* raw_context) {
         const jellyframe::Rect viewport = layer != nullptr && layer->has_clip ? layer->clip_rect
                                                                              : (layer != nullptr ? layer->bounds
                                                                                                  : jellyframe::Rect{});
-        context->scroll_drag_active = layer != nullptr && point_in_rect(event.x, event.y, viewport);
-        context->scroll_drag_last_y = event.y;
-        if (context->scroll_drag_active) {
+        if (layer != nullptr && point_in_rect(event.x, event.y, viewport)) {
+            context->scroll_gesture.begin(event.y);
             ESP_LOGI(kTag, "scroll_drag phase=down x=%d y=%d scroll_y=%d", event.x, event.y, context->scroll_y);
+        } else {
+            context->scroll_gesture.cancel();
         }
         break;
     }
-    case BoardInputKind::PointerMove:
-        if (context->scroll_drag_active) {
-            context->scroll_drag_delta += context->scroll_drag_last_y - event.y;
-            context->scroll_drag_last_y = event.y;
+    case BoardInputKind::PointerMove: {
+        const jellyframe::VerticalScrollGestureUpdate update = context->scroll_gesture.update(event.y);
+        if (update.dragging_started && context->input_controller) {
+            context->input_controller->clear_pointer_state();
         }
-        break;
-    case BoardInputKind::PointerUp:
-        if (context->scroll_drag_active) {
+        if (update.dragging && update.delta_y != 0) {
+            context->pending_scroll_drag_delta += update.delta_y;
+        }
+        return update.dragging;
+    }
+    case BoardInputKind::PointerUp: {
+        const bool consumed = context->scroll_gesture.end();
+        if (consumed) {
             ESP_LOGI(kTag, "scroll_drag phase=up scroll_y=%d", context->scroll_y);
         }
-        context->scroll_drag_active = false;
-        break;
+        return consumed;
+    }
     default:
         break;
     }
+    return false;
 }
 
 bool rebuild_pipeline(TimerUiTaskContext& context) {
@@ -1017,7 +1024,7 @@ void run_timer_ui_task(void* raw_context) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
-        context->scroll_drag_delta = 0;
+        context->pending_scroll_drag_delta = 0;
         const BoardInputDispatchStats input_stats =
             dispatch_input_events(context->input_queue,
                                   *context->input_controller,
@@ -1027,12 +1034,13 @@ void run_timer_ui_task(void* raw_context) {
         context->telemetry.input_events += input_stats.dispatched;
 
         bool scroll_changed = false;
-        if (context->scroll_benchmark && context->scroll_drag_delta != 0) {
-            scroll_changed = schedule_scroll_offset(*context, context->scroll_y + context->scroll_drag_delta);
+        if (context->scroll_benchmark && context->pending_scroll_drag_delta != 0) {
+            scroll_changed = schedule_scroll_offset(
+                *context, context->scroll_y + context->pending_scroll_drag_delta);
         }
         if (work_plan.timer_callbacks_to_pump > 0 || force_first_frame) {
             if (context->scroll_benchmark) {
-                if (!force_first_frame && context->scroll_autorun && !context->scroll_drag_active && !scroll_changed) {
+                if (!force_first_frame && context->scroll_autorun && !context->scroll_gesture.active() && !scroll_changed) {
                     scroll_changed = schedule_scroll_step(*context);
                 }
                 if (context->scroll_autorun) {
@@ -1044,6 +1052,12 @@ void run_timer_ui_task(void* raw_context) {
                 }
                 update_timer_text(*context);
                 next_tick_us = esp_timer_get_time() + 1000000ULL;
+            }
+        }
+        if (context->scroll_benchmark && !context->scroll_gesture.active() && !scroll_changed) {
+            const int inertia_delta = context->scroll_gesture.advance_inertia(true);
+            if (inertia_delta != 0) {
+                scroll_changed = schedule_scroll_offset(*context, context->scroll_y + inertia_delta);
             }
         }
 
@@ -1124,7 +1138,7 @@ void run_timer_ui_task(void* raw_context) {
                      context->timer_running ? 1 : 0,
                      static_cast<unsigned>(context->button_clicks),
                      context->scroll_y,
-                     context->scroll_drag_active ? 1 : 0,
+                     context->scroll_gesture.dragging() ? 1 : 0,
                      jellyframe::frame_update_action_name(frame_plan.update.action),
                      jellyframe::frame_update_reason_name(frame_plan.update.reason),
                      jellyframe::dirty_region_mode_name(context->frame_scratch.dirty_region.mode),

@@ -31,6 +31,7 @@
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
 #include "render_core/scroll_blit.h"
+#include "render_core/scroll_gesture.h"
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
 #include "render_core/style_repaint.h"
@@ -77,11 +78,6 @@ constexpr wchar_t kWindowClassName[] = L"JellyFrameWin32Browser";
 constexpr UINT_PTR kScriptTimerId = 1;
 constexpr UINT kScriptTimerPeriodMs = 16;
 constexpr int kIncrementalDirtyAreaLimitPercent = 70;
-constexpr int kScrollDragStartThresholdPx = 4;
-constexpr int kScrollInertiaMinDeltaPx = 2;
-constexpr int kScrollInertiaDecayNumerator = 3;
-constexpr int kScrollInertiaDecayDenominator = 4;
-constexpr int kScrollInertiaMaxFrames = 12;
 constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_launcher";
 constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
@@ -3553,14 +3549,9 @@ private:
     LayerNodePtr layer_tree_;
     std::unique_ptr<InputController> input_;
     std::unordered_map<const Node*, int> scroll_offsets_;
+    VerticalScrollGesture scroll_gesture_;
     const Node* scroll_drag_target_ = nullptr;
-    int scroll_drag_start_y_ = 0;
-    int scroll_drag_last_y_ = 0;
-    int scroll_drag_last_delta_y_ = 0;
-    bool scroll_dragging_ = false;
     const Node* scroll_inertia_target_ = nullptr;
-    int scroll_inertia_delta_y_ = 0;
-    int scroll_inertia_frames_ = 0;
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
     std::vector<StyleOverride> previous_style_overrides_;
@@ -3797,6 +3788,15 @@ private:
         case WM_LBUTTONUP:
             handle_pointer_up(wparam, lparam);
             ReleaseCapture();
+            return 0;
+        case WM_CAPTURECHANGED:
+        case WM_CANCELMODE:
+            if (scroll_gesture_.active()) {
+                reset_scroll_motion();
+                if (input_) {
+                    input_->clear_pointer_state();
+                }
+            }
             return 0;
         case WM_MOUSEWHEEL:
             handle_wheel(wparam, lparam);
@@ -4935,16 +4935,12 @@ private:
 
     void reset_scroll_drag() {
         scroll_drag_target_ = nullptr;
-        scroll_drag_start_y_ = 0;
-        scroll_drag_last_y_ = 0;
-        scroll_drag_last_delta_y_ = 0;
-        scroll_dragging_ = false;
+        scroll_gesture_.cancel_drag();
     }
 
     void stop_scroll_inertia() {
         scroll_inertia_target_ = nullptr;
-        scroll_inertia_delta_y_ = 0;
-        scroll_inertia_frames_ = 0;
+        scroll_gesture_.stop_inertia();
     }
 
     void reset_scroll_motion() {
@@ -4963,64 +4959,46 @@ private:
             return;
         }
         scroll_drag_target_ = target;
-        scroll_drag_start_y_ = y;
-        scroll_drag_last_y_ = y;
-        scroll_drag_last_delta_y_ = 0;
-        scroll_dragging_ = false;
-        stop_scroll_inertia();
+        scroll_gesture_.begin(y);
     }
 
     bool update_scroll_drag(int y) {
         if (scroll_drag_target_ == nullptr) {
             return false;
         }
-        const int total_delta = y - scroll_drag_start_y_;
-        if (!scroll_dragging_ && std::abs(total_delta) < kScrollDragStartThresholdPx) {
-            scroll_drag_last_y_ = y;
+        const VerticalScrollGestureUpdate update = scroll_gesture_.update(y);
+        if (!update.dragging) {
             return false;
         }
-        if (!scroll_dragging_ && input_) {
+        if (update.dragging_started && input_) {
             input_->clear_pointer_state();
         }
-        scroll_dragging_ = true;
-        const int scroll_delta = scroll_drag_last_y_ - y;
-        scroll_drag_last_y_ = y;
-        scroll_drag_last_delta_y_ = scroll_delta;
-        scroll_container_by(scroll_drag_target_, scroll_delta);
+        scroll_container_by(scroll_drag_target_, update.delta_y);
         return true;
     }
 
     void start_scroll_inertia_if_needed() {
-        if (scroll_drag_target_ == nullptr ||
-            std::abs(scroll_drag_last_delta_y_) < kScrollInertiaMinDeltaPx) {
-            stop_scroll_inertia();
-            return;
-        }
-        scroll_inertia_target_ = scroll_drag_target_;
-        scroll_inertia_delta_y_ = scroll_drag_last_delta_y_;
-        scroll_inertia_frames_ = kScrollInertiaMaxFrames;
+        const Node* target = scroll_drag_target_;
+        const bool consumed = scroll_gesture_.end();
+        scroll_inertia_target_ = consumed && scroll_gesture_.has_inertia() ? target : nullptr;
     }
 
     bool advance_scroll_inertia(const AppFramePolicy& frame_policy) {
-        if (scroll_inertia_target_ == nullptr || scroll_inertia_frames_ <= 0 ||
-            !frame_policy.presents_frames) {
+        if (scroll_inertia_target_ == nullptr) {
             return false;
         }
-        if (std::abs(scroll_inertia_delta_y_) < kScrollInertiaMinDeltaPx) {
+        const int delta_y = scroll_gesture_.advance_inertia(frame_policy.presents_frames);
+        if (delta_y == 0) {
             stop_scroll_inertia();
             return false;
         }
-        const bool scrolled = scroll_container_by(scroll_inertia_target_, scroll_inertia_delta_y_);
+        const bool scrolled = scroll_container_by(scroll_inertia_target_, delta_y);
         if (!scrolled) {
             stop_scroll_inertia();
             return false;
         }
         ++scroll_container_counters_.inertia_steps;
-        --scroll_inertia_frames_;
-        scroll_inertia_delta_y_ =
-            (scroll_inertia_delta_y_ * kScrollInertiaDecayNumerator) / kScrollInertiaDecayDenominator;
-        if (scroll_inertia_frames_ <= 0 ||
-            std::abs(scroll_inertia_delta_y_) < kScrollInertiaMinDeltaPx) {
+        if (!scroll_gesture_.has_inertia()) {
             stop_scroll_inertia();
         }
         return true;
@@ -5802,7 +5780,7 @@ private:
         input.button = PointerButton::Primary;
         input.buttons = buttons_from_keys(wparam) & ~1;
         input.modifiers = modifiers_from_keys(wparam);
-        const bool consumed_by_drag = scroll_dragging_;
+        const bool consumed_by_drag = scroll_gesture_.dragging();
         if (consumed_by_drag) {
             start_scroll_inertia_if_needed();
             reset_scroll_drag();
