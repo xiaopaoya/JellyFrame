@@ -208,7 +208,9 @@ struct PortTelemetry {
     std::uint32_t panel_scroll_steps = 0;
     std::uint32_t panel_scroll_fallbacks = 0;
     std::uint32_t panel_scroll_wraps = 0;
+    std::uint32_t panel_scroll_cpu_blits_elided = 0;
     std::uint64_t panel_scroll_setup_us = 0;
+    std::uint64_t panel_scroll_recovery_compose_us = 0;
     std::uint64_t layer_build_us = 0;
     std::uint64_t compose_us = 0;
     TimingHistogram frame_histogram;
@@ -264,6 +266,24 @@ struct TimerUiTaskContext {
     jellyframe::Rect framebuffer_scroll_viewport{};
     jellyframe::ScrollBlitPlan framebuffer_scroll_blit{};
 };
+
+bool panel_scroll_candidate(const TimerUiTaskContext& context, std::size_t dirty_count) {
+    if (!CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION ||
+        !CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL ||
+        !context.scroll_benchmark || context.board_runtime.packed_scroll_flush == nullptr ||
+        context.panel.packed_scroll_flush == nullptr || context.panel.reset_scroll == nullptr ||
+        !context.has_framebuffer_scroll_blit || context.frame_buffer == nullptr ||
+        context.pipeline.layer_tree == nullptr ||
+        context.framebuffer_scroll_blit.mode != jellyframe::ScrollBlitMode::FastBlit ||
+        context.framebuffer_scroll_viewport.x != 0 || context.framebuffer_scroll_viewport.y != 0 ||
+        context.framebuffer_scroll_viewport.width != context.width ||
+        context.framebuffer_scroll_viewport.height != context.height || dirty_count != 1) {
+        return false;
+    }
+    const jellyframe::Rect& strip = context.framebuffer_scroll_blit.exposed_strip;
+    return strip.x == 0 && strip.width == context.width &&
+        strip.height > 0 && strip.height < context.height;
+}
 
 struct InputInteractionState {
     const jellyframe::Node* hovered = nullptr;
@@ -450,7 +470,7 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
     const double present_other_ms_per_flush = static_cast<double>(present_other_us) / flush_count / 1000.0;
 
     ESP_LOGI(kTag,
-             "port_telemetry case=%s app=%s workload=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u",
+             "port_telemetry case=%s app=%s workload=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_cpu_blits_elided=%u panel_scroll_recovery_compose_ms_total=%.2f panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u",
              context.telemetry_case,
              context.telemetry_app_id,
              context.scroll_workload,
@@ -483,6 +503,8 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<unsigned>(telemetry.panel_scroll_steps),
              static_cast<unsigned>(telemetry.panel_scroll_fallbacks),
              static_cast<unsigned>(telemetry.panel_scroll_wraps),
+             static_cast<unsigned>(telemetry.panel_scroll_cpu_blits_elided),
+             static_cast<double>(telemetry.panel_scroll_recovery_compose_us) / 1000.0,
              static_cast<double>(telemetry.panel_scroll_setup_us) / 1000.0,
              panel_scroll_setup_ms_per_step,
              static_cast<double>(telemetry.framebuffer_convert_us) / 1000.0,
@@ -824,18 +846,28 @@ bool render_and_present(TimerUiTaskContext& context,
         bind_input_controller(context, input_state);
     }
 
+    const jellyframe::Rect full_viewport{0, 0, context.width, context.height};
+    const bool use_panel_scroll = panel_scroll_candidate(context, dirty_count);
+    // A panel-scroll frame intentionally leaves most framebuffer rows stale.
+    // Rebuild before a normal present can observe those rows again.
+    const bool rebuild_framebuffer_for_normal_present =
+        context.panel.packed_scroll_mapped && !use_panel_scroll;
     const bool can_reuse_scroll_pixels = context.has_framebuffer_scroll_blit &&
-        context.frame_buffer != nullptr && context.pipeline.layer_tree != nullptr;
+        context.frame_buffer != nullptr && context.pipeline.layer_tree != nullptr &&
+        !rebuild_framebuffer_for_normal_present;
     std::array<jellyframe::Rect, 2> scroll_reuse_dirty_rects{};
     const jellyframe::Rect* compose_dirty_rects = dirty_rects;
     std::size_t compose_dirty_count = dirty_count;
     if (can_reuse_scroll_pixels) {
-        const std::uint64_t scroll_blit_start = esp_timer_get_time();
-        const bool applied = jellyframe::apply_vertical_scroll_blit(*context.frame_buffer,
-                                                                     context.framebuffer_scroll_viewport,
-                                                                     context.framebuffer_scroll_blit);
-        context.telemetry.framebuffer_scroll_blit_us +=
-            static_cast<std::uint64_t>(esp_timer_get_time() - scroll_blit_start);
+        bool applied = use_panel_scroll;
+        if (!applied) {
+            const std::uint64_t scroll_blit_start = esp_timer_get_time();
+            applied = jellyframe::apply_vertical_scroll_blit(*context.frame_buffer,
+                                                              context.framebuffer_scroll_viewport,
+                                                              context.framebuffer_scroll_blit);
+            context.telemetry.framebuffer_scroll_blit_us +=
+                static_cast<std::uint64_t>(esp_timer_get_time() - scroll_blit_start);
+        }
         if (applied) {
             const jellyframe::Rect& strip = context.framebuffer_scroll_blit.exposed_strip;
             scroll_reuse_dirty_rects[0] = jellyframe::Rect{
@@ -859,7 +891,11 @@ bool render_and_present(TimerUiTaskContext& context,
                 compose_dirty_count = 1;
             }
             compose_dirty_rects = scroll_reuse_dirty_rects.data();
-            ++context.telemetry.framebuffer_scroll_blits;
+            if (use_panel_scroll) {
+                ++context.telemetry.panel_scroll_cpu_blits_elided;
+            } else {
+                ++context.telemetry.framebuffer_scroll_blits;
+            }
         } else {
             context.has_framebuffer_scroll_blit = false;
         }
@@ -868,12 +904,21 @@ bool render_and_present(TimerUiTaskContext& context,
     jellyframe::SoftwareCompositor compositor(context.text_painter,
         jellyframe::software_compositor_options_from_budgets(context.budgets));
     const std::uint64_t compose_start = esp_timer_get_time();
-    compositor.render_into(*context.pipeline.layer_tree,
-                           *context.frame_buffer,
-                           kBackground,
-                           compose_dirty_rects,
-                           compose_dirty_count,
-                           &context.compositor_scratch);
+    if (rebuild_framebuffer_for_normal_present) {
+        compositor.render_into(*context.pipeline.layer_tree,
+                               *context.frame_buffer,
+                               kBackground,
+                               &full_viewport,
+                               1,
+                               &context.compositor_scratch);
+    } else {
+        compositor.render_into(*context.pipeline.layer_tree,
+                               *context.frame_buffer,
+                               kBackground,
+                               compose_dirty_rects,
+                               compose_dirty_count,
+                               &context.compositor_scratch);
+    }
     const std::uint64_t compose_us = static_cast<std::uint64_t>(esp_timer_get_time() - compose_start);
     context.telemetry.compose_us += compose_us;
     if (can_reuse_scroll_pixels && compose_dirty_rects == scroll_reuse_dirty_rects.data()) {
@@ -894,7 +939,6 @@ bool render_and_present(TimerUiTaskContext& context,
     const std::uint32_t scroll_fallbacks_before = context.panel.packed_scroll_fallback_count;
     jellyframe::EmbeddedPackedRgb565Sink sink = make_packed_rgb565_sink(context.panel);
     const jellyframe::HostFrameSink frame_sink = jellyframe::embedded_packed_rgb565_sink(sink);
-    const jellyframe::Rect full_viewport{0, 0, context.width, context.height};
     const jellyframe::Rect exposed_strip = context.has_framebuffer_scroll_blit
         ? jellyframe::Rect{
               context.framebuffer_scroll_viewport.x + context.framebuffer_scroll_blit.exposed_strip.x,
@@ -903,16 +947,7 @@ bool render_and_present(TimerUiTaskContext& context,
               context.framebuffer_scroll_blit.exposed_strip.height,
           }
         : jellyframe::Rect{};
-    const bool can_use_panel_scroll = CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION &&
-        CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL && context.scroll_benchmark &&
-        context.board_runtime.packed_scroll_flush != nullptr &&
-        context.panel.packed_scroll_flush != nullptr && context.panel.reset_scroll != nullptr &&
-        context.has_framebuffer_scroll_blit &&
-        can_reuse_scroll_pixels &&
-        context.framebuffer_scroll_blit.mode == jellyframe::ScrollBlitMode::FastBlit &&
-        context.framebuffer_scroll_viewport.x == 0 && context.framebuffer_scroll_viewport.y == 0 &&
-        context.framebuffer_scroll_viewport.width == context.width &&
-        context.framebuffer_scroll_viewport.height == context.height && dirty_count == 1 &&
+    const bool can_use_panel_scroll = use_panel_scroll && can_reuse_scroll_pixels &&
         compose_dirty_count == 1 && exposed_strip.x == 0 && exposed_strip.width == context.width &&
         exposed_strip.height > 0 && exposed_strip.height < context.height;
     bool force_full_normal_present = false;
@@ -936,6 +971,19 @@ bool render_and_present(TimerUiTaskContext& context,
             if (!reset_rgb565_packed_scroll(context.panel)) {
                 ok = false;
             } else {
+                context.panel.framebuffer_convert_start_us = 0;
+                const std::uint64_t recovery_compose_start = esp_timer_get_time();
+                compositor.render_into(*context.pipeline.layer_tree,
+                                       *context.frame_buffer,
+                                       kBackground,
+                                       &full_viewport,
+                                       1,
+                                       &context.compositor_scratch);
+                const std::uint64_t recovery_compose_us =
+                    static_cast<std::uint64_t>(esp_timer_get_time() - recovery_compose_start);
+                context.telemetry.compose_us += recovery_compose_us;
+                context.telemetry.panel_scroll_recovery_compose_us += recovery_compose_us;
+                context.panel.framebuffer_convert_start_us = esp_timer_get_time();
                 force_full_normal_present = true;
             }
         }
@@ -943,10 +991,10 @@ bool render_and_present(TimerUiTaskContext& context,
     if (!can_use_panel_scroll || force_full_normal_present) {
         const jellyframe::Rect* present_dirty_rects = force_full_normal_present ? &full_viewport : dirty_rects;
         const std::size_t present_dirty_count = force_full_normal_present ? 1U : dirty_count;
-        ok = ok && jellyframe::present_frame(*context.frame_buffer,
-                                              frame_sink,
-                                              present_dirty_rects,
-                                              present_dirty_count);
+        ok = jellyframe::present_frame(*context.frame_buffer,
+                                       frame_sink,
+                                       present_dirty_rects,
+                                       present_dirty_count);
     }
     present_us = static_cast<std::uint32_t>(esp_timer_get_time() - present_start);
     context.panel.framebuffer_convert_start_us = 0;

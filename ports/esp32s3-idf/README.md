@@ -85,6 +85,13 @@ ping-pong workload crosses the physical GRAM boundary. A uses the existing CPU
 framebuffer scroll-blit plus normal dirty present. B keeps the same Core plan
 and framebuffer update, but writes only the exposed strip through the WS147
 callback's verified physical-GRAM ring mapping.
+Once B has started, it also elides the duplicate CPU framebuffer row move: the
+panel already owns the reused visible rows, so the CPU only composes and packs
+the exposed strip. The framebuffer is deliberately considered stale during
+those frames. Before any normal present or a panel callback fallback, the port
+recomposes the complete current viewport, resets `VSCSAD`, then submits that
+full framebuffer through A. `panel_scroll_cpu_blits_elided` and
+`panel_scroll_recovery_compose_ms_total` make both behaviors observable.
 The callback is board-local; the Render Core has no JD9853 commands or panel
 state. B is disabled by default and resets `VSCSAD` to zero before any normal
 present. Invalid geometry, a second dirty area, mixed content, callback failure
@@ -130,8 +137,9 @@ flash. Save the final cumulative `port_telemetry` and `pipeline_arena` lines
 from each run. The B result is valid only when `workload=panel`,
 `panel_scroll_mode=1`, `panel_scroll_steps` advances, `panel_scroll_fallbacks=0`
 and the observed list has no seams or corrupted rows through repeated ring
-wraps. Record `panel_scroll_wraps`, frame/present p95, DMA timing, internal and
-PSRAM watermarks, watchdog/reset status and a 30 fps visual capture. Do not
+wraps. Record `panel_scroll_wraps`, `panel_scroll_cpu_blits_elided`, frame/present
+p95, DMA timing, internal and PSRAM watermarks, watchdog/reset status and a
+30 fps visual capture. Do not
 compare the older 240 px internal-list workloads with this fixture: their
 rounded container, header/footer and indicator create mixed dirty regions and
 cannot exercise the single-strip contract.
