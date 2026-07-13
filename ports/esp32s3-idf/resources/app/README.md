@@ -15,4 +15,5 @@ or network dependencies on the board.
 - `/scroll_bench_panel.html` is the Phase D A/B-only full-screen retained list.
   Its single opaque rectangular scroll viewport is deliberately stricter than
   the normal scroll samples so a physical-GRAM panel callback can prove that
-  each scroll step has exactly one exposed strip.
+  each scroll step has exactly one exposed strip. Its 960 px content extent
+  makes the 320 px viewport cross the physical GRAM ring in both directions.

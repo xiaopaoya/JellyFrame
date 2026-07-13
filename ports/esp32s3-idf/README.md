@@ -80,9 +80,11 @@ Timer run mode.
 `panel-a` and `panel-b` are a paired measurement fixture, not a general scroll
 optimization switch. The fixture has one opaque rectangular 172x320 scroll
 viewport, no fixed overlay, no scroll indicator and exactly one exposed strip
-per step. A uses the existing CPU framebuffer scroll-blit plus normal dirty
-present. B keeps the same Core plan and framebuffer update, but writes only the
-exposed strip through the WS147 callback's verified physical-GRAM ring mapping.
+per step. Its content extent exceeds two panel heights so the fixed 6 px
+ping-pong workload crosses the physical GRAM boundary. A uses the existing CPU
+framebuffer scroll-blit plus normal dirty present. B keeps the same Core plan
+and framebuffer update, but writes only the exposed strip through the WS147
+callback's verified physical-GRAM ring mapping.
 The callback is board-local; the Render Core has no JD9853 commands or panel
 state. B is disabled by default and resets `VSCSAD` to zero before any normal
 present. Invalid geometry, a second dirty area, mixed content, callback failure
