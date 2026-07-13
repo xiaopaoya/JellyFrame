@@ -142,6 +142,12 @@ The runtime can terminate the active app with stable reasons such as:
 - `load-failure`
 - `system-policy`
 
+When the Win32 system shell terminates an installed app for `script-watchdog`
+or `budget-exceeded`, it records the app as failed before returning to the
+launcher. The registry detail is capped, so a bad app cannot turn an exception
+message into unbounded shell metadata. Users can inspect, re-enable, roll back
+or remove the package through the app-manager flow.
+
 Termination cancels current requests, discards stale completions, releases host
 handles and app font resources, and returns to a trusted launcher/system shell.
 The app may fail; the runtime, launcher and other apps must keep running. Any

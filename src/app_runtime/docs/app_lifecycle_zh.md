@@ -114,6 +114,11 @@ runtime 可以用稳定 reason 终止 active app，例如：
 - `load-failure`
 - `system-policy`
 
+Win32 system shell 因 `script-watchdog` 或 `budget-exceeded` 终止已安装 app
+时，会先把 app 标记为 failed，再返回 launcher。registry 中的 detail 有长度上限，坏
+app 不能借异常信息写入无界 shell metadata。用户可通过 app-manager 流程检查、重新启用、
+回滚或移除该包。
+
 终止会取消当前请求、丢弃 stale completion、释放 host handle 和 app 字体资源，然后回到受信
 launcher/system shell。app 可以失败；runtime、launcher 和其他 app 必须继续运行。任何不修改固件的操作
 都应有不依赖重新烧写设备的 fallback。

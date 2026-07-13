@@ -4245,6 +4245,22 @@ private:
         scroll_y_ = 0;
     }
 
+    void record_installed_app_failure(std::string_view app_id,
+                                      std::string_view reason,
+                                      std::string_view detail) {
+        if (options_.registry_store_path.empty() || app_id.empty()) {
+            return;
+        }
+        constexpr std::size_t kMaxFailureDetailBytes = 512;
+        const std::string message(detail.substr(0, kMaxFailureDetailBytes));
+        try {
+            jellyframe_example::mark_installed_app_failed(
+                options_.registry_store_path, app_id, reason, message);
+        } catch (const std::exception& error) {
+            std::cerr << "failed to record app recovery state: " << error.what() << '\n';
+        }
+    }
+
     void launch_installed_app(const std::string& app_id) {
         try {
             const std::filesystem::path bundle_path =
@@ -4273,11 +4289,7 @@ private:
         } catch (const std::exception& error) {
             const std::string message = error.what();
             if (message.find("not launchable") == std::string::npos) {
-                try {
-                    jellyframe_example::mark_installed_app_failed(
-                        options_.registry_store_path, app_id, "launch-failed", message);
-                } catch (const std::exception&) {
-                }
+                record_installed_app_failure(app_id, "launch-failed", message);
             }
             configure_system_shell(std::string("Launch failed: ") + error.what());
             rebuild();
@@ -4351,13 +4363,7 @@ private:
     void recover_active_app_after_failure(const std::exception& error) {
         std::cerr << "rebuild failed: " << error.what() << '\n';
         if (!options_.registry_store_path.empty() && !system_shell_mode_) {
-            if (!active_app_id_.empty()) {
-                try {
-                    jellyframe_example::mark_installed_app_failed(
-                        options_.registry_store_path, active_app_id_, "load-failed", error.what());
-                } catch (const std::exception&) {
-                }
-            }
+            record_installed_app_failure(active_app_id_, "load-failed", error.what());
             reset_image_services();
             const AppTeardownResult teardown = app_runtime_.terminate_current(AppTeardownReason::LoadFailure);
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
@@ -4408,6 +4414,13 @@ private:
         const std::uint32_t instance_id = app_runtime_.current_app_instance_id();
         const std::size_t discarded_system_events = system_events_.discard_app_instance(instance_id);
         const AppTeardownResult teardown = app_runtime_.terminate_current(report.teardown_reason);
+        std::string recovery_detail = std::string("boundary=") + boundary;
+        if (report.diagnostic_count != 0) {
+            recovery_detail += "; diagnostic=" +
+                std::string(app_budget_recovery_diagnostic_code_name(report.diagnostics[0].code));
+        }
+        record_installed_app_failure(
+            active_app_id_, app_teardown_reason_name(teardown.reason), recovery_detail);
         const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
         std::cerr << "budget_recovery_teardown reason=" << app_teardown_reason_name(teardown.reason)
                   << " released_instance=" << teardown.app_instance_id
@@ -4439,6 +4452,8 @@ private:
             script_runtime_instance_id_ = 0;
             KillTimer(hwnd_, kScriptTimerId);
             const AppTeardownResult teardown = app_runtime_.terminate_current(AppTeardownReason::ScriptWatchdog);
+            record_installed_app_failure(
+                active_app_id_, app_teardown_reason_name(teardown.reason), detail);
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
             std::cerr << "script_watchdog_recovery reason=" << app_teardown_reason_name(teardown.reason)
                       << " released_instance=" << teardown.app_instance_id
