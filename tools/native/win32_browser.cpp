@@ -3611,6 +3611,7 @@ private:
     bool debug_sensor_gyroscope_enabled_ = false;
     bool debug_sensor_heart_rate_enabled_ = false;
     bool debug_sensor_ambient_light_enabled_ = false;
+    jellyframe_example::AppPackageManifest active_package_manifest_;
     AppHostDataSnapshot debug_host_data_;
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_, &debug_canvas_};
@@ -3864,9 +3865,9 @@ private:
 
     AppHostDataAccessPolicy current_host_data_access_policy() const {
         AppHostDataAccessPolicy policy;
-        policy.battery = true;
-        policy.weather = true;
-        policy.activity = true;
+        policy.battery = active_package_manifest_.system_battery_allowed;
+        policy.weather = active_package_manifest_.system_weather_allowed;
+        policy.activity = active_package_manifest_.system_activity_allowed;
         policy.services.location_position = debug_location_enabled_;
         policy.services.sensor_accelerometer = debug_sensor_accelerometer_enabled_;
         policy.services.sensor_gyroscope = debug_sensor_gyroscope_enabled_;
@@ -4502,6 +4503,7 @@ private:
             debug_sensor_gyroscope_enabled_ = page.package_mode && page.package_manifest.sensor_gyroscope_allowed;
             debug_sensor_heart_rate_enabled_ = page.package_mode && page.package_manifest.sensor_heart_rate_allowed;
             debug_sensor_ambient_light_enabled_ = page.package_mode && page.package_manifest.sensor_ambient_light_allowed;
+            active_package_manifest_ = page.package_mode ? page.package_manifest : jellyframe_example::AppPackageManifest{};
             debug_location_.set_policy(AppLocationSnapshotPolicy{debug_location_enabled_, 2});
             if (page.package_mode) {
                 add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_);
@@ -4580,6 +4582,8 @@ private:
                     debug_local_storage_instance_id_ = script_runtime_instance_id_;
                 }
                 script_runtime_->bind_app_services(app_runtime_, debug_network_);
+                const AppHostDataAccessPolicy host_data_policy = current_host_data_access_policy();
+                script_runtime_->bind_host_data_snapshot(debug_host_data_, host_data_policy);
                 if (debug_location_enabled_) {
                     script_runtime_->bind_location_service(app_runtime_, debug_location_);
                 }

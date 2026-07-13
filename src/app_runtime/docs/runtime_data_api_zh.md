@@ -124,18 +124,16 @@ V0 支持面应限制在：
 - 用 `Date.now()` 读取宿主注入的 wall-clock 毫秒时间
 - 后续如需要，再考虑生命周期相关的 `pagehide` / `pageshow`
 
-电量和低功耗状态没有一个足够安全、现代、普遍的基线。Battery Status API 历史上存在，但有隐私敏感问题，
-不适合作为默认入口。V0 中电量/充电/低功耗快照继续保留在 C++ host event queue；只有当产品 profile
-明确选择兼容 surface 时，才考虑暴露给 app JavaScript。
+电量和低功耗状态没有足够安全、现代且普遍的 Web 基线。历史上的 Battery Status API 有隐私敏感问题，
+因此不实现。
 
 平台无关来源仍是 `AppSystemEventQueue`。JS binding 应尽量把 accepted events 映射到上述标准子集。
 宿主需要诊断注入失败时应使用 `try_push_current(...)`，并把 `empty-instance` / `queue-full`
 写入工具或串口 diagnostics。
 
 对于更丰富的产品数据，`AppHostDataSnapshot` 定义固定大小的宿主/system summary，覆盖
-battery、weather、activity、location 和 sensor。V0 中它刻意不暴露给 JavaScript；宿主可用于
-system shell 状态、diagnostics 或未来产品 profile binding。任何 app 可见 surface 出现前，都必须先经过
-`AppHostDataAccessPolicy` 过滤。
+battery、weather、activity、location 和 sensor。宿主可用于 system shell 状态和 diagnostics；向 app
+暴露前必须先经过 `AppHostDataAccessPolicy` 过滤。
 Win32 壳可通过 frame script 注入 debug battery/weather/activity/location/sensor summary，并在
 capture 输出中打印过滤后的 `host_data` 摘要。
 
@@ -145,10 +143,10 @@ V0 app 可见映射：
 | --- | --- | --- |
 | 时间 | `Date.now()` | 宿主注入的 wall-clock 毫秒；需要刷新时用 timer/rAF。 |
 | 网络在线/离线 | `navigator.onLine`、`online` / `offline` | 只读快照与有界事件。 |
-| 天气 | 对 app/local host data endpoint 发 `XMLHttpRequest` | 没有专用 weather object。产品可通过 `network.fetch` 提供包内或宿主 JSON。 |
+| 天气 | `navigator.jellyframe.getSnapshot().weather` | 需要 `system.weather`、host 批准和当前摘要；更详细的预报仍适合走 XHR。 |
 | 定位 | `navigator.geolocation.getCurrentPosition(...)` | 需要 `location.position` 与 host/profile 同时支持。 |
-| 电量/充电 | V0 不暴露给普通 app JS | 保留给 host/system shell 或未来 product-profile binding。 |
-| 活动数据 | V0 不暴露给普通 app JS | 保留给 host/system shell 或未来 product-profile binding。 |
+| 电量/充电 | `navigator.jellyframe.getSnapshot().battery` | 需要 `system.battery`、host 批准和当前摘要。 |
+| 活动数据 | `navigator.jellyframe.getSnapshot().activity` | 需要 `system.activity`、host 批准和当前摘要。 |
 | 传感器 | V0 无 JS sensor API | 先走 host/system shell 或未来语义传感器 API；裸 bus 继续隐藏。 |
 
 当前 V0 已实现：
@@ -170,9 +168,14 @@ V0 app 可见映射：
 - 确定性的 Win32 frame script 也能注入同类状态：`event FRAME network-online/offline`、
   `event FRAME screen-visible/hidden` 和 `event FRAME low-power-on/off`。还可以用
   `event FRAME time-ms VALUE` 为 `Date.now()` 注入确定性宿主时间。
+- 只有 host 绑定 `AppHostDataSnapshot`，且 manifest 至少声明 `system.battery`、
+  `system.weather`、`system.activity` 之一时才出现 `navigator.jellyframe`。其 V0 唯一方法
+  `getSnapshot()` 同步返回新的值快照，包含 `battery`、`weather` 和 `activity` 属性；字段只有在 host
+  policy、manifest 与当前数据同时满足时才有值，否则为 `null`。调用不会发起请求、轮询硬件、订阅变化、
+  排队 callback 或持有 native handle；app 应在既有 UI event、生命周期变化或自身受预算 timer 中刷新。
 
-尚未实现：battery JS API、JellyFrame 专有 system state 对象，以及超出 `online` / `offline`
-子集的完整 `Window`/`EventTarget` 语义。
+尚未实现：Battery Status API、任何 snapshot listener/subscription、`navigator.jellyframe` 中的
+location/sensor 字段、裸硬件访问，以及超出 `online` / `offline` 子集的完整 `Window`/`EventTarget` 语义。
 
 ## 错误名
 

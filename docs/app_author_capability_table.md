@@ -44,7 +44,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Host time | Available | Use `Date.now()`. Do not assume `new Date()` is host-clock controlled unless documented later. |
 | Host compute jobs | Host optional contract | `compute.jobs` reserves bounded named host work with byte budgets. It is not a JS Worker, thread, message port or arbitrary-code API yet. |
 | Video frame preview | Host optional experimental contract | `media.video.frame` supplies bounded latest-frame handles for product-owned MJPEG or explicitly enabled H.264 baseline preview. It is not `<video>` or a JS media API. |
-| Weather/activity/battery | Host/system only | Weather app data should use XHR JSON; activity and battery summaries are not ordinary app JS APIs yet. |
+| Battery/weather/activity summary | Host optional | Declare `system.battery`, `system.weather` or `system.activity`, then read the approved low-frequency snapshot with `navigator.jellyframe.getSnapshot()`. No polling, subscription or raw device handles are exposed. |
 | App-local routes | Bounded | `location.hash`, `hashchange` and `onhashchange` switch state inside the current app only. URL loading, `history`, navigation and cross-app routes are absent. |
 | Static local modules | Package-time subset | One external `type="module"` entry and package-local static `.js` imports are bundled to classic script at package time. Dynamic `import()`, remote modules and `modulepreload` are deferred. |
 | Promise/fetch/innerHTML | Deferred | Do not rely on them yet. |

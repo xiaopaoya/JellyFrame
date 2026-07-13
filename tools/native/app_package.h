@@ -35,6 +35,9 @@ struct AppPackageManifest {
     bool network_allowed = false;
     bool storage_kv_allowed = false;
     bool audio_playback_allowed = false;
+    bool system_battery_allowed = false;
+    bool system_weather_allowed = false;
+    bool system_activity_allowed = false;
     bool sensor_accelerometer_allowed = false;
     bool sensor_gyroscope_allowed = false;
     bool sensor_heart_rate_allowed = false;
@@ -775,6 +778,9 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
         json_array_contains_string(json, "capabilities", "network.fetch");
     manifest.storage_kv_allowed = json_array_contains_string(json, "capabilities", "storage.kv");
     manifest.audio_playback_allowed = json_array_contains_string(json, "capabilities", "media.audio.playback");
+    manifest.system_battery_allowed = json_array_contains_string(json, "capabilities", "system.battery");
+    manifest.system_weather_allowed = json_array_contains_string(json, "capabilities", "system.weather");
+    manifest.system_activity_allowed = json_array_contains_string(json, "capabilities", "system.activity");
     manifest.sensor_accelerometer_allowed =
         json_array_contains_string(json, "capabilities", "sensor.accelerometer");
     manifest.sensor_gyroscope_allowed = json_array_contains_string(json, "capabilities", "sensor.gyroscope");

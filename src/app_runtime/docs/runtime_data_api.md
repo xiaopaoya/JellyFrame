@@ -145,11 +145,8 @@ System state should use existing web-adjacent concepts where they fit:
 - `Date.now()` for host-injected wall-clock milliseconds
 - `pagehide` / `pageshow` for lifecycle-like transitions, if needed later
 
-Battery and low-power state do not have a broadly safe modern baseline. The
-Battery Status API exists historically but is privacy-sensitive and not a good
-default. For V0, keep battery/charging/low-power snapshots in the C++ host event
-queue and do not expose them to app JavaScript until a product profile explicitly
-chooses a compatible surface.
+Battery and low-power state do not have a broadly safe modern Web baseline. The
+historical Battery Status API is privacy-sensitive and is not implemented.
 
 The platform-neutral source remains `AppSystemEventQueue`. JS bindings should
 map accepted events to the standard subset above when possible.
@@ -157,10 +154,9 @@ Hosts that need injection diagnostics should call `try_push_current(...)` and
 report `empty-instance` / `queue-full` through tool or serial diagnostics.
 
 For richer product data, `AppHostDataSnapshot` defines a fixed-size host/system
-summary for battery, weather, activity, location and sensors. It is deliberately
-not exposed to JavaScript in V0. Hosts may use it for system shell state,
-diagnostics or future product-profile bindings, and must pass it through
-`AppHostDataAccessPolicy` before any app-visible surface is added.
+summary for battery, weather, activity, location and sensors. Hosts may use it
+for system shell state and diagnostics, and must pass it through
+`AppHostDataAccessPolicy` before exposing it to an app.
 The Win32 shell can inject debug battery/weather/activity/location/sensor
 summaries through frame scripts and prints the filtered `host_data` summary in
 capture output.
@@ -171,10 +167,10 @@ V0 app-visible mapping:
 | --- | --- | --- |
 | Time | `Date.now()` | Host-injected wall-clock milliseconds; use timer/rAF for updates. |
 | Network online/offline | `navigator.onLine`, `online` / `offline` | Read-only snapshot plus bounded events. |
-| Weather | `XMLHttpRequest` to app/local host data endpoint | No dedicated weather object. Products may feed package-local or host-served JSON through `network.fetch`. |
+| Weather | `navigator.jellyframe.getSnapshot().weather` | Requires `system.weather`, host approval and a current summary. XHR remains appropriate for app-owned detailed forecasts. |
 | Location | `navigator.geolocation.getCurrentPosition(...)` | Requires `location.position` and host/profile support. |
-| Battery / charging | Not exposed to ordinary app JS in V0 | Keep in host/system shell or future product-profile binding. |
-| Activity | Not exposed to ordinary app JS in V0 | Keep in host/system shell or future product-profile binding. |
+| Battery / charging | `navigator.jellyframe.getSnapshot().battery` | Requires `system.battery`, host approval and a current summary. |
+| Activity | `navigator.jellyframe.getSnapshot().activity` | Requires `system.activity`, host approval and a current summary. |
 | Sensors | No JS sensor API in V0 | Use host/system shell or future semantic sensor APIs; raw buses remain hidden. |
 
 Current V0 implementation:
@@ -200,10 +196,19 @@ Current V0 implementation:
   `event FRAME network-online/offline`, `event FRAME screen-visible/hidden` and
   `event FRAME low-power-on/off`. They can also inject deterministic host time
   for `Date.now()` with `event FRAME time-ms VALUE`.
+- `navigator.jellyframe` appears only when the host binds an
+  `AppHostDataSnapshot` and the manifest grants at least one of
+  `system.battery`, `system.weather` or `system.activity`. Its only V0 method,
+  `getSnapshot()`, synchronously returns a new value snapshot with `battery`,
+  `weather` and `activity` properties. A field is `null` unless both the host
+  policy and manifest allow it and the host has a current value. The call does
+  not start a request, poll hardware, subscribe to changes, queue callbacks or
+  retain native handles. Apps should refresh from an existing UI event,
+  lifecycle transition or their own budgeted timer.
 
-Not implemented yet: battery JS APIs, custom JellyFrame-specific system state
-objects and full `Window`/`EventTarget` semantics beyond the `online` /
-`offline` subset.
+Not implemented: the Battery Status API, any snapshot listener/subscription,
+location/sensor properties in `navigator.jellyframe`, raw hardware access and
+full `Window`/`EventTarget` semantics beyond the `online` / `offline` subset.
 
 ## Error Names
 

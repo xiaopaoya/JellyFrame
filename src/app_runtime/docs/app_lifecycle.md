@@ -88,8 +88,11 @@ When suspended or screen-off, hosts should stop foreground input, timers,
 keeps a service active. On resume, the host should schedule a repaint before the
 first interactive frame and may inject fresh network/visibility snapshots.
 
-Battery status and detailed low-power state are not exposed to app JavaScript in
-V0. They remain host policy inputs.
+Detailed low-power state remains a host policy input. An app may declare
+`system.battery`, `system.weather` or `system.activity` and read a filtered,
+one-shot value snapshot through `navigator.jellyframe.getSnapshot()` when the
+host binds it. This is not the Battery Status API: no listener, polling,
+subscription, raw device handle or write-back path is exposed.
 
 ## Runtime Services
 
@@ -103,6 +106,10 @@ profile must also allow them.
 - `media.audio.playback` enables the host-optional `Audio()` V0 subset.
 - `location.position` enables `navigator.geolocation.getCurrentPosition(...)`
   when a host location service is bound.
+- `system.battery`, `system.weather` and `system.activity` enable only their
+  corresponding fields in `navigator.jellyframe.getSnapshot()` when the host
+  binds approved data. Returned objects are detached values; changing them never
+  changes host or system state.
 - Sensor capability names express intent, but sensor JavaScript APIs are still
   deferred in V0.
 

@@ -74,7 +74,10 @@ Use `event FRAME battery PERCENT CHARGING`, `event FRAME weather TEMP_C_X10
 CONDITION`, `event FRAME activity STEPS ACTIVE_MINUTES`, `event FRAME location
 LATITUDE LONGITUDE ACCURACY_M` and `event FRAME sensor KIND VALUE [Y Z]` to
 validate the host-data snapshot path in Win32 captures. These update the shell's
-filtered debug summary only; they do not expose a JavaScript API.
+filtered debug summary. `battery`, `weather` and `activity` are additionally
+visible through `navigator.jellyframe.getSnapshot()` only when the app manifest
+declares the matching `system.*` capability; location and sensor injection do
+not create JavaScript sensor APIs.
 
 Use `script-watchdog-checks N`, `script-watchdog-interval N` and
 `require-script-watchdog` only for Win32/scripted recovery validation. They map

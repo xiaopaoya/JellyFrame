@@ -17,6 +17,30 @@
     state.textContent = hidden ? "Hidden" : "Active";
     line.textContent = hidden ? "UI is paused; approved services may continue." : "Foreground services are live.";
     net.textContent = online ? "Online" : "Offline";
+    refreshHostSnapshot();
+  }
+
+  function refreshHostSnapshot() {
+    if (!navigator.jellyframe || !navigator.jellyframe.getSnapshot) {
+      return;
+    }
+    var snapshot = navigator.jellyframe.getSnapshot();
+    if (!snapshot) {
+      return;
+    }
+    var parts = [];
+    if (snapshot.battery) {
+      parts.push(String(snapshot.battery.percent) + "%");
+    }
+    if (snapshot.weather) {
+      parts.push(snapshot.weather.condition + " " + String(snapshot.weather.temperatureC));
+    }
+    if (snapshot.activity) {
+      parts.push(String(snapshot.activity.steps) + " steps");
+    }
+    if (parts.length) {
+      data.textContent = parts.join(" / ");
+    }
   }
 
   function rememberStatus(value) {

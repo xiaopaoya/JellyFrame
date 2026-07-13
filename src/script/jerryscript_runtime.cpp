@@ -1,6 +1,7 @@
 ﻿#include "script/jerryscript_runtime.h"
 
 #include "app_runtime/app_device_services.h"
+#include "app_runtime/app_host_data.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
@@ -230,6 +231,26 @@ struct ScriptRuntimeAccess {
 
     static AppLocationSnapshotMock* location_snapshot(JerryScriptRuntime& runtime) {
         return runtime.location_snapshot_;
+    }
+
+    static const AppHostDataSnapshot* host_data_snapshot(const JerryScriptRuntime& runtime) {
+        return runtime.host_data_snapshot_;
+    }
+
+    static const AppHostDataAccessPolicy* host_data_access_policy(const JerryScriptRuntime& runtime) {
+        return runtime.host_data_access_policy_.get();
+    }
+
+    static bool host_data_battery_allowed(const JerryScriptRuntime& runtime) {
+        return runtime.host_data_access_policy_ != nullptr && runtime.host_data_access_policy_->battery;
+    }
+
+    static bool host_data_weather_allowed(const JerryScriptRuntime& runtime) {
+        return runtime.host_data_access_policy_ != nullptr && runtime.host_data_access_policy_->weather;
+    }
+
+    static bool host_data_activity_allowed(const JerryScriptRuntime& runtime) {
+        return runtime.host_data_access_policy_ != nullptr && runtime.host_data_access_policy_->activity;
     }
 
     static ScriptSystemState system_state(const JerryScriptRuntime& runtime) {
@@ -2724,6 +2745,82 @@ jerry_value_t make_geolocation_object(JerryScriptRuntime& runtime) {
     return object.release();
 }
 
+jerry_value_t make_host_data_battery_object(const AppHostDataSnapshot& snapshot) {
+    JerryValue object(jerry_object());
+    set_number_property(object.get(), "timestamp", static_cast<double>(snapshot.battery.timestamp_ms));
+    set_number_property(object.get(), "percent", snapshot.battery.percent);
+    set_bool_property(object.get(), "charging", snapshot.battery.charging);
+    return object.release();
+}
+
+jerry_value_t make_host_data_weather_object(const AppHostDataSnapshot& snapshot) {
+    JerryValue object(jerry_object());
+    set_number_property(object.get(), "timestamp", static_cast<double>(snapshot.weather.timestamp_ms));
+    set_property(object.get(), "condition", string_to_value(app_weather_condition_name(snapshot.weather.condition)).get());
+    set_number_property(object.get(), "temperatureC", static_cast<double>(snapshot.weather.temperature_c_x10) / 10.0);
+    set_number_property(object.get(), "feelsLikeC", static_cast<double>(snapshot.weather.feels_like_c_x10) / 10.0);
+    set_number_property(object.get(), "humidity", snapshot.weather.humidity_percent);
+    set_number_property(object.get(), "windSpeedMps", static_cast<double>(snapshot.weather.wind_speed_mps_x10) / 10.0);
+    set_number_property(object.get(), "precipitationMm", static_cast<double>(snapshot.weather.precipitation_mm_x10) / 10.0);
+    set_number_property(object.get(), "airQualityIndex", snapshot.weather.air_quality_index);
+    return object.release();
+}
+
+jerry_value_t make_host_data_activity_object(const AppHostDataSnapshot& snapshot) {
+    JerryValue object(jerry_object());
+    set_number_property(object.get(), "timestamp", static_cast<double>(snapshot.activity.timestamp_ms));
+    set_number_property(object.get(), "steps", snapshot.activity.steps);
+    set_number_property(object.get(), "activeMinutes", snapshot.activity.active_minutes);
+    set_number_property(object.get(), "caloriesKcal", snapshot.activity.calories_kcal);
+    set_number_property(object.get(), "distanceM", snapshot.activity.distance_m);
+    return object.release();
+}
+
+jerry_value_t host_data_get_snapshot(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t[],
+                                     const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    const AppHostDataSnapshot* snapshot = runtime != nullptr
+        ? ScriptRuntimeAccess::host_data_snapshot(*runtime)
+        : nullptr;
+    if (snapshot == nullptr) {
+        return jerry_null();
+    }
+    const AppHostDataAccessPolicy* policy = ScriptRuntimeAccess::host_data_access_policy(*runtime);
+    if (policy == nullptr) {
+        return jerry_null();
+    }
+
+    const AppHostDataSnapshot filtered = app_host_data_filter_for_app(*snapshot, *policy);
+    JerryValue result(jerry_object());
+    if (filtered.has.battery) {
+        JerryValue battery(make_host_data_battery_object(filtered));
+        set_property(result.get(), "battery", battery.get());
+    } else {
+        set_property(result.get(), "battery", jerry_null());
+    }
+    if (filtered.has.weather) {
+        JerryValue weather(make_host_data_weather_object(filtered));
+        set_property(result.get(), "weather", weather.get());
+    } else {
+        set_property(result.get(), "weather", jerry_null());
+    }
+    if (filtered.has.activity) {
+        JerryValue activity(make_host_data_activity_object(filtered));
+        set_property(result.get(), "activity", activity.get());
+    } else {
+        set_property(result.get(), "activity", jerry_null());
+    }
+    return result.release();
+}
+
+jerry_value_t make_jellyframe_host_data_object(JerryScriptRuntime& runtime) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    set_runtime_method(object.get(), "getSnapshot", host_data_get_snapshot, runtime);
+    return object.release();
+}
+
 jerry_value_t make_navigator_object(JerryScriptRuntime& runtime) {
     JerryValue object(jerry_object());
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
@@ -2731,6 +2828,13 @@ jerry_value_t make_navigator_object(JerryScriptRuntime& runtime) {
     if (ScriptRuntimeAccess::location_snapshot(runtime) != nullptr) {
         JerryValue geolocation(make_geolocation_object(runtime));
         set_property(object.get(), "geolocation", geolocation.get());
+    }
+    if (ScriptRuntimeAccess::host_data_snapshot(runtime) != nullptr &&
+        (ScriptRuntimeAccess::host_data_battery_allowed(runtime) ||
+         ScriptRuntimeAccess::host_data_weather_allowed(runtime) ||
+         ScriptRuntimeAccess::host_data_activity_allowed(runtime))) {
+        JerryValue jellyframe(make_jellyframe_host_data_object(runtime));
+        set_property(object.get(), "jellyframe", jellyframe.get());
     }
     return object.release();
 }
@@ -5300,6 +5404,12 @@ void JerryScriptRuntime::bind_location_service(AppRuntimeHost& host, AppLocation
     location_snapshot_ = &location;
 }
 
+void JerryScriptRuntime::bind_host_data_snapshot(const AppHostDataSnapshot& snapshot,
+                                                 const AppHostDataAccessPolicy& policy) {
+    host_data_snapshot_ = &snapshot;
+    host_data_access_policy_ = std::make_unique<AppHostDataAccessPolicy>(policy);
+}
+
 void JerryScriptRuntime::bind_local_storage(AppLocalStorageShadow& storage) {
     local_storage_ = &storage;
 }
@@ -5330,6 +5440,8 @@ void JerryScriptRuntime::clear_app_services() {
     app_host_ = nullptr;
     network_fetch_ = nullptr;
     location_snapshot_ = nullptr;
+    host_data_snapshot_ = nullptr;
+    host_data_access_policy_.reset();
     local_storage_ = nullptr;
     audio_host_ = {};
 }

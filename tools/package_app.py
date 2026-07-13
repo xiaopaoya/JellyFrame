@@ -442,6 +442,9 @@ def validate_manifest(manifest: dict) -> dict:
     sensor_heart_rate_allowed = "sensor.heart-rate" in capabilities
     sensor_ambient_light_allowed = "sensor.ambient-light" in capabilities
     location_position_allowed = "location.position" in capabilities
+    system_battery_allowed = "system.battery" in capabilities
+    system_weather_allowed = "system.weather" in capabilities
+    system_activity_allowed = "system.activity" in capabilities
     background_services = parse_background_service_policy(manifest)
     return {
         "id": app_id,
@@ -469,6 +472,9 @@ def validate_manifest(manifest: dict) -> dict:
         "sensorHeartRateAllowed": sensor_heart_rate_allowed,
         "sensorAmbientLightAllowed": sensor_ambient_light_allowed,
         "locationPositionAllowed": location_position_allowed,
+        "systemBatteryAllowed": system_battery_allowed,
+        "systemWeatherAllowed": system_weather_allowed,
+        "systemActivityAllowed": system_activity_allowed,
         "backgroundServices": background_services,
     }
 
@@ -508,6 +514,9 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
             "sensorHeartRate": bool(manifest.get("sensorHeartRateAllowed")),
             "sensorAmbientLight": bool(manifest.get("sensorAmbientLightAllowed")),
             "locationPosition": bool(manifest.get("locationPositionAllowed")),
+            "systemBattery": bool(manifest.get("systemBatteryAllowed")),
+            "systemWeather": bool(manifest.get("systemWeatherAllowed")),
+            "systemActivity": bool(manifest.get("systemActivityAllowed")),
         },
         "targetSupport": {
             "computeJobs": support_state("computeJobs"),
@@ -521,6 +530,9 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
             "sensorHeartRate": support_state("sensorHeartRate"),
             "sensorAmbientLight": support_state("sensorAmbientLight"),
             "locationPosition": support_state("locationPosition"),
+            "systemBattery": support_state("systemBattery"),
+            "systemWeather": support_state("systemWeather"),
+            "systemActivity": support_state("systemActivity"),
         },
         "permissions": list(permissions),
         "capabilities": list(capabilities),
@@ -533,6 +545,7 @@ def service_intent_report(manifest: dict, target_config: dict) -> dict:
             "Audio playback is host-owned; Audio() V0 is available only when the host binds an audio adapter.",
             "Canvas 2D is an optional bounded drawing surface; backing storage should be allocated only after getContext(\"2d\"). drawImage() V0.4 accepts allocated canvas sources only; image and video sources remain deferred.",
             "Sensor and location data are semantic host services; apps never receive raw hardware handles.",
+            "System data snapshots are explicit, low-frequency host summaries. navigator.jellyframe.getSnapshot() exists only when the app declares one of system.battery, system.weather or system.activity and the host binds that summary.",
         ],
     }
 
@@ -555,6 +568,9 @@ def collect_service_target_warnings(manifest: dict, target_config: dict) -> list
         ("sensorHeartRate", bool(manifest.get("sensorHeartRateAllowed")), "sensor.heart-rate"),
         ("sensorAmbientLight", bool(manifest.get("sensorAmbientLightAllowed")), "sensor.ambient-light"),
         ("locationPosition", bool(manifest.get("locationPositionAllowed")), "location.position"),
+        ("systemBattery", bool(manifest.get("systemBatteryAllowed")), "system.battery"),
+        ("systemWeather", bool(manifest.get("systemWeatherAllowed")), "system.weather"),
+        ("systemActivity", bool(manifest.get("systemActivityAllowed")), "system.activity"),
     ]
     warnings = []
     for key, requested, capability in requests:
@@ -619,6 +635,9 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "sensor.heart-rate",
         "sensor.ambient-light",
         "location.position",
+        "system.battery",
+        "system.weather",
+        "system.activity",
         "connectivity.status",
         "connectivity.companion",
         "system.launcher",
@@ -810,6 +829,11 @@ SCRIPT_API_CAPABILITIES = [
         "capability": "graphics.canvas2d",
         "pattern": re.compile(r"\bgetContext\s*\(\s*['\"]2d['\"]\s*\)"),
         "preserveStrings": True,
+    },
+    {
+        "api": "navigator.jellyframe.getSnapshot",
+        "capabilities": ["system.battery", "system.weather", "system.activity"],
+        "pattern": re.compile(r"\bnavigator\s*\.\s*jellyframe\s*\.\s*getSnapshot\s*\("),
     },
 ]
 
@@ -1266,27 +1290,33 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                 source = searchable_with_strings if api.get("preserveStrings") else searchable
                 if not api["pattern"].search(source):
                     continue
-                key = (source_path, api["api"], api["capability"])
+                supported_capabilities = api.get("capabilities", [api.get("capability", "")])
+                supported_capabilities = [capability for capability in supported_capabilities if capability]
+                key = (source_path, api["api"], tuple(supported_capabilities))
                 if key in seen:
                     continue
                 seen.add(key)
-                declared_capability = api["capability"] in declared
+                declared_capability = any(capability in declared for capability in supported_capabilities)
                 entry = {
                     "api": api["api"],
-                    "capability": api["capability"],
+                    "capability": supported_capabilities[0] if supported_capabilities else "",
                     "source": source_path,
                     "declared": declared_capability,
                 }
+                if len(supported_capabilities) > 1:
+                    entry["capabilities"] = supported_capabilities
                 entries.append(entry)
                 if not declared_capability:
                     missing_capability_count += 1
+                    capability_text = " or ".join(supported_capabilities)
                     warnings.append({
                         "level": "warning",
                         "code": "script-capability-missing",
-                        "message": f"script uses {api['api']} but manifest does not declare {api['capability']}",
+                        "message": f"script uses {api['api']} but manifest does not declare {capability_text}",
                         "source": source_path,
                         "api": api["api"],
-                        "capability": api["capability"],
+                        "capability": supported_capabilities[0] if supported_capabilities else "",
+                        "capabilities": supported_capabilities,
                     })
             for usage in SCRIPT_API_USAGE_WARNINGS:
                 if not usage["pattern"].search(searchable):

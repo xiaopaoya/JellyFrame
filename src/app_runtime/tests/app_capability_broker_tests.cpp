@@ -81,6 +81,9 @@ void names_are_stable_for_diagnostics() {
     assert(is_known_app_capability("file.write"));
     assert(is_known_app_capability("file.manage"));
     assert(is_known_app_capability("graphics.canvas2d"));
+    assert(is_known_app_capability("system.battery"));
+    assert(is_known_app_capability("system.weather"));
+    assert(is_known_app_capability("system.activity"));
     assert(!is_known_app_capability("vendor.example.private"));
     assert(std::string(app_capability_decision_status_name(AppCapabilityDecisionStatus::Granted)) == "granted");
     assert(std::string(app_capability_decision_status_name(

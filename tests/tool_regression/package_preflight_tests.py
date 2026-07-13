@@ -301,6 +301,24 @@ class PackagePreflightTests(unittest.TestCase):
         )
         self.assertTrue(all(warning["code"] == "script-capability-missing" for warning in warnings))
 
+    def test_host_data_snapshot_accepts_any_declared_summary_capability(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-host-data-snapshot-") as directory:
+            root = Path(directory)
+            script = root / "app.js"
+            script.write_text("navigator.jellyframe.getSnapshot();", encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, script, "/app.js", 0)]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics({
+                "capabilities": ["system.weather"],
+            }, resources)
+
+        self.assertEqual(diagnostics["entryCount"], 1)
+        self.assertEqual(diagnostics["missingCapabilityCount"], 0)
+        self.assertEqual(warnings, [])
+        entry = diagnostics["entries"][0]
+        self.assertEqual(entry["api"], "navigator.jellyframe.getSnapshot")
+        self.assertEqual(entry["capabilities"], ["system.battery", "system.weather", "system.activity"])
+
     def test_html_api_diagnostics_warn_for_browser_only_markup(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-html-api-diagnostics-") as directory:
             root = Path(directory)
@@ -628,6 +646,9 @@ class PackagePreflightTests(unittest.TestCase):
                 "sensorHeartRate": False,
                 "sensorAmbientLight": False,
                 "locationPosition": True,
+                "systemBattery": False,
+                "systemWeather": False,
+                "systemActivity": False,
             },
         )
         self.assertEqual(
@@ -644,6 +665,9 @@ class PackagePreflightTests(unittest.TestCase):
                 "sensorHeartRate": "unknown",
                 "sensorAmbientLight": "unknown",
                 "locationPosition": "unknown",
+                "systemBattery": "unknown",
+                "systemWeather": "unknown",
+                "systemActivity": "unknown",
             },
         )
         self.assertTrue(intent["backgroundServices"]["audio"]["whileScreenOff"])
@@ -677,6 +701,9 @@ class PackagePreflightTests(unittest.TestCase):
                 "sensorHeartRate": "unknown",
                 "sensorAmbientLight": "unknown",
                 "locationPosition": "unsupported",
+                "systemBattery": "unknown",
+                "systemWeather": "unknown",
+                "systemActivity": "unknown",
             },
         )
 

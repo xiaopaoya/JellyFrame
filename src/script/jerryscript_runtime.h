@@ -14,6 +14,8 @@
 namespace jellyframe {
 
 class AppRuntimeHost;
+struct AppHostDataSnapshot;
+struct AppHostDataAccessPolicy;
 class AppLocalStorageShadow;
 class AppLocationSnapshotMock;
 class Canvas2DRegistry;
@@ -99,6 +101,8 @@ public:
     void bind_document(Node& document);
     void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network);
     void bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location);
+    void bind_host_data_snapshot(const AppHostDataSnapshot& snapshot,
+                                 const AppHostDataAccessPolicy& policy);
     void bind_local_storage(AppLocalStorageShadow& storage);
     void bind_audio_host(ScriptAudioHost host);
     void bind_canvas_2d(Canvas2DRegistry& canvas);
@@ -145,6 +149,8 @@ private:
     AppRuntimeHost* app_host_ = nullptr;
     NetworkFetchMock* network_fetch_ = nullptr;
     AppLocationSnapshotMock* location_snapshot_ = nullptr;
+    const AppHostDataSnapshot* host_data_snapshot_ = nullptr;
+    std::unique_ptr<AppHostDataAccessPolicy> host_data_access_policy_;
     AppLocalStorageShadow* local_storage_ = nullptr;
     Canvas2DRegistry* canvas_2d_ = nullptr;
     ScriptAudioHost audio_host_;

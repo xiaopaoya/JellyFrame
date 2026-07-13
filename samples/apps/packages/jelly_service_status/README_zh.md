@@ -13,6 +13,10 @@ app 在 suspended 或 screen-off 状态下希望继续哪些后台活动。manif
 `navigator.geolocation.getCurrentPosition(...)` 定位快照，并把最近一次服务状态写入
 `localStorage` shadow，方便 Win32 壳同时验证系统状态投递、host completion 和小型非阻塞存储。
 
+它还声明 `system.battery`、`system.weather` 和 `system.activity`。宿主绑定并批准后，
+`navigator.jellyframe.getSnapshot()` 只返回这些摘要。页面仅在初次加载和已有 visibility
+变化时读取它，不轮询、不订阅原始传感器，也不会因此维持后台活动。
+
 确定性 Win32 验收命令：
 
 ```powershell

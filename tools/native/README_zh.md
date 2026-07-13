@@ -64,7 +64,9 @@ JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来�
 `event FRAME battery PERCENT CHARGING`、`event FRAME weather TEMP_C_X10 CONDITION`、
 `event FRAME activity STEPS ACTIVE_MINUTES`、`event FRAME location LATITUDE LONGITUDE ACCURACY_M`
 和 `event FRAME sensor KIND VALUE [Y Z]` 可在 Win32 capture 中验证 host-data snapshot 路径。
-它们只更新壳层过滤后的 debug summary，不暴露 JavaScript API。
+它们会更新壳层过滤后的 debug summary。只有 manifest 声明对应 `system.*` capability 时，
+`battery`、`weather` 和 `activity` 才会通过 `navigator.jellyframe.getSnapshot()` 对 app 可见；
+location 和 sensor 注入不会创建 JavaScript sensor API。
 
 `script-watchdog-checks N`、`script-watchdog-interval N` 和
 `require-script-watchdog` 只用于 Win32/scripted recovery 验收。它们映射到宿主的脚本执行预算，

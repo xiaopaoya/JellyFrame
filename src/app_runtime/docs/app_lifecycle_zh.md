@@ -68,7 +68,9 @@ suspended 或 screen-off 时，宿主应停止前台输入、timer、`requestAni
 除非产品 profile 明确允许某个 service 继续活动。resume 后，宿主应在第一帧可交互前安排 repaint，
 并可重新注入 network/visibility 快照。
 
-电量状态和详细低功耗状态在 V0 不暴露给 app JavaScript，它们仍是宿主策略输入。
+详细低功耗状态仍是宿主策略输入。App 可声明 `system.battery`、`system.weather` 或
+`system.activity`，在宿主绑定后通过 `navigator.jellyframe.getSnapshot()` 读取过滤后的一次性值快照。
+这不是 Battery Status API：没有 listener、轮询、订阅、裸设备 handle 或回写路径。
 
 ## 运行时服务
 
@@ -80,6 +82,9 @@ App 通过 manifest capability 请求服务，所选 target profile 也必须允
 - `media.audio.playback` 启用宿主可选的 `Audio()` V0 子集。
 - `location.position` 在宿主绑定 location service 时启用
   `navigator.geolocation.getCurrentPosition(...)`。
+- `system.battery`、`system.weather` 和 `system.activity` 只在宿主绑定已批准数据时，分别启用
+  `navigator.jellyframe.getSnapshot()` 中的对应字段。返回对象是脱离宿主的值；修改它绝不会改变 host 或
+  system 状态。
 - sensor capability 名称只表达意图，sensor JavaScript API 在 V0 仍延后。
 
 后台 service intent 写在 `backgroundServices`，它本身不授予权限。宿主会结合 manifest intent、用户授权、

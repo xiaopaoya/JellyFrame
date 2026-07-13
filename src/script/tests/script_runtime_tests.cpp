@@ -1,6 +1,7 @@
 ﻿#include "script/jerryscript_runtime.h"
 
 #include "app_runtime/app_device_services.h"
+#include "app_runtime/app_host_data.h"
 #include "app_runtime/app_services.h"
 #include "app_runtime/system_events.h"
 #include "render_core/canvas2d.h"
@@ -1459,6 +1460,47 @@ void javascript_system_state_exposes_web_adjacent_subset() {
     check(result.ok && result.value == "true:hidden:101", "document visibility state updates");
 }
 
+void javascript_host_data_snapshot_is_explicit_and_filtered() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+    AppHostDataSnapshot snapshot;
+    snapshot.has.battery = true;
+    snapshot.battery = AppBatterySnapshot{1000, 87, true};
+    snapshot.has.weather = true;
+    snapshot.weather = AppWeatherSnapshot{1001, AppWeatherCondition::Rain, 213, 201, 74, 42, 13, 38};
+    snapshot.has.activity = true;
+    snapshot.activity = AppActivitySnapshot{1002, 6400, 32, 230, 4100};
+
+    {
+        JerryScriptRuntime unbound;
+        unbound.bind_document(*document);
+        const ScriptEvaluationResult result = unbound.eval("typeof navigator.jellyframe");
+        check(result.ok && result.value == "undefined", "host-data namespace is absent until explicitly bound");
+    }
+
+    AppHostDataAccessPolicy policy;
+    policy.battery = true;
+    policy.weather = true;
+    JerryScriptRuntime runtime;
+    runtime.bind_host_data_snapshot(snapshot, policy);
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var data = navigator.jellyframe.getSnapshot();"
+        "data.battery.percent + ':' + data.battery.charging + ':' + data.weather.condition + ':' + "
+        "data.weather.temperatureC + ':' + String(data.activity)");
+    check(result.ok, "host-data snapshot script evaluates");
+    check(result.value == "87:true:rain:21.3:null", "host-data snapshot keeps only granted summaries");
+
+    snapshot.battery.percent = 42;
+    result = runtime.eval("navigator.jellyframe.getSnapshot().battery.percent");
+    check(result.ok && result.value == "42", "host-data reads the latest host snapshot without polling");
+
+    runtime.clear_app_services();
+    runtime.bind_document(*document);
+    result = runtime.eval("typeof navigator.jellyframe");
+    check(result.ok && result.value == "undefined", "clearing services removes host-data namespace");
+}
+
 void javascript_location_hash_routes_within_one_app() {
     HtmlParser parser;
     auto document = parser.parse("<body></body>");
@@ -1855,6 +1897,7 @@ int main() {
         javascript_service_objects_are_invalidated_after_clear_and_rebind();
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_system_state_exposes_web_adjacent_subset();
+        javascript_host_data_snapshot_is_explicit_and_filtered();
         javascript_location_hash_routes_within_one_app();
         javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();

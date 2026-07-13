@@ -18,6 +18,12 @@ snapshot, and writes the latest service state into the `localStorage` shadow so
 the Win32 shell can validate system-state delivery, host completions and small
 non-blocking storage together.
 
+It also declares `system.battery`, `system.weather` and `system.activity`. When
+the host binds approved summaries, `navigator.jellyframe.getSnapshot()` returns
+only those declared values. The sample reads it at initial load and on existing
+visibility changes; it does not poll, subscribe to raw sensors or keep a
+background service alive for snapshot data.
+
 Deterministic Win32 validation:
 
 ```powershell

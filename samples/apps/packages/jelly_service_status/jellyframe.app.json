@@ -32,6 +32,9 @@
     "storage.kv",
     "media.audio.playback",
     "location.position",
+    "system.battery",
+    "system.weather",
+    "system.activity",
     "sensor.accelerometer",
     "sensor.heart-rate"
   ],
