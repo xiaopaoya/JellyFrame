@@ -1,0 +1,4 @@
+# WS169 ST7789 physical-scroll A control. The panel fixture remains on the
+# normal framebuffer scroll-blit/present path.
+CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL=y
+# CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION is not set

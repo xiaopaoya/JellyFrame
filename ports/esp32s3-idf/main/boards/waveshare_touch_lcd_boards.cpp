@@ -847,6 +847,8 @@ void release_waveshare_147(Ws147DisplayContext& display) {
 const BoardProfile& selected_board_profile() {
 #if CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
     return kWaveshare147Profile;
+#elif CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    return waveshare_169_profile();
 #else
     return kGenericProfile;
 #endif
@@ -867,6 +869,9 @@ BoardRuntime initialize_selected_board() {
 #if CONFIG_JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && \
     CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
     return initialize_waveshare_147();
+#elif CONFIG_JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && \
+    CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    return initialize_waveshare_169();
 #else
     const BoardProfile& profile = selected_board_profile();
     return BoardRuntime{profile, false, "hardware board support disabled", nullptr, nullptr};
@@ -878,6 +883,12 @@ void release_board_runtime(BoardRuntime& runtime) {
     CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
     if (runtime.profile.id == BoardId::WaveshareEsp32s3TouchLcd147 && runtime.flush_context != nullptr) {
         release_waveshare_147(*static_cast<Ws147DisplayContext*>(runtime.flush_context));
+    }
+#endif
+#if CONFIG_JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && \
+    CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    if (runtime.profile.id == BoardId::WaveshareEsp32s3TouchLcd169 && runtime.flush_context != nullptr) {
+        release_waveshare_169(runtime);
     }
 #endif
     runtime.hardware_display_ready = false;
@@ -901,6 +912,10 @@ void attach_input_queue(BoardRuntime& runtime, BoardInputQueue* queue) {
 #else
     (void)runtime;
     (void)queue;
+#endif
+#if CONFIG_JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && \
+    CONFIG_JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    attach_waveshare_169_input_queue(runtime, queue);
 #endif
 }
 

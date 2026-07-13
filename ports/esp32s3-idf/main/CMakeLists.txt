@@ -42,6 +42,7 @@ idf_component_register(
         "jellyframe_esp32s3_resources.cpp"
         "jellyframe_esp32s3_ui_task.cpp"
         "boards/waveshare_touch_lcd_boards.cpp"
+        "boards/waveshare_touch_lcd_169_board.cpp"
         "${JELLYFRAME_ESP32S3_GENERATED_RESOURCES}"
     INCLUDE_DIRS
         "."

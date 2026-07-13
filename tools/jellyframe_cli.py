@@ -346,6 +346,7 @@ PORT_TELEMETRY_ALIASES = {
     "psram_peak": "psramPeakBytes",
     "psram_peak_bytes": "psramPeakBytes",
     "panel_scroll_mode": "panelScrollMode",
+    "panel_scroll_backend": "panelScrollBackend",
     "panel_scroll_steps": "panelScrollSteps",
     "panel_scroll_fallbacks": "panelScrollFallbacks",
     "panel_scroll_wraps": "panelScrollWraps",
@@ -413,6 +414,7 @@ def parse_port_telemetry_log(log_path: Path) -> dict:
             "case": metric_text(metrics, "case"),
             "app": metric_text(metrics, "app"),
             "workload": metric_text(metrics, "workload"),
+            "panelScrollBackend": metric_text(metrics, "panelScrollBackend"),
             "frames": metric_int(metrics, "frames"),
             "fullFrames": metric_int(metrics, "fullFrames"),
             "dirtyFrames": metric_int(metrics, "dirtyFrames"),
@@ -1716,6 +1718,7 @@ def collect_performance_summary(report: dict) -> dict:
         summary["measuredPortInternalRamPeakBytes"] = int(port_summary.get("internalRamPeakBytes", 0) or 0)
         summary["measuredPortPsramPeakBytes"] = int(port_summary.get("psramPeakBytes", 0) or 0)
         summary["measuredPortPanelScrollMode"] = int(port_summary.get("panelScrollMode", 0) or 0)
+        summary["measuredPortPanelScrollBackend"] = str(port_summary.get("panelScrollBackend", ""))
         summary["measuredPortPanelScrollSteps"] = int(port_summary.get("panelScrollSteps", 0) or 0)
         summary["measuredPortPanelScrollFallbacks"] = int(port_summary.get("panelScrollFallbacks", 0) or 0)
         summary["measuredPortPanelScrollWraps"] = int(port_summary.get("panelScrollWraps", 0) or 0)
@@ -1852,6 +1855,7 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
             "Compare DMA wait, flush-done time and dirty area. Prefer dirty rectangles or scroll-strip paths before adding retained-rendering complexity.",
             "", {"averageFrameMs": average_frame_ms, "maxFrameMs": max_frame_ms})
     panel_scroll_mode = int(port_summary.get("panelScrollMode", 0) or 0)
+    panel_scroll_backend = str(port_summary.get("panelScrollBackend", ""))
     panel_scroll_steps = int(port_summary.get("panelScrollSteps", 0) or 0)
     panel_scroll_fallbacks = int(port_summary.get("panelScrollFallbacks", 0) or 0)
     panel_scroll_wraps = int(port_summary.get("panelScrollWraps", 0) or 0)
@@ -1864,7 +1868,7 @@ def collect_performance_advice(report: dict, summary: dict) -> list[dict]:
             "Panel scroll strip path was active",
             "The port used its opt-in panel-scroll path for a strict full-viewport scroll workload.",
             "Keep this path restricted to the documented opaque full-viewport fixture until the board port has equivalent recovery evidence for broader content.",
-            "", {"panelScrollSteps": panel_scroll_steps, "panelScrollWraps": panel_scroll_wraps,
+            "", {"panelScrollBackend": panel_scroll_backend, "panelScrollSteps": panel_scroll_steps, "panelScrollWraps": panel_scroll_wraps,
                  "panelScrollCpuBlitsElided": panel_scroll_cpu_blits_elided})
     if panel_scroll_fallbacks:
         append_performance_advice(

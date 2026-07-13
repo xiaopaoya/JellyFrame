@@ -1440,7 +1440,7 @@ class PackagePreflightTests(unittest.TestCase):
                 "frame_ms_p95=20.0 present_ms_avg=1.33 present_ms_p95=1.0 "
                 "dma_wait_ms_avg=5.2 dma_wait_ms_max=11.0 "
                 "flush_done_ms_avg=13.5 flush_done_ms_max=27.0 "
-                "internal_ram_peak=330000 psram_peak=120000 panel_scroll_mode=1 "
+                "internal_ram_peak=330000 psram_peak=120000 panel_scroll_mode=1 panel_scroll_backend=ws169-st7789 "
                 "panel_scroll_steps=29 panel_scroll_fallbacks=0 panel_scroll_wraps=0 "
                 "panel_scroll_cpu_blits_elided=29\n",
                 encoding="utf-8",
@@ -1451,6 +1451,7 @@ class PackagePreflightTests(unittest.TestCase):
         summary = report["performanceSummary"]
         self.assertEqual(report["portTelemetry"]["summary"]["case"], "scroll_benchmark_cumulative")
         self.assertEqual(report["portTelemetry"]["summary"]["workload"], "cards")
+        self.assertEqual(report["portTelemetry"]["summary"]["panelScrollBackend"], "ws169-st7789")
         self.assertEqual(report["portTelemetry"]["summary"]["frames"], 30)
         self.assertEqual(summary["source"], "package-preflight-estimate+port-telemetry")
         self.assertEqual(summary["measuredPortWorkload"], "cards")
@@ -1468,6 +1469,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(summary["measuredPortAverageFlushDoneMs"], 13.5)
         self.assertEqual(summary["measuredPortInternalRamPeakBytes"], 330000)
         self.assertEqual(summary["measuredPortPanelScrollSteps"], 29)
+        self.assertEqual(summary["measuredPortPanelScrollBackend"], "ws169-st7789")
         self.assertEqual(summary["measuredPortPanelScrollCpuBlitsElided"], 29)
         bottleneck_codes = {entry["code"] for entry in summary["bottlenecks"]}
         self.assertIn("performance-port-frame-time-high", bottleneck_codes)

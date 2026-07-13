@@ -32,6 +32,10 @@
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
+#ifndef CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION
+#define CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION 0
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -268,7 +272,8 @@ struct TimerUiTaskContext {
 };
 
 bool panel_scroll_candidate(const TimerUiTaskContext& context, std::size_t dirty_count) {
-    if (!CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION ||
+    if (!(CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION ||
+          CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION) ||
         !CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL ||
         !context.scroll_benchmark || context.board_runtime.packed_scroll_flush == nullptr ||
         context.panel.packed_scroll_flush == nullptr || context.panel.reset_scroll == nullptr ||
@@ -283,6 +288,18 @@ bool panel_scroll_candidate(const TimerUiTaskContext& context, std::size_t dirty
     const jellyframe::Rect& strip = context.framebuffer_scroll_blit.exposed_strip;
     return strip.x == 0 && strip.width == context.width &&
         strip.height > 0 && strip.height < context.height;
+}
+
+const char* panel_scroll_backend_name(const TimerUiTaskContext& context) {
+    switch (context.board_runtime.profile.id) {
+    case boards::BoardId::WaveshareEsp32s3TouchLcd147:
+        return "ws147-jd9853";
+    case boards::BoardId::WaveshareEsp32s3TouchLcd169:
+        return "ws169-st7789";
+    case boards::BoardId::GenericQemu:
+        return "none";
+    }
+    return "none";
 }
 
 struct InputInteractionState {
@@ -470,10 +487,11 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
     const double present_other_ms_per_flush = static_cast<double>(present_other_us) / flush_count / 1000.0;
 
     ESP_LOGI(kTag,
-             "port_telemetry case=%s app=%s workload=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_cpu_blits_elided=%u panel_scroll_recovery_compose_ms_total=%.2f panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u",
+             "port_telemetry case=%s app=%s workload=%s panel_scroll_backend=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_cpu_blits_elided=%u panel_scroll_recovery_compose_ms_total=%.2f panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u",
              context.telemetry_case,
              context.telemetry_app_id,
              context.scroll_workload,
+             panel_scroll_backend_name(context),
              static_cast<unsigned>(telemetry.frames),
              static_cast<unsigned>(telemetry.full_frames),
              static_cast<unsigned>(telemetry.dirty_frames),
@@ -499,7 +517,8 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<unsigned>(telemetry.framebuffer_scroll_blits),
              framebuffer_scroll_blit_ms_per_step,
              scroll_reuse_compose_ms_per_step,
-             CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION ? 1 : 0,
+             (CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION ||
+              CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION) ? 1 : 0,
              static_cast<unsigned>(telemetry.panel_scroll_steps),
              static_cast<unsigned>(telemetry.panel_scroll_fallbacks),
              static_cast<unsigned>(telemetry.panel_scroll_wraps),
@@ -630,6 +649,10 @@ const jellyframe::LayerNode* current_scroll_layer(TimerUiTaskContext& context) {
         : nullptr;
 }
 
+bool supports_framebuffer_scroll_blit(const jellyframe::LayerNode& layer) {
+    return (layer.reasons & jellyframe::LayerReasonRoundedClip) == 0U;
+}
+
 bool schedule_scroll_offset(TimerUiTaskContext& context, int requested_scroll_y) {
     context.has_framebuffer_scroll_blit = false;
     const jellyframe::LayerNode* layer = current_scroll_layer(context);
@@ -650,7 +673,8 @@ bool schedule_scroll_offset(TimerUiTaskContext& context, int requested_scroll_y)
     context.explicit_dirty_rect = visible_rect;
     context.has_explicit_dirty_rect = context.explicit_dirty_rect.width > 0 &&
         context.explicit_dirty_rect.height > 0;
-    if (context.has_explicit_dirty_rect && strip_plan.mode == jellyframe::ScrollBlitMode::FastBlit) {
+    if (context.has_explicit_dirty_rect && strip_plan.mode == jellyframe::ScrollBlitMode::FastBlit &&
+        supports_framebuffer_scroll_blit(*layer)) {
         context.framebuffer_scroll_viewport = visible_rect;
         context.framebuffer_scroll_blit = strip_plan;
         context.has_framebuffer_scroll_blit = true;

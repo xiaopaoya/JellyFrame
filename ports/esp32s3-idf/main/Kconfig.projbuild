@@ -103,9 +103,9 @@ config JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_CLEAR
 config JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL
     bool "Full-screen opaque panel-scroll A/B fixture"
     help
-        Uses one full 172x320 rectangular overflow viewport with no indicator,
+        Uses one full screen-sized rectangular overflow viewport with no indicator,
         rounded corners, transparent pixels or overlapping UI. It is the only
-        valid workload for the experimental WS147 physical-GRAM scroll path.
+        valid workload for an experimental board-local physical-GRAM scroll path.
 
 endchoice
 
@@ -120,6 +120,17 @@ config JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
         Any mixed dirty update, invalid viewport, callback error or panel
         uncertainty immediately resets the scroll address and falls back to
         the normal framebuffer scroll-blit present path.
+
+config JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION
+    bool "Experimental WS169 ST7789 physical-GRAM scroll A/B path"
+    depends on JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK && JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL && JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default n
+    help
+        Experimental, disabled-by-default A/B path for the Waveshare 1.69
+        ST7789V2 panel. It configures the controller's 20/280/20 physical
+        GRAM scroll region and submits only the exposed strip. This is valid
+        only for the dedicated full-screen opaque fixture. Any uncertainty
+        resets VSCSAD and returns to normal presentation.
 
 config JELLYFRAME_BENCH_CARD_COUNT
     int "Synthetic card count"
@@ -176,6 +187,12 @@ config JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
     bool "Waveshare ESP32-S3-Touch-LCD-1.47"
     help
         Board-local adapter for the 172x320 JD9853 SPI LCD and AXS5106L I2C
+        touch controller.
+
+config JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    bool "Waveshare ESP32-S3-Touch-LCD-1.69"
+    help
+        Board-local adapter for the 240x280 ST7789V2 SPI LCD and CST816T I2C
         touch controller.
 
 endchoice
@@ -269,5 +286,81 @@ config JELLYFRAME_WS147_TOUCH_ADDR
     hex "Waveshare 1.47 AXS5106L I2C address"
     depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_147
     default 0x63
+
+config JELLYFRAME_WS169_LCD_WIDTH
+    int "Waveshare 1.69 LCD width"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 240
+
+config JELLYFRAME_WS169_LCD_HEIGHT
+    int "Waveshare 1.69 LCD height"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 280
+
+config JELLYFRAME_WS169_LCD_SPI_SCLK_GPIO
+    int "Waveshare 1.69 LCD SPI SCLK GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 6
+
+config JELLYFRAME_WS169_LCD_SPI_MOSI_GPIO
+    int "Waveshare 1.69 LCD SPI MOSI GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 7
+
+config JELLYFRAME_WS169_LCD_CS_GPIO
+    int "Waveshare 1.69 LCD CS GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 5
+
+config JELLYFRAME_WS169_LCD_DC_GPIO
+    int "Waveshare 1.69 LCD DC GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 4
+
+config JELLYFRAME_WS169_LCD_RST_GPIO
+    int "Waveshare 1.69 LCD reset GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 8
+
+config JELLYFRAME_WS169_LCD_BL_GPIO
+    int "Waveshare 1.69 LCD backlight GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 15
+
+config JELLYFRAME_WS169_LCD_PIXEL_CLOCK_HZ
+    int "Waveshare 1.69 LCD SPI pixel clock"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 40000000
+
+config JELLYFRAME_WS169_LCD_DMA_ROWS
+    int "Waveshare 1.69 LCD DMA rows"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 40
+    range 1 280
+
+config JELLYFRAME_WS169_TOUCH_SDA_GPIO
+    int "Waveshare 1.69 touch I2C SDA GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 11
+
+config JELLYFRAME_WS169_TOUCH_SCL_GPIO
+    int "Waveshare 1.69 touch I2C SCL GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 10
+
+config JELLYFRAME_WS169_TOUCH_INT_GPIO
+    int "Waveshare 1.69 touch INT GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 14
+
+config JELLYFRAME_WS169_TOUCH_RST_GPIO
+    int "Waveshare 1.69 touch reset GPIO"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 13
+
+config JELLYFRAME_WS169_TOUCH_ADDR
+    hex "Waveshare 1.69 CST816T I2C address"
+    depends on JELLYFRAME_ESP32S3_BOARD_WAVESHARE_TOUCH_LCD_169
+    default 0x15
 
 endmenu

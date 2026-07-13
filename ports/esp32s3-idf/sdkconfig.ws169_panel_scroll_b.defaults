@@ -1,0 +1,4 @@
+# WS169 ST7789 physical-scroll B experiment. This profile is restricted to
+# the opaque full-screen panel fixture and must not be used for general UI.
+CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL=y
+CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION=y

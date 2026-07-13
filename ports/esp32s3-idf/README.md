@@ -1,6 +1,6 @@
 # JellyFrame ESP32-S3 ESP-IDF Port
 
-> Last updated: 2026-07-13; Applies to: 0.5.0-dev
+> Last updated: 2026-07-14; Applies to: 0.5.0-dev
 
 This directory is a first hardware bring-up path for ESP32-S3. It keeps the
 engine core platform-neutral and builds a small ESP-IDF app around the HAL
@@ -29,6 +29,10 @@ shape described in `docs/embedded_hal_api.md`.
   bounded board-input queue; its touch task only enqueues events, while the UI
   task exclusively owns DOM, layout, composition, framebuffer presentation and
   input dispatch.
+- Provides an optional Waveshare ESP32-S3-Touch-LCD-1.69 board adapter for the
+  240x280 ST7789V2 LCD and CST816T touch controller. Its physical-GRAM scroll
+  experiment is disabled by default and bound only to the full-screen opaque
+  panel fixture; it has no effect on the Render Core or ordinary app pages.
 - The retained-scroll demo distinguishes taps from vertical drags with the
   shared allocation-free `VerticalScrollGesture`; once a drag crosses its small
   threshold, it cancels the pressed control and runs a bounded inertia tail.
@@ -55,6 +59,33 @@ idf.py menuconfig
 idf.py build
 idf.py -p COMx flash monitor
 ```
+
+For WS169 first bring-up, use an isolated generated `sdkconfig`:
+
+```powershell
+idf.py -B build-ws169-bringup `
+  -D "SDKCONFIG=build-ws169-bringup/sdkconfig" `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws169_bringup.defaults" build
+idf.py -B build-ws169-bringup -p COMx flash monitor
+```
+
+The WS169 profile is `240x280`, ST7789V2 over SPI mode 0 with `y_gap=20`,
+40-row DMA strips and CST816T input. Its A/B fixture is deliberately separate
+from the WS147 path:
+
+```powershell
+# A: normal framebuffer scroll-blit and full viewport present.
+idf.py -B build-ws169-panel-a -D "SDKCONFIG_DEFAULTS=sdkconfig.ws169_scroll_benchmark.defaults;sdkconfig.ws169_panel_scroll_a.defaults" build
+
+# B: ST7789 VSCRDEF/VSCSAD GRAM ring, one exposed-strip submit per step.
+idf.py -B build-ws169-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws169_scroll_benchmark.defaults;sdkconfig.ws169_panel_scroll_b.defaults" build
+```
+
+WS169 B reserves the ST7789's 320-row GRAM as `20/280/20` fixed/scroll/fixed
+rows. It is valid only for the paired full-screen, opaque, rectangular,
+single-scroll-viewport fixture. Rounded clipping, fixed overlays, transparency,
+scroll indicators or multiple dirty rectangles must use the normal safe path;
+any callback failure resets `VSCSAD` before that fallback present.
 
 For the WS147 retained modes, use their complete defaults files rather than
 overlaying the Timer bring-up file:
@@ -85,7 +116,7 @@ ping-pong workload crosses the physical GRAM boundary. A uses the existing CPU
 framebuffer scroll-blit plus normal dirty present. B keeps the same Core plan
 and framebuffer update, but writes only the exposed strip through the WS147
 callback's verified physical-GRAM ring mapping.
-Once B has started, it also elides the duplicate CPU framebuffer row move: the
+Once B has started, it elides the duplicate CPU framebuffer row move: the
 panel already owns the reused visible rows, so the CPU only composes and packs
 the exposed strip. The framebuffer is deliberately considered stale during
 those frames. Before any normal present or a panel callback fallback, the port
@@ -96,6 +127,11 @@ The callback is board-local; the Render Core has no JD9853 commands or panel
 state. B is disabled by default and resets `VSCSAD` to zero before any normal
 present. Invalid geometry, a second dirty area, mixed content, callback failure
 or reset failure leaves the path on A rather than attempting a partial repair.
+Framebuffer scroll-blit also rejects a layer with `LayerReasonRoundedClip`: a
+rectangular pixel move would carry stale content through the fixed rounded
+corners. That layer instead retains its trees and recomposes the full visible
+scroll region before the normal dirty present. The dedicated Phase D fixture is
+rectangular and remains eligible for the A/B path.
 
 Useful `menuconfig` entries:
 
@@ -104,6 +140,7 @@ Useful `menuconfig` entries:
 - `JellyFrame ESP32-S3 benchmark -> Scroll benchmark step in pixels`
 - `JellyFrame ESP32-S3 benchmark -> Retained scroll benchmark workload`
 - `JellyFrame ESP32-S3 benchmark -> Experimental WS147 physical-GRAM scroll A/B path`
+- `JellyFrame ESP32-S3 benchmark -> Experimental WS169 ST7789 physical-GRAM scroll A/B path`
 - `JellyFrame ESP32-S3 benchmark -> Synthetic card count`
 - `JellyFrame ESP32-S3 benchmark -> Benchmark iterations`
 - `JellyFrame ESP32-S3 benchmark -> Viewport width`
@@ -111,6 +148,7 @@ Useful `menuconfig` entries:
 - `JellyFrame ESP32-S3 benchmark -> Benchmark RGB565 framebuffer presentation`
 - `JellyFrame ESP32-S3 board support -> Enable physical board display/touch drivers`
 - `JellyFrame ESP32-S3 board support -> Waveshare ESP32-S3-Touch-LCD-1.47`
+- `JellyFrame ESP32-S3 board support -> Waveshare ESP32-S3-Touch-LCD-1.69`
 
 The QEMU/bring-up defaults are `300x300`, `40` cards and `20` iterations. This
 configuration expects PSRAM for the framebuffer and full pipeline benchmark.
@@ -137,7 +175,7 @@ flash. Save the final cumulative `port_telemetry` and `pipeline_arena` lines
 from each run. The B result is valid only when `workload=panel`,
 `panel_scroll_mode=1`, `panel_scroll_steps` advances, `panel_scroll_fallbacks=0`
 and the observed list has no seams or corrupted rows through repeated ring
-wraps. Record `panel_scroll_wraps`, `panel_scroll_cpu_blits_elided`, frame/present
+wraps. Record `panel_scroll_backend`, `panel_scroll_wraps`, `panel_scroll_cpu_blits_elided`, frame/present
 p95, DMA timing, internal and PSRAM watermarks, watchdog/reset status and a
 30 fps visual capture. Do not
 compare the older 240 px internal-list workloads with this fixture: their

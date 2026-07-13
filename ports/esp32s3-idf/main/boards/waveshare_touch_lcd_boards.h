@@ -13,6 +13,7 @@ namespace boards {
 enum class BoardId : std::uint8_t {
     GenericQemu = 0,
     WaveshareEsp32s3TouchLcd147,
+    WaveshareEsp32s3TouchLcd169,
 };
 
 struct DisplayProfile {
@@ -47,6 +48,11 @@ void release_board_runtime(BoardRuntime& runtime);
 void attach_input_queue(BoardRuntime& runtime, BoardInputQueue* queue);
 bool selected_board_probe_only_enabled();
 void run_selected_board_probe_only();
+
+const BoardProfile& waveshare_169_profile();
+BoardRuntime initialize_waveshare_169();
+void release_waveshare_169(BoardRuntime& runtime);
+void attach_waveshare_169_input_queue(BoardRuntime& runtime, BoardInputQueue* queue);
 
 } // namespace boards
 } // namespace jellyframe_esp32s3

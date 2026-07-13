@@ -1,0 +1,6 @@
+# Diagnostic-only console routing for the ESP32-S3 native USB Serial/JTAG
+# interface. Overlay after a WS169 workload defaults file when COM20 is the
+# USB device interface rather than a physical UART0 adapter.
+# CONFIG_ESP_CONSOLE_UART_DEFAULT is not set
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
