@@ -1,6 +1,6 @@
 # Samples
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-14；适用版本：0.5.0-dev
 
 根 `samples` 只保存 JellyFrame app 和 app package 生命周期验收样例。原生桌面工具源码位于
 `../tools/native`。
@@ -12,6 +12,7 @@
 当前视觉系统示例：
 
 - `apps/packages/jelly_controls`：可安装 Jelly UI 控件 package。
+- `apps/packages/jelly_wearable_launcher`：面向 round-300 的图标优先可穿戴启动器 package。
 - `apps/loose/jelly_motion.html`：transition/keyframe 动效 fixture。
 - `apps/loose/jelly_launcher_mock.html`：启动器 grid 视觉 fixture。
 

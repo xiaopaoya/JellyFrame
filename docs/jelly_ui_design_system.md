@@ -1,6 +1,6 @@
 # JellyFrame Gel Interface System
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-14; Applies to: 0.5.0-dev
 
 This document defines JellyFrame's first native visual and motion system. It
 interprets the `Jelly` name through the shared qualities of jellyfish and gel:
@@ -78,6 +78,9 @@ JellyFrame-safe fallback.
 
 - `samples/apps/packages/jelly_controls`: installable source package showing
   gel buttons, input, switch, progress and a small keyframe pulse.
+- `samples/apps/packages/jelly_wearable_launcher`: icon-first round-300
+  wearable launcher package using bounded CSS icon primitives and no runtime
+  services.
 - `samples/apps/loose/jelly_motion.html`: focused motion fixture using only
   transition and from/to keyframes.
 - `samples/apps/loose/jelly_launcher_mock.html`: small launcher-style grid for

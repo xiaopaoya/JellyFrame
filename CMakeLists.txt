@@ -376,6 +376,17 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_cli_check_wearable_launcher_package
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        check
+                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_wearable_launcher
+                        --target round-300
+                        --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_wearable_launcher.report.json
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
                 NAME jellyframe_cli_check_canvas_smoke_package
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
@@ -619,6 +630,16 @@ if(JELLYFRAME_BUILD_TESTS)
                         --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_watch_face
                         --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_watch_face/capture_watch_face_30fps.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
+                NAME jellyframe_win32_wearable_launcher_capture
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_wearable_launcher
+                        --capture ${CMAKE_BINARY_DIR}/test_outputs/wearable_launcher.bmp
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_wearable_launcher_capture PROPERTIES
+                PASS_REGULAR_EXPRESSION "JellyFrame Win32 browser capture"
+                FAIL_REGULAR_EXPRESSION "\\[warning\\]|\\[error\\]")
 
             add_test(
                 NAME jellyframe_win32_weather_interaction_frame_script

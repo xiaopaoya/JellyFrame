@@ -1,0 +1,52 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.examples.wearable_launcher",
+  "name": "Wearable Launcher",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.5.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
+  "budgets": {
+    "maxResourceBytes": 32768,
+    "maxDomNodes": 128,
+    "maxCssRules": 128,
+    "maxDisplayCommands": 256,
+    "maxTimers": 0,
+    "maxEventListeners": 12
+  },
+  "targets": {
+    "round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 300,
+          "height": 300
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
+    }
+  },
+  "capabilities": []
+}

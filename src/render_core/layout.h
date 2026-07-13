@@ -61,7 +61,12 @@ private:
                         int content_width,
                         int min_width,
                         int height) const;
-    int layout_flex_box(LayoutBox& box, int content_x, int content_y, int content_width, std::size_t depth) const;
+    int layout_flex_box(LayoutBox& box,
+                        int content_x,
+                        int content_y,
+                        int content_width,
+                        int containing_height,
+                        std::size_t depth) const;
     int layout_grid_box(LayoutBox& box, int content_x, int content_y, int content_width, std::size_t depth) const;
     int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width, std::size_t depth) const;
     void layout_positioned_children(LayoutBox& box,

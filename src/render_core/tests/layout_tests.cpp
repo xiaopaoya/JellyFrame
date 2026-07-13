@@ -230,6 +230,86 @@ void flex_wrap_stacks_lines_with_row_gap() {
     check(b->rect.x == 0 && b->rect.y == 17, "second wrapped flex item moves to next row with row-gap");
 }
 
+void flex_wrap_align_content_distributes_lines() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><div id='a'></div><div id='b'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; flex-wrap: wrap; align-content: space-between; width: 90px; height: 40px; row-gap: 7px; }"
+        "div { width: 90px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 100);
+
+    const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* b = find_first_by_id(*layout_tree, "b");
+    check(a != nullptr && b != nullptr, "align-content fixture boxes exist");
+    check(a->rect.y == 0 && b->rect.y == 30,
+          "align-content space-between distributes wrapped rows inside fixed height");
+}
+
+void flex_column_distributes_vertical_space_and_aligns_items() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main><div id='a'></div><div id='b'></div><div id='c'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; flex-direction: column; width: 200px; height: 100px; "
+        "justify-content: space-between; align-items: center; }"
+        "#c { align-self: flex-end; }"
+        "div { width: 40px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 240);
+
+    const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* b = find_first_by_id(*layout_tree, "b");
+    const LayoutBox* c = find_first_by_id(*layout_tree, "c");
+    check(a != nullptr && b != nullptr && c != nullptr, "column flex fixture boxes exist");
+    check(a->rect.x == 80 && b->rect.x == 80,
+          "center alignment places column items on the cross axis");
+    check(c->rect.x == 160, "align-self overrides the parent cross-axis alignment");
+    check(a->rect.y == 0 && b->rect.y == 45 && c->rect.y == 90,
+          "space-between distributes column items on the main axis");
+}
+
+void flex_column_distributes_grow_space() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><div id='a'></div><div id='b'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; flex-direction: column; width: 100px; height: 100px; }"
+        "div { flex: 1; min-height: 0; }"
+        "#b { flex-grow: 3; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 120);
+
+    const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* b = find_first_by_id(*layout_tree, "b");
+    check(a != nullptr && b != nullptr, "growing column flex fixture boxes exist");
+    check(a->rect.height == 25 && b->rect.height == 75, "column grow factors divide available height");
+}
+
+void flex_column_resolves_percent_height_against_containing_box() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><div id='fill'></div><div id='footer'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; height: 120px; }"
+        "main { display: flex; flex-direction: column; width: 100px; height: 100%; }"
+        "#fill { flex: 1; }"
+        "#footer { height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 120, 120);
+
+    const LayoutBox* fill = find_first_by_id(*layout_tree, "fill");
+    const LayoutBox* footer = find_first_by_id(*layout_tree, "footer");
+    check(fill != nullptr && footer != nullptr, "percent-height column flex fixture boxes exist");
+    check(fill->rect.height == 110 && footer->rect.y == 110,
+          "column flex resolves percentage container height before grow distribution");
+}
+
 void positioned_layout_offsets_without_flow_space() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -470,6 +550,10 @@ int main() {
         flex_row_justifies_and_aligns_items();
         flex_row_supports_end_and_space_evenly_justification();
         flex_wrap_stacks_lines_with_row_gap();
+        flex_wrap_align_content_distributes_lines();
+        flex_column_distributes_vertical_space_and_aligns_items();
+        flex_column_distributes_grow_space();
+        flex_column_resolves_percent_height_against_containing_box();
         positioned_layout_offsets_without_flow_space();
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();

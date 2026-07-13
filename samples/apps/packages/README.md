@@ -16,8 +16,8 @@ to check whether a package remains usable on the common wearable shapes:
 python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
 ```
 
-`watch_weather`, `jelly_controls`, `jelly_component_recipes` and
-`jelly_watch_face` are the primary showcase/recipe packages and should keep
+`watch_weather`, `jelly_controls`, `jelly_component_recipes`, `jelly_watch_face`
+and `jelly_wearable_launcher` are the primary showcase/recipe packages and should keep
 their target gates aligned with current trial targets. Capability smoke packages
 such as audio, font policy, motion stress and focused Canvas demos may
 intentionally omit hard gates or carry explainable warnings because they exist
@@ -36,6 +36,8 @@ Current packages:
   sheet and button jelly animations.
 - `jelly_watch_face`: analog watch face using `transform: rotate(...)` and
   `transform-origin` for hands.
+- `jelly_wearable_launcher`: icon-first round-300 wearable launcher visual sample
+  using bounded CSS shapes and no runtime services.
 - `jelly_canvas_smoke`: optional Canvas 2D V0.4 trend/bar-chart sample using bounded canvas-to-canvas drawImage scaling, radial highlights and budgeted quadratic/cubic paths.
 - `jelly_canvas_gauges`: optional Canvas 2D gauge/ring sample using `arc`,
   `fill`, `globalAlpha`, Canvas text, linear gradients and bounded path drawing.

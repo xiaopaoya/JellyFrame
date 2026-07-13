@@ -123,6 +123,9 @@ void supports_queries_flatten_safe_declaration_subset() {
 void supports_queries_apply_representative_supported_properties() {
     const Stylesheet stylesheet = parse(
         "@supports (display: flex) { .probe { display: flex; flex-wrap: wrap; gap: 6px; } }"
+        "@supports (flex-direction: column) { .probe { flex-direction: column; } }"
+        "@supports (align-self: flex-end) { .probe { align-self: flex-end; } }"
+        "@supports (align-content: space-between) { .probe { align-content: space-between; } }"
         "@supports (grid-template-columns: repeat(2, 1fr)) { .probe { display: grid; grid-template-columns: repeat(2, 1fr); } }"
         "@supports (object-fit: cover) { .probe { object-fit: cover; image-rendering: pixelated; } }"
         "@supports (border-right: 2px solid #123456) { .probe { border-right: 2px solid #123456; } }"
@@ -141,6 +144,9 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.display == Display::Grid, "supported grid declaration survives @supports and applies");
     check(style.grid_template_column_count == 2, "grid-template-columns applies after @supports");
     check(style.flex_wrap, "flex-wrap applies after @supports");
+    check(style.flex_direction == FlexDirection::Column, "flex-direction column applies after @supports");
+    check(style.align_self == AlignItems::End, "align-self applies after @supports");
+    check(style.align_content == JustifyContent::SpaceBetween, "align-content applies after @supports");
     check(style.column_gap == 6 && style.row_gap == 6, "gap applies after @supports");
     check(style.object_fit == ObjectFit::Cover, "object-fit applies after @supports");
     check(style.image_rendering == ImageRendering::Pixelated, "image-rendering applies after @supports");
@@ -965,6 +971,31 @@ void flex_sizing_properties_apply() {
     check(style.flex_basis == 24, "flex-basis parsed");
 }
 
+void flex_direction_column_applies() {
+    auto panel = make_element("section");
+    StyleResolver resolver(parse("section { display: flex; flex-direction: column; }"));
+
+    const Style style = resolver.resolve(*panel);
+    check(style.display == Display::Flex, "flex display remains available with column direction");
+    check(style.flex_direction == FlexDirection::Column, "column flex direction parses");
+}
+
+void align_self_applies() {
+    auto item = make_element("div");
+    StyleResolver resolver(parse("div { align-self: center; }"));
+
+    const Style style = resolver.resolve(*item);
+    check(style.align_self == AlignItems::Center, "align-self center parses");
+}
+
+void align_content_applies() {
+    auto panel = make_element("section");
+    StyleResolver resolver(parse("section { align-content: center; }"));
+
+    const Style style = resolver.resolve(*panel);
+    check(style.align_content == JustifyContent::Center, "align-content center parses");
+}
+
 void positioned_offsets_apply() {
     auto panel = make_element("section");
     panel->attributes["class"] = "panel";
@@ -1084,6 +1115,9 @@ int main() {
         repeated_fixed_grid_template_applies();
         modern_length_functions_and_flex_wrap_apply();
         flex_sizing_properties_apply();
+        flex_direction_column_applies();
+        align_self_applies();
+        align_content_applies();
         positioned_offsets_apply();
         style_candidate_cache_preserves_selector_context();
         style_candidate_cache_respects_tiny_budget_and_inline_style();

@@ -1,6 +1,6 @@
 # Samples
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-14; Applies to: 0.5.0-dev
 
 Root samples are for JellyFrame apps and app-package lifecycle validation.
 Native desktop tools live in `../tools/native`.
@@ -15,6 +15,7 @@ Native desktop tools live in `../tools/native`.
 Current visual-system samples:
 
 - `apps/packages/jelly_controls`: installable Jelly UI controls package.
+- `apps/packages/jelly_wearable_launcher`: round-300 icon-first wearable launcher package.
 - `apps/loose/jelly_motion.html`: transition/keyframe motion fixture.
 - `apps/loose/jelly_launcher_mock.html`: launcher grid visual fixture.
 

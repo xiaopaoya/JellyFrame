@@ -42,6 +42,12 @@ enum class AlignItems : std::uint8_t {
     Start,
     Center,
     End,
+    Auto,
+};
+
+enum class FlexDirection : std::uint8_t {
+    Row,
+    Column,
 };
 
 enum class ListStyleType : std::uint8_t {
@@ -191,7 +197,10 @@ struct Style {
     bool box_sizing_border_box = false;
     int column_gap = 0;
     int row_gap = 0;
+    FlexDirection flex_direction = FlexDirection::Row;
     bool flex_wrap = false;
+    AlignItems align_self = AlignItems::Auto;
+    JustifyContent align_content = JustifyContent::Start;
     int flex_grow = 0;
     int flex_shrink = 1;
     int flex_basis = -1;

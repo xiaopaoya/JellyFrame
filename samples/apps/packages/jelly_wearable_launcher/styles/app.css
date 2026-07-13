@@ -1,0 +1,365 @@
+:root {
+  --night: #06171d;
+  --ink: #f4fcfd;
+  --muted: rgba(210, 239, 242, 0.72);
+  --edge: rgba(159, 238, 237, 0.38);
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--night);
+  color: var(--ink);
+}
+
+body {
+  border-radius: 50%;
+  background: linear-gradient(#103942, #06171d);
+}
+
+.launcher {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 28px 32px 18px;
+}
+
+.top {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: 0 6px 13px;
+}
+
+.top strong {
+  font-size: 20px;
+}
+
+.top span {
+  padding-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 13px 12px;
+  flex-grow: 1;
+}
+
+.tile {
+  height: 80px;
+  padding: 4px 0 0;
+  color: var(--ink);
+  background-color: transparent;
+  border: 0;
+  font-size: 10px;
+  text-align: center;
+  transition: transform 140ms ease-out, opacity 140ms ease-out, background-color 140ms ease-out;
+}
+
+.tile > span:last-child {
+  display: block;
+  margin-top: 5px;
+}
+
+.icon {
+  position: relative;
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border: 1px solid var(--edge);
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.weather .icon {
+  background-color: #f2c46c;
+  background: radial-gradient(#fff3b8, #edb854);
+}
+
+.weather .icon i {
+  position: absolute;
+  left: 11px;
+  top: 25px;
+  width: 28px;
+  height: 10px;
+  background-color: rgba(237, 250, 255, 0.88);
+  border-radius: 8px;
+}
+
+.activity .icon {
+  background-color: #55d3bf;
+  background: conic-gradient(#78f1cf 0% 72%, rgba(13, 74, 79, 0.78) 72% 100%);
+  border-radius: 50%;
+}
+
+.activity .icon i {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 30px;
+  height: 30px;
+  background-color: #10373d;
+  border-radius: 50%;
+}
+
+.focus .icon {
+  background-color: #aee477;
+  border-radius: 50%;
+}
+
+.focus .icon i,
+.focus .icon b {
+  position: absolute;
+  left: 23px;
+  width: 3px;
+  background-color: #1c3c2d;
+  border-radius: 2px;
+}
+
+.focus .icon i {
+  top: 11px;
+  height: 16px;
+}
+
+.focus .icon b {
+  top: 23px;
+  height: 12px;
+  transform: rotate(120deg);
+  transform-origin: 50% 0%;
+}
+
+.music .icon {
+  background-color: #e99ab1;
+}
+
+.music .icon i,
+.music .icon b,
+.music .icon em {
+  position: absolute;
+  bottom: 10px;
+  width: 6px;
+  background-color: #54253f;
+  border-radius: 4px;
+}
+
+.music .icon i { left: 12px; height: 14px; }
+.music .icon b { left: 21px; height: 25px; }
+.music .icon em { left: 30px; height: 18px; }
+
+.notes .icon {
+  background-color: #76b9ed;
+}
+
+.notes .icon i,
+.notes .icon b,
+.notes .icon em {
+  position: absolute;
+  left: 11px;
+  height: 4px;
+  background-color: #16456a;
+  border-radius: 2px;
+}
+
+.notes .icon i { top: 13px; width: 26px; }
+.notes .icon b { top: 22px; width: 20px; }
+.notes .icon em { top: 31px; width: 24px; }
+
+.settings .icon {
+  background-color: #b8a9f4;
+}
+
+.settings .icon i,
+.settings .icon b,
+.settings .icon em,
+.settings .icon strong {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: #392d73;
+  border-radius: 3px;
+}
+
+.settings .icon i { left: 13px; top: 13px; }
+.settings .icon b { left: 25px; top: 13px; }
+.settings .icon em { left: 13px; top: 25px; }
+.settings .icon strong { left: 25px; top: 25px; }
+
+.tile:focus,
+.tile:active {
+  transform: translate(0px, 2px) scale(0.94);
+  opacity: 0.82;
+  outline: 1px solid rgba(230, 255, 253, 0.68);
+}
+
+.page-indicator {
+  display: grid;
+  align-self: center;
+  flex-shrink: 0;
+  grid-template-columns: 8px 8px;
+  gap: 6px;
+  width: 22px;
+  margin: 10px auto 0;
+}
+
+.page-indicator span,
+.page-indicator i {
+  height: 4px;
+  border-radius: 3px;
+  background-color: var(--muted);
+}
+
+.page-indicator span {
+  background-color: #bdf3dc;
+}
+
+@media (max-height: 260px) {
+  body {
+    border-radius: 0;
+  }
+
+  .launcher {
+    padding: 14px 24px 10px;
+  }
+
+  .top {
+    padding-bottom: 8px;
+  }
+
+  .top strong {
+    font-size: 16px;
+  }
+
+  .app-grid {
+    gap: 8px 10px;
+  }
+
+  .tile {
+    height: 62px;
+    font-size: 9px;
+  }
+
+  .tile > span:last-child {
+    margin-top: 3px;
+  }
+
+  .icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .page-indicator {
+    margin-top: 5px;
+  }
+}
+
+@media (max-width: 220px) {
+  body {
+    border-radius: 0;
+  }
+
+  .launcher {
+    padding: 22px 16px 12px;
+  }
+
+  .top {
+    padding: 0 2px 10px;
+  }
+
+  .top strong {
+    font-size: 17px;
+  }
+
+  .top span {
+    font-size: 8px;
+  }
+
+  .app-grid {
+    gap: 10px 8px;
+  }
+
+  .tile {
+    height: 70px;
+    font-size: 7px;
+  }
+
+  .tile > span:last-child {
+    margin-top: 4px;
+  }
+
+  .icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .weather .icon i {
+    left: 8px;
+    top: 19px;
+    width: 20px;
+    height: 8px;
+  }
+
+  .activity .icon i {
+    left: 6px;
+    top: 6px;
+    width: 22px;
+    height: 22px;
+  }
+
+  .focus .icon i,
+  .focus .icon b {
+    left: 17px;
+  }
+
+  .focus .icon i {
+    top: 8px;
+    height: 12px;
+  }
+
+  .focus .icon b {
+    top: 17px;
+    height: 9px;
+  }
+
+  .music .icon i,
+  .music .icon b,
+  .music .icon em {
+    bottom: 7px;
+    width: 5px;
+  }
+
+  .music .icon i { left: 9px; height: 11px; }
+  .music .icon b { left: 16px; height: 18px; }
+  .music .icon em { left: 23px; height: 13px; }
+
+  .notes .icon i,
+  .notes .icon b,
+  .notes .icon em {
+    left: 8px;
+    height: 3px;
+  }
+
+  .notes .icon i { top: 10px; width: 20px; }
+  .notes .icon b { top: 17px; width: 16px; }
+  .notes .icon em { top: 24px; width: 18px; }
+
+  .settings .icon i,
+  .settings .icon b,
+  .settings .icon em,
+  .settings .icon strong {
+    width: 8px;
+    height: 8px;
+  }
+
+  .settings .icon i { left: 9px; top: 9px; }
+  .settings .icon b { left: 19px; top: 9px; }
+  .settings .icon em { left: 9px; top: 19px; }
+  .settings .icon strong { left: 19px; top: 19px; }
+}

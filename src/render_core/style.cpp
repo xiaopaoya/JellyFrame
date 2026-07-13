@@ -2292,7 +2292,9 @@ enum class CascadeProperty : std::size_t {
     ZIndex,
     TextAlign,
     JustifyContent,
+    AlignContent,
     AlignItems,
+    AlignSelf,
     BoxSizing,
     TextShadow,
     Outline,
@@ -2304,6 +2306,7 @@ enum class CascadeProperty : std::size_t {
     FlexGrow,
     FlexShrink,
     FlexBasis,
+    FlexDirection,
     FlexWrap,
     Gap,
     ColumnGap,
@@ -2367,7 +2370,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
         CascadeProperty slot;
     };
     static constexpr PropertySlotEntry kPropertySlots[] = {
+        {"align-content", CascadeProperty::AlignContent},
         {"align-items", CascadeProperty::AlignItems},
+        {"align-self", CascadeProperty::AlignSelf},
         {"animation", CascadeProperty::Animation},
         {"animation-delay", CascadeProperty::AnimationDelay},
         {"animation-direction", CascadeProperty::AnimationDirection},
@@ -2394,6 +2399,7 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
         {"display", CascadeProperty::Display},
         {"flex", CascadeProperty::Flex},
         {"flex-basis", CascadeProperty::FlexBasis},
+        {"flex-direction", CascadeProperty::FlexDirection},
         {"flex-grow", CascadeProperty::FlexGrow},
         {"flex-shrink", CascadeProperty::FlexShrink},
         {"flex-wrap", CascadeProperty::FlexWrap},
@@ -3062,20 +3068,23 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
         }
         style.text_align_specified = true;
         return true;
-    } else if (property == "justify-content") {
+    } else if (property == "justify-content" || property == "align-content") {
         const std::string lowered = lowercase(trim(value));
+        JustifyContent& alignment = property == "justify-content"
+            ? style.justify_content
+            : style.align_content;
         if (lowered == "center") {
-            style.justify_content = JustifyContent::Center;
+            alignment = JustifyContent::Center;
         } else if (lowered == "flex-end" || lowered == "end") {
-            style.justify_content = JustifyContent::End;
+            alignment = JustifyContent::End;
         } else if (lowered == "space-around") {
-            style.justify_content = JustifyContent::SpaceAround;
+            alignment = JustifyContent::SpaceAround;
         } else if (lowered == "space-between") {
-            style.justify_content = JustifyContent::SpaceBetween;
+            alignment = JustifyContent::SpaceBetween;
         } else if (lowered == "space-evenly") {
-            style.justify_content = JustifyContent::SpaceEvenly;
+            alignment = JustifyContent::SpaceEvenly;
         } else if (lowered == "flex-start" || lowered == "start" || lowered == "normal") {
-            style.justify_content = JustifyContent::Start;
+            alignment = JustifyContent::Start;
         } else {
             return false;
         }
@@ -3090,6 +3099,22 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             style.align_items = AlignItems::Start;
         } else if (lowered == "stretch" || lowered == "normal") {
         style.align_items = AlignItems::Stretch;
+        } else {
+            return false;
+        }
+        return true;
+    } else if (property == "align-self") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "auto") {
+            style.align_self = AlignItems::Auto;
+        } else if (lowered == "center") {
+            style.align_self = AlignItems::Center;
+        } else if (lowered == "flex-end" || lowered == "end") {
+            style.align_self = AlignItems::End;
+        } else if (lowered == "flex-start" || lowered == "start") {
+            style.align_self = AlignItems::Start;
+        } else if (lowered == "stretch" || lowered == "normal") {
+            style.align_self = AlignItems::Stretch;
         } else {
             return false;
         }
@@ -3135,6 +3160,16 @@ bool apply_declaration(Style& style, const std::string& property, const std::str
             return false;
         }
         style.flex_basis = basis;
+        return true;
+    } else if (property == "flex-direction") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "row") {
+            style.flex_direction = FlexDirection::Row;
+        } else if (lowered == "column") {
+            style.flex_direction = FlexDirection::Column;
+        } else {
+            return false;
+        }
         return true;
     } else if (property == "flex-wrap") {
         const std::string lowered = lowercase(trim(value));

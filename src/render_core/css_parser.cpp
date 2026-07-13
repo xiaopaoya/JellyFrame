@@ -751,6 +751,12 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "flex-basis") {
         return value == "auto" || is_supported_length_value(value);
     }
+    if (property == "flex-direction") {
+        return supported_keyword(value, {"row", "column"});
+    }
+    if (property == "align-self") {
+        return supported_keyword(value, {"auto", "stretch", "normal", "start", "flex-start", "center", "end", "flex-end"});
+    }
     if (property == "color" || property == "border-color") {
         return is_supported_color_value(value);
     }
@@ -862,7 +868,7 @@ bool is_supported_declaration_feature(std::string_view feature) {
                value.find('s') != std::string::npos ||
                is_number_with_suffix(value, {""}, false);
     }
-    if (property == "justify-content") {
+    if (property == "justify-content" || property == "align-content") {
         return supported_keyword(value, {"start", "flex-start", "normal", "center",
                                         "end", "flex-end", "space-around", "space-between",
                                         "space-evenly"});
