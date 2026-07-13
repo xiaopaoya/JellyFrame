@@ -21,9 +21,9 @@
   },
   "budgets": {
     "maxResourceBytes": 65536,
-    "maxDomNodes": 256,
+    "maxDomNodes": 768,
     "maxCssRules": 128,
-    "maxDisplayCommands": 256,
+    "maxDisplayCommands": 512,
     "maxTimers": 2,
     "maxEventListeners": 16
   },

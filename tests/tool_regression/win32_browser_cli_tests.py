@@ -177,6 +177,35 @@ def main() -> int:
         require(app["rollback"]["versionCode"] == 2, "win32 registry rollback must preserve current version as rollback")
         require(app["rollback"]["entry"] == "/v2.html", "win32 registry rollback must preserve current entry as rollback")
 
+    with tempfile.TemporaryDirectory(prefix="jellyframe-launcher-action-") as directory:
+        root = Path(directory)
+        store = root / "store"
+        bundle = root / "launcher-action.jfapp"
+        frames = root / "frames"
+        app_id = "org.jellyframe.examples.audio_smoke"
+        write_jfapp(bundle, app_id, 1, "1.0.0", "/index.html")
+        install_result = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(bundle)])
+        require(install_result.returncode == 0, "launcher action fixture must install")
+        app_data = store / "data" / app_id
+        app_data.mkdir(parents=True)
+        (app_data / "state.txt").write_text("keep", encoding="utf-8")
+        action_result = run_case(
+            exe,
+            [
+                "--registry-store", str(store),
+                "--launcher-app", "samples/apps/system/sample_launcher",
+                "--capture-frames", str(frames),
+                "--frame-count", "3",
+                "--frame-event", "1:click:100:414",
+            ],
+        )
+        require(action_result.returncode == 0, "launcher remove-keep-data action must capture")
+        require("diagnostics: 0" in action_result.stdout,
+                "launcher action fixture must remain inside the documented rendering subset")
+        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+        require(not registry["apps"], "launcher remove-keep-data action must remove the installed bundle")
+        require(app_data.is_dir(), "launcher remove-keep-data action must preserve app-private data")
+
     with tempfile.TemporaryDirectory(prefix="jellyframe-failed-app-") as directory:
         store = Path(directory) / "store"
         bad_bundle = Path(directory) / "bad-entry.jfapp"

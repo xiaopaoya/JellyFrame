@@ -2792,9 +2792,18 @@ bool replace_once(std::string& text, std::string_view marker, std::string_view r
     return true;
 }
 
-std::string build_launcher_app_list_html(const std::filesystem::path& registry_store) {
-    const jellyframe_example::AppManagerState state =
-        jellyframe_example::load_app_manager_state(registry_store);
+std::string build_launcher_store_summary_html(const jellyframe_example::AppManagerState& state) {
+    std::ostringstream html;
+    html << "<section class='store-summary'>"
+         << "<span>Installed " << state.summary.app_count << "</span>"
+         << "<span>Ready " << state.summary.launchable_count << "</span>"
+         << "<span>Updates " << state.summary.rollback_ready_count << "</span>"
+         << "<span>Recovery " << state.summary.failed_count << "</span>"
+         << "</section>";
+    return html.str();
+}
+
+std::string build_launcher_app_list_html(const jellyframe_example::AppManagerState& state) {
     std::ostringstream html;
     if (state.apps.empty()) {
         html << "<section class='empty'><p>No installed apps.</p>"
@@ -2805,10 +2814,12 @@ std::string build_launcher_app_list_html(const std::filesystem::path& registry_s
         html << "<article class='app'>"
              << "<h2 class='name'>" << html_escape_text(app.name) << "</h2>"
              << "<p class='meta'>" << html_escape_text(app.id) << " - v"
-             << html_escape_text(app.version_name) << " - "
-             << html_escape_text(app.status) << (app_state.rollback_ready ? " - rollback ready" : "") << " - "
-             << (app.enabled ? "enabled" : "disabled") << " - "
-             << app.bundle_size << " bytes</p>"
+             << html_escape_text(app.version_name) << " - " << app.bundle_size << " bytes</p>"
+             << "<div class='badges'>"
+             << "<span class='badge'>" << html_escape_text(app.status) << "</span>"
+             << "<span class='badge'>" << (app.enabled ? "enabled" : "disabled") << "</span>"
+             << (app_state.rollback_ready ? "<span class='badge update'>rollback ready</span>" : "")
+             << "</div>"
              << (app.has_failure ? "<p class='meta'>failure: " + html_escape_text(app.failure_reason) + "</p>" : "")
              << "<div class='actions'>"
              << "<button class='primary' data-action='launch' data-app-id='" << html_escape_text(app.id) << "'"
@@ -2818,7 +2829,9 @@ std::string build_launcher_app_list_html(const std::filesystem::path& registry_s
              << (app_state.rollback_ready ?
                  "<button data-action='rollback' data-app-id='" + html_escape_text(app.id) + "'>Rollback</button>" :
                  "")
-             << "<button class='danger' data-action='delete' data-app-id='" << html_escape_text(app.id) << "'>Delete</button>"
+             << "<button data-action='clear-data' data-app-id='" << html_escape_text(app.id) << "'>Clear data</button>"
+             << "<button class='danger' data-action='remove-delete-data' data-app-id='" << html_escape_text(app.id) << "'>Remove + data</button>"
+             << "<button class='danger subtle' data-action='remove-keep-data' data-app-id='" << html_escape_text(app.id) << "'>Remove / keep data</button>"
              << "</div></article>";
     }
     return html.str();
@@ -2874,8 +2887,12 @@ std::string build_system_shell_html(const std::filesystem::path& launcher_app_pa
                                     const std::filesystem::path& registry_store,
                                     const std::string& status) {
     const auto package = jellyframe_example::load_app_package(launcher_app_path, kMaxInputBytes);
+    const jellyframe_example::AppManagerState state =
+        jellyframe_example::load_app_manager_state(registry_store);
     std::string html = load_launcher_entry_html(package);
-    inject_launcher_markup(html, build_launcher_app_list_html(registry_store), build_launcher_status_html(status));
+    inject_launcher_markup(html,
+                           build_launcher_store_summary_html(state) + build_launcher_app_list_html(state),
+                           build_launcher_status_html(status));
     return html;
 }
 
@@ -3765,7 +3782,7 @@ private:
         switch (message) {
         case WM_CREATE:
             resize_to_client();
-            if (!options_.registry_store_path.empty() && options_.app_path.empty() && options_.inline_html.empty()) {
+            if (!options_.registry_store_path.empty() && options_.app_path.empty()) {
                 configure_system_shell(options_.startup_status);
             }
             rebuild();
@@ -4297,19 +4314,35 @@ private:
         }
     }
 
-    void delete_installed_app(const std::string& app_id) {
+    void remove_installed_app(const std::string& app_id, bool delete_data) {
         try {
             if (!active_app_id_.empty() && active_app_id_ == app_id) {
                 reset_image_services();
                 app_runtime_.terminate_current(AppTeardownReason::UserKill);
-                configure_system_shell("Cannot delete the active app; returned to shell first.");
+                configure_system_shell("Returned to the shell before removing the active app.");
             }
-            const auto removed = jellyframe_example::remove_bundle_from_registry(options_.registry_store_path, app_id);
-            configure_system_shell("Deleted " + removed.name + ".");
+            const auto removed = jellyframe_example::remove_bundle_from_registry(
+                options_.registry_store_path, app_id, delete_data);
+            configure_system_shell("Removed " + removed.name +
+                                   (delete_data ? " and its app data." : "; app data was retained."));
             rebuild();
             InvalidateRect(hwnd_, nullptr, FALSE);
         } catch (const std::exception& error) {
-            configure_system_shell(std::string("Delete failed: ") + error.what());
+            configure_system_shell(std::string("Remove failed: ") + error.what());
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+
+    void clear_installed_app_data(const std::string& app_id) {
+        try {
+            const bool deleted = jellyframe_example::delete_registry_app_data(
+                options_.registry_store_path, app_id);
+            configure_system_shell(deleted ? "Cleared app data." : "No app data to clear.");
+            rebuild();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        } catch (const std::exception& error) {
+            configure_system_shell(std::string("Clear data failed: ") + error.what());
             rebuild();
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
@@ -4325,8 +4358,12 @@ private:
         pending_shell_app_id_.clear();
         if (action == "launch") {
             launch_installed_app(app_id);
-        } else if (action == "delete") {
-            delete_installed_app(app_id);
+        } else if (action == "remove-delete-data" || action == "delete") {
+            remove_installed_app(app_id, true);
+        } else if (action == "remove-keep-data") {
+            remove_installed_app(app_id, false);
+        } else if (action == "clear-data") {
+            clear_installed_app_data(app_id);
         } else if (action == "rollback") {
             try {
                 const auto restored =
@@ -5789,11 +5826,11 @@ private:
         }
         reset_scroll_motion();
         const Node* target = input_->pointer_up(input);
-        rerender_if_dirty(input_->focused_node());
         follow_hash_anchor(target);
         if (process_shell_action_if_needed()) {
             return;
         }
+        rerender_if_dirty(input_->focused_node());
         set_title("up " + describe_node(target));
     }
 
