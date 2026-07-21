@@ -28,7 +28,7 @@
 
 | 能力 | 状态 | 建议 |
 | --- | --- | --- |
-| 基础颜色/背景 | 可用子集 | 使用 hex、命名色、`rgb()` / `rgba()` 和有界 sRGB `hsl()` / `hsla()`。包内图片背景使用 `background-color` 加 `background-image: url("/assets/image.bmp")`；package report 会指出非法或缺失路径。 |
+| 基础颜色/背景 | 可用子集 | 使用 hex、命名色、`rgb()` / `rgba()` 和有界 sRGB `hsl()` / `hsla()`。包内图片背景使用 `background-color` 加 `background-image: url("/assets/image.bmp")`，再按需使用 `background-size: cover`/`contain`/`100% 100%`、简单 `background-position` 子集和 `background-repeat: no-repeat`；package report 会指出非法或缺失路径。 |
 | Layout | 子集 | 优先 block、简化 flex（direct flex child 可用有符号整数 `order`）和有界 grid-card 子集。Grid 支持 2-4 条固定/`1fr` 行，以及正整数 `grid-column`/`grid-row` start/end/span placement；它不是完整 Grid。使用固定底栏和明确滚动容器。需要保留 layout 占位时使用 `visibility: hidden`；需要收缩占位时使用 `display: none`。 |
 | 响应式 | 子集 | 使用 `@media`、百分比 sizing、LTR `inline-size` / `block-size`、`max-width: 100%`、`box-sizing: border-box`、`gap`、`aspect-ratio`。固定高度纵向滚动容器使用文档化的 `overflow-y: auto` 子集。 |
 | 圆角/阴影/渐变 | 子集 | 支持圆角矩形、百分比圆角、轻量阴影、非布局 `outline-offset`、线性渐变、两段 `conic-gradient()` 进度环和两色中心圆形 `radial-gradient()` 高光。复杂 blur/mask/filter 延后。 |

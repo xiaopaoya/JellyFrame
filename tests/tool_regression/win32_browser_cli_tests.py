@@ -172,24 +172,19 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-icon-") as directory:
         root = Path(directory)
-        debug_dir = root / "package"
         report = root / "report.json"
         capture = root / "static-svg.bmp"
-        packaged = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "tools" / "package_app.py"),
+        previewed = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "tools" / "jellyframe_cli.py"), "preview",
              "--root", str(STATIC_SVG_ICON_APP), "--report", str(report),
-             "--debug-dir", str(debug_dir), "--rasterize-svg"],
+             "--output", str(capture), "--build-dir", str(exe.parent),
+             "--width", "64", "--height", "64", "--rasterize-svg"],
             cwd=REPO_ROOT, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        require(packaged.returncode == 0, f"static SVG package must succeed: {packaged.stdout}")
+        require(previewed.returncode == 0, f"static SVG preview must succeed: {previewed.stdout}")
         report_data = json.loads(report.read_text(encoding="utf-8"))
         svg_report = report_data.get("staticSvgRasterization", {})
         require(svg_report.get("rasterizedCount") == 1,
                 "static SVG package report must record one generated icon")
-        require((debug_dir / "__jellyframe" / "raster" / "assets" / "status.bmp").is_file(),
-                "debug package must contain generated BMP instead of runtime SVG")
-        static_svg_result = run_case(exe, ["--app", str(debug_dir), "--viewport-width", "64",
-                                           "--viewport-height", "64", "--capture", str(capture)])
-        require(static_svg_result.returncode == 0, "rasterized static SVG fixture must capture")
         red, green, blue = read_bmp_rgb(capture, 32, 20)
         require(green > 160 and red < 80 and blue > 80,
                 f"rasterized SVG icon must retain its green surface, got {(red, green, blue)}")

@@ -63,13 +63,18 @@ when the target has no matching codec or image budget.
   height: 92px;
   background-color: #12314a;
   background-image: url("/assets/weather-card.bmp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   border-radius: 14px;
 }
 ```
 
-This V0 path stretches one package-absolute image across the background paint
-area. It intentionally does not accept remote/data URLs, relative paths,
-repeat, `background-size`, or `background-position`.
+This path accepts one package-absolute image. `background-size` is limited to
+`cover`, `contain` or `100% 100%`; `background-position` uses the documented
+simple image-position subset; only `background-repeat: no-repeat` is accepted.
+It intentionally does not accept remote/data URLs, relative paths, tiling,
+multiple backgrounds or arbitrary size expressions.
 
 ## Static SVG Icons
 

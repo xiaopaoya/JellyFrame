@@ -1,6 +1,6 @@
 # CSSWG Support Table
 
-> Generated from: `csswg_support_table.csv`; source SHA-256: `9991cc9c05c76b31a77709792a1819f83a40958b0d55260db4c6ae9c679c0e9d`.
+> Generated from: `csswg_support_table.csv`; source SHA-256: `70fb73298678152973b6b932b7b02ebf3a3c0bca14f1911c484bb0130eee332d`.
 > Do not edit this generated table by hand.
 > Source audit: 2026-07-22; Applies to: 0.5.0-dev.
 
@@ -23,9 +23,9 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | Status | Rows |
 | --- | ---: |
 | `supported` | 75 |
-| `partial` | 838 |
+| `partial` | 842 |
 | `host_dependent` | 0 |
-| `unsupported` | 3357 |
+| `unsupported` | 3353 |
 | `out_of_scope` | 229 |
 
 ## Full Table
@@ -80,9 +80,9 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | csswg:property:background-color:css-backgrounds-3:1 | property | css-backgrounds-3 | background-color |  | `supported` | Usable in the documented JellyFrame CSS subset. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-color) |
 | csswg:property:background-image:css-backgrounds-3:1 | property | css-backgrounds-3 | background-image |  | `partial` | Supported only in the documented subset or accepted owning property/value position; check the capability matrix for limits. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-image) |
 | csswg:property:background-origin:css-backgrounds-3:1 | property | css-backgrounds-3 | background-origin |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-origin) |
-| csswg:property:background-position:css-backgrounds-3:1 | property | css-backgrounds-3 | background-position |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-position) |
-| csswg:property:background-repeat:css-backgrounds-3:1 | property | css-backgrounds-3 | background-repeat |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-repeat) |
-| csswg:property:background-size:css-backgrounds-3:1 | property | css-backgrounds-3 | background-size |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-size) |
+| csswg:property:background-position:css-backgrounds-3:1 | property | css-backgrounds-3 | background-position |  | `partial` | Only the documented simple object-position keywords and percentages apply to one package-local background image. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-position) |
+| csswg:property:background-repeat:css-backgrounds-3:1 | property | css-backgrounds-3 | background-repeat |  | `partial` | Only no-repeat is accepted for one package-local background image; tiling is deferred. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-repeat) |
+| csswg:property:background-size:css-backgrounds-3:1 | property | css-backgrounds-3 | background-size |  | `partial` | Only cover contain and 100% 100% are accepted for one package-local background image. | [link](https://drafts.csswg.org/css-backgrounds-3/#propdef-background-size) |
 | csswg:property:baseline-shift:css-inline-3:1 | property | css-inline-3 | baseline-shift |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-inline-3/#propdef-baseline-shift) |
 | csswg:property:baseline-source:css-inline-3:1 | property | css-inline-3 | baseline-source |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-inline-3/#propdef-baseline-source) |
 | csswg:descriptor:base-palette:css-fonts-4:1 | descriptor | css-fonts-4 | base-palette |  | `out_of_scope` | Legacy compatibility syntax, specification detail, or browser-scale machinery outside the public JellyFrame CSS contract. | [link](https://drafts.csswg.org/css-fonts-4/#descdef-font-palette-values-base-palette) |
@@ -1450,7 +1450,7 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | csswg:value:bottom:css-anchor-position-1:1 | value | css-anchor-position-1 | bottom | in css-anchor-position-1, for anchor() | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-anchor-position-1/#valdef-anchor-bottom) |
 | csswg:value:bottom:css-anchor-position-1:2 | value | css-anchor-position-1 | bottom | in css-anchor-position-1, for position-area, <position-area> | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-anchor-position-1/#valdef-position-area-bottom) |
 | csswg:value:bottom:css-anchor-position-2:3 | value | css-anchor-position-2 | bottom | in css-anchor-position-2, for <position-area-query> | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-anchor-position-2/#valdef-position-area-query-bottom) |
-| csswg:value:bottom:css-backgrounds-3:4 | value | css-backgrounds-3 | bottom | in css-backgrounds-3, for background-position | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-background-position-bottom) |
+| csswg:value:bottom:css-backgrounds-3:4 | value | css-backgrounds-3 | bottom | in css-backgrounds-3, for background-position | `partial` | Supported only in the documented simple package-background position subset. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-background-position-bottom) |
 | csswg:value:bottom:css-borders-4:5 | value | css-borders-4 | bottom | in css-borders-4, for border-limit | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-borders-4/#valdef-border-limit-bottom) |
 | csswg:value:bottom:css-conditional-5:6 | value | css-conditional-5 | bottom | in css-conditional-5, for @container/scrollable | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-conditional-5/#valdef-container-scrollable-bottom) |
 | csswg:value:bottom:css-conditional-5:7 | value | css-conditional-5 | bottom | in css-conditional-5, for @container/scrolled | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-conditional-5/#valdef-container-scrolled-bottom) |
@@ -2832,7 +2832,7 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | csswg:value:colorimetric:css-color-5:1#2 | value | css-color-5 | colorimetric | relative-colorimetric | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-color-5/#valdef-color-profile-rendering-intent-relative-colorimetric) |
 | csswg:value:rem:css-values-4:1 | value | css-values-4 | rem |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-values-4/#rem) |
 | csswg:value:rem-unit:css-values-4:1 | value | css-values-4 | rem unit |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-values-4/#rem) |
-| csswg:value:repeat:css-backgrounds-3:1#2 | value | css-backgrounds-3 | repeat | in css-backgrounds-3, for background-repeat | `partial` | Supported only in the documented subset or accepted owning property/value position; check the capability matrix for limits. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-background-repeat-repeat) |
+| csswg:value:repeat:css-backgrounds-3:1#2 | value | css-backgrounds-3 | repeat | in css-backgrounds-3, for background-repeat | `unsupported` | Tiling is outside the documented JellyFrame CSS subset; use one no-repeat package background image. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-background-repeat-repeat) |
 | csswg:value:repeat:css-backgrounds-3:2 | value | css-backgrounds-3 | repeat | in css-backgrounds-3, for border-image-repeat | `partial` | Supported only in the documented subset or accepted owning property/value position; check the capability matrix for limits. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-border-image-repeat-repeat) |
 | csswg:value:repeat:css-borders-4:3 | value | css-borders-4 | repeat | in css-borders-4, for border-image-repeat | `partial` | Supported only in the documented subset or accepted owning property/value position; check the capability matrix for limits. | [link](https://drafts.csswg.org/css-borders-4/#valdef-border-image-repeat-repeat) |
 | csswg:value:x:css-backgrounds-3:1 | value | css-backgrounds-3 | x | repeat-x | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-background-repeat-repeat-x) |
@@ -3300,7 +3300,7 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | csswg:value:top:css-anchor-position-1:1 | value | css-anchor-position-1 | top | in css-anchor-position-1, for anchor() | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-anchor-position-1/#valdef-anchor-top) |
 | csswg:value:top:css-anchor-position-1:2 | value | css-anchor-position-1 | top | in css-anchor-position-1, for position-area, <position-area> | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-anchor-position-1/#valdef-position-area-top) |
 | csswg:value:top:css-anchor-position-2:3 | value | css-anchor-position-2 | top | in css-anchor-position-2, for <position-area-query> | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-anchor-position-2/#valdef-position-area-query-top) |
-| csswg:value:top:css-backgrounds-3:4 | value | css-backgrounds-3 | top | in css-backgrounds-3, for background-position | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-background-position-top) |
+| csswg:value:top:css-backgrounds-3:4 | value | css-backgrounds-3 | top | in css-backgrounds-3, for background-position | `partial` | Supported only in the documented simple package-background position subset. | [link](https://drafts.csswg.org/css-backgrounds-3/#valdef-background-position-top) |
 | csswg:value:top:css-borders-4:5 | value | css-borders-4 | top | in css-borders-4, for border-limit | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-borders-4/#valdef-border-limit-top) |
 | csswg:value:top:css-conditional-5:6 | value | css-conditional-5 | top | in css-conditional-5, for @container/scrollable | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-conditional-5/#valdef-container-scrollable-top) |
 | csswg:value:top:css-conditional-5:7 | value | css-conditional-5 | top | in css-conditional-5, for @container/scrolled | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-conditional-5/#valdef-container-scrolled-top) |

@@ -59,12 +59,16 @@ fallback，因为目标缺少相应 codec 或图片预算不足时，宿主可�
   height: 92px;
   background-color: #12314a;
   background-image: url("/assets/weather-card.bmp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   border-radius: 14px;
 }
 ```
 
-该 V0 路径把一个包内绝对路径图片拉伸到背景绘制区域。它刻意不接受远程/data URL、相对路径、
-repeat、`background-size` 或 `background-position`。
+该路径接受一张包内绝对路径图片。`background-size` 限于 `cover`、`contain` 或 `100% 100%`；
+`background-position` 使用文档化的简单图片定位子集；只接受 `background-repeat: no-repeat`。
+它刻意不接受远程/data URL、相对路径、平铺、多背景或任意尺寸表达式。
 
 ## 静态 SVG 图标
 

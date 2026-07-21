@@ -2158,6 +2158,14 @@ bool parse_package_background_image_url(std::string_view raw_value, std::string_
     });
 }
 
+void update_package_background_image_presentation(Style& style) {
+    const std::uint16_t resource_id = background_image_resource_id(style.background_overlay_packed);
+    if (resource_id != 0) {
+        style.background_overlay_packed = pack_background_image_resource(
+            resource_id, style.object_fit, style.object_position, style.image_rendering);
+    }
+}
+
 bool parse_number_or_length_for_transform(const std::string& value, float& output, int em_base = kRootFontSizePx) {
     int px = 0;
     if (parse_length_px(value, px, em_base)) {
@@ -2781,6 +2789,9 @@ enum class CascadeProperty : std::size_t {
     Visibility,
     Color,
     Background,
+    BackgroundSize,
+    BackgroundPosition,
+    BackgroundRepeat,
     Margin,
     MarginTop,
     MarginRight,
@@ -2925,6 +2936,9 @@ CascadeSlot* cascade_slot_for_property(CascadeSlots& slots, const std::string& p
         {"background", CascadeProperty::Background},
         {"background-color", CascadeProperty::Background},
         {"background-image", CascadeProperty::Background},
+        {"background-position", CascadeProperty::BackgroundPosition},
+        {"background-repeat", CascadeProperty::BackgroundRepeat},
+        {"background-size", CascadeProperty::BackgroundSize},
         {"border", CascadeProperty::Border},
         {"border-bottom-width", CascadeProperty::BorderBottomWidth},
         {"border-color", CascadeProperty::BorderColor},
@@ -3365,7 +3379,8 @@ bool apply_declaration(Style& style,
                 style.background_color = Color{0, 0, 0, 0};
                 style.background_color2 = style.background_color;
             }
-            style.background_overlay_packed = pack_background_image_resource(resource_id);
+            style.background_overlay_packed = pack_background_image_resource(
+                resource_id, style.object_fit, style.object_position, style.image_rendering);
             return true;
         }
         if (property == "background-image" && lowercase(trim(value)) == "none") {
@@ -3923,6 +3938,7 @@ bool apply_declaration(Style& style,
         } else {
             return false;
         }
+        update_package_background_image_presentation(style);
         return true;
     } else if (property == "object-position") {
         ObjectPosition position;
@@ -3930,6 +3946,7 @@ bool apply_declaration(Style& style,
             return false;
         }
         style.object_position = position;
+        update_package_background_image_presentation(style);
         return true;
     } else if (property == "image-rendering") {
         const std::string lowered = lowercase(trim(value));
@@ -3942,7 +3959,31 @@ bool apply_declaration(Style& style,
         } else {
             return false;
         }
+        update_package_background_image_presentation(style);
         return true;
+    } else if (property == "background-size") {
+        const std::string lowered = lowercase(trim(value));
+        if (lowered == "cover") {
+            style.object_fit = ObjectFit::Cover;
+        } else if (lowered == "contain") {
+            style.object_fit = ObjectFit::Contain;
+        } else if (lowered == "100% 100%") {
+            style.object_fit = ObjectFit::Fill;
+        } else {
+            return false;
+        }
+        update_package_background_image_presentation(style);
+        return true;
+    } else if (property == "background-position") {
+        ObjectPosition position;
+        if (!parse_object_position_value(value, position)) {
+            return false;
+        }
+        style.object_position = position;
+        update_package_background_image_presentation(style);
+        return true;
+    } else if (property == "background-repeat") {
+        return lowercase(trim(value)) == "no-repeat";
     } else if (property == "list-style" || property == "list-style-type") {
         std::istringstream stream(lowercase(trim(value)));
         std::string token;

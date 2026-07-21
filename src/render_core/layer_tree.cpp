@@ -980,9 +980,9 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
         push_image(display_list,
                    paint_rect,
                    background_image_handle,
-                   ObjectFit::Fill,
-                   ObjectPosition{},
-                   ImageRendering::Auto,
+                   background_image_object_fit(box.style.background_overlay_packed),
+                   background_image_object_position(box.style.background_overlay_packed),
+                   background_image_rendering(box.style.background_overlay_packed),
                    border_radius);
     }
 

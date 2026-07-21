@@ -3032,6 +3032,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             command.extend(["--targets", args.targets])
         if args.target:
             command.extend(["--target", args.target])
+        if getattr(args, "rasterize_svg", False):
+            command.extend(["--rasterize-svg", "--svg-raster-size", str(args.svg_raster_size)])
         if args.no_font_check:
             command.append("--no-font-check")
         if args.strict:
@@ -3221,16 +3223,20 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def add_static_svg_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--rasterize-svg", action="store_true",
+                        help="Compile statically referenced restricted SVG icons to package-local BMP resources.")
+    parser.add_argument("--svg-raster-size", type=int, default=32,
+                        help="Maximum generated SVG BMP dimension in pixels (1..256, default: 32).")
+
+
 def add_manifest_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
     parser.add_argument("--namespace", default="jellyframe_esp32s3", help="Generated C++ namespace.")
     parser.add_argument("--include", default="jellyframe_esp32s3_resources.h", help="Generated C++ include.")
     parser.add_argument("--target", help="Optional target preset id.")
-    parser.add_argument("--rasterize-svg", action="store_true",
-                        help="Compile statically referenced restricted SVG icons to package-local BMP resources.")
-    parser.add_argument("--svg-raster-size", type=int, default=32,
-                        help="Maximum generated SVG BMP dimension in pixels (1..256, default: 32).")
+    add_static_svg_args(parser)
 
 
 def add_common_package_args(parser: argparse.ArgumentParser) -> None:
@@ -3301,6 +3307,7 @@ def main() -> int:
                          help="Optional Win32 frame-script or runtime capture log to merge into the report.")
     preview.add_argument("--port-telemetry", type=Path,
                          help="Optional real-device port telemetry JSON or 'port_telemetry key=value' log.")
+    add_static_svg_args(preview)
     add_font_preflight_args(preview)
     add_responsive_args(preview)
     preview.add_argument("--namespace", default="jellyframe_esp32s3", help=argparse.SUPPRESS)
@@ -3368,6 +3375,7 @@ def main() -> int:
                          help="Allow installing a lower versionCode over the current app.")
     install.add_argument("--allow-untrusted-signature", action="store_true",
                          help="Permit unsigned/untrusted install candidates for desktop bring-up only.")
+    add_static_svg_args(install)
     add_font_preflight_args(install)
     add_responsive_args(install)
     install.set_defaults(func=cmd_install)
@@ -3395,6 +3403,7 @@ def main() -> int:
                         help="Skip font resource preflight while checking samples.")
     doctor.add_argument("--strict", action="store_true",
                         help="Fail when sample diagnostics contain warnings.")
+    add_static_svg_args(doctor)
     doctor.add_argument("--runtime-log", action="append", metavar="SAMPLE=PATH",
                         help="Merge a Win32 capture/runtime log for one sample; may be repeated.")
     doctor.add_argument("--port-telemetry", action="append", metavar="SAMPLE=PATH",

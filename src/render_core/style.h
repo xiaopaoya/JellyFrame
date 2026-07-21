@@ -147,11 +147,21 @@ inline BackgroundPaint unpack_background_overlay(std::uint64_t packed) {
 // A package background image reuses the existing optional overlay word instead
 // of extending Style. Resource ids are local to one StyleResolver and zero is
 // reserved for "not present".
-inline std::uint64_t pack_background_image_resource(std::uint16_t resource_id) {
+inline std::uint64_t pack_background_image_resource(std::uint16_t resource_id,
+                                                    ObjectFit object_fit = ObjectFit::Fill,
+                                                    ObjectPosition object_position = {},
+                                                    ImageRendering image_rendering = ImageRendering::Auto) {
     constexpr std::uint64_t kImageResourceMarker = 1ULL << 63U;
+    const auto clamp_percent = [](int value) {
+        return static_cast<std::uint64_t>(std::max(0, std::min(100, value)));
+    };
     return resource_id == 0 ? 0 :
         kImageResourceMarker | 1U |
-        (static_cast<std::uint64_t>(resource_id) << 3U);
+        (static_cast<std::uint64_t>(resource_id) << 3U) |
+        (static_cast<std::uint64_t>(object_fit) << 19U) |
+        (clamp_percent(object_position.x_percent) << 22U) |
+        (clamp_percent(object_position.y_percent) << 29U) |
+        (static_cast<std::uint64_t>(image_rendering) << 36U);
 }
 
 inline bool has_background_image_resource(std::uint64_t packed) {
@@ -163,6 +173,21 @@ inline std::uint16_t background_image_resource_id(std::uint64_t packed) {
     return has_background_image_resource(packed)
         ? static_cast<std::uint16_t>((packed >> 3U) & 0xFFFFU)
         : 0;
+}
+
+inline ObjectFit background_image_object_fit(std::uint64_t packed) {
+    return static_cast<ObjectFit>((packed >> 19U) & 0x7U);
+}
+
+inline ObjectPosition background_image_object_position(std::uint64_t packed) {
+    return ObjectPosition{
+        static_cast<int>((packed >> 22U) & 0x7FU),
+        static_cast<int>((packed >> 29U) & 0x7FU),
+    };
+}
+
+inline ImageRendering background_image_rendering(std::uint64_t packed) {
+    return static_cast<ImageRendering>((packed >> 36U) & 0x3U);
 }
 
 struct StyleTransition {

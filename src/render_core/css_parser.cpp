@@ -857,6 +857,15 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "background-image") {
         return is_supported_background_image_value(value);
     }
+    if (property == "background-size") {
+        return supported_keyword(value, {"cover", "contain"}) || ascii_lowercase(trim(value)) == "100% 100%";
+    }
+    if (property == "background-position") {
+        return is_supported_object_position_value(value);
+    }
+    if (property == "background-repeat") {
+        return supported_keyword(value, {"no-repeat"});
+    }
     if (property == "width" || property == "height" || property == "min-width" ||
         property == "min-height" || property == "max-width" || property == "max-height" || property == "font-size" ||
         property == "text-indent" || property == "letter-spacing" || property == "gap" || property == "row-gap" ||

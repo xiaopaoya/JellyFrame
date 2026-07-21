@@ -1138,7 +1138,8 @@ void package_background_image_emits_image_display_command_when_surface_resolves(
     auto document = html_parser.parse("<body><section class='cover'></section></body>");
     StyleResolver resolver(css_parser.parse(
         ".cover { width: 48px; height: 32px; border-radius: 8px; background-color: #112233; "
-        "background-image: url('/assets/cover.bmp'); }"));
+        "background-image: url('/assets/cover.bmp'); background-size: cover; background-position: right top; "
+        "background-repeat: no-repeat; image-rendering: crisp-edges; }"));
     const std::uint16_t resource_id = resolver.background_image_resource_id_for("/assets/cover.bmp");
     check(resource_id != 0 && resolver.background_image_resource_url(resource_id) != nullptr,
           "package background image owns a stylesheet-local resource id");
@@ -1163,6 +1164,9 @@ void package_background_image_emits_image_display_command_when_surface_resolves(
                   "background image fills the documented element paint area");
             check(has_corner_radius(command.border_radius),
                   "background image inherits the element rounded paint clip");
+            check(command.object_fit == ObjectFit::Cover && command.object_position.x_percent == 100 &&
+                      command.object_position.y_percent == 0 && command.image_rendering == ImageRendering::CrispEdges,
+                  "background image command carries bounded size, position and sampling controls");
         }
     }
     check(found_image, "resolved package background image emits image display command");

@@ -517,7 +517,8 @@ void package_background_image_url_is_bounded_and_preserves_background_color() {
     StyleResolverOptions options;
     options.diagnostics = &diagnostics;
     StyleResolver resolver(parse(
-        ".cover { background-color: #102030; background-image: url('/assets/Cover.bmp'); }"
+        ".cover { background-color: #102030; background-size: cover; background-position: right top; "
+        "background-repeat: no-repeat; image-rendering: crisp-edges; background-image: url('/assets/Cover.bmp'); }"
         ".replacement { background: linear-gradient(#ffffff, #000000); "
         "background-image: url('/assets/cover.bmp'); }"
         ".invalid { background-color: #102030; background-image: url('https://example.invalid/cover.bmp'); }"),
@@ -534,6 +535,11 @@ void package_background_image_url_is_bounded_and_preserves_background_color() {
           "background image resource keeps the case-sensitive package path");
     check(cover_style.background_color.r == 0x10 && cover_style.background_color.g == 0x20,
           "background-image url preserves the existing background color fallback");
+    check(background_image_object_fit(cover_style.background_overlay_packed) == ObjectFit::Cover &&
+              background_image_object_position(cover_style.background_overlay_packed).x_percent == 100 &&
+              background_image_object_position(cover_style.background_overlay_packed).y_percent == 0 &&
+              background_image_rendering(cover_style.background_overlay_packed) == ImageRendering::CrispEdges,
+          "background image packs size, position and sampling without extending Style");
     check(replacement_style.background_paint == BackgroundPaintKind::Solid &&
               replacement_style.background_color.a == 0 &&
               has_background_image_resource(replacement_style.background_overlay_packed),
