@@ -660,6 +660,85 @@ void focus_navigation_skips_disabled_and_activates() {
     check(input.focus_previous() == select, "focus wraps backward");
 }
 
+void tabindex_autofocus_and_focus_events_follow_embedded_subset() {
+    auto pipeline = build_form_pipeline(
+        "<body><div id='before' tabindex='0'>Before</div><button id='skip' tabindex='-1'>Skip</button>"
+        "<div id='auto' tabindex='0' autofocus>Auto</div><button id='after'>After</button></body>",
+        "div, button { display: block; width: 120px; height: 24px; }");
+    Node* before = find_by_id(*pipeline.document, "before");
+    Node* auto_focus = find_by_id(*pipeline.document, "auto");
+    Node* after = find_by_id(*pipeline.document, "after");
+    check(before != nullptr && auto_focus != nullptr && after != nullptr, "tabindex fixture exists");
+
+    int focus_events = 0;
+    int blur_events = 0;
+    auto_focus->add_event_listener("focus", [&](Event&) { ++focus_events; });
+    auto_focus->add_event_listener("blur", [&](Event&) { ++blur_events; });
+    InputController input(*pipeline.layer_tree);
+    check(input.focused_node() == auto_focus, "autofocus selects the first focusable autofocus node");
+    check(focus_events == 1, "autofocus dispatches focus when listeners are present");
+    check(input.focus_next() == after, "negative tabindex is excluded from hardware focus order");
+    check(blur_events == 1, "focus transition dispatches blur on the prior target");
+    check(input.focus_next() == before, "tabindex zero generic element participates in tree-order focus navigation");
+}
+
+void modal_root_limits_hit_testing_focus_and_activation() {
+    auto pipeline = build_form_pipeline(
+        "<body><button id='outside'>Outside</button><dialog id='modal' open>"
+        "<button id='confirm'>Confirm</button><button id='cancel'>Cancel</button></dialog></body>",
+        "button { display: block; width: 120px; height: 24px; } dialog { display: block; width: 140px; }");
+    Node* outside = find_by_id(*pipeline.document, "outside");
+    Node* modal = find_by_id(*pipeline.document, "modal");
+    Node* confirm = find_by_id(*pipeline.document, "confirm");
+    Node* cancel = find_by_id(*pipeline.document, "cancel");
+    const LayoutBox* outside_box = find_box_by_id(*pipeline.layout_tree, "outside");
+    const LayoutBox* confirm_box = find_box_by_id(*pipeline.layout_tree, "confirm");
+    check(outside != nullptr && modal != nullptr && confirm != nullptr && cancel != nullptr &&
+              outside_box != nullptr && confirm_box != nullptr,
+          "modal input fixture exists");
+
+    int outside_clicks = 0;
+    int confirm_clicks = 0;
+    outside->add_event_listener("click", [&](Event&) { ++outside_clicks; });
+    confirm->add_event_listener("click", [&](Event&) { ++confirm_clicks; });
+
+    InputController input(*pipeline.layer_tree);
+    input.set_focused_node(outside);
+    input.set_modal_root(modal);
+    check(input.modal_root() == modal, "modal root is installed");
+    check(input.focused_node() == confirm, "modal installation focuses its first control");
+
+    PointerInput pointer;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    pointer.x = outside_box->rect.x + 2;
+    pointer.y = outside_box->rect.y + 2;
+    check(input.pointer_down(pointer) == nullptr, "modal blocks pointer targets outside its subtree");
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+    check(outside_clicks == 0, "modal blocks outside activation");
+
+    pointer.buttons = 1;
+    pointer.x = confirm_box->rect.x + 2;
+    pointer.y = confirm_box->rect.y + 2;
+    check(input.pointer_down(pointer) == confirm, "modal accepts pointer targets in its subtree");
+    pointer.buttons = 0;
+    check(input.pointer_up(pointer) == confirm, "modal pointer up keeps descendant target");
+    check(confirm_clicks == 1, "modal descendant activates normally");
+    check(input.focus_next() == cancel, "modal focus traversal stays in subtree");
+    check(input.focus_next() == confirm, "modal focus traversal wraps within subtree");
+
+    input.set_modal_root(nullptr);
+    check(input.modal_root() == nullptr, "modal root clears without retained state");
+    pointer.buttons = 1;
+    pointer.x = outside_box->rect.x + 2;
+    pointer.y = outside_box->rect.y + 2;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+    check(outside_clicks == 1, "ordinary hit testing resumes after modal clears");
+}
+
 void submit_button_runs_form_default_action_after_click() {
     auto pipeline = build_form_pipeline(
         "<body><form id='form'><input id='name' name='name' value='Ada'><button id='send'>Send</button></form></body>",
@@ -687,6 +766,70 @@ void submit_button_runs_form_default_action_after_click() {
     check(submits == 1, "submit button dispatches form submit after click");
 }
 
+void reset_button_runs_form_default_action_after_click() {
+    auto pipeline = build_form_pipeline(
+        "<body><form id='form'><input id='name' value='Ada'><button id='reset' type='reset'>Reset</button></form></body>",
+        "input, button { display: block; width: 120px; height: 24px; }");
+    Node* form = find_by_id(*pipeline.document, "form");
+    Node* name = find_by_id(*pipeline.document, "name");
+    const LayoutBox* button_box = find_box_by_id(*pipeline.layout_tree, "reset");
+    check(form != nullptr && name != nullptr && button_box != nullptr, "reset input fixture exists");
+    check(set_form_control_value(*name, "Grace"), "reset input changes value before click");
+
+    int resets = 0;
+    form->add_event_listener("reset", [&](Event&) { ++resets; });
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = button_box->rect.x + 2;
+    pointer.y = button_box->rect.y + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    input.pointer_down(pointer);
+    pointer.buttons = 0;
+    input.pointer_up(pointer);
+
+    check(resets == 1 && form_control_value(*name) == "Ada",
+          "reset button dispatches reset and restores authored default after click");
+}
+
+void restored_interaction_state_drops_nodes_absent_from_rebuilt_layer_tree() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><button id='hidden'>Hidden</button><button id='visible'>Visible</button></body>");
+    Stylesheet stylesheet = css_parser.parse(
+        "#hidden.hidden { visibility: hidden; }"
+        "#visible { display: block; width: 80px; height: 24px; margin: 0; }");
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    LayoutEngine layout_engine(resolver);
+    LayerTreeBuilder layer_tree_builder;
+
+    auto first_render_tree = render_tree_builder.build(*document);
+    auto first_layout_tree = layout_engine.layout(*first_render_tree, 160);
+    auto first_layer_tree = layer_tree_builder.build(*first_layout_tree);
+    Node* hidden = find_by_id(*document, "hidden");
+    Node* visible = find_by_id(*document, "visible");
+    check(hidden != nullptr && visible != nullptr, "focus restoration fixture nodes exist");
+
+    InputController first_input(*first_layer_tree);
+    first_input.set_focused_node(hidden);
+    check(first_input.focused_node() == hidden, "initial visible node receives focus");
+
+    hidden->set_attribute("class", "hidden");
+    auto rebuilt_render_tree = render_tree_builder.build(*document);
+    auto rebuilt_layout_tree = layout_engine.layout(*rebuilt_render_tree, 160);
+    auto rebuilt_layer_tree = layer_tree_builder.build(*rebuilt_layout_tree);
+    InputController rebuilt_input(*rebuilt_layer_tree);
+    rebuilt_input.set_interaction_state(hidden, hidden, hidden);
+
+    check(rebuilt_input.hovered_node() == nullptr && rebuilt_input.active_node() == nullptr &&
+              rebuilt_input.focused_node() == nullptr,
+          "rebuilt input drops interaction nodes hidden by CSS visibility");
+    check(rebuilt_input.focus_next() == visible,
+          "focus navigation resumes at the first visible control after state restoration");
+}
+
 } // namespace
 
 int main() {
@@ -710,7 +853,11 @@ int main() {
         select_arrow_keys_work_through_optgroups();
         disabled_control_ignores_pointer_and_text_input();
         focus_navigation_skips_disabled_and_activates();
+        tabindex_autofocus_and_focus_events_follow_embedded_subset();
+        modal_root_limits_hit_testing_focus_and_activation();
         submit_button_runs_form_default_action_after_click();
+        reset_button_runs_form_default_action_after_click();
+        restored_interaction_state_drops_nodes_absent_from_rebuilt_layer_tree();
     } catch (const std::exception& error) {
         std::cerr << "input test failed: " << error.what() << '\n';
         return 1;

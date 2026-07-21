@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-15; Applies to: 0.5.0-dev
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -16,7 +16,7 @@ for whether a document needs another pass after code changes.
 3. [app_author_guide.md](app_author_guide.md) if you are writing apps.
 4. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
 5. [developer_capability_matrix.md](developer_capability_matrix.md)
-6. [html_living_standard_support_table.md](html_living_standard_support_table.md) if you need to search HTML Living Standard feature support.
+6. [html_living_standard_support_table.md](html_living_standard_support_table.md) or [csswg_support_table.md](csswg_support_table.md) if you need to search Web syntax support.
 7. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
 8. The module document for the area you want to use, port or inspect.
 
@@ -91,6 +91,10 @@ for whether a document needs another pass after code changes.
   full searchable HTML Living Standard support table.
 - [html_living_standard_support_table.csv](html_living_standard_support_table.csv):
   machine-readable version of the same table for editor/tooling integrations.
+- [csswg_support_table.md](csswg_support_table.md): full searchable CSSWG
+  support table.
+- [csswg_support_table.csv](csswg_support_table.csv): machine-readable version
+  of the CSS table for editor/tooling integrations.
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish
   control and motion design system.
 - [versioning.md](versioning.md): versioning and release discipline.

@@ -3,7 +3,7 @@ body {
   margin: 0;
   width: 300px;
   height: 300px;
-  background: #07090d;
+  background: #061015;
   color: #f7fbff;
 }
 
@@ -12,15 +12,21 @@ body {
   width: 300px;
   height: 300px;
   padding: 12px;
-  background: #07090d;
+  background: linear-gradient(to bottom right, #152c3e, #05090d);
 }
 
 .topline {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: 22px;
-  color: #9fb5c8;
+  height: 23px;
+  color: #a9c4d4;
+  font-size: 12px;
+}
+
+.title {
+  color: #e4f7ff;
   font-size: 14px;
+  font-weight: 700;
 }
 
 .meta {
@@ -29,45 +35,56 @@ body {
 
 .time-card {
   box-sizing: border-box;
-  height: 106px;
-  padding: 12px 14px;
-  border-radius: 28px;
-  background: #111923;
+  height: 110px;
+  padding: 10px 14px 9px;
+  border: 1px solid #294457;
+  border-radius: 26px;
+  background: radial-gradient(circle at 78% 14%, #284d68 0%, #132331 100%), linear-gradient(to bottom, #162939, #0e1823);
+  box-shadow: 0 4px 12px 0 #03070c;
+}
+
+.eyebrow {
+  display: block;
+  color: #77dcec;
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .phase {
   display: block;
-  color: #67e8f9;
-  font-size: 15px;
+  color: #a2eff8;
+  font-size: 13px;
 }
 
 #time {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: 42px;
   line-height: 1;
 }
 
 #note {
   display: block;
-  margin-top: 4px;
-  color: #a7f3d0;
-  font-size: 14px;
+  margin-top: 1px;
+  color: #b3dbd2;
+  font-size: 11px;
+  line-height: 12px;
 }
 
 .metrics {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  margin: 12px 0 10px;
+  margin: 10px 0 10px;
 }
 
 .metrics div {
   box-sizing: border-box;
-  height: 44px;
+  height: 45px;
   padding: 4px 12px;
-  border-radius: 16px;
-  background: #12161d;
+  border: 1px solid #213845;
+  border-radius: 15px;
+  background: #111d28;
 }
 
 .metrics span,
@@ -76,12 +93,14 @@ body {
 }
 
 .metrics span {
-  color: #91a3b7;
-  font-size: 13px;
+  color: #8ebdcc;
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .metrics strong {
-  margin-top: 1px;
+  margin-top: 0;
+  color: #f1fbff;
   font-size: 18px;
 }
 
@@ -92,23 +111,24 @@ body {
 }
 
 button {
-  height: 38px;
+  height: 39px;
   border: 0;
-  border-radius: 22px;
-  background: #183044;
-  color: #f8fafc;
-  font-size: 16px;
-  line-height: 38px;
+  border-radius: 20px;
+  background: linear-gradient(to bottom, #23445a, #173247);
+  color: #f5fbff;
+  font-size: 14px;
+  line-height: 39px;
+  box-shadow: 0 2px 5px 0 #03070b;
 }
 
 button span {
   display: block;
-  height: 38px;
-  line-height: 38px;
+  height: 39px;
+  line-height: 39px;
   text-align: center;
 }
 
 button:active,
 button:focus {
-  background: #24506d;
+  background: #326280;
 }

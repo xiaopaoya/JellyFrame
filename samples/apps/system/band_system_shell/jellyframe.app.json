@@ -1,0 +1,53 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.system.band_shell",
+  "name": "Band System Shell",
+  "role": "launcher",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.5.0",
+    "script": "none"
+  },
+  "viewport": {
+    "designWidth": 172,
+    "designHeight": 320,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 32768,
+    "maxDomNodes": 384,
+    "maxCssRules": 128,
+    "maxDisplayCommands": 512,
+    "maxTimers": 0,
+    "maxEventListeners": 0
+  },
+  "capabilities": ["system.launcher"],
+  "targets": {
+    "rect-172x320": {
+      "viewport": {
+        "width": 172,
+        "height": 320,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 172,
+          "height": 320
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
+    }
+  }
+}

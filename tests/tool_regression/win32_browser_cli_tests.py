@@ -93,11 +93,12 @@ def write_install_candidate(
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: win32_browser_cli_tests.py PATH_TO_EXE")
+    if len(sys.argv) not in (2, 3) or (len(sys.argv) == 3 and sys.argv[2] != "--scripting"):
+        print("usage: win32_browser_cli_tests.py PATH_TO_EXE [--scripting]")
         return 2
 
     exe = Path(sys.argv[1])
+    scripting_enabled = len(sys.argv) == 3
     require(exe.exists(), f"missing executable: {exe}")
 
     help_result = run_case(exe, ["--help"])
@@ -128,6 +129,29 @@ def main() -> int:
     require(event_result.returncode != 0, "invalid frame event must fail")
     require("wheel x, y and delta must be integers" in event_result.stdout,
             "invalid frame event must explain the failing field")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-background-image-") as directory:
+        root = Path(directory)
+        app = root / "app"
+        capture = root / "background.bmp"
+        shutil.copytree(Path("tools/templates/apps/weather"), app)
+        (app / "index.html").write_text(
+            "<link rel='stylesheet' href='styles/app.css'><body><main class='cover'></main></body>",
+            encoding="utf-8",
+        )
+        (app / "styles" / "app.css").write_text(
+            "body { margin: 0; }\n"
+            ".cover { width: 96px; height: 64px; background-color: #102030; "
+            "background-image: url('/assets/cloudy.bmp'); }\n",
+            encoding="utf-8",
+        )
+        background_result = run_case(exe, ["--app", str(app), "--viewport-width", "120",
+                                           "--viewport-height", "90", "--capture", str(capture)])
+        require(background_result.returncode == 0, "package-style background image capture must pass")
+        require("diagnostics: 0" in background_result.stdout,
+                "supported package-style background image must not emit diagnostics")
+        require(capture.is_file() and capture.stat().st_size > 54,
+                "background image capture must produce a bitmap")
 
     time_event_result = run_case(exe, ["--frame-event", "2:time-ms:nope"])
     require(time_event_result.returncode != 0, "invalid time event must fail")
@@ -366,69 +390,70 @@ def main() -> int:
         require(app["enabled"] is False, "win32 bad-entry launch must disable failed app")
         require(app["failure"]["reason"] == "load-failed", "win32 bad-entry launch must record failure reason")
 
-    with tempfile.TemporaryDirectory(prefix="jellyframe-watchdog-app-") as directory:
-        store = Path(directory) / "store"
-        package_root = Path("tests/fixtures/apps/jelly_watchdog_smoke")
-        bundle = Path(directory) / "watchdog.jfapp"
-        package_report = Path(directory) / "watchdog.report.json"
-        montage = Path(directory) / "watchdog.bmp"
-        packaged_root = Path(directory) / "package"
-        shutil.copytree(package_root, packaged_root)
-        manifest_path = packaged_root / "jellyframe.app.json"
-        manifest_text = manifest_path.read_text(encoding="utf-8")
-        target_block = (
-            '  "targets": {\n'
-            '    "round-300": {\n'
-            '      "viewport": {"width": 300, "height": 300, "shape": "round"},\n'
-            '      "fontProfile": "tiny-plus-symbols",\n'
-            '      "output": "jfapp"\n'
-            '    }\n'
-            '  },\n'
-        )
-        marker = '  "capabilities": []\n'
-        require(marker in manifest_text, "watchdog fixture manifest must have an empty capability list")
-        manifest_path.write_text(manifest_text.replace(marker, target_block + marker), encoding="utf-8")
-        package_result = subprocess.run(
-            [
-                sys.executable,
-                "tools/package_app.py",
-                "--root",
-                str(packaged_root),
-                "--output-bundle",
-                str(bundle),
-                "--report",
-                str(package_report),
-            ],
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-        require(package_result.returncode == 0, "watchdog fixture must package for registry recovery")
-        install_result = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(bundle)])
-        require(install_result.returncode == 0, "watchdog fixture must install for registry recovery")
-        watchdog_result = run_case(
-            exe,
-            [
-                "--registry-store",
-                str(store),
-                "--launch-app",
-                "org.jellyframe.tests.watchdog_smoke",
-                "--frame-script",
-                str(package_root / "capture_watchdog.jfcapture"),
-                "--capture-montage",
-                str(montage),
-            ],
-        )
-        require(watchdog_result.returncode == 0, "watchdog recovery must return to the system shell")
-        require("script_watchdog_recovery reason=script-watchdog" in watchdog_result.stdout,
-                "watchdog recovery must report its stable reason")
-        registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
-        app = registry["apps"][0]
-        require(app["status"] == "failed", "watchdog recovery must mark an installed app failed")
-        require(app["enabled"] is False, "watchdog recovery must disable the failed app")
-        require(app["failure"]["reason"] == "script-watchdog",
-                "watchdog recovery must preserve the stable failure reason")
+    if scripting_enabled:
+        with tempfile.TemporaryDirectory(prefix="jellyframe-watchdog-app-") as directory:
+            store = Path(directory) / "store"
+            package_root = Path("tests/fixtures/apps/jelly_watchdog_smoke")
+            bundle = Path(directory) / "watchdog.jfapp"
+            package_report = Path(directory) / "watchdog.report.json"
+            montage = Path(directory) / "watchdog.bmp"
+            packaged_root = Path(directory) / "package"
+            shutil.copytree(package_root, packaged_root)
+            manifest_path = packaged_root / "jellyframe.app.json"
+            manifest_text = manifest_path.read_text(encoding="utf-8")
+            target_block = (
+                '  "targets": {\n'
+                '    "round-300": {\n'
+                '      "viewport": {"width": 300, "height": 300, "shape": "round"},\n'
+                '      "fontProfile": "tiny-plus-symbols",\n'
+                '      "output": "jfapp"\n'
+                '    }\n'
+                '  },\n'
+            )
+            marker = '  "capabilities": []\n'
+            require(marker in manifest_text, "watchdog fixture manifest must have an empty capability list")
+            manifest_path.write_text(manifest_text.replace(marker, target_block + marker), encoding="utf-8")
+            package_result = subprocess.run(
+                [
+                    sys.executable,
+                    "tools/package_app.py",
+                    "--root",
+                    str(packaged_root),
+                    "--output-bundle",
+                    str(bundle),
+                    "--report",
+                    str(package_report),
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            require(package_result.returncode == 0, "watchdog fixture must package for registry recovery")
+            install_result = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(bundle)])
+            require(install_result.returncode == 0, "watchdog fixture must install for registry recovery")
+            watchdog_result = run_case(
+                exe,
+                [
+                    "--registry-store",
+                    str(store),
+                    "--launch-app",
+                    "org.jellyframe.tests.watchdog_smoke",
+                    "--frame-script",
+                    str(package_root / "capture_watchdog.jfcapture"),
+                    "--capture-montage",
+                    str(montage),
+                ],
+            )
+            require(watchdog_result.returncode == 0, "watchdog recovery must return to the system shell")
+            require("script_watchdog_recovery reason=script-watchdog" in watchdog_result.stdout,
+                    "watchdog recovery must report its stable reason")
+            registry = json.loads((store / "registry.json").read_text(encoding="utf-8"))
+            app = registry["apps"][0]
+            require(app["status"] == "failed", "watchdog recovery must mark an installed app failed")
+            require(app["enabled"] is False, "watchdog recovery must disable the failed app")
+            require(app["failure"]["reason"] == "script-watchdog",
+                    "watchdog recovery must preserve the stable failure reason")
 
     survival_result = run_case(exe, ["--system-survival-smoke", "12"])
     require(survival_result.returncode == 0, "system survival smoke must pass")

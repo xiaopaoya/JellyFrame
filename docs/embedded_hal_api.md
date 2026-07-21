@@ -415,6 +415,23 @@ ESP32-S3 mapping:
 The core performs hit testing, focus, activation, DOM event dispatch and basic
 form-control state updates.
 
+### Host-Owned Modal Input Gate
+
+While a host-owned dialog is open, install its current `dialog` node as the
+input root:
+
+```cpp
+input.set_modal_root(dialog_node);
+// Pointer hits, focus traversal and activation now stay inside dialog_node.
+input.set_modal_root(nullptr);
+```
+
+The root must belong to the current layer tree. This is an input boundary only:
+it does not create a browser top layer, backdrop, click-outside behavior or a
+global inert traversal. Hosts must clear the root before replacing the layer
+tree or destroying the document. The HTML/JS `showModal()` lifecycle bridge is
+separate and must not be emulated by a port with ad hoc hit-test filtering.
+
 ## Text API
 
 Headers:

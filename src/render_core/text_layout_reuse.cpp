@@ -44,11 +44,15 @@ bool text_box_can_reuse_layout(const LayoutBox& box, const TextMeasureProvider& 
         return false;
     }
     const std::string text = transformed_render_text(*box.node, box.style.text_transform);
-    if (text.empty() || has_text_wrap_opportunity(text)) {
+    if (text.empty() || box.style.overflow_wrap_anywhere || has_text_wrap_opportunity(text)) {
         return false;
     }
-    const TextMetrics metrics =
-        measure_text(text_measure, text, box.style.font_size, box.style.font_weight, box.style.font_family_hash);
+    const TextMetrics metrics = measure_text_with_letter_spacing(text_measure,
+                                                                 text,
+                                                                 box.style.font_size,
+                                                                 box.style.font_weight,
+                                                                 box.style.font_family_hash,
+                                                                 box.style.letter_spacing);
     const int measured_width = metrics.width + 1;
     const bool same_intrinsic_width = measured_width == box.rect.width;
     const bool fixed_min_width_still_contains_text =

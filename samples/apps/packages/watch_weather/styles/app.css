@@ -1,27 +1,39 @@
 html,
 body {
   margin: 0;
-  background: #071d25;
-  color: #f7fff6;
+  background: #06151d;
+  color: #f5fbff;
   font-family: sans-serif;
 }
 
 .screen {
   box-sizing: border-box;
   height: 300px;
-  padding: 12px 14px;
-  background: #0b3442;
+  padding: 13px 14px 10px;
+  background: linear-gradient(to bottom right, #164757, #06161f);
   overflow: hidden;
 }
 
 .topbar {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: 22px;
-  margin-bottom: 6px;
-  color: #bde8ee;
-  font-size: 12px;
+  height: 20px;
+  margin-bottom: 8px;
+  color: #c5e8ee;
+  font-size: 11px;
   font-weight: 700;
+}
+
+.live {
+  color: #75e2ce;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+.place {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta {
@@ -31,116 +43,155 @@ body {
 .hero {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 78px 1fr;
-  gap: 10px;
+  grid-template-columns: 72px 1fr;
+  gap: 9px;
   height: 106px;
-  margin-bottom: 12px;
-  padding: 10px;
-  border: 1px solid #3d7b86;
-  border-radius: 18px;
-  background: #0b2a36;
+  margin-bottom: 11px;
+  padding: 9px;
+  border: 1px solid #4d8290;
+  border-radius: 20px;
+  background: radial-gradient(circle at 82% 12%, #235b67 0%, #0d2b36 100%), linear-gradient(to bottom, #123744, #0a222d);
+  box-shadow: 0 4px 10px 0 #031017;
 }
 
 .weather-art {
   box-sizing: border-box;
-  width: 76px;
-  height: 76px;
-  margin-top: 5px;
-  border-radius: 18px;
+  width: 70px;
+  height: 70px;
+  margin-top: 7px;
+  border-radius: 20px;
   overflow: hidden;
-  background: #124f5d;
+  background: radial-gradient(circle at 34% 26%, #4a91a0 0%, #155565 100%);
+  box-shadow: 0 3px 8px 0 #071923;
   animation: weather-pulse 1800ms ease-in-out infinite alternate;
 }
 
 .weather-art img {
   display: block;
-  width: 72px;
-  height: 72px;
+  width: 66px;
+  height: 66px;
   margin: 2px;
+  border-radius: 18px;
   object-fit: contain;
 }
 
 .weather-copy {
+  box-sizing: border-box;
+  padding-top: 1px;
   text-align: left;
 }
 
-.label {
-  color: #aee4d4;
-  font-size: 13px;
+.eyebrow {
+  color: #76dfd0;
+  font-size: 9px;
   font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.label {
+  color: #c6f3e5;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.05;
 }
 
 .temp {
-  margin-top: 2px;
-  font-size: 40px;
+  margin-top: 1px;
+  font-size: 38px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1;
 }
 
 .unit {
-  font-size: 12px;
+  color: #91d6d2;
+  font-size: 11px;
 }
 
 .summary {
-  color: #b7dbc9;
-  font-size: 12px;
-  line-height: 1.25;
+  margin-top: 2px;
+  color: #bdd8d5;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  height: 38px;
-  margin-bottom: 19px;
+  height: 42px;
+  margin-bottom: 15px;
 }
 
 .stats div {
   box-sizing: border-box;
-  border: 1px solid #3d7b86;
-  border-radius: 14px;
-  background: #0b2a36;
-  padding: 2px 4px;
+  height: 42px;
+  border: 1px solid #3e7480;
+  border-radius: 15px;
+  background: #0a2530;
+  padding: 2px 7px;
   text-align: center;
 }
 
 .stats strong,
-.stats span {
+.stats span,
+.stats small {
   display: block;
 }
 
 .stats strong {
-  font-size: 16px;
+  margin-top: 0;
+  color: #f3feff;
+  font-size: 17px;
+  line-height: 17px;
 }
 
 .stats span {
-  color: #aee4d4;
-  font-size: 10px;
+  color: #7ed8c8;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 10px;
+}
+
+.stats small {
+  color: #9cc3c6;
+  font-size: 8px;
+  line-height: 8px;
 }
 
 .actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  height: 35px;
   gap: 8px;
-  margin-bottom: 9px;
+  margin-bottom: 8px;
 }
 
 .tile {
   box-sizing: border-box;
-  height: 34px;
-  border: 1px solid #7fc9a3;
+  height: 35px;
+  border: 1px solid #579fa7;
   border-radius: 17px;
-  background: #125464;
-  color: #f7fff6;
-  font-size: 12px;
+  background: #123d4c;
+  color: #dff9f5;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 31px;
+  line-height: 32px;
   text-align: center;
+}
+
+.tile.selected {
+  border-color: #79e0c8;
+  background: #166374;
+  box-shadow: 0 2px 6px 0 #04141c;
 }
 
 .tile:active,
 .tile:focus {
-  background: #19738a;
+  background: #1b7180;
 }
 
 @keyframes weather-pulse {
@@ -158,8 +209,8 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   height: 18px;
-  color: #8fd7d8;
-  font-size: 11px;
+  color: #a4d9d8;
+  font-size: 10px;
 }
 
 .statusline span:last-child {
@@ -181,7 +232,7 @@ body {
   .hero {
     grid-template-columns: 58px 1fr;
     gap: 8px;
-    height: 74px;
+    height: 76px;
     margin-bottom: 6px;
     padding: 8px;
     border-radius: 16px;
@@ -190,13 +241,14 @@ body {
   .weather-art {
     width: 54px;
     height: 54px;
-    margin-top: 1px;
+    margin-top: 3px;
     border-radius: 14px;
   }
 
   .weather-art img {
     width: 50px;
     height: 50px;
+    border-radius: 12px;
   }
 
   .label {
@@ -206,7 +258,7 @@ body {
   .temp {
     margin-top: 0;
     font-size: 28px;
-    line-height: 1.02;
+    line-height: 1;
   }
 
   .unit {
@@ -214,7 +266,7 @@ body {
   }
 
   .summary {
-    font-size: 11px;
+    font-size: 9px;
   }
 
   .stats {
@@ -259,13 +311,13 @@ body {
   .topbar {
     height: 20px;
     margin-bottom: 6px;
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .hero {
     grid-template-columns: 58px 1fr;
     gap: 8px;
-    height: 94px;
+    height: 96px;
     margin-bottom: 8px;
     padding: 8px;
     border-radius: 16px;
@@ -274,13 +326,14 @@ body {
   .weather-art {
     width: 56px;
     height: 56px;
-    margin-top: 8px;
+    margin-top: 10px;
     border-radius: 14px;
   }
 
   .weather-art img {
     width: 52px;
     height: 52px;
+    border-radius: 12px;
   }
 
   .temp {
@@ -288,8 +341,18 @@ body {
     line-height: 1.08;
   }
 
+  .unit,
+  .live {
+    display: none;
+  }
+
+  .eyebrow,
+  .stats span {
+    letter-spacing: normal;
+  }
+
   .summary {
-    font-size: 11px;
+    font-size: 8px;
   }
 
   .stats {
@@ -303,16 +366,22 @@ body {
   }
 
   .actions {
-    grid-template-columns: 1fr;
+    display: block;
     gap: 5px;
     margin-bottom: 6px;
   }
 
   .tile {
+    display: block;
+    width: 100%;
     height: 29px;
     border-radius: 15px;
     font-size: 10px;
     line-height: 26px;
+  }
+
+  .tile + .tile {
+    margin-top: 5px;
   }
 
   .statusline {

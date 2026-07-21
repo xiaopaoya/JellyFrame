@@ -9,6 +9,7 @@
 #include "render_core/dom.h"
 #include "render_core/form_control.h"
 #include "render_core/html_parser.h"
+#include "render_core/layout.h"
 
 #include <cstdint>
 #include <iostream>
@@ -237,6 +238,28 @@ void document_create_and_append_element() {
     check(paragraph->attribute("class") == "note", "created paragraph attribute");
     check(paragraph->text_content() == "Hello from JS", "created paragraph text");
     check(runtime.detached_node_count() == 0, "attached JS nodes leave detached owner");
+}
+
+void javascript_append_and_prepend_mix_text_and_nodes() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><main id='app'><i>tail</i></main></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+
+    const ScriptEvaluationResult result = runtime.eval(
+        "var app = document.getElementById('app');"
+        "var first = document.createElement('b'); first.textContent = 'A';"
+        "var second = document.createElement('em'); second.textContent = 'B';"
+        "app.append('x', first, 9);"
+        "app.prepend(second, 'y');"
+        "app.textContent + ':' + app.children.length + ':' + "
+        "app.children[0].tagName + ':' + app.children[1].tagName");
+
+    check(result.ok, "append and prepend subset script succeeds");
+    check(result.value == "BytailxA9:3:em:i",
+          "append and prepend preserve argument order while mixing text and nodes");
+    check(runtime.detached_node_count() == 0,
+          "append and prepend attach created nodes without retaining detached roots");
 }
 
 void remove_child_keeps_wrapper_usable() {
@@ -511,11 +534,44 @@ void javascript_form_properties_mutate_control_state() {
     check(result.value == "Ada:true:b:1", "form properties stringify expected state");
 }
 
+void javascript_dom_attribute_and_remove_ergonomics_work() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><section id='panel'><span id='item'>One</span></section></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var panel = document.getElementById('panel');"
+        "var item = document.getElementById('item');"
+        "var first = panel.toggleAttribute('hidden');"
+        "var had = panel.hasAttribute('hidden');"
+        "var second = panel.toggleAttribute('hidden', false);"
+        "item.remove();"
+        "String(first) + ':' + had + ':' + second + ':' + String(panel.hasAttribute('hidden')) + ':' + "
+        "String(panel.children.length) + ':' + String(item.parentElement === null);");
+    check(result.ok && result.value == "true:true:false:false:0:true",
+          "hasAttribute, toggleAttribute and Node.remove work through JavaScript");
+}
+
+void javascript_tabindex_and_autofocus_reflection_work() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><div id='tile' tabindex='0' autofocus>Tile</div></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var tile = document.getElementById('tile');"
+        "var before = tile.tabIndex + ':' + tile.autofocus;"
+        "tile.tabIndex = -1; tile.autofocus = false;"
+        "before + ':' + tile.getAttribute('tabindex') + ':' + tile.hasAttribute('autofocus');");
+    check(result.ok && result.value == "0:true:-1:false",
+          "tabIndex and autofocus reflect through JavaScript");
+}
+
 void javascript_form_idl_reflection_subset_works() {
     HtmlParser parser;
     auto document = parser.parse(
         "<body>"
         "<input id='name' type='text' name='user' value='Ada' placeholder='Name'>"
+        "<input id='contact' type='EMAIL' value='ada@example.test'>"
         "<button id='go' type='button' name='action' value='save'>Go</button>"
         "<select id='mode' name='mode' size='1'><option value='a'>Alpha</option>"
         "<optgroup id='group' label='More'><option id='beta'>Beta</option></optgroup></select>"
@@ -528,6 +584,7 @@ void javascript_form_idl_reflection_subset_works() {
     runtime.bind_document(*document);
     const ScriptEvaluationResult result = runtime.eval(
         "var name = document.getElementById('name');"
+        "var contact = document.getElementById('contact');"
         "var go = document.getElementById('go');"
         "var mode = document.getElementById('mode');"
         "var beta = document.getElementById('beta');"
@@ -552,7 +609,7 @@ void javascript_form_idl_reflection_subset_works() {
         "load.value = 50;"
         "battery.value = 6;"
         "battery.low = '3';"
-        "name.type + ':' + name.name + ':' + name.required + ':' + name.defaultValue + ':' + "
+        "name.type + ':' + contact.type + ':' + contact.value + ':' + name.name + ':' + name.required + ':' + name.defaultValue + ':' + "
         "name.defaultChecked + ':' + name.checked + ':' + "
         "go.type + ':' + go.name + ':' + go.value + ':' + "
         "mode.type + ':' + mode.name + ':' + mode.required + ':' + mode.size + ':' + "
@@ -565,7 +622,7 @@ void javascript_form_idl_reflection_subset_works() {
         "battery.high + ':' + battery.optimum + ':' + typeof battery.low");
 
     check(result.ok, "form IDL reflection script succeeds");
-    check(result.value == "text:user:true:Grace:true:false:button:action:save:select-one:mode:true:2:"
+    check(result.value == "text:email:ada@example.test:user:true:Grace:true:false:button:action:save:select-one:mode:true:2:"
                           "1:Beta Prime:true:b:Beta Prime:Extra:"
                           "textarea:4:16:soft:Memo:Memo:4:50:100:0.5:6:0:10:3:8:9:number",
           "form/progress/meter IDL subset reflects expected values");
@@ -669,13 +726,117 @@ void javascript_class_list_subset_mutates_class_attribute() {
         "var forced = save.classList.toggle('pressed', true);"
         "var removed = save.classList.toggle('idle', false);"
         "save.classList.remove('primary', 'missing');"
-        "before + ':' + afterAdd + ':' + forced + ':' + removed + ':' + save.className");
+        "var firstReplace = save.classList.replace('active', 'ready');"
+        "var mergedReplace = save.classList.replace('ready', 'pressed');"
+        "var missingReplace = save.classList.replace('missing', 'later');"
+        "var invalidReplace = save.classList.replace('bad token', 'later');"
+        "before + ':' + afterAdd + ':' + forced + ':' + removed + ':' + firstReplace + ':' + "
+        "mergedReplace + ':' + missingReplace + ':' + invalidReplace + ':' + save.className");
 
     check(result.ok, "classList subset script succeeds");
-    check(result.value == "true:idle primary active:true:false:active pressed",
-          "classList contains/add/remove/toggle update class attribute");
+    check(result.value == "true:idle primary active:true:false:true:true:false:false:pressed",
+          "classList contains/add/remove/toggle/replace update class attribute");
     check((subtree_dirty_flags(*document) & DomDirtyStyle) != 0U, "classList marks style dirty");
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "classList marks layout dirty");
+}
+
+void javascript_bounding_client_rect_uses_numeric_frame_snapshots() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><section id='card'>Card</section></body>");
+    Node* card = find_by_id(*document, "card");
+    check(card != nullptr, "bounding client rect fixture exists");
+
+    LayoutBox root;
+    root.node = document.get();
+    root.rect = Rect{0, 0, 172, 320};
+    LayoutBoxPtr card_box(new LayoutBox());
+    card_box->node = card;
+    card_box->rect = Rect{8, 32, 120, 48};
+    root.children.push_back(std::move(card_box));
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var card = document.getElementById('card');"
+        "var before = card.getBoundingClientRect();"
+        "before.x + ':' + before.width");
+    check(result.ok && result.value == "0:0", "rect request starts without a completed frame snapshot");
+
+    runtime.capture_layout_snapshot(root, 0, -4);
+    result = runtime.eval(
+        "var rect = card.getBoundingClientRect();"
+        "rect.x + ':' + rect.y + ':' + rect.width + ':' + rect.height + ':' + rect.top + ':' + "
+        "rect.right + ':' + rect.bottom + ':' + rect.left");
+    check(result.ok && result.value == "8:28:120:48:28:128:76:8",
+          "rect snapshot returns numeric client-relative DOMRect fields");
+
+    result = runtime.eval(
+        "document.body.textContent = 'replacement';"
+        "var destroyed = 'live';"
+        "try { card.getBoundingClientRect(); } catch (error) { destroyed = 'invalid'; }"
+        "destroyed");
+    check(result.ok && result.value == "invalid", "destroyed element cannot read a stale layout snapshot");
+}
+
+void javascript_dataset_writes_reflect_bounded_data_attributes() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='save' data-mode='idle'>Save</button></body>");
+    clear_dirty_flags(*document);
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var save = document.getElementById('save');"
+        "var data = save.dataset;"
+        "data.statusText = 'ready';"
+        "var reflected = save.getAttribute('data-status-text');"
+        "var live = save.dataset.statusText;"
+        "data['bad-key'] = 'ignored';"
+        "var rejected = save.getAttribute('data-bad-key') === null;"
+        "delete data.statusText;"
+        "data.mode + ':' + reflected + ':' + live + ':' + rejected + ':' + "
+        "String(save.getAttribute('data-status-text') === null)");
+
+    check(result.ok, "dataset write subset script succeeds");
+    check(result.value == "idle:ready:ready:true:true",
+          "dataset writes use camelCase data attributes and remain live for reads");
+    check((subtree_dirty_flags(*document) & DomDirtyStyle) != 0U, "dataset writes mark style dirty");
+    check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "dataset writes mark layout dirty");
+}
+
+void javascript_bounding_client_rect_snapshot_budget_is_bounded() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><p id='one'>One</p><p id='two'>Two</p></body>");
+    Node* one = find_by_id(*document, "one");
+    Node* two = find_by_id(*document, "two");
+    check(one != nullptr && two != nullptr, "rect budget fixture exists");
+
+    LayoutBox root;
+    root.node = document.get();
+    LayoutBoxPtr one_box(new LayoutBox());
+    one_box->node = one;
+    one_box->rect = Rect{1, 2, 3, 4};
+    LayoutBoxPtr two_box(new LayoutBox());
+    two_box->node = two;
+    two_box->rect = Rect{5, 6, 7, 8};
+    root.children.push_back(std::move(one_box));
+    root.children.push_back(std::move(two_box));
+
+    JerryScriptRuntimeOptions options;
+    options.max_layout_snapshot_nodes = 1;
+    JerryScriptRuntime runtime(options);
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var one = document.getElementById('one');"
+        "var two = document.getElementById('two');"
+        "one.getBoundingClientRect(); two.getBoundingClientRect();"
+        "'requested';");
+    check(result.ok && result.value == "requested", "rect budget requests are accepted without allocation failure");
+
+    runtime.capture_layout_snapshot(root);
+    result = runtime.eval(
+        "one.getBoundingClientRect().width + ':' + two.getBoundingClientRect().width");
+    check(result.ok && result.value == "3:0", "rect snapshot cap refuses measurements beyond the configured budget");
 }
 
 void javascript_element_style_hidden_and_disabled_properties_work() {
@@ -882,8 +1043,10 @@ void javascript_element_style_extended_properties_work() {
         "dial.style.backgroundImage = 'radial-gradient(#ffffff, rgba(36,126,160,.20))';"
         "dial.style.left = '6px';"
         "dial.style.top = '8px';"
+        "dial.style.visibility = 'hidden';"
         "dial.style.setProperty('--progress', '76%');"
         "dial.style.setProperty('background-image', 'radial-gradient(circle, #ffffff, #000000)');"
+        "dial.style.setProperty('background-image', \"url('/assets/cover.bmp')\");"
         "dial.style.setProperty('min-height', '44px');"
         "var oldProgress = dial.style.removeProperty('--progress');"
         "var missingFilter = dial.style.getPropertyValue('filter');"
@@ -906,8 +1069,9 @@ void javascript_element_style_extended_properties_work() {
     check(result.value.find("margin-top: 3px") != std::string::npos, "marginTop write serialized");
     check(result.value.find("max-width: 100%") != std::string::npos, "maxWidth write serialized");
     check(result.value.find("min-height: 44px") != std::string::npos, "setProperty min-height serialized");
-    check(result.value.find("background-image: radial-gradient(circle, #ffffff, #000000)") != std::string::npos,
-          "backgroundImage write serialized");
+    check(result.value.find("background-image: url('/assets/cover.bmp')") != std::string::npos,
+          "package backgroundImage write serialized");
+    check(result.value.find("visibility: hidden") != std::string::npos, "visibility write serialized");
     check(result.value.find("--progress") == std::string::npos, "removeProperty removes custom property");
     check(result.value.find("filter") == std::string::npos, "unsupported style.setProperty is ignored");
     check((subtree_dirty_flags(*document) & DomDirtyLayout) != 0U, "extended style writes mark layout dirty");
@@ -1519,9 +1683,18 @@ void javascript_location_hash_routes_within_one_app() {
     check(result.value == "#about:hashchange:#settings;listener:true;hashchange:#about;listener:true;",
           "location hash updates and dispatches one window event per route change");
 
-    result = runtime.eval("String(typeof location.assign) + ':' + String(typeof history)");
-    check(result.ok && result.value == "undefined:undefined",
-          "location subset does not imply navigation or history support");
+    result = runtime.eval(
+        "var popEvents = '';"
+        "window.onpopstate = function (event) { popEvents += event.type + ':' + location.hash + ';'; };"
+        "history.back(); var afterBack = location.hash;"
+        "history.forward();"
+        "history.pushState(null, '', '#advanced');"
+        "history.replaceState(null, '', '#details');"
+        "history.back();"
+        "String(typeof location.assign) + ':' + String(window.history === history) + ':' + history.length + ':' + "
+        "afterBack + ':' + location.hash + ':' + popEvents");
+    check(result.ok && result.value == "undefined:true:4:#settings:#about:popstate:#settings;popstate:#about;popstate:#about;",
+          "fragment-only history traverses one app without browser navigation");
 
     auto rebound_document = parser.parse("<body></body>");
     runtime.bind_document(*rebound_document);
@@ -1615,7 +1788,8 @@ void javascript_form_submission_and_form_data_work() {
     auto document = parser.parse(
         "<body><form id='account'><input id='name' name='name' required>"
         "<input id='agree' name='agree' type='checkbox' required value='yes'>"
-        "<button id='send' name='action' value='save'>Save</button></form></body>");
+        "<button id='send' name='action' value='save'>Save</button>"
+        "<button id='reset' type='reset'>Reset</button></form></body>");
 
     JerryScriptRuntime runtime;
     runtime.bind_document(*document);
@@ -1624,6 +1798,7 @@ void javascript_form_submission_and_form_data_work() {
         "var name = document.getElementById('name');"
         "var agree = document.getElementById('agree');"
         "var send = document.getElementById('send');"
+        "var reset = document.getElementById('reset');"
         "var invalidCount = 0; var submitterId = 'none'; var submitValue = 'none';"
         "name.addEventListener('invalid', function () { invalidCount++; });"
         "form.addEventListener('submit', function (event) {"
@@ -1636,10 +1811,38 @@ void javascript_form_submission_and_form_data_work() {
         "form.requestSubmit(send);"
         "var data = new FormData(form);"
         "data.append('tag', 'one'); data.append('tag', 'two'); data.set('tag', 'three');"
+        "reset.click();"
         "String(invalidCount) + ':' + submitterId + ':' + submitValue + ':' + data.get('tag') + ':' +"
-        "String(data.getAll('tag').length) + ':' + String(data.has('name')) + ':' + String(form.checkValidity());");
-    check(result.ok && result.value == "1:send:Ada:yes:three:1:true:true",
-          "form validation, submit event and FormData subset work through JavaScript");
+        "String(data.getAll('tag').length) + ':' + String(data.has('name')) + ':' + String(form.checkValidity()) + ':' +"
+        "name.value + ':' + String(agree.checked);");
+    check(result.ok && result.value == "1:send:Ada:yes:three:1:true:false::false",
+          "form validation, submit event, FormData and reset work through JavaScript");
+}
+
+void javascript_control_validity_subset_works() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><form><input id='name' required minlength='3'><input id='disabled' required disabled>"
+        "<button id='send'>Send</button></form></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var name = document.getElementById('name');"
+        "var disabled = document.getElementById('disabled');"
+        "var send = document.getElementById('send');"
+        "var invalid = 0; name.addEventListener('invalid', function () { invalid++; });"
+        "var before = name.validity.valueMissing + ':' + name.validity.valid + ':' + name.validationMessage + ':' + name.willValidate;"
+        "var checked = name.checkValidity();"
+        "name.value = 'Al';"
+        "var shortState = name.validity.tooShort + ':' + name.validationMessage;"
+        "name.setCustomValidity('Choose a full name.');"
+        "var customState = name.validity.customError + ':' + name.validity.valid + ':' + name.validationMessage;"
+        "name.setCustomValidity('');"
+        "before + ':' + checked + ':' + invalid + ':' + shortState + ':' + customState + ':' + "
+        "disabled.willValidate + ':' + disabled.validity.valid + ':' + send.willValidate + ':' + send.type");
+    check(result.ok && result.value ==
+                           "true:false:Please fill out this field.:true:false:1:true:Value is too short.:true:false:Choose a full name.:false:true:false:submit",
+          "control-level ValidityState subset works through JavaScript");
 }
 
 void javascript_canvas_2d_is_optional_and_lazy() {
@@ -1856,6 +2059,7 @@ int main() {
         inline_document_script_mutates_dom();
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();
+        javascript_append_and_prepend_mix_text_and_nodes();
         remove_child_keeps_wrapper_usable();
         javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_cleanup();
         javascript_cached_destroyed_node_wrappers_are_invalidated();
@@ -1866,12 +2070,17 @@ int main() {
         javascript_event_object_survives_after_dispatch_as_snapshot();
         javascript_event_handler_properties_work();
         javascript_form_properties_mutate_control_state();
+        javascript_dom_attribute_and_remove_ergonomics_work();
+        javascript_tabindex_and_autofocus_reflection_work();
         javascript_form_idl_reflection_subset_works();
         javascript_embedded_ui_helpers_support_event_delegation();
         javascript_query_selector_subset_works();
         javascript_class_name_reflects_class_attribute();
         javascript_id_and_document_body_reflect_dom_attributes();
         javascript_class_list_subset_mutates_class_attribute();
+        javascript_bounding_client_rect_uses_numeric_frame_snapshots();
+        javascript_dataset_writes_reflect_bounded_data_attributes();
+        javascript_bounding_client_rect_snapshot_budget_is_bounded();
         javascript_element_style_hidden_and_disabled_properties_work();
         javascript_standard_reflected_attributes_work();
         javascript_document_ready_state_and_element_click_work();
@@ -1902,6 +2111,7 @@ int main() {
         javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();
         javascript_form_submission_and_form_data_work();
+        javascript_control_validity_subset_works();
         javascript_canvas_2d_is_optional_and_lazy();
         javascript_canvas_quadratic_curve_to_strokes_path();
         javascript_canvas_bezier_curve_to_strokes_path();

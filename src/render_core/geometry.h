@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -27,12 +28,62 @@ struct EdgeSizes {
     int left = 0;
 };
 
+constexpr std::uint32_t kCornerRadiusMarker = 0x80000000U;
+
+struct CornerRadii {
+    int top_left = 0;
+    int top_right = 0;
+    int bottom_right = 0;
+    int bottom_left = 0;
+};
+
+inline int encode_corner_radii(CornerRadii radii) {
+    radii.top_left = std::max(0, std::min(127, radii.top_left));
+    radii.top_right = std::max(0, std::min(127, radii.top_right));
+    radii.bottom_right = std::max(0, std::min(127, radii.bottom_right));
+    radii.bottom_left = std::max(0, std::min(127, radii.bottom_left));
+    if (radii.top_left == radii.top_right && radii.top_left == radii.bottom_right &&
+        radii.top_left == radii.bottom_left) {
+        return radii.top_left;
+    }
+    return static_cast<int>(kCornerRadiusMarker |
+                            static_cast<std::uint32_t>(radii.top_left) |
+                            (static_cast<std::uint32_t>(radii.top_right) << 7U) |
+                            (static_cast<std::uint32_t>(radii.bottom_right) << 14U) |
+                            (static_cast<std::uint32_t>(radii.bottom_left) << 21U));
+}
+
+inline CornerRadii decode_corner_radii(int encoded) {
+    const std::uint32_t packed = static_cast<std::uint32_t>(encoded);
+    if ((packed & kCornerRadiusMarker) == 0U) {
+        const int radius = std::max(0, encoded);
+        return CornerRadii{radius, radius, radius, radius};
+    }
+    return CornerRadii{static_cast<int>(packed & 0x7FU), static_cast<int>((packed >> 7U) & 0x7FU),
+                       static_cast<int>((packed >> 14U) & 0x7FU), static_cast<int>((packed >> 21U) & 0x7FU)};
+}
+
+inline bool has_corner_radius(int encoded) {
+    const CornerRadii radii = decode_corner_radii(encoded);
+    return radii.top_left > 0 || radii.top_right > 0 || radii.bottom_right > 0 || radii.bottom_left > 0;
+}
+
+inline int expand_corner_radii(int encoded, int amount) {
+    CornerRadii radii = decode_corner_radii(encoded);
+    radii.top_left += amount;
+    radii.top_right += amount;
+    radii.bottom_right += amount;
+    radii.bottom_left += amount;
+    return encode_corner_radii(radii);
+}
+
 enum class DisplayCommandType : std::uint8_t {
     FillRect,
     StrokeRect,
     LinearGradient,
     ConicGradient,
     RadialGradient,
+    BoxShadow,
     Text,
     Image,
 };
@@ -40,6 +91,9 @@ enum class DisplayCommandType : std::uint8_t {
 enum class GradientAxis : std::uint8_t {
     Vertical,
     Horizontal,
+    DiagonalDownRight,
+    DiagonalDownLeft,
+    RadialPosition,
 };
 
 enum class TextCommandAlign : std::uint8_t {

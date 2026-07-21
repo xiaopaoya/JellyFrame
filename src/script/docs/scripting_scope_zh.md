@@ -1,6 +1,6 @@
 # 脚本能力范围
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-22；适用版本：0.5.0-dev
 
 JellyFrame 的脚本能力保持小型、可选、有界。目标是让嵌入式 app UI 真正可用，而不是一次性继承完整浏览器
 API 表面。
@@ -29,7 +29,7 @@ API 表面。
 - `document.getElementById(id)`。
 - `document.createElement(tag)`。
 - `document.createTextNode(text)`。
-- `node.appendChild(child)`，并处理 detached node 的所有权转移。
+- `node.appendChild(child)`，以及面向 runtime-owned 节点和可转文本标量值的 `node.append(...items)` / `node.prepend(...items)`；`DocumentFragment` 和 `replaceChildren()` 仍延后。
 - `node.removeChild(child)`，返回的 wrapper 仍可继续使用。
 - detached node 在未挂载到 document 前由 runtime 通过 `DomOwner` 持有。
   `HostBudgets::max_detached_dom_nodes` 会限制脚本创建和移除后保留的节点数量，
@@ -164,20 +164,23 @@ API 表面。
   - `document.head` / `document.body`，只读返回第一个元素 wrapper 或 `null`
   - 反射到 `id` attribute 的 `element.id`
   - 反射到 `class` attribute 的 `element.className`
-  - 极小 DOMTokenList-like helper：`element.classList.contains/add/remove/toggle`
+  - 极小 DOMTokenList-like helper：`element.classList.contains/add/remove/toggle/replace`
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
   - `document.querySelector(simpleSelector)` / `element.querySelector(simpleSelector)`
   - `document.querySelectorAll(simpleSelector)` / `element.querySelectorAll(simpleSelector)`，返回静态数组快照
   - `document.images`、`embeds`、`plugins`、`links`、`forms`、`scripts` 和
     `getElementsByName()`，作为静态数组快照暴露，不是浏览器 live collection
-  - 面向已有 `data-*` 属性的 `element.dataset` 快照 property
+  - `element.dataset`：读取已有 `data-*` 属性，并通过
+    `dataset[key] = value` / `delete dataset[key]` 写入有界 ASCII camelCase key
+  - `element.getBoundingClientRect()`：上一个完成的宿主 layout frame 的只读数值快照；
+    坐标相对 client、不含 transform/nested-scroll 后的几何、不强制 layout，也不保留 `LayoutBox`
   - 小型 inline-style 属性集合 `element.style`：
     `display`、`color`、`background`、`backgroundColor`、`backgroundImage`、`textAlign`、
     `textTransform`、`fontSize`、`fontWeight`、`lineHeight`、`width`、`height`、`minWidth`、
     `minHeight`、`maxWidth`、`maxHeight`、`boxSizing`、margin/padding shorthand
     与各边、`opacity`、`transform`、`borderRadius`、`left`、`top`、`right`、
-    `bottom`、`position`、
+    `bottom`、`position`、`visibility`、
     `whiteSpace`、`textOverflow`、`overflow` 和 `zIndex`
   - 面向同一安全 CSS 属性子集的 `element.style.getPropertyValue(name)`、
     `setProperty(name, value)` 和 `removeProperty(name)`，以及 `--progress`
@@ -185,6 +188,8 @@ API 表面。
   - `element.hidden`、`element.disabled` 和 `element.open`
   - `document.readyState`，包内文档绑定后固定暴露为 `complete`
   - `document.defaultView` 和 `document.hasFocus()`，用于嵌入式文档生命周期判断
+  - `HTMLElement.focus()` / `blur()` 被刻意延后。输入控制器会随 layer tree 重建，焦点由
+    host 持有；当前脚本使用 `autofocus` 和有界 hardware focus order。
   - `window.self`、global `self`、`origin`、`isSecureContext` 和
     `crossOriginIsolated`，作为固定包环境值
   - `window.btoa` / `window.atob` 和 global `btoa` / `atob`，用于 Base64
@@ -205,11 +210,13 @@ API 表面。
   Descendant/child combinator 目前仍只在 CSS 中支持。
 - native input dispatch 会把 `pointerdown`、`pointerup`、`touchstart` 和 `touchend`
   作为 mouse-like event 暴露，便于可穿戴壳实现按下反馈。
-- 可选 Canvas 2D V0.3 只在宿主绑定 canvas registry 后暴露：`canvas.getContext("2d")`、
+- 可选 Canvas 2D V0.4 只在宿主绑定 canvas registry 后暴露：`canvas.getContext("2d")`、
   `fillStyle`、`strokeStyle`、`lineWidth`、`globalAlpha`、`font`、`save`、`restore`、
   `clearRect`、`fillRect`、`strokeRect`、`beginPath`、`moveTo`、`lineTo`、`arc`、
-  `closePath`、`fill`、`stroke`、`measureText`、`fillText`、`createLinearGradient`
-  和 `CanvasGradient.addColorStop`。能力缺失或 backing-store 预算拒绝时，
+  `closePath`、`fill`、`stroke`、`measureText`、`fillText`、`createLinearGradient`、
+  `createRadialGradient`、`CanvasGradient.addColorStop`、canvas-to-canvas
+  `drawImage()` 3/5/9-argument form、`translate`、`resetTransform`、
+  `quadraticCurveTo` 和 `bezierCurveTo`。能力缺失或 backing-store 预算拒绝时，
   `getContext("2d")` 返回 `null`。
 - disabled 表单控件不会接收文本输入、range 移动或 activation。
 - 脚本相关 diagnostics 来自真正处理 app 的 package loader、JerryScript runtime 和
@@ -219,14 +226,19 @@ API 表面。
 
 - 完整 selector API。`querySelector` / `querySelectorAll` 只支持上方简单 selector 子集，不支持组合器、
   逗号、伪类、`:has()` 或 live NodeList。
-- 完整 DOMTokenList 语义。`classList` 只支持 `contains`/`add`/`remove`/`toggle`；
-  迭代、`replace()` 和非法 token 的异常行为延后。
+- 完整 DOMTokenList 语义。`classList` 只支持
+  `contains`/`add`/`remove`/`toggle`/`replace`；迭代和非法 token 的异常行为延后。
+  非法的 `replace()` 参数返回 `false`，而不是抛异常。
 - 完整 `GlobalEventHandlers`、HTML inline event handler attribute 和浏览器级 handler 编译语义。
   请使用 `addEventListener` 或上方文档化的函数型 `on*` property 子集。
-- 通过任意新 key 动态创建 `dataset` property 或反向修改 native attribute。
+- 完整 DOMStringMap 语义、迭代和任意动态 `dataset` key。可写子集只接受最长
+  48 bytes 的 ASCII identifier-like camelCase key、最长 256 bytes 的 value，且每个
+  element 最多 64 个 `data-*` attribute。
+- live `DOMRect`、同步 layout read、transform-aware 或 nested-scroll-aware 测量，以及
+  上一个完成的宿主 layout frame 中不存在的元素几何。
 - 超出单次求值范围的 promise/job pump。
 - `fetch()`、模块、dynamic import、`sessionStorage`、IndexedDB、cookie、完整
-  `HTMLAudioElement`、超出 `online`/`offline` 的完整 `Window`/`EventTarget` 语义、Canvas V0.3
+  `HTMLAudioElement`、超出 `online`/`offline` 的完整 `Window`/`EventTarget` 语义、Canvas V0.4
   以外的 API 和 Web Components。
 
 ## 嵌入式策略

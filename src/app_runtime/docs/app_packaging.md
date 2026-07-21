@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-07-12; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store
@@ -253,12 +253,14 @@ capability; target profiles report support through `hostServices.canvas2d`.
 Runtime support is optional and bounded: pixels are allocated only after
 `getContext("2d")`, and hosts/products should enable `hostServices.canvas2d`
   only when their memory budget accepts the configured surface limits. Canvas
-  V0.3 covers solid color rects, bounded paths, antialiased stroked lines,
-  `arc`, `fill`, `globalAlpha`, `save`/`restore`, `font`, `measureText` and
-  `fillText`, plus a bounded `createLinearGradient` / `addColorStop` subset;
-  richer APIs such as imageData, drawImage, transform, radial gradients and
-  pattern fills remain future work. Gradient text is currently approximated to
-  one sampled text color so Canvas can keep using the host text backend.
+  V0.4 covers solid color rects, bounded paths, antialiased stroked lines,
+  `arc`, `fill`, `globalAlpha`, `save`/`restore`, `font`, `measureText`,
+  `fillText`, canvas-to-canvas `drawImage()` 3/5/9-argument forms,
+  pixel-aligned `translate`/`resetTransform`, bounded quadratic/cubic curves,
+  plus bounded linear and two-stop concentric radial gradients. ImageData,
+  non-canvas image/video sources, generic matrices, scale/rotate and pattern
+  fills remain deferred. Gradient text is currently approximated to one sampled
+  text color so Canvas can keep using the host text backend.
 
 `fonts` is a deployment/runtime declaration for the JellyFrame bitmap font
 path, not a full CSS `@font-face` implementation. The packer records `.jffont`,
@@ -764,6 +766,12 @@ Uncompressed 24/32-bit BMP is the built-in Win32 debug-shell package image path;
 PNG/JPEG/WebP or vendor formats require a product host codec adapter before a
 preset should mark them supported. Unsupported target codecs and invalid BMP
 headers are reported as package warnings before install or preview.
+
+`backgroundImageDiagnostics` checks the constrained CSS background image path.
+It accepts one package-absolute `background-image: url("/assets/image.bmp")`
+or `background: url(...)`, and reports stable warnings for a rejected URL, a
+missing package resource or a resource that is not an image. It does not add a
+decoder; the selected target still decides whether the image codec is usable.
 
 For human app authoring on Windows, prefer the interactive Win32 browser shell:
 

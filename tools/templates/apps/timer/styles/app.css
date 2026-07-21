@@ -3,8 +3,8 @@ body {
   margin: 0;
   width: 300px;
   height: 300px;
-  background: #09090b;
-  color: #fff8ec;
+  background: #071015;
+  color: #f3fbfa;
 }
 
 .screen {
@@ -12,16 +12,22 @@ body {
   width: 300px;
   height: 300px;
   padding: 12px;
-  background: #09090b;
+  background: linear-gradient(to bottom right, #123339, #05090d);
 }
 
 .topline {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: 26px;
-  color: #cbd5e1;
-  font-size: 14px;
+  height: 24px;
+  color: #b8d8d7;
+  font-size: 12px;
   line-height: 1.4;
+}
+
+.title {
+  color: #d9fbf5;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .meta {
@@ -29,40 +35,48 @@ body {
 }
 
 .dial {
-  height: 164px;
+  height: 177px;
   text-align: center;
 }
 
 .track {
   box-sizing: border-box;
-  width: 160px;
-  height: 160px;
-  margin: 3px auto 0;
+  width: 174px;
+  height: 174px;
+  margin: 0 auto;
   padding: 8px;
-  border-radius: 80px;
-  background: #2dd4bf;
+  border-radius: 87px;
+  background: linear-gradient(to bottom, #62f0da, #20b8ad);
+  box-shadow: 0 4px 14px 0 #031014;
 }
 
 .inside {
   box-sizing: border-box;
-  width: 144px;
-  height: 144px;
-  padding-top: 29px;
-  border-radius: 72px;
-  background: #111827;
+  width: 158px;
+  height: 158px;
+  padding-top: 37px;
+  border-radius: 79px;
+  background: radial-gradient(circle at 35% 23%, #183740 0%, #0c1b24 100%);
+}
+
+.eyebrow {
+  display: block;
+  color: #6ce4d4;
+  font-size: 9px;
+  font-weight: 700;
 }
 
 #state {
   display: block;
-  color: #99f6e4;
-  font-size: 15px;
+  color: #a9f3e7;
+  font-size: 13px;
 }
 
 #time {
   display: block;
-  margin-top: 5px;
+  margin-top: 3px;
   color: #ffffff;
-  font-size: 36px;
+  font-size: 39px;
   line-height: 1;
 }
 
@@ -70,17 +84,18 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 7px;
-  margin: 8px 30px 12px;
+  margin: 8px 28px 12px;
 }
 
 .seg {
-  height: 9px;
+  height: 8px;
   border-radius: 8px;
-  background: #27272a;
+  background: #26353b;
 }
 
 .active {
-  background: #facc15;
+  background: linear-gradient(to right, #f5c64b, #f2dc76);
+  box-shadow: 0 2px 5px 0 #211807;
 }
 
 .actions {
@@ -90,23 +105,29 @@ body {
 }
 
 button {
-  height: 41px;
+  height: 40px;
   border: 0;
-  border-radius: 22px;
-  background: #1f2937;
-  color: #f8fafc;
-  font-size: 14px;
-  line-height: 41px;
+  border-radius: 20px;
+  background: #1c3038;
+  color: #eaf9f7;
+  font-size: 13px;
+  line-height: 40px;
+  box-shadow: 0 2px 5px 0 #03090c;
+}
+
+button:nth-child(2) {
+  background: linear-gradient(to bottom, #29bdaa, #168d88);
+  color: #f4fffd;
 }
 
 button span {
   display: block;
-  height: 41px;
-  line-height: 41px;
+  height: 40px;
+  line-height: 40px;
   text-align: center;
 }
 
 button:active,
 button:focus {
-  background: #334155;
+  background: #345661;
 }

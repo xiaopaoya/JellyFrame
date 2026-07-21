@@ -16,6 +16,14 @@ bool has_attribute(const Node& node, const std::string& name) {
     return node.attributes.find(name) != node.attributes.end();
 }
 
+std::string ascii_lowercase(std::string_view value) {
+    std::string output(value);
+    for (char& character : output) {
+        character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    }
+    return output;
+}
+
 int parse_int_attribute(const Node& node, const std::string& name, int fallback) {
     const std::string& value = node.attribute(name);
     if (value.empty()) {
@@ -298,7 +306,7 @@ FormControlKind form_control_kind(const Node& node) {
     if (node.tag_name != "input") {
         return FormControlKind::None;
     }
-    const std::string& type = node.attribute("type");
+    const std::string type = ascii_lowercase(node.attribute("type"));
     if (type == "checkbox") {
         return FormControlKind::Checkbox;
     }
@@ -319,6 +327,9 @@ FormControlKind form_control_kind(const Node& node) {
     }
     if (type == "file") {
         return FormControlKind::File;
+    }
+    if (type == "button" || type == "image" || type == "reset" || type == "submit") {
+        return FormControlKind::Button;
     }
     return FormControlKind::Text;
 }

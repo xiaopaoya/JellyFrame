@@ -1,6 +1,6 @@
 # App 组件 Recipes
 
-> 最后更新：2026-07-12；适用版本：0.5.0-dev
+> 最后更新：2026-07-22；适用版本：0.5.0-dev
 
 这些 recipes 是给小屏可穿戴 app 作者复制改写的起点。它们只使用 JellyFrame 文档化子集，
 不依赖浏览器专有行为。
@@ -37,6 +37,35 @@
 }
 ```
 
+## 保留占位
+
+可选 badge 或操作需要保留位置时使用 `visibility: hidden`；只有后续内容应补上空位时才使用
+`display: none`。隐藏 wrapper 内确有必要保持可见的子元素可显式声明 `visibility: visible`。
+不支持 `collapse`。
+
+```css
+.sync-slot { height: 26px; visibility: hidden; }
+.sync-slot.is-ready { visibility: visible; }
+```
+
+## 包内图片背景
+
+装饰背景或整张卡片背景可直接使用本地 BMP，不必再添加一个 `img` 节点。始终保留纯色
+fallback，因为目标缺少相应 codec 或图片预算不足时，宿主可以拒绝解码。
+
+```css
+.weather-card {
+  width: 100%;
+  height: 92px;
+  background-color: #12314a;
+  background-image: url("/assets/weather-card.bmp");
+  border-radius: 14px;
+}
+```
+
+该 V0 路径把一个包内绝对路径图片拉伸到背景绘制区域。它刻意不接受远程/data URL、相对路径、
+repeat、`background-size` 或 `background-position`。
+
 ## 按钮
 
 按钮文字尽量短。默认一行一到两个按钮。窄屏优先减少按钮数量或缩短标签。
@@ -58,6 +87,36 @@
 /* 窄屏优先减少按钮数量或缩短标签。 */
 ```
 
+## 固定设置 Grid
+
+只有设置页确实需要稳定的操作区时才使用显式行。该有界子集支持 2-4 条固定/`1fr` 行和正整数
+placement，不支持 named area 或完整浏览器 Grid。
+
+```css
+.settings-grid {
+  display: grid;
+  height: 156px;
+  grid-template-columns: 56px 1fr;
+  grid-template-rows: 30px 1fr 34px;
+  gap: 7px;
+}
+
+.settings-title { grid-column: 1 / 3; grid-row: 1; }
+.settings-label { grid-column: 1; grid-row: 2; }
+.settings-value { grid-column: 2; grid-row: 2; }
+.settings-save { grid-column: 1 / 3; grid-row: 3; }
+```
+
+## 紧凑标签
+
+短标签可使用字距；可能没有空格的数据可使用 scalar-safe 换行。两者都不能替代具备 shaping 的
+字体后端。
+
+```css
+.eyebrow { letter-spacing: 1px; }
+.device-name { overflow-wrap: anywhere; }
+```
+
 ## 卡片
 
 卡片用于重复数据项或控件组。不要把卡片再塞进卡片。
@@ -69,6 +128,22 @@
   border: 1px solid rgba(144, 237, 236, 0.64);
   border-radius: 18px;
   overflow: hidden;
+}
+```
+
+## 水凝胶表面
+
+用一层基础渐变和一层透明径向高光建立体积感。这是两层背景，应只用于主卡片等重点区域，
+不要铺满列表。阴影有明确的栅格边界，且只有声明它的元素才会产生绘制工作。
+
+```css
+.gel-card {
+  background:
+    radial-gradient(circle at 80% 12%, rgba(241, 253, 255, 0.22) 0%, transparent 100%),
+    linear-gradient(135deg, #315a7a, #142331);
+  border: 1px solid color-mix(in srgb, #b7edff 18%, #315a7a);
+  border-radius: 16px;
+  box-shadow: 0 6px 10px 1px color-mix(in srgb, rgba(0, 0, 0, 0.42) 76%, rgba(98, 223, 247, 0.26));
 }
 ```
 
@@ -198,7 +273,7 @@ module、`modulepreload`、`export *`、re-export declaration 和 inline module 
 
 ## App 内路由
 
-小型设置流或 tab 集合可使用 fragment route，它不会更新 host URL，也不会创建 browser history：
+小型设置流或 tab 集合可使用 fragment route，它不会更新 host URL，也不会创建浏览器导航 history：
 
 ```js
 function renderRoute() {
@@ -211,9 +286,11 @@ location.hash = "settings";
 renderRoute();
 ```
 
-支持面只有 `location.hash`、`hashchange` 和 `onhashchange`。`history`、
-`location.assign()`、远程导航和跨 app 路由均不可用。完整 package 参见
-`jelly_route_tabs`。
+支持面包括 `location.hash`、`hashchange`、`popstate`、`onhashchange`、
+`onpopstate` 与只处理 fragment 的 `history`。`history.back()`、`forward()`、
+`go(delta)`、`pushState()`、`replaceState()` 会保留有界 `#fragment` entry；
+`state` 与 `title` 不保留。`location.assign()`、远程导航和跨 app 路由均不可用。
+完整 package 参见 `jelly_route_tabs`。
 
 ## 窄屏目标
 

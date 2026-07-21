@@ -8,7 +8,7 @@
 <body>
   <main class="screen" id="app">
     <section class="topbar">
-      <span>Shanghai</span>
+      <span class="place"><span class="live">LIVE</span> Shanghai</span>
       <span id="updated" class="meta">Local</span>
     </section>
     <section class="hero">
@@ -16,18 +16,19 @@
         <img id="icon" src="assets/cloudy.bmp" alt="Cloudy">
       </div>
       <div class="weather-copy">
+        <div class="eyebrow">NOW</div>
         <div class="label" id="condition">Cloudy</div>
         <div class="temp"><span id="temp">26</span><span class="unit">deg</span></div>
         <div class="summary" id="summary">AQI 42 Good</div>
       </div>
     </section>
     <section class="stats">
-      <div><strong id="wind">8</strong><span>KMH</span></div>
-      <div><strong id="rain">20</strong><span>RAIN</span></div>
+      <div><span>WIND</span><strong id="wind">8</strong><small>km/h</small></div>
+      <div><span>RAIN</span><strong id="rain">20</strong><small>% next hour</small></div>
     </section>
     <section class="actions">
-      <button class="tile" data-mode="hourly">Hr</button>
-      <button class="tile" data-mode="daily">Day</button>
+      <button class="tile" data-mode="hourly">Hourly</button>
+      <button class="tile selected" data-mode="daily">Daily</button>
       <button class="tile" data-mode="air">Air</button>
     </section>
     <section class="statusline">

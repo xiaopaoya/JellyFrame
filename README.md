@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-07-12; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -29,8 +29,11 @@ targets and documentation use `JellyFrame`.
   dependency.
 - Tolerant HTML tokenizer/tree builder and compact mutable DOM.
 - CSS parser, cascade and style resolver for a documented embedded subset.
-- Block/inline layout, simplified flex, responsive grid-card layout, bounded
-  positioning and form controls.
+- Block/inline layout, simplified flex and bounded responsive Grid, including
+  explicit row tracks, numeric placement and direct-child flex ordering.
+- Modern small-screen presentation primitives: LTR logical sizing, bounded
+  gradients, percentage radii, light shadows, typography/overflow controls,
+  package-local image backgrounds and safe CSS nesting.
 - Hit testing, DOM-style event dispatch and hardware-neutral input handling.
 - Optional JerryScript bindings for local classic scripts, DOM mutation, events,
   form state and host-pumped timers.
@@ -70,9 +73,9 @@ interface.
 JellyFrame is not suitable for arbitrary modern websites, full frontend
 frameworks, browser storage, network-loaded pages, full Canvas/SVG/video,
 complete web compatibility or pixel-perfect rendering. A bounded optional
-Canvas 2D V0.4 exists for bounded custom charts, rings, labels, gradients and similar local
-graphics, but it is still an opt-in subset rather than browser-compatible
-Canvas.
+Canvas 2D V0.4 exists for custom charts, rings, labels, gradients, canvas-to-
+canvas drawing and short retained paths, but it is still an opt-in subset rather
+than browser-compatible Canvas.
 
 ## Quick Start
 

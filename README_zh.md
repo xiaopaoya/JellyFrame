@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-07-12；适用版本：0.5.0-dev
+> 最后更新：2026-07-22；适用版本：0.5.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -22,7 +22,10 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 - 平台无关 C++ 核心，不依赖文件系统、网络或窗口系统。
 - 容错 HTML tokenizer/tree builder 和紧凑可变 DOM。
 - 面向嵌入式子集的 CSS parser、cascade 和 style resolver。
-- Block/inline layout、简化 flex、响应式 grid-card layout、有界 positioning 和表单控件。
+- Block/inline layout、简化 flex 和有界响应式 Grid，包含显式行轨道、数字 placement
+  与直接子项 flex order。
+- 面向小屏现代视觉的基础能力：LTR logical sizing、有界 gradient、百分比圆角、轻量 shadow、
+  text overflow 控制、包内图片背景和安全 CSS nesting。
 - 命中测试、类 DOM 事件派发和硬件无关输入处理。
 - 可选 JerryScript binding，支持本地 classic scripts、DOM mutation、events、form state
   和宿主泵动 timers。
@@ -59,7 +62,7 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 
 JellyFrame 不适合直接运行任意现代网站、完整前端框架、浏览器存储、网络加载页面、
 完整 Canvas/SVG/video、完整 Web 兼容或像素级一致渲染。项目提供有界可选
-Canvas 2D V0 子集，用于自定义图表等局部图形。
+Canvas 2D V0.4，用于图表、圆环、标签、渐变、canvas-to-canvas 绘制和短路径等局部图形。
 
 ## 快速开始
 

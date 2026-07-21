@@ -67,8 +67,11 @@ public:
     const Node* hovered_node() const;
     const Node* active_node() const;
     const Node* focused_node() const;
+    const Node* modal_root() const;
     void set_focused_node(const Node* node);
     void set_interaction_state(const Node* hovered_node, const Node* active_node, const Node* focused_node);
+    // Hosts opt in only while one dialog is modal. All input remains in this subtree.
+    void set_modal_root(const Node* node);
 
     const Node* pointer_move(const PointerInput& input);
     const Node* pointer_down(const PointerInput& input);
@@ -88,10 +91,15 @@ private:
     const Node* hovered_node_ = nullptr;
     const Node* active_node_ = nullptr;
     const Node* focused_node_ = nullptr;
+    const Node* modal_root_ = nullptr;
     const LayoutBox* active_box_ = nullptr;
 
     HitTestResult hit(int x, int y) const;
     const Node* hit_node(int x, int y) const;
+    bool contains_node(const Node* node) const;
+    bool visible_node(const Node* node) const;
+    bool accepts_node(const Node* node) const;
+    const LayoutBox* focus_root_box() const;
     void set_hovered_node(const Node* node);
     void set_active_node(const Node* node, const LayoutBox* box = nullptr);
     MouseEvent make_mouse_event(const char* type, const PointerInput& input) const;

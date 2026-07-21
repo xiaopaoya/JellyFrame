@@ -25,6 +25,7 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.margin_right_auto == right.margin_right_auto &&
         edge_sizes_equal(left.padding, right.padding) &&
         edge_sizes_equal(left.border_width, right.border_width) &&
+        left.background_overlay_packed == right.background_overlay_packed &&
         left.width == right.width &&
         left.height == right.height &&
         left.min_width == right.min_width &&
@@ -49,9 +50,13 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.line_height_specified == right.line_height_specified &&
         left.text_indent == right.text_indent &&
         left.text_indent_specified == right.text_indent_specified &&
+        left.letter_spacing == right.letter_spacing &&
+        left.letter_spacing_specified == right.letter_spacing_specified &&
         left.text_transform == right.text_transform &&
         left.text_transform_specified == right.text_transform_specified &&
         left.position == right.position &&
+        left.overflow_wrap_anywhere == right.overflow_wrap_anywhere &&
+        left.overflow_wrap_specified == right.overflow_wrap_specified &&
         left.inset_top == right.inset_top &&
         left.inset_right == right.inset_right &&
         left.inset_bottom == right.inset_bottom &&
@@ -70,8 +75,12 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.grid_min_track_width == right.grid_min_track_width &&
         left.grid_template_column_count == right.grid_template_column_count &&
         left.grid_template_column_widths == right.grid_template_column_widths &&
+        left.grid_template_row_count == right.grid_template_row_count &&
+        left.grid_template_row_heights == right.grid_template_row_heights &&
         left.grid_auto_row_min == right.grid_auto_row_min &&
+        left.grid_column_start == right.grid_column_start &&
         left.grid_column_span == right.grid_column_span &&
+        left.grid_row_start == right.grid_row_start &&
         left.grid_row_span == right.grid_row_span &&
         left.list_style_type == right.list_style_type &&
         left.list_style_type_specified == right.list_style_type_specified &&

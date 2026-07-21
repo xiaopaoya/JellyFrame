@@ -1,6 +1,6 @@
 # How To Start With JellyFrame
 
-> Last updated: 2026-07-09; Applies to: 0.6.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 This guide is for developers opening the repository for the first time. It
 explains what JellyFrame is, how the project is organized, how to build and run
@@ -51,13 +51,14 @@ JellyFrame deliberately does not provide:
 - remote HTML/CSS/script/image page loading, `fetch` or WebSocket;
 - cookies, IndexedDB or a general filesystem API;
 - full DOM, query selector APIs, Shadow DOM or Web Components;
-- ES modules or browser loading algorithms;
+- browser loading algorithms, dynamic modules or remote modules;
 - full browser Canvas, SVG or a browser-grade image/video stack;
 - full Flexbox/Grid/positioning/animation/filter behavior;
 - GPU compositing or pixel-compatible browser rendering.
 
 Host-optional async `XMLHttpRequest` GET V0, `localStorage` V0, packaged BMP
-images, `Audio` V0 and optional Canvas 2D V0.3 exist, but they are not full
+images, `Audio` V0, package-time static modules and optional Canvas 2D V0.4
+exist, but they are not full
 browser APIs. Use them only within the capability matrix and manifest
 declarations.
 Before relying on a feature, check

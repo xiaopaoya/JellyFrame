@@ -1,6 +1,6 @@
 # App Component Recipes
 
-> Last updated: 2026-07-12; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 These recipes are copyable starting points for small wearable apps. They use the
 documented JellyFrame subset and avoid browser-only behavior.
@@ -39,6 +39,38 @@ one explicit child.
 }
 ```
 
+## Reserved Slots
+
+Use `visibility: hidden` for an optional badge or action whose space must stay
+reserved. Use `display: none` only when following content should close the gap.
+A child can explicitly use `visibility: visible` when it must remain visible
+inside a hidden wrapper. `collapse` is not supported.
+
+```css
+.sync-slot { height: 26px; visibility: hidden; }
+.sync-slot.is-ready { visibility: visible; }
+```
+
+## Package Image Background
+
+Use a local BMP as a decorative or full-card background without adding a second
+`img` node. Keep a solid fallback color because the host can decline decoding
+when the target has no matching codec or image budget.
+
+```css
+.weather-card {
+  width: 100%;
+  height: 92px;
+  background-color: #12314a;
+  background-image: url("/assets/weather-card.bmp");
+  border-radius: 14px;
+}
+```
+
+This V0 path stretches one package-absolute image across the background paint
+area. It intentionally does not accept remote/data URLs, relative paths,
+repeat, `background-size`, or `background-position`.
+
 ## Buttons
 
 Prefer short text. Use one or two columns. On narrow targets, keep only the
@@ -61,6 +93,38 @@ primary actions visible or use very short labels.
 /* For narrow targets, prefer fewer buttons or shorter labels. */
 ```
 
+## Fixed Settings Grid
+
+Use explicit rows only when a settings panel needs a stable action area. The
+bounded subset accepts two to four fixed/`1fr` rows and positive numeric
+placement, not named areas or full browser Grid.
+
+```css
+.settings-grid {
+  display: grid;
+  height: 156px;
+  grid-template-columns: 56px 1fr;
+  grid-template-rows: 30px 1fr 34px;
+  gap: 7px;
+}
+
+.settings-title { grid-column: 1 / 3; grid-row: 1; }
+.settings-label { grid-column: 1; grid-row: 2; }
+.settings-value { grid-column: 2; grid-row: 2; }
+.settings-save { grid-column: 1 / 3; grid-row: 3; }
+```
+
+## Compact Labels
+
+Use letter spacing for short labels and scalar-safe wrapping for data that may
+arrive without spaces. Do not use either as a substitute for a shaping-capable
+font backend.
+
+```css
+.eyebrow { letter-spacing: 1px; }
+.device-name { overflow-wrap: anywhere; }
+```
+
 ## Cards
 
 Cards should frame repeated items or controls. Avoid cards inside cards.
@@ -72,6 +136,23 @@ Cards should frame repeated items or controls. Avoid cards inside cards.
   border: 1px solid rgba(144, 237, 236, 0.64);
   border-radius: 18px;
   overflow: hidden;
+}
+```
+
+## Gel Surface
+
+Use one base gradient and one translucent radial highlight for depth. This is a
+two-layer background, so reserve it for prominent cards rather than every list
+row. The shadow has a bounded raster cost and is only emitted when declared.
+
+```css
+.gel-card {
+  background:
+    radial-gradient(circle at 80% 12%, rgba(241, 253, 255, 0.22) 0%, transparent 100%),
+    linear-gradient(135deg, #315a7a, #142331);
+  border: 1px solid color-mix(in srgb, #b7edff 18%, #315a7a);
+  border-radius: 16px;
+  box-shadow: 0 6px 10px 1px color-mix(in srgb, rgba(0, 0, 0, 0.42) 76%, rgba(98, 223, 247, 0.26));
 }
 ```
 
@@ -212,7 +293,7 @@ the source authoring form.
 ## App-Local Routes
 
 Use a fragment route for a small settings flow or tab set inside one app. It
-updates no host URL and adds no browsing history:
+updates no host URL and does not create browser navigation history:
 
 ```js
 function renderRoute() {
@@ -225,9 +306,12 @@ location.hash = "settings";
 renderRoute();
 ```
 
-The supported surface is `location.hash`, `hashchange` and `onhashchange`.
-`history`, `location.assign()`, remote navigation and cross-app routing are not
-available. See `jelly_route_tabs` for a complete package.
+The supported surface is `location.hash`, `hashchange`, `popstate`,
+`onhashchange`, `onpopstate` and fragment-only `history`. `history.back()`,
+`forward()`, `go(delta)`, `pushState()` and `replaceState()` retain a bounded
+stack of `#fragment` entries; `state` and `title` are not retained.
+`location.assign()`, remote navigation and cross-app routing are unavailable.
+See `jelly_route_tabs` for a complete package.
 
 ## Narrow Targets
 

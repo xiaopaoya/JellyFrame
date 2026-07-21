@@ -1,6 +1,6 @@
 # CSS Parser Scope
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 Last checked against CSS Syntax Module Level 3, Media Queries and browser
 parser source layout on 2026-06-16:
@@ -63,20 +63,32 @@ layout behavior.
   progress rings and two-color center-circle `radial-gradient()` highlights.
   Unsupported angles, stops, focal points, ellipses or image values are reported
   without replacing earlier supported fallbacks.
-- `background-image` accepts the same gradient subset, but not solid colors.
+- `background-image` accepts the same gradient subset, but not solid colors. It
+  also accepts one package-absolute `url("/assets/image.bmp")`, which is handed
+  to the host image resolver and fills the element background paint area. The
+  parser rejects remote/data URLs, relative paths, traversal, query/fragment,
+  multiple URL layers and background repeat/position/size syntax.
 - Type/class/id/attribute compound selectors, descendant and child combinators,
   and adjacent/general sibling combinators.
 - Dynamic pseudo-classes `:hover`, `:active`, `:focus`, `:focus-within`,
   `:checked` and `:disabled`.
 - `:is()` and `:where()` selector-list functions for the supported selector
   subset; `:where()` contributes zero specificity.
+- CSS nesting's explicit one-level `&` subset. Parent declarations and nested
+  rules retain source order; selector-list expansion is capped at 16. Implicit
+  nesting, deeper blocks and nested at-rules produce `css-nesting-skipped`.
 - UI-oriented declarations for the embedded app subset, including
   physical `margin-*`/`padding-*`/`border-*-width` longhands,
-  `outline`, `text-shadow`, `text-decoration`, `text-transform`, `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `flex`,
-  `flex-grow`, `flex-shrink`, `flex-basis`, `position`, `top`, `right`,
+  `outline`, `text-shadow`, `text-decoration`, `text-transform`, `letter-spacing`,
+  `white-space: normal`/`nowrap`, their `text-wrap: wrap`/`nowrap` aliases,
+  inherited `visibility: visible`/`hidden` (layout stays in flow while hidden
+  paint and hit targets are suppressed),
+  `overflow-wrap: anywhere`, `aspect-ratio`, `gap`, `column-gap`, `row-gap`, `flex`,
+  `flex-grow`, `flex-shrink`, `flex-basis`, signed-integer `order`, `position`, `top`, `right`,
   `bottom`, `left`, `grid-template-columns` with a `minmax()` minimum track,
+  bounded `grid-template-rows` fixed/`1fr` tracks,
   `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))`, `grid-auto-rows` with a
-  minimum track, `grid-column`/`grid-row: span N`, plus `object-fit` and a
+  minimum track, bounded positive numeric `grid-column`/`grid-row` start/end/span placement, plus `object-fit` and a
   keyword/percentage one/two-value `object-position` subset, and the
   `image-rendering` `auto`/`pixelated`/`crisp-edges` subset.
 - `@keyframes` from/to subset. Named blocks keep `from`/`to` or `0%`/`100%`
@@ -107,11 +119,12 @@ layout behavior.
 - Full custom property dependency graph, case-sensitive custom property names,
   guaranteed cycle handling beyond the bounded recursion guard, and CSS-wide
   invalid-at-computed-value-time semantics.
-- CSS nesting semantics.
+- Full CSS nesting semantics, including implicit nesting, nested at-rules and
+  deeper recursive blocks.
 - Shadow DOM selectors.
 - Full animation/keyframe model, including intermediate keyframes,
   fill/play-state/composition and layout-property animation.
-- Full grid value grammar, named lines, explicit placement and dense packing.
+- Full grid value grammar, named/negative lines, `grid-*-start/end` longhands, overlap resolution and dense packing.
 - Complete `object-position` four-value syntax and length offsets.
 - Container query evaluation. This is intentionally deferred until layout/style
   feedback can be bounded without cycles.

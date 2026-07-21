@@ -865,9 +865,9 @@ SCRIPT_API_USAGE_WARNINGS = [
     },
     {
         "api": "getBoundingClientRect",
-        "code": "script-api-deferred",
+        "code": "script-api-subset",
         "pattern": re.compile(r"\bgetBoundingClientRect\s*\("),
-        "message": "script uses getBoundingClientRect(), which is deferred until the host can expose a stable frame layout snapshot",
+        "message": "getBoundingClientRect() returns a numeric snapshot from the last completed host layout frame; it does not force synchronous layout or include transform/nested-scroll geometry",
     },
     {
         "api": "pointer capture",
@@ -900,6 +900,12 @@ SCRIPT_API_USAGE_WARNINGS = [
         "message": "script uses BroadcastChannel/web messaging, which is outside the current app isolation model",
     },
     {
+        "api": "MessageChannel",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\b(?:MessageChannel|MessagePort)\s*\("),
+        "message": "script uses MessageChannel/MessagePort, which is outside the current app isolation model",
+    },
+    {
         "api": "DataTransfer",
         "code": "script-api-deferred",
         "pattern": re.compile(r"\b(?:DataTransfer|DataTransferItemList|DataTransferItem|dataTransfer)\b"),
@@ -916,6 +922,37 @@ SCRIPT_API_USAGE_WARNINGS = [
         "code": "script-api-deferred",
         "pattern": re.compile(r"\bserviceWorker\b"),
         "message": "script uses serviceWorker, which is not part of the JellyFrame app runtime or install/update model",
+    },
+    {
+        "api": "sessionStorage",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bsessionStorage\b"),
+        "message": "script uses sessionStorage, which is not available; JellyFrame only exposes host-optional app-private localStorage",
+    },
+    {
+        "api": "document.cookie",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\bdocument\s*\.\s*cookie\b"),
+        "message": "script uses document.cookie, which is outside JellyFrame's app-private storage and networking model",
+    },
+    {
+        "api": "storage event",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\b(?:window\s*\.\s*)?addEventListener\s*\(\s*(['\"])storage\1"),
+        "preserveStrings": True,
+        "message": "script listens for browser storage events, which are not dispatched by JellyFrame's app-private storage subset",
+    },
+    {
+        "api": "Selection/Range",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\b(?:window|document)\s*\.\s*(?:getSelection|createRange)\s*\("),
+        "message": "script uses Selection/Range APIs, which are outside JellyFrame's bounded text-input model",
+    },
+    {
+        "api": "browser navigation",
+        "code": "script-api-deferred",
+        "pattern": re.compile(r"\b(?:window\s*\.\s*)?location\s*\.\s*(?:assign|replace|reload)\s*\("),
+        "message": "script uses browser navigation, which is outside JellyFrame's app-local fragment-route subset",
     },
     {
         "api": "Canvas ImageData",
@@ -976,6 +1013,47 @@ HTML_UNSUPPORTED_ELEMENT_MESSAGES = {
     "slot": "Shadow DOM slots are not implemented",
     "map": "image maps are not implemented; use explicit buttons or hit regions",
     "area": "image maps are not implemented; use explicit buttons or hit regions",
+}
+
+HTML_SUBSET_MARKUP = {
+    "picture": ("html-responsive-image-subset",
+                "responsive picture/source selection is not implemented"),
+    "source": ("html-responsive-image-subset",
+               "responsive image and media source selection is not implemented"),
+    "table": ("html-table-layout-subset",
+              "browser table layout is not implemented"),
+    "caption": ("html-table-layout-subset",
+                "browser table layout is not implemented"),
+    "colgroup": ("html-table-layout-subset",
+                 "browser table layout is not implemented"),
+    "col": ("html-table-layout-subset",
+            "browser table layout is not implemented"),
+    "thead": ("html-table-layout-subset",
+              "browser table layout is not implemented"),
+    "tbody": ("html-table-layout-subset",
+              "browser table layout is not implemented"),
+    "tfoot": ("html-table-layout-subset",
+              "browser table layout is not implemented"),
+    "tr": ("html-table-layout-subset",
+           "browser table layout is not implemented"),
+    "td": ("html-table-layout-subset",
+           "browser table layout is not implemented"),
+    "th": ("html-table-layout-subset",
+           "browser table layout is not implemented"),
+    "ruby": ("html-ruby-bidi-subset",
+             "ruby annotation and complex bidi layout are not implemented"),
+    "rt": ("html-ruby-bidi-subset",
+           "ruby annotation layout is not implemented"),
+    "rp": ("html-ruby-bidi-subset",
+           "ruby fallback semantics are not implemented"),
+    "template": ("html-template-subset",
+                 "template content is hidden ordinary DOM, not a detached template document"),
+    "video": ("html-media-element-deferred",
+              "HTML video playback is not implemented"),
+    "track": ("html-media-element-deferred",
+              "HTML media text tracks are not implemented"),
+    "audio": ("html-audio-element-subset",
+              "HTMLMediaElement audio markup is not implemented"),
 }
 
 
@@ -1181,6 +1259,71 @@ def collect_animation_diagnostics(resources: list[dict]) -> tuple[dict, list[dic
     }, warnings
 
 
+def collect_background_image_diagnostics(resources: list[dict]) -> tuple[dict, list[dict]]:
+    resource_by_path = {resource["path"]: resource for resource in resources}
+    entries = []
+    warnings = []
+    seen = set()
+    declaration_pattern = re.compile(r"\b(background(?:-image)?)\s*:\s*([^;{}]+)", flags=re.I)
+    url_pattern = re.compile(r"^url\(\s*(?:'([^']+)'|\"([^\"]+)\"|([^\s()]+))\s*\)$", flags=re.I)
+
+    for resource in resources:
+        for source_path, source_text in css_sources_for_resource(resource):
+            for declaration in declaration_pattern.finditer(strip_css_comments(source_text)):
+                raw_value = declaration.group(2).strip()
+                if not raw_value.lower().startswith("url("):
+                    continue
+                match = url_pattern.fullmatch(raw_value)
+                url = next((group for group in match.groups() if group is not None), "") if match else ""
+                valid = bool(match and url.startswith("/") and not url.startswith("//") and
+                             ".." not in url and "\\" not in url and "?" not in url and "#" not in url)
+                key = (source_path, raw_value)
+                if key in seen:
+                    continue
+                seen.add(key)
+                entry = {
+                    "source": source_path,
+                    "property": declaration.group(1).lower(),
+                    "value": raw_value,
+                    "url": url,
+                    "supported": valid,
+                }
+                if not valid:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "css-background-image-url-unsupported",
+                        "message": "CSS background image must be one package-absolute url('/assets/image.bmp') without query, fragment, traversal or remote scheme",
+                        "source": source_path,
+                        "property": declaration.group(1).lower(),
+                        "value": raw_value,
+                    })
+                    entries.append(entry)
+                    continue
+                target = resource_by_path.get(url)
+                if target is None:
+                    warnings.append({
+                        "level": "warning",
+                        "code": "css-background-image-resource-missing",
+                        "message": f"CSS background image is not packaged: {url}",
+                        "source": source_path,
+                        "url": url,
+                    })
+                elif resource_kind_name(target["kind"]) != "Image":
+                    warnings.append({
+                        "level": "warning",
+                        "code": "css-background-image-resource-not-image",
+                        "message": f"CSS background image path is not an image resource: {url}",
+                        "source": source_path,
+                        "url": url,
+                    })
+                entries.append(entry)
+    return {
+        "model": "package-local-css-background-image-v0",
+        "entryCount": len(entries),
+        "entries": entries,
+    }, warnings
+
+
 def strip_html_inert_content(text: str) -> str:
     text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
     text = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.I | re.S)
@@ -1200,6 +1343,38 @@ def collect_html_api_diagnostics(resources: list[dict]) -> tuple[dict, list[dict
         r"<\s*form\b(?=[^>]*(?:\baction\s*=|\bmethod\s*=))[^>]*>",
         flags=re.I | re.S,
     )
+    subset_markup_pattern = re.compile(
+        r"<\s*(" + "|".join(HTML_SUBSET_MARKUP) + r")\b",
+        flags=re.I,
+    )
+    srcset_pattern = re.compile(r"<\s*(?:img|source)\b[^>]*\ssrcset\s*=", flags=re.I | re.S)
+    rtl_direction_pattern = re.compile(
+        r"<\s*[a-z][^>]*\sdir\s*=\s*(?:['\"]\s*)?rtl\b",
+        flags=re.I | re.S,
+    )
+    contenteditable_pattern = re.compile(
+        r"<\s*[a-z][^>]*\scontenteditable(?:\s*=|\s|>)",
+        flags=re.I | re.S,
+    )
+
+    def add_subset_warning(source: str, code: str, feature: str, message: str) -> None:
+        key = (source, code)
+        if key in seen:
+            return
+        seen.add(key)
+        entries.append({
+            "feature": feature,
+            "source": source,
+            "warningCode": code,
+        })
+        warnings.append({
+            "level": "warning",
+            "code": code,
+            "message": message,
+            "source": source,
+            "feature": feature,
+        })
+
     for resource in resources:
         for source_text in html_sources_for_resource(resource):
             searchable = strip_html_inert_content(source_text)
@@ -1222,6 +1397,36 @@ def collect_html_api_diagnostics(resources: list[dict]) -> tuple[dict, list[dict
                     "source": resource["path"],
                     "tag": tag,
                 })
+            for match in subset_markup_pattern.finditer(searchable):
+                tag = match.group(1).lower()
+                code, limitation = HTML_SUBSET_MARKUP[tag]
+                add_subset_warning(
+                    resource["path"],
+                    code,
+                    tag,
+                    f"<{tag}> uses semantics outside JellyFrame's HTML subset: {limitation}",
+                )
+            if srcset_pattern.search(searchable):
+                add_subset_warning(
+                    resource["path"],
+                    "html-responsive-image-subset",
+                    "srcset",
+                    "srcset responsive image selection is not implemented; use one package-local image selected by the app target",
+                )
+            if rtl_direction_pattern.search(searchable):
+                add_subset_warning(
+                    resource["path"],
+                    "html-ruby-bidi-subset",
+                    "dir=rtl",
+                    "dir=rtl requests browser bidi layout, which is outside JellyFrame's text-layout subset",
+                )
+            if contenteditable_pattern.search(searchable):
+                add_subset_warning(
+                    resource["path"],
+                    "html-rich-text-deferred",
+                    "contenteditable",
+                    "contenteditable is not implemented; JellyFrame supports bounded input and textarea controls only",
+                )
             if form_submit_pattern.search(searchable):
                 key = (resource["path"], "html-form-submit-deferred")
                 if key in seen:
@@ -1319,7 +1524,8 @@ def collect_script_api_diagnostics(manifest: dict, resources: list[dict]) -> tup
                         "capabilities": supported_capabilities,
                     })
             for usage in SCRIPT_API_USAGE_WARNINGS:
-                if not usage["pattern"].search(searchable):
+                source = searchable_with_strings if usage.get("preserveStrings") else searchable
+                if not usage["pattern"].search(source):
                     continue
                 key = (source_path, usage["code"], usage["api"])
                 if key in seen:
@@ -2440,6 +2646,8 @@ def main() -> int:
     warnings.extend(script_api_warnings)
     image_diagnostics, image_warnings = collect_image_diagnostics(resources, target_config)
     warnings.extend(image_warnings)
+    background_image_diagnostics, background_image_warnings = collect_background_image_diagnostics(resources)
+    warnings.extend(background_image_warnings)
     reference_warnings, references = collect_reference_diagnostics(root, resources, manifest["entry"])
     warnings.extend(reference_warnings)
     font_diagnostics, font_warnings = collect_font_diagnostics(manifest, resources, target_config, budgets)
@@ -2478,6 +2686,7 @@ def main() -> int:
         "animationDiagnostics": animation_diagnostics,
         "scriptApiDiagnostics": script_api_diagnostics,
         "imageDiagnostics": image_diagnostics,
+        "backgroundImageDiagnostics": background_image_diagnostics,
         "fontDiagnostics": font_diagnostics,
         "runtimeBudgetEstimate": collect_runtime_budget_estimate(resources, budgets, font_diagnostics),
         "warnings": warnings,

@@ -1,6 +1,6 @@
 # App Packaging
 
-> 最后更新：2026-07-12；适用版本：0.5.0-dev
+> 最后更新：2026-07-22；适用版本：0.5.0-dev
 
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
@@ -193,11 +193,13 @@ Canvas 2D 的标准能力名是 `graphics.canvas2d`。它用于声明 app 需要
 `CanvasRenderingContext2D` 这类按需像素绘制能力。Canvas 会消耗 backing store 内存和 JS 绘制时间，
 因此它不是默认能力；target profile 会通过 `hostServices.canvas2d` 报告当前产品是否支持。
 运行时支持是可选且有界的：只有 `getContext("2d")` 后才分配像素，产品应只在内存预算能接受
-  surface 上限时开启 `hostServices.canvas2d`。Canvas V0.3 覆盖纯色矩形、有界 path、抗锯齿
-  stroked line、`arc`、`fill`、`globalAlpha`、`save`/`restore`、`font`、`measureText`
-  和 `fillText`，以及有界 `createLinearGradient` / `addColorStop` 子集；imageData、
-  drawImage、transform、radial gradient 和 pattern fill 等 API 仍属于未来工作。
-  gradient 文本目前会退化为一个采样色，以便 Canvas 继续复用宿主 text backend。
+  surface 上限时开启 `hostServices.canvas2d`。Canvas V0.4 覆盖纯色矩形、有界 path、抗锯齿
+  stroked line、`arc`、`fill`、`globalAlpha`、`save`/`restore`、`font`、`measureText`、
+  `fillText`、canvas-to-canvas `drawImage()` 3/5/9-argument form、像素对齐的
+  `translate`/`resetTransform`、有界二次/三次曲线，以及有界 linear 和两 stop 同心
+  radial gradient。ImageData、非 canvas image/video source、通用 matrix、scale/rotate
+  和 pattern fill 仍延后。gradient 文本目前会退化为一个采样色，以便 Canvas 继续复用宿主
+  text backend。
 
 `fonts` 是 JellyFrame bitmap font 路径的部署/runtime 声明，不是完整 CSS `@font-face`
 实现。打包器会把 `.jffont`、`.bdf`、`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font`
@@ -635,6 +637,11 @@ Package report 还包含 `imageDiagnostics`。这是打包期 target profile 检
 当前 Win32 debug shell 已验证的包内图片路径；PNG/JPEG/WebP 或厂商格式必须先由产品 host
 接入 codec adapter，preset 才应标为 supported。target 不支持的 codec 和非法 BMP header
 会在 install 或 preview 前以 package warning 报告。
+
+`backgroundImageDiagnostics` 检查受限的 CSS 图片背景路径。它接受一个包内绝对路径
+`background-image: url("/assets/image.bmp")` 或 `background: url(...)`，并为被拒绝的 URL、
+缺失的 package 资源或非图片资源输出稳定 warning。它不增加 decoder；目标是否能够使用相应
+图片 codec 仍由 target 决定。
 
 Windows 上做人类 app 开发时，应优先使用交互式 Win32 browser 壳：
 

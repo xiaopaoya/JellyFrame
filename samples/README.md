@@ -8,7 +8,7 @@ Native desktop tools live in `../tools/native`.
 - `apps/packages/`: complete JellyFrame source packages with
   `jellyframe.app.json`.
 - `apps/system/`: privileged system-app samples such as the sample launcher used
-  by the Win32 app-manager host path.
+  by the Win32 app-manager host path and the 172x320 Band System Shell.
 - `apps/loose/`: small loose-file app fixtures used for focused runtime,
   scripting and rendering checks.
 
@@ -16,6 +16,8 @@ Current visual-system samples:
 
 - `apps/packages/jelly_controls`: installable Jelly UI controls package.
 - `apps/packages/jelly_wearable_launcher`: round-300 icon-first wearable launcher package.
+- `apps/system/band_system_shell`: rect-172x320 wearable system-shell visual
+  and input acceptance sample.
 - `apps/loose/jelly_motion.html`: transition/keyframe motion fixture.
 - `apps/loose/jelly_launcher_mock.html`: launcher grid visual fixture.
 

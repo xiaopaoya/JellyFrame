@@ -104,12 +104,90 @@ void request_submit_is_cancellable_and_exposes_submitter() {
     check(!result.submitted && result.default_prevented, "preventDefault cancels default submit action");
 }
 
+void reset_restores_authored_control_defaults_and_is_cancellable() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><form id='form'><input id='name' value='Ada'><input id='enabled' type='checkbox' checked>"
+        "<select id='mode'><option value='day' selected>Day</option><option value='night'>Night</option></select>"
+        "<textarea id='note'>Memo</textarea></form></body>");
+    Node* form = find_by_id(*document, "form");
+    Node* name = find_by_id(*document, "name");
+    Node* enabled = find_by_id(*document, "enabled");
+    Node* mode = find_by_id(*document, "mode");
+    Node* note = find_by_id(*document, "note");
+    check(form != nullptr && name != nullptr && enabled != nullptr && mode != nullptr && note != nullptr,
+          "form reset fixture exists");
+
+    check(set_form_control_value(*name, "Grace"), "reset fixture text changes");
+    check(set_form_control_checked(*enabled, false), "reset fixture checkbox changes");
+    check(set_form_control_selected_index(*mode, 1), "reset fixture selection changes");
+    check(set_form_control_value(*note, "Draft"), "reset fixture textarea changes");
+
+    const std::size_t blocker = form->add_event_listener("reset", [](Event& event) { event.prevent_default(); });
+    check(!reset_form(*form), "preventDefault cancels form reset");
+    check(form_control_value(*name) == "Grace" && !form_control_checked(*enabled) &&
+              form_control_selected_index(*mode) == 1 && form_control_value(*note) == "Draft",
+          "cancelled reset keeps current control state");
+    form->remove_event_listener(blocker);
+
+    check(reset_form(*form), "uncancelled form reset succeeds");
+    check(form_control_value(*name) == "Ada" && form_control_checked(*enabled) &&
+              form_control_selected_index(*mode) == 0 && form_control_value(*note) == "Memo",
+          "reset restores defaults from attributes and textarea text");
+}
+
+void control_validation_subset_is_lazy_and_dispatches_invalid() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><form><input id='name' required minlength='3'><input id='disabled' required disabled>"
+        "<button id='send'>Send</button></form></body>");
+    Node* name = find_by_id(*document, "name");
+    Node* disabled = find_by_id(*document, "disabled");
+    Node* send = find_by_id(*document, "send");
+    check(name != nullptr && disabled != nullptr && send != nullptr, "control validation fixture exists");
+
+    check(form_control_will_validate(*name), "enabled text input participates in validation");
+    check(!form_control_will_validate(*disabled), "disabled input is barred from validation");
+    check(!form_control_will_validate(*send), "submit button is barred from validation");
+
+    FormControlValidationResult validation = validate_form_control(*name);
+    check(validation.value_missing && !validation.valid(), "required empty text input reports valueMissing");
+    check(form_control_validation_message(*name) == "Please fill out this field.", "required message is stable");
+    int invalid_events = 0;
+    name->add_event_listener("invalid", [&](Event&) { ++invalid_events; });
+    check(!check_form_control_validity(*name) && invalid_events == 1, "control checkValidity dispatches invalid once");
+
+    check(set_form_control_value(*name, "Al"), "short value applies");
+    validation = validate_form_control(*name);
+    check(validation.too_short && !validation.value_missing, "minlength reports tooShort");
+    check(set_form_control_custom_validity(*name, "Choose a full name."), "custom message applies");
+    validation = validate_form_control(*name);
+    check(validation.custom_error && !validation.valid(), "custom error overrides intrinsic result");
+    check(form_control_validation_message(*name) == "Choose a full name.", "custom message is exposed");
+    check(set_form_control_custom_validity(*name, ""), "custom message clears");
+    check(!validate_form_control(*name).custom_error, "cleared custom message restores intrinsic validation");
+}
+
+void input_type_tokens_are_ascii_case_insensitive() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><form id='form'><input id='send' type='SUBMIT'></form></body>");
+    Node* form = find_by_id(*document, "form");
+    Node* send = find_by_id(*document, "send");
+    check(form != nullptr && send != nullptr, "case-insensitive type fixture exists");
+    check(form_control_kind(*send) == FormControlKind::Button, "uppercase submit is a button control");
+    check(is_form_submitter(*send), "uppercase submit activates form submission");
+    check(request_form_submit_from_control(*send).submitted, "uppercase submit follows submit default action");
+}
+
 } // namespace
 
 int main() {
     try {
         validation_and_form_data_follow_control_state();
         request_submit_is_cancellable_and_exposes_submitter();
+        reset_restores_authored_control_defaults_and_is_cancellable();
+        control_validation_subset_is_lazy_and_dispatches_invalid();
+        input_type_tokens_are_ascii_case_insensitive();
     } catch (const std::exception& error) {
         std::cerr << "form submission test failed: " << error.what() << '\n';
         return 1;

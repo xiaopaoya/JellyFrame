@@ -43,7 +43,16 @@ enum LayerReason : std::uint32_t {
 
 using LayerReasons = std::uint32_t;
 
-using ImageHandleResolveCallback = bool (*)(const Node& node, std::uint32_t& handle, void* context);
+enum class ImageResolveKind : std::uint8_t {
+    Content,
+    Background,
+};
+
+using ImageHandleResolveCallback = bool (*)(const Node& node,
+                                            ImageResolveKind kind,
+                                            std::uint16_t background_resource_id,
+                                            std::uint32_t& handle,
+                                            void* context);
 
 struct ImageHandleResolver {
     ImageHandleResolveCallback resolve = nullptr;
@@ -95,6 +104,7 @@ struct LayerTreeBuilderOptions {
     DiagnosticSink* diagnostics = nullptr;
     ImageHandleResolver image_resolver;
     ScrollOffsetResolver scroll_resolver;
+    TextMeasureProvider text_measure;
     bool paint_scroll_indicators = false;
 };
 

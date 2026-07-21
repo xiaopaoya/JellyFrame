@@ -13,6 +13,16 @@ enum class FormValidationFailure {
     ValueMissing,
     TooShort,
     TooLong,
+    CustomError,
+};
+
+struct FormControlValidationResult {
+    bool value_missing = false;
+    bool too_short = false;
+    bool too_long = false;
+    bool custom_error = false;
+
+    bool valid() const { return !value_missing && !too_short && !too_long && !custom_error; }
 };
 
 struct FormValidationIssue {
@@ -51,10 +61,18 @@ struct FormSubmitResult {
 Node* form_owner(Node& node);
 const Node* form_owner(const Node& node);
 bool is_form_submitter(const Node& node);
+bool is_form_resetter(const Node& node);
+bool form_control_will_validate(const Node& node);
+FormControlValidationResult validate_form_control(const Node& node);
+bool check_form_control_validity(Node& node);
+std::string form_control_validation_message(const Node& node);
+bool set_form_control_custom_validity(Node& node, std::string message);
 FormValidationResult validate_form(const Node& form);
 bool check_form_validity(Node& form);
 std::vector<FormDataEntry> collect_form_data(const Node& form, const Node* submitter = nullptr);
 FormSubmitResult request_form_submit(Node& form, const Node* submitter = nullptr);
 FormSubmitResult request_form_submit_from_control(Node& control);
+bool reset_form(Node& form);
+bool reset_form_from_control(Node& control);
 
 } // namespace jellyframe

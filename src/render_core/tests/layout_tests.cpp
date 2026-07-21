@@ -291,6 +291,26 @@ void flex_column_distributes_grow_space() {
     check(a->rect.height == 25 && b->rect.height == 75, "column grow factors divide available height");
 }
 
+void flex_order_reorders_in_flow_layout_without_touching_default_path() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><div id='a'></div><div id='b'></div><div id='c'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; width: 90px; }"
+        "div { width: 20px; height: 10px; }"
+        "#a { order: 2; } #b { order: -1; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 100);
+
+    const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* b = find_first_by_id(*layout_tree, "b");
+    const LayoutBox* c = find_first_by_id(*layout_tree, "c");
+    check(a != nullptr && b != nullptr && c != nullptr, "flex order fixture boxes exist");
+    check(b->rect.x == 0 && c->rect.x == 20 && a->rect.x == 40,
+          "nonzero order uses stable ascending flex item placement");
+}
+
 void flex_column_resolves_percent_height_against_containing_box() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -338,6 +358,23 @@ void positioned_layout_offsets_without_flow_space() {
           "absolute right offset uses parent content box");
     check(badge->rect.y == main->rect.y + main->style.border_width.top + main->style.padding.top + 5,
           "absolute top offset uses parent content box");
+}
+
+void logical_inset_layout_uses_ltr_physical_offsets() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main><div id='badge'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { position: relative; width: 100px; height: 50px; }"
+        "#badge { position: absolute; inset: 6px 8px auto 4px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 120, 80);
+
+    const LayoutBox* badge = find_first_by_id(*layout_tree, "badge");
+    check(badge != nullptr, "logical inset fixture exists");
+    check(badge->rect.x == 4 && badge->rect.y == 6 && badge->rect.width == 88,
+          "logical inset expands to the same LTR absolute-position geometry as physical offsets");
 }
 
 void relative_layout_offsets_visual_box_only() {
@@ -503,6 +540,35 @@ void grid_places_fixed_columns_and_spans() {
           "span grid item moves to next row and covers both columns");
 }
 
+void grid_places_explicit_rows_and_numeric_lines() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main><section id='top'></section><section id='side'></section>"
+        "<section id='bottom'></section></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: grid; width: 120px; height: 90px; grid-template-columns: 40px 1fr;"
+        " grid-template-rows: 20px 1fr; gap: 5px; }"
+        "section { box-sizing: border-box; }"
+        "#top { grid-column: 1 / 3; grid-row: 1; }"
+        "#side { grid-column: 1; grid-row: 2; }"
+        "#bottom { grid-column: 2; grid-row: 2 / span 1; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 160, 120);
+
+    const LayoutBox* top = find_first_by_id(*layout_tree, "top");
+    const LayoutBox* side = find_first_by_id(*layout_tree, "side");
+    const LayoutBox* bottom = find_first_by_id(*layout_tree, "bottom");
+    check(top != nullptr && side != nullptr && bottom != nullptr, "explicit grid fixture boxes exist");
+    check(top->rect.x == 0 && top->rect.y == 0 && top->rect.width == 120,
+          "numeric grid end line spans both columns");
+    check(side->rect.x == 0 && side->rect.y == 25 && side->rect.width == 40,
+          "numeric first column and second row resolve");
+    check(bottom->rect.x == 45 && bottom->rect.y == 25 && bottom->rect.width == 75,
+          "numeric start plus span resolves remaining cell");
+}
+
 void nowrap_text_overflow_reports_diagnostic() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -553,8 +619,10 @@ int main() {
         flex_wrap_align_content_distributes_lines();
         flex_column_distributes_vertical_space_and_aligns_items();
         flex_column_distributes_grow_space();
+        flex_order_reorders_in_flow_layout_without_touching_default_path();
         flex_column_resolves_percent_height_against_containing_box();
         positioned_layout_offsets_without_flow_space();
+        logical_inset_layout_uses_ltr_physical_offsets();
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();
         percentage_width_and_height_use_containing_box();
@@ -562,6 +630,7 @@ int main() {
         max_width_percent_clamps_nested_border_box();
         max_width_percent_clamps_nested_flex_grid_items();
         grid_places_fixed_columns_and_spans();
+        grid_places_explicit_rows_and_numeric_lines();
         nowrap_text_overflow_reports_diagnostic();
     } catch (const std::exception& error) {
         std::cerr << "layout test failed: " << error.what() << '\n';

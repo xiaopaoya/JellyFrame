@@ -9,6 +9,9 @@ namespace jellyframe {
 namespace {
 
 Style inherit_text_style(Style style, const Style& parent_style) {
+    if (!style.visibility_specified) {
+        style.visibility_hidden = parent_style.visibility_hidden;
+    }
     if (!style.color_specified) {
         style.color = parent_style.color;
     }
@@ -30,6 +33,9 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     if (!style.text_indent_specified) {
         style.text_indent = parent_style.text_indent;
     }
+    if (!style.letter_spacing_specified) {
+        style.letter_spacing = parent_style.letter_spacing;
+    }
     if (!style.text_transform_specified) {
         style.text_transform = parent_style.text_transform;
     }
@@ -42,6 +48,15 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     }
     if (!style.white_space_specified) {
         style.white_space_nowrap = parent_style.white_space_nowrap;
+    }
+    // text-overflow is not generally inherited. The render tree represents a
+    // direct text run as its own node, so carry the owning inline container's
+    // ellipsis intent only to that anonymous-equivalent run.
+    if (style.text_overflow_ellipsis == false) {
+        style.text_overflow_ellipsis = parent_style.text_overflow_ellipsis;
+    }
+    if (!style.overflow_wrap_specified) {
+        style.overflow_wrap_anywhere = parent_style.overflow_wrap_anywhere;
     }
     if (!style.list_style_type_specified) {
         style.list_style_type = parent_style.list_style_type;
@@ -111,6 +126,7 @@ void apply_style_override(Style& style, const Node& node, const std::vector<Styl
             style.background_gradient_stop_percent = 100;
             style.background_color = override.background_color;
             style.background_color2 = override.background_color;
+            style.background_overlay_packed = 0;
         }
         if (override.has_transform) {
             style.transform = override.transform;

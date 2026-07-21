@@ -750,6 +750,21 @@ ADVICE_BY_CODE = {
         "explanation": "The packaged image does not use a recognized V0 image codec path.",
         "action": "For current Win32/package validation, use package-local BMP or a target profile with an explicit production codec adapter.",
     },
+    "css-background-image-url-unsupported": {
+        "title": "CSS background image URL is outside the supported subset",
+        "explanation": "A CSS background image must use one package-absolute local URL so the host can apply resource and decode budgets.",
+        "action": "Use one package-absolute background-image: url(\"/assets/image.bmp\") without a remote scheme, data URL, relative path, query, fragment or traversal. Keep background-color as the fallback.",
+    },
+    "css-background-image-resource-missing": {
+        "title": "CSS background image is not packaged",
+        "explanation": "The declared local background image path is absent from the current app package.",
+        "action": "Add the image below the app root, reference its package-absolute path, and rerun check/package before device testing.",
+    },
+    "css-background-image-resource-not-image": {
+        "title": "CSS background image path is not an image",
+        "explanation": "The CSS background URL resolves to a packaged resource with a non-image type.",
+        "action": "Point background-image at a package image resource supported by the selected target, such as a validated BMP in the Win32 V0 path.",
+    },
     "manifest-capability-unknown": {
         "title": "Manifest capability is unknown",
         "explanation": "The manifest asks for a capability name JellyFrame does not recognize.",
@@ -984,6 +999,41 @@ ADVICE_BY_CODE = {
         "title": "Browser form submission is not implemented",
         "explanation": "JellyFrame renders form controls, but it does not run browser navigation or HTTP form submission.",
         "action": "Handle the form action in app JavaScript using supported control APIs and an allowed host service such as XMLHttpRequest GET V0.",
+    },
+    "html-responsive-image-subset": {
+        "title": "Responsive browser image selection is not implemented",
+        "explanation": "Picture/source/srcset markup does not choose image candidates from viewport, media or codec rules in JellyFrame.",
+        "action": "Ship one package-local image per route, use CSS object-fit/object-position for cropping, and select target-specific assets in app state or packaging instead of relying on srcset.",
+    },
+    "html-table-layout-subset": {
+        "title": "Browser table layout is not implemented",
+        "explanation": "Table markup is parsed, but JellyFrame does not implement browser column measurement, spanning or table formatting semantics.",
+        "action": "Build compact data rows with documented flex/grid subsets, or draw a bounded chart/table with Canvas when exact columns matter.",
+    },
+    "html-ruby-bidi-subset": {
+        "title": "Ruby and complex bidi layout are not implemented",
+        "explanation": "Ruby markup remains ordinary text/elements and the renderer does not provide full browser complex-script shaping or bidi layout.",
+        "action": "Use a host-verified localized plain-text string and a target font with the required glyph coverage; avoid ruby annotations or UI that depends on automatic bidi reordering.",
+    },
+    "html-template-subset": {
+        "title": "Browser template semantics are not implemented",
+        "explanation": "A template is hidden ordinary DOM, not a detached DocumentFragment with cloneable content.",
+        "action": "Create the small component tree explicitly with document.createElement()/append(), then keep repeated list data bounded.",
+    },
+    "html-media-element-deferred": {
+        "title": "HTML video and text tracks are not implemented",
+        "explanation": "JellyFrame has no HTMLMediaElement playback pipeline or browser text-track model.",
+        "action": "For product-owned live preview, declare media.video.frame and use the host frame provider; otherwise use a package-local image, Canvas, or a system media component.",
+    },
+    "html-audio-element-subset": {
+        "title": "HTML audio markup is not implemented",
+        "explanation": "The host-optional Audio() V0 helper is not an HTMLMediaElement or <audio> markup implementation.",
+        "action": "Declare media.audio.playback and use the documented Audio() V0 API with package-local audio resources, while providing a visible no-audio fallback.",
+    },
+    "html-rich-text-deferred": {
+        "title": "Rich-text editing is not implemented",
+        "explanation": "JellyFrame provides bounded single-value input and textarea controls, not contenteditable, Selection, Range or browser editing commands.",
+        "action": "Use input/textarea for bounded text fields, or delegate a document editor to a product-owned system component.",
     },
     "target-gate-not-accepted": {
         "title": "Target gate is not accepted",
@@ -1220,18 +1270,32 @@ def specialize_developer_advice(entry: dict, code: str, parsed: dict) -> None:
             "fetch": "Use XMLHttpRequest GET V0 when the manifest and host allow network.fetch.",
             "Promise": "Use bounded callback-style host completions; Promise/microtask scheduling is not available.",
             "innerHTML": "Use textContent or explicit DOM creation APIs.",
-            "getBoundingClientRect": "Keep geometry in declared CSS or wait for a documented host layout snapshot.",
             "pointer capture": "Track pointerdown/pointermove/pointerup inside the app viewport without pointer capture.",
             "dynamic import": "Bundle static package-local modules at package time or keep classic scripts.",
             "WebSocket": "Use XMLHttpRequest GET V0 for bounded polling, or ask the host for a semantic push service.",
             "EventSource": "Use host-owned polling or a semantic push service instead of a browser event stream.",
             "BroadcastChannel": "Use app-local state or a host-owned system event; cross-app browser messaging is unavailable.",
+            "MessageChannel": "Use app-local state or a host-owned service completion; browser message ports are unavailable.",
             "DataTransfer": "Use pointer/touch events and app-local drag state; browser drag-and-drop payloads are unavailable.",
             "Worker": "Submit bounded compute work through a host service; workers cannot access the app DOM or renderer.",
             "serviceWorker": "Use the host app lifecycle and package updater; Service Worker is not part of the runtime model.",
+            "sessionStorage": "Use manifest-gated app-private localStorage for small persistent preferences, or retain transient state in the current app route.",
+            "document.cookie": "Use a host-approved app-private credential/session service; browser cookies are unavailable.",
+            "storage event": "Keep state within the current app or ask the host for an explicit system event; app-private storage has no browser storage event.",
+            "Selection/Range": "Use bounded input/textarea fields, or delegate rich document editing to a system component.",
+            "browser navigation": "Use location.hash and the documented fragment-only history subset for app-local routes; let the system shell own app navigation.",
         }
         if api in alternatives:
             entry["action"] = alternatives[api]
+        return
+
+    if code == "script-api-subset":
+        api = str(parsed.get("api", "") or "")
+        if api == "getBoundingClientRect":
+            entry["action"] = (
+                "Read geometry after a completed frame. The returned numeric snapshot is client-relative, "
+                "does not force synchronous layout, and excludes transform/nested-scroll geometry."
+            )
         return
 
     if code == "html-element-unsupported":

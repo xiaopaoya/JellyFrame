@@ -1,6 +1,6 @@
 # CSSOM And Cascade Scope
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 Last checked against CSSOM and CSS Cascade references on 2026-06-13:
 
@@ -84,12 +84,17 @@ exist as fallbacks.
   plus `border-color`, `border-radius`.
 - `width`, `height`, `min-width`, `min-height`, `max-width`, `max-height`, including
   layout-resolved percentage values for these sizing properties.
-- `color`, `background-color`.
-- `font-size`, `line-height`, `text-align`, `text-indent`, ASCII-subset
-  `text-transform`.
-- `box-sizing`, `overflow`, `opacity`, `position`, `z-index`, `transform`.
+- `color`, `background-color`, bounded gradient/background-image layers and
+  package-local image backgrounds.
+- `font-size`, `line-height`, `letter-spacing`, `white-space`, `text-wrap`,
+  `overflow-wrap`, `text-overflow`, `text-align`, `text-indent` and
+  ASCII-subset `text-transform`.
+- `box-sizing`, `visibility`, `overflow`, `opacity`, `position`, `z-index`,
+  `transform`.
 - Embedded-app layout fields: `aspect-ratio`, `gap`, `column-gap`,
-  `row-gap`, simplified grid minimum track sizing, `grid-auto-rows` minimum
-  sizing and `grid-column`/`grid-row` spans.
+  `row-gap`, simplified grid row/column track sizing, `grid-auto-rows`,
+  numeric `grid-column`/`grid-row` placement and direct-child flex `order`.
+- Explicit one-level CSS nesting with `&`, expanded while retaining bounded
+  selector and source-order rules.
 - `box-shadow` is stored and painted as a cheap rounded translucent rectangle;
   blur is approximated, not rasterized.

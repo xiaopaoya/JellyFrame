@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Band System Shell</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <main class="band-shell" aria-label="Band system shell">
+    <section id="view-home" class="band-view active" aria-label="Watch face">
+      <header class="status"><strong>LIVE</strong><span>MON</span><span>82%</span></header>
+      <p class="eyebrow">GOOD MORNING</p>
+      <h1>09:41</h1>
+      <p class="subtle">FLOW / MOVE</p>
+      <div class="metric-grid">
+        <button id="home-to-activity" class="metric coral"><span class="metric-icon heart-icon"><i></i><b></b><em></em></span><strong>72</strong><small>BPM</small></button>
+        <button id="home-to-apps" class="metric lime"><span class="metric-icon steps-icon"><i></i><b></b><em></em></span><strong>6.8K</strong><small>STEPS</small></button>
+      </div>
+      <button id="home-to-weather" class="weather-card"><span><strong>26 C</strong><small>Shanghai, clear</small></span><b></b></button>
+      <div class="dock"><button id="home-to-quick">QUICK</button><button id="home-to-notices">3 NEW</button></div>
+    </section>
+
+    <section id="view-apps" class="band-view" aria-label="App launcher">
+      <header class="topline"><button id="apps-home">BACK</button><strong>APPS</strong><span>1/1</span></header>
+      <div class="app-grid">
+        <button id="apps-activity" class="app-tile coral"><span class="app-icon activity-icon"><i></i></span><small>Activity</small></button>
+        <button id="apps-weather" class="app-tile sky"><span class="app-icon weather-icon"><i></i><b></b></span><small>Weather</small></button>
+        <button class="app-tile violet"><span class="app-icon sleep-icon"><i></i></span><small>Sleep</small></button>
+        <button class="app-tile lime"><span class="app-icon workout-icon"><i></i><b></b><em></em></span><small>Workout</small></button>
+        <button class="app-tile peach"><span class="app-icon music-icon"><i></i><b></b><em></em></span><small>Music</small></button>
+        <button id="apps-quick" class="app-tile slate"><span class="app-icon settings-icon"><i></i><b></b><em></em></span><small>Settings</small></button>
+      </div>
+      <p class="footer-note">System apps are host-owned.</p>
+    </section>
+
+    <section id="view-activity" class="band-view" aria-label="Activity summary">
+      <header class="topline"><button id="activity-home">BACK</button><strong>ACTIVITY</strong><span>TODAY</span></header>
+      <div class="ring-card">
+        <div class="activity-ring"><div class="ring-core"><strong>82%</strong><small>GOAL</small></div></div>
+        <p>Move 492 / 600 kcal</p>
+      </div>
+      <div class="stat-row"><article><strong>6,842</strong><small>STEPS</small></article><article><strong>5.2</strong><small>KM</small></article><article><strong>42</strong><small>MIN</small></article></div>
+      <div class="tip"><b>+</b><span>108 kcal left for today's move goal.</span></div>
+    </section>
+
+    <section id="view-weather" class="band-view" aria-label="Weather">
+      <header class="topline"><button id="weather-home">BACK</button><strong>WEATHER</strong><span>NOW</span></header>
+      <div class="weather-hero"><strong>26 C</strong><span>CLEAR</span><small>Feels like 28 C</small><b>SUN</b></div>
+      <div class="forecast"><article><span>10</span><b>26</b><i></i></article><article><span>12</span><b>29</b><i></i></article><article><span>14</span><b>31</b><i></i></article><article><span>16</span><b>30</b><i></i></article></div>
+      <div class="tip sky-tip"><b>AIR</b><span>Good air quality. Light south wind.</span></div>
+    </section>
+
+    <section id="view-quick" class="band-view" aria-label="Quick settings">
+      <header class="topline"><button id="quick-home">BACK</button><strong>QUICK</strong><span>82%</span></header>
+      <div class="quick-grid"><button class="quick-on">BT</button><button>MOON</button><button class="quick-on">LIFT</button><button>LOCK</button><button class="quick-on">HAPTIC</button><button>LAMP</button></div>
+      <div class="brightness"><span>BRIGHT</span><div><i></i></div><b>68</b></div>
+      <p class="footer-note">Hardware actions require host approval.</p>
+    </section>
+
+    <section id="view-notices" class="band-view" aria-label="Notifications">
+      <header class="topline"><button id="notices-home">BACK</button><strong>NOTICES</strong><span>3</span></header>
+      <article class="notice"><b>MSG</b><div><strong>Lin Yi</strong><p>The new interaction draft is ready.</p></div></article>
+      <article class="notice"><b>RUN</b><div><strong>Activity</strong><p>Move goal is 82 percent complete.</p></div></article>
+      <article class="notice"><b>CAL</b><div><strong>Calendar</strong><p>FirmwareSyncQueueAwaitingApproval</p></div></article>
+      <button class="clear">CLEAR ALL</button>
+    </section>
+  </main>
+</body>
+</html>

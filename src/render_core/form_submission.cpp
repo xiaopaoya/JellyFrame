@@ -5,6 +5,7 @@
 #include "render_core/text_scan.h"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <string_view>
 #include <utility>
@@ -79,6 +80,19 @@ bool already_reported_radio_group(const std::vector<std::string>& groups, const 
     return std::find(groups.begin(), groups.end(), name) != groups.end();
 }
 
+bool ascii_equals_ignore_case(std::string_view left, std::string_view right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (std::tolower(static_cast<unsigned char>(left[index])) !=
+            std::tolower(static_cast<unsigned char>(right[index]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 SubmitEvent::SubmitEvent(const Node* submitter)
@@ -108,9 +122,106 @@ bool is_form_submitter(const Node& node) {
     }
     if (node.tag_name == "button") {
         const std::string& type = node.attribute("type");
-        return type.empty() || type == "submit";
+        return type.empty() || ascii_equals_ignore_case(type, "submit");
     }
-    return node.tag_name == "input" && (node.attribute("type") == "submit" || node.attribute("type") == "image");
+    return node.tag_name == "input" &&
+        (ascii_equals_ignore_case(node.attribute("type"), "submit") ||
+         ascii_equals_ignore_case(node.attribute("type"), "image"));
+}
+
+bool is_form_resetter(const Node& node) {
+    if (node.type != NodeType::Element || is_disabled_form_control(node)) {
+        return false;
+    }
+    return (node.tag_name == "button" || node.tag_name == "input") &&
+        ascii_equals_ignore_case(node.attribute("type"), "reset");
+}
+
+bool form_control_will_validate(const Node& node) {
+    if (!is_form_control(node) || is_disabled_form_control(node)) {
+        return false;
+    }
+    const FormControlKind kind = form_control_kind(node);
+    return kind != FormControlKind::Button && kind != FormControlKind::File;
+}
+
+FormControlValidationResult validate_form_control(const Node& node) {
+    FormControlValidationResult result;
+    if (!form_control_will_validate(node)) {
+        return result;
+    }
+
+    if (const FormControlState* state = form_control_state_if_created(node);
+        state != nullptr && !state->custom_validation_message.empty()) {
+        result.custom_error = true;
+        return result;
+    }
+
+    const FormControlKind kind = form_control_kind(node);
+    const std::string value = form_control_value(node);
+    if (has_attribute(node, "required")) {
+        if (kind == FormControlKind::Checkbox) {
+            result.value_missing = !form_control_checked(node);
+        } else if (kind == FormControlKind::Radio) {
+            const Node* owner = form_owner(node);
+            result.value_missing = owner != nullptr
+                ? !radio_group_checked(*owner, node.attribute("name"))
+                : !form_control_checked(node);
+        } else {
+            result.value_missing = value.empty();
+        }
+    }
+    if (!result.value_missing && (kind == FormControlKind::Text || kind == FormControlKind::TextArea)) {
+        const std::size_t length = utf8_codepoint_count(value);
+        const int min_length = nonnegative_integer_attribute(node, "minlength");
+        const int max_length = nonnegative_integer_attribute(node, "maxlength");
+        result.too_short = min_length >= 0 && length < static_cast<std::size_t>(min_length);
+        result.too_long = !result.too_short && max_length >= 0 && length > static_cast<std::size_t>(max_length);
+    }
+    return result;
+}
+
+bool check_form_control_validity(Node& node) {
+    const FormControlValidationResult validation = validate_form_control(node);
+    if (!validation.valid()) {
+        Event invalid("invalid", false, true);
+        dispatch_event(node, invalid);
+    }
+    return validation.valid();
+}
+
+std::string form_control_validation_message(const Node& node) {
+    const FormControlValidationResult validation = validate_form_control(node);
+    if (validation.custom_error) {
+        const FormControlState* state = form_control_state_if_created(node);
+        return state != nullptr ? state->custom_validation_message : std::string{};
+    }
+    if (validation.value_missing) {
+        return "Please fill out this field.";
+    }
+    if (validation.too_short) {
+        return "Value is too short.";
+    }
+    if (validation.too_long) {
+        return "Value is too long.";
+    }
+    return {};
+}
+
+bool set_form_control_custom_validity(Node& node, std::string message) {
+    if (!is_form_control(node)) {
+        return false;
+    }
+    const FormControlState* existing = form_control_state_if_created(node);
+    if (message.empty() && (existing == nullptr || existing->custom_validation_message.empty())) {
+        return false;
+    }
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.custom_validation_message == message) {
+        return false;
+    }
+    state.custom_validation_message = std::move(message);
+    return true;
 }
 
 FormValidationResult validate_form(const Node& form) {
@@ -125,36 +236,23 @@ FormValidationResult validate_form(const Node& form) {
     while (!pending.empty()) {
         const Node* current = pending.back();
         pending.pop_back();
-        if (current != &form && is_form_control(*current) && !is_disabled_form_control(*current)) {
+        if (current != &form && form_control_will_validate(*current)) {
+            const FormControlValidationResult validation = validate_form_control(*current);
             const FormControlKind kind = form_control_kind(*current);
-            const std::string value = form_control_value(*current);
-            if (has_attribute(*current, "required")) {
-                bool missing = false;
-                if (kind == FormControlKind::Checkbox) {
-                    missing = !form_control_checked(*current);
-                } else if (kind == FormControlKind::Radio) {
-                    const std::string& name = current->attribute("name");
-                    if (!already_reported_radio_group(reported_radio_groups, name)) {
-                        missing = !radio_group_checked(form, name);
-                        reported_radio_groups.push_back(name);
-                    }
-                } else if (kind != FormControlKind::Button && kind != FormControlKind::File) {
-                    missing = value.empty();
-                }
-                if (missing) {
+            if (validation.value_missing && kind == FormControlKind::Radio) {
+                const std::string& name = current->attribute("name");
+                if (!already_reported_radio_group(reported_radio_groups, name)) {
                     result.issues.push_back(FormValidationIssue{const_cast<Node*>(current), FormValidationFailure::ValueMissing});
-                    continue;
+                    reported_radio_groups.push_back(name);
                 }
-            }
-            if (kind == FormControlKind::Text || kind == FormControlKind::TextArea) {
-                const std::size_t length = utf8_codepoint_count(value);
-                const int min_length = nonnegative_integer_attribute(*current, "minlength");
-                const int max_length = nonnegative_integer_attribute(*current, "maxlength");
-                if (min_length >= 0 && length < static_cast<std::size_t>(min_length)) {
-                    result.issues.push_back(FormValidationIssue{const_cast<Node*>(current), FormValidationFailure::TooShort});
-                } else if (max_length >= 0 && length > static_cast<std::size_t>(max_length)) {
-                    result.issues.push_back(FormValidationIssue{const_cast<Node*>(current), FormValidationFailure::TooLong});
-                }
+            } else if (validation.custom_error) {
+                result.issues.push_back(FormValidationIssue{const_cast<Node*>(current), FormValidationFailure::CustomError});
+            } else if (validation.value_missing) {
+                result.issues.push_back(FormValidationIssue{const_cast<Node*>(current), FormValidationFailure::ValueMissing});
+            } else if (validation.too_short) {
+                result.issues.push_back(FormValidationIssue{const_cast<Node*>(current), FormValidationFailure::TooShort});
+            } else if (validation.too_long) {
+                result.issues.push_back(FormValidationIssue{const_cast<Node*>(current), FormValidationFailure::TooLong});
             }
         }
         for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
@@ -225,6 +323,39 @@ FormSubmitResult request_form_submit(Node& form, const Node* submitter) {
 FormSubmitResult request_form_submit_from_control(Node& control) {
     Node* form = form_owner(control);
     return form != nullptr && is_form_submitter(control) ? request_form_submit(*form, &control) : FormSubmitResult{};
+}
+
+bool reset_form(Node& form) {
+    if (form.type != NodeType::Element || form.tag_name != "form") {
+        return false;
+    }
+
+    Event event("reset", true, true);
+    if (!dispatch_event(form, event)) {
+        return false;
+    }
+
+    std::vector<Node*> pending;
+    pending.push_back(&form);
+    while (!pending.empty()) {
+        Node* current = pending.back();
+        pending.pop_back();
+        if (current != &form && is_form_control(*current)) {
+            // Initial control state is derived lazily from DOM attributes/text.
+            // Dropping an existing state restores that authored default without a snapshot.
+            current->form_control_state.reset();
+            mark_dirty(*current, DomDirtyStyle | DomDirtyPaint);
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+    return true;
+}
+
+bool reset_form_from_control(Node& control) {
+    Node* form = form_owner(control);
+    return form != nullptr && is_form_resetter(control) && reset_form(*form);
 }
 
 } // namespace jellyframe

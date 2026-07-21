@@ -349,6 +349,20 @@ ESP32-S3 映射：
 
 core 负责 hit testing、focus、activation、DOM event dispatch 和基础表单控件状态更新。
 
+### 宿主拥有的模态输入门
+
+宿主打开 dialog 时，把当前 `dialog` 节点安装为输入根：
+
+```cpp
+input.set_modal_root(dialog_node);
+// pointer 命中、焦点遍历和激活现在只能落在 dialog_node 子树内。
+input.set_modal_root(nullptr);
+```
+
+该 root 必须属于当前 layer tree。这只是输入边界：不会创建浏览器 top layer、backdrop、点击外部关闭或全局
+inert traversal。替换 layer tree 或销毁 document 前宿主必须清除 root。HTML/JS `showModal()` 生命周期桥接
+是独立后续切片；port 不应自行复制临时 hit-test 过滤来伪造该语义。
+
 ## 文本 API
 
 头文件：

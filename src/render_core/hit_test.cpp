@@ -75,6 +75,9 @@ HitTestResult HitTester::hit_test_box(const LayoutBox& box, int x, int y) const 
     if (box.node == nullptr) {
         return {};
     }
+    if (box.style.visibility_hidden) {
+        return {};
+    }
     return make_result(box, x, y);
 }
 
@@ -116,7 +119,7 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer,
     Rect visual_bounds = layer.bounds;
     visual_bounds.x += layer_offset_x;
     visual_bounds.y += layer_offset_y;
-    if (layer.box == nullptr || !contains(visual_bounds, x, y)) {
+    if (layer.box == nullptr || !contains(visual_bounds, x, y) || layer.box->style.visibility_hidden) {
         return {};
     }
     const int document_x = x - layer_offset_x;

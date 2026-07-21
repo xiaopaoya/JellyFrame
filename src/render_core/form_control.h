@@ -30,6 +30,7 @@ struct FormControlState {
     int min = 0;
     int max = 100;
     int step = 1;
+    std::string custom_validation_message;
     bool dirty = false;
 };
 

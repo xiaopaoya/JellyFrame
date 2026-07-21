@@ -32,6 +32,7 @@ struct ScriptNodeBinding;
 struct ScriptLocalStorageBinding;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
+struct LayoutBox;
 
 enum class ScriptEvaluationStatus {
     Ok,
@@ -70,8 +71,10 @@ struct JerryScriptRuntimeOptions {
     std::size_t max_animation_frame_callbacks = 16;
     std::size_t max_audio_elements = 8;
     std::size_t max_geolocation_requests = 4;
+    std::size_t max_route_history_entries = 16;
     std::uint32_t max_execution_check_count = 0;
     std::uint32_t execution_check_interval = 16;
+    std::size_t max_layout_snapshot_nodes = 32;
 };
 
 struct ScriptRuntimeStatistics {
@@ -108,6 +111,8 @@ public:
     void bind_canvas_2d(Canvas2DRegistry& canvas);
     void clear_app_services();
     void clear_canvas_2d();
+    // Records numeric client rects only for elements that requested measurement.
+    void capture_layout_snapshot(const LayoutBox& root, int client_offset_x = 0, int client_offset_y = 0);
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
     bool execution_watchdog_supported() const;
     bool take_execution_watchdog_interrupt();
@@ -143,6 +148,7 @@ private:
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
     std::vector<std::unique_ptr<ScriptCanvasGradient>> canvas_gradients_;
     std::vector<ScriptNodeBinding*> node_bindings_;
+    std::vector<ScriptNodeBinding*> layout_snapshot_bindings_;
     std::vector<ScriptLocalStorageBinding*> local_storage_bindings_;
     std::vector<Node*> observed_nodes_;
     JerryScriptRuntimeOptions options_;
@@ -157,6 +163,8 @@ private:
     Node* bound_document_ = nullptr;
     ScriptSystemState system_state_;
     std::string route_fragment_;
+    std::vector<std::string> route_history_;
+    std::size_t route_history_index_ = 0;
     std::uint32_t execution_watchdog_depth_ = 0;
     std::uint32_t execution_watchdog_remaining_ = 0;
     bool execution_watchdog_interrupted_ = false;
@@ -182,6 +190,10 @@ private:
     void dispatch_window_event(const char* type);
     std::string location_hash() const;
     void set_location_hash(std::string value);
+    std::size_t route_history_length() const;
+    void push_route_history(std::string value);
+    void replace_route_history(std::string value);
+    bool traverse_route_history(int delta);
     void clear_script_event_listeners();
     std::uint32_t add_timer(std::uint32_t callback_value, std::uint32_t delay_ms, bool repeat);
     void clear_timer(std::uint32_t id);

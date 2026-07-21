@@ -1,6 +1,6 @@
 # JellyFrame 上手指南
 
-> 最后更新：2026-07-09；适用版本：0.6.0-dev
+> 最后更新：2026-07-22；适用版本：0.5.0-dev
 
 本文面向第一次打开这个仓库的开发者，说明 JellyFrame 是什么、仓库如何组织、如何编译运行、
 Release 目录里每个 exe 是做什么的，以及应该按什么顺序阅读项目。
@@ -49,13 +49,13 @@ JellyFrame 明确不提供：
 - 远程 HTML/CSS/script/image 页面加载、`fetch`、WebSocket；
 - cookie、IndexedDB 或通用文件系统 API；
 - 完整 DOM、query selector APIs、Shadow DOM、Web Components；
-- ES modules 或完整浏览器加载算法；
+- 完整浏览器加载算法、动态 module 或远程 module；
 - 完整 Canvas、SVG 或浏览器级图片/视频栈；
 - 完整 Flexbox/Grid/positioning/animation/filter 行为；
 - GPU 合成或像素级浏览器兼容渲染。
 
-宿主可选的异步 `XMLHttpRequest` GET V0、`localStorage` V0、包内 BMP 图片、`Audio` V0
-和可选 Canvas 2D V0 已经存在，但它们不是浏览器完整实现，必须按 capability matrix 和
+宿主可选的异步 `XMLHttpRequest` GET V0、`localStorage` V0、包内 BMP 图片、`Audio` V0、
+package-time static module 和可选 Canvas 2D V0.4 已经存在，但它们不是浏览器完整实现，必须按 capability matrix 和
 manifest 能力声明使用。
 依赖某个功能前，请先查
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。

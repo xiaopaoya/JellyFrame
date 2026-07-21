@@ -231,6 +231,10 @@ if(JELLYFRAME_BUILD_BENCHMARKS)
     add_executable(jellyframe_app_runtime_microbench src/app_runtime/benchmarks/app_runtime_bench.cpp)
     target_link_libraries(jellyframe_app_runtime_microbench PRIVATE jellyframe_app_runtime)
     add_jellyframe_tool(jellyframe_virtual_bench ports/virtual_board/virtual_bench.cpp)
+    if(JELLYFRAME_BUILD_SCRIPTING)
+        add_executable(jellyframe_script_microbench src/script/benchmarks/script_microbench.cpp)
+        target_link_libraries(jellyframe_script_microbench PRIVATE jellyframe_script)
+    endif()
 endif()
 
 if(JELLYFRAME_BUILD_TESTS)
@@ -280,7 +284,10 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_RENDER_CORE_TEST_SOURCES}
     )
     jellyframe_enable_test_asserts(jellyframe_render_core_tests)
-    add_test(NAME jellyframe_render_core_tests COMMAND jellyframe_render_core_tests)
+    add_test(
+        NAME jellyframe_render_core_tests
+        COMMAND jellyframe_render_core_tests
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
         src/app_runtime/tests/app_capability_broker_tests.cpp
@@ -319,6 +326,18 @@ if(JELLYFRAME_BUILD_TESTS)
             NAME jellyframe_tool_package_preflight_tests
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_test(
+            NAME jellyframe_html_support_table_consistency
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/html_support_table_tests.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_test(
+            NAME jellyframe_css_support_table_consistency
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/css_support_table_tests.py
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         add_test(
@@ -387,6 +406,17 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_cli_check_band_system_shell
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        check
+                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/system/band_system_shell
+                        --target rect-172x320
+                        --report ${CMAKE_BINARY_DIR}/test_outputs/band_system_shell.report.json
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
                 NAME jellyframe_cli_check_canvas_smoke_package
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
@@ -444,11 +474,16 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     if(WIN32 AND JELLYFRAME_BUILD_EXAMPLES)
+        set(JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py
+            $<TARGET_FILE:jellyframe_win32_browser>)
+        if(JELLYFRAME_BUILD_SCRIPTING)
+            list(APPEND JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS --scripting)
+        endif()
         add_test(
             NAME jellyframe_win32_browser_cli_contract
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py
-                    $<TARGET_FILE:jellyframe_win32_browser>
+            COMMAND ${JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         add_test(
@@ -638,6 +673,16 @@ if(JELLYFRAME_BUILD_TESTS)
                         --capture ${CMAKE_BINARY_DIR}/test_outputs/wearable_launcher.bmp
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_wearable_launcher_capture PROPERTIES
+                PASS_REGULAR_EXPRESSION "JellyFrame Win32 browser capture"
+                FAIL_REGULAR_EXPRESSION "\\[warning\\]|\\[error\\]")
+
+            add_test(
+                NAME jellyframe_win32_band_system_shell_capture
+                COMMAND $<TARGET_FILE:jellyframe_win32_browser>
+                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/system/band_system_shell
+                        --capture ${CMAKE_BINARY_DIR}/test_outputs/band_system_shell.bmp
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_band_system_shell_capture PROPERTIES
                 PASS_REGULAR_EXPRESSION "JellyFrame Win32 browser capture"
                 FAIL_REGULAR_EXPRESSION "\\[warning\\]|\\[error\\]")
 

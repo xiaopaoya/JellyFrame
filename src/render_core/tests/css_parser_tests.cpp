@@ -63,6 +63,41 @@ void splits_selector_lists() {
     check(stylesheet[2].selector == ".title", "class selector");
 }
 
+void expands_single_level_explicit_css_nesting() {
+    const Stylesheet stylesheet = parse(
+        ".card { color: #111111; &:hover { color: #ff0000; } & .label { color: #0000ff; } }");
+    check(stylesheet.size() == 3, "single-level nesting expands parent declarations and both nested rules");
+    check(stylesheet[0].selector == ".card", "nested source keeps parent declaration order");
+    check(stylesheet[1].selector == ".card:hover", "nested pseudo selector substitutes explicit parent marker");
+    check(stylesheet[2].selector == ".card .label", "nested descendant selector substitutes explicit parent marker");
+
+    auto card = make_element("div");
+    card->attributes["class"] = "card";
+    auto label = make_element("span");
+    label->attributes["class"] = "label";
+    Node& label_node = card->append_child(std::move(label));
+    StyleResolver resolver(stylesheet, StyleResolverOptions{128, card.get(), nullptr, nullptr, nullptr});
+    const Style hovered_card = resolver.resolve(*card);
+    const Style label_style = resolver.resolve(label_node);
+    check(hovered_card.color.r == 255 && hovered_card.color.g == 0,
+          "expanded hover selector enters the existing interaction selector path");
+    check(label_style.color.b == 255, "expanded descendant selector enters the existing selector path");
+}
+
+void rejects_nested_css_outside_explicit_single_level_subset() {
+    VectorDiagnosticSink diagnostics;
+    CssParser parser;
+    CssParserOptions options;
+    options.diagnostics = &diagnostics;
+    const Stylesheet stylesheet = parser.parse(
+        ".card { color: #111111; .label { color: #ff0000; } & .nested { & .deep { color: #0000ff; } } }",
+        options);
+    check(stylesheet.size() == 1 && stylesheet[0].selector == ".card",
+          "unsupported nesting does not corrupt surrounding parent declarations");
+    check(has_diagnostic_code(diagnostics, "css-nesting-skipped"),
+          "unsupported nesting reports a stable diagnostic");
+}
+
 void skips_enhancement_blocks_without_corrupting_following_rules() {
     const Stylesheet stylesheet = parse(
         "@supports (color: oklch(50% 0.2 30)) { .modern { color: oklch(50% 0.2 30); } }"
@@ -107,29 +142,36 @@ void supports_queries_flatten_safe_declaration_subset() {
         "@supports (display: grid) { .grid { display: grid; } }"
         "@supports ((display: flex) and (gap: 8px)) { .flex { display: flex; gap: 8px; } }"
         "@supports (background: conic-gradient(#22cc88 0% 76%, rgba(16, 32, 48, .35) 76% 100%)) { .ring { width: 44px; } }"
+        "@supports (background: radial-gradient(circle at 80% 20%, rgba(255,255,255,.2), transparent), linear-gradient(to bottom right, #315a7a, #142331)) { .gel { height: 40px; } }"
+        "@supports (color: color-mix(in srgb, #ffffff 80%, #62dff7)) { .tint { color: #62dff7; } }"
         "@supports not (color: oklch(50% 0.2 30)) { .fallback { color: #123456; } }"
         "@supports ((display: grid) or (unknown-prop: 1px)) { .either { display: block; } }"
         "@supports ((display: grid) and (gap: 8px) or (color: red)) { .mixed { color: red; } }"
         "@supports selector(:has(*)) { .has { color: red; } }");
 
-    check(stylesheet.size() == 5, "supported @supports subset flattens matching safe blocks");
+    check(stylesheet.size() == 7, "supported @supports subset flattens matching safe blocks");
     check(stylesheet[0].selector == ".grid", "display grid supports selector");
     check(stylesheet[1].selector == ".flex", "and supports selector");
     check(stylesheet[2].selector == ".ring", "conic background supports selector");
-    check(stylesheet[3].selector == ".fallback", "not unsupported supports selector");
-    check(stylesheet[4].selector == ".either", "or supports selector");
+    check(stylesheet[3].selector == ".gel", "two-layer background supports selector");
+    check(stylesheet[4].selector == ".tint", "color-mix supports selector");
+    check(stylesheet[5].selector == ".fallback", "not unsupported supports selector");
+    check(stylesheet[6].selector == ".either", "or supports selector");
 }
 
 void supports_queries_apply_representative_supported_properties() {
     const Stylesheet stylesheet = parse(
         "@supports (display: flex) { .probe { display: flex; flex-wrap: wrap; gap: 6px; } }"
         "@supports (flex-direction: column) { .probe { flex-direction: column; } }"
+        "@supports (order: -2) { .probe { order: -2; } }"
         "@supports (align-self: flex-end) { .probe { align-self: flex-end; } }"
         "@supports (align-content: space-between) { .probe { align-content: space-between; } }"
         "@supports (grid-template-columns: repeat(2, 1fr)) { .probe { display: grid; grid-template-columns: repeat(2, 1fr); } }"
         "@supports (object-fit: cover) { .probe { object-fit: cover; image-rendering: pixelated; } }"
         "@supports (border-right: 2px solid #123456) { .probe { border-right: 2px solid #123456; } }"
         "@supports (text-overflow: ellipsis) { .probe { white-space: nowrap; text-overflow: ellipsis; } }"
+        "@supports (visibility: hidden) { .probe { visibility: hidden; } }"
+        "@supports (visibility: collapse) { .probe { color: #ff0000; } }"
         "@supports (justify-content: space-evenly) { .probe { justify-content: space-evenly; } }"
         "@supports (overflow-y: auto) { .probe { overflow-y: auto; } }"
         "@supports (overflow-y: hidden) { .probe { color: #ff0000; } }"
@@ -145,6 +187,7 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.grid_template_column_count == 2, "grid-template-columns applies after @supports");
     check(style.flex_wrap, "flex-wrap applies after @supports");
     check(style.flex_direction == FlexDirection::Column, "flex-direction column applies after @supports");
+    check(style.flex_order == -2, "integer flex order applies after @supports");
     check(style.align_self == AlignItems::End, "align-self applies after @supports");
     check(style.align_content == JustifyContent::SpaceBetween, "align-content applies after @supports");
     check(style.column_gap == 6 && style.row_gap == 6, "gap applies after @supports");
@@ -152,12 +195,26 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.image_rendering == ImageRendering::Pixelated, "image-rendering applies after @supports");
     check(style.border_width.right == 2, "border-right applies after @supports");
     check(style.white_space_nowrap && style.text_overflow_ellipsis, "text overflow controls apply after @supports");
+    check(style.visibility_hidden, "visibility hidden applies after @supports");
     check(style.justify_content == JustifyContent::SpaceEvenly,
           "space-evenly justification applies after @supports");
     check(style.overflow == "auto", "overflow-y auto applies after @supports");
     check(style.background_paint == BackgroundPaintKind::RadialGradient,
           "background-image radial-gradient applies after @supports");
     check(style.color.r == 0 && style.color.g == 0 && style.color.b == 0, "unsupported @supports block is not applied");
+}
+
+void text_wrap_alias_reuses_bounded_white_space_behavior() {
+    auto label = make_element("span");
+    label->attributes["class"] = "label";
+    StyleResolver resolver(parse(
+        ".label { white-space: nowrap; }"
+        ".label { text-wrap: wrap; }"
+        "@supports (text-wrap: nowrap) { .label { text-wrap: nowrap; } }"));
+
+    const Style style = resolver.resolve(*label);
+    check(style.white_space_nowrap,
+          "text-wrap nowrap participates in the white-space cascade and @supports subset");
 }
 
 void style_struct_size_has_embedded_guardrail() {
@@ -250,6 +307,10 @@ void resolves_simple_css_custom_properties() {
     check(contextual_button_style.color.r == 0xdc && contextual_button_style.color.g == 0x26 &&
               contextual_button_style.color.b == 0x26,
           "contextual custom property resolution keeps inherited value");
+    check(custom_context.custom_property_scopes.size() == 3,
+          "contextual custom properties allocate scopes only for root, theme and inline overrides");
+    check(custom_context.matched_rule_cache.size() >= custom_context.custom_property_scopes.size(),
+          "contextual custom properties reuse matched selectors during style application");
 
     auto plain_document = html_parser.parse("<body><main><button>Go</button></main></body>");
     Node* plain_button = find_first_by_tag(*plain_document, "button");
@@ -260,6 +321,8 @@ void resolves_simple_css_custom_properties() {
           "plain contextual style resolves without custom properties");
     check(plain_context.custom_property_cache.empty(),
           "plain contextual style does not allocate empty custom property cache entries");
+    check(plain_context.custom_property_scopes.empty() && plain_context.matched_rule_cache.empty(),
+          "plain contextual style keeps custom-property scopes and selector matches empty");
 
     auto inline_document = html_parser.parse(
         "<body style='--accent:#654321'><button class='inline'>Go</button></body>");
@@ -279,8 +342,8 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
     Stylesheet stylesheet = parser.parse(
         ".gel { background: #102030; background: linear-gradient(to right, #102030, rgba(80, 120, 160, 0.5)); }"
         ".bad-color { color: #123456; color: linear-gradient(#ffffff, #000000); }"
-        ".fallback { background: #111111; background: linear-gradient(45deg, #ffffff, #000000); }"
-        ".fx { text-shadow: 0 1px 2px rgba(0,0,0,0.35); outline: 2px solid rgba(255,255,255,0.5); "
+        ".fallback { background: #111111; background: linear-gradient(46deg, #ffffff, #000000); }"
+        ".fx { text-shadow: 0 1px 2px rgba(0,0,0,0.35); outline: 2px solid rgba(255,255,255,0.5); outline-offset: 3px; "
         "text-decoration: underline; }",
         css_options);
 
@@ -314,13 +377,71 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
     check(fallback_style.background_paint == BackgroundPaintKind::Solid &&
               fallback_style.background_color.r == 0x11,
           "unsupported gradient does not replace earlier solid fallback");
-    check(!fx_style.text_shadow.empty() && fx_style.outline_width == 2 &&
+    check(fx_style.text_shadow.enabled && fx_style.text_shadow.color.a >= 88 && fx_style.text_shadow.color.a <= 90 &&
+              fx_style.outline_width == 2 &&
+              fx_style.outline_offset == 3 &&
               fx_style.outline_color.a >= 126 && fx_style.outline_color.a <= 128,
           "text-shadow and outline subset apply");
     check(fx_style.text_decoration_underline && !fx_style.text_decoration_line_through,
           "text-decoration underline applies");
     check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
           "unsupported gradient value is diagnosed by style resolver");
+
+    auto diagonal = make_element("div");
+    diagonal->attributes["class"] = "diagonal";
+    StyleResolver diagonal_resolver(parse(
+        ".diagonal { background: linear-gradient(to bottom left, #ffffff, #000000); }"));
+    const Style diagonal_style = diagonal_resolver.resolve(*diagonal);
+    check(diagonal_style.background_paint == BackgroundPaintKind::LinearGradient &&
+              diagonal_style.background_gradient_axis == GradientAxis::DiagonalDownLeft,
+          "linear-gradient stores diagonal direction subset");
+
+    auto angle = make_element("div");
+    angle->attributes["class"] = "angle";
+    StyleResolver angle_resolver(parse(
+        ".angle { background: linear-gradient(135deg, #ffffff, #000000); }"));
+    const Style angle_style = angle_resolver.resolve(*angle);
+    check(angle_style.background_paint == BackgroundPaintKind::LinearGradient &&
+              angle_style.background_gradient_axis == GradientAxis::DiagonalDownRight,
+          "linear-gradient maps common design-tool degree angles to the bounded diagonal raster path");
+}
+
+void color_mix_and_bounded_box_shadow_apply() {
+    auto card = make_element("div");
+    card->attributes["class"] = "card";
+    StyleResolver resolver(parse(
+        ".card { color: color-mix(in srgb, #ffffff 80%, #62dff7); "
+        "border: 1px solid color-mix(in srgb, #ffffff 20%, transparent); "
+        "box-shadow: 1px 4px 10px 2px rgba(98,223,247,.28); }"));
+    const Style style = resolver.resolve(*card);
+    check(style.color.r == 224 && style.color.g == 249 && style.color.b == 253,
+          "two-color srgb color-mix resolves explicit and implicit weights");
+    check(style.border_color.a >= 50 && style.border_color.a <= 52,
+          "color-mix can produce translucent borders");
+    check(style.box_shadow.enabled && style.box_shadow.offset_x == 1 && style.box_shadow.offset_y == 4 &&
+              style.box_shadow.blur == 10 && style.box_shadow.spread == 2,
+          "single bounded box-shadow stores geometry in computed style");
+    check(style.box_shadow.color.r == 98 && style.box_shadow.color.g == 223 &&
+              style.box_shadow.color.b == 247 && style.box_shadow.color.a >= 70 && style.box_shadow.color.a <= 72,
+          "box-shadow retains the authored shadow color and alpha");
+}
+
+void two_layer_background_keeps_base_and_highlight() {
+    auto card = make_element("div");
+    card->attributes["class"] = "card";
+    StyleResolver resolver(parse(
+        ".card { background: radial-gradient(circle at 78% 12%, rgba(255, 255, 255, 0.22) 0%, transparent 100%), "
+        "linear-gradient(to bottom right, #315a7a, #142331); }"));
+    const Style style = resolver.resolve(*card);
+    check(style.background_paint == BackgroundPaintKind::LinearGradient &&
+              style.background_gradient_axis == GradientAxis::DiagonalDownRight,
+          "two-layer background keeps the last CSS layer as the base paint");
+    const BackgroundPaint overlay = unpack_background_overlay(style.background_overlay_packed);
+    check(has_background_overlay(style.background_overlay_packed) && overlay.kind == BackgroundPaintKind::RadialGradient &&
+              overlay.axis == GradientAxis::RadialPosition,
+          "two-layer background keeps the first CSS layer as the top highlight");
+    check(overlay.stop_percent == 78 * 101 + 12,
+          "two-layer radial highlight retains percentage position");
 }
 
 void conic_gradient_background_applies_progress_subset() {
@@ -353,14 +474,18 @@ void radial_gradient_background_applies_center_circle_subset() {
     image->attributes["class"] = "image";
     auto fallback = make_element("div");
     fallback->attributes["class"] = "fallback";
+    auto highlight = make_element("div");
+    highlight->attributes["class"] = "highlight";
 
     StyleResolver resolver(parse(
         ".gel { background: radial-gradient(circle at center, rgba(240,255,252,.85) 0%, rgba(36,126,160,.20) 100%); }"
         ".image { background-color: #102030; background-image: radial-gradient(#ffffff, rgba(36,126,160,.20)); }"
+        ".highlight { background: radial-gradient(circle at 82% 12%, #ffffff 0%, #102030 100%); }"
         ".fallback { background: #102030; background: radial-gradient(ellipse, #fff, #000); }"));
 
     const Style gel_style = resolver.resolve(*gel);
     const Style image_style = resolver.resolve(*image);
+    const Style highlight_style = resolver.resolve(*highlight);
     const Style fallback_style = resolver.resolve(*fallback);
     check(gel_style.background_paint == BackgroundPaintKind::RadialGradient,
           "radial-gradient background selects radial paint");
@@ -371,9 +496,51 @@ void radial_gradient_background_applies_center_circle_subset() {
     check(image_style.background_paint == BackgroundPaintKind::RadialGradient &&
               image_style.background_color.r == 255,
           "background-image accepts radial-gradient image subset");
+    check(highlight_style.background_paint == BackgroundPaintKind::RadialGradient &&
+              highlight_style.background_gradient_axis == GradientAxis::RadialPosition &&
+              highlight_style.background_gradient_stop_percent == 82 * 101 + 12,
+          "radial-gradient stores bounded percentage center position");
     check(fallback_style.background_paint == BackgroundPaintKind::Solid &&
               fallback_style.background_color.r == 0x10,
           "unsupported radial-gradient does not clear earlier fallback");
+}
+
+void package_background_image_url_is_bounded_and_preserves_background_color() {
+    auto cover = make_element("div");
+    cover->attributes["class"] = "cover";
+    auto invalid = make_element("div");
+    invalid->attributes["class"] = "invalid";
+    auto replacement = make_element("div");
+    replacement->attributes["class"] = "replacement";
+
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    StyleResolver resolver(parse(
+        ".cover { background-color: #102030; background-image: url('/assets/Cover.bmp'); }"
+        ".replacement { background: linear-gradient(#ffffff, #000000); "
+        "background-image: url('/assets/cover.bmp'); }"
+        ".invalid { background-color: #102030; background-image: url('https://example.invalid/cover.bmp'); }"),
+        options);
+
+    const Style cover_style = resolver.resolve(*cover);
+    const Style invalid_style = resolver.resolve(*invalid);
+    const Style replacement_style = resolver.resolve(*replacement);
+    const std::uint16_t resource_id = background_image_resource_id(cover_style.background_overlay_packed);
+    check(resource_id != 0 && has_background_image_resource(cover_style.background_overlay_packed),
+          "absolute package url stores a compact background image resource id");
+    const std::string* resource_url = resolver.background_image_resource_url(resource_id);
+    check(resource_url != nullptr && *resource_url == "/assets/Cover.bmp",
+          "background image resource keeps the case-sensitive package path");
+    check(cover_style.background_color.r == 0x10 && cover_style.background_color.g == 0x20,
+          "background-image url preserves the existing background color fallback");
+    check(replacement_style.background_paint == BackgroundPaintKind::Solid &&
+              replacement_style.background_color.a == 0 &&
+              has_background_image_resource(replacement_style.background_overlay_packed),
+          "background-image URL replaces an earlier gradient image layer");
+    check(!has_background_image_resource(invalid_style.background_overlay_packed) &&
+              invalid_style.background_color.r == 0x10,
+          "remote background image URL is rejected without clearing the fallback");
 }
 
 void unsupported_conic_gradient_reports_specific_diagnostic() {
@@ -405,7 +572,7 @@ void unsupported_radial_gradient_reports_specific_diagnostic() {
     options.diagnostics = &diagnostics;
     StyleResolver resolver(parse(
         ".fallback { background: #102030; "
-        "background-image: radial-gradient(circle at 20% 30%, #fff 0%, #000 100%); }"),
+        "background-image: radial-gradient(ellipse at 20% 30%, #fff 0%, #000 100%); }"),
         options);
 
     const Style style = resolver.resolve(*fallback);
@@ -755,8 +922,8 @@ void grid_and_aspect_ratio_properties_apply() {
 
     StyleResolver resolver(parse(
         ".grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));"
-        "grid-auto-rows: minmax(140px, auto); gap: 1.2rem; }"
-        ".wide { grid-column: span 2; grid-row: span 3; }"
+        "grid-template-rows: 36px 1fr 1fr; grid-auto-rows: minmax(140px, auto); gap: 1.2rem; }"
+        ".wide { grid-column: 2 / span 2; grid-row: 2 / 4; }"
         ".media { aspect-ratio: auto 1.5 / 1; }"));
 
     const Style grid_style = resolver.resolve(*grid);
@@ -765,9 +932,14 @@ void grid_and_aspect_ratio_properties_apply() {
 
     check(grid_style.display == Display::Grid, "grid display parsed");
     check(grid_style.grid_min_track_width == 220, "grid min track parsed");
+    check(grid_style.grid_template_row_count == 3 && grid_style.grid_template_row_heights[0] == 36 &&
+              grid_style.grid_template_row_heights[1] == 0 && grid_style.grid_template_row_heights[2] == 0,
+          "fixed and fr grid row tracks parse");
     check(grid_style.grid_auto_row_min == 140, "grid auto row min parsed");
     check(grid_style.column_gap == 19 && grid_style.row_gap == 19, "rem gap parsed");
-    check(card_style.grid_column_span == 2 && card_style.grid_row_span == 3, "grid span parsed");
+    check(card_style.grid_column_start == 1 && card_style.grid_column_span == 2 &&
+              card_style.grid_row_start == 1 && card_style.grid_row_span == 2,
+          "numeric grid placement and span parse");
     check(media_style.aspect_ratio_width == 1500 && media_style.aspect_ratio_height == 1000,
           "aspect ratio parsed");
 }
@@ -875,6 +1047,16 @@ void after_generated_content_and_text_overflow_apply() {
     check(style.after_color.g == 0xcc, "after color parsed");
     check(style.after_font_weight == 700, "after font-weight parsed");
     check(style.after_left_specified && style.after_left == 4, "after left parsed");
+}
+
+void per_corner_border_radius_applies() {
+    auto card = make_element("div");
+    card->attributes["class"] = "card";
+    StyleResolver resolver(parse(".card { border-radius: 16px 10px 4px 0; }"));
+    const Style style = resolver.resolve(*card);
+    const CornerRadii radii = decode_corner_radii(style.border_radius);
+    check(radii.top_left == 16 && radii.top_right == 10 && radii.bottom_right == 4 && radii.bottom_left == 0,
+          "border-radius 1-4 length syntax retains physical corner radii");
 }
 
 void overflow_y_uses_the_vertical_scroll_subset() {
@@ -1011,6 +1193,59 @@ void positioned_offsets_apply() {
     check(!style.z_index_auto && style.z_index == 3, "z-index still applies with positioned offsets");
 }
 
+void logical_properties_and_hsl_apply() {
+    auto panel = make_element("section");
+    panel->attributes["class"] = "panel";
+    StyleResolver resolver(parse(
+        ".panel { margin-inline: 8px 12px !important; padding-block: 3px 5px; "
+        "border-inline-width: 1px 2px; "
+        "inline-size: 72px; min-block-size: 24px; position: absolute; "
+        "inset-inline: 7px 9px; inset-block-start: 4px; place-content: end center; "
+        "color: hsl(210 50% 40% / 50%); background-color: hsla(120, 100%, 25%, .5); }"
+        ".panel { margin-left: 1px; }"));
+
+    const Style style = resolver.resolve(*panel);
+    check(style.margin.left == 8 && style.margin.right == 12,
+          "logical margin respects physical cascade slots and important");
+    check(style.padding.top == 3 && style.padding.bottom == 5, "logical block padding maps to physical edges");
+    check(style.border_width.left == 1 && style.border_width.right == 2,
+          "logical border width maps to physical edges without changing border color semantics");
+    check(style.width == 72 && style.min_height == 24, "logical sizing maps to physical sizing");
+    check(style.inset_left_specified && style.inset_left == 7 &&
+              style.inset_right_specified && style.inset_right == 9 &&
+              style.inset_top_specified && style.inset_top == 4,
+          "logical inset maps to LTR physical offsets");
+    check(style.align_content == JustifyContent::End && style.justify_content == JustifyContent::Center,
+          "place-content expands through existing alignment properties");
+    check(style.color.r == 51 && style.color.g == 102 && style.color.b == 153 && style.color.a == 128,
+          "hsl color converts through the existing sRGB color path");
+    check(style.background_color.r == 0 && style.background_color.g == 128 &&
+              style.background_color.b == 0 && style.background_color.a == 128,
+          "hsla background color keeps optional alpha");
+}
+
+void supports_queries_accept_logical_properties_and_hsl() {
+    auto panel = make_element("div");
+    panel->attributes["class"] = "panel";
+    StyleResolver resolver(parse(
+        "@supports (inline-size: 48px) and (color: hsl(210 50% 40%)) { "
+        ".panel { inline-size: 48px; color: hsl(.583333turn 50% 40%); } }"));
+
+    const Style style = resolver.resolve(*panel);
+    check(style.width == 48 && style.color.r == 51 && style.color.g == 102 && style.color.b == 153,
+          "supports uses the same logical-property and hsl subset as style resolution");
+}
+
+void invalid_hsl_preserves_prior_fallback() {
+    auto panel = make_element("div");
+    panel->attributes["class"] = "panel";
+    StyleResolver resolver(parse(".panel { color: #123456; color: hsl(nan 50% 40%); }"));
+
+    const Style style = resolver.resolve(*panel);
+    check(style.color.r == 0x12 && style.color.g == 0x34 && style.color.b == 0x56,
+          "invalid hsl cannot override an earlier supported color fallback");
+}
+
 void style_candidate_cache_preserves_selector_context() {
     auto root = make_element("main");
     auto sidebar = make_element("section");
@@ -1063,11 +1298,33 @@ void style_candidate_cache_respects_tiny_budget_and_inline_style() {
 
     check(primary_style.color.b == 0xeb, "tiny style cache resolves first class");
     check(danger_style.color.r == 0xff && danger_style.color.g == 0, "inline style survives tiny cache");
-    check(primary_style_again.color.b == 0xeb, "tiny style cache rebuilds evicted class");
-    check(statistics.candidate_cache_hits == 0, "tiny style cache records no hits after evictions");
-    check(statistics.candidate_cache_misses == 3, "tiny style cache records rebuilt candidate keys");
-    check(statistics.candidate_cache_clears == 2, "tiny style cache records budget clears");
-    check(statistics.candidate_cache_entries == 1, "tiny style cache keeps one entry after final rebuild");
+    check(primary_style_again.color.b == 0xeb, "tiny style cache retains the first hot class");
+    check(statistics.candidate_cache_hits == 1, "tiny style cache reuses retained candidate entries");
+    check(statistics.candidate_cache_misses == 2, "tiny style cache records uncached candidate keys");
+    check(statistics.candidate_cache_clears == 0, "tiny style cache does not churn bounded entries");
+    check(statistics.candidate_cache_bypasses == 1, "tiny style cache reports non-retained candidates");
+    check(statistics.candidate_cache_entries == 1, "tiny style cache keeps one bounded entry");
+}
+
+void style_candidate_cache_ignores_irrelevant_identifiers() {
+    auto first = make_element("button");
+    first->attributes["id"] = "first-instance";
+    first->attributes["class"] = "action telemetry-only";
+    auto second = make_element("button");
+    second->attributes["id"] = "second-instance";
+    second->attributes["class"] = "action debug-marker";
+
+    StyleResolver resolver(parse("button { font-size: 12px; }.action { color: #2563eb; }"));
+    const Style first_style = resolver.resolve(*first);
+    const Style second_style = resolver.resolve(*second);
+    const StyleResolverStatistics statistics = resolver.statistics();
+
+    check(first_style.color.b == 0xeb && second_style.color.b == 0xeb,
+          "irrelevant identifiers cannot change selector matching");
+    check(statistics.candidate_cache_misses == 1 && statistics.candidate_cache_hits == 1,
+          "irrelevant ids and classes share the same candidate rule cache entry");
+    check(statistics.candidate_cache_entries == 1,
+          "irrelevant identifiers do not consume candidate cache capacity");
 }
 
 } // namespace
@@ -1076,18 +1333,24 @@ int main() {
     try {
         parses_comments_strings_and_functions();
         splits_selector_lists();
+        expands_single_level_explicit_css_nesting();
+        rejects_nested_css_outside_explicit_single_level_subset();
         skips_enhancement_blocks_without_corrupting_following_rules();
         pipeline_diagnostics_report_css_and_style_degradation();
         supports_queries_flatten_safe_declaration_subset();
         supports_queries_apply_representative_supported_properties();
+        text_wrap_alias_reuses_bounded_white_space_behavior();
         style_struct_size_has_embedded_guardrail();
         flattens_layers_and_plain_media();
         conditional_media_queries_respect_viewport();
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
         linear_gradient_background_applies_without_breaking_fallbacks();
+        color_mix_and_bounded_box_shadow_apply();
+        two_layer_background_keeps_base_and_highlight();
         conic_gradient_background_applies_progress_subset();
         radial_gradient_background_applies_center_circle_subset();
+        package_background_image_url_is_bounded_and_preserves_background_color();
         unsupported_conic_gradient_reports_specific_diagnostic();
         unsupported_radial_gradient_reports_specific_diagnostic();
         matches_simple_compound_selectors();
@@ -1110,6 +1373,7 @@ int main() {
         text_transform_parses_and_inherits();
         font_family_declares_runtime_family_hash_and_inherits();
         after_generated_content_and_text_overflow_apply();
+        per_corner_border_radius_applies();
         overflow_y_uses_the_vertical_scroll_subset();
         fixed_two_column_grid_template_applies();
         repeated_fixed_grid_template_applies();
@@ -1119,8 +1383,12 @@ int main() {
         align_self_applies();
         align_content_applies();
         positioned_offsets_apply();
+        logical_properties_and_hsl_apply();
+        supports_queries_accept_logical_properties_and_hsl();
+        invalid_hsl_preserves_prior_fallback();
         style_candidate_cache_preserves_selector_context();
         style_candidate_cache_respects_tiny_budget_and_inline_style();
+        style_candidate_cache_ignores_irrelevant_identifiers();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

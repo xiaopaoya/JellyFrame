@@ -1,6 +1,6 @@
 # 开发者能力矩阵
 
-> 最后更新：2026-07-14；适用版本：0.5.0-dev
+> 最后更新：2026-07-22；适用版本：0.5.0-dev
 
 
 这份文档是 JellyFrame 面向应用开发者的实际能力契约。开发者在使用某个 HTML
@@ -53,6 +53,14 @@ package report 或宿主/移植接口里，而不是伪装成页面私有语法�
 `on*` handler property。navigation/history、browsing context、Workers、Worklets、完整媒体、
 Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语法仍是明确非目标；
 除非未来产品 profile 把它们做成宿主持有 capability，否则不进入页面可依赖能力。
+
+## CSSWG 支持表
+
+在使用 CSS 属性、函数、选择器、值或 at-rule 前，请搜索 CSSWG 全量支持表。它和 HTML
+全量表使用同一组状态；尤其注意 `partial`：CSS 值细节只能在已文档化的所属属性或值位置中使用。
+
+- 面向人阅读：[csswg_support_table_zh.md](csswg_support_table_zh.md)
+- 面向工具消费：[csswg_support_table.csv](csswg_support_table.csv)
 
 ## 最适合的项目
 
@@ -156,7 +164,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `@keyframes` | 子集 | 解析命名 `@keyframes` block，并保存 `from`/`to` 或 `0%`/`100%` declaration。中间百分比会诊断并忽略。执行范围受下方 animation 属性子集限制。 |
 | 未知 at-rule | 懒处理 | 跳过 statement 或平衡 block。 |
 | CSS custom properties | 子集 | 支持直接 `var(--token)` 和 `var(--token, fallback)`，来源包括继承的 `:root`、祖先、当前元素和 inline custom property declarations。无法解析的 `var()` 不会覆盖之前的受支持 fallback。完整依赖图、区分大小写的 custom property 名称和完整 invalid-at-computed-value-time 语义尚未实现。 |
-| CSS nesting | 延后 | 不要依赖嵌套 selector。 |
+| CSS nesting | 显式单层子集 | 一个 qualified rule 内可包含一层嵌套 qualified rule，但每个嵌套 selector 都必须含 `&`，例如 `.card { &:hover { ... } & .label { ... } }`。父声明和嵌套规则保留 source order；逗号展开最多 16 个 selector。隐式 nesting、超过一层、nested at-rule 和不含 `&` 的 selector 会被跳过并输出 `css-nesting-skipped`。 |
 | Cascade origins | 子集 | author + inline + 小型内置默认样式；无 user/animation origin。 |
 | Rule indexing | 可用 | 按最右侧 id/class/tag/universal 建桶。 |
 
@@ -186,21 +194,22 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | 属性 | 状态 | 支持值/降级 |
 | --- | --- | --- |
 | `display` | 子集 | `block`、`inline`、`inline-block`、`flex`、`inline-flex`、`grid`、`inline-grid`、`none`。inline flex/grid 映射为同一简化布局模式。 |
-| `color` | 子集 | 基础命名色、hex、`rgb()`、`rgba()`。`oklch()` 等不覆盖 fallback。 |
+| `color` | 子集 | 基础命名色、hex、`rgb()`、`rgba()`、数值角度/百分比饱和度和明度/可选 alpha 的 `hsl()` / `hsla()`，以及双色 `color-mix(in srgb, <color> [<percentage>], <color> [<percentage>])`。可用它实现半透明描边和带色层次，无需额外 DOM。`oklch()` 等不覆盖 fallback。 |
 | `background-color` | 子集 | 与 `color` 相同的颜色解析；刻意不接受渐变，因为 CSS 语义中渐变属于背景图像。 |
-| `background` | 子集 | 支持纯色、`linear-gradient(<color>, <color>)`、`linear-gradient(to bottom/top/right/left, ...)`、双色进度 `conic-gradient(<color> 0% N%, <color> N% 100%)`，以及两色中心圆形 `radial-gradient([circle\|circle at center,] <color> [0%], <color> [100%])`。Conic gradient 面向表盘环、电量环和活动弧线；radial gradient 面向水凝胶高光、中心光斑和内凹质感。复杂 stop、角度、焦点偏移、椭圆、repeating 和多重背景会诊断并忽略，不会覆盖之前 fallback。超出 conic/radial 子集会分别输出 `style-conic-gradient-unsupported` / `style-radial-gradient-unsupported`，过大的绘制区域会输出 `layer-conic-gradient-area-budget` / `layer-radial-gradient-area-budget`。 |
-| `background-image` | 子集 | 接受与 `background` 相同的 gradient 子集，但不接受纯色；纯色请使用 `background-color` 或 `background`。 |
+| `background` | 子集 | 支持纯色；双色 `linear-gradient()`，方向可为 `to top/bottom/left/right`、对角关键字，或设计工具常输出的 `0deg` 至 `315deg`、每 45 度一档；双色进度 `conic-gradient(<color> 0% N%, <color> N% 100%)`；以及两色圆形 `radial-gradient([circle] [at center\|<x%> <y%>,] <color> [0%], <color> [100%])`。支持最多两层，按标准从底到顶绘制，可组合底层渐变与透明径向高光。可选顶层以 RGBA4444 压缩保存，避免每个节点常驻大对象。Conic gradient 面向表盘环；可定位 radial gradient 面向水凝胶高光和内凹层次。其他角度、复杂 stop、焦点、椭圆、repeating 与超过两层的背景会诊断并忽略，不会覆盖之前 fallback。超出 conic/radial 子集会分别输出 `style-conic-gradient-unsupported` / `style-radial-gradient-unsupported`，过大的绘制区域会输出 `layer-conic-gradient-area-budget` / `layer-radial-gradient-area-budget`。 |
+| `background-image` | 子集 | 接受与 `background` 相同的一层/两层 gradient 子集，但不接受纯色。也支持一个包内绝对路径 `url("/assets/image.bmp")`：它复用宿主拥有的图片 surface cache，填充元素背景绘制区域，`background-color` 保留为 fallback。远程/data URL、相对路径、query/fragment/traversal、多 URL 层、repeat、position、size 仍不支持。package report 会以 `backgroundImageDiagnostics` 指出非法或缺失的本地资源。 |
 | `margin` | 可用 | 1-4 个长度值，支持水平 `auto`。 |
 | `margin-top/right/bottom/left` | 可用 | 物理 longhand。`margin-left/right:auto` 可用于当前水平居中路径。 |
 | `padding` | 可用 | 1-4 个长度值。 |
 | `padding-top/right/bottom/left` | 可用 | 物理 longhand。 |
+| 逻辑 box edge | LTR 子集 | 在 horizontal LTR writing mode 下，`margin-inline` / `margin-block`、`padding-inline` / `padding-block`、`border-inline-width` / `border-block-width` 及其 `-start` / `-end` longhand 会展开到同一组物理 cascade slot。逻辑 border color/style shorthand、writing mode 和 RTL 映射暂不实现。 |
 | `border` | 子集 | 支持 `none`，从简单 shorthand 中提取 width 和 color；style 关键词只作为可忽略文本。 |
 | `border-top/right/bottom/left` | 子集 | 支持单边 shorthand 的 width/color 子集，例如 `border-right: 1px solid #ddd`。当前内部只有单个 `border_color`，因此单边 shorthand 的 color 会成为全局 border color；单边宽度按对应边生效。 |
 | `border-width` | 可用 | 1-4 个长度值。 |
 | `border-top/right/bottom/left-width` | 可用 | 物理边框宽度 longhand。 |
 | `border-color` | 子集 | 单色应用到所有边。 |
-| `border-radius` | 子集 | 单个长度 radius，或 `50%` 这类单值百分比。支持圆角填充和边框；软件 renderer 会对圆角边缘做局部 coverage 抗锯齿。复杂四角 radius 不支持。 |
-| `outline` / `outline-width` / `outline-color` | 子集 | 作为不参与布局的外扩 stroke 绘制。支持简单 width/color shorthand；`outline-offset` 和复杂 style 语义延后。 |
+| `border-radius` | 子集 | 支持 1-4 个非负长度值，按标准物理角顺序解释；也支持 `50%` 这类单值百分比。圆角填充和边框使用局部 coverage 抗锯齿。单值 radius 保持紧凑快路径；不同角才进入有界四角栅格路径。椭圆 slash 语法和逐角百分比延后。 |
+| `outline` / `outline-width` / `outline-color` / `outline-offset` | 子集 | 作为不参与布局的外扩 stroke 绘制。支持简单 width/color shorthand 与受支持 length offset；正 offset 会形成清晰的 focus 间隙，负 offset 会与 border box 重叠。outline style keyword、auto/invert color 和浏览器 focus-ring policy 继续延后。 |
 | `width` / `height` | 可用 | 支持单位的长度值和百分比值。百分比相对 containing content box 解析；根节点/全屏 app wrapper 会使用真实 viewport 宽高。 |
 | `min-width` / `min-height` | 可用 | 长度值和百分比值。 |
 | `max-width` / `max-height` | 可用 | 长度值或百分比值；block layout 使用。 |
@@ -210,41 +219,48 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `line-height` | 可用 | 无单位倍率或长度。 |
 | `text-align` | 可用 | `left`、`right`、`start`、`end`、`center`。 |
 | `text-indent` | 可用 | 长度值。 |
+| `letter-spacing` | 有界子集 | 支持 `normal`，或在当前字号解析后处于 `-0.5em` 到 `2em` 的受支持长度。声明字距时，测量与绘制使用同一 UTF-8 scalar advance，且属性可继承。该路径会为每个 scalar 生成一条文本命令，应用于短标签和数字显示，不应用于长段落。复杂文字 shaping、保留 kerning 与浏览器的边界语义仍由平台文本后端决定。 |
 | `text-transform` | ASCII 子集 | `none`、`uppercase`、`lowercase` 和 `capitalize`。转换会在文本测量和绘制前统一执行。V0 只转换 ASCII 字母；locale-sensitive Unicode 大小写映射延后。 |
 | `text-decoration` / `text-decoration-line` | 子集 | `none`、`underline`、`line-through` 会绘制便宜的实线装饰。颜色/粗细/style 变体和 wavy/double 延后。 |
-| `text-shadow` | 子集 | 第一条 shadow 会绘制为偏移文本；blur 只用于解析兼容，不做真实模糊；多重阴影暂不栅格化。 |
+| `text-shadow` | 子集 | 一条 `<offset-x> <offset-y> [blur-radius] [color]` shadow 会绘制为偏移文本。作者指定颜色会被保留；未写颜色时使用 `currentColor`。blur 只用于解析兼容，不做真实模糊；多重阴影暂不栅格化。 |
 | `box-sizing` | 可用 | `content-box`、`border-box`。 |
+| `visibility` | 有界子集 | 可继承的 `visible` 和 `hidden` 保留正常 layout 流。`hidden` 不绘制该元素自身，也不会成为命中目标；显式声明 `visible` 的后代可以绘制并接收输入。隐藏子树不会产生额外分配、cache 或 idle-frame 工作。`collapse`、accessibility tree 行为和浏览器 focus-navigation 语义继续延后。 |
 | `overflow` / `overflow-y` | 子集 | `overflow` 接受 `visible`、`hidden`、`clip`、`auto`、`scroll`。标准 `overflow-y` 只接受 `auto` 和 `scroll`，是显式纵向滚动的推荐写法；其他轴专属值会被拒绝，不会悄悄裁切两个轴。V0 原生滚动容器支持固定尺寸的垂直 `auto`/`scroll` 区域，由宿主提供 scroll offset，并参与裁切绘制和命中测试。`VerticalScrollGesture` 是零分配的宿主 helper，统一 tap/drag 阈值、开始拖动后取消控件激活以及有界惯性；宿主不驱动它时不会产生工作。Win32 壳会把 wheel/arrow/drag 默认动作先交给最近的可滚容器，不能滚时才回退页面滚动；ESP32-S3 retained-scroll demo 对队列触控使用相同规则。宿主在 dirty 面积预算内只重绘容器视口。保守的 strip-blit 快路径只用于安全的矩形、不透明、无覆盖容器；圆角、半透明、重叠容器会回退到 dirty repaint。`overflow-x` 和横向滚动仍延后。 |
-| `white-space` | 子集 | `normal` 和 `nowrap`。`nowrap` 会继承到文本 layout，阻止便宜换行。 |
-| `text-overflow` | 诊断子集 | 接受 `clip` 和 `ellipsis`，用于表达作者意图。当前渲染仍通过盒/文本后端裁剪；当测量文本宽度超过可用盒时，layout diagnostics 会给出 warning。浏览器级 ellipsis shaping 延后。 |
+| `white-space` / `text-wrap` | 有界子集 | `white-space: normal` / `nowrap` 与现代等价别名 `text-wrap: wrap` / `nowrap` 共用同一 cascade slot 和布局路径。`nowrap` 会继承到文本 layout，阻止便宜换行。`balance`、`pretty`、`text-wrap-mode` 和 `text-wrap-style` 仍不支持。 |
+| `overflow-wrap` | 有界子集 | 支持 `normal` 和可继承的 `anywhere`。`anywhere` 只在合法 UTF-8 scalar 边界断行，且使用与绘制相同的 scalar 测量路径。不实现 hyphenation、字素/词典分词、`break-word`、balance/pretty 换行或复杂文字断行。额外 scalar 工作和 display command 只在声明该属性时产生。 |
+| `text-overflow` | 有界视觉子集 | 接受 `clip` 和 `ellipsis`。`ellipsis` 与继承的 `white-space: nowrap` 组合时，超宽文本会在 layer-tree 构建中按 UTF-8 标量安全截短，并绘制所有小型 bitmap font 都可显示的 ASCII `...` 标记。该路径使用当前 host/app font 测量，且仅在作者声明且实际超宽时运行。多行省略、区域相关的 U+2026 选择行为和 browser line-clamp 语义继续延后。 |
 | `opacity` | 子集 | 0..1；软件合成中创建 composited layer。 |
 | `position` | 子集 | `relative` 只做视觉偏移，不改变普通流占位。`absolute`/`fixed` box 会脱离普通流，并用简单 inset 定位。`sticky` 目前只作为 layer hint 保存。 |
 | `top` / `right` / `bottom` / `left` | 子集 | 支持长度和 `auto`。Absolute/fixed box 使用父内容框或近似 viewport 原点。百分比、shrink-to-fit、完整 containing-block 规则和 sticky 滚动行为不支持。 |
+| 逻辑 sizing/inset | LTR 子集 | `inline-size` / `block-size`、它们的 `min-` / `max-` 形式、`inset`、`inset-inline` / `inset-block` 及 start/end longhand 映射到现有 LTR 物理 width/height/inset 子集。writing mode 和 RTL 映射延后。 |
 | `z-index` | 子集 | 整数或 `auto`；目前是 layer-local ordering。 |
 | `transform` | 子集 | `translate()`/`translateX()`/`translateY()`、`scale()`/`scaleX()`/`scaleY()` 和 `rotate()`/`rotateZ()` 会解析为 composited layer，并由软件合成器绘制。角度支持 `deg`、`turn`、`rad` 和 `grad`。`transform-origin` 支持常用关键字和百分比。`skew()`、`matrix()`、perspective 和 3D transform 不支持，会诊断并忽略。 |
 | `justify-content` | 子集 | `start`、`flex-start`、`normal`、`end`、`flex-end`、`center`、`space-around`、`space-between`、`space-evenly`，作用于简化 row/column flex 的主轴。 |
 | `align-items` | 子集 | `stretch`、`normal`、`start`、`flex-start`、`center`、`end`、`flex-end`，作用于简化 row/column flex 的交叉轴。 |
 | `align-self` | 子集 | `auto`、`stretch`、`normal`、`start`、`flex-start`、`center`、`end`、`flex-end` 可为单个简化 row/column flex item 覆盖父容器交叉轴对齐。 |
 | `align-content` | 子集 | `start`、`flex-start`、`normal`、`end`、`flex-end`、`center`、`space-around`、`space-between`、`space-evenly` 仅在 row 换行且 flex 容器有额外固定/min-height 时分配行组。`stretch` 与 column 换行不支持。 |
+| `place-content` | 子集 | 一/两个值的 shorthand，会展开到文档化的 `align-content` / `justify-content` 子集。`place-items` 和 `place-self` 继续延后，因为缺少的 grid 对齐语义不能静默丢弃。 |
 | `flex-direction` | 子集 | 支持 `row` 和 `column`。`row-reverse`、`column-reverse` 会被拒绝，不做近似实现。 |
+| `order` | 子集 | 直接 flex child 可使用有符号整数 order。只有存在非零 order 时，layout 与同 stack 绘制顺序才构造一次稳定临时排序视图；默认全零的 flex 容器继续走无分配 source-order 路径。它不是供浏览器 API 使用的完整 order-modified document model。 |
 | `flex` | 子集 | Shorthand 支持常见 `none`、`auto`、`<grow>`、`<grow> <basis>` 和 `<grow> <shrink> <basis>` 形式，用于简化 row 和不换行 column flex layout。完整 Flexbox 语法不支持。 |
 | `flex-grow` / `flex-shrink` / `flex-basis` | 子集 | 非负数字 grow/shrink 因子和受支持长度/`auto` basis 会参与简化 row 和不换行 column sizing pass；column 中 basis 是高度基准。 |
 | `flex-wrap` | 子集 | `wrap`/`wrap-reverse` 启用简单 row 换行。column flex 有意保持不换行。换行后只做固定/basis 探测，不执行完整逐行 Flexbox 算法。 |
 | `gap` | 可用 | 1-2 个长度值，用于 grid 和简化 flex。 |
 | `row-gap` / `column-gap` | 可用 | 长度值。 |
 | `grid-template-columns` | 子集 | 从 `repeat(auto-fit, minmax(<length>, 1fr))`、`minmax(<length>, 1fr)`、单个长度或 `1fr` 中提取最小轨道。 |
+| `grid-template-rows` | 有界子集 | 支持 2 到 4 条固定长度或 `1fr` 行轨道。grid 有确定高度时，剩余空间会平均分给 `1fr` 行；没有确定高度时由内容提供最小高度。named line/area、带权 `fr`、`repeat()`、content-sized track、subgrid 与 masonry 延后。 |
 | 简单固定 grid 列 | 子集 | 支持 `grid-template-columns: <length> 1fr`、`repeat(N, 1fr)`、`repeat(N, minmax(0, 1fr))` 及相近的 2-4 列 length/`fr` 模板，适合描述列表、设置表单和紧凑键盘。 |
 | `grid-auto-rows` | 子集 | 长度或 `minmax(<length>, auto)` 最小行高。 |
-| `grid-column` / `grid-row` | 子集 | `span N`，内部有界钳制。无显式 line placement。 |
+| `grid-column` / `grid-row` | 有界子集 | 支持正整数 start、`span N`、`start / end`、`start / span N`；span 有上限。显式 placement 仅覆盖四条模板轨道，隐式行上限为 128。没有负 line、named line、`auto` grammar、`grid-*-start/end` longhand、dense packing 或浏览器 overlap resolution。 |
 | `list-style` / `list-style-type` | 子集 | `none`、disc-like 和 decimal-like 值。`li` 会绘制轻量原生列表标记。 |
 | `content` on `::before` / `::after` | 子集 | 支持纯文本和 `counter(name) "suffix"`，用于轻量列表计数、单位和角标。Generated content 被绘制在元素盒内，并计入 display command 预算，不是真实 DOM 节点。完整 generated-content layout 延后。 |
-| `box-shadow` | 子集 | `none` 可清空阴影；第一条 shadow 近似为圆角半透明填充。不做真实 blur 和多重阴影；需要柔光质感时优先组合轻量阴影、边框和 `radial-gradient()` 高光。大面积近似阴影会输出 `layer-box-shadow-area-budget`。 |
+| `box-shadow` | 子集 | `none` 可清空阴影。一条外部 `<offset-x> <offset-y> [blur-radius] [spread-radius] [color]` shadow 会生成有界、圆角、二次衰减的软阴影命令。作者写入的 `hex`/`rgb`/`rgba`/`color-mix()` RGB 与 alpha 会被保留；未写颜色时使用 `currentColor`。blur 上限为 24 px，超过会输出 `layer-box-shadow-blur-clamped`。Inset、负 spread、多 shadow 和 blend mode 仍延后。只有声明 shadow 的元素才产生绘制工作；面积过大仍输出 `layer-box-shadow-area-budget`。 |
 | `object-fit` / `object-position` | 子集 | `object-fit` 支持 `fill`、`contain`、`cover`、`none`、`scale-down`。`object-position` 支持关键词和百分比的一/二值子集，例如 `center`、`right top`、`25% 80%`；复杂四值和长度偏移延后。 |
 | `image-rendering` | 子集 | 支持标准关键词 `auto`、`pixelated`、`crisp-edges`。`auto` 允许宿主 image painter 使用双线性/平滑采样；`pixelated` 和 `crisp-edges` 保持 nearest-neighbor，适合像素图标。 |
 | `font-family` | runtime 子集 | 解析逗号分隔 family list。首个自定义 family 会规范化为小型 runtime hash；`system-ui`、`sans-serif` 等 generic family 会映射到宿主/系统 fallback。使用 app-font 后端时，manifest `.jffont` 的 `family` 若匹配该 hash，会优先于普通系统优先 fallback 链；layout 测量和 paint 使用同一选择结果。不实现完整浏览器 cascade、`@font-face`、style/stretch/features 和多字号匹配。Package diagnostics 仍会报告 generic family、manifest 匹配和未匹配首选 family。Win32 默认使用 GDI；传 `--use-app-fonts` 才验收包内 `.jffont` 选择。 |
 | `requestAnimationFrame` | 脚本子集 | JerryScript 构建中可用。宿主按每帧预算和时间戳泵动 callback。后台/低功耗 profile 可把 animation callback/FPS 预算设为 0。Win32 验证壳通过 `--animation-fps`、`--animation-callbacks` 和 frame-script 命令暴露这些预算，便于确定性低功耗验收。 |
-| CSS `transition` | 子集 | 支持 `transition` 和 `transition-*` 的有界列表，当前可动画属性为 `opacity`、`transform: translate()/scale()/rotate()`、`background-color` 和 `color`。Win32 调试壳会在交互状态变化时推进 timeline，并用 animation dirty-region helper 只重绘前后运动/绘制区域；layout 属性动画不做逐帧重排。 |
-| `@keyframes` / `animation-*` | 子集 | 支持有界 `animation`、`animation-name`、`animation-duration`、`animation-delay`、`animation-timing-function`、`animation-iteration-count` 和 `animation-direction`。执行的 keyframes 仅限 `from`/`to`，属性限于 `opacity`、`transform: translate()/scale()/rotate()`、`background-color` 和 `color`；`width`、margin、grid/flex 等 layout 属性会诊断并忽略，不做逐帧 reflow。支持 `normal`/`alternate` direction，以及正整数或 `infinite` iteration count。不支持 fill-mode、play-state 和多个百分比关键帧插值。 |
+| CSS `transition` | 子集 | 支持 `transition` 和 `transition-*` 的有界列表，当前可动画属性为 `opacity`、`transform: translate()/scale()/rotate()`、`background-color` 和 `color`。timing 支持命名 `linear`/`ease*`，以及有界 `cubic-bezier(x1, y1, x2, y2)`，其中 `x1/x2` 为 0..1，`y1/y2` 为 -2..2。Win32 调试壳会在交互状态变化时推进 timeline，并用 animation dirty-region helper 只重绘前后运动/绘制区域；layout 属性动画不做逐帧重排。 |
+| `@keyframes` / `animation-*` | 子集 | 支持有界 `animation`、`animation-name`、`animation-duration`、`animation-delay`、`animation-timing-function`、`animation-iteration-count`、`animation-direction` 和 `animation-fill-mode`。timing 支持命名曲线与同一有界 `cubic-bezier()` 子集。执行的 keyframes 仅限 `from`/`to`，属性限于 `opacity`、`transform: translate()/scale()/rotate()`、`background-color` 和 `color`；`width`、margin、grid/flex 等 layout 属性会诊断并忽略，不做逐帧 reflow。支持 `normal`/`alternate`、正整数或 `infinite` iteration，以及 `none`/`forwards`/`backwards`/`both` fill mode。只有显式声明 fill mode 才会保留首尾 override。不支持 play-state 和多个百分比关键帧插值。 |
 | filter/backdrop-filter | 延后 | 不绘制。 |
 
 当前长度单位包括 `px`、无单位 px-like 数字、`rem`、`em` 和简化 `vh`/`vw`。
@@ -276,6 +292,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | --- | --- | --- |
 | `button` | 可用 / submit 子集 | 轻量原生风格绘制，默认近似按内容收缩，支持 click。form 内默认按钮或 `type=submit` 按钮会在 click 默认动作未被阻止时先执行有界校验，再派发可取消 `submit`。 |
 | `input type=text` 和默认 input | 可用 | 有 value 状态，宿主可输入 UTF-8 文本，支持 Backspace。 |
+| `input type=search/tel/url/email/number` | 子集 | 这些 ASCII 大小写不敏感的 type 会保留规范化 IDL `type` token，并走有界 text-entry 路径。没有浏览器键盘提示、URL/email/number 解析或对应 constraint validation。 |
 | `readonly` / `maxlength` | 子集 | 文本输入类控件会在用户输入路径遵守 `readonly` 和 `maxlength`。脚本写 `value` 仍是程序性状态修改；V0 校验会报告程序写入后超过 `maxlength` 的值。 |
 | `input list` / `datalist` | 子集 | 不显示原生 popup。获得焦点的文本输入框可用 Tab/Enter 接受第一个匹配的 datalist option。 |
 | `textarea` | 子集 | value-like 状态和基础绘制；完整多行编辑有限。 |
@@ -285,7 +302,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `select` / `option` / `optgroup` | 子集 | 绘制当前选中项；验证壳点击会循环选项；Up/Down 可跨 `optgroup` 在 option 间移动。无 popup/分组菜单 UI。 |
 | `progress` / `meter` | 可用 | 根据属性绘制 value bar。 |
 | 日期/颜色/文件控件 | 延后 | 暂用 text/select/range fallback。 |
-| 表单验证 / form submission | 子集 | `form.checkValidity()`、`form.reportValidity()` 和 submit 激活会检查 `required`、text/textarea `minlength`/`maxlength`、required checkbox/radio group 和 required select value。无效控件会收到不冒泡 `invalid`，但不绘制浏览器 popup。`form.requestSubmit([submitter])` 会在校验成功并收集数据后派发可取消、带 `submitter` 的 `SubmitEvent` 形状 `submit`。browser navigation、action/method POST、multipart/file upload、pattern/type/date 校验、`form.submit()`、reset 和完整 `ValidityState` 仍未实现。 |
+| 表单验证 / form submission | 子集 | form 和控件级 `checkValidity()` / `reportValidity()` 及 submit 激活会检查 `required`、text/textarea `minlength`/`maxlength`、required checkbox/radio group 和 required select value。参与校验的控件提供新建的 `validity` 快照（`valueMissing`、`tooShort`、`tooLong`、`customError`、`valid`）、`willValidate`、`validationMessage` 和 `setCustomValidity(message)`。无效控件会收到不冒泡 `invalid`，但不绘制浏览器 popup。`form.requestSubmit([submitter])` 会在校验成功并收集数据后派发可取消、带 `submitter` 的 `SubmitEvent` 形状 `submit`。`form.reset()` 及未取消的 `button/input type=reset` 激活会派发可取消、可冒泡的 `reset`；未取消时从作者 attribute/text 懒恢复控件状态，不保留 snapshot。browser navigation、action/method POST、multipart/file upload、pattern/type/date/range/step 校验、`form.submit()` 和其余 `ValidityState` 标志仍未实现。 |
 | IME | 壳层相关 | 核心接收 UTF-8 文本；平台壳负责输入法集成。 |
 
 ## 事件与输入
@@ -302,7 +319,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | Pointer move/down/up | 子集 | 平台无关 input controller 派发 mouse-like events，并提供 `pointerdown`/`pointerup` aliases。滚动拖动是宿主默认行为，不是 HTML Drag and Drop；`setPointerCapture()`、`pointercancel`、`touch-action`、多指输入和完整 Pointer Events 字段仍延后。 |
 | Click synthesis | 可用 | 同一目标 down/up 合成 click。 |
 | Hash anchor click | 壳层限定 | Win32 壳会把 `<a href="#id">` 处理为 viewport scroll。核心只派发 click 事件。 |
-| Focus tracking | 子集 | input controller 保存 focused node，并驱动 `:focus` / `:focus-within` 样式匹配。 |
+| Focus tracking / `tabindex` | 子集 | `InputController` 保存 focused node、驱动 `:focus` / `:focus-within`，在真实焦点切换时派发不冒泡 `focus`/`blur`，并在创建时选择第一个可聚焦的 `[autofocus]` node。native control/link 及带非负 `tabindex` 的普通 element 会按 tree order 加入焦点导航；`tabindex=-1` 会跳过。正 tabindex 排序、脚本 `focus()`/`blur()`、focus-visible heuristic 和浏览器 focus scope 延后。 |
 | Touch events | 子集 | `touchstart`/`touchend` 以 mouse-like event 暴露，用于按下反馈；完整 multi-touch object 延后。 |
 | Keyboard events | 延后 | 核心只处理控件所需的简单 key action；DOM keyboard event object 不完整。 |
 
@@ -321,34 +338,36 @@ JerryScript 源码树时可用。
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
 | `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；数量受 `HostBudgets::max_detached_dom_nodes` 限制。 |
 | `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |
-| `appendChild` / `removeChild` | 可用 | 移动节点、防止环、标记 dirty。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
-| `setAttribute` / `getAttribute` / `removeAttribute` | 可用 | 绑定层会 lowercase 属性名。 |
+| `appendChild` / `append` / `prepend` / `removeChild` | 子集 | `appendChild` 移动一个节点并返回它。`append(...items)` / `prepend(...items)` 接受现有 runtime-owned 节点和会转换为文本节点的标量值，保留参数顺序、防止环并标记 dirty。不接受 `DocumentFragment`；`replaceChildren()` 因多 wrapper 生命周期和 detached budget 需要独立事务设计，继续延后。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
+| `setAttribute` / `getAttribute` / `removeAttribute` / `hasAttribute` / `toggleAttribute` | 可用 / 子集 | 绑定层会 lowercase 属性名。`toggleAttribute(name[, force])` 采用普通 boolean attribute 风格的添加/移除并返回是否存在；空名称抛出 `TypeError`，而非浏览器 `InvalidCharacterError`。 |
+| `Node.remove()` | 可用 | 通过与 `removeChild` 相同的 runtime-owned detached-node budget 移除已连接 node；已 detached/root node 为 no-op。 |
 | `textContent` / `innerText` | 可用 / 子集 | `textContent` getter/setter；同值设置不会触发 dirty。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。`innerText` 在 element wrapper 上作为轻量 `textContent` 别名暴露；不执行浏览器 layout-aware rendered-text 算法。 |
 | `id` | 可用 | 反射到 `id` attribute，并走现有 style/layout dirty 路径。 |
 | `className` | 可用 | 反射到 `class` attribute，并走现有 style/layout dirty 路径。 |
 | `title` / `lang` / `dir` | 可用 | element wrapper 上的字符串属性反射。`lang` 和 `dir` 反射不等于完整语言特定 shaping 或 bidi layout。 |
 | 元素专用反射属性 | 子集 | 对纯内容属性形式的常见低成本 IDL 反射提供支持：`meta.name/content/httpEquiv/media`、`data.value`、`time.dateTime`、`img.alt`、`label.htmlFor`、anchor 的 `text/download/ping/rel`，以及以字符串形式反射但不做浏览器 policy 规范化的 anchor `referrerPolicy`。`label.control` 会在访问时解析 `for=id` 或第一个可标记后代。导航、资源加载、图片解码、ping 发送、Shadow DOM/custom-element label 关联和完整 URL 工具仍不实现。 |
-| `classList` | 子集 | 极小 DOMTokenList-like helper，支持 `contains(token)`、`add(...tokens)`、`remove(...tokens)` 和 `toggle(token[, force])`。含空白 token 会被忽略而不是抛异常。它反射到 `class` 并走正常 dirty 路径；完整 DOMTokenList 语义、迭代和 `replace()` 延后。 |
+| `classList` | 子集 | 极小 DOMTokenList-like helper，支持 `contains(token)`、`add(...tokens)`、`remove(...tokens)`、`toggle(token[, force])` 与 `replace(oldToken, newToken)`。含空白 token 会被忽略而不是抛异常；无效的 `replace()` 返回 `false`。它反射到 `class` 并走正常 dirty 路径；迭代和完整 DOMTokenList 异常语义延后。 |
 | `children` / `parentElement` | 子集 | element children 快照数组，以及 parent wrapper/null。 |
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
-| `dataset` | 子集 | 已存在的 `data-*` 属性以 camelCase 快照 property 暴露，用于事件委托；动态新 key 延后。 |
-| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`whiteSpace`、`textOverflow`、`overflow`、`overflowY` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
-| `hidden` / `disabled` / `open` properties | 子集 | Boolean reflection。`hidden` 会移出渲染；disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 状态。 |
+| `dataset` | 有界子集 | 已存在的 `data-*` 属性以 camelCase property 读取。可写的 `DOMStringMap` 子集支持 `dataset[key] = value` 与 `delete dataset[key]`，只接受 ASCII identifier-like camelCase key，并反射到普通 attribute dirty 路径；key 最长 48 bytes、value 最长 256 bytes、每个 element 最多 64 个 `data-*` attribute。不提供迭代、任意 key 或完整 DOMStringMap/prototype 语义。 |
+| `getBoundingClientRect()` | frame snapshot 子集 | element 请求测量后，返回上一个完成的宿主 layout frame 的新数值对象 `{x,y,width,height,top,right,bottom,left}`。快照相对 client；Win32 壳会应用根页面 scroll，而 nested scroll 与 transform 后的几何仍延后。它绝不保存 `LayoutBox*`、不强制同步 layout，也不是 live DOMRect。runtime 最多保留 32 个已请求 element 的快照；首次或不可用快照返回零矩形。 |
+| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`visibility`、`whiteSpace`、`textOverflow`、`overflow`、`overflowY` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
+| `hidden` / `disabled` / `open` / `autofocus` / `tabIndex` properties | 子集 | `hidden`、`disabled`、`open`、`autofocus` 为 Boolean reflection，`tabIndex` 为整数 reflection。`hidden` 提供默认的 `display:none` 行为，正常 author CSS 可以覆盖；当它使节点在重建后的 layer tree 中消失时，命中测试以及恢复的 hover/active/focus 状态会一并清除。CSS `visibility:hidden` 保留 layout，但走同一恢复交互状态清理。disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 状态。host 创建 `InputController` 时会消费 `autofocus`，`tabIndex` 只影响有界 hardware focus order。`HTMLElement.focus()` / `blur()` 继续延后：在 port 能跨 layer-tree rebuild 提供生命周期安全 adapter 前，焦点归属始终由 host 持有。 |
 | `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio/select 状态变化会派发 `input`/`change`，未被取消的 `summary.click()` 会切换父 `details`，未取消的 form submit button 会进入有界提交路径。不实现 browser navigation。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
-| `on*` event handler properties | 子集 | 只为 JellyFrame 实际派发的事件支持函数型 handler property：`onclick`、`oninput`、`onchange`、`ontoggle`、mouse/wheel handlers、`onfocus`/`onblur`、`document.onvisibilitychange`、`window.ononline`/`window.onoffline`/`window.onhashchange`，以及可穿戴按下反馈别名 `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`。设置为 `null` 或非函数会清除 handler。它们复用普通 listener 预算和 runtime 清理路径。不实现完整 `GlobalEventHandlers`、HTML inline event handler attribute 或浏览器级 handler 编译语义。 |
+| `on*` event handler properties | 子集 | 只为 JellyFrame 实际派发的事件支持函数型 handler property：`onclick`、`oninput`、`onchange`、`ontoggle`、mouse/wheel handlers、`onfocus`/`onblur`、`document.onvisibilitychange`、`window.ononline`/`window.onoffline`/`window.onhashchange`/`window.onpopstate`，以及可穿戴按下反馈别名 `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`。设置为 `null` 或非函数会清除 handler。它们复用普通 listener 预算和 runtime 清理路径。不实现完整 `GlobalEventHandlers`、HTML inline event handler attribute 或浏览器级 handler 编译语义。 |
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。form `submit` event 还会暴露 `submitter` wrapper。 |
-| 表单属性 / `FormData` | 子集 | 相关控件上的常用 IDL 属性：`value`、`defaultValue`、input `defaultChecked`、`type`、`name`、`placeholder`、`required`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max`、`step`，textarea 的 `rows`/`cols`/`wrap`/`textLength`，select 的 `size`，option 的 `label`/`defaultSelected`/`value`/`text`/`index`，optgroup 的 `label`，以及 progress/meter 数值 `value`/`min`/`max`、meter 的 `low`/`high`/`optimum` 和 progress 的 `position`。form wrapper 提供 `checkValidity()`、`reportValidity()`、`requestSubmit()`；`new FormData(form)` 以及 `append`/`set`/`delete`/`get`/`getAll`/`has` 覆盖字符串 form entry。完整 `ValidityState`、labels collections、selection API、picker UI、file entry、迭代、reset 和浏览器表单导航延后。 |
+| 表单属性 / `FormData` | 子集 | 相关控件上的常用 IDL 属性：`value`、`defaultValue`、input `defaultChecked`、`type`、`name`、`placeholder`、`required`、`checked`、`selectedIndex`、`readOnly`、`maxLength`、`minLength`、`min`、`max`、`step`、`willValidate`、`validationMessage`、`validity`，textarea 的 `rows`/`cols`/`wrap`/`textLength`，select 的 `size`，option 的 `label`/`defaultSelected`/`value`/`text`/`index`，optgroup 的 `label`，以及 progress/meter 数值 `value`/`min`/`max`、meter 的 `low`/`high`/`optimum` 和 progress 的 `position`。控件提供 `checkValidity()`、`reportValidity()` 和 `setCustomValidity(message)`；form wrapper 额外提供 `requestSubmit()` 和可取消 `reset()`。`new FormData(form)` 以及 `append`/`set`/`delete`/`get`/`getAll`/`has` 覆盖字符串 form entry。`ValidityState` 快照刻意只包含已实现的标志；labels collections、selection API、picker UI、file entry、迭代和浏览器表单导航延后。 |
 | Timer | 可用 | 宿主泵动 `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`；callback budget 由宿主控制。 |
 | 脚本执行 watchdog | 宿主/runtime 可选 | 当链接的 JerryScript 使用 `JERRY_VM_HALT=ON` 构建时，`JerryScriptRuntimeOptions::max_execution_check_count` 与 `HostBudgets::max_script_execution_checks` 可中断失控 eval 和 callback，并给出 `script execution budget exceeded`。若 JerryScript 缺少该特性，JellyFrame 会报告 watchdog 不可用，不伪造抢占。Win32 验证壳可用 `--require-script-watchdog` 和有界 check 参数强制验收这条 recovery 路径。 |
 | `btoa` / `atob` | 部分支持 | 绑定 document 的 runtime 会在 `window` 和 global 暴露 Base64 helper。`btoa` 接受 HTML binary string，并拒绝超过 255 的 code point；`atob` 忽略 ASCII whitespace、容忍缺省 padding，并拒绝非法输入。错误目前使用 JellyFrame `TypeError`，不是 DOMException `InvalidCharacterError`。 |
 | Promise/microtask | 延后 | 不要依赖浏览器 task 语义。 |
-| App 内路由片段 | 子集 | `window.location.hash` / 全局 `location.hash` 为当前运行 app 保存一个 route fragment。其归一化值发生变化时，会在 `window` 派发不可取消的 `hashchange`；`window.onhashchange` 与普通 listener 共用预算。新 document 绑定时 fragment 重置。URL 加载、`Location.assign/replace/reload`、`history`、导航、browsing context 与跨 app 路由均不存在。 |
+| App 内路由片段 / history | 子集 | `window.location.hash` / 全局 `location.hash` 为当前运行 app 保存一个 route fragment。fragment 改变时会在 `window` 派发不可取消的 `hashchange`；`history.length`、`back()`、`forward()`、`go(delta)`、`pushState(state, title, url)` 和 `replaceState(state, title, url)` 最多保留 `max_route_history_entries` 个 fragment entry。history 的 URL 参数只能为空或 `#fragment`；`state`/`title` 可传入但不保留，遍历时会先派发 `popstate`，fragment 变化再派发 `hashchange`。`window.onhashchange` / `window.onpopstate` 与普通 listener 共用预算。新 document 绑定时 fragment 和 history 重置。URL 加载、`Location.assign/replace/reload`、`history.state`、`go(0)` reload、浏览器导航、browsing context 与跨 app 路由均不存在。 |
 | Modules/import | 打包期子集 | 一个外部 `type="module"` 入口可 import 一个有界、无环的 package-local `.js` 图。打包器会改写入口 HTML 并生成一个 classic bundle；原 module 不会留在最终 resources 中。支持 named/default/namespace import、named/default export 和副作用 import。inline module script、多个 module entry、循环、re-export、`export *`、远程/非 JS path、`modulepreload` 与动态 `import()` 仍延后。 |
 | `querySelector` / `querySelectorAll` | 子集 | 支持 document/element 上的简单 selector：tag、`.class`、`#id`、`[attr]`、`[attr=value]` 及同一 compound 内组合，例如 `button.primary`。返回静态 wrapper/数组快照，不是 live NodeList。不支持 descendant/child/sibling combinator、逗号、伪类、`:has()` 或完整 CSS selector API；复杂字面量会在 package report 中输出 `script-api-subset`。 |
 | `innerHTML` | 延后 | 使用 DOM creation APIs。 |
 | XHR/fetch/storage | 部分支持 | scripting 构建已支持异步 `XMLHttpRequest` GET V0；绑定非阻塞 `AppLocalStorageShadow` 时支持极小 `localStorage` 子集；`fetch()` 等 Promise/microtask 有界后再考虑。 |
-| 管线 diagnostics | 已开始 | HTML tokenizer/parser、CSS parser、style resolver、render tree、layout、layer tree、script collection、package/resource loader 和 software renderer 会通过可选 sink 向桌面工具报告预算截断、跳过、忽略、加载失败和降级。`jellyframe_pseudo_browser --diagnostics-json` 会输出结构化报告，`jellyframe_cli.py check`/`preview`/`package` 会把它合并到 `pipelineDiagnostics`。开发期视觉诊断还会报告横向溢出 `visual-horizontal-overflow`、垂直绘制溢出 `visual-vertical-paint-overflow`、页面需要滚动 `visual-scroll-needed`、内部滚动容器内容被裁切 `visual-scroll-container` 和 display command 密度过高 `visual-display-command-density`。常见布局诊断会尽量暴露面向 app 作者的解析字段，包括文本片段、紧凑节点标签、类似选择器的 DOM path、文本测量/可用宽度、滚动容器高度/溢出、paint bounds、viewport 和越界像素。横向和纵向溢出在可安全归因时会带上可能的 layout-box node/path 与 box overflow metrics。Package report 还包含 `htmlApiDiagnostics`，用静态 HTML 扫描提示浏览器专属标签和 form submission；还包含 `scriptApiDiagnostics`，用静态 classic script/inline script 扫描发现 XHR、localStorage、Audio、geolocation 和 Canvas 2D API 与 manifest capability 的不匹配，提示无参 `Date()` / `new Date()` 的宿主时间歧义，并提示 `fetch()`、`Promise`、复杂 `querySelector`、`innerHTML`、`getBoundingClientRect()`、pointer capture、动态 `import()`、`WebSocket`、`EventSource`、`BroadcastChannel`、`DataTransfer`、Web Workers 和 `serviceWorker` 等延后或子集 API。CLI 写出的 report 还会派生 `developerAdvice[]`，作为 package warnings、管线 diagnostics、responsive profiles 和字体 diagnostics 面向 app 作者的解释/修复建议层；结构化的文本/滚动/绘制溢出诊断会转成直接指出可能元素/文本和像素越界量的建议。针对 target 的建议带 `targetViewport` 与结构化 `targetGate` decision/reasons；字体建议在可用时带缺失 codepoint sample、target profile 和未匹配 CSS family。原则是：已知不兼容给出明确原因；未知或无法分类的异常会保留 diagnostic code、stage/source 和触发 detail，让 app 作者至少能定位字段或片段。 |
+| 管线 diagnostics | 已开始 | HTML tokenizer/parser、CSS parser、style resolver、render tree、layout、layer tree、script collection、package/resource loader 和 software renderer 会通过可选 sink 向桌面工具报告预算截断、跳过、忽略、加载失败和降级。`jellyframe_pseudo_browser --diagnostics-json` 会输出结构化报告，`jellyframe_cli.py check`/`preview`/`package` 会把它合并到 `pipelineDiagnostics`。开发期视觉诊断还会报告横向溢出 `visual-horizontal-overflow`、垂直绘制溢出 `visual-vertical-paint-overflow`、页面需要滚动 `visual-scroll-needed`、内部滚动容器内容被裁切 `visual-scroll-container` 和 display command 密度过高 `visual-display-command-density`。常见布局诊断会尽量暴露面向 app 作者的解析字段，包括文本片段、紧凑节点标签、类似选择器的 DOM path、文本测量/可用宽度、滚动容器高度/溢出、paint bounds、viewport 和越界像素。横向和纵向溢出在可安全归因时会带上可能的 layout-box node/path 与 box overflow metrics。Package report 还包含 `htmlApiDiagnostics`，用静态 HTML 扫描提示浏览器专属标签、form submission 及响应式图片、表格、ruby、template、media、富文本等高风险 partial markup；还包含 `scriptApiDiagnostics`，扫描 manifest 不匹配以及 `fetch()`、`Promise`、复杂 `querySelector`、`innerHTML`、`getBoundingClientRect()`、pointer capture、动态 `import()`、`WebSocket`、`EventSource`、浏览器/消息 channel、Worker、session storage/cookie、浏览器 navigation 和 Selection/Range 等延后或子集 API。CLI 写出的 report 还会派生 `developerAdvice[]`，作为 package warnings、管线 diagnostics、responsive profiles 和字体 diagnostics 面向 app 作者的解释/修复建议层；已知 crosswork 诊断会指向 package-local、Canvas、app route、host service 或 system component 等真实替代方案。结构化的文本/滚动/绘制溢出诊断会转成直接指出可能元素/文本和像素越界量的建议。针对 target 的建议带 `targetViewport` 与结构化 `targetGate` decision/reasons；字体建议在可用时带缺失 codepoint sample、target profile 和未匹配 CSS family。未知或无法分类的异常会保留 diagnostic code、stage/source 和触发 detail，让 app 作者至少能定位字段或片段。 |
 | 性能预检报告 | 工具限定 | CLI 写出的 report 会从 package resources、responsive profiles 和伪浏览器管线统计派生 `performanceSummary` 和可选 `performanceAdvice[]`。summary 会报告 `ok`/`watch`/`high-risk` 等级、对象数量、layer/display-command 数量、framebuffer bytes、估算 pipeline heap、资源预算占比、full-frame present 规模、可用时的桌面工具侧阶段耗时，以及用于快速定位慢 UI 主因的 `bottlenecks[]` 短列表。这是预检归因，不是设备 FPS；`--runtime-log` 可合并 Win32 frame-script/capture 计数，`--port-telemetry` 可合并真实 port 的 frame ms、DMA wait、flush-done 和 internal-RAM 峰值，分别写入 `runtimeMetrics` / `portTelemetry` 和 measured performance summary 字段。 |
 | Responsive profile report | 工具限定 | `jellyframe_cli.py check`/`preview`/`package`/`install` 可显式传 `--targets a,b` 或 `--all-targets`，对同一 package 按多个 target preset 跑 render-core pseudo browser，并在 report 写入 `responsiveProfiles[]`。它报告 viewport、shape、content height、横向溢出、是否需要滚动和 diagnostics 计数。manifest `targets[id].gate` 可声明发布前 accept/warn/reject 门槛，例如最小 viewport、是否允许滚动、是否允许横向溢出和 warning/error 上限；`reject` 会让 CLI 失败。普通单 target 路径不输出该字段，也不多跑额外视口。它是发布前适配检查，不是完整浏览器级 responsive/layout engine。 |
 | 字体资源检查 | 工具限定 | `jellyframe_font_resource_check` 暂时保留用于确定性的字体工作：输出非 ASCII 使用字符、估算 bitmap font 预算，并验证嵌入式字体覆盖。 |

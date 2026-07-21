@@ -529,6 +529,16 @@ bool is_supported_length_value(std::string_view value) {
     return is_number_with_suffix(text, {"px", "em", "rem", "vw", "vh", "%"});
 }
 
+bool is_supported_length_sequence(std::string_view value, int maximum, bool allow_auto) {
+    const std::vector<std::string> tokens = split_whitespace_top_level(value);
+    if (tokens.empty() || static_cast<int>(tokens.size()) > maximum) {
+        return false;
+    }
+    return std::all_of(tokens.begin(), tokens.end(), [allow_auto](const std::string& token) {
+        return (allow_auto && token == "auto") || is_supported_length_value(token);
+    });
+}
+
 bool is_supported_color_value(std::string_view value) {
     const std::string text = ascii_lowercase(trim(value));
     if (text.empty()) {
@@ -536,6 +546,9 @@ bool is_supported_color_value(std::string_view value) {
     }
     if (text.find("var(") != std::string::npos) {
         return true;
+    }
+    if (text.rfind("color-mix(", 0) == 0 && text.back() == ')') {
+        return text.find("in srgb") != std::string::npos;
     }
     if (text == "transparent" || text == "black" || text == "white" ||
         text == "red" || text == "green" || text == "blue") {
@@ -548,7 +561,8 @@ bool is_supported_color_value(std::string_view value) {
             });
         }
     }
-    return (text.rfind("rgb(", 0) == 0 || text.rfind("rgba(", 0) == 0) && text.back() == ')';
+    return (text.rfind("rgb(", 0) == 0 || text.rfind("rgba(", 0) == 0 ||
+            text.rfind("hsl(", 0) == 0 || text.rfind("hsla(", 0) == 0) && text.back() == ')';
 }
 
 bool is_supported_border_shorthand_value(std::string_view value) {
@@ -577,7 +591,31 @@ bool is_supported_border_shorthand_value(std::string_view value) {
     return has_width || has_color;
 }
 
-bool is_supported_background_value(std::string_view value) {
+bool is_supported_package_background_url(std::string_view value) {
+    const std::string text = trim(value);
+    if (text.size() < 7 || text.back() != ')' ||
+        ascii_lower(text[0]) != 'u' || ascii_lower(text[1]) != 'r' ||
+        ascii_lower(text[2]) != 'l' || text[3] != '(') {
+        return false;
+    }
+    std::string path = trim(std::string_view(text).substr(4, text.size() - 5));
+    if (path.size() >= 2 && ((path.front() == '\'' && path.back() == '\'') ||
+                             (path.front() == '"' && path.back() == '"'))) {
+        path = path.substr(1, path.size() - 2);
+    }
+    if (path.empty() || path.front() != '/' || path.rfind("//", 0) == 0 ||
+        path.find("..") != std::string::npos || path.find('\\') != std::string::npos ||
+        path.find('?') != std::string::npos || path.find('#') != std::string::npos ||
+        std::any_of(path.begin(), path.end(), [](unsigned char ch) { return std::isspace(ch) != 0; })) {
+        return false;
+    }
+    return true;
+}
+
+bool is_supported_single_background_value(std::string_view value) {
+    if (is_supported_package_background_url(value)) {
+        return true;
+    }
     const std::string text = ascii_lowercase(trim(value));
     if (is_supported_color_value(text)) {
         return true;
@@ -614,8 +652,21 @@ bool is_supported_background_value(std::string_view value) {
         std::vector<std::string> args =
             split_top_level_commas(std::string_view(text).substr(16, text.size() - 17));
         if (args.size() == 3) {
-            const std::string shape = trim(args[0]);
-            if (shape != "circle" && shape != "circle at center" && shape != "at center") {
+            const std::vector<std::string> position = split_whitespace_top_level(args[0]);
+            std::size_t position_index = 0;
+            if (!position.empty() && position[0] == "circle") {
+                ++position_index;
+            }
+            bool valid_position = position_index == position.size();
+            if (!valid_position && position_index < position.size() && position[position_index] == "at") {
+                ++position_index;
+                valid_position = position_index + 1 == position.size() && position[position_index] == "center";
+                if (!valid_position && position_index + 2 == position.size()) {
+                    valid_position = is_number_with_suffix(position[position_index], {"%"}) &&
+                        is_number_with_suffix(position[position_index + 1], {"%"});
+                }
+            }
+            if (!valid_position) {
                 return false;
             }
             args.erase(args.begin());
@@ -645,7 +696,11 @@ bool is_supported_background_value(std::string_view value) {
     if (args.size() == 3) {
         const std::string direction = trim(args[0]);
         if (direction != "to bottom" && direction != "to top" &&
-            direction != "to right" && direction != "to left") {
+            direction != "to right" && direction != "to left" &&
+            direction != "to top left" && direction != "to top right" &&
+            direction != "to bottom left" && direction != "to bottom right" &&
+            direction != "0deg" && direction != "45deg" && direction != "90deg" && direction != "135deg" &&
+            direction != "180deg" && direction != "225deg" && direction != "270deg" && direction != "315deg") {
             return false;
         }
         args.erase(args.begin());
@@ -653,12 +708,28 @@ bool is_supported_background_value(std::string_view value) {
     return args.size() == 2 && is_supported_color_value(args[0]) && is_supported_color_value(args[1]);
 }
 
+bool is_supported_background_value(std::string_view value) {
+    const std::vector<std::string> layers = split_top_level_commas(value);
+    if (layers.empty() || layers.size() > 2) {
+        return false;
+    }
+    return std::all_of(layers.begin(), layers.end(), [](const std::string& layer) {
+        return is_supported_single_background_value(layer);
+    });
+}
+
 bool is_supported_background_image_value(std::string_view value) {
+    if (is_supported_package_background_url(value)) {
+        return true;
+    }
     const std::string text = ascii_lowercase(trim(value));
+    if (text == "none") {
+        return true;
+    }
     if (is_supported_color_value(text)) {
         return false;
     }
-    return is_supported_background_value(text);
+    return is_supported_background_value(value);
 }
 
 bool supported_keyword(std::string_view value, const std::initializer_list<std::string_view>& keywords) {
@@ -724,6 +795,17 @@ bool is_positive_integer_value(std::string_view raw_value) {
     }) && value != "0";
 }
 
+bool is_integer_value(std::string_view raw_value) {
+    const std::string value = ascii_lowercase(trim(raw_value));
+    if (value.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    std::strtol(value.c_str(), &end, 10);
+    return end != value.c_str() && errno != ERANGE && end != nullptr && *end == '\0';
+}
+
 bool is_supported_declaration_feature(std::string_view feature) {
     const std::size_t colon = find_top_level_colon(feature);
     if (colon == std::string_view::npos) {
@@ -741,6 +823,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
         return supported_keyword(value, {"block", "inline", "inline-block", "flex",
                                         "inline-flex", "grid", "inline-grid", "none"});
     }
+    if (property == "visibility") {
+        return supported_keyword(value, {"visible", "hidden"});
+    }
     if (property == "flex") {
         return value == "auto" || value == "none" ||
                value.find("px") != std::string::npos || is_number_with_suffix(value, {""}, false);
@@ -753,6 +838,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
     }
     if (property == "flex-direction") {
         return supported_keyword(value, {"row", "column"});
+    }
+    if (property == "order") {
+        return is_integer_value(value);
     }
     if (property == "align-self") {
         return supported_keyword(value, {"auto", "stretch", "normal", "start", "flex-start", "center", "end", "flex-end"});
@@ -771,15 +859,37 @@ bool is_supported_declaration_feature(std::string_view feature) {
     }
     if (property == "width" || property == "height" || property == "min-width" ||
         property == "min-height" || property == "max-width" || property == "max-height" || property == "font-size" ||
-        property == "text-indent" || property == "gap" || property == "row-gap" ||
+        property == "text-indent" || property == "letter-spacing" || property == "gap" || property == "row-gap" ||
         property == "column-gap" || property == "grid-auto-rows") {
+        return is_supported_length_value(value);
+    }
+    if (property == "inline-size" || property == "block-size" ||
+        property == "min-inline-size" || property == "min-block-size" ||
+        property == "max-inline-size" || property == "max-block-size") {
         return is_supported_length_value(value);
     }
     if (property == "top" || property == "right" || property == "bottom" || property == "left") {
         return value == "auto" || is_supported_length_value(value);
     }
+    if (property == "inset") {
+        return is_supported_length_sequence(value, 4, true);
+    }
+    if (property == "inset-inline" || property == "inset-block") {
+        return is_supported_length_sequence(value, 2, true);
+    }
+    if (property == "inset-inline-start" || property == "inset-inline-end" ||
+        property == "inset-block-start" || property == "inset-block-end") {
+        return value == "auto" || is_supported_length_value(value);
+    }
     if (property == "margin" || property == "margin-top" || property == "margin-right" ||
         property == "margin-bottom" || property == "margin-left") {
+        return value == "auto" || is_supported_length_value(value);
+    }
+    if (property == "margin-inline" || property == "margin-block") {
+        return is_supported_length_sequence(value, 2, true);
+    }
+    if (property == "margin-inline-start" || property == "margin-inline-end" ||
+        property == "margin-block-start" || property == "margin-block-end") {
         return value == "auto" || is_supported_length_value(value);
     }
     if (property == "padding" || property == "padding-top" || property == "padding-right" ||
@@ -787,6 +897,20 @@ bool is_supported_declaration_feature(std::string_view feature) {
         property == "border-width" || property == "border-top-width" ||
         property == "border-right-width" || property == "border-bottom-width" ||
         property == "border-left-width" || property == "border-radius") {
+        return is_supported_length_value(value);
+    }
+    if (property == "padding-inline" || property == "padding-block") {
+        return is_supported_length_sequence(value, 2, false);
+    }
+    if (property == "padding-inline-start" || property == "padding-inline-end" ||
+        property == "padding-block-start" || property == "padding-block-end") {
+        return is_supported_length_value(value);
+    }
+    if (property == "border-inline-width" || property == "border-block-width") {
+        return is_supported_length_sequence(value, 2, false);
+    }
+    if (property == "border-inline-start-width" || property == "border-inline-end-width" ||
+        property == "border-block-start-width" || property == "border-block-end-width") {
         return is_supported_length_value(value);
     }
     if (property == "border" || property == "border-top" || property == "border-right" ||
@@ -822,8 +946,14 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "white-space") {
         return supported_keyword(value, {"normal", "nowrap"});
     }
+    if (property == "text-wrap") {
+        return supported_keyword(value, {"wrap", "nowrap"});
+    }
     if (property == "text-overflow") {
         return supported_keyword(value, {"clip", "ellipsis"});
+    }
+    if (property == "overflow-wrap") {
+        return supported_keyword(value, {"normal", "anywhere"});
     }
     if (property == "opacity") {
         return is_number_with_suffix(value, {""}, false);
@@ -845,6 +975,7 @@ bool is_supported_declaration_feature(std::string_view feature) {
         return value.find("opacity") != std::string::npos ||
                value.find("transform") != std::string::npos ||
                value.find("color") != std::string::npos ||
+               value.find("cubic-bezier(") != std::string::npos ||
                value.find("ms") != std::string::npos ||
                value.find('s') != std::string::npos;
     }
@@ -857,13 +988,15 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "animation" ||
         property == "animation-duration" || property == "animation-delay" ||
         property == "animation-timing-function" ||
-        property == "animation-direction") {
+        property == "animation-direction" || property == "animation-fill-mode") {
         return value == "none" ||
                value == "infinite" ||
                value == "normal" ||
                value == "alternate" ||
+               value == "forwards" || value == "backwards" || value == "both" ||
                value.find("linear") != std::string::npos ||
                value.find("ease") != std::string::npos ||
+               value.find("cubic-bezier(") != std::string::npos ||
                value.find("ms") != std::string::npos ||
                value.find('s') != std::string::npos ||
                is_number_with_suffix(value, {""}, false);
@@ -873,6 +1006,14 @@ bool is_supported_declaration_feature(std::string_view feature) {
                                         "end", "flex-end", "space-around", "space-between",
                                         "space-evenly"});
     }
+    if (property == "place-content") {
+        const std::vector<std::string> values = split_whitespace_top_level(value);
+        return !values.empty() && values.size() <= 2 && std::all_of(values.begin(), values.end(), [](const std::string& item) {
+            return supported_keyword(item, {"start", "flex-start", "normal", "center",
+                                            "end", "flex-end", "space-around", "space-between",
+                                            "space-evenly"});
+        });
+    }
     if (property == "align-items") {
         return supported_keyword(value, {"stretch", "normal", "start", "flex-start",
                                         "center", "end", "flex-end"});
@@ -880,12 +1021,14 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property == "flex-wrap") {
         return supported_keyword(value, {"wrap", "wrap-reverse", "nowrap"});
     }
-    if (property == "grid-template-columns") {
+    if (property == "grid-template-columns" || property == "grid-template-rows") {
         return value.find("minmax(") != std::string::npos || value.find("repeat(") != std::string::npos ||
-               value.find("fr") != std::string::npos || value.find("px") != std::string::npos;
+               value.find("fr") != std::string::npos || value.find("px") != std::string::npos ||
+               value.find("em") != std::string::npos;
     }
     if (property == "grid-column" || property == "grid-row") {
-        return value.find("span") != std::string::npos;
+        return value.find("span") != std::string::npos || value.find('/') != std::string::npos ||
+               is_positive_integer_value(value);
     }
     if (property == "list-style" || property == "list-style-type") {
         return supported_keyword(value, {"none", "disc", "decimal", "decimal-leading-zero"});
@@ -912,6 +1055,9 @@ bool is_supported_declaration_feature(std::string_view feature) {
                value.find("rgb(") != std::string::npos || value.find("px") != std::string::npos;
     }
     if (property == "outline-width") {
+        return is_supported_length_value(value);
+    }
+    if (property == "outline-offset") {
         return is_supported_length_value(value);
     }
     if (property == "outline-color") {
@@ -1192,6 +1338,226 @@ bool finish_important(std::string& value) {
 
     value = trim(value);
     return false;
+}
+
+std::size_t find_top_level_open_brace(std::string_view source, std::size_t begin) {
+    int paren_depth = 0;
+    char quote = '\0';
+    for (std::size_t index = begin; index < source.size(); ++index) {
+        const char ch = source[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < source.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '/' && index + 1 < source.size() && source[index + 1] == '*') {
+            index += 2;
+            while (index + 1 < source.size() && !(source[index] == '*' && source[index + 1] == '/')) {
+                ++index;
+            }
+            ++index;
+            continue;
+        }
+        if (ch == '\'' || ch == '"') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++paren_depth;
+        } else if (ch == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (ch == '{' && paren_depth == 0) {
+            return index;
+        }
+    }
+    return std::string_view::npos;
+}
+
+std::size_t find_matching_brace(std::string_view source, std::size_t open_brace) {
+    int brace_depth = 0;
+    char quote = '\0';
+    for (std::size_t index = open_brace; index < source.size(); ++index) {
+        const char ch = source[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < source.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '/' && index + 1 < source.size() && source[index + 1] == '*') {
+            index += 2;
+            while (index + 1 < source.size() && !(source[index] == '*' && source[index + 1] == '/')) {
+                ++index;
+            }
+            ++index;
+            continue;
+        }
+        if (ch == '\'' || ch == '"') {
+            quote = ch;
+        } else if (ch == '{') {
+            ++brace_depth;
+        } else if (ch == '}' && --brace_depth == 0) {
+            return index;
+        }
+    }
+    return std::string_view::npos;
+}
+
+std::size_t find_last_top_level_semicolon(std::string_view source) {
+    int paren_depth = 0;
+    char quote = '\0';
+    std::size_t result = std::string_view::npos;
+    for (std::size_t index = 0; index < source.size(); ++index) {
+        const char ch = source[index];
+        if (quote != '\0') {
+            if (ch == '\\' && index + 1 < source.size()) {
+                ++index;
+            } else if (ch == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '\'' || ch == '"') {
+            quote = ch;
+        } else if (ch == '(') {
+            ++paren_depth;
+        } else if (ch == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (ch == ';' && paren_depth == 0) {
+            result = index;
+        }
+    }
+    return result;
+}
+
+std::string replace_nesting_parent(std::string_view selector, std::string_view parent) {
+    std::string expanded;
+    std::size_t cursor = 0;
+    while (cursor < selector.size()) {
+        const std::size_t marker = selector.find('&', cursor);
+        if (marker == std::string_view::npos) {
+            expanded.append(selector.substr(cursor));
+            break;
+        }
+        expanded.append(selector.substr(cursor, marker - cursor));
+        expanded.append(parent);
+        cursor = marker + 1;
+    }
+    return trim(expanded);
+}
+
+void append_nesting_rule(std::string& output, std::string_view selector, std::string_view declarations) {
+    if (trim(declarations).empty()) {
+        return;
+    }
+    output.append(selector);
+    output.push_back('{');
+    output.append(declarations);
+    output.push_back('}');
+}
+
+std::string expand_single_level_nesting_rule(std::string_view parent_selector,
+                                             std::string_view body,
+                                             DiagnosticSink* diagnostics) {
+    if (body.find('&') == std::string_view::npos) {
+        std::string unchanged(parent_selector);
+        unchanged.push_back('{');
+        unchanged.append(body);
+        unchanged.push_back('}');
+        return unchanged;
+    }
+
+    std::string output;
+    std::size_t cursor = 0;
+    while (true) {
+        const std::size_t open_brace = find_top_level_open_brace(body, cursor);
+        if (open_brace == std::string_view::npos) {
+            append_nesting_rule(output, parent_selector, body.substr(cursor));
+            break;
+        }
+        const std::size_t close_brace = find_matching_brace(body, open_brace);
+        if (close_brace == std::string_view::npos) {
+            report_diagnostic(diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
+                              "css-nesting-skipped", "Malformed nested CSS block was skipped", std::string(parent_selector));
+            append_nesting_rule(output, parent_selector, body.substr(cursor, open_brace - cursor));
+            break;
+        }
+        const std::string_view prefix = body.substr(cursor, open_brace - cursor);
+        const std::size_t semicolon = find_last_top_level_semicolon(prefix);
+        const std::string_view declarations = semicolon == std::string_view::npos
+            ? std::string_view{}
+            : prefix.substr(0, semicolon + 1);
+        const std::string nested_selector = trim(semicolon == std::string_view::npos
+            ? prefix
+            : prefix.substr(semicolon + 1));
+        append_nesting_rule(output, parent_selector, declarations);
+
+        const std::string_view nested_body = body.substr(open_brace + 1, close_brace - open_brace - 1);
+        const bool valid_nested_selector = !nested_selector.empty() && nested_selector.find('&') != std::string::npos &&
+            nested_selector.front() != '@' && find_top_level_open_brace(nested_body, 0) == std::string_view::npos;
+        if (!valid_nested_selector) {
+            report_diagnostic(diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
+                              "css-nesting-skipped", "Nested CSS is outside the explicit single-level '&' subset",
+                              nested_selector.empty() ? std::string(parent_selector) : nested_selector);
+        } else {
+            const std::vector<std::string> parents = split_top_level_commas(parent_selector);
+            const std::vector<std::string> nested_selectors = split_top_level_commas(nested_selector);
+            constexpr std::size_t kMaxExpandedSelectors = 16;
+            if (parents.empty() || nested_selectors.empty() || parents.size() * nested_selectors.size() > kMaxExpandedSelectors) {
+                report_diagnostic(diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
+                                  "css-nesting-skipped", "Nested selector expansion exceeded the bounded subset",
+                                  nested_selector);
+            } else {
+                for (const std::string& parent : parents) {
+                    for (const std::string& nested : nested_selectors) {
+                        append_nesting_rule(output, replace_nesting_parent(nested, trim(parent)), nested_body);
+                    }
+                }
+            }
+        }
+        cursor = close_brace + 1;
+    }
+    return output;
+}
+
+std::string expand_single_level_css_nesting(std::string_view source, DiagnosticSink* diagnostics) {
+    if (source.find('&') == std::string_view::npos) {
+        return {};
+    }
+    std::string output;
+    std::size_t cursor = 0;
+    while (cursor < source.size()) {
+        const std::size_t open_brace = find_top_level_open_brace(source, cursor);
+        if (open_brace == std::string_view::npos) {
+            output.append(source.substr(cursor));
+            break;
+        }
+        const std::size_t close_brace = find_matching_brace(source, open_brace);
+        if (close_brace == std::string_view::npos) {
+            output.append(source.substr(cursor));
+            break;
+        }
+        const std::string_view prelude = source.substr(cursor, open_brace - cursor);
+        const std::string trimmed_prelude = trim(prelude);
+        const std::string_view body = source.substr(open_brace + 1, close_brace - open_brace - 1);
+        if (!trimmed_prelude.empty() && trimmed_prelude.front() == '@') {
+            output.append(prelude);
+            output.push_back('{');
+            if (body.find('&') == std::string_view::npos) {
+                output.append(body);
+            } else {
+                output.append(expand_single_level_css_nesting(body, diagnostics));
+            }
+            output.push_back('}');
+        } else {
+            output.append(expand_single_level_nesting_rule(prelude, body, diagnostics));
+        }
+        cursor = close_brace + 1;
+    }
+    return output;
 }
 
 class CssParserRun {
@@ -1780,7 +2146,11 @@ Stylesheet CssParser::parse(const std::string& source) const {
 }
 
 Stylesheet CssParser::parse(const std::string& source, const CssParserOptions& options) const {
-    CssParserRun run(source, options);
+    const bool uses_nesting_marker = source.find('&') != std::string::npos;
+    const std::string expanded = uses_nesting_marker
+        ? expand_single_level_css_nesting(source, options.diagnostics)
+        : std::string{};
+    CssParserRun run(uses_nesting_marker ? std::string_view(expanded) : std::string_view(source), options);
     return run.parse();
 }
 

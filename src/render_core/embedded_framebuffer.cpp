@@ -58,10 +58,15 @@ constexpr std::array<std::uint8_t, 256> make_quantize_table(int bits) {
 constexpr std::array<std::uint8_t, 256> kQuantize5 = make_quantize_table(5);
 constexpr std::array<std::uint8_t, 256> kQuantize6 = make_quantize_table(6);
 
-std::uint8_t quantize_channel(std::uint8_t channel, int bits, int x, int y, bool ordered_dither) {
-    const int max_value = (1 << bits) - 1;
-    const int bias = ordered_dither ? bayer4_threshold(x, y) * 16 : 127;
-    return static_cast<std::uint8_t>(std::min(max_value, (static_cast<int>(channel) * max_value + bias) / 255));
+int divide_by_255(int value) {
+    // Exact for this bounded non-negative quantization numerator range.
+    const int incremented = value + 1;
+    return (incremented + (incremented >> 8)) >> 8;
+}
+
+std::uint8_t quantize_channel(std::uint8_t channel, int max_value, int bias) {
+    return static_cast<std::uint8_t>(std::min(max_value,
+        divide_by_255(static_cast<int>(channel) * max_value + bias)));
 }
 
 std::uint16_t pack_565_opaque_no_dither(Color color, bool bgr) {
@@ -76,9 +81,10 @@ std::uint16_t pack_565_opaque_no_dither(Color color, bool bgr) {
 
 std::uint16_t pack_565(Color color, bool bgr, int x, int y, bool ordered_dither) {
     color = opaque_color(color);
-    const std::uint16_t r = quantize_channel(color.r, 5, x, y, ordered_dither);
-    const std::uint16_t g = quantize_channel(color.g, 6, x, y, ordered_dither);
-    const std::uint16_t b = quantize_channel(color.b, 5, x, y, ordered_dither);
+    const int bias = ordered_dither ? bayer4_threshold(x, y) * 16 : 127;
+    const std::uint16_t r = quantize_channel(color.r, 31, bias);
+    const std::uint16_t g = quantize_channel(color.g, 63, bias);
+    const std::uint16_t b = quantize_channel(color.b, 31, bias);
     if (bgr) {
         return static_cast<std::uint16_t>((b << 11) | (g << 5) | r);
     }

@@ -74,6 +74,7 @@ private:
         std::uint32_t duration_ms = 0;
         std::uint32_t delay_ms = 0;
         AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+        std::uint64_t cubic_bezier = 0;
         float from_opacity = 1.0F;
         float to_opacity = 1.0F;
         Color from_color;
@@ -89,9 +90,11 @@ private:
         std::uint32_t duration_ms = 0;
         std::uint32_t delay_ms = 0;
         AnimationTimingFunction timing = AnimationTimingFunction::Ease;
+        std::uint64_t cubic_bezier = 0;
         std::uint16_t iteration_count = 1;
         bool infinite = false;
         AnimationDirection direction = AnimationDirection::Normal;
+        AnimationFillMode fill_mode = AnimationFillMode::None;
         Style from_style;
         Style to_style;
         Transform2D from_transform;

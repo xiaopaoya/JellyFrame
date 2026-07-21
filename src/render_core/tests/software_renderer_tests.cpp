@@ -142,6 +142,23 @@ void fill_rect_rasterizes_pixels() {
     check(frame_buffer.pixel(0, 0).r == 255, "fill rect leaves outside pixel");
 }
 
+void rounded_image_clip_preserves_corner_underpaint() {
+    FrameBuffer frame_buffer(16, 16, Color{255, 255, 255, 255});
+    ImagePaintProbe probe;
+    probe.expected_handle = 17;
+    SoftwareRasterizer rasterizer({}, ImagePainter{probe_image_painter, &probe});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Image;
+    command.rect = Rect{2, 2, 10, 10};
+    command.image_handle = 17;
+    command.border_radius = encode_corner_radii(CornerRadii{5, 5, 5, 5});
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 16, 16});
+    check(frame_buffer.pixel(2, 2).r == 255, "rounded image leaves the outer corner underpaint visible");
+    check(frame_buffer.pixel(7, 2).r < 255, "rounded image paints the antialiased top edge");
+    check(frame_buffer.pixel(7, 7).r == 220, "rounded image paints its center");
+    check(probe.calls == 1, "rounded image resolves through the normal image painter once");
+}
+
 void linear_gradient_rasterizes_top_and_bottom_colors() {
     FrameBuffer frame_buffer(3, 4, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -171,6 +188,83 @@ void horizontal_linear_gradient_rasterizes_left_and_right_colors() {
     check(frame_buffer.pixel(0, 1).r == 0, "horizontal gradient left column uses first color");
     check(frame_buffer.pixel(3, 1).r == 90, "horizontal gradient right column uses second color");
     check(frame_buffer.pixel(2, 1).r > frame_buffer.pixel(1, 1).r, "horizontal gradient interpolates columns");
+}
+
+void diagonal_linear_gradient_rasterizes_corner_colors() {
+    FrameBuffer frame_buffer(5, 5, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::LinearGradient;
+    command.rect = Rect{0, 0, 5, 5};
+    command.color = Color{0, 0, 0, 255};
+    command.color2 = Color{200, 100, 40, 255};
+    command.gradient_axis = GradientAxis::DiagonalDownRight;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 5, 5});
+
+    check(frame_buffer.pixel(0, 0).r == 0, "diagonal gradient starts with first corner color");
+    check(frame_buffer.pixel(4, 4).r == 200, "diagonal gradient reaches second corner color");
+    check(frame_buffer.pixel(4, 0).r > 0 && frame_buffer.pixel(4, 0).r < 200,
+          "diagonal gradient interpolates across the off-axis corner");
+}
+
+void opaque_linear_gradient_fast_path_preserves_dirty_clip() {
+    FrameBuffer frame_buffer(5, 5, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::LinearGradient;
+    command.rect = Rect{0, 0, 5, 5};
+    command.color = Color{0, 0, 0, 255};
+    command.color2 = Color{200, 100, 50, 255};
+
+    rasterizer.rasterize(command, frame_buffer, Rect{1, 1, 2, 2});
+
+    check(frame_buffer.pixel(0, 0).r == 255, "opaque gradient fast path preserves pixels outside dirty clip");
+    check(frame_buffer.pixel(1, 1).r == 49 && frame_buffer.pixel(1, 1).g == 25,
+          "opaque gradient fast path preserves vertical interpolation inside dirty clip");
+    check(frame_buffer.pixel(2, 2).r == 100 && frame_buffer.pixel(2, 2).g == 50,
+          "opaque gradient fast path preserves later dirty rows");
+}
+
+void opaque_linear_gradient_fast_path_preserves_all_axis_interpolation() {
+    const Color first{12, 34, 56, 255};
+    const Color second{212, 134, 6, 255};
+    SoftwareRasterizer rasterizer;
+
+    DisplayCommand horizontal;
+    horizontal.type = DisplayCommandType::LinearGradient;
+    horizontal.rect = Rect{1, 1, 5, 5};
+    horizontal.color = first;
+    horizontal.color2 = second;
+    horizontal.gradient_axis = GradientAxis::Horizontal;
+    FrameBuffer horizontal_target(7, 7, Color{255, 255, 255, 255});
+    rasterizer.rasterize(horizontal, horizontal_target, Rect{2, 2, 3, 3});
+    check(horizontal_target.pixel(2, 2).r == 61 && horizontal_target.pixel(2, 2).g == 59 &&
+              horizontal_target.pixel(2, 2).b == 44,
+          "opaque horizontal gradient keeps standard interpolation in a dirty clip");
+    check(horizontal_target.pixel(4, 4).r == 162 && horizontal_target.pixel(4, 4).g == 109 &&
+              horizontal_target.pixel(4, 4).b == 19,
+          "opaque horizontal gradient keeps later interpolation in a dirty clip");
+
+    DisplayCommand diagonal = horizontal;
+    diagonal.gradient_axis = GradientAxis::DiagonalDownRight;
+    FrameBuffer diagonal_target(7, 7, Color{255, 255, 255, 255});
+    rasterizer.rasterize(diagonal, diagonal_target, Rect{2, 2, 3, 3});
+    check(diagonal_target.pixel(2, 2).r == 61 && diagonal_target.pixel(2, 2).g == 59 &&
+              diagonal_target.pixel(2, 2).b == 44,
+          "opaque diagonal-down-right gradient keeps its first dirty sample");
+    check(diagonal_target.pixel(4, 4).r == 162 && diagonal_target.pixel(4, 4).g == 109 &&
+              diagonal_target.pixel(4, 4).b == 19,
+          "opaque diagonal-down-right gradient keeps its final dirty sample");
+
+    diagonal.gradient_axis = GradientAxis::DiagonalDownLeft;
+    FrameBuffer reverse_diagonal_target(7, 7, Color{255, 255, 255, 255});
+    rasterizer.rasterize(diagonal, reverse_diagonal_target, Rect{2, 2, 3, 3});
+    check(reverse_diagonal_target.pixel(2, 2).r == 112 && reverse_diagonal_target.pixel(2, 2).g == 84 &&
+              reverse_diagonal_target.pixel(2, 2).b == 31,
+          "opaque diagonal-down-left gradient keeps its first dirty sample");
+    check(reverse_diagonal_target.pixel(4, 2).r == 61 && reverse_diagonal_target.pixel(4, 2).g == 59 &&
+              reverse_diagonal_target.pixel(4, 2).b == 44,
+          "opaque diagonal-down-left gradient keeps its mirrored dirty sample");
 }
 
 void conic_gradient_rasterizes_clockwise_progress() {
@@ -206,6 +300,75 @@ void radial_gradient_rasterizes_center_to_edge() {
           "radial gradient interpolates by distance from center");
 }
 
+void radial_gradient_keeps_diagonal_falloff_close_to_axis() {
+    FrameBuffer frame_buffer(129, 129, Color{0, 0, 0, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::RadialGradient;
+    command.rect = Rect{0, 0, 129, 129};
+    command.color = Color{255, 255, 255, 255};
+    command.color2 = Color{0, 0, 0, 255};
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 129, 129});
+
+    const int axis = frame_buffer.pixel(112, 64).r;
+    const int diagonal = frame_buffer.pixel(98, 98).r;
+    check(std::abs(axis - diagonal) <= 3,
+          "radial gradient keeps near-equal axis and diagonal distances circular instead of octagonal");
+}
+
+void positioned_radial_gradient_moves_highlight_center() {
+    FrameBuffer frame_buffer(11, 11, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::RadialGradient;
+    command.rect = Rect{0, 0, 11, 11};
+    command.color = Color{240, 250, 255, 255};
+    command.color2 = Color{20, 80, 140, 255};
+    command.gradient_axis = GradientAxis::RadialPosition;
+    command.gradient_stop_percent = 80 * 101 + 20;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 11, 11});
+
+    check(frame_buffer.pixel(8, 2).r > frame_buffer.pixel(5, 5).r,
+          "positioned radial gradient moves the highlight toward its declared center");
+}
+
+void soft_box_shadow_fades_outside_rounded_card() {
+    FrameBuffer frame_buffer(20, 20, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::BoxShadow;
+    command.rect = Rect{2, 2, 16, 16};
+    command.color = Color{0, 0, 0, 96};
+    command.border_radius = 7;
+    command.stroke_width = 3;
+    command.gradient_stop_percent = 3;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 20, 20});
+
+    check(frame_buffer.pixel(10, 17).r < 255, "soft shadow paints within its bounded outer extent");
+    check(frame_buffer.pixel(10, 18).r == 255, "soft shadow leaves pixels outside its extent untouched");
+    check(frame_buffer.pixel(10, 17).r > frame_buffer.pixel(10, 16).r,
+          "soft shadow fades instead of drawing a flat translucent rectangle");
+}
+
+void circular_box_shadow_keeps_diagonal_falloff_close_to_axis() {
+    FrameBuffer frame_buffer(52, 52, Color{0, 0, 0, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::BoxShadow;
+    command.rect = Rect{0, 0, 52, 52};
+    command.color = Color{255, 255, 255, 255};
+    command.border_radius = 26;
+    command.stroke_width = 6;
+    command.gradient_stop_percent = 8;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 52, 52});
+
+    const int axis = frame_buffer.pixel(26, 2).r;
+    const int diagonal = frame_buffer.pixel(42, 42).r;
+    check(axis > 0 && diagonal > 0, "circular box shadow reaches equal-distance axis and diagonal samples");
+    check(std::abs(axis - diagonal) <= 6,
+          "circular box shadow keeps the diagonal falloff close to the axis without an octagonal halo");
+}
+
 void rounded_stroke_keeps_corner_pixels_clear() {
     FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -235,6 +398,19 @@ void rounded_fill_antialiases_edge_pixels() {
     check(edge.r > 0 && edge.r < 255, "rounded fill edge is partially covered");
     check(frame_buffer.pixel(6, 6).r == 0, "rounded fill center remains sharp");
     check(frame_buffer.pixel(1, 1).r == 255, "rounded fill outer corner remains clear");
+}
+
+void per_corner_rounded_rect_keeps_square_bottom_left() {
+    FrameBuffer frame_buffer(24, 24, Color{0, 0, 0, 255});
+    DisplayCommand command;
+    command.type = DisplayCommandType::FillRect;
+    command.rect = Rect{2, 2, 18, 18};
+    command.color = Color{255, 255, 255, 255};
+    command.border_radius = encode_corner_radii(CornerRadii{8, 4, 2, 0});
+    SoftwareRasterizer rasterizer;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 24, 24});
+    check(frame_buffer.pixel(2, 19).r == 255, "square bottom-left corner remains filled");
+    check(frame_buffer.pixel(2, 2).r < 255, "rounded top-left corner keeps antialiased coverage");
 }
 
 void source_over_alpha_composites() {
@@ -999,12 +1175,21 @@ void jffont_v1_coverage_glyphs_antialias_text_edges() {
 int main() {
     try {
         fill_rect_rasterizes_pixels();
+        rounded_image_clip_preserves_corner_underpaint();
         linear_gradient_rasterizes_top_and_bottom_colors();
         horizontal_linear_gradient_rasterizes_left_and_right_colors();
+        diagonal_linear_gradient_rasterizes_corner_colors();
+        opaque_linear_gradient_fast_path_preserves_dirty_clip();
+        opaque_linear_gradient_fast_path_preserves_all_axis_interpolation();
         conic_gradient_rasterizes_clockwise_progress();
         radial_gradient_rasterizes_center_to_edge();
+        radial_gradient_keeps_diagonal_falloff_close_to_axis();
+        positioned_radial_gradient_moves_highlight_center();
+        soft_box_shadow_fades_outside_rounded_card();
+        circular_box_shadow_keeps_diagonal_falloff_close_to_axis();
         rounded_stroke_keeps_corner_pixels_clear();
         rounded_fill_antialiases_edge_pixels();
+        per_corner_rounded_rect_keeps_square_bottom_left();
         source_over_alpha_composites();
         clipping_limits_rasterization();
         image_command_uses_injected_painter();

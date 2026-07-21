@@ -54,12 +54,15 @@ void css_transition_and_transform_subset_is_parsed() {
     auto element = make_element("button");
     element->attributes["class"] = "card";
     StyleResolver resolver(parser.parse(
-        ".card { transition: opacity 200ms linear, transform .1s ease-out; "
+        ".card { transition: opacity 200ms linear, transform .1s cubic-bezier(.2, .8, .2, 1); "
         "opacity: .5; transform: translate(10px, 4px) scale(.9); }"));
     const Style style = resolver.resolve(*element);
     check(style.transitions.size() == 2, "transition shorthand creates bounded transition entries");
     check(style.transitions[0].duration_ms == 200, "transition duration ms parsed");
     check(style.transitions[0].property == AnimatableProperty::Opacity, "transition property parsed");
+    check(style.transitions[1].timing == AnimationTimingFunction::CubicBezier &&
+              style.transitions[1].cubic_bezier != 0,
+          "transition shorthand stores bounded cubic-bezier timing data");
     check(style.opacity > 0.49F && style.opacity < 0.51F, "opacity parsed");
 
     Transform2D transform;
@@ -80,6 +83,25 @@ void css_transition_and_transform_subset_is_parsed() {
           "transform-origin percentage parsed");
 }
 
+void cubic_bezier_timing_is_sampled_for_composited_transition() {
+    CssParser parser;
+    auto element = make_element("div");
+    element->attributes["class"] = "card";
+    StyleResolver resolver(parser.parse(
+        ".card { opacity: 1; transition: opacity 100ms cubic-bezier(.2, .8, .2, 1); }"));
+    const Style to = resolver.resolve(*element);
+    Style from = to;
+    from.opacity = 0.0F;
+
+    AnimationTimeline timeline;
+    check(timeline.start_transitions(*element, from, to, 0), "cubic-bezier transition starts");
+    std::vector<StyleOverride> overrides;
+    check(timeline.sample(50, overrides) && overrides.size() == 1 && overrides[0].has_opacity,
+          "cubic-bezier transition samples an opacity override");
+    check(overrides[0].opacity > 0.70F && overrides[0].opacity < 0.96F,
+          "front-loaded cubic-bezier curve differs from linear interpolation");
+}
+
 void css_keyframes_animation_subset_is_parsed() {
     CssParser parser;
     Stylesheet stylesheet = parser.parse(
@@ -88,7 +110,7 @@ void css_keyframes_animation_subset_is_parsed() {
         "  50% { opacity: .5; }"
         "  to { opacity: 1; transform: translate(8px, 2px) scale(1.1); }"
         "}"
-        ".dot { animation: pulse 200ms linear infinite alternate; }");
+        ".dot { animation: pulse 200ms linear infinite alternate both; }");
     check(stylesheet.keyframes_size() == 1, "@keyframes rule is stored");
     check(stylesheet.keyframes().front().from_declarations.size() == 3, "from declarations are parsed");
     check(stylesheet.keyframes().front().to_declarations.size() == 2, "to declarations are parsed");
@@ -102,6 +124,7 @@ void css_keyframes_animation_subset_is_parsed() {
     check(style.animations[0].duration_ms == 200, "animation duration parsed");
     check(style.animations[0].infinite, "infinite iteration count parsed");
     check(style.animations[0].direction == AnimationDirection::Alternate, "alternate direction parsed");
+    check(style.animations[0].fill_mode == AnimationFillMode::Both, "animation shorthand parses fill mode");
     check(resolver.keyframes("pulse") != nullptr, "resolver exposes keyframes lookup");
 
     StyleResolver longhand_resolver(parser.parse(
@@ -110,6 +133,30 @@ void css_keyframes_animation_subset_is_parsed() {
     check(longhand.animations.size() == 1, "animation longhands keep partial entries");
     check(longhand.animations[0].name == "pulse", "animation-name preserves earlier duration");
     check(longhand.animations[0].duration_ms == 120, "animation-duration before name is preserved");
+}
+
+void keyframe_fill_mode_holds_explicit_terminal_state() {
+    auto node = make_element("div");
+    Style base;
+    StyleAnimation animation;
+    animation.name = "enter";
+    animation.duration_ms = 100;
+    animation.timing = AnimationTimingFunction::Linear;
+    animation.fill_mode = AnimationFillMode::Forwards;
+    CssKeyframesRule keyframes;
+    keyframes.name = "enter";
+    keyframes.from_declarations.push_back(CssDeclaration{"opacity", "0", false});
+    keyframes.to_declarations.push_back(CssDeclaration{"opacity", "1", false});
+
+    AnimationTimeline timeline;
+    check(timeline.ensure_keyframe_animation(*node, base, animation, keyframes, 0),
+          "forwards-fill keyframe animation starts");
+    std::vector<StyleOverride> overrides;
+    check(timeline.sample(100, overrides) && overrides[0].has_opacity && overrides[0].opacity > 0.99F,
+          "forwards fill samples the final style");
+    check(!timeline.empty(), "forwards fill retains its explicit terminal override");
+    check(timeline.sample(250, overrides) && overrides[0].has_opacity && overrides[0].opacity > 0.99F,
+          "forwards fill keeps terminal style after the active duration");
 }
 
 void animation_and_transition_entries_stay_bounded() {
@@ -327,10 +374,12 @@ void animation_invalidation_covers_previous_and_current_transform_bounds() {
 int main() {
     try {
         css_transition_and_transform_subset_is_parsed();
+        cubic_bezier_timing_is_sampled_for_composited_transition();
         css_keyframes_animation_subset_is_parsed();
         animation_and_transition_entries_stay_bounded();
         animation_timeline_samples_paint_only_properties();
         animation_timeline_samples_keyframes_subset();
+        keyframe_fill_mode_holds_explicit_terminal_state();
         keyframe_unsupported_properties_report_diagnostics();
         render_tree_applies_animation_style_overrides();
         software_compositor_applies_translate_transform();

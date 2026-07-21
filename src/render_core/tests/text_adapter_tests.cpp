@@ -83,12 +83,26 @@ void incomplete_adapter_degrades_to_core_fallbacks() {
     check(text_painter_from_adapter(adapter).paint == nullptr, "empty adapter has no painter");
 }
 
+void letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries() {
+    ProbeTextBackend probe;
+    const TextMeasureProvider measure{probe_measure, &probe};
+    const TextMetrics spaced = measure_text_with_letter_spacing(measure, "ABC", 10, 400, 0, 2);
+    check(spaced.width == 34, "letter spacing measures scalar advances plus two gaps");
+
+    const std::string cjk = "\xe4\xb8\xad\xe6\x96\x87";
+    const std::vector<std::string> lines = wrap_text_anywhere(measure, cjk, 10, 400, 0, 0, 30);
+    check(lines.size() == 2, "anywhere wrap breaks two utf-8 scalars into separate lines");
+    check(lines[0].size() == 3 && lines[1].size() == 3,
+          "anywhere wrap never splits the bytes of a utf-8 scalar");
+}
+
 } // namespace
 
 int main() {
     try {
         adapter_wraps_measure_and_paint_callbacks();
         incomplete_adapter_degrades_to_core_fallbacks();
+        letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries();
     } catch (const std::exception& error) {
         std::cerr << "text adapter test failed: " << error.what() << '\n';
         return 1;

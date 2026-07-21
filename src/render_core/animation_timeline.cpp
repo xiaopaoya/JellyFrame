@@ -56,7 +56,7 @@ float mix_float(float from, float to, float t) {
     return from + (to - from) * t;
 }
 
-float apply_timing(AnimationTimingFunction timing, float progress) {
+float apply_timing(AnimationTimingFunction timing, std::uint64_t cubic_bezier, float progress) {
     progress = std::max(0.0F, std::min(1.0F, progress));
     switch (timing) {
     case AnimationTimingFunction::Linear:
@@ -73,6 +73,32 @@ float apply_timing(AnimationTimingFunction timing, float progress) {
         return progress < 0.5F
             ? 2.0F * progress * progress
             : 1.0F - std::pow(-2.0F * progress + 2.0F, 2.0F) * 0.5F;
+    case AnimationTimingFunction::CubicBezier: {
+        const auto unpack = [&](int shift) {
+            return static_cast<float>(static_cast<std::int16_t>((cubic_bezier >> shift) & 0xFFFFU)) / 8192.0F;
+        };
+        const float x1 = unpack(0);
+        const float y1 = unpack(16);
+        const float x2 = unpack(32);
+        const float y2 = unpack(48);
+        const auto bezier = [](float t, float p1, float p2) {
+            const float inverse = 1.0F - t;
+            return 3.0F * inverse * inverse * t * p1 + 3.0F * inverse * t * t * p2 + t * t * t;
+        };
+        const auto derivative = [](float t, float p1, float p2) {
+            const float inverse = 1.0F - t;
+            return 3.0F * inverse * inverse * p1 + 6.0F * inverse * t * (p2 - p1) + 3.0F * t * t * (1.0F - p2);
+        };
+        float t = progress;
+        for (int iteration = 0; iteration < 4; ++iteration) {
+            const float slope = derivative(t, x1, x2);
+            if (std::abs(slope) < 0.001F) {
+                break;
+            }
+            t = std::max(0.0F, std::min(1.0F, t - (bezier(t, x1, x2) - progress) / slope));
+        }
+        return std::max(-2.0F, std::min(2.0F, bezier(t, y1, y2)));
+    }
     }
     return progress;
 }
@@ -165,6 +191,7 @@ bool AnimationTimeline::start_transitions(const Node& node,
         active.duration_ms = transition->duration_ms;
         active.delay_ms = transition->delay_ms;
         active.timing = transition->timing;
+        active.cubic_bezier = transition->cubic_bezier;
         active.from_opacity = from_style.opacity;
         active.to_opacity = to_style.opacity;
         append(active);
@@ -178,6 +205,7 @@ bool AnimationTimeline::start_transitions(const Node& node,
         active.duration_ms = transition->duration_ms;
         active.delay_ms = transition->delay_ms;
         active.timing = transition->timing;
+        active.cubic_bezier = transition->cubic_bezier;
         active.from_color = from_style.background_color;
         active.to_color = to_style.background_color;
         append(active);
@@ -191,6 +219,7 @@ bool AnimationTimeline::start_transitions(const Node& node,
         active.duration_ms = transition->duration_ms;
         active.delay_ms = transition->delay_ms;
         active.timing = transition->timing;
+        active.cubic_bezier = transition->cubic_bezier;
         active.from_color = from_style.color;
         active.to_color = to_style.color;
         append(active);
@@ -209,6 +238,7 @@ bool AnimationTimeline::start_transitions(const Node& node,
             active.duration_ms = transition->duration_ms;
             active.delay_ms = transition->delay_ms;
             active.timing = transition->timing;
+            active.cubic_bezier = transition->cubic_bezier;
             active.from_transform = from_transform;
             active.to_transform = to_transform;
             append(active);
@@ -251,9 +281,11 @@ bool AnimationTimeline::ensure_keyframe_animation(const Node& node,
     active.duration_ms = animation.duration_ms;
     active.delay_ms = animation.delay_ms;
     active.timing = animation.timing;
+    active.cubic_bezier = animation.cubic_bezier;
     active.iteration_count = std::max<std::uint16_t>(1, animation.iteration_count);
     active.infinite = animation.infinite;
     active.direction = animation.direction;
+    active.fill_mode = animation.fill_mode;
     active.from_style = base_style;
     active.to_style = base_style;
 
@@ -311,7 +343,7 @@ bool AnimationTimeline::sample(std::uint64_t now_ms, std::vector<StyleOverride>&
             ? 0.0F
             : static_cast<float>(now_ms - begin) / static_cast<float>(std::max<std::uint32_t>(1, active.duration_ms));
         const float progress = std::min(1.0F, raw_progress);
-        const float eased = apply_timing(active.timing, progress);
+        const float eased = apply_timing(active.timing, active.cubic_bezier, progress);
         StyleOverride& override = override_for(overrides, active.node);
         switch (active.property) {
         case AnimatedTransitionProperty::Opacity:
@@ -340,6 +372,13 @@ bool AnimationTimeline::sample(std::uint64_t now_ms, std::vector<StyleOverride>&
     remaining_keyframes.reserve(keyframes_.size());
     for (const ActiveKeyframeAnimation& active : keyframes_) {
         const std::uint64_t begin = active.start_ms + active.delay_ms;
+        const bool before_start = now_ms < begin;
+        const bool applies_backwards = active.fill_mode == AnimationFillMode::Backwards ||
+            active.fill_mode == AnimationFillMode::Both;
+        if (before_start && !applies_backwards) {
+            remaining_keyframes.push_back(active);
+            continue;
+        }
         const std::uint64_t elapsed = now_ms <= begin ? 0 : now_ms - begin;
         const std::uint32_t duration = std::max<std::uint32_t>(1, active.duration_ms);
         std::uint64_t cycle = elapsed / duration;
@@ -357,7 +396,7 @@ bool AnimationTimeline::sample(std::uint64_t now_ms, std::vector<StyleOverride>&
         if (active.direction == AnimationDirection::Alternate && (cycle % 2U) == 1U) {
             progress = 1.0F - progress;
         }
-        const float eased = apply_timing(active.timing, progress);
+        const float eased = apply_timing(active.timing, active.cubic_bezier, progress);
         StyleOverride& override = override_for(overrides, active.node);
         if (active.animates_opacity) {
             override.has_opacity = true;
@@ -375,7 +414,9 @@ bool AnimationTimeline::sample(std::uint64_t now_ms, std::vector<StyleOverride>&
             override.has_transform = true;
             override.transform = serialize_css_transform_2d(mix_transform(active.from_transform, active.to_transform, eased));
         }
-        if (!finished) {
+        const bool applies_forwards = active.fill_mode == AnimationFillMode::Forwards ||
+            active.fill_mode == AnimationFillMode::Both;
+        if (!finished || applies_forwards) {
             remaining_keyframes.push_back(active);
         }
     }

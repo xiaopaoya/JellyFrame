@@ -1,6 +1,7 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/animation_timeline.h"
 #include "render_core/html_parser.h"
+#include "render_core/hit_test.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
@@ -95,6 +96,30 @@ const LayoutBox* find_layout_by_class(const LayoutBox& box, const std::string& c
     return nullptr;
 }
 
+const LayoutBox* find_layout_by_id(const LayoutBox& box, const std::string& id) {
+    if (box.node != nullptr && box.node->attribute("id") == id) {
+        return &box;
+    }
+    for (const auto& child : box.children) {
+        if (const LayoutBox* found = find_layout_by_id(*child, id)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+const LayoutBox* find_first_text_layout(const LayoutBox& box) {
+    if (box.node != nullptr && box.node->type == NodeType::Text) {
+        return &box;
+    }
+    for (const auto& child : box.children) {
+        if (const LayoutBox* found = find_first_text_layout(*child)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 int fixed_scroll_offset(const Node& node, int max_scroll_y, void*) {
     if (node.attribute("id") == "list") {
         return std::min(24, max_scroll_y);
@@ -120,6 +145,86 @@ void overflow_y_auto_creates_vertical_scroll_clip_layer() {
     check(layer != nullptr, "overflow-y auto layer exists");
     check(layer->type == LayerType::Clip, "overflow-y auto uses the vertical scroll clip layer");
     check(layer->has_clip, "overflow-y auto layer has clip");
+}
+
+void visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing() {
+    auto pipeline = build_pipeline(
+        "<body><section id='hidden'><span id='visible-child'></span></section><div id='after'></div></body>",
+        "body { margin: 0; }"
+        "#hidden { width: 80px; height: 24px; visibility: hidden; background: #000000; }"
+        "#visible-child { display: block; width: 20px; height: 24px; visibility: visible; background: #ff0000; }"
+        "#after { width: 80px; height: 12px; background: #0000ff; }");
+
+    const LayoutBox* hidden = find_layout_by_id(*pipeline.layout_tree, "hidden");
+    const LayoutBox* visible_child = find_layout_by_id(*pipeline.layout_tree, "visible-child");
+    const LayoutBox* after = find_layout_by_id(*pipeline.layout_tree, "after");
+    check(hidden != nullptr && visible_child != nullptr && after != nullptr, "visibility fixture nodes exist");
+    check(hidden->rect.height == 24, "hidden box preserves its layout height");
+    check(after->rect.y == 24, "following sibling keeps the hidden box flow position");
+
+    LayerTreeBuilder builder;
+    const DisplayList commands = builder.flatten(*pipeline.layer_tree);
+    bool found_hidden_black = false;
+    bool found_visible_red = false;
+    bool found_after_blue = false;
+    for (const DisplayCommand& command : commands) {
+        if (command.type != DisplayCommandType::FillRect) {
+            continue;
+        }
+        found_hidden_black |= command.color.r == 0 && command.color.g == 0 && command.color.b == 0;
+        found_visible_red |= command.color.r == 255 && command.color.g == 0 && command.color.b == 0;
+        found_after_blue |= command.color.r == 0 && command.color.g == 0 && command.color.b == 255;
+    }
+    check(!found_hidden_black, "visibility hidden suppresses the element's paint");
+    check(found_visible_red, "explicit visible descendant can paint through hidden inheritance");
+    check(found_after_blue, "following visible sibling still paints");
+
+    auto shown = build_pipeline(
+        "<body><section id='hidden'><span id='visible-child'></span></section><div id='after'></div></body>",
+        "body { margin: 0; }"
+        "#hidden { width: 80px; height: 24px; visibility: visible; background: #000000; }"
+        "#visible-child { display: block; width: 20px; height: 24px; visibility: visible; background: #ff0000; }"
+        "#after { width: 80px; height: 12px; background: #0000ff; }");
+    const DisplayList shown_commands = builder.flatten(*shown.layer_tree);
+    check(commands.size() < shown_commands.size(),
+          "visibility hidden emits fewer display commands without changing layout");
+
+    HitTester hit_tester;
+    const HitTestResult child_hit = hit_tester.hit_test(*pipeline.layer_tree, 8, 8);
+    check(child_hit.node == visible_child->node, "visible descendant remains hit-testable");
+    const HitTestResult hidden_hit = hit_tester.hit_test(*pipeline.layer_tree, 48, 8);
+    check(hidden_hit.node != hidden->node, "hidden element is not a hit-test target");
+}
+
+void text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands() {
+    auto normal = build_pipeline("<body><p>AB</p></body>", "p { font-size: 10px; }");
+    LayerTreeBuilder builder;
+    const DisplayList normal_commands = builder.flatten(*normal.layer_tree);
+    int normal_text_count = 0;
+    for (const DisplayCommand& command : normal_commands) {
+        normal_text_count += command.type == DisplayCommandType::Text ? 1 : 0;
+    }
+    check(normal_text_count == 1, "normal text remains one display command");
+
+    auto spaced = build_pipeline("<body><p>AB</p></body>", "p { font-size: 10px; letter-spacing: 2px; }");
+    const LayoutBox* spaced_layout = find_first_text_layout(*spaced.layout_tree);
+    check(spaced_layout != nullptr && spaced_layout->style.letter_spacing == 2,
+          "letter spacing reaches text layout style");
+    const DisplayList spaced_commands = builder.flatten(*spaced.layer_tree);
+    int spaced_text_count = 0;
+    for (const DisplayCommand& command : spaced_commands) {
+        spaced_text_count += command.type == DisplayCommandType::Text ? 1 : 0;
+    }
+    check(spaced_text_count == 2, "declared letter spacing emits one command per scalar");
+
+    auto wrapped = build_pipeline("<body><p>ABCDE</p></body>",
+                                  "p { width: 12px; font-size: 10px; overflow-wrap: anywhere; }");
+    const DisplayList wrapped_commands = builder.flatten(*wrapped.layer_tree);
+    int wrapped_text_count = 0;
+    for (const DisplayCommand& command : wrapped_commands) {
+        wrapped_text_count += command.type == DisplayCommandType::Text ? 1 : 0;
+    }
+    check(wrapped_text_count > 1, "declared overflow-wrap emits individual wrapped line commands");
 }
 
 void scroll_container_offsets_descendant_paint() {
@@ -374,6 +479,27 @@ void outline_and_text_shadow_emit_paint_commands() {
     check(glow_text_commands >= 2, "text-shadow emits shadow text before main text");
 }
 
+void outline_offset_expands_focus_stroke_without_affecting_layout() {
+    auto pipeline = build_pipeline("<body><button class='cta'>Open</button></body>",
+                                   "body { margin: 0; } .cta { display: block; width: 40px; height: 20px; "
+                                   "outline: 2px solid #ffffff; outline-offset: 3px; }");
+
+    const LayoutBox* button = find_layout_by_class(*pipeline.layout_tree, "cta");
+    check(button != nullptr, "outline offset fixture button exists");
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::StrokeRect || command.stroke_width != 2) {
+            continue;
+        }
+        check(command.rect.x == button->rect.x - 5 && command.rect.y == button->rect.y - 5 &&
+                  command.rect.width == button->rect.width + 10 && command.rect.height == button->rect.height + 10,
+              "outline offset expands only the non-layout stroke geometry");
+        return;
+    }
+    check(false, "outline offset fixture emits a stroke command");
+}
+
 void z_index_orders_child_layers() {
     auto pipeline = build_pipeline("<body><div class='back'>Back</div><div class='front'>Front</div></body>",
                                    ".back { position: relative; z-index: 5; }"
@@ -557,7 +683,7 @@ void layer_tree_can_use_monotonic_arena() {
           "arena layer tree keeps clip reason");
 }
 
-void box_shadow_emits_cheap_translucent_fill() {
+void box_shadow_emits_bounded_soft_shadow_command() {
     auto pipeline = build_pipeline(
         "<body><section class='card'>Shadow</section><section class='card color-first'>Shadow</section></body>",
         ".card { background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }"
@@ -567,11 +693,56 @@ void box_shadow_emits_cheap_translucent_fill() {
     DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
     int found_shadows = 0;
     for (const DisplayCommand& command : flattened) {
-        if (command.type == DisplayCommandType::FillRect && command.color.a > 0 && command.color.a < 80) {
+        if (command.type == DisplayCommandType::BoxShadow && command.color.a > 0 && command.color.a < 80 &&
+            command.stroke_width > 0 && command.gradient_stop_percent > 0) {
             ++found_shadows;
         }
     }
-    check(found_shadows >= 2, "box-shadow emits approximate translucent fills");
+    check(found_shadows >= 2, "box-shadow emits bounded soft-shadow commands");
+}
+
+void colored_spread_box_shadow_keeps_author_color() {
+    auto pipeline = build_pipeline(
+        "<body><section class='card'>Glow</section></body>",
+        ".card { width: 64px; height: 32px; background: #121820; "
+        "box-shadow: 1px 3px 8px 2px rgba(98,223,247,.28); }");
+
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::BoxShadow) {
+            continue;
+        }
+        check(command.color.r == 98 && command.color.g == 223 && command.color.b == 247,
+              "box-shadow command retains authored RGB color");
+        check(command.color.a >= 70 && command.color.a <= 72,
+              "box-shadow command retains authored alpha");
+        check(command.rect.width > 64 && command.rect.height > 32,
+              "positive box-shadow spread expands the bounded paint rect");
+        return;
+    }
+    throw std::runtime_error("colored spread box-shadow command is missing");
+}
+
+void two_layer_background_emits_base_then_highlight() {
+    auto pipeline = build_pipeline(
+        "<body><section class='card'>Glow</section></body>",
+        ".card { width: 64px; height: 36px; background: "
+        "radial-gradient(circle at 80% 20%, rgba(255,255,255,.24) 0%, transparent 100%), "
+        "linear-gradient(to bottom right, #315a7a, #142331); }");
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    int linear_index = -1;
+    int radial_index = -1;
+    for (std::size_t index = 0; index < flattened.size(); ++index) {
+        if (flattened[index].type == DisplayCommandType::LinearGradient) {
+            linear_index = static_cast<int>(index);
+        } else if (flattened[index].type == DisplayCommandType::RadialGradient) {
+            radial_index = static_cast<int>(index);
+        }
+    }
+    check(linear_index >= 0 && radial_index > linear_index,
+          "two-layer background paints the base before its translucent highlight");
 }
 
 void box_shadow_none_and_large_shadow_are_diagnosed() {
@@ -581,13 +752,13 @@ void box_shadow_none_and_large_shadow_are_diagnosed() {
 
     LayerTreeBuilder layer_tree_builder;
     DisplayList none_flattened = layer_tree_builder.flatten(*none_pipeline.layer_tree);
-    int translucent_fills = 0;
+    int shadow_commands = 0;
     for (const DisplayCommand& command : none_flattened) {
-        if (command.type == DisplayCommandType::FillRect && command.color.a > 0 && command.color.a < 80) {
-            ++translucent_fills;
+        if (command.type == DisplayCommandType::BoxShadow) {
+            ++shadow_commands;
         }
     }
-    check(translucent_fills == 0, "box-shadow:none suppresses approximate shadow fill");
+    check(shadow_commands == 0, "box-shadow:none suppresses soft shadow command");
 
     HtmlParser html_parser;
     CssParser css_parser;
@@ -780,6 +951,27 @@ void fixed_grid_places_description_list_in_columns() {
     check(description->rect.x > term->rect.x + 70, "fixed grid places dd in second column");
 }
 
+void flex_order_changes_same_stack_paint_order() {
+    auto pipeline = build_pipeline(
+        "<body><main><div class='late'></div><div class='early'></div></main></body>",
+        "body { margin: 0; } main { display: flex; }"
+        "div { width: 20px; height: 20px; }"
+        ".late { order: 2; background: #ff0000; }"
+        ".early { order: -1; background: #0000ff; }");
+
+    LayerTreeBuilder builder;
+    const DisplayList flattened = builder.flatten(*pipeline.layer_tree);
+    std::vector<Color> fills;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect && command.rect.width == 20 && command.rect.height == 20) {
+            fills.push_back(command.color);
+        }
+    }
+    check(fills.size() == 2, "flex order paint fixture emits both child fills");
+    check(fills[0].b == 255 && fills[1].r == 255,
+          "flex order changes same-stack paint order with the layout order");
+}
+
 void unbreakable_symbol_stays_single_line() {
     auto pipeline = build_pipeline("<body><button class='delete'>&#215;</button></body>",
                                    ".delete { width: 34px; height: 34px; font-size: 24px;"
@@ -795,6 +987,26 @@ void unbreakable_symbol_stays_single_line() {
         }
     }
     check(false, "symbol text command exists");
+}
+
+void text_overflow_ellipsis_truncates_painted_text() {
+    auto pipeline = build_pipeline(
+        "<body><p>SuperLongStatusLabelWithoutBreaks</p></body>",
+        "p { width: 42px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::Text) {
+            continue;
+        }
+        check(command.text != "SuperLongStatusLabelWithoutBreaks",
+              "ellipsis does not emit the unclipped source text");
+        check(command.text.size() >= 3 && command.text.compare(command.text.size() - 3, 3, "...") == 0,
+              "ellipsis paints an ASCII fallback marker when text exceeds the box");
+        return;
+    }
+    check(false, "ellipsis fixture emits a text command");
 }
 
 void text_transform_paints_transformed_text() {
@@ -874,22 +1086,86 @@ struct ImageResolveContext {
     std::uint32_t handle = 0;
 };
 
-bool resolve_test_image(const Node& node, std::uint32_t& handle, void* raw_context) {
+bool resolve_test_image(const Node& node,
+                        ImageResolveKind kind,
+                        std::uint16_t,
+                        std::uint32_t& handle,
+                        void* raw_context) {
     auto* context = static_cast<ImageResolveContext*>(raw_context);
-    if (context == nullptr || node.attribute("src") != context->url) {
+    if (context == nullptr || kind != ImageResolveKind::Content || node.attribute("src") != context->url) {
         return false;
     }
     handle = context->handle;
     return true;
 }
 
-bool resolve_test_canvas(const Node& node, std::uint32_t& handle, void* raw_context) {
+bool resolve_test_canvas(const Node& node,
+                         ImageResolveKind kind,
+                         std::uint16_t,
+                         std::uint32_t& handle,
+                         void* raw_context) {
     auto* expected_handle = static_cast<std::uint32_t*>(raw_context);
-    if (expected_handle == nullptr || node.type != NodeType::Element || node.tag_name != "canvas") {
+    if (expected_handle == nullptr || kind != ImageResolveKind::Content ||
+        node.type != NodeType::Element || node.tag_name != "canvas") {
         return false;
     }
     handle = *expected_handle;
     return true;
+}
+
+struct BackgroundImageResolveContext {
+    std::uint16_t resource_id = 0;
+    std::uint32_t handle = 0;
+};
+
+bool resolve_test_background_image(const Node&,
+                                   ImageResolveKind kind,
+                                   std::uint16_t resource_id,
+                                   std::uint32_t& handle,
+                                   void* raw_context) {
+    auto* context = static_cast<BackgroundImageResolveContext*>(raw_context);
+    if (context == nullptr || kind != ImageResolveKind::Background ||
+        resource_id == 0 || resource_id != context->resource_id) {
+        return false;
+    }
+    handle = context->handle;
+    return true;
+}
+
+void package_background_image_emits_image_display_command_when_surface_resolves() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><section class='cover'></section></body>");
+    StyleResolver resolver(css_parser.parse(
+        ".cover { width: 48px; height: 32px; border-radius: 8px; background-color: #112233; "
+        "background-image: url('/assets/cover.bmp'); }"));
+    const std::uint16_t resource_id = resolver.background_image_resource_id_for("/assets/cover.bmp");
+    check(resource_id != 0 && resolver.background_image_resource_url(resource_id) != nullptr,
+          "package background image owns a stylesheet-local resource id");
+
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 120);
+
+    BackgroundImageResolveContext context{resource_id, 91};
+    LayerTreeBuilderOptions options;
+    options.image_resolver = ImageHandleResolver{resolve_test_background_image, &context};
+    LayerTreeBuilder layer_tree_builder(options);
+    auto layer_tree = layer_tree_builder.build(*layout_tree);
+    DisplayList flattened = layer_tree_builder.flatten(*layer_tree);
+
+    bool found_image = false;
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::Image && command.image_handle == context.handle) {
+            found_image = true;
+            check(command.rect.width == 48 && command.rect.height == 32,
+                  "background image fills the documented element paint area");
+            check(has_corner_radius(command.border_radius),
+                  "background image inherits the element rounded paint clip");
+        }
+    }
+    check(found_image, "resolved package background image emits image display command");
 }
 
 void image_element_emits_image_display_command_when_surface_resolves() {
@@ -897,7 +1173,7 @@ void image_element_emits_image_display_command_when_surface_resolves() {
     CssParser css_parser;
     auto document = html_parser.parse("<body><img src='/debug/icon.raw'></body>");
     Stylesheet stylesheet = css_parser.parse(
-        "img { width: 32px; height: 24px; object-fit: cover; object-position: right top; image-rendering: crisp-edges; }");
+        "img { width: 32px; height: 24px; border-radius: 8px; object-fit: cover; object-position: right top; image-rendering: crisp-edges; }");
     StyleResolver resolver(stylesheet);
     RenderTreeBuilder render_tree_builder(resolver);
     auto render_tree = render_tree_builder.build(*document);
@@ -922,6 +1198,8 @@ void image_element_emits_image_display_command_when_surface_resolves() {
                   "image command carries object-position");
             check(command.image_rendering == ImageRendering::CrispEdges,
                   "image command carries image-rendering");
+            check(has_corner_radius(command.border_radius),
+                  "image command carries the declared rounded paint clip");
         }
     }
     check(found_image, "resolved img emits image command");
@@ -965,6 +1243,8 @@ int main() {
     try {
         overflow_hidden_creates_clip_layer();
         overflow_y_auto_creates_vertical_scroll_clip_layer();
+        visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing();
+        text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands();
         scroll_container_offsets_descendant_paint();
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();
@@ -974,6 +1254,7 @@ int main() {
         rounded_equal_border_emits_stroke_command();
         linear_gradient_background_emits_gradient_command();
         outline_and_text_shadow_emit_paint_commands();
+        outline_offset_expands_focus_stroke_without_affecting_layout();
         z_index_orders_child_layers();
         progress_and_meter_emit_value_fill();
         inline_mark_background_shrinks_to_text();
@@ -982,16 +1263,21 @@ int main() {
         button_inline_block_shrink_wraps_text();
         select_does_not_paint_option_list_inline();
         grid_auto_fit_gap_span_and_aspect_ratio_layout();
-        box_shadow_emits_cheap_translucent_fill();
+        box_shadow_emits_bounded_soft_shadow_command();
+        colored_spread_box_shadow_keeps_author_color();
+        two_layer_background_emits_base_then_highlight();
         box_shadow_none_and_large_shadow_are_diagnosed();
         list_markers_and_generated_counters_emit_text();
         generated_after_and_percentage_radius_emit_commands();
+        package_background_image_emits_image_display_command_when_surface_resolves();
         conic_gradient_background_emits_progress_command();
         radial_gradient_background_emits_center_circle_command();
         large_conic_gradient_reports_area_budget_diagnostic();
         large_radial_gradient_reports_area_budget_diagnostic();
         fixed_grid_places_description_list_in_columns();
+        flex_order_changes_same_stack_paint_order();
         unbreakable_symbol_stays_single_line();
+        text_overflow_ellipsis_truncates_painted_text();
         text_transform_paints_transformed_text();
         grid_item_auto_width_reflows_centered_text();
         text_input_respects_text_align();

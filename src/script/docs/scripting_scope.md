@@ -1,6 +1,6 @@
 # Scripting Scope
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 JellyFrame scripting is intentionally small and optional. The engine should
 become useful for embedded app UI without inheriting the full browser API
@@ -34,7 +34,7 @@ surface.
 - `document.getElementById(id)`.
 - `document.createElement(tag)`.
 - `document.createTextNode(text)`.
-- `node.appendChild(child)` with detached-node ownership transfer.
+- `node.appendChild(child)`, plus `node.append(...items)` / `node.prepend(...items)` for runtime-owned nodes and text-convertible scalar values. `DocumentFragment` and `replaceChildren()` are deferred.
 - `node.removeChild(child)` while keeping the returned wrapper usable.
 - Detached nodes are runtime-owned through `DomOwner` while not attached to the
   document. `HostBudgets::max_detached_dom_nodes` bounds script-created and
@@ -200,7 +200,7 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `document.body` as a read-only first-`body` wrapper
   - `element.id` reflected to the `id` attribute
   - `element.className` reflected to the `class` attribute
-  - `element.classList.contains/add/remove/toggle` as a minimal DOMTokenList-like helper
+  - `element.classList.contains/add/remove/toggle/replace` as a minimal DOMTokenList-like helper
   - `element.matches(simpleSelector)`
   - `element.closest(simpleSelector)`
   - `document.querySelector(simpleSelector)` / `element.querySelector(simpleSelector)`
@@ -210,13 +210,17 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   - `document.images`, `embeds`, `plugins`, `links`, `forms`, `scripts` and
     `getElementsByName()` as static array snapshots, not live browser
     collections
-  - `element.dataset` snapshot properties for existing `data-*` attributes
+  - `element.dataset` reads existing `data-*` attributes and writes bounded
+    ASCII camelCase keys through `dataset[key] = value` / `delete dataset[key]`
+  - `element.getBoundingClientRect()` as a read-only numeric snapshot of the
+    last completed host layout frame; it is client-relative, excludes transform
+    and nested-scroll geometry, does not force layout and never retains a `LayoutBox`
   - `element.style` for a small inline-style property set:
     `display`, `color`, `background`, `backgroundColor`, `backgroundImage`, `textAlign`,
     `textTransform`, `fontSize`, `fontWeight`, `lineHeight`, `width`, `height`, `minWidth`,
     `minHeight`, `maxWidth`, `maxHeight`, `boxSizing`, margin/padding shorthands
     and sides, `opacity`, `transform`, `borderRadius`, `left`, `top`, `right`,
-    `bottom`, `position`,
+    `bottom`, `position`, `visibility`,
     `whiteSpace`, `textOverflow`, `overflow` and `zIndex`
   - `element.style.getPropertyValue(name)`, `setProperty(name, value)` and
     `removeProperty(name)` for the same safe CSS property subset plus CSS
@@ -226,6 +230,9 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
     bound
   - `document.defaultView` and `document.hasFocus()` for the embedded document
     lifecycle
+  - `HTMLElement.focus()` / `blur()` are intentionally deferred. The host owns
+    focus because input controllers are rebuilt with the layer tree; scripts
+    must use `autofocus` and the bounded hardware focus order for now.
   - `window.self`, global `self`, `origin`, `isSecureContext` and
     `crossOriginIsolated` as fixed package-environment values
   - `window.btoa` / `window.atob` and global `btoa` / `atob` for Base64
@@ -248,13 +255,15 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   CSS-only for now.
 - Native input dispatch exposes `pointerdown`, `pointerup`, `touchstart` and
   `touchend` as mouse-like events for press feedback on wearable shells.
-- Optional Canvas 2D V0.3 is exposed only when the host binds a canvas registry:
+- Optional Canvas 2D V0.4 is exposed only when the host binds a canvas registry:
   `canvas.getContext("2d")`, `fillStyle`, `strokeStyle`, `lineWidth`,
   `globalAlpha`, `font`, `save`, `restore`, `clearRect`, `fillRect`,
   `strokeRect`, `beginPath`, `moveTo`, `lineTo`, `arc`, `closePath`, `fill`,
-  `stroke`, `measureText`, `fillText`, `createLinearGradient` and
-  `CanvasGradient.addColorStop`. `getContext("2d")` returns `null` when the
-  capability is absent or the backing-store budget rejects the surface.
+  `stroke`, `measureText`, `fillText`, `createLinearGradient`,
+  `createRadialGradient`, `CanvasGradient.addColorStop`, canvas-to-canvas
+  `drawImage()` 3/5/9-argument forms, `translate`, `resetTransform`,
+  `quadraticCurveTo` and `bezierCurveTo`. `getContext("2d")` returns `null`
+  when the capability is absent or the backing-store budget rejects the surface.
 - Disabled form controls do not accept text input, range movement or activation.
 - Script-related diagnostics come from the package loader, JerryScript runtime
   and DOM/event binding code paths that actually handled the app.
@@ -265,17 +274,23 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
   simple selector subset above, with no combinators, commas, pseudo-classes,
   `:has()` or live NodeList semantics.
 - Full DOMTokenList semantics. `classList` is limited to
-  `contains`/`add`/`remove`/`toggle`; iteration, `replace()` and exception
-  behavior for invalid tokens are deferred.
+  `contains`/`add`/`remove`/`toggle`/`replace`; iteration and exception
+  behavior for invalid tokens are deferred. Invalid `replace()` arguments
+  return `false` rather than throwing.
 - Full `GlobalEventHandlers`, inline HTML event handler attributes and browser
   event-handler compilation semantics. Use `addEventListener` or the documented
   function-valued `on*` property subset above.
-- Dynamic `dataset` property creation or native mutation through new arbitrary keys.
+- Full DOMStringMap semantics, iteration and arbitrary dynamic `dataset` keys.
+  The writable subset accepts ASCII identifier-like camelCase keys up to 48
+  bytes, values up to 256 bytes and at most 64 `data-*` attributes per element.
+- Live `DOMRect` objects, synchronous layout reads, transform-aware or
+  nested-scroll-aware measurement and geometry for elements that were not
+  present in the last completed host layout frame.
 - Promises/job pumping beyond what JerryScript itself performs inside one
   evaluation.
 - `fetch()`, modules, dynamic import, `sessionStorage`, IndexedDB, cookies,
   full `HTMLAudioElement`, full `Window`/`EventTarget` semantics beyond
-  `online`/`offline`, Canvas APIs beyond V0.3 and Web Components.
+  `online`/`offline`, Canvas APIs beyond V0.4 and Web Components.
 
 ## Embedded Policy
 

@@ -62,8 +62,17 @@ the host-owned context must outlive layout and rendering:
 ```cpp
 HostTextAdapter adapter{measure_text, paint_text, host_font_context};
 LayoutEngine layout(style_resolver, text_measure_provider_from_adapter(adapter));
+LayerTreeBuilderOptions layer_options;
+layer_options.text_measure = text_measure_provider_from_adapter(adapter);
+LayerTreeBuilder layers(layer_options);
 SoftwareCompositor compositor(text_painter_from_adapter(adapter));
 ```
+
+When an app uses the documented `letter-spacing` or `overflow-wrap: anywhere`
+subset, pass the same measure provider to `LayerTreeBuilderOptions::text_measure`.
+The builder then emits scalar-positioned commands using exactly the advances
+used by layout. Ordinary text keeps the old single-command path and does not
+consult this provider during layer construction.
 
 This helper exists to keep board ports consistent. It does not add font
 discovery, shaping or caching to the core.

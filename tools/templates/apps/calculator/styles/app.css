@@ -3,7 +3,7 @@ body {
   margin: 0;
   width: 300px;
   height: 300px;
-  background: #05070a;
+  background: #05090d;
   color: #f8fafc;
 }
 
@@ -12,71 +12,80 @@ body {
   width: 300px;
   height: 300px;
   padding: 12px;
-  background: #05070a;
+  background: linear-gradient(to bottom right, #142b35, #04080c);
 }
 
 .display-panel {
   box-sizing: border-box;
-  height: 62px;
-  margin-bottom: 7px;
-  padding: 9px 12px 7px;
-  border-radius: 24px;
-  background: #101820;
+  height: 66px;
+  margin-bottom: 9px;
+  padding: 9px 13px 7px;
+  border: 1px solid #294652;
+  border-radius: 22px;
+  background: radial-gradient(circle at 82% 15%, #1b3d49 0%, #0c1820 100%);
+  box-shadow: 0 4px 11px 0 #020507;
 }
 
 #status {
   display: block;
-  color: #8fd6c8;
-  font-size: 14px;
+  color: #75dfcf;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 input {
   box-sizing: border-box;
   display: block;
-  width: 244px;
-  height: 28px;
-  margin: 3px 0 0;
+  width: 242px;
+  height: 33px;
+  margin: 1px 0 0;
   padding: 0;
   border: 0;
-  background: #101820;
+  background: transparent;
+  border-radius: 12px;
   color: #ffffff;
-  font-size: 30px;
-  line-height: 28px;
+  font-size: 33px;
+  line-height: 33px;
   text-align: right;
 }
 
 .keys {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 7px;
 }
 
 button {
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 17px;
-  background: #1d2732;
+  border: 1px solid #1c3843;
+  border-radius: 16px;
+  background: linear-gradient(to bottom, #1d3540, #152832);
   color: #ffffff;
-  font-size: 19px;
-  line-height: 32px;
+  font-size: 18px;
+  line-height: 30px;
+  box-shadow: 0 2px 4px 0 #020609;
   text-align: center;
 }
 
 button span {
   display: block;
-  height: 32px;
-  line-height: 32px;
+  height: 30px;
+  line-height: 30px;
   text-align: center;
 }
 
 .soft {
-  background: #334155;
-  color: #e2e8f0;
+  border-color: #52687b;
+  background: linear-gradient(to bottom, #40566b, #2b4154);
+  color: #e9f3fa;
 }
 
 .equals {
-  background: #0f766e;
+  border-color: #4ee0cc;
+  background: linear-gradient(to bottom, #18a997, #107c78);
+  color: #f2fffd;
 }
 
 .wide {
@@ -85,5 +94,5 @@ button span {
 
 button:active,
 button:focus {
-  background: #475569;
+  background: #426174;
 }

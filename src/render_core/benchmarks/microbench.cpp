@@ -3,6 +3,7 @@
 #include "render_core/animation_invalidation.h"
 #include "render_core/canvas2d.h"
 #include "render_core/dirty_region.h"
+#include "render_core/embedded_framebuffer.h"
 #include "render_core/frame_scratch.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
@@ -78,6 +79,37 @@ std::string make_custom_property_css() {
            ".action { color: var(--panel); background: var(--accent); }";
 }
 
+std::string make_logical_hsl_css() {
+    return "body { margin: 0; }"
+           ".shell { inline-size: 100%; padding-inline: 12px 16px; padding-block: 8px; }"
+           ".card { margin-inline: 6px; padding-block: 8px 10px; min-block-size: 32px; "
+           "color: hsl(210 50% 40% / 90%); background: linear-gradient(hsl(210 60% 98%), #ffffff); }"
+           ".metric-card { place-content: center space-between; }";
+}
+
+std::string make_flex_order_html(int count) {
+    std::ostringstream html;
+    html << "<!doctype html><html><body><main class='ordered'>";
+    for (int index = 0; index < count; ++index) {
+        html << "<div class='item rank-" << (index % 3) << "'>" << index << "</div>";
+    }
+    html << "</main></body></html>";
+    return html.str();
+}
+
+std::string make_flex_order_css() {
+    return "body { margin: 0; }"
+           ".ordered { display: flex; flex-wrap: wrap; width: 320px; gap: 4px; }"
+           ".item { width: 36px; height: 20px; background: #ffffff; }"
+           ".rank-0 { order: 1; } .rank-1 { order: -1; } .rank-2 { order: 0; }";
+}
+
+std::string make_single_level_nested_css() {
+    return ".card { color: #102030; padding: 8px; "
+           "&:hover { color: hsl(210 70% 45%); } "
+           "& .metric { color: #2563eb; } }";
+}
+
 template <typename Fn>
 double average_microseconds(int iterations, Fn fn) {
     const auto begin = Clock::now();
@@ -98,7 +130,8 @@ void print_style_statistics(const StyleResolverStatistics& statistics) {
               << " rule_refs=" << statistics.candidate_cache_rule_refs
               << " hits=" << statistics.candidate_cache_hits
               << " misses=" << statistics.candidate_cache_misses
-              << " clears=" << statistics.candidate_cache_clears << '\n';
+              << " clears=" << statistics.candidate_cache_clears
+              << " bypasses=" << statistics.candidate_cache_bypasses << '\n';
 }
 
 const LayoutBox* find_first_layout_by_class(const LayoutBox& box, const char* class_name) {
@@ -209,8 +242,19 @@ int run_render_core_microbench(int argc, char** argv) {
         (void)stylesheet;
     }));
 
-    auto document = html_parser.parse(html);
     auto stylesheet = css_parser.parse(css);
+    print_result("style_resolver_construct", iterations, average_microseconds(iterations, [&] {
+        StyleResolver resolver(stylesheet);
+        (void)resolver;
+    }));
+
+    const std::string nested_css = make_single_level_nested_css();
+    print_result("single_level_nesting_css_parse", iterations, average_microseconds(iterations, [&] {
+        auto stylesheet = css_parser.parse(nested_css);
+        (void)stylesheet;
+    }));
+
+    auto document = html_parser.parse(html);
 
     std::vector<const Node*> nodes;
     collect_nodes(*document, nodes);
@@ -223,10 +267,27 @@ int run_render_core_microbench(int argc, char** argv) {
         }
     }));
 
+    StyleResolver retained_style_resolver(stylesheet);
+    print_result("style_resolve_retained_candidates", iterations, average_microseconds(iterations, [&] {
+        StyleResolveContext context;
+        for (const Node* node : nodes) {
+            const Style style = retained_style_resolver.resolve(*node, context);
+            (void)style;
+        }
+    }));
+    print_style_statistics(retained_style_resolver.statistics());
+
     auto custom_document = html_parser.parse(make_custom_property_html(card_count));
     auto custom_stylesheet = css_parser.parse(make_custom_property_css());
     std::vector<const Node*> custom_nodes;
     collect_nodes(*custom_document, custom_nodes);
+    StyleResolver naive_custom_resolver(custom_stylesheet);
+    print_result("custom_property_style_resolve_naive", iterations, average_microseconds(iterations, [&] {
+        for (const Node* node : custom_nodes) {
+            const Style style = naive_custom_resolver.resolve(*node);
+            (void)style;
+        }
+    }));
     print_result("custom_property_style_resolve", iterations, average_microseconds(iterations, [&] {
         StyleResolver custom_resolver(custom_stylesheet);
         StyleResolveContext context;
@@ -234,6 +295,32 @@ int run_render_core_microbench(int argc, char** argv) {
             const Style style = custom_resolver.resolve(*node, context);
             (void)style;
         }
+    }));
+
+    auto logical_document = html_parser.parse(html);
+    auto logical_stylesheet = css_parser.parse(make_logical_hsl_css());
+    std::vector<const Node*> logical_nodes;
+    collect_nodes(*logical_document, logical_nodes);
+    print_result("logical_hsl_style_resolve", iterations, average_microseconds(iterations, [&] {
+        StyleResolver logical_resolver(logical_stylesheet);
+        StyleResolveContext context;
+        for (const Node* node : logical_nodes) {
+            const Style style = logical_resolver.resolve(*node, context);
+            (void)style;
+        }
+    }));
+
+    auto flex_order_document = html_parser.parse(make_flex_order_html(card_count));
+    auto flex_order_stylesheet = css_parser.parse(make_flex_order_css());
+    StyleResolver flex_order_resolver(flex_order_stylesheet);
+    RenderTreeBuilder flex_order_builder(flex_order_resolver);
+    MonotonicArena flex_order_render_arena;
+    auto flex_order_render_tree = flex_order_builder.build(*flex_order_document, flex_order_render_arena);
+    print_result("flex_order_layout", iterations, average_microseconds(iterations, [&] {
+        LayoutEngine flex_order_layout(flex_order_resolver);
+        MonotonicArena flex_order_layout_arena;
+        auto flex_order_layout_tree = flex_order_layout.layout(*flex_order_render_tree, 360, flex_order_layout_arena);
+        (void)flex_order_layout_tree;
     }));
 
     print_result("render_tree", iterations, average_microseconds(iterations, [&] {
@@ -327,6 +414,56 @@ int run_render_core_microbench(int argc, char** argv) {
         rasterizer.rasterize(rounded_commands, target, Rect{0, 0, 320, 260});
     }));
 
+    DisplayCommand opaque_screen_gradient;
+    opaque_screen_gradient.type = DisplayCommandType::LinearGradient;
+    opaque_screen_gradient.rect = Rect{0, 0, 172, 320};
+    opaque_screen_gradient.color = Color{22, 71, 87, 255};
+    opaque_screen_gradient.color2 = Color{6, 22, 31, 255};
+    print_result("opaque_linear_gradient_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(172, 320, Color{0, 0, 0, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(opaque_screen_gradient, target, Rect{0, 0, 172, 320});
+    }));
+    opaque_screen_gradient.gradient_axis = GradientAxis::Horizontal;
+    print_result("opaque_horizontal_linear_gradient_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(172, 320, Color{0, 0, 0, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(opaque_screen_gradient, target, Rect{0, 0, 172, 320});
+    }));
+    opaque_screen_gradient.gradient_axis = GradientAxis::DiagonalDownRight;
+    print_result("opaque_diagonal_linear_gradient_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(172, 320, Color{0, 0, 0, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(opaque_screen_gradient, target, Rect{0, 0, 172, 320});
+    }));
+    FrameBuffer rgb565_dither_source(172, 320, Color{0, 0, 0, 255});
+    for (int y = 0; y < rgb565_dither_source.height; ++y) {
+        for (int x = 0; x < rgb565_dither_source.width; ++x) {
+            const int shade = 34 + (x * 96 + y * 125) / 491;
+            rgb565_dither_source.pixel(x, y) = Color{
+                static_cast<std::uint8_t>(shade),
+                static_cast<std::uint8_t>(shade + 18),
+                static_cast<std::uint8_t>(shade + 36),
+                255,
+            };
+        }
+    }
+    std::vector<std::uint16_t> rgb565_dither_pixels(172U * 320U);
+    EmbeddedPackedRgb565Sink rgb565_dither_sink{
+        EmbeddedPixelFormat::Rgb565,
+        rgb565_dither_pixels.data(),
+        rgb565_dither_pixels.size(),
+        true,
+        nullptr,
+        nullptr,
+    };
+    print_result("packed_rgb565_dither_present", iterations, average_microseconds(iterations, [&] {
+        (void)present_to_packed_rgb565(frame_buffer_view(rgb565_dither_source),
+                                       nullptr,
+                                       0,
+                                       rgb565_dither_sink);
+    }));
+
     DisplayList conic_commands;
     for (int row = 0; row < 4; ++row) {
         for (int column = 0; column < 4; ++column) {
@@ -362,6 +499,66 @@ int run_render_core_microbench(int argc, char** argv) {
         FrameBuffer target(320, 260, Color{8, 16, 24, 255});
         SoftwareRasterizer rasterizer;
         rasterizer.rasterize(radial_commands, target, Rect{0, 0, 320, 260});
+    }));
+
+    DisplayList diagonal_gradient_commands;
+    DisplayList soft_shadow_commands;
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            DisplayCommand gradient;
+            gradient.type = DisplayCommandType::LinearGradient;
+            gradient.rect = Rect{column * 72 + 8, row * 62 + 8, 56, 46};
+            gradient.color = Color{44, 52, 66, 255};
+            gradient.color2 = Color{16, 18, 24, 255};
+            gradient.gradient_axis = GradientAxis::DiagonalDownRight;
+            gradient.border_radius = 14;
+            diagonal_gradient_commands.push_back(gradient);
+
+            DisplayCommand shadow;
+            shadow.type = DisplayCommandType::BoxShadow;
+            shadow.rect = Rect{column * 72 + 3, row * 62 + 5, 66, 56};
+            shadow.color = Color{0, 0, 0, 72};
+            shadow.border_radius = 19;
+            shadow.stroke_width = 5;
+            shadow.gradient_stop_percent = 5;
+            soft_shadow_commands.push_back(shadow);
+        }
+    }
+    print_result("diagonal_gradient_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{8, 16, 24, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(diagonal_gradient_commands, target, Rect{0, 0, 320, 260});
+    }));
+    DisplayList layered_hydrogel_commands = diagonal_gradient_commands;
+    for (const DisplayCommand& base : radial_commands) {
+        DisplayCommand highlight = base;
+        highlight.color = Color{236, 254, 255, 44};
+        highlight.color2 = Color{0, 0, 0, 0};
+        highlight.gradient_axis = GradientAxis::RadialPosition;
+        highlight.gradient_stop_percent = 80 * 101 + 12;
+        layered_hydrogel_commands.push_back(highlight);
+    }
+    print_result("layered_hydrogel_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{8, 16, 24, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(layered_hydrogel_commands, target, Rect{0, 0, 320, 260});
+    }));
+    print_result("soft_box_shadow_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{8, 16, 24, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(soft_shadow_commands, target, Rect{0, 0, 320, 260});
+    }));
+    DisplayCommand circular_shadow;
+    circular_shadow.type = DisplayCommandType::BoxShadow;
+    circular_shadow.rect = Rect{26, 98, 120, 120};
+    circular_shadow.color = Color{200, 255, 90, 56};
+    circular_shadow.border_radius = 60;
+    circular_shadow.stroke_width = 10;
+    circular_shadow.gradient_stop_percent = 9;
+    print_result("circular_box_shadow_exact_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(172, 320, Color{18, 22, 26, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(circular_shadow, target, Rect{0, 0, 172, 320});
     }));
 
     LayerNode dirty_root;
@@ -590,6 +787,48 @@ int run_render_core_microbench(int argc, char** argv) {
             (void)reusable;
         }));
     }
+
+    auto typography_document = html_parser.parse(
+        "<body><p class='spaced'>TelemetryStatusLabelWithoutSpaces</p>"
+        "<p class='wrapped'>ABCDEFGHIJKLMNOPQRSTUVWXYZ</p></body>");
+    auto plain_typography_document = html_parser.parse(
+        "<body><p>TelemetryStatusLabelWithoutSpaces</p><p>ABCDEFGHIJKLMNOPQRSTUVWXYZ</p></body>");
+    StyleResolver plain_typography_resolver(css_parser.parse(
+        "p { margin: 0; width: 96px; font-size: 12px; line-height: 14px; }"));
+    RenderTreeBuilder plain_typography_builder(plain_typography_resolver);
+    auto plain_typography_render_tree = plain_typography_builder.build(*plain_typography_document);
+    LayoutEngine plain_typography_layout_engine(plain_typography_resolver, fixed_text_measure());
+    LayerTreeBuilderOptions plain_typography_layer_options;
+    plain_typography_layer_options.text_measure = fixed_text_measure();
+    LayerTreeBuilder plain_typography_layer_builder(plain_typography_layer_options);
+    print_result("text_plain_layout", iterations, average_microseconds(iterations, [&] {
+        auto plain_typography_layout_tree = plain_typography_layout_engine.layout(*plain_typography_render_tree, 172, 320);
+        (void)plain_typography_layout_tree;
+    }));
+    auto plain_typography_layout_tree = plain_typography_layout_engine.layout(*plain_typography_render_tree, 172, 320);
+    print_result("text_plain_layer", iterations, average_microseconds(iterations, [&] {
+        auto plain_typography_layer_tree = plain_typography_layer_builder.build(*plain_typography_layout_tree);
+        (void)plain_typography_layer_tree;
+    }));
+    StyleResolver typography_resolver(css_parser.parse(
+        "p { margin: 0; width: 96px; font-size: 12px; line-height: 14px; }"
+        ".spaced { letter-spacing: 1px; }"
+        ".wrapped { overflow-wrap: anywhere; }"));
+    RenderTreeBuilder typography_builder(typography_resolver);
+    auto typography_render_tree = typography_builder.build(*typography_document);
+    LayoutEngine typography_layout_engine(typography_resolver, fixed_text_measure());
+    LayerTreeBuilderOptions typography_layer_options;
+    typography_layer_options.text_measure = fixed_text_measure();
+    LayerTreeBuilder typography_layer_builder(typography_layer_options);
+    print_result("text_spacing_anywhere_layout", iterations, average_microseconds(iterations, [&] {
+        auto typography_layout_tree = typography_layout_engine.layout(*typography_render_tree, 172, 320);
+        (void)typography_layout_tree;
+    }));
+    auto typography_layout_tree = typography_layout_engine.layout(*typography_render_tree, 172, 320);
+    print_result("text_spacing_anywhere_layer", iterations, average_microseconds(iterations, [&] {
+        auto typography_layer_tree = typography_layer_builder.build(*typography_layout_tree);
+        (void)typography_layer_tree;
+    }));
 
     auto style_document = html_parser.parse(
         "<body><button id='pulse' class='pill'>Open</button><strong id='frame'>01</strong></body>");

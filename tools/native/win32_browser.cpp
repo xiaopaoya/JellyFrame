@@ -362,6 +362,26 @@ void add_package_image_fixtures(const Node& document,
     }
 }
 
+void add_package_background_image_fixtures(const StyleResolver& resolver,
+                                           jellyframe_example::PackageResourceContext& package_context,
+                                           ImageDecodeMock& images,
+                                           DiagnosticSink* diagnostics) {
+    for (std::size_t index = 1; index <= resolver.background_image_resource_count(); ++index) {
+        const std::string* source = resolver.background_image_resource_url(static_cast<std::uint16_t>(index));
+        if (source == nullptr) {
+            continue;
+        }
+        std::string bytes;
+        if (!jellyframe_example::load_package_resource(*source, package_context.base_url, bytes, &package_context)) {
+            continue;
+        }
+        ImageDecodeFixture fixture;
+        if (decode_bmp_to_fixture(*source, bytes, fixture, diagnostics)) {
+            images.add_fixture(std::move(fixture));
+        }
+    }
+}
+
 void collect_image_handles(const LayerNode& layer, std::vector<std::uint32_t>& handles) {
     for (const DisplayCommand& command : layer.display_list) {
         if (command.type != DisplayCommandType::Image || command.image_handle == 0) {
@@ -1613,40 +1633,55 @@ struct BrowserImageResolveContext {
     AppImageSurfaceCache* cache = nullptr;
     Canvas2DRegistry* canvas = nullptr;
     DiagnosticSink* diagnostics = nullptr;
+    const StyleResolver* style_resolver = nullptr;
 };
 
-bool resolve_browser_image_handle(const Node& node, std::uint32_t& handle, void* raw_context) {
+bool resolve_browser_image_handle(const Node& node,
+                                  ImageResolveKind kind,
+                                  std::uint16_t background_resource_id,
+                                  std::uint32_t& handle,
+                                  void* raw_context) {
     auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
     if (context == nullptr || node.type != NodeType::Element) {
         return false;
     }
-    if (node.tag_name == "canvas") {
+    if (kind == ImageResolveKind::Content && node.tag_name == "canvas") {
         handle = context->canvas != nullptr ? context->canvas->handle_for(node) : 0;
         return handle != 0;
     }
     if (context->runtime == nullptr || context->images == nullptr ||
-        context->cache == nullptr || node.tag_name != "img") {
+        context->cache == nullptr) {
         return false;
     }
-    const std::string src = node.attribute("src");
-    const AppImageSurfaceState previous_state = context->cache->state_for_url(src);
-    const bool resolved = context->cache->resolve_or_request(*context->runtime, *context->images, src, &handle);
-    const AppServiceSubmitStatus submit_status = context->cache->last_submit_status_for_url(src);
-    const AppImageSurfaceState current_state = context->cache->state_for_url(src);
+    const std::string* src = nullptr;
+    if (kind == ImageResolveKind::Background) {
+        src = context->style_resolver != nullptr
+            ? context->style_resolver->background_image_resource_url(background_resource_id)
+            : nullptr;
+    } else if (node.tag_name == "img") {
+        src = &node.attribute("src");
+    }
+    if (src == nullptr || src->empty()) {
+        return false;
+    }
+    const AppImageSurfaceState previous_state = context->cache->state_for_url(*src);
+    const bool resolved = context->cache->resolve_or_request(*context->runtime, *context->images, *src, &handle);
+    const AppServiceSubmitStatus submit_status = context->cache->last_submit_status_for_url(*src);
+    const AppImageSurfaceState current_state = context->cache->state_for_url(*src);
     if (!resolved && submit_status != AppServiceSubmitStatus::Accepted &&
         previous_state != AppImageSurfaceState::Failed &&
         current_state != AppImageSurfaceState::Pending) {
         report_image_request_failure(context->diagnostics,
-                                     src,
+                                     *src,
                                      submit_status,
-                                     context->cache->last_host_status_for_url(src));
+                                     context->cache->last_host_status_for_url(*src));
         if (context->diagnostics != nullptr) {
             report_diagnostic(context->diagnostics,
                               DiagnosticStage::Package,
                               DiagnosticSeverity::Info,
                               "image-cache-state",
                               "Image cache state after request failure",
-                              context->cache->diagnostic_detail_for_url(src));
+                              context->cache->diagnostic_detail_for_url(*src));
         }
     }
     return resolved;
@@ -3137,6 +3172,10 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     StyleResolverOptions style_options;
     style_options.diagnostics = &diagnostics;
     StyleResolver resolver(std::move(page.stylesheet), style_options);
+    image_resolve_context.style_resolver = &resolver;
+    if (page.package_mode) {
+        add_package_background_image_fixtures(resolver, page.package_context, debug_images, &diagnostics);
+    }
 
     RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
     render_options.diagnostics = &diagnostics;
@@ -3148,6 +3187,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
+    layer_options.text_measure = text_backend.measure;
     layer_options.paint_scroll_indicators = true;
     layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
     LayerTreeBuilder layer_builder(layer_options);
@@ -4678,6 +4718,12 @@ private:
             StyleResolverOptions style_options;
             style_options.diagnostics = &diagnostics_;
             style_resolver_ = std::make_unique<StyleResolver>(std::move(page.stylesheet), style_options);
+            if (page.package_mode) {
+                add_package_background_image_fixtures(*style_resolver_,
+                                                      page.package_context,
+                                                      debug_images_,
+                                                      &diagnostics_);
+            }
             page_background_ = page_background_color(*document_, *style_resolver_);
             render_tree_.reset();
             layout_tree_.reset();
@@ -4955,7 +5001,10 @@ private:
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
         layer_options.paint_scroll_indicators = true;
+        BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
+        layer_options.text_measure = text_backend.measure;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
+        image_resolve_context.style_resolver = style_resolver_.get();
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};
         LayerTreeBuilder layer_builder(layer_options);
@@ -4963,7 +5012,6 @@ private:
 
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
-        BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
@@ -5155,6 +5203,16 @@ private:
         return true;
     }
 
+    void capture_script_layout_snapshot() {
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr &&
+            script_runtime_instance_id_ == app_runtime_.current_app_instance_id() &&
+            layout_tree_ != nullptr) {
+            script_runtime_->capture_layout_snapshot(*layout_tree_, 0, -scroll_y_);
+        }
+#endif
+    }
+
     void render_current(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
@@ -5198,16 +5256,18 @@ private:
         }
         frame_scratch_.begin_frame();
 
+        BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
         layer_options.paint_scroll_indicators = true;
+        layer_options.text_measure = text_backend.measure;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
+        image_resolve_context.style_resolver = style_resolver_.get();
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
-        BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
@@ -5284,6 +5344,7 @@ private:
                 *layer_tree_,
                 input_invalidation_options_from_style(*style_resolver_));
             input_->set_interaction_state(hovered_node, active_node, focused_node);
+            capture_script_layout_snapshot();
             update_blit_pixels();
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
@@ -5387,6 +5448,7 @@ private:
                 *layer_tree_,
                 input_invalidation_options_from_style(*style_resolver_));
             input_->set_interaction_state(hovered_node, active_node, focused_node);
+            capture_script_layout_snapshot();
             update_blit_pixels();
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
@@ -5423,6 +5485,7 @@ private:
         render_tree_ = std::move(next_render_tree);
         layout_tree_ = std::move(next_layout_tree);
         layer_tree_ = std::move(next_layer_tree);
+        capture_script_layout_snapshot();
         evict_unused_image_surfaces();
 
         if (can_repaint_incrementally && !dirty_rects.empty() &&

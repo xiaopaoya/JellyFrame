@@ -1,6 +1,6 @@
 # CSS Parser 裁剪范围
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-22；适用版本：0.5.0-dev
 
 最后对照 CSS Syntax Module Level 3、Media Queries 和浏览器 parser 源码结构的时间：
 2026-06-16。
@@ -56,19 +56,25 @@ cascade。Parser 接受常见语法，在 at-rule 和 declaration 边界恢复�
   `linear-gradient(<color>, <color>)`、`linear-gradient(to bottom/top/right/left, ...)`、
   两段 `conic-gradient()` 进度环和两色中心圆形 `radial-gradient()` 高光子集。
   不支持的角度、stop、焦点、椭圆或图片值会被报告，且不会替换之前已经支持的 fallback。
-- `background-image` 接受同一 gradient 子集，但不接受纯色。
+- `background-image` 接受同一 gradient 子集，但不接受纯色。也接受一个包内绝对路径
+  `url("/assets/image.bmp")`，由宿主图片 resolver 处理并填充元素背景绘制区域。
+  parser 会拒绝远程/data URL、相对路径、traversal、query/fragment、多 URL 层及
+  background repeat/position/size 语法。
 - Type/class/id/attribute compound selectors、descendant 和 child combinators，
   以及 adjacent/general sibling combinators。
 - 动态 pseudo-classes：`:hover`、`:active`、`:focus`、`:focus-within`、
   `:checked` 和 `:disabled`。
 - `:is()` 和 `:where()` selector-list functions，支持当前 selector 子集；
   `:where()` specificity 为 0。
-- 面向嵌入式应用子集的 UI 属性声明，包括 `outline`、`text-shadow`、`text-decoration`、`text-transform`、`aspect-ratio`、`gap`、
+- CSS nesting 的显式单层 `&` 子集。父 declaration 与 nested rule 保留 source order；
+  selector-list 展开上限为 16。隐式 nesting、多层 block 和 nested at-rule 输出
+  `css-nesting-skipped`。
+- 面向嵌入式应用子集的 UI 属性声明，包括 `outline`、`text-shadow`、`text-decoration`、`text-transform`、`letter-spacing`、`white-space: normal`/`nowrap` 及其 `text-wrap: wrap`/`nowrap` 别名、可继承的 `visibility: visible`/`hidden`（保留 layout 流，但 hidden 时不绘制且不作为命中目标）、`overflow-wrap: anywhere`、`aspect-ratio`、`gap`、
   物理 `margin-*`/`padding-*`/`border-*-width` longhands、`column-gap`、
-  `row-gap`、`flex`、`flex-grow`、`flex-shrink`、`flex-basis`、
+  `row-gap`、`flex`、`flex-grow`、`flex-shrink`、`flex-basis`、有符号整数 `order`、
   `position`、`top`、`right`、`bottom`、`left`、带 `minmax()` 最小轨道的
-  `grid-template-columns`、`repeat(N, 1fr)`、`repeat(N, minmax(0, 1fr))`、
-  带最小轨道的 `grid-auto-rows`，`grid-column`/`grid-row: span N`，以及
+  `grid-template-columns`、有界 `grid-template-rows` 固定/`1fr` 轨道、`repeat(N, 1fr)`、`repeat(N, minmax(0, 1fr))`、
+  带最小轨道的 `grid-auto-rows`，有界正整数 `grid-column`/`grid-row` start/end/span placement，以及
   `object-fit`、关键词/百分比一二值 `object-position` 子集和 `image-rendering` 的
   `auto`/`pixelated`/`crisp-edges` 子集。
 - `@keyframes` from/to 子集。命名 block 会保存 `from`/`to` 或 `0%`/`100%`
@@ -95,11 +101,11 @@ cascade。Parser 接受常见语法，在 at-rule 和 declaration 边界恢复�
   support 语义。
 - 完整 custom property dependency graph、区分大小写的 custom property 名称、
   超出有界递归保护的循环处理，以及完整 invalid-at-computed-value-time 语义。
-- CSS nesting semantics。
+- 完整 CSS nesting semantics，包括隐式 nesting、nested at-rule 和多层递归 block。
 - Shadow DOM selectors。
 - 完整 Animation/keyframe model，包括中间关键帧、fill/play-state/composition 和
   layout 属性动画。
-- 完整 grid value grammar、named lines、显式 placement 和 dense packing。
+- 完整 grid value grammar、named/negative line、`grid-*-start/end` longhand、overlap resolution 和 dense packing。
 - 完整 `object-position` 四值语法和长度偏移。
 - Container query evaluation。该能力有价值，但会引入 style/layout 反馈环；
   在能可靠限制循环前刻意延后。

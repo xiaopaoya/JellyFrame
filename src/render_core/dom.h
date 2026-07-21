@@ -84,6 +84,7 @@ struct Node : public EventTarget {
     DomDirtyFlags local_dirty_flags = DomDirtyNone;
 
     Node& append_child(std::unique_ptr<Node> child);
+    Node& insert_child(std::unique_ptr<Node> child, std::size_t index);
     std::unique_ptr<Node> detach_child(const Node& child);
     bool remove_child(const Node& child);
     void set_attribute(std::string name, std::string value);

@@ -345,6 +345,113 @@ class PackagePreflightTests(unittest.TestCase):
             ],
         )
 
+    def test_html_api_diagnostics_map_partial_markup_to_real_alternatives(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-html-subset-diagnostics-") as directory:
+            root = Path(directory)
+            html = root / "index.html"
+            html.write_text(
+                "<div data-contenteditable='metadata'><img data-srcset='/metadata.bmp'></div>\n"
+                "<picture><source srcset='/wide.bmp 2x'><img src='/default.bmp' srcset='/dense.bmp 2x'></picture>\n"
+                "<table><tr><td>cell</td></tr></table><ruby>base<rt>hint</rt></ruby>\n"
+                "<template><button>later</button></template><video src='/preview.mjpg'></video><track kind='captions'>\n"
+                "<audio src='/tone.mp3'></audio><div contenteditable>note</div>\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, html, "/index.html", 0)]
+
+            diagnostics, warnings = package_app.collect_html_api_diagnostics(resources)
+            advice = jellyframe_cli.collect_developer_advice({"warnings": warnings})
+
+        self.assertEqual(diagnostics["entryCount"], 7)
+        self.assertEqual(diagnostics["warningCount"], 7)
+        self.assertEqual(
+            {warning["code"] for warning in warnings},
+            {
+                "html-responsive-image-subset",
+                "html-table-layout-subset",
+                "html-ruby-bidi-subset",
+                "html-template-subset",
+                "html-media-element-deferred",
+                "html-audio-element-subset",
+                "html-rich-text-deferred",
+            },
+        )
+        actions = {entry["code"]: entry["action"] for entry in advice}
+        self.assertIn("package-local image", actions["html-responsive-image-subset"])
+        self.assertIn("flex/grid", actions["html-table-layout-subset"])
+        self.assertIn("system component", actions["html-rich-text-deferred"])
+
+    def test_html_api_diagnostics_warn_for_rtl_without_ruby_markup(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-html-bidi-diagnostics-") as directory:
+            root = Path(directory)
+            html = root / "index.html"
+            html.write_text(
+                "<div data-dir='rtl'>metadata</div><p dir='rtl'>localized text</p>",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, html, "/index.html", 0)]
+
+            diagnostics, warnings = package_app.collect_html_api_diagnostics(resources)
+
+        self.assertEqual(diagnostics["entryCount"], 1)
+        self.assertEqual(diagnostics["warningCount"], 1)
+        self.assertEqual(warnings[0]["code"], "html-ruby-bidi-subset")
+        self.assertEqual(warnings[0]["feature"], "dir=rtl")
+
+    def test_static_subset_diagnostics_ignore_data_attributes_and_local_helpers(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-static-diagnostic-noise-") as directory:
+            root = Path(directory)
+            html = root / "index.html"
+            script = root / "scripts" / "app.js"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            html.write_text(
+                "<div data-srcset='/metadata.bmp' data-contenteditable='note' data-dir='rtl'></div>",
+                encoding="utf-8")
+            script.write_text(
+                "function getSelection() { return null; }\ngetSelection();\n",
+                encoding="utf-8")
+            html_resources = [package_app.build_resource_entry(root, html, "/index.html", 0)]
+            script_resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
+
+            _, html_warnings = package_app.collect_html_api_diagnostics(html_resources)
+            _, script_warnings = package_app.collect_script_api_diagnostics({}, script_resources)
+
+        self.assertEqual(html_warnings, [])
+        self.assertEqual(script_warnings, [])
+
+    def test_script_api_diagnostics_cover_storage_channels_selection_and_navigation(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-script-subset-diagnostics-") as directory:
+            root = Path(directory)
+            script = root / "scripts" / "app.js"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                "new MessageChannel();\n"
+                "sessionStorage.setItem('draft', '1');\n"
+                "document.cookie = 'token=value';\n"
+                "window.addEventListener('storage', refresh);\n"
+                "document.getSelection(); document.createRange();\n"
+                "location.assign('/next');\n",
+                encoding="utf-8")
+            resources = [package_app.build_resource_entry(root, script, "/scripts/app.js", 0)]
+
+            diagnostics, warnings = package_app.collect_script_api_diagnostics({}, resources)
+            advice = jellyframe_cli.collect_developer_advice({"warnings": warnings})
+
+        self.assertEqual(diagnostics["entryCount"], 6)
+        self.assertEqual(diagnostics["warningCount"], 6)
+        self.assertEqual(
+            {warning["api"] for warning in warnings},
+            {
+                "MessageChannel",
+                "sessionStorage",
+                "document.cookie",
+                "storage event",
+                "Selection/Range",
+                "browser navigation",
+            },
+        )
+        actions = {entry["api"]: entry["action"] for entry in advice}
+        self.assertIn("fragment-only history", actions["browser navigation"])
+        self.assertIn("app-private localStorage", actions["sessionStorage"])
+
     def test_script_api_diagnostics_warn_for_ambient_date_construction(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-script-date-diagnostics-") as directory:
             root = Path(directory)
@@ -364,7 +471,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(warnings[0]["code"], "script-host-time-ambiguous")
         self.assertEqual(warnings[0]["api"], "Date")
 
-    def test_script_api_diagnostics_warn_for_deferred_web_apis(self):
+    def test_script_api_diagnostics_distinguish_geometry_snapshot_from_deferred_web_apis(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-script-deferred-api-diagnostics-") as directory:
             root = Path(directory)
             script = root / "scripts" / "app.js"
@@ -407,7 +514,11 @@ class PackagePreflightTests(unittest.TestCase):
                 "serviceWorker",
             ],
         )
-        self.assertTrue(all(warning["code"] == "script-api-deferred" for warning in warnings))
+        by_api = {warning["api"]: warning["code"] for warning in warnings}
+        self.assertEqual(by_api["getBoundingClientRect"], "script-api-subset")
+        self.assertTrue(
+            all(code == "script-api-deferred" for api, code in by_api.items() if api != "getBoundingClientRect")
+        )
 
     def test_script_api_diagnostics_warn_for_canvas_apis_outside_subset(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-script-canvas-api-diagnostics-") as directory:
@@ -1282,6 +1393,19 @@ class PackagePreflightTests(unittest.TestCase):
             self.assertNotEqual(by_code[code]["title"], "Diagnostic needs app author review")
             self.assertTrue(by_code[code]["action"])
 
+    def test_background_image_package_warnings_have_specific_developer_advice(self):
+        advice = jellyframe_cli.collect_developer_advice({
+            "warnings": [
+                {"level": "warning", "code": "css-background-image-url-unsupported"},
+                {"level": "warning", "code": "css-background-image-resource-missing"},
+                {"level": "warning", "code": "css-background-image-resource-not-image"},
+            ],
+        })
+        by_code = {entry["code"]: entry for entry in advice}
+        self.assertIn("package-absolute", by_code["css-background-image-url-unsupported"]["action"])
+        self.assertIn("app root", by_code["css-background-image-resource-missing"]["action"])
+        self.assertIn("image resource", by_code["css-background-image-resource-not-image"]["action"])
+
     def test_unclassified_pipeline_diagnostic_keeps_stage_and_detail(self):
         report = {
             "pipelineDiagnostics": {
@@ -1614,6 +1738,33 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(package_app.normalized_int_list([8, True, "12", 16], 1), [8, 16])
         self.assertEqual(package_app.normalized_int_list([400, 1200], 1, 1000), [400])
+
+    def test_package_background_image_diagnostics_match_the_bounded_css_subset(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-background-image-") as directory:
+            root = Path(directory)
+            css = root / "styles" / "app.css"
+            image = root / "assets" / "cover.bmp"
+            css.parent.mkdir(parents=True, exist_ok=True)
+            image.parent.mkdir(parents=True, exist_ok=True)
+            css.write_text(
+                ".cover { background-image: url('/assets/cover.bmp'); }\n"
+                ".remote { background-image: url('https://example.invalid/cover.bmp'); }\n"
+                ".missing { background: url('/assets/missing.bmp'); }\n",
+                encoding="utf-8")
+            image.write_bytes(tiny_bmp())
+            resources = [
+                package_app.build_resource_entry(root, css, "/styles/app.css", 4096),
+                package_app.build_resource_entry(root, image, "/assets/cover.bmp", 4096),
+            ]
+
+            diagnostics, warnings = package_app.collect_background_image_diagnostics(resources)
+
+        self.assertEqual(diagnostics["entryCount"], 3)
+        supported = {entry["url"] for entry in diagnostics["entries"] if entry["supported"]}
+        self.assertIn("/assets/cover.bmp", supported)
+        codes = {warning["code"] for warning in warnings}
+        self.assertIn("css-background-image-url-unsupported", codes)
+        self.assertIn("css-background-image-resource-missing", codes)
 
 
 if __name__ == "__main__":

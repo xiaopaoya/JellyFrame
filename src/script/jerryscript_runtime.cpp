@@ -8,6 +8,7 @@
 #include "render_core/canvas2d.h"
 #include "render_core/form_control.h"
 #include "render_core/form_submission.h"
+#include "render_core/layout.h"
 #include "render_core/style.h"
 #include "render_core/text_scan.h"
 
@@ -15,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
@@ -100,7 +102,10 @@ struct ScriptFormData {
 struct ScriptNodeBinding {
     JerryScriptRuntime* runtime = nullptr;
     Node* node = nullptr;
+    Rect layout_rect;
     bool active = false;
+    bool layout_snapshot_requested = false;
+    bool has_layout_snapshot = false;
 };
 
 struct ScriptLocalStorageBinding {
@@ -289,6 +294,20 @@ struct ScriptRuntimeAccess {
         runtime.invalidate_script_node(node);
     }
 
+    static bool request_layout_snapshot(JerryScriptRuntime& runtime, ScriptNodeBinding& binding) {
+        if (binding.runtime != &runtime || !binding.active) {
+            return false;
+        }
+        if (!binding.layout_snapshot_requested) {
+            if (runtime.layout_snapshot_bindings_.size() >= runtime.options_.max_layout_snapshot_nodes) {
+                return false;
+            }
+            binding.layout_snapshot_requested = true;
+            runtime.layout_snapshot_bindings_.push_back(&binding);
+        }
+        return binding.has_layout_snapshot;
+    }
+
     static ScriptLocalStorageBinding* bind_script_local_storage(JerryScriptRuntime& runtime,
                                                                 AppLocalStorageShadow& storage) {
         return runtime.bind_script_local_storage(storage);
@@ -326,6 +345,22 @@ struct ScriptRuntimeAccess {
 
     static void set_location_hash(JerryScriptRuntime& runtime, std::string value) {
         runtime.set_location_hash(std::move(value));
+    }
+
+    static std::size_t route_history_length(const JerryScriptRuntime& runtime) {
+        return runtime.route_history_length();
+    }
+
+    static void push_route_history(JerryScriptRuntime& runtime, std::string value) {
+        runtime.push_route_history(std::move(value));
+    }
+
+    static void replace_route_history(JerryScriptRuntime& runtime, std::string value) {
+        runtime.replace_route_history(std::move(value));
+    }
+
+    static bool traverse_route_history(JerryScriptRuntime& runtime, int delta) {
+        return runtime.traverse_route_history(delta);
     }
 
     static bool& execution_watchdog_interrupt_pending(JerryScriptRuntime& runtime) {
@@ -598,6 +633,14 @@ Node* native_node(const jerry_value_t object) {
         return nullptr;
     }
     return ScriptRuntimeAccess::resolve_script_node(*binding->runtime, *binding);
+}
+
+ScriptNodeBinding* native_node_binding(const jerry_value_t object) {
+    if (!jerry_value_is_object(object)) {
+        return nullptr;
+    }
+    auto* binding = static_cast<ScriptNodeBinding*>(jerry_object_get_native_ptr(object, &kNodeNativeInfo));
+    return binding != nullptr && binding->runtime != nullptr && binding->active ? binding : nullptr;
 }
 
 JerryScriptRuntime* native_runtime(const jerry_value_t object) {
@@ -906,6 +949,18 @@ std::string dataset_key_to_data_attribute(std::string_view key) {
     return attribute;
 }
 
+bool dataset_key_is_writable(std::string_view key) {
+    if (key.empty() || key.size() > 48 || key == "__proto__" || key == "constructor" || key == "prototype") {
+        return false;
+    }
+    if (!(std::isalpha(static_cast<unsigned char>(key.front())) != 0 || key.front() == '_')) {
+        return false;
+    }
+    return std::all_of(key.begin(), key.end(), [](unsigned char ch) {
+        return std::isalnum(ch) != 0 || ch == '_';
+    });
+}
+
 std::string css_property_name_from_js(std::string_view key) {
     std::string property;
     for (char ch : key) {
@@ -959,6 +1014,7 @@ bool is_script_writable_style_property(const std::string& property) {
         "right",
         "bottom",
         "position",
+        "visibility",
         "white-space",
         "text-overflow",
         "overflow",
@@ -1823,6 +1879,7 @@ JELLYFRAME_REFLECTED_INT_ACCESSOR(minLength, "minlength", -1)
 JELLYFRAME_REFLECTED_INT_ACCESSOR(rows, "rows", 2)
 JELLYFRAME_REFLECTED_INT_ACCESSOR(cols, "cols", 20)
 JELLYFRAME_REFLECTED_INT_ACCESSOR(size, "size", 0)
+JELLYFRAME_REFLECTED_INT_ACCESSOR(tabIndex, "tabindex", -1)
 
 #undef JELLYFRAME_REFLECTED_INT_ACCESSOR
 
@@ -1950,6 +2007,39 @@ jerry_value_t class_list_toggle(const jerry_call_info_t* call_info_p,
     return jerry_boolean(should_have);
 }
 
+jerry_value_t class_list_replace(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 2) {
+        return jerry_boolean(false);
+    }
+
+    const std::string old_token = value_to_string(args_p[0]);
+    const std::string new_token = value_to_string(args_p[1]);
+    if (!class_token_valid(old_token) || !class_token_valid(new_token)) {
+        return jerry_boolean(false);
+    }
+
+    std::vector<std::string> tokens = class_tokens_for(*node);
+    const auto old = std::find(tokens.begin(), tokens.end(), old_token);
+    if (old == tokens.end()) {
+        return jerry_boolean(false);
+    }
+    if (old_token == new_token) {
+        return jerry_boolean(true);
+    }
+
+    const auto existing_new = std::find(tokens.begin(), tokens.end(), new_token);
+    if (existing_new != tokens.end()) {
+        tokens.erase(old);
+    } else {
+        *old = new_token;
+    }
+    set_class_tokens(*node, tokens);
+    return jerry_boolean(true);
+}
+
 jerry_value_t node_get_class_list(const jerry_call_info_t* call_info_p,
                                   const jerry_value_t[],
                                   const jerry_length_t) {
@@ -1964,6 +2054,7 @@ jerry_value_t node_get_class_list(const jerry_call_info_t* call_info_p,
     set_method(object.get(), "add", class_list_add);
     set_method(object.get(), "remove", class_list_remove);
     set_method(object.get(), "toggle", class_list_toggle);
+    set_method(object.get(), "replace", class_list_replace);
     return object.release();
 }
 
@@ -1978,6 +2069,27 @@ jerry_value_t node_get_hidden(const jerry_call_info_t* call_info_p,
                               const jerry_length_t) {
     Node* node = native_node(call_info_p->this_value);
     return jerry_boolean(node != nullptr && has_attribute(*node, "hidden"));
+}
+
+jerry_value_t node_get_autofocus(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && has_attribute(*node, "autofocus"));
+}
+
+jerry_value_t node_set_autofocus(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t args_p[],
+                                  const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node != nullptr && node->type == NodeType::Element) {
+        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+            node->set_attribute("autofocus", "");
+        } else {
+            node->remove_attribute("autofocus");
+        }
+    }
+    return jerry_undefined();
 }
 
 jerry_value_t node_set_hidden(const jerry_call_info_t* call_info_p,
@@ -2130,7 +2242,8 @@ jerry_value_t node_get_type(const jerry_call_info_t* call_info_p,
     if (node->tag_name == "input") {
         const std::string type = ascii_lowercase(node->attribute("type"));
         static constexpr std::string_view kSupportedInputTypes[] = {
-            "checkbox", "color", "date", "datetime-local", "file", "radio", "range", "text", "time",
+            "button", "checkbox", "color", "date", "datetime-local", "file", "image", "radio", "range",
+            "reset", "submit", "text", "time", "search", "tel", "url", "email", "number",
         };
         if (std::find(std::begin(kSupportedInputTypes), std::end(kSupportedInputTypes), std::string_view(type)) !=
             std::end(kSupportedInputTypes)) {
@@ -2481,7 +2594,8 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
 #define JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(X) \
     X(ononline, "online") \
     X(onoffline, "offline") \
-    X(onhashchange, "hashchange")
+    X(onhashchange, "hashchange") \
+    X(onpopstate, "popstate")
 
 #define JELLYFRAME_DECLARE_NODE_EVENT_HANDLER(js_name, event_type) \
     jerry_value_t node_get_##js_name(const jerry_call_info_t*, const jerry_value_t[], const jerry_length_t); \
@@ -2517,6 +2631,15 @@ jerry_value_t document_query_selector_all(const jerry_call_info_t* call_info_p,
 jerry_value_t element_remove_attribute(const jerry_call_info_t* call_info_p,
                                        const jerry_value_t args_p[],
                                        const jerry_length_t args_count);
+jerry_value_t element_has_attribute(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count);
+jerry_value_t element_toggle_attribute(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count);
+jerry_value_t node_remove(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t args_p[],
+                          const jerry_length_t args_count);
 
 void set_property(jerry_value_t object, const char* name, jerry_value_t value) {
     JerryValue result(jerry_object_set_sz(object, name, value));
@@ -2861,6 +2984,100 @@ jerry_value_t make_location_object(JerryScriptRuntime& runtime) {
     JerryValue object(jerry_object());
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
     define_accessor(object.get(), "hash", location_get_hash, location_set_hash);
+    return object.release();
+}
+
+jerry_value_t history_get_length(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    return jerry_number(runtime != nullptr ? static_cast<double>(ScriptRuntimeAccess::route_history_length(*runtime)) : 0.0);
+}
+
+bool history_url_to_fragment(const jerry_value_t args_p[], jerry_length_t args_count, std::string& fragment) {
+    if (args_count < 3 || jerry_value_is_undefined(args_p[2]) || jerry_value_is_null(args_p[2])) {
+        return true;
+    }
+    const std::string url = value_to_string(args_p[2]);
+    if (!url.empty() && url.front() != '#') {
+        return false;
+    }
+    fragment = url.empty() ? std::string() : url.substr(1);
+    return true;
+}
+
+jerry_value_t history_push_state(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr) {
+        return throw_type_error("history is not bound to a document");
+    }
+    std::string fragment = ScriptRuntimeAccess::location_hash(*runtime);
+    if (!fragment.empty()) {
+        fragment.erase(0, 1);
+    }
+    if (!history_url_to_fragment(args_p, args_count, fragment)) {
+        return throw_type_error("history only accepts an empty or fragment URL");
+    }
+    ScriptRuntimeAccess::push_route_history(*runtime, std::move(fragment));
+    return jerry_undefined();
+}
+
+jerry_value_t history_replace_state(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr) {
+        return throw_type_error("history is not bound to a document");
+    }
+    std::string fragment = ScriptRuntimeAccess::location_hash(*runtime);
+    if (!fragment.empty()) {
+        fragment.erase(0, 1);
+    }
+    if (!history_url_to_fragment(args_p, args_count, fragment)) {
+        return throw_type_error("history only accepts an empty or fragment URL");
+    }
+    ScriptRuntimeAccess::replace_route_history(*runtime, std::move(fragment));
+    return jerry_undefined();
+}
+
+jerry_value_t history_go(const jerry_call_info_t* call_info_p,
+                         const jerry_value_t args_p[],
+                         const jerry_length_t args_count) {
+    if (JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value); runtime != nullptr) {
+        ScriptRuntimeAccess::traverse_route_history(*runtime, args_count > 0 ? int_from_value(args_p[0], 0) : 0);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t history_back(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t[],
+                           const jerry_length_t) {
+    if (JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value); runtime != nullptr) {
+        ScriptRuntimeAccess::traverse_route_history(*runtime, -1);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t history_forward(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t[],
+                              const jerry_length_t) {
+    if (JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value); runtime != nullptr) {
+        ScriptRuntimeAccess::traverse_route_history(*runtime, 1);
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t make_history_object(JerryScriptRuntime& runtime) {
+    JerryValue object(jerry_object());
+    jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+    define_accessor(object.get(), "length", history_get_length, node_ignore_setter);
+    set_method(object.get(), "pushState", history_push_state);
+    set_method(object.get(), "replaceState", history_replace_state);
+    set_method(object.get(), "go", history_go);
+    set_method(object.get(), "back", history_back);
+    set_method(object.get(), "forward", history_forward);
     return object.release();
 }
 
@@ -3431,6 +3648,76 @@ jerry_value_t form_request_submit(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t form_reset(const jerry_call_info_t* call_info_p,
+                         const jerry_value_t[],
+                         const jerry_length_t) {
+    Node* form = native_node(call_info_p->this_value);
+    if (form == nullptr || form->type != NodeType::Element || form->tag_name != "form") {
+        return throw_type_error("reset requires a form element");
+    }
+    reset_form(*form);
+    return jerry_undefined();
+}
+
+jerry_value_t node_get_will_validate(const jerry_call_info_t* call_info_p,
+                                     const jerry_value_t[],
+                                     const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    return jerry_boolean(node != nullptr && form_control_will_validate(*node));
+}
+
+jerry_value_t node_get_validation_message(const jerry_call_info_t* call_info_p,
+                                           const jerry_value_t[],
+                                           const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || !is_form_control(*node)) {
+        return jerry_string_sz("");
+    }
+    return jerry_string_sz(form_control_validation_message(*node).c_str());
+}
+
+jerry_value_t node_get_validity(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    const FormControlValidationResult validation =
+        node != nullptr && is_form_control(*node) ? validate_form_control(*node) : FormControlValidationResult{};
+    JerryValue object(jerry_object());
+    set_property(object.get(), "valueMissing", JerryValue(jerry_boolean(validation.value_missing)).get());
+    set_property(object.get(), "tooShort", JerryValue(jerry_boolean(validation.too_short)).get());
+    set_property(object.get(), "tooLong", JerryValue(jerry_boolean(validation.too_long)).get());
+    set_property(object.get(), "customError", JerryValue(jerry_boolean(validation.custom_error)).get());
+    set_property(object.get(), "valid", JerryValue(jerry_boolean(validation.valid())).get());
+    return object.release();
+}
+
+jerry_value_t node_check_validity(const jerry_call_info_t* call_info_p,
+                                  const jerry_value_t[],
+                                  const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || !is_form_control(*node)) {
+        return throw_type_error("checkValidity requires a form control");
+    }
+    return jerry_boolean(check_form_control_validity(*node));
+}
+
+jerry_value_t node_report_validity(const jerry_call_info_t* call_info_p,
+                                   const jerry_value_t[],
+                                   const jerry_length_t) {
+    return node_check_validity(call_info_p, nullptr, 0);
+}
+
+jerry_value_t node_set_custom_validity(const jerry_call_info_t* call_info_p,
+                                        const jerry_value_t args_p[],
+                                        const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || !is_form_control(*node)) {
+        return throw_type_error("setCustomValidity requires a form control");
+    }
+    set_form_control_custom_validity(*node, args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    return jerry_undefined();
+}
+
 jerry_value_t audio_construct(const jerry_call_info_t* call_info_p,
                               const jerry_value_t args_p[],
                               const jerry_length_t args_count) {
@@ -3603,8 +3890,80 @@ jerry_value_t make_audio_constructor(JerryScriptRuntime& runtime) {
     return constructor.release();
 }
 
+constexpr std::size_t kMaxDatasetAttributes = 64;
+constexpr std::size_t kMaxDatasetValueBytes = 256;
+
+jerry_value_t dataset_proxy_get(const jerry_call_info_t*,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    if (args_count < 2) {
+        return jerry_undefined();
+    }
+    Node* node = native_node(args_p[0]);
+    if (node != nullptr && node->type == NodeType::Element && jerry_value_is_string(args_p[1])) {
+        const std::string key = value_to_string(args_p[1]);
+        if (dataset_key_is_writable(key)) {
+            const std::string value = node->attribute(dataset_key_to_data_attribute(key));
+            if (!value.empty() || node->attributes.find(dataset_key_to_data_attribute(key)) != node->attributes.end()) {
+                return jerry_string_sz(value.c_str());
+            }
+        }
+    }
+    return jerry_object_get(args_p[0], args_p[1]);
+}
+
+jerry_value_t dataset_proxy_set(const jerry_call_info_t*,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    if (args_count < 3 || !jerry_value_is_string(args_p[1])) {
+        return jerry_boolean(false);
+    }
+    Node* node = native_node(args_p[0]);
+    const std::string key = value_to_string(args_p[1]);
+    const std::string value = value_to_string(args_p[2]);
+    if (node == nullptr || node->type != NodeType::Element || !dataset_key_is_writable(key) ||
+        value.size() > kMaxDatasetValueBytes) {
+        return jerry_boolean(false);
+    }
+
+    const std::string attribute = dataset_key_to_data_attribute(key);
+    if (node->attributes.find(attribute) == node->attributes.end() &&
+        node->attributes.size() >= kMaxDatasetAttributes) {
+        return jerry_boolean(false);
+    }
+    node->set_attribute(attribute, value);
+    return jerry_boolean(true);
+}
+
+jerry_value_t dataset_proxy_delete_property(const jerry_call_info_t*,
+                                             const jerry_value_t args_p[],
+                                             const jerry_length_t args_count) {
+    if (args_count < 2 || !jerry_value_is_string(args_p[1])) {
+        return jerry_boolean(false);
+    }
+    Node* node = native_node(args_p[0]);
+    const std::string key = value_to_string(args_p[1]);
+    if (node == nullptr || node->type != NodeType::Element || !dataset_key_is_writable(key)) {
+        return jerry_boolean(false);
+    }
+    node->remove_attribute(dataset_key_to_data_attribute(key));
+    return jerry_boolean(true);
+}
+
 jerry_value_t make_dataset_object(JerryScriptRuntime& runtime, Node& node) {
-    (void) runtime;
+    if (jerry_feature_enabled(JERRY_FEATURE_PROXY)) {
+        JerryValue target(jerry_object());
+        bind_native_node(target.get(), runtime, node);
+        JerryValue handler(jerry_object());
+        set_method(handler.get(), "get", dataset_proxy_get);
+        set_method(handler.get(), "set", dataset_proxy_set);
+        set_method(handler.get(), "deleteProperty", dataset_proxy_delete_property);
+        JerryValue proxy(jerry_proxy(target.get(), handler.get()));
+        if (!jerry_value_is_exception(proxy.get())) {
+            return proxy.release();
+        }
+    }
+
     JerryValue object(jerry_object());
     for (const auto& attribute : node.attributes) {
         const std::string key = data_attribute_to_dataset_key(attribute.first);
@@ -3727,6 +4086,7 @@ JELLYFRAME_STYLE_ACCESSOR(top, "top")
 JELLYFRAME_STYLE_ACCESSOR(right, "right")
 JELLYFRAME_STYLE_ACCESSOR(bottom, "bottom")
 JELLYFRAME_STYLE_ACCESSOR(position, "position")
+JELLYFRAME_STYLE_ACCESSOR(visibility, "visibility")
 JELLYFRAME_STYLE_ACCESSOR(whiteSpace, "white-space")
 JELLYFRAME_STYLE_ACCESSOR(textOverflow, "text-overflow")
 JELLYFRAME_STYLE_ACCESSOR(overflow, "overflow")
@@ -3772,6 +4132,7 @@ jerry_value_t make_style_object(JerryScriptRuntime& runtime, Node& node) {
     define_accessor(object.get(), "right", style_get_right, style_set_right);
     define_accessor(object.get(), "bottom", style_get_bottom, style_set_bottom);
     define_accessor(object.get(), "position", style_get_position, style_set_position);
+    define_accessor(object.get(), "visibility", style_get_visibility, style_set_visibility);
     define_accessor(object.get(), "whiteSpace", style_get_whiteSpace, style_set_whiteSpace);
     define_accessor(object.get(), "textOverflow", style_get_textOverflow, style_set_textOverflow);
     define_accessor(object.get(), "overflow", style_get_overflow, style_set_overflow);
@@ -4300,6 +4661,28 @@ jerry_value_t node_get_dataset(const jerry_call_info_t* call_info_p,
     return make_dataset_object(*runtime, *node);
 }
 
+jerry_value_t node_get_bounding_client_rect(const jerry_call_info_t* call_info_p,
+                                             const jerry_value_t[],
+                                             const jerry_length_t) {
+    ScriptNodeBinding* binding = native_node_binding(call_info_p->this_value);
+    if (binding == nullptr || binding->runtime == nullptr) {
+        return throw_type_error("getBoundingClientRect called on non-node object");
+    }
+
+    const bool has_snapshot = ScriptRuntimeAccess::request_layout_snapshot(*binding->runtime, *binding);
+    const Rect rect = has_snapshot ? binding->layout_rect : Rect{};
+    JerryValue result(jerry_object());
+    set_number_property(result.get(), "x", rect.x);
+    set_number_property(result.get(), "y", rect.y);
+    set_number_property(result.get(), "width", rect.width);
+    set_number_property(result.get(), "height", rect.height);
+    set_number_property(result.get(), "top", rect.y);
+    set_number_property(result.get(), "right", rect.x + rect.width);
+    set_number_property(result.get(), "bottom", rect.y + rect.height);
+    set_number_property(result.get(), "left", rect.x);
+    return result.release();
+}
+
 jerry_value_t node_get_style_object(const jerry_call_info_t* call_info_p,
                                     const jerry_value_t[],
                                     const jerry_length_t) {
@@ -4310,6 +4693,13 @@ jerry_value_t node_get_style_object(const jerry_call_info_t* call_info_p,
     }
     return make_style_object(*runtime, *node);
 }
+
+jerry_value_t node_append(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t args_p[],
+                          const jerry_length_t args_count);
+jerry_value_t node_prepend(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count);
 
 jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool document_methods) {
     JerryValue object(jerry_object());
@@ -4332,6 +4722,10 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     define_accessor(object.get(), "hidden", node_get_hidden, node_set_hidden);
     define_accessor(object.get(), "disabled", node_get_disabled, node_set_disabled);
     define_accessor(object.get(), "open", node_get_open, node_set_open);
+    if (node.type == NodeType::Element) {
+        define_accessor(object.get(), "tabIndex", node_get_tabIndex, node_set_tabIndex);
+        define_accessor(object.get(), "autofocus", node_get_autofocus, node_set_autofocus);
+    }
 #define JELLYFRAME_DEFINE_NODE_EVENT_HANDLER(js_name, event_type) \
     define_accessor(object.get(), #js_name, node_get_##js_name, node_set_##js_name);
     JELLYFRAME_NODE_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_NODE_EVENT_HANDLER)
@@ -4351,6 +4745,9 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         define_accessor(object.get(), "min", node_get_min, node_set_min);
         define_accessor(object.get(), "max", node_get_max, node_set_max);
         define_accessor(object.get(), "step", node_get_step, node_set_step);
+        define_accessor(object.get(), "willValidate", node_get_will_validate, node_ignore_setter);
+        define_accessor(object.get(), "validationMessage", node_get_validation_message, node_ignore_setter);
+        define_accessor(object.get(), "validity", node_get_validity, node_ignore_setter);
     }
     if (node.type == NodeType::Element && (node.tag_name == "input" || node.tag_name == "textarea")) {
         define_accessor(object.get(), "placeholder", node_get_placeholder, node_set_placeholder);
@@ -4421,10 +4818,15 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         define_accessor(object.get(), "control", node_get_label_control, node_ignore_setter);
     }
     set_method(object.get(), "appendChild", node_append_child);
+    set_method(object.get(), "append", node_append);
+    set_method(object.get(), "prepend", node_prepend);
     set_method(object.get(), "removeChild", node_remove_child);
     set_method(object.get(), "setAttribute", element_set_attribute);
     set_method(object.get(), "getAttribute", element_get_attribute);
     set_method(object.get(), "removeAttribute", element_remove_attribute);
+    set_method(object.get(), "hasAttribute", element_has_attribute);
+    set_method(object.get(), "toggleAttribute", element_toggle_attribute);
+    set_method(object.get(), "remove", node_remove);
     set_method(object.get(), "addEventListener", node_add_event_listener);
     set_method(object.get(), "removeEventListener", node_remove_event_listener);
     set_method(object.get(), "click", node_click);
@@ -4432,10 +4834,17 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     set_method(object.get(), "closest", node_closest);
     set_method(object.get(), "querySelector", node_query_selector);
     set_method(object.get(), "querySelectorAll", node_query_selector_all);
+    set_method(object.get(), "getBoundingClientRect", node_get_bounding_client_rect);
+    if (form_control) {
+        set_method(object.get(), "checkValidity", node_check_validity);
+        set_method(object.get(), "reportValidity", node_report_validity);
+        set_method(object.get(), "setCustomValidity", node_set_custom_validity);
+    }
     if (node.type == NodeType::Element && node.tag_name == "form") {
         set_method(object.get(), "checkValidity", form_check_validity);
         set_method(object.get(), "reportValidity", form_report_validity);
         set_method(object.get(), "requestSubmit", form_request_submit);
+        set_method(object.get(), "reset", form_reset);
     }
     if (node.type == NodeType::Element && node.tag_name == "canvas") {
         set_method(object.get(), "getContext", canvas_get_context);
@@ -4475,25 +4884,31 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     return object.release();
 }
 
+Node& insert_or_move_child(JerryScriptRuntime& runtime, Node& parent, Node& child, std::size_t index);
+
 Node& append_or_move_child(JerryScriptRuntime& runtime, Node& parent, Node& child) {
+    return insert_or_move_child(runtime, parent, child, parent.children.size());
+}
+
+Node& insert_or_move_child(JerryScriptRuntime& runtime, Node& parent, Node& child, std::size_t index) {
     if (&parent == &child || is_ancestor_of(child, parent)) {
-        throw std::runtime_error("appendChild would create a cycle");
+        throw std::runtime_error("node insertion would create a cycle");
     }
 
     if (child.parent != nullptr) {
         Node* old_parent = child.parent;
         auto detached = old_parent->detach_child(child);
         if (!detached) {
-            throw std::runtime_error("appendChild could not detach existing child");
+            throw std::runtime_error("node insertion could not detach existing child");
         }
-        return parent.append_child(std::move(detached));
+        return parent.insert_child(std::move(detached), index);
     }
 
     if (auto detached = ScriptRuntimeAccess::release_detached_node(runtime, child)) {
-        return parent.append_child(std::move(detached));
+        return parent.insert_child(std::move(detached), index);
     }
 
-    throw std::runtime_error("appendChild received a node outside this runtime");
+    throw std::runtime_error("node insertion received a node outside this runtime");
 }
 
 jerry_value_t node_append_child(const jerry_call_info_t* call_info_p,
@@ -4512,6 +4927,51 @@ jerry_value_t node_append_child(const jerry_call_info_t* call_info_p,
     } catch (const std::exception& error) {
         return jerry_throw_sz(JERRY_ERROR_TYPE, error.what());
     }
+}
+
+jerry_value_t node_append(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t args_p[],
+                          const jerry_length_t args_count) {
+    Node* parent = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (parent == nullptr || runtime == nullptr) {
+        return throw_type_error("append called on an invalid node");
+    }
+    try {
+        for (jerry_length_t index = 0; index < args_count; ++index) {
+            if (Node* child = native_node(args_p[index])) {
+                append_or_move_child(*runtime, *parent, *child);
+            } else {
+                parent->append_child(make_text(value_to_string(args_p[index])));
+            }
+        }
+    } catch (const std::exception& error) {
+        return jerry_throw_sz(JERRY_ERROR_TYPE, error.what());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t node_prepend(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count) {
+    Node* parent = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (parent == nullptr || runtime == nullptr) {
+        return throw_type_error("prepend called on an invalid node");
+    }
+    try {
+        std::size_t insertion_index = 0;
+        for (jerry_length_t index = 0; index < args_count; ++index, ++insertion_index) {
+            if (Node* child = native_node(args_p[index])) {
+                insert_or_move_child(*runtime, *parent, *child, insertion_index);
+            } else {
+                parent->insert_child(make_text(value_to_string(args_p[index])), insertion_index);
+            }
+        }
+    } catch (const std::exception& error) {
+        return jerry_throw_sz(JERRY_ERROR_TYPE, error.what());
+    }
+    return jerry_undefined();
 }
 
 jerry_value_t node_remove_child(const jerry_call_info_t* call_info_p,
@@ -4577,6 +5037,57 @@ jerry_value_t element_remove_attribute(const jerry_call_info_t* call_info_p,
         return throw_type_error("removeAttribute requires an element and attribute name");
     }
     node->remove_attribute(ascii_lowercase(value_to_string(args_p[0])));
+    return jerry_undefined();
+}
+
+jerry_value_t element_has_attribute(const jerry_call_info_t* call_info_p,
+                                    const jerry_value_t args_p[],
+                                    const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
+        return throw_type_error("hasAttribute requires an element and attribute name");
+    }
+    const std::string name = ascii_lowercase(value_to_string(args_p[0]));
+    return jerry_boolean(!name.empty() && node->attributes.find(name) != node->attributes.end());
+}
+
+jerry_value_t element_toggle_attribute(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t args_p[],
+                                       const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
+        return throw_type_error("toggleAttribute requires an element and attribute name");
+    }
+    const std::string name = ascii_lowercase(value_to_string(args_p[0]));
+    if (name.empty()) {
+        return throw_type_error("toggleAttribute requires a non-empty attribute name");
+    }
+    const bool present = node->attributes.find(name) != node->attributes.end();
+    const bool should_be_present = args_count >= 2 ? jerry_value_to_boolean(args_p[1]) : !present;
+    if (should_be_present && !present) {
+        node->set_attribute(name, "");
+    } else if (!should_be_present && present) {
+        node->remove_attribute(name);
+    }
+    return jerry_boolean(should_be_present);
+}
+
+jerry_value_t node_remove(const jerry_call_info_t* call_info_p,
+                          const jerry_value_t[],
+                          const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->parent == nullptr) {
+        return jerry_undefined();
+    }
+    if (!ScriptRuntimeAccess::can_adopt_detached_node(*runtime)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
+    }
+    Node* parent = node->parent;
+    auto detached = parent->detach_child(*node);
+    if (!detached || ScriptRuntimeAccess::adopt_detached_node(*runtime, std::move(detached)) == nullptr) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
+    }
     return jerry_undefined();
 }
 
@@ -4983,6 +5494,7 @@ jerry_value_t node_click(const jerry_call_info_t* call_info_p,
     }
     if (!click.default_prevented()) {
         request_form_submit_from_control(*node);
+        reset_form_from_control(*node);
     }
     return jerry_undefined();
 }
@@ -5149,7 +5661,7 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
 } // namespace
 
 ScriptNodeBinding* JerryScriptRuntime::bind_script_node(Node& node) {
-    auto* binding = new ScriptNodeBinding{this, &node, true};
+    auto* binding = new ScriptNodeBinding{this, &node, {}, true, false, false};
     node_bindings_.push_back(binding);
     if (std::find(observed_nodes_.begin(), observed_nodes_.end(), &node) == observed_nodes_.end()) {
         node.set_destroy_observer(script_node_destroyed, this);
@@ -5166,6 +5678,9 @@ Node* JerryScriptRuntime::resolve_script_node(const ScriptNodeBinding& binding) 
 }
 
 void JerryScriptRuntime::forget_script_node_binding(ScriptNodeBinding& binding) {
+    layout_snapshot_bindings_.erase(
+        std::remove(layout_snapshot_bindings_.begin(), layout_snapshot_bindings_.end(), &binding),
+        layout_snapshot_bindings_.end());
     auto it = std::find(node_bindings_.begin(), node_bindings_.end(), &binding);
     if (it != node_bindings_.end()) {
         node_bindings_.erase(it);
@@ -5180,8 +5695,17 @@ void JerryScriptRuntime::invalidate_script_node(Node& node) {
         if (binding != nullptr && binding->node == &node) {
             binding->node = nullptr;
             binding->active = false;
+            binding->layout_snapshot_requested = false;
+            binding->has_layout_snapshot = false;
         }
     }
+    layout_snapshot_bindings_.erase(
+        std::remove_if(layout_snapshot_bindings_.begin(),
+                       layout_snapshot_bindings_.end(),
+                       [&node](const ScriptNodeBinding* binding) {
+                           return binding == nullptr || binding->node == &node;
+                       }),
+        layout_snapshot_bindings_.end());
     for (Node*& observed : observed_nodes_) {
         if (observed == &node) {
             observed = nullptr;
@@ -5196,14 +5720,54 @@ void JerryScriptRuntime::clear_script_node_bindings() {
         }
     }
     observed_nodes_.clear();
+    layout_snapshot_bindings_.clear();
     for (ScriptNodeBinding* binding : node_bindings_) {
         if (binding != nullptr) {
             binding->runtime = nullptr;
             binding->node = nullptr;
             binding->active = false;
+            binding->layout_snapshot_requested = false;
+            binding->has_layout_snapshot = false;
         }
     }
     node_bindings_.clear();
+}
+
+void JerryScriptRuntime::capture_layout_snapshot(const LayoutBox& root,
+                                                 int client_offset_x,
+                                                 int client_offset_y) {
+    if (layout_snapshot_bindings_.empty()) {
+        return;
+    }
+
+    for (ScriptNodeBinding* binding : layout_snapshot_bindings_) {
+        if (binding != nullptr) {
+            binding->has_layout_snapshot = false;
+        }
+    }
+
+    std::vector<const LayoutBox*> pending;
+    pending.push_back(&root);
+    while (!pending.empty()) {
+        const LayoutBox* box = pending.back();
+        pending.pop_back();
+        if (box == nullptr) {
+            continue;
+        }
+        for (ScriptNodeBinding* binding : layout_snapshot_bindings_) {
+            if (binding != nullptr && binding->active && binding->node == box->node) {
+                binding->layout_rect = box->rect;
+                binding->layout_rect.x += client_offset_x;
+                binding->layout_rect.y += client_offset_y;
+                binding->has_layout_snapshot = true;
+            }
+        }
+        for (const LayoutBoxPtr& child : box->children) {
+            if (child != nullptr) {
+                pending.push_back(child.get());
+            }
+        }
+    }
 }
 
 ScriptLocalStorageBinding* JerryScriptRuntime::bind_script_local_storage(AppLocalStorageShadow& storage) {
@@ -5305,6 +5869,8 @@ void JerryScriptRuntime::bind_document(Node& document) {
     }
     bound_document_ = &document;
     route_fragment_.clear();
+    route_history_.clear();
+    route_history_index_ = 0;
 
     JerryValue global(jerry_current_realm());
     jerry_object_set_native_ptr(global.get(), &kRuntimeNativeInfo, this);
@@ -5312,6 +5878,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     JerryValue window_object(jerry_object());
     JerryValue navigator_object(make_navigator_object(*this));
     JerryValue location_object(make_location_object(*this));
+    JerryValue history_object(make_history_object(*this));
     jerry_object_set_native_ptr(window_object.get(), &kRuntimeNativeInfo, this);
 
     set_property(window_object.get(), "document", document_object.get());
@@ -5322,6 +5889,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_bool_property(window_object.get(), "crossOriginIsolated", false);
     set_property(window_object.get(), "navigator", navigator_object.get());
     set_property(window_object.get(), "location", location_object.get());
+    set_property(window_object.get(), "history", history_object.get());
     set_property(global.get(), "document", document_object.get());
     set_property(global.get(), "window", window_object.get());
     set_property(global.get(), "self", window_object.get());
@@ -5330,6 +5898,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_bool_property(global.get(), "crossOriginIsolated", false);
     set_property(global.get(), "navigator", navigator_object.get());
     set_property(global.get(), "location", location_object.get());
+    set_property(global.get(), "history", history_object.get());
     set_runtime_method(window_object.get(), "setTimeout", script_set_timeout, *this);
     set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
     set_runtime_method(window_object.get(), "setInterval", script_set_interval, *this);
@@ -6003,8 +6572,56 @@ void JerryScriptRuntime::set_location_hash(std::string value) {
     if (value == route_fragment_) {
         return;
     }
-    route_fragment_ = std::move(value);
+    push_route_history(std::move(value));
     dispatch_window_event("hashchange");
+}
+
+std::size_t JerryScriptRuntime::route_history_length() const {
+    return route_history_.empty() ? 1U : route_history_.size();
+}
+
+void JerryScriptRuntime::push_route_history(std::string value) {
+    if (route_history_.empty()) {
+        route_history_.push_back(route_fragment_);
+        route_history_index_ = 0;
+    }
+    route_history_.erase(route_history_.begin() + static_cast<std::ptrdiff_t>(route_history_index_ + 1),
+                         route_history_.end());
+    route_history_.push_back(std::move(value));
+    route_history_index_ = route_history_.size() - 1;
+    const std::size_t max_entries = std::max<std::size_t>(1, options_.max_route_history_entries);
+    if (route_history_.size() > max_entries) {
+        route_history_.erase(route_history_.begin());
+        --route_history_index_;
+    }
+    route_fragment_ = route_history_[route_history_index_];
+}
+
+void JerryScriptRuntime::replace_route_history(std::string value) {
+    if (route_history_.empty()) {
+        route_fragment_ = std::move(value);
+        return;
+    }
+    route_history_[route_history_index_] = std::move(value);
+    route_fragment_ = route_history_[route_history_index_];
+}
+
+bool JerryScriptRuntime::traverse_route_history(int delta) {
+    if (delta == 0 || route_history_.empty()) {
+        return false;
+    }
+    const std::ptrdiff_t target = static_cast<std::ptrdiff_t>(route_history_index_) + delta;
+    if (target < 0 || target >= static_cast<std::ptrdiff_t>(route_history_.size())) {
+        return false;
+    }
+    const std::string previous = route_fragment_;
+    route_history_index_ = static_cast<std::size_t>(target);
+    route_fragment_ = route_history_[route_history_index_];
+    dispatch_window_event("popstate");
+    if (route_fragment_ != previous) {
+        dispatch_window_event("hashchange");
+    }
+    return true;
 }
 
 void JerryScriptRuntime::dispatch_window_event(const char* type) {

@@ -140,10 +140,15 @@ Node::~Node() {
 }
 
 Node& Node::append_child(std::unique_ptr<Node> child) {
+    return insert_child(std::move(child), children.size());
+}
+
+Node& Node::insert_child(std::unique_ptr<Node> child, std::size_t index) {
+    index = std::min(index, children.size());
     child->parent = this;
-    children.push_back(std::move(child));
+    auto inserted = children.insert(children.begin() + static_cast<std::ptrdiff_t>(index), std::move(child));
     mark_dirty(*this, DomDirtyTree | DomDirtyLayout);
-    return *children.back();
+    return **inserted;
 }
 
 std::unique_ptr<Node> Node::detach_child(const Node& child) {

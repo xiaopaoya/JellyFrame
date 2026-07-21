@@ -89,6 +89,10 @@ app.addEventListener("click", function (event) {
   if (!button || !button.dataset.mode) {
     return;
   }
+  var buttons = app.querySelectorAll("button");
+  for (var index = 0; index < buttons.length; index += 1) {
+    buttons[index].classList.toggle("selected", buttons[index] === button);
+  }
   applyWeather(modes[button.dataset.mode], button.dataset.mode);
 });
 

@@ -18,7 +18,7 @@ namespace {
 
 constexpr int kConicGradientAreaWarningPixels = 65536;
 constexpr int kRadialGradientAreaWarningPixels = 32768;
-constexpr int kBoxShadowAreaWarningPixels = 65536;
+constexpr int kBoxShadowAreaWarningPixels = 98304;
 
 bool has_border(const EdgeSizes& border) {
     return border.top > 0 || border.right > 0 || border.bottom > 0 || border.left > 0;
@@ -51,6 +51,27 @@ Rect paint_rect_for(const LayoutBox& box) {
         rect = union_rect(rect, child->rect);
     }
     return rect.width > 0 && rect.height > 0 ? rect : box.rect;
+}
+
+std::vector<const LayoutBox*> ordered_flex_paint_children(const LayoutBox& box) {
+    if (box.style.display != Display::Flex) {
+        return {};
+    }
+    const bool has_nonzero_order = std::any_of(box.children.begin(), box.children.end(), [](const LayoutBoxPtr& child) {
+        return child->style.flex_order != 0;
+    });
+    if (!has_nonzero_order) {
+        return {};
+    }
+    std::vector<const LayoutBox*> ordered;
+    ordered.reserve(box.children.size());
+    for (const LayoutBoxPtr& child : box.children) {
+        ordered.push_back(child.get());
+    }
+    std::stable_sort(ordered.begin(), ordered.end(), [](const LayoutBox* left, const LayoutBox* right) {
+        return left->style.flex_order < right->style.flex_order;
+    });
+    return ordered;
 }
 
 bool has_overflow_clip(const Style& style) {
@@ -88,11 +109,11 @@ Transform2D parsed_transform_or_identity(const Style& style, DiagnosticSink* dia
 }
 
 bool has_shadow(const Style& style) {
-    return !style.box_shadow.empty() && style.box_shadow != "none";
+    return style.box_shadow.enabled;
 }
 
 bool has_text_shadow(const Style& style) {
-    return !style.text_shadow.empty() && style.text_shadow != "none";
+    return style.text_shadow.enabled;
 }
 
 int resolved_border_radius(const LayoutBox& box) {
@@ -102,7 +123,12 @@ int resolved_border_radius(const LayoutBox& box) {
                         (std::max(0, std::min(box.rect.width, box.rect.height)) *
                          box.style.border_radius_percent + 50) / 100);
     }
-    return std::min(max_radius, std::max(0, box.style.border_radius));
+    CornerRadii radii = decode_corner_radii(box.style.border_radius);
+    radii.top_left = std::min(max_radius, radii.top_left);
+    radii.top_right = std::min(max_radius, radii.top_right);
+    radii.bottom_right = std::min(max_radius, radii.bottom_right);
+    radii.bottom_left = std::min(max_radius, radii.bottom_left);
+    return encode_corner_radii(radii);
 }
 
 void push_fill_rect(DisplayList& display_list, Rect rect, Color color, int border_radius = 0) {
@@ -156,10 +182,33 @@ void push_conic_gradient(DisplayList& display_list,
     display_list.push_back(std::move(command));
 }
 
+void push_box_shadow(DisplayList& display_list,
+                     Rect rect,
+                     Color color,
+                     int border_radius,
+                     int extent,
+                     int blur) {
+    if (rect.width <= 0 || rect.height <= 0 || color.a == 0 || extent <= 0) {
+        return;
+    }
+    DisplayCommand command;
+    command.type = DisplayCommandType::BoxShadow;
+    command.rect = Rect{rect.x - extent, rect.y - extent,
+                        rect.width + extent * 2, rect.height + extent * 2};
+    command.color = color;
+    command.color2 = color;
+    command.border_radius = expand_corner_radii(border_radius, extent);
+    command.stroke_width = extent;
+    command.gradient_stop_percent = blur;
+    display_list.push_back(std::move(command));
+}
+
 void push_radial_gradient(DisplayList& display_list,
                           Rect rect,
                           Color center,
                           Color edge,
+                          GradientAxis axis,
+                          int packed_position,
                           int border_radius = 0) {
     if (rect.width <= 0 || rect.height <= 0 || (center.a == 0 && edge.a == 0)) {
         return;
@@ -169,8 +218,38 @@ void push_radial_gradient(DisplayList& display_list,
     command.rect = rect;
     command.color = center;
     command.color2 = edge;
+    command.gradient_axis = axis;
+    command.gradient_stop_percent = packed_position;
     command.border_radius = border_radius;
     display_list.push_back(std::move(command));
+}
+
+void paint_background_paint(const BackgroundPaint& paint,
+                            Rect rect,
+                            int border_radius,
+                            DisplayList& display_list,
+                            const LayerTreeBuilderOptions& options) {
+    if (paint.kind == BackgroundPaintKind::LinearGradient) {
+        push_linear_gradient(display_list, rect, paint.color, paint.color2, paint.axis, border_radius);
+    } else if (paint.kind == BackgroundPaintKind::ConicGradient) {
+        const long long area = static_cast<long long>(std::max(0, rect.width)) * static_cast<long long>(std::max(0, rect.height));
+        if (area > kConicGradientAreaWarningPixels) {
+            report_diagnostic(options.diagnostics, DiagnosticStage::LayerTree, DiagnosticSeverity::Warning,
+                              "layer-conic-gradient-area-budget", "conic-gradient() area is above the embedded progress-ring budget",
+                              "area=" + std::to_string(area) + "px limit=" + std::to_string(kConicGradientAreaWarningPixels) + "px");
+        }
+        push_conic_gradient(display_list, rect, paint.color, paint.color2, paint.stop_percent, border_radius);
+    } else if (paint.kind == BackgroundPaintKind::RadialGradient) {
+        const long long area = static_cast<long long>(std::max(0, rect.width)) * static_cast<long long>(std::max(0, rect.height));
+        if (area > kRadialGradientAreaWarningPixels) {
+            report_diagnostic(options.diagnostics, DiagnosticStage::LayerTree, DiagnosticSeverity::Warning,
+                              "layer-radial-gradient-area-budget", "radial-gradient() area is above the embedded highlight budget",
+                              "area=" + std::to_string(area) + "px limit=" + std::to_string(kRadialGradientAreaWarningPixels) + "px");
+        }
+        push_radial_gradient(display_list, rect, paint.color, paint.color2, paint.axis, paint.stop_percent, border_radius);
+    } else if (is_visible_background(paint.color)) {
+        push_fill_rect(display_list, rect, paint.color, border_radius);
+    }
 }
 
 bool equal_border_widths(const EdgeSizes& border) {
@@ -195,7 +274,7 @@ void push_border_rects(DisplayList& display_list, Rect rect, const EdgeSizes& bo
     if (!has_border(border) || rect.width <= 0 || rect.height <= 0 || color.a == 0) {
         return;
     }
-    if (border_radius > 0 && equal_border_widths(border)) {
+    if (has_corner_radius(border_radius) && equal_border_widths(border)) {
         push_stroke_rect(display_list, rect, color, border.top, border_radius);
         return;
     }
@@ -231,12 +310,136 @@ void push_text(DisplayList& display_list,
     display_list.push_back(std::move(command));
 }
 
+std::string ellipsize_single_line_text(const std::string& text,
+                                       const Style& style,
+                                       int available_width,
+                                       const TextMeasureProvider& text_measure) {
+    if (!style.text_overflow_ellipsis || !style.white_space_nowrap || available_width <= 0 || text.empty()) {
+        return text;
+    }
+    const auto measure_width = [&](std::string_view value) {
+        return measure_text_with_letter_spacing(text_measure,
+                                                value,
+                                                style.font_size,
+                                                style.font_weight,
+                                                style.font_family_hash,
+                                                style.letter_spacing).width;
+    };
+    if (measure_width(text) <= available_width) {
+        return text;
+    }
+
+    static constexpr std::string_view marker = "...";
+    if (measure_width(marker) >= available_width) {
+        return std::string(marker);
+    }
+
+    std::string prefix;
+    prefix.reserve(text.size());
+    for (std::size_t index = 0; index < text.size();) {
+        const std::size_t begin = index;
+        consume_utf8_codepoint(text, index);
+        std::string candidate = prefix;
+        candidate.append(text, begin, index - begin);
+        candidate.append(marker);
+        if (measure_width(candidate) > available_width) {
+            break;
+        }
+        prefix.assign(candidate, 0, candidate.size() - marker.size());
+    }
+    prefix.append(marker);
+    return prefix;
+}
+
+void push_text_with_layout(DisplayList& display_list,
+                           Rect rect,
+                           Color color,
+                           const std::string& text,
+                           const Style& style,
+                           TextCommandAlign align,
+                           const TextMeasureProvider& text_measure) {
+    if (rect.width <= 0 || rect.height <= 0 || text.empty() || color.a == 0) {
+        return;
+    }
+    const std::string rendered_text = ellipsize_single_line_text(text, style, rect.width, text_measure);
+    const int line_height = style.line_height > 0
+        ? style.line_height
+        : style.font_size + std::max(6, style.font_size / 3);
+    const bool wrap_anywhere = style.overflow_wrap_anywhere && !style.white_space_nowrap;
+    const bool split_scalars = style.letter_spacing != 0;
+    if (!wrap_anywhere && !split_scalars) {
+        push_text(display_list, rect, color, rendered_text, style.font_size, style.font_weight,
+                  style.font_family_hash, align, true);
+        return;
+    }
+
+    const std::vector<std::string> lines = wrap_anywhere
+        ? wrap_text_anywhere(text_measure,
+                             rendered_text,
+                             style.font_size,
+                             style.font_weight,
+                             style.font_family_hash,
+                             style.letter_spacing,
+                             rect.width)
+        : std::vector<std::string>{rendered_text};
+    for (std::size_t line_index = 0; line_index < lines.size(); ++line_index) {
+        const std::string& line = lines[line_index];
+        const int y = rect.y + static_cast<int>(line_index) * line_height;
+        if (y >= rect.y + rect.height) {
+            break;
+        }
+        Rect line_rect{rect.x, y, rect.width, std::min(line_height, rect.y + rect.height - y)};
+        if (!split_scalars) {
+            push_text(display_list, line_rect, color, line, style.font_size, style.font_weight,
+                      style.font_family_hash, align, true);
+            continue;
+        }
+        const int line_width = measure_text_with_letter_spacing(text_measure,
+                                                                 line,
+                                                                 style.font_size,
+                                                                 style.font_weight,
+                                                                 style.font_family_hash,
+                                                                 style.letter_spacing).width;
+        int cursor_x = line_rect.x;
+        if (align == TextCommandAlign::Center) {
+            cursor_x += std::max(0, (line_rect.width - line_width) / 2);
+        } else if (align == TextCommandAlign::End) {
+            cursor_x += std::max(0, line_rect.width - line_width);
+        }
+        std::size_t scalar_index = 0;
+        while (scalar_index < line.size()) {
+            const std::size_t begin = scalar_index;
+            consume_utf8_codepoint(line, scalar_index);
+            const std::string scalar = line.substr(begin, scalar_index - begin);
+            const int scalar_width = std::max(1, measure_text(text_measure,
+                                                              scalar,
+                                                              style.font_size,
+                                                              style.font_weight,
+                                                              style.font_family_hash).width);
+            push_text(display_list,
+                      Rect{cursor_x, line_rect.y, scalar_width, line_rect.height},
+                      color,
+                      scalar,
+                      style.font_size,
+                      style.font_weight,
+                      style.font_family_hash,
+                      TextCommandAlign::Start,
+                      true);
+            cursor_x += scalar_width;
+            if (scalar_index < line.size()) {
+                cursor_x += style.letter_spacing;
+            }
+        }
+    }
+}
+
 void push_image(DisplayList& display_list,
                 Rect rect,
                 std::uint32_t image_handle,
                 ObjectFit object_fit,
                 ObjectPosition object_position,
-                ImageRendering image_rendering) {
+                ImageRendering image_rendering,
+                int border_radius = 0) {
     if (rect.width <= 0 || rect.height <= 0 || image_handle == 0) {
         return;
     }
@@ -247,6 +450,7 @@ void push_image(DisplayList& display_list,
     command.object_fit = object_fit;
     command.object_position = object_position;
     command.image_rendering = image_rendering;
+    command.border_radius = border_radius;
     command.color = Color{255, 255, 255, 255};
     command.color2 = command.color;
     display_list.push_back(std::move(command));
@@ -442,113 +646,32 @@ bool parse_float_attribute(const Node& node, const char* name, float& output) {
     return true;
 }
 
-bool parse_shadow_length_token(const char*& cursor, int& output) {
-    while (*cursor != '\0' && std::isspace(static_cast<unsigned char>(*cursor)) != 0) {
-        ++cursor;
-    }
-    char* end = nullptr;
-    errno = 0;
-    const float parsed = std::strtof(cursor, &end);
-    if (end == cursor || errno == ERANGE) {
-        return false;
-    }
-    cursor = end;
-    if (std::strncmp(cursor, "px", 2) == 0) {
-        cursor += 2;
-    }
-    output = static_cast<int>(parsed >= 0.0F ? parsed + 0.5F : parsed - 0.5F);
-    return true;
-}
-
-void skip_shadow_non_length_token(const char*& cursor) {
-    while (*cursor != '\0' && std::isspace(static_cast<unsigned char>(*cursor)) != 0) {
-        ++cursor;
-    }
-    if (*cursor == '\0' || *cursor == ',') {
-        return;
-    }
-    if (std::isalpha(static_cast<unsigned char>(*cursor)) != 0 || *cursor == '#') {
-        while (*cursor != '\0' && !std::isspace(static_cast<unsigned char>(*cursor)) && *cursor != '(' && *cursor != ',') {
-            ++cursor;
-        }
-        if (*cursor == '(') {
-            int depth = 1;
-            ++cursor;
-            while (*cursor != '\0' && depth > 0) {
-                if (*cursor == '(') {
-                    ++depth;
-                } else if (*cursor == ')') {
-                    --depth;
-                }
-                ++cursor;
-            }
-        }
-        return;
-    }
-    ++cursor;
-}
-
-bool parse_shadow_lengths(const std::string& shadow, int& offset_x, int& offset_y, int& blur) {
-    const char* cursor = shadow.c_str();
-    int lengths[3] = {0, 0, 0};
-    int count = 0;
-    while (*cursor != '\0' && *cursor != ',' && count < 3) {
-        const char* before = cursor;
-        int value = 0;
-        if (parse_shadow_length_token(cursor, value)) {
-            lengths[count++] = value;
-        } else {
-            cursor = before;
-            skip_shadow_non_length_token(cursor);
-        }
-    }
-    if (count < 2) {
-        return false;
-    }
-    offset_x = lengths[0];
-    offset_y = lengths[1];
-    blur = count >= 3 ? lengths[2] : 0;
-    return true;
-}
-
-Color approximate_shadow_color(const std::string& shadow) {
-    const std::size_t rgba = shadow.find("rgba(");
-    if (rgba == std::string::npos) {
-        return Color{0, 0, 0, 32};
-    }
-    const std::size_t close = shadow.find(')', rgba + 5);
-    if (close == std::string::npos) {
-        return Color{0, 0, 0, 32};
-    }
-    const std::string body = shadow.substr(rgba + 5, close - rgba - 5);
-    const std::size_t comma = body.rfind(',');
-    if (comma == std::string::npos) {
-        return Color{0, 0, 0, 32};
-    }
-    char* end = nullptr;
-    const float alpha = std::strtof(body.c_str() + comma + 1, &end);
-    const int out_alpha = static_cast<int>(std::max(0.0F, std::min(1.0F, alpha)) * 255.0F + 0.5F);
-    return Color{0, 0, 0, static_cast<std::uint8_t>(std::max(8, std::min(64, out_alpha)))};
-}
-
-void paint_approximate_box_shadow(const LayoutBox& box,
-                                  DisplayList& display_list,
-                                  const LayerTreeBuilderOptions& options) {
+void paint_box_shadow(const LayoutBox& box,
+                      DisplayList& display_list,
+                      const LayerTreeBuilderOptions& options) {
     if (!has_shadow(box.style)) {
         return;
     }
-    int offset_x = 0;
-    int offset_y = 0;
-    int blur = 0;
-    if (!parse_shadow_lengths(box.style.box_shadow, offset_x, offset_y, blur)) {
-        return;
+    const BoxShadowStyle& shadow = box.style.box_shadow;
+    const Color shadow_color = shadow.uses_current_color ? box.style.color : shadow.color;
+    int blur = shadow.blur;
+    constexpr int kMaxSoftShadowBlur = 24;
+    if (blur > kMaxSoftShadowBlur) {
+        report_diagnostic(options.diagnostics,
+                          DiagnosticStage::LayerTree,
+                          DiagnosticSeverity::Warning,
+                          "layer-box-shadow-blur-clamped",
+                          "box-shadow blur radius is above the embedded soft-shadow budget",
+                          "blur=" + std::to_string(blur) + "px limit=" + std::to_string(kMaxSoftShadowBlur) + "px");
+        blur = kMaxSoftShadowBlur;
     }
-    const int spread = std::max(1, blur / 3);
+    const int extent = std::max(1, blur) + shadow.spread;
+    const int spread = shadow.spread;
     const Rect shadow_rect{
-        box.rect.x + offset_x - spread,
-        box.rect.y + offset_y - spread,
-        box.rect.width + spread * 2,
-        box.rect.height + spread * 2,
+        box.rect.x + shadow.offset_x - extent,
+        box.rect.y + shadow.offset_y - extent,
+        box.rect.width + extent * 2,
+        box.rect.height + extent * 2,
     };
     const long long shadow_area = static_cast<long long>(std::max(0, shadow_rect.width)) *
         static_cast<long long>(std::max(0, shadow_rect.height));
@@ -557,11 +680,17 @@ void paint_approximate_box_shadow(const LayoutBox& box,
                           DiagnosticStage::LayerTree,
                           DiagnosticSeverity::Warning,
                           "layer-box-shadow-area-budget",
-                          "box-shadow approximate paint area is above the embedded shadow budget",
+                          "box-shadow paint area is above the embedded shadow budget",
                           "area=" + std::to_string(shadow_area) +
                               "px limit=" + std::to_string(kBoxShadowAreaWarningPixels) + "px");
     }
-    push_fill_rect(display_list, shadow_rect, approximate_shadow_color(box.style.box_shadow), resolved_border_radius(box));
+    push_box_shadow(display_list,
+                    Rect{box.rect.x + shadow.offset_x - spread, box.rect.y + shadow.offset_y - spread,
+                         box.rect.width + spread * 2, box.rect.height + spread * 2},
+                    shadow_color,
+                    expand_corner_radii(resolved_border_radius(box), spread),
+                    extent,
+                    blur);
 }
 
 void paint_outline(const LayoutBox& box, DisplayList& display_list) {
@@ -569,17 +698,18 @@ void paint_outline(const LayoutBox& box, DisplayList& display_list) {
         return;
     }
     const int width = box.style.outline_width;
+    const int extent = std::max(0, width + box.style.outline_offset);
     const Rect outline_rect{
-        box.rect.x - width,
-        box.rect.y - width,
-        box.rect.width + width * 2,
-        box.rect.height + width * 2,
+        box.rect.x - extent,
+        box.rect.y - extent,
+        box.rect.width + extent * 2,
+        box.rect.height + extent * 2,
     };
     push_stroke_rect(display_list,
                      outline_rect,
                      box.style.outline_color,
                      width,
-                     resolved_border_radius(box) + width);
+                     expand_corner_radii(resolved_border_radius(box), extent));
 }
 
 void paint_meter_bar(const LayoutBox& box, DisplayList& display_list) {
@@ -621,7 +751,7 @@ void paint_meter_bar(const LayoutBox& box, DisplayList& display_list) {
     };
     inner.width = static_cast<int>(static_cast<float>(inner.width) * ratio + 0.5F);
     const Color fill = is_progress ? Color{37, 99, 235, 255} : Color{22, 163, 74, 255};
-    push_fill_rect(display_list, inner, fill, std::max(0, resolved_border_radius(box) - 1));
+    push_fill_rect(display_list, inner, fill, expand_corner_radii(resolved_border_radius(box), -1));
 }
 
 int range_state_value(const FormControlState& state) {
@@ -721,20 +851,29 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
 }
 
 bool resolve_image_handle(const LayoutBox& box,
+                          ImageResolveKind kind,
+                          std::uint16_t background_resource_id,
                           const LayerTreeBuilderOptions& options,
                           std::uint32_t& image_handle) {
     image_handle = 0;
-    if (box.node == nullptr || box.node->type != NodeType::Element ||
+    if (box.node == nullptr || box.node->type != NodeType::Element || options.image_resolver.resolve == nullptr) {
+        return false;
+    }
+    if (kind == ImageResolveKind::Content &&
         (box.node->tag_name != "img" && box.node->tag_name != "canvas")) {
         return false;
     }
-    if (box.node->tag_name == "img" && box.node->attribute("src").empty()) {
+    if (kind == ImageResolveKind::Content && box.node->tag_name == "img" && box.node->attribute("src").empty()) {
         return false;
     }
-    if (options.image_resolver.resolve == nullptr) {
+    if (kind == ImageResolveKind::Background && background_resource_id == 0) {
         return false;
     }
-    return options.image_resolver.resolve(*box.node, image_handle, options.image_resolver.context) && image_handle != 0;
+    return options.image_resolver.resolve(*box.node,
+                                          kind,
+                                          background_resource_id,
+                                          image_handle,
+                                          options.image_resolver.context) && image_handle != 0;
 }
 
 Rect content_rect_for(const LayoutBox& box) {
@@ -820,51 +959,31 @@ void translate_display_commands(DisplayList& display_list, std::size_t begin, in
 void paint_box_self(const LayoutBox& box, DisplayList& display_list, const LayerTreeBuilderOptions& options) {
     const Rect paint_rect = paint_rect_for(box);
     const int border_radius = resolved_border_radius(box);
-    paint_approximate_box_shadow(box, display_list, options);
-    if (box.style.background_paint == BackgroundPaintKind::LinearGradient) {
-        push_linear_gradient(display_list,
-                             paint_rect,
-                             box.style.background_color,
-                             box.style.background_color2,
-                             box.style.background_gradient_axis,
-                             border_radius);
-    } else if (box.style.background_paint == BackgroundPaintKind::ConicGradient) {
-        const long long conic_area = static_cast<long long>(std::max(0, paint_rect.width)) *
-            static_cast<long long>(std::max(0, paint_rect.height));
-        if (conic_area > kConicGradientAreaWarningPixels) {
-            report_diagnostic(options.diagnostics,
-                              DiagnosticStage::LayerTree,
-                              DiagnosticSeverity::Warning,
-                              "layer-conic-gradient-area-budget",
-                              "conic-gradient() area is above the embedded progress-ring budget",
-                              "area=" + std::to_string(conic_area) +
-                                  "px limit=" + std::to_string(kConicGradientAreaWarningPixels) + "px");
-        }
-        push_conic_gradient(display_list,
-                            paint_rect,
-                            box.style.background_color,
-                            box.style.background_color2,
-                            box.style.background_gradient_stop_percent,
-                            border_radius);
-    } else if (box.style.background_paint == BackgroundPaintKind::RadialGradient) {
-        const long long radial_area = static_cast<long long>(std::max(0, paint_rect.width)) *
-            static_cast<long long>(std::max(0, paint_rect.height));
-        if (radial_area > kRadialGradientAreaWarningPixels) {
-            report_diagnostic(options.diagnostics,
-                              DiagnosticStage::LayerTree,
-                              DiagnosticSeverity::Warning,
-                              "layer-radial-gradient-area-budget",
-                              "radial-gradient() area is above the embedded highlight budget",
-                              "area=" + std::to_string(radial_area) +
-                                  "px limit=" + std::to_string(kRadialGradientAreaWarningPixels) + "px");
-        }
-        push_radial_gradient(display_list,
-                             paint_rect,
-                             box.style.background_color,
-                             box.style.background_color2,
-                             border_radius);
-    } else if (is_visible_background(box.style.background_color)) {
-        push_fill_rect(display_list, paint_rect, box.style.background_color, border_radius);
+    paint_box_shadow(box, display_list, options);
+    const BackgroundPaint base{box.style.background_paint, box.style.background_gradient_axis,
+                               box.style.background_gradient_stop_percent, box.style.background_color,
+                               box.style.background_color2};
+    paint_background_paint(base, paint_rect, border_radius, display_list, options);
+    if (has_background_overlay(box.style.background_overlay_packed) &&
+        !has_background_image_resource(box.style.background_overlay_packed)) {
+        paint_background_paint(unpack_background_overlay(box.style.background_overlay_packed),
+                               paint_rect, border_radius, display_list, options);
+    }
+    const std::uint16_t background_resource_id =
+        background_image_resource_id(box.style.background_overlay_packed);
+    std::uint32_t background_image_handle = 0;
+    if (resolve_image_handle(box,
+                             ImageResolveKind::Background,
+                             background_resource_id,
+                             options,
+                             background_image_handle)) {
+        push_image(display_list,
+                   paint_rect,
+                   background_image_handle,
+                   ObjectFit::Fill,
+                   ObjectPosition{},
+                   ImageRendering::Auto,
+                   border_radius);
     }
 
     if (has_border(box.style.border_width)) {
@@ -882,51 +1001,38 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
     paint_generated_inline_content(box, display_list, CssPseudoElement::Before);
 
     std::uint32_t image_handle = 0;
-    if (resolve_image_handle(box, options, image_handle)) {
+    if (resolve_image_handle(box, ImageResolveKind::Content, 0, options, image_handle)) {
         push_image(display_list,
                    content_rect_for(box),
                    image_handle,
                    box.style.object_fit,
                    box.style.object_position,
-                   box.style.image_rendering);
+                   box.style.image_rendering,
+                   resolved_border_radius(box));
     }
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
         const std::string text = transformed_render_text(*box.node, box.style.text_transform);
-        const int line_height = box.style.line_height > 0
-            ? box.style.line_height
-            : box.style.font_size + std::max(6, box.style.font_size / 3);
-        const bool single_line = box.style.white_space_nowrap ||
-            !has_text_wrap_opportunity(text) ||
-            box.rect.height <= line_height;
         if (has_text_shadow(box.style)) {
-            int shadow_x = 0;
-            int shadow_y = 0;
-            int shadow_blur = 0;
-            if (parse_shadow_lengths(box.style.text_shadow, shadow_x, shadow_y, shadow_blur)) {
-                Rect shadow_rect = box.rect;
-                shadow_rect.x += shadow_x;
-                shadow_rect.y += shadow_y;
-                push_text(display_list,
-                          shadow_rect,
-                          approximate_shadow_color(box.style.text_shadow),
-                          text,
-                          box.style.font_size,
-                          box.style.font_weight,
-                          box.style.font_family_hash,
-                          text_command_align(box.style.text_align),
-                          single_line);
-            }
+            const TextShadowStyle& shadow = box.style.text_shadow;
+            Rect shadow_rect = box.rect;
+            shadow_rect.x += shadow.offset_x;
+            shadow_rect.y += shadow.offset_y;
+            push_text_with_layout(display_list,
+                                  shadow_rect,
+                                  shadow.uses_current_color ? box.style.color : shadow.color,
+                                  text,
+                                  box.style,
+                                  text_command_align(box.style.text_align),
+                                  options.text_measure);
         }
-        push_text(display_list,
-                  box.rect,
-                  box.style.color,
-                  text,
-                  box.style.font_size,
-                  box.style.font_weight,
-                  box.style.font_family_hash,
-                  text_command_align(box.style.text_align),
-                  single_line);
+        push_text_with_layout(display_list,
+                              box.rect,
+                              box.style.color,
+                              text,
+                              box.style,
+                              text_command_align(box.style.text_align),
+                              options.text_measure);
         push_text_decorations(display_list, box, box.rect);
     }
 }
@@ -954,7 +1060,7 @@ LayerReasons layer_reasons_for(const LayoutBox& box, bool root) {
     if (has_shadow(box.style)) {
         reasons |= LayerReasonShadow;
     }
-    if ((box.style.border_radius > 0 || box.style.border_radius_percent >= 0) && has_overflow_clip(box.style)) {
+    if ((has_corner_radius(box.style.border_radius) || box.style.border_radius_percent >= 0) && has_overflow_clip(box.style)) {
         reasons |= LayerReasonRoundedClip;
     }
     return reasons;
@@ -1166,10 +1272,14 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->z_index = root.style.z_index;
     root_layer->source_order = 0;
 
-    paint_box_self(root, root_layer->display_list, options_);
+    if (!root.style.visibility_hidden) {
+        paint_box_self(root, root_layer->display_list, options_);
+    }
     trim_display_list(root_layer->display_list);
     build_children(root, *root_layer, arena);
-    paint_generated_inline_content(root, root_layer->display_list, CssPseudoElement::After);
+    if (!root.style.visibility_hidden) {
+        paint_generated_inline_content(root, root_layer->display_list, CssPseudoElement::After);
+    }
     trim_display_list(root_layer->display_list);
     sort_layer_children(*root_layer);
     return root_layer;
@@ -1221,9 +1331,21 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
 
     std::vector<PendingBox> pending;
     pending.reserve(box.children.size());
-    for (auto it = box.children.rbegin(); it != box.children.rend(); ++it) {
-        pending.push_back(PendingBox{it->get(), &layer, layer.scroll_y, false});
-    }
+    const auto enqueue_children = [&pending](const LayoutBox& parent,
+                                             LayerNode* parent_layer,
+                                             int parent_scroll_y) {
+        const std::vector<const LayoutBox*> ordered = ordered_flex_paint_children(parent);
+        if (ordered.empty()) {
+            for (auto it = parent.children.rbegin(); it != parent.children.rend(); ++it) {
+                pending.push_back(PendingBox{it->get(), parent_layer, parent_scroll_y, false});
+            }
+            return;
+        }
+        for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
+            pending.push_back(PendingBox{*it, parent_layer, parent_scroll_y, false});
+        }
+    };
+    enqueue_children(box, &layer, layer.scroll_y);
 
     while (!pending.empty()) {
         const PendingBox current = pending.back();
@@ -1231,10 +1353,12 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
         const LayoutBox* current_box = current.box;
         LayerNode& current_layer = *current.layer;
         if (current.exit) {
-            const std::size_t command_begin = current_layer.display_list.size();
-            paint_generated_inline_content(*current_box, current_layer.display_list, CssPseudoElement::After);
-            translate_display_commands(current_layer.display_list, command_begin, 0, -current.scroll_y);
-            trim_display_list(current_layer.display_list);
+            if (!current_box->style.visibility_hidden) {
+                const std::size_t command_begin = current_layer.display_list.size();
+                paint_generated_inline_content(*current_box, current_layer.display_list, CssPseudoElement::After);
+                translate_display_commands(current_layer.display_list, command_begin, 0, -current.scroll_y);
+                trim_display_list(current_layer.display_list);
+            }
             if (options_.paint_scroll_indicators &&
                 current_layer.box == current_box &&
                 current_layer.max_scroll_y > 0 &&
@@ -1294,17 +1418,17 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
             layer_budget_reported = true;
         }
 
-        const std::size_t command_begin = target_layer->display_list.size();
-        paint_box_self(*current_box, target_layer->display_list, options_);
-        if (target_layer == &current_layer) {
-            translate_display_commands(target_layer->display_list, command_begin, 0, -current.scroll_y);
+        if (!current_box->style.visibility_hidden) {
+            const std::size_t command_begin = target_layer->display_list.size();
+            paint_box_self(*current_box, target_layer->display_list, options_);
+            if (target_layer == &current_layer) {
+                translate_display_commands(target_layer->display_list, command_begin, 0, -current.scroll_y);
+            }
+            trim_display_list(target_layer->display_list);
         }
-        trim_display_list(target_layer->display_list);
         const int child_scroll_y = target_layer == &current_layer ? current.scroll_y + own_scroll_y : own_scroll_y;
         pending.push_back(PendingBox{current_box, target_layer, child_scroll_y, true});
-        for (auto it = current_box->children.rbegin(); it != current_box->children.rend(); ++it) {
-            pending.push_back(PendingBox{it->get(), target_layer, child_scroll_y, false});
-        }
+        enqueue_children(*current_box, target_layer, child_scroll_y);
     }
 }
 

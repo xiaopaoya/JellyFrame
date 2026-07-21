@@ -1,6 +1,6 @@
 # Software Renderer Scope
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 
 JellyFrame now has a CPU-only validation renderer. It is meant to prove the full
@@ -39,7 +39,7 @@ DOM + CSSOM
 - Source-over alpha compositing.
 - Rectangle fills, stroke rectangles, non-layout outline strokes, cheap
   approximate `box-shadow`/`text-shadow` commands, solid text-decoration lines,
-  two-color horizontal or vertical linear-gradient commands, two-segment
+  bounded linear-gradient commands, two-segment
   conic-gradient progress commands and two-color center-circle radial-gradient
   highlight commands.
 - Rounded rectangle clipping for filled backgrounds, borders and gradients.
@@ -48,7 +48,10 @@ DOM + CSSOM
 - Text drawing through a Windows GDI CPU mask when available.
 - Built-in tiny ASCII fallback text drawing for non-Windows builds.
 - Host image painters can draw decoded surfaces with `object-fit`, simple
-  `object-position` and `image-rendering`.
+  `object-position` and `image-rendering`, including the same host-owned
+  surface path for a package-local CSS background image. Declared image
+  `border-radius` uses the same local coverage antialiasing as rounded fills;
+  images without a radius keep the direct painter fast path.
 - Offscreen compositing for opacity/composited layers.
 - `transform: translate()/scale()/rotate()` for composited layers. Translation
   is rounded to integer pixels; scale and rotate use the supported

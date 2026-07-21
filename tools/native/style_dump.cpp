@@ -80,8 +80,14 @@ void dump_styles(const Node& node, const StyleResolver& resolver, std::size_t de
                   << " radius=" << style.border_radius;
         print_color("color", style.color);
         print_color("background", style.background_color);
-        if (!style.box_shadow.empty()) {
-            std::cout << " shadow=\"" << style.box_shadow << "\"";
+        if (style.box_shadow.enabled) {
+            const Color shadow_color = style.box_shadow.uses_current_color ? style.color : style.box_shadow.color;
+            std::cout << " shadow=(x=" << style.box_shadow.offset_x
+                      << ",y=" << style.box_shadow.offset_y
+                      << ",blur=" << style.box_shadow.blur
+                      << ",spread=" << style.box_shadow.spread << ",";
+            print_color("color", shadow_color);
+            std::cout << ')';
         }
         std::cout << '\n';
     }

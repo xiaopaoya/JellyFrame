@@ -44,6 +44,21 @@ bool record_packed_flush(const std::uint16_t* pixels, Rect rect, void* context) 
     return true;
 }
 
+int bayer4_threshold_for_test(int x, int y) {
+    static constexpr std::uint8_t kBayer4[4][4] = {
+        {0, 8, 2, 10},
+        {12, 4, 14, 6},
+        {3, 11, 1, 9},
+        {15, 7, 13, 5},
+    };
+    return kBayer4[y & 3][x & 3];
+}
+
+std::uint8_t quantize_dither_reference(std::uint8_t value, int max_value, int x, int y) {
+    return static_cast<std::uint8_t>((static_cast<int>(value) * max_value +
+        bayer4_threshold_for_test(x, y) * 16) / 255);
+}
+
 void stride_and_size_are_bounded() {
     check(embedded_framebuffer_min_stride_bytes(10, EmbeddedPixelFormat::Rgb565) == 20,
           "rgb565 stride");
@@ -115,6 +130,78 @@ void rgb565_ordered_dither_varies_quantization() {
         differs = differs || target_bytes[index] != target_bytes[0] || target_bytes[index + 1] != target_bytes[1];
     }
     check(differs, "ordered dither varies packed rgb565 values");
+}
+
+void packed_rgb565_ordered_dither_breaks_up_gradient_bands() {
+    constexpr int width = 4;
+    constexpr int height = 6;
+    FrameBuffer source(width, height, Color{0, 0, 0, 255});
+    for (int y = 0; y < height; ++y) {
+        const std::uint8_t shade = static_cast<std::uint8_t>(120 + y * 2);
+        for (int x = 0; x < width; ++x) {
+            source.pixel(x, y) = Color{shade, shade, shade, 255};
+        }
+    }
+
+    std::uint16_t packed_pixels[width * height]{};
+    EmbeddedPackedRgb565Sink sink{
+        EmbeddedPixelFormat::Rgb565,
+        packed_pixels,
+        width * height,
+        true,
+        nullptr,
+        nullptr};
+    check(present_to_packed_rgb565(frame_buffer_view(source), nullptr, 0, sink),
+          "packed rgb565 dither present succeeds");
+
+    bool row_has_multiple_levels = false;
+    for (int y = 0; y < height; ++y) {
+        const std::uint16_t first = packed_pixels[y * width];
+        for (int x = 1; x < width; ++x) {
+            row_has_multiple_levels = row_has_multiple_levels ||
+                packed_pixels[y * width + x] != first;
+        }
+    }
+    check(row_has_multiple_levels,
+          "packed rgb565 dither distributes adjacent quantization levels across a gradient row");
+}
+
+void packed_rgb565_ordered_dither_matches_reference_quantization() {
+    constexpr int width = 4;
+    constexpr int height = 4;
+    FrameBuffer source(width, height, Color{0, 0, 0, 255});
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            source.pixel(x, y) = Color{
+                static_cast<std::uint8_t>(91 + x * 19 + y * 7),
+                static_cast<std::uint8_t>(47 + x * 13 + y * 11),
+                static_cast<std::uint8_t>(153 - x * 9 - y * 5),
+                255,
+            };
+        }
+    }
+    std::uint16_t packed_pixels[width * height]{};
+    EmbeddedPackedRgb565Sink sink{
+        EmbeddedPixelFormat::Rgb565,
+        packed_pixels,
+        width * height,
+        true,
+        nullptr,
+        nullptr};
+    check(present_to_packed_rgb565(frame_buffer_view(source), nullptr, 0, sink),
+          "packed rgb565 exact-dither present succeeds");
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const Color color = source.pixel(x, y);
+            const std::uint16_t expected = static_cast<std::uint16_t>(
+                (quantize_dither_reference(color.r, 31, x, y) << 11) |
+                (quantize_dither_reference(color.g, 63, x, y) << 5) |
+                quantize_dither_reference(color.b, 31, x, y));
+            check(packed_pixels[y * width + x] == expected,
+                  "packed rgb565 dither keeps exact ordered quantization");
+        }
+    }
 }
 
 void rgb565_opaque_fast_path_matches_reference_quantization() {
@@ -296,6 +383,8 @@ int main() {
         stride_and_size_are_bounded();
         rgb565_present_respects_dirty_rect();
         rgb565_ordered_dither_varies_quantization();
+        packed_rgb565_ordered_dither_breaks_up_gradient_bands();
+        packed_rgb565_ordered_dither_matches_reference_quantization();
         rgb565_opaque_fast_path_matches_reference_quantization();
         packed_rgb565_present_uses_compact_dirty_buffer();
         mono_present_packs_bits();

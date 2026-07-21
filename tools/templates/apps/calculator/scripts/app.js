@@ -38,7 +38,7 @@ function equals() {
     result = pending - right;
   }
   setDisplay(result);
-  status.textContent = "Result";
+  status.textContent = "RESULT";
   operator = "";
   fresh = true;
 }
@@ -48,7 +48,7 @@ function clearAll() {
   operator = "";
   fresh = true;
   setDisplay(0);
-  status.textContent = "Ready";
+  status.textContent = "QUICK MATH";
 }
 
 app.addEventListener("click", function (event) {
