@@ -303,6 +303,10 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(report["sourceSvgCount"], 1)
         self.assertEqual(warnings[0]["code"], "svg-runtime-deferred")
+        advice = jellyframe_cli.collect_developer_advice({"warnings": warnings})
+        self.assertEqual(advice[0]["code"], "svg-runtime-deferred")
+        self.assertIn("--rasterize-svg", advice[0]["action"])
+        self.assertEqual(advice[0]["recipe"], "app_author_recipes.md#static-svg-icons")
 
     def test_packaged_audio_warns_without_playback_capability(self):
         manifest = {"capabilities": []}

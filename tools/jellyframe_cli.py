@@ -753,6 +753,12 @@ ADVICE_BY_CODE = {
         "explanation": "The packaged image does not use a recognized V0 image codec path.",
         "action": "For current Win32/package validation, use package-local BMP or a target profile with an explicit production codec adapter.",
     },
+    "svg-runtime-deferred": {
+        "title": "SVG cannot be decoded at runtime",
+        "explanation": "JellyFrame does not link an SVG renderer or SVG image decoder into app targets.",
+        "action": "For a simple static local icon, rerun package/check/preview with --rasterize-svg. Otherwise replace this source with a package-local BMP or a target-supported image codec.",
+        "recipe": "app_author_recipes.md#static-svg-icons",
+    },
     "css-background-image-url-unsupported": {
         "title": "CSS background image URL is outside the supported subset",
         "explanation": "A CSS background image must use one package-absolute local URL so the host can apply resource and decode budgets.",
