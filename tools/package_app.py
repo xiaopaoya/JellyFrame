@@ -9,6 +9,8 @@ import tempfile
 import zlib
 from pathlib import Path, PurePosixPath
 
+from svg_rasterize import SvgRasterError, rasterize_svg
+
 
 JFAPP_MAGIC = b"JFAPPV0\0"
 JFAPP_HEADER_FORMAT = "<8sHHIIIIIIIIIII"
@@ -1778,6 +1780,107 @@ def build_generated_resource_entry(staging_root: Path,
     }
 
 
+def _rewrite_svg_references(text: str, source_path: str, replacements: dict[str, str]) -> str:
+    def replace_value(match: re.Match) -> str:
+        value = match.group(2)
+        if classify_reference(value) != "local":
+            return match.group(0)
+        replacement = replacements.get(resolve_reference(value, source_path))
+        return match.group(1) + replacement + match.group(3) if replacement else match.group(0)
+
+    text = re.sub(r'''((?:src|href)\s*=\s*["'])([^"']+)(["'])''', replace_value, text, flags=re.I)
+    return re.sub(r'''(url\(\s*["']?)([^"')]+)(["']?\s*\))''', replace_value, text, flags=re.I)
+
+
+def apply_static_svg_rasterization(resources: list[dict],
+                                   staging_root: Path,
+                                   max_resource_bytes: int,
+                                   enabled: bool,
+                                   raster_size: int) -> tuple[list[dict], dict, list[dict]]:
+    """Compile statically referenced package-local SVG icons to BMP at package time.
+
+    SVG remains a tooling input only. The generated package contains rewritten
+    HTML/CSS references and ordinary BMP resources, so no target parses SVG.
+    """
+    svg_resources = [resource for resource in resources if Path(resource["path"]).suffix.lower() == ".svg"]
+    diagnostics = {
+        "model": "package-time-static-svg-rasterization",
+        "enabled": enabled,
+        "rasterSize": raster_size if enabled else 0,
+        "sourceSvgCount": len(svg_resources),
+        "rasterizedCount": 0,
+        "entries": [],
+    }
+    if not svg_resources:
+        return resources, diagnostics, []
+    if not enabled:
+        return resources, diagnostics, [{
+            "level": "warning",
+            "code": "svg-runtime-deferred",
+            "message": f"SVG is not a runtime image codec: {resource['path']}; use a BMP/target codec or package with --rasterize-svg",
+            "source": resource["path"],
+        } for resource in svg_resources]
+
+    svg_paths = {resource["path"] for resource in svg_resources}
+    referenced = set()
+    for resource in resources:
+        suffix = Path(resource["path"]).suffix.lower()
+        if suffix not in {".html", ".htm", ".css"}:
+            continue
+        try:
+            text = resource["file"].read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError as error:
+            fail(f"cannot rewrite SVG reference in non-UTF-8 resource: {resource['path']} ({error})")
+        for reference in extract_references(text):
+            if reference["kind"] == "local" and resolve_reference(reference["value"], resource["path"]) in svg_paths:
+                referenced.add(resolve_reference(reference["value"], resource["path"]))
+    missing = sorted(svg_paths - referenced)
+    if missing:
+        fail("SVG rasterization accepts only static HTML/CSS references; unreferenced or script-built SVG path: " + ", ".join(missing))
+
+    replacements = {}
+    generated = []
+    for resource in svg_resources:
+        relative = PurePosixPath(resource["path"].lstrip("/"))
+        output_path = "/__jellyframe/raster/" + str(relative.with_suffix(".bmp"))
+        if any(existing["path"] == output_path for existing in resources) or output_path in replacements.values():
+            fail(f"generated SVG raster path is already occupied: {output_path}")
+        try:
+            bitmap, metadata = rasterize_svg(resource["file"].read_bytes(), raster_size)
+        except SvgRasterError as error:
+            fail(f"SVG rasterization failed for {resource['path']}: {error}")
+        generated.append(build_generated_resource_entry(
+            staging_root, output_path, bitmap, "jellyframe::HostResourceKind::Image", max_resource_bytes))
+        replacements[resource["path"]] = output_path
+        diagnostics["entries"].append({
+            "source": resource["path"],
+            "output": output_path,
+            **metadata,
+        })
+
+    output = []
+    for resource in resources:
+        if resource["path"] in svg_paths:
+            continue
+        suffix = Path(resource["path"]).suffix.lower()
+        if suffix not in {".html", ".htm", ".css"}:
+            output.append(resource)
+            continue
+        try:
+            text = resource["file"].read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            output.append(resource)
+            continue
+        transformed = _rewrite_svg_references(text, resource["path"], replacements)
+        if transformed == text:
+            output.append(resource)
+            continue
+        output.append(build_generated_resource_entry(
+            staging_root, resource["path"], transformed.encode("utf-8"), resource["kind"], max_resource_bytes))
+    diagnostics["rasterizedCount"] = len(generated)
+    return sorted(output + generated, key=lambda item: item["path"]), diagnostics, []
+
+
 MODULE_SCRIPT_RE = re.compile(
     r'<script\b(?=[^>]*\btype\s*=\s*(["\'])module\1)(?=[^>]*\bsrc\s*=\s*(["\'])([^"\']+)\2)[^>]*>\s*</script\s*>',
     flags=re.I | re.S,
@@ -2622,7 +2725,13 @@ def main() -> int:
     parser.add_argument("--debug-dir", help="Optional copied debug package directory.")
     parser.add_argument("--validate-only", action="store_true", help="Validate and report without emitting C++.")
     parser.add_argument("--target", help="Optional target id. Loads tools/presets/targets/<id>.json and overlays manifest target settings.")
+    parser.add_argument("--rasterize-svg", action="store_true",
+                        help="Compile statically referenced restricted SVG icons to package-local BMP resources.")
+    parser.add_argument("--svg-raster-size", type=int, default=32,
+                        help="Maximum generated SVG BMP dimension in pixels (1..256, default: 32).")
     args = parser.parse_args()
+    if args.rasterize_svg and not 1 <= args.svg_raster_size <= 256:
+        fail("--svg-raster-size must be between 1 and 256")
 
     root = Path(args.root).resolve()
     raw_manifest = read_manifest(root)
@@ -2632,6 +2741,10 @@ def main() -> int:
     budgets = effective_budgets(manifest, target_config)
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
+    svg_staging = tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-")
+    resources, svg_diagnostics, svg_warnings = apply_static_svg_rasterization(
+        resources, Path(svg_staging.name), max_resource_bytes, args.rasterize_svg, args.svg_raster_size)
+    warnings.extend(svg_warnings)
     module_staging = tempfile.TemporaryDirectory(prefix="jellyframe-static-modules-")
     resources, module_diagnostics = apply_static_module_bundle(
         resources, manifest["entry"], Path(module_staging.name), max_resource_bytes)
@@ -2681,6 +2794,7 @@ def main() -> int:
         ],
         "references": references,
         "staticModules": module_diagnostics,
+        "staticSvgRasterization": svg_diagnostics,
         "serviceIntent": service_intent_report(manifest, target_config),
         "htmlApiDiagnostics": html_api_diagnostics,
         "animationDiagnostics": animation_diagnostics,
@@ -2712,6 +2826,7 @@ def main() -> int:
     for warning in warnings:
         print(f"{warning['level']}: {warning['message']}")
     module_staging.cleanup()
+    svg_staging.cleanup()
     return 0
 
 

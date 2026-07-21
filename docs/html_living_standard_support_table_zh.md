@@ -1,6 +1,6 @@
 # HTML Living Standard 支持表
 
-> 生成来源：`html_living_standard_support_table.csv`；源 SHA-256：`a0012541fc8faad11bf1fd2f55f4e6c2130cd22493fd12db29034e2d47ea4f0c`。
+> 生成来源：`html_living_standard_support_table.csv`；源 SHA-256：`3b1bd098f35c95145b44dfdd1f0d3b71b8466a7c69dead53e2f2a1d7dc8267f3`。
 > 本表由生成器生成，请勿手工编辑。
 > 审计快照：2026-07-12；适用版本：0.5.0-dev。
 
@@ -391,7 +391,7 @@ CSS 不包含在本表中；请使用独立的 [csswg_support_table_zh.md](csswg
 | html-ls:section:4.8.14.1 | section | html-elements | Authoring | 4.8.14.1 | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Common app elements are supported; many elements degrade to ordinary boxes or are unsupported. | [link](https://html.spec.whatwg.org/multipage/image-maps.html#authoring) |
 | html-ls:section:4.8.14.2 | processing-model | html-elements | Processing model | 4.8.14.2 | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Common app elements are supported; many elements degrade to ordinary boxes or are unsupported. | [link](https://html.spec.whatwg.org/multipage/image-maps.html#image-map-processing-model) |
 | html-ls:section:4.8.15 | section | html-elements | MathML | 4.8.15 | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Common app elements are supported; many elements degrade to ordinary boxes or are unsupported. | [link](https://html.spec.whatwg.org/multipage/embedded-content-other.html#mathml) |
-| html-ls:section:4.8.16 | section | html-elements | SVG | 4.8.16 | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Common app elements are supported; many elements degrade to ordinary boxes or are unsupported. | [link](https://html.spec.whatwg.org/multipage/embedded-content-other.html#svg-0) |
+| html-ls:section:4.8.16 | section | html-elements | SVG | 4.8.16 | `partial` | Package-time static icon subset only: --rasterize-svg converts documented local SVG shapes and paths to generated BMP resources. There is no SVG DOM or runtime renderer. | [link](https://html.spec.whatwg.org/multipage/embedded-content-other.html#svg-0) |
 | html-ls:section:4.8.17 | section | html-elements | Dimension attributes | 4.8.17 | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Common app elements are supported; many elements degrade to ordinary boxes or are unsupported. | [link](https://html.spec.whatwg.org/multipage/embedded-content-other.html#dimension-attributes) |
 | html-ls:section:4.9 | section | html-elements | Tabular data | 4.9 | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Common app elements are supported; many elements degrade to ordinary boxes or are unsupported. | [link](https://html.spec.whatwg.org/multipage/tables.html#tables) |
 | html-ls:section:4.9.1 | html-element-section | html-elements | The table element | 4.9.1 | `partial` | Subset or graceful degradation. Check the capability matrix for exact behavior before relying on it. Common app elements are supported; many elements degrade to ordinary boxes or are unsupported. | [link](https://html.spec.whatwg.org/multipage/tables.html#the-table-element) |

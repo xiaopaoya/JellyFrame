@@ -71,6 +71,31 @@ This V0 path stretches one package-absolute image across the background paint
 area. It intentionally does not accept remote/data URLs, relative paths,
 repeat, `background-size`, or `background-position`.
 
+## Static SVG Icons
+
+Keep a simple icon source in the package, reference it from HTML or CSS, then
+compile the package with `--rasterize-svg`. The output bundle/debug package has
+only a generated BMP and rewritten references, so the target has no SVG parser
+or vector allocation cost.
+
+```html
+<img class="status-icon" src="assets/status.svg" alt="Ready">
+```
+
+```powershell
+python tools\jellyframe_cli.py package `
+  --root your_app `
+  --report build\your_app.report.json `
+  --output-bundle build\your_app.jfapp `
+  --rasterize-svg --svg-raster-size 32
+```
+
+This is for static 16/24/32px-style icons, not SVG UI. Use static HTML/CSS
+references only. The converter accepts basic shapes and simple paths, but
+rejects SVG text, filters, gradients, transforms, scripts, remote data and arc
+path commands. Inspect `staticSvgRasterization` in the package report; replace
+an unsupported source with a pre-rasterized bitmap when conversion is rejected.
+
 ## Buttons
 
 Prefer short text. Use one or two columns. On narrow targets, keep only the

@@ -249,6 +249,61 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(diagnostics["entries"][0]["metadata"]["reason"], "invalid-signature")
         self.assertEqual(warnings[0]["code"], "image-bmp-invalid")
 
+    def test_static_svg_rasterization_rewrites_package_references_without_runtime_svg(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-") as directory:
+            root = Path(directory)
+            (root / "assets").mkdir()
+            (root / "index.html").write_text(
+                '<link rel="stylesheet" href="styles/app.css"><img src="assets/check.svg">', encoding="utf-8")
+            (root / "styles").mkdir()
+            (root / "styles" / "app.css").write_text(
+                '.badge { background-image: url("../assets/check.svg"); }', encoding="utf-8")
+            (root / "assets" / "check.svg").write_text(
+                '<svg width="24" height="24" viewBox="0 0 24 24">'
+                '<path fill="none" stroke="#17d7a0" stroke-width="2" stroke-linecap="round" '
+                'd="M4 12 L9 17 L20 6"/></svg>', encoding="utf-8")
+            resources = package_app.discover_resources(root, 4096)
+            with tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-stage-") as staging:
+                output, report, warnings = package_app.apply_static_svg_rasterization(
+                    resources, Path(staging), 4096, True, 32)
+                entries = {resource["path"]: resource for resource in output}
+                generated_path = "/__jellyframe/raster/assets/check.bmp"
+                index_text = entries["/index.html"]["file"].read_text(encoding="utf-8")
+                css_text = entries["/styles/app.css"]["file"].read_text(encoding="utf-8")
+                generated_metadata = package_app.parse_bmp_metadata(entries[generated_path]["file"].read_bytes())
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(report["sourceSvgCount"], 1)
+        self.assertEqual(report["rasterizedCount"], 1)
+        paths = {resource["path"] for resource in output}
+        self.assertIn(generated_path, paths)
+        self.assertNotIn("/assets/check.svg", paths)
+        self.assertIn(generated_path, index_text)
+        self.assertIn(generated_path, css_text)
+        self.assertTrue(generated_metadata["ok"])
+
+    def test_static_svg_rasterization_rejects_unsupported_vector_features(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-invalid-") as directory:
+            root = Path(directory)
+            (root / "index.html").write_text('<img src="icon.svg">', encoding="utf-8")
+            (root / "icon.svg").write_text('<svg><text x="1" y="1">x</text></svg>', encoding="utf-8")
+            resources = package_app.discover_resources(root, 4096)
+            with tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-stage-") as staging:
+                with self.assertRaises(SystemExit) as failure:
+                    package_app.apply_static_svg_rasterization(resources, Path(staging), 4096, True, 32)
+
+        self.assertIn("unsupported SVG element <text>", str(failure.exception))
+
+    def test_uncompiled_svg_reports_runtime_deferred_advice(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-warning-") as directory:
+            root = Path(directory)
+            (root / "icon.svg").write_text('<svg width="1" height="1"/>', encoding="utf-8")
+            resources = package_app.discover_resources(root, 4096)
+            _, report, warnings = package_app.apply_static_svg_rasterization(resources, root, 4096, False, 32)
+
+        self.assertEqual(report["sourceSvgCount"], 1)
+        self.assertEqual(warnings[0]["code"], "svg-runtime-deferred")
+
     def test_packaged_audio_warns_without_playback_capability(self):
         manifest = {"capabilities": []}
         resources = [{"path": "/audio/tone.wav"}]

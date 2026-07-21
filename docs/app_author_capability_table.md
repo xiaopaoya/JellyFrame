@@ -13,7 +13,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Text | Available | UTF-8 text is preserved; real CJK glyph quality depends on system fonts or app `.jffont` supplements. |
 | Form controls | Form V0 subset | Use `button`, `input`, `select`, `textarea`, `progress` and `meter`. `required`, text `minlength`/`maxlength`, checkbox/radio required state and required selects work with local `submit`; browser validation popups and browser navigation do not. |
 | Confirmation dialog | Bounded modal subset | Use one `<dialog>` with `showModal()` and `close(returnValue)`. In the Win32 shell, Escape becomes a cancellable `cancel` and then `close`; focus and hit testing stay inside the dialog while it is open. No nested dialogs, backdrop/light-dismiss, `show()`, `requestClose()` or browser top-layer behavior. |
-| Images | Subset | Use package-local `<img src="/assets/icon.bmp">` or one CSS `background-image: url("/assets/image.bmp")`. `border-radius` clips either image form with antialiased corners. CSS backgrounds fill the element and retain `background-color` as fallback; no remote/data URL, repeat, position or size syntax. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
+| Images | Subset | Use package-local `<img src="/assets/icon.bmp">` or one CSS `background-image: url("/assets/image.bmp")`. A static icon SVG may be compiled to BMP with `package --rasterize-svg`; its HTML/CSS reference is rewritten in the generated package. `border-radius` clips either image form with antialiased corners. CSS backgrounds fill the element and retain `background-color` as fallback; no remote/data URL, repeat, position or size syntax. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
 | Browser image/media markup | Deferred | Do not rely on `picture`/`source`/`srcset`, `<video>`, `<track>` or `<audio>` markup. Select one package-local image in app state; use `Audio()` V0 or the host frame-provider contract only when their capabilities are declared. |
 | Tables, ruby and templates | Deferred | Browser table measurement, ruby/bidi layout and detached `template.content` semantics are absent. Use documented flex/grid subsets, localized plain text and explicit DOM creation. |
 | Rich-text editing | Deferred | `contenteditable`, Selection and Range are absent. Use bounded `input`/`textarea`, or a product-owned system editor. |
@@ -67,7 +67,7 @@ subset, not complete browser behavior.
 
 | Feature | Status | Guidance |
 | --- | --- | --- |
-| Package-local resources | Available | Use `/assets/a.bmp` or relative paths. Schemes, `//host` and app-root escapes are rejected. |
+| Package-local resources | Available | Use `/assets/a.bmp` or relative paths. Schemes, `//host` and app-root escapes are rejected. Static SVG icon sources are package-time inputs only when `--rasterize-svg` is passed; they do not reach the target as SVG. |
 | `.jfapp` bundle | V0 available | Generate with CLI `package --output-bundle`. |
 | Character scan | Default | `check`/`package`/`preview`/`install` emit `*.used_chars.txt` and a `fontSubset` plan by default. |
 | `.jffont` | Available | Can be generated from a licensed BDF; still declare it explicitly in manifest `fonts[]`. |

@@ -13,7 +13,7 @@
 | 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont` 补充含。 |
 | 表单控件 | Form V0 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。`required`、文本 `minlength`/`maxlength`、checkbox/radio 必填状态和 required select 可配合本地 `submit` 使用；不提供浏览器校验弹窗或页面导航。 |
 | 确认对话框 | 有界 modal 子集 | 使用一个 `<dialog>` 配合 `showModal()` 和 `close(returnValue)`。Win32 壳会把 Escape 转为可取消的 `cancel`，再触发 `close`；打开期间 focus/hit test 限制在 dialog 内。不支持嵌套 dialog、backdrop/light-dismiss、`show()`、`requestClose()` 或浏览器 top layer。 |
-| 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">` 或一个 CSS `background-image: url("/assets/image.bmp")`。`border-radius` 会以抗锯齿角裁切这两类图片。CSS 背景会填充元素并保留 `background-color` fallback；不支持远程/data URL、repeat、position、size。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
+| 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">` 或一个 CSS `background-image: url("/assets/image.bmp")`。静态图标 SVG 可通过 `package --rasterize-svg` 在打包期编译成 BMP，生成包中的 HTML/CSS 引用会自动改写。`border-radius` 会以抗锯齿角裁切这两类图片。CSS 背景会填充元素并保留 `background-color` fallback；不支持远程/data URL、repeat、position、size。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
 | 浏览器图片/媒体标签 | 延后 | 不依赖 `picture`/`source`/`srcset`、`<video>`、`<track>` 或 `<audio>` markup。由 app state 选择一张包内图片；只有声明对应 capability 时才使用 `Audio()` V0 或 host frame-provider contract。 |
 | 表格、ruby 与 template | 延后 | 没有浏览器表格测量、ruby/bidi layout 或分离的 `template.content` 语义。使用文档化 flex/grid 子集、本地化 plain text 和显式 DOM 创建。 |
 | 富文本编辑 | 延后 | 不提供 `contenteditable`、Selection、Range。使用有界 `input`/`textarea`，或产品自有的系统编辑器。 |
@@ -66,7 +66,7 @@
 
 | 能力 | 状态 | 建议 |
 | --- | --- | --- |
-| Package-local 资源 | 可用 | 使用 `/assets/a.bmp` 或相对路径。禁止 scheme、`//host`、逃出 app root。 |
+| Package-local 资源 | 可用 | 使用 `/assets/a.bmp` 或相对路径。禁止 scheme、`//host`、逃出 app root。静态 SVG 图标源仅会在传入 `--rasterize-svg` 时作为打包期输入，不会以 SVG 形式进入目标端。 |
 | `.jfapp` 安装包 | 可用 V0 | 用 CLI `package --output-bundle` 生成。 |
 | 字符扫描 | 默认 | `check`/`package`/`preview`/`install` 默认输出 `*.used_chars.txt` 和 `fontSubset` 计划。 |
 | `.jffont` | 可用 | 可由授权 BDF 生成；生成后仍要显式写入 manifest `fonts[]`。 |

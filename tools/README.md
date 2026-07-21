@@ -1,6 +1,6 @@
 # Tools
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0-dev
 
 Desktop developer tools for packaging, validation and editor integration.
 
@@ -37,3 +37,8 @@ Use `--runtime-log` to merge Win32 frame-script/capture counters into a package
 report, and `--port-telemetry` to merge real board data such as frame time, DMA
 wait, flush-done time and internal-RAM peaks. Both stay in desktop tooling and do
 not add embedded runtime cost.
+
+`package`, `check` and `preview` accept `--rasterize-svg --svg-raster-size 32`
+for the documented static icon subset. The package step converts static local
+HTML/CSS SVG references to generated BMP resources; it does not add an SVG
+parser or decoder to the target runtime.

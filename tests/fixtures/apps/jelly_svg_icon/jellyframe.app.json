@@ -1,0 +1,38 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.tests.svg_icon",
+  "name": "Static SVG Icon Fixture",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.5.0",
+    "script": "none"
+  },
+  "viewport": {
+    "designWidth": 64,
+    "designHeight": 64,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 16384,
+    "maxDomNodes": 16,
+    "maxCssRules": 16,
+    "maxDisplayCommands": 32
+  },
+  "capabilities": [],
+  "targets": {
+    "rect-320x240": {
+      "viewport": {
+        "width": 320,
+        "height": 240,
+        "shape": "rect"
+      },
+      "output": "cpp"
+    }
+  }
+}

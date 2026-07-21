@@ -66,6 +66,27 @@ fallback，因为目标缺少相应 codec 或图片预算不足时，宿主可�
 该 V0 路径把一个包内绝对路径图片拉伸到背景绘制区域。它刻意不接受远程/data URL、相对路径、
 repeat、`background-size` 或 `background-position`。
 
+## 静态 SVG 图标
+
+将简单图标源放入包内，在 HTML 或 CSS 中引用它，再以 `--rasterize-svg` 打包。输出 bundle/debug
+package 中只保留生成的 BMP 和改写后的引用，因此目标端没有 SVG parser 或矢量分配成本。
+
+```html
+<img class="status-icon" src="assets/status.svg" alt="Ready">
+```
+
+```powershell
+python tools\jellyframe_cli.py package `
+  --root your_app `
+  --report build\your_app.report.json `
+  --output-bundle build\your_app.jfapp `
+  --rasterize-svg --svg-raster-size 32
+```
+
+该路径用于静态的 16/24/32px 风格图标，不是 SVG UI。只能使用静态 HTML/CSS 引用。转换器接受基础图形和
+简单 path，但会拒绝 SVG 文本、filter、渐变、transform、脚本、远程数据和 arc path command。检查 package
+report 中的 `staticSvgRasterization`；被拒绝时应替换为预光栅化 bitmap。
+
 ## 按钮
 
 按钮文字尽量短。默认一行一到两个按钮。窄屏优先减少按钮数量或缩短标签。
