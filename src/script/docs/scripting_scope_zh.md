@@ -222,6 +222,19 @@ API 表面。
 - 脚本相关 diagnostics 来自真正处理 app 的 package loader、JerryScript runtime 和
   DOM/event binding 代码路径。
 
+## Dialog
+
+- `dialog.open`、`dialog.returnValue`、`dialog.showModal()` 和
+  `dialog.close([returnValue])` 组成确认对话框子集。
+- 一个 document 最多只有一个活动的 `showModal()` dialog。已有 dialog 打开时再次调用会经普通脚本
+  异常路径报告 `InvalidStateError`。
+- `close()` 会移除 `open`、保留 string `returnValue` 并派发不可取消的 `close`。宿主可为 Escape/back
+  policy 调用 `request_modal_cancel()`；它先派发可取消的 `cancel`，未被阻止时才关闭。
+- Win32 shell 会在每次 layer-tree rebuild 后安装已有的 modal input gate，把 hit test 和 focus 限制在
+  dialog 内，并在关闭时恢复之前的 focus。port 决定物理 back 是否请求取消。
+- 不提供 `show()`、`requestClose()`、嵌套 modal、light dismiss、浏览器 top layer、backdrop 绘制或完整
+  inert-subtree algorithm。
+
 ## 暂不支持
 
 - 完整 selector API。`querySelector` / `querySelectorAll` 只支持上方简单 selector 子集，不支持组合器、

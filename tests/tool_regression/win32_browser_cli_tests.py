@@ -28,6 +28,20 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def read_bmp_rgb(path: Path, x: int, y: int) -> tuple[int, int, int]:
+    data = path.read_bytes()
+    require(data[:2] == b"BM", f"{path} must be a BMP")
+    offset = struct.unpack_from("<I", data, 10)[0]
+    width, height = struct.unpack_from("<ii", data, 18)
+    bits_per_pixel = struct.unpack_from("<H", data, 28)[0]
+    require(width > x >= 0 and height > y >= 0 and bits_per_pixel == 24,
+            f"{path} must be a 24-bit capture containing the requested pixel")
+    stride = (width * 3 + 3) & ~3
+    pixel = offset + (height - 1 - y) * stride + x * 3
+    blue, green, red = data[pixel:pixel + 3]
+    return red, green, blue
+
+
 def write_jfapp(path: Path, app_id: str, version_code: int, version_name: str, entry: str) -> None:
     summary = json.dumps(
         {
@@ -106,6 +120,7 @@ def main() -> int:
     require("usage: jellyframe_win32_browser" in help_result.stdout, "--help must print usage")
     require("Frame script commands:" in help_result.stdout, "--help must document frame scripts")
     require("event FRAME:kind[:x:y[:delta]]" in help_result.stdout, "--help must document wheel delta")
+    require("pointer-up, wheel, escape" in help_result.stdout, "--help must document deterministic Escape")
     require("event FRAME:time-ms:VALUE" in help_result.stdout, "--help must document host time injection")
     require("event FRAME battery PERCENT CHARGING" in help_result.stdout,
             "--help must document host battery injection")
@@ -391,6 +406,29 @@ def main() -> int:
         require(app["failure"]["reason"] == "load-failed", "win32 bad-entry launch must record failure reason")
 
     if scripting_enabled:
+        with tempfile.TemporaryDirectory(prefix="jellyframe-dialog-modal-") as directory:
+            captures = Path(directory) / "captures"
+            dialog_result = run_case(
+                exe,
+                [
+                    "--app",
+                    "tests/fixtures/apps/jelly_dialog_modal",
+                    "--frame-script",
+                    "tests/fixtures/apps/jelly_dialog_modal/capture_modal_escape.jfcapture",
+                    "--capture-frames",
+                    str(captures),
+                ],
+            )
+            require(dialog_result.returncode == 0, "dialog frame-script fixture must pass")
+            require("diagnostics: 0" in dialog_result.stdout,
+                    "dialog frame-script fixture must not emit diagnostics")
+            open_pixel = read_bmp_rgb(captures / "frame_001.bmp", 16, 70)
+            closed_pixel = read_bmp_rgb(captures / "frame_002.bmp", 16, 70)
+            require(open_pixel[0] > 180 and open_pixel[1] < 130,
+                    "showModal must render the confirmation surface before Escape")
+            require(closed_pixel[0] < 30 and closed_pixel[1] < 40 and closed_pixel[2] < 60,
+                    "Escape must cancel and close the confirmation surface")
+
         with tempfile.TemporaryDirectory(prefix="jellyframe-watchdog-app-") as directory:
             store = Path(directory) / "store"
             package_root = Path("tests/fixtures/apps/jelly_watchdog_smoke")

@@ -247,6 +247,43 @@ form.addEventListener("submit", function (event) {
 `invalid`。没有浏览器校验弹窗。`FormData` 只保存字符串 entry，支持 `append`、`set`、
 `delete`、`get`、`getAll` 和 `has`。
 
+## 确认对话框
+
+删除数据或需要用户确认的操作使用一个 modal dialog。由发起控件打开，再由 dialog 内的操作显式关闭。
+宿主可以把 Escape 或硬件 Back 映射为 `cancel`；只有 app 必须继续显示确认时才调用 `preventDefault()`。
+
+```html
+<button id="clear-data">清除数据</button>
+<dialog id="confirm-clear">
+  <p>清除本地数据？</p>
+  <div class="button-row">
+    <button id="keep-data" type="button">保留</button>
+    <button id="confirm-data" type="button">清除</button>
+  </div>
+</dialog>
+```
+
+```js
+const dialog = document.getElementById("confirm-clear");
+document.getElementById("clear-data").addEventListener("click", function () {
+  dialog.showModal();
+});
+document.getElementById("keep-data").addEventListener("click", function () {
+  dialog.close("keep");
+});
+document.getElementById("confirm-data").addEventListener("click", function () {
+  dialog.close("clear");
+});
+dialog.addEventListener("close", function () {
+  if (dialog.returnValue === "clear") {
+    // 启动文档化的宿主清数据操作。
+  }
+});
+```
+
+一个 document 同时只能有一个 `showModal()` dialog。没有嵌套 modal、click-outside close、浏览器
+backdrop、`show()` 或 `requestClose()`。
+
 ## 静态本地模块
 
 较大的 app 可以在源码中使用一个静态本地 module 入口，同时让设备 runtime 继续执行文档化的

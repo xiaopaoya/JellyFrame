@@ -1,0 +1,5 @@
+viewport 120 120
+frames 3
+step-ms 33
+event 1 click 20 20
+event 2 escape

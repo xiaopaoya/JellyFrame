@@ -48,6 +48,7 @@ step-ms 33
 viewport 300 300
 event 8 click 150 260
 event 10 wheel 150 160 -120
+event 11 escape
 event 12 time-ms 1700000000123
 event 14 battery 88 1
 event 16 weather 213 rain

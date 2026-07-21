@@ -2044,6 +2044,46 @@ void javascript_canvas_draw_image_copies_and_scales_canvas_source() {
           "canvas drawImage script covers standard overloads");
 }
 
+void javascript_dialog_modal_subset_is_bounded_and_cancellable() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='launch'>Launch</button><dialog id='confirm'><button>OK</button></dialog></body>");
+    Node* dialog = find_by_id(*document, "confirm");
+    check(dialog != nullptr, "dialog fixture exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var d = document.getElementById('confirm');"
+        "var cancelCount = 0; var closeCount = 0;"
+        "d.addEventListener('cancel', function () { cancelCount++; });"
+        "d.onclose = function () { closeCount++; };"
+        "d.showModal(); d.open + ':' + d.returnValue;");
+    check(result.ok && result.value == "true:", "showModal opens the dialog with an empty return value");
+    check(runtime.active_modal_dialog() == dialog, "showModal exposes one active dialog to the host");
+
+    check(runtime.request_modal_cancel(), "host cancel is consumed by the active modal");
+    result = runtime.eval("d.open + ':' + cancelCount + ':' + closeCount + ':' + d.returnValue;");
+    check(result.ok && result.value == "false:1:1:", "unprevented cancel closes and emits close exactly once");
+    check(runtime.active_modal_dialog() == nullptr, "cancelled dialog releases modal state");
+
+    result = runtime.eval(
+        "d.showModal();"
+        "d.addEventListener('cancel', function (event) { event.preventDefault(); });"
+        "'open';");
+    check(result.ok && result.value == "open", "dialog can reopen after cancellation");
+    check(runtime.request_modal_cancel(), "prevented cancel still consumes the host request");
+    result = runtime.eval("d.open + ':' + cancelCount + ':' + closeCount;");
+    check(result.ok && result.value == "true:2:1", "prevented cancel keeps the modal open");
+
+    result = runtime.eval("d.close('confirmed'); d.open + ':' + d.returnValue + ':' + closeCount;");
+    check(result.ok && result.value == "false:confirmed:2", "close stores returnValue and emits close");
+    check(runtime.active_modal_dialog() == nullptr, "explicit close releases modal state");
+
+    result = runtime.eval("d.showModal(); document.body.textContent = 'replaced'; 'done';");
+    check(result.ok && result.value == "done", "destroying an active dialog remains safe");
+    check(runtime.active_modal_dialog() == nullptr, "destroyed modal clears host-visible state");
+}
+
 } // namespace
 
 int main() {
@@ -2119,6 +2159,7 @@ int main() {
         javascript_canvas_reset_transform_clears_translation();
         javascript_canvas_radial_gradient_uses_concentric_two_stop_subset();
         javascript_canvas_draw_image_copies_and_scales_canvas_source();
+        javascript_dialog_modal_subset_is_bounded_and_cancellable();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

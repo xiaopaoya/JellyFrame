@@ -472,6 +472,7 @@ enum class ScriptedFrameEventKind {
     PointerUp,
     Click,
     Wheel,
+    Escape,
 };
 
 enum class ScriptedHostSensorKind {
@@ -2446,6 +2447,12 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
         } else {
             parsed.event.kind = ScriptedFrameEventKind::Click;
         }
+    } else if (kind == "escape") {
+        if (fields.size() != 2) {
+            parsed.error = "escape events require FRAME:escape";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::Escape;
     } else if (kind == "wheel") {
         if (fields.size() != 5) {
             parsed.error = "wheel events require FRAME:wheel:x:y:delta";
@@ -2706,7 +2713,7 @@ void print_win32_browser_usage(std::ostream& output) {
         << "  --require-script-watchdog      Fail scripted startup if JerryScript cannot halt.\n"
         << "  --frame-event SPEC             Inject event: FRAME:kind[:x:y[:delta]].\n"
         << "                                 Kinds: click, pointer-move, pointer-down,\n"
-        << "                                 pointer-up, wheel, network-online/offline,\n"
+        << "                                 pointer-up, wheel, escape, network-online/offline,\n"
         << "                                 screen-visible/hidden, low-power-on/off,\n"
         << "                                 time-ms, battery, weather, activity,\n"
         << "                                 location, sensor.\n"
@@ -3659,6 +3666,8 @@ private:
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
     std::unique_ptr<JerryScriptRuntime> script_runtime_;
     std::uint32_t script_runtime_instance_id_ = 0;
+    const Node* active_modal_node_ = nullptr;
+    const Node* modal_focus_restore_node_ = nullptr;
     struct PendingScriptAudioEvent {
         std::uint32_t audio_id = 0;
         std::uint64_t due_ms = 0;
@@ -3763,6 +3772,32 @@ private:
 
     std::uint64_t current_time_ms() const {
         return scripted_time_enabled_ ? scripted_now_ms_ : GetTickCount64();
+    }
+
+    void rebuild_input_controller(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
+        input_ = std::make_unique<InputController>(
+            *layer_tree_,
+            input_invalidation_options_from_style(*style_resolver_));
+        input_->set_interaction_state(hovered_node, active_node, focused_node);
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        const Node* modal = script_runtime_ != nullptr ? script_runtime_->active_modal_dialog() : nullptr;
+        if (modal != active_modal_node_) {
+            if (modal != nullptr) {
+                modal_focus_restore_node_ = input_->focused_node();
+                active_modal_node_ = modal;
+            } else {
+                input_->set_modal_root(nullptr);
+                if (modal_focus_restore_node_ != nullptr) {
+                    input_->set_focused_node(modal_focus_restore_node_);
+                }
+                active_modal_node_ = nullptr;
+                modal_focus_restore_node_ = nullptr;
+            }
+        }
+        if (modal != nullptr) {
+            input_->set_modal_root(modal);
+        }
+#endif
     }
 
     LPARAM pointer_lparam(int x, int y) const {
@@ -3882,6 +3917,9 @@ private:
                              pointer_lparam(screen_point.x, screen_point.y));
                 break;
             }
+            case ScriptedFrameEventKind::Escape:
+                handle_key_down(VK_ESCAPE);
+                break;
             }
         }
     }
@@ -5050,10 +5088,7 @@ private:
             ++scroll_container_counters_.strip_blits;
             ++scroll_container_counters_.dirty_repaints;
             record_present_estimate_for_content_rects(dirty_rects, dirty_count);
-            input_ = std::make_unique<InputController>(
-                *layer_tree_,
-                input_invalidation_options_from_style(*style_resolver_));
-            input_->set_interaction_state(hovered_node, active_node, focused_node);
+            rebuild_input_controller(hovered_node, active_node, focused_node);
             update_blit_pixels_for_content_rect(strip_visible_rect);
             InvalidateRect(hwnd_, nullptr, FALSE);
             return true;
@@ -5080,10 +5115,7 @@ private:
             ++scroll_container_counters_.full_repaints;
             record_present_estimate_full_viewport();
         }
-        input_ = std::make_unique<InputController>(
-            *layer_tree_,
-            input_invalidation_options_from_style(*style_resolver_));
-        input_->set_interaction_state(hovered_node, active_node, focused_node);
+        rebuild_input_controller(hovered_node, active_node, focused_node);
         if (can_repaint_dirty) {
             update_blit_pixels_for_content_rect(dirty_content_rect);
         } else {
@@ -5340,10 +5372,7 @@ private:
                 record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
-            input_ = std::make_unique<InputController>(
-                *layer_tree_,
-                input_invalidation_options_from_style(*style_resolver_));
-            input_->set_interaction_state(hovered_node, active_node, focused_node);
+            rebuild_input_controller(hovered_node, active_node, focused_node);
             capture_script_layout_snapshot();
             update_blit_pixels();
             clear_dirty_flags(*document_);
@@ -5444,10 +5473,7 @@ private:
                 record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
-            input_ = std::make_unique<InputController>(
-                *layer_tree_,
-                input_invalidation_options_from_style(*style_resolver_));
-            input_->set_interaction_state(hovered_node, active_node, focused_node);
+            rebuild_input_controller(hovered_node, active_node, focused_node);
             capture_script_layout_snapshot();
             update_blit_pixels();
             clear_dirty_flags(*document_);
@@ -5506,10 +5532,7 @@ private:
             record_frame_repaint(repaint_plan, false);
             render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
         }
-        input_ = std::make_unique<InputController>(
-            *layer_tree_,
-            input_invalidation_options_from_style(*style_resolver_));
-        input_->set_interaction_state(hovered_node, active_node, focused_node);
+        rebuild_input_controller(hovered_node, active_node, focused_node);
         update_blit_pixels();
         clear_dirty_flags(*document_);
         clear_finished_animation_overrides();
@@ -6067,6 +6090,12 @@ private:
         if (!input_ || !accepts_ui_events()) {
             return;
         }
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (wparam == VK_ESCAPE && script_runtime_ != nullptr && script_runtime_->request_modal_cancel()) {
+            rerender_if_dirty(input_->focused_node());
+            return;
+        }
+#endif
         KeyInput key;
         if (wparam == VK_BACK) {
             key.code = KeyCode::Backspace;

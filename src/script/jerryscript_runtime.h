@@ -28,6 +28,7 @@ struct ScriptAudioElement;
 struct ScriptEventListener;
 struct ScriptGeolocationRequest;
 struct ScriptCanvasGradient;
+struct ScriptDialogState;
 struct ScriptNodeBinding;
 struct ScriptLocalStorageBinding;
 struct ScriptTimer;
@@ -120,6 +121,10 @@ public:
     void set_system_state(ScriptSystemState state);
     ScriptSystemState system_state() const;
     bool dispatch_visibility_change();
+    // Hosts use this to route Escape/back through the dialog cancel policy.
+    // Returns true when an active modal consumed the request, even if cancel was prevented.
+    bool request_modal_cancel();
+    Node* active_modal_dialog() const;
     bool dispatch_audio_event(std::uint32_t audio_id, ScriptAudioEventKind kind);
     std::size_t pump_timers(std::uint64_t now_ms, std::size_t max_callbacks = 32);
     std::size_t pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks = 4);
@@ -147,6 +152,7 @@ private:
     std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
     std::vector<std::unique_ptr<ScriptCanvasGradient>> canvas_gradients_;
+    std::vector<std::unique_ptr<ScriptDialogState>> dialog_states_;
     std::vector<ScriptNodeBinding*> node_bindings_;
     std::vector<ScriptNodeBinding*> layout_snapshot_bindings_;
     std::vector<ScriptLocalStorageBinding*> local_storage_bindings_;
@@ -161,6 +167,7 @@ private:
     Canvas2DRegistry* canvas_2d_ = nullptr;
     ScriptAudioHost audio_host_;
     Node* bound_document_ = nullptr;
+    Node* active_modal_dialog_ = nullptr;
     ScriptSystemState system_state_;
     std::string route_fragment_;
     std::vector<std::string> route_history_;
@@ -211,6 +218,14 @@ private:
     void clear_geolocation_requests();
     ScriptCanvasGradient* create_canvas_gradient(std::uint32_t gradient_id);
     void clear_canvas_gradients();
+    ScriptDialogState* dialog_state_for(Node& node, bool create);
+    const ScriptDialogState* dialog_state_for(const Node& node) const;
+    bool show_modal_dialog(Node& node);
+    void close_dialog(Node& node, std::string return_value, bool update_return_value);
+    void set_dialog_open(Node& node, bool open);
+    std::string dialog_return_value(const Node& node) const;
+    void set_dialog_return_value(Node& node, std::string value);
+    void clear_dialog_states();
     ScriptNodeBinding* bind_script_node(Node& node);
     Node* resolve_script_node(const ScriptNodeBinding& binding) const;
     void forget_script_node_binding(ScriptNodeBinding& binding);

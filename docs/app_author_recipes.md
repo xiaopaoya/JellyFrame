@@ -263,6 +263,45 @@ non-bubbling `invalid` on each invalid control. There is no browser validation
 popup. `FormData` supports string entries with `append`, `set`, `delete`, `get`,
 `getAll` and `has`.
 
+## Confirmation Dialog
+
+Use one modal dialog for destructive or permission-gated actions. Open it from
+the initiating control and close it explicitly from the dialog action. The host
+may map Escape or a hardware Back action to `cancel`; call `preventDefault()`
+only when the app must keep the confirmation visible.
+
+```html
+<button id="clear-data">Clear data</button>
+<dialog id="confirm-clear">
+  <p>Clear local data?</p>
+  <div class="button-row">
+    <button id="keep-data" type="button">Keep</button>
+    <button id="confirm-data" type="button">Clear</button>
+  </div>
+</dialog>
+```
+
+```js
+const dialog = document.getElementById("confirm-clear");
+document.getElementById("clear-data").addEventListener("click", function () {
+  dialog.showModal();
+});
+document.getElementById("keep-data").addEventListener("click", function () {
+  dialog.close("keep");
+});
+document.getElementById("confirm-data").addEventListener("click", function () {
+  dialog.close("clear");
+});
+dialog.addEventListener("close", function () {
+  if (dialog.returnValue === "clear") {
+    // Start the documented host-owned clear-data operation.
+  }
+});
+```
+
+Only one `showModal()` dialog may be active in a document. There is no nested
+modal, click-outside close, browser backdrop, `show()` or `requestClose()`.
+
 ## Static Local Modules
 
 For a larger app, keep the device runtime on the documented classic-script path

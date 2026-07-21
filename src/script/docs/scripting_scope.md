@@ -268,6 +268,24 @@ documented under `src/app_runtime/docs/runtime_data_api.md`.
 - Script-related diagnostics come from the package loader, JerryScript runtime
   and DOM/event binding code paths that actually handled the app.
 
+## Dialogs
+
+- `dialog.open`, `dialog.returnValue`, `dialog.showModal()` and
+  `dialog.close([returnValue])` form the confirmation-dialog subset.
+- One document has at most one active `showModal()` dialog. Calling it while a
+  dialog is already open reports `InvalidStateError` through the normal script
+  exception path.
+- `close()` removes `open`, retains the string `returnValue` and dispatches a
+  non-cancellable `close` event. Hosts can call `request_modal_cancel()` for
+  Escape/back policy; it dispatches cancellable `cancel` and closes only when
+  the event is not prevented.
+- The Win32 shell installs the existing modal input gate after each layer-tree
+  rebuild, constraining hit testing and focus to the dialog and restoring the
+  previous focus when it closes. Ports decide whether a physical back action
+  requests cancellation.
+- There is no `show()`, `requestClose()`, nested modal, light dismiss, browser
+  top layer, backdrop rendering or full inert-subtree algorithm.
+
 ## Not Supported Yet
 
 - Full selector APIs. `querySelector` / `querySelectorAll` support only the

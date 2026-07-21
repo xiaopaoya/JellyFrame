@@ -95,6 +95,11 @@ struct ScriptCanvasGradient {
     std::uint32_t id = 0;
 };
 
+struct ScriptDialogState {
+    Node* node = nullptr;
+    std::string return_value;
+};
+
 struct ScriptFormData {
     std::vector<FormDataEntry> entries;
 };
@@ -276,6 +281,29 @@ struct ScriptRuntimeAccess {
 
     static ScriptCanvasGradient* create_canvas_gradient(JerryScriptRuntime& runtime, std::uint32_t gradient_id) {
         return runtime.create_canvas_gradient(gradient_id);
+    }
+
+    static bool show_modal_dialog(JerryScriptRuntime& runtime, Node& node) {
+        return runtime.show_modal_dialog(node);
+    }
+
+    static void close_dialog(JerryScriptRuntime& runtime,
+                             Node& node,
+                             std::string return_value,
+                             bool update_return_value) {
+        runtime.close_dialog(node, std::move(return_value), update_return_value);
+    }
+
+    static void set_dialog_open(JerryScriptRuntime& runtime, Node& node, bool open) {
+        runtime.set_dialog_open(node, open);
+    }
+
+    static std::string dialog_return_value(const JerryScriptRuntime& runtime, const Node& node) {
+        return runtime.dialog_return_value(node);
+    }
+
+    static void set_dialog_return_value(JerryScriptRuntime& runtime, Node& node, std::string value) {
+        runtime.set_dialog_return_value(node, std::move(value));
     }
 
     static ScriptNodeBinding* bind_script_node(JerryScriptRuntime& runtime, Node& node) {
@@ -2159,13 +2187,67 @@ jerry_value_t node_set_open(const jerry_call_info_t* call_info_p,
                             const jerry_value_t args_p[],
                             const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
     if (node != nullptr) {
-        if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
+        const bool open = args_count > 0 && jerry_value_to_boolean(args_p[0]);
+        if (runtime != nullptr && node->type == NodeType::Element && node->tag_name == "dialog") {
+            ScriptRuntimeAccess::set_dialog_open(*runtime, *node, open);
+        } else if (open) {
             node->set_attribute("open", "");
         } else {
             node->remove_attribute("open");
         }
     }
+    return jerry_undefined();
+}
+
+jerry_value_t dialog_get_return_value(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t[],
+                                      const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element || node->tag_name != "dialog") {
+        return jerry_string_sz("");
+    }
+    return jerry_string_sz(ScriptRuntimeAccess::dialog_return_value(*runtime, *node).c_str());
+}
+
+jerry_value_t dialog_set_return_value(const jerry_call_info_t* call_info_p,
+                                      const jerry_value_t args_p[],
+                                      const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node != nullptr && runtime != nullptr && node->type == NodeType::Element && node->tag_name == "dialog") {
+        ScriptRuntimeAccess::set_dialog_return_value(
+            *runtime, *node, args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t dialog_show_modal(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t[],
+                                 const jerry_length_t) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element || node->tag_name != "dialog") {
+        return throw_type_error("showModal requires a dialog element");
+    }
+    if (!ScriptRuntimeAccess::show_modal_dialog(*runtime, *node)) {
+        return jerry_throw_sz(JERRY_ERROR_TYPE, "InvalidStateError: another dialog is already open");
+    }
+    return jerry_undefined();
+}
+
+jerry_value_t dialog_close(const jerry_call_info_t* call_info_p,
+                           const jerry_value_t args_p[],
+                           const jerry_length_t args_count) {
+    Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || node->type != NodeType::Element || node->tag_name != "dialog") {
+        return throw_type_error("close requires a dialog element");
+    }
+    ScriptRuntimeAccess::close_dialog(
+        *runtime, *node, args_count > 0 ? value_to_string(args_p[0]) : std::string(), args_count > 0);
     return jerry_undefined();
 }
 
@@ -2577,6 +2659,8 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
     X(oninput, "input") \
     X(onchange, "change") \
     X(ontoggle, "toggle") \
+    X(oncancel, "cancel") \
+    X(onclose, "close") \
     X(onpointerdown, "pointerdown") \
     X(onpointerup, "pointerup") \
     X(ontouchstart, "touchstart") \
@@ -4846,6 +4930,11 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         set_method(object.get(), "requestSubmit", form_request_submit);
         set_method(object.get(), "reset", form_reset);
     }
+    if (node.type == NodeType::Element && node.tag_name == "dialog") {
+        define_accessor(object.get(), "returnValue", dialog_get_return_value, dialog_set_return_value);
+        set_method(object.get(), "showModal", dialog_show_modal);
+        set_method(object.get(), "close", dialog_close);
+    }
     if (node.type == NodeType::Element && node.tag_name == "canvas") {
         set_method(object.get(), "getContext", canvas_get_context);
     }
@@ -5691,6 +5780,15 @@ void JerryScriptRuntime::forget_script_node_binding(ScriptNodeBinding& binding) 
 }
 
 void JerryScriptRuntime::invalidate_script_node(Node& node) {
+    if (active_modal_dialog_ == &node) {
+        active_modal_dialog_ = nullptr;
+    }
+    dialog_states_.erase(
+        std::remove_if(dialog_states_.begin(), dialog_states_.end(),
+                       [&node](const std::unique_ptr<ScriptDialogState>& state) {
+                           return state == nullptr || state->node == &node;
+                       }),
+        dialog_states_.end());
     for (ScriptNodeBinding* binding : node_bindings_) {
         if (binding != nullptr && binding->node == &node) {
             binding->node = nullptr;
@@ -5839,6 +5937,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
         clear_audio_elements();
         clear_geolocation_requests();
         clear_canvas_gradients();
+        clear_dialog_states();
         clear_script_event_listeners();
         clear_animation_frame_callbacks();
         clear_timers();
@@ -5858,6 +5957,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     clear_audio_elements();
     clear_geolocation_requests();
     clear_canvas_gradients();
+    clear_dialog_states();
     clear_script_event_listeners();
     clear_animation_frame_callbacks();
     clear_timers();
@@ -6069,6 +6169,24 @@ bool JerryScriptRuntime::dispatch_visibility_change() {
     Event event("visibilitychange", false, false);
     dispatch_event(*bound_document_, event);
     return true;
+}
+
+bool JerryScriptRuntime::request_modal_cancel() {
+    Node* dialog = active_modal_dialog_;
+    if (dialog == nullptr || dialog->type != NodeType::Element || dialog->tag_name != "dialog") {
+        return false;
+    }
+
+    Event event("cancel", false, true);
+    dispatch_event(*dialog, event);
+    if (!event.default_prevented() && active_modal_dialog_ == dialog) {
+        close_dialog(*dialog, std::string(), false);
+    }
+    return true;
+}
+
+Node* JerryScriptRuntime::active_modal_dialog() const {
+    return active_modal_dialog_;
 }
 
 bool JerryScriptRuntime::dispatch_audio_event(std::uint32_t audio_id, ScriptAudioEventKind kind) {
@@ -6953,6 +7071,87 @@ ScriptCanvasGradient* JerryScriptRuntime::create_canvas_gradient(std::uint32_t g
 
 void JerryScriptRuntime::clear_canvas_gradients() {
     canvas_gradients_.clear();
+}
+
+ScriptDialogState* JerryScriptRuntime::dialog_state_for(Node& node, bool create) {
+    for (const auto& state : dialog_states_) {
+        if (state != nullptr && state->node == &node) {
+            return state.get();
+        }
+    }
+    if (!create || dialog_states_.size() >= 8) {
+        return nullptr;
+    }
+    auto state = std::make_unique<ScriptDialogState>();
+    state->node = &node;
+    ScriptDialogState* raw = state.get();
+    dialog_states_.push_back(std::move(state));
+    return raw;
+}
+
+const ScriptDialogState* JerryScriptRuntime::dialog_state_for(const Node& node) const {
+    for (const auto& state : dialog_states_) {
+        if (state != nullptr && state->node == &node) {
+            return state.get();
+        }
+    }
+    return nullptr;
+}
+
+bool JerryScriptRuntime::show_modal_dialog(Node& node) {
+    if (node.type != NodeType::Element || node.tag_name != "dialog" || active_modal_dialog_ != nullptr ||
+        node.attributes.find("open") != node.attributes.end() || dialog_state_for(node, true) == nullptr) {
+        return false;
+    }
+    active_modal_dialog_ = &node;
+    node.set_attribute("open", "");
+    return true;
+}
+
+void JerryScriptRuntime::close_dialog(Node& node, std::string return_value, bool update_return_value) {
+    if (node.type != NodeType::Element || node.tag_name != "dialog" ||
+        node.attributes.find("open") == node.attributes.end()) {
+        return;
+    }
+    if (update_return_value) {
+        set_dialog_return_value(node, std::move(return_value));
+    }
+    node.remove_attribute("open");
+    if (active_modal_dialog_ == &node) {
+        active_modal_dialog_ = nullptr;
+    }
+    Event event("close", false, false);
+    dispatch_event(node, event);
+}
+
+void JerryScriptRuntime::set_dialog_open(Node& node, bool open) {
+    if (node.type != NodeType::Element || node.tag_name != "dialog") {
+        return;
+    }
+    if (open) {
+        node.set_attribute("open", "");
+        return;
+    }
+    node.remove_attribute("open");
+    if (active_modal_dialog_ == &node) {
+        active_modal_dialog_ = nullptr;
+    }
+}
+
+std::string JerryScriptRuntime::dialog_return_value(const Node& node) const {
+    const ScriptDialogState* state = dialog_state_for(node);
+    return state != nullptr ? state->return_value : std::string();
+}
+
+void JerryScriptRuntime::set_dialog_return_value(Node& node, std::string value) {
+    if (ScriptDialogState* state = dialog_state_for(node, true)) {
+        state->return_value = std::move(value);
+    }
+}
+
+void JerryScriptRuntime::clear_dialog_states() {
+    dialog_states_.clear();
+    active_modal_dialog_ = nullptr;
 }
 
 } // namespace jellyframe

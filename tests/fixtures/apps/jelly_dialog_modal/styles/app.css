@@ -1,0 +1,42 @@
+body {
+  margin: 0;
+  background: #07121f;
+  color: #f1f8ff;
+}
+
+#open {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 72px;
+  height: 30px;
+  background: #3a6cff;
+  color: #ffffff;
+}
+
+#state {
+  position: absolute;
+  left: 8px;
+  top: 42px;
+  width: 72px;
+  height: 16px;
+}
+
+dialog {
+  position: absolute;
+  left: 12px;
+  top: 62px;
+  width: 96px;
+  height: 46px;
+  padding: 6px;
+  background: #ed5260;
+  border: 0;
+  border-radius: 12px;
+}
+
+dialog button {
+  width: 72px;
+  height: 24px;
+  background: #ffffff;
+  color: #18233a;
+}
