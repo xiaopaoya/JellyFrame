@@ -432,8 +432,10 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
                         --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges
+                        --targets round-300,rect-320x240,rect-172x320
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_canvas_gauges.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                        --strict
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(

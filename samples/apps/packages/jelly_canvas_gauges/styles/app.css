@@ -73,3 +73,103 @@ h1 {
   font-size: 24px;
   line-height: 28px;
 }
+
+@media (max-height: 260px) {
+  html,
+  body {
+    width: 320px;
+    height: 240px;
+  }
+
+  .screen {
+    width: 296px;
+    height: 216px;
+    padding: 12px;
+    grid-template-columns: 170px 92px;
+    gap: 8px;
+  }
+
+  .summary {
+    padding: 10px 12px;
+    border-radius: 18px;
+  }
+
+  h1 {
+    margin-top: 2px;
+    font-size: 30px;
+    line-height: 34px;
+  }
+
+  .rings {
+    width: 92px;
+    height: 92px;
+  }
+
+  .mini {
+    width: 296px;
+    gap: 8px;
+  }
+
+  .mini article {
+    padding: 5px 8px;
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 220px) {
+  html,
+  body {
+    width: 172px;
+    height: 320px;
+  }
+
+  .screen {
+    width: 152px;
+    height: 300px;
+    padding: 10px;
+    grid-template-columns: 70px 72px;
+    gap: 8px;
+  }
+
+  .summary {
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .eyebrow,
+  .subtle,
+  .mini span {
+    font-size: 10px;
+  }
+
+  h1 {
+    margin: 2px 0 0;
+    font-size: 22px;
+    line-height: 26px;
+  }
+
+  .rings {
+    width: 72px;
+    height: 72px;
+  }
+
+  .mini {
+    width: 152px;
+    gap: 8px;
+  }
+
+  .mini article {
+    padding: 5px 6px;
+    border-radius: 14px;
+  }
+
+  .mini canvas {
+    width: 60px;
+    height: 36px;
+  }
+
+  .mini strong {
+    font-size: 18px;
+    line-height: 20px;
+  }
+}

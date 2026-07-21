@@ -82,8 +82,10 @@ Release 测试二进制会显式保持 `assert(...)` 生效，因此这条命令
 python tools\jellyframe_cli.py doctor --build-dir build\Release
 ```
 
-只想检查某一个样例时可加 `--sample watch_weather`；迭代较重的样例套件时可用
-`--exclude-sample NAME` 临时跳过。
+做一次聚焦的外部试用时，可传入 `--sample
+jelly_wearable_launcher,jelly_component_recipes,jelly_service_status,jelly_canvas_gauges`。
+这四个 package 分别覆盖可穿戴主屏、设置/滚动交互、宿主状态和可选 Canvas 图形。迭代较重的
+样例套件时可用 `--exclude-sample NAME` 临时跳过。
 
 把静态页面渲染成图片：
 

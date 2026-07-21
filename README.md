@@ -99,8 +99,11 @@ the end:
 python tools\jellyframe_cli.py doctor --build-dir build\Release
 ```
 
-Use `--sample watch_weather` for a focused run, or `--exclude-sample NAME` when
-you are iterating on one heavier sample suite.
+For a focused external-trial pass, run `--sample
+jelly_wearable_launcher,jelly_component_recipes,jelly_service_status,jelly_canvas_gauges`.
+Those packages cover a wearable home screen, settings/scroll interaction,
+host-backed status and optional Canvas graphics. Use `--exclude-sample NAME`
+when you are iterating on one heavier sample suite.
 
 Render a static page to an image:
 
