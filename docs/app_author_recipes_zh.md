@@ -270,7 +270,9 @@ form.addEventListener("submit", function (event) {
 
 `form.checkValidity()` 和 `form.reportValidity()` 返回布尔值，并向每个无效控件派发不冒泡的
 `invalid`。没有浏览器校验弹窗。`FormData` 只保存字符串 entry，支持 `append`、`set`、
-`delete`、`get`、`getAll` 和 `has`。
+`delete`、`get`、`getAll`、`has` 和 `forEach`。`forEach` 按 entry 顺序传入
+`(value, name, formData)`；回调中新加的 entry 有意留到下一次调用，从而避免一次有界 app
+回调持续扩大当前遍历。
 
 ## 确认对话框
 

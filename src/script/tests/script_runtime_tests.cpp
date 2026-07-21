@@ -1811,11 +1811,13 @@ void javascript_form_submission_and_form_data_work() {
         "form.requestSubmit(send);"
         "var data = new FormData(form);"
         "data.append('tag', 'one'); data.append('tag', 'two'); data.set('tag', 'three');"
+        "var iteration = ''; var receiver = { prefix: '@' };"
+        "data.forEach(function (value, key, source) { iteration += this.prefix + key + '=' + value + ':' + (source === data) + ';'; }, receiver);"
         "reset.click();"
         "String(invalidCount) + ':' + submitterId + ':' + submitValue + ':' + data.get('tag') + ':' +"
         "String(data.getAll('tag').length) + ':' + String(data.has('name')) + ':' + String(form.checkValidity()) + ':' +"
-        "name.value + ':' + String(agree.checked);");
-    check(result.ok && result.value == "1:send:Ada:yes:three:1:true:false::false",
+        "name.value + ':' + String(agree.checked) + ':' + iteration;");
+    check(result.ok && result.value == "1:send:Ada:yes:three:1:true:false::false:@name=Ada:true;@agree=yes:true;@tag=three:true;",
           "form validation, submit event, FormData and reset work through JavaScript");
 }
 

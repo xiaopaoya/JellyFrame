@@ -101,6 +101,7 @@ struct ScriptDialogState {
 };
 
 struct ScriptFormData {
+    JerryScriptRuntime* runtime = nullptr;
     std::vector<FormDataEntry> entries;
 };
 
@@ -3577,6 +3578,7 @@ jerry_value_t form_data_construct(const jerry_call_info_t* call_info_p,
         entries = collect_form_data(*form);
     }
     auto* data = new ScriptFormData;
+    data->runtime = native_runtime(call_info_p->function);
     data->entries = std::move(entries);
     jerry_object_set_native_ptr(call_info_p->this_value, &kFormDataNativeInfo, data);
     return jerry_undefined();
@@ -3681,6 +3683,32 @@ jerry_value_t form_data_set(const jerry_call_info_t* call_info_p,
     return jerry_undefined();
 }
 
+jerry_value_t form_data_for_each(const jerry_call_info_t* call_info_p,
+                                 const jerry_value_t args_p[],
+                                 const jerry_length_t args_count) {
+    ScriptFormData* data = native_form_data(call_info_p->this_value);
+    if (data == nullptr || data->runtime == nullptr || args_count < 1 || !jerry_value_is_function(args_p[0])) {
+        return throw_type_error("FormData.forEach requires a callback");
+    }
+
+    // Callbacks may mutate FormData. Iterating a bounded snapshot keeps one call finite.
+    const std::vector<FormDataEntry> entries = data->entries;
+    const jerry_value_t this_arg = args_count > 1 ? args_p[1] : jerry_undefined();
+    JerryValue source(jerry_value_copy(call_info_p->this_value));
+    for (const FormDataEntry& entry : entries) {
+        JerryValue value(jerry_string_sz(entry.value.c_str()));
+        JerryValue name(jerry_string_sz(entry.name.c_str()));
+        const jerry_value_t callback_args[] = {value.get(), name.get(), source.get()};
+        JerryValue result(run_with_execution_budget(*data->runtime, [&]() {
+            return jerry_call(args_p[0], this_arg, callback_args, 3);
+        }));
+        if (jerry_value_is_exception(result.get())) {
+            return result.release();
+        }
+    }
+    return jerry_undefined();
+}
+
 void install_form_data_members(jerry_value_t object) {
     set_method(object, "append", form_data_append);
     set_method(object, "delete", form_data_delete);
@@ -3688,10 +3716,12 @@ void install_form_data_members(jerry_value_t object) {
     set_method(object, "getAll", form_data_get_all);
     set_method(object, "has", form_data_has);
     set_method(object, "set", form_data_set);
+    set_method(object, "forEach", form_data_for_each);
 }
 
-jerry_value_t make_form_data_constructor() {
+jerry_value_t make_form_data_constructor(JerryScriptRuntime& runtime) {
     JerryValue constructor(jerry_function_external(form_data_construct));
+    jerry_object_set_native_ptr(constructor.get(), &kRuntimeNativeInfo, &runtime);
     JerryValue prototype(jerry_object());
     install_form_data_members(prototype.get());
     set_property(constructor.get(), "prototype", prototype.get());
@@ -6021,7 +6051,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_method(global.get(), "btoa", script_btoa);
     set_method(global.get(), "atob", script_atob);
-    JerryValue form_data_constructor(make_form_data_constructor());
+    JerryValue form_data_constructor(make_form_data_constructor(*this));
     set_property(window_object.get(), "FormData", form_data_constructor.get());
     set_property(global.get(), "FormData", form_data_constructor.get());
     set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);

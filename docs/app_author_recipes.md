@@ -291,7 +291,9 @@ form.addEventListener("submit", function (event) {
 `form.checkValidity()` and `form.reportValidity()` return a boolean and dispatch
 non-bubbling `invalid` on each invalid control. There is no browser validation
 popup. `FormData` supports string entries with `append`, `set`, `delete`, `get`,
-`getAll` and `has`.
+`getAll`, `has` and `forEach`. `forEach` supplies `(value, name, formData)` in
+entry order; entries appended from its callback are deliberately deferred to the
+next call so one bounded app callback cannot grow the active iteration.
 
 ## Confirmation Dialog
 
