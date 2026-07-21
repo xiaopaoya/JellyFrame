@@ -1722,6 +1722,17 @@ class PackagePreflightTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             jellyframe_cli.filter_sample_roots(roots, None, ["jelly_controls,watch_weather,jelly_motion_lab"])
 
+    def test_official_trial_samples_are_a_stable_explicit_subset(self):
+        roots = [Path("samples/apps/packages") / name for name in (
+            "jelly_canvas_gauges",
+            "jelly_component_recipes",
+            "jelly_service_status",
+            "jelly_wearable_launcher",
+            "watch_weather",
+        )]
+        selected = jellyframe_cli.official_trial_sample_roots(roots)
+        self.assertEqual([root.name for root in selected], list(jellyframe_cli.OFFICIAL_TRIAL_SAMPLE_NAMES))
+
     def test_doctor_sample_artifacts_require_explicit_existing_mappings(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-doctor-artifacts-") as directory:
             runtime_log = Path(directory) / "weather.capture.log"

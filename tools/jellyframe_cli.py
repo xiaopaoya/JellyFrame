@@ -12,6 +12,14 @@ from pathlib import Path
 import app_registry
 
 
+OFFICIAL_TRIAL_SAMPLE_NAMES = (
+    "jelly_wearable_launcher",
+    "jelly_component_recipes",
+    "jelly_service_status",
+    "jelly_canvas_gauges",
+)
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
@@ -2907,6 +2915,11 @@ def filter_sample_roots(roots: list[Path],
     return selected
 
 
+
+def official_trial_sample_roots(roots: list[Path]) -> list[Path]:
+    return filter_sample_roots(roots, list(OFFICIAL_TRIAL_SAMPLE_NAMES), None)
+
+
 def parse_doctor_sample_artifacts(values: list[str] | None, option_name: str) -> dict[str, Path]:
     """Parse explicit SAMPLE=PATH mappings for optional measured doctor inputs."""
     artifacts: dict[str, Path] = {}
@@ -2996,9 +3009,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     roots = sample_package_roots(args.samples_dir)
     if not roots:
         raise SystemExit(f"no sample packages found in {args.samples_dir}")
-    roots = filter_sample_roots(roots,
-                                getattr(args, "sample", None),
-                                getattr(args, "exclude_sample", None))
+    trial = bool(getattr(args, "trial", False))
+    if trial and (getattr(args, "sample", None) or getattr(args, "exclude_sample", None)):
+        raise SystemExit("--trial cannot be combined with --sample or --exclude-sample")
+    roots = official_trial_sample_roots(roots) if trial else filter_sample_roots(
+        roots, getattr(args, "sample", None), getattr(args, "exclude_sample", None))
     runtime_logs = parse_doctor_sample_artifacts(getattr(args, "runtime_log", None), "--runtime-log")
     port_telemetry = parse_doctor_sample_artifacts(getattr(args, "port_telemetry", None), "--port-telemetry")
     selected_names = {root.name for root in roots}
@@ -3010,7 +3025,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     args.report_dir.mkdir(parents=True, exist_ok=True)
     print(
         "JellyFrame doctor: "
-        f"samples={len(roots)} targets={args.targets or '<default>'} "
+        f"mode={'external-trial' if trial else 'all-samples'} samples={len(roots)} "
+        f"targets={args.targets or '<default>'} "
         f"build_dir={args.build_dir}"
     )
     failed = 0
@@ -3036,7 +3052,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             command.extend(["--rasterize-svg", "--svg-raster-size", str(args.svg_raster_size)])
         if args.no_font_check:
             command.append("--no-font-check")
-        if args.strict:
+        if args.strict or trial:
             command.append("--strict")
         if root.name in runtime_logs:
             command.extend(["--runtime-log", str(runtime_logs[root.name])])
@@ -3396,6 +3412,8 @@ def main() -> int:
                         help="Only check named sample package(s). May be repeated or comma-separated.")
     doctor.add_argument("--exclude-sample", action="append",
                         help="Skip named sample package(s). May be repeated or comma-separated.")
+    doctor.add_argument("--trial", action="store_true",
+                        help="Strictly check the four official external-trial packages. Cannot be combined with --sample or --exclude-sample.")
     doctor.add_argument("--target", help="Primary target preset id passed to package diagnostics.")
     doctor.add_argument("--targets", default="round-300,rect-320x240,rect-172x320",
                         help="Comma-separated responsive target preset ids.")

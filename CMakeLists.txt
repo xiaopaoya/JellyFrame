@@ -462,6 +462,19 @@ if(JELLYFRAME_BUILD_TESTS)
                 PASS_REGULAR_EXPRESSION
                     "doctor summary: samples=[0-9]+ checked=[0-9]+ failed=0 diagnostics=[0-9]+/[0-9]+/[0-9]+")
 
+            add_test(
+                NAME jellyframe_cli_doctor_external_trial
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                        doctor
+                        --trial
+                        --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                        --report-dir ${CMAKE_BINARY_DIR}/test_outputs/external_trial
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_cli_doctor_external_trial PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "JellyFrame doctor: mode=external-trial samples=4")
+
             if(TARGET jellyframe_virtual_bench)
                 add_test(
                     NAME jellyframe_virtual_board_bench_smoke
