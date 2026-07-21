@@ -257,7 +257,7 @@ jellyframe::EmbeddedPackedRgb565Sink make_packed_rgb565_sink(Rgb565Panel& panel)
         jellyframe::EmbeddedPixelFormat::Rgb565,
         panel.packed_pixels,
         panel.packed_pixel_capacity,
-        false,
+        panel.ordered_dither,
         flush_packed_rgb565_rect,
         &panel,
     };

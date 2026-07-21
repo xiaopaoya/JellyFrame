@@ -52,6 +52,10 @@ struct Rgb565Panel {
     std::size_t scratch_pixel_capacity = 0;
     std::uint16_t* packed_pixels = nullptr;
     std::size_t packed_pixel_capacity = 0;
+    // Set by the UI policy when the retained layer tree contains a gradient.
+    // The conversion remains deterministic because the Bayer phase uses
+    // absolute framebuffer coordinates.
+    bool ordered_dither = false;
     std::uint32_t flush_count = 0;
     std::uint32_t packed_flush_count = 0;
     std::uint32_t packed_scroll_flush_count = 0;

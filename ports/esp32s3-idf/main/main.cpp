@@ -528,7 +528,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     LayoutEngine layout_engine(resolver, text_measure, layout_engine_options_from_budgets(budgets));
     MonotonicArena layout_arena;
     auto layout_tree = layout_engine.layout(*render_tree, width, layout_arena);
-    LayerTreeBuilder layer_tree_builder(layer_tree_options_from_budgets(budgets));
+    LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
+    layer_options.text_measure = text_measure;
+    LayerTreeBuilder layer_tree_builder(layer_options);
     MonotonicArena layer_arena;
     auto layer_tree = layer_tree_builder.build(*layout_tree, layer_arena);
 
@@ -821,6 +823,18 @@ extern "C" void app_main(void) {
         ESP_LOGE(tag, "failed to start Timer UI task");
     } else {
         ESP_LOGI(tag, "Timer UI task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
+    if (!jellyframe_esp32s3::start_band_shell_ui_task()) {
+        ESP_LOGE(tag, "failed to start Band System Shell UI task");
+    } else {
+        ESP_LOGI(tag, "Band System Shell UI task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK
+    if (!jellyframe_esp32s3::start_gradient_fastpath_ui_task()) {
+        ESP_LOGE(tag, "failed to start opaque linear-gradient fixture");
+    } else {
+        ESP_LOGI(tag, "opaque linear-gradient fixture started");
     }
 #elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
     if (!jellyframe_esp32s3::start_scroll_benchmark_task()) {

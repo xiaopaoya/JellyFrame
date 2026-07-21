@@ -1,6 +1,6 @@
 # JellyFrame ESP32-S3 ESP-IDF Port
 
-> Last updated: 2026-07-14; Applies to: 0.5.0-dev
+> Last updated: 2026-07-16; Applies to: 0.5.0-dev
 
 This directory is a first hardware bring-up path for ESP32-S3. It keeps the
 engine core platform-neutral and builds a small ESP-IDF app around the HAL
@@ -9,8 +9,9 @@ shape described in `docs/embedded_hal_api.md`.
 ## What Runs Now
 
 - Builds `src/render_core` as an ESP-IDF component named `jellyframe_render_core`.
-- Provides three mutually exclusive startup modes: the one-shot synthetic
-  benchmark, an interactive retained Timer UI task, and a deterministic
+- Provides five mutually exclusive startup modes: the one-shot synthetic
+  benchmark, an interactive retained Timer UI task, a static 172x320 Band
+  System Shell UI fixture, an opaque-gradient A/B fixture, and a deterministic
   retained-scroll workload.
 - Loads static HTML/CSS/classic-script resources through a bounded host
   resource bundle before the benchmark.
@@ -23,6 +24,14 @@ shape described in `docs/embedded_hal_api.md`.
   presentation.
 - Prints timing and heap watermarks over the serial monitor.
 - Provides a thin RGB565 panel flush hook in `main/jellyframe_esp32s3_hal.*`.
+- Enables deterministic RGB565 ordered dithering only for retained pages that
+  actually contain a CSS gradient. This removes the most visible 5:6:5 color
+  banding without changing RGBA rendering or adding conversion work to plain
+  pages. The port refreshes this policy after every layer-tree rebuild, including
+  paint-only updates. It can be disabled for panel A/B work or controllers with
+  hardware dithering. The bit-exact ordered-dither conversion fast path measured
+  28.385 ms/flush on the WS147 172x320 gradient fixture, down from 33.116 ms
+  before the quantization cleanup; panel transport remains board-specific.
 - Provides an optional Waveshare ESP32-S3-Touch-LCD-1.47 board adapter for the
   172x320 JD9853 LCD and AXS5106L touch controller. It is disabled by default
   and should be enabled only for physical-board bring-up. The adapter owns a
@@ -103,6 +112,57 @@ idf.py -B build-ws147-panel-a -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benc
 idf.py -B build-ws147-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults" build
 ```
 
+For visual and touch acceptance of the 172x320 Band System Shell fixture:
+
+```powershell
+idf.py -B build-ws147-band-shell `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_band_shell.defaults" build
+idf.py -B build-ws147-band-shell -p COMx flash monitor
+```
+
+The fixture is intentionally non-scripted. Its native adapter can only switch
+among the watch face, app grid, activity, weather, quick-settings and notices
+views. It is useful for panel/text/input acceptance, not evidence that the
+product shell, service permissions or app lifecycle are complete.
+
+After flashing, verify the initial `FLOW` view, then tap the two metric cards,
+weather card and the two bottom actions. From the app grid, tap Activity,
+Weather and Settings; each visible detail page has a Back control. Every route
+must repaint the full new view without a reset, corrupted rounded corners or
+stale text. The serial monitor should first contain `ui_task kind=band-shell`
+and later a `port_telemetry case=band_shell_ui_cumulative` line. Record the
+frame/present p95, internal/PSRAM low-water marks, board profile and any touch
+misroutes. The fixture deliberately uses ASCII because the default bring-up
+font is not a production CJK pack.
+
+When a shell route is slow, collect the accompanying
+`port_pipeline_telemetry` line as well. It separates input dispatch, frame
+planning, render-tree construction, layout, layer-tree construction, input
+controller binding and remaining active-frame work. It is port-local
+instrumentation: it allocates no buffers and does not change the Render Core
+or ordinary application behavior. Compare timings per rebuild, not the idle
+frame average. Each accepted native route also writes
+`band_shell route=<view> count=<n>`; the final transition count must match the
+manual or replay script. A test-only injected-input replay validates the path after the
+board adapter, but a manual run is still required to accept AXS5106L coordinate
+calibration and gesture discoverability.
+
+For an isolated opaque linear-gradient raster/present capture, build the fixed
+30 Hz fixture instead of the shell:
+
+```powershell
+idf.py -B build-ws147-gradient-fastpath `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_gradient_fastpath.defaults" build
+idf.py -B build-ws147-gradient-fastpath -p COMx flash monitor
+```
+
+It renders one full-screen square, opaque `linear-gradient()` and produces
+`port_telemetry case=opaque_linear_gradient_cumulative`. It intentionally has
+no text, input, animation, shell navigation or rounded/translucent paint, so it
+is suitable only for comparing an equivalent renderer revision or compile-time
+candidate. Keep the same dither policy for both runs and compare `compose`,
+`framebuffer_convert`, `present`, DMA and heap-watermark fields separately.
+
 The first file selects the scroll run mode and the WS147 hardware profile. The
 second only disables automatic scrolling and selects the full-list workload;
 do not combine either with `sdkconfig.ws147_bringup.defaults`, which selects the
@@ -136,7 +196,10 @@ rectangular and remains eligible for the A/B path.
 Useful `menuconfig` entries:
 
 - `JellyFrame ESP32-S3 benchmark -> Startup run mode`
+- `JellyFrame ESP32-S3 benchmark -> Start 172x320 Band System Shell UI task`
+- `JellyFrame ESP32-S3 benchmark -> Run opaque linear-gradient presentation fixture`
 - `JellyFrame ESP32-S3 benchmark -> UI task stack size`
+- `JellyFrame ESP32-S3 benchmark -> Dither RGB565 presentation for pages containing gradients`
 - `JellyFrame ESP32-S3 benchmark -> Scroll benchmark step in pixels`
 - `JellyFrame ESP32-S3 benchmark -> Retained scroll benchmark workload`
 - `JellyFrame ESP32-S3 benchmark -> Experimental WS147 physical-GRAM scroll A/B path`
@@ -335,6 +398,10 @@ The smoke-test bundle contains:
 - `/scripts/benchmark.js`
 - `/timer.html`
 - `/styles/timer.css`
+- `/band_shell.html`
+- `/styles/band_shell.css`
+- `/gradient_fastpath.html`
+- `/styles/gradient_fastpath.css`
 
 The loader resolves relative URLs against the host-provided base URL, rejects
 non-local URLs, enforces `HostBudgets::max_resource_bytes` on every load, and

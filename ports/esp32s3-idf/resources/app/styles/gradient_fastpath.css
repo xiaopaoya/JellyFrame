@@ -1,0 +1,9 @@
+html, body, .gradient-fixture {
+  margin: 0;
+  width: 172px;
+  height: 320px;
+}
+
+.gradient-fixture {
+  background: linear-gradient(180deg, #164757, #06161f);
+}

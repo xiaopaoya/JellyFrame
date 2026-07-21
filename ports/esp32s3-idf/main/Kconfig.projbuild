@@ -17,6 +17,22 @@ config JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK
         bundle, dispatches bounded board input events, updates the timer once
         per second and publishes port telemetry.
 
+config JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
+    bool "Start 172x320 Band System Shell UI task"
+    help
+        Starts a static, host-owned wearable system-shell fixture from
+        /band_shell.html. Board input changes among watch face, launcher,
+        activity, weather, quick settings and notification views without
+        enabling JerryScript. It is a visual and input bring-up fixture, not a
+        product launcher or permission implementation.
+
+config JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK
+    bool "Run opaque linear-gradient presentation fixture"
+    help
+        Starts a fixed 172x320 opaque linear-gradient workload at 30 Hz. It
+        exists only for board A/B evidence of the platform-neutral renderer
+        fast path. It has no input, script, animation or product-shell role.
+
 config JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
     bool "Run retained scroll benchmark"
     help
@@ -29,7 +45,7 @@ endchoice
 
 config JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE
     int "UI task stack size"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
     default 32768
     range 8192 65536
     help
@@ -38,15 +54,53 @@ config JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE
 
 config JELLYFRAME_ESP32S3_UI_TASK_PRIORITY
     int "UI task priority"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
     default 5
     range 1 24
 
 config JELLYFRAME_ESP32S3_UI_TASK_TICK_MS
     int "UI task idle tick delay in ms"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
     default 20
     range 1 1000
+
+config JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER
+    bool "Retain StyleResolver for the loaded UI document"
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    default y
+    help
+        Keeps the stylesheet index and bounded selector-candidate cache across
+        retained pipeline rebuilds. Disable only for real-device A/B: the port
+        then constructs an equivalent resolver for each rebuild and records
+        heap low-water at every rebuild stage, so transient and retained peak
+        memory are comparable. This setting is port-only.
+
+config JELLYFRAME_ESP32S3_STYLE_RESOLVER_CACHE_ENTRIES
+    int "Persistent StyleResolver candidate-cache entries"
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    default 32
+    range 0 128
+    help
+        Bounds the port-owned selector candidate cache retained for one loaded
+        UI document. The cache reduces repeated style matching during retained
+        pipeline rebuilds, but its entries consume internal heap. Keep this
+        deliberately small unless real-device telemetry demonstrates that a
+        larger value improves route latency without violating the board's
+        internal-RAM low-water target. This does not change Render Core's
+        default resolver policy or affect ports that do not create this UI task.
+        A value of zero disables retained candidate entries for A/B controls.
+
+config JELLYFRAME_ESP32S3_RGB565_GRADIENT_DITHER
+    bool "Dither RGB565 presentation for pages containing gradients"
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    default y
+    help
+        Uses the Render Core's deterministic 4x4 ordered RGB565 quantization
+        only when the retained layer tree contains a linear, radial or conic
+        gradient. It breaks up visible 16-bit color bands without changing
+        RGBA rendering or adding work to pages without gradients. Disable for
+        panel-specific A/B comparison or if a display controller already
+        applies its own dithering.
 
 config JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART
     bool "Start Timer UI in running state"

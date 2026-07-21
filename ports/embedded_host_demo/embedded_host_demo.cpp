@@ -124,7 +124,9 @@ Pipeline build_pipeline(BitmapFontContext& font_context, const HostBudgets& budg
                                TextMeasureProvider{bitmap_font_measure_callback, &font_context},
                                layout_engine_options_from_budgets(budgets));
     pipeline.layout_tree = layout_engine.layout(*pipeline.render_tree, kViewportWidth);
-    LayerTreeBuilder layer_tree_builder(layer_tree_options_from_budgets(budgets));
+    LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
+    layer_options.text_measure = TextMeasureProvider{bitmap_font_measure_callback, &font_context};
+    LayerTreeBuilder layer_tree_builder(layer_options);
     pipeline.layer_tree = layer_tree_builder.build(*pipeline.layout_tree);
     return pipeline;
 }
