@@ -14,6 +14,9 @@ JellyFrame Engine 的重要变更记录在这里。
   port 证据；完成后才进入以外部开发者试用为目标的 `0.6.0-dev`。该阶段不承诺完整浏览器兼容。
 - 统一 app 作者能力表与能力矩阵中 package-local CSS 背景图片的契约：单张图片可使用
   `cover`/`contain`/`100% 100%`、简单 position 和 `no-repeat`，但不支持多层、平铺和任意尺寸表达式。
+- 为官方 service-status 与 canvas-gauges target preset 声明了 `hostServices.audioPlayback` 和
+  `hostServices.canvas2d`。严格四包 external-trial doctor 现为 4/4 通过，且没有屏蔽真正的
+  unsupported-target diagnostic。
 
 ### 修复
 

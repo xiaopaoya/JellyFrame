@@ -18,6 +18,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   table and capability matrix: one image supports `cover`/`contain`/`100% 100%`,
   simple position and `no-repeat`, but not multiple layers, tiling or arbitrary
   size expressions.
+- Declared `hostServices.audioPlayback` and `hostServices.canvas2d` for the
+  official service-status and canvas-gauges target presets. The strict
+  four-package external-trial doctor check now reports 4/4 passing packages
+  without suppressing unsupported-target diagnostics.
 
 ### Fixed
 

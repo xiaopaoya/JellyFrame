@@ -35,6 +35,7 @@
         "shape": "round"
       },
       "fontProfile": "app-subset-cn",
+      "hostServices": {"canvas2d": true},
       "output": "jfapp",
       "gate": {
         "policy": "reject",
@@ -55,6 +56,7 @@
         "shape": "rect"
       },
       "fontProfile": "app-subset-cn",
+      "hostServices": {"canvas2d": true},
       "output": "jfapp",
       "gate": {
         "policy": "reject",
@@ -75,6 +77,7 @@
         "shape": "rect"
       },
       "fontProfile": "app-subset-cn",
+      "hostServices": {"canvas2d": true},
       "output": "jfapp",
       "gate": {
         "policy": "reject",

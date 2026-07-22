@@ -66,6 +66,7 @@
         "shape": "round"
       },
       "fontProfile": "tiny-plus-symbols",
+      "hostServices": {"audioPlayback": true},
       "output": "jfapp"
     },
     "rect-320x240": {
@@ -75,6 +76,7 @@
         "shape": "rect"
       },
       "fontProfile": "tiny-plus-symbols",
+      "hostServices": {"audioPlayback": true},
       "output": "jfapp"
     },
     "rect-172x320": {
@@ -84,6 +86,7 @@
         "shape": "rect"
       },
       "fontProfile": "tiny-plus-symbols",
+      "hostServices": {"audioPlayback": true},
       "output": "jfapp"
     }
   }
