@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import csv
+import hashlib
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -10,6 +12,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = REPO_ROOT / "tools" / "generate_css_support_table.py"
 IMPORTER = REPO_ROOT / "tools" / "import_css_support_crosswork.py"
+
+_generator_spec = importlib.util.spec_from_file_location("generate_css_support_table", GENERATOR)
+assert _generator_spec is not None and _generator_spec.loader is not None
+generate_css_support_table = importlib.util.module_from_spec(_generator_spec)
+_generator_spec.loader.exec_module(generate_css_support_table)
 
 
 class CssSupportTableTests(unittest.TestCase):
@@ -71,6 +78,13 @@ class CssSupportTableTests(unittest.TestCase):
     def test_checked_in_tables_match_csv(self):
         completed = subprocess.run([sys.executable, str(GENERATOR), "--check"], cwd=REPO_ROOT, check=False, capture_output=True, text=True)
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+
+    def test_source_hash_is_stable_across_checkout_line_endings(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-css-table-") as directory:
+            source = Path(directory) / "table.csv"
+            source.write_bytes(b"feature_id,kind\r\nfixture,property\r\n")
+            expected = hashlib.sha256(b"feature_id,kind\nfixture,property\n").hexdigest()
+            self.assertEqual(generate_css_support_table.source_sha256(source), expected)
 
     def test_importer_normalizes_internal_statuses(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-css-table-") as directory:

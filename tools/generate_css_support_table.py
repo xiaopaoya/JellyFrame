@@ -37,6 +37,13 @@ def read_rows(csv_path: Path) -> list[dict[str, str]]:
     return rows
 
 
+def source_sha256(csv_path: Path) -> str:
+    # Git may check this source out as CRLF on Windows. The generated table must
+    # describe logical CSV content, not checkout-specific line endings.
+    source = csv_path.read_text(encoding="utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+
 def markdown_cell(value: str) -> str:
     return " ".join(value.replace("|", "\\|").splitlines())
 
@@ -132,9 +139,9 @@ def main() -> int:
     except (OSError, ValueError) as error:
         print(f"support table generation failed: {error}", file=sys.stderr)
         return 2
-    source_sha256 = hashlib.sha256(args.csv.read_bytes()).hexdigest()
-    english = render_document(rows, args.csv.name, source_sha256, chinese=False)
-    chinese = render_document(rows, args.csv.name, source_sha256, chinese=True)
+    source_hash = source_sha256(args.csv)
+    english = render_document(rows, args.csv.name, source_hash, chinese=False)
+    chinese = render_document(rows, args.csv.name, source_hash, chinese=True)
     current = write_or_check(args.english, english, args.check)
     current = write_or_check(args.chinese, chinese, args.check) and current
     return 0 if current else 1
