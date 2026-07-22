@@ -1,6 +1,6 @@
 # CSSWG Support Table
 
-> Generated from: `csswg_support_table.csv`; source SHA-256: `70fb73298678152973b6b932b7b02ebf3a3c0bca14f1911c484bb0130eee332d`.
+> Generated from: `csswg_support_table.csv`; source SHA-256: `b2d7c72f4cee270492579c133551d37c37a8b38e8ddeda6b494dc49421b8e2a3`.
 > Do not edit this generated table by hand.
 > Source audit: 2026-07-22; Applies to: 0.5.0-dev.
 
