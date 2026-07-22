@@ -3079,6 +3079,257 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def trial_report_path(output_dir: Path) -> Path:
+    return output_dir / "external_trial.report.json"
+
+
+def write_trial_report(output_dir: Path, targets: list[str], steps: list[dict], status: str) -> None:
+    report = {
+        "format": "jellyframe.external_trial",
+        "formatVersion": 0,
+        "status": status,
+        "targets": targets,
+        "steps": steps,
+        "summary": {
+            "total": len(steps),
+            "passed": sum(1 for step in steps if step.get("passed")),
+            "failed": sum(1 for step in steps if not step.get("passed")),
+        },
+    }
+    write_json_report(trial_report_path(output_dir), report)
+
+
+def prepare_trial_output(output_dir: Path, clean: bool) -> None:
+    resolved_output = output_dir.resolve()
+    if resolved_output == repo_root().resolve():
+        raise SystemExit("trial output directory must not be the repository root")
+    if output_dir.exists() and not output_dir.is_dir():
+        raise SystemExit(f"trial output path is not a directory: {output_dir}")
+    if output_dir.exists() and any(output_dir.iterdir()):
+        if not clean:
+            raise SystemExit(f"trial output directory is not empty: {output_dir}; pass --clean to replace it")
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+
+def cmd_trial(args: argparse.Namespace) -> int:
+    """Run the reproducible desktop evidence flow used before external trials.
+
+    This intentionally remains a developer-tool orchestration command. It has no
+    runtime dependency and writes every generated bundle, preview and report under
+    an explicitly chosen clean directory.
+    """
+    targets = parse_targets_arg(args.targets)
+    if not targets:
+        raise SystemExit("trial requires at least one target preset")
+    if not sys.platform.startswith("win"):
+        raise SystemExit("trial requires a Windows build with jellyframe_win32_browser")
+    ensure_tool(tool_path(args.build_dir, "jellyframe_pseudo_browser"))
+    ensure_tool(tool_path(args.build_dir, "jellyframe_win32_browser"))
+    prepare_trial_output(args.output_dir, args.clean)
+
+    cli = Path(__file__).resolve()
+    output_dir = args.output_dir.resolve()
+    steps: list[dict] = []
+
+    def run_step(name: str, command: list[str], expect_success: bool, report: Path | None = None) -> bool:
+        result = run_command(command)
+        passed = (result == 0) == expect_success
+        step = {
+            "name": name,
+            "expected": "success" if expect_success else "rejection",
+            "exitCode": result,
+            "passed": passed,
+        }
+        if report is not None:
+            step["report"] = str(report.resolve().relative_to(output_dir))
+        steps.append(step)
+        print(f"trial step {name}: {'passed' if passed else 'failed'}")
+        return passed
+
+    def fail() -> int:
+        write_trial_report(output_dir, targets, steps, "failed")
+        return 1
+
+    doctor_reports = output_dir / "doctor"
+    if not run_step(
+            "official-trial-doctor",
+            [
+                sys.executable, str(cli), "doctor", "--trial", "--strict",
+                "--build-dir", str(args.build_dir), "--report-dir", str(doctor_reports),
+                "--targets", ",".join(targets),
+            ],
+            True):
+        return fail()
+
+    work_dir = output_dir / "work"
+    scaffold = work_dir / "weather"
+    if not run_step(
+            "template-create",
+            [
+                sys.executable, str(cli), "new", "--template", "weather", "--output", str(scaffold),
+                "--id", "org.jellyframe.trial.weather", "--name", "Trial Weather", "--target", targets[0],
+            ],
+            True):
+        return fail()
+    scaffold_report = output_dir / "template-weather.check.report.json"
+    if not run_step(
+            "template-check",
+            [
+                sys.executable, str(cli), "check", "--root", str(scaffold), "--target", targets[0],
+                "--report", str(scaffold_report), "--build-dir", str(args.build_dir), "--strict",
+            ],
+            True,
+            scaffold_report):
+        return fail()
+
+    showcase = repo_root() / "samples" / "apps" / "packages" / "jelly_component_recipes"
+    for target in targets:
+        check_report = output_dir / f"component-recipes.{target}.check.report.json"
+        if not run_step(
+                f"showcase-check-{target}",
+                [
+                    sys.executable, str(cli), "check", "--root", str(showcase), "--target", target,
+                    "--report", str(check_report), "--build-dir", str(args.build_dir), "--strict",
+                ],
+                True,
+                check_report):
+            return fail()
+        package_report = output_dir / f"component-recipes.{target}.package.report.json"
+        if not run_step(
+                f"showcase-package-{target}",
+                [
+                    sys.executable, str(cli), "package", "--root", str(showcase), "--target", target,
+                    "--report", str(package_report), "--output-bundle", str(output_dir / f"component-recipes.{target}.jfapp"),
+                    "--build-dir", str(args.build_dir), "--strict",
+                ],
+                True,
+                package_report):
+            return fail()
+        preview_report = output_dir / f"component-recipes.{target}.preview.report.json"
+        if not run_step(
+                f"showcase-preview-{target}",
+                [
+                    sys.executable, str(cli), "preview", "--root", str(showcase), "--target", target,
+                    "--report", str(preview_report), "--output", str(output_dir / f"component-recipes.{target}.ppm"),
+                    "--build-dir", str(args.build_dir), "--strict",
+                ],
+                True,
+                preview_report):
+            return fail()
+
+    rejected = work_dir / "canvas-missing-host-service"
+    shutil.copytree(repo_root() / "samples" / "apps" / "packages" / "jelly_canvas_gauges", rejected)
+    rejected_manifest_path = rejected / "jellyframe.app.json"
+    rejected_manifest = json.loads(rejected_manifest_path.read_text(encoding="utf-8-sig"))
+    rejected_target = rejected_manifest.get("targets", {}).get(targets[0], {})
+    if not isinstance(rejected_target, dict):
+        raise SystemExit(f"trial canvas fixture does not declare target: {targets[0]}")
+    rejected_target.pop("hostServices", None)
+    rejected_manifest_path.write_text(json.dumps(rejected_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    rejection_report = output_dir / "intentional-missing-host-service.report.json"
+    if not run_step(
+            "intentional-missing-host-service",
+            [
+                sys.executable, str(cli), "check", "--root", str(rejected), "--target", targets[0],
+                "--report", str(rejection_report), "--build-dir", str(args.build_dir), "--strict",
+            ],
+            False,
+            rejection_report):
+        return fail()
+    if not rejection_report.is_file():
+        return fail()
+    rejection_data = load_json_if_exists(rejection_report)
+    rejection_warnings = rejection_data.get("warnings", [])
+    if not isinstance(rejection_warnings, list) or not rejection_warnings:
+        steps.append({
+            "name": "intentional-missing-host-service-report",
+            "expected": "warning diagnostic",
+            "passed": False,
+        })
+        return fail()
+    steps.append({
+        "name": "intentional-missing-host-service-report",
+        "expected": "warning diagnostic",
+        "passed": True,
+    })
+
+    recovery_source = work_dir / "recovery-app"
+    shutil.copytree(showcase, recovery_source)
+    recovery_manifest_path = recovery_source / "jellyframe.app.json"
+    recovery_manifest = json.loads(recovery_manifest_path.read_text(encoding="utf-8-sig"))
+    recovery_id = "org.jellyframe.trial.recovery"
+    recovery_manifest["id"] = recovery_id
+    recovery_manifest["version"] = {"name": "1.0.0", "code": 1}
+    recovery_manifest_path.write_text(json.dumps(recovery_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    registry_store = output_dir / "registry"
+    install_v1_report = output_dir / "install-v1.report.json"
+    if not run_step(
+            "install-v1",
+            [
+                sys.executable, str(cli), "install", "--root", str(recovery_source), "--store", str(registry_store),
+                "--target", targets[0], "--report", str(install_v1_report), "--build-dir", str(args.build_dir), "--strict",
+            ],
+            True,
+            install_v1_report):
+        return fail()
+    recovery_manifest["version"] = {"name": "1.1.0", "code": 2}
+    recovery_manifest_path.write_text(json.dumps(recovery_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    install_v2_report = output_dir / "install-v2.report.json"
+    if not run_step(
+            "install-v2",
+            [
+                sys.executable, str(cli), "install", "--root", str(recovery_source), "--store", str(registry_store),
+                "--target", targets[0], "--report", str(install_v2_report), "--build-dir", str(args.build_dir), "--strict",
+            ],
+            True,
+            install_v2_report):
+        return fail()
+    if not run_step(
+            "rollback-v1",
+            [
+                sys.executable, str(cli), "registry", "rollback", "--store", str(registry_store), "--id", recovery_id,
+            ],
+            True):
+        return fail()
+    state_report = output_dir / "registry-state.report.json"
+    if not run_step(
+            "recovery-state",
+            [
+                sys.executable, str(cli), "registry", "state", "--store", str(registry_store), "--output", str(state_report),
+            ],
+            True,
+            state_report):
+        return fail()
+    state = load_json_if_exists(state_report)
+    apps = state.get("apps", [])
+    app = next((entry for entry in apps if isinstance(entry, dict) and entry.get("id") == recovery_id), {})
+    recovered = (
+        int(app.get("versionCode", 0) or 0) == 1
+        and bool(app.get("launchable"))
+        and bool(app.get("rollbackReady"))
+    )
+    steps.append({
+        "name": "recovery-state-contract",
+        "expected": "version 1 launchable with rollback retained",
+        "passed": recovered,
+    })
+    if not recovered:
+        return fail()
+    if not run_step(
+            "recovery-launch",
+            [
+                str(tool_path(args.build_dir, "jellyframe_win32_browser")), "--capture", str(output_dir / "recovery-launch.ppm"),
+                "--registry-store", str(registry_store), "--launch-app", recovery_id,
+            ],
+            True):
+        return fail()
+
+    write_trial_report(output_dir, targets, steps, "passed")
+    print(f"trial summary: passed={len(steps)} report={trial_report_path(output_dir)}")
+    return 0
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     selected_inputs = [bool(args.root), bool(args.bundle), bool(getattr(args, "candidate", None))]
     if sum(1 for selected in selected_inputs if selected) != 1:
@@ -3429,6 +3680,20 @@ def main() -> int:
     doctor.add_argument("--fail-fast", action="store_true",
                         help="Stop after the first failed sample.")
     doctor.set_defaults(func=cmd_doctor)
+
+    trial = subparsers.add_parser(
+        "trial",
+        help="Run the clean-directory external-trial evidence flow on Windows.",
+    )
+    trial.add_argument("--build-dir", default=default_build_dir(), type=Path,
+                       help="Directory containing built developer tools.")
+    trial.add_argument("--output-dir", required=True, type=Path,
+                       help="Empty directory for generated trial evidence.")
+    trial.add_argument("--clean", action="store_true",
+                       help="Delete a non-empty --output-dir before generating new evidence.")
+    trial.add_argument("--targets", default="round-300,rect-320x240,rect-172x320",
+                       help="Comma-separated target presets for showcase evidence.")
+    trial.set_defaults(func=cmd_trial)
 
     args = parser.parse_args()
     return args.func(args)

@@ -48,6 +48,14 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
 
+      - name: Upload external trial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-trial-evidence-windows-release
+          path: build/test_outputs/external_trial
+          if-no-files-found: warn
+
       - name: Configure Debug
         shell: pwsh
         run: >

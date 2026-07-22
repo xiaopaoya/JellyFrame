@@ -56,6 +56,10 @@ def tiny_png_header(width: int = 2, height: int = 2) -> bytes:
 
 
 class PackagePreflightTests(unittest.TestCase):
+    def test_trial_clean_refuses_repository_root(self):
+        with self.assertRaisesRegex(SystemExit, "must not be the repository root"):
+            jellyframe_cli.prepare_trial_output(REPO_ROOT, clean=True)
+
     def test_esp32s3_render_core_sources_match_desktop_target(self):
         desktop_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         esp_cmake = (REPO_ROOT / "ports" / "esp32s3-idf" / "components" /

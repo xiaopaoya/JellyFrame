@@ -36,6 +36,7 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 新增
 
+- 新增 `jellyframe_cli.py trial`，这是仅限 Windows 的干净目录发布证据流程。它将严格官方试用包检查、模板创建、三个 target 的 check/package/preview、一个故意缺失 host service 的拒绝，以及安装/更新/回滚后的 Win32 启动统一记录到 `external_trial.report.json`。Windows CI 会上传 Release artifact；该能力只属于桌面工具，不增加嵌入式 runtime 成本。
 - 新增有界 app 内路由片段：`location.hash`、`hashchange` 与 `onhashchange` 可在一个运行中的 app 内切换 tab/设置状态，不引入 history、URL 加载或浏览器导航；新增 `jelly_route_tabs` package 示例。
 - 新增打包期静态本地 ES-module authoring V0。一个外部 `type="module"` 入口可使用有界、无环的 package-local `.js` 图；打包器生成 classic bundle，并从最终 package resources 移除原 module。`preview` 现通过 Win32 验收同一 prepared package，`--debug-dir` 也包含可运行 manifest。动态/远程加载和 runtime module loader 仍不存在。
 - 新增 Form V0，本地嵌入式流程可使用 `form.checkValidity()`、

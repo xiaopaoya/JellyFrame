@@ -52,6 +52,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Added
 
+- Added `jellyframe_cli.py trial`, a Windows-only clean-directory release
+  evidence flow. It records strict official trial checks, template creation,
+  three-target check/package/preview evidence, an intentional missing-host
+  service rejection, and install/update/rollback followed by a Win32 launch in
+  one `external_trial.report.json`. The Windows CI uploads its Release artifact;
+  this is desktop tooling only and adds no embedded runtime cost.
 - Added bounded app-local route fragments: `location.hash`, `hashchange` and `onhashchange` now support tab/settings state within one running app, with no history, URL loading or browser navigation. Added the `jelly_route_tabs` package sample.
 - Added package-time static local ES-module authoring V0. One external `type="module"` entry can use a bounded acyclic package-local `.js` graph; the packager emits a classic bundle and removes module sources from final package resources. `preview` now validates that prepared package through Win32, and `--debug-dir` includes a runnable manifest. Dynamic/remote loading and a runtime module loader remain absent.
 - Added Form V0 for local embedded flows: `form.checkValidity()`,

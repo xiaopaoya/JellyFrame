@@ -1,6 +1,6 @@
 # Tools
 
-> Last updated: 2026-07-22; Applies to: 0.5.0-dev
+> Last updated: 2026-07-23; Applies to: 0.5.0-dev
 
 Desktop developer tools for packaging, validation and editor integration.
 
@@ -22,6 +22,7 @@ Useful developer entry points:
 
 ```powershell
 python tools\jellyframe_cli.py doctor --build-dir build\Release
+python tools\jellyframe_cli.py trial --build-dir build\Release --output-dir build\external_trial --clean
 python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --report build\watch_weather.report.json --build-dir build\Release
 python tools\jellyframe_cli.py preview --root samples\apps\packages\watch_weather --target round-300 --output build\watch_weather.bmp --build-dir build\Release
 python tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
@@ -32,6 +33,14 @@ complete sample package, runs the render-core preflight path over common
 wearable targets and leaves JSON reports under `build/doctor_reports`.
 Use `--sample name` or `--exclude-sample name` when you only want a focused
 subset; both options may be repeated or passed comma-separated names.
+
+`trial` is the reproducible Windows release-evidence flow, not an app-author
+command. It requires an explicitly empty output directory (or `--clean`) and
+writes a portable `external_trial.report.json` plus all generated reports,
+bundles and previews there. It verifies the strict official sample set, a
+template create/check loop, a three-target showcase, one intentional capability
+rejection, and install/update/rollback followed by a Win32 launch. It adds no
+runtime feature or embedded target cost.
 
 Use `--runtime-log` to merge Win32 frame-script/capture counters into a package
 report, and `--port-telemetry` to merge real board data such as frame time, DMA

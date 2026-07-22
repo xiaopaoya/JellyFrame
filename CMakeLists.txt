@@ -361,6 +361,19 @@ if(JELLYFRAME_BUILD_TESTS)
                         $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+            if(WIN32)
+                add_test(
+                    NAME jellyframe_cli_external_trial_evidence
+                    COMMAND ${Python3_EXECUTABLE}
+                            ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                            trial
+                            --build-dir $<TARGET_FILE_DIR:jellyframe_win32_browser>
+                            --output-dir ${CMAKE_BINARY_DIR}/test_outputs/external_trial
+                            --clean)
+                set_tests_properties(jellyframe_cli_external_trial_evidence PROPERTIES
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            endif()
+
             add_test(
                 NAME jellyframe_cli_check_audio_smoke_package
                 COMMAND ${Python3_EXECUTABLE}
