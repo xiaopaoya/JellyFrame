@@ -40,6 +40,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `app_service_policies_for_app(...)`. Packaged apps without a declared network,
   storage, audio or location capability no longer receive the debug service
   merely because the shell has a fixture for it.
+- Clipped text and image repaint temporary surfaces now share the compositor's
+  offscreen pixel budget. Text is skipped and images use a clipped placeholder
+  with `paint-transient-surface-budget` when that bounded allocation is refused.
+- The source-package loader now rejects resources that resolve outside the app
+  root, including symlinks, and rejects a symlinked manifest before parsing.
 
 ### Added
 

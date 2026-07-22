@@ -309,6 +309,32 @@ inline std::filesystem::path package_file_path(const std::filesystem::path& root
     return root / relative;
 }
 
+inline bool resolve_package_file_path(const std::filesystem::path& root,
+                                      std::string_view app_path,
+                                      std::filesystem::path& output) {
+    std::error_code error;
+    const std::filesystem::path canonical_root = std::filesystem::weakly_canonical(root, error);
+    if (error) {
+        return false;
+    }
+    const std::filesystem::path candidate = package_file_path(canonical_root, app_path);
+    const std::filesystem::path canonical_candidate = std::filesystem::weakly_canonical(candidate, error);
+    if (error) {
+        return false;
+    }
+    const std::filesystem::path relative = canonical_candidate.lexically_relative(canonical_root);
+    if (relative.empty()) {
+        return false;
+    }
+    for (const std::filesystem::path& component : relative) {
+        if (component == "..") {
+            return false;
+        }
+    }
+    output = canonical_candidate;
+    return true;
+}
+
 inline bool load_package_resource(std::string_view url,
                                   std::string_view base_url,
                                   std::string& output,
@@ -376,7 +402,18 @@ inline bool load_package_resource(std::string_view url,
                                       resolved);
         return false;
     }
-    output = read_text_file_limited(package_file_path(context->root, resolved), context->max_input_bytes);
+    std::filesystem::path resource_path;
+    if (!resolve_package_file_path(context->root, resolved, resource_path)) {
+        record_package_rejected(context);
+        jellyframe::report_diagnostic(context->diagnostics,
+                                      jellyframe::DiagnosticStage::Package,
+                                      jellyframe::DiagnosticSeverity::Warning,
+                                      "package-resource-rejected",
+                                      "Package resource resolved outside the app root",
+                                      resolved);
+        return false;
+    }
+    output = read_text_file_limited(resource_path, context->max_input_bytes);
     if (output.empty()) {
         record_package_missing(context);
         jellyframe::report_diagnostic(context->diagnostics,
@@ -947,6 +984,9 @@ inline AppPackage load_app_package(const std::filesystem::path& package_root, st
         return load_jfapp_bundle(root, max_input_bytes);
     }
     const std::filesystem::path manifest_path = root / "jellyframe.app.json";
+    if (std::filesystem::is_symlink(manifest_path)) {
+        throw std::runtime_error("jellyframe.app.json must not be a symlink");
+    }
     std::string manifest_text = read_text_file_limited(manifest_path, max_input_bytes);
     if (manifest_text.empty()) {
         throw std::runtime_error("failed to read jellyframe.app.json");

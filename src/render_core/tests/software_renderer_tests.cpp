@@ -835,6 +835,40 @@ void rasterizer_scratch_reuses_clipped_command_storage() {
           "scratch release returns temporary surface storage");
 }
 
+void rasterizer_bounds_clipped_temporary_surfaces() {
+    FrameBuffer frame_buffer(40, 10, Color{255, 255, 255, 255});
+    VectorDiagnosticSink diagnostics;
+    SoftwareRasterizer rasterizer(TextPainter{center_pixel_text_painter, nullptr},
+                                  &diagnostics,
+                                  SoftwareRasterizerOptions{16});
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{0, 0, 40, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.text = "center";
+    command.font_size = 10;
+    command.text_single_line = true;
+
+    rasterizer.rasterize(command, frame_buffer, Rect{20, 0, 5, 10});
+
+    check(frame_buffer.pixel(20, 5).r == 255, "oversized clipped text surface is skipped safely");
+    check(has_diagnostic_code(diagnostics, "paint-transient-surface-budget"),
+          "clipped temporary surface budget rejection is reported");
+
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 40, 10};
+    root.display_list.push_back(command);
+    SoftwareCompositor::Options compositor_options;
+    compositor_options.max_offscreen_pixels = 16;
+    compositor_options.diagnostics = &diagnostics;
+    SoftwareCompositor compositor(TextPainter{center_pixel_text_painter, nullptr}, compositor_options);
+    const Rect dirty{20, 0, 5, 10};
+    compositor.render_into(root, frame_buffer, Color{255, 255, 255, 255}, &dirty, 1);
+    check(frame_buffer.pixel(20, 5).r == 255,
+          "compositor propagates the temporary surface budget to clipped paint");
+}
+
 void compositor_scratch_reuses_clipped_command_storage() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1206,6 +1240,7 @@ int main() {
         rasterizer_reports_text_fallback();
         dirty_text_clip_preserves_original_text_geometry();
         rasterizer_scratch_reuses_clipped_command_storage();
+        rasterizer_bounds_clipped_temporary_surfaces();
         compositor_scratch_reuses_clipped_command_storage();
         rasterizer_scratch_reuses_clipped_image_storage();
         compositor_smooths_scaled_layers();

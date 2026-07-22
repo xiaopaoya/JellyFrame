@@ -170,6 +170,28 @@ def main() -> int:
         require(capture.is_file() and capture.stat().st_size > 54,
                 "background image capture must produce a bitmap")
 
+    with tempfile.TemporaryDirectory(prefix="jellyframe-package-resource-link-") as directory:
+        root = Path(directory)
+        app = root / "app"
+        outside = root / "outside.css"
+        capture = root / "capture.bmp"
+        shutil.copytree(Path("tools/templates/apps/weather"), app)
+        outside.write_text("body { background: #ff0000; }", encoding="utf-8")
+        linked = app / "styles" / "outside.css"
+        try:
+            linked.symlink_to(outside)
+        except OSError as error:
+            print(f"skipping source-package symlink check: {error}")
+        else:
+            (app / "index.html").write_text(
+                "<link rel='stylesheet' href='styles/outside.css'><body><main>safe</main></body>",
+                encoding="utf-8",
+            )
+            link_result = run_case(exe, ["--app", str(app), "--capture", str(capture)])
+            require(link_result.returncode == 0, "rejected source-package symlink must recover into a capture")
+            require("package-resource-rejected" in link_result.stdout,
+                    "source-package symlink must be rejected by the app loader")
+
     with tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-icon-") as directory:
         root = Path(directory)
         report = root / "report.json"

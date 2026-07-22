@@ -27,6 +27,9 @@ JellyFrame Engine 的重要变更记录在这里。
   回调中新建同类 wrapper 不会使 dispatcher 持有的容器 entry 失效。
 - Win32 验收壳现在通过 `app_service_policies_for_app(...)` 推导可选 script-service 绑定。未声明
   network、storage、audio 或 location capability 的 package 不会仅因桌面壳存在 debug fixture 而获得对应服务。
+- 裁剪 text/image repaint 的临时 surface 现在复用 compositor 的 offscreen pixel 预算。预算拒绝时 text 会跳过，
+  image 会以带裁剪的占位色和 `paint-transient-surface-budget` 降级。
+- source-package loader 现在拒绝解析到 app root 外的 resource，包括 symlink，并在解析前拒绝 symlink manifest。
 
 ### 新增
 

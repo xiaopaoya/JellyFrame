@@ -1233,13 +1233,32 @@ const Color& FrameBuffer::pixel(int x, int y) const {
     return pixels[index];
 }
 
-SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter, DiagnosticSink* diagnostics)
-    : SoftwareRasterizer(text_painter, {}, diagnostics) {}
+SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter,
+                                       DiagnosticSink* diagnostics,
+                                       SoftwareRasterizerOptions options)
+    : SoftwareRasterizer(text_painter, {}, diagnostics, options) {}
 
 SoftwareRasterizer::SoftwareRasterizer(TextPainter text_painter,
                                        ImagePainter image_painter,
-                                       DiagnosticSink* diagnostics)
-    : text_painter_(text_painter), image_painter_(image_painter), diagnostics_(diagnostics) {}
+                                       DiagnosticSink* diagnostics,
+                                       SoftwareRasterizerOptions options)
+    : text_painter_(text_painter), image_painter_(image_painter), diagnostics_(diagnostics), options_(options) {}
+
+bool SoftwareRasterizer::prepare_temporary_surface(FrameBuffer& surface, int width, int height) const {
+    std::size_t pixels = 0;
+    if (!checked_pixel_count(width, height, pixels) ||
+        (options_.max_temporary_pixels != 0 && pixels > options_.max_temporary_pixels)) {
+        report_diagnostic(diagnostics_,
+                          DiagnosticStage::Paint,
+                          DiagnosticSeverity::Warning,
+                          "paint-transient-surface-budget",
+                          "Clipped paint temporary surface exceeded budget; command was skipped",
+                          std::to_string(width) + "x" + std::to_string(height));
+        return false;
+    }
+    surface.resize(width, height, Color{0, 0, 0, 0});
+    return surface.width == width && surface.height == height && surface.pixels.size() == pixels;
+}
 
 void SoftwareRasterizer::rasterize(const DisplayList& display_list,
                                    FrameBuffer& target,
@@ -1378,7 +1397,9 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         }
         FrameBuffer local_buffer;
         FrameBuffer& text_buffer = scratch != nullptr ? scratch->temporary_surface : local_buffer;
-        text_buffer.resize(visible.width, visible.height, Color{0, 0, 0, 0});
+        if (!prepare_temporary_surface(text_buffer, visible.width, visible.height)) {
+            break;
+        }
         draw_text(text_buffer,
                   Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
                   command.color,
@@ -1413,7 +1434,10 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
             }
             FrameBuffer local_buffer;
             FrameBuffer& image_buffer = scratch != nullptr ? scratch->temporary_surface : local_buffer;
-            image_buffer.resize(visible.width, visible.height, Color{0, 0, 0, 0});
+            if (!prepare_temporary_surface(image_buffer, visible.width, visible.height)) {
+                fill_rect_clipped(target, rect, clip, Color{226, 232, 240, 255});
+                break;
+            }
             if (!image_painter_.paint(image_buffer,
                                       Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
                                       command.image_handle,
@@ -1466,7 +1490,10 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         }
         FrameBuffer local_buffer;
         FrameBuffer& image_buffer = scratch != nullptr ? scratch->temporary_surface : local_buffer;
-        image_buffer.resize(visible.width, visible.height, Color{0, 0, 0, 0});
+        if (!prepare_temporary_surface(image_buffer, visible.width, visible.height)) {
+            fill_rect_clipped(target, rect, clip, Color{226, 232, 240, 255});
+            break;
+        }
         if (!image_painter_.paint(image_buffer,
                                   Rect{rect.x - visible.x, rect.y - visible.y, rect.width, rect.height},
                                   command.image_handle,
@@ -1503,7 +1530,11 @@ SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter im
     : SoftwareCompositor(text_painter, image_painter, Options{}) {}
 
 SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter image_painter, Options options)
-    : rasterizer_(text_painter, image_painter, options.diagnostics), options_(options) {}
+    : rasterizer_(text_painter,
+                  image_painter,
+                  options.diagnostics,
+                  SoftwareRasterizerOptions{options.max_offscreen_pixels}),
+      options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,
                                        int viewport_width,

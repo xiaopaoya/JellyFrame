@@ -74,10 +74,20 @@ struct ImagePainter {
     void* context = nullptr;
 };
 
+struct SoftwareRasterizerOptions {
+    // Applies only to clipped text/image temporary surfaces. Zero is unlimited.
+    std::size_t max_temporary_pixels = 0;
+};
+
 class SoftwareRasterizer {
 public:
-    explicit SoftwareRasterizer(TextPainter text_painter = {}, DiagnosticSink* diagnostics = nullptr);
-    SoftwareRasterizer(TextPainter text_painter, ImagePainter image_painter, DiagnosticSink* diagnostics = nullptr);
+    explicit SoftwareRasterizer(TextPainter text_painter = {},
+                                DiagnosticSink* diagnostics = nullptr,
+                                SoftwareRasterizerOptions options = {});
+    SoftwareRasterizer(TextPainter text_painter,
+                       ImagePainter image_painter,
+                       DiagnosticSink* diagnostics = nullptr,
+                       SoftwareRasterizerOptions options = {});
 
     void rasterize(const DisplayList& display_list, FrameBuffer& target, Rect clip, int offset_x = 0, int offset_y = 0) const;
     void rasterize(const DisplayList& display_list,
@@ -97,6 +107,9 @@ private:
     TextPainter text_painter_;
     ImagePainter image_painter_;
     DiagnosticSink* diagnostics_ = nullptr;
+    SoftwareRasterizerOptions options_;
+
+    bool prepare_temporary_surface(FrameBuffer& surface, int width, int height) const;
 };
 
 class SoftwareCompositor {
