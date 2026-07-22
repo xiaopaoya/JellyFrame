@@ -10,6 +10,7 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 新增默认关闭的 `JELLYFRAME_ENABLE_SANITIZERS` CMake 开关，用于 Clang/GCC 的 AddressSanitizer 与 UndefinedBehaviorSanitizer 构建。CI 现会在 Linux 上以这两种 sanitizer 运行非 scripting 的核心/工具测试；该项不宣称已覆盖 scripting bridge 的 sanitizer。
 - 将当前开发线明确为 `0.5.0-dev` 收尾：`0.5` 的关闭条件是设备可用性、诊断、宿主契约和真实
   port 证据；完成后才进入以外部开发者试用为目标的 `0.6.0-dev`。该阶段不承诺完整浏览器兼容。
 - 统一 app 作者能力表与能力矩阵中 package-local CSS 背景图片的契约：单张图片可使用

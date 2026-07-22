@@ -10,6 +10,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Added the default-off `JELLYFRAME_ENABLE_SANITIZERS` CMake switch for
+  Clang/GCC AddressSanitizer plus UndefinedBehaviorSanitizer builds. CI now
+  runs the non-scripting core/tool suite on Linux with both sanitizers; this
+  does not claim scripting-bridge sanitizer coverage.
 - Clarified the current line as `0.5.0-dev` closeout: 0.5 closes device
   usability, diagnostics, host contracts and real-port evidence before the
   external-developer-trial `0.6.0-dev` stage. It does not promise broad browser

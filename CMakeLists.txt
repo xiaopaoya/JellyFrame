@@ -11,6 +11,17 @@ option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
 option(JELLYFRAME_ENABLE_IMAGE_FILE_IO "Expose desktop image file writers from render_core" ON)
+option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
+
+if(JELLYFRAME_ENABLE_SANITIZERS)
+    if(MSVC)
+        message(FATAL_ERROR
+            "JELLYFRAME_ENABLE_SANITIZERS requires a Clang/GCC-style toolchain; "
+            "use the dedicated MSVC AddressSanitizer build or configure with clang-cl.")
+    endif()
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 set(JERRYSCRIPT_ROOT "" CACHE PATH "JerryScript source or install root")
 set(JERRYSCRIPT_INCLUDE_DIR "" CACHE PATH "JerryScript include directory")

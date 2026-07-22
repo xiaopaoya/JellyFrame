@@ -12,6 +12,39 @@ permissions:
   contents: read
 
 jobs:
+  linux-sanitizers:
+    name: Linux ASan and UBSan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Configure sanitizer build
+        run: >
+          cmake -S . -B build-sanitizers -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DJELLYFRAME_BUILD_EXAMPLES=ON
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_SCRIPTING=OFF
+          -DJELLYFRAME_ENABLE_IMAGE_FILE_IO=OFF
+          -DJELLYFRAME_ENABLE_SANITIZERS=ON
+
+      - name: Build sanitizer targets
+        run: cmake --build build-sanitizers --parallel
+
+      - name: Run sanitizer CTest
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-sanitizers --output-on-failure
+
   windows:
     name: Windows build and smoke tests
     runs-on: windows-latest

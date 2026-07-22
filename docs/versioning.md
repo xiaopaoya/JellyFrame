@@ -23,7 +23,10 @@ MAJOR.MINOR.PATCH[-stage]
   `CHANGELOG_zh.md`.
 - Release CTest must stay meaningful: test binaries explicitly undefine
   `NDEBUG` and fail the build if `assert(...)` is disabled. CI also runs a
-  Debug CTest pass.
+  Debug CTest pass. Linux CI additionally runs non-scripting core/tool coverage
+  with AddressSanitizer and UndefinedBehaviorSanitizer; the optional
+  JerryScript bridge needs its own compatible sanitizer toolchain before its
+  sanitizer gate can be considered closed.
 - Public documentation is provided in English and Chinese. Chinese files use a
   `_zh` suffix.
 - Public Markdown documents carry a short freshness line near the top:
