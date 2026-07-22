@@ -62,6 +62,41 @@ def write_jfapp(
     path.write_bytes(bundle)
 
 
+def write_jfapp_with_invalid_resource_entry(path: Path) -> None:
+    summary = json.dumps({
+        "id": "org.example.weather",
+        "name": "Weather",
+        "versionName": "1.0.0",
+        "versionCode": 1,
+        "entry": "/index.html",
+        "script": "classic",
+    }, separators=(",", ":")).encode("utf-8")
+    summary_offset = app_registry.JFAPP_HEADER_SIZE
+    index_offset = summary_offset + len(summary)
+    strings_offset = index_offset + app_registry.JFAPP_ENTRY_SIZE
+    header = struct.pack(
+        app_registry.JFAPP_HEADER_FORMAT,
+        app_registry.JFAPP_MAGIC,
+        app_registry.JFAPP_HEADER_SIZE,
+        0,
+        0,
+        summary_offset,
+        len(summary),
+        index_offset,
+        1,
+        strings_offset,
+        0,
+        strings_offset,
+        0,
+        0,
+        0,
+    )
+    entry = struct.pack(app_registry.JFAPP_ENTRY_FORMAT, 0, 0, 1, 0, 0, 0, 0, 0)
+    bundle = bytearray(header + summary + entry)
+    struct.pack_into("<I", bundle, 48, zlib.crc32(bundle) & 0xffffffff)
+    path.write_bytes(bundle)
+
+
 def write_install_candidate(
     path: Path,
     bundle: Path,
@@ -119,6 +154,76 @@ def write_registry(store: Path, app_id: str = "org.example.weather") -> None:
 
 
 class AppRegistryTests(unittest.TestCase):
+    def test_install_rejects_invalid_resource_index_before_registry_mutation(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory) / "store"
+            bundle = Path(directory) / "invalid-resource-index.jfapp"
+            write_jfapp_with_invalid_resource_entry(bundle)
+
+            with self.assertRaisesRegex(SystemExit, "resource index entry 0 path"):
+                app_registry.install_bundle(
+                    store,
+                    bundle,
+                    app_registry.DEFAULT_MAX_APPS,
+                    app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+                )
+
+            self.assertFalse(app_registry.registry_path(store).exists())
+
+    def test_registry_rejects_bundle_path_escape_before_mutating_store(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory) / "store"
+            outside = Path(directory) / "outside.jfapp"
+            outside.write_bytes(b"must-not-delete")
+            write_registry(store)
+            registry = app_registry.load_registry(store)
+            registry["apps"][0]["bundleFile"] = "../outside.jfapp"
+            app_registry.atomic_write_json(app_registry.registry_path(store), registry)
+
+            with self.assertRaisesRegex(SystemExit, "bundle file"):
+                app_registry.remove_app(store, "org.example.weather")
+
+            self.assertEqual(outside.read_bytes(), b"must-not-delete")
+            self.assertEqual(len(json.loads(app_registry.registry_path(store).read_text(encoding="utf-8"))["apps"]), 1)
+
+    def test_registry_rejects_symlinked_bundle(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
+            store = Path(directory) / "store"
+            outside = Path(directory) / "outside.jfapp"
+            outside.write_bytes(b"must-not-read")
+            write_registry(store)
+            bundle = app_registry.bundles_dir(store) / "weather.jfapp"
+            bundle.unlink()
+            try:
+                bundle.symlink_to(outside)
+            except OSError as error:
+                self.skipTest(f"symlink unavailable: {error}")
+
+            with self.assertRaisesRegex(SystemExit, "must not be a symlink"):
+                app_registry.app_bundle_path(store, "org.example.weather")
+
+    def test_install_candidate_requires_valid_hash_and_accepts_uppercase_hash(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-candidate-") as directory:
+            root = Path(directory)
+            store = root / "store"
+            bundle = root / "weather.jfapp"
+            candidate = root / "candidate.json"
+            write_jfapp(bundle)
+
+            write_install_candidate(candidate, bundle, sha256="")
+            with self.assertRaisesRegex(SystemExit, "64-character hexadecimal"):
+                app_registry.validate_install_candidate(store, candidate, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+
+            write_install_candidate(candidate, bundle, sha256="not-a-hash")
+            with self.assertRaisesRegex(SystemExit, "64-character hexadecimal"):
+                app_registry.validate_install_candidate(store, candidate, app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+
+            write_install_candidate(candidate, bundle, sha256=hashlib.sha256(bundle.read_bytes()).hexdigest().upper())
+            _path, _bytes, info, _previous, _candidate = app_registry.validate_install_candidate(
+                store, candidate, app_registry.DEFAULT_MAX_BUNDLE_BYTES
+            )
+            self.assertEqual(info["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
+
     def test_remove_deletes_app_private_data_by_default(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
             store = Path(directory)

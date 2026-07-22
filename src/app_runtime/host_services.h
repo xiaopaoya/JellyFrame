@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace jellyframe {
@@ -90,15 +91,18 @@ public:
     std::size_t cancel_app_instance(std::uint32_t app_instance_id);
     void clear();
 
-    std::size_t size() const { return requests_.size(); }
-    std::size_t in_flight_size() const { return in_progress_.size(); }
+    std::size_t size() const;
+    std::size_t in_flight_size() const;
     std::size_t capacity() const { return capacity_; }
-    bool empty() const { return requests_.empty(); }
-    bool full() const { return requests_.size() + in_progress_.size() >= capacity_; }
+    bool empty() const;
+    bool full() const;
 
 private:
+    bool full_unlocked() const;
+
     std::size_t capacity_ = 0;
     std::uint32_t next_job_id_ = 1;
+    mutable std::mutex mutex_;
     std::vector<HostServiceRequest> requests_;
     std::vector<HostServiceRequest> in_progress_;
 };
@@ -112,13 +116,14 @@ public:
     std::size_t discard_app_instance(std::uint32_t app_instance_id);
     void clear();
 
-    std::size_t size() const { return size_; }
+    std::size_t size() const;
     std::size_t capacity() const { return capacity_; }
-    bool empty() const { return size_ == 0; }
-    bool full() const { return size_ >= capacity_; }
+    bool empty() const;
+    bool full() const;
 
 private:
     std::size_t capacity_ = 0;
+    mutable std::mutex mutex_;
     std::size_t head_ = 0;
     std::size_t size_ = 0;
     std::vector<HostServiceCompletion> completions_;

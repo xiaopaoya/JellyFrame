@@ -1,6 +1,8 @@
 #include "app_runtime/host_services.h"
 
 #include <cassert>
+#include <atomic>
+#include <thread>
 #include <vector>
 
 using namespace jellyframe;
@@ -145,6 +147,37 @@ void completion_queue_rejects_overflow() {
     HostServiceCompletionQueue queue(1);
     assert(queue.push(HostServiceCompletion{1, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
     assert(!queue.push(HostServiceCompletion{2, HostServiceJobKind::NetworkFetch, HostServiceStatus::Completed, 1}));
+}
+
+void request_queue_is_safe_for_submitter_and_worker_threads() {
+    HostServiceRequestQueue queue(64);
+    std::atomic<bool> submitting{true};
+    std::atomic<unsigned int> accepted{0};
+    std::atomic<unsigned int> completed{0};
+    std::thread submitter([&] {
+        for (unsigned int index = 0; index < 1000; ++index) {
+            const auto result = queue.submit(HostServiceJobKind::NetworkFetch, 1, 0, index % 4);
+            if (result.accepted) {
+                ++accepted;
+            }
+        }
+        submitting = false;
+    });
+    std::thread worker([&] {
+        HostServiceRequest request;
+        while (submitting || !queue.empty()) {
+            if (queue.pop_next(request)) {
+                assert(queue.finish(request.job_id));
+                ++completed;
+            }
+        }
+    });
+    submitter.join();
+    worker.join();
+
+    assert(accepted == completed);
+    assert(queue.empty());
+    assert(queue.in_flight_size() == 0);
 }
 
 void completion_queue_preserves_fifo_after_wraparound() {
@@ -293,6 +326,7 @@ int main() {
     request_queue_can_pop_specific_pending_job();
     completion_queue_drains_with_frame_budget();
     completion_queue_rejects_overflow();
+    request_queue_is_safe_for_submitter_and_worker_threads();
     completion_queue_preserves_fifo_after_wraparound();
     completion_queue_discard_preserves_order_after_wraparound();
     handle_table_rejects_stale_handles();

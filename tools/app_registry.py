@@ -14,6 +14,7 @@ from pathlib import Path
 JFAPP_MAGIC = b"JFAPPV0\0"
 JFAPP_HEADER_FORMAT = "<8sHHIIIIIIIIIII"
 JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
+JFAPP_ENTRY_FORMAT = "<IIHHIIII"
 JFAPP_ENTRY_SIZE = 28
 REGISTRY_FORMAT = "jellyframe.installed_apps.registry"
 REGISTRY_VERSION = 0
@@ -26,6 +27,7 @@ APP_STATUS_DISABLED = "disabled"
 APP_STATUS_FAILED = "failed"
 DEFAULT_MAX_APPS = 32
 DEFAULT_MAX_BUNDLE_BYTES = 4 * 1024 * 1024
+MAX_INSTALL_CANDIDATE_BYTES = 128 * 1024
 UPDATE_POLICY_REJECT_DOWNGRADE = "reject-downgrade"
 
 
@@ -62,15 +64,20 @@ def sanitize_filename(value: str) -> str:
     return cleaned or "app"
 
 
-def read_json(path: Path) -> dict:
+def read_json(path: Path, max_bytes: int | None = None) -> dict:
     try:
-        return json.loads(path.read_text(encoding="utf-8-sig"))
+        if max_bytes is not None and path.stat().st_size > max_bytes:
+            fail(f"JSON exceeds max bytes: {path}")
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         fail(f"invalid JSON {path}: {error}")
+    if not isinstance(value, dict):
+        fail(f"JSON root must be an object: {path}")
+    return value
 
 
 def load_install_candidate(path: Path) -> dict:
-    candidate = read_json(path)
+    candidate = read_json(path, MAX_INSTALL_CANDIDATE_BYTES)
     if candidate.get("format") != INSTALL_CANDIDATE_FORMAT:
         fail(f"install candidate format must be {INSTALL_CANDIDATE_FORMAT}: {path}")
     if int(candidate.get("formatVersion", -1)) != INSTALL_CANDIDATE_VERSION:
@@ -109,6 +116,15 @@ def load_registry(store: Path) -> dict:
     apps = registry.get("apps", [])
     if not isinstance(apps, list):
         fail(f"registry apps must be a list: {path}")
+    for index, entry in enumerate(apps):
+        if not isinstance(entry, dict):
+            fail(f"registry apps[{index}] must be an object: {path}")
+        bundle_path_in_store(store, entry.get("bundleFile"), f"registry apps[{index}]")
+        rollback = entry.get("rollback")
+        if rollback is not None:
+            if not isinstance(rollback, dict):
+                fail(f"registry apps[{index}].rollback must be an object: {path}")
+            bundle_path_in_store(store, rollback.get("bundleFile"), f"registry apps[{index}].rollback")
     registry["apps"] = apps
     return registry
 
@@ -174,6 +190,28 @@ def byte_range_is_valid(total: int, offset: int, size: int) -> bool:
     return 0 <= offset <= total and 0 <= size <= total - offset
 
 
+def bundle_path_in_store(store: Path, bundle_file: object, context: str, require_exists: bool = False) -> Path:
+    if not isinstance(bundle_file, str) or not bundle_file:
+        fail(f"{context} bundle file is required")
+    filename = Path(bundle_file)
+    if filename.name != bundle_file or filename.suffix != ".jfapp":
+        fail(f"{context} bundle file must be a .jfapp basename")
+
+    root = bundles_dir(store.resolve())
+    path = root / filename
+    root_resolved = root.resolve(strict=False)
+    path_resolved = path.resolve(strict=False)
+    try:
+        path_resolved.relative_to(root_resolved)
+    except ValueError:
+        fail(f"{context} bundle file escapes the bundle store")
+    if path.is_symlink():
+        fail(f"{context} bundle file must not be a symlink")
+    if require_exists and not path.is_file():
+        fail(f"{context} bundle is missing: {path}")
+    return path
+
+
 def parse_jfapp(bundle: bytes) -> dict:
     if len(bundle) < JFAPP_HEADER_SIZE:
         fail("bundle is too small to contain a .jfapp header")
@@ -213,6 +251,22 @@ def parse_jfapp(bundle: bytes) -> dict:
         actual_crc32 = zlib.crc32(crc_bytes) & 0xffffffff
         if actual_crc32 != expected_crc32:
             fail(f".jfapp checksum mismatch: {actual_crc32:08x} != {expected_crc32:08x}")
+    for index in range(resource_count):
+        entry_offset = index_offset + index * JFAPP_ENTRY_SIZE
+        (
+            _path_hash,
+            path_offset,
+            path_size,
+            _kind,
+            entry_payload_offset,
+            entry_payload_size,
+            _entry_crc32,
+            _flags,
+        ) = struct.unpack_from(JFAPP_ENTRY_FORMAT, bundle, entry_offset)
+        if not byte_range_is_valid(string_table_size, path_offset, path_size):
+            fail(f".jfapp resource index entry {index} path is out of range")
+        if not byte_range_is_valid(payload_size, entry_payload_offset, entry_payload_size):
+            fail(f".jfapp resource index entry {index} payload is out of range")
     summary_text = bundle[summary_offset:summary_offset + summary_size].decode("utf-8")
     try:
         summary = json.loads(summary_text)
@@ -342,7 +396,7 @@ def install_bundle(
         )
 
     final_name = bundle_filename(bundle_info["summary"], bundle_info["sha256"])
-    final_path = bundles_dir(store) / final_name
+    final_path = bundle_path_in_store(store, final_name, "generated")
     stage_path = staging_dir(store) / (final_name + ".staging")
     staging_dir(store).mkdir(parents=True, exist_ok=True)
     bundles_dir(store).mkdir(parents=True, exist_ok=True)
@@ -377,7 +431,7 @@ def install_bundle(
             stage_path.unlink()
 
     if old_entry is not None and obsolete_rollback_file:
-        obsolete_path = bundles_dir(store) / obsolete_rollback_file
+        obsolete_path = bundle_path_in_store(store, obsolete_rollback_file, "rollback")
         if obsolete_path.exists():
             obsolete_path.unlink()
     return entry
@@ -556,8 +610,10 @@ def validate_install_candidate(
     bundle_path = candidate["bundlePath"]
     bundle = read_bundle(bundle_path, max_bundle_bytes)
     bundle_info = parse_jfapp(bundle)
-    expected_sha256 = candidate.get("bundle", {}).get("sha256", "")
-    if expected_sha256 and expected_sha256 != bundle_info["sha256"]:
+    expected_sha256 = candidate.get("bundle", {}).get("sha256")
+    if not isinstance(expected_sha256, str) or re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256) is None:
+        fail("install candidate bundle.sha256 must be a 64-character hexadecimal SHA-256")
+    if expected_sha256.lower() != bundle_info["sha256"]:
         fail("bundle-hash-mismatch: install candidate bundle sha256 mismatch")
     signature_status = candidate_signature_status(candidate)
     if signature_status != "trusted" and not allow_untrusted:
@@ -596,15 +652,15 @@ def remove_app(store: Path, app_id: str, delete_data: bool = True) -> dict:
     registry["apps"] = [app for app in apps if app.get("id") != app_id]
     atomic_write_json(registry_path(store), sorted_registry(registry))
     bundle_file = entry.get("bundleFile")
-    if isinstance(bundle_file, str) and bundle_file:
-        path = bundles_dir(store) / bundle_file
+    if bundle_file:
+        path = bundle_path_in_store(store, bundle_file, "installed app")
         if path.exists():
             path.unlink()
     rollback = entry.get("rollback", {})
     if isinstance(rollback, dict):
         rollback_file = rollback.get("bundleFile")
-        if isinstance(rollback_file, str) and rollback_file and rollback_file != bundle_file:
-            rollback_path = bundles_dir(store) / rollback_file
+        if rollback_file and rollback_file != bundle_file:
+            rollback_path = bundle_path_in_store(store, rollback_file, "rollback")
             if rollback_path.exists():
                 rollback_path.unlink()
     entry["dataDeleted"] = delete_app_data(store, app_id) if delete_data else False
@@ -623,9 +679,7 @@ def rollback_app(store: Path, app_id: str) -> dict:
     if not isinstance(rollback, dict) or not rollback.get("bundleFile"):
         fail(f"app has no rollback bundle: {app_id}")
     rollback_file = rollback.get("bundleFile")
-    rollback_path = bundles_dir(store) / str(rollback_file)
-    if not rollback_path.is_file():
-        fail(f"rollback bundle is missing: {rollback_path}")
+    rollback_path = bundle_path_in_store(store, rollback_file, "rollback", require_exists=True)
     restored = apply_rollback_record(entry, rollback)
     apps[apps.index(entry)] = restored
     atomic_write_json(registry_path(store), sorted_registry(registry))
@@ -681,10 +735,7 @@ def app_bundle_path(store: Path, app_id: str) -> Path:
     bundle_file = app.get("bundleFile")
     if not isinstance(bundle_file, str) or not bundle_file:
         fail(f"installed app has no bundle file: {app_id}")
-    path = bundles_dir(store.resolve()) / bundle_file
-    if not path.is_file():
-        fail(f"installed app bundle is missing: {path}")
-    return path
+    return bundle_path_in_store(store, bundle_file, "installed app", require_exists=True)
 
 
 def cmd_install(args: argparse.Namespace) -> int:

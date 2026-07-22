@@ -445,6 +445,24 @@ void range_uses_min_max_step_attributes() {
     check(ensure_form_control_state(*range).value == "20", "range max/step applies to pointer input");
 }
 
+void range_extreme_attributes_use_bounded_integer_math() {
+    auto pipeline = build_form_pipeline(
+        "<body><input id='range' type='range' min='-2147483648' max='2147483647' step='1'></body>");
+    Node* range = find_by_id(*pipeline.document, "range");
+    const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "range");
+    check(range != nullptr && box != nullptr, "extreme range exists");
+    check(ensure_form_control_state(*range).value == "-1", "extreme range midpoint stays representable");
+
+    check(set_range_value_from_local_x(*range, box->rect.width, box->rect.width),
+          "extreme range endpoint changes value");
+    check(ensure_form_control_state(*range).value == "2147483647", "extreme range pointer value stays representable");
+
+    auto invalid = build_form_pipeline("<body><input id='range' type='range' min='2147483648' max='5'></body>");
+    Node* invalid_range = find_by_id(*invalid.document, "range");
+    check(invalid_range != nullptr && ensure_form_control_state(*invalid_range).min == 0,
+          "out-of-range integer attribute falls back safely");
+}
+
 void deep_form_control_helpers_are_iterative() {
     auto document = make_element("document");
     Node& body = document->append_child(make_element("body"));
@@ -849,6 +867,7 @@ int main() {
         summary_toggles_details_open_state();
         summary_click_prevent_default_blocks_details_toggle();
         range_uses_min_max_step_attributes();
+        range_extreme_attributes_use_bounded_integer_math();
         deep_form_control_helpers_are_iterative();
         select_arrow_keys_work_through_optgroups();
         disabled_control_ignores_pointer_and_text_input();

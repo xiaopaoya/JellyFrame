@@ -151,7 +151,6 @@ private:
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
     std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
-    std::vector<std::unique_ptr<ScriptCanvasGradient>> canvas_gradients_;
     std::vector<std::unique_ptr<ScriptDialogState>> dialog_states_;
     std::vector<ScriptNodeBinding*> node_bindings_;
     std::vector<ScriptNodeBinding*> layout_snapshot_bindings_;

@@ -67,8 +67,10 @@ inline bool framebuffer_size_fits_budget(int width, int height, const HostBudget
     if (width <= 0 || height <= 0) {
         return false;
     }
-    const auto pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
-    return pixels <= std::max<std::size_t>(1, budgets.max_framebuffer_pixels);
+    const std::size_t pixel_limit = std::max<std::size_t>(1, budgets.max_framebuffer_pixels);
+    const std::size_t w = static_cast<std::size_t>(width);
+    const std::size_t h = static_cast<std::size_t>(height);
+    return w <= pixel_limit / h;
 }
 
 inline SoftwareCompositor::Options software_compositor_options_from_budgets(const HostBudgets& budgets) {

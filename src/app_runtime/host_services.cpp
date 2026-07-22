@@ -28,7 +28,8 @@ HostServiceSubmitResult HostServiceRequestQueue::submit(HostServiceJobKind kind,
                                                         std::uint32_t request_handle,
                                                         std::uint8_t priority,
                                                         std::uint32_t timeout_ms) {
-    if (capacity_ == 0 || full()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (capacity_ == 0 || full_unlocked()) {
         return HostServiceSubmitResult{false, 0, HostServiceStatus::BudgetExceeded};
     }
     const std::uint32_t job_id = next_job_id_++;
@@ -40,6 +41,7 @@ HostServiceSubmitResult HostServiceRequestQueue::submit(HostServiceJobKind kind,
 }
 
 bool HostServiceRequestQueue::pop_next(HostServiceRequest& request) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (requests_.empty()) {
         return false;
     }
@@ -56,6 +58,7 @@ bool HostServiceRequestQueue::pop_next(HostServiceRequest& request) {
 }
 
 bool HostServiceRequestQueue::pop_next(HostServiceJobKind kind, HostServiceRequest& request) {
+    std::lock_guard<std::mutex> lock(mutex_);
     auto best = requests_.end();
     for (auto it = requests_.begin(); it != requests_.end(); ++it) {
         if (it->kind != kind) {
@@ -75,6 +78,7 @@ bool HostServiceRequestQueue::pop_next(HostServiceJobKind kind, HostServiceReque
 }
 
 bool HostServiceRequestQueue::pop_pending(std::uint32_t job_id, HostServiceRequest& request) {
+    std::lock_guard<std::mutex> lock(mutex_);
     const auto it = std::find_if(requests_.begin(), requests_.end(), [job_id](const HostServiceRequest& candidate) {
         return candidate.job_id == job_id;
     });
@@ -88,6 +92,7 @@ bool HostServiceRequestQueue::pop_pending(std::uint32_t job_id, HostServiceReque
 }
 
 bool HostServiceRequestQueue::cancel_pending(std::uint32_t job_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
     const auto it = std::find_if(requests_.begin(), requests_.end(), [job_id](const HostServiceRequest& request) {
         return request.job_id == job_id;
     });
@@ -99,6 +104,7 @@ bool HostServiceRequestQueue::cancel_pending(std::uint32_t job_id) {
 }
 
 bool HostServiceRequestQueue::finish(std::uint32_t job_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
     const auto it = std::find_if(in_progress_.begin(), in_progress_.end(), [job_id](const HostServiceRequest& request) {
         return request.job_id == job_id;
     });
@@ -110,6 +116,7 @@ bool HostServiceRequestQueue::finish(std::uint32_t job_id) {
 }
 
 std::size_t HostServiceRequestQueue::cancel_app_instance(std::uint32_t app_instance_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
     const auto old_size = requests_.size();
     requests_.erase(std::remove_if(requests_.begin(),
                                    requests_.end(),
@@ -128,8 +135,33 @@ std::size_t HostServiceRequestQueue::cancel_app_instance(std::uint32_t app_insta
 }
 
 void HostServiceRequestQueue::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
     requests_.clear();
     in_progress_.clear();
+}
+
+std::size_t HostServiceRequestQueue::size() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return requests_.size();
+}
+
+std::size_t HostServiceRequestQueue::in_flight_size() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return in_progress_.size();
+}
+
+bool HostServiceRequestQueue::empty() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return requests_.empty();
+}
+
+bool HostServiceRequestQueue::full() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return full_unlocked();
+}
+
+bool HostServiceRequestQueue::full_unlocked() const {
+    return requests_.size() + in_progress_.size() >= capacity_;
 }
 
 HostServiceCompletionQueue::HostServiceCompletionQueue(std::size_t capacity)
@@ -138,7 +170,8 @@ HostServiceCompletionQueue::HostServiceCompletionQueue(std::size_t capacity)
 }
 
 bool HostServiceCompletionQueue::push(const HostServiceCompletion& completion) {
-    if (capacity_ == 0 || full()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (capacity_ == 0 || size_ >= capacity_) {
         return false;
     }
     completions_[(head_ + size_) % capacity_] = completion;
@@ -147,6 +180,7 @@ bool HostServiceCompletionQueue::push(const HostServiceCompletion& completion) {
 }
 
 std::size_t HostServiceCompletionQueue::pop(std::size_t max_count, std::vector<HostServiceCompletion>& output) {
+    std::lock_guard<std::mutex> lock(mutex_);
     const std::size_t count = std::min(max_count, size_);
     output.reserve(output.size() + count);
     for (std::size_t i = 0; i < count; ++i) {
@@ -163,6 +197,7 @@ std::size_t HostServiceCompletionQueue::pop(std::size_t max_count, std::vector<H
 }
 
 std::size_t HostServiceCompletionQueue::discard_app_instance(std::uint32_t app_instance_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
     const std::size_t old_size = size_;
     std::size_t kept = 0;
     for (std::size_t i = 0; i < old_size; ++i) {
@@ -181,8 +216,24 @@ std::size_t HostServiceCompletionQueue::discard_app_instance(std::uint32_t app_i
 }
 
 void HostServiceCompletionQueue::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
     head_ = 0;
     size_ = 0;
+}
+
+std::size_t HostServiceCompletionQueue::size() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return size_;
+}
+
+bool HostServiceCompletionQueue::empty() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return size_ == 0;
+}
+
+bool HostServiceCompletionQueue::full() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return size_ >= capacity_;
 }
 
 HostHandleTable::HostHandleTable(std::size_t capacity, std::size_t byte_budget)

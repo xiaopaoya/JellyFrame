@@ -454,6 +454,10 @@ void free_script_form_data(void* native_p, jerry_object_native_info_t*) {
     delete static_cast<ScriptFormData*>(native_p);
 }
 
+void free_script_canvas_gradient(void* native_p, jerry_object_native_info_t*) {
+    delete static_cast<ScriptCanvasGradient*>(native_p);
+}
+
 void script_node_event_listener_removed(void* context) {
     auto* listener = static_cast<ScriptEventListener*>(context);
     if (listener == nullptr) {
@@ -470,7 +474,7 @@ const jerry_object_native_info_t kEventNativeInfo = {free_script_event_binding, 
 const jerry_object_native_info_t kXhrNativeInfo = {free_script_xhr, 0, 0};
 const jerry_object_native_info_t kLocalStorageNativeInfo = {free_script_local_storage_binding, 0, 0};
 const jerry_object_native_info_t kAudioNativeInfo = {free_script_audio, 0, 0};
-const jerry_object_native_info_t kCanvasGradientNativeInfo = {nullptr, 0, 0};
+const jerry_object_native_info_t kCanvasGradientNativeInfo = {free_script_canvas_gradient, 0, 0};
 const jerry_object_native_info_t kFormDataNativeInfo = {free_script_form_data, 0, 0};
 
 class JerryValue {
@@ -7092,15 +7096,12 @@ ScriptCanvasGradient* JerryScriptRuntime::create_canvas_gradient(std::uint32_t g
     if (gradient_id == 0) {
         return nullptr;
     }
-    auto gradient = std::make_unique<ScriptCanvasGradient>();
-    gradient->id = gradient_id;
-    ScriptCanvasGradient* raw = gradient.get();
-    canvas_gradients_.push_back(std::move(gradient));
-    return raw;
+    return new ScriptCanvasGradient{gradient_id};
 }
 
 void JerryScriptRuntime::clear_canvas_gradients() {
-    canvas_gradients_.clear();
+    // Gradient wrappers are owned by their JS objects. Canvas2DRegistry::clear()
+    // invalidates their IDs, while retained wrappers remain safe to collect later.
 }
 
 ScriptDialogState* JerryScriptRuntime::dialog_state_for(Node& node, bool create) {

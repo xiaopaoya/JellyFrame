@@ -2018,6 +2018,23 @@ void javascript_canvas_radial_gradient_uses_concentric_two_stop_subset() {
     check(unsupported.ok && unsupported.value == "null", "canvas radial gradient rejects non-concentric circles");
 }
 
+void javascript_retained_canvas_gradient_is_safe_after_canvas_clear() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><canvas id='canvas' width='8' height='8'></canvas></body>");
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(registry);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult created = runtime.eval(
+        "var ctx = document.getElementById('canvas').getContext('2d');"
+        "var retainedGradient = ctx.createLinearGradient(0, 0, 8, 0); 'ok';");
+    check(created.ok && created.value == "ok", "canvas gradient wrapper is created");
+
+    runtime.clear_canvas_2d();
+    const ScriptEvaluationResult reused = runtime.eval("retainedGradient.addColorStop(0, '#ffffff'); 'ok';");
+    check(reused.ok && reused.value == "ok", "retained gradient is safe after canvas clear");
+}
+
 void javascript_canvas_draw_image_copies_and_scales_canvas_source() {
     HtmlParser parser;
     auto document = parser.parse("<body><canvas id='src' width='4' height='4'></canvas><canvas id='dst' width='8' height='8'></canvas></body>");
@@ -2160,6 +2177,7 @@ int main() {
         javascript_canvas_translate_is_pixel_aligned_and_saved();
         javascript_canvas_reset_transform_clears_translation();
         javascript_canvas_radial_gradient_uses_concentric_two_stop_subset();
+        javascript_retained_canvas_gradient_is_safe_after_canvas_clear();
         javascript_canvas_draw_image_copies_and_scales_canvas_source();
         javascript_dialog_modal_subset_is_bounded_and_cancellable();
     } catch (const std::exception& error) {

@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cerrno>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -32,7 +34,8 @@ int parse_int_attribute(const Node& node, const std::string& name, int fallback)
     char* end = nullptr;
     errno = 0;
     const long parsed = std::strtol(value.c_str(), &end, 10);
-    if (end == value.c_str() || errno == ERANGE) {
+    if (end == value.c_str() || errno == ERANGE || parsed < std::numeric_limits<int>::min() ||
+        parsed > std::numeric_limits<int>::max()) {
         return fallback;
     }
     return static_cast<int>(parsed);
@@ -257,7 +260,8 @@ FormControlState make_initial_state(const Node& node) {
         }
         state.value = node.attribute("value");
         if (state.value.empty()) {
-            state.value = std::to_string(state.min + (state.max - state.min) / 2);
+            const std::int64_t span = static_cast<std::int64_t>(state.max) - state.min;
+            state.value = std::to_string(static_cast<std::int64_t>(state.min) + span / 2);
         }
         break;
     case FormControlKind::TextArea:
@@ -489,10 +493,13 @@ bool set_range_value_from_local_x(Node& node, int local_x, int width) {
     if (state.kind != FormControlKind::Range || width <= 0 || state.max <= state.min) {
         return false;
     }
-    const int clamped_x = std::max(0, std::min(local_x, width));
-    const int raw = state.min + ((state.max - state.min) * clamped_x + width / 2) / width;
-    const int stepped = state.min + ((raw - state.min + state.step / 2) / state.step) * state.step;
-    const int value = std::max(state.min, std::min(stepped, state.max));
+    const std::int64_t clamped_x = std::max(0, std::min(local_x, width));
+    const std::int64_t range = static_cast<std::int64_t>(state.max) - state.min;
+    const std::int64_t raw = static_cast<std::int64_t>(state.min) +
+        (range * clamped_x + width / 2) / width;
+    const std::int64_t stepped = static_cast<std::int64_t>(state.min) +
+        ((raw - state.min + state.step / 2) / state.step) * state.step;
+    const std::int64_t value = std::max<std::int64_t>(state.min, std::min<std::int64_t>(stepped, state.max));
     const std::string next = std::to_string(value);
     if (state.value == next) {
         return false;

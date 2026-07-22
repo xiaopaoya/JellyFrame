@@ -96,8 +96,13 @@ std::size_t AppRuntimeHost::clear_current_fonts() {
 }
 
 bool AppRuntimeHost::push_completion(const HostServiceCompletion& completion) {
+    // Keep the request charged until its completion has a guaranteed delivery slot.
+    // Workers can retry when this returns false instead of silently losing a result.
+    if (!completions_.push(completion)) {
+        return false;
+    }
     requests_.finish(completion.job_id);
-    return completions_.push(completion);
+    return true;
 }
 
 bool AppRuntimeHost::pop_worker_request(HostServiceRequest& request) {
