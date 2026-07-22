@@ -199,7 +199,7 @@ class AppRegistryTests(unittest.TestCase):
             except OSError as error:
                 self.skipTest(f"symlink unavailable: {error}")
 
-            with self.assertRaisesRegex(SystemExit, "must not be a symlink"):
+            with self.assertRaisesRegex(SystemExit, "bundle file (must not be a symlink|escapes the bundle store)"):
                 app_registry.app_bundle_path(store, "org.example.weather")
 
     def test_install_candidate_requires_valid_hash_and_accepts_uppercase_hash(self):
