@@ -76,6 +76,8 @@ struct JerryScriptRuntimeOptions {
     std::uint32_t max_execution_check_count = 0;
     std::uint32_t execution_check_interval = 16;
     std::size_t max_layout_snapshot_nodes = 32;
+    std::size_t max_form_data_entries = 32;
+    std::size_t max_form_data_bytes = 4096;
 };
 
 struct ScriptRuntimeStatistics {

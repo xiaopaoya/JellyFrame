@@ -135,6 +135,33 @@ void tokenizer_attribute_budget_consumes_extra_attributes_without_storing_them()
     check(token_at(tokens, 1, HtmlTokenType::EndTag).name == "div", "tokenizer still reaches end tag");
 }
 
+void tokenizer_byte_budgets_consume_oversized_names_and_values_without_storing_them() {
+    HtmlTokenizer tokenizer;
+    HtmlTokenizerOptions options;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+    options.max_tag_name_bytes = 3;
+    options.max_attribute_name_bytes = 2;
+    options.max_attribute_value_bytes = 3;
+
+    const auto tokens = tokenizer.tokenize("<section abcdef=123456 next=ok></section>", options);
+    const HtmlToken& start = token_at(tokens, 0, HtmlTokenType::StartTag);
+    check(start.name == "sec", "tokenizer truncates an oversized tag name");
+    check(start.attributes.size() == 2, "tokenizer continues after oversized attribute fields");
+    check(start.attributes[0].name == "ab" && start.attributes[0].value == "123",
+          "tokenizer truncates oversized attribute name and value");
+    check(start.attributes[1].name == "ne" && start.attributes[1].value == "ok",
+          "tokenizer resets byte budgets for the next attribute");
+    check(has_diagnostic_code(diagnostics, "html-tokenizer-tag-name-byte-limit"),
+          "tokenizer reports tag-name byte cap");
+    check(has_diagnostic_code(diagnostics, "html-tokenizer-attribute-name-byte-limit"),
+          "tokenizer reports attribute-name byte cap");
+    check(has_diagnostic_code(diagnostics, "html-tokenizer-attribute-value-byte-limit"),
+          "tokenizer reports attribute-value byte cap");
+    check(token_at(tokens, 1, HtmlTokenType::EndTag).name == "sec",
+          "tokenizer still reaches the matching end tag");
+}
+
 void parser_consumes_token_stream() {
     HtmlParser parser;
     auto document = parser.parse("<!doctype html><body><p>Hello &amp; welcome</p><br><p>again</p></body>");
@@ -255,6 +282,7 @@ int main() {
         decodes_common_named_and_numeric_references();
         keeps_first_duplicate_attribute();
         tokenizer_attribute_budget_consumes_extra_attributes_without_storing_them();
+        tokenizer_byte_budgets_consume_oversized_names_and_values_without_storing_them();
         parser_consumes_token_stream();
         parser_treats_non_void_self_closing_as_start_tag();
         parser_preserves_dom_text_whitespace();

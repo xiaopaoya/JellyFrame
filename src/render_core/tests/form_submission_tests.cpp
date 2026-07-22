@@ -81,6 +81,11 @@ void validation_and_form_data_follow_control_state() {
     const std::vector<FormDataEntry> submit_data = collect_form_data(*form, send);
     check(submit_data.size() == 6 && submit_data.back().name == "action" && submit_data.back().value == "save",
           "submitter name/value is appended after successful controls");
+
+    std::vector<FormDataEntry> limited_data;
+    check(!collect_form_data_limited(*form, limited_data, FormDataCollectionLimits{1, 64}),
+          "bounded FormData collection rejects excessive entries");
+    check(limited_data.empty(), "rejected bounded FormData collection leaves no partial entries");
 }
 
 void request_submit_is_cancellable_and_exposes_submitter() {

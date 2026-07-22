@@ -350,12 +350,65 @@ private:
         current_attribute_ = HtmlAttribute{};
         has_current_attribute_ = false;
         attribute_limit_reported_ = false;
+        tag_name_limit_reported_ = false;
+        attribute_name_limit_reported_ = false;
+        attribute_value_limit_reported_ = false;
     }
 
     void begin_attribute() {
         finish_attribute();
         current_attribute_ = HtmlAttribute{};
         has_current_attribute_ = true;
+        attribute_name_limit_reported_ = false;
+        attribute_value_limit_reported_ = false;
+    }
+
+    bool append_with_limit(std::string& destination,
+                           std::string_view value,
+                           std::size_t limit,
+                           bool& limit_reported,
+                           std::string_view code,
+                           std::string_view message,
+                           std::string_view detail) {
+        if (limit == 0 || destination.size() + value.size() <= limit) {
+            destination.append(value);
+            return true;
+        }
+        if (!limit_reported) {
+            report(DiagnosticSeverity::Warning, code, message, detail);
+            limit_reported = true;
+        }
+        return false;
+    }
+
+    void append_tag_name(std::string_view value) {
+        append_with_limit(current_token_.name,
+                          value,
+                          options_.max_tag_name_bytes,
+                          tag_name_limit_reported_,
+                          "html-tokenizer-tag-name-byte-limit",
+                          "HTML tag name exceeded its byte budget; remaining bytes were consumed and ignored",
+                          snippet_at(index_ > 0 ? index_ - 1 : 0));
+    }
+
+    void append_attribute_name(std::string_view value) {
+        append_with_limit(current_attribute_.name,
+                          value,
+                          options_.max_attribute_name_bytes,
+                          attribute_name_limit_reported_,
+                          "html-tokenizer-attribute-name-byte-limit",
+                          "HTML attribute name exceeded its byte budget; remaining bytes were consumed and ignored",
+                          current_token_.name);
+    }
+
+    void append_attribute_value(std::string_view value) {
+        append_with_limit(current_attribute_.value,
+                          value,
+                          options_.max_attribute_value_bytes,
+                          attribute_value_limit_reported_,
+                          "html-tokenizer-attribute-value-byte-limit",
+                          "HTML attribute value exceeded its byte budget; remaining bytes were consumed and ignored",
+                          current_attribute_.name);
     }
 
     void finish_attribute() {
@@ -619,9 +672,10 @@ private:
                    "html-null-character",
                    "Null character in tag name was replaced with U+FFFD",
                    current_token_.name);
-            current_token_.name += kReplacement;
+            append_tag_name(kReplacement);
         } else {
-            current_token_.name.push_back(ascii_lower(ch));
+            const char normalized = ascii_lower(ch);
+            append_tag_name(std::string_view(&normalized, 1));
         }
     }
 
@@ -684,7 +738,7 @@ private:
                    "html-null-character",
                    "Null character in attribute name was replaced with U+FFFD",
                    current_attribute_.name);
-            current_attribute_.name += kReplacement;
+            append_attribute_name(kReplacement);
         } else {
             if (ch == '<' || ch == '"' || ch == '\'') {
                 report(DiagnosticSeverity::Warning,
@@ -692,7 +746,8 @@ private:
                        "Suspicious character was included in an HTML attribute name",
                        current_attribute_.name + ch);
             }
-            current_attribute_.name.push_back(ascii_lower(ch));
+            const char normalized = ascii_lower(ch);
+            append_attribute_name(std::string_view(&normalized, 1));
         }
     }
 
@@ -778,15 +833,15 @@ private:
         if (ch == quote) {
             state_ = State::AfterAttributeValueQuoted;
         } else if (ch == '&') {
-            current_attribute_.value += consume_character_reference();
+            append_attribute_value(consume_character_reference());
         } else if (ch == '\0') {
             report(DiagnosticSeverity::Warning,
                    "html-null-character",
                    "Null character in attribute value was replaced with U+FFFD",
                    current_attribute_.name);
-            current_attribute_.value += kReplacement;
+            append_attribute_value(kReplacement);
         } else {
-            current_attribute_.value.push_back(ch);
+            append_attribute_value(std::string_view(&ch, 1));
         }
     }
 
@@ -803,7 +858,7 @@ private:
             finish_attribute();
             state_ = State::BeforeAttributeName;
         } else if (ch == '&') {
-            current_attribute_.value += consume_character_reference();
+            append_attribute_value(consume_character_reference());
         } else if (ch == '>') {
             finish_attribute();
             emit_current_token();
@@ -812,7 +867,7 @@ private:
                    "html-null-character",
                    "Null character in unquoted attribute value was replaced with U+FFFD",
                    current_attribute_.name);
-            current_attribute_.value += kReplacement;
+            append_attribute_value(kReplacement);
         } else {
             if (ch == '"' || ch == '\'' || ch == '<' || ch == '=' || ch == '`') {
                 report(DiagnosticSeverity::Warning,
@@ -820,7 +875,7 @@ private:
                        "Suspicious character was kept inside an unquoted attribute value",
                        current_attribute_.name + "=" + current_attribute_.value + ch);
             }
-            current_attribute_.value.push_back(ch);
+            append_attribute_value(std::string_view(&ch, 1));
         }
     }
 
@@ -1026,6 +1081,9 @@ private:
     HtmlAttribute current_attribute_;
     bool has_current_attribute_ = false;
     bool attribute_limit_reported_ = false;
+    bool tag_name_limit_reported_ = false;
+    bool attribute_name_limit_reported_ = false;
+    bool attribute_value_limit_reported_ = false;
     std::string raw_text_end_tag_;
 };
 

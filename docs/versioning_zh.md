@@ -1,6 +1,6 @@
 # 版本规则
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-23；适用版本：0.5.0-dev
 
 JellyFrame Engine 使用轻量语义化版本规则：
 
@@ -36,3 +36,7 @@ MAJOR.MINOR.PATCH[-stage]
   responsive target report、有界动画、宿主服务策略、font-family 选择和 Win32 验证工具。
 - `0.5.x`：设备可用性阶段，包括 storage lifecycle 接入、retained rendering 分片、
   产品级 image codec adapter、system shell recovery 和更多实机验证。
+- `0.6.x`：外部开发者试用阶段。只有完成 0.5 的设备可用性、诊断与宿主契约关闭条件后才进入；
+  重点是试用反馈、分发语义和目标设备证据，不表示转向完整浏览器兼容。
+- `0.7.x` 至 `1.0`：公开契约冻结阶段。manifest、capability、target gate、诊断码和
+  host-service 错误语义在此期间只允许兼容性修复或有明确迁移路径的变更。

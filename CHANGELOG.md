@@ -1,12 +1,45 @@
 # Changelog
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-23; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
 The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ## Unreleased
+
+### Changed
+
+- Clarified the current line as `0.5.0-dev` closeout: 0.5 closes device
+  usability, diagnostics, host contracts and real-port evidence before the
+  external-developer-trial `0.6.0-dev` stage. It does not promise broad browser
+  compatibility.
+- Unified the package-local CSS background-image contract across the app-author
+  table and capability matrix: one image supports `cover`/`contain`/`100% 100%`,
+  simple position and `no-repeat`, but not multiple layers, tiling or arbitrary
+  size expressions.
+
+### Fixed
+
+- HTML tokenizer tag-name, attribute-name and attribute-value byte limits now
+  apply before DOM construction. Excess bytes are consumed with stable
+  diagnostics instead of allowing token strings to keep growing; the existing
+  per-tag attribute-count cap remains in place.
+- `FormData` now applies independent entry and byte budgets during core form
+  collection and JavaScript `append()`/`set()`. The default is 32 entries /
+  4096 bytes; an overflow throws `RangeError`, and an oversized form leaves no
+  partial entries behind.
+- Location completions now detach their runtime request record and release the
+  snapshot handle before entering a JavaScript success/error callback. A
+  callback may safely start another location request, rebind a document or
+  clear services without dereferencing the completed record.
+- XHR completion and `Audio` event dispatch now resolve separately owned runtime
+  records before entering JavaScript, so callback-created wrappers cannot
+  invalidate a container entry held by the dispatcher.
+- The Win32 validation shell now derives optional script-service bindings from
+  `app_service_policies_for_app(...)`. Packaged apps without a declared network,
+  storage, audio or location capability no longer receive the debug service
+  merely because the shell has a fixture for it.
 
 ### Added
 

@@ -41,6 +41,11 @@ struct FormDataEntry {
     std::string value;
 };
 
+struct FormDataCollectionLimits {
+    std::size_t max_entries = 0;
+    std::size_t max_bytes = 0;
+};
+
 class SubmitEvent final : public Event {
 public:
     explicit SubmitEvent(const Node* submitter = nullptr);
@@ -70,6 +75,10 @@ bool set_form_control_custom_validity(Node& node, std::string message);
 FormValidationResult validate_form(const Node& form);
 bool check_form_validity(Node& form);
 std::vector<FormDataEntry> collect_form_data(const Node& form, const Node* submitter = nullptr);
+bool collect_form_data_limited(const Node& form,
+                               std::vector<FormDataEntry>& entries,
+                               FormDataCollectionLimits limits,
+                               const Node* submitter = nullptr);
 FormSubmitResult request_form_submit(Node& form, const Node* submitter = nullptr);
 FormSubmitResult request_form_submit_from_control(Node& control);
 bool reset_form(Node& form);

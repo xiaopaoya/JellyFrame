@@ -1,6 +1,6 @@
 # App 作者能力速查表
 
-> 最后更新：2026-07-22；适用版本：0.5.0-dev
+> 最后更新：2026-07-23；适用版本：0.5.0-dev
 
 这份表给 app 作者快速判断“能不能用”。完整边界仍以
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md) 为准。
@@ -13,7 +13,7 @@
 | 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont` 补充含。 |
 | 表单控件 | Form V0 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。`required`、文本 `minlength`/`maxlength`、checkbox/radio 必填状态和 required select 可配合本地 `submit` 使用；不提供浏览器校验弹窗或页面导航。 |
 | 确认对话框 | 有界 modal 子集 | 使用一个 `<dialog>` 配合 `showModal()` 和 `close(returnValue)`。Win32 壳会把 Escape 转为可取消的 `cancel`，再触发 `close`；打开期间 focus/hit test 限制在 dialog 内。不支持嵌套 dialog、backdrop/light-dismiss、`show()`、`requestClose()` 或浏览器 top layer。 |
-| 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">` 或一个 CSS `background-image: url("/assets/image.bmp")`。静态图标 SVG 可通过 `package --rasterize-svg` 在打包期编译成 BMP，生成包中的 HTML/CSS 引用会自动改写。`border-radius` 会以抗锯齿角裁切这两类图片。CSS 背景会填充元素并保留 `background-color` fallback；不支持远程/data URL、repeat、position、size。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
+| 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">` 或一个 CSS `background-image: url("/assets/image.bmp")`。静态图标 SVG 可通过 `package --rasterize-svg` 在打包期编译成 BMP，生成包中的 HTML/CSS 引用会自动改写。`border-radius` 会以抗锯齿角裁切这两类图片。单张 CSS 背景保留 `background-color` fallback，并支持 `background-size: cover`/`contain`/`100% 100%`、简单 `background-position` 与 `background-repeat: no-repeat`；不支持远程/data URL、多图层或平铺。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
 | 浏览器图片/媒体标签 | 延后 | 不依赖 `picture`/`source`/`srcset`、`<video>`、`<track>` 或 `<audio>` markup。由 app state 选择一张包内图片；只有声明对应 capability 时才使用 `Audio()` V0 或 host frame-provider contract。 |
 | 表格、ruby 与 template | 延后 | 没有浏览器表格测量、ruby/bidi layout 或分离的 `template.content` 语义。使用文档化 flex/grid 子集、本地化 plain text 和显式 DOM 创建。 |
 | 富文本编辑 | 延后 | 不提供 `contenteditable`、Selection、Range。使用有界 `input`/`textarea`，或产品自有的系统编辑器。 |
@@ -44,7 +44,7 @@
 | DOM 查询/修改 | 子集 | 无需额外 capability。使用 `document.head`、`document.body`、`document.readyState`、`document.defaultView`、`document.hasFocus()`、简单 selector 的 `querySelector`、`createElement`、`appendChild`、`append`、`prepend`、`textContent`、轻量 `innerText`、`id`、`className`、常用表单控件 IDL 属性和小型 `classList` helper。 |
 | 元素几何 | frame snapshot 子集 | `element.getBoundingClientRect()` 返回上一个完成的宿主 layout frame 的只读数值 client-relative 矩形。它不强制 layout、不保留 live DOMRect，也不包含 transform/nested-scroll 后的几何。 |
 | 事件 | 可用 | 使用 `addEventListener`、文档化的 `on*` handler property、`element.click()`、事件委托、可读写的有界 `dataset` 子集和 `matches`/`closest`。不支持 HTML inline event attribute。 |
-| 本地表单 / `FormData` | Form V0 子集 | 使用 `form.checkValidity()`、`reportValidity()`、`requestSubmit([submitter])`、可取消的 `submit` 事件及 `event.submitter`，以及 `new FormData(form)`。字符串 entry 支持 `append`、`set`、`delete`、`get`、`getAll`、`has` 和 `forEach`；后者在有界快照上运行，不是 live iterator。在事件处理器中通过已获准的宿主服务提交数据。 |
+| 本地表单 / `FormData` | Form V0 子集 | 使用 `form.checkValidity()`、`reportValidity()`、`requestSubmit([submitter])`、可取消的 `submit` 事件及 `event.submitter`，以及 `new FormData(form)`。字符串 entry 支持 `append`、`set`、`delete`、`get`、`getAll`、`has` 和 `forEach`；后者在有界快照上运行，不是 live iterator。每个对象默认最多 32 entries / 4096 bytes，超限抛出 `RangeError`。在事件处理器中通过已获准的宿主服务提交数据。 |
 | `HTMLDialogElement` | 有界 modal 子集 | scripting 构建支持 `dialog.open`、`returnValue`、`showModal()` 和 `close([returnValue])`。使用 `cancel`/`close` listener；每个 document 同时只能有一个 modal，宿主 back/Escape policy 可请求取消。 |
 | 时间 / Timer / rAF | 有界 | `Date.now()` 读取宿主注入时间；timer/rAF 无需额外 capability，但受 frame policy 和预算限制。 |
 | `XMLHttpRequest` GET | 宿主可选 | `network.fetch`。只用于运行时数据，不加载页面资源。 |

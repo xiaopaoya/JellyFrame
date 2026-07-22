@@ -1,6 +1,6 @@
 # Versioning
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-23; Applies to: 0.5.0-dev
 
 JellyFrame Engine uses a lightweight semantic versioning scheme:
 
@@ -47,3 +47,10 @@ MAJOR.MINOR.PATCH[-stage]
 - `0.5.x`: device-usability work: storage lifecycle integration, retained
   rendering slices, production image codec adapters, system shell recovery and
   broader real-device validation.
+- `0.6.x`: external developer trial. It starts only after 0.5 closes its
+  device-usability, diagnostic and host-contract gates; its focus is trial
+  feedback, distribution semantics and target-device evidence, not broad
+  browser compatibility.
+- `0.7.x` through `1.0`: public-contract freeze. Manifest, capability, target
+  gate, diagnostic-code and host-service error semantics may change only with
+  compatibility or an explicit migration path.

@@ -103,6 +103,8 @@ struct ScriptDialogState {
 struct ScriptFormData {
     JerryScriptRuntime* runtime = nullptr;
     std::vector<FormDataEntry> entries;
+    std::size_t max_entries = 0;
+    std::size_t max_bytes = 0;
 };
 
 struct ScriptNodeBinding {
@@ -230,6 +232,14 @@ struct ScriptRuntimeAccess {
                                                        return request->active;
                                                    }));
         return active_requests < runtime.options_.max_geolocation_requests;
+    }
+
+    static std::size_t max_form_data_entries(const JerryScriptRuntime& runtime) {
+        return runtime.options_.max_form_data_entries;
+    }
+
+    static std::size_t max_form_data_bytes(const JerryScriptRuntime& runtime) {
+        return runtime.options_.max_form_data_bytes;
     }
 
     static AppRuntimeHost* app_host(JerryScriptRuntime& runtime) {
@@ -1231,6 +1241,86 @@ bool is_ancestor_of(const Node& possible_ancestor, const Node& node) {
 
 jerry_value_t throw_type_error(const char* message) {
     return jerry_throw_sz(JERRY_ERROR_TYPE, message);
+}
+
+bool form_data_entry_fits(std::size_t entry_count,
+                          std::size_t byte_count,
+                          std::string_view name,
+                          std::string_view value,
+                          std::size_t max_entries,
+                          std::size_t max_bytes) {
+    if (max_entries != 0 && entry_count >= max_entries) {
+        return false;
+    }
+    if (max_bytes == 0) {
+        return true;
+    }
+    if (byte_count > max_bytes || name.size() > max_bytes - byte_count) {
+        return false;
+    }
+    const std::size_t after_name = byte_count + name.size();
+    return value.size() <= max_bytes - after_name;
+}
+
+std::size_t form_data_byte_count(const std::vector<FormDataEntry>& entries) {
+    std::size_t bytes = 0;
+    for (const FormDataEntry& entry : entries) {
+        bytes += entry.name.size() + entry.value.size();
+    }
+    return bytes;
+}
+
+bool form_data_entries_fit(const std::vector<FormDataEntry>& entries,
+                           std::size_t max_entries,
+                           std::size_t max_bytes) {
+    std::size_t byte_count = 0;
+    std::size_t entry_count = 0;
+    for (const FormDataEntry& entry : entries) {
+        if (!form_data_entry_fits(entry_count, byte_count, entry.name, entry.value, max_entries, max_bytes)) {
+            return false;
+        }
+        byte_count += entry.name.size() + entry.value.size();
+        ++entry_count;
+    }
+    return true;
+}
+
+bool form_data_set_fits(const ScriptFormData& data,
+                        std::string_view name,
+                        std::string_view value) {
+    std::size_t byte_count = 0;
+    std::size_t entry_count = 0;
+    bool replaced = false;
+    for (const FormDataEntry& entry : data.entries) {
+        if (entry.name == name) {
+            if (replaced) {
+                continue;
+            }
+            replaced = true;
+            if (!form_data_entry_fits(entry_count, byte_count, name, value, data.max_entries, data.max_bytes)) {
+                return false;
+            }
+            byte_count += name.size() + value.size();
+            ++entry_count;
+            continue;
+        }
+        if (!form_data_entry_fits(entry_count,
+                                  byte_count,
+                                  entry.name,
+                                  entry.value,
+                                  data.max_entries,
+                                  data.max_bytes)) {
+            return false;
+        }
+        byte_count += entry.name.size() + entry.value.size();
+        ++entry_count;
+    }
+    return replaced || form_data_entry_fits(entry_count,
+                                             byte_count,
+                                             name,
+                                             value,
+                                             data.max_entries,
+                                             data.max_bytes);
 }
 
 ScriptEventBinding* native_event_binding(const jerry_value_t object) {
@@ -3573,17 +3663,34 @@ jerry_value_t form_data_construct(const jerry_call_info_t* call_info_p,
     if (jerry_value_is_undefined(call_info_p->new_target) || !jerry_value_is_object(call_info_p->this_value)) {
         return throw_type_error("FormData must be constructed with new");
     }
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->function);
+    if (runtime == nullptr) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "FormData budget exceeded");
+    }
     std::vector<FormDataEntry> entries;
     if (args_count > 0) {
         Node* form = native_node(args_p[0]);
         if (form == nullptr || form->type != NodeType::Element || form->tag_name != "form") {
             return throw_type_error("FormData constructor requires a form element");
         }
-        entries = collect_form_data(*form);
+        if (!collect_form_data_limited(*form,
+                                       entries,
+                                       FormDataCollectionLimits{
+                                           ScriptRuntimeAccess::max_form_data_entries(*runtime),
+                                           ScriptRuntimeAccess::max_form_data_bytes(*runtime)})) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "FormData budget exceeded");
+        }
+    }
+    if (!form_data_entries_fit(entries,
+                               ScriptRuntimeAccess::max_form_data_entries(*runtime),
+                               ScriptRuntimeAccess::max_form_data_bytes(*runtime))) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "FormData budget exceeded");
     }
     auto* data = new ScriptFormData;
-    data->runtime = native_runtime(call_info_p->function);
+    data->runtime = runtime;
     data->entries = std::move(entries);
+    data->max_entries = ScriptRuntimeAccess::max_form_data_entries(*runtime);
+    data->max_bytes = ScriptRuntimeAccess::max_form_data_bytes(*runtime);
     jerry_object_set_native_ptr(call_info_p->this_value, &kFormDataNativeInfo, data);
     return jerry_undefined();
 }
@@ -3595,7 +3702,18 @@ jerry_value_t form_data_append(const jerry_call_info_t* call_info_p,
     if (data == nullptr || args_count < 2) {
         return throw_type_error("FormData.append requires name and value");
     }
-    data->entries.push_back(FormDataEntry{value_to_string(args_p[0]), value_to_string(args_p[1])});
+    const std::string name = value_to_string(args_p[0]);
+    const std::string value = value_to_string(args_p[1]);
+    if (!form_data_entries_fit(data->entries, data->max_entries, data->max_bytes) ||
+        !form_data_entry_fits(data->entries.size(),
+                              form_data_byte_count(data->entries),
+                              name,
+                              value,
+                              data->max_entries,
+                              data->max_bytes)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "FormData budget exceeded");
+    }
+    data->entries.push_back(FormDataEntry{name, value});
     return jerry_undefined();
 }
 
@@ -3674,6 +3792,9 @@ jerry_value_t form_data_set(const jerry_call_info_t* call_info_p,
     }
     const std::string name = value_to_string(args_p[0]);
     const std::string value = value_to_string(args_p[1]);
+    if (!form_data_set_fits(*data, name, value)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "FormData budget exceeded");
+    }
     auto first = std::find_if(data->entries.begin(), data->entries.end(),
                               [&](const FormDataEntry& entry) { return entry.name == name; });
     if (first == data->entries.end()) {
@@ -6227,12 +6348,16 @@ bool JerryScriptRuntime::dispatch_audio_event(std::uint32_t audio_id, ScriptAudi
     if (audio_id == 0) {
         return false;
     }
-    for (const auto& audio : audio_elements_) {
-        if (audio->active && audio->id == audio_id) {
-            return dispatch_audio_event_to_element(*audio, kind);
+    ScriptAudioElement* target = nullptr;
+    for (const auto& entry : audio_elements_) {
+        if (entry->active && entry->id == audio_id) {
+            target = entry.get();
+            break;
         }
     }
-    return false;
+    // JavaScript handlers may create more Audio objects and grow the owning
+    // vector. The element itself remains stable because it is separately owned.
+    return target != nullptr && dispatch_audio_event_to_element(*target, kind);
 }
 
 std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t max_callbacks) {
@@ -6317,17 +6442,43 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
         return false;
     }
     if (completion.kind == HostServiceJobKind::LocationSnapshot && location_snapshot_ != nullptr) {
-        for (const auto& request : geolocation_requests_) {
-            if (!request->active || request->job_id != completion.job_id) {
-                continue;
+        AppRuntimeHost* const host = app_host_;
+        AppLocationSnapshotMock* const location = location_snapshot_;
+        const auto found = std::find_if(geolocation_requests_.begin(),
+                                        geolocation_requests_.end(),
+                                        [&](const std::unique_ptr<ScriptGeolocationRequest>& request) {
+                                            return request->active && request->job_id == completion.job_id;
+                                        });
+        if (found == geolocation_requests_.end()) {
+            if (completion.handle != 0) {
+                if (!location->release_snapshot(*host, completion.handle)) {
+                    host->handles().release(completion.handle);
+                }
             }
-            if (completion.status == HostServiceStatus::Completed && completion.handle != 0) {
-                const AppLocationSnapshotRecord* snapshot = location_snapshot_->snapshot(completion.handle);
-                if (snapshot != nullptr && request->success_callback != 0 &&
-                    jerry_value_is_function(request->success_callback)) {
-                    JerryValue position(make_geolocation_position_object(*snapshot));
+            return true;
+        }
+
+        // A user callback may bind another document or submit another location request.
+        // Detach the completed record and snapshot before entering JavaScript.
+        std::unique_ptr<ScriptGeolocationRequest> request = std::move(*found);
+        geolocation_requests_.erase(found);
+        jerry_value_t success_callback = request->success_callback;
+        jerry_value_t error_callback = request->error_callback;
+        request->success_callback = 0;
+        request->error_callback = 0;
+
+        if (completion.status == HostServiceStatus::Completed && completion.handle != 0) {
+            const AppLocationSnapshotRecord* snapshot = location->snapshot(completion.handle);
+            if (snapshot != nullptr) {
+                const AppLocationSnapshotRecord snapshot_copy = *snapshot;
+                if (!location->release_snapshot(*host, completion.handle)) {
+                    host->handles().release(completion.handle);
+                }
+                if (success_callback != 0 && jerry_value_is_function(success_callback)) {
+                    JerryValue position(make_geolocation_position_object(snapshot_copy));
                     const jerry_value_t arg = position.get();
-                    JerryValue callback(jerry_value_copy(request->success_callback));
+                    JerryValue callback(success_callback);
+                    success_callback = 0;
                     JerryValue result(run_with_execution_budget(*this, [&]() {
                         return jerry_call(callback.get(), jerry_undefined(), &arg, 1);
                     }));
@@ -6335,51 +6486,48 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
                         JerryValue exception_value(jerry_exception_value(result.release(), true));
                         (void) exception_value;
                     }
-                } else {
-                    call_geolocation_error(*this,
-                                           request->error_callback,
-                                           AppDeviceFailureReason::SampleUnavailable);
+                } else if (success_callback != 0) {
+                    jerry_value_free(success_callback);
                 }
-                location_snapshot_->release_snapshot(*app_host_, completion.handle);
             } else {
-                call_geolocation_error(*this,
-                                       request->error_callback,
-                                       classify_app_device_failure(AppServiceSubmitStatus::Accepted,
-                                                                   completion.status,
-                                                                   completion.error_code));
+                host->handles().release(completion.handle);
+                call_geolocation_error(*this, error_callback, AppDeviceFailureReason::SampleUnavailable);
             }
-            if (request->success_callback != 0) {
-                jerry_value_free(request->success_callback);
-                request->success_callback = 0;
-            }
-            if (request->error_callback != 0) {
-                jerry_value_free(request->error_callback);
-                request->error_callback = 0;
-            }
-            request->active = false;
-            geolocation_requests_.erase(
-                std::remove_if(geolocation_requests_.begin(),
-                               geolocation_requests_.end(),
-                               [](const std::unique_ptr<ScriptGeolocationRequest>& entry) {
-                                   return !entry->active;
-                               }),
-                geolocation_requests_.end());
-            return true;
+        } else {
+            call_geolocation_error(*this,
+                                   error_callback,
+                                   classify_app_device_failure(AppServiceSubmitStatus::Accepted,
+                                                               completion.status,
+                                                               completion.error_code));
         }
+        if (success_callback != 0) {
+            jerry_value_free(success_callback);
+        }
+        if (error_callback != 0) {
+            jerry_value_free(error_callback);
+        }
+        return true;
     }
     if (network_fetch_ == nullptr) {
         return false;
     }
-    for (const auto& xhr : xml_http_requests_) {
-        if (!xhr->active) {
+    ScriptXmlHttpRequest* matched_xhr = nullptr;
+    for (const auto& entry : xml_http_requests_) {
+        if (!entry->active) {
             continue;
         }
-        if (xhr->request.handle_completion(*app_host_, *network_fetch_, completion)) {
-            dispatch_xhr_events(*xhr);
-            return true;
+        if (entry->request.handle_completion(*app_host_, *network_fetch_, completion)) {
+            matched_xhr = entry.get();
+            break;
         }
     }
-    return false;
+    if (matched_xhr == nullptr) {
+        return false;
+    }
+    // Dispatch can reenter JavaScript and allocate more XHR wrappers. Do not
+    // retain a reference to a vector entry across that call.
+    dispatch_xhr_events(*matched_xhr);
+    return true;
 }
 
 bool JerryScriptRuntime::handle_system_event(const AppSystemEvent& event) {

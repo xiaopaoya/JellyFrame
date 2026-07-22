@@ -1273,6 +1273,15 @@ void javascript_xml_http_request_get_completes_from_host_service() {
     check(document->text_content().find("load:{\"temp\":21}") != std::string::npos, "XHR load updates DOM");
     check(runtime.eval("log").value.find("done:200") != std::string::npos, "XHR readyState/status observable");
     check(runtime.eval("log").value.find("end") != std::string::npos, "XHR loadend observable");
+
+    const ScriptEvaluationResult reentrant = runtime.eval(
+        "var reentrantXhrs = [];"
+        "xhr.onload = function () { for (var i = 0; i < 8; ++i) reentrantXhrs.push(new XMLHttpRequest()); };"
+        "xhr.open('GET', '/data/weather.json', true); xhr.send(); 'armed';");
+    check(reentrant.ok && reentrant.value == "armed", "XHR reentrant completion script evaluates");
+    check(complete_network_and_dispatch(host, network, runtime) == 1, "XHR reentrant completion dispatched");
+    check(runtime.statistics().xml_http_request_count == 9,
+          "XHR callback can allocate wrappers without invalidating completion dispatch");
 }
 
 void javascript_xml_http_request_error_callback_runs_on_missing_fixture() {
@@ -1469,6 +1478,16 @@ void javascript_audio_subset_uses_bound_host() {
         result = runtime_with_audio.eval("eventLog");
         check(result.ok && result.value == "ended:true;ended:true;",
               "Audio ended dispatches property and listener callbacks");
+
+        result = runtime_with_audio.eval(
+            "var reentrantAudio = [];"
+            "tone.onended = function () { for (var i = 0; i < 4; ++i) reentrantAudio.push(new Audio('/audio/tone.wav')); };"
+            "'armed';");
+        check(result.ok && result.value == "armed", "Audio reentrant dispatch script evaluates");
+        check(runtime_with_audio.dispatch_audio_event(host.audio_id, ScriptAudioEventKind::Ended),
+              "Audio reentrant dispatch reports handled");
+        check(runtime_with_audio.statistics().audio_element_count == 5,
+              "Audio callback can allocate wrappers without invalidating event dispatch");
     }
 
     FakeAudioHost failing_host;
@@ -1781,6 +1800,39 @@ void javascript_geolocation_uses_bound_location_service() {
         result = missing_runtime.eval("geoError");
         check(result.ok && result.value == "2:geolocation position unavailable", "geolocation error callback shape");
     }
+
+    {
+        AppRuntimeHost reentrant_host(AppRuntimeHostOptions{8, 8, 8, 4096, 2});
+        reentrant_host.launch("org.example.geo-reentrant", AppRole::App);
+        AppLocationSnapshotMock reentrant_location(AppLocationSnapshotPolicy{true, 2});
+        check(reentrant_location.set_fixture(AppLocationSnapshotFixture{99, 30.0, 120.0}),
+              "reentrant geolocation fixture accepted");
+        JerryScriptRuntime reentrant_runtime;
+        reentrant_runtime.bind_location_service(reentrant_host, reentrant_location);
+        reentrant_runtime.bind_document(*document);
+        ScriptEvaluationResult result = reentrant_runtime.eval(
+            "var geoOrder = '';"
+            "navigator.geolocation.getCurrentPosition(function () {"
+            "  geoOrder += 'first;';"
+            "  navigator.geolocation.getCurrentPosition(function () { geoOrder += 'second;'; });"
+            "});"
+            "geoOrder;");
+        check(result.ok && result.value.empty(), "reentrant geolocation starts first request");
+
+        check(reentrant_location.complete_next(reentrant_host), "first reentrant location completion queued");
+        std::vector<HostServiceCompletion> completions;
+        reentrant_host.pump_frame_completions(completions);
+        check(completions.size() == 1 && reentrant_runtime.handle_host_completion(completions.front()),
+              "first reentrant location completion handled");
+        check(reentrant_location.complete_next(reentrant_host), "second reentrant location completion queued");
+        completions.clear();
+        reentrant_host.pump_frame_completions(completions);
+        check(completions.size() == 1 && reentrant_runtime.handle_host_completion(completions.front()),
+              "second reentrant location completion handled");
+        result = reentrant_runtime.eval("geoOrder");
+        check(result.ok && result.value == "first;second;", "reentrant geolocation callbacks stay ordered and safe");
+        check(reentrant_host.handles().active_count() == 0, "reentrant geolocation releases both handles");
+    }
 }
 
 void javascript_form_submission_and_form_data_work() {
@@ -1819,6 +1871,24 @@ void javascript_form_submission_and_form_data_work() {
         "name.value + ':' + String(agree.checked) + ':' + iteration;");
     check(result.ok && result.value == "1:send:Ada:yes:three:1:true:false::false:@name=Ada:true;@agree=yes:true;@tag=three:true;",
           "form validation, submit event, FormData and reset work through JavaScript");
+}
+
+void javascript_form_data_budget_is_bounded() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var data = new FormData(); var rejected = false;"
+        "try { for (var i = 0; i < 33; i++) data.append('k' + i, 'v'); }"
+        "catch (error) { rejected = true; }"
+        "String(data.getAll('k0').length) + ':' + rejected;");
+    if (!result.ok) {
+        throw std::runtime_error("FormData budget evaluation failed: " + result.error);
+    }
+    if (result.value != "1:true") {
+        throw std::runtime_error("FormData budget result: " + result.value);
+    }
 }
 
 void javascript_control_validity_subset_works() {
@@ -2170,6 +2240,7 @@ int main() {
         javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();
         javascript_form_submission_and_form_data_work();
+        javascript_form_data_budget_is_bounded();
         javascript_control_validity_subset_works();
         javascript_canvas_2d_is_optional_and_lazy();
         javascript_canvas_quadratic_curve_to_strokes_path();

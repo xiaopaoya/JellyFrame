@@ -14,6 +14,9 @@ struct HtmlParserOptions {
     std::size_t max_nodes = 8192;
     std::size_t max_depth = 64;
     std::size_t max_attributes_per_element = 64;
+    std::size_t max_tag_name_bytes = 128;
+    std::size_t max_attribute_name_bytes = 128;
+    std::size_t max_attribute_value_bytes = 2048;
     DiagnosticSink* diagnostics = nullptr;
     bool synthesize_document_structure = true;
 };

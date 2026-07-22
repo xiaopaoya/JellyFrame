@@ -3726,10 +3726,12 @@ private:
     AppSystemEventQueue system_events_{32, 8};
     AppSystemStateSnapshot debug_system_state_;
     NetworkFetchMock debug_network_{NetworkFetchPolicy{true, 1024, 64 * 1024}};
+    bool debug_network_enabled_ = false;
     ImageDecodeMock debug_images_{ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4}};
     Canvas2DRegistry debug_canvas_{Canvas2DPolicy{true, 4, 300 * 300, 300 * 300, 300, 150}};
     AppLocationSnapshotMock debug_location_{AppLocationSnapshotPolicy{false, 2}};
     bool debug_location_enabled_ = false;
+    bool debug_audio_enabled_ = false;
     bool debug_sensor_accelerometer_enabled_ = false;
     bool debug_sensor_gyroscope_enabled_ = false;
     bool debug_sensor_heart_rate_enabled_ = false;
@@ -3739,6 +3741,7 @@ private:
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_, &debug_canvas_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
+    bool debug_storage_enabled_ = false;
     std::uint32_t debug_local_storage_instance_id_ = 0;
     std::vector<std::filesystem::path> temp_audio_files_;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
@@ -4037,6 +4040,70 @@ private:
         policy.services.sensor_heart_rate = debug_sensor_heart_rate_enabled_;
         policy.services.sensor_ambient_light = debug_sensor_ambient_light_enabled_;
         return policy;
+    }
+
+    AppServiceManifestCapabilities current_service_manifest_capabilities(bool package_mode) const {
+        AppServiceManifestCapabilities capabilities;
+        if (!package_mode) {
+            capabilities.network_fetch = true;
+            capabilities.storage_kv = true;
+            capabilities.audio_playback = true;
+            capabilities.sensor_accelerometer = true;
+            capabilities.sensor_gyroscope = true;
+            capabilities.sensor_heart_rate = true;
+            capabilities.sensor_ambient_light = true;
+            capabilities.location_position = true;
+            return capabilities;
+        }
+        capabilities.network_fetch = active_package_manifest_.network_allowed;
+        capabilities.storage_kv = active_package_manifest_.storage_kv_allowed;
+        capabilities.audio_playback = active_package_manifest_.audio_playback_allowed;
+        capabilities.sensor_accelerometer = active_package_manifest_.sensor_accelerometer_allowed;
+        capabilities.sensor_gyroscope = active_package_manifest_.sensor_gyroscope_allowed;
+        capabilities.sensor_heart_rate = active_package_manifest_.sensor_heart_rate_allowed;
+        capabilities.sensor_ambient_light = active_package_manifest_.sensor_ambient_light_allowed;
+        capabilities.location_position = active_package_manifest_.location_position_allowed;
+        return capabilities;
+    }
+
+    static AppServiceHostProfile desktop_service_host_profile() {
+        AppServiceHostProfile profile;
+        profile.allow_network_fetch = true;
+        profile.max_network_url_bytes = 1024;
+        profile.max_network_response_bytes = 64 * 1024;
+        profile.allow_storage_kv = true;
+        profile.max_storage_key_bytes = 64;
+        profile.max_storage_value_bytes = 2048;
+        profile.max_storage_items_per_app = 64;
+        profile.max_storage_bytes_per_app = 32 * 1024;
+        profile.allow_audio_playback = true;
+        profile.max_audio_streams = 1;
+        profile.allow_sensor_accelerometer = true;
+        profile.allow_sensor_gyroscope = true;
+        profile.allow_sensor_heart_rate = true;
+        profile.allow_sensor_ambient_light = true;
+        profile.allow_location_position = true;
+        profile.max_location_snapshot_records = 2;
+        return profile;
+    }
+
+    void apply_debug_service_policies(bool package_mode) {
+        const AppServicePolicies policies = app_service_policies_for_app(
+            current_service_manifest_capabilities(package_mode), desktop_service_host_profile());
+        debug_network_.set_policy(policies.network);
+        debug_local_storage_.set_policy(policies.storage);
+        debug_location_.set_policy(AppLocationSnapshotPolicy{
+            policies.location_position,
+            policies.max_location_snapshot_records,
+        });
+        debug_location_enabled_ = policies.location_position;
+        debug_network_enabled_ = policies.network.enabled;
+        debug_storage_enabled_ = policies.storage.enabled;
+        debug_audio_enabled_ = policies.audio.enabled;
+        debug_sensor_accelerometer_enabled_ = policies.sensor_accelerometer;
+        debug_sensor_gyroscope_enabled_ = policies.sensor_gyroscope;
+        debug_sensor_heart_rate_enabled_ = policies.sensor_heart_rate;
+        debug_sensor_ambient_light_enabled_ = policies.sensor_ambient_light;
     }
 
     void record_frame_policy_sample() {
@@ -4742,13 +4809,8 @@ private:
             background_service_policy_ = page.package_mode
                 ? background_policy_from_manifest(page.package_manifest)
                 : AppBackgroundServicePolicy{};
-            debug_location_enabled_ = page.package_mode && page.package_manifest.location_position_allowed;
-            debug_sensor_accelerometer_enabled_ = page.package_mode && page.package_manifest.sensor_accelerometer_allowed;
-            debug_sensor_gyroscope_enabled_ = page.package_mode && page.package_manifest.sensor_gyroscope_allowed;
-            debug_sensor_heart_rate_enabled_ = page.package_mode && page.package_manifest.sensor_heart_rate_allowed;
-            debug_sensor_ambient_light_enabled_ = page.package_mode && page.package_manifest.sensor_ambient_light_allowed;
             active_package_manifest_ = page.package_mode ? page.package_manifest : jellyframe_example::AppPackageManifest{};
-            debug_location_.set_policy(AppLocationSnapshotPolicy{debug_location_enabled_, 2});
+            apply_debug_service_policies(page.package_mode);
             if (page.package_mode) {
                 add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_);
             }
@@ -4831,14 +4893,20 @@ private:
                     debug_local_storage_.clear();
                     debug_local_storage_instance_id_ = script_runtime_instance_id_;
                 }
-                script_runtime_->bind_app_services(app_runtime_, debug_network_);
+                if (debug_network_enabled_) {
+                    script_runtime_->bind_app_services(app_runtime_, debug_network_);
+                }
                 const AppHostDataAccessPolicy host_data_policy = current_host_data_access_policy();
                 script_runtime_->bind_host_data_snapshot(debug_host_data_, host_data_policy);
                 if (debug_location_enabled_) {
                     script_runtime_->bind_location_service(app_runtime_, debug_location_);
                 }
-                script_runtime_->bind_local_storage(debug_local_storage_);
-                script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
+                if (debug_storage_enabled_) {
+                    script_runtime_->bind_local_storage(debug_local_storage_);
+                }
+                if (debug_audio_enabled_) {
+                    script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
+                }
                 const BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
                 debug_canvas_.set_text_backend(text_backend.measure, text_backend.painter);
                 script_runtime_->bind_canvas_2d(debug_canvas_);

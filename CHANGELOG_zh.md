@@ -1,12 +1,32 @@
 # 变更记录
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-23；适用版本：0.5.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
 项目使用轻量语义化版本规则。详见 `docs/versioning_zh.md`。
 
 ## Unreleased
+
+### 变更
+
+- 将当前开发线明确为 `0.5.0-dev` 收尾：`0.5` 的关闭条件是设备可用性、诊断、宿主契约和真实
+  port 证据；完成后才进入以外部开发者试用为目标的 `0.6.0-dev`。该阶段不承诺完整浏览器兼容。
+- 统一 app 作者能力表与能力矩阵中 package-local CSS 背景图片的契约：单张图片可使用
+  `cover`/`contain`/`100% 100%`、简单 position 和 `no-repeat`，但不支持多层、平铺和任意尺寸表达式。
+
+### 修复
+
+- HTML tokenizer 现在在 DOM 构造前限制 tag 名、属性名和属性值的字节数。超限字节会继续被消费并输出稳定
+  diagnostic，但不会让 token 内字符串持续扩容；既有属性数量限制不变。
+- `FormData` 现在在核心 form collection 与 JavaScript `append()`/`set()` 路径应用独立 entry 与
+  字节预算。默认 32 entries / 4096 bytes，超限抛出 `RangeError`，form 构造超限不会留下部分 entries。
+- 定位 completion 现在在进入 JavaScript success/error callback 前脱离 runtime 请求容器并释放 snapshot
+  handle。回调可安全地再次请求定位、重建 document 或清理服务，不会继续解引用旧请求记录。
+- XHR completion 与 `Audio` event dispatch 现在会在进入 JavaScript 前解析独立持有的 runtime record，
+  回调中新建同类 wrapper 不会使 dispatcher 持有的容器 entry 失效。
+- Win32 验收壳现在通过 `app_service_policies_for_app(...)` 推导可选 script-service 绑定。未声明
+  network、storage、audio 或 location capability 的 package 不会仅因桌面壳存在 debug fixture 而获得对应服务。
 
 ### 新增
 

@@ -273,18 +273,44 @@ bool check_form_validity(Node& form) {
     return validation.valid();
 }
 
-std::vector<FormDataEntry> collect_form_data(const Node& form, const Node* submitter) {
-    std::vector<FormDataEntry> entries;
+bool collect_form_data_limited(const Node& form,
+                               std::vector<FormDataEntry>& entries,
+                               FormDataCollectionLimits limits,
+                               const Node* submitter) {
+    entries.clear();
     if (form.type != NodeType::Element || form.tag_name != "form") {
-        return entries;
+        return true;
     }
+
+    std::size_t bytes = 0;
+    const auto append = [&](std::string name, std::string value) {
+        if (limits.max_entries != 0 && entries.size() >= limits.max_entries) {
+            return false;
+        }
+        if (limits.max_bytes != 0) {
+            if (bytes > limits.max_bytes || name.size() > limits.max_bytes - bytes) {
+                return false;
+            }
+            const std::size_t after_name = bytes + name.size();
+            if (value.size() > limits.max_bytes - after_name) {
+                return false;
+            }
+            bytes = after_name + value.size();
+        }
+        entries.push_back(FormDataEntry{std::move(name), std::move(value)});
+        return true;
+    };
+
     std::vector<const Node*> pending;
     pending.push_back(&form);
     while (!pending.empty()) {
         const Node* current = pending.back();
         pending.pop_back();
         if (current != &form && is_successful_control(*current)) {
-            entries.push_back(FormDataEntry{current->attribute("name"), form_control_value(*current)});
+            if (!append(current->attribute("name"), form_control_value(*current))) {
+                entries.clear();
+                return false;
+            }
         }
         for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
             pending.push_back(it->get());
@@ -292,8 +318,17 @@ std::vector<FormDataEntry> collect_form_data(const Node& form, const Node* submi
     }
     if (submitter != nullptr && is_descendant_of(*submitter, form) && is_form_submitter(*submitter) &&
         !submitter->attribute("name").empty()) {
-        entries.push_back(FormDataEntry{submitter->attribute("name"), submitter->attribute("value")});
+        if (!append(submitter->attribute("name"), submitter->attribute("value"))) {
+            entries.clear();
+            return false;
+        }
     }
+    return true;
+}
+
+std::vector<FormDataEntry> collect_form_data(const Node& form, const Node* submitter) {
+    std::vector<FormDataEntry> entries;
+    collect_form_data_limited(form, entries, {}, submitter);
     return entries;
 }
 
