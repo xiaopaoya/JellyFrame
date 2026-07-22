@@ -143,6 +143,25 @@ void bounded_cpp_listener_registration_respects_limit() {
     check(count == 1, "only registered bounded listener runs");
 }
 
+void dispatch_stops_safely_when_a_listener_destroys_its_target() {
+    auto document = make_element("document");
+    Node& parent = append_element(*document, "div");
+    Node& child = append_element(parent, "button");
+    int child_calls = 0;
+    int parent_calls = 0;
+    child.add_event_listener("click", [&](Event&) {
+        ++child_calls;
+        parent.set_text_content("replaced");
+    });
+    child.add_event_listener("click", [&](Event&) { ++child_calls; });
+    parent.add_event_listener("click", [&](Event&) { ++parent_calls; });
+
+    MouseEvent event("click", 0, 0);
+    check(dispatch_event(child, event), "destroying listener preserves dispatch result");
+    check(child_calls == 1, "destroyed target does not invoke later listeners");
+    check(parent_calls == 0, "destroyed path does not bubble");
+}
+
 } // namespace
 
 int main() {
@@ -151,6 +170,7 @@ int main() {
         prevent_default_stop_and_once_work();
         listener_mutation_during_dispatch_is_stable();
         bounded_cpp_listener_registration_respects_limit();
+        dispatch_stops_safely_when_a_listener_destroys_its_target();
     } catch (const std::exception& error) {
         std::cerr << "event test failed: " << error.what() << '\n';
         return 1;

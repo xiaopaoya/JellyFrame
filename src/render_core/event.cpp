@@ -12,6 +12,30 @@ namespace {
 
 constexpr std::size_t kStackListenerSnapshotCapacity = 8;
 
+struct DispatchScope {
+    DispatchScope* previous = nullptr;
+    bool path_node_destroyed = false;
+};
+
+thread_local DispatchScope* g_dispatch_scope = nullptr;
+
+class ScopedDispatch {
+public:
+    ScopedDispatch() {
+        scope_.previous = g_dispatch_scope;
+        g_dispatch_scope = &scope_;
+    }
+
+    ~ScopedDispatch() {
+        g_dispatch_scope = scope_.previous;
+    }
+
+    bool path_node_destroyed() const { return scope_.path_node_destroyed; }
+
+private:
+    DispatchScope scope_;
+};
+
 } // namespace
 
 Event::Event(std::string type, bool bubbles, bool cancelable)
@@ -217,7 +241,7 @@ EventTarget::ListenerId EventTarget::add_event_listener_bounded(const std::strin
         return 0;
     }
     if (!listeners_) {
-        listeners_ = std::make_unique<ListenerStore>();
+        listeners_ = std::make_shared<ListenerStore>();
     }
     if (max_listeners > 0 && listeners_->listener_count() >= max_listeners) {
         return 0;
@@ -256,7 +280,8 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         return;
     }
 
-    auto* listeners = listeners_->find_listeners(event.type());
+    const std::shared_ptr<ListenerStore> listener_store = listeners_;
+    auto* listeners = listener_store->find_listeners(event.type());
     if (listeners == nullptr) {
         return;
     }
@@ -278,8 +303,8 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         }
     }
 
-    const auto invoke_snapshot_listener = [this, &event, capture_phase](ListenerId listener_id) {
-        ListenerStore::Listener* listener = listeners_->find_listener(listener_id);
+    const auto invoke_snapshot_listener = [&listener_store, &event, capture_phase](ListenerId listener_id) {
+        ListenerStore::Listener* listener = listener_store->find_listener(listener_id);
         if (listener == nullptr || listener->removed || listener->options.capture != capture_phase) {
             return true;
         }
@@ -287,7 +312,7 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         const bool once = listener->options.once;
         callback(event);
         if (once) {
-            if (ListenerStore::Listener* once_listener = listeners_->find_listener(listener_id)) {
+            if (ListenerStore::Listener* once_listener = listener_store->find_listener(listener_id)) {
                 ListenerStore::mark_removed(*once_listener);
             }
         }
@@ -310,7 +335,7 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
         }
     }
 
-    listeners = listeners_->find_listeners(event.type());
+    listeners = listener_store->find_listeners(event.type());
     if (listeners == nullptr) {
         return;
     }
@@ -321,6 +346,7 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
 }
 
 bool dispatch_event(const Node& target, Event& event) {
+    ScopedDispatch dispatch_scope;
     std::vector<const Node*> path;
     for (const Node* node = &target; node != nullptr; node = node->parent) {
         path.push_back(node);
@@ -335,6 +361,10 @@ bool dispatch_event(const Node& target, Event& event) {
         }
         event.set_current_target(*node, EventPhase::Capturing);
         node->invoke_event_listeners(event, true);
+        if (dispatch_scope.path_node_destroyed()) {
+            event.clear_current_target();
+            return !event.default_prevented();
+        }
         if (event.propagation_stopped()) {
             event.clear_current_target();
             return !event.default_prevented();
@@ -343,8 +373,16 @@ bool dispatch_event(const Node& target, Event& event) {
 
     event.set_current_target(target, EventPhase::AtTarget);
     target.invoke_event_listeners(event, true);
+    if (dispatch_scope.path_node_destroyed()) {
+        event.clear_current_target();
+        return !event.default_prevented();
+    }
     if (!event.immediate_propagation_stopped()) {
         target.invoke_event_listeners(event, false);
+        if (dispatch_scope.path_node_destroyed()) {
+            event.clear_current_target();
+            return !event.default_prevented();
+        }
     }
 
     if (event.bubbles() && !event.propagation_stopped()) {
@@ -352,6 +390,10 @@ bool dispatch_event(const Node& target, Event& event) {
             const Node* node = path[index];
             event.set_current_target(*node, EventPhase::Bubbling);
             node->invoke_event_listeners(event, false);
+            if (dispatch_scope.path_node_destroyed()) {
+                event.clear_current_target();
+                return !event.default_prevented();
+            }
             if (event.propagation_stopped()) {
                 break;
             }
@@ -360,6 +402,12 @@ bool dispatch_event(const Node& target, Event& event) {
 
     event.clear_current_target();
     return !event.default_prevented();
+}
+
+void event_dispatch_node_destroyed(const Node&) {
+    for (DispatchScope* scope = g_dispatch_scope; scope != nullptr; scope = scope->previous) {
+        scope->path_node_destroyed = true;
+    }
 }
 
 } // namespace jellyframe

@@ -129,6 +129,7 @@ Node::Node(NodeType node_type)
     : type(node_type) {}
 
 Node::~Node() {
+    event_dispatch_node_destroyed(*this);
     DestroyObserver observer = destroy_observer_;
     void* context = destroy_observer_context_;
     destroy_observer_ = nullptr;

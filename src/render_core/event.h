@@ -120,9 +120,10 @@ private:
     friend bool dispatch_event(const Node& target, Event& event);
 
     struct ListenerStore;
-    mutable std::unique_ptr<ListenerStore> listeners_;
+    mutable std::shared_ptr<ListenerStore> listeners_;
 };
 
 bool dispatch_event(const Node& target, Event& event);
+void event_dispatch_node_destroyed(const Node& node);
 
 } // namespace jellyframe
