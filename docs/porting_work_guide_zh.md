@@ -1,6 +1,6 @@
 # JellyFrame 移植工作指导
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-23；适用版本：0.5.0-dev
 
 
 本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及当前核心已经提供了哪些可直接使用的能力。
@@ -474,3 +474,65 @@ loop:
 6. 完成 UI task 运行循环：输入、timer、dirty rebuild/repaint、present 和低功耗节流。
 7. 跑真实硬件基准并更新 port 文档。
 8. 非脚本路径稳定后，再启用 JerryScript component。
+
+## 0.5 实机验收
+
+这是把一个 0.5 port 标记为设备可用前必须提供的板端证据。它测量完整设备路径，而不是桌面截图或仅 CPU 的微基准。panel、DMA、cache 的优化仍属于 port；不得为了通过此关卡把板级加速塞进 `render_core`。
+
+### 可复现前提
+
+每次测试开始前记录：
+
+- JellyFrame commit、ESP-IDF/SDK、编译器版本与 build type。
+- 板卡 revision、SoC 主频策略、internal RAM/PSRAM 配置、panel 控制器、总线频率、像素格式和物理 viewport。
+- 启用的 port fast path、framebuffer 数量和存放位置、字体包/资源大小，以及 JerryScript 是否启用。
+- fixture package、target profile、输入脚本和 telemetry build flag 的精确版本。
+
+首帧测量使用冷启动；重复场景先 warm up 30 帧。计时期间不得混入 trace logging、JTAG 暂停或串口刷屏。基准可以使用宿主控制的可重复输入脚本，但必须走量产 present 路径，并在复用 buffer 前等待 DMA/flush 完成。
+
+### 必测 Fixture
+
+全部适用 fixture 都使用同一个 target profile。
+
+1. **静态与首帧：** 一个包含文本、圆角卡片、图标/图片和普通背景的精致静态页面。分别记录冷启动 parse/build/first present 与稳定 idle frame。
+2. **字体与视觉质量：** 使用实际发布的 2bpp 或 4bpp 字体深度显示中文/拉丁/数字，并验收 rounded clip、圆环和 linear/radial/conic 渐变。以正常观看距离拍摄屏幕，检查裁切、方角、破损圆环、明显色带和文本 baseline 漂移。
+3. **列表滚动：** 使用真实固定导航/底栏、rounded clip 与 indicator 的滚动列表。测试手指拖动、释放后的惯性和边界停止。至少运行 300 帧脚本滚动和一次 10 分钟 repeat/soak。若 port 提供 panel-scroll 或 strip-blit，必须在同一 workload 下与普通 framebuffer scroll-blit 对照。
+4. **常见动画：** opacity/transform transition、小型 progress/ring 更新和一个 timer 驱动文本更新。包含 dirty-region 更新，以及一个确实需要 full-frame repaint 的页面。
+5. **图片与资源 fallback：** package-local 图片/背景资源及其 missing/over-budget 变体。拒绝或降级只能影响当前 app，并显示文档约定的 fallback。
+6. **恢复与电源策略：** background/suspend/resume、screen-off 和 low-power 状态切换。触发可用的坏 app 路径（budget recovery、service overload；启用 scripting 时再测 script watchdog），确认回到 launcher，且没有 watchdog reset 或重新烧录需求。
+
+### 必需 Telemetry
+
+每个计时 fixture 至少输出一行机器可读 summary，并保留完整串口日志。核心和 port 的耗时必须分开：
+
+```text
+port_telemetry case=scroll_list workload=drag_inertia frames=600 \
+  frame_ms_p50=28.4 frame_ms_p95=41.7 compose_ms_p95=18.0 \
+  present_ms_p95=20.6 dma_wait_ms_p95=19.1 dirty_bytes_avg=18432 \
+  dirty_rects_avg=1.2 internal_ram_min=80399 psram_min=4210688 \
+  fallbacks=0 watchdog_resets=0 app_recoveries=0
+```
+
+字段可以扩展，但报告必须包含：
+
+- frame count、p50/p95 frame time；有效 FPS 必须从同一帧样本计算，不能另取秒表平均值。
+- 可用时提供 p50/p95 或 average/max 的 compose/paint 与 present/DMA-wait。
+- dirty rect count、dirty area 或 bytes，以及 full-frame-present count。
+- minimum internal RAM、minimum PSRAM、可用时的 largest free block，以及 framebuffer/scratch high-water。
+- fallback、dropped-frame、panel/DMA error、app recovery、watchdog reset 和 MCU reset counter。
+- 启用 opt-in panel-scroll 时的 steps/wraps/fallbacks 和 CPU blits elided。
+
+`frame_ms` 是端到端 UI 延迟；`compose_ms` 才是平台无关 core 优化的候选。`present_ms` 与 `dma_wait_ms` 是 port 证据：除非测量明确表明核心接口缺口，应在 port 中解决。
+
+### 验收规则
+
+- 所有视觉 fixture 必须以物理面板为准；桌面截图只作辅助证据。
+- 静态 idle 页面不得持续积累 dirty work 或持续分配内存。
+- 列表滚动目标是在声明的 wearable profile 上 p50 不高于 33.3 ms、p95 不高于 50 ms。任一未达到都应标为性能 blocker，不能用平均 FPS 掩盖。
+- 10 分钟 scroll soak 必须没有意外 panel fallback、watchdog/MCU reset、损坏的 indicator/ring 像素或输入丢失。warm-up 后 minimum free memory 的下降不得超过 `max(8 KiB, 3%)`。
+- 只有 fast path 在同一 workload 下改善端到端 p50 或 p95、保持视觉正确且不降低 memory floor 时才可接受；否则保留 portable fallback，并从 port 移除该候选。
+- 故意拒绝的资源和坏 app 只能终止/恢复当前 app。任何非固件测试都不得要求重新烧录才能恢复 launcher。
+
+### 报告产物
+
+每个 board/run 建立一个目录，包含 raw log、简短 Markdown 总结、视觉 case 的截图/照片和 JSON summary。Markdown 必须写明 control/candidate build、fixture、测得值、视觉观察、回归，以及每个 fast path 的明确 `accept`、`reject` 或 `blocked` 决定。必须带上上述 panel/SoC 元数据，避免未来 port 比较不兼容的数据。

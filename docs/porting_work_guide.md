@@ -1,6 +1,6 @@
 # JellyFrame Porting Work Guide
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-23; Applies to: 0.5.0-dev
 
 
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
@@ -594,3 +594,111 @@ If a product target requires any of the following, plan core work first:
    and low-power throttling.
 7. Run real hardware benchmarks and update port documentation.
 8. Enable the JerryScript component after the non-scripted path is stable.
+
+## 0.5 Real-Device Acceptance
+
+This is the required board-side evidence before calling a 0.5 port
+device-ready. It measures the complete device path, not just a desktop capture
+or a CPU-only microbenchmark. The port owns panel/DMA/cache changes; do not put
+board-specific acceleration into `render_core` to satisfy this gate.
+
+### Reproducible Setup
+
+Record these fields before every run:
+
+- JellyFrame commit, ESP-IDF/SDK version, compiler version and build type.
+- Board revision, SoC clock policy, internal RAM/PSRAM configuration, panel
+  controller, bus frequency, pixel format and physical viewport.
+- Enabled port fast paths, framebuffer count/placement, font pack/resource
+  sizes and whether JerryScript is enabled.
+- Exact fixture package, target profile, input script and telemetry build flag.
+
+Use a cold boot for first-frame measurements, then warm up each repeating case
+for 30 frames. Do not mix trace logging, JTAG pauses or serial flood output
+into a timed sample. A benchmark may use a host-controlled repeatable input
+script, but it must use the production presentation path and wait for DMA/flush
+completion before reusing a buffer.
+
+### Required Fixtures
+
+Run all applicable fixtures with the same target profile.
+
+1. **Static and first frame:** one polished static page with text, rounded
+   cards, icons/images and a normal background. Record cold parse/build/first
+   present separately from steady idle frames.
+2. **Typography and visual quality:** Chinese/Latin/digit text at the shipped
+   2bpp or 4bpp font depth, plus rounded clips, rings and linear/radial/conic
+   gradients. Photograph the panel at normal viewing distance and inspect for
+   clipping, square corners, broken rings, excessive colour banding or text
+   baseline drift.
+3. **List scroll:** a scrollable list with the actual fixed navigation/footer,
+   rounded clip and indicator. Test finger drag, release inertia and edge stop.
+   Run at least 300 scripted scroll frames and one 10-minute repeat/soak run.
+   If the port offers panel-scroll or strip-blit, compare it with the normal
+   framebuffer scroll-blit path under the same workload.
+4. **Common animation:** opacity/transform transition, a small progress/ring
+   update and one timer-driven text update. Include both a dirty-region update
+   and any page that intentionally needs a full-frame repaint.
+5. **Image and resource fallback:** package-local image/background resources
+   with a missing/over-budget resource variant. The rejected or degraded case
+   must remain contained to the app and display its documented fallback.
+6. **Recovery and power policy:** background/suspend/resume, screen-off and
+   low-power transitions. Trigger the available bad-app paths (budget recovery,
+   service overload and script watchdog when scripting is enabled) and confirm
+   return to the launcher without a watchdog reset or firmware reflash.
+
+### Required Telemetry
+
+For every timed fixture emit at least one machine-readable summary line and
+retain the raw serial log. Keep core and port numbers separate:
+
+```text
+port_telemetry case=scroll_list workload=drag_inertia frames=600 \
+  frame_ms_p50=28.4 frame_ms_p95=41.7 compose_ms_p95=18.0 \
+  present_ms_p95=20.6 dma_wait_ms_p95=19.1 dirty_bytes_avg=18432 \
+  dirty_rects_avg=1.2 internal_ram_min=80399 psram_min=4210688 \
+  fallbacks=0 watchdog_resets=0 app_recoveries=0
+```
+
+The exact field names may be extended, but every report must include:
+
+- frame count and p50/p95 frame time; compute effective FPS from the same frame
+  sample rather than from a separate stopwatch;
+- p50/p95 or average/max compose/paint and present/DMA-wait time when available;
+- dirty rectangle count, dirty area or bytes and full-frame-present count;
+- minimum internal RAM, minimum PSRAM, largest free block when available, and
+  any framebuffer/scratch high-water mark;
+- fallback, dropped-frame, panel/DMA error, app-recovery, watchdog-reset and
+  MCU-reset counters;
+- panel-scroll steps/wraps/fallbacks and CPU blits elided when that opt-in path
+  is enabled.
+
+`frame_ms` is end-to-end UI latency. `compose_ms` is eligible for a
+platform-neutral core optimization. `present_ms` and `dma_wait_ms` are port
+evidence: improve them in the port unless a measured core interface gap exists.
+
+### Acceptance Rules
+
+- All visual fixtures must be correct on the physical panel. A desktop capture
+  is supporting evidence only.
+- Static idle pages must not accumulate dirty work or allocate indefinitely.
+- The list-scroll target is p50 at or below 33.3 ms and p95 at or below 50 ms
+  on the declared wearable profile. Missing either value is a performance
+  blocker, not something to hide behind average FPS.
+- The 10-minute scroll soak must have zero unexpected panel fallbacks,
+  watchdog/MCU resets, corrupted indicator/ring pixels or input loss. Minimum
+  free memory may not decline by more than `max(8 KiB, 3%)` after warm-up.
+- A fast path is accepted only when it improves end-to-end p50 or p95 under the
+  same workload, preserves visual output and does not worsen the memory floor.
+  Otherwise keep the portable fallback and remove the candidate from the port.
+- Deliberately rejected resources and bad apps must terminate/recover only that
+  app. No non-firmware test may require reflashing to restore the launcher.
+
+### Report Deliverable
+
+Publish one directory per board/run containing the raw log, a short Markdown
+summary, screenshots/photos for the visual cases and a JSON summary. The
+Markdown summary must name the control/candidate build, fixtures, measured
+values, visual observations, regressions and a clear `accept`, `reject` or
+`blocked` decision for each fast path. Include the panel/SoC metadata above so
+future ports do not compare incompatible measurements.
