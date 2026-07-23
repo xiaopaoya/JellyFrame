@@ -209,24 +209,9 @@ HostDeviceCapabilities make_device_capabilities(int width, int height, int cards
     capabilities.async.supports_cancel = true;
     capabilities.async.max_in_flight_jobs = 2;
     capabilities.async.max_completion_events_per_frame = 2;
-    capabilities.media.supports_image_decode = true;
-    capabilities.media.supports_audio_playback = true;
-    capabilities.media.supports_video_decode = true;
-    capabilities.media.supports_mjpeg = true;
-    capabilities.media.supports_mp3 = true;
-    capabilities.media.preferred_decoded_image_format = HostPixelFormat::Rgb565;
-    capabilities.media.preferred_video_frame_format = HostPixelFormat::Rgb565;
-    capabilities.media.max_image_width = width;
-    capabilities.media.max_image_height = height;
-    capabilities.media.max_video_width = std::min(width, 240);
-    capabilities.media.max_video_height = std::min(height, 240);
-    capabilities.media.max_video_fps = 15;
-    capabilities.media.max_decoded_image_bytes =
-        static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * sizeof(std::uint16_t);
-    capabilities.media.max_video_frame_bytes =
-        static_cast<std::size_t>(capabilities.media.max_video_width) *
-        static_cast<std::size_t>(capabilities.media.max_video_height) * sizeof(std::uint16_t);
-    capabilities.media.max_audio_streams = 1;
+    // This port does not yet bind a board-owned image, audio, or video adapter.
+    // Keep advertised capabilities aligned with executable host support.
+    capabilities.media = {};
     capabilities.budgets = make_budgets(width, height, cards);
     return capabilities;
 }
@@ -504,14 +489,20 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         "button { height: 28px; background: #2563eb; color: #ffffff; border: 1px solid #dbeafe; }"
         "input { height: 24px; background: #ffffff; color: #111827; border: 1px solid #94a3b8; }";
 
-    jellyframe::BitmapFontContext font_context = jellyframe_esp32s3::make_bringup_font_context(2);
-    TextMeasureProvider text_measure{bitmap_font_measure_callback, &font_context};
-    TextPainter text_painter{bitmap_font_paint_callback, &font_context};
+    const TextMeasureProvider text_measure =
+        jellyframe_esp32s3::make_production_text_measure_provider();
+    const TextPainter text_painter = jellyframe_esp32s3::make_production_text_painter();
 
     TextMetrics ascii_metrics{};
     TextMetrics cjk_metrics{};
-    const bool ascii_ok = bitmap_font_measure_callback("STATUS", 14, 400, &ascii_metrics, &font_context);
-    const bool cjk_ok = bitmap_font_measure_callback("\xe4\xb8\xad", 14, 400, &cjk_metrics, &font_context);
+    TextMetrics bold_metrics{};
+    const bool ascii_ok = text_measure.measure != nullptr &&
+        text_measure.measure("STATUS", 16, 400, &ascii_metrics, text_measure.context);
+    const bool cjk_ok = text_measure.measure != nullptr &&
+        text_measure.measure("\xe4\xb8\xad\xe6\x96\x87", 20, 500, &cjk_metrics, text_measure.context);
+    const bool bold_ok = text_measure.measure != nullptr &&
+        text_measure.measure("BOLD", 24, 700, &bold_metrics, text_measure.context);
+    const auto& font_stats = jellyframe_esp32s3::production_font_stats();
 
     HtmlParser html_parser;
     CssParser css_parser;
@@ -575,13 +566,23 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     const bool dirty_present_ok = present_frame(frame_buffer, frame_sink, &dirty_rect, 1);
 
     ESP_LOGI(tag,
-             "p4_p5_p6_ui_smoke font_ascii_ok=%d font_cjk_ok=%d ascii=%dx%d cjk=%dx%d first_present=%d dirty_present=%d dispatched=%u queue_left=%u dropped=%u pointer=%u wheel=%u focus=%u text=%u activate=%u checkbox=%d checkbox_clicks=%d input_value=%s dirty_area=%u dirty_flushes=%u dirty_bytes=%u",
+             "p4_p5_p6_ui_smoke font_family=\"%s\" coverage=%s faces=%u coverage_chars=%u glyphs=%u bitmap_bytes=%u bits_per_pixel=%u font_ascii_ok=%d font_cjk_ok=%d font_bold_ok=%d ascii=%dx%d cjk=%dx%d bold=%dx%d first_present=%d dirty_present=%d dispatched=%u queue_left=%u dropped=%u pointer=%u wheel=%u focus=%u text=%u activate=%u checkbox=%d checkbox_clicks=%d input_value=%s dirty_area=%u dirty_flushes=%u dirty_bytes=%u",
+             font_stats.family,
+             font_stats.coverage,
+             static_cast<unsigned>(font_stats.face_count),
+             static_cast<unsigned>(font_stats.coverage_count),
+             static_cast<unsigned>(font_stats.glyph_count),
+             static_cast<unsigned>(font_stats.bitmap_bytes),
+             static_cast<unsigned>(font_stats.bits_per_pixel),
              ascii_ok ? 1 : 0,
              cjk_ok ? 1 : 0,
+             bold_ok ? 1 : 0,
              ascii_metrics.width,
              ascii_metrics.line_height,
              cjk_metrics.width,
              cjk_metrics.line_height,
+             bold_metrics.width,
+             bold_metrics.line_height,
              first_present_ok ? 1 : 0,
              dirty_present_ok ? 1 : 0,
              static_cast<unsigned>(dispatch_stats.dispatched),
@@ -841,6 +842,30 @@ extern "C" void app_main(void) {
         ESP_LOGE(tag, "failed to start scroll benchmark task");
     } else {
         ESP_LOGI(tag, "scroll benchmark task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_power_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start panel power acceptance task");
+    } else {
+        ESP_LOGI(tag, "panel power acceptance task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_soc_power_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start SoC power acceptance task");
+    } else {
+        ESP_LOGI(tag, "SoC power acceptance task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE
+    if (!jellyframe_esp32s3::start_resource_failure_task()) {
+        ESP_LOGE(tag, "failed to start resource failure task");
+    } else {
+        ESP_LOGI(tag, "resource failure task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_image_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start image acceptance task");
+    } else {
+        ESP_LOGI(tag, "image acceptance task started");
     }
 #else
     run_benchmark();

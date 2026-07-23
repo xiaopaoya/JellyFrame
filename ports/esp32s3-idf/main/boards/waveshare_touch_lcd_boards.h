@@ -7,6 +7,7 @@
 namespace jellyframe_esp32s3 {
 
 class BoardInputQueue;
+using BoardScreenPowerCallback = bool (*)(bool on, void* context);
 
 namespace boards {
 
@@ -40,6 +41,7 @@ struct BoardRuntime {
     Rgb565PackedScrollFlushCallback packed_scroll_flush = nullptr;
     Rgb565PanelScrollResetCallback reset_scroll = nullptr;
     void* flush_context = nullptr;
+    BoardScreenPowerCallback screen_power = nullptr;
 };
 
 const BoardProfile& selected_board_profile();

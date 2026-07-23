@@ -3,6 +3,9 @@
 #include "boards/waveshare_touch_lcd_boards.h"
 #include "jellyframe_esp32s3_font.h"
 #include "jellyframe_esp32s3_hal.h"
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#include "jellyframe_esp32s3_image.h"
+#endif
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
 
@@ -83,6 +86,22 @@
 #define CONFIG_JELLYFRAME_ESP32S3_SCROLL_AUTORUN 0
 #endif
 
+#ifndef CONFIG_JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE
+#define CONFIG_JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE 0
+#endif
+
+#ifndef CONFIG_JELLYFRAME_ESP32S3_BAND_SHELL_AUTOROUTE
+#define CONFIG_JELLYFRAME_ESP32S3_BAND_SHELL_AUTOROUTE 0
+#endif
+
+#ifndef CONFIG_JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE
+#define CONFIG_JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE 0
+#endif
+
+#ifndef CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#define CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER 0
+#endif
+
 #ifndef CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_FULL
 #define CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_FULL 1
 #endif
@@ -111,11 +130,17 @@
 #define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION 0
 #endif
 
+#ifndef CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE
+#define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE 0
+#endif
+
 namespace jellyframe_esp32s3 {
 namespace {
 
 constexpr const char* kTag = "JellyFrameUi";
 constexpr std::string_view kTimerUrl = "/timer.html";
+constexpr std::string_view kResourceFailureUrl = "/resource_failure.html";
+constexpr std::string_view kImageAcceptanceUrl = "/image_acceptance.html";
 constexpr std::string_view kBandShellUrl = "/band_shell.html";
 constexpr std::string_view kGradientFastpathUrl = "/gradient_fastpath.html";
 constexpr std::string_view kScrollDemoUrl = "/scroll_demo.html";
@@ -127,6 +152,8 @@ constexpr std::string_view kScrollBenchClearUrl = "/scroll_bench_clear.html";
 constexpr std::string_view kScrollBenchPanelUrl = "/scroll_bench_panel.html";
 constexpr jellyframe::Color kBackground{248, 250, 252, 255};
 constexpr int kScrollIndicatorRepaintWidth = 8;
+constexpr std::uint32_t kBandAutorouteTransitionCount = 30;
+constexpr std::uint64_t kBandAutorouteIntervalUs = 500000ULL;
 
 std::string_view scroll_benchmark_url() {
 #if CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_TEXT
@@ -199,6 +226,11 @@ struct TimingHistogram {
 };
 
 struct PortTelemetry {
+    std::uint64_t cold_document_load_us = 0;
+    std::uint64_t cold_pipeline_build_us = 0;
+    std::uint32_t first_frame_us = 0;
+    std::uint32_t first_present_us = 0;
+    bool first_present_ok = false;
     std::uint32_t frames = 0;
     std::uint32_t full_frames = 0;
     std::uint32_t dirty_frames = 0;
@@ -229,6 +261,9 @@ struct PortTelemetry {
     std::uint32_t panel_scroll_fallbacks = 0;
     std::uint32_t panel_scroll_wraps = 0;
     std::uint32_t panel_scroll_cpu_blits_elided = 0;
+    std::uint32_t panel_scroll_probe_injections = 0;
+    std::uint32_t panel_scroll_probe_recoveries = 0;
+    std::uint32_t panel_scroll_probe_reentries = 0;
     std::uint64_t panel_scroll_setup_us = 0;
     std::uint64_t panel_scroll_recovery_compose_us = 0;
     std::uint64_t layer_build_us = 0;
@@ -243,6 +278,9 @@ struct PortTelemetry {
     std::uint64_t layout_us = 0;
     std::uint64_t pipeline_layer_build_us = 0;
     std::uint64_t input_bind_us = 0;
+    std::uint32_t screen_power_offs = 0;
+    std::uint32_t screen_power_ons = 0;
+    std::uint32_t screen_power_failures = 0;
     TimingHistogram frame_histogram;
     TimingHistogram present_histogram;
     std::uint32_t min_internal_free = 0;
@@ -260,7 +298,10 @@ struct TimerUiTaskContext {
     BoardInputQueue input_queue;
     jellyframe::HostBudgets budgets;
     jellyframe::HostDeviceCapabilities capabilities;
-    jellyframe::BitmapFontContext font_context{};
+    AppFontContext font_context{};
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    BmpImageAdapter image_adapter;
+#endif
     jellyframe::TextMeasureProvider text_measure{};
     jellyframe::TextPainter text_painter{};
     jellyframe::FrameScratch frame_scratch;
@@ -285,6 +326,8 @@ struct TimerUiTaskContext {
     const char* telemetry_app_id = "org.jellyframe.bringup.timer";
     const char* scroll_workload = "none";
     bool band_shell = false;
+    bool image_acceptance = false;
+    std::uint32_t image_acceptance_cycles = 0;
     bool gradient_fastpath_benchmark = false;
     bool scroll_benchmark = false;
     bool scroll_autorun = false;
@@ -299,6 +342,10 @@ struct TimerUiTaskContext {
     bool has_framebuffer_scroll_blit = false;
     jellyframe::Rect framebuffer_scroll_viewport{};
     jellyframe::ScrollBlitPlan framebuffer_scroll_blit{};
+    bool power_acceptance = false;
+    bool screen_is_on = true;
+    std::uint64_t next_power_transition_us = 0;
+    bool panel_scroll_probe_awaiting_reentry = false;
 };
 
 const char* ui_task_kind(const TimerUiTaskContext& context) {
@@ -307,6 +354,9 @@ const char* ui_task_kind(const TimerUiTaskContext& context) {
     }
     if (context.gradient_fastpath_benchmark) {
         return "gradient-fastpath";
+    }
+    if (context.image_acceptance) {
+        return "image-acceptance";
     }
     return context.band_shell ? "band-shell" : "timer";
 }
@@ -452,6 +502,14 @@ jellyframe::HostDeviceCapabilities make_ui_capabilities(const boards::BoardProfi
     capabilities.async.supports_cancel = false;
     capabilities.async.max_in_flight_jobs = 2;
     capabilities.async.max_completion_events_per_frame = 2;
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    // Advertise the same bounded image contract that this binary actually links.
+    capabilities.media.supports_image_decode = true;
+    capabilities.media.preferred_decoded_image_format = jellyframe::HostPixelFormat::Rgb565;
+    capabilities.media.max_image_width = 96;
+    capabilities.media.max_image_height = 96;
+    capabilities.media.max_decoded_image_bytes = 32 * 1024;
+#endif
     capabilities.budgets = make_ui_budgets(width, height);
     return capabilities;
 }
@@ -543,7 +601,7 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
         : 0;
 
     ESP_LOGI(kTag,
-             "port_telemetry case=%s app=%s workload=%s panel_scroll_backend=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_cpu_blits_elided=%u panel_scroll_recovery_compose_ms_total=%.2f panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u",
+             "port_telemetry case=%s app=%s workload=%s panel_scroll_backend=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_cpu_blits_elided=%u panel_scroll_recovery_compose_ms_total=%.2f panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u screen_power_offs=%u screen_power_ons=%u screen_power_failures=%u",
              context.telemetry_case,
              context.telemetry_app_id,
              context.scroll_workload,
@@ -609,7 +667,33 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<unsigned>(telemetry.initial_largest_internal),
              static_cast<unsigned>(telemetry.min_largest_internal),
              static_cast<unsigned>(telemetry.initial_largest_spiram),
-             static_cast<unsigned>(telemetry.min_largest_spiram));
+             static_cast<unsigned>(telemetry.min_largest_spiram),
+             static_cast<unsigned>(telemetry.screen_power_offs),
+             static_cast<unsigned>(telemetry.screen_power_ons),
+             static_cast<unsigned>(telemetry.screen_power_failures));
+
+    if (context.image_acceptance) {
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+        const auto& image = context.image_adapter.stats();
+        ESP_LOGI(kTag,
+                 "image_adapter requests=%u cache_hits=%u decoded=%u missing=%u corrupt=%u oversized=%u unsupported=%u budget_rejected=%u paint_calls=%u paint_failures=%u decoded_bytes=%u decode_ms=%.3f cycles=%u",
+                 static_cast<unsigned>(image.requests),
+                 static_cast<unsigned>(image.cache_hits),
+                 static_cast<unsigned>(image.decoded),
+                 static_cast<unsigned>(image.missing),
+                 static_cast<unsigned>(image.corrupt),
+                 static_cast<unsigned>(image.oversized),
+                 static_cast<unsigned>(image.unsupported),
+                 static_cast<unsigned>(image.budget_rejected),
+                 static_cast<unsigned>(image.paint_calls),
+                 static_cast<unsigned>(image.paint_failures),
+                 static_cast<unsigned>(image.decoded_bytes),
+                 static_cast<double>(image.decode_us) / 1000.0,
+                 static_cast<unsigned>(context.image_acceptance_cycles));
+#else
+        ESP_LOGE(kTag, "image acceptance selected without the BMP adapter");
+#endif
+    }
 
     ESP_LOGI(kTag,
              "port_pipeline_telemetry active_frames=%u active_frame_ms_total=%.2f band_route_transitions=%u pipeline_rebuilds=%u input_dispatch_ms_total=%.2f input_dispatch_ms_per_active=%.3f frame_planning_ms_total=%.2f frame_planning_ms_per_active=%.3f pipeline_rebuild_ms_total=%.2f pipeline_rebuild_ms_per_rebuild=%.3f render_tree_ms_total=%.2f render_tree_ms_per_rebuild=%.3f layout_ms_total=%.2f layout_ms_per_rebuild=%.3f pipeline_layer_tree_ms_total=%.2f pipeline_layer_tree_ms_per_rebuild=%.3f input_bind_ms_total=%.2f input_bind_ms_per_rebuild=%.3f active_other_ms_total=%.2f active_other_ms_per_active=%.3f",
@@ -636,6 +720,15 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<double>(active_other_us) / 1000.0,
              static_cast<double>(active_other_us) /
                  static_cast<double>(std::max<std::uint32_t>(1, telemetry.active_frames)) / 1000.0);
+
+    if (CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE) {
+        ESP_LOGI(kTag,
+                 "panel_scroll_fallback_probe injections=%u recoveries=%u reentries=%u awaiting_reentry=%d",
+                 static_cast<unsigned>(telemetry.panel_scroll_probe_injections),
+                 static_cast<unsigned>(telemetry.panel_scroll_probe_recoveries),
+                 static_cast<unsigned>(telemetry.panel_scroll_probe_reentries),
+                 context.panel_scroll_probe_awaiting_reentry ? 1 : 0);
+    }
 
     if (context.style_resolver != nullptr) {
         const jellyframe::StyleResolverStatistics statistics = context.style_resolver->statistics();
@@ -725,6 +818,9 @@ int resolve_scroll_y(const jellyframe::Node& node, int max_scroll_y, void* raw_c
 jellyframe::LayerTreeBuilderOptions make_layer_tree_options(const TimerUiTaskContext& context) {
     jellyframe::LayerTreeBuilderOptions options = jellyframe::layer_tree_options_from_budgets(context.budgets);
     options.text_measure = context.text_measure;
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    options.image_resolver = make_bmp_image_resolver(const_cast<BmpImageAdapter&>(context.image_adapter));
+#endif
     if (context.scroll_benchmark) {
         options.scroll_resolver = jellyframe::ScrollOffsetResolver{resolve_scroll_y,
                                                                     const_cast<TimerUiTaskContext*>(&context)};
@@ -1046,7 +1142,18 @@ bool render_and_present(TimerUiTaskContext& context,
     }
 
     const jellyframe::Rect full_viewport{0, 0, context.width, context.height};
-    const bool use_panel_scroll = panel_scroll_candidate(context, dirty_count);
+    const bool inject_panel_scroll_fallback =
+        CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE &&
+        context.telemetry.panel_scroll_probe_injections == 0 &&
+        context.telemetry.panel_scroll_steps >= 30 && context.panel.packed_scroll_mapped;
+    if (inject_panel_scroll_fallback) {
+        ++context.telemetry.panel_scroll_probe_injections;
+        ESP_LOGI(kTag,
+                 "panel_scroll_fallback_probe phase=inject step=%u mapped_before=1 reason=forced-ineligible-frame",
+                 static_cast<unsigned>(context.telemetry.panel_scroll_steps));
+    }
+    const bool use_panel_scroll = !inject_panel_scroll_fallback &&
+        panel_scroll_candidate(context, dirty_count);
     // A panel-scroll frame intentionally leaves most framebuffer rows stale.
     // Rebuild before a normal present can observe those rows again.
     const bool rebuild_framebuffer_for_normal_present =
@@ -1100,7 +1207,12 @@ bool render_and_present(TimerUiTaskContext& context,
         }
     }
 
+    jellyframe::ImagePainter image_painter{};
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    image_painter = make_bmp_image_painter(context.image_adapter);
+#endif
     jellyframe::SoftwareCompositor compositor(context.text_painter,
+        image_painter,
         jellyframe::software_compositor_options_from_budgets(context.budgets));
     const std::uint64_t compose_start = esp_timer_get_time();
     if (rebuild_framebuffer_for_normal_present) {
@@ -1152,6 +1264,9 @@ bool render_and_present(TimerUiTaskContext& context,
     bool force_full_normal_present = false;
     if (!can_use_panel_scroll && context.panel.packed_scroll_mapped) {
         if (!reset_rgb565_packed_scroll(context.panel)) {
+            if (inject_panel_scroll_fallback) {
+                ESP_LOGE(kTag, "panel_scroll_fallback_probe phase=reset ok=0");
+            }
             return false;
         }
         force_full_normal_present = true;
@@ -1194,6 +1309,26 @@ bool render_and_present(TimerUiTaskContext& context,
                                        frame_sink,
                                        present_dirty_rects,
                                        present_dirty_count);
+    }
+    if (inject_panel_scroll_fallback) {
+        if (ok && force_full_normal_present && !context.panel.packed_scroll_mapped) {
+            ++context.telemetry.panel_scroll_probe_recoveries;
+            context.panel_scroll_probe_awaiting_reentry = true;
+            ESP_LOGI(kTag,
+                     "panel_scroll_fallback_probe phase=full-present ok=1 mapped_after=0 bytes=%u",
+                     static_cast<unsigned>(context.panel.flushed_bytes - bytes_before));
+        } else {
+            ESP_LOGE(kTag,
+                     "panel_scroll_fallback_probe phase=full-present ok=0 mapped_after=%d force_full=%d",
+                     context.panel.packed_scroll_mapped ? 1 : 0,
+                     force_full_normal_present ? 1 : 0);
+        }
+    } else if (can_use_panel_scroll && ok && context.panel_scroll_probe_awaiting_reentry) {
+        context.panel_scroll_probe_awaiting_reentry = false;
+        ++context.telemetry.panel_scroll_probe_reentries;
+        ESP_LOGI(kTag,
+                 "panel_scroll_fallback_probe phase=reentry ok=1 step=%u mapped_after=1",
+                 static_cast<unsigned>(context.telemetry.panel_scroll_steps));
     }
     present_us = static_cast<std::uint32_t>(esp_timer_get_time() - present_start);
     context.panel.framebuffer_convert_start_us = 0;
@@ -1293,6 +1428,22 @@ void set_band_view(TimerUiTaskContext& context, const char* active_id) {
              static_cast<unsigned>(context.telemetry.band_route_transitions));
 }
 
+void schedule_band_autoroute(TimerUiTaskContext& context) {
+    static constexpr const char* kRouteSequence[] = {
+        "view-activity", "view-home",
+        "view-weather", "view-home",
+        "view-quick", "view-home",
+        "view-notices", "view-home",
+        "view-apps", "view-home",
+    };
+    if (context.telemetry.band_route_transitions >= kBandAutorouteTransitionCount) {
+        return;
+    }
+    const std::size_t index = context.telemetry.band_route_transitions %
+        (sizeof(kRouteSequence) / sizeof(kRouteSequence[0]));
+    set_band_view(context, kRouteSequence[index]);
+}
+
 void bind_band_navigation(TimerUiTaskContext& context) {
     struct Route {
         const char* control_id;
@@ -1333,11 +1484,24 @@ void run_retained_ui_task(void* raw_context) {
     context->height = board.display.height > 0 ? board.display.height : CONFIG_JELLYFRAME_BENCH_VIEWPORT_HEIGHT;
     context->capabilities = make_ui_capabilities(board, context->width, context->height);
     context->budgets = context->capabilities.budgets;
-    context->font_context = make_bringup_font_context(2);
-    context->text_measure = jellyframe::TextMeasureProvider{jellyframe::bitmap_font_measure_callback,
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    context->image_adapter.configure(context->budgets, context->document_url);
+#endif
+    context->font_context = make_app_font_context();
+    context->text_measure = jellyframe::TextMeasureProvider{app_font_measure_callback,
                                                             &context->font_context};
-    context->text_painter = jellyframe::TextPainter{jellyframe::bitmap_font_paint_callback,
+    context->text_painter = jellyframe::TextPainter{app_font_paint_callback,
                                                     &context->font_context};
+    const auto& font_stats = production_font_stats();
+    ESP_LOGI(kTag,
+             "font_pack family=\"%s\" coverage=%s faces=%u coverage_chars=%u glyphs=%u bitmap_bytes=%u bits_per_pixel=%u",
+             font_stats.family,
+             font_stats.coverage,
+             static_cast<unsigned>(font_stats.face_count),
+             static_cast<unsigned>(font_stats.coverage_count),
+             static_cast<unsigned>(font_stats.glyph_count),
+             static_cast<unsigned>(font_stats.bitmap_bytes),
+             static_cast<unsigned>(font_stats.bits_per_pixel));
     context->frame_scratch.reserve_from_budgets(context->budgets);
     jellyframe::AppRuntimeHostOptions app_options;
     app_options.max_in_flight_jobs = context->capabilities.async.max_in_flight_jobs;
@@ -1367,11 +1531,14 @@ void run_retained_ui_task(void* raw_context) {
              context->board_runtime.hardware_status != nullptr ? context->board_runtime.hardware_status : "",
              static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
 
+    const std::uint64_t cold_document_load_start = esp_timer_get_time();
     if (!load_timer_document(*context) || !prepare_buffers(*context)) {
         boards::release_board_runtime(context->board_runtime);
         vTaskDelete(nullptr);
         return;
     }
+    context->telemetry.cold_document_load_us =
+        static_cast<std::uint64_t>(esp_timer_get_time() - cold_document_load_start);
     context->timer_running = !context->scroll_benchmark && !context->band_shell && !context->gradient_fastpath_benchmark &&
         CONFIG_JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART;
     if (context->band_shell) {
@@ -1391,21 +1558,65 @@ void run_retained_ui_task(void* raw_context) {
     std::uint64_t last_telemetry_us = esp_timer_get_time();
 
     while (true) {
+        const std::uint64_t power_now_us = esp_timer_get_time();
+        if (context->power_acceptance && context->telemetry.first_present_ok &&
+            context->board_runtime.screen_power != nullptr) {
+            if (context->next_power_transition_us == 0) {
+                context->next_power_transition_us = power_now_us + 5000000ULL;
+            }
+            if (power_now_us >= context->next_power_transition_us) {
+                const bool turn_on = !context->screen_is_on;
+                if (context->board_runtime.screen_power(turn_on, context->board_runtime.flush_context)) {
+                    context->screen_is_on = turn_on;
+                    if (turn_on) {
+                        ++context->telemetry.screen_power_ons;
+                        force_first_frame = true;
+                    } else {
+                        ++context->telemetry.screen_power_offs;
+                    }
+                    context->next_power_transition_us = power_now_us + (turn_on ? 5000000ULL : 2000000ULL);
+                    ESP_LOGI(kTag,
+                             "screen_power_transition state=%s offs=%u ons=%u",
+                             turn_on ? "on" : "off",
+                             static_cast<unsigned>(context->telemetry.screen_power_offs),
+                             static_cast<unsigned>(context->telemetry.screen_power_ons));
+                } else {
+                    ++context->telemetry.screen_power_failures;
+                    context->next_power_transition_us = power_now_us + 1000000ULL;
+                    ESP_LOGE(kTag,
+                             "screen_power_transition failed target=%s failures=%u",
+                             turn_on ? "on" : "off",
+                             static_cast<unsigned>(context->telemetry.screen_power_failures));
+                }
+            }
+        }
         context->frame_scratch.begin_frame();
         context->app_scratch.begin_frame();
         const std::uint64_t frame_start = esp_timer_get_time();
+        const bool first_frame = force_first_frame;
 
         jellyframe::FrameLoopPendingWork pending;
         pending.pending_input_events = context->input_queue.size();
+        const bool band_autoroute_due = context->band_shell &&
+            CONFIG_JELLYFRAME_ESP32S3_BAND_SHELL_AUTOROUTE &&
+            context->telemetry.band_route_transitions < kBandAutorouteTransitionCount;
         const bool timer_due = ((!context->scroll_benchmark && !context->band_shell && !context->gradient_fastpath_benchmark) ||
-                                context->scroll_autorun || context->gradient_fastpath_benchmark) &&
+                                context->scroll_autorun || context->gradient_fastpath_benchmark ||
+                                band_autoroute_due) &&
             esp_timer_get_time() >= next_tick_us;
         pending.pending_timer_callbacks = timer_due ? 1 : 0;
 
-        if (!context->pipeline.layer_tree && !rebuild_pipeline(*context)) {
-            ESP_LOGE(kTag, "ui task failed: initial pipeline build failed");
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            continue;
+        if (!context->pipeline.layer_tree) {
+            const std::uint64_t cold_pipeline_start = esp_timer_get_time();
+            if (!rebuild_pipeline(*context)) {
+                ESP_LOGE(kTag, "ui task failed: initial pipeline build failed");
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                continue;
+            }
+            if (first_frame) {
+                context->telemetry.cold_pipeline_build_us =
+                    static_cast<std::uint64_t>(esp_timer_get_time() - cold_pipeline_start);
+            }
         }
 
         const jellyframe::FrameLoopWorkPlan work_plan =
@@ -1440,6 +1651,20 @@ void run_retained_ui_task(void* raw_context) {
                 if (context->scroll_autorun) {
                     next_tick_us = esp_timer_get_time() + 33333ULL;
                 }
+            } else if (context->band_shell && CONFIG_JELLYFRAME_ESP32S3_BAND_SHELL_AUTOROUTE) {
+                if (!force_first_frame) {
+                    schedule_band_autoroute(*context);
+                }
+                next_tick_us = esp_timer_get_time() + kBandAutorouteIntervalUs;
+            } else if (context->image_acceptance) {
+                if (!force_first_frame && context->image_acceptance_cycles < 30) {
+                    ++context->image_acceptance_cycles;
+                    context->document->set_attribute(
+                        "data-cycle", std::to_string(context->image_acceptance_cycles));
+                    ESP_LOGI(kTag, "image_acceptance cycle=%u/30",
+                             static_cast<unsigned>(context->image_acceptance_cycles));
+                }
+                next_tick_us = esp_timer_get_time() + 500000ULL;
             } else if (!context->band_shell && !context->gradient_fastpath_benchmark) {
                 if (!force_first_frame && context->timer_running) {
                     ++context->elapsed_seconds;
@@ -1522,6 +1747,23 @@ void run_retained_ui_task(void* raw_context) {
         }
 
         const std::uint32_t frame_us = static_cast<std::uint32_t>(esp_timer_get_time() - frame_start);
+        if (first_frame && frame_plan.update.action != jellyframe::FrameUpdateAction::None) {
+            context->telemetry.first_frame_us = frame_us;
+            context->telemetry.first_present_us = present_us;
+            context->telemetry.first_present_ok = presented;
+            ESP_LOGI(kTag,
+                     "port_cold_start_telemetry case=%s resource_parse_ms=%.3f pipeline_build_ms=%.3f first_frame_ms=%.3f first_present_ms=%.3f first_present_ok=%d internal_free=%u psram_free=%u largest_internal=%u largest_psram=%u",
+                     context->telemetry_case,
+                     static_cast<double>(context->telemetry.cold_document_load_us) / 1000.0,
+                     static_cast<double>(context->telemetry.cold_pipeline_build_us) / 1000.0,
+                     static_cast<double>(context->telemetry.first_frame_us) / 1000.0,
+                     static_cast<double>(context->telemetry.first_present_us) / 1000.0,
+                     context->telemetry.first_present_ok ? 1 : 0,
+                     static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+                     static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+                     static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+                     static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
+        }
         ++context->telemetry.frames;
         if (frame_plan.update.action != jellyframe::FrameUpdateAction::None) {
             ++context->telemetry.active_frames;
@@ -1654,6 +1896,43 @@ bool start_scroll_benchmark_task() {
     context->scroll_workload = context->scroll_autorun ? scroll_benchmark_workload() : "interactive-full";
     context->scroll_benchmark = true;
     return start_ui_task(context, "jellyframe_scroll");
+}
+
+bool start_power_acceptance_task() {
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (context == nullptr) {
+        ESP_LOGE(kTag, "panel power acceptance task context allocation failed");
+        return false;
+    }
+    context->telemetry_case = "screen_power_acceptance_cumulative";
+    context->telemetry_app_id = "org.jellyframe.bringup.screen-power";
+    context->power_acceptance = true;
+    return start_ui_task(context, "jellyframe_power");
+}
+
+bool start_resource_failure_task() {
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (context == nullptr) {
+        ESP_LOGE(kTag, "resource failure task context allocation failed");
+        return false;
+    }
+    context->document_url = kResourceFailureUrl;
+    context->telemetry_case = "resource_failure_cumulative";
+    context->telemetry_app_id = "org.jellyframe.bringup.resource-failure";
+    return start_ui_task(context, "jellyframe_resource");
+}
+
+bool start_image_acceptance_task() {
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (context == nullptr) {
+        ESP_LOGE(kTag, "image acceptance task context allocation failed");
+        return false;
+    }
+    context->document_url = kImageAcceptanceUrl;
+    context->telemetry_case = "image_acceptance_cumulative";
+    context->telemetry_app_id = "org.jellyframe.bringup.image";
+    context->image_acceptance = true;
+    return start_ui_task(context, "jellyframe_image");
 }
 
 } // namespace jellyframe_esp32s3

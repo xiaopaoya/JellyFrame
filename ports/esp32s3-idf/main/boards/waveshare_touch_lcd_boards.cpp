@@ -59,6 +59,7 @@ constexpr std::uint8_t kWs147CmdVerticalScrollDefinition = 0x33;
 constexpr std::uint8_t kWs147CmdVerticalScrollStart = 0x37;
 constexpr std::uint8_t kWs147AxsTouchPointsReg = 0x01;
 constexpr std::uint8_t kWs147AxsMaxPoints = 2;
+bool g_ws147_gpio_isr_service_installed = false;
 
 struct Ws147DisplayContext {
     spi_host_device_t spi_host = SPI2_HOST;
@@ -551,6 +552,32 @@ bool ws147_reset_panel_scroll(void* context) {
     return true;
 }
 
+bool ws147_set_screen_power(bool on, void* context) {
+    auto* display = static_cast<Ws147DisplayContext*>(context);
+    if (display == nullptr || display->lcd_io == nullptr) {
+        return false;
+    }
+    if (!on && ws147_set_backlight(*display, false) != ESP_OK) {
+        return false;
+    }
+
+    ws147_lock_lcd(*display);
+    esp_err_t result = on
+        ? ws147_lcd_tx_param(display->lcd_io, LCD_CMD_SLPOUT, nullptr, 0)
+        : ws147_lcd_tx_param(display->lcd_io, LCD_CMD_DISPOFF, nullptr, 0);
+    if (result == ESP_OK && on) {
+        vTaskDelay(pdMS_TO_TICKS(120));
+        result = ws147_lcd_tx_param(display->lcd_io, LCD_CMD_DISPON, nullptr, 0);
+    } else if (result == ESP_OK) {
+        result = ws147_lcd_tx_param(display->lcd_io, LCD_CMD_SLPIN, nullptr, 0);
+    }
+    ws147_unlock_lcd(*display);
+    if (result != ESP_OK) {
+        return false;
+    }
+    return on ? ws147_set_backlight(*display, true) == ESP_OK : true;
+}
+
 Ws147TouchPoint ws147_map_touch_point(std::uint16_t raw_x, std::uint16_t raw_y) {
     Ws147TouchPoint point{};
     point.raw_x = raw_x;
@@ -742,8 +769,12 @@ esp_err_t ws147_init_i2c_and_probe_touch(Ws147DisplayContext& display) {
         return probe_err;
     }
 
-    esp_err_t isr_err = gpio_install_isr_service(0);
-    if (isr_err != ESP_OK && isr_err != ESP_ERR_INVALID_STATE) {
+    esp_err_t isr_err = ESP_OK;
+    if (!g_ws147_gpio_isr_service_installed) {
+        isr_err = gpio_install_isr_service(0);
+        g_ws147_gpio_isr_service_installed = isr_err == ESP_OK || isr_err == ESP_ERR_INVALID_STATE;
+    }
+    if (!g_ws147_gpio_isr_service_installed) {
         ESP_LOGW(kTag, "waveshare 1.47 touch ISR service install failed: %s", esp_err_to_name(isr_err));
     } else {
         ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_isr_handler_add(touch_int_gpio, ws147_touch_isr_handler, &display));
@@ -778,7 +809,7 @@ BoardRuntime initialize_waveshare_147() {
     esp_err_t err = ws147_init_lcd(display);
     if (err != ESP_OK) {
         ESP_LOGE(kTag, "waveshare 1.47 LCD init failed: %s", esp_err_to_name(err));
-        return BoardRuntime{kWaveshare147Profile, false, "JD9853 init failed", nullptr, nullptr, nullptr, &display};
+        return BoardRuntime{kWaveshare147Profile, false, "JD9853 init failed", nullptr, nullptr, nullptr, &display, nullptr};
     }
 
     err = ws147_init_i2c_and_probe_touch(display);
@@ -790,7 +821,8 @@ BoardRuntime initialize_waveshare_147() {
                             ws147_packed_flush,
                             ws147_packed_scroll_flush,
                             ws147_reset_panel_scroll,
-                            &display};
+                            &display,
+                            ws147_set_screen_power};
     }
 
     ESP_LOGI(kTag, "waveshare 1.47 hardware display initialized and AXS5106L detected");
@@ -800,7 +832,8 @@ BoardRuntime initialize_waveshare_147() {
                         ws147_packed_flush,
                         ws147_packed_scroll_flush,
                         ws147_reset_panel_scroll,
-                        &display};
+                        &display,
+                        ws147_set_screen_power};
 }
 
 void release_waveshare_147(Ws147DisplayContext& display) {

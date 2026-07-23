@@ -41,11 +41,55 @@ config JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
         presents only that visible container region. It is a measured board
         workload, not a production scroll-shell implementation.
 
+config JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE
+    bool "Run panel screen-off/resume acceptance fixture"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    help
+        Starts a static Timer page and cycles the selected board panel through
+        display sleep, backlight off, wake and full repaint. This validates the
+        board-local screen power boundary; it is not a claim of full SoC deep
+        sleep or product power management.
+
+config JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE
+    bool "Run ESP32-S3 light/deep sleep acceptance fixture"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    help
+        Runs a port-only SoC power fixture after a normal board present. It
+        cycles light sleep with timer and touch GPIO wake sources, then uses
+        RTC-retained state and timer wake for deep-sleep cold-start recovery.
+        Current measurement remains an external acceptance step.
+
+config JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE
+    bool "Run missing-resource fallback fixture"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    help
+        Loads a local page with an intentionally missing stylesheet and image
+        URL. The page must still paint its inline fallback. This validates
+        bounded resource failure behavior, not image decoding.
+
+config JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE
+    bool "Run bounded BMP image acceptance fixture"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE && JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    help
+        Loads one bounded 24/32-bit BMP plus missing, corrupt, oversized and
+        unsupported image resources. Rebuilds the fixture 30 times to verify
+        cache ownership, rejection and inline placeholder fallback.
+
 endchoice
+
+config JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    bool "Enable bounded BMP image adapter"
+    default n
+    help
+        Links the port-owned uncompressed 24/32-bit BMP decoder and image
+        callbacks. It accepts at most 96x96 pixels, 32 KiB decoded pixels,
+        16 cached URLs and 256-byte URLs. Keep it disabled for ports and Apps
+        that do not render images so they do not link the decoder or retain an
+        image cache. This does not enable PNG, JPEG, GIF, WebP, audio or video.
 
 config JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE
     int "UI task stack size"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE
     default 32768
     range 8192 65536
     help
@@ -54,13 +98,13 @@ config JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE
 
 config JELLYFRAME_ESP32S3_UI_TASK_PRIORITY
     int "UI task priority"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE
     default 5
     range 1 24
 
 config JELLYFRAME_ESP32S3_UI_TASK_TICK_MS
     int "UI task idle tick delay in ms"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE
     default 20
     range 1 1000
 
@@ -89,6 +133,15 @@ config JELLYFRAME_ESP32S3_STYLE_RESOLVER_CACHE_ENTRIES
         internal-RAM low-water target. This does not change Render Core's
         default resolver policy or affect ports that do not create this UI task.
         A value of zero disables retained candidate entries for A/B controls.
+
+config JELLYFRAME_ESP32S3_BAND_SHELL_AUTOROUTE
+    bool "Run 30-transition Band Shell acceptance autoroute"
+    depends on JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
+    default n
+    help
+        Cycles the static Band Shell through a fixed 30-transition route
+        sequence and then stops. This is an unattended retained-pipeline and
+        typography acceptance fixture; keep it disabled for interactive use.
 
 config JELLYFRAME_ESP32S3_RGB565_GRADIENT_DITHER
     bool "Dither RGB565 presentation for pages containing gradients"
@@ -174,6 +227,17 @@ config JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
         Any mixed dirty update, invalid viewport, callback error or panel
         uncertainty immediately resets the scroll address and falls back to
         the normal framebuffer scroll-blit present path.
+
+config JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE
+    bool "Inject one WS147 panel-scroll ineligible-frame fallback"
+    depends on JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
+    default n
+    help
+        Acceptance-only probe. After 30 successful panel-scroll steps, forces
+        one frame through the existing ineligible-frame recovery path. The
+        path must reset VSCSAD, rebuild and present the full viewport, then
+        re-enter panel scroll on the following eligible frame. Keep disabled
+        in normal and production profiles.
 
 config JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION
     bool "Experimental WS169 ST7789 physical-GRAM scroll A/B path"

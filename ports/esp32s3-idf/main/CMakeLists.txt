@@ -14,6 +14,12 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
         "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.html"
         "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.js"
         "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.json"
+        "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.bmp"
+        "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.png"
+        "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.jpg"
+        "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.jpeg"
+        "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.gif"
+        "${JELLYFRAME_ESP32S3_RESOURCE_ROOT}/*.webp"
     )
 
     add_custom_command(
@@ -37,9 +43,12 @@ idf_component_register(
     SRCS
         "main.cpp"
         "jellyframe_esp32s3_font.cpp"
+        "jellyframe_esp32s3_noto_sans_sc_font.cpp"
         "jellyframe_esp32s3_hal.cpp"
+        "jellyframe_esp32s3_image.cpp"
         "jellyframe_esp32s3_input.cpp"
         "jellyframe_esp32s3_resources.cpp"
+        "jellyframe_esp32s3_soc_power_acceptance.cpp"
         "jellyframe_esp32s3_ui_task.cpp"
         "boards/waveshare_touch_lcd_boards.cpp"
         "boards/waveshare_touch_lcd_169_board.cpp"

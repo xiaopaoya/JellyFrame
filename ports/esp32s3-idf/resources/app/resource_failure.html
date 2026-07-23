@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Resource fallback</title>
+  <link rel="stylesheet" href="styles/missing-resource.css">
+  <style>
+    body { background: #f7fafc; color: #102033; font-family: sans-serif; }
+    .page { width: 172px; height: 320px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; }
+    .fallback { width: 132px; padding: 14px 8px; border: 2px solid #1f6f8b; border-radius: 12px; text-align: center; background: #ffffff; }
+    .missing-image { width: 64px; height: 64px; border-radius: 12px; background: #dceff5; color: #1f6f8b; display: flex; align-items: center; justify-content: center; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="fallback">
+      <div class="missing-image">IMG</div>
+      <h1>Fallback</h1>
+      <p>Local resource unavailable</p>
+    </div>
+  </main>
+</body>
+</html>

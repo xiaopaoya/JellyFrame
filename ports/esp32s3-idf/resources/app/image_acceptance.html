@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><style>
+body { width: 172px; height: 320px; margin: 0; background: #f8fafc; color: #172033; font-size: 12px; }
+.page { display: flex; flex-direction: column; align-items: center; padding: 8px; gap: 4px; }
+.title { font-size: 16px; font-weight: 700; height: 24px; }
+.row { display: flex; gap: 4px; height: 72px; }
+img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; image-rendering: crisp-edges; }
+.small { width: 148px; height: 28px; display: flex; align-items: center; justify-content: center; background: #dceff5; border-radius: 8px; }
+</style></head><body><main class="page" data-cycle="0">
+<div class="title">IMAGE BMP</div>
+<div class="row"><img src="/image_acceptance/sunny.bmp" alt="valid"><img src="/image_acceptance/missing.bmp" alt="missing"></div>
+<div class="row"><img src="/image_acceptance/corrupt.bmp" alt="corrupt"><img src="/image_acceptance/oversize.bmp" alt="oversize"></div>
+<img src="/image_acceptance/unsupported.png" alt="unsupported">
+<div class="small">fallbacks stay interactive</div>
+</main></body></html>

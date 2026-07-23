@@ -1,6 +1,6 @@
 # ESP32-S3 App Resource
 
-> Last updated: 2026-07-16; Applies to: 0.5.0-dev
+> Last updated: 2026-07-24; Applies to: 0.5.0-dev
 
 Local app resource bundle used by the ESP32-S3 smoke demo and board bring-up
 profiles.
@@ -26,3 +26,10 @@ or network dependencies on the board.
   the normal scroll samples so a physical-GRAM panel callback can prove that
   each scroll step has exactly one exposed strip. Its 960 px content extent
   makes the 320 px viewport cross the physical GRAM ring in both directions.
+- `/resource_failure.html` deliberately requests missing local resources while
+  preserving an inline fallback. It verifies that bounded resource failures do
+  not prevent a first paint or reset the board.
+- `/image_acceptance.html` and `image_acceptance/` exercise the opt-in BMP
+  adapter with one valid 24-bit BMP plus missing, corrupt, oversized and
+  unsupported inputs. They are acceptance fixtures, not a declaration of
+  general PNG/JPEG/WebP support.

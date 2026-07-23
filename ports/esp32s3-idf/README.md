@@ -1,6 +1,6 @@
 # JellyFrame ESP32-S3 ESP-IDF Port
 
-> Last updated: 2026-07-16; Applies to: 0.5.0-dev
+> Last updated: 2026-07-24; Applies to: 0.5.0-dev
 
 This directory is a first hardware bring-up path for ESP32-S3. It keeps the
 engine core platform-neutral and builds a small ESP-IDF app around the HAL
@@ -9,10 +9,9 @@ shape described in `docs/embedded_hal_api.md`.
 ## What Runs Now
 
 - Builds `src/render_core` as an ESP-IDF component named `jellyframe_render_core`.
-- Provides five mutually exclusive startup modes: the one-shot synthetic
-  benchmark, an interactive retained Timer UI task, a static 172x320 Band
-  System Shell UI fixture, an opaque-gradient A/B fixture, and a deterministic
-  retained-scroll workload.
+- Provides mutually exclusive startup modes for the one-shot synthetic
+  benchmark, retained UI fixtures, deterministic scroll/presentation A/B work,
+  bounded resource handling, and board-local sleep acceptance.
 - Loads static HTML/CSS/classic-script resources through a bounded host
   resource bundle before the benchmark.
 - Measures parser, style/render tree, layout, layer tree, framebuffer rendering
@@ -112,12 +111,27 @@ idf.py -B build-ws147-panel-a -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benc
 idf.py -B build-ws147-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults" build
 ```
 
+To prove the B path can leave physical-GRAM mapping safely, use the
+acceptance-only one-shot fallback probe with an isolated sdkconfig:
+
+```powershell
+idf.py -B build-ws147-panel-fallback-probe `
+  -D "SDKCONFIG=build-ws147-panel-fallback-probe/sdkconfig" `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults;sdkconfig.ws147_panel_scroll_fallback_probe.defaults" build
+```
+
+After 30 successful strip submissions, the log must show `phase=inject`, one
+successful full present with `mapped_after=0`, and `phase=reentry` on the next
+eligible frame. This option remains off in normal A/B profiles.
+
 For visual and touch acceptance of the 172x320 Band System Shell fixture:
 
 ```powershell
 idf.py -B build-ws147-band-shell `
+  -D "SDKCONFIG=build-ws147-band-shell/sdkconfig" `
   -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_band_shell.defaults" build
-idf.py -B build-ws147-band-shell -p COMx flash monitor
+idf.py -B build-ws147-band-shell `
+  -D "SDKCONFIG=build-ws147-band-shell/sdkconfig" -p COMx flash monitor
 ```
 
 The fixture is intentionally non-scripted. Its native adapter can only switch
@@ -132,8 +146,10 @@ must repaint the full new view without a reset, corrupted rounded corners or
 stale text. The serial monitor should first contain `ui_task kind=band-shell`
 and later a `port_telemetry case=band_shell_ui_cumulative` line. Record the
 frame/present p95, internal/PSRAM low-water marks, board profile and any touch
-misroutes. The fixture deliberately uses ASCII because the default bring-up
-font is not a production CJK pack.
+misroutes. The fixture uses the recovered Noto Sans SC production bitmap
+family. The serial startup line reports its face, coverage, glyph and
+bitmap-byte counts; physical visual review is still required for typography
+acceptance.
 
 When a shell route is slow, collect the accompanying
 `port_pipeline_telemetry` line as well. It separates input dispatch, frame
@@ -146,6 +162,12 @@ frame average. Each accepted native route also writes
 manual or replay script. A test-only injected-input replay validates the path after the
 board adapter, but a manual run is still required to accept AXS5106L coordinate
 calibration and gesture discoverability.
+
+All retained UI modes also emit one `port_cold_start_telemetry` line after the
+first successful present. It reports resource/parse, pipeline-build, first-frame
+and first-present durations separately, with current free and largest internal
+RAM/PSRAM blocks. Keep this line with every cold-boot acceptance log; it is not
+included in steady-state p50/p95 telemetry.
 
 For an isolated opaque linear-gradient raster/present capture, build the fixed
 30 Hz fixture instead of the shell:
@@ -162,6 +184,47 @@ no text, input, animation, shell navigation or rounded/translucent paint, so it
 is suitable only for comparing an equivalent renderer revision or compile-time
 candidate. Keep the same dither policy for both runs and compare `compose`,
 `framebuffer_convert`, `present`, DMA and heap-watermark fields separately.
+
+For the WS147 board-local panel power boundary, use a separate build directory:
+
+```powershell
+idf.py -B build-ws147-power `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_power_acceptance.defaults" build
+idf.py -B build-ws147-power -p COMx flash monitor
+```
+
+The fixture cycles JD9853 `DISPOFF`/`SLPIN`, turns the backlight off, then uses
+`SLPOUT`/`DISPON`, turns the backlight on and forces one full repaint. It emits
+`screen_power_transition` and `screen_power_offs`, `screen_power_ons`,
+`screen_power_failures` fields in `port_telemetry`. This is panel sleep and
+backlight evidence only; it does not measure ESP32-S3 light/deep-sleep current
+or GPIO wake behavior.
+
+For bounded missing-resource behavior, use `sdkconfig.ws147_resource_failure.defaults`.
+The fixture links a missing stylesheet and references a missing image while its
+inline fallback remains renderable. Acceptance requires the resource log to
+show the expected missing/rejected count, a successful first present and no
+reset. This fixture only validates bounded missing-resource behavior. The
+port also contains an acceptance-only bounded BMP image adapter; use the
+image acceptance profile to exercise successful decode, cache reuse,
+unsupported format rejection, and oversized/corrupt input handling.
+
+For the ESP32-S3 SoC sleep fixture, use a separate build directory:
+
+```powershell
+idf.py -B build-ws147-soc-power `
+  -D "SDKCONFIG=build-ws147-soc-power/sdkconfig" `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_soc_power_acceptance.defaults" build
+idf.py -B build-ws147-soc-power `
+  -D "SDKCONFIG=build-ws147-soc-power/sdkconfig" -p COMx flash monitor
+```
+
+This runs 100 light-sleep cycles with timer and AXS5106L INT GPIO wake
+configuration, then 30 timer-driven deep-sleep cold-start cycles and finally
+starts the interactive Band Shell. USB-Serial/JTAG output is unavailable
+during light sleep, so its summary is retained in RTC memory and printed after
+the first deep wake. The fixture reports timing and heap watermarks but does
+not measure current; use an external meter for the H4 power gate.
 
 The first file selects the scroll run mode and the WS147 hardware profile. The
 second only disables automatic scrolling and selects the full-list workload;
@@ -198,6 +261,8 @@ Useful `menuconfig` entries:
 - `JellyFrame ESP32-S3 benchmark -> Startup run mode`
 - `JellyFrame ESP32-S3 benchmark -> Start 172x320 Band System Shell UI task`
 - `JellyFrame ESP32-S3 benchmark -> Run opaque linear-gradient presentation fixture`
+- `JellyFrame ESP32-S3 benchmark -> Run panel screen-off/resume acceptance fixture`
+- `JellyFrame ESP32-S3 benchmark -> Run missing-resource fallback fixture`
 - `JellyFrame ESP32-S3 benchmark -> UI task stack size`
 - `JellyFrame ESP32-S3 benchmark -> Dither RGB565 presentation for pages containing gradients`
 - `JellyFrame ESP32-S3 benchmark -> Scroll benchmark step in pixels`
@@ -247,10 +312,9 @@ cannot exercise the single-strip contract.
 
 ## Flash Layout
 
-The port defaults to an 8 MB flash image with a custom partition table in
-`partitions.csv`. The app partition is intentionally 4 MB so the later
-JerryScript component, bitmap fonts and generated app resources have room to
-grow.
+The port defaults to a 16 MB flash image with a custom partition table in
+`partitions.csv`. The 8 MB factory partition leaves room for the recovered
+bitmap font pack, JerryScript and generated app resources.
 
 Current layout:
 
@@ -258,20 +322,16 @@ Current layout:
 |---|---|---:|---:|---|
 | `nvs` | data/nvs | `0x9000` | 24 KB | system settings |
 | `phy_init` | data/phy | `0xf000` | 4 KB | PHY init data |
-| `factory` | app/factory | `0x10000` | 4 MB | JellyFrame firmware |
-| `assets` | data/spiffs | `0x410000` | 2 MB | future generated resources/fonts |
-| `storage` | data/nvs | `0x610000` | 512 KB | app settings/state |
-| `coredump` | data/coredump | `0x690000` | 256 KB | crash diagnostics |
-
-If the product needs OTA slots, prefer moving to a 16 MB flash module and using
-a two-app layout instead of shrinking the 4 MB app partition.
+| `factory` | app/factory | `0x10000` | 8 MB | JellyFrame firmware and production bitmap fonts |
+| `assets` | data/spiffs | `0x810000` | 6 MB | generated resources and future app assets |
+| `storage` | data/nvs | `0xe10000` | 1 MB | app settings/state |
+| `coredump` | data/coredump | `0xf10000` | 256 KB | crash diagnostics |
 
 For ESP32-S3 N16R8 boards with 16 MB flash and 8 MB octal PSRAM, this directory
 also provides `partitions_16mb_n16r8.csv` and
-`sdkconfig.n16r8_bench.defaults`. That profile keeps the 4 MB app partition,
-expands `assets` to 8 MB, leaves 1 MB for settings/storage and reserves 512 KB
-for coredumps. It is the current real-chip benchmark profile for the 300x300
-synthetic UI workload.
+`sdkconfig.n16r8_bench.defaults`. That profile uses the same 8 MB app / 6 MB
+assets plan and reserves 512 KB for coredumps. It is the current real-chip
+benchmark profile for the 300x300 synthetic UI workload.
 
 Expected serial output shape:
 
@@ -310,12 +370,17 @@ Espressif QEMU `esp_develop_9.2.2_20260417` works for this benchmark. It accepts
 Manual launch flow:
 
 ```powershell
-python -m esptool --chip esp32s3 merge_bin --output flash_image.bin --fill-flash-size 8MB "@flash_args"
+$qemuDir = Join-Path $env:TEMP "jellyframe-qemu-s3"
+New-Item -ItemType Directory -Force $qemuDir | Out-Null
+$flashImage = Join-Path $qemuDir "flash_image.bin"
+$efuseImage = Join-Path $qemuDir "qemu_efuse.bin"
+
+python -m esptool --chip esp32s3 merge_bin --output $flashImage --fill-flash-size 8MB "@flash_args"
 
 qemu-system-xtensa.exe -M esp32s3 -m 4M `
   -global driver=ssi_psram,property=is_octal,value=true `
-  -drive file=C:\Users\Administrator\AppData\Local\Temp\jellyframe-qemu-s3\flash_image.bin,if=mtd,format=raw `
-  -drive file=C:\Users\Administrator\AppData\Local\Temp\jellyframe-qemu-s3\qemu_efuse.bin,if=none,format=raw,id=efuse `
+  -drive "file=$flashImage,if=mtd,format=raw" `
+  -drive "file=$efuseImage,if=none,format=raw,id=efuse" `
   -nographic -monitor none -no-reboot
 ```
 
@@ -502,14 +567,39 @@ are packed into a temporary tight buffer.
 
 ## Text And Input Smoke Hooks
 
-`main/jellyframe_esp32s3_font.*` contains a deliberately tiny bring-up bitmap
-font. It covers the ASCII glyphs needed by the smoke text plus one CJK glyph
-(`U+4E2D`) so the board path can validate UTF-8 codepoint measurement and
-painting. It is not a production Chinese font. Product firmware should choose a
-font profile with `jellyframe_font_resource_check`, then generate either an
-app-specific bitmap font pack or a documented product profile such as
-`cn-standard` with `jellyframe_font_pack_gen`. Record the source font license,
-glyph count and flash size.
+`main/jellyframe_esp32s3_noto_sans_sc_font.cpp` is the recovered offline
+generated Noto Sans SC bitmap pack. It contains Regular/Medium/Bold at 16/20/24
+px, ASCII, common symbols and GB2312 level-1 coverage: 9 faces, 4,541 covered
+characters, 40,869 glyphs and 3,262,475 bitmap bytes. The generator is
+`tools/generate_noto_sans_sc_font_pack.py`; Pillow and the source font files
+are needed only when regenerating the checked-in source. The tiny
+`main/generated` fixture remains available for early debug fallback, but the
+normal AppFont callbacks use Noto. The recovered pack is 1bpp. Its Noto Sans
+SC 2.002/OFL source and reproduction record live under `font/`; product
+acceptance still requires a normal-distance 1bpp/2bpp visual selection. The
+current 2bpp candidate leaves only 7.21% of the 8 MB app partition free, while
+4bpp does not fit that layout.
+
+Run the physical smoke with an isolated configuration:
+
+```powershell
+idf.py -B build-ws147-typography-acceptance-v2 `
+  -D "SDKCONFIG=build-ws147-typography-acceptance-v2/sdkconfig" `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_typography_acceptance.defaults" build
+```
+
+The decisive line is `p4_p5_p6_ui_smoke`; it reports ASCII, CJK and Bold
+measurement success plus first/dirty present status.
+
+The ESP32-S3 port can bind a board-owned bounded BMP image adapter for
+uncompressed 24/32-bit BMP resources. It does not bind audio or video
+adapters. Enable `CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER` only for
+an image-capable profile: the adapter is then advertised through the host
+capability snapshot and is limited to 96x96 resources, 32 KiB of decoded
+RGB565/alpha cache, 16 cached URLs and 256-byte URLs. It is disabled by
+default, so Apps that do not use images neither link its decoder nor retain
+cache state. Unsupported or invalid resources follow the documented fallback
+behavior.
 
 `main/jellyframe_esp32s3_input.*` contains a fixed-capacity
 `BoardInputQueue`. Drivers or ISRs should enqueue small board events, then the
@@ -531,7 +621,8 @@ own host integration.
 
 1. Replace the no-op `Rgb565Panel` path with your board's panel driver.
 2. Add touch/crown/button input and translate it into `InputController` calls.
-3. Choose a font profile and replace the bring-up font with a production bitmap
-   font pack.
+3. Use the checked-in Noto Sans SC 2.002/OFL pack for functional smoke, then
+   complete visual review and the 1bpp/2bpp product-format decision before
+   release.
 4. Replace the smoke-test resource table with a generated real app bundle.
 5. Enable JerryScript only after the non-scripted pipeline is stable.
