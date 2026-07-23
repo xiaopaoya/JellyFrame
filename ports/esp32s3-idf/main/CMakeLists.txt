@@ -62,5 +62,6 @@ idf_component_register(
         esp_lcd
         heap
         log
+        jellyframe_app_runtime
         jellyframe_render_core
 )

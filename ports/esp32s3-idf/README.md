@@ -9,6 +9,11 @@ shape described in `docs/embedded_hal_api.md`.
 ## What Runs Now
 
 - Builds `src/render_core` as an ESP-IDF component named `jellyframe_render_core`.
+- Builds the platform-neutral `jellyframe_app_runtime` component as a separate
+  static archive. The default port does not instantiate an AppRuntime host, so
+  the linker does not retain it in the normal firmware image. This is build
+  integration only; it does not yet claim third-party App isolation or
+  JerryScript support on ESP32-S3.
 - Provides mutually exclusive startup modes for the one-shot synthetic
   benchmark, retained UI fixtures, deterministic scroll/presentation A/B work,
   bounded resource handling, and board-local sleep acceptance.
