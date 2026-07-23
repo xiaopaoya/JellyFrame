@@ -42,10 +42,10 @@ inline LayoutEngineOptions layout_engine_options_from_budgets(const HostBudgets&
 }
 
 inline LayerTreeBuilderOptions layer_tree_options_from_budgets(const HostBudgets& budgets) {
-    return LayerTreeBuilderOptions{
-        std::max<std::size_t>(1, budgets.max_layers),
-        std::max<std::size_t>(1, budgets.max_display_commands),
-    };
+    LayerTreeBuilderOptions options;
+    options.max_layers = std::max<std::size_t>(1, budgets.max_layers);
+    options.max_display_commands = std::max<std::size_t>(1, budgets.max_display_commands);
+    return options;
 }
 
 inline DirtyRegionOptions dirty_region_options_from_budgets(const HostBudgets& budgets,
