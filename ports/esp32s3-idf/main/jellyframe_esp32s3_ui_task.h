@@ -10,5 +10,6 @@ bool start_power_acceptance_task();
 bool start_soc_power_acceptance_task();
 bool start_resource_failure_task();
 bool start_image_acceptance_task();
+bool start_app_runtime_recovery_acceptance_task();
 
 } // namespace jellyframe_esp32s3

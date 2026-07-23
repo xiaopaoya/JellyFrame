@@ -867,6 +867,12 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGI(tag, "image acceptance task started");
     }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_app_runtime_recovery_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start native AppRuntime recovery preflight");
+    } else {
+        ESP_LOGI(tag, "native AppRuntime recovery preflight started");
+    }
 #else
     run_benchmark();
     ESP_LOGI(tag, "benchmark complete");

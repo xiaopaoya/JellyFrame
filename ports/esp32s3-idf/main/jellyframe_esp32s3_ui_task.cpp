@@ -98,6 +98,10 @@
 #define CONFIG_JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE 0
 #endif
 
+#ifndef CONFIG_JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+#define CONFIG_JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE 0
+#endif
+
 #ifndef CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 #define CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER 0
 #endif
@@ -327,6 +331,8 @@ struct TimerUiTaskContext {
     const char* scroll_workload = "none";
     bool band_shell = false;
     bool image_acceptance = false;
+    bool app_runtime_recovery_acceptance = false;
+    bool app_runtime_recovery_complete = false;
     std::uint32_t image_acceptance_cycles = 0;
     bool gradient_fastpath_benchmark = false;
     bool scroll_benchmark = false;
@@ -357,6 +363,9 @@ const char* ui_task_kind(const TimerUiTaskContext& context) {
     }
     if (context.image_acceptance) {
         return "image-acceptance";
+    }
+    if (context.app_runtime_recovery_acceptance) {
+        return "app-runtime-recovery-native";
     }
     return context.band_shell ? "band-shell" : "timer";
 }
@@ -1444,6 +1453,87 @@ void schedule_band_autoroute(TimerUiTaskContext& context) {
     set_band_view(context, kRouteSequence[index]);
 }
 
+#if CONFIG_JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+bool run_native_app_runtime_recovery_preflight() {
+    jellyframe::AppRuntimeHostOptions options;
+    options.max_in_flight_jobs = 4;
+    options.max_completion_events_per_frame = 4;
+    options.max_host_handles = 4;
+    options.max_host_handle_bytes = 1024;
+    options.max_app_fonts = 1;
+    jellyframe::AppRuntimeHost host(options);
+
+    constexpr std::array<jellyframe::AppTeardownReason, 3> kReasons{
+        jellyframe::AppTeardownReason::RuntimeError,
+        jellyframe::AppTeardownReason::BudgetExceeded,
+        jellyframe::AppTeardownReason::LoadFailure,
+    };
+    constexpr std::uint32_t kCyclesPerReason = 30;
+    bool all_passed = true;
+    std::uint32_t total_failures = 0;
+    std::uint32_t min_internal_free =
+        static_cast<std::uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    std::uint32_t min_spiram_free =
+        static_cast<std::uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+
+    for (const jellyframe::AppTeardownReason reason : kReasons) {
+        std::uint32_t reason_failures = 0;
+        for (std::uint32_t cycle = 0; cycle < kCyclesPerReason; ++cycle) {
+            const jellyframe::AppInstance app = host.launch("org.jellyframe.fixture.native-failure",
+                                                             jellyframe::AppRole::App);
+            const jellyframe::HostServiceSubmitResult request =
+                host.submit_current(jellyframe::HostServiceJobKind::NetworkFetch);
+            const std::uint32_t handle = host.allocate_current_handle(
+                jellyframe::HostServiceHandleKind::FetchResponse, 64);
+            const bool completion_queued = request.accepted && handle != 0 &&
+                host.push_completion(jellyframe::HostServiceCompletion{
+                    request.job_id,
+                    jellyframe::HostServiceJobKind::NetworkFetch,
+                    jellyframe::HostServiceStatus::Completed,
+                    app.id,
+                    handle,
+                    0,
+                    64,
+                });
+            const jellyframe::AppTeardownResult teardown = host.terminate_current(reason);
+            const bool cleaned = teardown.app_instance_id == app.id && teardown.reason == reason &&
+                teardown.crashed && teardown.cancelled_requests == 1 &&
+                teardown.discarded_completions == 1 && teardown.released_handles == 1 &&
+                host.requests().empty() && host.completions().empty() &&
+                host.handles().active_count() == 0;
+            const jellyframe::AppInstance launcher = host.launch(
+                "org.jellyframe.system.launcher", jellyframe::AppRole::Launcher);
+            const bool launcher_ready = launcher.active() && launcher.role == jellyframe::AppRole::Launcher &&
+                host.current_app_instance_id() == launcher.id;
+            if (!completion_queued || !cleaned || !launcher_ready) {
+                all_passed = false;
+                ++reason_failures;
+                ++total_failures;
+            }
+            min_internal_free = std::min(
+                min_internal_free,
+                static_cast<std::uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+            min_spiram_free = std::min(
+                min_spiram_free,
+                static_cast<std::uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
+        }
+        ESP_LOGI(kTag,
+                 "app_runtime_native_recovery reason=%s cycles=%u failures=%u",
+                 jellyframe::app_teardown_reason_name(reason),
+                 static_cast<unsigned>(kCyclesPerReason),
+                 static_cast<unsigned>(reason_failures));
+    }
+    host.exit_current();
+    ESP_LOGI(kTag,
+             "app_runtime_native_recovery_summary scripting=0 cycles=%u failures=%u system_shell_retained=1 internal_free_min=%u spiram_free_min=%u",
+             static_cast<unsigned>(kCyclesPerReason * kReasons.size()),
+             static_cast<unsigned>(total_failures),
+             static_cast<unsigned>(min_internal_free),
+             static_cast<unsigned>(min_spiram_free));
+    return all_passed && total_failures == 0;
+}
+#endif
+
 void bind_band_navigation(TimerUiTaskContext& context) {
     struct Route {
         const char* control_id;
@@ -1764,6 +1854,15 @@ void run_retained_ui_task(void* raw_context) {
                      static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
                      static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
         }
+#if CONFIG_JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+        if (context->app_runtime_recovery_acceptance && !context->app_runtime_recovery_complete &&
+            first_frame && presented) {
+            context->app_runtime_recovery_complete = true;
+            if (!run_native_app_runtime_recovery_preflight()) {
+                ESP_LOGE(kTag, "app runtime native recovery preflight failed; native system shell remains active");
+            }
+        }
+#endif
         ++context->telemetry.frames;
         if (frame_plan.update.action != jellyframe::FrameUpdateAction::None) {
             ++context->telemetry.active_frames;
@@ -1933,6 +2032,19 @@ bool start_image_acceptance_task() {
     context->telemetry_app_id = "org.jellyframe.bringup.image";
     context->image_acceptance = true;
     return start_ui_task(context, "jellyframe_image");
+}
+
+bool start_app_runtime_recovery_acceptance_task() {
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (context == nullptr) {
+        ESP_LOGE(kTag, "app runtime recovery task context allocation failed");
+        return false;
+    }
+    context->band_shell = true;
+    context->app_runtime_recovery_acceptance = true;
+    context->telemetry_case = "app_runtime_native_recovery_cumulative";
+    context->telemetry_app_id = "org.jellyframe.system.launcher";
+    return start_ui_task(context, "jellyframe_app_recovery");
 }
 
 } // namespace jellyframe_esp32s3

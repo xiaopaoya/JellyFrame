@@ -214,6 +214,26 @@ port also contains an acceptance-only bounded BMP image adapter; use the
 image acceptance profile to exercise successful decode, cache reuse,
 unsupported format rejection, and oversized/corrupt input handling.
 
+For the AppRuntime lifecycle preflight, use
+`sdkconfig.ws147_app_runtime_recovery_acceptance.defaults` with an isolated
+build directory:
+
+```powershell
+idf.py -B build-ws147-app-runtime-recovery `
+  -D "SDKCONFIG=build-ws147-app-runtime-recovery/sdkconfig" `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_app_runtime_recovery_acceptance.defaults" build
+idf.py -B build-ws147-app-runtime-recovery `
+  -D "SDKCONFIG=build-ws147-app-runtime-recovery/sdkconfig" -p COMx flash monitor
+```
+
+The native system shell must present first, then the log must report zero
+failures for 30 cycles each of `runtime-error`, `budget-exceeded` and
+`load-failure`, followed by `app_runtime_native_recovery_summary scripting=0`
+with `system_shell_retained=1`. Confirm that the shell remains interactive
+after the summary. This is deliberately a native AppRuntime integration
+preflight, not H5 script-watchdog acceptance: no third-party DOM or
+JerryScript realm is started by this configuration.
+
 For the ESP32-S3 SoC sleep fixture, use a separate build directory:
 
 ```powershell
@@ -268,6 +288,7 @@ Useful `menuconfig` entries:
 - `JellyFrame ESP32-S3 benchmark -> Run opaque linear-gradient presentation fixture`
 - `JellyFrame ESP32-S3 benchmark -> Run panel screen-off/resume acceptance fixture`
 - `JellyFrame ESP32-S3 benchmark -> Run missing-resource fallback fixture`
+- `JellyFrame ESP32-S3 benchmark -> Run native AppRuntime recovery preflight`
 - `JellyFrame ESP32-S3 benchmark -> UI task stack size`
 - `JellyFrame ESP32-S3 benchmark -> Dither RGB565 presentation for pages containing gradients`
 - `JellyFrame ESP32-S3 benchmark -> Scroll benchmark step in pixels`
