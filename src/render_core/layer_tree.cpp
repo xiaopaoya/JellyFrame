@@ -714,11 +714,12 @@ void paint_outline(const LayoutBox& box, DisplayList& display_list) {
         safe_edge(box.rect.width, extent * 2),
         safe_edge(box.rect.height, extent * 2),
     };
+    const int border_radius = resolved_border_radius(box);
     push_stroke_rect(display_list,
                      outline_rect,
                      box.style.outline_color,
                      width,
-                     expand_corner_radii(resolved_border_radius(box), extent));
+                     has_corner_radius(border_radius) ? expand_corner_radii(border_radius, extent) : 0);
 }
 
 void paint_meter_bar(const LayoutBox& box, DisplayList& display_list) {

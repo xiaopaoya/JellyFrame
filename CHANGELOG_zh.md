@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-07-23；适用版本：0.5.0-dev
+> 最后更新：2026-07-25；适用版本：0.5.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -10,6 +10,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 明确 0.5 收束状态：平台无关的核心/工具/文档工作进入收束候选，正式切 `0.5.0`
+  仍需要 WS147 实机签收。新增视觉、字体/图片、滚动、恢复和输入验收的硬件签收清单。
 - 新增默认关闭的 `JELLYFRAME_ENABLE_SANITIZERS` CMake 开关，用于 Clang/GCC 的 AddressSanitizer 与 UndefinedBehaviorSanitizer 构建。CI 现会在 Linux 上以这两种 sanitizer 运行非 scripting 的核心/工具测试；该项不宣称已覆盖 scripting bridge 的 sanitizer。
 - 将当前开发线明确为 `0.5.0-dev` 收尾：`0.5` 的关闭条件是设备可用性、诊断、宿主契约和真实
   port 证据；完成后才进入以外部开发者试用为目标的 `0.6.0-dev`。该阶段不承诺完整浏览器兼容。
@@ -21,6 +23,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 修复
 
+- 修复方形 `outline`/offset 与圆角描边覆盖：focus ring 和带边框控件会保留直边，不再退化为只描圆角。
+  新增方形 outline 几何和圆角描边直边覆盖的 render-core 回归。
 - HTML tokenizer 现在在 DOM 构造前限制 tag 名、属性名和属性值的字节数。超限字节会继续被消费并输出稳定
   diagnostic，但不会让 token 内字符串持续扩容；既有属性数量限制不变。
 - `FormData` 现在在核心 form collection 与 JavaScript `append()`/`set()` 路径应用独立 entry 与

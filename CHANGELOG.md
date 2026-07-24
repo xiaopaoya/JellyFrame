@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-07-23; Applies to: 0.5.0-dev
+> Last updated: 2026-07-25; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -10,6 +10,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Clarified the 0.5 closeout state: platform-neutral core/tool/doc work is now
+  a closeout candidate, while the official `0.5.0` cut still requires
+  real-device WS147 sign-off. Added a hardware sign-off checklist for visual,
+  font/image, scroll, recovery and input acceptance.
 - Added the default-off `JELLYFRAME_ENABLE_SANITIZERS` CMake switch for
   Clang/GCC AddressSanitizer plus UndefinedBehaviorSanitizer builds. CI now
   runs the non-scripting core/tool suite on Linux with both sanitizers; this
@@ -29,6 +33,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- Fixed square `outline`/offset painting and rounded stroke coverage so focus
+  rings and bordered controls keep their straight edges instead of degenerating
+  into corner-only strokes. Added render-core regressions for square outline
+  geometry and rounded stroke edge coverage.
 - HTML tokenizer tag-name, attribute-name and attribute-value byte limits now
   apply before DOM construction. Excess bytes are consumed with stable
   diagnostics instead of allowing token strings to keep growing; the existing

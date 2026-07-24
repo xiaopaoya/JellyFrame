@@ -495,6 +495,7 @@ void outline_offset_expands_focus_stroke_without_affecting_layout() {
         check(command.rect.x == button->rect.x - 5 && command.rect.y == button->rect.y - 5 &&
                   command.rect.width == button->rect.width + 10 && command.rect.height == button->rect.height + 10,
               "outline offset expands only the non-layout stroke geometry");
+        check(command.border_radius == 0, "square outline remains square after offset");
         return;
     }
     check(false, "outline offset fixture emits a stroke command");

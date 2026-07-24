@@ -193,6 +193,9 @@ int rounded_rect_coverage(Rect rect, int encoded_radius, int x, int y) {
     const int top = rect.y;
     const int right = safe_edge(rect.x, rect.width);
     const int bottom = safe_edge(rect.y, rect.height);
+    if (x < left || x >= right || y < top || y >= bottom) {
+        return 0;
+    }
     int cx = 0;
     int cy = 0;
     int radius = 0;
