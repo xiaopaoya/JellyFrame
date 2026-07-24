@@ -1,21 +1,30 @@
-﻿#include "render_core/hit_test.h"
+#include "render_core/hit_test.h"
 
 #include "render_core/dom.h"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace jellyframe {
 namespace {
 
 bool contains(Rect rect, int x, int y) {
-    return x >= rect.x && y >= rect.y && x < rect.x + rect.width && y < rect.y + rect.height;
+    const std::int64_t right = static_cast<std::int64_t>(rect.x) + static_cast<std::int64_t>(rect.width);
+    const std::int64_t bottom = static_cast<std::int64_t>(rect.y) + static_cast<std::int64_t>(rect.height);
+    return x >= rect.x && y >= rect.y &&
+        static_cast<std::int64_t>(x) < right &&
+        static_cast<std::int64_t>(y) < bottom;
 }
 
 Rect intersect_rect(Rect left, Rect right) {
     const int x1 = std::max(left.x, right.x);
     const int y1 = std::max(left.y, right.y);
-    const int x2 = std::min(left.x + left.width, right.x + right.width);
-    const int y2 = std::min(left.y + left.height, right.y + right.height);
+    const std::int64_t left_right = static_cast<std::int64_t>(left.x) + static_cast<std::int64_t>(left.width);
+    const std::int64_t right_right = static_cast<std::int64_t>(right.x) + static_cast<std::int64_t>(right.width);
+    const std::int64_t left_bottom = static_cast<std::int64_t>(left.y) + static_cast<std::int64_t>(left.height);
+    const std::int64_t right_bottom = static_cast<std::int64_t>(right.y) + static_cast<std::int64_t>(right.height);
+    const int x2 = static_cast<int>(std::min(left_right, right_right));
+    const int y2 = static_cast<int>(std::min(left_bottom, right_bottom));
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }

@@ -1,8 +1,9 @@
-﻿#include "render_core/embedded_framebuffer.h"
+#include "render_core/embedded_framebuffer.h"
 #include "render_core/software_renderer.h"
 
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -376,8 +377,17 @@ void present_stats_estimate_matches_dirty_rect_accounting() {
           "estimated stats count full frame present");
 }
 
+void oversized_framebuffer_dimensions_are_rejected() {
+    check(embedded_framebuffer_min_stride_bytes(std::numeric_limits<int>::max(), EmbeddedPixelFormat::Rgba8888) == 0,
+          "oversized rgba stride is rejected");
+    check(embedded_framebuffer_min_size(std::numeric_limits<int>::max(), 2, EmbeddedPixelFormat::Rgba8888) == 0,
+          "oversized rgba buffer size is rejected");
+    check(embedded_framebuffer_packed_rect_bytes(std::numeric_limits<int>::max(),
+                                                 std::numeric_limits<int>::max(),
+                                                 EmbeddedPixelFormat::Rgb565) == 0,
+          "oversized packed rect byte count is rejected");
+}
 } // namespace
-
 int main() {
     try {
         stride_and_size_are_bounded();
@@ -392,6 +402,7 @@ int main() {
         invalid_target_fails_cleanly();
         clipped_and_empty_rects_are_reported();
         present_stats_estimate_matches_dirty_rect_accounting();
+        oversized_framebuffer_dimensions_are_rejected();
     } catch (const std::exception& error) {
         std::cerr << "embedded framebuffer test failed: " << error.what() << '\n';
         return 1;

@@ -1,4 +1,4 @@
-﻿#include "render_core/embedded_framebuffer.h"
+#include "render_core/embedded_framebuffer.h"
 
 #include <algorithm>
 #include <array>
@@ -13,8 +13,8 @@ bool empty_rect(Rect rect) {
 Rect intersect_rect(Rect left, Rect right) {
     const int x1 = std::max(left.x, right.x);
     const int y1 = std::max(left.y, right.y);
-    const int x2 = std::min(left.x + left.width, right.x + right.width);
-    const int y2 = std::min(left.y + left.height, right.y + right.height);
+    const int x2 = std::min(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::min(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
@@ -129,7 +129,11 @@ bool valid_target(const EmbeddedFrameBufferTarget& target) {
     if (min_stride == 0 || stride < min_stride) {
         return false;
     }
-    const std::size_t required = stride * static_cast<std::size_t>(target.height - 1) + min_stride;
+    std::size_t required = 0;
+    if (!checked_multiply(stride, static_cast<std::size_t>(target.height - 1), required) ||
+        !checked_add(required, min_stride, required)) {
+        return false;
+    }
     return target.byte_size >= required;
 }
 
@@ -148,7 +152,7 @@ bool packed_rect_pixel_count(Rect rect, std::size_t capacity, std::size_t& pixel
     }
     const std::size_t width = static_cast<std::size_t>(rect.width);
     const std::size_t height = static_cast<std::size_t>(rect.height);
-    if (width > capacity / height) {
+    if (height == 0 || width > capacity / height) {
         return false;
     }
     pixel_count = width * height;
@@ -332,13 +336,14 @@ std::size_t embedded_framebuffer_min_stride_bytes(int width, EmbeddedPixelFormat
         return 0;
     }
     const std::size_t w = static_cast<std::size_t>(width);
+    std::size_t stride = 0;
     switch (format) {
     case EmbeddedPixelFormat::Rgba8888:
     case EmbeddedPixelFormat::Bgra8888:
-        return w * 4U;
+        return checked_multiply(w, 4U, stride) ? stride : 0U;
     case EmbeddedPixelFormat::Rgb565:
     case EmbeddedPixelFormat::Bgr565:
-        return w * 2U;
+        return checked_multiply(w, 2U, stride) ? stride : 0U;
     case EmbeddedPixelFormat::Rgb332:
     case EmbeddedPixelFormat::Gray8:
         return w;
@@ -358,21 +363,33 @@ std::size_t embedded_framebuffer_min_size(int width,
     }
     const std::size_t min_stride = embedded_framebuffer_min_stride_bytes(width, format);
     const std::size_t stride = stride_bytes == 0 ? min_stride : stride_bytes;
-    if (stride < min_stride) {
+    if (min_stride == 0 || stride < min_stride) {
         return 0;
     }
-    return stride * static_cast<std::size_t>(height - 1) + min_stride;
+    std::size_t row_bytes = 0;
+    if (!checked_multiply(stride, static_cast<std::size_t>(height - 1), row_bytes) ||
+        !checked_add(row_bytes, min_stride, row_bytes)) {
+        return 0;
+    }
+    return row_bytes;
 }
 
 std::size_t embedded_framebuffer_packed_rect_bytes(int width, int height, EmbeddedPixelFormat format) {
     if (width <= 0 || height <= 0) {
         return 0;
     }
+    const std::size_t w = static_cast<std::size_t>(width);
     const std::size_t h = static_cast<std::size_t>(height);
+    std::size_t row_bytes = 0;
     if (format == EmbeddedPixelFormat::Mono1Msb || format == EmbeddedPixelFormat::Mono1Lsb) {
-        return ((static_cast<std::size_t>(width) + 7U) / 8U) * h;
+        row_bytes = (w + 7U) / 8U;
+    } else {
+        if (!checked_multiply(w, bytes_per_pixel_floor(format), row_bytes)) {
+            return 0;
+        }
     }
-    return static_cast<std::size_t>(width) * h * bytes_per_pixel_floor(format);
+    std::size_t total = 0;
+    return checked_multiply(row_bytes, h, total) ? total : 0U;
 }
 
 bool present_to_embedded_framebuffer(const HostFrameBufferView& frame,

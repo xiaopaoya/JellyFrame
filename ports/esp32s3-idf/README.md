@@ -593,18 +593,18 @@ are packed into a temporary tight buffer.
 
 ## Text And Input Smoke Hooks
 
-`main/jellyframe_esp32s3_noto_sans_sc_font.cpp` is the recovered offline
-generated Noto Sans SC bitmap pack. It contains Regular/Medium/Bold at 16/20/24
-px, ASCII, common symbols and GB2312 level-1 coverage: 9 faces, 4,541 covered
-characters, 40,869 glyphs and 3,262,475 bitmap bytes. The generator is
+`build/generated_noto_sans_sc_font/jellyframe_esp32s3_noto_sans_sc_font.cpp`
+is the offline-generated Noto Sans SC bitmap pack used by the port build. It
+contains Regular/Medium/Bold at 16/20/24 px, ASCII, common symbols and GB2312
+level-1 coverage: 9 faces, 4,541 covered characters, 40,869 glyphs and
+3,262,475 bitmap bytes. The generator is
 `tools/generate_noto_sans_sc_font_pack.py`; Pillow and the source font files
-are needed only when regenerating the checked-in source. The tiny
-`main/generated` fixture remains available for early debug fallback, but the
-normal AppFont callbacks use Noto. The recovered pack is 1bpp. Its Noto Sans
-SC 2.002/OFL source and reproduction record live under `font/`; product
-acceptance still requires a normal-distance 1bpp/2bpp visual selection. The
-current 2bpp candidate leaves only 7.21% of the 8 MB app partition free, while
-4bpp does not fit that layout.
+are needed only when regenerating the pack. The tiny `main/generated` fixture
+remains available for early debug fallback, but the normal AppFont callbacks
+use Noto. The pack is 1bpp. Its Noto Sans SC 2.002/OFL source and reproduction
+record live under `font/`; product acceptance still requires a normal-distance
+1bpp/2bpp visual selection. The current 2bpp candidate leaves only 7.21% of
+the 8 MB app partition free, while 4bpp does not fit that layout.
 
 Run the physical smoke with an isolated configuration:
 

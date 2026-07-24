@@ -1,7 +1,8 @@
 #include "render_core/bitmap_font_resource.h"
 
+#include "render_core/geometry.h"
+
 #include <cstring>
-#include <limits>
 
 namespace jellyframe {
 namespace {
@@ -23,14 +24,6 @@ std::uint32_t read_u32(const std::uint8_t* data) {
 
 bool range_within(std::size_t offset, std::size_t length, std::size_t size) {
     return offset <= size && length <= size - offset;
-}
-
-bool checked_multiply(std::size_t left, std::size_t right, std::size_t& result) {
-    if (left != 0 && right > std::numeric_limits<std::size_t>::max() / left) {
-        return false;
-    }
-    result = left * right;
-    return true;
 }
 
 } // namespace

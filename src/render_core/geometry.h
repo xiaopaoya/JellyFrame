@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,29 @@ struct Rect {
     int width = 0;
     int height = 0;
 };
+
+inline int safe_edge(int origin, int extent) {
+    const std::int64_t edge = static_cast<std::int64_t>(origin) + static_cast<std::int64_t>(extent);
+    return static_cast<int>(std::clamp(edge,
+                                       static_cast<std::int64_t>(std::numeric_limits<int>::min()),
+                                       static_cast<std::int64_t>(std::numeric_limits<int>::max())));
+}
+
+inline bool checked_multiply(std::size_t left, std::size_t right, std::size_t& result) {
+    if (left != 0 && right > std::numeric_limits<std::size_t>::max() / left) {
+        return false;
+    }
+    result = left * right;
+    return true;
+}
+
+inline bool checked_add(std::size_t left, std::size_t right, std::size_t& result) {
+    if (std::numeric_limits<std::size_t>::max() - left < right) {
+        return false;
+    }
+    result = left + right;
+    return true;
+}
 
 struct EdgeSizes {
     int top = 0;

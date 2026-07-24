@@ -37,8 +37,8 @@ Rect union_rect(Rect left, Rect right) {
     }
     const int x1 = std::min(left.x, right.x);
     const int y1 = std::min(left.y, right.y);
-    const int x2 = std::max(left.x + left.width, right.x + right.width);
-    const int y2 = std::max(left.y + left.height, right.y + right.height);
+    const int x2 = std::max(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::max(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
     return Rect{x1, y1, x2 - x1, y2 - y1};
 }
 
@@ -191,10 +191,19 @@ void push_box_shadow(DisplayList& display_list,
     if (rect.width <= 0 || rect.height <= 0 || color.a == 0 || extent <= 0) {
         return;
     }
+    const std::int64_t extent64 = static_cast<std::int64_t>(extent);
+    const std::int64_t twice_extent64 = extent64 * 2;
+    const int twice_extent = static_cast<int>(std::clamp(twice_extent64,
+                                                         static_cast<std::int64_t>(std::numeric_limits<int>::min()),
+                                                         static_cast<std::int64_t>(std::numeric_limits<int>::max())));
     DisplayCommand command;
     command.type = DisplayCommandType::BoxShadow;
-    command.rect = Rect{rect.x - extent, rect.y - extent,
-                        rect.width + extent * 2, rect.height + extent * 2};
+    command.rect = Rect{
+        safe_edge(rect.x, -extent),
+        safe_edge(rect.y, -extent),
+        safe_edge(rect.width, twice_extent),
+        safe_edge(rect.height, twice_extent),
+    };
     command.color = color;
     command.color2 = color;
     command.border_radius = expand_corner_radii(border_radius, extent);
@@ -279,9 +288,9 @@ void push_border_rects(DisplayList& display_list, Rect rect, const EdgeSizes& bo
         return;
     }
     push_fill_rect(display_list, Rect{rect.x, rect.y, rect.width, border.top}, color);
-    push_fill_rect(display_list, Rect{rect.x, rect.y + rect.height - border.bottom, rect.width, border.bottom}, color);
+    push_fill_rect(display_list, Rect{rect.x, safe_edge(rect.y, safe_edge(rect.height, -border.bottom)), rect.width, border.bottom}, color);
     push_fill_rect(display_list, Rect{rect.x, rect.y, border.left, rect.height}, color);
-    push_fill_rect(display_list, Rect{rect.x + rect.width - border.right, rect.y, border.right, rect.height}, color);
+    push_fill_rect(display_list, Rect{safe_edge(rect.x, safe_edge(rect.width, -border.right)), rect.y, border.right, rect.height}, color);
 }
 
 void push_text(DisplayList& display_list,
@@ -385,10 +394,10 @@ void push_text_with_layout(DisplayList& display_list,
     for (std::size_t line_index = 0; line_index < lines.size(); ++line_index) {
         const std::string& line = lines[line_index];
         const int y = rect.y + static_cast<int>(line_index) * line_height;
-        if (y >= rect.y + rect.height) {
+        if (y >= safe_edge(rect.y, rect.height)) {
             break;
         }
-        Rect line_rect{rect.x, y, rect.width, std::min(line_height, rect.y + rect.height - y)};
+        Rect line_rect{rect.x, y, rect.width, std::min(line_height, safe_edge(rect.y, rect.height) - y)};
         if (!split_scalars) {
             push_text(display_list, line_rect, color, line, style.font_size, style.font_weight,
                       style.font_family_hash, align, true);
@@ -668,10 +677,10 @@ void paint_box_shadow(const LayoutBox& box,
     const int extent = std::max(1, blur) + shadow.spread;
     const int spread = shadow.spread;
     const Rect shadow_rect{
-        box.rect.x + shadow.offset_x - extent,
-        box.rect.y + shadow.offset_y - extent,
-        box.rect.width + extent * 2,
-        box.rect.height + extent * 2,
+        safe_edge(box.rect.x, shadow.offset_x - extent),
+        safe_edge(box.rect.y, shadow.offset_y - extent),
+        safe_edge(box.rect.width, extent * 2),
+        safe_edge(box.rect.height, extent * 2),
     };
     const long long shadow_area = static_cast<long long>(std::max(0, shadow_rect.width)) *
         static_cast<long long>(std::max(0, shadow_rect.height));
@@ -700,10 +709,10 @@ void paint_outline(const LayoutBox& box, DisplayList& display_list) {
     const int width = box.style.outline_width;
     const int extent = std::max(0, width + box.style.outline_offset);
     const Rect outline_rect{
-        box.rect.x - extent,
-        box.rect.y - extent,
-        box.rect.width + extent * 2,
-        box.rect.height + extent * 2,
+        safe_edge(box.rect.x, -extent),
+        safe_edge(box.rect.y, -extent),
+        safe_edge(box.rect.width, extent * 2),
+        safe_edge(box.rect.height, extent * 2),
     };
     push_stroke_rect(display_list,
                      outline_rect,
@@ -1096,8 +1105,8 @@ bool needs_own_layer(LayerReasons reasons) {
 Rect intersect_rect(Rect left, Rect right) {
     const int x1 = std::max(left.x, right.x);
     const int y1 = std::max(left.y, right.y);
-    const int x2 = std::min(left.x + left.width, right.x + right.width);
-    const int y2 = std::min(left.y + left.height, right.y + right.height);
+    const int x2 = std::min(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::min(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }

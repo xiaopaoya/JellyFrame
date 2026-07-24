@@ -8,6 +8,7 @@
 #include "render_core/render_tree.h"
 
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -532,6 +533,18 @@ void dirty_rect_coalescing_clips_and_handles_large_areas() {
           "coalescing area accounting handles maximum representable rectangles");
 }
 
+void dirty_region_area_handles_extreme_rects_safely() {
+    DirtyRegionResult result;
+    result.rects.push_back(Rect{std::numeric_limits<int>::max() - 1,
+                                std::numeric_limits<int>::max() - 1,
+                                2,
+                                2});
+    result.rects.push_back(Rect{0, 0, 1, 1});
+    check(dirty_region_area(result) > 0, "extreme dirty region keeps a positive area");
+    check(dirty_region_area_percent(result, Rect{0, 0, 100, 100}) == 100,
+          "extreme dirty region saturates at viewport percent");
+}
+
 } // namespace
 
 int main() {
@@ -554,6 +567,7 @@ int main() {
         dirty_rect_coalescing_respects_extra_area_budget();
         dirty_rect_coalescing_forces_deterministic_low_extra_merge();
         dirty_rect_coalescing_clips_and_handles_large_areas();
+        dirty_region_area_handles_extreme_rects_safely();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

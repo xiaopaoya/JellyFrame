@@ -13,8 +13,8 @@ bool empty_rect(Rect rect) {
 Rect intersect_rect(Rect left, Rect right) {
     const int x1 = std::max(left.x, right.x);
     const int y1 = std::max(left.y, right.y);
-    const int x2 = std::min(left.x + left.width, right.x + right.width);
-    const int y2 = std::min(left.y + left.height, right.y + right.height);
+    const int x2 = std::min(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::min(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
@@ -30,8 +30,8 @@ Rect union_rect(Rect left, Rect right) {
     }
     const int x1 = std::min(left.x, right.x);
     const int y1 = std::min(left.y, right.y);
-    const int x2 = std::max(left.x + left.width, right.x + right.width);
-    const int y2 = std::max(left.y + left.height, right.y + right.height);
+    const int x2 = std::max(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::max(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
     return Rect{x1, y1, x2 - x1, y2 - y1};
 }
 

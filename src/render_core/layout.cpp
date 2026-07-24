@@ -811,20 +811,22 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
                 const int child_height = layout_box(*child, content_x, cursor_y, content_width, height, depth + 1);
                 cursor_y += child_height;
                 flow_height += child_height;
-                max_child_width = std::max(max_child_width,
-                    child->rect.width + child->style.margin.left + child->style.margin.right);
+                const int child_left = safe_edge(child->rect.x, -child->style.margin.left);
+                const int child_right = safe_edge(safe_edge(child->rect.x, child->rect.width), child->style.margin.right);
+                max_child_width = std::max(max_child_width, child_right - child_left);
             }
             return flow_height;
         }();
     if (box.style.width < 0 && box.style.width_percent < 0 &&
         (box.style.display == Display::Inline || box.style.display == Display::InlineBlock)) {
         if (!box.children.empty()) {
-            int min_child_x = box.children.front()->rect.x - box.children.front()->style.margin.left;
-            int max_child_x = box.children.front()->rect.x + box.children.front()->rect.width +
-                box.children.front()->style.margin.right;
+            int min_child_x = safe_edge(box.children.front()->rect.x, -box.children.front()->style.margin.left);
+            int max_child_x = safe_edge(safe_edge(box.children.front()->rect.x, box.children.front()->rect.width),
+                                        box.children.front()->style.margin.right);
             for (const auto& child : box.children) {
-                min_child_x = std::min(min_child_x, child->rect.x - child->style.margin.left);
-                max_child_x = std::max(max_child_x, child->rect.x + child->rect.width + child->style.margin.right);
+                min_child_x = std::min(min_child_x, safe_edge(child->rect.x, -child->style.margin.left));
+                max_child_x = std::max(max_child_x,
+                    safe_edge(safe_edge(child->rect.x, child->rect.width), child->style.margin.right));
             }
             max_child_width = std::max(0, max_child_x - min_child_x);
         }

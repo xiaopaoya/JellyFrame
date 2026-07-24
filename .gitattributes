@@ -7,3 +7,4 @@
 *.gif binary
 *.webp binary
 *.bdf text eol=lf
+ports/esp32s3-idf/font/source/**/*.otf export-ignore

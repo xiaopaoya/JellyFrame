@@ -13,8 +13,8 @@ bool empty_rect(Rect rect) {
 Rect intersect_rect(Rect left, Rect right) {
     const int x1 = std::max(left.x, right.x);
     const int y1 = std::max(left.y, right.y);
-    const int x2 = std::min(left.x + left.width, right.x + right.width);
-    const int y2 = std::min(left.y + left.height, right.y + right.height);
+    const int x2 = std::min(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::min(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
@@ -44,8 +44,8 @@ bool contains_rect(Rect outer, Rect inner) {
     return !empty_rect(inner) &&
         inner.x >= outer.x &&
         inner.y >= outer.y &&
-        inner.x + inner.width <= outer.x + outer.width &&
-        inner.y + inner.height <= outer.y + outer.height;
+        safe_edge(inner.x, inner.width) <= safe_edge(outer.x, outer.width) &&
+        safe_edge(inner.y, inner.height) <= safe_edge(outer.y, outer.height);
 }
 
 std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects, std::size_t dirty_rect_count) {

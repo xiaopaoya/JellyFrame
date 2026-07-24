@@ -3,7 +3,8 @@
 The ESP32-S3 production bitmap pack is generated offline from the three font
 files in `source/noto-sans-sc-2.002`. They are retained with the port so a
 developer does not need an undocumented `C:\Windows\Fonts` installation to
-reproduce the checked-in pack.
+reproduce the pack. The generated C++ output is written to the build tree,
+not kept as a checked-in source file.
 
 ## Provenance
 

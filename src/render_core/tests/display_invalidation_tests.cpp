@@ -1,4 +1,4 @@
-﻿#include "render_core/css_parser.h"
+#include "render_core/css_parser.h"
 #include "render_core/display_invalidation.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
@@ -6,6 +6,7 @@
 #include "render_core/render_tree.h"
 
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 using namespace jellyframe;
@@ -84,14 +85,25 @@ void clipped_and_composited_layers_are_visible_in_diagnostics() {
     check(result.composited_layers_intersecting > 0, "composited layer is counted");
 }
 
+void extreme_dirty_rects_are_safely_normalized() {
+    auto layer_tree = build_layer_tree("<body><section>A</section></body>", "body { margin: 0; } section { width: 80px; height: 30px; margin: 0; }");
+    const Rect dirty_rects[] = {
+        Rect{std::numeric_limits<int>::max() - 20, std::numeric_limits<int>::max() - 20, 10, 10},
+        Rect{std::numeric_limits<int>::max() - 19, std::numeric_limits<int>::max() - 19, 4, 4},
+    };
+    const DisplayInvalidationResult result = analyze_display_invalidation(*layer_tree, dirty_rects, 2);
+    check(result.dirty_rect_count == 1, "extreme dirty rects normalize to one rect");
+    check(result.dirty_area == 100, "extreme dirty rects keep exact area");
+    check(result.layers_visited >= 1, "extreme dirty rects still traverse layers safely");
+}
 } // namespace
-
 int main() {
     try {
         empty_dirty_rects_report_no_work();
         local_dirty_rect_reports_intersecting_commands_and_layers();
         contained_dirty_rects_are_normalized_for_diagnostics();
         clipped_and_composited_layers_are_visible_in_diagnostics();
+        extreme_dirty_rects_are_safely_normalized();
     } catch (const std::exception& error) {
         std::cerr << "display invalidation test failed: " << error.what() << '\n';
         return 1;
