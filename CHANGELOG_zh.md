@@ -23,6 +23,13 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 修复
 
+- HTML DOM 节点上限现在包含合成的 `html`/`head`/`body` 结构；HTML text/CDATA 与 CSS 输入、selector、at-rule prelude、declaration value 也会在临时 parser 存储无限增长前受限。超限字段会被消费或跳过，并输出稳定 diagnostic。
+- worker 已持有的 service request 会在 app teardown 后继续计入预算，直至 stale completion 成功投递；预算 telemetry 现将 queued 和 in-flight 一并统计，避免迟到 worker 结果静默释放并发容量。
+- worker completion 遇到已满的 UI ring 时会保留在固定的 in-flight slot，直至成功投递。Host handle 现采用受同步保护的 copy-out 查询；system event producer/UI-pump 也围绕原子 app-instance snapshot 同步。
+- 桌面 `.jfapp` loader 会在乘法或 `reserve()` 前拒绝过大的 resource-index count；manifest 字段只从所属 JSON object 的直接成员或显式请求的已文档化嵌套 object 读取；`jellyframe_cli.py trial --clean` 现在只能删除仓库 `build/` 下的子目录。
+- registry 安装现在要求 package 的规范化 manifest summary 具备完整且类型正确的字段，并验证 capability 派生布尔值与 `permissions`/`capabilities` 数组一致；畸形 summary 会在修改 registry 前被拒绝。
+- 带 transform 的 layer 超过 offscreen budget 时现在会报告并跳过，不再静默绘制未变换结果。`text-overflow` 具有显式 specified 状态，嵌套元素不会意外继承父级 ellipsis。
+- Host budget 为零时，JavaScript timer、listener、detached node 和 animation allocation 会按宿主策略真正禁用。相同 node/type/callback/capture 的重复 `addEventListener()` 会去重，移除也会匹配 capture。
 - 修复方形 `outline`/offset 与圆角描边覆盖：focus ring 和带边框控件会保留直边，不再退化为只描圆角。
   新增方形 outline 几何和圆角描边直边覆盖的 render-core 回归。
 - HTML tokenizer 现在在 DOM 构造前限制 tag 名、属性名和属性值的字节数。超限字节会继续被消费并输出稳定

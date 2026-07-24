@@ -33,6 +33,34 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- HTML DOM node limits now include synthesized `html`/`head`/`body` structure,
+  and HTML text/CDATA plus CSS input, selector, at-rule prelude and declaration
+  values are bounded before their temporary parser storage can grow without
+  limit. Oversized fields are consumed or skipped with stable diagnostics.
+- Worker-owned service requests remain charged through app teardown until their
+  stale completion is posted; budget telemetry now counts queued and in-flight
+  jobs together. This prevents a late worker result from silently reopening
+  request capacity.
+- Worker completions that encounter a full UI ring are retained in their fixed
+  in-flight slot until delivery. Host handles now use synchronized copy-out
+  lookup, and system-event producer/UI-pump access is synchronized around an
+  atomic app-instance snapshot.
+- The desktop `.jfapp` loader rejects oversized resource-index counts before
+  multiplication or `reserve()`, reads manifest fields only from their direct
+  JSON object level or an explicitly requested documented nested object, and
+  `jellyframe_cli.py trial --clean` can only delete a descendant of the
+  repository `build/` directory.
+- Registry installation now requires the package's normalized manifest summary
+  to contain complete typed fields and capability projections consistent with
+  its `permissions` and `capabilities` arrays; malformed summaries are rejected
+  before registry mutation.
+- A transformed layer that exceeds its offscreen budget now reports and skips
+  rather than silently painting an untransformed result. `text-overflow` now
+  carries an explicit specified state, so nested elements no longer inherit a
+  parent ellipsis unintentionally.
+- Host budgets of zero now disable JavaScript timer, listener, detached-node and
+  animation allocation as requested. Duplicate `addEventListener()` calls are
+  ignored by node/type/callback/capture identity, and removal matches capture.
 - Fixed square `outline`/offset painting and rounded stroke coverage so focus
   rings and bordered controls keep their straight edges instead of degenerating
   into corner-only strokes. Added render-core regressions for square outline

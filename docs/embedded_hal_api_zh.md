@@ -1,6 +1,6 @@
 # 嵌入式 HAL API
 
-> 最后更新：2026-07-13；适用版本：0.5.0-dev
+> 最后更新：2026-07-25；适用版本：0.5.0-dev
 
 
 这份文档是 ESP32-S3、RTOS host 或具体开发板需要实现的接口清单。`jellyframe_render_core`
@@ -104,6 +104,11 @@ pump_completions(max_events) -> completion events
 completion event 只能在 UI/main task 的帧边界被消费。事件里应包含 job id、状态、资源句柄或错误码；
 不要让 worker 线程直接改 DOM、执行 JS、重建 layout 或写 framebuffer。这样能保证第三方 app 发起
 网络请求、播放音频或安装包校验时，系统 app/启动器和当前页面仍能响应输入。
+
+request 一旦由 worker 持有就继续占用预算。若工作完成后 completion ring 已满，宿主必须把该有界
+completion 保留在原 in-flight slot，等 UI frame 可投递后再交付；不得丢弃结果后重新计算。handle table
+查询只返回 copy-out snapshot，绝不能向 worker 借出表内指针；worker 可以释放 handle，但不得保留先前
+查询得到的 metadata。
 
 对于 compute job，应保持 operation 词表小且由产品宿主定义。只复制有界字节到宿主拥有的 job 存储，
 返回不透明 handle 或有界结果记录。worker 不得访问 DOM、JerryScript、layout、display list 或 framebuffer 内存。

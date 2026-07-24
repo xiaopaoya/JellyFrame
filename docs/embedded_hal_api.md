@@ -1,6 +1,6 @@
 # Embedded HAL API
 
-> Last updated: 2026-07-13; Applies to: 0.5.0-dev
+> Last updated: 2026-07-25; Applies to: 0.5.0-dev
 
 
 This document is the implementation checklist for a board or RTOS host such as
@@ -131,6 +131,13 @@ a job id, status, resource handle or error code. Worker tasks must never mutate
 DOM, run JavaScript, rebuild layout or write the framebuffer directly. This lets
 third-party apps request data, play audio or install packages without stalling
 the system shell or the active page.
+
+The request slot remains charged while a worker owns it. If the completion ring
+becomes full after work has finished, the host retains that bounded completion
+in the existing in-flight slot until a UI frame can post it; do not discard and
+recompute results. Handle-table inspection uses a copy-out snapshot, never a
+borrowed table pointer. A worker can release a handle, but must not retain
+metadata returned by a previous lookup.
 
 For compute jobs, keep the operation vocabulary product-defined and small. Copy
 only bounded bytes into host-owned job storage; return an opaque handle or a
