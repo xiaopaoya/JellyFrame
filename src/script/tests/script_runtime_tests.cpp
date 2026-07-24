@@ -1513,10 +1513,12 @@ void javascript_service_objects_are_invalidated_after_clear_and_rebind() {
     host.launch("org.example.service-rebind", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
     AppLocalStorageShadow storage(AppPrivateKvPolicy{true, 16, 32, 4, 128});
+    AppLocationSnapshotMock location(AppLocationSnapshotPolicy{true, 2});
     FakeAudioHost audio_host;
 
     JerryScriptRuntime runtime;
     runtime.bind_app_services(host, network);
+    runtime.bind_location_service(host, location);
     runtime.bind_local_storage(storage);
     runtime.bind_audio_host(ScriptAudioHost{fake_audio_play, &audio_host});
     runtime.bind_document(*first_document);
@@ -1532,8 +1534,21 @@ void javascript_service_objects_are_invalidated_after_clear_and_rebind() {
     check(runtime.statistics().xml_http_request_count == 1, "one active XHR before clear");
     check(runtime.statistics().audio_element_count == 1, "one active Audio before clear");
 
+    check(location.set_fixture(AppLocationSnapshotFixture{1234, 31.2304, 121.4737, 4.0f, 8.0f, 0.2f}),
+          "geolocation fixture accepted before service clear");
+    result = runtime.eval(
+        "var geoState = 'pending';"
+        "navigator.geolocation.getCurrentPosition(function () { geoState = 'success'; },"
+        "  function (error) { geoState = 'error:' + error.code + ':' + error.message; });"
+        "geoState");
+    check(result.ok && result.value == "pending", "geolocation request starts before service clear");
+    check(location.complete_next(host), "geolocation host worker completes before service clear");
+    std::vector<HostServiceCompletion> completions;
+    host.pump_frame_completions(completions);
+    check(completions.size() == 1, "geolocation completion is queued before service clear");
+    check(host.handles().active_count() == 1, "geolocation completion owns one host handle before clear");
+
     runtime.clear_app_services();
-    runtime.bind_document(*second_document);
     result = runtime.eval(
         "var types = [typeof XMLHttpRequest, typeof Audio, typeof localStorage].join(':');"
         "var xhrOpen = true;"
@@ -1550,11 +1565,21 @@ void javascript_service_objects_are_invalidated_after_clear_and_rebind() {
 
     check(result.ok, "cleared service objects script evaluates");
     check(result.value == "undefined:undefined:undefined|false:false:false:false:false",
-          "cleared services remove globals and invalidate cached objects");
+          "cleared services immediately remove globals and invalidate cached objects");
+    result = runtime.eval("typeof navigator.geolocation");
+    check(result.ok && result.value == "undefined",
+          "cleared services immediately remove geolocation namespace");
     check(runtime.statistics().xml_http_request_count == 0, "cleared XHR is not active");
     check(runtime.statistics().audio_element_count == 0, "cleared Audio is not active");
+    check(runtime.statistics().geolocation_request_count == 0, "cleared geolocation request record is collected");
+    check(host.handles().active_count() == 0, "cleared services release current app handles");
     check(storage.get_item("after", nullptr) == AppLocalStorageStatus::NotFound,
           "cleared localStorage object cannot write after service clear");
+
+    runtime.bind_document(*second_document);
+    result = runtime.eval("typeof XMLHttpRequest + ':' + typeof Audio + ':' + typeof localStorage");
+    check(result.ok && result.value == "undefined:undefined:undefined",
+          "document rebind keeps revoked service globals absent");
 }
 
 void javascript_runtime_respects_timer_and_listener_budgets() {
@@ -1679,6 +1704,9 @@ void javascript_host_data_snapshot_is_explicit_and_filtered() {
     check(result.ok && result.value == "42", "host-data reads the latest host snapshot without polling");
 
     runtime.clear_app_services();
+    result = runtime.eval("typeof navigator.jellyframe");
+    check(result.ok && result.value == "undefined",
+          "clearing services immediately removes host-data namespace");
     runtime.bind_document(*document);
     result = runtime.eval("typeof navigator.jellyframe");
     check(result.ok && result.value == "undefined", "clearing services removes host-data namespace");

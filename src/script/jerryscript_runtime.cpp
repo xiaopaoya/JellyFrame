@@ -6261,6 +6261,9 @@ void JerryScriptRuntime::clear_app_services() {
     clear_audio_elements();
     clear_geolocation_requests();
     clear_script_local_storage_bindings();
+    if (app_host_ != nullptr) {
+        app_host_->handles().release_app_instance(app_host_->current_app_instance_id());
+    }
     app_host_ = nullptr;
     network_fetch_ = nullptr;
     location_snapshot_ = nullptr;
@@ -6268,6 +6271,24 @@ void JerryScriptRuntime::clear_app_services() {
     host_data_access_policy_.reset();
     local_storage_ = nullptr;
     audio_host_ = {};
+
+    // Service teardown is a capability revocation boundary. Do not leave a
+    // usable-looking global behind until the next document bind.
+    JerryValue global(jerry_current_realm());
+    delete_property(global.get(), "XMLHttpRequest");
+    delete_property(global.get(), "Audio");
+    delete_property(global.get(), "localStorage");
+    JerryValue window_object(jerry_object_get_sz(global.get(), "window"));
+    if (jerry_value_is_object(window_object.get())) {
+        delete_property(window_object.get(), "XMLHttpRequest");
+        delete_property(window_object.get(), "Audio");
+        delete_property(window_object.get(), "localStorage");
+    }
+    JerryValue navigator_object(jerry_object_get_sz(global.get(), "navigator"));
+    if (jerry_value_is_object(navigator_object.get())) {
+        delete_property(navigator_object.get(), "geolocation");
+        delete_property(navigator_object.get(), "jellyframe");
+    }
 }
 
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {
