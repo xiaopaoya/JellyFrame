@@ -25,14 +25,40 @@ def write_jfapp(
     version_name: str = "1.0.0",
     entry: str = "/index.html",
     script: str = "classic",
+    capabilities: list[str] | None = None,
+    network_allowed: bool = False,
 ) -> None:
+    capabilities = [] if capabilities is None else capabilities
     summary = json.dumps({
         "id": app_id,
         "name": "Weather",
+        "role": "app",
         "versionName": version_name,
         "versionCode": version_code,
         "entry": entry,
+        "minJellyFrame": "0.5.0-dev",
         "script": script,
+        "viewport": {"designWidth": 172, "designHeight": 320},
+        "budgets": {"maxResourceBytes": 65536},
+        "fonts": [],
+        "targets": {"test": {"viewport": {"width": 172, "height": 320}, "output": "jfapp"}},
+        "permissions": [],
+        "capabilities": capabilities,
+        "computeJobsAllowed": False,
+        "videoFrameAllowed": False,
+        "networkAllowed": network_allowed,
+        "storageKvAllowed": False,
+        "canvas2dAllowed": False,
+        "audioPlaybackAllowed": False,
+        "sensorAccelerometerAllowed": False,
+        "sensorGyroscopeAllowed": False,
+        "sensorHeartRateAllowed": False,
+        "sensorAmbientLightAllowed": False,
+        "locationPositionAllowed": False,
+        "systemBatteryAllowed": False,
+        "systemWeatherAllowed": False,
+        "systemActivityAllowed": False,
+        "backgroundServices": {},
     }, separators=(",", ":")).encode("utf-8")
     summary_offset = app_registry.JFAPP_HEADER_SIZE
     summary_size = len(summary)
@@ -66,10 +92,33 @@ def write_jfapp_with_invalid_resource_entry(path: Path) -> None:
     summary = json.dumps({
         "id": "org.example.weather",
         "name": "Weather",
+        "role": "app",
         "versionName": "1.0.0",
         "versionCode": 1,
         "entry": "/index.html",
+        "minJellyFrame": "0.5.0-dev",
         "script": "classic",
+        "viewport": {"designWidth": 172, "designHeight": 320},
+        "budgets": {"maxResourceBytes": 65536},
+        "fonts": [],
+        "targets": {"test": {"viewport": {"width": 172, "height": 320}, "output": "jfapp"}},
+        "permissions": [],
+        "capabilities": [],
+        "computeJobsAllowed": False,
+        "videoFrameAllowed": False,
+        "networkAllowed": False,
+        "storageKvAllowed": False,
+        "canvas2dAllowed": False,
+        "audioPlaybackAllowed": False,
+        "sensorAccelerometerAllowed": False,
+        "sensorGyroscopeAllowed": False,
+        "sensorHeartRateAllowed": False,
+        "sensorAmbientLightAllowed": False,
+        "locationPositionAllowed": False,
+        "systemBatteryAllowed": False,
+        "systemWeatherAllowed": False,
+        "systemActivityAllowed": False,
+        "backgroundServices": {},
     }, separators=(",", ":")).encode("utf-8")
     summary_offset = app_registry.JFAPP_HEADER_SIZE
     index_offset = summary_offset + len(summary)
@@ -154,6 +203,19 @@ def write_registry(store: Path, app_id: str = "org.example.weather") -> None:
 
 
 class AppRegistryTests(unittest.TestCase):
+    def test_install_rejects_capability_projection_drift_before_registry_mutation(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-summary-drift-") as directory:
+            root = Path(directory)
+            bundle = root / "drift.jfapp"
+            write_jfapp(bundle, capabilities=["network.fetch"], network_allowed=False)
+
+            with self.assertRaisesRegex(SystemExit, "networkAllowed does not match permissions/capabilities"):
+                app_registry.install_bundle(root / "store",
+                                            bundle,
+                                            app_registry.DEFAULT_MAX_APPS,
+                                            app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+            self.assertFalse((root / "store" / "registry.json").exists())
+
     def test_install_rejects_invalid_resource_index_before_registry_mutation(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
             store = Path(directory) / "store"

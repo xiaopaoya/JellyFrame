@@ -3101,15 +3101,18 @@ def write_trial_report(output_dir: Path, targets: list[str], steps: list[dict], 
 
 def prepare_trial_output(output_dir: Path, clean: bool) -> None:
     resolved_output = output_dir.resolve()
+    trial_root = (repo_root() / "build").resolve()
     if resolved_output == repo_root().resolve():
         raise SystemExit("trial output directory must not be the repository root")
-    if output_dir.exists() and not output_dir.is_dir():
-        raise SystemExit(f"trial output path is not a directory: {output_dir}")
-    if output_dir.exists() and any(output_dir.iterdir()):
+    if resolved_output == trial_root or not resolved_output.is_relative_to(trial_root):
+        raise SystemExit("trial output directory must be a descendant of the repository build directory")
+    if resolved_output.exists() and not resolved_output.is_dir():
+        raise SystemExit(f"trial output path is not a directory: {resolved_output}")
+    if resolved_output.exists() and any(resolved_output.iterdir()):
         if not clean:
-            raise SystemExit(f"trial output directory is not empty: {output_dir}; pass --clean to replace it")
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+            raise SystemExit(f"trial output directory is not empty: {resolved_output}; pass --clean to replace it")
+        shutil.rmtree(resolved_output)
+    resolved_output.mkdir(parents=True, exist_ok=True)
 
 
 def cmd_trial(args: argparse.Namespace) -> int:

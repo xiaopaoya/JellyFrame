@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -20,6 +21,15 @@ constexpr std::uint32_t kJfappFnvOffset = 0x811c9dc5U;
 constexpr std::uint32_t kJfappFnvPrime = 0x01000193U;
 constexpr std::size_t kJfappHeaderSize = 56;
 constexpr std::size_t kJfappResourceEntrySize = 28;
+constexpr std::size_t kJfappMaxResourceEntries = 16384;
+
+inline bool jfapp_resource_index_size_fits(std::uint32_t resource_count) {
+    if constexpr (sizeof(std::size_t) < sizeof(std::uint64_t)) {
+        return static_cast<std::uint64_t>(resource_count) <=
+               std::numeric_limits<std::size_t>::max() / kJfappResourceEntrySize;
+    }
+    return true;
+}
 
 struct AppPackageManifest {
     std::string id;
@@ -504,20 +514,96 @@ inline bool load_package_script(std::string_view src, std::string& output, void*
     return load_package_resource(src, {}, output, context);
 }
 
+// Finds a direct member of one JSON object. This remains deliberately small
+// because package_app.py owns schema validation, but it must not confuse an
+// identically named nested field with a manifest field.
+inline bool json_find_direct_value(std::string_view json, std::string_view key, std::size_t& value_begin) {
+    std::size_t index = 0;
+    while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
+        ++index;
+    }
+    if (index >= json.size() || json[index] != '{') {
+        return false;
+    }
+    ++index;
+    for (;;) {
+        while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
+            ++index;
+        }
+        if (index >= json.size() || json[index] == '}') {
+            return false;
+        }
+        if (json[index++] != '"') {
+            return false;
+        }
+        std::string member;
+        bool escaped = false;
+        for (; index < json.size(); ++index) {
+            const char ch = json[index];
+            if (escaped) {
+                member.push_back(ch);
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                ++index;
+                break;
+            } else {
+                member.push_back(ch);
+            }
+        }
+        if (index > json.size()) {
+            return false;
+        }
+        while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
+            ++index;
+        }
+        if (index >= json.size() || json[index++] != ':') {
+            return false;
+        }
+        while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
+            ++index;
+        }
+        if (member == key) {
+            value_begin = index;
+            return true;
+        }
+
+        int depth = 0;
+        bool in_string = false;
+        escaped = false;
+        for (; index < json.size(); ++index) {
+            const char ch = json[index];
+            if (in_string) {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    in_string = false;
+                }
+                continue;
+            }
+            if (ch == '"') {
+                in_string = true;
+            } else if (ch == '{' || ch == '[') {
+                ++depth;
+            } else if (ch == '}' || ch == ']') {
+                if (depth == 0 && ch == '}') {
+                    return false;
+                }
+                --depth;
+            } else if (ch == ',' && depth == 0) {
+                ++index;
+                break;
+            }
+        }
+    }
+}
+
 inline bool json_find_string(const std::string& json, std::string_view key, std::string& value) {
-    // Minimal manifest reader for example shells. The authoritative validator is
-    // tools/package_app.py, which uses a real JSON parser.
-    const std::string needle = "\"" + std::string(key) + "\"";
-    const std::size_t key_pos = json.find(needle);
-    if (key_pos == std::string::npos) {
-        return false;
-    }
-    const std::size_t colon = json.find(':', key_pos + needle.size());
-    if (colon == std::string::npos) {
-        return false;
-    }
-    std::size_t quote = json.find('"', colon + 1);
-    if (quote == std::string::npos) {
+    std::size_t quote = 0;
+    if (!json_find_direct_value(json, key, quote) || quote >= json.size() || json[quote] != '"') {
         return false;
     }
     std::string parsed;
@@ -537,19 +623,10 @@ inline bool json_find_string(const std::string& json, std::string_view key, std:
     return false;
 }
 
-inline bool json_find_int(const std::string& json, std::string_view key, int& value) {
-    const std::string needle = "\"" + std::string(key) + "\"";
-    const std::size_t key_pos = json.find(needle);
-    if (key_pos == std::string::npos) {
+inline bool json_find_int(std::string_view json, std::string_view key, int& value) {
+    std::size_t index = 0;
+    if (!json_find_direct_value(json, key, index)) {
         return false;
-    }
-    const std::size_t colon = json.find(':', key_pos + needle.size());
-    if (colon == std::string::npos) {
-        return false;
-    }
-    std::size_t index = colon + 1;
-    while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
-        ++index;
     }
     int parsed = 0;
     bool any = false;
@@ -566,13 +643,11 @@ inline bool json_find_int(const std::string& json, std::string_view key, int& va
 }
 
 inline bool json_array_contains_string(const std::string& json, std::string_view key, std::string_view expected) {
-    const std::string needle = "\"" + std::string(key) + "\"";
-    const std::size_t key_pos = json.find(needle);
-    if (key_pos == std::string::npos) {
+    std::size_t open = 0;
+    if (!json_find_direct_value(json, key, open) || open >= json.size() || json[open] != '[') {
         return false;
     }
-    const std::size_t open = json.find('[', key_pos + needle.size());
-    const std::size_t close = json.find(']', open == std::string::npos ? key_pos + needle.size() : open + 1);
+    const std::size_t close = json.find(']', open + 1);
     if (open == std::string::npos || close == std::string::npos) {
         return false;
     }
@@ -583,17 +658,8 @@ inline bool json_find_object_range(std::string_view json,
                                    std::string_view key,
                                    std::size_t& object_open,
                                    std::size_t& object_close) {
-    const std::string needle = "\"" + std::string(key) + "\"";
-    const std::size_t key_pos = json.find(needle);
-    if (key_pos == std::string_view::npos) {
-        return false;
-    }
-    const std::size_t colon = json.find(':', key_pos + needle.size());
-    if (colon == std::string_view::npos) {
-        return false;
-    }
-    const std::size_t open = json.find('{', colon + 1);
-    if (open == std::string_view::npos) {
+    std::size_t open = 0;
+    if (!json_find_direct_value(json, key, open) || open >= json.size() || json[open] != '{') {
         return false;
     }
 
@@ -629,18 +695,9 @@ inline bool json_find_object_range(std::string_view json,
 }
 
 inline bool json_find_bool(std::string_view json, std::string_view key, bool& value) {
-    const std::string needle = "\"" + std::string(key) + "\"";
-    const std::size_t key_pos = json.find(needle);
-    if (key_pos == std::string_view::npos) {
+    std::size_t index = 0;
+    if (!json_find_direct_value(json, key, index)) {
         return false;
-    }
-    const std::size_t colon = json.find(':', key_pos + needle.size());
-    if (colon == std::string_view::npos) {
-        return false;
-    }
-    std::size_t index = colon + 1;
-    while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
-        ++index;
     }
     if (json.substr(index, 4) == "true") {
         value = true;
@@ -651,6 +708,18 @@ inline bool json_find_bool(std::string_view json, std::string_view key, bool& va
         return true;
     }
     return false;
+}
+
+inline bool json_find_object_int(std::string_view json,
+                                 std::string_view object_key,
+                                 std::string_view field_key,
+                                 int& value) {
+    std::size_t object_open = 0;
+    std::size_t object_close = 0;
+    if (!json_find_object_range(json, object_key, object_open, object_close)) {
+        return false;
+    }
+    return json_find_int(json.substr(object_open, object_close - object_open), field_key, value);
 }
 
 inline bool json_find_nested_bool(const std::string& json,
@@ -805,10 +874,10 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     json_find_int(json, "width", manifest.viewport_width);
     json_find_int(json, "height", manifest.viewport_height);
     if (manifest.viewport_width <= 0) {
-        json_find_int(json, "designWidth", manifest.viewport_width);
+        json_find_object_int(json, "viewport", "designWidth", manifest.viewport_width);
     }
     if (manifest.viewport_height <= 0) {
-        json_find_int(json, "designHeight", manifest.viewport_height);
+        json_find_object_int(json, "viewport", "designHeight", manifest.viewport_height);
     }
     manifest.network_allowed =
         json_array_contains_string(json, "permissions", "network") ||
@@ -925,8 +994,12 @@ inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, st
     const std::uint32_t payload_offset = read_le32(bytes.data() + 40);
     const std::uint32_t payload_size = read_le32(bytes.data() + 44);
     const std::uint32_t expected_crc32 = read_le32(bytes.data() + 48);
+    if (resource_count > kJfappMaxResourceEntries || !jfapp_resource_index_size_fits(resource_count)) {
+        throw std::runtime_error(".jfapp resource index count exceeds loader limits");
+    }
+    const std::size_t index_size = static_cast<std::size_t>(resource_count) * kJfappResourceEntrySize;
     if (!byte_range_is_valid(bytes.size(), summary_offset, summary_size) ||
-        !byte_range_is_valid(bytes.size(), index_offset, resource_count * kJfappResourceEntrySize) ||
+        !byte_range_is_valid(bytes.size(), index_offset, index_size) ||
         !byte_range_is_valid(bytes.size(), strings_offset, strings_size) ||
         !byte_range_is_valid(bytes.size(), payload_offset, payload_size)) {
         throw std::runtime_error(".jfapp contains an out-of-range section");
@@ -942,7 +1015,7 @@ inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, st
     std::string summary(reinterpret_cast<const char*>(bytes.data() + summary_offset),
                         reinterpret_cast<const char*>(bytes.data() + summary_offset + summary_size));
     std::vector<BundleResourceEntry> entries;
-    entries.reserve(resource_count);
+    entries.reserve(static_cast<std::size_t>(resource_count));
     for (std::uint32_t index = 0; index < resource_count; ++index) {
         const std::uint8_t* raw = bytes.data() + index_offset + index * kJfappResourceEntrySize;
         const std::uint32_t path_hash = read_le32(raw);

@@ -170,6 +170,33 @@ def main() -> int:
         require(capture.is_file() and capture.stat().st_size > 54,
                 "background image capture must produce a bitmap")
 
+    with tempfile.TemporaryDirectory(prefix="jellyframe-nested-viewport-") as directory:
+        app = Path(directory)
+        (app / "index.html").write_text("<main>Viewport probe</main>", encoding="utf-8")
+        (app / "jellyframe.app.json").write_text(
+            json.dumps(
+                {
+                    "id": "org.jellyframe.viewport-probe",
+                    "name": "Viewport Probe",
+                    "role": "app",
+                    "versionName": "1.0.0",
+                    "versionCode": 1,
+                    "entry": "/index.html",
+                    "minJellyFrame": "0.5.0-dev",
+                    "script": "none",
+                    "viewport": {"designWidth": 172, "designHeight": 320},
+                }
+            ),
+            encoding="utf-8",
+        )
+        capture = app / "viewport.bmp"
+        viewport_result = run_case(exe, ["--app", str(app), "--capture", str(capture)])
+        require(viewport_result.returncode == 0, "nested manifest viewport capture must pass")
+        require("viewport_width=172" in viewport_result.stdout,
+                "package manifest designWidth must select the default viewport")
+        require("image=172x320" in viewport_result.stdout,
+                "package manifest design dimensions must select the capture size")
+
     with tempfile.TemporaryDirectory(prefix="jellyframe-package-resource-link-") as directory:
         root = Path(directory)
         app = root / "app"

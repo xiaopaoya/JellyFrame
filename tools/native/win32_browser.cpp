@@ -690,6 +690,9 @@ void count_host_completion_kind(HostServiceDebugCounters& counters, HostServiceJ
     case HostServiceJobKind::LocationSnapshot:
         ++counters.location_completions;
         break;
+    case HostServiceJobKind::ComputeJob:
+        ++counters.other_completions;
+        break;
     case HostServiceJobKind::Other:
         ++counters.other_completions;
         break;

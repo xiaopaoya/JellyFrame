@@ -190,6 +190,58 @@ def byte_range_is_valid(total: int, offset: int, size: int) -> bool:
     return 0 <= offset <= total and 0 <= size <= total - offset
 
 
+def validate_bundle_summary(summary: object) -> dict:
+    if not isinstance(summary, dict):
+        fail(".jfapp summary root must be an object")
+
+    required_strings = ("id", "name", "role", "versionName", "entry", "minJellyFrame", "script")
+    for key in required_strings:
+        if not isinstance(summary.get(key), str) or not summary[key]:
+            fail(f".jfapp summary {key} must be a non-empty string")
+    if summary["role"] not in {"app", "launcher", "watchface", "settings"}:
+        fail(".jfapp summary role is invalid")
+    if summary["script"] not in {"none", "classic"}:
+        fail(".jfapp summary script is invalid")
+    if not isinstance(summary.get("versionCode"), int) or isinstance(summary["versionCode"], bool) or summary["versionCode"] < 0:
+        fail(".jfapp summary versionCode must be a non-negative integer")
+    entry = Path(summary["entry"])
+    if not summary["entry"].startswith("/") or any(part in {"", ".", ".."} for part in entry.parts[1:]):
+        fail(".jfapp summary entry must be a normalized absolute app path")
+
+    for key in ("permissions", "capabilities"):
+        value = summary.get(key)
+        if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+            fail(f".jfapp summary {key} must be a string array")
+    for key in ("viewport", "budgets", "targets", "backgroundServices"):
+        if not isinstance(summary.get(key), dict):
+            fail(f".jfapp summary {key} must be an object")
+    if not isinstance(summary.get("fonts"), list):
+        fail(".jfapp summary fonts must be an array")
+
+    capabilities = set(summary["capabilities"])
+    permissions = set(summary["permissions"])
+    projected_capabilities = {
+        "computeJobsAllowed": "compute.jobs" in capabilities,
+        "videoFrameAllowed": "media.video.frame" in capabilities,
+        "networkAllowed": "network" in permissions or "network.fetch" in capabilities,
+        "storageKvAllowed": "storage.kv" in capabilities,
+        "canvas2dAllowed": "graphics.canvas2d" in capabilities,
+        "audioPlaybackAllowed": "media.audio.playback" in capabilities,
+        "sensorAccelerometerAllowed": "sensor.accelerometer" in capabilities,
+        "sensorGyroscopeAllowed": "sensor.gyroscope" in capabilities,
+        "sensorHeartRateAllowed": "sensor.heart-rate" in capabilities,
+        "sensorAmbientLightAllowed": "sensor.ambient-light" in capabilities,
+        "locationPositionAllowed": "location.position" in capabilities,
+        "systemBatteryAllowed": "system.battery" in capabilities,
+        "systemWeatherAllowed": "system.weather" in capabilities,
+        "systemActivityAllowed": "system.activity" in capabilities,
+    }
+    for key, expected in projected_capabilities.items():
+        if not isinstance(summary.get(key), bool) or summary[key] != expected:
+            fail(f".jfapp summary {key} does not match permissions/capabilities")
+    return summary
+
+
 def bundle_path_in_store(store: Path, bundle_file: object, context: str, require_exists: bool = False) -> Path:
     if not isinstance(bundle_file, str) or not bundle_file:
         fail(f"{context} bundle file is required")
@@ -272,9 +324,7 @@ def parse_jfapp(bundle: bytes) -> dict:
         summary = json.loads(summary_text)
     except json.JSONDecodeError as error:
         fail(f".jfapp summary JSON is invalid: {error}")
-    app_id = summary.get("id")
-    if not isinstance(app_id, str) or not app_id:
-        fail(".jfapp summary is missing app id")
+    summary = validate_bundle_summary(summary)
     return {
         "summary": summary,
         "resourceCount": resource_count,
