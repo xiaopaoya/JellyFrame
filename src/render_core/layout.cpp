@@ -889,7 +889,7 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
     const int raw_text_width = metrics.width;
     const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
     const int usable_text_width = std::max(0, content_width - text_indent);
-    const int text_width = std::max(min_width, std::min(usable_text_width, raw_text_width + 1));
+    const int text_width = std::max(min_width, std::min(usable_text_width, raw_text_width));
     const int line_height = box.style.line_height > 0 ? box.style.line_height : metrics.line_height;
     const bool can_wrap = !box.style.white_space_nowrap &&
         (box.style.overflow_wrap_anywhere || has_text_wrap_opportunity(text));

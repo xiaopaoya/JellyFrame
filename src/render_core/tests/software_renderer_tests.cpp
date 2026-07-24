@@ -543,7 +543,7 @@ void layout_uses_injected_text_measurement() {
 
     const LayoutBox* text_box = find_first_text_box(*layout_tree);
     check(text_box != nullptr, "measured text box exists");
-    check(text_box->rect.width == 33, "layout uses injected text width with paint safety pad");
+    check(text_box->rect.width == 32, "layout uses injected text width without extra pad");
     check(text_box->rect.height == 21, "layout uses injected line height");
 }
 

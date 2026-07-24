@@ -53,7 +53,7 @@ bool text_box_can_reuse_layout(const LayoutBox& box, const TextMeasureProvider& 
                                                                  box.style.font_weight,
                                                                  box.style.font_family_hash,
                                                                  box.style.letter_spacing);
-    const int measured_width = metrics.width + 1;
+    const int measured_width = metrics.width;
     const bool same_intrinsic_width = measured_width == box.rect.width;
     const bool fixed_min_width_still_contains_text =
         box.style.min_width >= 0 && box.style.min_width == box.rect.width && measured_width <= box.rect.width;
