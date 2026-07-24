@@ -799,9 +799,16 @@ void paint_form_control(const LayoutBox& box, DisplayList& display_list) {
             track_height,
         };
         push_fill_rect(display_list, track, Color{203, 213, 225, 255}, 2);
-        const int denom = std::max(1, state.max - state.min);
-        const int value = std::max(state.min, std::min(range_state_value(state), state.max));
-        const int fill_width = (inner.width * (value - state.min) + denom / 2) / denom;
+        const std::int64_t min_value = state.min;
+        const std::int64_t max_value = state.max;
+        const std::int64_t denom = std::max<std::int64_t>(1, max_value - min_value);
+        const std::int64_t value = std::max<std::int64_t>(min_value,
+                                                          std::min<std::int64_t>(range_state_value(state),
+                                                                                 max_value));
+        const std::int64_t fill_width64 =
+            (static_cast<std::int64_t>(inner.width) * (value - min_value) + denom / 2) / denom;
+        const int fill_width = static_cast<int>(std::max<std::int64_t>(
+            0, std::min<std::int64_t>(fill_width64, inner.width)));
         push_fill_rect(display_list, Rect{track.x, track.y, fill_width, track.height}, Color{37, 99, 235, 255}, 2);
         const int thumb_size = std::max(10, std::min(18, box.rect.height - 2));
         const int thumb_x = inner.x + fill_width - thumb_size / 2;
