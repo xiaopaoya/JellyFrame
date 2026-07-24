@@ -162,6 +162,27 @@ void tokenizer_byte_budgets_consume_oversized_names_and_values_without_storing_t
           "tokenizer still reaches the matching end tag");
 }
 
+void tokenizer_text_budget_consumes_excess_text_without_storing_it() {
+    HtmlTokenizer tokenizer;
+    HtmlTokenizerOptions options;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+    options.max_text_token_bytes = 4;
+
+    const auto tokens = tokenizer.tokenize("<div>abcdef<![CDATA[ghijkl]]></div>", options);
+    const auto text_it = std::find_if(tokens.begin(), tokens.end(), [](const HtmlToken& token) {
+        return token.type == HtmlTokenType::Text;
+    });
+    check(text_it != tokens.end(), "tokenizer emits bounded text");
+    const HtmlToken& text = *text_it;
+    check(text.data == "abcd", "tokenizer bounds text and CDATA storage");
+    check(has_diagnostic_code(diagnostics, "html-text-token-limit"), "tokenizer reports text cap");
+    const auto end_it = std::find_if(tokens.begin(), tokens.end(), [](const HtmlToken& token) {
+        return token.type == HtmlTokenType::EndTag && token.name == "div";
+    });
+    check(end_it != tokens.end(), "tokenizer continues after text cap");
+}
+
 void parser_consumes_token_stream() {
     HtmlParser parser;
     auto document = parser.parse("<!doctype html><body><p>Hello &amp; welcome</p><br><p>again</p></body>");
@@ -283,6 +304,7 @@ int main() {
         keeps_first_duplicate_attribute();
         tokenizer_attribute_budget_consumes_extra_attributes_without_storing_them();
         tokenizer_byte_budgets_consume_oversized_names_and_values_without_storing_them();
+        tokenizer_text_budget_consumes_excess_text_without_storing_it();
         parser_consumes_token_stream();
         parser_treats_non_void_self_closing_as_start_tag();
         parser_preserves_dom_text_whitespace();

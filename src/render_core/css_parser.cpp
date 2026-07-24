@@ -1649,7 +1649,23 @@ private:
         const std::string name = ascii_lowercase(std::string(source_.substr(name_begin, index_ - name_begin)));
         const std::size_t prelude_begin = index_;
         const char delimiter = consume_component_until_rule_delimiter();
-        const std::string prelude = trim(source_.substr(prelude_begin, index_ - prelude_begin));
+        const std::size_t prelude_size = index_ - prelude_begin;
+        if (options_.max_at_rule_prelude_bytes != 0 && prelude_size > options_.max_at_rule_prelude_bytes) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-at-rule-prelude-limit",
+                              "CSS at-rule prelude exceeded its byte budget and was skipped",
+                              "Keep media, supports, and layer preludes bounded for embedded targets.");
+            if (delimiter == '{') {
+                consume();
+                skip_balanced_block();
+            } else if (delimiter == ';') {
+                consume();
+            }
+            return;
+        }
+        const std::string prelude = trim(source_.substr(prelude_begin, prelude_size));
 
         if (delimiter == ';') {
             consume();
@@ -1702,7 +1718,23 @@ private:
     void parse_qualified_rule() {
         const std::size_t selector_begin = index_;
         const char delimiter = consume_component_until_rule_delimiter();
-        const std::string selector_text = collapse_ascii_space(source_.substr(selector_begin, index_ - selector_begin));
+        const std::size_t selector_size = index_ - selector_begin;
+        if (options_.max_selector_bytes != 0 && selector_size > options_.max_selector_bytes) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-selector-limit",
+                              "CSS selector exceeded its byte budget and the rule was skipped",
+                              "Split generated selector lists or simplify compatibility selectors.");
+            if (delimiter == '{') {
+                consume();
+                skip_balanced_block();
+            } else if (delimiter == ';') {
+                consume();
+            }
+            return;
+        }
+        const std::string selector_text = collapse_ascii_space(source_.substr(selector_begin, selector_size));
         if (delimiter != '{') {
             if (delimiter == ';') {
                 consume();
@@ -1909,7 +1941,17 @@ private:
             }
             consume();
 
-            std::string value = consume_declaration_value();
+            bool value_limited = false;
+            std::string value = consume_declaration_value(value_limited);
+            if (value_limited) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-declaration-value-limit",
+                                  "CSS declaration value exceeded its byte budget and was skipped",
+                                  property);
+                continue;
+            }
             CssDeclaration declaration;
             declaration.property = std::move(property);
             declaration.important = finish_important(value);
@@ -1939,43 +1981,62 @@ private:
         return '\0';
     }
 
-    std::string consume_declaration_value() {
+    std::string consume_declaration_value(bool& limited) {
         std::string value;
+        limited = false;
         int paren_depth = 0;
         int bracket_depth = 0;
+        const auto append = [this, &value, &limited](char ch) {
+            if (options_.max_declaration_value_bytes == 0 ||
+                value.size() < options_.max_declaration_value_bytes) {
+                value.push_back(ch);
+            } else {
+                limited = true;
+            }
+        };
         while (!eof()) {
             if (starts_comment()) {
                 skip_whitespace_and_comments();
                 if (!value.empty() && value.back() != ' ') {
-                    value.push_back(' ');
+                    append(' ');
                 }
                 continue;
             }
 
             const char ch = peek();
             if (ch == '"' || ch == '\'') {
-                consume_string_into(value, consume());
+                const char quote = consume();
+                append(quote);
+                while (!eof()) {
+                    const char string_ch = consume();
+                    append(string_ch);
+                    if (string_ch == '\\' && !eof()) {
+                        append(consume());
+                    } else if (string_ch == quote) {
+                        break;
+                    }
+                }
                 continue;
             }
             if (ch == '(') {
                 ++paren_depth;
-                value.push_back(consume());
+                append(consume());
             } else if (ch == ')' && paren_depth > 0) {
                 --paren_depth;
-                value.push_back(consume());
+                append(consume());
             } else if (ch == '[') {
                 ++bracket_depth;
-                value.push_back(consume());
+                append(consume());
             } else if (ch == ']' && bracket_depth > 0) {
                 --bracket_depth;
-                value.push_back(consume());
+                append(consume());
             } else if ((ch == ';' || ch == '}') && paren_depth == 0 && bracket_depth == 0) {
                 if (ch == ';') {
                     consume();
                 }
                 break;
             } else {
-                value.push_back(consume());
+                append(consume());
             }
         }
         return value;
@@ -2017,19 +2078,6 @@ private:
             const char ch = consume();
             if (ch == '\\' && !eof()) {
                 consume();
-            } else if (ch == quote) {
-                return;
-            }
-        }
-    }
-
-    void consume_string_into(std::string& output, char quote) {
-        output.push_back(quote);
-        while (!eof()) {
-            const char ch = consume();
-            output.push_back(ch);
-            if (ch == '\\' && !eof()) {
-                output.push_back(consume());
             } else if (ch == quote) {
                 return;
             }
@@ -2155,11 +2203,23 @@ Stylesheet CssParser::parse(const std::string& source) const {
 }
 
 Stylesheet CssParser::parse(const std::string& source, const CssParserOptions& options) const {
-    const bool uses_nesting_marker = source.find('&') != std::string::npos;
+    const bool input_limited = options.max_input_bytes != 0 && source.size() > options.max_input_bytes;
+    const std::string_view bounded_source = input_limited
+        ? std::string_view(source).substr(0, options.max_input_bytes)
+        : std::string_view(source);
+    if (input_limited) {
+        report_diagnostic(options.diagnostics,
+                          DiagnosticStage::Css,
+                          DiagnosticSeverity::Warning,
+                          "css-input-limit",
+                          "CSS input exceeded its byte budget; trailing input was skipped",
+                          "Keep stylesheet resources within the target parser budget.");
+    }
+    const bool uses_nesting_marker = bounded_source.find('&') != std::string_view::npos;
     const std::string expanded = uses_nesting_marker
-        ? expand_single_level_css_nesting(source, options.diagnostics)
+        ? expand_single_level_css_nesting(bounded_source, options.diagnostics)
         : std::string{};
-    CssParserRun run(uses_nesting_marker ? std::string_view(expanded) : std::string_view(source), options);
+    CssParserRun run(uses_nesting_marker ? std::string_view(expanded) : bounded_source, options);
     return run.parse();
 }
 

@@ -17,6 +17,7 @@ struct HtmlParserOptions {
     std::size_t max_tag_name_bytes = 128;
     std::size_t max_attribute_name_bytes = 128;
     std::size_t max_attribute_value_bytes = 2048;
+    std::size_t max_text_token_bytes = 16384;
     DiagnosticSink* diagnostics = nullptr;
     bool synthesize_document_structure = true;
 };

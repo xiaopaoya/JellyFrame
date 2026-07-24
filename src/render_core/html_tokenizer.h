@@ -36,6 +36,7 @@ struct HtmlTokenizerOptions {
     std::size_t max_tag_name_bytes = 0;
     std::size_t max_attribute_name_bytes = 0;
     std::size_t max_attribute_value_bytes = 0;
+    std::size_t max_text_token_bytes = 0;
 };
 
 class HtmlTokenSink {

@@ -21,15 +21,15 @@ public:
 private:
     bool can_add_node();
     bool can_descend();
-    Node& append_element(Node& parent, const HtmlToken& token);
-    Node& append_synthetic_element(Node& parent, std::string_view tag_name);
+    Node* append_element(Node& parent, const HtmlToken& token);
+    Node* append_synthetic_element(Node& parent, std::string_view tag_name);
     Node* find_open_element(std::string_view tag_name) const;
     bool has_open_element(std::string_view tag_name) const;
     void pop_until(std::string_view tag_name);
     void pop_current_if(std::string_view tag_name);
-    Node& ensure_html();
-    Node& ensure_head();
-    Node& ensure_body();
+    Node* ensure_html();
+    Node* ensure_head();
+    Node* ensure_body();
     void start_tag(const HtmlToken& token);
     void start_html(const HtmlToken& token);
     void start_head(const HtmlToken& token);

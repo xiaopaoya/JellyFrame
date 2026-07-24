@@ -321,15 +321,36 @@ private:
         state_ = state;
     }
 
+    void append_text_bytes(std::string_view text) {
+        if (text.empty()) {
+            return;
+        }
+        const std::size_t limit = options_.max_text_token_bytes;
+        const std::size_t remaining = limit == 0 || text_buffer_.size() >= limit
+            ? (limit == 0 ? text.size() : 0)
+            : limit - text_buffer_.size();
+        const std::size_t accepted = std::min(remaining, text.size());
+        if (accepted != 0) {
+            text_buffer_.append(text.data(), accepted);
+        }
+        if (accepted != text.size() && !text_token_limit_reported_) {
+            text_token_limit_reported_ = true;
+            report(DiagnosticSeverity::Warning,
+                   "html-text-token-limit",
+                   "HTML text token exceeded its byte budget; excess text was dropped",
+                   "Split generated text into bounded nodes or increase max_text_token_bytes for this host profile.");
+        }
+    }
+
     void append_text_char(char ch) {
         if (ch == '\0') {
             report(DiagnosticSeverity::Warning,
                    "html-null-character",
                    "HTML null character was replaced with U+FFFD",
                    snippet_at(index_ > 0 ? index_ - 1 : 0));
-            text_buffer_ += kReplacement;
+            append_text_bytes(kReplacement);
         } else {
-            text_buffer_.push_back(ch);
+            append_text_bytes(std::string_view(&ch, 1));
         }
     }
 
@@ -341,6 +362,7 @@ private:
         token.type = HtmlTokenType::Text;
         token.data = std::move(text_buffer_);
         text_buffer_.clear();
+        text_token_limit_reported_ = false;
         emit_token(token);
     }
 
@@ -546,7 +568,7 @@ private:
 
         const char ch = consume();
         if (ch == '&') {
-            text_buffer_ += consume_character_reference();
+            append_text_bytes(consume_character_reference());
         } else if (ch == '<') {
             state_ = State::TagOpen;
         } else {
@@ -556,7 +578,7 @@ private:
 
     void tag_open_state() {
         if (eof()) {
-            text_buffer_.push_back('<');
+            append_text_char('<');
             state_ = State::EndOfFile;
             return;
         }
@@ -584,14 +606,14 @@ private:
                    "html-invalid-tag-open",
                    "Invalid '<' sequence was treated as text",
                    snippet_at(index_ > 0 ? index_ - 1 : 0));
-            text_buffer_.push_back('<');
+            append_text_char('<');
             reconsume_in(State::Data);
         }
     }
 
     void end_tag_open_state() {
         if (eof()) {
-            text_buffer_ += "</";
+            append_text_bytes("</");
             state_ = State::EndOfFile;
             return;
         }
@@ -972,7 +994,7 @@ private:
 
         const char ch = consume();
         if (ch == '&') {
-            text_buffer_ += consume_character_reference();
+            append_text_bytes(consume_character_reference());
         } else {
             append_text_char(ch);
         }
@@ -1026,11 +1048,11 @@ private:
                    "CDATA section reached EOF before ']]>'",
                    snippet_at(index_));
             const std::string_view remaining = source_.substr(index_);
-            text_buffer_.append(remaining.data(), remaining.size());
+            append_text_bytes(remaining);
             index_ = source_.size();
         } else {
             const std::string_view data = source_.substr(index_, end - index_);
-            text_buffer_.append(data.data(), data.size());
+            append_text_bytes(data);
             index_ = end + 3;
         }
     }
@@ -1084,6 +1106,7 @@ private:
     bool tag_name_limit_reported_ = false;
     bool attribute_name_limit_reported_ = false;
     bool attribute_value_limit_reported_ = false;
+    bool text_token_limit_reported_ = false;
     std::string raw_text_end_tag_;
 };
 

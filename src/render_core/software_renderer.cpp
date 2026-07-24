@@ -1683,6 +1683,16 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         }
         Rect offscreen_bounds = has_scale_or_rotate ? source_bounds : visible_destination;
         if (!offscreen_fits_budget(offscreen_bounds, options_)) {
+            if (has_scale_or_rotate) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Paint,
+                                  DiagnosticSeverity::Warning,
+                                  "paint-transform-budget",
+                                  "Transformed layer exceeded the offscreen pixel budget and was skipped",
+                                  std::to_string(offscreen_bounds.width) + "x" +
+                                      std::to_string(offscreen_bounds.height));
+                return;
+            }
             report_diagnostic(options_.diagnostics,
                               DiagnosticStage::Paint,
                               DiagnosticSeverity::Warning,

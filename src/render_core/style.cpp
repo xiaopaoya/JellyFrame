@@ -3637,10 +3637,12 @@ bool apply_declaration(Style& style,
         const std::string lowered = lowercase(trim(value));
         if (lowered == "clip") {
             style.text_overflow_ellipsis = false;
+            style.text_overflow_specified = true;
             return true;
         }
         if (lowered == "ellipsis") {
             style.text_overflow_ellipsis = true;
+            style.text_overflow_specified = true;
             return true;
         }
         return false;

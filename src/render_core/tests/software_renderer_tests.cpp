@@ -762,6 +762,31 @@ void compositor_degrades_oversized_offscreen_layers_without_crashing() {
     check(has_diagnostic_code(diagnostics, "paint-offscreen-budget"), "offscreen fallback is reported");
 }
 
+void compositor_skips_oversized_transformed_layers_instead_of_painting_them_untransformed() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 4, 4};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->bounds = Rect{0, 0, 4, 4};
+    child->transform.scale_x = 0.5F;
+    child->transform.scale_y = 0.5F;
+    child->display_list.push_back(black_fill(Rect{0, 0, 4, 4}));
+    root.children.push_back(std::move(child));
+
+    VectorDiagnosticSink diagnostics;
+    SoftwareCompositor::Options options;
+    options.max_offscreen_pixels = 1;
+    options.diagnostics = &diagnostics;
+    const FrameBuffer output = SoftwareCompositor({}, options).render(root, 4, 4, Color{255, 255, 255, 255});
+
+    check(output.pixel(0, 0).r == 255,
+          "oversized transformed layer does not silently paint an untransformed result");
+    check(has_diagnostic_code(diagnostics, "paint-transform-budget"),
+          "transformed budget fallback is reported");
+}
+
 void compositor_rejects_oversized_framebuffer_before_allocation() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1262,6 +1287,7 @@ int main() {
         rasterizer_scratch_reuses_clipped_image_storage();
         compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
+        compositor_skips_oversized_transformed_layers_instead_of_painting_them_untransformed();
         compositor_rejects_oversized_framebuffer_before_allocation();
         frame_sink_receives_framebuffer_view_and_dirty_rects();
         bitmap_font_backend_measures_and_paints();

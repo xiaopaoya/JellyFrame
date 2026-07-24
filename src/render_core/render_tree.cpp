@@ -52,7 +52,7 @@ Style inherit_text_style(Style style, const Style& parent_style) {
     // text-overflow is not generally inherited. The render tree represents a
     // direct text run as its own node, so carry the owning inline container's
     // ellipsis intent only to that anonymous-equivalent run.
-    if (style.text_overflow_ellipsis == false) {
+    if (!style.text_overflow_specified) {
         style.text_overflow_ellipsis = parent_style.text_overflow_ellipsis;
     }
     if (!style.overflow_wrap_specified) {
@@ -65,7 +65,11 @@ Style inherit_text_style(Style style, const Style& parent_style) {
 }
 
 Style inherit_element_style(Style style, const Style& parent_style) {
-    return inherit_text_style(style, parent_style);
+    style = inherit_text_style(style, parent_style);
+    if (!style.text_overflow_specified) {
+        style.text_overflow_ellipsis = false;
+    }
+    return style;
 }
 
 bool creates_render_object(const Node& node, const Style& style) {

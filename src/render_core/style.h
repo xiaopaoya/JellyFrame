@@ -318,6 +318,7 @@ struct Style {
     bool white_space_nowrap = false;
     bool white_space_specified = false;
     bool text_overflow_ellipsis = false;
+    bool text_overflow_specified = false;
     float opacity = 1.0F;
     std::string transform;
     int transform_origin_x_percent = 50;

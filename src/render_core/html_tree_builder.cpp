@@ -88,7 +88,10 @@ bool HtmlTreeBuilder::can_descend() {
     return false;
 }
 
-Node& HtmlTreeBuilder::append_element(Node& parent, const HtmlToken& token) {
+Node* HtmlTreeBuilder::append_element(Node& parent, const HtmlToken& token) {
+    if (!can_add_node()) {
+        return nullptr;
+    }
     auto element = make_element(token.name);
     std::size_t count = 0;
     for (const HtmlAttribute& attribute : token.attributes) {
@@ -100,12 +103,15 @@ Node& HtmlTreeBuilder::append_element(Node& parent, const HtmlToken& token) {
         ++count;
     }
     ++node_count_;
-    return parent.append_child(std::move(element));
+    return &parent.append_child(std::move(element));
 }
 
-Node& HtmlTreeBuilder::append_synthetic_element(Node& parent, std::string_view tag_name) {
+Node* HtmlTreeBuilder::append_synthetic_element(Node& parent, std::string_view tag_name) {
+    if (!can_add_node()) {
+        return nullptr;
+    }
     ++node_count_;
-    return parent.append_child(make_element(std::string(tag_name)));
+    return &parent.append_child(make_element(std::string(tag_name)));
 }
 
 Node* HtmlTreeBuilder::find_open_element(std::string_view tag_name) const {
@@ -137,46 +143,49 @@ void HtmlTreeBuilder::pop_current_if(std::string_view tag_name) {
     }
 }
 
-Node& HtmlTreeBuilder::ensure_html() {
+Node* HtmlTreeBuilder::ensure_html() {
     if (html_ != nullptr) {
-        return *html_;
+        return html_;
     }
-    if (!can_add_node()) {
-        return document_;
+    html_ = append_synthetic_element(document_, "html");
+    if (html_ == nullptr) {
+        return nullptr;
     }
-    html_ = &append_synthetic_element(document_, "html");
     open_elements_.push_back(html_);
-    return *html_;
+    return html_;
 }
 
-Node& HtmlTreeBuilder::ensure_head() {
-    Node& html = ensure_html();
+Node* HtmlTreeBuilder::ensure_head() {
+    Node* html = ensure_html();
+    if (html == nullptr) {
+        return nullptr;
+    }
     if (head_ != nullptr) {
-        return *head_;
+        return head_;
     }
-    if (!can_add_node()) {
-        return html;
-    }
-    head_ = &append_synthetic_element(html, "head");
-    return *head_;
+    head_ = append_synthetic_element(*html, "head");
+    return head_;
 }
 
-Node& HtmlTreeBuilder::ensure_body() {
-    Node& html = ensure_html();
+Node* HtmlTreeBuilder::ensure_body() {
+    Node* html = ensure_html();
+    if (html == nullptr) {
+        return nullptr;
+    }
     if (body_ != nullptr) {
-        return *body_;
+        return body_;
     }
     if (open_elements_.size() > 1 && open_elements_.back()->tag_name == "head") {
         open_elements_.pop_back();
     }
-    if (!can_add_node()) {
-        return html;
+    body_ = append_synthetic_element(*html, "body");
+    if (body_ == nullptr) {
+        return nullptr;
     }
-    body_ = &append_synthetic_element(html, "body");
     if (can_descend()) {
         open_elements_.push_back(body_);
     }
-    return *body_;
+    return body_;
 }
 
 void HtmlTreeBuilder::start_tag(const HtmlToken& token) {
@@ -189,10 +198,6 @@ void HtmlTreeBuilder::start_tag(const HtmlToken& token) {
                           {});
         return;
     }
-    if (!can_add_node()) {
-        return;
-    }
-
     if (options_.synthesize_document_structure) {
         if (token.name == "html") {
             start_html(token);
@@ -207,75 +212,93 @@ void HtmlTreeBuilder::start_tag(const HtmlToken& token) {
             return;
         }
         if (html_ == nullptr) {
-            ensure_html();
+            if (ensure_html() == nullptr) {
+                return;
+            }
         }
         if (body_ == nullptr && is_metadata_element(token.name)) {
             append_to_head(token);
             return;
         }
         if (body_ == nullptr) {
-            ensure_body();
+            if (ensure_body() == nullptr) {
+                return;
+            }
         }
     }
 
     apply_common_implied_end_tags(token.name);
 
     Node& parent = *open_elements_.back();
-    Node& appended = append_element(parent, token);
-    if (token.self_closing && !is_void_element(appended.tag_name)) {
+    Node* appended = append_element(parent, token);
+    if (appended == nullptr) {
+        return;
+    }
+    if (token.self_closing && !is_void_element(appended->tag_name)) {
         report_diagnostic(options_.diagnostics,
                           DiagnosticStage::Html,
                           DiagnosticSeverity::Info,
                           "html-non-void-self-closing",
                           "Self-closing slash on a non-void HTML element was ignored",
-                          appended.tag_name);
+                          appended->tag_name);
     }
-    if (!is_void_element(appended.tag_name) && can_descend()) {
-        open_elements_.push_back(&appended);
+    if (!is_void_element(appended->tag_name) && can_descend()) {
+        open_elements_.push_back(appended);
     }
 }
 
 void HtmlTreeBuilder::start_html(const HtmlToken& token) {
     if (html_ == nullptr) {
-        html_ = &append_element(document_, token);
-        open_elements_.push_back(html_);
+        html_ = append_element(document_, token);
+        if (html_ != nullptr) {
+            open_elements_.push_back(html_);
+        }
         return;
     }
     merge_attributes(*html_, token);
 }
 
 void HtmlTreeBuilder::start_head(const HtmlToken& token) {
-    Node& html = ensure_html();
+    Node* html = ensure_html();
+    if (html == nullptr) {
+        return;
+    }
     if (head_ == nullptr) {
-        head_ = &append_element(html, token);
+        head_ = append_element(*html, token);
     } else {
         merge_attributes(*head_, token);
     }
-    if (open_elements_.back() != head_ && can_descend()) {
+    if (head_ != nullptr && open_elements_.back() != head_ && can_descend()) {
         open_elements_.push_back(head_);
     }
 }
 
 void HtmlTreeBuilder::start_body(const HtmlToken& token) {
-    Node& html = ensure_html();
+    Node* html = ensure_html();
+    if (html == nullptr) {
+        return;
+    }
     if (open_elements_.size() > 1 && open_elements_.back()->tag_name == "head") {
         open_elements_.pop_back();
     }
     if (body_ == nullptr) {
-        body_ = &append_element(html, token);
+        body_ = append_element(*html, token);
     } else {
         merge_attributes(*body_, token);
     }
-    if (open_elements_.back() != body_ && can_descend()) {
+    if (body_ != nullptr && open_elements_.back() != body_ && can_descend()) {
         open_elements_.push_back(body_);
     }
 }
 
 void HtmlTreeBuilder::append_to_head(const HtmlToken& token) {
-    Node& head = ensure_head();
-    Node& appended = append_element(head, token);
-    if (!is_void_element(appended.tag_name) && can_descend()) {
-        open_elements_.push_back(&appended);
+    Node* head = ensure_head();
+    if (head == nullptr) {
+        return;
+    }
+    Node* appended = append_element(*head, token);
+    if (appended != nullptr && !is_void_element(appended->tag_name) && can_descend()) {
+        open_elements_.push_back(appended);
     }
 }
 
@@ -361,9 +384,6 @@ void HtmlTreeBuilder::end_tag(std::string_view tag_name) {
 }
 
 void HtmlTreeBuilder::text(std::string_view data) {
-    if (!can_add_node()) {
-        return;
-    }
     if (options_.synthesize_document_structure && body_ == nullptr &&
         (open_elements_.back() == &document_ || open_elements_.back()->tag_name == "html")) {
         const bool has_non_space = std::any_of(data.begin(), data.end(), [](char ch) {
@@ -372,7 +392,9 @@ void HtmlTreeBuilder::text(std::string_view data) {
         if (!has_non_space) {
             return;
         }
-        ensure_body();
+        if (ensure_body() == nullptr) {
+            return;
+        }
     }
 
     const std::string value = std::string(data);
@@ -380,6 +402,9 @@ void HtmlTreeBuilder::text(std::string_view data) {
         return;
     }
 
+    if (!can_add_node()) {
+        return;
+    }
     ++node_count_;
     open_elements_.back()->append_child(make_text(value));
 }

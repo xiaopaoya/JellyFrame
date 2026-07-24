@@ -12,6 +12,10 @@ struct CssParserOptions {
     std::size_t max_rules = 4096;
     std::size_t max_declarations_per_rule = 256;
     std::size_t max_nesting_depth = 8;
+    std::size_t max_input_bytes = 256 * 1024;
+    std::size_t max_selector_bytes = 4096;
+    std::size_t max_at_rule_prelude_bytes = 4096;
+    std::size_t max_declaration_value_bytes = 4096;
     bool flatten_layer_blocks = true;
     bool parse_plain_media_blocks = true;
     bool parse_supports_blocks = true;

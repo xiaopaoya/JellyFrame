@@ -81,8 +81,8 @@ void parser_budget_diagnostics_are_explicit_and_bounded() {
           "parser reports attribute budget pressure");
 
     const DomStatistics statistics = compute_dom_statistics(*result.document);
-    check(statistics.node_count <= budgets.max_dom_nodes + 3,
-          "synthesized document structure remains bounded around node budget");
+    check(statistics.node_count <= budgets.max_dom_nodes,
+          "synthesized document structure remains inside node budget");
     check(statistics.max_attributes_per_element <= budgets.max_attributes_per_element,
           "attribute budget is enforced per element");
 }

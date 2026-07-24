@@ -1333,6 +1333,48 @@ void style_candidate_cache_ignores_irrelevant_identifiers() {
           "irrelevant identifiers do not consume candidate cache capacity");
 }
 
+void parser_limits_unbounded_css_fields_without_losing_following_rules() {
+    CssParser parser;
+    VectorDiagnosticSink diagnostics;
+    CssParserOptions options;
+    options.diagnostics = &diagnostics;
+    options.max_selector_bytes = 16;
+    options.max_at_rule_prelude_bytes = 8;
+    options.max_declaration_value_bytes = 8;
+    const Stylesheet stylesheet = parser.parse(
+        ".selector-that-is-too-long { color: red; }"
+        "@media screen and (min-width: 320px) { .ignored { color: blue; } }"
+        ".limited { color: rgb(123, 456, 789); }"
+        ".kept { color: #123456; }",
+        options);
+
+    check(stylesheet.size() == 1 && stylesheet[0].selector == ".kept",
+          "oversized parser fields are skipped without corrupting following rules");
+    check(has_diagnostic_code(diagnostics, "css-selector-limit"), "selector cap is reported");
+    check(has_diagnostic_code(diagnostics, "css-at-rule-prelude-limit"), "at-rule prelude cap is reported");
+    check(has_diagnostic_code(diagnostics, "css-declaration-value-limit"), "declaration value cap is reported");
+}
+
+void text_overflow_is_specified_but_not_inherited_by_nested_elements() {
+    auto parent = make_element("div");
+    parent->attributes["class"] = "parent";
+    auto child = make_element("span");
+    Node& child_node = parent->append_child(std::move(child));
+    StyleResolver resolver(parse(".parent { text-overflow: ellipsis; }"));
+
+    const Style parent_style = resolver.resolve(*parent);
+    const Style child_style = resolver.resolve(child_node);
+    check(parent_style.text_overflow_ellipsis && parent_style.text_overflow_specified,
+          "ellipsis keeps its specified state");
+    check(!child_style.text_overflow_ellipsis && !child_style.text_overflow_specified,
+          "a child starts with an unspecified text-overflow value");
+
+    RenderTreeBuilder builder(resolver);
+    auto tree = builder.build(*parent);
+    check(!tree->children.empty() && !tree->children.front()->style.text_overflow_ellipsis,
+          "nested elements do not inherit the parent ellipsis state");
+}
+
 } // namespace
 
 int main() {
@@ -1395,6 +1437,8 @@ int main() {
         style_candidate_cache_preserves_selector_context();
         style_candidate_cache_respects_tiny_budget_and_inline_style();
         style_candidate_cache_ignores_irrelevant_identifiers();
+        parser_limits_unbounded_css_fields_without_losing_following_rules();
+        text_overflow_is_specified_but_not_inherited_by_nested_elements();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
         return 1;

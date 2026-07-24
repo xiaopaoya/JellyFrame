@@ -32,6 +32,7 @@ HtmlParseResult HtmlParser::parse_with_diagnostics(const std::string& source, co
     tokenizer_options.max_tag_name_bytes = options.max_tag_name_bytes;
     tokenizer_options.max_attribute_name_bytes = options.max_attribute_name_bytes;
     tokenizer_options.max_attribute_value_bytes = options.max_attribute_value_bytes;
+    tokenizer_options.max_text_token_bytes = options.max_text_token_bytes;
     tokenizer.tokenize_to_sink(source, tree_builder, tokenizer_options);
     clear_dirty_flags(*root);
     const HtmlParserDiagnosticFlags flags = tree_builder.diagnostics();
