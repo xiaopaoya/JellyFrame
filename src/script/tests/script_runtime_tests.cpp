@@ -1607,6 +1607,48 @@ void javascript_runtime_respects_timer_and_listener_budgets() {
     check(runtime.eval("String(fired)").value == "101", "listener budget keeps only first listener");
 }
 
+void javascript_runtime_honors_zero_host_budgets_and_deduplicates_listeners() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>Go</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "zero-budget button exists");
+
+    HostBudgets zero_budgets;
+    zero_budgets.max_timers = 0;
+    zero_budgets.max_event_listeners = 0;
+    zero_budgets.max_detached_dom_nodes = 0;
+    zero_budgets.max_active_animations = 0;
+    {
+        JerryScriptRuntime zero_runtime(zero_budgets);
+        zero_runtime.bind_document(*document);
+        const ScriptEvaluationResult zero_result = zero_runtime.eval(
+            "var button = document.getElementById('button');"
+            "String(setTimeout(function () {}, 1)) + ':' +"
+            "String(requestAnimationFrame(function () {})) + ':' +"
+            "String(button.addEventListener('click', function () {}));");
+        check(zero_result.ok && zero_result.value == "0:0:undefined",
+              "zero host budgets reject timer and animation allocation without failing script evaluation");
+        check(zero_runtime.statistics().timer_count == 0 &&
+                  zero_runtime.statistics().animation_frame_callback_count == 0 &&
+                  zero_runtime.statistics().event_listener_count == 0,
+              "zero host budgets do not allocate script-owned records");
+    }
+
+    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{4, 4});
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult duplicate_result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var calls = 0;"
+        "function listener() { calls += 1; }"
+        "button.addEventListener('click', listener);"
+        "button.addEventListener('click', listener);"
+        "button.removeEventListener('click', listener, true);"
+        "button.click();"
+        "String(calls) + ':' + String(button.removeEventListener('click', listener));");
+    check(duplicate_result.ok && duplicate_result.value == "1:undefined",
+          "listener identity ignores duplicate add and remove respects capture");
+}
+
 void javascript_system_state_exposes_web_adjacent_subset() {
     HtmlParser parser;
     auto document = parser.parse("<body><p id='status'>ready</p></body>");
@@ -2262,6 +2304,7 @@ int main() {
         javascript_audio_subset_uses_bound_host();
         javascript_service_objects_are_invalidated_after_clear_and_rebind();
         javascript_runtime_respects_timer_and_listener_budgets();
+        javascript_runtime_honors_zero_host_budgets_and_deduplicates_listeners();
         javascript_system_state_exposes_web_adjacent_subset();
         javascript_host_data_snapshot_is_explicit_and_filtered();
         javascript_location_hash_routes_within_one_app();

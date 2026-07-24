@@ -185,14 +185,19 @@ private:
                                    std::string type,
                                    std::uint32_t callback_value,
                                    EventListenerOptions options);
-    void remove_script_event_listener(Node& node, std::string type, std::uint32_t callback_value);
+    void remove_script_event_listener(Node& node,
+                                      std::string type,
+                                      std::uint32_t callback_value,
+                                      EventListenerOptions options);
     void set_script_event_handler(Node& node, std::string type, std::uint32_t callback_value);
     std::uint32_t get_script_event_handler(Node& node, const std::string& type) const;
     void add_window_event_listener(std::string type,
                                    std::uint32_t callback_value,
                                    std::uint32_t target_value,
                                    EventListenerOptions options);
-    void remove_window_event_listener(std::string type, std::uint32_t callback_value);
+    void remove_window_event_listener(std::string type,
+                                      std::uint32_t callback_value,
+                                      EventListenerOptions options);
     void set_window_event_handler(std::string type, std::uint32_t callback_value, std::uint32_t target_value);
     std::uint32_t get_window_event_handler(const std::string& type) const;
     void dispatch_window_event(const char* type);

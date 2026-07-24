@@ -37,7 +37,8 @@ AppBudgetSnapshot collect_app_budget_snapshot(const AppRuntimeHost& host,
     snapshot.role = host.current().role;
     snapshot.state = host.current().state;
 
-    snapshot.service_requests = AppBudgetMeter{host.requests().size(), host.requests().capacity()};
+    snapshot.service_requests = AppBudgetMeter{
+        host.requests().size() + host.requests().in_flight_size(), host.requests().capacity()};
     snapshot.service_completions = AppBudgetMeter{host.completions().size(), host.completions().capacity()};
     snapshot.host_handles = AppBudgetMeter{host.handles().active_count(), host.handles().capacity()};
     snapshot.host_handle_bytes = AppBudgetMeter{host.handles().used_bytes(), host.handles().byte_budget()};

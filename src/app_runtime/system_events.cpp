@@ -29,7 +29,8 @@ AppSystemEventPushStatus AppSystemEventQueue::try_push_current(const AppRuntimeH
     if (app_instance_id == 0) {
         return AppSystemEventPushStatus::EmptyInstance;
     }
-    if (full()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (size_ >= capacity_) {
         return AppSystemEventPushStatus::QueueFull;
     }
     events_[(head_ + size_) % capacity_] = AppSystemEvent{app_instance_id, kind, snapshot};
@@ -47,6 +48,7 @@ AppSystemEventPumpResult AppSystemEventQueue::pump_current(const AppRuntimeHost&
                                                            std::vector<AppSystemEvent>& output) {
     AppSystemEventPumpResult result;
     const std::uint32_t active_instance = host.current_app_instance_id();
+    std::lock_guard<std::mutex> lock(mutex_);
     const std::size_t limit = max_events_per_frame_ == 0 ? capacity_ : max_events_per_frame_;
     const std::size_t count = std::min(limit, size_);
     for (std::size_t index = 0; index < count; ++index) {
@@ -70,6 +72,7 @@ AppSystemEventPumpResult AppSystemEventQueue::pump_current(const AppRuntimeHost&
 }
 
 std::size_t AppSystemEventQueue::discard_app_instance(std::uint32_t app_instance_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
     const std::size_t old_size = size_;
     std::size_t kept = 0;
     for (std::size_t index = 0; index < old_size; ++index) {
@@ -88,8 +91,24 @@ std::size_t AppSystemEventQueue::discard_app_instance(std::uint32_t app_instance
 }
 
 void AppSystemEventQueue::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
     head_ = 0;
     size_ = 0;
+}
+
+std::size_t AppSystemEventQueue::size() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return size_;
+}
+
+bool AppSystemEventQueue::empty() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return size_ == 0;
+}
+
+bool AppSystemEventQueue::full() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return size_ >= capacity_;
 }
 
 } // namespace jellyframe

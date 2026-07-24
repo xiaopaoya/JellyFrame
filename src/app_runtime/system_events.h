@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace jellyframe {
@@ -62,27 +63,22 @@ public:
     std::size_t discard_app_instance(std::uint32_t app_instance_id);
     void clear();
 
-    std::size_t size() const {
-        return size_;
-    }
+    std::size_t size() const;
 
     std::size_t capacity() const {
         return capacity_;
     }
 
-    bool empty() const {
-        return size_ == 0;
-    }
+    bool empty() const;
 
-    bool full() const {
-        return size_ >= capacity_;
-    }
+    bool full() const;
 
 private:
     std::size_t capacity_ = 0;
     std::size_t max_events_per_frame_ = 0;
     std::size_t head_ = 0;
     std::size_t size_ = 0;
+    mutable std::mutex mutex_;
     std::vector<AppSystemEvent> events_;
 };
 

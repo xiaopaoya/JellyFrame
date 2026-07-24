@@ -73,9 +73,9 @@ void current_instance_submission_and_handles_are_scoped() {
 
     const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
     assert(handle != 0);
-    const HostHandleInfo* info = host.handles().lookup(handle);
-    assert(info != nullptr);
-    assert(info->app_instance_id == app.id);
+    HostHandleInfo info;
+    assert(host.handles().lookup_copy(handle, info));
+    assert(info.app_instance_id == app.id);
 }
 
 void launch_cleans_previous_instance_state() {
@@ -468,6 +468,15 @@ void budget_snapshot_reports_runtime_usage_and_caps() {
     assert(budget.storage_shadow_bytes.limit == 0);
     assert(budget.dom_nodes.limit == 123);
     assert(budget.framebuffer_pixels.limit == 456);
+
+    AppRuntimeHost worker_host = make_host();
+    worker_host.launch("org.example.worker-budget", AppRole::App);
+    assert(worker_host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
+    HostServiceRequest worker_request;
+    assert(worker_host.pop_worker_request(worker_request));
+    const AppBudgetSnapshot worker_budget = collect_app_budget_snapshot(worker_host);
+    assert(worker_budget.service_requests.used == 1);
+    assert(worker_budget.service_requests.limit == 4);
     assert(!app_budget_snapshot_has_exhausted_runtime_budget(budget));
 }
 

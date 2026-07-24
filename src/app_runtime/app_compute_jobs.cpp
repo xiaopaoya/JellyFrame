@@ -212,7 +212,7 @@ bool AppComputeJobMock::release_result(AppRuntimeHost& host, std::uint32_t handl
 std::size_t AppComputeJobMock::collect_released_results(const AppRuntimeHost& host) {
     const std::size_t before = records_.size();
     records_.erase(std::remove_if(records_.begin(), records_.end(), [&host](const AppComputeResultRecord& record) {
-        return host.handles().lookup(record.handle) == nullptr;
+        return !host.handles().contains(record.handle);
     }), records_.end());
     return before - records_.size();
 }

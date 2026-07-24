@@ -4,6 +4,7 @@
 #include "app_runtime/app_lifecycle.h"
 #include "app_runtime/host_services.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -60,7 +61,7 @@ public:
     }
 
     std::uint32_t current_app_instance_id() const {
-        return lifecycle_.current_app_instance_id();
+        return current_app_instance_id_.load(std::memory_order_acquire);
     }
 
     AppInstance launch(std::string app_id, AppRole role);
@@ -129,6 +130,7 @@ public:
 
 private:
     AppLifecycleController lifecycle_;
+    std::atomic<std::uint32_t> current_app_instance_id_{0};
     HostServiceRequestQueue requests_;
     HostServiceCompletionQueue completions_;
     HostHandleTable handles_;

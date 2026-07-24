@@ -52,7 +52,7 @@ bool HostServiceRequestQueue::pop_next(HostServiceRequest& request) {
         }
     }
     request = *best;
-    in_progress_.push_back(request);
+    in_progress_.push_back(InFlightRequest{request, {}, false});
     requests_.erase(best);
     return true;
 }
@@ -72,7 +72,7 @@ bool HostServiceRequestQueue::pop_next(HostServiceJobKind kind, HostServiceReque
         return false;
     }
     request = *best;
-    in_progress_.push_back(request);
+    in_progress_.push_back(InFlightRequest{request, {}, false});
     requests_.erase(best);
     return true;
 }
@@ -86,7 +86,7 @@ bool HostServiceRequestQueue::pop_pending(std::uint32_t job_id, HostServiceReque
         return false;
     }
     request = *it;
-    in_progress_.push_back(request);
+    in_progress_.push_back(InFlightRequest{request, {}, false});
     requests_.erase(it);
     return true;
 }
@@ -105,13 +105,28 @@ bool HostServiceRequestQueue::cancel_pending(std::uint32_t job_id) {
 
 bool HostServiceRequestQueue::finish(std::uint32_t job_id) {
     std::lock_guard<std::mutex> lock(mutex_);
-    const auto it = std::find_if(in_progress_.begin(), in_progress_.end(), [job_id](const HostServiceRequest& request) {
-        return request.job_id == job_id;
+    const auto it = std::find_if(in_progress_.begin(), in_progress_.end(), [job_id](const InFlightRequest& request) {
+        return request.request.job_id == job_id;
     });
     if (it == in_progress_.end()) {
         return false;
     }
     in_progress_.erase(it);
+    return true;
+}
+
+bool HostServiceRequestQueue::defer_completion(const HostServiceCompletion& completion) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto it = std::find_if(in_progress_.begin(), in_progress_.end(), [&completion](const InFlightRequest& request) {
+        return request.request.job_id == completion.job_id &&
+               request.request.kind == completion.kind &&
+               request.request.app_instance_id == completion.app_instance_id;
+    });
+    if (it == in_progress_.end() || it->has_deferred_completion) {
+        return false;
+    }
+    it->completion = completion;
+    it->has_deferred_completion = true;
     return true;
 }
 
@@ -124,14 +139,9 @@ std::size_t HostServiceRequestQueue::cancel_app_instance(std::uint32_t app_insta
                                        return request.app_instance_id == app_instance_id;
                                    }),
                     requests_.end());
-    const auto old_in_progress_size = in_progress_.size();
-    in_progress_.erase(std::remove_if(in_progress_.begin(),
-                                      in_progress_.end(),
-                                      [app_instance_id](const HostServiceRequest& request) {
-                                          return request.app_instance_id == app_instance_id;
-                                      }),
-                       in_progress_.end());
-    return (old_size - requests_.size()) + (old_in_progress_size - in_progress_.size());
+    // A worker may already own one of these requests. Keep it charged until it
+    // posts its stale completion, then finish() releases the in-flight slot.
+    return old_size - requests_.size();
 }
 
 void HostServiceRequestQueue::clear() {
@@ -148,6 +158,15 @@ std::size_t HostServiceRequestQueue::size() const {
 std::size_t HostServiceRequestQueue::in_flight_size() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return in_progress_.size();
+}
+
+std::size_t HostServiceRequestQueue::deferred_completion_count() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return static_cast<std::size_t>(std::count_if(in_progress_.begin(),
+                                                   in_progress_.end(),
+                                                   [](const InFlightRequest& request) {
+                                                       return request.has_deferred_completion;
+                                                   }));
 }
 
 bool HostServiceRequestQueue::empty() const {
@@ -236,6 +255,23 @@ bool HostServiceCompletionQueue::full() const {
     return size_ >= capacity_;
 }
 
+std::size_t HostServiceRequestQueue::flush_deferred_completions(HostServiceCompletionQueue& completions) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::size_t flushed = 0;
+    for (auto it = in_progress_.begin(); it != in_progress_.end();) {
+        if (!it->has_deferred_completion) {
+            ++it;
+            continue;
+        }
+        if (!completions.push(it->completion)) {
+            break;
+        }
+        it = in_progress_.erase(it);
+        ++flushed;
+    }
+    return flushed;
+}
+
 HostHandleTable::HostHandleTable(std::size_t capacity, std::size_t byte_budget)
     : capacity_(std::min<std::size_t>(capacity, kSlotMask)),
       byte_budget_(byte_budget) {
@@ -246,6 +282,7 @@ std::uint32_t HostHandleTable::allocate(HostServiceHandleKind kind,
                                         std::uint32_t app_instance_id,
                                         std::uint32_t bytes,
                                         void* payload) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (kind == HostServiceHandleKind::None || capacity_ == 0 || active_count_ >= capacity_) {
         return 0;
     }
@@ -276,6 +313,7 @@ std::uint32_t HostHandleTable::allocate(HostServiceHandleKind kind,
 }
 
 bool HostHandleTable::release(std::uint32_t handle) {
+    std::lock_guard<std::mutex> lock(mutex_);
     Slot* slot = slot_for_handle(handle);
     if (slot == nullptr) {
         return false;
@@ -289,17 +327,18 @@ bool HostHandleTable::release(std::uint32_t handle) {
     return true;
 }
 
-const HostHandleInfo* HostHandleTable::lookup(std::uint32_t handle) const {
+bool HostHandleTable::lookup_copy(std::uint32_t handle, HostHandleInfo& output) const {
+    std::lock_guard<std::mutex> lock(mutex_);
     const Slot* slot = slot_for_handle(handle);
-    return slot == nullptr ? nullptr : &slot->info;
-}
-
-HostHandleInfo* HostHandleTable::lookup(std::uint32_t handle) {
-    Slot* slot = slot_for_handle(handle);
-    return slot == nullptr ? nullptr : &slot->info;
+    if (slot == nullptr) {
+        return false;
+    }
+    output = slot->info;
+    return true;
 }
 
 std::size_t HostHandleTable::release_app_instance(std::uint32_t app_instance_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
     std::size_t released = 0;
     for (std::size_t i = 0; i < slots_.size(); ++i) {
         Slot& slot = slots_[i];
@@ -320,6 +359,7 @@ std::size_t HostHandleTable::release_app_instance(std::uint32_t app_instance_id)
 }
 
 void HostHandleTable::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
     for (Slot& slot : slots_) {
         if (slot.active) {
             slot.generation = next_generation(slot.generation);
@@ -330,6 +370,16 @@ void HostHandleTable::clear() {
     used_bytes_ = 0;
     active_count_ = 0;
     next_free_hint_ = 0;
+}
+
+std::size_t HostHandleTable::active_count() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return active_count_;
+}
+
+std::size_t HostHandleTable::used_bytes() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return used_bytes_;
 }
 
 std::uint32_t HostHandleTable::make_handle(std::size_t slot_index, std::uint16_t generation) {

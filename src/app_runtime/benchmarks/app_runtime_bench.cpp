@@ -91,7 +91,7 @@ void bench_handle_table(std::size_t capacity) {
                                          nullptr));
     }
     for (std::uint32_t handle : handles) {
-        (void)table.lookup(handle);
+        (void)table.contains(handle);
     }
     for (std::uint32_t handle : handles) {
         table.release(handle);

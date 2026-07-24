@@ -332,7 +332,7 @@ std::size_t AppSensorSampleMock::collect_released_samples(const AppRuntimeHost& 
     records_.erase(std::remove_if(records_.begin(),
                                   records_.end(),
                                   [&host](const AppSensorSampleRecord& record) {
-                                      return host.handles().lookup(record.handle) == nullptr;
+                                      return !host.handles().contains(record.handle);
                                   }),
                    records_.end());
     return old_size - records_.size();
@@ -510,7 +510,7 @@ std::size_t AppLocationSnapshotMock::collect_released_snapshots(const AppRuntime
     records_.erase(std::remove_if(records_.begin(),
                                   records_.end(),
                                   [&host](const AppLocationSnapshotRecord& record) {
-                                      return host.handles().lookup(record.handle) == nullptr;
+                                      return !host.handles().contains(record.handle);
                                   }),
                    records_.end());
     return old_size - records_.size();

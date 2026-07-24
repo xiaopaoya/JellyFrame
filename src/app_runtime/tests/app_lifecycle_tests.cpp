@@ -45,7 +45,7 @@ void launch_tears_down_previous_instance_resources() {
     assert(requests.empty());
     assert(completions.empty());
     assert(handles.active_count() == 0);
-    assert(handles.lookup(handle) == nullptr);
+    assert(!handles.contains(handle));
 }
 
 void exit_current_cleans_only_active_instance() {
@@ -82,8 +82,8 @@ void exit_current_cleans_only_active_instance() {
     assert(lifecycle.current_app_instance_id() == 0);
     assert(requests.size() == 1);
     assert(completions.size() == 1);
-    assert(handles.lookup(active_handle) == nullptr);
-    assert(handles.lookup(other_handle) != nullptr);
+    assert(!handles.contains(active_handle));
+    assert(handles.contains(other_handle));
 }
 
 void terminate_current_reports_stable_reasons() {
@@ -146,7 +146,7 @@ void completion_pump_accepts_current_and_releases_stale_handles() {
     assert(result.released_stale_handles == 1);
     assert(accepted.size() == 1);
     assert(accepted.front().job_id == 2);
-    assert(handles.lookup(stale_handle) == nullptr);
+    assert(!handles.contains(stale_handle));
 }
 
 void stale_completion_cannot_release_current_instance_handle() {
@@ -171,7 +171,7 @@ void stale_completion_cannot_release_current_instance_handle() {
     assert(result.accepted == 0);
     assert(result.stale == 1);
     assert(result.released_stale_handles == 0);
-    assert(handles.lookup(current_handle) != nullptr);
+    assert(handles.contains(current_handle));
 }
 
 void suspend_resume_are_explicit_state_transitions() {

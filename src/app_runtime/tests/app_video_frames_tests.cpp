@@ -81,7 +81,7 @@ void video_frame_returns_latest_surface_and_drops_old_one() {
     check(provider.complete_next(host), "second frame completed");
     const auto second = pump(host);
     check(second.size() == 1 && second[0].handle != 0, "second frame completion returns handle");
-    check(provider.frame(old_handle) == nullptr && host.handles().lookup(old_handle) == nullptr,
+    check(provider.frame(old_handle) == nullptr && !host.handles().contains(old_handle),
           "old latest frame released before replacement");
     const AppVideoFrameRecord* latest = provider.frame(second[0].handle);
     check(latest != nullptr && latest->dropped_previous && provider.latest_frame_handle("/preview.mjpg") == second[0].handle,
@@ -106,7 +106,7 @@ void video_frame_keeps_displayed_frame_when_replacement_has_no_handle_budget() {
     const auto replacement = pump(host);
     check(replacement.size() == 1 && replacement[0].status == HostServiceStatus::BudgetExceeded,
           "replacement reports handle budget exhaustion");
-    check(provider.frame(old_handle) != nullptr && host.handles().lookup(old_handle) != nullptr &&
+    check(provider.frame(old_handle) != nullptr && host.handles().contains(old_handle) &&
               provider.latest_frame_handle("/preview.mjpg") == old_handle,
           "old frame remains visible when replacement cannot allocate");
     check(provider.release_frame(host, old_handle), "old frame released after budget failure");

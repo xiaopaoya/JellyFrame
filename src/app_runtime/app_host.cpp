@@ -25,7 +25,9 @@ AppRuntimeHostOptions AppRuntimeHost::options_from_capabilities(const HostDevice
 
 AppInstance AppRuntimeHost::launch(std::string app_id, AppRole role) {
     fonts_.clear_app_instance(lifecycle_.current_app_instance_id());
-    return lifecycle_.launch(std::move(app_id), role, &requests_, &completions_, &handles_);
+    AppInstance instance = lifecycle_.launch(std::move(app_id), role, &requests_, &completions_, &handles_);
+    current_app_instance_id_.store(instance.id, std::memory_order_release);
+    return instance;
 }
 
 AppTeardownResult AppRuntimeHost::exit_current() {
@@ -34,6 +36,7 @@ AppTeardownResult AppRuntimeHost::exit_current() {
 
 AppTeardownResult AppRuntimeHost::terminate_current(AppTeardownReason reason) {
     AppTeardownResult result = lifecycle_.terminate_current(reason, &requests_, &completions_, &handles_);
+    current_app_instance_id_.store(0, std::memory_order_release);
     result.released_font_resources = fonts_.clear_app_instance(result.app_instance_id);
     return result;
 }
@@ -96,13 +99,13 @@ std::size_t AppRuntimeHost::clear_current_fonts() {
 }
 
 bool AppRuntimeHost::push_completion(const HostServiceCompletion& completion) {
-    // Keep the request charged until its completion has a guaranteed delivery slot.
-    // Workers can retry when this returns false instead of silently losing a result.
-    if (!completions_.push(completion)) {
-        return false;
+    // Keep worker-owned completions in their already-reserved in-flight slot
+    // until the UI completion queue can accept them.
+    if (completions_.push(completion)) {
+        requests_.finish(completion.job_id);
+        return true;
     }
-    requests_.finish(completion.job_id);
-    return true;
+    return requests_.defer_completion(completion);
 }
 
 bool AppRuntimeHost::pop_worker_request(HostServiceRequest& request) {
@@ -114,11 +117,13 @@ bool AppRuntimeHost::pop_worker_request(HostServiceJobKind kind, HostServiceRequ
 }
 
 AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(std::vector<HostServiceCompletion>& accepted) {
+    requests_.flush_deferred_completions(completions_);
     return lifecycle_.pump_completions(completions_, max_completion_events_per_frame_, accepted, &handles_);
 }
 
 AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(AppFrameScratch& scratch) {
     scratch.begin_frame();
+    requests_.flush_deferred_completions(completions_);
     return lifecycle_.pump_completions(completions_,
                                        max_completion_events_per_frame_,
                                        scratch.accepted_completions,

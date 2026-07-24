@@ -73,6 +73,8 @@ struct HostServiceSubmitResult {
     HostServiceStatus rejected_status = HostServiceStatus::BudgetExceeded;
 };
 
+class HostServiceCompletionQueue;
+
 class HostServiceRequestQueue {
 public:
     explicit HostServiceRequestQueue(std::size_t capacity = 0);
@@ -88,23 +90,34 @@ public:
     bool pop_pending(std::uint32_t job_id, HostServiceRequest& request);
     bool cancel_pending(std::uint32_t job_id);
     bool finish(std::uint32_t job_id);
+    // Retains a worker result in its existing in-flight slot when the bounded
+    // completion queue is temporarily full. No heap allocation is performed.
+    bool defer_completion(const HostServiceCompletion& completion);
+    std::size_t flush_deferred_completions(HostServiceCompletionQueue& completions);
     std::size_t cancel_app_instance(std::uint32_t app_instance_id);
     void clear();
 
     std::size_t size() const;
     std::size_t in_flight_size() const;
+    std::size_t deferred_completion_count() const;
     std::size_t capacity() const { return capacity_; }
     bool empty() const;
     bool full() const;
 
 private:
+    struct InFlightRequest {
+        HostServiceRequest request;
+        HostServiceCompletion completion;
+        bool has_deferred_completion = false;
+    };
+
     bool full_unlocked() const;
 
     std::size_t capacity_ = 0;
     std::uint32_t next_job_id_ = 1;
     mutable std::mutex mutex_;
     std::vector<HostServiceRequest> requests_;
-    std::vector<HostServiceRequest> in_progress_;
+    std::vector<InFlightRequest> in_progress_;
 };
 
 class HostServiceCompletionQueue {
@@ -145,14 +158,19 @@ public:
                            std::uint32_t bytes = 0,
                            void* payload = nullptr);
     bool release(std::uint32_t handle);
-    const HostHandleInfo* lookup(std::uint32_t handle) const;
-    HostHandleInfo* lookup(std::uint32_t handle);
+    // Returns a stable snapshot. Callers must not retain table storage across a
+    // worker/UI boundary because teardown may release the handle concurrently.
+    bool lookup_copy(std::uint32_t handle, HostHandleInfo& output) const;
+    bool contains(std::uint32_t handle) const {
+        HostHandleInfo ignored;
+        return lookup_copy(handle, ignored);
+    }
     std::size_t release_app_instance(std::uint32_t app_instance_id);
     void clear();
 
-    std::size_t active_count() const { return active_count_; }
+    std::size_t active_count() const;
     std::size_t capacity() const { return capacity_; }
-    std::size_t used_bytes() const { return used_bytes_; }
+    std::size_t used_bytes() const;
     std::size_t byte_budget() const { return byte_budget_; }
 
 private:
@@ -173,6 +191,7 @@ private:
     std::size_t used_bytes_ = 0;
     std::size_t active_count_ = 0;
     std::size_t next_free_hint_ = 0;
+    mutable std::mutex mutex_;
     std::vector<Slot> slots_;
 };
 

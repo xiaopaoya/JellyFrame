@@ -561,8 +561,8 @@ bool NetworkFetchMock::release_response(AppRuntimeHost& host, std::uint32_t hand
         return record.handle == handle;
     });
     if (found == records_.end()) {
-        const HostHandleInfo* info = host.handles().lookup(handle);
-        if (info == nullptr || info->kind != HostServiceHandleKind::FetchResponse) {
+        HostHandleInfo info;
+        if (!host.handles().lookup_copy(handle, info) || info.kind != HostServiceHandleKind::FetchResponse) {
             return false;
         }
         return host.handles().release(handle);
@@ -576,7 +576,7 @@ std::size_t NetworkFetchMock::collect_released_responses(const AppRuntimeHost& h
     records_.erase(std::remove_if(records_.begin(),
                                   records_.end(),
                                   [&host](const NetworkFetchRecord& record) {
-                                      return host.handles().lookup(record.handle) == nullptr;
+                                      return !host.handles().contains(record.handle);
                                   }),
                    records_.end());
     return old_size - records_.size();
@@ -1055,8 +1055,8 @@ bool ImageDecodeMock::release_surface(AppRuntimeHost& host, std::uint32_t handle
         return record.handle == handle;
     });
     if (found == records_.end()) {
-        const HostHandleInfo* info = host.handles().lookup(handle);
-        if (info == nullptr || info->kind != HostServiceHandleKind::Surface) {
+        HostHandleInfo info;
+        if (!host.handles().lookup_copy(handle, info) || info.kind != HostServiceHandleKind::Surface) {
             return false;
         }
         return host.handles().release(handle);
@@ -1070,7 +1070,7 @@ std::size_t ImageDecodeMock::collect_released_surfaces(const AppRuntimeHost& hos
     records_.erase(std::remove_if(records_.begin(),
                                   records_.end(),
                                   [&host](const AppDecodedSurfaceRecord& record) {
-                                      return host.handles().lookup(record.handle) == nullptr;
+                                      return !host.handles().contains(record.handle);
                                   }),
                    records_.end());
     return old_size - records_.size();
@@ -1129,9 +1129,9 @@ const AudioStreamRecord* AudioCommandMock::find_stream(std::uint32_t audio_handl
 }
 
 bool AudioCommandMock::valid_handle_for_current_app(const AppRuntimeHost& host, std::uint32_t audio_handle) const {
-    const HostHandleInfo* info = host.handles().lookup(audio_handle);
-    return info != nullptr && info->kind == HostServiceHandleKind::AudioStream &&
-           info->app_instance_id == host.current_app_instance_id() &&
+    HostHandleInfo info;
+    return host.handles().lookup_copy(audio_handle, info) && info.kind == HostServiceHandleKind::AudioStream &&
+           info.app_instance_id == host.current_app_instance_id() &&
            find_stream(audio_handle) != nullptr;
 }
 
@@ -1277,9 +1277,9 @@ HostServiceCompletion AudioCommandMock::complete_request(AppRuntimeHost& host,
         }
     } else if (status == HostServiceStatus::Completed) {
         AudioStreamRecord* record = find_stream(handle);
-        const HostHandleInfo* info = host.handles().lookup(handle);
-        if (record == nullptr || info == nullptr || info->kind != HostServiceHandleKind::AudioStream ||
-            info->app_instance_id != request.app_instance_id) {
+        HostHandleInfo info;
+        if (record == nullptr || !host.handles().lookup_copy(handle, info) ||
+            info.kind != HostServiceHandleKind::AudioStream || info.app_instance_id != request.app_instance_id) {
             status = HostServiceStatus::Failed;
             error_code = 410;
             handle = 0;
@@ -1332,8 +1332,9 @@ HostServiceCompletion AudioCommandMock::complete_request(AppRuntimeHost& host,
 
 bool AudioCommandMock::post_ended(AppRuntimeHost& host, std::uint32_t audio_handle) {
     AudioStreamRecord* record = find_stream(audio_handle);
-    const HostHandleInfo* info = host.handles().lookup(audio_handle);
-    if (record == nullptr || info == nullptr || info->kind != HostServiceHandleKind::AudioStream) {
+    HostHandleInfo info;
+    if (record == nullptr || !host.handles().lookup_copy(audio_handle, info) ||
+        info.kind != HostServiceHandleKind::AudioStream) {
         return false;
     }
     record->state = AudioStreamState::Ended;
@@ -1347,8 +1348,9 @@ bool AudioCommandMock::post_ended(AppRuntimeHost& host, std::uint32_t audio_hand
 
 bool AudioCommandMock::post_error(AppRuntimeHost& host, std::uint32_t audio_handle, std::uint32_t error_code) {
     AudioStreamRecord* record = find_stream(audio_handle);
-    const HostHandleInfo* info = host.handles().lookup(audio_handle);
-    if (record == nullptr || info == nullptr || info->kind != HostServiceHandleKind::AudioStream) {
+    HostHandleInfo info;
+    if (record == nullptr || !host.handles().lookup_copy(audio_handle, info) ||
+        info.kind != HostServiceHandleKind::AudioStream) {
         return false;
     }
     record->state = AudioStreamState::Error;
@@ -1373,11 +1375,11 @@ bool AudioCommandMock::release_stream(AppRuntimeHost& host, std::uint32_t audio_
         return false;
     }
     streams_.erase(found);
-    HostHandleInfo* info = host.handles().lookup(audio_handle);
-    if (info == nullptr) {
+    HostHandleInfo info;
+    if (!host.handles().lookup_copy(audio_handle, info)) {
         return true;
     }
-    if (info->kind != HostServiceHandleKind::AudioStream) {
+    if (info.kind != HostServiceHandleKind::AudioStream) {
         return false;
     }
     return host.handles().release(audio_handle);
@@ -1392,8 +1394,8 @@ std::size_t AudioCommandMock::release_app_streams(AppRuntimeHost& host, std::uin
         }
         const std::uint32_t handle = it->handle;
         it = streams_.erase(it);
-        HostHandleInfo* info = host.handles().lookup(handle);
-        if (info != nullptr && info->kind == HostServiceHandleKind::AudioStream) {
+        HostHandleInfo info;
+        if (host.handles().lookup_copy(handle, info) && info.kind == HostServiceHandleKind::AudioStream) {
             host.handles().release(handle);
         }
         ++released;
@@ -1406,9 +1408,10 @@ std::size_t AudioCommandMock::collect_released_streams(const AppRuntimeHost& hos
     streams_.erase(std::remove_if(streams_.begin(),
                                   streams_.end(),
                                   [&host](const AudioStreamRecord& stream) {
-                                      const HostHandleInfo* info = host.handles().lookup(stream.handle);
-                                      return info == nullptr || info->kind != HostServiceHandleKind::AudioStream ||
-                                             info->app_instance_id != stream.app_instance_id;
+                                      HostHandleInfo info;
+                                      return !host.handles().lookup_copy(stream.handle, info) ||
+                                             info.kind != HostServiceHandleKind::AudioStream ||
+                                             info.app_instance_id != stream.app_instance_id;
                                   }),
                    streams_.end());
     return old_size - streams_.size();
@@ -1512,9 +1515,9 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
     Entry* entry = find_url(url);
     if (entry != nullptr) {
         if (entry->state == AppImageSurfaceState::Ready) {
-            const HostHandleInfo* info = host.handles().lookup(entry->handle);
-            if (info != nullptr && info->kind == HostServiceHandleKind::Surface &&
-                info->app_instance_id == host.current_app_instance_id()) {
+            HostHandleInfo info;
+            if (host.handles().lookup_copy(entry->handle, info) && info.kind == HostServiceHandleKind::Surface &&
+                info.app_instance_id == host.current_app_instance_id()) {
                 if (handle != nullptr) {
                     *handle = entry->handle;
                 }
@@ -2048,7 +2051,7 @@ std::size_t AppPrivateKvStorageMock::collect_released_values(const AppRuntimeHos
     records_.erase(std::remove_if(records_.begin(),
                                   records_.end(),
                                   [&host](const AppPrivateKvRecord& record) {
-                                      return host.handles().lookup(record.handle) == nullptr;
+                                      return !host.handles().contains(record.handle);
                                   }),
                    records_.end());
     return old_size - records_.size();

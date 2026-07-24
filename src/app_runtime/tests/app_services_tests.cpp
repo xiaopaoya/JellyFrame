@@ -784,7 +784,7 @@ void audio_command_mock_opens_controls_and_closes_streams() {
     check(accepted.size() == 1, "audio close completion accepted");
     check(accepted.front().handle == handle, "audio close completion reports closed handle");
     check(audio.stream(handle) == nullptr, "audio close drops stream record");
-    check(host.handles().lookup(handle) == nullptr, "audio close releases handle");
+    check(!host.handles().contains(handle), "audio close releases handle");
 }
 
 void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
@@ -806,7 +806,7 @@ void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
     check(audio.submit_open(host, "/tone-b.mp3").status == AppServiceSubmitStatus::BudgetExceeded,
           "audio active stream counts against budget");
     host.launch("org.example.next", AppRole::App);
-    check(host.handles().lookup(old_handle) == nullptr, "audio lifecycle releases old app handle");
+    check(!host.handles().contains(old_handle), "audio lifecycle releases old app handle");
     check(audio.collect_released_streams(host) == 1, "audio mock collects stale stream records");
     check(audio.stream(old_handle) == nullptr, "audio stale stream removed");
 
@@ -818,7 +818,7 @@ void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
     const std::uint32_t next_handle = accepted.front().handle;
     check(audio.release_app_streams(host, host.current_app_instance_id()) == 1, "audio release app streams");
     check(audio.stream(next_handle) == nullptr, "audio release app stream record");
-    check(host.handles().lookup(next_handle) == nullptr, "audio release app handle");
+    check(!host.handles().contains(next_handle), "audio release app handle");
 }
 
 void audio_command_stale_worker_pending_is_collectable_after_app_switch() {
@@ -935,9 +935,9 @@ void service_records_collect_handles_released_by_lifecycle() {
     check(storage_handle != 0, "resource cleanup storage handle");
 
     host.launch("org.example.next", AppRole::App);
-    check(host.handles().lookup(network_handle) == nullptr, "resource cleanup network handle released by host");
-    check(host.handles().lookup(image_handle) == nullptr, "resource cleanup image handle released by host");
-    check(host.handles().lookup(storage_handle) == nullptr, "resource cleanup storage handle released by host");
+    check(!host.handles().contains(network_handle), "resource cleanup network handle released by host");
+    check(!host.handles().contains(image_handle), "resource cleanup image handle released by host");
+    check(!host.handles().contains(storage_handle), "resource cleanup storage handle released by host");
 
     check(network.collect_released_responses(host) == 1, "resource cleanup collects network record");
     check(images.collect_released_surfaces(host) == 1, "resource cleanup collects image record");

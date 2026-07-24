@@ -94,7 +94,7 @@ void request_queue_counts_worker_owned_jobs_against_capacity() {
     assert(fourth.accepted);
 }
 
-void request_queue_cancels_in_progress_app_jobs() {
+void request_queue_keeps_in_progress_app_jobs_charged_until_worker_completion() {
     HostServiceRequestQueue queue(3);
     const auto first = queue.submit(HostServiceJobKind::NetworkFetch, 7);
     const auto second = queue.submit(HostServiceJobKind::ImageDecode, 8);
@@ -104,9 +104,13 @@ void request_queue_cancels_in_progress_app_jobs() {
     HostServiceRequest request;
     assert(queue.pop_next(request));
     assert(queue.in_flight_size() == 1);
-    assert(queue.cancel_app_instance(request.app_instance_id) == 1);
+    assert(queue.cancel_app_instance(request.app_instance_id) == 0);
+    assert(queue.in_flight_size() == 1);
+    const auto third = queue.submit(HostServiceJobKind::StorageKv, 9);
+    assert(third.accepted);
+    assert(queue.full());
+    assert(queue.finish(request.job_id));
     assert(queue.in_flight_size() == 0);
-    assert(!queue.finish(request.job_id));
 }
 
 void request_queue_can_pop_specific_pending_job() {
@@ -234,22 +238,22 @@ void handle_table_rejects_stale_handles() {
     assert(handles.active_count() == 1);
     assert(handles.used_bytes() == 128);
 
-    const HostHandleInfo* info = handles.lookup(first);
-    assert(info != nullptr);
-    assert(info->kind == HostServiceHandleKind::Surface);
-    assert(info->app_instance_id == 1);
-    assert(info->bytes == 128);
-    assert(info->payload == reinterpret_cast<void*>(0x10));
+    HostHandleInfo info;
+    assert(handles.lookup_copy(first, info));
+    assert(info.kind == HostServiceHandleKind::Surface);
+    assert(info.app_instance_id == 1);
+    assert(info.bytes == 128);
+    assert(info.payload == reinterpret_cast<void*>(0x10));
 
     assert(handles.release(first));
     assert(!handles.release(first));
-    assert(handles.lookup(first) == nullptr);
+    assert(!handles.contains(first));
 
     const std::uint32_t second = handles.allocate(HostServiceHandleKind::AudioStream, 1, 64);
     assert(second != 0);
     assert(second != first);
-    assert(handles.lookup(first) == nullptr);
-    assert(handles.lookup(second) != nullptr);
+    assert(!handles.contains(first));
+    assert(handles.contains(second));
 }
 
 void handle_table_enforces_capacity_and_bytes() {
@@ -269,7 +273,7 @@ void handle_table_enforces_capacity_and_bytes() {
     handles.clear();
     assert(handles.active_count() == 0);
     assert(handles.used_bytes() == 0);
-    assert(handles.lookup(second) == nullptr);
+    assert(!handles.contains(second));
 }
 
 void handle_table_reuses_released_slot_with_new_generation() {
@@ -286,11 +290,27 @@ void handle_table_reuses_released_slot_with_new_generation() {
     assert(reused != 0);
     assert(reused != second);
     assert((reused & 0x0000ffffu) == (second & 0x0000ffffu));
-    assert(handles.lookup(second) == nullptr);
-    const HostHandleInfo* info = handles.lookup(reused);
-    assert(info != nullptr);
-    assert(info->kind == HostServiceHandleKind::StorageValue);
-    assert(info->app_instance_id == 2);
+    assert(!handles.contains(second));
+    HostHandleInfo info;
+    assert(handles.lookup_copy(reused, info));
+    assert(info.kind == HostServiceHandleKind::StorageValue);
+    assert(info.app_instance_id == 2);
+}
+
+void handle_table_lookup_copy_remains_valid_after_release() {
+    HostHandleTable handles(1, 128);
+    const std::uint32_t handle = handles.allocate(HostServiceHandleKind::ComputeResult, 7, 64,
+                                                  reinterpret_cast<void*>(0x20));
+    assert(handle != 0);
+
+    HostHandleInfo snapshot;
+    assert(handles.lookup_copy(handle, snapshot));
+    assert(handles.release(handle));
+    assert(!handles.contains(handle));
+    assert(snapshot.kind == HostServiceHandleKind::ComputeResult);
+    assert(snapshot.app_instance_id == 7);
+    assert(snapshot.bytes == 64);
+    assert(snapshot.payload == reinterpret_cast<void*>(0x20));
 }
 
 void queue_helpers_use_capability_budgets() {
@@ -322,7 +342,7 @@ int main() {
     request_queue_cancels_pending_jobs();
     request_queue_can_pop_by_kind_without_consuming_other_jobs();
     request_queue_counts_worker_owned_jobs_against_capacity();
-    request_queue_cancels_in_progress_app_jobs();
+    request_queue_keeps_in_progress_app_jobs_charged_until_worker_completion();
     request_queue_can_pop_specific_pending_job();
     completion_queue_drains_with_frame_budget();
     completion_queue_rejects_overflow();
@@ -332,6 +352,7 @@ int main() {
     handle_table_rejects_stale_handles();
     handle_table_enforces_capacity_and_bytes();
     handle_table_reuses_released_slot_with_new_generation();
+    handle_table_lookup_copy_remains_valid_after_release();
     queue_helpers_use_capability_budgets();
     cancelled_completion_preserves_request_identity();
     return 0;

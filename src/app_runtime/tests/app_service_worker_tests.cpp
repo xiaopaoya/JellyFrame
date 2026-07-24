@@ -237,6 +237,45 @@ void worker_pump_does_not_pop_when_completion_queue_is_full() {
     assert(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request));
 }
 
+void worker_completion_is_retained_when_queue_fills_after_worker_pop() {
+    AppRuntimeHost host = make_host(1, 1);
+    const AppInstance app = host.launch("org.example.retained-completion", AppRole::App);
+    const auto submitted = host.submit_current(HostServiceJobKind::NetworkFetch);
+    assert(submitted.accepted);
+
+    HostServiceRequest request;
+    assert(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request));
+    assert(host.push_completion(HostServiceCompletion{
+        99,
+        HostServiceJobKind::Other,
+        HostServiceStatus::Completed,
+        app.id,
+        0,
+        0,
+        0,
+    }));
+    assert(host.push_completion(HostServiceCompletion{
+        request.job_id,
+        request.kind,
+        HostServiceStatus::Completed,
+        request.app_instance_id,
+        0,
+        0,
+        0,
+    }));
+    assert(host.requests().in_flight_size() == 1);
+    assert(host.requests().deferred_completion_count() == 1);
+
+    std::vector<HostServiceCompletion> accepted;
+    assert(host.pump_frame_completions(accepted).accepted == 1);
+    assert(accepted.front().job_id == 99);
+    accepted.clear();
+    assert(host.pump_frame_completions(accepted).accepted == 1);
+    assert(accepted.front().job_id == submitted.job_id);
+    assert(host.requests().in_flight_size() == 0);
+    assert(host.requests().deferred_completion_count() == 0);
+}
+
 void worker_pump_respects_per_tick_request_budget() {
     AppRuntimeHost host = make_host(4, 2);
     host.launch("org.example.timing", AppRole::App);
@@ -615,6 +654,7 @@ int main() {
     worker_pump_processes_only_selected_service_kind();
     worker_pump_normalizes_completion_identity();
     worker_pump_does_not_pop_when_completion_queue_is_full();
+    worker_completion_is_retained_when_queue_fills_after_worker_pop();
     worker_pump_respects_per_tick_request_budget();
     worker_pump_remains_stable_across_many_ticks();
     worker_group_pump_processes_multiple_services_with_fixed_budgets();

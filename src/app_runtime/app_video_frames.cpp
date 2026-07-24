@@ -254,7 +254,7 @@ bool AppVideoFrameProviderMock::release_frame(AppRuntimeHost& host, std::uint32_
 std::size_t AppVideoFrameProviderMock::collect_released_frames(const AppRuntimeHost& host) {
     const std::size_t before = records_.size();
     records_.erase(std::remove_if(records_.begin(), records_.end(), [&host](const AppVideoFrameRecord& record) {
-        return host.handles().lookup(record.handle) == nullptr;
+        return !host.handles().contains(record.handle);
     }), records_.end());
     return before - records_.size();
 }

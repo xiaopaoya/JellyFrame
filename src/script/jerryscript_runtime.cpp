@@ -159,8 +159,9 @@ struct ScriptRuntimeAccess {
     static void remove_script_event_listener(JerryScriptRuntime& runtime,
                                              Node& node,
                                              std::string type,
-                                             jerry_value_t callback) {
-        runtime.remove_script_event_listener(node, std::move(type), callback);
+                                             jerry_value_t callback,
+                                             EventListenerOptions options) {
+        runtime.remove_script_event_listener(node, std::move(type), callback, options);
     }
 
     static void add_window_event_listener(JerryScriptRuntime& runtime,
@@ -185,8 +186,9 @@ struct ScriptRuntimeAccess {
 
     static void remove_window_event_listener(JerryScriptRuntime& runtime,
                                              std::string type,
-                                             jerry_value_t callback) {
-        runtime.remove_window_event_listener(std::move(type), callback);
+                                             jerry_value_t callback,
+                                             EventListenerOptions options) {
+        runtime.remove_window_event_listener(std::move(type), callback, options);
     }
 
     static std::uint32_t add_timer(JerryScriptRuntime& runtime,
@@ -1004,19 +1006,6 @@ bool dataset_key_is_writable(std::string_view key) {
     });
 }
 
-std::string css_property_name_from_js(std::string_view key) {
-    std::string property;
-    for (char ch : key) {
-        if (ch >= 'A' && ch <= 'Z') {
-            property.push_back('-');
-            property.push_back(static_cast<char>(ch - 'A' + 'a'));
-        } else {
-            property.push_back(ch);
-        }
-    }
-    return property;
-}
-
 bool is_script_writable_style_property(const std::string& property) {
     if (property.size() > 2 && property[0] == '-' && property[1] == '-') {
         return true;
@@ -1328,14 +1317,6 @@ ScriptEventBinding* native_event_binding(const jerry_value_t object) {
         return nullptr;
     }
     return static_cast<ScriptEventBinding*>(jerry_object_get_native_ptr(object, &kEventNativeInfo));
-}
-
-Event* native_event(const jerry_value_t object) {
-    ScriptEventBinding* binding = native_event_binding(object);
-    if (binding == nullptr || !binding->active) {
-        return nullptr;
-    }
-    return binding->event;
 }
 
 ScriptXmlHttpRequest* native_xhr(const jerry_value_t object) {
@@ -5860,7 +5841,12 @@ jerry_value_t node_remove_event_listener(const jerry_call_info_t* call_info_p,
         return jerry_undefined();
     }
 
-    ScriptRuntimeAccess::remove_script_event_listener(*runtime, *node, value_to_string(args_p[0]), args_p[1]);
+    ScriptRuntimeAccess::remove_script_event_listener(
+        *runtime,
+        *node,
+        value_to_string(args_p[0]),
+        args_p[1],
+        args_count > 2 ? listener_options_from_value(args_p[2]) : EventListenerOptions{});
     return jerry_undefined();
 }
 
@@ -5898,7 +5884,11 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
     if (runtime == nullptr || args_count < 2 || !jerry_value_is_function(args_p[1])) {
         return jerry_undefined();
     }
-    ScriptRuntimeAccess::remove_window_event_listener(*runtime, value_to_string(args_p[0]), args_p[1]);
+    ScriptRuntimeAccess::remove_window_event_listener(
+        *runtime,
+        value_to_string(args_p[0]),
+        args_p[1],
+        args_count > 2 ? listener_options_from_value(args_p[2]) : EventListenerOptions{});
     return jerry_undefined();
 }
 
@@ -6071,11 +6061,11 @@ JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
 
 JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
     : JerryScriptRuntime(JerryScriptRuntimeOptions{
-          std::max<std::size_t>(1, budgets.max_timers),
-          std::max<std::size_t>(1, budgets.max_event_listeners),
-          std::max<std::size_t>(1, budgets.max_detached_dom_nodes),
+          budgets.max_timers,
+          budgets.max_event_listeners,
+          budgets.max_detached_dom_nodes,
           16,
-          std::max<std::size_t>(1, budgets.max_active_animations),
+          budgets.max_active_animations,
           8,
           4,
           static_cast<std::uint32_t>(std::min<std::size_t>(
@@ -6668,7 +6658,14 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
         [](const std::unique_ptr<ScriptEventListener>& listener) {
             return !listener->active;
         }), event_listeners_.end());
-    if (event_listeners_.size() >= std::max<std::size_t>(1, options_.max_event_listeners)) {
+    for (const auto& listener : event_listeners_) {
+        if (listener->active && !listener->property_handler && listener->node == &node &&
+            listener->type == type && listener->options.capture == options.capture &&
+            same_js_value(listener->callback, callback_value)) {
+            return;
+        }
+    }
+    if (event_listeners_.size() >= options_.max_event_listeners) {
         return;
     }
     auto listener = std::make_unique<ScriptEventListener>();
@@ -6705,10 +6702,13 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
     event_listeners_.push_back(std::move(listener));
 }
 
-void JerryScriptRuntime::remove_script_event_listener(Node& node, std::string type, std::uint32_t callback_value) {
+void JerryScriptRuntime::remove_script_event_listener(Node& node,
+                                                      std::string type,
+                                                      std::uint32_t callback_value,
+                                                      EventListenerOptions options) {
     for (const auto& listener : event_listeners_) {
         if (!listener->active || listener->node != &node || listener->type != type ||
-            !same_js_value(listener->callback, callback_value)) {
+            listener->options.capture != options.capture || !same_js_value(listener->callback, callback_value)) {
             continue;
         }
 
@@ -6747,7 +6747,7 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
             return !listener->active;
         }), event_listeners_.end());
     if (!jerry_value_is_function(callback_value) ||
-        event_listeners_.size() >= std::max<std::size_t>(1, options_.max_event_listeners)) {
+        event_listeners_.size() >= options_.max_event_listeners) {
         return;
     }
 
@@ -6803,7 +6803,15 @@ void JerryScriptRuntime::add_window_event_listener(std::string type,
         [](const std::unique_ptr<ScriptEventListener>& listener) {
             return !listener->active;
         }), event_listeners_.end());
-    if (event_listeners_.size() >= std::max<std::size_t>(1, options_.max_event_listeners)) {
+    for (const auto& listener : event_listeners_) {
+        if (listener->active && !listener->property_handler && listener->node == nullptr &&
+            listener->type == type && listener->options.capture == options.capture &&
+            same_js_value(listener->callback, callback_value) &&
+            same_js_value(listener->target_object, target_value)) {
+            return;
+        }
+    }
+    if (event_listeners_.size() >= options_.max_event_listeners) {
         return;
     }
     auto listener = std::make_unique<ScriptEventListener>();
@@ -6816,10 +6824,12 @@ void JerryScriptRuntime::add_window_event_listener(std::string type,
     event_listeners_.push_back(std::move(listener));
 }
 
-void JerryScriptRuntime::remove_window_event_listener(std::string type, std::uint32_t callback_value) {
+void JerryScriptRuntime::remove_window_event_listener(std::string type,
+                                                      std::uint32_t callback_value,
+                                                      EventListenerOptions options) {
     for (const auto& listener : event_listeners_) {
         if (!listener->active || listener->node != nullptr || listener->type != type ||
-            !same_js_value(listener->callback, callback_value)) {
+            listener->options.capture != options.capture || !same_js_value(listener->callback, callback_value)) {
             continue;
         }
         listener->active = false;
@@ -6859,7 +6869,7 @@ void JerryScriptRuntime::set_window_event_handler(std::string type,
             return !listener->active;
         }), event_listeners_.end());
     if (!jerry_value_is_function(callback_value) ||
-        event_listeners_.size() >= std::max<std::size_t>(1, options_.max_event_listeners)) {
+        event_listeners_.size() >= options_.max_event_listeners) {
         return;
     }
     auto listener = std::make_unique<ScriptEventListener>();
@@ -7017,7 +7027,7 @@ std::uint32_t JerryScriptRuntime::add_timer(std::uint32_t callback_value,
     timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
         return !timer->active;
     }), timers_.end());
-    if (timers_.size() >= std::max<std::size_t>(1, options_.max_timers)) {
+    if (timers_.size() >= options_.max_timers) {
         return 0;
     }
     auto timer = std::make_unique<ScriptTimer>();
@@ -7071,7 +7081,7 @@ std::uint32_t JerryScriptRuntime::add_animation_frame_callback(std::uint32_t cal
                            return !callback->active;
                        }),
         animation_frame_callbacks_.end());
-    if (animation_frame_callbacks_.size() >= std::max<std::size_t>(1, options_.max_animation_frame_callbacks)) {
+    if (animation_frame_callbacks_.size() >= options_.max_animation_frame_callbacks) {
         return 0;
     }
     auto callback = std::make_unique<ScriptAnimationFrameCallback>();

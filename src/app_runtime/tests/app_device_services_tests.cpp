@@ -176,7 +176,7 @@ void sensor_samples_follow_app_instance_lifetime() {
     check(accepted.size() == 1 && accepted.front().handle != 0, "sensor lifetime handle");
     const std::uint32_t handle = accepted.front().handle;
     host.launch("org.example.third", AppRole::App);
-    check(host.handles().lookup(handle) == nullptr, "sensor lifetime host handle released");
+    check(!host.handles().contains(handle), "sensor lifetime host handle released");
     check(sensors.collect_released_samples(host) == 1, "sensor stale records collected");
     check(sensors.sample(handle) == nullptr, "sensor stale sample record removed");
 }
