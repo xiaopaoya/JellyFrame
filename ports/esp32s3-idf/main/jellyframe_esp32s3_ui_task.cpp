@@ -2040,6 +2040,7 @@ bool start_app_runtime_recovery_acceptance_task() {
         ESP_LOGE(kTag, "app runtime recovery task context allocation failed");
         return false;
     }
+    context->document_url = kBandShellUrl;
     context->band_shell = true;
     context->app_runtime_recovery_acceptance = true;
     context->telemetry_case = "app_runtime_native_recovery_cumulative";
