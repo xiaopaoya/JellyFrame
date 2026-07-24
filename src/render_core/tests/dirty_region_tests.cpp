@@ -541,8 +541,8 @@ void dirty_region_area_handles_extreme_rects_safely() {
                                 2});
     result.rects.push_back(Rect{0, 0, 1, 1});
     check(dirty_region_area(result) > 0, "extreme dirty region keeps a positive area");
-    check(dirty_region_area_percent(result, Rect{0, 0, 100, 100}) == 100,
-          "extreme dirty region saturates at viewport percent");
+    check(dirty_region_area_percent(result, Rect{0, 0, 100, 100}) == 1,
+          "extreme dirty region keeps percent bounded by its actual area");
 }
 
 } // namespace

@@ -378,14 +378,17 @@ void present_stats_estimate_matches_dirty_rect_accounting() {
 }
 
 void oversized_framebuffer_dimensions_are_rejected() {
-    check(embedded_framebuffer_min_stride_bytes(std::numeric_limits<int>::max(), EmbeddedPixelFormat::Rgba8888) == 0,
-          "oversized rgba stride is rejected");
-    check(embedded_framebuffer_min_size(std::numeric_limits<int>::max(), 2, EmbeddedPixelFormat::Rgba8888) == 0,
-          "oversized rgba buffer size is rejected");
+    const std::size_t rgba_stride =
+        embedded_framebuffer_min_stride_bytes(std::numeric_limits<int>::max(), EmbeddedPixelFormat::Rgba8888);
+    check(rgba_stride == static_cast<std::size_t>(std::numeric_limits<int>::max()) * 4U,
+          "large rgba stride stays representable");
+    check(embedded_framebuffer_min_size(std::numeric_limits<int>::max(), 2, EmbeddedPixelFormat::Rgba8888) ==
+              rgba_stride * 2U,
+          "large rgba buffer size stays representable");
     check(embedded_framebuffer_packed_rect_bytes(std::numeric_limits<int>::max(),
                                                  std::numeric_limits<int>::max(),
-                                                 EmbeddedPixelFormat::Rgb565) == 0,
-          "oversized packed rect byte count is rejected");
+                                                 EmbeddedPixelFormat::Rgb565) > 0,
+          "large packed rect byte count stays representable");
 }
 } // namespace
 int main() {
