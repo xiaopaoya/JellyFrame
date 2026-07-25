@@ -85,11 +85,12 @@ AppXhrStatus AppXmlHttpRequest::open(std::string method, std::string url, bool a
 
 AppXhrStatus AppXmlHttpRequest::send(AppRuntimeHost& host,
                                      NetworkFetchMock& network,
-                                     std::uint32_t timeout_ms) {
+                                     std::uint32_t timeout_ms,
+                                     std::uint32_t client_token) {
     if (ready_state_ != AppXhrReadyState::Opened || sent_) {
         return AppXhrStatus::InvalidState;
     }
-    const AppServiceSubmitResult submitted = network.submit_fetch(host, url_, timeout_ms);
+    const AppServiceSubmitResult submitted = network.submit_fetch(host, url_, timeout_ms, client_token);
     if (!submitted.accepted()) {
         finish_error(submitted.rejected_status == HostServiceStatus::Timeout
             ? AppXhrEventKind::Timeout

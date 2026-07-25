@@ -43,7 +43,10 @@ public:
     static constexpr std::size_t kMaxTrackedAbandonedJobs = 8;
 
     AppXhrStatus open(std::string method, std::string url, bool async = true);
-    AppXhrStatus send(AppRuntimeHost& host, NetworkFetchMock& network, std::uint32_t timeout_ms = 0);
+    AppXhrStatus send(AppRuntimeHost& host,
+                      NetworkFetchMock& network,
+                      std::uint32_t timeout_ms = 0,
+                      std::uint32_t client_token = 0);
     void abort(AppRuntimeHost& host);
     bool handle_completion(AppRuntimeHost& host,
                            NetworkFetchMock& network,

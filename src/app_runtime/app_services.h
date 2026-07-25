@@ -52,6 +52,7 @@ struct NetworkFetchRecord {
     std::uint16_t status_code = 0;
     std::string content_type;
     std::string body;
+    std::uint32_t client_token = 0;
 };
 
 enum class AppNetworkFailureReason {
@@ -88,7 +89,8 @@ public:
     bool add_fixture(NetworkFetchFixture fixture);
     AppServiceSubmitResult submit_fetch(AppRuntimeHost& host,
                                         const std::string& url,
-                                        std::uint32_t timeout_ms = 0);
+                                        std::uint32_t timeout_ms = 0,
+                                        std::uint32_t client_token = 0);
     // Converts a worker-popped request into a completion and allocates the
     // response handle through host budgets. The caller still owns completion
     // queue posting.
@@ -96,6 +98,9 @@ public:
     bool complete_next(AppRuntimeHost& host);
     const NetworkFetchRecord* response(std::uint32_t handle) const;
     bool release_response(AppRuntimeHost& host, std::uint32_t handle);
+    std::size_t release_client_responses(AppRuntimeHost& host,
+                                         std::uint32_t app_instance_id,
+                                         std::uint32_t client_token);
     std::size_t collect_released_responses(const AppRuntimeHost& host);
     std::size_t collect_stale_pending_fetches(const AppRuntimeHost& host);
     void clear();
@@ -107,6 +112,7 @@ private:
         HostServiceStatus status = HostServiceStatus::Failed;
         std::uint32_t error_code = 0;
         NetworkFetchFixture fixture;
+        std::uint32_t client_token = 0;
     };
 
     NetworkFetchPolicy policy_;

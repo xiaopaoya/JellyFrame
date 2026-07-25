@@ -55,6 +55,9 @@ struct HostServiceRequest {
     std::uint32_t request_handle = 0;
     std::uint32_t timeout_ms = 0;
     std::uint8_t priority = 0;
+    // Identifies an internal consumer within one app instance. It is never an
+    // app-visible capability and lets teardown release only its own handles.
+    std::uint32_t client_token = 0;
 };
 
 struct HostServiceCompletion {
@@ -65,6 +68,7 @@ struct HostServiceCompletion {
     std::uint32_t handle = 0;
     std::uint32_t error_code = 0;
     std::uint32_t byte_count = 0;
+    std::uint32_t client_token = 0;
 };
 
 struct HostServiceSubmitResult {
@@ -83,7 +87,8 @@ public:
                                    std::uint32_t app_instance_id,
                                    std::uint32_t request_handle = 0,
                                    std::uint8_t priority = 0,
-                                   std::uint32_t timeout_ms = 0);
+                                   std::uint32_t timeout_ms = 0,
+                                   std::uint32_t client_token = 0);
 
     bool pop_next(HostServiceRequest& request);
     bool pop_next(HostServiceJobKind kind, HostServiceRequest& request);
@@ -147,6 +152,7 @@ struct HostHandleInfo {
     std::uint32_t app_instance_id = 0;
     std::uint32_t bytes = 0;
     void* payload = nullptr;
+    std::uint32_t client_token = 0;
 };
 
 class HostHandleTable {
@@ -156,7 +162,8 @@ public:
     std::uint32_t allocate(HostServiceHandleKind kind,
                            std::uint32_t app_instance_id,
                            std::uint32_t bytes = 0,
-                           void* payload = nullptr);
+                           void* payload = nullptr,
+                           std::uint32_t client_token = 0);
     bool release(std::uint32_t handle);
     // Returns a stable snapshot. Callers must not retain table storage across a
     // worker/UI boundary because teardown may release the handle concurrently.
@@ -166,6 +173,7 @@ public:
         return lookup_copy(handle, ignored);
     }
     std::size_t release_app_instance(std::uint32_t app_instance_id);
+    std::size_t release_client(std::uint32_t app_instance_id, std::uint32_t client_token);
     void clear();
 
     std::size_t active_count() const;
@@ -202,6 +210,7 @@ inline HostServiceCompletion make_cancelled_completion(const HostServiceRequest&
         HostServiceStatus::Cancelled,
         request.app_instance_id,
         0,
+        request.client_token,
         0,
         0,
     };

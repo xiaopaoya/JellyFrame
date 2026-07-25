@@ -1572,6 +1572,10 @@ void javascript_service_objects_are_invalidated_after_clear_and_rebind() {
     host.pump_frame_completions(completions);
     check(completions.size() == 1, "geolocation completion is queued before service clear");
     check(host.handles().active_count() == 1, "geolocation completion owns one host handle before clear");
+    const std::uint32_t non_script_handle = host.handles().allocate(
+        HostServiceHandleKind::ComputeResult, host.current_app_instance_id(), 16);
+    check(non_script_handle != 0, "non-script app handle allocated before service clear");
+    check(host.handles().active_count() == 2, "script and non-script handles coexist before service clear");
 
     runtime.clear_app_services();
     result = runtime.eval(
@@ -1597,7 +1601,8 @@ void javascript_service_objects_are_invalidated_after_clear_and_rebind() {
     check(runtime.statistics().xml_http_request_count == 0, "cleared XHR is not active");
     check(runtime.statistics().audio_element_count == 0, "cleared Audio is not active");
     check(runtime.statistics().geolocation_request_count == 0, "cleared geolocation request record is collected");
-    check(host.handles().active_count() == 0, "cleared services release current app handles");
+    check(host.handles().active_count() == 1 && host.handles().contains(non_script_handle),
+          "cleared services release only runtime-owned handles");
     check(storage.get_item("after", nullptr) == AppLocalStorageStatus::NotFound,
           "cleared localStorage object cannot write after service clear");
 
@@ -1605,6 +1610,38 @@ void javascript_service_objects_are_invalidated_after_clear_and_rebind() {
     result = runtime.eval("typeof XMLHttpRequest + ':' + typeof Audio + ':' + typeof localStorage");
     check(result.ok && result.value == "undefined:undefined:undefined",
           "document rebind keeps revoked service globals absent");
+}
+
+void cleared_services_reclaim_late_runtime_completion_only() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+    AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
+    host.launch("org.example.service-late", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    check(network.add_fixture(NetworkFetchFixture{"/late.json", 200, "application/json", "{}"}),
+          "late service fixture accepted");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_app_services(host, network);
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var late = new XMLHttpRequest(); late.open('GET', '/late.json'); late.send(); 'sent';");
+    check(result.ok && result.value == "sent", "runtime-owned late XHR submitted");
+    HostServiceRequest request;
+    check(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request), "late XHR worker owns request");
+    check(request.client_token != 0, "runtime request carries a client token");
+    const std::uint32_t non_script_handle = host.handles().allocate(
+        HostServiceHandleKind::ComputeResult, host.current_app_instance_id(), 16);
+    check(non_script_handle != 0, "late fixture non-script handle allocated");
+
+    runtime.clear_app_services();
+    const HostServiceCompletion completion = network.complete_request(host, request);
+    check(completion.client_token == request.client_token, "worker completion preserves the client token");
+    check(completion.handle != 0, "late worker completion allocates a response handle");
+    check(runtime.handle_host_completion(completion), "cleared runtime consumes its late completion");
+    check(host.handles().active_count() == 1 && host.handles().contains(non_script_handle),
+          "late runtime completion does not release non-script app handles");
+    check(network.response(completion.handle) == nullptr, "late runtime response record is reclaimed");
 }
 
 void javascript_runtime_respects_timer_and_listener_budgets() {
@@ -2329,6 +2366,7 @@ int main() {
         javascript_local_storage_quota_error_is_reported();
         javascript_audio_subset_uses_bound_host();
         javascript_service_objects_are_invalidated_after_clear_and_rebind();
+        cleared_services_reclaim_late_runtime_completion_only();
         javascript_runtime_respects_timer_and_listener_budgets();
         javascript_runtime_honors_zero_host_budgets_and_deduplicates_listeners();
         javascript_system_state_exposes_web_adjacent_subset();

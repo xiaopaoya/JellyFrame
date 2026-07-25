@@ -85,6 +85,7 @@ struct AppLocationSnapshotRecord {
     float altitude_m = 0.0f;
     float accuracy_m = 0.0f;
     float speed_mps = 0.0f;
+    std::uint32_t client_token = 0;
 };
 
 const char* app_sensor_kind_name(AppSensorKind kind);
@@ -140,11 +141,16 @@ public:
 
     void set_policy(AppLocationSnapshotPolicy policy);
     bool set_fixture(AppLocationSnapshotFixture fixture);
-    AppServiceSubmitResult submit_position(AppRuntimeHost& host, std::uint32_t timeout_ms = 0);
+    AppServiceSubmitResult submit_position(AppRuntimeHost& host,
+                                           std::uint32_t timeout_ms = 0,
+                                           std::uint32_t client_token = 0);
     HostServiceCompletion complete_request(AppRuntimeHost& host, const HostServiceRequest& request);
     bool complete_next(AppRuntimeHost& host);
     const AppLocationSnapshotRecord* snapshot(std::uint32_t handle) const;
     bool release_snapshot(AppRuntimeHost& host, std::uint32_t handle);
+    std::size_t release_client_snapshots(AppRuntimeHost& host,
+                                         std::uint32_t app_instance_id,
+                                         std::uint32_t client_token);
     std::size_t release_app_snapshots(AppRuntimeHost& host, std::uint32_t app_instance_id);
     std::size_t collect_released_snapshots(const AppRuntimeHost& host);
     std::size_t collect_stale_pending_snapshots(const AppRuntimeHost& host);
@@ -157,6 +163,7 @@ private:
         HostServiceStatus status = HostServiceStatus::Failed;
         std::uint32_t error_code = 0;
         AppLocationSnapshotFixture fixture;
+        std::uint32_t client_token = 0;
     };
 
     std::size_t active_record_count(std::uint32_t app_instance_id = 0) const;

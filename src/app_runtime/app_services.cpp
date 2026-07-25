@@ -464,7 +464,8 @@ bool NetworkFetchMock::add_fixture(NetworkFetchFixture fixture) {
 
 AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
                                                       const std::string& url,
-                                                      std::uint32_t timeout_ms) {
+                                                      std::uint32_t timeout_ms,
+                                                      std::uint32_t client_token) {
     if (host.current_app_instance_id() == 0) {
         return rejected(AppServiceSubmitStatus::EmptyInstance, HostServiceStatus::Cancelled);
     }
@@ -476,7 +477,7 @@ AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
     }
 
     const HostServiceSubmitResult submitted =
-        host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, timeout_ms);
+        host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, timeout_ms, client_token);
     AppServiceSubmitResult result = from_submit(submitted);
     if (!result.accepted()) {
         return result;
@@ -485,6 +486,7 @@ AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
     PendingFetch pending;
     pending.job_id = result.job_id;
     pending.app_instance_id = host.current_app_instance_id();
+    pending.client_token = client_token;
     const auto found = std::find_if(fixtures_.begin(), fixtures_.end(), [&url](const NetworkFetchFixture& fixture) {
         return fixture.url == url;
     });
@@ -525,11 +527,14 @@ HostServiceCompletion NetworkFetchMock::complete_request(AppRuntimeHost& host,
         0,
         pending->error_code,
         0,
+        request.client_token,
     };
     if (pending->status == HostServiceStatus::Completed) {
         const std::uint32_t handle = host.handles().allocate(HostServiceHandleKind::FetchResponse,
                                                             request.app_instance_id,
-                                                            static_cast<std::uint32_t>(pending->fixture.body.size()));
+                                                            static_cast<std::uint32_t>(pending->fixture.body.size()),
+                                                            nullptr,
+                                                            request.client_token);
         if (handle == 0) {
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = kServiceErrorBudgetExceeded;
@@ -542,6 +547,7 @@ HostServiceCompletion NetworkFetchMock::complete_request(AppRuntimeHost& host,
                 pending->fixture.status_code,
                 pending->fixture.content_type,
                 pending->fixture.body,
+                request.client_token,
             });
         }
     }
@@ -569,6 +575,25 @@ bool NetworkFetchMock::release_response(AppRuntimeHost& host, std::uint32_t hand
     }
     records_.erase(found);
     return host.handles().release(handle);
+}
+
+std::size_t NetworkFetchMock::release_client_responses(AppRuntimeHost& host,
+                                                       std::uint32_t app_instance_id,
+                                                       std::uint32_t client_token) {
+    if (app_instance_id == 0 || client_token == 0) {
+        return 0;
+    }
+    std::vector<std::uint32_t> handles;
+    handles.reserve(records_.size());
+    for (const NetworkFetchRecord& record : records_) {
+        if (record.app_instance_id == app_instance_id && record.client_token == client_token) {
+            handles.push_back(record.handle);
+        }
+    }
+    for (std::uint32_t handle : handles) {
+        release_response(host, handle);
+    }
+    return handles.size();
 }
 
 std::size_t NetworkFetchMock::collect_released_responses(const AppRuntimeHost& host) {

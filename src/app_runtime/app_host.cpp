@@ -56,12 +56,13 @@ bool AppRuntimeHost::resume_current() {
 HostServiceSubmitResult AppRuntimeHost::submit_current(HostServiceJobKind kind,
                                                        std::uint32_t request_handle,
                                                        std::uint8_t priority,
-                                                       std::uint32_t timeout_ms) {
+                                                       std::uint32_t timeout_ms,
+                                                       std::uint32_t client_token) {
     const std::uint32_t app_instance_id = lifecycle_.current_app_instance_id();
     if (app_instance_id == 0) {
         return HostServiceSubmitResult{false, 0, HostServiceStatus::Cancelled};
     }
-    return requests_.submit(kind, app_instance_id, request_handle, priority, timeout_ms);
+    return requests_.submit(kind, app_instance_id, request_handle, priority, timeout_ms, client_token);
 }
 
 std::uint32_t AppRuntimeHost::allocate_current_handle(HostServiceHandleKind kind,

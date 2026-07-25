@@ -382,7 +382,9 @@ std::size_t AppLocationSnapshotMock::pending_record_count(std::uint32_t app_inst
                                                   }));
 }
 
-AppServiceSubmitResult AppLocationSnapshotMock::submit_position(AppRuntimeHost& host, std::uint32_t timeout_ms) {
+AppServiceSubmitResult AppLocationSnapshotMock::submit_position(AppRuntimeHost& host,
+                                                                std::uint32_t timeout_ms,
+                                                                std::uint32_t client_token) {
     if (host.current_app_instance_id() == 0) {
         return rejected(AppServiceSubmitStatus::EmptyInstance, HostServiceStatus::Cancelled);
     }
@@ -398,7 +400,7 @@ AppServiceSubmitResult AppLocationSnapshotMock::submit_position(AppRuntimeHost& 
     }
 
     const HostServiceSubmitResult submitted =
-        host.submit_current(HostServiceJobKind::LocationSnapshot, 0, 0, timeout_ms);
+        host.submit_current(HostServiceJobKind::LocationSnapshot, 0, 0, timeout_ms, client_token);
     AppServiceSubmitResult result = from_submit(submitted);
     if (!result.accepted()) {
         return result;
@@ -407,6 +409,7 @@ AppServiceSubmitResult AppLocationSnapshotMock::submit_position(AppRuntimeHost& 
     PendingSnapshot pending;
     pending.job_id = result.job_id;
     pending.app_instance_id = host.current_app_instance_id();
+    pending.client_token = client_token;
     if (!has_fixture_) {
         pending.status = HostServiceStatus::Failed;
         pending.error_code = kDeviceErrorUnavailable;
@@ -441,12 +444,15 @@ HostServiceCompletion AppLocationSnapshotMock::complete_request(AppRuntimeHost& 
         0,
         pending->error_code,
         0,
+        request.client_token,
     };
     if (pending->status == HostServiceStatus::Completed) {
         const std::uint32_t bytes = static_cast<std::uint32_t>(sizeof(AppLocationSnapshotRecord));
         const std::uint32_t handle = host.handles().allocate(HostServiceHandleKind::LocationSnapshot,
                                                             request.app_instance_id,
-                                                            bytes);
+                                                            bytes,
+                                                            nullptr,
+                                                            request.client_token);
         if (handle == 0) {
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = kDeviceErrorBudgetExceeded;
@@ -462,6 +468,7 @@ HostServiceCompletion AppLocationSnapshotMock::complete_request(AppRuntimeHost& 
                 pending->fixture.altitude_m,
                 pending->fixture.accuracy_m,
                 pending->fixture.speed_mps,
+                request.client_token,
             });
         }
     }
@@ -489,6 +496,25 @@ bool AppLocationSnapshotMock::release_snapshot(AppRuntimeHost& host, std::uint32
     }
     records_.erase(found);
     return host.handles().release(handle);
+}
+
+std::size_t AppLocationSnapshotMock::release_client_snapshots(AppRuntimeHost& host,
+                                                              std::uint32_t app_instance_id,
+                                                              std::uint32_t client_token) {
+    if (app_instance_id == 0 || client_token == 0) {
+        return 0;
+    }
+    std::vector<std::uint32_t> handles;
+    handles.reserve(records_.size());
+    for (const AppLocationSnapshotRecord& record : records_) {
+        if (record.app_instance_id == app_instance_id && record.client_token == client_token) {
+            handles.push_back(record.handle);
+        }
+    }
+    for (std::uint32_t handle : handles) {
+        release_snapshot(host, handle);
+    }
+    return handles.size();
 }
 
 std::size_t AppLocationSnapshotMock::release_app_snapshots(AppRuntimeHost& host, std::uint32_t app_instance_id) {

@@ -74,7 +74,8 @@ public:
     HostServiceSubmitResult submit_current(HostServiceJobKind kind,
                                            std::uint32_t request_handle = 0,
                                            std::uint8_t priority = 0,
-                                           std::uint32_t timeout_ms = 0);
+                                           std::uint32_t timeout_ms = 0,
+                                           std::uint32_t client_token = 0);
 
     std::uint32_t allocate_current_handle(HostServiceHandleKind kind,
                                           std::uint32_t bytes = 0,

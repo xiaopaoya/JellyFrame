@@ -27,7 +27,8 @@ HostServiceSubmitResult HostServiceRequestQueue::submit(HostServiceJobKind kind,
                                                         std::uint32_t app_instance_id,
                                                         std::uint32_t request_handle,
                                                         std::uint8_t priority,
-                                                        std::uint32_t timeout_ms) {
+                                                        std::uint32_t timeout_ms,
+                                                        std::uint32_t client_token) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (capacity_ == 0 || full_unlocked()) {
         return HostServiceSubmitResult{false, 0, HostServiceStatus::BudgetExceeded};
@@ -36,7 +37,8 @@ HostServiceSubmitResult HostServiceRequestQueue::submit(HostServiceJobKind kind,
     if (next_job_id_ == 0) {
         next_job_id_ = 1;
     }
-    requests_.push_back(HostServiceRequest{job_id, kind, app_instance_id, request_handle, timeout_ms, priority});
+    requests_.push_back(HostServiceRequest{
+        job_id, kind, app_instance_id, request_handle, timeout_ms, priority, client_token});
     return HostServiceSubmitResult{true, job_id, HostServiceStatus::Completed};
 }
 
@@ -281,7 +283,8 @@ HostHandleTable::HostHandleTable(std::size_t capacity, std::size_t byte_budget)
 std::uint32_t HostHandleTable::allocate(HostServiceHandleKind kind,
                                         std::uint32_t app_instance_id,
                                         std::uint32_t bytes,
-                                        void* payload) {
+                                        void* payload,
+                                        std::uint32_t client_token) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (kind == HostServiceHandleKind::None || capacity_ == 0 || active_count_ >= capacity_) {
         return 0;
@@ -300,7 +303,7 @@ std::uint32_t HostHandleTable::allocate(HostServiceHandleKind kind,
             continue;
         }
         slot.active = true;
-        slot.info = HostHandleInfo{kind, app_instance_id, bytes, payload};
+        slot.info = HostHandleInfo{kind, app_instance_id, bytes, payload, client_token};
         used_bytes_ += bytes;
         ++active_count_;
         next_free_hint_ = i + 1;
@@ -343,6 +346,31 @@ std::size_t HostHandleTable::release_app_instance(std::uint32_t app_instance_id)
     for (std::size_t i = 0; i < slots_.size(); ++i) {
         Slot& slot = slots_[i];
         if (!slot.active || slot.info.app_instance_id != app_instance_id) {
+            continue;
+        }
+        used_bytes_ -= slot.info.bytes;
+        slot.active = false;
+        slot.info = {};
+        slot.generation = next_generation(slot.generation);
+        --active_count_;
+        if (released == 0) {
+            next_free_hint_ = i;
+        }
+        ++released;
+    }
+    return released;
+}
+
+std::size_t HostHandleTable::release_client(std::uint32_t app_instance_id, std::uint32_t client_token) {
+    if (app_instance_id == 0 || client_token == 0) {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::size_t released = 0;
+    for (std::size_t i = 0; i < slots_.size(); ++i) {
+        Slot& slot = slots_[i];
+        if (!slot.active || slot.info.app_instance_id != app_instance_id ||
+            slot.info.client_token != client_token) {
             continue;
         }
         used_bytes_ -= slot.info.bytes;

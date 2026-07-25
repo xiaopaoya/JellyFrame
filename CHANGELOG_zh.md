@@ -23,6 +23,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 修复
 
+- script-service teardown 现在将内部 runtime client token 贯穿 request、completion 和返回 handle。清理
+  script service 只释放该 runtime 的 network/location 资源，迟到 worker completion 仍会回收，不会释放同一 app
+  内其他 consumer 的 handle。
 - Grid placement 最多保留 128 条 tracked row。更大的隐式 row/span 会以
   `grid-placement-budget` 退化为不重叠的 block flow，不再压到最后一行重叠，也不会越过有界存储索引。
 - document CSS 与 classic-script 收集现在执行宿主配置的聚合字节和数量预算。后续资源会通过稳定

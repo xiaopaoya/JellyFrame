@@ -29,6 +29,19 @@
 
 namespace jellyframe {
 
+namespace {
+
+std::uint32_t next_service_client_token() {
+    static std::uint32_t next = 1;
+    const std::uint32_t token = next++;
+    if (next == 0) {
+        next = 1;
+    }
+    return token;
+}
+
+} // namespace
+
 struct ScriptEventListener {
     JerryScriptRuntime* runtime = nullptr;
     Node* node = nullptr;
@@ -254,6 +267,10 @@ struct ScriptRuntimeAccess {
 
     static AppLocationSnapshotMock* location_snapshot(JerryScriptRuntime& runtime) {
         return runtime.location_snapshot_;
+    }
+
+    static std::uint32_t service_client_token(const JerryScriptRuntime& runtime) {
+        return runtime.service_client_token_;
     }
 
     static const AppHostDataSnapshot* host_data_snapshot(const JerryScriptRuntime& runtime) {
@@ -3002,7 +3019,8 @@ jerry_value_t geolocation_get_current_position(const jerry_call_info_t* call_inf
         return jerry_undefined();
     }
 
-    const AppServiceSubmitResult submitted = location->submit_position(*host);
+    const AppServiceSubmitResult submitted = location->submit_position(
+        *host, 0, ScriptRuntimeAccess::service_client_token(*runtime));
     if (!submitted.accepted()) {
         call_geolocation_error(*runtime,
                                error_callback,
@@ -3432,7 +3450,8 @@ jerry_value_t xhr_send(const jerry_call_info_t* call_info_p,
     if (host == nullptr || network == nullptr) {
         return throw_type_error("XMLHttpRequest network service is not bound");
     }
-    const AppXhrStatus status = xhr->request.send(*host, *network);
+    const AppXhrStatus status = xhr->request.send(
+        *host, *network, 0, ScriptRuntimeAccess::service_client_token(*runtime));
     dispatch_xhr_events(*xhr);
     if (status == AppXhrStatus::Ok || status == AppXhrStatus::SubmitFailed) {
         return jerry_undefined();
@@ -6208,13 +6227,21 @@ void JerryScriptRuntime::bind_document(Node& document) {
 #undef JELLYFRAME_WINDOW_EVENT_HANDLER_LIST
 
 void JerryScriptRuntime::bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) {
+    if (bound_service_app_instance_id_ == 0) {
+        service_client_token_ = next_service_client_token();
+    }
     app_host_ = &host;
     network_fetch_ = &network;
+    bound_service_app_instance_id_ = host.current_app_instance_id();
 }
 
 void JerryScriptRuntime::bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location) {
+    if (bound_service_app_instance_id_ == 0) {
+        service_client_token_ = next_service_client_token();
+    }
     app_host_ = &host;
     location_snapshot_ = &location;
+    bound_service_app_instance_id_ = host.current_app_instance_id();
 }
 
 void JerryScriptRuntime::bind_host_data_snapshot(const AppHostDataSnapshot& snapshot,
@@ -6250,8 +6277,21 @@ void JerryScriptRuntime::clear_app_services() {
     clear_audio_elements();
     clear_geolocation_requests();
     clear_script_local_storage_bindings();
-    if (app_host_ != nullptr) {
-        app_host_->handles().release_app_instance(app_host_->current_app_instance_id());
+    if (app_host_ != nullptr && bound_service_app_instance_id_ != 0 && service_client_token_ != 0) {
+        if (network_fetch_ != nullptr) {
+            network_fetch_->release_client_responses(
+                *app_host_, bound_service_app_instance_id_, service_client_token_);
+        }
+        if (location_snapshot_ != nullptr) {
+            location_snapshot_->release_client_snapshots(
+                *app_host_, bound_service_app_instance_id_, service_client_token_);
+        }
+        app_host_->handles().release_client(bound_service_app_instance_id_, service_client_token_);
+        retired_service_host_ = app_host_;
+        retired_network_fetch_ = network_fetch_;
+        retired_location_snapshot_ = location_snapshot_;
+        retired_service_app_instance_id_ = bound_service_app_instance_id_;
+        retired_service_client_token_ = service_client_token_;
     }
     app_host_ = nullptr;
     network_fetch_ = nullptr;
@@ -6260,6 +6300,7 @@ void JerryScriptRuntime::clear_app_services() {
     host_data_access_policy_.reset();
     local_storage_ = nullptr;
     audio_host_ = {};
+    bound_service_app_instance_id_ = 0;
 
     // Service teardown is a capability revocation boundary. Do not leave a
     // usable-looking global behind until the next document bind.
@@ -6448,10 +6489,39 @@ std::size_t JerryScriptRuntime::pump_animation_frame(std::uint64_t now_ms, std::
 }
 
 bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& completion) {
-    if (app_host_ == nullptr) {
-        return false;
+    const auto handle_retired_completion = [&]() {
+        if (retired_service_host_ == nullptr ||
+            completion.app_instance_id != retired_service_app_instance_id_ ||
+            completion.client_token != retired_service_client_token_) {
+            return false;
+        }
+        if (completion.kind == HostServiceJobKind::NetworkFetch && retired_network_fetch_ != nullptr) {
+            if (!retired_network_fetch_->release_response(*retired_service_host_, completion.handle)) {
+                retired_service_host_->handles().release(completion.handle);
+            }
+            return true;
+        }
+        if (completion.kind == HostServiceJobKind::LocationSnapshot && retired_location_snapshot_ != nullptr) {
+            if (!retired_location_snapshot_->release_snapshot(*retired_service_host_, completion.handle)) {
+                retired_service_host_->handles().release(completion.handle);
+            }
+            return true;
+        }
+        if (completion.handle != 0) {
+            HostHandleInfo info;
+            if (retired_service_host_->handles().lookup_copy(completion.handle, info) &&
+                info.app_instance_id == retired_service_app_instance_id_ &&
+                info.client_token == retired_service_client_token_) {
+                retired_service_host_->handles().release(completion.handle);
+            }
+        }
+        return true;
+    };
+    if (app_host_ == nullptr || completion.client_token != service_client_token_) {
+        return handle_retired_completion();
     }
-    if (completion.kind == HostServiceJobKind::LocationSnapshot && location_snapshot_ != nullptr) {
+    if (completion.kind == HostServiceJobKind::LocationSnapshot && location_snapshot_ != nullptr &&
+        completion.client_token == service_client_token_) {
         AppRuntimeHost* const host = app_host_;
         AppLocationSnapshotMock* const location = location_snapshot_;
         const auto found = std::find_if(geolocation_requests_.begin(),
@@ -6523,16 +6593,14 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
     }
     ScriptXmlHttpRequest* matched_xhr = nullptr;
     for (const auto& entry : xml_http_requests_) {
-        if (!entry->active) {
-            continue;
-        }
         if (entry->request.handle_completion(*app_host_, *network_fetch_, completion)) {
             matched_xhr = entry.get();
             break;
         }
     }
     if (matched_xhr == nullptr) {
-        if (completion.kind == HostServiceJobKind::NetworkFetch && completion.handle != 0) {
+        if (completion.kind == HostServiceJobKind::NetworkFetch && completion.handle != 0 &&
+            completion.client_token == service_client_token_) {
             if (!network_fetch_->release_response(*app_host_, completion.handle)) {
                 app_host_->handles().release(completion.handle);
             }

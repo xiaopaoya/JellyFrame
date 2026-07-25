@@ -33,6 +33,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- Script-service teardown now carries an internal runtime client token through
+  requests, completions and returned handles. Clearing script services releases
+  only that runtime's network/location resources and still reclaims its late
+  worker completion without releasing another consumer's app-local handle.
 - Grid placement now retains at most 128 tracked rows. A larger implicit row or
   span falls back to non-overlapping block flow with `grid-placement-budget`
   instead of overlapping the final row or indexing beyond bounded storage.

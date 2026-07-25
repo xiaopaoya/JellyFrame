@@ -169,6 +169,13 @@ private:
     AppLocalStorageShadow* local_storage_ = nullptr;
     Canvas2DRegistry* canvas_2d_ = nullptr;
     ScriptAudioHost audio_host_;
+    std::uint32_t service_client_token_ = 0;
+    std::uint32_t bound_service_app_instance_id_ = 0;
+    AppRuntimeHost* retired_service_host_ = nullptr;
+    NetworkFetchMock* retired_network_fetch_ = nullptr;
+    AppLocationSnapshotMock* retired_location_snapshot_ = nullptr;
+    std::uint32_t retired_service_app_instance_id_ = 0;
+    std::uint32_t retired_service_client_token_ = 0;
     Node* bound_document_ = nullptr;
     Node* active_modal_dialog_ = nullptr;
     ScriptSystemState system_state_;

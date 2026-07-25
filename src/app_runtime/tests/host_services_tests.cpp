@@ -276,6 +276,19 @@ void handle_table_enforces_capacity_and_bytes() {
     assert(!handles.contains(second));
 }
 
+void handle_table_releases_only_matching_client() {
+    HostHandleTable handles(3, 256);
+    const std::uint32_t script_handle = handles.allocate(HostServiceHandleKind::FetchResponse, 9, 32, nullptr, 41);
+    const std::uint32_t other_handle = handles.allocate(HostServiceHandleKind::ComputeResult, 9, 32, nullptr, 42);
+    const std::uint32_t default_handle = handles.allocate(HostServiceHandleKind::Other, 9, 32);
+    assert(script_handle != 0 && other_handle != 0 && default_handle != 0);
+    assert(handles.release_client(9, 41) == 1);
+    assert(!handles.contains(script_handle));
+    assert(handles.contains(other_handle));
+    assert(handles.contains(default_handle));
+    assert(handles.release_client(9, 0) == 0);
+}
+
 void handle_table_reuses_released_slot_with_new_generation() {
     HostHandleTable handles(3, 1024);
     const std::uint32_t first = handles.allocate(HostServiceHandleKind::Surface, 1, 64);
@@ -351,6 +364,7 @@ int main() {
     completion_queue_discard_preserves_order_after_wraparound();
     handle_table_rejects_stale_handles();
     handle_table_enforces_capacity_and_bytes();
+    handle_table_releases_only_matching_client();
     handle_table_reuses_released_slot_with_new_generation();
     handle_table_lookup_copy_remains_valid_after_release();
     queue_helpers_use_capability_budgets();
