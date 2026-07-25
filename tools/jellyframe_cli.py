@@ -3118,6 +3118,17 @@ def prepare_trial_output(output_dir: Path, clean: bool, build_dir: Path | None =
     resolved_output.mkdir(parents=True, exist_ok=True)
 
 
+def trial_build_root(build_dir: Path) -> Path:
+    """Return the CMake build root that owns a directory of built tools."""
+    repository = repo_root().resolve()
+    candidate = build_dir.resolve()
+    while candidate != repository and candidate.is_relative_to(repository):
+        if (candidate / "CMakeCache.txt").is_file():
+            return candidate
+        candidate = candidate.parent
+    raise SystemExit("trial build directory must be inside a CMake build directory below the repository root")
+
+
 def cmd_trial(args: argparse.Namespace) -> int:
     """Run the reproducible desktop evidence flow used before external trials.
 
@@ -3132,7 +3143,7 @@ def cmd_trial(args: argparse.Namespace) -> int:
         raise SystemExit("trial requires a Windows build with jellyframe_win32_browser")
     ensure_tool(tool_path(args.build_dir, "jellyframe_pseudo_browser"))
     ensure_tool(tool_path(args.build_dir, "jellyframe_win32_browser"))
-    prepare_trial_output(args.output_dir, args.clean, args.build_dir)
+    prepare_trial_output(args.output_dir, args.clean, trial_build_root(args.build_dir))
 
     cli = Path(__file__).resolve()
     output_dir = args.output_dir.resolve()
@@ -3694,7 +3705,7 @@ def main() -> int:
     trial.add_argument("--build-dir", default=default_build_dir(), type=Path,
                        help="Directory containing built developer tools.")
     trial.add_argument("--output-dir", required=True, type=Path,
-                       help="Empty directory below --build-dir for generated trial evidence.")
+                       help="Empty directory below the CMake build root for generated trial evidence.")
     trial.add_argument("--clean", action="store_true",
                        help="Delete a non-empty --output-dir before generating new evidence.")
     trial.add_argument("--targets", default="round-300,rect-320x240,rect-172x320",

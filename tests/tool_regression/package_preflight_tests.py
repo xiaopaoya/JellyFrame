@@ -68,6 +68,10 @@ class PackagePreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "build directory must be a descendant"):
             jellyframe_cli.prepare_trial_output(output_dir, clean=True, build_dir=REPO_ROOT)
 
+    def test_trial_build_root_rejects_paths_outside_a_repository_build(self):
+        with self.assertRaisesRegex(SystemExit, "inside a CMake build directory"):
+            jellyframe_cli.trial_build_root(REPO_ROOT / "tools")
+
     def test_esp32s3_render_core_sources_match_desktop_target(self):
         desktop_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         esp_cmake = (REPO_ROOT / "ports" / "esp32s3-idf" / "components" /
