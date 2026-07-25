@@ -98,6 +98,36 @@ void deep_script_collection_is_iterative() {
     check(scripts[0].source.find("window.deep") != std::string::npos, "deep script source is preserved");
 }
 
+void script_collection_respects_aggregate_resource_limits() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body>"
+        "<script>window.first = true;</script>"
+        "<script src='app.js'></script>"
+        "<script>window.third = true;</script>"
+        "</body>");
+    VectorDiagnosticSink diagnostics;
+    DocumentScriptCollectionOptions options;
+    options.max_scripts = 2;
+    options.max_total_source_bytes = 1024;
+    options.diagnostics = &diagnostics;
+    const std::vector<DocumentScript> count_limited =
+        collect_classic_scripts(*document, script_loader, nullptr, options);
+    check(count_limited.size() == 2, "script count budget retains the first scripts only");
+    check(count_limited[0].source.find("first") != std::string::npos, "first script is retained");
+    check(count_limited[1].name == "app.js", "second script is retained");
+    check(has_diagnostic_code(diagnostics, "script-document-resource-limit"), "script count limit is diagnosed");
+
+    diagnostics.clear();
+    options.max_scripts = 8;
+    options.max_total_source_bytes = 24;
+    const std::vector<DocumentScript> byte_limited =
+        collect_classic_scripts(*document, script_loader, nullptr, options);
+    check(byte_limited.size() == 1, "script byte budget skips complete later scripts");
+    check(byte_limited[0].source.find("first") != std::string::npos, "fitting script source is retained");
+    check(has_diagnostic_code(diagnostics, "script-document-resource-limit"), "script byte limit is diagnosed");
+}
+
 } // namespace
 
 int main() {
@@ -106,6 +136,7 @@ int main() {
         external_scripts_use_callback_in_document_order();
         script_collection_reports_skipped_and_failed_scripts();
         deep_script_collection_is_iterative();
+        script_collection_respects_aggregate_resource_limits();
     } catch (const std::exception& error) {
         std::cerr << "document script test failed: " << error.what() << '\n';
         return 1;

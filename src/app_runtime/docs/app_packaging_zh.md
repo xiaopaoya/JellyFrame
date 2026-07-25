@@ -368,6 +368,9 @@ JellyFrame 应使用严格的本地路径子集：
 - CSS `url(...)`、`<link href>`、`<script src>`、图片和字体使用同一个 resolver。
 - `budgets.maxResourceBytes` 会作为单资源上限执行，同时报告总资源字节数；总量超限会产生
   `resource-budget-exceeded`，方便嵌入式 target 按产品策略警告或拒绝。
+- document 加载时，同一预算也限制已接受 CSS 与 classic-script source 的聚合字节数；宿主还会限制
+  stylesheet 与 script 的数量。超限时通过 `css-document-resource-limit` 或
+  `script-document-resource-limit` 跳过后续完整资源，绝不会把截断资源交给 parser 或 script runtime。
 
 这些规则与当前 ESP32-S3 bring-up 接近，也能让 MCU loader 很小。
 

@@ -1,6 +1,8 @@
 ﻿#pragma once
 
 #include "render_core/css_parser.h"
+#include "render_core/document_script.h"
+#include "render_core/document_style.h"
 #include "render_core/dirty_region.h"
 #include "render_core/frame_loop.h"
 #include "render_core/host.h"
@@ -27,6 +29,26 @@ inline CssParserOptions css_parser_options_from_budgets(const HostBudgets& budge
     CssParserOptions options;
     options.max_rules = std::max<std::size_t>(1, budgets.max_css_rules);
     options.max_declarations_per_rule = std::max<std::size_t>(1, budgets.max_css_declarations_per_rule);
+    return options;
+}
+
+inline DocumentStyleCollectionOptions document_style_collection_options_from_budgets(
+    const HostBudgets& budgets,
+    DiagnosticSink* diagnostics = nullptr) {
+    DocumentStyleCollectionOptions options;
+    options.max_stylesheets = std::max<std::size_t>(1, budgets.max_document_stylesheets);
+    options.max_total_bytes = std::max<std::size_t>(1, budgets.max_resource_bytes);
+    options.diagnostics = diagnostics;
+    return options;
+}
+
+inline DocumentScriptCollectionOptions document_script_collection_options_from_budgets(
+    const HostBudgets& budgets,
+    DiagnosticSink* diagnostics = nullptr) {
+    DocumentScriptCollectionOptions options;
+    options.max_scripts = std::max<std::size_t>(1, budgets.max_document_scripts);
+    options.max_total_source_bytes = std::max<std::size_t>(1, budgets.max_resource_bytes);
+    options.diagnostics = diagnostics;
     return options;
 }
 

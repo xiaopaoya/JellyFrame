@@ -287,12 +287,14 @@ bool run_p2_resource_smoke(const HostBudgets& budgets) {
         "",
         *document,
         jellyframe_esp32s3::load_linked_stylesheet,
-        &resource_context);
+        &resource_context,
+        document_style_collection_options_from_budgets(budgets));
     const Stylesheet stylesheet = css_parser.parse(css, css_parser_options_from_budgets(budgets));
     const std::vector<DocumentScript> scripts = collect_classic_scripts(
         *document,
         jellyframe_esp32s3::load_classic_script,
-        &resource_context);
+        &resource_context,
+        document_script_collection_options_from_budgets(budgets));
 
     jellyframe_esp32s3::ResourceLoadStats reject_stats;
     HostBudgets tiny_budget = budgets;
@@ -657,12 +659,14 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         ? combine_author_css(make_card_css(),
                              *resource_document,
                              jellyframe_esp32s3::load_linked_stylesheet,
-                             &benchmark_resource_context)
+                             &benchmark_resource_context,
+                             document_style_collection_options_from_budgets(budgets))
         : make_card_css();
     const std::vector<DocumentScript> benchmark_scripts = resource_document
         ? collect_classic_scripts(*resource_document,
                                   jellyframe_esp32s3::load_classic_script,
-                                  &benchmark_resource_context)
+                                  &benchmark_resource_context,
+                                  document_script_collection_options_from_budgets(budgets))
         : std::vector<DocumentScript>{};
     ESP_LOGI(tag,
              "benchmark_resources css_bytes=%u scripts=%u external_scripts=%u script_bytes=%u loads=%u missing=%u rejected=%u",

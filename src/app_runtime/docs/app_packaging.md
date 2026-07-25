@@ -465,6 +465,11 @@ JellyFrame should use a strict local path subset:
 - `budgets.maxResourceBytes` is enforced per resource and reported for the
   total packaged resource bytes. A total overrun emits
   `resource-budget-exceeded` so embedded targets can reject or warn by policy.
+- At document load, the same budget also bounds the aggregate accepted CSS and
+  classic-script source bytes. Hosts additionally cap stylesheet and script
+  counts. Overflow skips whole later resources with
+  `css-document-resource-limit` or `script-document-resource-limit`; it never
+  feeds a truncated resource to a parser or script runtime.
 
 These rules match the current ESP32-S3 bring-up closely and keep the MCU loader
 small.

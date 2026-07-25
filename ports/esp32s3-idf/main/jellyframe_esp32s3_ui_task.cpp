@@ -792,7 +792,8 @@ bool load_timer_document(TimerUiTaskContext& context) {
     const std::string css = jellyframe::combine_author_css("",
                                                            *context.document,
                                                            load_linked_stylesheet,
-                                                           &resource_context);
+                                                           &resource_context,
+                                                           jellyframe::document_style_collection_options_from_budgets(context.budgets));
     jellyframe::CssParser css_parser;
     jellyframe::Stylesheet stylesheet = css_parser.parse(
         css, jellyframe::css_parser_options_from_budgets(context.budgets));

@@ -65,8 +65,43 @@ bool is_classic_script_type(std::string_view raw_type) {
         ascii_equals(type, "classic");
 }
 
+struct ScriptCollectionState {
+    const DocumentScriptCollectionOptions& options;
+    std::vector<DocumentScript> scripts;
+    std::size_t source_bytes = 0;
+    bool limit_reported = false;
+};
+
+void report_collection_limit(ScriptCollectionState& state, std::string_view detail) {
+    if (state.limit_reported) {
+        return;
+    }
+    report_diagnostic(state.options.diagnostics,
+                      DiagnosticStage::Script,
+                      DiagnosticSeverity::Warning,
+                      "script-document-resource-limit",
+                      "Document script collection reached its resource budget; later scripts were skipped",
+                      detail);
+    state.limit_reported = true;
+}
+
+bool append_script(ScriptCollectionState& state, DocumentScript script) {
+    if (state.scripts.size() >= state.options.max_scripts) {
+        report_collection_limit(state, "script count limit at " + script.name);
+        return false;
+    }
+    if (state.source_bytes > state.options.max_total_source_bytes ||
+        script.source.size() > state.options.max_total_source_bytes - state.source_bytes) {
+        report_collection_limit(state, "script byte limit at " + script.name);
+        return false;
+    }
+    state.source_bytes += script.source.size();
+    state.scripts.push_back(std::move(script));
+    return true;
+}
+
 void collect_scripts(const Node& node,
-                     std::vector<DocumentScript>& scripts,
+                     ScriptCollectionState& state,
                      ScriptLoadCallback load_script,
                      void* context,
                      DiagnosticSink* diagnostics) {
@@ -98,7 +133,9 @@ void collect_scripts(const Node& node,
                 }
                 std::string source;
                 if (load_script(src, source, context) && !source.empty()) {
-                    scripts.push_back(DocumentScript{std::move(source), src, true});
+                    if (!append_script(state, DocumentScript{std::move(source), src, true})) {
+                        break;
+                    }
                 } else {
                     report_diagnostic(diagnostics,
                                       DiagnosticStage::Script,
@@ -112,7 +149,9 @@ void collect_scripts(const Node& node,
             std::string source;
             append_text_descendants(*current, source);
             if (!source.empty()) {
-                scripts.push_back(DocumentScript{std::move(source), "(inline script)", false});
+                if (!append_script(state, DocumentScript{std::move(source), "(inline script)", false})) {
+                    break;
+                }
             }
             continue;
         }
@@ -133,9 +172,18 @@ std::vector<DocumentScript> collect_classic_scripts(const Node& document,
                                                     ScriptLoadCallback load_script,
                                                     void* context,
                                                     DiagnosticSink* diagnostics) {
-    std::vector<DocumentScript> scripts;
-    collect_scripts(document, scripts, load_script, context, diagnostics);
-    return scripts;
+    DocumentScriptCollectionOptions options;
+    options.diagnostics = diagnostics;
+    return collect_classic_scripts(document, load_script, context, options);
+}
+
+std::vector<DocumentScript> collect_classic_scripts(const Node& document,
+                                                    ScriptLoadCallback load_script,
+                                                    void* context,
+                                                    const DocumentScriptCollectionOptions& options) {
+    ScriptCollectionState state{options, {}, 0, false};
+    collect_scripts(document, state, load_script, context, options.diagnostics);
+    return std::move(state.scripts);
 }
 
 } // namespace jellyframe

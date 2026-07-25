@@ -909,6 +909,35 @@ void deep_author_css_collection_is_iterative() {
     check(linked_pos < embedded_pos, "deep author css preserves order");
 }
 
+void author_css_collection_respects_aggregate_resource_limits() {
+    HtmlParser html_parser;
+    auto document = html_parser.parse(
+        "<html><head>"
+        "<style>.first { color: red; }</style>"
+        "<link rel='stylesheet' href='style1.css'>"
+        "<style>.third { color: blue; }</style>"
+        "</head></html>");
+    VectorDiagnosticSink diagnostics;
+    DocumentStyleCollectionOptions options;
+    options.max_stylesheets = 2;
+    options.max_total_bytes = 1024;
+    options.diagnostics = &diagnostics;
+    const std::string count_limited = combine_author_css(
+        "", *document, linked_stylesheet_callback, nullptr, options);
+    check(count_limited.find(".first") != std::string::npos, "first stylesheet is retained");
+    check(count_limited.find("#123456") != std::string::npos, "second stylesheet is retained");
+    check(count_limited.find(".third") == std::string::npos, "later stylesheet is skipped at count limit");
+    check(has_diagnostic_code(diagnostics, "css-document-resource-limit"), "stylesheet count limit is diagnosed");
+
+    diagnostics.clear();
+    options.max_stylesheets = 8;
+    options.max_total_bytes = 25;
+    const std::string byte_limited = combine_author_css("", *document, linked_stylesheet_callback, nullptr, options);
+    check(byte_limited.find(".first") != std::string::npos, "complete stylesheet fitting byte budget is retained");
+    check(byte_limited.find("#123456") == std::string::npos, "oversized later stylesheet is not truncated");
+    check(has_diagnostic_code(diagnostics, "css-document-resource-limit"), "stylesheet byte limit is diagnosed");
+}
+
 void html5_semantic_defaults_are_visible() {
     auto mark = make_element("mark");
     auto blockquote = make_element("blockquote");
@@ -1458,6 +1487,7 @@ int main() {
         embedded_styles_and_common_lengths_apply();
         linked_stylesheets_merge_into_author_css();
         deep_author_css_collection_is_iterative();
+        author_css_collection_respects_aggregate_resource_limits();
         html5_semantic_defaults_are_visible();
         border_none_removes_default_control_border();
         grid_and_aspect_ratio_properties_apply();

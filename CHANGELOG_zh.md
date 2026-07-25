@@ -23,6 +23,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 修复
 
+- document CSS 与 classic-script 收集现在执行宿主配置的聚合字节和数量预算。后续资源会通过稳定
+  diagnostic 完整跳过，不再无界累积，也不会被截断后交给 parser 或 script runtime。
 - HTML DOM 节点上限现在包含合成的 `html`/`head`/`body` 结构；HTML text/CDATA 与 CSS 输入、selector、at-rule prelude、declaration value 也会在临时 parser 存储无限增长前受限。超限字段会被消费或跳过，并输出稳定 diagnostic。
 - worker 已持有的 service request 会在 app teardown 后继续计入预算，直至 stale completion 成功投递；预算 telemetry 现将 queued 和 in-flight 一并统计，避免迟到 worker 结果静默释放并发容量。
 - worker completion 遇到已满的 UI ring 时会保留在固定的 in-flight slot，直至成功投递。Host handle 现采用受同步保护的 copy-out 查询；system event producer/UI-pump 也围绕原子 app-instance snapshot 同步。

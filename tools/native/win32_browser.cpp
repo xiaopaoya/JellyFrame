@@ -3126,7 +3126,11 @@ LoadedPage load_page(const BrowserOptions& options,
         }
         page.document = html_parser.parse(html, html_options);
         const std::string css = combine_author_css(
-            {}, *page.document, jellyframe_example::load_package_stylesheet, &page.package_context);
+            {},
+            *page.document,
+            jellyframe_example::load_package_stylesheet,
+            &page.package_context,
+            document_style_collection_options_from_budgets(budgets, diagnostics));
         page.stylesheet = css_parser.parse(css, css_options);
         page.script_base_dir = package.root / std::filesystem::path(package.manifest.entry).parent_path().relative_path();
         return page;
@@ -3144,7 +3148,8 @@ LoadedPage load_page(const BrowserOptions& options,
             return combine_author_css(jellyframe_example::read_file_limited(options.css_path, kMaxInputBytes),
                                       *page.document,
                                       jellyframe_example::load_linked_stylesheet,
-                                      &stylesheet_context);
+                                      &stylesheet_context,
+                                      document_style_collection_options_from_budgets(budgets, diagnostics));
         }(),
         css_options);
     const std::filesystem::path html_path(options.html_path);
@@ -4883,9 +4888,15 @@ private:
             std::vector<DocumentScript> document_scripts =
                 page.package_mode
                     ? collect_classic_scripts(
-                          *document_, jellyframe_example::load_package_script, &page.package_context, &diagnostics_)
+                          *document_,
+                          jellyframe_example::load_package_script,
+                          &page.package_context,
+                          document_script_collection_options_from_budgets(budgets_, &diagnostics_))
                     : collect_classic_scripts(
-                          *document_, jellyframe_example::load_linked_script, &script_context, &diagnostics_);
+                          *document_,
+                          jellyframe_example::load_linked_script,
+                          &script_context,
+                          document_script_collection_options_from_budgets(budgets_, &diagnostics_));
             if (!document_scripts.empty() || !options_.script_path.empty()) {
                 script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
                 script_runtime_instance_id_ = app_runtime_.current_app_instance_id();

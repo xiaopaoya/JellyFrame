@@ -33,6 +33,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- Document CSS and classic-script collection now enforces host-configured
+  aggregate byte and item budgets. Later resources are skipped whole with
+  stable diagnostics rather than being accumulated without bound or truncated.
 - HTML DOM node limits now include synthesized `html`/`head`/`body` structure,
   and HTML text/CDATA plus CSS input, selector, at-rule prelude and declaration
   values are bounded before their temporary parser storage can grow without

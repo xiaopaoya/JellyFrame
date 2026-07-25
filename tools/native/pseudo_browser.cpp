@@ -687,7 +687,8 @@ int main(int argc, char** argv) {
         const std::string css = combine_author_css(jellyframe_example::read_file_limited(options.css_path, kMaxInputBytes),
                                                    *document,
                                                    jellyframe_example::load_linked_stylesheet,
-                                                   &stylesheet_context);
+                                                   &stylesheet_context,
+                                                   document_style_collection_options_from_budgets(budgets, &diagnostics));
 
         CssParser css_parser;
         CssParserOptions css_options = css_parser_options_from_budgets(budgets);

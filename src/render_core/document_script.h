@@ -17,10 +17,20 @@ struct DocumentScript {
     bool external = false;
 };
 
+struct DocumentScriptCollectionOptions {
+    std::size_t max_scripts = 64;
+    std::size_t max_total_source_bytes = 512 * 1024;
+    DiagnosticSink* diagnostics = nullptr;
+};
+
 std::vector<DocumentScript> collect_classic_scripts(const Node& document);
 std::vector<DocumentScript> collect_classic_scripts(const Node& document,
                                                     ScriptLoadCallback load_script,
                                                     void* context,
                                                     DiagnosticSink* diagnostics = nullptr);
+std::vector<DocumentScript> collect_classic_scripts(const Node& document,
+                                                    ScriptLoadCallback load_script,
+                                                    void* context,
+                                                    const DocumentScriptCollectionOptions& options);
 
 } // namespace jellyframe
