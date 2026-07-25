@@ -163,6 +163,7 @@ void dom_statistics_are_iterative_and_budget_oriented() {
     check(statistics.max_depth == 4, "dom statistics max depth");
     check(statistics.max_child_count == 1, "dom statistics max child count");
     check(statistics.max_attributes_per_element == 1, "dom statistics max attributes");
+    check(statistics.string_bytes == 43, "dom statistics include tag, text and attribute bytes");
 }
 
 } // namespace

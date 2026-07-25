@@ -43,6 +43,7 @@ void detached_nodes_can_be_adopted_released_and_measured() {
     check(statistics.aggregate.element_count == 1, "statistics aggregate elements");
     check(statistics.aggregate.text_count == 1, "statistics aggregate text nodes");
     check(statistics.aggregate.attribute_count == 1, "statistics aggregate attributes");
+    check(statistics.aggregate.string_bytes == 22, "statistics aggregate string bytes");
     check(statistics.max_subtree_nodes == 2, "statistics max subtree nodes");
 
     auto released = owner.release_detached_node(*adopted);
