@@ -58,6 +58,8 @@ private:
 
 struct FormSubmitResult {
     FormValidationResult validation;
+    // Submitting dispatches the event only. Consumers that need a payload must
+    // explicitly call collect_form_data_limited with their own budget.
     std::vector<FormDataEntry> data;
     bool submitted = false;
     bool default_prevented = false;

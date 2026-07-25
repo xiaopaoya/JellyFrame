@@ -6,10 +6,12 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <cerrno>
 #include <cstring>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -36,9 +38,34 @@ std::string trim(std::string_view value) {
 constexpr int kRootFontSizePx = 16;
 constexpr int kDefaultViewportWidthPx = 360;
 constexpr int kDefaultViewportHeightPx = 240;
+constexpr float kMaxTransformTranslationPx = 100000.0F;
 
 std::string lowercase(std::string value);
 bool parse_length_px(const std::string& raw_value, int& output, int em_base = kRootFontSizePx);
+
+bool round_finite_float_to_int(float value, int& output) {
+    if (!std::isfinite(value)) {
+        return false;
+    }
+    const double rounded = value >= 0.0F
+        ? static_cast<double>(value) + 0.5
+        : static_cast<double>(value) - 0.5;
+    if (rounded < static_cast<double>(std::numeric_limits<int>::min()) ||
+        rounded > static_cast<double>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    output = static_cast<int>(rounded);
+    return true;
+}
+
+bool add_lengths(int left, std::int64_t right, int& output) {
+    const std::int64_t result = static_cast<std::int64_t>(left) + right;
+    if (result < std::numeric_limits<int>::min() || result > std::numeric_limits<int>::max()) {
+        return false;
+    }
+    output = static_cast<int>(result);
+    return true;
+}
 
 bool is_css_ident_char(char ch) {
     const unsigned char value = static_cast<unsigned char>(ch);
@@ -172,8 +199,9 @@ bool parse_length_function(const std::string& value, int& output, int em_base) {
             !parse_length_px(expr.substr(op + 1), right, em_base)) {
             return false;
         }
-        output = op_char == '-' ? left - right : left + right;
-        return true;
+        return op_char == '-'
+            ? add_lengths(left, -static_cast<std::int64_t>(right), output)
+            : add_lengths(left, right, output);
     }
     return false;
 }
@@ -253,7 +281,7 @@ bool parse_length_px(const std::string& raw_value, int& output, int em_base) {
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(value.c_str(), &end);
-    if (end == value.c_str() || errno == ERANGE) {
+    if (end == value.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
         return false;
     }
     while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
@@ -290,8 +318,7 @@ bool parse_length_px(const std::string& raw_value, int& output, int em_base) {
     if (end == nullptr || *end != '\0') {
         return false;
     }
-    output = static_cast<int>(pixels >= 0.0F ? pixels + 0.5F : pixels - 0.5F);
-    return true;
+    return round_finite_float_to_int(pixels, output);
 }
 
 bool parse_float(const std::string& raw_value, float& output) {
@@ -302,7 +329,7 @@ bool parse_float(const std::string& raw_value, float& output) {
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(value.c_str(), &end);
-    if (end == value.c_str() || errno == ERANGE) {
+    if (end == value.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
         return false;
     }
     while (end != nullptr && *end != '\0') {
@@ -323,7 +350,7 @@ bool parse_percentage_int(const std::string& raw_value, int& output) {
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(value.c_str(), &end);
-    if (end == value.c_str() || errno == ERANGE) {
+    if (end == value.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
         return false;
     }
     while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
@@ -339,7 +366,11 @@ bool parse_percentage_int(const std::string& raw_value, int& output) {
     if (*end != '\0') {
         return false;
     }
-    output = std::max(-1000, std::min(1000, static_cast<int>(parsed + (parsed >= 0.0F ? 0.5F : -0.5F))));
+    int rounded = 0;
+    if (!round_finite_float_to_int(parsed, rounded)) {
+        return false;
+    }
+    output = std::max(-1000, std::min(1000, rounded));
     return true;
 }
 
@@ -351,7 +382,7 @@ bool parse_time_ms(const std::string& raw_value, std::uint32_t& output) {
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(value.c_str(), &end);
-    if (end == value.c_str() || errno == ERANGE || parsed < 0.0F) {
+    if (end == value.c_str() || errno == ERANGE || !std::isfinite(parsed) || parsed < 0.0F) {
         return false;
     }
     while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
@@ -371,6 +402,9 @@ bool parse_time_ms(const std::string& raw_value, std::uint32_t& output) {
         ++end;
     }
     if (end == nullptr || *end != '\0') {
+        return false;
+    }
+    if (!std::isfinite(milliseconds)) {
         return false;
     }
     output = static_cast<std::uint32_t>(std::min(60000.0F, milliseconds + 0.5F));
@@ -394,6 +428,9 @@ bool parse_integer(const std::string& raw_value, int& output) {
         }
         ++end;
     }
+    if (parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max()) {
+        return false;
+    }
     output = static_cast<int>(parsed);
     return true;
 }
@@ -403,7 +440,11 @@ bool parse_positive_ratio_number(const std::string& raw_value, int& output) {
     if (!parse_float(raw_value, parsed) || parsed <= 0.0F) {
         return false;
     }
-    output = std::max(1, std::min(1000000, static_cast<int>(parsed * 1000.0F + 0.5F)));
+    if (parsed >= 1000.0F) {
+        output = 1000000;
+        return true;
+    }
+    return round_finite_float_to_int(parsed * 1000.0F, output) && output > 0;
     return true;
 }
 
@@ -534,8 +575,11 @@ bool parse_flex_factor(const std::string& raw_value, int& output) {
     if (!parse_float(raw_value, parsed) || parsed < 0.0F) {
         return false;
     }
-    output = std::max(0, std::min(1000000, static_cast<int>(parsed * 1000.0F + 0.5F)));
-    return true;
+    if (parsed >= 1000.0F) {
+        output = 1000000;
+        return true;
+    }
+    return round_finite_float_to_int(parsed * 1000.0F, output) && output >= 0;
 }
 
 bool parse_position_inset(const std::string& raw_value, int font_size, int& output, bool& specified) {
@@ -2172,7 +2216,9 @@ bool parse_number_or_length_for_transform(const std::string& value, float& outpu
         output = static_cast<float>(px);
         return true;
     }
-    return parse_float(value, output);
+    return parse_float(value, output) &&
+        output >= -kMaxTransformTranslationPx &&
+        output <= kMaxTransformTranslationPx;
 }
 
 bool parse_scale_value(const std::string& value, float& output) {
@@ -2202,7 +2248,11 @@ bool parse_angle_degrees(const std::string& raw_value, float& output) {
         if (!parse_float(trim(std::string_view(value).substr(0, value.size() - suffix_length)), parsed)) {
             return false;
         }
-        output = parsed * multiplier;
+        const float degrees = parsed * multiplier;
+        if (!std::isfinite(degrees)) {
+            return false;
+        }
+        output = degrees;
         return true;
     };
     constexpr float kPi = 3.14159265358979323846F;
@@ -2220,6 +2270,23 @@ bool parse_transform_function(std::string_view function, Transform2D& output) {
     const std::string name = lowercase(trim(function.substr(0, open)));
     const std::vector<std::string> args =
         split_function_arguments(function.substr(open + 1, function.size() - open - 2));
+    const auto add_transform_component = [](float& target, float value) {
+        const float result = target + value;
+        if (!std::isfinite(result) ||
+            result < -kMaxTransformTranslationPx || result > kMaxTransformTranslationPx) {
+            return false;
+        }
+        target = result;
+        return true;
+    };
+    const auto multiply_transform_scale = [](float& target, float value) {
+        const float result = target * value;
+        if (!std::isfinite(result)) {
+            return false;
+        }
+        target = result;
+        return true;
+    };
     if (name == "translate" || name == "translate3d") {
         if (args.empty() || args.size() > 3) {
             return false;
@@ -2232,25 +2299,22 @@ bool parse_transform_function(std::string_view function, Transform2D& output) {
         if (args.size() >= 2 && !parse_number_or_length_for_transform(args[1], y)) {
             return false;
         }
-        output.translate_x += x;
-        output.translate_y += y;
-        return true;
+        return add_transform_component(output.translate_x, x) &&
+            add_transform_component(output.translate_y, y);
     }
     if (name == "translatex") {
         float x = 0.0F;
         if (args.size() != 1 || !parse_number_or_length_for_transform(args[0], x)) {
             return false;
         }
-        output.translate_x += x;
-        return true;
+        return add_transform_component(output.translate_x, x);
     }
     if (name == "translatey") {
         float y = 0.0F;
         if (args.size() != 1 || !parse_number_or_length_for_transform(args[0], y)) {
             return false;
         }
-        output.translate_y += y;
-        return true;
+        return add_transform_component(output.translate_y, y);
     }
     if (name == "scale" || name == "scale3d") {
         if (args.empty() || args.size() > 3) {
@@ -2265,33 +2329,29 @@ bool parse_transform_function(std::string_view function, Transform2D& output) {
         if (args.size() >= 2 && !parse_scale_value(args[1], y)) {
             return false;
         }
-        output.scale_x *= x;
-        output.scale_y *= y;
-        return true;
+        return multiply_transform_scale(output.scale_x, x) &&
+            multiply_transform_scale(output.scale_y, y);
     }
     if (name == "scalex") {
         float x = 1.0F;
         if (args.size() != 1 || !parse_scale_value(args[0], x)) {
             return false;
         }
-        output.scale_x *= x;
-        return true;
+        return multiply_transform_scale(output.scale_x, x);
     }
     if (name == "scaley") {
         float y = 1.0F;
         if (args.size() != 1 || !parse_scale_value(args[0], y)) {
             return false;
         }
-        output.scale_y *= y;
-        return true;
+        return multiply_transform_scale(output.scale_y, y);
     }
     if (name == "rotate" || name == "rotatez") {
         float degrees = 0.0F;
         if (args.size() != 1 || !parse_angle_degrees(args[0], degrees)) {
             return false;
         }
-        output.rotate_degrees += degrees;
-        return true;
+        return add_transform_component(output.rotate_degrees, degrees);
     }
     return false;
 }
@@ -2313,7 +2373,7 @@ bool parse_transform_origin_percent_token(const std::string& token, int& percent
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(value.c_str(), &end);
-    if (end == value.c_str() || errno == ERANGE) {
+    if (end == value.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
         return false;
     }
     while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
@@ -2329,7 +2389,11 @@ bool parse_transform_origin_percent_token(const std::string& token, int& percent
     if (*end != '\0') {
         return false;
     }
-    percent = std::max(-200, std::min(300, static_cast<int>(parsed + (parsed >= 0.0F ? 0.5F : -0.5F))));
+    int rounded = 0;
+    if (!round_finite_float_to_int(parsed, rounded)) {
+        return false;
+    }
+    percent = std::max(-200, std::min(300, rounded));
     return true;
 }
 
@@ -2374,7 +2438,7 @@ bool parse_object_position_percent_token(const std::string& token, int& percent)
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(token.c_str(), &end);
-    if (end == token.c_str() || errno == ERANGE) {
+    if (end == token.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
         return false;
     }
     while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
@@ -2390,7 +2454,11 @@ bool parse_object_position_percent_token(const std::string& token, int& percent)
     if (*end != '\0') {
         return false;
     }
-    percent = std::max(0, std::min(100, static_cast<int>(parsed + (parsed >= 0.0F ? 0.5F : -0.5F))));
+    int rounded = 0;
+    if (!round_finite_float_to_int(parsed, rounded)) {
+        return false;
+    }
+    percent = std::max(0, std::min(100, rounded));
     return true;
 }
 
@@ -3442,7 +3510,10 @@ bool apply_declaration(Style& style,
         float multiplier = 0.0F;
         int px = 0;
         if (parse_float(value, multiplier)) {
-            style.line_height = std::max(1, static_cast<int>(static_cast<float>(style.font_size) * multiplier + 0.5F));
+            if (!round_finite_float_to_int(static_cast<float>(style.font_size) * multiplier, px)) {
+                return false;
+            }
+            style.line_height = std::max(1, px);
         } else if (parse_length_px(value, px, style.font_size)) {
             style.line_height = std::max(1, px);
         } else {

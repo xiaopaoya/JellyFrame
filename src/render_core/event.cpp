@@ -14,6 +14,8 @@ constexpr std::size_t kStackListenerSnapshotCapacity = 8;
 
 struct DispatchScope {
     DispatchScope* previous = nullptr;
+    const Node* const* path = nullptr;
+    std::size_t path_count = 0;
     bool path_node_destroyed = false;
 };
 
@@ -21,8 +23,10 @@ thread_local DispatchScope* g_dispatch_scope = nullptr;
 
 class ScopedDispatch {
 public:
-    ScopedDispatch() {
+    ScopedDispatch(const std::vector<const Node*>& path) {
         scope_.previous = g_dispatch_scope;
+        scope_.path = path.data();
+        scope_.path_count = path.size();
         g_dispatch_scope = &scope_;
     }
 
@@ -346,11 +350,11 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
 }
 
 bool dispatch_event(const Node& target, Event& event) {
-    ScopedDispatch dispatch_scope;
     std::vector<const Node*> path;
     for (const Node* node = &target; node != nullptr; node = node->parent) {
         path.push_back(node);
     }
+    ScopedDispatch dispatch_scope(path);
 
     event.reset_for_dispatch(target);
 
@@ -404,9 +408,14 @@ bool dispatch_event(const Node& target, Event& event) {
     return !event.default_prevented();
 }
 
-void event_dispatch_node_destroyed(const Node&) {
+void event_dispatch_node_destroyed(const Node& node) {
     for (DispatchScope* scope = g_dispatch_scope; scope != nullptr; scope = scope->previous) {
-        scope->path_node_destroyed = true;
+        for (std::size_t index = 0; index < scope->path_count; ++index) {
+            if (scope->path[index] == &node) {
+                scope->path_node_destroyed = true;
+                break;
+            }
+        }
     }
 }
 

@@ -213,6 +213,26 @@ void class_change_with_wider_text_stays_conservative() {
           "paint-only class change with wider text does not reuse layout");
 }
 
+void flex_and_text_layout_fields_reject_paint_only_reuse() {
+    auto fixture = build_fixture(
+        "<body><div id='item' class='item'>Open</div></body>",
+        ".item { display: flex; flex-direction: row; order: 0; align-self: auto; align-content: start;"
+        " white-space: normal; text-overflow: clip; }"
+        ".item.active { flex-direction: column; order: 1; align-self: center; align-content: center;"
+        " white-space: nowrap; text-overflow: ellipsis; }");
+    Node* item = find_element_by_id(*fixture.document, "item");
+    check(item != nullptr, "layout fields item exists");
+    item->set_attribute("class", "item active");
+    auto next_render = rebuild_render_tree(*fixture.document, fixture.resolver);
+
+    check(!style_dirty_can_reuse_layout(*fixture.document,
+                                        *fixture.render_tree,
+                                        *next_render,
+                                        *fixture.layout_tree,
+                                        fixed_text_measure()),
+          "flex and text layout changes reject retained paint-only reuse");
+}
+
 } // namespace
 
 int main() {
@@ -222,6 +242,7 @@ int main() {
         transform_class_change_invalidates_old_and_new_bounds();
         class_change_with_stable_text_can_reuse_layout();
         class_change_with_wider_text_stays_conservative();
+        flex_and_text_layout_fields_reject_paint_only_reuse();
     } catch (const std::exception& error) {
         std::cerr << "style repaint test failed: " << error.what() << '\n';
         return 1;

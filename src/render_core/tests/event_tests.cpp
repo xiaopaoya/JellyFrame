@@ -162,6 +162,26 @@ void dispatch_stops_safely_when_a_listener_destroys_its_target() {
     check(parent_calls == 0, "destroyed path does not bubble");
 }
 
+void dispatch_continues_when_a_listener_destroys_an_unrelated_node() {
+    auto document = make_element("document");
+    Node& parent = append_element(*document, "div");
+    Node& target = append_element(parent, "button");
+    Node& unrelated = append_element(parent, "span");
+    int target_calls = 0;
+    int parent_calls = 0;
+    target.add_event_listener("click", [&](Event&) {
+        ++target_calls;
+        check(parent.remove_child(unrelated), "unrelated child is removed");
+    });
+    target.add_event_listener("click", [&](Event&) { ++target_calls; });
+    parent.add_event_listener("click", [&](Event&) { ++parent_calls; });
+
+    MouseEvent event("click", 0, 0);
+    check(dispatch_event(target, event), "unrelated destruction preserves dispatch result");
+    check(target_calls == 2, "unrelated destruction keeps target listeners running");
+    check(parent_calls == 1, "unrelated destruction keeps bubbling path running");
+}
+
 } // namespace
 
 int main() {
@@ -171,6 +191,7 @@ int main() {
         listener_mutation_during_dispatch_is_stable();
         bounded_cpp_listener_registration_respects_limit();
         dispatch_stops_safely_when_a_listener_destroys_its_target();
+        dispatch_continues_when_a_listener_destroys_an_unrelated_node();
     } catch (const std::exception& error) {
         std::cerr << "event test failed: " << error.what() << '\n';
         return 1;

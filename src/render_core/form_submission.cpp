@@ -348,7 +348,6 @@ FormSubmitResult request_form_submit(Node& form, const Node* submitter) {
         return result;
     }
 
-    result.data = collect_form_data(form, submitter);
     SubmitEvent event(submitter);
     result.submitted = dispatch_event(form, event);
     result.default_prevented = event.default_prevented();

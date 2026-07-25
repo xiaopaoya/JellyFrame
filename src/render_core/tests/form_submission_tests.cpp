@@ -105,6 +105,7 @@ void request_submit_is_cancellable_and_exposes_submitter() {
 
     FormSubmitResult result = request_form_submit_from_control(*send);
     check(result.validation.valid(), "simple form is valid");
+    check(result.data.empty(), "submit dispatch does not materialize unused FormData");
     check(submits == 1, "submit event dispatches once");
     check(!result.submitted && result.default_prevented, "preventDefault cancels default submit action");
 }

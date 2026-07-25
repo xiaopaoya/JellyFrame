@@ -54,6 +54,10 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.letter_spacing_specified == right.letter_spacing_specified &&
         left.text_transform == right.text_transform &&
         left.text_transform_specified == right.text_transform_specified &&
+        left.white_space_nowrap == right.white_space_nowrap &&
+        left.white_space_specified == right.white_space_specified &&
+        left.text_overflow_ellipsis == right.text_overflow_ellipsis &&
+        left.text_overflow_specified == right.text_overflow_specified &&
         left.position == right.position &&
         left.overflow_wrap_anywhere == right.overflow_wrap_anywhere &&
         left.overflow_wrap_specified == right.overflow_wrap_specified &&
@@ -68,10 +72,14 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.box_sizing_border_box == right.box_sizing_border_box &&
         left.column_gap == right.column_gap &&
         left.row_gap == right.row_gap &&
+        left.flex_direction == right.flex_direction &&
         left.flex_wrap == right.flex_wrap &&
         left.flex_grow == right.flex_grow &&
         left.flex_shrink == right.flex_shrink &&
         left.flex_basis == right.flex_basis &&
+        left.flex_order == right.flex_order &&
+        left.align_self == right.align_self &&
+        left.align_content == right.align_content &&
         left.grid_min_track_width == right.grid_min_track_width &&
         left.grid_template_column_count == right.grid_template_column_count &&
         left.grid_template_column_widths == right.grid_template_column_widths &&
