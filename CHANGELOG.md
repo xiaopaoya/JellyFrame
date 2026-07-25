@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-07-25; Applies to: 0.5.0-dev
+> Last updated: 2026-07-26; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
