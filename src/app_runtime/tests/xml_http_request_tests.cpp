@@ -171,6 +171,38 @@ void xhr_reopen_consumes_late_previous_completion() {
     check(xhr.ready_state() == AppXhrReadyState::Opened, "reopened xhr state preserved");
 }
 
+void xhr_multiple_reopens_consume_every_late_completion() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.reopen-many", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
+    check(network.add_fixture(NetworkFetchFixture{"/data/first.txt", 200, "text/plain", "first"}), "first fixture");
+    check(network.add_fixture(NetworkFetchFixture{"/data/second.txt", 200, "text/plain", "second"}), "second fixture");
+    check(network.add_fixture(NetworkFetchFixture{"/data/third.txt", 200, "text/plain", "third"}), "third fixture");
+
+    AppXmlHttpRequest xhr;
+    HostServiceRequest requests[3];
+    const char* urls[] = {"/data/first.txt", "/data/second.txt", "/data/third.txt"};
+    for (std::size_t index = 0; index < 3; ++index) {
+        check(xhr.open("GET", urls[index], true) == AppXhrStatus::Ok, "xhr reopen-many open");
+        take_events(xhr);
+        check(xhr.send(host, network) == AppXhrStatus::Ok, "xhr reopen-many send");
+        check(host.pop_worker_request(HostServiceJobKind::NetworkFetch, requests[index]),
+              "xhr reopen-many worker owns request");
+    }
+
+    const HostServiceCompletion first = network.complete_request(host, requests[0]);
+    const HostServiceCompletion second = network.complete_request(host, requests[1]);
+    check(xhr.handle_completion(host, network, first), "first abandoned completion is consumed");
+    check(xhr.handle_completion(host, network, second), "second abandoned completion is consumed");
+    check(xhr.ready_state() == AppXhrReadyState::Opened && xhr.sent(),
+          "late completions preserve the newest request state");
+    check(host.handles().active_count() == 0, "all late response handles are released");
+
+    const HostServiceCompletion third = network.complete_request(host, requests[2]);
+    check(xhr.handle_completion(host, network, third), "current completion is consumed");
+    check(host.handles().active_count() == 0, "current response handle is released");
+}
+
 void xhr_missing_response_record_releases_handle() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.missing-record", AppRole::App);
@@ -211,6 +243,7 @@ int main() {
     xhr_abort_cancels_pending_request();
     xhr_abort_consumes_late_worker_completion();
     xhr_reopen_consumes_late_previous_completion();
+    xhr_multiple_reopens_consume_every_late_completion();
     xhr_missing_response_record_releases_handle();
     return 0;
 }

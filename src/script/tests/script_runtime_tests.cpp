@@ -140,6 +140,31 @@ void host_budgets_enable_script_execution_watchdog_when_supported() {
     check(!loop.ok, "HostBudgets script watchdog interrupts infinite eval");
 }
 
+void host_budgets_map_to_script_runtime_options_without_field_drift() {
+    HostBudgets budgets;
+    budgets.max_timers = 3;
+    budgets.max_event_listeners = 5;
+    budgets.max_detached_dom_nodes = 7;
+    budgets.max_active_animations = 11;
+    budgets.max_script_execution_checks = 13;
+    budgets.script_execution_check_interval = 17;
+
+    const JerryScriptRuntimeOptions options = jerryscript_runtime_options_from_host_budgets(budgets);
+    check(options.max_timers == 3, "HostBudgets maps timer cap exactly");
+    check(options.max_event_listeners == 5, "HostBudgets maps listener cap exactly");
+    check(options.max_detached_nodes == 7, "HostBudgets maps detached-node cap exactly");
+    check(options.max_animation_frame_callbacks == 11, "HostBudgets maps animation cap exactly");
+    check(options.max_execution_check_count == 13, "HostBudgets maps watchdog check cap exactly");
+    check(options.execution_check_interval == 17, "HostBudgets maps watchdog interval exactly");
+    check(options.max_route_history_entries == 16, "unrelated route-history cap keeps its default");
+
+    budgets.max_script_execution_checks = 0;
+    budgets.script_execution_check_interval = 0;
+    const JerryScriptRuntimeOptions zero_options = jerryscript_runtime_options_from_host_budgets(budgets);
+    check(zero_options.max_execution_check_count == 0 && zero_options.execution_check_interval == 0,
+          "zero watchdog budgets remain disabled instead of shifting into another option");
+}
+
 void runtime_can_restart() {
     for (int i = 0; i < 3; ++i) {
         JerryScriptRuntime runtime;
@@ -2253,6 +2278,7 @@ int main() {
         execution_watchdog_interrupts_infinite_eval_when_supported();
         execution_watchdog_interrupts_timer_callback_when_supported();
         host_budgets_enable_script_execution_watchdog_when_supported();
+        host_budgets_map_to_script_runtime_options_without_field_drift();
         runtime_can_restart();
         base64_helpers_follow_html_binary_string_subset();
         inline_document_script_mutates_dom();

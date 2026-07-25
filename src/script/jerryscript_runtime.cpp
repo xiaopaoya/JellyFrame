@@ -6059,22 +6059,21 @@ JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
     g_runtime_active = true;
 }
 
+JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const HostBudgets& budgets) {
+    JerryScriptRuntimeOptions options;
+    options.max_timers = budgets.max_timers;
+    options.max_event_listeners = budgets.max_event_listeners;
+    options.max_detached_nodes = budgets.max_detached_dom_nodes;
+    options.max_animation_frame_callbacks = budgets.max_active_animations;
+    options.max_execution_check_count = static_cast<std::uint32_t>(
+        std::min<std::size_t>(budgets.max_script_execution_checks, std::numeric_limits<std::uint32_t>::max()));
+    options.execution_check_interval = static_cast<std::uint32_t>(
+        std::min<std::size_t>(budgets.script_execution_check_interval, std::numeric_limits<std::uint32_t>::max()));
+    return options;
+}
+
 JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
-    : JerryScriptRuntime(JerryScriptRuntimeOptions{
-          budgets.max_timers,
-          budgets.max_event_listeners,
-          budgets.max_detached_dom_nodes,
-          16,
-          budgets.max_active_animations,
-          8,
-          4,
-          static_cast<std::uint32_t>(std::min<std::size_t>(
-              budgets.max_script_execution_checks,
-              std::numeric_limits<std::uint32_t>::max())),
-          static_cast<std::uint32_t>(std::min<std::size_t>(
-              budgets.script_execution_check_interval,
-              std::numeric_limits<std::uint32_t>::max())),
-      }) {}
+    : JerryScriptRuntime(jerryscript_runtime_options_from_host_budgets(budgets)) {}
 
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
@@ -6533,6 +6532,12 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
         }
     }
     if (matched_xhr == nullptr) {
+        if (completion.kind == HostServiceJobKind::NetworkFetch && completion.handle != 0) {
+            if (!network_fetch_->release_response(*app_host_, completion.handle)) {
+                app_host_->handles().release(completion.handle);
+            }
+            return true;
+        }
         return false;
     }
     // Dispatch can reenter JavaScript and allocate more XHR wrappers. Do not

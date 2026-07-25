@@ -39,8 +39,28 @@ void AppXmlHttpRequest::abandon_active_job() {
     if (job_id_ == 0) {
         return;
     }
-    abandoned_job_id_ = job_id_;
+    track_abandoned_job(job_id_);
     job_id_ = 0;
+}
+
+void AppXmlHttpRequest::track_abandoned_job(std::uint32_t job_id) {
+    if (job_id == 0 || abandoned_job_count_ >= abandoned_job_ids_.size()) {
+        return;
+    }
+    abandoned_job_ids_[abandoned_job_count_++] = job_id;
+}
+
+bool AppXmlHttpRequest::consume_abandoned_job(std::uint32_t job_id) {
+    for (std::size_t index = 0; index < abandoned_job_count_; ++index) {
+        if (abandoned_job_ids_[index] != job_id) {
+            continue;
+        }
+        --abandoned_job_count_;
+        abandoned_job_ids_[index] = abandoned_job_ids_[abandoned_job_count_];
+        abandoned_job_ids_[abandoned_job_count_] = 0;
+        return true;
+    }
+    return false;
 }
 
 AppXhrStatus AppXmlHttpRequest::open(std::string method, std::string url, bool async) {
@@ -84,7 +104,7 @@ AppXhrStatus AppXmlHttpRequest::send(AppRuntimeHost& host,
 void AppXmlHttpRequest::abort(AppRuntimeHost& host) {
     if (job_id_ != 0) {
         if (!host.requests().cancel_pending(job_id_)) {
-            abandoned_job_id_ = job_id_;
+            track_abandoned_job(job_id_);
         }
     }
     job_id_ = 0;
@@ -111,11 +131,10 @@ void AppXmlHttpRequest::finish_error(AppXhrEventKind terminal_event) {
 bool AppXmlHttpRequest::handle_completion(AppRuntimeHost& host,
                                           NetworkFetchMock& network,
                                           const HostServiceCompletion& completion) {
-    if (completion.kind == HostServiceJobKind::NetworkFetch && completion.job_id == abandoned_job_id_) {
+    if (completion.kind == HostServiceJobKind::NetworkFetch && consume_abandoned_job(completion.job_id)) {
         if (completion.handle != 0) {
             network.release_response(host, completion.handle);
         }
-        abandoned_job_id_ = 0;
         return true;
     }
     if (completion.kind != HostServiceJobKind::NetworkFetch || completion.job_id != job_id_) {

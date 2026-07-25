@@ -80,6 +80,8 @@ struct JerryScriptRuntimeOptions {
     std::size_t max_form_data_bytes = 4096;
 };
 
+JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const HostBudgets& budgets);
+
 struct ScriptRuntimeStatistics {
     std::size_t timer_count = 0;
     std::size_t animation_frame_callback_count = 0;

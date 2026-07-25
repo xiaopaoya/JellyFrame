@@ -38,6 +38,9 @@ enum class AppXhrEventKind {
 class AppXmlHttpRequest {
 public:
     static constexpr std::size_t kMaxQueuedEvents = 8;
+    // The wearable host keeps at most a small, explicit number of service jobs in flight.
+    // Retain old IDs so reopen/abort can consume their late completions without allocation.
+    static constexpr std::size_t kMaxTrackedAbandonedJobs = 8;
 
     AppXhrStatus open(std::string method, std::string url, bool async = true);
     AppXhrStatus send(AppRuntimeHost& host, NetworkFetchMock& network, std::uint32_t timeout_ms = 0);
@@ -79,6 +82,8 @@ public:
 
 private:
     void abandon_active_job();
+    void track_abandoned_job(std::uint32_t job_id);
+    bool consume_abandoned_job(std::uint32_t job_id);
     void set_ready_state(AppXhrReadyState state);
     void push_event(AppXhrEventKind kind);
     void finish_error(AppXhrEventKind terminal_event);
@@ -86,7 +91,8 @@ private:
     AppXhrReadyState ready_state_ = AppXhrReadyState::Unsent;
     std::uint16_t status_ = 0;
     std::uint32_t job_id_ = 0;
-    std::uint32_t abandoned_job_id_ = 0;
+    std::array<std::uint32_t, kMaxTrackedAbandonedJobs> abandoned_job_ids_{};
+    std::size_t abandoned_job_count_ = 0;
     bool sent_ = false;
     std::string url_;
     std::string response_text_;
