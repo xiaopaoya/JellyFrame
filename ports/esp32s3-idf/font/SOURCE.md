@@ -1,5 +1,7 @@
 # Noto Sans SC font source
 
+> Last updated: 2026-07-26; Applies to: 0.5.0-dev
+
 The ESP32-S3 production bitmap pack is generated offline from the three font
 files in `source/noto-sans-sc-2.002`. They are retained with the port so a
 developer does not need an undocumented `C:\Windows\Fonts` installation to
