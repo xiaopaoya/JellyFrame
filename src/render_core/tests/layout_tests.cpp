@@ -569,6 +569,34 @@ void grid_places_explicit_rows_and_numeric_lines() {
           "numeric start plus span resolves remaining cell");
 }
 
+void grid_row_budget_uses_non_overlapping_block_fallback() {
+    std::string html = "<body><main id='grid'>";
+    for (int index = 0; index <= 128; ++index) {
+        html += "<section id='cell-" + std::to_string(index) + "'>" + std::to_string(index) + "</section>";
+    }
+    html += "</main></body>";
+
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(html);
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; } main { display: grid; width: 80px; row-gap: 1px; }"
+        "section { height: 4px; box-sizing: border-box; }"));
+    VectorDiagnosticSink diagnostics;
+    LayoutEngineOptions options;
+    options.diagnostics = &diagnostics;
+    LayoutEngine layout_engine(resolver, {}, options);
+    auto layout_tree = layout_engine.layout(*document, 80);
+
+    const LayoutBox* penultimate = find_first_by_id(*layout_tree, "cell-127");
+    const LayoutBox* fallback = find_first_by_id(*layout_tree, "cell-128");
+    check(penultimate != nullptr && fallback != nullptr, "bounded grid fixture boxes exist");
+    check(fallback->rect.y >= penultimate->rect.y + penultimate->rect.height,
+          "row-budget fallback does not overlap the final tracked grid item");
+    check(fallback->rect.width <= 80, "row-budget fallback remains within the grid content width");
+    check(has_diagnostic_code(diagnostics, "grid-placement-budget"), "row-budget fallback is diagnosed");
+}
+
 void nowrap_text_overflow_reports_diagnostic() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -631,6 +659,7 @@ int main() {
         max_width_percent_clamps_nested_flex_grid_items();
         grid_places_fixed_columns_and_spans();
         grid_places_explicit_rows_and_numeric_lines();
+        grid_row_budget_uses_non_overlapping_block_fallback();
         nowrap_text_overflow_reports_diagnostic();
     } catch (const std::exception& error) {
         std::cerr << "layout test failed: " << error.what() << '\n';

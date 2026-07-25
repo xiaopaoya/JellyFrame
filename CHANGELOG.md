@@ -33,6 +33,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- Grid placement now retains at most 128 tracked rows. A larger implicit row or
+  span falls back to non-overlapping block flow with `grid-placement-budget`
+  instead of overlapping the final row or indexing beyond bounded storage.
 - Document CSS and classic-script collection now enforces host-configured
   aggregate byte and item budgets. Later resources are skipped whole with
   stable diagnostics rather than being accumulated without bound or truncated.

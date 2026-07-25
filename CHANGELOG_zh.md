@@ -23,6 +23,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 修复
 
+- Grid placement 最多保留 128 条 tracked row。更大的隐式 row/span 会以
+  `grid-placement-budget` 退化为不重叠的 block flow，不再压到最后一行重叠，也不会越过有界存储索引。
 - document CSS 与 classic-script 收集现在执行宿主配置的聚合字节和数量预算。后续资源会通过稳定
   diagnostic 完整跳过，不再无界累积，也不会被截断后交给 parser 或 script runtime。
 - HTML DOM 节点上限现在包含合成的 `html`/`head`/`body` 结构；HTML text/CDATA 与 CSS 输入、selector、at-rule prelude、declaration value 也会在临时 parser 存储无限增长前受限。超限字段会被消费或跳过，并输出稳定 diagnostic。

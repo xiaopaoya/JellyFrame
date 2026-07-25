@@ -484,6 +484,7 @@ struct GridPlacement {
     int column = 0;
     int column_span = 1;
     int row_span = 1;
+    bool fallback_block = false;
 };
 
 struct GridPlacementState {
@@ -546,11 +547,21 @@ GridPlacement place_grid_item(GridPlacementState& state,
     placement.column_span = column_span;
     placement.row_span = row_span;
 
+    // The occupancy grid has a fixed, explicit memory bound. Do not clamp a
+    // later row back onto the final tracked row: that creates overlapping
+    // boxes and may index past the retained row vectors for large spans.
+    if (row_span > kMaxGridRows ||
+        (requested_row >= 0 &&
+         (requested_row >= kMaxGridRows || requested_row > kMaxGridRows - row_span))) {
+        placement.fallback_block = true;
+        return placement;
+    }
+
     if (requested_column >= 0) {
         placement.column = std::min(requested_column, std::max(0, column_count - column_span));
     }
     if (requested_row >= 0) {
-        placement.row = std::min(requested_row, std::max(0, kMaxGridRows - row_span));
+        placement.row = requested_row;
     }
 
     if (requested_row >= 0 && requested_column >= 0) {
@@ -575,10 +586,8 @@ GridPlacement place_grid_item(GridPlacementState& state,
     bool placed = false;
     while (!placed) {
         if (placement.row + row_span > kMaxGridRows) {
-            placement.row = std::max(0, kMaxGridRows - row_span);
-            placement.column = requested_column >= 0 ? placement.column : 0;
-            ensure_grid_rows(state, placement.row + row_span, min_row_height);
-            break;
+            placement.fallback_block = true;
+            return placement;
         }
         ensure_grid_rows(state, placement.row + row_span, min_row_height);
         const int column_begin = requested_column >= 0 ? placement.column : 0;
@@ -1294,8 +1303,9 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
 
     GridPlacementState placement_state;
     if (box.style.grid_template_row_count > 0) {
-        const int template_rows = std::min(static_cast<int>(box.style.grid_template_row_count),
-                                           static_cast<int>(box.style.grid_template_row_heights.size()));
+        const int template_rows = std::min({static_cast<int>(box.style.grid_template_row_count),
+                                            static_cast<int>(box.style.grid_template_row_heights.size()),
+                                            kMaxGridRows});
         placement_state.occupied.assign(static_cast<std::size_t>(template_rows), 0);
         placement_state.row_heights.reserve(static_cast<std::size_t>(template_rows));
         placement_state.row_fixed.reserve(static_cast<std::size_t>(template_rows));
@@ -1327,6 +1337,7 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
     }
     std::vector<GridPlacement> placements;
     placements.reserve(static_cast<std::size_t>(in_flow_count));
+    bool grid_placement_budget_reported = false;
 
     for (auto& child : box.children) {
         if (is_out_of_flow_positioned(child->style)) {
@@ -1342,6 +1353,21 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
                                                   child->style.grid_column_start,
                                                   child->style.grid_row_start);
         placement.child = child.get();
+
+        if (placement.fallback_block) {
+            if (!grid_placement_budget_reported) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Layout,
+                                  DiagnosticSeverity::Warning,
+                                  "grid-placement-budget",
+                                  "Grid placement exceeded the bounded row budget; later items use block-flow fallback",
+                                  "maximum tracked rows=" + std::to_string(kMaxGridRows));
+                grid_placement_budget_reported = true;
+            }
+            layout_box(*child, 0, 0, content_width, 0, depth + 1);
+            placements.push_back(placement);
+            continue;
+        }
 
         const int item_width = grid_item_width(columns, placement.column, column_span);
         const int original_width = child->style.width;
@@ -1379,7 +1405,26 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
         }
     }
 
+    int fallback_y = total_height;
+    const bool has_grid_rows = !placement_state.row_heights.empty();
+    const bool has_fallback = std::any_of(placements.begin(), placements.end(),
+                                          [](const GridPlacement& placement) {
+                                              return placement.fallback_block;
+                                          });
+    if (has_grid_rows && has_fallback) {
+        fallback_y += row_gap;
+    }
+
     for (const GridPlacement& placement : placements) {
+        if (placement.fallback_block) {
+            const int target_x = content_x + placement.child->style.margin.left;
+            const int target_y = content_y + fallback_y + placement.child->style.margin.top;
+            shift_box(*placement.child, target_x - placement.child->rect.x, target_y - placement.child->rect.y);
+            fallback_y += std::max(1, placement.child->rect.height +
+                                          placement.child->style.margin.top +
+                                          placement.child->style.margin.bottom) + row_gap;
+            continue;
+        }
         int allocated_height = 0;
         for (int r = 0; r < placement.row_span; ++r) {
             allocated_height += placement_state.row_heights[static_cast<std::size_t>(placement.row + r)];
@@ -1395,7 +1440,7 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
         }
     }
 
-    return total_height;
+    return has_fallback ? std::max(total_height, fallback_y - row_gap) : total_height;
 }
 
 std::size_t count_layout_boxes(const LayoutBox& root) {
