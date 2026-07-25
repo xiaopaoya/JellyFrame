@@ -11,6 +11,7 @@ JellyFrame Engine 的重要变更记录在这里。
 ### 变更
 
 - 一方 Markdown 现有 CTest 新鲜度关卡：每份文档必须带当前版本的编辑标记；自动生成的支持表必须带当前版本的审计快照标记。
+- Windows Clang sanitizer 测试二进制现在会在旁边部署所需的 ASan runtime DLL；平台无关的 ASan/UBSan 验证可用 `RelWithDebInfo` 配置复现。
 - 明确 0.5 收束状态：平台无关的核心/工具/文档工作进入收束候选，正式切 `0.5.0`
   仍需要 WS147 实机签收。新增视觉、字体/图片、滚动、恢复和输入验收的硬件签收清单。
 - 新增默认关闭的 `JELLYFRAME_ENABLE_SANITIZERS` CMake 开关，用于 Clang/GCC 的 AddressSanitizer 与 UndefinedBehaviorSanitizer 构建。CI 现会在 Linux 上以这两种 sanitizer 运行非 scripting 的核心/工具测试；该项不宣称已覆盖 scripting bridge 的 sanitizer。

@@ -13,6 +13,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - First-party Markdown now has a CTest freshness gate: every document carries
   a current-version edit marker, while generated support tables carry their
   current-version source-audit marker.
+- Windows Clang sanitizer test binaries now receive the required ASan runtime
+  DLL beside the executable; platform-neutral ASan/UBSan validation is
+  reproducible with a `RelWithDebInfo` configuration.
 - Clarified the 0.5 closeout state: platform-neutral core/tool/doc work is now
   a closeout candidate, while the official `0.5.0` cut still requires
   real-device WS147 sign-off. Added a hardware sign-off checklist for visual,

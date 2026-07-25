@@ -26,7 +26,9 @@ MAJOR.MINOR.PATCH[-stage]
   Debug CTest pass. Linux CI additionally runs non-scripting core/tool coverage
   with AddressSanitizer and UndefinedBehaviorSanitizer; the optional
   JerryScript bridge needs its own compatible sanitizer toolchain before its
-  sanitizer gate can be considered closed.
+  sanitizer gate can be considered closed. Local Windows Clang sanitizer runs
+  use `RelWithDebInfo`: the Debug CRT is not compatible with the dynamic ASan
+  runtime, while CMake stages that runtime beside the sanitizer test binaries.
 - Public documentation is provided in English and Chinese. Chinese files use a
   `_zh` suffix.
 - Public Markdown documents carry a short freshness line near the top:

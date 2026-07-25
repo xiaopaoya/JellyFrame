@@ -21,7 +21,28 @@ if(JELLYFRAME_ENABLE_SANITIZERS)
     endif()
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
+
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=clang_rt.asan_dynamic-x86_64.dll
+            OUTPUT_VARIABLE JELLYFRAME_CLANG_ASAN_RUNTIME
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(NOT EXISTS "${JELLYFRAME_CLANG_ASAN_RUNTIME}")
+            message(FATAL_ERROR
+                "Clang sanitizer runtime was not found: ${JELLYFRAME_CLANG_ASAN_RUNTIME}")
+        endif()
+    endif()
 endif()
+
+function(jellyframe_stage_sanitizer_runtime target)
+    if(JELLYFRAME_ENABLE_SANITIZERS AND WIN32 AND JELLYFRAME_CLANG_ASAN_RUNTIME)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${JELLYFRAME_CLANG_ASAN_RUNTIME}"
+                    "$<TARGET_FILE_DIR:${target}>"
+            VERBATIM)
+    endif()
+endfunction()
 
 set(JERRYSCRIPT_ROOT "" CACHE PATH "JerryScript source or install root")
 set(JERRYSCRIPT_INCLUDE_DIR "" CACHE PATH "JerryScript include directory")
@@ -295,6 +316,7 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_RENDER_CORE_TEST_SOURCES}
     )
     jellyframe_enable_test_asserts(jellyframe_render_core_tests)
+    jellyframe_stage_sanitizer_runtime(jellyframe_render_core_tests)
     add_test(
         NAME jellyframe_render_core_tests
         COMMAND jellyframe_render_core_tests
@@ -330,6 +352,7 @@ if(JELLYFRAME_BUILD_TESTS)
     )
     target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_app_runtime)
     jellyframe_enable_test_asserts(jellyframe_app_runtime_tests)
+    jellyframe_stage_sanitizer_runtime(jellyframe_app_runtime_tests)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
 
     if(Python3_Interpreter_FOUND)
@@ -828,6 +851,7 @@ if(JELLYFRAME_BUILD_TESTS)
         )
         target_link_libraries(jellyframe_script_tests PRIVATE jellyframe_script)
         jellyframe_enable_test_asserts(jellyframe_script_tests)
+        jellyframe_stage_sanitizer_runtime(jellyframe_script_tests)
         add_test(NAME jellyframe_script_tests COMMAND jellyframe_script_tests)
     endif()
 endif()
