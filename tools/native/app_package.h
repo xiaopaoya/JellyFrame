@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace jellyframe_example {
@@ -1111,7 +1112,69 @@ inline std::vector<std::string> json_collect_object_string_values(const std::str
     return values;
 }
 
-inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
+inline void validate_normalized_bundle_summary(const std::string& json, const AppPackageManifest& manifest) {
+    const auto require_non_empty_string = [&](std::string_view key) {
+        std::string value;
+        if (!json_find_string(json, key, value) || value.empty()) {
+            throw std::runtime_error(".jfapp summary " + std::string(key) + " must be a non-empty string");
+        }
+    };
+    for (const std::string_view key : {"id", "name", "role", "versionName", "entry", "minJellyFrame", "script"}) {
+        require_non_empty_string(key);
+    }
+    int version_code = 0;
+    if (!json_find_int(json, "versionCode", version_code) || version_code < 0) {
+        throw std::runtime_error(".jfapp summary versionCode must be a non-negative integer");
+    }
+    for (const std::string_view key : {"permissions", "capabilities", "fonts"}) {
+        std::size_t open = 0;
+        std::size_t close = 0;
+        if (!json_find_array_range(json, key, open, close)) {
+            throw std::runtime_error(".jfapp summary " + std::string(key) + " must be an array");
+        }
+    }
+    for (const std::string_view key : {"viewport", "budgets", "targets", "backgroundServices"}) {
+        std::size_t open = 0;
+        std::size_t close = 0;
+        if (!json_find_object_range(json, key, open, close)) {
+            throw std::runtime_error(".jfapp summary " + std::string(key) + " must be an object");
+        }
+    }
+    if (manifest.role != "app" && manifest.role != "launcher" && manifest.role != "watchface" &&
+        manifest.role != "settings") {
+        throw std::runtime_error(".jfapp summary role is invalid");
+    }
+    if (manifest.script_mode != "none" && manifest.script_mode != "classic") {
+        throw std::runtime_error(".jfapp summary script is invalid");
+    }
+
+    const std::pair<std::string_view, bool> projections[] = {
+        {"computeJobsAllowed", json_array_contains_string(json, "capabilities", "compute.jobs")},
+        {"videoFrameAllowed", json_array_contains_string(json, "capabilities", "media.video.frame")},
+        {"networkAllowed", json_array_contains_string(json, "permissions", "network") ||
+                               json_array_contains_string(json, "capabilities", "network.fetch")},
+        {"storageKvAllowed", manifest.storage_kv_allowed},
+        {"canvas2dAllowed", json_array_contains_string(json, "capabilities", "graphics.canvas2d")},
+        {"audioPlaybackAllowed", manifest.audio_playback_allowed},
+        {"sensorAccelerometerAllowed", manifest.sensor_accelerometer_allowed},
+        {"sensorGyroscopeAllowed", manifest.sensor_gyroscope_allowed},
+        {"sensorHeartRateAllowed", manifest.sensor_heart_rate_allowed},
+        {"sensorAmbientLightAllowed", manifest.sensor_ambient_light_allowed},
+        {"locationPositionAllowed", manifest.location_position_allowed},
+        {"systemBatteryAllowed", manifest.system_battery_allowed},
+        {"systemWeatherAllowed", manifest.system_weather_allowed},
+        {"systemActivityAllowed", manifest.system_activity_allowed},
+    };
+    for (const auto& projection : projections) {
+        bool declared = false;
+        if (!json_find_bool(json, projection.first, declared) || declared != projection.second) {
+            throw std::runtime_error(".jfapp summary " + std::string(projection.first) +
+                                     " does not match permissions/capabilities");
+        }
+    }
+}
+
+inline AppPackageManifest parse_app_manifest_text(const std::string& json, bool require_normalized_summary = false) {
     if (!manifest_json_is_strict(json)) {
         throw std::runtime_error("manifest JSON is malformed, too deeply nested, or contains duplicate/escaped member names");
     }
@@ -1221,6 +1284,9 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
     if (manifest.id.empty()) {
         throw std::runtime_error("manifest id is required");
     }
+    if (require_normalized_summary) {
+        validate_normalized_bundle_summary(json, manifest);
+    }
     if (manifest.name.empty()) {
         manifest.name = manifest.id;
     }
@@ -1299,7 +1365,7 @@ inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, st
 
     AppPackage package;
     package.root = std::filesystem::absolute(bundle_path).parent_path();
-    package.manifest = parse_app_manifest_text(summary);
+    package.manifest = parse_app_manifest_text(summary, true);
     package.bundle_payload_offset = payload_offset;
     package.bundle_entries = std::move(entries);
     package.bundle_bytes = std::move(bytes);

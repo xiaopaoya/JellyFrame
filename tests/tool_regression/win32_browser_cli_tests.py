@@ -51,15 +51,44 @@ def write_jfapp(
     version_name: str,
     entry: str,
     summary_text: str | None = None,
+    capabilities: list[str] | None = None,
+    network_allowed: bool | None = None,
 ) -> None:
+    declared_capabilities = capabilities or []
+    projected_network_allowed = (
+        network_allowed if network_allowed is not None else "network.fetch" in declared_capabilities
+    )
     summary = (summary_text.encode("utf-8") if summary_text is not None else json.dumps(
         {
             "id": app_id,
             "name": "Rollback Probe",
+            "role": "app",
             "versionName": version_name,
             "versionCode": version_code,
             "entry": entry,
+            "minJellyFrame": "0.5.0-dev",
             "script": "classic",
+            "viewport": {"designWidth": 172, "designHeight": 320},
+            "budgets": {"maxResourceBytes": 65536},
+            "fonts": [],
+            "targets": {"test": {"viewport": {"width": 172, "height": 320}, "output": "jfapp"}},
+            "permissions": [],
+            "capabilities": declared_capabilities,
+            "computeJobsAllowed": False,
+            "videoFrameAllowed": False,
+            "networkAllowed": projected_network_allowed,
+            "storageKvAllowed": False,
+            "canvas2dAllowed": False,
+            "audioPlaybackAllowed": False,
+            "sensorAccelerometerAllowed": False,
+            "sensorGyroscopeAllowed": False,
+            "sensorHeartRateAllowed": False,
+            "sensorAmbientLightAllowed": False,
+            "locationPositionAllowed": False,
+            "systemBatteryAllowed": False,
+            "systemWeatherAllowed": False,
+            "systemActivityAllowed": False,
+            "backgroundServices": {},
         },
         separators=(",", ":"),
     ).encode("utf-8"))
@@ -368,6 +397,22 @@ def main() -> int:
         require(duplicate_result.returncode != 0, "native registry must reject duplicate manifest members")
         require("duplicate" in duplicate_result.stdout.lower(),
                 "native duplicate manifest rejection must explain the malformed summary")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-summary-projection-drift-") as directory:
+        bundle = Path(directory) / "projection-drift.jfapp"
+        write_jfapp(bundle,
+                    "org.jellyframe.projection-drift",
+                    1,
+                    "1.0.0",
+                    "/index.html",
+                    capabilities=["network.fetch"],
+                    network_allowed=False)
+        drift_result = run_case(exe, ["--registry-store", str(Path(directory) / "store"),
+                                      "--install-bundle", str(bundle)])
+        require(drift_result.returncode != 0,
+                "native loader must reject a capability projection that disagrees with the summary arrays")
+        require("networkAllowed does not match permissions/capabilities" in drift_result.stdout,
+                "native capability projection rejection must name the inconsistent summary field")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-install-candidate-") as directory:
         root = Path(directory)

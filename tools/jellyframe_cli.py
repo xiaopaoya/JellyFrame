@@ -3099,13 +3099,16 @@ def write_trial_report(output_dir: Path, targets: list[str], steps: list[dict], 
     write_json_report(trial_report_path(output_dir), report)
 
 
-def prepare_trial_output(output_dir: Path, clean: bool) -> None:
+def prepare_trial_output(output_dir: Path, clean: bool, build_dir: Path | None = None) -> None:
     resolved_output = output_dir.resolve()
-    trial_root = (repo_root() / "build").resolve()
-    if resolved_output == repo_root().resolve():
+    repository = repo_root().resolve()
+    trial_root = (build_dir if build_dir is not None else repository / "build").resolve()
+    if trial_root == repository or not trial_root.is_relative_to(repository):
+        raise SystemExit("trial build directory must be a descendant of the repository root")
+    if resolved_output == repository:
         raise SystemExit("trial output directory must not be the repository root")
     if resolved_output == trial_root or not resolved_output.is_relative_to(trial_root):
-        raise SystemExit("trial output directory must be a descendant of the repository build directory")
+        raise SystemExit("trial output directory must be a descendant of the selected build directory")
     if resolved_output.exists() and not resolved_output.is_dir():
         raise SystemExit(f"trial output path is not a directory: {resolved_output}")
     if resolved_output.exists() and any(resolved_output.iterdir()):
@@ -3129,7 +3132,7 @@ def cmd_trial(args: argparse.Namespace) -> int:
         raise SystemExit("trial requires a Windows build with jellyframe_win32_browser")
     ensure_tool(tool_path(args.build_dir, "jellyframe_pseudo_browser"))
     ensure_tool(tool_path(args.build_dir, "jellyframe_win32_browser"))
-    prepare_trial_output(args.output_dir, args.clean)
+    prepare_trial_output(args.output_dir, args.clean, args.build_dir)
 
     cli = Path(__file__).resolve()
     output_dir = args.output_dir.resolve()
@@ -3691,7 +3694,7 @@ def main() -> int:
     trial.add_argument("--build-dir", default=default_build_dir(), type=Path,
                        help="Directory containing built developer tools.")
     trial.add_argument("--output-dir", required=True, type=Path,
-                       help="Empty directory for generated trial evidence.")
+                       help="Empty directory below --build-dir for generated trial evidence.")
     trial.add_argument("--clean", action="store_true",
                        help="Delete a non-empty --output-dir before generating new evidence.")
     trial.add_argument("--targets", default="round-300,rect-320x240,rect-172x320",

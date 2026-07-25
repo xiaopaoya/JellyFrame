@@ -60,6 +60,14 @@ class PackagePreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "must not be the repository root"):
             jellyframe_cli.prepare_trial_output(REPO_ROOT, clean=True)
 
+    def test_trial_clean_requires_output_below_selected_build_directory(self):
+        build_dir = REPO_ROOT / "build-package-preflight-test"
+        output_dir = build_dir / "trial"
+        with self.assertRaisesRegex(SystemExit, "selected build directory"):
+            jellyframe_cli.prepare_trial_output(REPO_ROOT / "outside-trial", clean=True, build_dir=build_dir)
+        with self.assertRaisesRegex(SystemExit, "build directory must be a descendant"):
+            jellyframe_cli.prepare_trial_output(output_dir, clean=True, build_dir=REPO_ROOT)
+
     def test_esp32s3_render_core_sources_match_desktop_target(self):
         desktop_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         esp_cmake = (REPO_ROOT / "ports" / "esp32s3-idf" / "components" /

@@ -33,6 +33,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- The native `.jfapp` loader now requires the normalized bundle summary shape
+  emitted by package validation and verifies every capability projection against
+  its `permissions`/`capabilities` arrays. Direct Win32 loading can no longer
+  interpret a rewritten summary differently from registry installation.
 - Script-owned DOM mutation now uses one attached-plus-detached ledger for
   node count, tree depth, attributes per element and retained DOM string bytes.
   Creation, text replacement, attribute reflection and text insertion preflight
