@@ -194,6 +194,7 @@ private:
 
     bool can_adopt_detached_node() const;
     bool can_adopt_detached_node(const Node& node) const;
+    bool can_append_new_dom_node(const Node& parent, const Node& node) const;
     bool can_insert_dom_node(const Node& parent, const Node& child) const;
     bool can_append_dom_text(const Node& parent, const std::vector<std::string>& values) const;
     bool can_set_dom_text_content(const Node& node, std::string_view value) const;

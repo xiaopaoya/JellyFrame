@@ -144,6 +144,10 @@ struct ScriptRuntimeAccess {
         return runtime.can_adopt_detached_node(node);
     }
 
+    static bool can_append_new_dom_node(const JerryScriptRuntime& runtime, const Node& parent, const Node& node) {
+        return runtime.can_append_new_dom_node(parent, node);
+    }
+
     static bool can_insert_dom_node(const JerryScriptRuntime& runtime, const Node& parent, const Node& child) {
         return runtime.can_insert_dom_node(parent, child);
     }
@@ -5615,16 +5619,22 @@ jerry_value_t document_set_title_attr(const jerry_call_info_t* call_info_p,
                                       const jerry_value_t args_p[],
                                       const jerry_length_t args_count) {
     Node* document = native_node(call_info_p->this_value);
-    if (document == nullptr) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (document == nullptr || runtime == nullptr) {
         return jerry_undefined();
     }
+    const std::string value = args_count > 0 ? value_to_string(args_p[0]) : std::string();
     Node* title = find_first_element_by_tag(*document, "title");
     if (title == nullptr) {
-        Node& created = document->append_child(make_element("title"));
-        title = &created;
+        auto created = make_element("title");
+        created->set_text_content(value);
+        if (!ScriptRuntimeAccess::can_append_new_dom_node(*runtime, *document, *created)) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
+        }
+        document->append_child(std::move(created));
+        return jerry_undefined();
     }
-    title->set_text_content(args_count > 0 ? value_to_string(args_p[0]) : std::string());
-    return jerry_undefined();
+    return set_script_dom_text_content(call_info_p, *title, value);
 }
 
 jerry_value_t document_get_dir(const jerry_call_info_t* call_info_p,
@@ -5639,8 +5649,11 @@ jerry_value_t document_set_dir(const jerry_call_info_t* call_info_p,
                                const jerry_length_t args_count) {
     Node* document = native_node(call_info_p->this_value);
     if (document != nullptr) {
-        document_direction_element(*document)->set_attribute(
-            "dir", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p,
+            *document_direction_element(*document),
+            "dir",
+            args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -5867,6 +5880,10 @@ jerry_value_t node_click(const jerry_call_info_t* call_info_p,
         if (has_attribute(*details, "open")) {
             details->remove_attribute("open");
         } else {
+            JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+            if (runtime == nullptr || !ScriptRuntimeAccess::can_set_dom_attribute(*runtime, *details, "open", "")) {
+                return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+            }
             details->set_attribute("open", "");
         }
         Event toggle("toggle", false, false);
@@ -6914,6 +6931,18 @@ bool JerryScriptRuntime::can_adopt_detached_node(const Node& node) const {
         std::max(projected.max_attributes_per_element, added.max_attributes_per_element);
     projected.string_bytes += added.string_bytes;
     return statistics_fit_dom_budget(projected, options_);
+}
+
+bool JerryScriptRuntime::can_append_new_dom_node(const Node& parent, const Node& node) const {
+    const DomStatistics current = dom_statistics();
+    const DomStatistics added = compute_dom_statistics(node);
+    if (!budget_has_room(current.node_count, added.node_count, options_.max_dom_nodes) ||
+        !budget_has_room(current.string_bytes, added.string_bytes, options_.max_dom_string_bytes) ||
+        added.max_depth > options_.max_dom_depth ||
+        dom_node_depth(parent) > options_.max_dom_depth - added.max_depth) {
+        return false;
+    }
+    return added.max_attributes_per_element <= options_.max_attributes_per_element;
 }
 
 bool JerryScriptRuntime::can_insert_dom_node(const Node& parent, const Node& child) const {

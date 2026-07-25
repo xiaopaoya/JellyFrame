@@ -2364,6 +2364,24 @@ void javascript_dom_budget_ledger_rejects_growth_atomically() {
             "failed + ':' + n.textContent;");
         check(result.ok && result.value == "true:", "DOM node ledger includes detached subtrees and depth preflight");
     }
+
+    {
+        auto document = make_element("document");
+        const DomStatistics baseline = compute_dom_statistics(*document);
+        JerryScriptRuntimeOptions options;
+        options.max_dom_nodes = baseline.node_count + 2;
+        options.max_dom_depth = 3;
+        options.max_dom_string_bytes = baseline.string_bytes + 6;
+        JerryScriptRuntime runtime(options);
+        runtime.bind_document(*document);
+        const ScriptEvaluationResult result = runtime.eval(
+            "document.title = 'x';"
+            "var failed = false;"
+            "try { document.title = 'xx'; } catch (e) { failed = e instanceof RangeError; }"
+            "failed + ':' + document.title;");
+        check(result.ok && result.value == "true:x",
+              "document title creation and replacement stay within the DOM ledger");
+    }
 }
 
 } // namespace
