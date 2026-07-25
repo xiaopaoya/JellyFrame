@@ -570,7 +570,10 @@ struct HostBudgets {
 `src/render_core/budget.h` maps these values into the current HTML/CSS/parser,
 render/layout/layer/display-list, dirty-rectangle and frame-loop entry points.
 JerryScript runtime construction also consumes timer, listener and detached DOM
-node limits. Suggested ESP32-S3 starting point:
+node limits. Script-visible DOM mutation additionally shares `max_dom_nodes`,
+`max_dom_depth`, `max_attributes_per_element` and `max_resource_bytes` as a
+retained DOM-string cap, covering attached and detached nodes together.
+Suggested ESP32-S3 starting point:
 
 - DOM nodes: 512-1500
 - DOM depth: 32-64

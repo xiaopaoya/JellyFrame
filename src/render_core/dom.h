@@ -38,6 +38,10 @@ struct DomStatistics {
     std::size_t max_depth = 0;
     std::size_t max_child_count = 0;
     std::size_t max_attributes_per_element = 0;
+    // UTF-8 source bytes retained by the DOM itself: tag names, text nodes,
+    // and attribute names and values. This deliberately excludes allocator
+    // overhead so hosts can apply the same deterministic cap on every port.
+    std::size_t string_bytes = 0;
 };
 
 class AttributeList {

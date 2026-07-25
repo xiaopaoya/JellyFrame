@@ -78,6 +78,11 @@ struct JerryScriptRuntimeOptions {
     std::size_t max_layout_snapshot_nodes = 32;
     std::size_t max_form_data_entries = 32;
     std::size_t max_form_data_bytes = 4096;
+    // Kept at the end so existing aggregate initializers retain their field order.
+    std::size_t max_dom_nodes = 4096;
+    std::size_t max_dom_depth = 64;
+    std::size_t max_attributes_per_element = 64;
+    std::size_t max_dom_string_bytes = 512 * 1024;
 };
 
 JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const HostBudgets& budgets);
@@ -188,6 +193,12 @@ private:
     bool execution_watchdog_interrupt_pending_ = false;
 
     bool can_adopt_detached_node() const;
+    bool can_adopt_detached_node(const Node& node) const;
+    bool can_insert_dom_node(const Node& parent, const Node& child) const;
+    bool can_append_dom_text(const Node& parent, const std::vector<std::string>& values) const;
+    bool can_set_dom_text_content(const Node& node, std::string_view value) const;
+    bool can_set_dom_attribute(const Node& node, std::string_view name, std::string_view value) const;
+    DomStatistics dom_statistics() const;
     Node* adopt_detached_node(std::unique_ptr<Node> node);
     std::unique_ptr<Node> release_detached_node(Node& node);
     void add_script_event_listener(Node& node,

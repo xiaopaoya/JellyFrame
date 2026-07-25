@@ -376,6 +376,8 @@ DomStatistics compute_dom_statistics(const Node& root) {
         const auto [node, depth] = pending.back();
         pending.pop_back();
         ++statistics.node_count;
+        statistics.string_bytes += node->tag_name.size();
+        statistics.string_bytes += node->text.size();
         statistics.max_depth = std::max(statistics.max_depth, depth);
         statistics.max_child_count = std::max(statistics.max_child_count, node->children.size());
         if (node->type == NodeType::Element) {
@@ -383,6 +385,10 @@ DomStatistics compute_dom_statistics(const Node& root) {
             statistics.attribute_count += node->attributes.size();
             statistics.max_attributes_per_element =
                 std::max(statistics.max_attributes_per_element, node->attributes.size());
+            for (const auto& attribute : node->attributes) {
+                statistics.string_bytes += attribute.first.size();
+                statistics.string_bytes += attribute.second.size();
+            }
         } else {
             ++statistics.text_count;
         }

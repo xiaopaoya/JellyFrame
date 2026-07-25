@@ -486,7 +486,9 @@ struct HostBudgets {
 
 `src/render_core/budget.h` 会把这些值映射到当前 HTML/CSS parser、render/layout/layer/display-list、
 dirty rectangle 和 frame-loop 入口。JerryScript runtime 构建还会使用 timer、listener 和
-detached DOM node 上限。ESP32-S3 初始建议：
+detached DOM node 上限。脚本可见的 DOM mutation 还会共同使用 `max_dom_nodes`、
+`max_dom_depth`、`max_attributes_per_element` 与作为保留 DOM 字符串上限的
+`max_resource_bytes`，统一覆盖 attached/detached node。ESP32-S3 初始建议：
 
 - DOM nodes：512-1500
 - DOM depth：32-64

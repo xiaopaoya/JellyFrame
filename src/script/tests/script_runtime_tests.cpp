@@ -145,6 +145,10 @@ void host_budgets_map_to_script_runtime_options_without_field_drift() {
     budgets.max_timers = 3;
     budgets.max_event_listeners = 5;
     budgets.max_detached_dom_nodes = 7;
+    budgets.max_dom_nodes = 19;
+    budgets.max_dom_depth = 23;
+    budgets.max_attributes_per_element = 29;
+    budgets.max_resource_bytes = 31;
     budgets.max_active_animations = 11;
     budgets.max_script_execution_checks = 13;
     budgets.script_execution_check_interval = 17;
@@ -153,6 +157,10 @@ void host_budgets_map_to_script_runtime_options_without_field_drift() {
     check(options.max_timers == 3, "HostBudgets maps timer cap exactly");
     check(options.max_event_listeners == 5, "HostBudgets maps listener cap exactly");
     check(options.max_detached_nodes == 7, "HostBudgets maps detached-node cap exactly");
+    check(options.max_dom_nodes == 19, "HostBudgets maps total DOM node cap exactly");
+    check(options.max_dom_depth == 23, "HostBudgets maps DOM depth cap exactly");
+    check(options.max_attributes_per_element == 29, "HostBudgets maps attribute cap exactly");
+    check(options.max_dom_string_bytes == 31, "HostBudgets maps DOM string cap exactly");
     check(options.max_animation_frame_callbacks == 11, "HostBudgets maps animation cap exactly");
     check(options.max_execution_check_count == 13, "HostBudgets maps watchdog check cap exactly");
     check(options.execution_check_interval == 17, "HostBudgets maps watchdog interval exactly");
@@ -2305,6 +2313,59 @@ void javascript_dialog_modal_subset_is_bounded_and_cancellable() {
     check(runtime.active_modal_dialog() == nullptr, "destroyed modal clears host-visible state");
 }
 
+void javascript_dom_budget_ledger_rejects_growth_atomically() {
+    HtmlParser parser;
+    {
+        auto document = parser.parse("<body><div id='target'></div></body>");
+        const DomStatistics baseline = compute_dom_statistics(*document);
+        JerryScriptRuntimeOptions options;
+        options.max_detached_nodes = 4;
+        options.max_dom_nodes = baseline.node_count + 1;
+        options.max_dom_depth = baseline.max_depth + 1;
+        options.max_attributes_per_element = 1;
+        options.max_dom_string_bytes = baseline.string_bytes + 3;
+        JerryScriptRuntime runtime(options);
+        runtime.bind_document(*document);
+
+        ScriptEvaluationResult result = runtime.eval(
+            "var t = document.getElementById('target');"
+            "var failed = false;"
+            "try { t.append('a', 'b'); } catch (e) { failed = e instanceof RangeError; }"
+            "failed + ':' + t.textContent;");
+        check(result.ok && result.value == "true:", "append preflight rejects a multi-node write atomically");
+
+        result = runtime.eval(
+            "t.textContent = 'abc';"
+            "var failed = false;"
+            "try { t.textContent = 'abcd'; } catch (e) { failed = e instanceof RangeError; }"
+            "failed + ':' + t.textContent;");
+        check(result.ok && result.value == "true:abc", "textContent preserves old tree when the string budget rejects replacement");
+
+        result = runtime.eval(
+            "var failed = false;"
+            "try { t.title = 'x'; } catch (e) { failed = e instanceof RangeError; }"
+            "failed + ':' + (t.getAttribute('title') === null) + ':' + t.getAttribute('id');");
+        check(result.ok && result.value == "true:true:target",
+              "attribute cap rejects reflected-property growth without changing the element");
+    }
+
+    {
+        auto document = make_element("document");
+        const DomStatistics baseline = compute_dom_statistics(*document);
+        JerryScriptRuntimeOptions options;
+        options.max_dom_nodes = baseline.node_count + 2;
+        options.max_dom_depth = 1;
+        JerryScriptRuntime runtime(options);
+        runtime.bind_document(*document);
+        const ScriptEvaluationResult result = runtime.eval(
+            "var n = document.createElement('i');"
+            "var failed = false;"
+            "try { n.appendChild(document.createElement('b')); } catch (e) { failed = e instanceof RangeError; }"
+            "failed + ':' + n.textContent;");
+        check(result.ok && result.value == "true:", "DOM node ledger includes detached subtrees and depth preflight");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -2386,6 +2447,7 @@ int main() {
         javascript_retained_canvas_gradient_is_safe_after_canvas_clear();
         javascript_canvas_draw_image_copies_and_scales_canvas_source();
         javascript_dialog_modal_subset_is_bounded_and_cancellable();
+        javascript_dom_budget_ledger_rejects_growth_atomically();
     } catch (const std::exception& error) {
         std::cerr << "script runtime test failed: " << error.what() << '\n';
         return 1;

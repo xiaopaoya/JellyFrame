@@ -339,12 +339,12 @@ JerryScript 源码树时可用。
 | `document.title` / `document.dir` / `document.readyState` / `document.defaultView` / `document.hasFocus()` | 可用 | `document.title` 读取/写入第一个 `title` 元素文本。`document.dir` 反射 `html` 元素上的文档方向属性；简化文档中会 fallback 到 body/document。`document.readyState` 在 JellyFrame 绑定包内文档后始终为 `complete`；不模拟浏览器加载过程中的中间状态。`document.defaultView` 返回绑定的 JellyFrame `window`。`document.hasFocus()` 跟随嵌入式生命周期；宿主将文档标记为 hidden 时返回 false。 |
 | Document collections | 子集 | `document.images`、`embeds`、`plugins`、`links`、`forms`、`scripts` 和 `getElementsByName()` 返回静态数组快照。它们不是 live HTMLCollection，不提供 named lookup 或浏览器 collection 方法。`links` 包含带 `href` 的 `a`/`area` 元素；`plugins` 与 `embeds` 返回同一类 embed 快照。 |
 | `document.getElementById` | 可用 | 返回 wrapper 或 `null`。 |
-| `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；数量受 `HostBudgets::max_detached_dom_nodes` 限制。 |
-| `document.createTextNode` | 可用 | 创建 detached text node，同样受 detached-node 预算限制。 |
-| `appendChild` / `append` / `prepend` / `removeChild` | 子集 | `appendChild` 移动一个节点并返回它。`append(...items)` / `prepend(...items)` 接受现有 runtime-owned 节点和会转换为文本节点的标量值，保留参数顺序、防止环并标记 dirty。不接受 `DocumentFragment`；`replaceChildren()` 因多 wrapper 生命周期和 detached budget 需要独立事务设计，继续延后。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
-| `setAttribute` / `getAttribute` / `removeAttribute` / `hasAttribute` / `toggleAttribute` | 可用 / 子集 | 绑定层会 lowercase 属性名。`toggleAttribute(name[, force])` 采用普通 boolean attribute 风格的添加/移除并返回是否存在；空名称抛出 `TypeError`，而非浏览器 `InvalidCharacterError`。 |
+| `document.createElement` | 可用 | 创建由 runtime 持有、等待挂载的 detached element；同时受 `HostBudgets::max_detached_dom_nodes` 与聚合 DOM 节点/深度/属性/字符串账本限制。 |
+| `document.createTextNode` | 可用 | 创建 detached text node，适用同一 detached root 与聚合 DOM 预算。 |
+| `appendChild` / `append` / `prepend` / `removeChild` | 子集 | `appendChild` 移动一个节点并返回它。`append(...items)` / `prepend(...items)` 接受现有 runtime-owned 节点和会转换为文本节点的标量值，保留参数顺序、防止环并标记 dirty；文本新增与深度变化会先预检，超预算的多参数调用不会留下部分修改。不接受 `DocumentFragment`；`replaceChildren()` 因多 wrapper 生命周期和 detached budget 需要独立事务设计，继续延后。`removeChild` 返回的节点会继续由 runtime 持有，保持可用。 |
+| `setAttribute` / `getAttribute` / `removeAttribute` / `hasAttribute` / `toggleAttribute` | 可用 / 子集 | 绑定层会 lowercase 属性名。新增/替换值会在 mutation 前检查聚合 DOM 字符串预算和每 element 属性上限。`toggleAttribute(name[, force])` 采用普通 boolean attribute 风格的添加/移除并返回是否存在；空名称抛出 `TypeError`，而非浏览器 `InvalidCharacterError`。 |
 | `Node.remove()` | 可用 | 通过与 `removeChild` 相同的 runtime-owned detached-node budget 移除已连接 node；已 detached/root node 为 no-op。 |
-| `textContent` / `innerText` | 可用 / 子集 | `textContent` getter/setter；同值设置不会触发 dirty。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。`innerText` 在 element wrapper 上作为轻量 `textContent` 别名暴露；不执行浏览器 layout-aware rendered-text 算法。 |
+| `textContent` / `innerText` | 可用 / 子集 | `textContent` getter/setter；同值设置不会触发 dirty。替换会先预检节点和保留字符串预算，拒绝时保持旧 subtree。已有唯一 text child 时会原地更新；替换混合子节点仍是结构变化。`innerText` 在 element wrapper 上作为轻量 `textContent` 别名暴露；不执行浏览器 layout-aware rendered-text 算法。 |
 | `id` | 可用 | 反射到 `id` attribute，并走现有 style/layout dirty 路径。 |
 | `className` | 可用 | 反射到 `class` attribute，并走现有 style/layout dirty 路径。 |
 | `title` / `lang` / `dir` | 可用 | element wrapper 上的字符串属性反射。`lang` 和 `dir` 反射不等于完整语言特定 shaping 或 bidi layout。 |

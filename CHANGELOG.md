@@ -33,6 +33,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Fixed
 
+- Script-owned DOM mutation now uses one attached-plus-detached ledger for
+  node count, tree depth, attributes per element and retained DOM string bytes.
+  Creation, text replacement, attribute reflection and text insertion preflight
+  their budgets; multi-value `append()` / `prepend()` reject atomically rather
+  than leaving a partially changed subtree.
 - Script-service teardown now carries an internal runtime client token through
   requests, completions and returned handles. Clearing script services releases
   only that runtime's network/location resources and still reclaims its late

@@ -140,6 +140,33 @@ struct ScriptRuntimeAccess {
         return runtime.can_adopt_detached_node();
     }
 
+    static bool can_adopt_detached_node(const JerryScriptRuntime& runtime, const Node& node) {
+        return runtime.can_adopt_detached_node(node);
+    }
+
+    static bool can_insert_dom_node(const JerryScriptRuntime& runtime, const Node& parent, const Node& child) {
+        return runtime.can_insert_dom_node(parent, child);
+    }
+
+    static bool can_append_dom_text(const JerryScriptRuntime& runtime,
+                                    const Node& parent,
+                                    const std::vector<std::string>& values) {
+        return runtime.can_append_dom_text(parent, values);
+    }
+
+    static bool can_set_dom_text_content(const JerryScriptRuntime& runtime,
+                                         const Node& node,
+                                         std::string_view value) {
+        return runtime.can_set_dom_text_content(node, value);
+    }
+
+    static bool can_set_dom_attribute(const JerryScriptRuntime& runtime,
+                                      const Node& node,
+                                      std::string_view name,
+                                      std::string_view value) {
+        return runtime.can_set_dom_attribute(node, name, value);
+    }
+
     static Node* adopt_detached_node(JerryScriptRuntime& runtime, std::unique_ptr<Node> node) {
         return runtime.adopt_detached_node(std::move(node));
     }
@@ -1756,10 +1783,38 @@ jerry_value_t node_set_text_content(const jerry_call_info_t* call_info_p,
                                     const jerry_value_t args_p[],
                                     const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
     if (node == nullptr) {
         return throw_type_error("textContent setter called on non-node object");
     }
-    node->set_text_content(args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    const std::string value = args_count > 0 ? value_to_string(args_p[0]) : std::string();
+    if (runtime == nullptr || !ScriptRuntimeAccess::can_set_dom_text_content(*runtime, *node, value)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
+    }
+    node->set_text_content(value);
+    return jerry_undefined();
+}
+
+jerry_value_t set_script_dom_attribute(const jerry_call_info_t* call_info_p,
+                                       Node& node,
+                                       std::string_view name,
+                                       std::string value) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr || !ScriptRuntimeAccess::can_set_dom_attribute(*runtime, node, name, value)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+    }
+    node.set_attribute(std::string(name), std::move(value));
+    return jerry_undefined();
+}
+
+jerry_value_t set_script_dom_text_content(const jerry_call_info_t* call_info_p,
+                                          Node& node,
+                                          std::string value) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr || !ScriptRuntimeAccess::can_set_dom_text_content(*runtime, node, value)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
+    }
+    node.set_text_content(std::move(value));
     return jerry_undefined();
 }
 
@@ -1788,7 +1843,8 @@ jerry_value_t node_set_id(const jerry_call_info_t* call_info_p,
                           const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element) {
-        node->set_attribute("id", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, "id", args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -1798,7 +1854,8 @@ jerry_value_t node_set_class_name(const jerry_call_info_t* call_info_p,
                                   const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element) {
-        node->set_attribute("class", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, "class", args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -1818,7 +1875,8 @@ jerry_value_t node_set_reflected_string_attribute(const jerry_call_info_t* call_
                                                   const char* attribute_name) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element) {
-        node->set_attribute(attribute_name, args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, attribute_name, args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -1895,7 +1953,7 @@ jerry_value_t node_set_reflected_number_attribute(const jerry_call_info_t* call_
                                                   const char* attribute_name) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element && args_count > 0) {
-        node->set_attribute(attribute_name, number_attribute_value(args_p[0]));
+        return set_script_dom_attribute(call_info_p, *node, attribute_name, number_attribute_value(args_p[0]));
     }
     return jerry_undefined();
 }
@@ -1932,7 +1990,8 @@ jerry_value_t node_set_min(const jerry_call_info_t* call_info_p,
                            const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element) {
-        node->set_attribute("min", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, "min", args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -1955,7 +2014,8 @@ jerry_value_t node_set_max(const jerry_call_info_t* call_info_p,
                            const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element) {
-        node->set_attribute("max", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, "max", args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -1982,7 +2042,8 @@ jerry_value_t node_set_reflected_int_attribute(const jerry_call_info_t* call_inf
                                                const char* attribute_name) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element && args_count > 0) {
-        node->set_attribute(attribute_name, std::to_string(int_from_value(args_p[0], -1)));
+        return set_script_dom_attribute(
+            call_info_p, *node, attribute_name, std::to_string(int_from_value(args_p[0], -1)));
     }
     return jerry_undefined();
 }
@@ -2023,7 +2084,7 @@ std::vector<std::string> class_tokens_for(const Node& node) {
     return tokens;
 }
 
-void set_class_tokens(Node& node, const std::vector<std::string>& tokens) {
+bool set_class_tokens(JerryScriptRuntime& runtime, Node& node, const std::vector<std::string>& tokens) {
     std::string value;
     for (const std::string& token : tokens) {
         if (token.empty()) {
@@ -2034,7 +2095,11 @@ void set_class_tokens(Node& node, const std::vector<std::string>& tokens) {
         }
         value += token;
     }
+    if (!ScriptRuntimeAccess::can_set_dom_attribute(runtime, node, "class", value)) {
+        return false;
+    }
     node.set_attribute("class", std::move(value));
+    return true;
 }
 
 bool class_token_valid(const std::string& token) {
@@ -2077,7 +2142,10 @@ jerry_value_t class_list_add(const jerry_call_info_t* call_info_p,
         changed = true;
     }
     if (changed) {
-        set_class_tokens(*node, tokens);
+        JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+        if (runtime == nullptr || !set_class_tokens(*runtime, *node, tokens)) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+        }
     }
     return jerry_undefined();
 }
@@ -2099,7 +2167,10 @@ jerry_value_t class_list_remove(const jerry_call_info_t* call_info_p,
         tokens.erase(std::remove(tokens.begin(), tokens.end(), token), tokens.end());
     }
     if (tokens.size() != before) {
-        set_class_tokens(*node, tokens);
+        JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+        if (runtime == nullptr || !set_class_tokens(*runtime, *node, tokens)) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+        }
     }
     return jerry_undefined();
 }
@@ -2120,10 +2191,16 @@ jerry_value_t class_list_toggle(const jerry_call_info_t* call_info_p,
     const bool should_have = args_count >= 2 ? jerry_value_to_boolean(args_p[1]) : !contained;
     if (should_have && !contained) {
         tokens.push_back(token);
-        set_class_tokens(*node, tokens);
+        JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+        if (runtime == nullptr || !set_class_tokens(*runtime, *node, tokens)) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+        }
     } else if (!should_have && contained) {
         tokens.erase(std::remove(tokens.begin(), tokens.end(), token), tokens.end());
-        set_class_tokens(*node, tokens);
+        JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+        if (runtime == nullptr || !set_class_tokens(*runtime, *node, tokens)) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+        }
     }
     return jerry_boolean(should_have);
 }
@@ -2157,7 +2234,10 @@ jerry_value_t class_list_replace(const jerry_call_info_t* call_info_p,
     } else {
         *old = new_token;
     }
-    set_class_tokens(*node, tokens);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (runtime == nullptr || !set_class_tokens(*runtime, *node, tokens)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+    }
     return jerry_boolean(true);
 }
 
@@ -2205,7 +2285,7 @@ jerry_value_t node_set_autofocus(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element) {
         if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
-            node->set_attribute("autofocus", "");
+            return set_script_dom_attribute(call_info_p, *node, "autofocus", "");
         } else {
             node->remove_attribute("autofocus");
         }
@@ -2219,7 +2299,7 @@ jerry_value_t node_set_hidden(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr) {
         if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
-            node->set_attribute("hidden", "");
+            return set_script_dom_attribute(call_info_p, *node, "hidden", "");
         } else {
             node->remove_attribute("hidden");
         }
@@ -2240,7 +2320,7 @@ jerry_value_t node_set_disabled(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr) {
         if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
-            node->set_attribute("disabled", "");
+            return set_script_dom_attribute(call_info_p, *node, "disabled", "");
         } else {
             node->remove_attribute("disabled");
         }
@@ -2261,7 +2341,7 @@ jerry_value_t node_set_read_only(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr) {
         if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
-            node->set_attribute("readonly", "");
+            return set_script_dom_attribute(call_info_p, *node, "readonly", "");
         } else {
             node->remove_attribute("readonly");
         }
@@ -2286,7 +2366,7 @@ jerry_value_t node_set_open(const jerry_call_info_t* call_info_p,
         if (runtime != nullptr && node->type == NodeType::Element && node->tag_name == "dialog") {
             ScriptRuntimeAccess::set_dialog_open(*runtime, *node, open);
         } else if (open) {
-            node->set_attribute("open", "");
+            return set_script_dom_attribute(call_info_p, *node, "open", "");
         } else {
             node->remove_attribute("open");
         }
@@ -2357,7 +2437,7 @@ jerry_value_t node_set_required(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr) {
         if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
-            node->set_attribute("required", "");
+            return set_script_dom_attribute(call_info_p, *node, "required", "");
         } else {
             node->remove_attribute("required");
         }
@@ -2387,9 +2467,9 @@ jerry_value_t node_set_default_value(const jerry_call_info_t* call_info_p,
     }
     const std::string value = args_count > 0 ? value_to_string(args_p[0]) : std::string();
     if (node->tag_name == "textarea") {
-        node->set_text_content(value);
+        return set_script_dom_text_content(call_info_p, *node, value);
     } else {
-        node->set_attribute("value", value);
+        return set_script_dom_attribute(call_info_p, *node, "value", value);
     }
     return jerry_undefined();
 }
@@ -2435,7 +2515,8 @@ jerry_value_t node_set_type(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element &&
         (node->tag_name == "input" || node->tag_name == "button")) {
-        node->set_attribute("type", args_count > 0 ? ascii_lowercase(value_to_string(args_p[0])) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, "type", args_count > 0 ? ascii_lowercase(value_to_string(args_p[0])) : std::string());
     }
     return jerry_undefined();
 }
@@ -2484,7 +2565,8 @@ jerry_value_t node_set_label(const jerry_call_info_t* call_info_p,
                              const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && is_option_or_optgroup(*node)) {
-        node->set_attribute("label", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, "label", args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -2503,7 +2585,7 @@ jerry_value_t node_set_default_selected(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element && node->tag_name == "option") {
         if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
-            node->set_attribute("selected", "");
+            return set_script_dom_attribute(call_info_p, *node, "selected", "");
         } else {
             node->remove_attribute("selected");
         }
@@ -2525,7 +2607,7 @@ jerry_value_t node_set_default_checked(const jerry_call_info_t* call_info_p,
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element && node->tag_name == "input") {
         if (args_count > 0 && jerry_value_to_boolean(args_p[0])) {
-            node->set_attribute("checked", "");
+            return set_script_dom_attribute(call_info_p, *node, "checked", "");
         } else {
             node->remove_attribute("checked");
         }
@@ -2549,7 +2631,8 @@ jerry_value_t node_set_option_value(const jerry_call_info_t* call_info_p,
                                     const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element && node->tag_name == "option") {
-        node->set_attribute("value", args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_attribute(
+            call_info_p, *node, "value", args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -2569,7 +2652,8 @@ jerry_value_t node_set_option_text(const jerry_call_info_t* call_info_p,
                                    const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && node->type == NodeType::Element && node->tag_name == "option") {
-        node->set_text_content(args_count > 0 ? value_to_string(args_p[0]) : std::string());
+        return set_script_dom_text_content(
+            call_info_p, *node, args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -2606,12 +2690,12 @@ jerry_value_t node_set_value(const jerry_call_info_t* call_info_p,
                              const jerry_length_t args_count) {
     Node* node = native_node(call_info_p->this_value);
     if (node != nullptr && is_progress_or_meter(*node)) {
-        node->set_attribute("value", args_count > 0 ? number_attribute_value(args_p[0]) : std::string());
-        return jerry_undefined();
+        return set_script_dom_attribute(
+            call_info_p, *node, "value", args_count > 0 ? number_attribute_value(args_p[0]) : std::string());
     }
     if (node != nullptr && node->type == NodeType::Element && node->tag_name == "button") {
-        node->set_attribute("value", args_count > 0 ? value_to_string(args_p[0]) : std::string());
-        return jerry_undefined();
+        return set_script_dom_attribute(
+            call_info_p, *node, "value", args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     if (node == nullptr || !is_form_control(*node)) {
         return jerry_undefined();
@@ -4170,6 +4254,10 @@ jerry_value_t dataset_proxy_set(const jerry_call_info_t*,
         node->attributes.size() >= kMaxDatasetAttributes) {
         return jerry_boolean(false);
     }
+    JerryScriptRuntime* runtime = native_runtime(args_p[0]);
+    if (runtime == nullptr || !ScriptRuntimeAccess::can_set_dom_attribute(*runtime, *node, attribute, value)) {
+        return jerry_boolean(false);
+    }
     node->set_attribute(attribute, value);
     return jerry_boolean(true);
 }
@@ -5164,6 +5252,9 @@ jerry_value_t node_append_child(const jerry_call_info_t* call_info_p,
     if (parent == nullptr || runtime == nullptr || child == nullptr) {
         return throw_type_error("appendChild requires a node child");
     }
+    if (!ScriptRuntimeAccess::can_insert_dom_node(*runtime, *parent, *child)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM depth budget exceeded");
+    }
 
     try {
         Node& appended = append_or_move_child(*runtime, *parent, *child);
@@ -5182,11 +5273,26 @@ jerry_value_t node_append(const jerry_call_info_t* call_info_p,
         return throw_type_error("append called on an invalid node");
     }
     try {
+        std::vector<std::string> text_values;
+        text_values.reserve(args_count);
+        for (jerry_length_t index = 0; index < args_count; ++index) {
+            if (Node* child = native_node(args_p[index])) {
+                if (!ScriptRuntimeAccess::can_insert_dom_node(*runtime, *parent, *child)) {
+                    return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM depth budget exceeded");
+                }
+            } else {
+                text_values.push_back(value_to_string(args_p[index]));
+            }
+        }
+        if (!ScriptRuntimeAccess::can_append_dom_text(*runtime, *parent, text_values)) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
+        }
+        std::size_t text_index = 0;
         for (jerry_length_t index = 0; index < args_count; ++index) {
             if (Node* child = native_node(args_p[index])) {
                 append_or_move_child(*runtime, *parent, *child);
             } else {
-                parent->append_child(make_text(value_to_string(args_p[index])));
+                parent->append_child(make_text(std::move(text_values[text_index++])));
             }
         }
     } catch (const std::exception& error) {
@@ -5204,12 +5310,27 @@ jerry_value_t node_prepend(const jerry_call_info_t* call_info_p,
         return throw_type_error("prepend called on an invalid node");
     }
     try {
+        std::vector<std::string> text_values;
+        text_values.reserve(args_count);
+        for (jerry_length_t index = 0; index < args_count; ++index) {
+            if (Node* child = native_node(args_p[index])) {
+                if (!ScriptRuntimeAccess::can_insert_dom_node(*runtime, *parent, *child)) {
+                    return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM depth budget exceeded");
+                }
+            } else {
+                text_values.push_back(value_to_string(args_p[index]));
+            }
+        }
+        if (!ScriptRuntimeAccess::can_append_dom_text(*runtime, *parent, text_values)) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
+        }
         std::size_t insertion_index = 0;
+        std::size_t text_index = 0;
         for (jerry_length_t index = 0; index < args_count; ++index, ++insertion_index) {
             if (Node* child = native_node(args_p[index])) {
                 insert_or_move_child(*runtime, *parent, *child, insertion_index);
             } else {
-                parent->insert_child(make_text(value_to_string(args_p[index])), insertion_index);
+                parent->insert_child(make_text(std::move(text_values[text_index++])), insertion_index);
             }
         }
     } catch (const std::exception& error) {
@@ -5253,8 +5374,13 @@ jerry_value_t element_set_attribute(const jerry_call_info_t* call_info_p,
         return throw_type_error("setAttribute requires an element and attribute name");
     }
 
-    node->set_attribute(ascii_lowercase(value_to_string(args_p[0])),
-                        args_count > 1 ? value_to_string(args_p[1]) : std::string());
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    const std::string name = ascii_lowercase(value_to_string(args_p[0]));
+    const std::string value = args_count > 1 ? value_to_string(args_p[1]) : std::string();
+    if (runtime == nullptr || !ScriptRuntimeAccess::can_set_dom_attribute(*runtime, *node, name, value)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+    }
+    node->set_attribute(name, value);
     return jerry_undefined();
 }
 
@@ -5309,6 +5435,10 @@ jerry_value_t element_toggle_attribute(const jerry_call_info_t* call_info_p,
     const bool present = node->attributes.find(name) != node->attributes.end();
     const bool should_be_present = args_count >= 2 ? jerry_value_to_boolean(args_p[1]) : !present;
     if (should_be_present && !present) {
+        JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+        if (runtime == nullptr || !ScriptRuntimeAccess::can_set_dom_attribute(*runtime, *node, name, "")) {
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
+        }
         node->set_attribute(name, "");
     } else if (!should_be_present && present) {
         node->remove_attribute(name);
@@ -5653,8 +5783,11 @@ jerry_value_t document_create_element(const jerry_call_info_t* call_info_p,
         return throw_type_error("createElement requires a tag name");
     }
 
-    Node* node = ScriptRuntimeAccess::adopt_detached_node(
-        *runtime, make_element(ascii_lowercase(value_to_string(args_p[0]))));
+    auto created = make_element(ascii_lowercase(value_to_string(args_p[0])));
+    if (!ScriptRuntimeAccess::can_adopt_detached_node(*runtime, *created)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
+    }
+    Node* node = ScriptRuntimeAccess::adopt_detached_node(*runtime, std::move(created));
     if (node == nullptr) {
         return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
     }
@@ -5669,8 +5802,11 @@ jerry_value_t document_create_text_node(const jerry_call_info_t* call_info_p,
         return throw_type_error("createTextNode requires a document");
     }
 
-    Node* node = ScriptRuntimeAccess::adopt_detached_node(
-        *runtime, make_text(args_count > 0 ? value_to_string(args_p[0]) : std::string()));
+    auto created = make_text(args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    if (!ScriptRuntimeAccess::can_adopt_detached_node(*runtime, *created)) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
+    }
+    Node* node = ScriptRuntimeAccess::adopt_detached_node(*runtime, std::move(created));
     if (node == nullptr) {
         return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
     }
@@ -6083,6 +6219,10 @@ JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const Ho
     options.max_timers = budgets.max_timers;
     options.max_event_listeners = budgets.max_event_listeners;
     options.max_detached_nodes = budgets.max_detached_dom_nodes;
+    options.max_dom_nodes = budgets.max_dom_nodes;
+    options.max_dom_depth = budgets.max_dom_depth;
+    options.max_attributes_per_element = budgets.max_attributes_per_element;
+    options.max_dom_string_bytes = budgets.max_resource_bytes;
     options.max_animation_frame_callbacks = budgets.max_active_animations;
     options.max_execution_check_count = static_cast<std::uint32_t>(
         std::min<std::size_t>(budgets.max_script_execution_checks, std::numeric_limits<std::uint32_t>::max()));
@@ -6710,6 +6850,133 @@ ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
 
 bool JerryScriptRuntime::can_adopt_detached_node() const {
     return detached_nodes_.detached_node_count() < options_.max_detached_nodes;
+}
+
+namespace {
+
+bool budget_has_room(std::size_t current, std::size_t added, std::size_t limit) {
+    return current <= limit && added <= limit - current;
+}
+
+std::size_t dom_node_depth(const Node& node) {
+    std::size_t depth = 1;
+    for (const Node* current = node.parent; current != nullptr; current = current->parent) {
+        ++depth;
+    }
+    return depth;
+}
+
+bool statistics_fit_dom_budget(const DomStatistics& statistics, const JerryScriptRuntimeOptions& options) {
+    return statistics.node_count <= options.max_dom_nodes &&
+           statistics.max_depth <= options.max_dom_depth &&
+           statistics.max_attributes_per_element <= options.max_attributes_per_element &&
+           statistics.string_bytes <= options.max_dom_string_bytes;
+}
+
+} // namespace
+
+DomStatistics JerryScriptRuntime::dom_statistics() const {
+    DomStatistics statistics;
+    if (bound_document_ != nullptr) {
+        statistics = compute_dom_statistics(*bound_document_);
+    }
+    const DetachedDomStatistics detached = detached_nodes_.detached_statistics();
+    statistics.node_count += detached.aggregate.node_count;
+    statistics.element_count += detached.aggregate.element_count;
+    statistics.text_count += detached.aggregate.text_count;
+    statistics.attribute_count += detached.aggregate.attribute_count;
+    statistics.max_depth = std::max(statistics.max_depth, detached.aggregate.max_depth);
+    statistics.max_child_count = std::max(statistics.max_child_count, detached.aggregate.max_child_count);
+    statistics.max_attributes_per_element =
+        std::max(statistics.max_attributes_per_element, detached.aggregate.max_attributes_per_element);
+    statistics.string_bytes += detached.aggregate.string_bytes;
+    return statistics;
+}
+
+bool JerryScriptRuntime::can_adopt_detached_node(const Node& node) const {
+    if (!can_adopt_detached_node()) {
+        return false;
+    }
+    const DomStatistics current = dom_statistics();
+    const DomStatistics added = compute_dom_statistics(node);
+    if (!budget_has_room(current.node_count, added.node_count, options_.max_dom_nodes) ||
+        !budget_has_room(current.string_bytes, added.string_bytes, options_.max_dom_string_bytes)) {
+        return false;
+    }
+    DomStatistics projected = current;
+    projected.node_count += added.node_count;
+    projected.element_count += added.element_count;
+    projected.text_count += added.text_count;
+    projected.attribute_count += added.attribute_count;
+    projected.max_depth = std::max(projected.max_depth, added.max_depth);
+    projected.max_child_count = std::max(projected.max_child_count, added.max_child_count);
+    projected.max_attributes_per_element =
+        std::max(projected.max_attributes_per_element, added.max_attributes_per_element);
+    projected.string_bytes += added.string_bytes;
+    return statistics_fit_dom_budget(projected, options_);
+}
+
+bool JerryScriptRuntime::can_insert_dom_node(const Node& parent, const Node& child) const {
+    const DomStatistics child_statistics = compute_dom_statistics(child);
+    return child_statistics.max_depth <= options_.max_dom_depth &&
+           dom_node_depth(parent) <= options_.max_dom_depth - child_statistics.max_depth;
+}
+
+bool JerryScriptRuntime::can_append_dom_text(const Node& parent,
+                                             const std::vector<std::string>& values) const {
+    if (values.empty()) {
+        return true;
+    }
+    const DomStatistics current = dom_statistics();
+    std::size_t string_bytes = 0;
+    for (const std::string& value : values) {
+        if (!budget_has_room(string_bytes, value.size(), options_.max_dom_string_bytes)) {
+            return false;
+        }
+        string_bytes += value.size();
+    }
+    return budget_has_room(current.node_count, values.size(), options_.max_dom_nodes) &&
+           budget_has_room(current.string_bytes, string_bytes, options_.max_dom_string_bytes) &&
+           dom_node_depth(parent) < options_.max_dom_depth;
+}
+
+bool JerryScriptRuntime::can_set_dom_text_content(const Node& node, std::string_view value) const {
+    const DomStatistics current = dom_statistics();
+    if (node.type == NodeType::Text) {
+        const std::size_t retained = current.string_bytes - std::min(current.string_bytes, node.text.size());
+        return budget_has_room(retained, value.size(), options_.max_dom_string_bytes);
+    }
+
+    DomStatistics removed;
+    for (const auto& child : node.children) {
+        const DomStatistics child_statistics = compute_dom_statistics(*child);
+        removed.node_count += child_statistics.node_count;
+        removed.string_bytes += child_statistics.string_bytes;
+    }
+    const std::size_t remaining_nodes = current.node_count - std::min(current.node_count, removed.node_count);
+    const std::size_t remaining_strings = current.string_bytes - std::min(current.string_bytes, removed.string_bytes);
+    if (value.empty()) {
+        return true;
+    }
+    return budget_has_room(remaining_nodes, 1, options_.max_dom_nodes) &&
+           budget_has_room(remaining_strings, value.size(), options_.max_dom_string_bytes) &&
+           dom_node_depth(node) < options_.max_dom_depth;
+}
+
+bool JerryScriptRuntime::can_set_dom_attribute(const Node& node,
+                                               std::string_view name,
+                                               std::string_view value) const {
+    const auto existing = node.attributes.find(std::string(name));
+    if (existing == node.attributes.end() && node.attributes.size() >= options_.max_attributes_per_element) {
+        return false;
+    }
+    const DomStatistics current = dom_statistics();
+    std::size_t retained = current.string_bytes;
+    if (existing != node.attributes.end()) {
+        const std::size_t replaced = existing->first.size() + existing->second.size();
+        retained -= std::min(retained, replaced);
+    }
+    return budget_has_room(retained, name.size() + value.size(), options_.max_dom_string_bytes);
 }
 
 Node* JerryScriptRuntime::adopt_detached_node(std::unique_ptr<Node> node) {

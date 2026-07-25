@@ -15,6 +15,7 @@ void merge_dom_statistics(DomStatistics& target, const DomStatistics& source) {
     target.max_child_count = std::max(target.max_child_count, source.max_child_count);
     target.max_attributes_per_element =
         std::max(target.max_attributes_per_element, source.max_attributes_per_element);
+    target.string_bytes += source.string_bytes;
 }
 
 } // namespace
