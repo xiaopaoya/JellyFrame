@@ -31,6 +31,15 @@ bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& co
     return false;
 }
 
+bool has_diagnostic_message_fragment(const VectorDiagnosticSink& sink, const std::string& fragment) {
+    for (const Diagnostic& diagnostic : sink.diagnostics()) {
+        if (diagnostic.message.find(fragment) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool rejecting_text_painter(FrameBuffer&,
                             Rect,
                             Color,
@@ -762,6 +771,36 @@ void compositor_degrades_oversized_offscreen_layers_without_crashing() {
     check(has_diagnostic_code(diagnostics, "paint-offscreen-budget"), "offscreen fallback is reported");
 }
 
+void compositor_bounds_nested_live_offscreen_pixels() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 2, 2};
+
+    auto parent = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    parent->type = LayerType::Composited;
+    parent->opacity = 0.5F;
+    parent->bounds = Rect{0, 0, 2, 2};
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->opacity = 0.5F;
+    child->bounds = Rect{0, 0, 2, 2};
+    child->display_list.push_back(black_fill(Rect{0, 0, 2, 2}));
+    parent->children.push_back(std::move(child));
+    root.children.push_back(std::move(parent));
+
+    VectorDiagnosticSink diagnostics;
+    SoftwareCompositor::Options options;
+    options.max_offscreen_pixels = 4;
+    options.diagnostics = &diagnostics;
+    const FrameBuffer output = SoftwareCompositor({}, options).render(root, 2, 2, Color{255, 255, 255, 255});
+
+    check(output.pixel(0, 0).r < 255, "aggregate offscreen fallback still paints visible content");
+    check(has_diagnostic_code(diagnostics, "paint-offscreen-budget"),
+          "nested offscreen aggregate cap is reported with the stable budget code");
+    check(has_diagnostic_message_fragment(diagnostics, "aggregate live budget"),
+          "nested offscreen rejection distinguishes aggregate live usage");
+}
+
 void compositor_skips_oversized_transformed_layers_instead_of_painting_them_untransformed() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1287,6 +1326,7 @@ int main() {
         rasterizer_scratch_reuses_clipped_image_storage();
         compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
+        compositor_bounds_nested_live_offscreen_pixels();
         compositor_skips_oversized_transformed_layers_instead_of_painting_them_untransformed();
         compositor_rejects_oversized_framebuffer_before_allocation();
         frame_sink_receives_framebuffer_view_and_dirty_rects();

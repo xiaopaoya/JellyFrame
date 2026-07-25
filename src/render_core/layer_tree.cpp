@@ -1272,6 +1272,8 @@ LayerNodePtr LayerTreeBuilder::build(const LayoutBox& root, MonotonicArena& aren
 }
 
 LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, MonotonicArena* arena) const {
+    std::size_t remaining_commands = std::max<std::size_t>(1, options_.max_display_commands);
+    bool display_budget_reported = false;
     auto root_layer = make_layer_node(arena);
     root_layer->type = LayerType::Root;
     root_layer->reasons = layer_reasons_for(root, true);
@@ -1292,12 +1294,13 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     if (!root.style.visibility_hidden) {
         paint_box_self(root, root_layer->display_list, options_);
     }
-    trim_display_list(root_layer->display_list);
-    build_children(root, *root_layer, arena);
+    trim_display_list(root_layer->display_list, 0, remaining_commands, display_budget_reported);
+    build_children(root, *root_layer, arena, remaining_commands, display_budget_reported);
     if (!root.style.visibility_hidden) {
+        const std::size_t command_begin = root_layer->display_list.size();
         paint_generated_inline_content(root, root_layer->display_list, CssPseudoElement::After);
+        trim_display_list(root_layer->display_list, command_begin, remaining_commands, display_budget_reported);
     }
-    trim_display_list(root_layer->display_list);
     sort_layer_children(*root_layer);
     return root_layer;
 }
@@ -1320,20 +1323,33 @@ void LayerTreeBuilder::flatten_into(const LayerNode& root, DisplayList& output) 
                   options_.diagnostics, display_budget_reported);
 }
 
-void LayerTreeBuilder::trim_display_list(DisplayList& display_list) const {
-    const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
-    if (display_list.size() > max_display_commands) {
+void LayerTreeBuilder::trim_display_list(DisplayList& display_list,
+                                         std::size_t command_begin,
+                                         std::size_t& remaining_commands,
+                                         bool& budget_reported) const {
+    command_begin = std::min(command_begin, display_list.size());
+    const std::size_t added_commands = display_list.size() - command_begin;
+    const std::size_t kept_commands = std::min(added_commands, remaining_commands);
+    if (kept_commands < added_commands) {
+        display_list.resize(command_begin + kept_commands);
+        if (!budget_reported) {
         report_diagnostic(options_.diagnostics,
                           DiagnosticStage::LayerTree,
                           DiagnosticSeverity::Warning,
                           "display-command-limit",
-                          "Layer display command budget was reached; commands in this layer were clipped",
+                          "Retained-tree display command budget was reached; later commands were clipped",
                           "Increase max_display_commands for complex pages.");
-        display_list.resize(max_display_commands);
+            budget_reported = true;
+        }
     }
+    remaining_commands -= kept_commands;
 }
 
-void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, MonotonicArena* arena) const {
+void LayerTreeBuilder::build_children(const LayoutBox& box,
+                                      LayerNode& layer,
+                                      MonotonicArena* arena,
+                                      std::size_t& remaining_commands,
+                                      bool& display_budget_reported) const {
     struct PendingBox {
         const LayoutBox* box = nullptr;
         LayerNode* layer = nullptr;
@@ -1374,7 +1390,10 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
                 const std::size_t command_begin = current_layer.display_list.size();
                 paint_generated_inline_content(*current_box, current_layer.display_list, CssPseudoElement::After);
                 translate_display_commands(current_layer.display_list, command_begin, 0, -current.scroll_y);
-                trim_display_list(current_layer.display_list);
+                trim_display_list(current_layer.display_list,
+                                  command_begin,
+                                  remaining_commands,
+                                  display_budget_reported);
             }
             if (options_.paint_scroll_indicators &&
                 current_layer.box == current_box &&
@@ -1393,7 +1412,10 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
                     indicator_layer->opacity = 1.0F;
                     indicator_layer->source_order = next_source_order++;
                     indicator_layer->display_list = std::move(indicator_commands);
-                    trim_display_list(indicator_layer->display_list);
+                    trim_display_list(indicator_layer->display_list,
+                                      0,
+                                      remaining_commands,
+                                      display_budget_reported);
                     current_layer.children.push_back(std::move(indicator_layer));
                     ++layer_count;
                 }
@@ -1441,7 +1463,10 @@ void LayerTreeBuilder::build_children(const LayoutBox& box, LayerNode& layer, Mo
             if (target_layer == &current_layer) {
                 translate_display_commands(target_layer->display_list, command_begin, 0, -current.scroll_y);
             }
-            trim_display_list(target_layer->display_list);
+            trim_display_list(target_layer->display_list,
+                              command_begin,
+                              remaining_commands,
+                              display_budget_reported);
         }
         const int child_scroll_y = target_layer == &current_layer ? current.scroll_y + own_scroll_y : own_scroll_y;
         pending.push_back(PendingBox{current_box, target_layer, child_scroll_y, true});

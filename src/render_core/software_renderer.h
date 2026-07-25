@@ -152,6 +152,7 @@ private:
                          int offset_x,
                          int offset_y,
                          float inherited_opacity = 1.0F,
+                         std::size_t active_offscreen_pixels = 0,
                          SoftwareRasterizerScratch* scratch = nullptr) const;
 };
 

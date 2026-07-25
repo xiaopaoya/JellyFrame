@@ -663,6 +663,8 @@ void layer_builder_respects_layer_and_display_command_budgets() {
     DisplayList flattened = tight_layer_builder.flatten(*tight_layer_tree);
 
     check(count_layers(*tight_layer_tree) <= 2, "layer budget caps own layers");
+    check(count_layer_display_commands(*tight_layer_tree) <= 4,
+          "display command budget caps the retained layer tree globally");
     check(flattened.size() <= 4, "display command budget caps flattened output");
     check(has_diagnostic_code(diagnostics, "layer-limit"), "layer budget diagnostic is reported");
     check(has_diagnostic_code(diagnostics, "display-command-limit"), "display command budget diagnostic is reported");

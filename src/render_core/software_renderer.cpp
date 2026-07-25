@@ -1141,15 +1141,19 @@ int round_transform_offset(float value) {
     return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
 }
 
-bool offscreen_fits_budget(Rect bounds, SoftwareCompositor::Options options) {
-    std::size_t pixels = 0;
+bool offscreen_fits_budget(Rect bounds,
+                           SoftwareCompositor::Options options,
+                           std::size_t active_pixels,
+                           std::size_t& pixels) {
+    pixels = 0;
     if (!checked_pixel_count(bounds.width, bounds.height, pixels)) {
         return false;
     }
     if (options.max_offscreen_pixels == 0) {
         return true;
     }
-    return pixels <= options.max_offscreen_pixels;
+    return active_pixels <= options.max_offscreen_pixels &&
+        pixels <= options.max_offscreen_pixels - active_pixels;
 }
 
 bool framebuffer_fits_budget(int width, int height, SoftwareCompositor::Options options) {
@@ -1615,7 +1619,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
         if (!root_opaque_fill_covers(root, full_target)) {
             target.clear(background);
         }
-        composite_layer(root, target, full_target, 0, 0, 1.0F, scratch != nullptr ? &scratch->rasterizer : nullptr);
+        composite_layer(root, target, full_target, 0, 0, 1.0F, 0, scratch != nullptr ? &scratch->rasterizer : nullptr);
         return;
     }
     if (dirty_rect_count == 1) {
@@ -1624,7 +1628,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
             if (!root_opaque_fill_covers(root, dirty)) {
                 fill_rect(target, dirty, background);
             }
-            composite_layer(root, target, dirty, 0, 0, 1.0F, scratch != nullptr ? &scratch->rasterizer : nullptr);
+            composite_layer(root, target, dirty, 0, 0, 1.0F, 0, scratch != nullptr ? &scratch->rasterizer : nullptr);
         }
         return;
     }
@@ -1634,7 +1638,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
         if (!root_opaque_fill_covers(root, dirty)) {
             fill_rect(target, dirty, background);
         }
-        composite_layer(root, target, dirty, 0, 0, 1.0F, scratch != nullptr ? &scratch->rasterizer : nullptr);
+        composite_layer(root, target, dirty, 0, 0, 1.0F, 0, scratch != nullptr ? &scratch->rasterizer : nullptr);
     }
 }
 
@@ -1644,6 +1648,7 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                          int offset_x,
                                          int offset_y,
                                          float inherited_opacity,
+                                         std::size_t active_offscreen_pixels,
                                          SoftwareRasterizerScratch* scratch) const {
     const int transform_x = round_transform_offset(layer.transform.translate_x);
     const int transform_y = round_transform_offset(layer.transform.translate_y);
@@ -1682,13 +1687,14 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
             return;
         }
         Rect offscreen_bounds = has_scale_or_rotate ? source_bounds : visible_destination;
-        if (!offscreen_fits_budget(offscreen_bounds, options_)) {
+        std::size_t offscreen_pixels = 0;
+        if (!offscreen_fits_budget(offscreen_bounds, options_, active_offscreen_pixels, offscreen_pixels)) {
             if (has_scale_or_rotate) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Paint,
                                   DiagnosticSeverity::Warning,
                                   "paint-transform-budget",
-                                  "Transformed layer exceeded the offscreen pixel budget and was skipped",
+                                  "Transformed layer exceeded the aggregate live offscreen pixel budget and was skipped",
                                   std::to_string(offscreen_bounds.width) + "x" +
                                       std::to_string(offscreen_bounds.height));
                 return;
@@ -1697,7 +1703,7 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                               DiagnosticStage::Paint,
                               DiagnosticSeverity::Warning,
                               "paint-offscreen-budget",
-                              "Offscreen compositing buffer exceeded budget; layer was painted by direct opacity fallback",
+                              "Offscreen compositing buffer exceeded aggregate live budget; layer was painted by direct opacity fallback",
                               std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
             rasterize_with_opacity(rasterizer_,
                                    layer.display_list,
@@ -1709,18 +1715,37 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                    0,
                                    scratch);
             for (const auto& child : layer.children) {
-                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity, scratch);
+                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
+                                active_offscreen_pixels, scratch);
             }
             return;
         }
 
-        FrameBuffer offscreen(offscreen_bounds.width, offscreen_bounds.height, Color{0, 0, 0, 0});
+        FrameBuffer offscreen;
+        try {
+            offscreen.resize(offscreen_bounds.width, offscreen_bounds.height, Color{0, 0, 0, 0});
+        } catch (const std::bad_alloc&) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "paint-offscreen-allocation-failed",
+                              "Offscreen compositing allocation failed; layer was painted by direct opacity fallback",
+                              std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
+            rasterize_with_opacity(rasterizer_, layer.display_list, target, layer_clip,
+                                   layer_offset_x, layer_offset_y, layer_opacity, 0, scratch);
+            for (const auto& child : layer.children) {
+                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
+                                active_offscreen_pixels, scratch);
+            }
+            return;
+        }
         const int child_offset_x = layer_offset_x - offscreen_bounds.x;
         const int child_offset_y = layer_offset_y - offscreen_bounds.y;
         const Rect offscreen_clip{0, 0, offscreen_bounds.width, offscreen_bounds.height};
         rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y, scratch);
         for (const auto& child : layer.children) {
-            composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F, scratch);
+            composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F,
+                            active_offscreen_pixels + offscreen_pixels, scratch);
         }
         if (has_scale_or_rotate) {
             composite_transformed_buffer(target,
@@ -1752,7 +1777,8 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                            prefix.first_command,
                            scratch);
     for (const auto& child : layer.children) {
-        composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity, scratch);
+        composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
+                        active_offscreen_pixels, scratch);
     }
 }
 

@@ -121,8 +121,15 @@ private:
     LayerTreeBuilderOptions options_;
 
     LayerNodePtr build_with_arena(const LayoutBox& root, MonotonicArena* arena) const;
-    void trim_display_list(DisplayList& display_list) const;
-    void build_children(const LayoutBox& box, LayerNode& layer, MonotonicArena* arena) const;
+    void trim_display_list(DisplayList& display_list,
+                           std::size_t command_begin,
+                           std::size_t& remaining_commands,
+                           bool& budget_reported) const;
+    void build_children(const LayoutBox& box,
+                        LayerNode& layer,
+                        MonotonicArena* arena,
+                        std::size_t& remaining_commands,
+                        bool& display_budget_reported) const;
     LayerNodePtr make_layer_node(MonotonicArena* arena) const;
 };
 
