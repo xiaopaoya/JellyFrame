@@ -1442,8 +1442,24 @@ std::size_t find_last_top_level_semicolon(std::string_view source) {
     return result;
 }
 
-std::string replace_nesting_parent(std::string_view selector, std::string_view parent) {
-    std::string expanded;
+bool replace_nesting_parent(std::string_view selector,
+                            std::string_view parent,
+                            std::size_t max_bytes,
+                            std::string& expanded) {
+    std::size_t marker_count = 0;
+    for (char ch : selector) {
+        marker_count += ch == '&' ? 1U : 0U;
+    }
+    const std::size_t selector_without_markers = selector.size() - marker_count;
+    if (marker_count != 0 && parent.size() > (max_bytes - std::min(max_bytes, selector_without_markers)) / marker_count) {
+        return false;
+    }
+    const std::size_t expanded_size = selector_without_markers + marker_count * parent.size();
+    if (expanded_size > max_bytes) {
+        return false;
+    }
+    expanded.clear();
+    expanded.reserve(expanded_size);
     std::size_t cursor = 0;
     while (cursor < selector.size()) {
         const std::size_t marker = selector.find('&', cursor);
@@ -1455,44 +1471,79 @@ std::string replace_nesting_parent(std::string_view selector, std::string_view p
         expanded.append(parent);
         cursor = marker + 1;
     }
-    return trim(expanded);
+    expanded = trim(expanded);
+    return true;
 }
 
-void append_nesting_rule(std::string& output, std::string_view selector, std::string_view declarations) {
+struct NestingExpansionBudget {
+    std::size_t remaining_bytes = 0;
+    std::size_t max_depth = 0;
+    DiagnosticSink* diagnostics = nullptr;
+    bool reported = false;
+
+    void report(std::string_view message, std::string_view detail) {
+        if (reported) {
+            return;
+        }
+        reported = true;
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Css,
+                          DiagnosticSeverity::Warning,
+                          "css-nesting-expansion-limit",
+                          std::string(message),
+                          std::string(detail));
+    }
+
+    bool append(std::string& output, std::string_view value, std::string_view detail) {
+        if (value.size() > remaining_bytes) {
+            report("CSS nesting expansion exceeded its bounded parser budget and was truncated", detail);
+            return false;
+        }
+        output.append(value);
+        remaining_bytes -= value.size();
+        return true;
+    }
+
+    bool append_char(std::string& output, char value, std::string_view detail) {
+        return append(output, std::string_view(&value, 1), detail);
+    }
+};
+
+bool append_nesting_rule(std::string& output,
+                         std::string_view selector,
+                         std::string_view declarations,
+                         NestingExpansionBudget& budget) {
     if (trim(declarations).empty()) {
-        return;
+        return true;
     }
-    output.append(selector);
-    output.push_back('{');
-    output.append(declarations);
-    output.push_back('}');
+    const std::size_t required = selector.size() + declarations.size() + 2;
+    if (required > budget.remaining_bytes) {
+        budget.report("CSS nesting expansion exceeded its bounded parser budget and was truncated", selector);
+        return false;
+    }
+    return budget.append(output, selector, selector) && budget.append_char(output, '{', selector) &&
+           budget.append(output, declarations, selector) && budget.append_char(output, '}', selector);
 }
 
-std::string expand_single_level_nesting_rule(std::string_view parent_selector,
-                                             std::string_view body,
-                                             DiagnosticSink* diagnostics) {
+bool expand_single_level_nesting_rule(std::string_view parent_selector,
+                                      std::string_view body,
+                                      std::string& output,
+                                      NestingExpansionBudget& budget) {
     if (body.find('&') == std::string_view::npos) {
-        std::string unchanged(parent_selector);
-        unchanged.push_back('{');
-        unchanged.append(body);
-        unchanged.push_back('}');
-        return unchanged;
+        return append_nesting_rule(output, parent_selector, body, budget);
     }
 
-    std::string output;
     std::size_t cursor = 0;
     while (true) {
         const std::size_t open_brace = find_top_level_open_brace(body, cursor);
         if (open_brace == std::string_view::npos) {
-            append_nesting_rule(output, parent_selector, body.substr(cursor));
-            break;
+            return append_nesting_rule(output, parent_selector, body.substr(cursor), budget);
         }
         const std::size_t close_brace = find_matching_brace(body, open_brace);
         if (close_brace == std::string_view::npos) {
-            report_diagnostic(diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
+            report_diagnostic(budget.diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
                               "css-nesting-skipped", "Malformed nested CSS block was skipped", std::string(parent_selector));
-            append_nesting_rule(output, parent_selector, body.substr(cursor, open_brace - cursor));
-            break;
+            return append_nesting_rule(output, parent_selector, body.substr(cursor, open_brace - cursor), budget);
         }
         const std::string_view prefix = body.substr(cursor, open_brace - cursor);
         const std::size_t semicolon = find_last_top_level_semicolon(prefix);
@@ -1502,13 +1553,15 @@ std::string expand_single_level_nesting_rule(std::string_view parent_selector,
         const std::string nested_selector = trim(semicolon == std::string_view::npos
             ? prefix
             : prefix.substr(semicolon + 1));
-        append_nesting_rule(output, parent_selector, declarations);
+        if (!append_nesting_rule(output, parent_selector, declarations, budget)) {
+            return false;
+        }
 
         const std::string_view nested_body = body.substr(open_brace + 1, close_brace - open_brace - 1);
         const bool valid_nested_selector = !nested_selector.empty() && nested_selector.find('&') != std::string::npos &&
             nested_selector.front() != '@' && find_top_level_open_brace(nested_body, 0) == std::string_view::npos;
         if (!valid_nested_selector) {
-            report_diagnostic(diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
+            report_diagnostic(budget.diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
                               "css-nesting-skipped", "Nested CSS is outside the explicit single-level '&' subset",
                               nested_selector.empty() ? std::string(parent_selector) : nested_selector);
         } else {
@@ -1516,57 +1569,73 @@ std::string expand_single_level_nesting_rule(std::string_view parent_selector,
             const std::vector<std::string> nested_selectors = split_top_level_commas(nested_selector);
             constexpr std::size_t kMaxExpandedSelectors = 16;
             if (parents.empty() || nested_selectors.empty() || parents.size() * nested_selectors.size() > kMaxExpandedSelectors) {
-                report_diagnostic(diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
+                report_diagnostic(budget.diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
                                   "css-nesting-skipped", "Nested selector expansion exceeded the bounded subset",
                                   nested_selector);
             } else {
                 for (const std::string& parent : parents) {
                     for (const std::string& nested : nested_selectors) {
-                        append_nesting_rule(output, replace_nesting_parent(nested, trim(parent)), nested_body);
+                        std::string expanded_selector;
+                        if (!replace_nesting_parent(nested, trim(parent), budget.remaining_bytes, expanded_selector) ||
+                            !append_nesting_rule(output, expanded_selector, nested_body, budget)) {
+                            budget.report("CSS nesting selector expansion exceeded its bounded parser budget", nested);
+                            return false;
+                        }
                     }
                 }
             }
         }
         cursor = close_brace + 1;
     }
-    return output;
+    return true;
 }
 
-std::string expand_single_level_css_nesting(std::string_view source, DiagnosticSink* diagnostics) {
+bool expand_single_level_css_nesting(std::string_view source,
+                                     std::string& output,
+                                     NestingExpansionBudget& budget,
+                                     std::size_t depth) {
     if (source.find('&') == std::string_view::npos) {
-        return {};
+        return budget.append(output, source, {});
     }
-    std::string output;
+    if (depth >= budget.max_depth) {
+        budget.report("CSS nesting exceeded its bounded parser depth and was skipped", {});
+        return false;
+    }
     std::size_t cursor = 0;
     while (cursor < source.size()) {
         const std::size_t open_brace = find_top_level_open_brace(source, cursor);
         if (open_brace == std::string_view::npos) {
-            output.append(source.substr(cursor));
-            break;
+            return budget.append(output, source.substr(cursor), {});
         }
         const std::size_t close_brace = find_matching_brace(source, open_brace);
         if (close_brace == std::string_view::npos) {
-            output.append(source.substr(cursor));
-            break;
+            return budget.append(output, source.substr(cursor), {});
         }
         const std::string_view prelude = source.substr(cursor, open_brace - cursor);
         const std::string trimmed_prelude = trim(prelude);
         const std::string_view body = source.substr(open_brace + 1, close_brace - open_brace - 1);
         if (!trimmed_prelude.empty() && trimmed_prelude.front() == '@') {
-            output.append(prelude);
-            output.push_back('{');
-            if (body.find('&') == std::string_view::npos) {
-                output.append(body);
-            } else {
-                output.append(expand_single_level_css_nesting(body, diagnostics));
+            if (!budget.append(output, prelude, trimmed_prelude) || !budget.append_char(output, '{', trimmed_prelude)) {
+                return false;
             }
-            output.push_back('}');
+            if (body.find('&') == std::string_view::npos) {
+                if (!budget.append(output, body, trimmed_prelude)) {
+                    return false;
+                }
+            } else if (!expand_single_level_css_nesting(body, output, budget, depth + 1)) {
+                return false;
+            }
+            if (!budget.append_char(output, '}', trimmed_prelude)) {
+                return false;
+            }
         } else {
-            output.append(expand_single_level_nesting_rule(prelude, body, diagnostics));
+            if (!expand_single_level_nesting_rule(prelude, body, output, budget)) {
+                return false;
+            }
         }
         cursor = close_brace + 1;
     }
-    return output;
+    return true;
 }
 
 class CssParserRun {
@@ -2216,9 +2285,15 @@ Stylesheet CssParser::parse(const std::string& source, const CssParserOptions& o
                           "Keep stylesheet resources within the target parser budget.");
     }
     const bool uses_nesting_marker = bounded_source.find('&') != std::string_view::npos;
-    const std::string expanded = uses_nesting_marker
-        ? expand_single_level_css_nesting(bounded_source, options.diagnostics)
-        : std::string{};
+    std::string expanded;
+    if (uses_nesting_marker) {
+        const std::size_t expansion_limit = options.max_nesting_expansion_bytes == 0
+            ? options.max_input_bytes
+            : options.max_nesting_expansion_bytes;
+        NestingExpansionBudget budget{expansion_limit, options.max_nesting_depth, options.diagnostics};
+        expanded.reserve(std::min(bounded_source.size(), expansion_limit));
+        expand_single_level_css_nesting(bounded_source, expanded, budget, 0);
+    }
     CssParserRun run(uses_nesting_marker ? std::string_view(expanded) : bounded_source, options);
     return run.parse();
 }

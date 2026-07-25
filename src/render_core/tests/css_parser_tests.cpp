@@ -98,6 +98,24 @@ void rejects_nested_css_outside_explicit_single_level_subset() {
           "unsupported nesting reports a stable diagnostic");
 }
 
+void nesting_preprocessor_respects_depth_and_output_budgets() {
+    CssParser parser;
+    VectorDiagnosticSink diagnostics;
+    CssParserOptions options;
+    options.diagnostics = &diagnostics;
+    options.max_nesting_depth = 2;
+    options.max_nesting_expansion_bytes = 96;
+    const Stylesheet stylesheet = parser.parse(
+        ".before { color: #123456; }"
+        "@media screen { @media screen { @media screen { .card { &:hover { color: #ff0000; } } } } }",
+        options);
+
+    check(!stylesheet.empty() && stylesheet[0].selector == ".before",
+          "nesting budget failure retains already expanded safe rules");
+    check(has_diagnostic_code(diagnostics, "css-nesting-expansion-limit"),
+          "nesting preprocessor reports bounded depth or output expansion");
+}
+
 void skips_enhancement_blocks_without_corrupting_following_rules() {
     const Stylesheet stylesheet = parse(
         "@supports (color: oklch(50% 0.2 30)) { .modern { color: oklch(50% 0.2 30); } }"
@@ -1355,6 +1373,32 @@ void parser_limits_unbounded_css_fields_without_losing_following_rules() {
     check(has_diagnostic_code(diagnostics, "css-declaration-value-limit"), "declaration value cap is reported");
 }
 
+void nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks() {
+    auto element = make_element("div");
+    element->attributes["class"] = "bounded";
+    StyleResolver resolver(parse(
+        ".bounded {"
+        " width: 24px; width: 1e20px;"
+        " height: 18px; height: nanpx;"
+        " opacity: 0.75; opacity: inf;"
+        " line-height: 2; line-height: 1e20;"
+        " transform: translate(12px, 4px); transform: translate(infpx, 0);"
+        " transform-origin: 25% 75%; transform-origin: nan% 0%;"
+        "}"));
+
+    const Style style = resolver.resolve(*element);
+    check(style.width == 24 && style.height == 18,
+          "nonfinite or out-of-range lengths preserve the earlier declaration");
+    check(style.opacity == 0.75F, "nonfinite opacity preserves the earlier declaration");
+    check(style.line_height == 28, "out-of-range line-height preserves the earlier declaration");
+    Transform2D transform;
+    check(parse_css_transform_2d(style.transform, transform) &&
+              transform.translate_x == 12.0F && transform.translate_y == 4.0F,
+          "nonfinite transforms preserve the earlier declaration");
+    check(style.transform_origin_x_percent == 25 && style.transform_origin_y_percent == 75,
+          "nonfinite transform origins preserve the earlier declaration");
+}
+
 void text_overflow_is_specified_but_not_inherited_by_nested_elements() {
     auto parent = make_element("div");
     parent->attributes["class"] = "parent";
@@ -1383,6 +1427,7 @@ int main() {
         splits_selector_lists();
         expands_single_level_explicit_css_nesting();
         rejects_nested_css_outside_explicit_single_level_subset();
+        nesting_preprocessor_respects_depth_and_output_budgets();
         skips_enhancement_blocks_without_corrupting_following_rules();
         pipeline_diagnostics_report_css_and_style_degradation();
         supports_queries_flatten_safe_declaration_subset();
@@ -1438,6 +1483,7 @@ int main() {
         style_candidate_cache_respects_tiny_budget_and_inline_style();
         style_candidate_cache_ignores_irrelevant_identifiers();
         parser_limits_unbounded_css_fields_without_losing_following_rules();
+        nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks();
         text_overflow_is_specified_but_not_inherited_by_nested_elements();
     } catch (const std::exception& error) {
         std::cerr << "css parser test failed: " << error.what() << '\n';
