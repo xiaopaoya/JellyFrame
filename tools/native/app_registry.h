@@ -18,6 +18,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace jellyframe_example {
 
 struct InstalledAppEntry {
@@ -657,31 +661,85 @@ inline InstalledAppEntry parse_registry_entry(std::string_view object_text) {
     return entry;
 }
 
-inline InstalledAppRegistry load_installed_app_registry(const std::filesystem::path& store) {
+inline InstalledAppRegistry parse_installed_app_registry_text(const std::string& text) {
     InstalledAppRegistry registry;
-    const std::string text = read_text_file_limited(registry_json_path(store), 1024 * 1024);
-    if (text.empty()) {
-        return registry;
+    if (!manifest_json_is_strict(text)) {
+        throw std::runtime_error("installed app registry JSON is malformed or contains duplicate member names");
     }
-    const std::size_t apps_key = text.find("\"apps\"");
-    if (apps_key == std::string::npos) {
-        return registry;
+    std::size_t apps_open = 0;
+    std::size_t apps_close = 0;
+    if (!json_find_array_range(text, "apps", apps_open, apps_close)) {
+        throw std::runtime_error("installed app registry has no valid apps array");
     }
-    const std::size_t open = text.find('[', apps_key);
-    const std::size_t close = text.rfind(']');
-    if (open == std::string::npos || close == std::string::npos || close <= open) {
-        return registry;
-    }
-    for (const std::string_view object : split_top_level_objects(std::string_view(text).substr(open + 1, close - open - 1))) {
+    for (const std::string_view object :
+         split_top_level_objects(std::string_view(text).substr(apps_open + 1, apps_close - apps_open - 2))) {
         InstalledAppEntry entry = parse_registry_entry(object);
-        if (!entry.id.empty() && !entry.bundle_file.empty()) {
-            registry.apps.push_back(std::move(entry));
+        if (entry.id.empty() || entry.bundle_file.empty()) {
+            throw std::runtime_error("installed app registry contains an incomplete app entry");
         }
+        registry.apps.push_back(std::move(entry));
     }
     std::sort(registry.apps.begin(), registry.apps.end(), [](const InstalledAppEntry& left, const InstalledAppEntry& right) {
         return left.id < right.id;
     });
     return registry;
+}
+
+inline void replace_registry_file(const std::filesystem::path& temporary,
+                                  const std::filesystem::path& destination) {
+#ifdef _WIN32
+    if (::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
+        throw std::runtime_error("failed to atomically replace registry: " + std::to_string(::GetLastError()));
+    }
+#else
+    std::error_code error;
+    std::filesystem::rename(temporary, destination, error);
+    if (error) {
+        throw std::runtime_error("failed to atomically replace registry: " + error.message());
+    }
+#endif
+}
+
+inline InstalledAppRegistry load_installed_app_registry(const std::filesystem::path& store) {
+    const std::filesystem::path path = registry_json_path(store);
+    const std::filesystem::path temporary = path.string() + ".tmp";
+    std::error_code error;
+    const bool registry_exists = std::filesystem::exists(path, error);
+    if (error) {
+        throw std::runtime_error("failed to inspect installed app registry: " + error.message());
+    }
+    if (registry_exists) {
+        if (!std::filesystem::is_regular_file(path, error) || error) {
+            throw std::runtime_error("installed app registry is not a regular file");
+        }
+        const std::string text = read_text_file_limited(path, 1024 * 1024);
+        if (text.empty()) {
+            throw std::runtime_error("installed app registry is empty or unreadable");
+        }
+        return parse_installed_app_registry_text(text);
+    }
+
+    error.clear();
+    const bool temporary_exists = std::filesystem::exists(temporary, error);
+    if (error) {
+        throw std::runtime_error("failed to inspect registry recovery file: " + error.message());
+    }
+    if (!temporary_exists) {
+        return InstalledAppRegistry{};
+    }
+    if (!std::filesystem::is_regular_file(temporary, error) || error) {
+        if (error) {
+            throw std::runtime_error("failed to inspect registry recovery file: " + error.message());
+        }
+        throw std::runtime_error("registry recovery file is not a regular file");
+    }
+    const std::string text = read_text_file_limited(temporary, 1024 * 1024);
+    if (text.empty()) {
+        throw std::runtime_error("registry recovery file is empty or unreadable");
+    }
+    InstalledAppRegistry recovered = parse_installed_app_registry_text(text);
+    replace_registry_file(temporary, path);
+    return recovered;
 }
 
 inline RegistryStorageRecovery recover_registry_storage(const std::filesystem::path& store,
@@ -799,10 +857,15 @@ inline void write_installed_app_registry(const std::filesystem::path& store, con
     }
     output << "  ]\n";
     output << "}\n";
+    output.flush();
+    if (!output) {
+        throw std::runtime_error("failed to write registry");
+    }
     output.close();
-    std::error_code remove_error;
-    std::filesystem::remove(registry_json_path(store), remove_error);
-    std::filesystem::rename(temp_path, registry_json_path(store));
+    if (!output) {
+        throw std::runtime_error("failed to close registry");
+    }
+    replace_registry_file(temp_path, registry_json_path(store));
 }
 
 inline std::filesystem::path installed_app_bundle_path(const std::filesystem::path& store,

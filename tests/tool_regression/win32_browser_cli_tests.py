@@ -44,8 +44,15 @@ def read_bmp_rgb(path: Path, x: int, y: int) -> tuple[int, int, int]:
     return red, green, blue
 
 
-def write_jfapp(path: Path, app_id: str, version_code: int, version_name: str, entry: str) -> None:
-    summary = json.dumps(
+def write_jfapp(
+    path: Path,
+    app_id: str,
+    version_code: int,
+    version_name: str,
+    entry: str,
+    summary_text: str | None = None,
+) -> None:
+    summary = (summary_text.encode("utf-8") if summary_text is not None else json.dumps(
         {
             "id": app_id,
             "name": "Rollback Probe",
@@ -55,7 +62,7 @@ def write_jfapp(path: Path, app_id: str, version_code: int, version_name: str, e
             "script": "classic",
         },
         separators=(",", ":"),
-    ).encode("utf-8")
+    ).encode("utf-8"))
     summary_offset = JFAPP_HEADER_SIZE
     summary_size = len(summary)
     index_offset = summary_offset + summary_size
@@ -328,6 +335,39 @@ def main() -> int:
         app = registry["apps"][0]
         require((bundles / app["bundleFile"]).is_file(), "registry recovery must retain the current bundle")
         require((bundles / app["rollback"]["bundleFile"]).is_file(), "registry recovery must retain the rollback bundle")
+
+        registry_file = store / "registry.json"
+        registry_tmp = store / "registry.json.tmp"
+        registry_file.replace(registry_tmp)
+        tmp_recovery = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(second)])
+        require(tmp_recovery.returncode == 0, "native registry must recover a valid interrupted registry write")
+        require(registry_file.is_file() and not registry_tmp.exists(),
+                "native registry recovery must restore the valid temporary registry before mutation")
+        registry = json.loads(registry_file.read_text(encoding="utf-8"))
+        app = registry["apps"][0]
+        preserved_bundles = {entry.name for entry in bundles.glob("*.jfapp")}
+        registry_file.write_text("{ not valid JSON", encoding="utf-8")
+        corrupt_result = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(first)])
+        require(corrupt_result.returncode != 0, "native registry must reject a corrupt registry before cleanup")
+        require({entry.name for entry in bundles.glob("*.jfapp")} == preserved_bundles,
+                "corrupt registry must not trigger orphan bundle deletion")
+        registry_file.write_text(json.dumps(registry), encoding="utf-8")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-duplicate-summary-") as directory:
+        bundle = Path(directory) / "duplicate.jfapp"
+        write_jfapp(
+            bundle,
+            "org.jellyframe.duplicate-probe",
+            1,
+            "1.0.0",
+            "/index.html",
+            '{"id":"org.jellyframe.duplicate-probe","capabilities":["network.fetch"],"capabilities":[]}',
+        )
+        duplicate_result = run_case(exe, ["--registry-store", str(Path(directory) / "store"),
+                                          "--install-bundle", str(bundle)])
+        require(duplicate_result.returncode != 0, "native registry must reject duplicate manifest members")
+        require("duplicate" in duplicate_result.stdout.lower(),
+                "native duplicate manifest rejection must explain the malformed summary")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-install-candidate-") as directory:
         root = Path(directory)

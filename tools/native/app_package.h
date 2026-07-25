@@ -514,6 +514,218 @@ inline bool load_package_script(std::string_view src, std::string& output, void*
     return load_package_resource(src, {}, output, context);
 }
 
+class ManifestJsonValidator {
+public:
+    explicit ManifestJsonValidator(std::string_view source) : source_(source) {}
+
+    bool validate() {
+        skip_space();
+        return parse_object(0) && (skip_space(), index_ == source_.size());
+    }
+
+private:
+    void skip_space() {
+        while (index_ < source_.size() && std::isspace(static_cast<unsigned char>(source_[index_])) != 0) {
+            ++index_;
+        }
+    }
+
+    bool consume(char expected) {
+        if (index_ >= source_.size() || source_[index_] != expected) {
+            return false;
+        }
+        ++index_;
+        return true;
+    }
+
+    bool parse_string(std::string* member_name = nullptr) {
+        if (!consume('"')) {
+            return false;
+        }
+        while (index_ < source_.size()) {
+            const unsigned char ch = static_cast<unsigned char>(source_[index_++]);
+            if (ch < 0x20) {
+                return false;
+            }
+            if (ch == '"') {
+                return true;
+            }
+            if (ch != '\\') {
+                if (member_name != nullptr) {
+                    member_name->push_back(static_cast<char>(ch));
+                }
+                continue;
+            }
+            if (index_ >= source_.size()) {
+                return false;
+            }
+            const char escape = source_[index_++];
+            if (escape == 'u') {
+                for (int digit = 0; digit < 4; ++digit) {
+                    if (index_ >= source_.size() ||
+                        std::isxdigit(static_cast<unsigned char>(source_[index_++])) == 0) {
+                        return false;
+                    }
+                }
+            } else if (escape != '"' && escape != '\\' && escape != '/' && escape != 'b' && escape != 'f' &&
+                       escape != 'n' && escape != 'r' && escape != 't') {
+                return false;
+            }
+            // Schema field names are ASCII and must not use escape aliases. This
+            // makes duplicate-key rejection identical in native and Python paths.
+            if (member_name != nullptr) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    bool parse_number() {
+        const std::size_t begin = index_;
+        if (index_ < source_.size() && source_[index_] == '-') {
+            ++index_;
+        }
+        if (index_ >= source_.size()) {
+            return false;
+        }
+        if (source_[index_] == '0') {
+            ++index_;
+        } else if (source_[index_] >= '1' && source_[index_] <= '9') {
+            do {
+                ++index_;
+            } while (index_ < source_.size() && std::isdigit(static_cast<unsigned char>(source_[index_])) != 0);
+        } else {
+            return false;
+        }
+        if (index_ < source_.size() && source_[index_] == '.') {
+            ++index_;
+            const std::size_t fraction_begin = index_;
+            while (index_ < source_.size() && std::isdigit(static_cast<unsigned char>(source_[index_])) != 0) {
+                ++index_;
+            }
+            if (index_ == fraction_begin) {
+                return false;
+            }
+        }
+        if (index_ < source_.size() && (source_[index_] == 'e' || source_[index_] == 'E')) {
+            ++index_;
+            if (index_ < source_.size() && (source_[index_] == '+' || source_[index_] == '-')) {
+                ++index_;
+            }
+            const std::size_t exponent_begin = index_;
+            while (index_ < source_.size() && std::isdigit(static_cast<unsigned char>(source_[index_])) != 0) {
+                ++index_;
+            }
+            if (index_ == exponent_begin) {
+                return false;
+            }
+        }
+        return index_ > begin;
+    }
+
+    bool parse_literal(std::string_view literal) {
+        if (source_.substr(index_, literal.size()) != literal) {
+            return false;
+        }
+        index_ += literal.size();
+        return true;
+    }
+
+    bool parse_array(std::size_t depth) {
+        if (!consume('[')) {
+            return false;
+        }
+        skip_space();
+        if (consume(']')) {
+            return true;
+        }
+        for (;;) {
+            if (!parse_value(depth + 1)) {
+                return false;
+            }
+            skip_space();
+            if (consume(']')) {
+                return true;
+            }
+            if (!consume(',')) {
+                return false;
+            }
+            skip_space();
+        }
+    }
+
+    bool parse_object(std::size_t depth) {
+        if (depth > kMaxDepth || !consume('{')) {
+            return false;
+        }
+        skip_space();
+        if (consume('}')) {
+            return true;
+        }
+        std::vector<std::string> names;
+        for (;;) {
+            std::string name;
+            if (!parse_string(&name)) {
+                return false;
+            }
+            for (const std::string& existing : names) {
+                if (existing == name) {
+                    return false;
+                }
+            }
+            names.push_back(std::move(name));
+            skip_space();
+            if (!consume(':')) {
+                return false;
+            }
+            skip_space();
+            if (!parse_value(depth + 1)) {
+                return false;
+            }
+            skip_space();
+            if (consume('}')) {
+                return true;
+            }
+            if (!consume(',')) {
+                return false;
+            }
+            skip_space();
+        }
+    }
+
+    bool parse_value(std::size_t depth) {
+        if (depth > kMaxDepth || index_ >= source_.size()) {
+            return false;
+        }
+        switch (source_[index_]) {
+        case '{':
+            return parse_object(depth);
+        case '[':
+            return parse_array(depth);
+        case '"':
+            return parse_string();
+        case 't':
+            return parse_literal("true");
+        case 'f':
+            return parse_literal("false");
+        case 'n':
+            return parse_literal("null");
+        default:
+            return source_[index_] == '-' || std::isdigit(static_cast<unsigned char>(source_[index_])) != 0
+                ? parse_number()
+                : false;
+        }
+    }
+
+    static constexpr std::size_t kMaxDepth = 32;
+    std::string_view source_;
+    std::size_t index_ = 0;
+};
+
+inline bool manifest_json_is_strict(std::string_view source) {
+    return ManifestJsonValidator(source).validate();
+}
+
 // Finds a direct member of one JSON object. This remains deliberately small
 // because package_app.py owns schema validation, but it must not confuse an
 // identically named nested field with a manifest field.
@@ -694,6 +906,46 @@ inline bool json_find_object_range(std::string_view json,
     return false;
 }
 
+inline bool json_find_array_range(std::string_view json,
+                                  std::string_view key,
+                                  std::size_t& array_open,
+                                  std::size_t& array_close) {
+    std::size_t open = 0;
+    if (!json_find_direct_value(json, key, open) || open >= json.size() || json[open] != '[') {
+        return false;
+    }
+
+    int depth = 0;
+    bool in_string = false;
+    bool escaped = false;
+    for (std::size_t index = open; index < json.size(); ++index) {
+        const char ch = json[index];
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '[') {
+            ++depth;
+        } else if (ch == ']') {
+            --depth;
+            if (depth == 0) {
+                array_open = open;
+                array_close = index + 1;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 inline bool json_find_bool(std::string_view json, std::string_view key, bool& value) {
     std::size_t index = 0;
     if (!json_find_direct_value(json, key, index)) {
@@ -860,6 +1112,9 @@ inline std::vector<std::string> json_collect_object_string_values(const std::str
 }
 
 inline AppPackageManifest parse_app_manifest_text(const std::string& json) {
+    if (!manifest_json_is_strict(json)) {
+        throw std::runtime_error("manifest JSON is malformed, too deeply nested, or contains duplicate/escaped member names");
+    }
     AppPackageManifest manifest;
     json_find_string(json, "id", manifest.id);
     json_find_string(json, "name", manifest.name);

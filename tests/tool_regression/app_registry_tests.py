@@ -27,9 +27,10 @@ def write_jfapp(
     script: str = "classic",
     capabilities: list[str] | None = None,
     network_allowed: bool = False,
+    summary_text: str | None = None,
 ) -> None:
     capabilities = [] if capabilities is None else capabilities
-    summary = json.dumps({
+    summary = (summary_text.encode("utf-8") if summary_text is not None else json.dumps({
         "id": app_id,
         "name": "Weather",
         "role": "app",
@@ -59,7 +60,7 @@ def write_jfapp(
         "systemWeatherAllowed": False,
         "systemActivityAllowed": False,
         "backgroundServices": {},
-    }, separators=(",", ":")).encode("utf-8")
+    }, separators=(",", ":")).encode("utf-8"))
     summary_offset = app_registry.JFAPP_HEADER_SIZE
     summary_size = len(summary)
     index_offset = summary_offset + summary_size
@@ -203,6 +204,19 @@ def write_registry(store: Path, app_id: str = "org.example.weather") -> None:
 
 
 class AppRegistryTests(unittest.TestCase):
+    def test_install_rejects_duplicate_summary_member_before_registry_mutation(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-duplicate-summary-") as directory:
+            root = Path(directory)
+            bundle = root / "duplicate.jfapp"
+            write_jfapp(bundle, summary_text='{"id":"org.example.duplicate","capabilities":["network.fetch"],"capabilities":[]}')
+
+            with self.assertRaisesRegex(SystemExit, "duplicate JSON object member: capabilities"):
+                app_registry.install_bundle(root / "store",
+                                            bundle,
+                                            app_registry.DEFAULT_MAX_APPS,
+                                            app_registry.DEFAULT_MAX_BUNDLE_BYTES)
+            self.assertFalse((root / "store" / "registry.json").exists())
+
     def test_install_rejects_capability_projection_drift_before_registry_mutation(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-summary-drift-") as directory:
             root = Path(directory)

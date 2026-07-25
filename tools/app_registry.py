@@ -64,12 +64,24 @@ def sanitize_filename(value: str) -> str:
     return cleaned or "app"
 
 
+def strict_json_loads(text: str) -> object:
+    def reject_duplicate_members(pairs: list[tuple[str, object]]) -> dict:
+        value: dict = {}
+        for key, member in pairs:
+            if key in value:
+                raise ValueError(f"duplicate JSON object member: {key}")
+            value[key] = member
+        return value
+
+    return json.loads(text, object_pairs_hook=reject_duplicate_members)
+
+
 def read_json(path: Path, max_bytes: int | None = None) -> dict:
     try:
         if max_bytes is not None and path.stat().st_size > max_bytes:
             fail(f"JSON exceeds max bytes: {path}")
-        value = json.loads(path.read_text(encoding="utf-8-sig"))
-    except json.JSONDecodeError as error:
+        value = strict_json_loads(path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, ValueError) as error:
         fail(f"invalid JSON {path}: {error}")
     if not isinstance(value, dict):
         fail(f"JSON root must be an object: {path}")
@@ -321,8 +333,8 @@ def parse_jfapp(bundle: bytes) -> dict:
             fail(f".jfapp resource index entry {index} payload is out of range")
     summary_text = bundle[summary_offset:summary_offset + summary_size].decode("utf-8")
     try:
-        summary = json.loads(summary_text)
-    except json.JSONDecodeError as error:
+        summary = strict_json_loads(summary_text)
+    except (json.JSONDecodeError, ValueError) as error:
         fail(f".jfapp summary JSON is invalid: {error}")
     summary = validate_bundle_summary(summary)
     return {
