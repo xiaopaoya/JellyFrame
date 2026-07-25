@@ -2,6 +2,7 @@
 
 #include "render_core/diagnostics.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -947,6 +948,58 @@ inline bool json_find_array_range(std::string_view json,
     return false;
 }
 
+inline bool json_collect_string_array(std::string_view json,
+                                      std::string_view key,
+                                      std::vector<std::string>& values) {
+    std::size_t open = 0;
+    std::size_t close = 0;
+    if (!json_find_array_range(json, key, open, close)) {
+        return false;
+    }
+
+    const auto skip_whitespace = [&](std::size_t& index) {
+        while (index < close && std::isspace(static_cast<unsigned char>(json[index])) != 0) {
+            ++index;
+        }
+    };
+    std::size_t index = open + 1;
+    skip_whitespace(index);
+    if (index == close - 1) {
+        return true;
+    }
+    while (index < close - 1) {
+        if (json[index] != '"') {
+            return false;
+        }
+        ++index;
+        const std::size_t value_begin = index;
+        while (index < close - 1 && json[index] != '"') {
+            // Capability identifiers are emitted unescaped by the packager.
+            // Reject escapes here instead of accepting a representation the
+            // native loader cannot compare byte-for-byte with its policy keys.
+            if (json[index] == '\\') {
+                return false;
+            }
+            ++index;
+        }
+        if (index == close - 1) {
+            return false;
+        }
+        values.emplace_back(json.substr(value_begin, index - value_begin));
+        ++index;
+        skip_whitespace(index);
+        if (index == close - 1) {
+            return true;
+        }
+        if (json[index] != ',') {
+            return false;
+        }
+        ++index;
+        skip_whitespace(index);
+    }
+    return false;
+}
+
 inline bool json_find_bool(std::string_view json, std::string_view key, bool& value) {
     std::size_t index = 0;
     if (!json_find_direct_value(json, key, index)) {
@@ -1126,12 +1179,20 @@ inline void validate_normalized_bundle_summary(const std::string& json, const Ap
     if (!json_find_int(json, "versionCode", version_code) || version_code < 0) {
         throw std::runtime_error(".jfapp summary versionCode must be a non-negative integer");
     }
-    for (const std::string_view key : {"permissions", "capabilities", "fonts"}) {
-        std::size_t open = 0;
-        std::size_t close = 0;
-        if (!json_find_array_range(json, key, open, close)) {
-            throw std::runtime_error(".jfapp summary " + std::string(key) + " must be an array");
-        }
+    std::vector<std::string> permissions;
+    std::vector<std::string> capabilities;
+    if (!json_collect_string_array(json, "permissions", permissions) ||
+        std::any_of(permissions.begin(), permissions.end(), [](const std::string& value) { return value.empty(); })) {
+        throw std::runtime_error(".jfapp summary permissions must be a string array");
+    }
+    if (!json_collect_string_array(json, "capabilities", capabilities) ||
+        std::any_of(capabilities.begin(), capabilities.end(), [](const std::string& value) { return value.empty(); })) {
+        throw std::runtime_error(".jfapp summary capabilities must be a string array");
+    }
+    std::size_t fonts_open = 0;
+    std::size_t fonts_close = 0;
+    if (!json_find_array_range(json, "fonts", fonts_open, fonts_close)) {
+        throw std::runtime_error(".jfapp summary fonts must be an array");
     }
     for (const std::string_view key : {"viewport", "budgets", "targets", "backgroundServices"}) {
         std::size_t open = 0;
@@ -1148,22 +1209,32 @@ inline void validate_normalized_bundle_summary(const std::string& json, const Ap
         throw std::runtime_error(".jfapp summary script is invalid");
     }
 
+    std::string raw_entry;
+    if (!json_find_string(json, "entry", raw_entry) || raw_entry != manifest.entry) {
+        throw std::runtime_error(".jfapp summary entry must be a normalized absolute app path");
+    }
+    const auto has_capability = [&](std::string_view value) {
+        return std::find(capabilities.begin(), capabilities.end(), value) != capabilities.end();
+    };
+    const auto has_permission = [&](std::string_view value) {
+        return std::find(permissions.begin(), permissions.end(), value) != permissions.end();
+    };
+
     const std::pair<std::string_view, bool> projections[] = {
-        {"computeJobsAllowed", json_array_contains_string(json, "capabilities", "compute.jobs")},
-        {"videoFrameAllowed", json_array_contains_string(json, "capabilities", "media.video.frame")},
-        {"networkAllowed", json_array_contains_string(json, "permissions", "network") ||
-                               json_array_contains_string(json, "capabilities", "network.fetch")},
-        {"storageKvAllowed", manifest.storage_kv_allowed},
-        {"canvas2dAllowed", json_array_contains_string(json, "capabilities", "graphics.canvas2d")},
-        {"audioPlaybackAllowed", manifest.audio_playback_allowed},
-        {"sensorAccelerometerAllowed", manifest.sensor_accelerometer_allowed},
-        {"sensorGyroscopeAllowed", manifest.sensor_gyroscope_allowed},
-        {"sensorHeartRateAllowed", manifest.sensor_heart_rate_allowed},
-        {"sensorAmbientLightAllowed", manifest.sensor_ambient_light_allowed},
-        {"locationPositionAllowed", manifest.location_position_allowed},
-        {"systemBatteryAllowed", manifest.system_battery_allowed},
-        {"systemWeatherAllowed", manifest.system_weather_allowed},
-        {"systemActivityAllowed", manifest.system_activity_allowed},
+        {"computeJobsAllowed", has_capability("compute.jobs")},
+        {"videoFrameAllowed", has_capability("media.video.frame")},
+        {"networkAllowed", has_permission("network") || has_capability("network.fetch")},
+        {"storageKvAllowed", has_capability("storage.kv")},
+        {"canvas2dAllowed", has_capability("graphics.canvas2d")},
+        {"audioPlaybackAllowed", has_capability("media.audio.playback")},
+        {"sensorAccelerometerAllowed", has_capability("sensor.accelerometer")},
+        {"sensorGyroscopeAllowed", has_capability("sensor.gyroscope")},
+        {"sensorHeartRateAllowed", has_capability("sensor.heart-rate")},
+        {"sensorAmbientLightAllowed", has_capability("sensor.ambient-light")},
+        {"locationPositionAllowed", has_capability("location.position")},
+        {"systemBatteryAllowed", has_capability("system.battery")},
+        {"systemWeatherAllowed", has_capability("system.weather")},
+        {"systemActivityAllowed", has_capability("system.activity")},
     };
     for (const auto& projection : projections) {
         bool declared = false;

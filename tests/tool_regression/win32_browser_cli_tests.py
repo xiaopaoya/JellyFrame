@@ -51,7 +51,7 @@ def write_jfapp(
     version_name: str,
     entry: str,
     summary_text: str | None = None,
-    capabilities: list[str] | None = None,
+    capabilities: list[object] | None = None,
     network_allowed: bool | None = None,
 ) -> None:
     declared_capabilities = capabilities or []
@@ -413,6 +413,36 @@ def main() -> int:
                 "native loader must reject a capability projection that disagrees with the summary arrays")
         require("networkAllowed does not match permissions/capabilities" in drift_result.stdout,
                 "native capability projection rejection must name the inconsistent summary field")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-summary-array-shape-") as directory:
+        bundle = Path(directory) / "array-shape.jfapp"
+        write_jfapp(bundle,
+                    "org.jellyframe.array-shape",
+                    1,
+                    "1.0.0",
+                    "/index.html",
+                    capabilities=[{"capability": "network.fetch"}],
+                    network_allowed=True)
+        shape_result = run_case(exe, ["--registry-store", str(Path(directory) / "store"),
+                                      "--install-bundle", str(bundle)])
+        require(shape_result.returncode != 0,
+                "native loader must reject a non-string capability array member")
+        require("capabilities must be a string array" in shape_result.stdout,
+                "native array-shape rejection must name the malformed summary field")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-summary-entry-normalization-") as directory:
+        bundle = Path(directory) / "entry-normalization.jfapp"
+        write_jfapp(bundle,
+                    "org.jellyframe.entry-normalization",
+                    1,
+                    "1.0.0",
+                    "/pages/../index.html")
+        entry_result = run_case(exe, ["--registry-store", str(Path(directory) / "store"),
+                                      "--install-bundle", str(bundle)])
+        require(entry_result.returncode != 0,
+                "native loader must reject a non-normalized summary entry path")
+        require("entry must be a normalized absolute app path" in entry_result.stdout,
+                "native entry rejection must name the malformed summary field")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-install-candidate-") as directory:
         root = Path(directory)
