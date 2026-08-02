@@ -10,6 +10,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 新增构建期 `forms.advanced` Render Core family 门控。关闭 profile 仍保留基础表单控件，
+  但 C++ API 走安全 no-op stub、不执行 submit/reset 默认动作、JerryScript 不暴露高级表单 API，
+  并在生成 profile 与 link-map 证据中记录该选择。
+
 - link-map 报告现在明确将 `css.flex-grid` 标记为不适用 object-marker 验证：该 family
   在共享 translation unit 内编译门控，仍必须以生成 profile 和 ON/OFF 行为测试作为证据。
 

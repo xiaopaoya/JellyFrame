@@ -10,6 +10,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Added the build-time `forms.advanced` Render Core family gate. Disabled
+  profiles retain basic form controls but link safe C++ no-op stubs, do not run
+  submit/reset default actions, omit the advanced JerryScript form APIs, and
+  record the choice in the generated profile and link-map evidence.
+
 - Link-map reports now explicitly classify `css.flex-grid` as not applicable to
   object-marker verification because it is compile-gated inside shared units;
   generated-profile and ON/OFF behavior evidence remain mandatory.

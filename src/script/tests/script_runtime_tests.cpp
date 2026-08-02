@@ -7,6 +7,7 @@
 #include "render_core/canvas2d.h"
 #include "render_core/document_script.h"
 #include "render_core/dom.h"
+#include "render_core/feature_config.h"
 #include "render_core/form_control.h"
 #include "render_core/html_parser.h"
 #include "render_core/layout.h"
@@ -1975,6 +1976,7 @@ void javascript_geolocation_uses_bound_location_service() {
     }
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 void javascript_form_submission_and_form_data_work() {
     HtmlParser parser;
     auto document = parser.parse(
@@ -2056,6 +2058,21 @@ void javascript_control_validity_subset_works() {
                            "true:false:Please fill out this field.:true:false:1:true:Value is too short.:true:false:Choose a full name.:false:true:false:submit",
           "control-level ValidityState subset works through JavaScript");
 }
+#else
+void javascript_advanced_form_apis_are_absent_when_disabled() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><form id='form'><input id='name'><button id='send'>Send</button></form></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var form = document.getElementById('form'); var name = document.getElementById('name');"
+        "String(typeof FormData) + ':' + String(typeof form.requestSubmit) + ':' + "
+        "String(typeof form.reset) + ':' + String(typeof name.checkValidity) + ':' + "
+        "String(typeof name.validity);");
+    check(result.ok && result.value == "undefined:undefined:undefined:undefined:undefined",
+          "forms-off runtime does not expose advanced form APIs");
+}
+#endif
 
 void javascript_canvas_2d_is_optional_and_lazy() {
     HtmlParser parser;
@@ -2453,9 +2470,13 @@ int main() {
         javascript_location_hash_routes_within_one_app();
         javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         javascript_form_submission_and_form_data_work();
         javascript_form_data_budget_is_bounded();
         javascript_control_validity_subset_works();
+#else
+        javascript_advanced_form_apis_are_absent_when_disabled();
+#endif
         javascript_canvas_2d_is_optional_and_lazy();
         javascript_canvas_quadratic_curve_to_strokes_path();
         javascript_canvas_bezier_curve_to_strokes_path();

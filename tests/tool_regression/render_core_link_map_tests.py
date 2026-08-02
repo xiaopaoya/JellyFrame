@@ -73,6 +73,21 @@ class RenderCoreLinkMapTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_advanced_forms_marker_agrees_with_profile(self):
+        enabled = run_checker(
+            {"schemaVersion": 1, "features": [
+                "core.document", "core.paint", "forms.advanced",
+            ]},
+            "jellyframe_render_core:form_submission.cpp.obj\n",
+        )
+        self.assertEqual(enabled.returncode, 0, enabled.stdout + enabled.stderr)
+
+        disabled = run_checker(
+            {"schemaVersion": 1, "features": ["core.document", "core.paint"]},
+            "jellyframe_render_core:form_submission_disabled.cpp.obj\n",
+        )
+        self.assertEqual(disabled.returncode, 0, disabled.stdout + disabled.stderr)
+
     def test_profile_map_mismatch_fails(self):
         result = run_checker(
             {"schemaVersion": 1, "features": ["core.document", "core.paint", "css.modern-paint"]},

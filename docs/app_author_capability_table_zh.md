@@ -44,7 +44,7 @@
 | DOM 查询/修改 | 子集 | 无需额外 capability。使用 `document.head`、`document.body`、`document.readyState`、`document.defaultView`、`document.hasFocus()`、简单 selector 的 `querySelector`、`createElement`、`appendChild`、`append`、`prepend`、`textContent`、轻量 `innerText`、`id`、`className`、常用表单控件 IDL 属性和小型 `classList` helper。 |
 | 元素几何 | frame snapshot 子集 | `element.getBoundingClientRect()` 返回上一个完成的宿主 layout frame 的只读数值 client-relative 矩形。它不强制 layout、不保留 live DOMRect，也不包含 transform/nested-scroll 后的几何。 |
 | 事件 | 可用 | 使用 `addEventListener`、文档化的 `on*` handler property、`element.click()`、事件委托、可读写的有界 `dataset` 子集和 `matches`/`closest`。不支持 HTML inline event attribute。 |
-| 本地表单 / `FormData` | Form V0 子集 | 使用 `form.checkValidity()`、`reportValidity()`、`requestSubmit([submitter])`、可取消的 `submit` 事件及 `event.submitter`，以及 `new FormData(form)`。字符串 entry 支持 `append`、`set`、`delete`、`get`、`getAll`、`has` 和 `forEach`；后者在有界快照上运行，不是 live iterator。每个对象默认最多 32 entries / 4096 bytes，超限抛出 `RangeError`。在事件处理器中通过已获准的宿主服务提交数据。 |
+| 本地表单 / `FormData` | `forms.advanced` profile 子集 | 目标 Render Core profile 必须声明 `forms.advanced`。使用 `form.checkValidity()`、`reportValidity()`、`requestSubmit([submitter])`、可取消的 `submit` 事件及 `event.submitter`，以及 `new FormData(form)`。字符串 entry 支持 `append`、`set`、`delete`、`get`、`getAll`、`has` 和 `forEach`；后者在有界快照上运行，不是 live iterator。每个对象默认最多 32 entries / 4096 bytes，超限抛出 `RangeError`。在事件处理器中通过已获准的宿主服务提交数据。 |
 | `HTMLDialogElement` | 有界 modal 子集 | scripting 构建支持 `dialog.open`、`returnValue`、`showModal()` 和 `close([returnValue])`。使用 `cancel`/`close` listener；每个 document 同时只能有一个 modal，宿主 back/Escape policy 可请求取消。 |
 | 时间 / Timer / rAF | 有界 | `Date.now()` 读取宿主注入时间；timer/rAF 无需额外 capability，但受 frame policy 和预算限制。 |
 | `XMLHttpRequest` GET | 宿主可选 | `network.fetch`。只用于运行时数据，不加载页面资源。 |

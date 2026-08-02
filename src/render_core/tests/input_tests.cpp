@@ -1,4 +1,5 @@
 ﻿#include "render_core/css_parser.h"
+#include "render_core/feature_config.h"
 #include "render_core/form_control.h"
 #include "render_core/html_parser.h"
 #include "render_core/input.h"
@@ -757,6 +758,7 @@ void modal_root_limits_hit_testing_focus_and_activation() {
     check(outside_clicks == 1, "ordinary hit testing resumes after modal clears");
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 void submit_button_runs_form_default_action_after_click() {
     auto pipeline = build_form_pipeline(
         "<body><form id='form'><input id='name' name='name' value='Ada'><button id='send'>Send</button></form></body>",
@@ -809,6 +811,8 @@ void reset_button_runs_form_default_action_after_click() {
     check(resets == 1 && form_control_value(*name) == "Ada",
           "reset button dispatches reset and restores authored default after click");
 }
+
+#endif
 
 void restored_interaction_state_drops_nodes_absent_from_rebuilt_layer_tree() {
     HtmlParser html_parser;
@@ -874,8 +878,10 @@ int main() {
         focus_navigation_skips_disabled_and_activates();
         tabindex_autofocus_and_focus_events_follow_embedded_subset();
         modal_root_limits_hit_testing_focus_and_activation();
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         submit_button_runs_form_default_action_after_click();
         reset_button_runs_form_default_action_after_click();
+#endif
         restored_interaction_state_drops_nodes_absent_from_rebuilt_layer_tree();
     } catch (const std::exception& error) {
         std::cerr << "input test failed: " << error.what() << '\n';

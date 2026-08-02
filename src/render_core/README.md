@@ -50,25 +50,26 @@ while the pipeline is still being validated. In particular, `style.cpp`,
 are currently large cross-cutting units; moving them into arbitrary folders
 would not by itself reduce firmware size or runtime cost.
 
-The planned 0.6 modularization will introduce feature-family boundaries above
-this file layout. The first candidates are `graphics.canvas2d`,
-`css.modern-paint` and `css.flex-grid`. A family may span parser, computed style,
-layout and paint files, but it must have an explicit registration point,
+The 0.6 modularization introduces feature-family boundaries above this file
+layout. The first slices are `graphics.canvas2d`, `css.modern-paint`,
+`css.flex-grid` and `forms.advanced`. A family may span parser, computed style,
+layout, paint and input files, but it must have an explicit registration point,
 dependency list, budget and profile gate. See
 `project_docs/render_pipeline_modularity_plan_zh.md` for the build-profile and
 manifest contract. Ordinary App packages remain data/code at the declared
 runtime level; they do not load native Render Core modules.
 
-The first build-time slices are `JELLYFRAME_ENABLE_CANVAS2D`,
-`JELLYFRAME_ENABLE_MODERN_PAINT` and `JELLYFRAME_ENABLE_FLEX_GRID`. When Canvas
+The build-time slices are `JELLYFRAME_ENABLE_CANVAS2D`,
+`JELLYFRAME_ENABLE_MODERN_PAINT`, `JELLYFRAME_ENABLE_FLEX_GRID` and
+`JELLYFRAME_ENABLE_ADVANCED_FORMS`. When Canvas
 is enabled, the full Canvas 2D implementation is linked. When disabled, the stable
 `Canvas2DRegistry` API is backed by `canvas2d_disabled.cpp`; calls fail safely,
 allocate no Canvas surface state and keep existing host consumers linkable. The
 generated `jellyframe_render_core_profile.json` in the build directory records
 the selected feature set and engine ABI for package/check integration. The
 profile must also contain the dependency closure: `core.paint` and
-`css.flex-grid` depend on `core.document`, `css.modern-paint` depends on
-`core.paint`, and `graphics.canvas2d` depends on `core.paint`. The packager
+`css.flex-grid` and `forms.advanced` depend on `core.document`, while
+`css.modern-paint` and `graphics.canvas2d` depend on `core.paint`. The packager
 rejects a profile that advertises a family without these prerequisites, rather
 than allowing a later runtime failure.
 
@@ -86,6 +87,14 @@ rejected and the document uses the existing block/inline fallback; it does not
 allocate a runtime feature registry or permit an App to re-enable the family.
 Generated profile IDs are deterministic for every Canvas/modern-paint/flex-grid
 combination and are covered by a configure-only regression test.
+
+`JELLYFRAME_ENABLE_ADVANCED_FORMS` is ON by default. It owns local constraint
+validation, custom validity, bounded `FormData`, `SubmitEvent`, `requestSubmit`
+and cancellable reset/default actions. When disabled, normal form controls keep
+their base value and input behavior, but those advanced C++ APIs resolve to
+safe no-op stubs, input activation does not submit/reset, and JerryScript does
+not expose `FormData`, validation accessors or advanced form methods. This is a
+firmware build decision; an App cannot enable the family at runtime.
 
 Modern paint prepares rounded-rectangle geometry once per display command and
 reuses it across the pixel loop. Shared geometry arithmetic uses saturating

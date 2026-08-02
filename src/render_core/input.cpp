@@ -2,8 +2,11 @@
 
 #include "render_core/dom.h"
 #include "render_core/event.h"
+#include "render_core/feature_config.h"
 #include "render_core/form_control.h"
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 #include "render_core/form_submission.h"
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -292,10 +295,12 @@ const Node* InputController::pointer_up(const PointerInput& input) {
         dispatch_mouse_event(target, click);
         if (!click.default_prevented()) {
             toggle_details_from_summary(active_node_);
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
             if (active_node_ != nullptr) {
                 request_form_submit_from_control(*mutable_node(active_node_));
                 reset_form_from_control(*mutable_node(active_node_));
             }
+#endif
         }
     }
     set_active_node(nullptr);
@@ -409,8 +414,10 @@ bool InputController::activate_focused() {
     dispatch_mouse_event(focused_node_, click);
     if (!click.default_prevented()) {
         toggle_details_from_summary(focused_node_);
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         request_form_submit_from_control(*mutable_node(focused_node_));
         reset_form_from_control(*mutable_node(focused_node_));
+#endif
     }
     return true;
 }

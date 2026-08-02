@@ -15,6 +15,7 @@ option(JELLYFRAME_ENABLE_IMAGE_FILE_IO "Expose desktop image file writers from r
 option(JELLYFRAME_ENABLE_CANVAS2D "Compile the graphics.canvas2d Render Core family" ON)
 option(JELLYFRAME_ENABLE_MODERN_PAINT "Compile the css.modern-paint Render Core family" ON)
 option(JELLYFRAME_ENABLE_FLEX_GRID "Compile the css.flex-grid Render Core family" ON)
+option(JELLYFRAME_ENABLE_ADVANCED_FORMS "Compile the forms.advanced Render Core family" ON)
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
 
 if(JELLYFRAME_ENABLE_SANITIZERS)
@@ -114,6 +115,7 @@ target_compile_definitions(jellyframe_render_core PUBLIC
     JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED=${JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED}
     JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED=${JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED}
     JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED=${JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED}
+    JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED=${JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED}
 )
 if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
     target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)

@@ -12,18 +12,26 @@ import unittest
 from pathlib import Path
 
 
-BASE_FEATURES = ("core.document", "core.paint", "forms.advanced")
+BASE_FEATURES = ("core.document", "core.paint")
 TEST_ARGS: argparse.Namespace | None = None
 
 PROFILE_CASES = (
-    (True, True, True, "render-core-default"),
-    (False, True, True, "render-core-no-canvas"),
-    (True, False, True, "render-core-no-modern-paint"),
-    (True, True, False, "render-core-no-flex-grid"),
-    (False, False, True, "render-core-no-modern-paint-no-canvas"),
-    (False, True, False, "render-core-no-flex-grid-no-canvas"),
-    (True, False, False, "render-core-no-flex-grid-no-modern-paint"),
-    (False, False, False, "render-core-minimal"),
+    (True, True, True, True, "render-core-default"),
+    (False, True, True, True, "render-core-no-canvas"),
+    (True, False, True, True, "render-core-no-modern-paint"),
+    (True, True, False, True, "render-core-no-flex-grid"),
+    (False, False, True, True, "render-core-no-modern-paint-no-canvas"),
+    (False, True, False, True, "render-core-no-flex-grid-no-canvas"),
+    (True, False, False, True, "render-core-no-flex-grid-no-modern-paint"),
+    (False, False, False, True, "render-core-minimal"),
+    (True, True, True, False, "render-core-no-forms-advanced"),
+    (False, True, True, False, "render-core-no-canvas-no-forms-advanced"),
+    (True, False, True, False, "render-core-no-modern-paint-no-forms-advanced"),
+    (True, True, False, False, "render-core-no-flex-grid-no-forms-advanced"),
+    (False, False, True, False, "render-core-no-modern-paint-no-canvas-no-forms-advanced"),
+    (False, True, False, False, "render-core-no-flex-grid-no-canvas-no-forms-advanced"),
+    (True, False, False, False, "render-core-no-flex-grid-no-modern-paint-no-forms-advanced"),
+    (False, False, False, False, "render-core-minimal-no-forms-advanced"),
 )
 
 
@@ -55,6 +63,7 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
         canvas: bool,
         modern_paint: bool,
         flex_grid: bool,
+        advanced_forms: bool,
     ) -> dict:
         def cmake_bool(value: bool) -> str:
             return "ON" if value else "OFF"
@@ -69,6 +78,7 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
             f"-DJELLYFRAME_ENABLE_CANVAS2D={cmake_bool(canvas)}",
             f"-DJELLYFRAME_ENABLE_MODERN_PAINT={cmake_bool(modern_paint)}",
             f"-DJELLYFRAME_ENABLE_FLEX_GRID={cmake_bool(flex_grid)}",
+            f"-DJELLYFRAME_ENABLE_ADVANCED_FORMS={cmake_bool(advanced_forms)}",
         ]
         if self.generator:
             command.extend(["-G", self.generator])
@@ -81,15 +91,18 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="jellyframe-profile-") as directory:
             root = Path(directory)
             build_dir = root / "build"
-            for canvas, modern_paint, flex_grid, profile_id in PROFILE_CASES:
+            for canvas, modern_paint, flex_grid, advanced_forms, profile_id in PROFILE_CASES:
                 with self.subTest(profile_id=profile_id):
                     profile = self.configure_profile(
                         build_dir,
                         canvas=canvas,
                         modern_paint=modern_paint,
                         flex_grid=flex_grid,
+                        advanced_forms=advanced_forms,
                     )
                     expected_features = list(BASE_FEATURES)
+                    if advanced_forms:
+                        expected_features.append("forms.advanced")
                     if flex_grid:
                         expected_features.append("css.flex-grid")
                     if modern_paint:
@@ -101,11 +114,17 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                     self.assertEqual(profile["profileId"], profile_id)
                     self.assertEqual(profile["features"], expected_features)
                     self.assertEqual(
+                        profile["sourceFamilies"]["forms.advanced"],
+                        (["src/render_core/form_submission.cpp"] if advanced_forms else
+                         ["src/render_core/form_submission_disabled.cpp"]),
+                    )
+                    self.assertEqual(
                         profile["notes"],
                         {
                             "canvas2d": "1" if canvas else "0",
                             "modernPaint": "1" if modern_paint else "0",
                             "flexGrid": "1" if flex_grid else "0",
+                            "formsAdvanced": "1" if advanced_forms else "0",
                         },
                     )
 

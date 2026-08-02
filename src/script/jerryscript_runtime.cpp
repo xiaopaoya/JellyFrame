@@ -6,8 +6,11 @@
 #include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
 #include "render_core/canvas2d.h"
+#include "render_core/feature_config.h"
 #include "render_core/form_control.h"
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 #include "render_core/form_submission.h"
+#endif
 #include "render_core/layout.h"
 #include "render_core/style.h"
 #include "render_core/text_scan.h"
@@ -113,12 +116,14 @@ struct ScriptDialogState {
     std::string return_value;
 };
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 struct ScriptFormData {
     JerryScriptRuntime* runtime = nullptr;
     std::vector<FormDataEntry> entries;
     std::size_t max_entries = 0;
     std::size_t max_bytes = 0;
 };
+#endif
 
 struct ScriptNodeBinding {
     JerryScriptRuntime* runtime = nullptr;
@@ -510,9 +515,11 @@ void free_script_local_storage_binding(void* native_p, jerry_object_native_info_
     delete binding;
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 void free_script_form_data(void* native_p, jerry_object_native_info_t*) {
     delete static_cast<ScriptFormData*>(native_p);
 }
+#endif
 
 void free_script_canvas_gradient(void* native_p, jerry_object_native_info_t*) {
     delete static_cast<ScriptCanvasGradient*>(native_p);
@@ -535,7 +542,9 @@ const jerry_object_native_info_t kXhrNativeInfo = {free_script_xhr, 0, 0};
 const jerry_object_native_info_t kLocalStorageNativeInfo = {free_script_local_storage_binding, 0, 0};
 const jerry_object_native_info_t kAudioNativeInfo = {free_script_audio, 0, 0};
 const jerry_object_native_info_t kCanvasGradientNativeInfo = {free_script_canvas_gradient, 0, 0};
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 const jerry_object_native_info_t kFormDataNativeInfo = {free_script_form_data, 0, 0};
+#endif
 
 class JerryValue {
 public:
@@ -1280,6 +1289,7 @@ jerry_value_t throw_type_error(const char* message) {
     return jerry_throw_sz(JERRY_ERROR_TYPE, message);
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 bool form_data_entry_fits(std::size_t entry_count,
                           std::size_t byte_count,
                           std::string_view name,
@@ -1408,6 +1418,7 @@ ScriptFormData* native_form_data(const jerry_value_t object) {
     }
     return static_cast<ScriptFormData*>(jerry_object_get_native_ptr(object, &kFormDataNativeInfo));
 }
+#endif
 
 std::size_t xhr_event_index(AppXhrEventKind kind) {
     return static_cast<std::size_t>(kind);
@@ -1691,6 +1702,7 @@ jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
         set_number_property(object.get(), "deltaY", wheel.delta_y);
         set_number_property(object.get(), "deltaMode", wheel.delta_mode);
     }
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
     if (const auto* submit = dynamic_cast<const SubmitEvent*>(&event)) {
         if (submit->submitter() != nullptr) {
             set_property(object.get(), "submitter",
@@ -1701,6 +1713,7 @@ jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
             set_property(object.get(), "submitter", jerry_null());
         }
     }
+#endif
 
     set_method(object.get(), "preventDefault", event_prevent_default);
     set_method(object.get(), "stopPropagation", event_stop_propagation);
@@ -3745,6 +3758,7 @@ jerry_value_t make_local_storage_object(JerryScriptRuntime& runtime, AppLocalSto
     return object.release();
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 jerry_value_t form_data_construct(const jerry_call_info_t* call_info_p,
                                   const jerry_value_t args_p[],
                                   const jerry_length_t args_count) {
@@ -4044,6 +4058,7 @@ jerry_value_t node_set_custom_validity(const jerry_call_info_t* call_info_p,
     set_form_control_custom_validity(*node, args_count > 0 ? value_to_string(args_p[0]) : std::string());
     return jerry_undefined();
 }
+#endif
 
 jerry_value_t audio_construct(const jerry_call_info_t* call_info_p,
                               const jerry_value_t args_p[],
@@ -5076,9 +5091,11 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
         define_accessor(object.get(), "min", node_get_min, node_set_min);
         define_accessor(object.get(), "max", node_get_max, node_set_max);
         define_accessor(object.get(), "step", node_get_step, node_set_step);
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         define_accessor(object.get(), "willValidate", node_get_will_validate, node_ignore_setter);
         define_accessor(object.get(), "validationMessage", node_get_validation_message, node_ignore_setter);
         define_accessor(object.get(), "validity", node_get_validity, node_ignore_setter);
+#endif
     }
     if (node.type == NodeType::Element && (node.tag_name == "input" || node.tag_name == "textarea")) {
         define_accessor(object.get(), "placeholder", node_get_placeholder, node_set_placeholder);
@@ -5167,15 +5184,19 @@ jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool do
     set_method(object.get(), "querySelectorAll", node_query_selector_all);
     set_method(object.get(), "getBoundingClientRect", node_get_bounding_client_rect);
     if (form_control) {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         set_method(object.get(), "checkValidity", node_check_validity);
         set_method(object.get(), "reportValidity", node_report_validity);
         set_method(object.get(), "setCustomValidity", node_set_custom_validity);
+#endif
     }
     if (node.type == NodeType::Element && node.tag_name == "form") {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         set_method(object.get(), "checkValidity", form_check_validity);
         set_method(object.get(), "reportValidity", form_report_validity);
         set_method(object.get(), "requestSubmit", form_request_submit);
         set_method(object.get(), "reset", form_reset);
+#endif
     }
     if (node.type == NodeType::Element && node.tag_name == "dialog") {
         define_accessor(object.get(), "returnValue", dialog_get_return_value, dialog_set_return_value);
@@ -5890,8 +5911,10 @@ jerry_value_t node_click(const jerry_call_info_t* call_info_p,
         dispatch_event(*details, toggle);
     }
     if (!click.default_prevented()) {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         request_form_submit_from_control(*node);
         reset_form_from_control(*node);
+#endif
     }
     return jerry_undefined();
 }
@@ -6341,9 +6364,14 @@ void JerryScriptRuntime::bind_document(Node& document) {
     set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
     set_method(global.get(), "btoa", script_btoa);
     set_method(global.get(), "atob", script_atob);
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
     JerryValue form_data_constructor(make_form_data_constructor(*this));
     set_property(window_object.get(), "FormData", form_data_constructor.get());
     set_property(global.get(), "FormData", form_data_constructor.get());
+#else
+    delete_property(window_object.get(), "FormData");
+    delete_property(global.get(), "FormData");
+#endif
     set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
     set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
 #define JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER(js_name, event_type) \

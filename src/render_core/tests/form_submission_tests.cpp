@@ -1,4 +1,5 @@
 #include "render_core/form_control.h"
+#include "render_core/feature_config.h"
 #include "render_core/form_submission.h"
 #include "render_core/html_parser.h"
 
@@ -28,6 +29,7 @@ Node* find_by_id(Node& node, const std::string& id) {
     return nullptr;
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 void validation_and_form_data_follow_control_state() {
     HtmlParser parser;
     auto document = parser.parse(
@@ -184,16 +186,41 @@ void input_type_tokens_are_ascii_case_insensitive() {
     check(is_form_submitter(*send), "uppercase submit activates form submission");
     check(request_form_submit_from_control(*send).submitted, "uppercase submit follows submit default action");
 }
+#else
+void advanced_form_apis_are_safe_no_ops_when_disabled() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><form id='form'><input id='name' name='name' required><button id='send'>Send</button></form></body>");
+    Node* form = find_by_id(*document, "form");
+    Node* name = find_by_id(*document, "name");
+    Node* send = find_by_id(*document, "send");
+    check(form != nullptr && name != nullptr && send != nullptr, "forms-off fixture exists");
+
+    check(!form_control_will_validate(*name), "forms-off controls do not expose validation");
+    check(validate_form_control(*name).valid(), "forms-off control validation is valid");
+    check(check_form_validity(*form), "forms-off form validation is valid");
+    std::vector<FormDataEntry> entries{{"stale", "entry"}};
+    check(!collect_form_data_limited(*form, entries, FormDataCollectionLimits{}),
+          "forms-off FormData collection is unavailable");
+    check(entries.empty(), "forms-off FormData collection clears output");
+    check(!request_form_submit(*form, send).submitted, "forms-off requestSubmit has no default action");
+    check(!reset_form(*form), "forms-off reset has no default action");
+}
+#endif
 
 } // namespace
 
 int main() {
     try {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         validation_and_form_data_follow_control_state();
         request_submit_is_cancellable_and_exposes_submitter();
         reset_restores_authored_control_defaults_and_is_cancellable();
         control_validation_subset_is_lazy_and_dispatches_invalid();
         input_type_tokens_are_ascii_case_insensitive();
+#else
+        advanced_form_apis_are_safe_no_ops_when_disabled();
+#endif
     } catch (const std::exception& error) {
         std::cerr << "form submission test failed: " << error.what() << '\n';
         return 1;

@@ -20,6 +20,10 @@ from render_core_feature_registry import (
 
 
 FEATURE_MARKERS = {
+    # Advanced forms is a separately compiled vertical slice. The disabled
+    # implementation deliberately remains linkable but must not satisfy this
+    # real implementation marker.
+    "forms.advanced": ("form_submission.cpp.obj", "form_submission.cpp.o"),
     "css.modern-paint": ("modern_paint_",),
     # The disabled Canvas API keeps the public registry symbols. The object
     # file marker distinguishes the real implementation from that stub.

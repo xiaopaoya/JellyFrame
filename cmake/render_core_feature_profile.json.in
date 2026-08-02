@@ -14,11 +14,15 @@
     ],
     "graphics.canvas2d": [
       @JELLYFRAME_RENDER_CORE_CANVAS2D_SOURCES_JSON@
+    ],
+    "forms.advanced": [
+      @JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_SOURCES_JSON@
     ]
   },
   "notes": {
     "canvas2d": "@JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED@",
     "modernPaint": "@JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED@",
-    "flexGrid": "@JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED@"
+    "flexGrid": "@JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED@",
+    "formsAdvanced": "@JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED@"
   }
 }

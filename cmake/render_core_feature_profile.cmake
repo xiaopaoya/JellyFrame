@@ -8,8 +8,10 @@ set(JELLYFRAME_RENDER_CORE_ENGINE_ABI 1 CACHE STRING
 set(_jellyframe_render_core_features
     "core.document"
     "core.paint"
-    "forms.advanced"
 )
+if(JELLYFRAME_ENABLE_ADVANCED_FORMS)
+    list(APPEND _jellyframe_render_core_features "forms.advanced")
+endif()
 if(JELLYFRAME_ENABLE_FLEX_GRID)
     list(APPEND _jellyframe_render_core_features "css.flex-grid")
 endif()
@@ -30,11 +32,18 @@ endif()
 if(NOT JELLYFRAME_ENABLE_CANVAS2D)
     list(APPEND _jellyframe_render_core_disabled_profile_families "no-canvas")
 endif()
+if(NOT JELLYFRAME_ENABLE_ADVANCED_FORMS)
+    list(APPEND _jellyframe_render_core_disabled_profile_families "no-forms-advanced")
+endif()
 if(NOT _jellyframe_render_core_disabled_profile_families)
     set(JELLYFRAME_RENDER_CORE_PROFILE_ID "render-core-default")
 elseif(NOT JELLYFRAME_ENABLE_FLEX_GRID AND NOT JELLYFRAME_ENABLE_MODERN_PAINT AND
        NOT JELLYFRAME_ENABLE_CANVAS2D)
-    set(JELLYFRAME_RENDER_CORE_PROFILE_ID "render-core-minimal")
+    if(JELLYFRAME_ENABLE_ADVANCED_FORMS)
+        set(JELLYFRAME_RENDER_CORE_PROFILE_ID "render-core-minimal")
+    else()
+        set(JELLYFRAME_RENDER_CORE_PROFILE_ID "render-core-minimal-no-forms-advanced")
+    endif()
 else()
     string(JOIN "-" _jellyframe_render_core_profile_suffix
         ${_jellyframe_render_core_disabled_profile_families})
@@ -68,6 +77,15 @@ else()
     set(JELLYFRAME_RENDER_CORE_CANVAS2D_SOURCES_JSON
         "\"src/render_core/canvas2d_disabled.cpp\"")
 endif()
+string(REPLACE ";" "\",\n      \"" _jellyframe_render_core_advanced_forms_sources_json
+    "${JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_SOURCES}")
+if(JELLYFRAME_ENABLE_ADVANCED_FORMS)
+    set(JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_SOURCES_JSON
+        "\"${_jellyframe_render_core_advanced_forms_sources_json}\"")
+else()
+    set(JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_SOURCES_JSON
+        "\"src/render_core/form_submission_disabled.cpp\"")
+endif()
 
 set(JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -84,3 +102,4 @@ unset(_jellyframe_render_core_profile_suffix)
 unset(_jellyframe_render_core_base_sources_json)
 unset(_jellyframe_render_core_modern_paint_sources_json)
 unset(_jellyframe_render_core_canvas2d_sources_json)
+unset(_jellyframe_render_core_advanced_forms_sources_json)
