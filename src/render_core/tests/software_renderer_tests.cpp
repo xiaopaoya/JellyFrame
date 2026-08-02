@@ -1,6 +1,7 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/bitmap_font.h"
 #include "render_core/bitmap_font_resource.h"
+#include "render_core/feature_config.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
@@ -178,12 +179,21 @@ void linear_gradient_rasterizes_top_and_bottom_colors() {
     command.color2 = Color{120, 60, 30, 255};
     rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 3, 4});
 
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     check(frame_buffer.pixel(1, 0).r == 0, "gradient top row uses first color");
     check(frame_buffer.pixel(1, 3).r == 120, "gradient bottom row uses second color");
     check(frame_buffer.pixel(1, 2).r > frame_buffer.pixel(1, 1).r, "gradient interpolates rows");
+#else
+    check(frame_buffer.pixel(1, 0).r == 0, "disabled gradient starts with its solid fallback");
+    check(frame_buffer.pixel(1, 3).r == 0, "disabled gradient does not rasterize the second color");
+    check(frame_buffer.pixel(1, 2).r == 0, "disabled gradient has no interpolation output");
+#endif
 }
 
 void horizontal_linear_gradient_rasterizes_left_and_right_colors() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(4, 3, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -200,6 +210,9 @@ void horizontal_linear_gradient_rasterizes_left_and_right_colors() {
 }
 
 void diagonal_linear_gradient_rasterizes_corner_colors() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(5, 5, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -217,6 +230,9 @@ void diagonal_linear_gradient_rasterizes_corner_colors() {
 }
 
 void opaque_linear_gradient_fast_path_preserves_dirty_clip() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(5, 5, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -235,6 +251,9 @@ void opaque_linear_gradient_fast_path_preserves_dirty_clip() {
 }
 
 void opaque_linear_gradient_fast_path_preserves_all_axis_interpolation() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     const Color first{12, 34, 56, 255};
     const Color second{212, 134, 6, 255};
     SoftwareRasterizer rasterizer;
@@ -277,6 +296,9 @@ void opaque_linear_gradient_fast_path_preserves_all_axis_interpolation() {
 }
 
 void conic_gradient_rasterizes_clockwise_progress() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(9, 9, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -294,6 +316,9 @@ void conic_gradient_rasterizes_clockwise_progress() {
 }
 
 void radial_gradient_rasterizes_center_to_edge() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(9, 9, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -310,6 +335,9 @@ void radial_gradient_rasterizes_center_to_edge() {
 }
 
 void radial_gradient_keeps_diagonal_falloff_close_to_axis() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(129, 129, Color{0, 0, 0, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -326,6 +354,9 @@ void radial_gradient_keeps_diagonal_falloff_close_to_axis() {
 }
 
 void positioned_radial_gradient_moves_highlight_center() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(11, 11, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -342,6 +373,9 @@ void positioned_radial_gradient_moves_highlight_center() {
 }
 
 void soft_box_shadow_fades_outside_rounded_card() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(20, 20, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;
@@ -360,6 +394,9 @@ void soft_box_shadow_fades_outside_rounded_card() {
 }
 
 void circular_box_shadow_keeps_diagonal_falloff_close_to_axis() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     FrameBuffer frame_buffer(52, 52, Color{0, 0, 0, 255});
     SoftwareRasterizer rasterizer;
     DisplayCommand command;

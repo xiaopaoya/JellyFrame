@@ -234,6 +234,36 @@
       },
       "uniqueItems": true
     },
+    "requiresFeatures": {
+      "description": "Render Core feature families that must be compiled into the target firmware.",
+      "type": "array",
+      "items": {
+        "enum": [
+          "core.document",
+          "core.paint",
+          "css.flex-grid",
+          "css.modern-paint",
+          "forms.advanced",
+          "graphics.canvas2d"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "optionalFeatures": {
+      "description": "Render Core feature families used when available, with an App-defined fallback.",
+      "type": "array",
+      "items": {
+        "enum": [
+          "core.document",
+          "core.paint",
+          "css.flex-grid",
+          "css.modern-paint",
+          "forms.advanced",
+          "graphics.canvas2d"
+        ]
+      },
+      "uniqueItems": true
+    },
     "backgroundServices": {
       "description": "Optional background activity intent. The host profile must still approve every item.",
       "type": "object",

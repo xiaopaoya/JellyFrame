@@ -121,6 +121,43 @@ double average_microseconds(int iterations, Fn fn) {
     return static_cast<double>(total) / static_cast<double>(iterations);
 }
 
+template <typename Fn>
+void print_timing_statistics(const char* name,
+                             int samples,
+                             int iterations_per_sample,
+                             Fn fn,
+                             std::size_t display_commands,
+                             std::size_t peak_surface_bytes) {
+    std::vector<double> sample_us;
+    sample_us.reserve(static_cast<std::size_t>(samples));
+    for (int sample = 0; sample < samples; ++sample) {
+        const auto begin = Clock::now();
+        for (int iteration = 0; iteration < iterations_per_sample; ++iteration) {
+            fn();
+        }
+        const auto end = Clock::now();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        sample_us.push_back(static_cast<double>(elapsed) /
+                            static_cast<double>(std::max(1, iterations_per_sample)));
+    }
+    std::sort(sample_us.begin(), sample_us.end());
+    const auto percentile = [&sample_us](double fraction) {
+        if (sample_us.empty()) {
+            return 0.0;
+        }
+        const std::size_t index = std::min(
+            sample_us.size() - 1,
+            static_cast<std::size_t>(fraction * static_cast<double>(sample_us.size() - 1)));
+        return sample_us[index];
+    };
+    std::cout << name << " samples=" << samples
+              << " iterations_per_sample=" << iterations_per_sample
+              << " p50_us=" << percentile(0.50)
+              << " p95_us=" << percentile(0.95)
+              << " display_commands=" << display_commands
+              << " peak_surface_bytes=" << peak_surface_bytes << '\n';
+}
+
 void print_result(const char* name, int iterations, double average_us) {
     std::cout << name << " iterations=" << iterations << " avg_us=" << average_us << '\n';
 }
@@ -400,6 +437,42 @@ int run_render_core_microbench(int argc, char** argv) {
         (void)display_list;
     }));
 
+    const std::string empty_html = "<!doctype html><html><head></head><body></body></html>";
+    const std::string empty_css = "body { margin: 0; }";
+    auto empty_document = html_parser.parse(empty_html);
+    auto empty_stylesheet = css_parser.parse(empty_css);
+    StyleResolver empty_resolver(empty_stylesheet);
+    RenderTreeBuilder empty_render_builder(empty_resolver);
+    MonotonicArena empty_render_arena;
+    auto empty_render_tree = empty_render_builder.build(*empty_document, empty_render_arena);
+    LayoutEngine empty_layout_engine(empty_resolver);
+    MonotonicArena empty_layout_arena;
+    auto empty_layout_tree = empty_layout_engine.layout(*empty_render_tree, 172, empty_layout_arena);
+    LayerTreeBuilder empty_layer_builder;
+    MonotonicArena empty_layer_arena;
+    auto empty_layer_tree = empty_layer_builder.build(*empty_layout_tree, empty_layer_arena);
+    const DisplayList empty_display_list = empty_layer_builder.flatten(*empty_layer_tree);
+    std::cout << "empty_page_baseline display_commands=" << empty_display_list.size()
+              << " render_arena_used_bytes=" << empty_render_arena.used_bytes()
+              << " layout_arena_used_bytes=" << empty_layout_arena.used_bytes()
+              << " layer_arena_used_bytes=" << empty_layer_arena.used_bytes() << '\n';
+    print_result("empty_page_pipeline", iterations, average_microseconds(iterations, [&] {
+        auto local_document = html_parser.parse(empty_html);
+        auto local_stylesheet = css_parser.parse(empty_css);
+        StyleResolver local_resolver(local_stylesheet);
+        RenderTreeBuilder local_render_builder(local_resolver);
+        MonotonicArena local_render_arena;
+        auto local_render_tree = local_render_builder.build(*local_document, local_render_arena);
+        LayoutEngine local_layout_engine(local_resolver);
+        MonotonicArena local_layout_arena;
+        auto local_layout_tree = local_layout_engine.layout(*local_render_tree, 172, local_layout_arena);
+        LayerTreeBuilder local_layer_builder;
+        MonotonicArena local_layer_arena;
+        auto local_layer_tree = local_layer_builder.build(*local_layout_tree, local_layer_arena);
+        const DisplayList display_list = local_layer_builder.flatten(*local_layer_tree);
+        (void)display_list;
+    }));
+
     DisplayList rounded_commands;
     for (int row = 0; row < 6; ++row) {
         for (int column = 0; column < 6; ++column) {
@@ -560,6 +633,44 @@ int run_render_core_microbench(int argc, char** argv) {
         SoftwareRasterizer rasterizer;
         rasterizer.rasterize(circular_shadow, target, Rect{0, 0, 172, 320});
     }));
+
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    // Desktop tail-latency evidence for representative wearable-sized paint.
+    // Port acceptance still owns panel flush, DMA and MCU memory telemetry.
+    const std::size_t wearable_surface_bytes =
+        static_cast<std::size_t>(172) * static_cast<std::size_t>(320) * sizeof(Color);
+    print_timing_statistics("modern_paint_linear_gradient_stats", 16,
+                            std::max(1, iterations / 4), [&] {
+        FrameBuffer target(172, 320, Color{0, 0, 0, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(opaque_screen_gradient, target, Rect{0, 0, 172, 320});
+    }, 1, wearable_surface_bytes);
+    print_timing_statistics("modern_paint_radial_gradient_stats", 16,
+                            std::max(1, iterations / 4), [&] {
+        FrameBuffer target(172, 320, Color{18, 22, 26, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(radial_commands.front(), target, Rect{0, 0, 172, 320});
+    }, 1, wearable_surface_bytes);
+    print_timing_statistics("modern_paint_conic_gradient_stats", 16,
+                            std::max(1, iterations / 4), [&] {
+        FrameBuffer target(172, 320, Color{18, 22, 26, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(conic_commands.front(), target, Rect{0, 0, 172, 320});
+    }, 1, wearable_surface_bytes);
+    print_timing_statistics("modern_paint_shadow_stats", 16,
+                            std::max(1, iterations / 4), [&] {
+        FrameBuffer target(172, 320, Color{18, 22, 26, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(circular_shadow, target, Rect{0, 0, 172, 320});
+    }, 1, wearable_surface_bytes);
+    print_timing_statistics("modern_paint_hydrogel_frame_stats", 16,
+                            std::max(1, iterations / 4), [&] {
+        FrameBuffer target(172, 320, Color{8, 16, 24, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(diagonal_gradient_commands, target, Rect{0, 0, 172, 320});
+        rasterizer.rasterize(soft_shadow_commands, target, Rect{0, 0, 172, 320});
+    }, diagonal_gradient_commands.size() + soft_shadow_commands.size(), wearable_surface_bytes);
+#endif
 
     LayerNode dirty_root;
     dirty_root.type = LayerType::Root;

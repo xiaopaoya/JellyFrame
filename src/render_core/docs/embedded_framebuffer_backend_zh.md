@@ -1,6 +1,6 @@
 # 嵌入式 Framebuffer 后端
 
-> 最后更新：2026-07-11；适用版本：0.5.0-dev
+> 最后更新：2026-08-02；适用版本：0.5.0-dev
 
 
 `src/render_core/embedded_framebuffer.h` 提供第一版可部署的嵌入式 presentation
@@ -93,6 +93,12 @@ present_frame(frame_buffer, sink, dirty_rects, dirty_rect_count);
 该 buffer 必须能容纳最大可接受 dirty rectangle；`flush` callback 返回前必须已消费或复制这些像素。
 此路径只支持 RGB565/BGR565。线性 framebuffer 和异步多缓冲策略应继续使用
 `EmbeddedFrameBufferSink`。
+
+这只是 presentation contract，不是性能承诺。port 必须在相同的整屏和 dirty-rect workload
+下实测 packed 与线性 framebuffer 路径后再选择。WS147 172x320 RGB565 目标在 2026-08-02
+的整屏渐变 A/B 中，packed conversion 每次 flush 额外增加约 12.7 ms，frame p95 从 58 ms
+升到 71 ms，因此该 port 当前保留线性 framebuffer 为默认路径。这个结果不改变平台无关 API，
+也不能推导其他 panel 的性能。
 
 桌面验收工具如果只需要同口径统计、不持有目标 buffer，也可以调用估算入口：
 

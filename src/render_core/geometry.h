@@ -22,11 +22,33 @@ struct Rect {
     int height = 0;
 };
 
-inline int safe_edge(int origin, int extent) {
-    const std::int64_t edge = static_cast<std::int64_t>(origin) + static_cast<std::int64_t>(extent);
-    return static_cast<int>(std::clamp(edge,
+inline int clamp_int64_to_int(std::int64_t value) {
+    return static_cast<int>(std::clamp(value,
                                        static_cast<std::int64_t>(std::numeric_limits<int>::min()),
                                        static_cast<std::int64_t>(std::numeric_limits<int>::max())));
+}
+
+inline int safe_edge(int origin, int extent) {
+    const std::int64_t edge = static_cast<std::int64_t>(origin) + static_cast<std::int64_t>(extent);
+    return clamp_int64_to_int(edge);
+}
+
+inline int safe_add(int left, int right) {
+    return safe_edge(left, right);
+}
+
+inline int safe_negate(int value) {
+    const std::int64_t negated = -static_cast<std::int64_t>(value);
+    return clamp_int64_to_int(negated);
+}
+
+inline int safe_span(int start, int end) {
+    if (end <= start) {
+        return 0;
+    }
+    return clamp_int64_to_int(std::min<std::int64_t>(
+        static_cast<std::int64_t>(std::numeric_limits<int>::max()),
+        static_cast<std::int64_t>(end) - start));
 }
 
 inline bool checked_multiply(std::size_t left, std::size_t right, std::size_t& result) {
@@ -94,10 +116,14 @@ inline bool has_corner_radius(int encoded) {
 
 inline int expand_corner_radii(int encoded, int amount) {
     CornerRadii radii = decode_corner_radii(encoded);
-    radii.top_left += amount;
-    radii.top_right += amount;
-    radii.bottom_right += amount;
-    radii.bottom_left += amount;
+    const auto expand = [amount](int radius) {
+        const std::int64_t value = static_cast<std::int64_t>(radius) + amount;
+        return static_cast<int>(std::clamp(value, static_cast<std::int64_t>(0), static_cast<std::int64_t>(127)));
+    };
+    radii.top_left = expand(radii.top_left);
+    radii.top_right = expand(radii.top_right);
+    radii.bottom_right = expand(radii.bottom_right);
+    radii.bottom_left = expand(radii.bottom_left);
     return encode_corner_radii(radii);
 }
 

@@ -1,6 +1,6 @@
 # App 作者能力速查表
 
-> 最后更新：2026-07-23；适用版本：0.5.0-dev
+> 最后更新：2026-08-02；适用版本：0.5.0-dev
 
 这份表给 app 作者快速判断“能不能用”。完整边界仍以
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md) 为准。
@@ -31,7 +31,7 @@
 | 基础颜色/背景 | 可用子集 | 使用 hex、命名色、`rgb()` / `rgba()` 和有界 sRGB `hsl()` / `hsla()`。包内图片背景使用 `background-color` 加 `background-image: url("/assets/image.bmp")`，再按需使用 `background-size: cover`/`contain`/`100% 100%`、简单 `background-position` 子集和 `background-repeat: no-repeat`；package report 会指出非法或缺失路径。 |
 | Layout | 子集 | 优先 block、简化 flex（direct flex child 可用有符号整数 `order`）和有界 grid-card 子集。Grid 支持 2-4 条固定/`1fr` 行，以及正整数 `grid-column`/`grid-row` start/end/span placement；它不是完整 Grid。使用固定底栏和明确滚动容器。需要保留 layout 占位时使用 `visibility: hidden`；需要收缩占位时使用 `display: none`。 |
 | 响应式 | 子集 | 使用 `@media`、百分比 sizing、LTR `inline-size` / `block-size`、`max-width: 100%`、`box-sizing: border-box`、`gap`、`aspect-ratio`。固定高度纵向滚动容器使用文档化的 `overflow-y: auto` 子集。 |
-| 圆角/阴影/渐变 | 子集 | 支持圆角矩形、百分比圆角、轻量阴影、非布局 `outline-offset`、线性渐变、两段 `conic-gradient()` 进度环和两色中心圆形 `radial-gradient()` 高光。复杂 blur/mask/filter 延后。 |
+| 圆角/阴影/渐变 | 子集/按 profile 裁剪 | target profile 包含 `css.modern-paint` 时支持圆角矩形、百分比圆角、非布局 `outline-offset`、线性渐变、两段 `conic-gradient()` 进度环、两色中心圆形 `radial-gradient()` 高光和有界阴影命令；未包含时渐变保留文档化纯色 fallback，阴影不生成 layer/command。复杂 blur/mask/filter 延后。 |
 | 文本排版与溢出 | 有界子集 | 短标签/数字可使用 `letter-spacing`；无法断开的 UTF-8 标签可使用 `overflow-wrap: anywhere`，它只在 scalar 边界断行。`text-wrap: wrap` 和 `text-wrap: nowrap` 分别是 `white-space: normal` 和 `white-space: nowrap` 的别名；超宽单行文本使用 `white-space: nowrap; text-overflow: ellipsis`，会绘制 UTF-8 安全前缀与 `...`。不提供 hyphenation、平衡换行或复杂文字 shaping。 |
 | 动画 | 子集 | 关键帧支持 opacity、color、background/background-color 与已文档化的 transform 形式；timing 支持 linear/ease/ease-in/ease-out/ease-in-out，打包前会标记 layout 动画与不支持的 easing。 |
 | CSS nesting | 显式单层子集 | 只使用显式 `&`，例如 `.card { &:hover { ... } & .label { ... } }`。不要使用隐式 nesting、nested at-rule 或超过一层的嵌套。 |

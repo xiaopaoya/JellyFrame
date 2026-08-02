@@ -10,6 +10,10 @@ import zlib
 from pathlib import Path, PurePosixPath
 
 from svg_rasterize import SvgRasterError, rasterize_svg
+from render_core_feature_registry import (
+    KNOWN_RENDER_CORE_FEATURES,
+    missing_feature_dependencies,
+)
 
 
 JFAPP_MAGIC = b"JFAPPV0\0"
@@ -58,7 +62,6 @@ IMAGE_CODEC_BY_SUFFIX = {
 }
 
 STANDARD_IMAGE_CODECS = {"bmp", "png", "jpeg", "webp"}
-
 
 def fail(message: str) -> None:
     raise SystemExit(f"jellyframe_package_app: {message}")
@@ -354,6 +357,113 @@ def required_int(parent: dict, key: str, source: str, minimum: int | None = None
     return value
 
 
+def normalized_render_feature_list(manifest: dict, key: str) -> list[str]:
+    value = manifest.get(key, [])
+    if not isinstance(value, list):
+        fail(f"manifest {key} must be an array")
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for index, feature in enumerate(value):
+        if not isinstance(feature, str) or not feature:
+            fail(f"manifest {key}[{index}] must be a non-empty string")
+        if feature not in KNOWN_RENDER_CORE_FEATURES:
+            fail(f"manifest {key}[{index}] is not a known Render Core feature: {feature}")
+        if feature in seen:
+            fail(f"manifest {key} contains duplicate feature: {feature}")
+        seen.add(feature)
+        normalized.append(feature)
+    return normalized
+
+
+def load_render_core_profile(path: Path | None) -> dict | None:
+    if path is None:
+        return None
+    try:
+        profile = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        fail(f"cannot read Render Core profile {path}: {error}")
+    except json.JSONDecodeError as error:
+        fail(f"invalid Render Core profile JSON {path}: {error}")
+    if not isinstance(profile, dict):
+        fail("Render Core profile root must be an object")
+    if profile.get("schemaVersion") != 1:
+        fail("only Render Core profile schemaVersion 1 is supported")
+    engine_abi = profile.get("engineAbi")
+    profile_id = profile.get("profileId")
+    features = profile.get("features")
+    if not isinstance(engine_abi, int) or isinstance(engine_abi, bool) or engine_abi < 1:
+        fail("Render Core profile engineAbi must be a positive integer")
+    if not isinstance(profile_id, str) or not profile_id:
+        fail("Render Core profile profileId must be a non-empty string")
+    if not isinstance(features, list) or any(not isinstance(feature, str) or not feature for feature in features):
+        fail("Render Core profile features must be an array of non-empty strings")
+    if len(set(features)) != len(features):
+        fail("Render Core profile features must not contain duplicates")
+    unknown = sorted(set(features) - KNOWN_RENDER_CORE_FEATURES)
+    if unknown:
+        fail("Render Core profile contains unknown features: " + ", ".join(unknown))
+    missing_dependencies = missing_feature_dependencies(features)
+    if missing_dependencies:
+        fail(
+            "Render Core profile has missing feature dependencies: "
+            + ", ".join(missing_dependencies)
+        )
+    return {
+        "schemaVersion": 1,
+        "engineAbi": engine_abi,
+        "profileId": profile_id,
+        "features": list(features),
+    }
+
+
+def render_core_feature_diagnostics(manifest: dict, profile: dict | None) -> tuple[dict, list[dict]]:
+    required = list(manifest.get("requiresFeatures", []))
+    optional = list(manifest.get("optionalFeatures", []))
+    if profile is None:
+        return {
+            "model": "render-core-feature-profile-preflight",
+            "available": False,
+            "required": required,
+            "optional": optional,
+            "missingRequired": [],
+            "missingOptional": [],
+        }, []
+    available = set(profile["features"])
+    missing_required = [feature for feature in required if feature not in available]
+    missing_optional = [feature for feature in optional if feature not in available]
+    if missing_required:
+        fail(
+            "Render Core profile "
+            f"{profile['profileId']} is missing required features: "
+            + ", ".join(missing_required)
+        )
+    warnings = [
+        {
+            "level": "warning",
+            "code": "render-core-optional-feature-missing",
+            "message": (
+                f"Render Core profile {profile['profileId']} does not include optional feature {feature}; "
+                "the App must use its declared fallback"
+            ),
+            "feature": feature,
+            "source": "render-core-profile",
+        }
+        for feature in missing_optional
+    ]
+    return {
+        "model": "render-core-feature-profile-preflight",
+        "available": True,
+        "schemaVersion": profile["schemaVersion"],
+        "engineAbi": profile["engineAbi"],
+        "profileId": profile["profileId"],
+        "features": profile["features"],
+        "required": required,
+        "optional": optional,
+        "missingRequired": missing_required,
+        "missingOptional": missing_optional,
+    }, warnings
+
+
 def validate_manifest(manifest: dict) -> dict:
     if not isinstance(manifest, dict):
         fail("manifest root must be an object")
@@ -386,6 +496,11 @@ def validate_manifest(manifest: dict) -> dict:
     capabilities = manifest.get("capabilities", [])
     if not isinstance(capabilities, list):
         capabilities = []
+    required_features = normalized_render_feature_list(manifest, "requiresFeatures")
+    optional_features = normalized_render_feature_list(manifest, "optionalFeatures")
+    overlap = sorted(set(required_features).intersection(optional_features))
+    if overlap:
+        fail("manifest feature cannot be both required and optional: " + ", ".join(overlap))
     fonts = []
     raw_fonts = manifest.get("fonts", [])
     if raw_fonts and not isinstance(raw_fonts, list):
@@ -463,6 +578,8 @@ def validate_manifest(manifest: dict) -> dict:
         "targets": targets,
         "permissions": permissions,
         "capabilities": capabilities,
+        "requiresFeatures": required_features,
+        "optionalFeatures": optional_features,
         "computeJobsAllowed": compute_jobs_allowed,
         "videoFrameAllowed": video_frame_allowed,
         "networkAllowed": network_allowed,
@@ -607,6 +724,8 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "fonts",
         "permissions",
         "capabilities",
+        "requiresFeatures",
+        "optionalFeatures",
         "backgroundServices",
         "targets",
     }
@@ -2725,6 +2844,7 @@ def main() -> int:
     parser.add_argument("--debug-dir", help="Optional copied debug package directory.")
     parser.add_argument("--validate-only", action="store_true", help="Validate and report without emitting C++.")
     parser.add_argument("--target", help="Optional target id. Loads tools/presets/targets/<id>.json and overlays manifest target settings.")
+    parser.add_argument("--render-core-profile", help="Optional generated Render Core feature profile JSON for compatibility preflight.")
     parser.add_argument("--rasterize-svg", action="store_true",
                         help="Compile statically referenced restricted SVG icons to package-local BMP resources.")
     parser.add_argument("--svg-raster-size", type=int, default=32,
@@ -2738,6 +2858,11 @@ def main() -> int:
     warnings = collect_manifest_warnings(raw_manifest)
     manifest = validate_manifest(raw_manifest)
     target_config = effective_target_config(manifest, args.target)
+    render_core_profile = load_render_core_profile(
+        Path(args.render_core_profile).resolve() if args.render_core_profile else None)
+    render_core_diagnostics, render_core_warnings = render_core_feature_diagnostics(
+        manifest, render_core_profile)
+    warnings.extend(render_core_warnings)
     budgets = effective_budgets(manifest, target_config)
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
@@ -2779,6 +2904,7 @@ def main() -> int:
         "format": "jellyframe.package.report",
         "app": manifest,
         "target": target_config,
+        "renderCoreProfile": render_core_diagnostics,
         "effectiveBudgets": budgets,
         "resourceCount": len(resources),
         "totalResourceBytes": sum(resource["size"] for resource in resources),

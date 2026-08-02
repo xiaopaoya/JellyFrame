@@ -1,5 +1,6 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/document_style.h"
+#include "render_core/feature_config.h"
 #include "render_core/dom.h"
 #include "render_core/form_control.h"
 #include "render_core/html_parser.h"
@@ -217,8 +218,13 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.justify_content == JustifyContent::SpaceEvenly,
           "space-evenly justification applies after @supports");
     check(style.overflow == "auto", "overflow-y auto applies after @supports");
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     check(style.background_paint == BackgroundPaintKind::RadialGradient,
           "background-image radial-gradient applies after @supports");
+#else
+    check(style.background_paint == BackgroundPaintKind::Solid,
+          "background-image radial-gradient falls back when modern paint is disabled");
+#endif
     check(style.color.r == 0 && style.color.g == 0 && style.color.b == 0, "unsupported @supports block is not applied");
 }
 
@@ -353,6 +359,9 @@ void resolves_simple_css_custom_properties() {
 }
 
 void linear_gradient_background_applies_without_breaking_fallbacks() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     VectorDiagnosticSink diagnostics;
     CssParser parser;
     CssParserOptions css_options;
@@ -425,6 +434,9 @@ void linear_gradient_background_applies_without_breaking_fallbacks() {
 }
 
 void color_mix_and_bounded_box_shadow_apply() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto card = make_element("div");
     card->attributes["class"] = "card";
     StyleResolver resolver(parse(
@@ -445,6 +457,9 @@ void color_mix_and_bounded_box_shadow_apply() {
 }
 
 void two_layer_background_keeps_base_and_highlight() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto card = make_element("div");
     card->attributes["class"] = "card";
     StyleResolver resolver(parse(
@@ -463,6 +478,9 @@ void two_layer_background_keeps_base_and_highlight() {
 }
 
 void conic_gradient_background_applies_progress_subset() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto ring = make_element("div");
     ring->attributes["class"] = "ring";
     auto fallback = make_element("div");
@@ -486,6 +504,9 @@ void conic_gradient_background_applies_progress_subset() {
 }
 
 void radial_gradient_background_applies_center_circle_subset() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto gel = make_element("div");
     gel->attributes["class"] = "gel";
     auto image = make_element("div");

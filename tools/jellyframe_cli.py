@@ -185,6 +185,8 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
         command.extend(["--include", args.include])
     if args.target:
         command.extend(["--target", args.target])
+    if getattr(args, "render_core_profile", None):
+        command.extend(["--render-core-profile", str(args.render_core_profile)])
     if getattr(args, "rasterize_svg", False):
         command.append("--rasterize-svg")
         command.extend(["--svg-raster-size", str(args.svg_raster_size)])
@@ -3520,6 +3522,10 @@ def add_manifest_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--namespace", default="jellyframe_esp32s3", help="Generated C++ namespace.")
     parser.add_argument("--include", default="jellyframe_esp32s3_resources.h", help="Generated C++ include.")
     parser.add_argument("--target", help="Optional target preset id.")
+    parser.add_argument(
+        "--render-core-profile", type=Path,
+        help="Generated Render Core profile used for feature compatibility preflight.",
+    )
     add_static_svg_args(parser)
 
 

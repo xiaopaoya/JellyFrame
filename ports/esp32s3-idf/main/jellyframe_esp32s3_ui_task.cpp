@@ -74,6 +74,10 @@
 #define CONFIG_JELLYFRAME_ESP32S3_RGB565_GRADIENT_DITHER 1
 #endif
 
+#ifndef CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK
+#define CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK 0
+#endif
+
 #ifndef CONFIG_JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART
 #define CONFIG_JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART 0
 #endif
@@ -610,11 +614,12 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
         : 0;
 
     ESP_LOGI(kTag,
-             "port_telemetry case=%s app=%s workload=%s panel_scroll_backend=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_cpu_blits_elided=%u panel_scroll_recovery_compose_ms_total=%.2f panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u screen_power_offs=%u screen_power_ons=%u screen_power_failures=%u",
+             "port_telemetry case=%s app=%s workload=%s panel_scroll_backend=%s rgb565_sink=%s frames=%u full=%u dirty=%u idle=%u input=%u completions=%u flushes=%u packed_bytes=%llu frame_ms_avg=%.2f frame_ms_p50=%.2f frame_ms_p95=%.2f frame_ms_p99=%.2f frame_ms_max=%.2f present_ms_avg=%.2f present_ms_p50=%.2f present_ms_p95=%.2f present_ms_p99=%.2f present_ms_max=%.2f layer_build_ms_total=%.2f layer_build_ms_per_flush=%.3f compose_ms_total=%.2f compose_ms_per_flush=%.3f framebuffer_scroll_blits=%u framebuffer_scroll_blit_ms_per_step=%.3f scroll_reuse_compose_ms_per_step=%.3f panel_scroll_mode=%d panel_scroll_steps=%u panel_scroll_fallbacks=%u panel_scroll_wraps=%u panel_scroll_cpu_blits_elided=%u panel_scroll_recovery_compose_ms_total=%.2f panel_scroll_setup_ms_total=%.2f panel_scroll_setup_ms_per_step=%.3f rgba8888_to_rgb565_ms_total=%.2f rgba8888_to_rgb565_ms_per_flush=%.3f scratch_copy_ms_total=%.2f scratch_copy_ms_per_flush=%.3f rgb565_convert_ms_total=%.2f rgb565_convert_ms_per_chunk=%.3f panel_window_ms_total=%.2f panel_window_ms_per_chunk=%.3f dma_submit_ms_total=%.2f dma_submit_ms_per_chunk=%.3f dma_wait_ms_total=%.2f dma_wait_ms_per_chunk=%.3f present_other_ms_total=%.2f present_other_ms_per_flush=%.3f dma_chunks=%u scroll_steps=%u scroll_visible_pixels=%llu scroll_visible_pixels_per_step=%.0f scroll_exposed_pixels=%llu scroll_exposed_pixels_per_step=%.0f internal_ram_peak=%u psram_peak=%u internal_free_min=%u psram_free_min=%u largest_internal_before=%u largest_internal_min=%u largest_psram_before=%u largest_psram_min=%u screen_power_offs=%u screen_power_ons=%u screen_power_failures=%u",
              context.telemetry_case,
              context.telemetry_app_id,
              context.scroll_workload,
              panel_scroll_backend_name(context),
+             CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK ? "packed" : "framebuffer",
              static_cast<unsigned>(telemetry.frames),
              static_cast<unsigned>(telemetry.full_frames),
              static_cast<unsigned>(telemetry.dirty_frames),
@@ -1258,8 +1263,14 @@ bool render_and_present(TimerUiTaskContext& context,
     const std::uint32_t chunks_before = context.panel.panel_dma_chunks;
     const std::uint32_t scroll_wraps_before = context.panel.packed_scroll_wrap_count;
     const std::uint32_t scroll_fallbacks_before = context.panel.packed_scroll_fallback_count;
-    jellyframe::EmbeddedPackedRgb565Sink sink = make_packed_rgb565_sink(context.panel);
-    const jellyframe::HostFrameSink frame_sink = jellyframe::embedded_packed_rgb565_sink(sink);
+#if CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK
+    jellyframe::EmbeddedPackedRgb565Sink packed_sink = make_packed_rgb565_sink(context.panel);
+    const jellyframe::HostFrameSink frame_sink = jellyframe::embedded_packed_rgb565_sink(packed_sink);
+#else
+    context.panel.pixels = context.packed_rgb565.get();
+    jellyframe::EmbeddedFrameBufferSink framebuffer_sink = make_rgb565_sink(context.panel);
+    const jellyframe::HostFrameSink frame_sink = jellyframe::embedded_frame_sink(framebuffer_sink);
+#endif
     const jellyframe::Rect exposed_strip = context.has_framebuffer_scroll_blit
         ? jellyframe::Rect{
               context.framebuffer_scroll_viewport.x + context.framebuffer_scroll_blit.exposed_strip.x,
@@ -1268,7 +1279,8 @@ bool render_and_present(TimerUiTaskContext& context,
               context.framebuffer_scroll_blit.exposed_strip.height,
           }
         : jellyframe::Rect{};
-    const bool can_use_panel_scroll = use_panel_scroll && can_reuse_scroll_pixels &&
+    const bool can_use_panel_scroll = CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK &&
+        use_panel_scroll && can_reuse_scroll_pixels &&
         compose_dirty_count == 1 && exposed_strip.x == 0 && exposed_strip.width == context.width &&
         exposed_strip.height > 0 && exposed_strip.height < context.height;
     bool force_full_normal_present = false;

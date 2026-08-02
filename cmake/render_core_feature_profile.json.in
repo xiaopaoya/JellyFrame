@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "engineAbi": @JELLYFRAME_RENDER_CORE_ENGINE_ABI@,
+  "profileId": "@JELLYFRAME_RENDER_CORE_PROFILE_ID@",
+  "features": [
+    @JELLYFRAME_RENDER_CORE_FEATURES_JSON@
+  ],
+  "sourceFamilies": {
+    "core": [
+      @JELLYFRAME_RENDER_CORE_BASE_SOURCES_JSON@
+    ],
+    "css.modern-paint": [
+      @JELLYFRAME_RENDER_CORE_MODERN_PAINT_SOURCES_JSON@
+    ],
+    "graphics.canvas2d": [
+      @JELLYFRAME_RENDER_CORE_CANVAS2D_SOURCES_JSON@
+    ]
+  },
+  "notes": {
+    "canvas2d": "@JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED@",
+    "modernPaint": "@JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED@"
+  }
+}

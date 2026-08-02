@@ -5,8 +5,11 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <new>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace jellyframe {
 namespace {
@@ -14,6 +17,18 @@ namespace {
 constexpr std::uint32_t kCanvasHandleMask = 0x80000000U;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kTwoPi = kPi * 2.0;
+
+template <typename T, typename U>
+bool try_push_back(std::vector<T>& values, U&& value) {
+    try {
+        values.push_back(std::forward<U>(value));
+        return true;
+    } catch (const std::bad_alloc&) {
+        return false;
+    } catch (const std::length_error&) {
+        return false;
+    }
+}
 
 bool translated_coordinate(int value, int translation, int& result) {
     const std::int64_t translated = static_cast<std::int64_t>(value) + translation;
@@ -484,8 +499,7 @@ bool push_path_point(Canvas2DSurface& surface, const Canvas2DPolicy& policy, Can
     if (surface.path.size() >= std::max<std::size_t>(1, policy.max_path_points)) {
         return false;
     }
-    surface.path.push_back(point);
-    return true;
+    return try_push_back(surface.path, point);
 }
 
 bool append_quadratic_points(Canvas2DSurface& surface,
@@ -627,7 +641,13 @@ bool fill_polygon(Canvas2DSurface& surface,
 
     std::vector<int>& intersections = surface.fill_intersections;
     if (intersections.capacity() < points.size()) {
-        intersections.reserve(points.size());
+        try {
+            intersections.reserve(points.size());
+        } catch (const std::bad_alloc&) {
+            return false;
+        } catch (const std::length_error&) {
+            return false;
+        }
     }
     for (int y = top; y <= bottom; ++y) {
         intersections.clear();
@@ -639,8 +659,11 @@ bool fill_polygon(Canvas2DSurface& surface,
             const double by = static_cast<double>(b.y);
             if ((ay <= scan_y && by > scan_y) || (by <= scan_y && ay > scan_y)) {
                 const double t = (scan_y - ay) / (by - ay);
-                intersections.push_back(static_cast<int>(std::round(static_cast<double>(a.x) +
-                                                                     t * static_cast<double>(b.x - a.x))));
+                if (!try_push_back(intersections,
+                                   static_cast<int>(std::round(static_cast<double>(a.x) +
+                                                               t * static_cast<double>(b.x - a.x))))) {
+                    return false;
+                }
             }
         }
         if (intersections.size() < 2) {
@@ -683,7 +706,13 @@ void Canvas2DRegistry::clear() {
 std::size_t Canvas2DRegistry::total_pixels() const {
     std::size_t total = 0;
     for (const auto& surface : surfaces_) {
-        total += static_cast<std::size_t>(surface.width) * static_cast<std::size_t>(surface.height);
+        std::size_t pixels = 0;
+        if (!checked_multiply(static_cast<std::size_t>(surface.width),
+                              static_cast<std::size_t>(surface.height),
+                              pixels) ||
+            !checked_add(total, pixels, total)) {
+            return std::numeric_limits<std::size_t>::max();
+        }
     }
     return total;
 }
@@ -703,8 +732,13 @@ std::uint32_t Canvas2DRegistry::ensure_surface(Node& node) {
     if (width <= 0 || height <= 0) {
         return 0;
     }
-    const auto pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
-    if (pixels == 0 || pixels > policy_.max_surface_pixels || total_pixels() + pixels > policy_.max_total_pixels) {
+    std::size_t pixels = 0;
+    std::size_t combined_pixels = 0;
+    if (!checked_multiply(static_cast<std::size_t>(width), static_cast<std::size_t>(height), pixels) ||
+        pixels == 0 ||
+        pixels > policy_.max_surface_pixels ||
+        !checked_add(total_pixels(), pixels, combined_pixels) ||
+        combined_pixels > policy_.max_total_pixels) {
         return 0;
     }
 
@@ -716,8 +750,16 @@ std::uint32_t Canvas2DRegistry::ensure_surface(Node& node) {
     surface.node = &node;
     surface.width = width;
     surface.height = height;
-    surface.pixels.assign(pixels, Color{0, 0, 0, 0});
-    surfaces_.push_back(std::move(surface));
+    try {
+        surface.pixels.assign(pixels, Color{0, 0, 0, 0});
+    } catch (const std::bad_alloc&) {
+        return 0;
+    } catch (const std::length_error&) {
+        return 0;
+    }
+    if (!try_push_back(surfaces_, std::move(surface))) {
+        return 0;
+    }
     mark_dirty(node, DomDirtyPaint);
     return surfaces_.back().handle;
 }
@@ -907,8 +949,7 @@ bool Canvas2DRegistry::save(Node& node) {
     if (surface == nullptr || surface->state_stack.size() >= std::max<std::size_t>(1, policy_.max_state_stack_depth)) {
         return false;
     }
-    surface->state_stack.push_back(surface->state);
-    return true;
+    return try_push_back(surface->state_stack, surface->state);
 }
 
 bool Canvas2DRegistry::restore(Node& node) {
@@ -1279,7 +1320,9 @@ std::uint32_t Canvas2DRegistry::create_linear_gradient(double x0, double y0, dou
     gradient.y0 = y0;
     gradient.x1 = x1;
     gradient.y1 = y1;
-    gradients_.push_back(std::move(gradient));
+    if (!try_push_back(gradients_, std::move(gradient))) {
+        return 0;
+    }
     return gradients_.back().id;
 }
 
@@ -1322,7 +1365,9 @@ std::uint32_t Canvas2DRegistry::create_radial_gradient(double x0,
     gradient.y1 = y1;
     gradient.r0 = r0;
     gradient.r1 = r1;
-    gradients_.push_back(std::move(gradient));
+    if (!try_push_back(gradients_, std::move(gradient))) {
+        return 0;
+    }
     return gradients_.back().id;
 }
 
@@ -1363,7 +1408,9 @@ bool Canvas2DRegistry::add_color_stop(std::uint32_t gradient_id, double offset, 
     if (found == nullptr || found->stops.size() >= max_stops || !parse_canvas_color(color, parsed)) {
         return false;
     }
-    found->stops.push_back(Canvas2DGradientStop{offset, parsed});
+    if (!try_push_back(found->stops, Canvas2DGradientStop{offset, parsed})) {
+        return false;
+    }
     std::stable_sort(found->stops.begin(), found->stops.end(), [](const auto& left, const auto& right) {
         return left.offset < right.offset;
     });

@@ -165,6 +165,18 @@ config JELLYFRAME_ESP32S3_RGB565_GRADIENT_DITHER
         panel-specific A/B comparison or if a display controller already
         applies its own dithering.
 
+config JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK
+    bool "Use direct packed RGB565 presentation sink"
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+    default n
+    help
+        Presents each dirty rectangle through EmbeddedPackedRgb565Sink. The
+        default framebuffer sink remains the production path because the
+        WS147 full-screen gradient A/B measured higher p95 latency for packed
+        conversion. Enable only for a port-side comparison or a panel with
+        independent evidence. Both paths retain the same RGBA-to-RGB565
+        quantization.
+
 config JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART
     bool "Start Timer UI in running state"
     depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK

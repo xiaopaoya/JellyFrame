@@ -1,6 +1,7 @@
 ﻿#include "render_core/style.h"
 
 #include "render_core/form_control.h"
+#include "render_core/feature_config.h"
 #include "render_core/text_backend.h"
 
 #include <algorithm>
@@ -244,6 +245,7 @@ std::vector<std::string> split_whitespace_components(std::string_view value) {
     return tokens;
 }
 
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
 bool has_top_level_comma(std::string_view value) {
     int depth = 0;
     char quote = '\0';
@@ -267,6 +269,7 @@ bool has_top_level_comma(std::string_view value) {
     }
     return false;
 }
+#endif
 
 bool parse_length_px(const std::string& raw_value, int& output, int em_base) {
     const std::string value = trim(raw_value);
@@ -445,7 +448,6 @@ bool parse_positive_ratio_number(const std::string& raw_value, int& output) {
         return true;
     }
     return round_finite_float_to_int(parsed * 1000.0F, output) && output > 0;
-    return true;
 }
 
 bool parse_aspect_ratio(const std::string& raw_value, int& width, int& height) {
@@ -1702,6 +1704,7 @@ bool parse_color(const std::string& raw_value, Color& output) {
     return false;
 }
 
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
 bool parse_box_shadow_style(const std::string& raw_value, int em_base, BoxShadowStyle& output) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "none") {
@@ -1788,6 +1791,7 @@ bool parse_text_shadow_style(const std::string& raw_value, int em_base, TextShad
     output.color = color;
     return true;
 }
+#endif
 
 struct BorderShorthandParseResult {
     int width = 0;
@@ -3468,6 +3472,11 @@ bool apply_declaration(Style& style,
             if (!parsed) {
                 return false;
             }
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+            if (layer.kind != BackgroundPaintKind::Solid) {
+                return false;
+            }
+#endif
         }
         const BackgroundPaint& base = parsed_layers[layers.size() - 1];
         style.background_paint = base.kind;
@@ -3595,6 +3604,9 @@ bool apply_declaration(Style& style,
         style.text_decoration_specified = true;
         return true;
     } else if (property == "text-shadow") {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+        return false;
+#else
         TextShadowStyle shadow;
         if (!parse_text_shadow_style(value, style.font_size, shadow)) {
             return false;
@@ -3602,13 +3614,18 @@ bool apply_declaration(Style& style,
         style.text_shadow = shadow;
         style.text_shadow_specified = true;
         return true;
+#endif
     } else if (property == "box-shadow") {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+        return false;
+#else
         BoxShadowStyle shadow;
         if (!parse_box_shadow_style(value, style.font_size, shadow)) {
             return false;
         }
         style.box_shadow = shadow;
         return true;
+#endif
     } else if (property == "outline-width") {
         int px = 0;
         if (!parse_length_px(value, px, style.font_size)) {

@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-07-26；适用版本：0.5.0-dev
+> 最后更新：2026-08-02；适用版本：0.5.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -9,6 +9,22 @@ JellyFrame Engine 的重要变更记录在这里。
 ## Unreleased
 
 ### 变更
+
+- ESP32-S3 packed RGB565 presentation sink 现在是明确 opt-in 的 port 对比路径。WS147
+  整屏渐变 A/B 中 packed conversion 使 frame p95 从 58 ms 升到 71 ms，因此默认保持
+  线性 framebuffer sink。
+
+- linker-map 校验现在支持显式 `--used-feature` workload 范围：被 linker GC 移除但未被
+  workload 调用的已启用 family 标记为 `not-tested`；真实 Canvas smoke workload 仍必须
+  检查 Canvas symbol。
+
+- Render Core 的 feature ID 与依赖规则现在由桌面工具共用唯一注册表；package 预检和
+  linker-map 校验会在 App 或固件证据引用 profile 之前拒绝不完整的依赖闭包。
+
+- Render Core 现为 Canvas 2D 和 modern-paint 构建切片输出 feature family 源码元数据与桌面链接 map。
+  新的 link-map checker 会验证生成的 profile 与最终可执行文件一致，并区分真实实现和 disabled stub。
+  render-core microbench 现报告可穿戴尺寸 modern-paint 的 p50/p95 延迟、display command 数、surface 字节数
+  和空白页基线；这些仍是桌面证据，不是 MCU 性能结论。
 
 - 一方 Markdown 现有 CTest 新鲜度关卡：每份文档必须带当前版本的编辑标记；自动生成的支持表必须带当前版本的审计快照标记。
 - Windows Clang sanitizer 测试二进制现在会在旁边部署所需的 ASan runtime DLL；平台无关的 ASan/UBSan 验证可用 `RelWithDebInfo` 配置复现。
@@ -24,6 +40,9 @@ JellyFrame Engine 的重要变更记录在这里。
   unsupported-target diagnostic。
 
 ### 修复
+
+- modern-paint OFF 构建不再编译未使用的渐变/阴影辅助函数；核心回归测试按 profile 检查纯色/无 command fallback，
+  不再错误断言被关闭的能力必须存在。
 
 - script-service teardown 现在将内部 runtime client token 贯穿 request、completion 和返回 handle。清理
   script service 只释放该 runtime 的 network/location 资源，迟到 worker completion 仍会回收，不会释放同一 app

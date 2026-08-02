@@ -56,6 +56,24 @@ def tiny_png_header(width: int = 2, height: int = 2) -> bytes:
 
 
 class PackagePreflightTests(unittest.TestCase):
+    def test_cli_forwards_render_core_profile_to_package_tool(self):
+        args = type("Args", (), {
+            "root": REPO_ROOT / "samples" / "apps" / "packages" / "jelly_canvas_smoke",
+            "report": REPO_ROOT / "build" / "cli-profile-test.json",
+            "namespace": "test_namespace",
+            "include": "test_resources.h",
+            "target": "round-300",
+            "render_core_profile": REPO_ROOT / "build" / "module-on" / "generated" / "profile.json",
+            "rasterize_svg": False,
+            "svg_raster_size": 32,
+            "output_cpp": None,
+            "output_bundle": None,
+            "debug_dir": None,
+        })()
+        command = jellyframe_cli.package_command(args, validate_only=True)
+        self.assertIn("--render-core-profile", command)
+        self.assertIn(str(args.render_core_profile), command)
+
     def test_trial_clean_refuses_repository_root(self):
         with self.assertRaisesRegex(SystemExit, "must not be the repository root"):
             jellyframe_cli.prepare_trial_output(REPO_ROOT, clean=True)
@@ -76,12 +94,114 @@ class PackagePreflightTests(unittest.TestCase):
         desktop_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         esp_cmake = (REPO_ROOT / "ports" / "esp32s3-idf" / "components" /
                      "jellyframe_render_core" / "CMakeLists.txt").read_text(encoding="utf-8")
+        source_manifest_path = REPO_ROOT / "cmake" / "render_core_sources.cmake"
+        source_manifest = source_manifest_path.read_text(encoding="utf-8")
         pattern = r"src/render_core/([A-Za-z0-9_]+\.cpp)"
-        desktop_sources = set(re.findall(pattern, desktop_cmake))
-        esp_sources = set(re.findall(pattern, esp_cmake))
+        manifest_sources = set(re.findall(pattern, source_manifest))
 
-        self.assertEqual(sorted(desktop_sources - esp_sources), [])
-        self.assertEqual(sorted(esp_sources - desktop_sources), [])
+        self.assertIn("cmake/render_core_sources.cmake", desktop_cmake.replace("\\", "/"))
+        self.assertIn("cmake/render_core_sources.cmake", esp_cmake.replace("\\", "/"))
+        self.assertGreater(len(manifest_sources), 30)
+        for source in manifest_sources:
+            self.assertTrue((REPO_ROOT / "src" / "render_core" / source).is_file(), source)
+
+    def test_render_core_profile_preflight_rejects_missing_required_feature(self):
+        manifest = package_app.validate_manifest({
+            "format": "jellyframe.app",
+            "formatVersion": 0,
+            "id": "org.test.profile",
+            "entry": "/index.html",
+            "version": {"name": "0.1.0", "code": 1},
+            "runtime": {"minJellyFrame": "0.5.0", "script": "none"},
+            "viewport": {"designWidth": 10, "designHeight": 10},
+            "budgets": {"maxResourceBytes": 1024},
+            "requiresFeatures": ["graphics.canvas2d"],
+            "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
+        })
+        with self.assertRaisesRegex(SystemExit, "missing required features: graphics.canvas2d"):
+            package_app.render_core_feature_diagnostics(manifest, {
+                "schemaVersion": 1,
+                "engineAbi": 1,
+                "profileId": "render-core-no-canvas",
+                "features": ["core.document", "core.paint"],
+            })
+
+    def test_render_core_profile_preflight_accepts_declared_feature(self):
+        manifest = package_app.validate_manifest({
+            "format": "jellyframe.app",
+            "formatVersion": 0,
+            "id": "org.test.profile",
+            "entry": "/index.html",
+            "version": {"name": "0.1.0", "code": 1},
+            "runtime": {"minJellyFrame": "0.5.0", "script": "none"},
+            "viewport": {"designWidth": 10, "designHeight": 10},
+            "budgets": {"maxResourceBytes": 1024},
+            "requiresFeatures": ["graphics.canvas2d"],
+            "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
+        })
+        diagnostics, warnings = package_app.render_core_feature_diagnostics(manifest, {
+            "schemaVersion": 1,
+            "engineAbi": 1,
+            "profileId": "render-core-default",
+            "features": ["core.document", "core.paint", "graphics.canvas2d"],
+        })
+        self.assertEqual(diagnostics["missingRequired"], [])
+        self.assertEqual(warnings, [])
+
+    def test_render_core_profile_preflight_rejects_modern_paint_when_disabled(self):
+        manifest = package_app.validate_manifest({
+            "format": "jellyframe.app",
+            "formatVersion": 0,
+            "id": "org.test.modern-paint",
+            "entry": "/index.html",
+            "version": {"name": "0.1.0", "code": 1},
+            "runtime": {"minJellyFrame": "0.5.0", "script": "none"},
+            "viewport": {"designWidth": 10, "designHeight": 10},
+            "budgets": {"maxResourceBytes": 1024},
+            "requiresFeatures": ["css.modern-paint"],
+            "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
+        })
+        with self.assertRaisesRegex(SystemExit, "missing required features: css.modern-paint"):
+            package_app.render_core_feature_diagnostics(manifest, {
+                "schemaVersion": 1,
+                "engineAbi": 1,
+                "profileId": "render-core-minimal",
+                "features": ["core.document", "core.paint", "css.flex-grid", "forms.advanced"],
+            })
+
+    def test_render_core_profile_rejects_incomplete_dependency_closure(self):
+        with self.assertRaisesRegex(SystemExit, "graphics.canvas2d -> core.paint"):
+            self._load_temporary_render_core_profile({
+                "schemaVersion": 1,
+                "engineAbi": 1,
+                "profileId": "invalid-canvas-only",
+                "features": ["graphics.canvas2d"],
+            })
+
+    def test_render_core_profile_accepts_dependency_closure(self):
+        profile = self._load_temporary_render_core_profile({
+            "schemaVersion": 1,
+            "engineAbi": 1,
+            "profileId": "valid-canvas",
+            "features": ["core.document", "core.paint", "graphics.canvas2d"],
+        })
+        self.assertEqual(profile["features"], [
+            "core.document", "core.paint", "graphics.canvas2d",
+        ])
+
+    @staticmethod
+    def _load_temporary_render_core_profile(profile):
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", prefix="jellyframe-profile-",
+            encoding="utf-8", delete=False,
+        )
+        path = Path(handle.name)
+        path.write_text(json.dumps(profile), encoding="utf-8")
+        handle.close()
+        try:
+            return package_app.load_render_core_profile(path)
+        finally:
+            path.unlink(missing_ok=True)
 
     def test_weather_template_and_sample_stay_intentionally_aligned(self):
         mirrored_files = (

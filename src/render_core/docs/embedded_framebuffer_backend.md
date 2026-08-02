@@ -1,6 +1,6 @@
 # Embedded Framebuffer Backend
 
-> Last updated: 2026-07-11; Applies to: 0.5.0-dev
+> Last updated: 2026-08-02; Applies to: 0.5.0-dev
 
 
 `src/render_core/embedded_framebuffer.h` provides the first deployable presentation
@@ -104,6 +104,14 @@ The packed buffer must hold the largest accepted dirty rectangle, and its flush
 callback must consume or copy the pixels before returning. This path supports
 only RGB565/BGR565; linear framebuffers and asynchronous multi-buffer policies
 should continue using `EmbeddedFrameBufferSink`.
+
+This is a presentation contract, not a performance promise. A port must
+benchmark the packed and linear framebuffer paths with the same full-frame and
+dirty-rect workload before selecting it. On the WS147 172x320 RGB565 target,
+the 2026-08-02 full-screen gradient A/B showed packed conversion adding about
+12.7 ms per flush and raising frame p95 from 58 ms to 71 ms; the port therefore
+keeps the linear framebuffer path as the default there. This result does not
+change the platform-neutral API or predict other panels.
 
 Desktop validation tools can use the same accounting without owning a target
 buffer:

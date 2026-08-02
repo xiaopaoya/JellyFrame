@@ -1,6 +1,6 @@
 # 开发者能力矩阵
 
-> 最后更新：2026-07-26；适用版本：0.5.0-dev
+> 最后更新：2026-08-02；适用版本：0.5.0-dev
 
 
 这份文档是 JellyFrame 面向应用开发者的实际能力契约。开发者在使用某个 HTML
@@ -381,14 +381,15 @@ JerryScript 源码树时可用。
 | --- | --- | --- |
 | Display list | 可用 | 矩形、边框、渐变、文本和 image-surface-handle 命令，包含近似文本字重。Canvas 输出通过同一条有界 image command 路径集成。 |
 | CPU framebuffer | 可用 | 软件 rasterizer/compositor 可输出 BMP/PPM。带预算的 compositor 会在分配前拒绝过大的主 framebuffer。 |
-| 嵌入式 framebuffer adapter | 可用 | `embedded_framebuffer` 可把 `HostFrameBufferView` 转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit 单色 buffer，并通过 callback flush dirty rects。`EmbeddedPackedRgb565Sink` 还可把每个 dirty rect 直接转换为紧凑、宿主原生的 RGB565/BGR565 word buffer，供同步面板路径使用。RGB565/BGR565 target 可选择开启 4x4 ordered dithering；可选 `EmbeddedFrameBufferPresentStats` 会报告 converted pixels、packed bytes、clipped/empty rects 和 flush count，供开发板 bring-up 对齐真实 panel 指标。 |
+| 嵌入式 framebuffer adapter | 可用 | `embedded_framebuffer` 可把 `HostFrameBufferView` 转换到调用方持有的 RGBA8888/BGRA8888、RGB565/BGR565、RGB332、Gray8 或 1-bit 单色 buffer，并通过 callback flush dirty rects。`EmbeddedPackedRgb565Sink` 还可把每个 dirty rect 直接转换为紧凑、宿主原生的 RGB565/BGR565 word buffer，供同步面板路径使用；它是可选的 presentation contract，不是性能保证，每个 port 都必须与线性 framebuffer 路径进行 A/B 实测。RGB565/BGR565 target 可选择开启 4x4 ordered dithering；可选 `EmbeddedFrameBufferPresentStats` 会报告 converted pixels、packed bytes、clipped/empty rects 和 flush count，供开发板 bring-up 对齐真实 panel 指标。 |
 | Source-over alpha | 可用 | straight-alpha 合成。 |
 | Opacity layer | 子集 | opacity/composited layer 使用离屏合成。嵌入式宿主可限制 offscreen pixels；超限 layer 会降级为逐命令直接透明绘制，避免分配过大的临时 buffer。相同上限也覆盖裁剪 text/image 的临时 surface：text 会跳过，image 以带裁剪的占位色和 `paint-transient-surface-budget` 降级。 |
 | 圆角填充 | 子集 | 背景/阴影支持 rounded rectangle fill clipping；圆角 fill/stroke/gradient 边缘使用局部 coverage 抗锯齿，普通不透明直角矩形仍走快速填充路径。 |
 | 边框绘制 | 可用 | 边框拆成 fill rectangles。 |
-| Linear gradient | 子集 | 两色水平/垂直渐变命令。 |
-| Conic gradient | 子集 | 两段顺时针进度绘制命令，从 12 点方向开始。只在实际使用时栅格化；普通矩形和线性渐变保持原快路径。Stop 必须覆盖 `0%..100%` 且连续；越界值不会被静默夹取。 |
-| Radial gradient | 子集 | 两色中心圆形径向渐变命令，仅在实际使用时栅格化。用于小面积高光、胶感卡片和表盘光斑；不支持焦点偏移、椭圆、多 stop、repeating 或多层背景。大面积使用会输出 `layer-radial-gradient-area-budget`。 |
+| Render Core modern-paint profile | 构建期可选 family | `css.modern-paint` 将有界渐变和阴影栅格路径作为一条垂直 feature family 裁剪。生成的 profile 必须与桌面链接 map 一致；关闭时不会链接 `modern_paint.cpp`，渐变使用首色/纯色 fallback，阴影不生成专属 command。App 不能加载 native feature module。 |
+| Linear gradient | 子集/按 profile 裁剪 | 包含 `css.modern-paint` 时支持两色水平、垂直和有界对角命令；不透明方角可穿戴路径有独立 fast path。`jellyframe_render_core_microbench` 报告 p50/p95 栅格耗时，但不把桌面数据冒充设备 FPS。 |
+| Conic gradient | 子集/按 profile 裁剪 | 包含 `css.modern-paint` 时支持从 12 点开始的两段顺时针进度命令，只在使用时栅格化；普通矩形和线性渐变保持原快路径。Stop 必须连续覆盖 `0%..100%`；越界会诊断，不静默夹取。 |
+| Radial gradient | 子集/按 profile 裁剪 | 包含 `css.modern-paint` 时支持两色中心圆形径向渐变，用于小面积高光、胶感卡片和表盘光斑；不支持焦点偏移、椭圆、多 stop、repeating 或多层背景。大面积使用会输出 `layer-radial-gradient-area-budget`。 |
 | 文本 | 子集 | 核心 fallback 是极小 ASCII bitmap 绘制，并为 UTF-8 非 ASCII 码点显示占位 glyph。Win32 壳注入 GDI，可验证 UTF-8/中文。 |
 | 中文文本 | 壳层相关 | 用 Win32 壳或未来平台 text backend。伪浏览器 fallback 会显示占位 glyph。 |
 | 图片 | 宿主可选/包内 BMP V0 + codec adapter 形状 | 已有平台无关 `ImageDecodeMock`、`AppImageSurfaceCache`、`Surface` handle 生命周期和尺寸/decoded bytes/pending 预算检查。render core 支持 `ImageHandleResolver` + image display command + `ImagePainter`；页面应使用 package-local 标准路径，例如 `<img src="/assets/icon.bmp">` 或相对 URL。Win32 壳可从 `.jfapp`/源码包加载无压缩 24/32-bit BMP 作为包内图片 V0；它的私有 debug fixture 只属于壳层验收，不是 app 语法。`AppImageCodecAdapter` 已定义 PNG/JPEG/WebP/厂商 codec 的产品级解码器边界，`app_image_codec_result_within_policy(...)` 会在 decoded surface 变成 handle 前做预算校验。`AppImageSurfaceCache` 可按 ready surface 数量和 decoded bytes 回收未被当前 display list 引用的 LRU surface；旧 app completion 会被拒绝，stale ready entry 可在 eviction 时丢弃并报告；图片命令携带 `object-fit`、简单 `object-position` 和 `image-rendering` 子集；`auto` 路径使用双线性缩放，`pixelated`/`crisp-edges` 保留硬边采样。Package report 包含 `imageDiagnostics`，会分类 package 图片 codec、读取轻量 BMP/PNG metadata，并与 target `hostServices.imageDecode` / `imageCodecs` 声明进行对比。图片 request 拒绝和 completion 失败会归类为稳定原因，例如 `capability-denied`、`resource-not-found`、`decode-budget-exceeded` 和 `surface-budget-exceeded`；`diagnostic_detail_for_url(...)` 会暴露稳定的 `src`/`state`/`reason`/`submit` 以及可选 host/job/handle/byte 字段，供桌面工具和移植日志使用。真实 PNG/JPEG/WebP decoder 和复杂 position 语法仍属于 port/未来工作。 |

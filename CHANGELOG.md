@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-07-26; Applies to: 0.5.0-dev
+> Last updated: 2026-08-02; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -9,6 +9,27 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 ## Unreleased
 
 ### Changed
+
+- The ESP32-S3 packed RGB565 presentation sink is now an explicit opt-in port
+  comparison path. The WS147 full-screen gradient A/B keeps the linear
+  framebuffer sink as the default after packed conversion raised frame p95
+  from 58 ms to 71 ms.
+
+- Link-map validation now accepts explicit `--used-feature` workload scopes:
+  enabled but uncalled families are reported as `not-tested` under linker GC,
+  while a real Canvas smoke workload still requires Canvas symbols.
+
+- Render Core feature IDs and dependency rules now use one desktop-tool registry;
+  package preflight and linker-map validation reject incomplete profiles before
+  an App or firmware evidence report can rely on them.
+
+- Render Core now emits feature-family source metadata and desktop linker maps
+  for the Canvas 2D and modern-paint build slices. The new link-map checker
+  verifies that the generated profile agrees with the final executable and
+  distinguishes real implementations from disabled stubs. The render-core
+  microbench now reports wearable-sized modern-paint p50/p95 latency, display
+  command count, surface bytes and an empty-page baseline; these remain desktop
+  evidence rather than MCU performance claims.
 
 - First-party Markdown now has a CTest freshness gate: every document carries
   a current-version edit marker, while generated support tables carry their
@@ -38,6 +59,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   without suppressing unsupported-target diagnostics.
 
 ### Fixed
+
+- Modern-paint OFF builds no longer compile unused gradient/shadow helpers, and
+  the core regression suite now tests profile-specific solid/no-command
+  fallbacks instead of asserting that disabled features are present.
 
 - The native `.jfapp` loader now requires the normalized bundle summary shape
   emitted by package validation and verifies every capability projection against

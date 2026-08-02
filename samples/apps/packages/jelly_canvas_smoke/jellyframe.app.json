@@ -27,6 +27,7 @@
     "maxEventListeners": 8
   },
   "capabilities": ["graphics.canvas2d"],
+  "requiresFeatures": ["graphics.canvas2d"],
   "targets": {
     "round-300": {
       "viewport": {

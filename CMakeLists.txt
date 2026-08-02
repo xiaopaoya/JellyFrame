@@ -11,6 +11,8 @@ option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
 option(JELLYFRAME_ENABLE_IMAGE_FILE_IO "Expose desktop image file writers from render_core" ON)
+option(JELLYFRAME_ENABLE_CANVAS2D "Compile the graphics.canvas2d Render Core family" ON)
+option(JELLYFRAME_ENABLE_MODERN_PAINT "Compile the css.modern-paint Render Core family" ON)
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
 
 if(JELLYFRAME_ENABLE_SANITIZERS)
@@ -91,45 +93,13 @@ if(JERRYSCRIPT_ROOT)
     endif()
 endif()
 
+set(JELLYFRAME_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_sources.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_feature_profile.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_link_map.cmake")
+
 add_library(jellyframe_render_core
-    src/render_core/animation_invalidation.cpp
-    src/render_core/animation_timeline.cpp
-    src/render_core/arena.cpp
-    src/render_core/bitmap_font.cpp
-    src/render_core/bitmap_font_resource.cpp
-    src/render_core/canvas2d.cpp
-    src/render_core/css_parser.cpp
-    src/render_core/display_invalidation.cpp
-    src/render_core/dirty_region.cpp
-    src/render_core/document_script.cpp
-    src/render_core/document_style.cpp
-    src/render_core/dom.cpp
-    src/render_core/dom_owner.cpp
-    src/render_core/embedded_framebuffer.cpp
-    src/render_core/event.cpp
-    src/render_core/form_control.cpp
-    src/render_core/form_submission.cpp
-    src/render_core/frame_loop.cpp
-    src/render_core/frame_update.cpp
-    src/render_core/hit_test.cpp
-    src/render_core/html_parser.cpp
-    src/render_core/html_tokenizer.cpp
-    src/render_core/html_tree_builder.cpp
-    src/render_core/input.cpp
-    src/render_core/layer_tree.cpp
-    src/render_core/layout.cpp
-    src/render_core/pipeline_statistics.cpp
-    src/render_core/render_tree.cpp
-    src/render_core/scroll_blit.cpp
-    src/render_core/software_renderer.cpp
-    src/render_core/style.cpp
-    src/render_core/style_repaint.cpp
-    src/render_core/text_adapter.cpp
-    src/render_core/text_backend.cpp
-    src/render_core/text_layout_reuse.cpp
-    src/render_core/text_normalization.cpp
-    src/render_core/text_repaint.cpp
-    src/render_core/text_scan.cpp
+    ${JELLYFRAME_RENDER_CORE_SOURCES_ABSOLUTE}
 )
 
 target_include_directories(jellyframe_render_core
@@ -138,6 +108,10 @@ target_include_directories(jellyframe_render_core
 )
 
 target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
+target_compile_definitions(jellyframe_render_core PUBLIC
+    JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED=${JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED}
+    JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED=${JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED}
+)
 if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
     target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)
 endif()
@@ -260,6 +234,7 @@ endif()
 
 if(JELLYFRAME_BUILD_BENCHMARKS)
     add_jellyframe_tool(jellyframe_render_core_microbench src/render_core/benchmarks/microbench.cpp)
+    jellyframe_enable_render_core_link_map(jellyframe_render_core_microbench)
     add_executable(jellyframe_app_runtime_microbench src/app_runtime/benchmarks/app_runtime_bench.cpp)
     target_link_libraries(jellyframe_app_runtime_microbench PRIVATE jellyframe_app_runtime)
     add_jellyframe_tool(jellyframe_virtual_bench ports/virtual_board/virtual_bench.cpp)
@@ -277,7 +252,6 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/arena_tests.cpp
         src/render_core/tests/animation_timeline_tests.cpp
         src/render_core/tests/budget_stress_tests.cpp
-        src/render_core/tests/canvas2d_tests.cpp
         src/render_core/tests/dom_mutation_tests.cpp
         src/render_core/tests/dom_owner_tests.cpp
         src/render_core/tests/document_script_tests.cpp
@@ -304,6 +278,17 @@ if(JELLYFRAME_BUILD_TESTS)
         src/render_core/tests/text_repaint_tests.cpp
         src/render_core/tests/text_scan_tests.cpp
     )
+    if(JELLYFRAME_ENABLE_CANVAS2D)
+        list(APPEND JELLYFRAME_RENDER_CORE_TEST_SOURCES
+            src/render_core/tests/canvas2d_tests.cpp)
+    else()
+        list(APPEND JELLYFRAME_RENDER_CORE_TEST_SOURCES
+            src/render_core/tests/canvas2d_disabled_tests.cpp)
+    endif()
+    if(JELLYFRAME_ENABLE_MODERN_PAINT)
+        list(APPEND JELLYFRAME_RENDER_CORE_TEST_SOURCES
+            src/render_core/tests/modern_paint_tests.cpp)
+    endif()
 
     foreach(test_source IN LISTS JELLYFRAME_RENDER_CORE_TEST_SOURCES)
         get_filename_component(test_name ${test_source} NAME_WE)
@@ -316,6 +301,7 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_RENDER_CORE_TEST_SOURCES}
     )
     jellyframe_enable_test_asserts(jellyframe_render_core_tests)
+    jellyframe_enable_render_core_link_map(jellyframe_render_core_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_render_core_tests)
     add_test(
         NAME jellyframe_render_core_tests
@@ -360,6 +346,12 @@ if(JELLYFRAME_BUILD_TESTS)
             NAME jellyframe_tool_package_preflight_tests
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_test(
+            NAME jellyframe_render_core_link_map_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_link_map_tests.py
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         add_test(

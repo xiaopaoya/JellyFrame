@@ -1,6 +1,6 @@
 # Embedded Optimization Notes
 
-> Last updated: 2026-07-13; Applies to: 0.5.0-dev
+> Last updated: 2026-08-02; Applies to: 0.5.0-dev
 
 
 The exact target CPU, memory map, display controller and instruction set are not
@@ -8,6 +8,11 @@ known yet, so current optimizations focus on portable constraints that matter on
 small wearable devices.
 
 ## Current Choices
+
+- Packed RGB565 presentation remains opt-in. The WS147 172x320 full-screen
+  gradient A/B on 2026-08-02 measured 71 ms frame p95 for packed conversion
+  versus 58 ms for the linear framebuffer path; the port must select the path
+  from measured evidence rather than assuming compact output is faster.
 
 - No exceptions on hot parser paths.
 - Parser stages are linear scans with explicit limits.

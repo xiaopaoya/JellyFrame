@@ -1,5 +1,6 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/animation_timeline.h"
+#include "render_core/feature_config.h"
 #include "render_core/html_parser.h"
 #include "render_core/hit_test.h"
 #include "render_core/layer_tree.h"
@@ -446,7 +447,11 @@ void linear_gradient_background_emits_gradient_command() {
             check(command.border_radius == 8, "gradient command carries radius");
         }
     }
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     check(found_gradient, "linear-gradient background emits gradient command");
+#else
+    check(!found_gradient, "linear-gradient background does not emit a modern command when disabled");
+#endif
 }
 
 void outline_and_text_shadow_emit_paint_commands() {
@@ -476,7 +481,11 @@ void outline_and_text_shadow_emit_paint_commands() {
     }
     check(found_outline, "outline emits stroke command");
     check(found_decoration, "text-decoration emits a small paint command");
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     check(glow_text_commands >= 2, "text-shadow emits shadow text before main text");
+#else
+    check(glow_text_commands == 1, "disabled text-shadow keeps only the main text command");
+#endif
 }
 
 void outline_offset_expands_focus_stroke_without_affecting_layout() {
@@ -687,6 +696,9 @@ void layer_tree_can_use_monotonic_arena() {
 }
 
 void box_shadow_emits_bounded_soft_shadow_command() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto pipeline = build_pipeline(
         "<body><section class='card'>Shadow</section><section class='card color-first'>Shadow</section></body>",
         ".card { background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }"
@@ -705,6 +717,9 @@ void box_shadow_emits_bounded_soft_shadow_command() {
 }
 
 void colored_spread_box_shadow_keeps_author_color() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto pipeline = build_pipeline(
         "<body><section class='card'>Glow</section></body>",
         ".card { width: 64px; height: 32px; background: #121820; "
@@ -728,6 +743,9 @@ void colored_spread_box_shadow_keeps_author_color() {
 }
 
 void two_layer_background_emits_base_then_highlight() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto pipeline = build_pipeline(
         "<body><section class='card'>Glow</section></body>",
         ".card { width: 64px; height: 36px; background: "
@@ -749,6 +767,9 @@ void two_layer_background_emits_base_then_highlight() {
 }
 
 void box_shadow_none_and_large_shadow_are_diagnosed() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto none_pipeline = build_pipeline(
         "<body><section class='card'>No shadow</section></body>",
         ".card { background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.08); box-shadow: none; }");
@@ -841,6 +862,9 @@ void generated_after_and_percentage_radius_emit_commands() {
 }
 
 void conic_gradient_background_emits_progress_command() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto pipeline = build_pipeline(
         "<body><section class='ring'></section></body>",
         ".ring { width: 64px; height: 64px; border-radius: 50%; "
@@ -861,6 +885,9 @@ void conic_gradient_background_emits_progress_command() {
 }
 
 void radial_gradient_background_emits_center_circle_command() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     auto pipeline = build_pipeline(
         "<body><section class='gel'></section></body>",
         ".gel { width: 80px; height: 48px; border-radius: 18px; "
@@ -882,6 +909,9 @@ void radial_gradient_background_emits_center_circle_command() {
 }
 
 void large_conic_gradient_reports_area_budget_diagnostic() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse("<body><section class='ring'></section></body>");
@@ -906,6 +936,9 @@ void large_conic_gradient_reports_area_budget_diagnostic() {
 }
 
 void large_radial_gradient_reports_area_budget_diagnostic() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse("<body><section class='gel'></section></body>");

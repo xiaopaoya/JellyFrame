@@ -2,6 +2,7 @@
 
 #include "render_core/animation_timeline.h"
 #include "render_core/form_control.h"
+#include "render_core/feature_config.h"
 #include "render_core/text_normalization.h"
 #include "render_core/text_scan.h"
 
@@ -16,9 +17,11 @@
 namespace jellyframe {
 namespace {
 
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
 constexpr int kConicGradientAreaWarningPixels = 65536;
 constexpr int kRadialGradientAreaWarningPixels = 32768;
 constexpr int kBoxShadowAreaWarningPixels = 98304;
+#endif
 
 bool has_border(const EdgeSizes& border) {
     return border.top > 0 || border.right > 0 || border.bottom > 0 || border.left > 0;
@@ -39,7 +42,7 @@ Rect union_rect(Rect left, Rect right) {
     const int y1 = std::min(left.y, right.y);
     const int x2 = std::max(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
     const int y2 = std::max(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
 Rect paint_rect_for(const LayoutBox& box) {
@@ -109,11 +112,21 @@ Transform2D parsed_transform_or_identity(const Style& style, DiagnosticSink* dia
 }
 
 bool has_shadow(const Style& style) {
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     return style.box_shadow.enabled;
+#else
+    (void)style;
+    return false;
+#endif
 }
 
 bool has_text_shadow(const Style& style) {
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     return style.text_shadow.enabled;
+#else
+    (void)style;
+    return false;
+#endif
 }
 
 int resolved_border_radius(const LayoutBox& box) {
@@ -144,6 +157,7 @@ void push_fill_rect(DisplayList& display_list, Rect rect, Color color, int borde
     display_list.push_back(std::move(command));
 }
 
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
 void push_linear_gradient(DisplayList& display_list,
                           Rect rect,
                           Color first,
@@ -232,15 +246,24 @@ void push_radial_gradient(DisplayList& display_list,
     command.border_radius = border_radius;
     display_list.push_back(std::move(command));
 }
+#endif
 
 void paint_background_paint(const BackgroundPaint& paint,
                             Rect rect,
                             int border_radius,
                             DisplayList& display_list,
                             const LayerTreeBuilderOptions& options) {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    (void)options;
+#endif
     if (paint.kind == BackgroundPaintKind::LinearGradient) {
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
         push_linear_gradient(display_list, rect, paint.color, paint.color2, paint.axis, border_radius);
+#else
+        push_fill_rect(display_list, rect, paint.color, border_radius);
+#endif
     } else if (paint.kind == BackgroundPaintKind::ConicGradient) {
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
         const long long area = static_cast<long long>(std::max(0, rect.width)) * static_cast<long long>(std::max(0, rect.height));
         if (area > kConicGradientAreaWarningPixels) {
             report_diagnostic(options.diagnostics, DiagnosticStage::LayerTree, DiagnosticSeverity::Warning,
@@ -248,7 +271,11 @@ void paint_background_paint(const BackgroundPaint& paint,
                               "area=" + std::to_string(area) + "px limit=" + std::to_string(kConicGradientAreaWarningPixels) + "px");
         }
         push_conic_gradient(display_list, rect, paint.color, paint.color2, paint.stop_percent, border_radius);
+#else
+        push_fill_rect(display_list, rect, paint.color, border_radius);
+#endif
     } else if (paint.kind == BackgroundPaintKind::RadialGradient) {
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
         const long long area = static_cast<long long>(std::max(0, rect.width)) * static_cast<long long>(std::max(0, rect.height));
         if (area > kRadialGradientAreaWarningPixels) {
             report_diagnostic(options.diagnostics, DiagnosticStage::LayerTree, DiagnosticSeverity::Warning,
@@ -256,6 +283,9 @@ void paint_background_paint(const BackgroundPaint& paint,
                               "area=" + std::to_string(area) + "px limit=" + std::to_string(kRadialGradientAreaWarningPixels) + "px");
         }
         push_radial_gradient(display_list, rect, paint.color, paint.color2, paint.axis, paint.stop_percent, border_radius);
+#else
+        push_fill_rect(display_list, rect, paint.color, border_radius);
+#endif
     } else if (is_visible_background(paint.color)) {
         push_fill_rect(display_list, rect, paint.color, border_radius);
     }
@@ -658,6 +688,12 @@ bool parse_float_attribute(const Node& node, const char* name, float& output) {
 void paint_box_shadow(const LayoutBox& box,
                       DisplayList& display_list,
                       const LayerTreeBuilderOptions& options) {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    (void)box;
+    (void)display_list;
+    (void)options;
+    return;
+#else
     if (!has_shadow(box.style)) {
         return;
     }
@@ -674,13 +710,13 @@ void paint_box_shadow(const LayoutBox& box,
                           "blur=" + std::to_string(blur) + "px limit=" + std::to_string(kMaxSoftShadowBlur) + "px");
         blur = kMaxSoftShadowBlur;
     }
-    const int extent = std::max(1, blur) + shadow.spread;
+    const int extent = std::max(1, safe_add(std::max(1, blur), shadow.spread));
     const int spread = shadow.spread;
     const Rect shadow_rect{
-        safe_edge(box.rect.x, shadow.offset_x - extent),
-        safe_edge(box.rect.y, shadow.offset_y - extent),
-        safe_edge(box.rect.width, extent * 2),
-        safe_edge(box.rect.height, extent * 2),
+        safe_edge(box.rect.x, safe_add(shadow.offset_x, -extent)),
+        safe_edge(box.rect.y, safe_add(shadow.offset_y, -extent)),
+        safe_add(box.rect.width, safe_add(extent, extent)),
+        safe_add(box.rect.height, safe_add(extent, extent)),
     };
     const long long shadow_area = static_cast<long long>(std::max(0, shadow_rect.width)) *
         static_cast<long long>(std::max(0, shadow_rect.height));
@@ -694,12 +730,15 @@ void paint_box_shadow(const LayoutBox& box,
                               "px limit=" + std::to_string(kBoxShadowAreaWarningPixels) + "px");
     }
     push_box_shadow(display_list,
-                    Rect{box.rect.x + shadow.offset_x - spread, box.rect.y + shadow.offset_y - spread,
-                         box.rect.width + spread * 2, box.rect.height + spread * 2},
+                    Rect{safe_edge(box.rect.x, safe_add(shadow.offset_x, safe_negate(spread))),
+                         safe_edge(box.rect.y, safe_add(shadow.offset_y, safe_negate(spread))),
+                         safe_add(box.rect.width, safe_add(spread, spread)),
+                         safe_add(box.rect.height, safe_add(spread, spread))},
                     shadow_color,
                     expand_corner_radii(resolved_border_radius(box), spread),
                     extent,
                     blur);
+#endif
 }
 
 void paint_outline(const LayoutBox& box, DisplayList& display_list) {
@@ -707,7 +746,7 @@ void paint_outline(const LayoutBox& box, DisplayList& display_list) {
         return;
     }
     const int width = box.style.outline_width;
-    const int extent = std::max(0, width + box.style.outline_offset);
+    const int extent = std::max(0, safe_add(width, box.style.outline_offset));
     const Rect outline_rect{
         safe_edge(box.rect.x, -extent),
         safe_edge(box.rect.y, -extent),
@@ -1111,7 +1150,7 @@ Rect intersect_rect(Rect left, Rect right) {
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
 bool empty_rect(Rect rect) {
