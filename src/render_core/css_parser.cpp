@@ -1,4 +1,5 @@
 ﻿#include "render_core/css_parser.h"
+#include "render_core/feature_config.h"
 
 #include <algorithm>
 #include <array>
@@ -819,6 +820,21 @@ bool is_supported_declaration_feature(std::string_view feature) {
     if (property.rfind("--", 0) == 0) {
         return true;
     }
+#if !JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+    if (property == "display") {
+        return !supported_keyword(value, {"flex", "inline-flex", "grid", "inline-grid"});
+    }
+    if (property == "align-content" || property == "align-items" || property == "align-self" ||
+        property == "column-gap" || property == "flex" || property == "flex-basis" ||
+        property == "flex-direction" || property == "flex-grow" || property == "flex-shrink" ||
+        property == "flex-wrap" || property == "gap" || property == "grid-auto-rows" ||
+        property == "grid-column" || property == "grid-row" ||
+        property == "grid-template-columns" || property == "grid-template-rows" ||
+        property == "justify-content" || property == "order" || property == "place-content" ||
+        property == "place-items" || property == "place-self" || property == "row-gap") {
+        return false;
+    }
+#endif
     if (property == "display") {
         return supported_keyword(value, {"block", "inline", "inline-block", "flex",
                                         "inline-flex", "grid", "inline-grid", "none"});

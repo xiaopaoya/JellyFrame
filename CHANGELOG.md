@@ -10,6 +10,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Added the build-time `css.flex-grid` family gate. The parser, style, layout and
+  layer paths now share one ON/OFF boundary; disabled profiles reject flex/grid
+  declarations and matching `@supports` conditions, then use block/inline fallback.
+  Sample and Win32 regression registration can be disabled for minimal profiles,
+  and all Canvas/modern-paint/flex-grid combinations now receive deterministic
+  profile IDs.
+
 - The ESP32-S3 packed RGB565 presentation sink is now an explicit opt-in port
   comparison path. The WS147 full-screen gradient A/B keeps the linear
   framebuffer sink as the default after packed conversion raised frame p95

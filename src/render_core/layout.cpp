@@ -193,6 +193,7 @@ void apply_relative_position_offset(LayoutBox& box) {
     }
 }
 
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
 struct FlexLayoutItem {
     LayoutBox* child = nullptr;
     int base_width = 0;
@@ -607,6 +608,7 @@ GridPlacement place_grid_item(GridPlacementState& state,
     mark_grid_item_occupied(state, placement.row, placement.column, column_span, row_span);
     return placement;
 }
+#endif
 
 bool participates_in_inline_flow(const LayoutBox& box) {
     return (box.node != nullptr && box.node->type == NodeType::Text) ||
@@ -805,11 +807,15 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
     }
 
     int max_child_width = 0;
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
     const int children_height = box.style.display == Display::Flex
         ? layout_flex_box(box, content_x, cursor_y, content_width, height, depth)
         : box.style.display == Display::Grid
         ? layout_grid_box(box, content_x, cursor_y, content_width, height, depth)
         : has_only_inline_children(box)
+#else
+    const int children_height = has_only_inline_children(box)
+#endif
         ? layout_inline_children(box, content_x, cursor_y, content_width, depth)
         : [&] {
             int flow_height = 0;
@@ -1046,6 +1052,7 @@ void LayoutEngine::layout_positioned_children(LayoutBox& box,
     }
 }
 
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
 int LayoutEngine::layout_flex_box(LayoutBox& box,
                                   int content_x,
                                   int content_y,
@@ -1442,6 +1449,7 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
 
     return has_fallback ? std::max(total_height, fallback_y - row_gap) : total_height;
 }
+#endif
 
 std::size_t count_layout_boxes(const LayoutBox& root) {
     std::size_t count = 0;

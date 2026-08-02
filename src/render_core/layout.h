@@ -2,6 +2,7 @@
 
 #include "render_core/arena.h"
 #include "render_core/dom.h"
+#include "render_core/feature_config.h"
 #include "render_core/geometry.h"
 #include "render_core/render_tree.h"
 #include "render_core/style.h"
@@ -61,6 +62,7 @@ private:
                         int content_width,
                         int min_width,
                         int height) const;
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
     int layout_flex_box(LayoutBox& box,
                         int content_x,
                         int content_y,
@@ -73,6 +75,7 @@ private:
                         int content_width,
                         int containing_height,
                         std::size_t depth) const;
+#endif
     int layout_inline_children(LayoutBox& box, int content_x, int content_y, int content_width, std::size_t depth) const;
     void layout_positioned_children(LayoutBox& box,
                                     int content_x,

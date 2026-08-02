@@ -56,6 +56,7 @@ Rect paint_rect_for(const LayoutBox& box) {
     return rect.width > 0 && rect.height > 0 ? rect : box.rect;
 }
 
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
 std::vector<const LayoutBox*> ordered_flex_paint_children(const LayoutBox& box) {
     if (box.style.display != Display::Flex) {
         return {};
@@ -76,6 +77,7 @@ std::vector<const LayoutBox*> ordered_flex_paint_children(const LayoutBox& box) 
     });
     return ordered;
 }
+#endif
 
 bool has_overflow_clip(const Style& style) {
     return style.overflow == "hidden" || style.overflow == "scroll" ||
@@ -1406,7 +1408,11 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
     const auto enqueue_children = [&pending](const LayoutBox& parent,
                                              LayerNode* parent_layer,
                                              int parent_scroll_y) {
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         const std::vector<const LayoutBox*> ordered = ordered_flex_paint_children(parent);
+#else
+        const std::vector<const LayoutBox*> ordered;
+#endif
         if (ordered.empty()) {
             for (auto it = parent.children.rbegin(); it != parent.children.rend(); ++it) {
                 pending.push_back(PendingBox{it->get(), parent_layer, parent_scroll_y, false});

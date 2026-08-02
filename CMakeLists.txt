@@ -9,10 +9,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(JELLYFRAME_BUILD_EXAMPLES "Build JellyFrame native validation and dump tools" ON)
 option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
+option(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS "Register sample and external-trial CTest coverage" ON)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
 option(JELLYFRAME_ENABLE_IMAGE_FILE_IO "Expose desktop image file writers from render_core" ON)
 option(JELLYFRAME_ENABLE_CANVAS2D "Compile the graphics.canvas2d Render Core family" ON)
 option(JELLYFRAME_ENABLE_MODERN_PAINT "Compile the css.modern-paint Render Core family" ON)
+option(JELLYFRAME_ENABLE_FLEX_GRID "Compile the css.flex-grid Render Core family" ON)
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
 
 if(JELLYFRAME_ENABLE_SANITIZERS)
@@ -111,6 +113,7 @@ target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
 target_compile_definitions(jellyframe_render_core PUBLIC
     JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED=${JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED}
     JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED=${JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED}
+    JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED=${JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED}
 )
 if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
     target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)
@@ -378,7 +381,7 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_registry_tests.py
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-        if(JELLYFRAME_BUILD_EXAMPLES)
+        if(JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
             add_test(
                 NAME jellyframe_pipeline_visual_diagnostics_tests
                 COMMAND ${Python3_EXECUTABLE}
@@ -533,7 +536,7 @@ if(JELLYFRAME_BUILD_TESTS)
         endif()
     endif()
 
-    if(WIN32 AND JELLYFRAME_BUILD_EXAMPLES)
+    if(WIN32 AND JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
         set(JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py

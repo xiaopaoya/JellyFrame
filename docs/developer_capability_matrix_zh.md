@@ -386,6 +386,7 @@ JerryScript 源码树时可用。
 | Opacity layer | 子集 | opacity/composited layer 使用离屏合成。嵌入式宿主可限制 offscreen pixels；超限 layer 会降级为逐命令直接透明绘制，避免分配过大的临时 buffer。相同上限也覆盖裁剪 text/image 的临时 surface：text 会跳过，image 以带裁剪的占位色和 `paint-transient-surface-budget` 降级。 |
 | 圆角填充 | 子集 | 背景/阴影支持 rounded rectangle fill clipping；圆角 fill/stroke/gradient 边缘使用局部 coverage 抗锯齿，普通不透明直角矩形仍走快速填充路径。 |
 | 边框绘制 | 可用 | 边框拆成 fill rectangles。 |
+| Render Core flex-grid profile | 构建期可选 family | `css.flex-grid` 将简化 flex/grid 的 parser、computed-style 字段、layout pass 和 flex order 绘制排序作为一条垂直 family 门控。关闭时 flex/grid 声明及命中的 `@supports` 条件都会被拒绝，布局回退到 block/inline，也不要求 minimal profile 注册 flex/grid 专属测试或示例。Canvas/modern-paint/flex-grid 的 profile 组合使用确定且不重复的名称；是否在受限固件启用仍须由移植侧提供链接、flash/RAM 和启动成本数据。 |
 | Render Core modern-paint profile | 构建期可选 family | `css.modern-paint` 将有界渐变和阴影栅格路径作为一条垂直 feature family 裁剪。生成的 profile 必须与桌面链接 map 一致；关闭时不会链接 `modern_paint.cpp`，渐变使用首色/纯色 fallback，阴影不生成专属 command。App 不能加载 native feature module。 |
 | Linear gradient | 子集/按 profile 裁剪 | 包含 `css.modern-paint` 时支持两色水平、垂直和有界对角命令；不透明方角可穿戴路径有独立 fast path。`jellyframe_render_core_microbench` 报告 p50/p95 栅格耗时，但不把桌面数据冒充设备 FPS。 |
 | Conic gradient | 子集/按 profile 裁剪 | 包含 `css.modern-paint` 时支持从 12 点开始的两段顺时针进度命令，只在使用时栅格化；普通矩形和线性渐变保持原快路径。Stop 必须连续覆盖 `0%..100%`；越界会诊断，不静默夹取。 |

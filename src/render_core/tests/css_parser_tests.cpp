@@ -228,6 +228,27 @@ void supports_queries_apply_representative_supported_properties() {
     check(style.color.r == 0 && style.color.g == 0 && style.color.b == 0, "unsupported @supports block is not applied");
 }
 
+#if !JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+void disabled_flex_grid_queries_and_declarations_fall_back() {
+    const Stylesheet stylesheet = parse(
+        "@supports (display: grid) { .grid { display: grid; gap: 4px; } }"
+        ".fallback { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }"
+        ".plain { display: block; }");
+    check(stylesheet.size() == 2, "disabled flex-grid removes the conditional grid rule");
+    check(stylesheet[0].selector == ".fallback" && stylesheet[1].selector == ".plain",
+          "disabled flex-grid preserves surrounding rules");
+
+    auto element = make_element("div");
+    element->attributes["class"] = "fallback";
+    StyleResolver resolver(stylesheet);
+    const Style style = resolver.resolve(*element);
+    check(style.display != Display::Flex && style.display != Display::Grid,
+          "disabled flex-grid never leaves a flex/grid display value");
+    check(style.column_gap == 0 && style.row_gap == 0,
+          "disabled flex-grid does not retain layout-family gaps");
+}
+#endif
+
 void text_wrap_alias_reuses_bounded_white_space_behavior() {
     auto label = make_element("span");
     label->attributes["class"] = "label";
@@ -1289,8 +1310,13 @@ void logical_properties_and_hsl_apply() {
               style.inset_right_specified && style.inset_right == 9 &&
               style.inset_top_specified && style.inset_top == 4,
           "logical inset maps to LTR physical offsets");
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
     check(style.align_content == JustifyContent::End && style.justify_content == JustifyContent::Center,
           "place-content expands through existing alignment properties");
+#else
+    check(style.align_content == JustifyContent::Start && style.justify_content == JustifyContent::Start,
+          "disabled flex-grid ignores place-content without changing the block fallback");
+#endif
     check(style.color.r == 51 && style.color.g == 102 && style.color.b == 153 && style.color.a == 128,
           "hsl color converts through the existing sRGB color path");
     check(style.background_color.r == 0 && style.background_color.g == 128 &&
@@ -1480,8 +1506,12 @@ int main() {
         nesting_preprocessor_respects_depth_and_output_budgets();
         skips_enhancement_blocks_without_corrupting_following_rules();
         pipeline_diagnostics_report_css_and_style_degradation();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         supports_queries_flatten_safe_declaration_subset();
         supports_queries_apply_representative_supported_properties();
+#else
+        disabled_flex_grid_queries_and_declarations_fall_back();
+#endif
         text_wrap_alias_reuses_bounded_white_space_behavior();
         style_struct_size_has_embedded_guardrail();
         flattens_layers_and_plain_media();
@@ -1511,7 +1541,9 @@ int main() {
         author_css_collection_respects_aggregate_resource_limits();
         html5_semantic_defaults_are_visible();
         border_none_removes_default_control_border();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_and_aspect_ratio_properties_apply();
+#endif
         physical_edge_longhands_apply_per_side();
         font_weight_list_style_and_generated_counter_apply();
         text_transform_parses_and_inherits();
@@ -1519,6 +1551,7 @@ int main() {
         after_generated_content_and_text_overflow_apply();
         per_corner_border_radius_applies();
         overflow_y_uses_the_vertical_scroll_subset();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         fixed_two_column_grid_template_applies();
         repeated_fixed_grid_template_applies();
         modern_length_functions_and_flex_wrap_apply();
@@ -1526,6 +1559,7 @@ int main() {
         flex_direction_column_applies();
         align_self_applies();
         align_content_applies();
+#endif
         positioned_offsets_apply();
         logical_properties_and_hsl_apply();
         supports_queries_accept_logical_properties_and_hsl();

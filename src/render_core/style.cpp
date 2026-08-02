@@ -22,6 +22,19 @@
 namespace jellyframe {
 namespace {
 
+#if !JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+bool is_flex_grid_property(const std::string& property) {
+    return property == "align-content" || property == "align-items" || property == "align-self" ||
+        property == "column-gap" || property == "flex" || property == "flex-basis" ||
+        property == "flex-direction" || property == "flex-grow" || property == "flex-shrink" ||
+        property == "flex-wrap" || property == "gap" || property == "grid-auto-rows" ||
+        property == "grid-column" || property == "grid-row" ||
+        property == "grid-template-columns" || property == "grid-template-rows" ||
+        property == "justify-content" || property == "order" || property == "place-content" ||
+        property == "place-items" || property == "place-self" || property == "row-gap";
+}
+#endif
+
 std::string trim(std::string_view value) {
     std::size_t begin = 0;
     while (begin < value.size() && std::isspace(static_cast<unsigned char>(value[begin]))) {
@@ -3374,6 +3387,11 @@ bool apply_declaration(Style& style,
                        const std::string& property,
                        const std::string& value,
                        const StyleResolver* resolver = nullptr) {
+#if !JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+    if (is_flex_grid_property(property)) {
+        return false;
+    }
+#endif
     const DeclarationApplyResult sizing = apply_sizing_declaration(style, property, value);
     if (sizing != DeclarationApplyResult::Unhandled) {
         return sizing == DeclarationApplyResult::Applied;
@@ -3389,9 +3407,17 @@ bool apply_declaration(Style& style,
         } else if (value == "inline-block") {
             style.display = Display::InlineBlock;
         } else if (value == "flex" || value == "inline-flex") {
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
             style.display = Display::Flex;
+#else
+            return false;
+#endif
         } else if (value == "grid" || value == "inline-grid") {
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
             style.display = Display::Grid;
+#else
+            return false;
+#endif
         } else {
             return false;
         }

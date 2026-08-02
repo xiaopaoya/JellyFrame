@@ -639,6 +639,7 @@ int main() {
         layout_tree_respects_box_budget();
         layout_tree_reports_box_budget_diagnostic();
         layout_tree_reports_depth_budget_diagnostic();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         flex_row_distributes_grow_space();
         flex_row_shrinks_basis_widths();
         flex_row_justifies_and_aligns_items();
@@ -649,6 +650,7 @@ int main() {
         flex_column_distributes_grow_space();
         flex_order_reorders_in_flow_layout_without_touching_default_path();
         flex_column_resolves_percent_height_against_containing_box();
+#endif
         positioned_layout_offsets_without_flow_space();
         logical_inset_layout_uses_ltr_physical_offsets();
         relative_layout_offsets_visual_box_only();
@@ -656,10 +658,12 @@ int main() {
         percentage_width_and_height_use_containing_box();
         border_box_percent_width_accounts_for_edges();
         max_width_percent_clamps_nested_border_box();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         max_width_percent_clamps_nested_flex_grid_items();
         grid_places_fixed_columns_and_spans();
         grid_places_explicit_rows_and_numeric_lines();
         grid_row_budget_uses_non_overlapping_block_fallback();
+#endif
         nowrap_text_overflow_reports_diagnostic();
     } catch (const std::exception& error) {
         std::cerr << "layout test failed: " << error.what() << '\n';

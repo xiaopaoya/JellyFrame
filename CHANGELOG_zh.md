@@ -10,6 +10,11 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 新增构建期 `css.flex-grid` family 门控。parser、style、layout 和 layer 共用同一条
+  ON/OFF 边界；关闭 profile 时拒绝 flex/grid 声明及命中的 `@supports` 条件，并回退到
+  block/inline。minimal profile 可关闭示例与 Win32 回归注册，Canvas/modern-paint/flex-grid
+  的全部组合现在都有确定且不重复的 profile ID。
+
 - ESP32-S3 packed RGB565 presentation sink 现在是明确 opt-in 的 port 对比路径。WS147
   整屏渐变 A/B 中 packed conversion 使 frame p95 从 58 ms 升到 71 ms，因此默认保持
   线性 framebuffer sink。

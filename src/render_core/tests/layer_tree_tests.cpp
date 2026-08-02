@@ -1302,7 +1302,9 @@ int main() {
         centered_inline_text_aligns_in_parent();
         button_inline_block_shrink_wraps_text();
         select_does_not_paint_option_list_inline();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_auto_fit_gap_span_and_aspect_ratio_layout();
+#endif
         box_shadow_emits_bounded_soft_shadow_command();
         colored_spread_box_shadow_keeps_author_color();
         two_layer_background_emits_base_then_highlight();
@@ -1314,14 +1316,20 @@ int main() {
         radial_gradient_background_emits_center_circle_command();
         large_conic_gradient_reports_area_budget_diagnostic();
         large_radial_gradient_reports_area_budget_diagnostic();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         fixed_grid_places_description_list_in_columns();
         flex_order_changes_same_stack_paint_order();
+#endif
         unbreakable_symbol_stays_single_line();
         text_overflow_ellipsis_truncates_painted_text();
         text_transform_paints_transformed_text();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_item_auto_width_reflows_centered_text();
+#endif
         text_input_respects_text_align();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         flex_wrap_places_items_on_new_lines();
+#endif
         image_element_emits_image_display_command_when_surface_resolves();
         canvas_element_emits_image_display_command_when_surface_resolves();
         layer_builder_respects_layer_and_display_command_budgets();
