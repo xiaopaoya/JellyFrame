@@ -68,10 +68,26 @@ inline Color modern_paint_lerp_color_255(Color first, Color second, int t) {
 }
 
 inline int modern_paint_euclidean_distance_half_px(std::int64_t dx, std::int64_t dy) {
-    const std::int64_t major = std::max(std::abs(dx), std::abs(dy));
-    const std::int64_t minor = std::min(std::abs(dx), std::abs(dy));
-    return static_cast<int>(std::min<std::int64_t>(std::numeric_limits<int>::max(),
-                                                   major + ((minor * 13) >> 5)));
+    const auto absolute_u64 = [](std::int64_t value) -> std::uint64_t {
+        if (value >= 0) {
+            return static_cast<std::uint64_t>(value);
+        }
+        // Avoid negating INT64_MIN while retaining its exact magnitude.
+        return static_cast<std::uint64_t>(-(value + 1)) + 1U;
+    };
+    const std::uint64_t absolute_dx = absolute_u64(dx);
+    const std::uint64_t absolute_dy = absolute_u64(dy);
+    const std::uint64_t major = std::max(absolute_dx, absolute_dy);
+    const std::uint64_t minor = std::min(absolute_dx, absolute_dy);
+    if (minor > std::numeric_limits<std::uint64_t>::max() / 13U) {
+        return std::numeric_limits<int>::max();
+    }
+    const std::uint64_t correction = (minor * 13U) >> 5U;
+    if (major > std::numeric_limits<std::uint64_t>::max() - correction) {
+        return std::numeric_limits<int>::max();
+    }
+    return static_cast<int>(std::min<std::uint64_t>(
+        std::numeric_limits<int>::max(), major + correction));
 }
 
 inline int modern_paint_progress_255(int delta, int denominator) {

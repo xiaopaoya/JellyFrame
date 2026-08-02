@@ -17,6 +17,9 @@ int modern_paint_tests_main() {
     assert(modern_paint_conic_percent_from_top_clockwise(0, 10) == 50);
     assert(modern_paint_conic_percent_from_top_clockwise(-10, 0) == 75);
     assert(modern_paint_euclidean_distance_half_px(0, 10) == 10);
+    assert(modern_paint_euclidean_distance_half_px(std::numeric_limits<std::int64_t>::min(),
+                                                   std::numeric_limits<std::int64_t>::max()) ==
+           std::numeric_limits<int>::max());
     assert(modern_paint_rounded_rect_outside_distance_half_px(Rect{0, 0, 20, 20}, 10, 10, 10) == 0);
     const Rect rounded_rect{4, 6, 20, 14};
     const int rounded_radius = encode_corner_radii(CornerRadii{5, 3, 7, 2});
