@@ -85,8 +85,8 @@ flex/grid parser, computed-style, layout and paint-order paths as one vertical
 family. When disabled, matching declarations and `@supports` conditions are
 rejected and the document uses the existing block/inline fallback; it does not
 allocate a runtime feature registry or permit an App to re-enable the family.
-Generated profile IDs are deterministic for every Canvas/modern-paint/flex-grid
-combination and are covered by a configure-only regression test.
+Generated profile IDs are deterministic for every Canvas/modern-paint/flex-grid/
+advanced-forms combination and are covered by a configure-only regression test.
 
 `JELLYFRAME_ENABLE_ADVANCED_FORMS` is ON by default. It owns local constraint
 validation, custom validity, bounded `FormData`, `SubmitEvent`, `requestSubmit`
