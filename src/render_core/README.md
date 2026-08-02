@@ -1,6 +1,6 @@
 # Render Core
 
-> Last updated: 2026-08-02; Applies to: 0.5.0-dev
+> Last updated: 2026-08-03; Applies to: 0.5.0-dev
 
 `render_core` is JellyFrame's platform-neutral Living Standard/CSS subset and
 software rendering pipeline.
@@ -59,9 +59,9 @@ dependency list, budget and profile gate. See
 manifest contract. Ordinary App packages remain data/code at the declared
 runtime level; they do not load native Render Core modules.
 
-The first build-time slices are `JELLYFRAME_ENABLE_CANVAS2D` and
-`JELLYFRAME_ENABLE_MODERN_PAINT`. When Canvas is enabled, the
-full Canvas 2D implementation is linked. When disabled, the stable
+The first build-time slices are `JELLYFRAME_ENABLE_CANVAS2D`,
+`JELLYFRAME_ENABLE_MODERN_PAINT` and `JELLYFRAME_ENABLE_FLEX_GRID`. When Canvas
+is enabled, the full Canvas 2D implementation is linked. When disabled, the stable
 `Canvas2DRegistry` API is backed by `canvas2d_disabled.cpp`; calls fail safely,
 allocate no Canvas surface state and keep existing host consumers linkable. The
 generated `jellyframe_render_core_profile.json` in the build directory records
@@ -78,6 +78,14 @@ OFF, gradient declarations retain an earlier solid-color fallback, shadow
 declarations are rejected without creating shadow layers, and direct gradient
 display commands are painted as their first color. This is a build-time family
 gate, not an App-loadable native module.
+
+`JELLYFRAME_ENABLE_FLEX_GRID` is also ON by default. It gates the documented
+flex/grid parser, computed-style, layout and paint-order paths as one vertical
+family. When disabled, matching declarations and `@supports` conditions are
+rejected and the document uses the existing block/inline fallback; it does not
+allocate a runtime feature registry or permit an App to re-enable the family.
+Generated profile IDs are deterministic for every Canvas/modern-paint/flex-grid
+combination and are covered by a configure-only regression test.
 
 Modern paint prepares rounded-rectangle geometry once per display command and
 reuses it across the pixel loop. Shared geometry arithmetic uses saturating

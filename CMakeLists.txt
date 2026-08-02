@@ -358,6 +358,15 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         add_test(
+            NAME jellyframe_render_core_feature_profile_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_feature_profile_tests.py
+                    --cmake ${CMAKE_COMMAND}
+                    --source-root ${CMAKE_CURRENT_SOURCE_DIR}
+                    --generator ${CMAKE_GENERATOR}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_test(
             NAME jellyframe_html_support_table_consistency
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/html_support_table_tests.py

@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-02; Applies to: 0.5.0-dev
+> Last updated: 2026-08-03; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -9,6 +9,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 ## Unreleased
 
 ### Changed
+
+- Render Core profile IDs are now derived from a fixed disabled-family order
+  instead of a hand-maintained combination table. A configure-only regression
+  covers all Canvas 2D, modern-paint and flex-grid combinations, including the
+  generated features and compile notes.
 
 - Added the build-time `css.flex-grid` family gate. The parser, style, layout and
   layer paths now share one ON/OFF boundary; disabled profiles reject flex/grid

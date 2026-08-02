@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-02；适用版本：0.5.0-dev
+> 最后更新：2026-08-03；适用版本：0.5.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -9,6 +9,10 @@ JellyFrame Engine 的重要变更记录在这里。
 ## Unreleased
 
 ### 变更
+
+- Render Core profile ID 现按固定 disabled-family 顺序生成，不再维护易遗漏的组合表。
+  新增 configure-only 回归，覆盖 Canvas 2D、modern-paint 与 flex-grid 的全部组合，以及
+  生成的 feature 列表和编译 notes。
 
 - 新增构建期 `css.flex-grid` family 门控。parser、style、layout 和 layer 共用同一条
   ON/OFF 边界；关闭 profile 时拒绝 flex/grid 声明及命中的 `@supports` 条件，并回退到
