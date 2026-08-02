@@ -10,6 +10,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- CTest 现会将生成的 Render Core 测试可执行文件 link map 与当前 profile 对照；CMake
+  target metadata 会将生成的 map 路径提供给校验器。
+
 - 新增构建期 `forms.advanced` Render Core family 门控。关闭 profile 仍保留基础表单控件，
   但 C++ API 走安全 no-op stub、不执行 submit/reset 默认动作、JerryScript 不暴露高级表单 API，
   并在生成 profile 与 link-map 证据中记录该选择。

@@ -5,6 +5,8 @@
 # archive extraction and dead stripping. The path is placed beside the target
 # to work with the single-config desktop validation builds used by CI.
 function(jellyframe_enable_render_core_link_map target)
+    set(_jellyframe_render_core_map_path
+        "${CMAKE_CURRENT_BINARY_DIR}/${target}.map")
     if(MSVC)
         target_link_options(${target} PRIVATE
             "/MAP:${target}.map")
@@ -15,4 +17,7 @@ function(jellyframe_enable_render_core_link_map target)
         target_link_options(${target} PRIVATE
             "-Wl,-Map,${target}.map")
     endif()
+    set_property(TARGET ${target} PROPERTY
+        JELLYFRAME_RENDER_CORE_LINK_MAP "${_jellyframe_render_core_map_path}")
+    unset(_jellyframe_render_core_map_path)
 endfunction()

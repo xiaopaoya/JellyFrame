@@ -114,6 +114,12 @@ python tools\check_render_core_link_map.py `
   --map build\module-on\jellyframe_render_core_microbench.map
 ```
 
+CTest also checks the generated `jellyframe_render_core_tests` map against the
+active profile through CMake target metadata, so a default CI build cannot
+silently advertise a separately compiled family that its validation executable
+failed to link. A scoped map check is still needed for an embedded workload that
+intentionally does not exercise every enabled family.
+
 The Render Core microbench reports both legacy `avg_us` smoke metrics and
 `modern_paint_*_stats` lines with p50/p95 latency, display-command count and
 the measured wearable surface byte count. These are desktop attribution

@@ -359,6 +359,19 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_link_map_tests.py
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+        get_property(_jellyframe_render_core_tests_map
+            TARGET jellyframe_render_core_tests
+            PROPERTY JELLYFRAME_RENDER_CORE_LINK_MAP)
+        add_test(
+            NAME jellyframe_render_core_generated_link_map
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_render_core_link_map.py
+                    --profile ${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json
+                    --map ${_jellyframe_render_core_tests_map})
+        set_tests_properties(jellyframe_render_core_generated_link_map PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        unset(_jellyframe_render_core_tests_map)
+
         add_test(
             NAME jellyframe_render_core_feature_profile_tests
             COMMAND ${Python3_EXECUTABLE}

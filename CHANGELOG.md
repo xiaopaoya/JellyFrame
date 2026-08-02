@@ -10,6 +10,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- CTest now validates the generated Render Core test-executable link map against
+  the active profile. CMake target metadata supplies the generated map path to
+  the checker.
+
 - Added the build-time `forms.advanced` Render Core family gate. Disabled
   profiles retain basic form controls but link safe C++ no-op stubs, do not run
   submit/reset default actions, omit the advanced JerryScript form APIs, and
