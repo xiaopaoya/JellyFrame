@@ -227,3 +227,22 @@ jobs:
       - name: Run scripting CTest
         shell: pwsh
         run: ctest --test-dir build-scripting -C Release --output-on-failure
+
+      - name: Configure scripting forms-off build
+        shell: pwsh
+        run: >
+          cmake -S . -B build-scripting-forms-off
+          -DJELLYFRAME_BUILD_EXAMPLES=OFF
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_SCRIPTING=ON
+          -DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF
+          -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
+
+      - name: Build scripting forms-off test target
+        shell: pwsh
+        run: cmake --build build-scripting-forms-off --config Release --target jellyframe_script_tests --parallel
+
+      - name: Run scripting forms-off CTest
+        shell: pwsh
+        run: ctest --test-dir build-scripting-forms-off -C Release -R "^jellyframe_script_tests$" --output-on-failure

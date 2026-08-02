@@ -14,6 +14,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   the active profile. CMake target metadata supplies the generated map path to
   the checker.
 
+- The Windows JerryScript CI job now compiles and runs the `forms.advanced` OFF
+  bridge test target, ensuring omitted form APIs remain buildable and absent.
+
 - Added the build-time `forms.advanced` Render Core family gate. Disabled
   profiles retain basic form controls but link safe C++ no-op stubs, do not run
   submit/reset default actions, omit the advanced JerryScript form APIs, and
