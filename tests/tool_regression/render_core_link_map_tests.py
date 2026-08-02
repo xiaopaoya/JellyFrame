@@ -132,6 +132,20 @@ class RenderCoreLinkMapTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
 
+    def test_flex_grid_is_explicitly_not_applicable_to_map_symbols(self):
+        result = run_checker(
+            {
+                "schemaVersion": 1,
+                "features": ["core.document", "core.paint", "css.flex-grid"],
+            },
+            "jellyframe_render_core:layout.cpp.obj\n",
+            "--used-feature", "css.flex-grid",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('"feature": "css.flex-grid"', result.stdout)
+        self.assertIn('"mapValidation": "not-applicable"', result.stdout)
+        self.assertIn('"status": "not-applicable"', result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Verify that a Render Core profile agrees with a final-link map.
+"""Verify link-map-visible Render Core families against a generated profile.
 
 This is intentionally a conservative smoke check. A map proves that a
-feature-family symbol reached the selected desktop validation executable; it
-does not replace an embedded link map or claim a firmware flash/RAM result.
+separately linked family reached the selected desktop validation executable;
+families compiled into shared translation units are reported as not applicable.
+It does not replace an embedded link map or claim a firmware flash/RAM result.
 """
 
 from __future__ import annotations
@@ -24,6 +25,23 @@ FEATURE_MARKERS = {
     # file marker distinguishes the real implementation from that stub.
     "graphics.canvas2d": ("canvas2d.cpp.obj", "canvas2d.cpp.o"),
 }
+
+# Flex/grid is conditionally compiled inside parser, style, layout and layer
+# translation units that are also required by the minimal profile. A map cannot
+# distinguish its preprocessor-gated paths from the common implementation.
+# Keep that limitation explicit instead of treating profile metadata as a link
+# proof. The configure-only profile regression and an ON/OFF behavior workload
+# provide the evidence for this family.
+PROFILE_GATED_WITHOUT_LINK_MARKER = {
+    "css.flex-grid": (
+        "compiled into shared parser/style/layout/layer translation units; "
+        "validate through the generated profile and an ON/OFF behavior workload"
+    ),
+}
+
+CHECKED_FEATURES = tuple(sorted(
+    set(FEATURE_MARKERS) | set(PROFILE_GATED_WITHOUT_LINK_MARKER)
+))
 
 
 def fail(message: str) -> None:
@@ -62,7 +80,7 @@ def main() -> int:
     parser.add_argument("--map", required=True, dest="map_path", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument(
-        "--used-feature", action="append", choices=sorted(FEATURE_MARKERS),
+        "--used-feature", action="append", choices=CHECKED_FEATURES,
         help=(
             "Feature exercised by the linked workload. Repeat for multiple features. "
             "When supplied, profile-enabled but unused families are reported as not-tested "
@@ -97,10 +115,24 @@ def main() -> int:
                 "workload uses features absent from profile: "
                 + ", ".join(missing_used_features)
             )
-    for feature, markers in FEATURE_MARKERS.items():
-        present = any(marker in map_text for marker in markers)
+    for feature in CHECKED_FEATURES:
         expected = feature in profile["features"]
         tested = used_features is None or feature in used_features
+        if feature in PROFILE_GATED_WITHOUT_LINK_MARKER:
+            checks.append({
+                "feature": feature,
+                "expectedInProfile": expected,
+                "markerFoundInMap": None,
+                "testedByWorkload": tested,
+                "markers": [],
+                "mapValidation": "not-applicable",
+                "reason": PROFILE_GATED_WITHOUT_LINK_MARKER[feature],
+                "status": "not-applicable",
+            })
+            continue
+
+        markers = FEATURE_MARKERS[feature]
+        present = any(marker in map_text for marker in markers)
         if expected and used_features is not None and not tested:
             status = "not-tested"
         else:

@@ -10,6 +10,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Link-map reports now explicitly classify `css.flex-grid` as not applicable to
+  object-marker verification because it is compile-gated inside shared units;
+  generated-profile and ON/OFF behavior evidence remain mandatory.
+
 - Render Core profile IDs are now derived from a fixed disabled-family order
   instead of a hand-maintained combination table. A configure-only regression
   covers all Canvas 2D, modern-paint and flex-grid combinations, including the

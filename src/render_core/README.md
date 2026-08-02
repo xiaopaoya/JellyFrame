@@ -109,3 +109,8 @@ The Render Core microbench reports both legacy `avg_us` smoke metrics and
 `modern_paint_*_stats` lines with p50/p95 latency, display-command count and
 the measured wearable surface byte count. These are desktop attribution
 signals, not MCU frame-rate or flash/RAM claims; those remain port evidence.
+The link-map checker can prove separately linked Canvas and modern-paint
+objects. Flex/grid is compile-gated inside shared parser/style/layout/layer
+units, so its checker entry deliberately reports `not-applicable` rather than
+pretending that a shared object marker proves the feature. Use the generated
+profile regression plus a real ON/OFF behavior workload for that family.

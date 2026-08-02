@@ -10,6 +10,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- link-map 报告现在明确将 `css.flex-grid` 标记为不适用 object-marker 验证：该 family
+  在共享 translation unit 内编译门控，仍必须以生成 profile 和 ON/OFF 行为测试作为证据。
+
 - Render Core profile ID 现按固定 disabled-family 顺序生成，不再维护易遗漏的组合表。
   新增 configure-only 回归，覆盖 Canvas 2D、modern-paint 与 flex-grid 的全部组合，以及
   生成的 feature 列表和编译 notes。
