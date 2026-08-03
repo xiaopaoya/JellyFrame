@@ -10,6 +10,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 新增无脚本 `jelly_flex_grid_probe` 桌面 fixture 与 capture 回归。Flex/Grid ON
+  现在检查真实像素布局；同一 fixture 也已用 OFF profile 捕获，确认稳定的 block/inline
+  fallback 且无重叠。
+
 - 已在 `f472cbc` 上完成 WS147 `forms.advanced` ON/OFF 验收：两组基础控件均可操作，
   ON 执行 submit/reset 默认动作，OFF 安全抑制默认动作；select 瞬态弹层使用旧/新 layer
   bounds 做局部重绘，没有用全屏重绘掩盖问题。本验收不覆盖 Canvas、JerryScript FormData

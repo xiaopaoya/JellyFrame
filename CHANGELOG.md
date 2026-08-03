@@ -10,6 +10,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Added the dedicated no-script `jelly_flex_grid_probe` desktop fixture and
+  capture regression. Flex/Grid ON now checks real pixel placement; the same
+  fixture was manually captured with the OFF profile to verify stable
+  block/inline fallback without overlap.
+
 - Completed the WS147 `forms.advanced` ON/OFF acceptance on `f472cbc`: basic
   controls remain usable in both profiles, ON submit/reset defaults execute,
   OFF defaults stay suppressed, and transient select overlays repaint locally

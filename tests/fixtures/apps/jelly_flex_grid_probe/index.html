@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Flex Grid Probe</title>
+  <style>
+    html, body { margin: 0; width: 300px; height: 300px; }
+    body { background: #101820; color: #f6f7f9; font-family: sans-serif; }
+    main { padding: 12px; }
+    h1 { margin: 0 0 8px; font-size: 18px; }
+    .status { height: 20px; color: #9fe870; }
+    .status-fallback { display: block; color: #f4b860; }
+    .status-flex { display: none; }
+    .flex-row { display: flex; gap: 6px; justify-content: space-between; height: 96px; }
+    .flex-row > div { width: 82px; height: 32px; padding: 8px; box-sizing: border-box; }
+    .flex-row .first { background: #315c4b; }
+    .flex-row .second { background: #664c34; }
+    .flex-row .third { background: #2a5061; }
+    .flex-row .first { order: 2; }
+    .flex-row .second { order: 1; }
+    .flex-row .third { order: 3; }
+    .grid { display: block; margin-top: 10px; }
+    .grid > div { height: 34px; margin-bottom: 6px; padding: 6px; box-sizing: border-box; }
+    .grid .wide { background: #2a5061; }
+    .grid .a { background: #315c4b; }
+    .grid .b { background: #664c34; }
+    @supports (display: flex) {
+      .status-flex { display: block; }
+      .status-fallback { display: none; }
+    }
+    @supports (display: grid) {
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .grid > div { margin-bottom: 0; }
+      .grid .wide { grid-column: 1 / span 2; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Layout profile</h1>
+    <div class="status status-flex">FLEX + GRID ON</div>
+    <div class="status status-fallback">BLOCK FALLBACK</div>
+    <section class="flex-row">
+      <div class="first">FIRST</div>
+      <div class="second">SECOND</div>
+      <div class="third">THIRD</div>
+    </section>
+    <section class="grid">
+      <div class="wide">WIDE / SPAN 2</div>
+      <div class="a">A</div>
+      <div class="b">B</div>
+    </section>
+  </main>
+</body>
+</html>
