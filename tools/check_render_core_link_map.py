@@ -23,11 +23,15 @@ FEATURE_MARKERS = {
     # Advanced forms is a separately compiled vertical slice. The disabled
     # implementation deliberately remains linkable but must not satisfy this
     # real implementation marker.
-    "forms.advanced": ("form_submission.cpp.obj", "form_submission.cpp.o"),
+    "forms.advanced": (
+        "form_submission.cpp.obj", "form_submission.cpp.o", "form_submission.obj",
+    ),
     "css.modern-paint": ("modern_paint_",),
     # The disabled Canvas API keeps the public registry symbols. The object
     # file marker distinguishes the real implementation from that stub.
-    "graphics.canvas2d": ("canvas2d.cpp.obj", "canvas2d.cpp.o"),
+    "graphics.canvas2d": (
+        "canvas2d.cpp.obj", "canvas2d.cpp.o", "canvas2d.obj",
+    ),
 }
 
 # Flex/grid is conditionally compiled inside parser, style, layout and layer

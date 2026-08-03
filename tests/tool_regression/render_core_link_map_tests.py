@@ -88,6 +88,16 @@ class RenderCoreLinkMapTests(unittest.TestCase):
         )
         self.assertEqual(disabled.returncode, 0, disabled.stdout + disabled.stderr)
 
+    def test_msvc_style_object_markers_are_accepted(self):
+        result = run_checker(
+            {"schemaVersion": 1, "features": [
+                "core.document", "core.paint", "forms.advanced", "graphics.canvas2d",
+            ]},
+            "jellyframe_render_core.lib(form_submission.obj)\n"
+            "jellyframe_render_core.lib(canvas2d.obj)\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_profile_map_mismatch_fails(self):
         result = run_checker(
             {"schemaVersion": 1, "features": ["core.document", "core.paint", "css.modern-paint"]},
