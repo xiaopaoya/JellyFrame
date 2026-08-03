@@ -15,6 +15,8 @@
   底层的 `--capture-frames DIR --frame-count 30 --frame-step-ms 33` 与多个
   `--frame-event FRAME:kind[:x:y[:delta]]` 仍可用于快速 smoke test。完整参数以
   `jellyframe_win32_browser --help` 输出为准。
+  帧脚本中的 `pointer-down` 到 `pointer-up` 会保持 primary button 状态；期间的
+  `pointer-move` 可用于确定性滑块拖动。`click` 仍表示一次完整按下/抬起。
 - `win32_browser.cpp` 还提供 Win32-only host audio smoke 路径：
   `--audio-smoke local.wav`，或 `--app package --audio-smoke /audio/tone.wav`。
   这只验证 package resource 到桌面宿主 adapter 的交接，不代表嵌入式端内置 audio codec，

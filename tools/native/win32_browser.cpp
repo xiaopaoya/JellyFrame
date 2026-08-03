@@ -3391,6 +3391,7 @@ public:
         int montage_cell_height = 0;
         int montage_rows = 0;
         scripted_time_enabled_ = true;
+        scripted_pointer_down_ = false;
         for (int frame = 0; frame < options_.frame_count; ++frame) {
             scripted_now_ms_ = options_.frame_start_ms +
                 static_cast<std::uint64_t>(frame) * options_.frame_step_ms;
@@ -3697,6 +3698,7 @@ private:
     std::vector<StyleOverride> previous_style_overrides_;
     bool clear_animation_overrides_after_render_ = false;
     bool scripted_time_enabled_ = false;
+    bool scripted_pointer_down_ = false;
     std::uint64_t scripted_now_ms_ = 0;
     FrameScratch frame_scratch_;
     LayerTreeOverrideScratch layer_override_scratch_;
@@ -3907,18 +3909,23 @@ private:
                 }
                 break;
             case ScriptedFrameEventKind::PointerMove:
-                handle_pointer_move(0, pointer_lparam(event.x, event.y));
+                handle_pointer_move(scripted_pointer_down_ ? MK_LBUTTON : 0,
+                                    pointer_lparam(event.x, event.y));
                 break;
             case ScriptedFrameEventKind::PointerDown:
                 handle_pointer_down(0, pointer_lparam(event.x, event.y));
+                scripted_pointer_down_ = true;
                 break;
             case ScriptedFrameEventKind::PointerUp:
                 handle_pointer_up(MK_LBUTTON, pointer_lparam(event.x, event.y));
+                scripted_pointer_down_ = false;
                 break;
             case ScriptedFrameEventKind::Click:
                 handle_pointer_move(0, pointer_lparam(event.x, event.y));
                 handle_pointer_down(0, pointer_lparam(event.x, event.y));
+                scripted_pointer_down_ = true;
                 handle_pointer_up(MK_LBUTTON, pointer_lparam(event.x, event.y));
+                scripted_pointer_down_ = false;
                 break;
             case ScriptedFrameEventKind::Wheel:
             {

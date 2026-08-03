@@ -173,6 +173,50 @@ def main() -> int:
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
 
+    with tempfile.TemporaryDirectory(prefix="jellyframe-scripted-pointer-drag-") as directory:
+        root = Path(directory)
+        app = root / "app"
+        frames = root / "frames"
+        app.mkdir()
+        (app / "index.html").write_text(
+            "<style>html,body{margin:0;width:160px;height:60px;background:#10151b;}"
+            "input{width:140px;margin:10px;}</style>"
+            "<input id='drag' type='range' min='0' max='100' value='0'>",
+            encoding="utf-8",
+        )
+        (app / "jellyframe.app.json").write_text(
+            json.dumps({
+                "id": "org.jellyframe.pointer-drag-probe",
+                "name": "Pointer Drag Probe",
+                "role": "app",
+                "versionName": "1.0.0",
+                "versionCode": 1,
+                "entry": "/index.html",
+                "minJellyFrame": "0.5.0-dev",
+                "script": "none",
+                "viewport": {"designWidth": 160, "designHeight": 60},
+            }),
+            encoding="utf-8",
+        )
+        drag_result = run_case(
+            exe,
+            [
+                "--app", str(app),
+                "--capture-frames", str(frames),
+                "--frame-count", "5",
+                "--frame-event", "1:pointer-down:20:20",
+                "--frame-event", "2:pointer-move:130:20",
+                "--frame-event", "3:pointer-up:130:20",
+            ],
+        )
+        require(drag_result.returncode == 0, "scripted pointer drag must capture")
+        before_drag = frames / "frame_001.bmp"
+        after_drag = frames / "frame_003.bmp"
+        require(before_drag.is_file() and after_drag.is_file(),
+                "scripted pointer drag must produce before/after frames")
+        require(before_drag.read_bytes() != after_drag.read_bytes(),
+                "pointer-move between pointer-down/up must update a range control")
+
     numeric_result = run_case(exe, ["--viewport-width", "nope"])
     require(numeric_result.returncode != 0, "invalid numeric option must fail")
     require("--viewport-width requires an integer" in numeric_result.stdout,
