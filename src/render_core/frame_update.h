@@ -35,10 +35,11 @@ enum class FrameUpdateReason {
     MissingFramebuffer,
     FramebufferSizeMismatch,
     ResolvedFramebufferSizeMismatch,
+    OverlayDirty,
 };
 
 constexpr std::size_t kFrameUpdateReasonCount =
-    static_cast<std::size_t>(FrameUpdateReason::ResolvedFramebufferSizeMismatch) + 1;
+    static_cast<std::size_t>(FrameUpdateReason::OverlayDirty) + 1;
 
 struct FrameUpdateState {
     DomDirtyFlags dirty_flags = DomDirtyNone;
@@ -93,6 +94,7 @@ struct FrameUpdateStatistics {
     std::size_t dirty_style_frames = 0;
     std::size_t dirty_layout_frames = 0;
     std::size_t dirty_paint_frames = 0;
+    std::size_t dirty_overlay_frames = 0;
     std::size_t dirty_render_or_layout_frames = 0;
 };
 

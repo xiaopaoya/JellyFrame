@@ -56,6 +56,16 @@ void paint_dirty_reuses_existing_pipeline() {
     check(!plan.needs_previous_layout, "paint dirty does not need old layout");
 }
 
+void overlay_dirty_rebuilds_only_the_layer_tree() {
+    const FrameUpdatePlan plan = plan_frame_update(cached_state(DomDirtyOverlay | DomDirtyPaint));
+    check(plan.action == FrameUpdateAction::RepaintExisting, "overlay dirty reuses the render and layout trees");
+    check(plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout,
+          "overlay dirty uses current layout bounds");
+    check(plan.reason == FrameUpdateReason::OverlayDirty, "overlay dirty reason is explicit");
+    check(plan.can_reuse_render_and_layout, "overlay dirty reuses render/layout");
+    check(!plan.needs_full_framebuffer, "overlay dirty does not require a full framebuffer");
+}
+
 void layout_dirty_rebuilds_with_previous_layout() {
     const FrameUpdatePlan plan = plan_frame_update(cached_state(DomDirtyText | DomDirtyLayout));
     check(plan.action == FrameUpdateAction::RebuildPipeline, "layout dirty rebuilds pipeline");
@@ -319,6 +329,7 @@ int main() {
         clean_document_has_no_work();
         clean_uncached_document_gets_first_paint();
         paint_dirty_reuses_existing_pipeline();
+        overlay_dirty_rebuilds_only_the_layer_tree();
         layout_dirty_rebuilds_with_previous_layout();
         repaint_plan_keeps_incremental_layout_when_size_matches();
         repaint_plan_forces_full_frame_when_resolved_layout_grows();

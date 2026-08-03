@@ -101,6 +101,8 @@ const char* frame_update_reason_name(FrameUpdateReason reason) {
         return "framebuffer-size-mismatch";
     case FrameUpdateReason::ResolvedFramebufferSizeMismatch:
         return "resolved-framebuffer-size-mismatch";
+    case FrameUpdateReason::OverlayDirty:
+        return "overlay-dirty";
     }
     return "unknown";
 }
@@ -133,6 +135,8 @@ std::size_t frame_update_reason_index(FrameUpdateReason reason) {
         return 11;
     case FrameUpdateReason::ResolvedFramebufferSizeMismatch:
         return 12;
+    case FrameUpdateReason::OverlayDirty:
+        return 13;
     }
     return 0;
 }
@@ -181,6 +185,9 @@ void record_frame_dirty_flags(FrameUpdateStatistics& statistics, DomDirtyFlags d
     }
     if ((dirty_flags & DomDirtyPaint) != 0U) {
         ++statistics.dirty_paint_frames;
+    }
+    if ((dirty_flags & DomDirtyOverlay) != 0U) {
+        ++statistics.dirty_overlay_frames;
     }
     if (dirty_requires_render_or_layout(dirty_flags)) {
         ++statistics.dirty_render_or_layout_frames;
@@ -259,7 +266,9 @@ FrameUpdatePlan plan_frame_update(const FrameUpdateState& state) {
     if (paint_only && cache_ready && framebuffer_ready) {
         plan.action = FrameUpdateAction::RepaintExisting;
         plan.dirty_rect_mode = FrameDirtyRectMode::CurrentLayout;
-        plan.reason = FrameUpdateReason::PaintOnlyDirty;
+        plan.reason = (state.dirty_flags & DomDirtyOverlay) != 0U
+            ? FrameUpdateReason::OverlayDirty
+            : FrameUpdateReason::PaintOnlyDirty;
         plan.can_reuse_render_and_layout = true;
         return plan;
     }

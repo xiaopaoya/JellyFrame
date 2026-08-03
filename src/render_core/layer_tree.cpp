@@ -1523,7 +1523,7 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
                                        popup_bounds)) {
                     auto popup_layer = make_layer_node(arena);
                     popup_layer->type = LayerType::Stacking;
-                    popup_layer->reasons = LayerReasonZIndex;
+                    popup_layer->reasons = LayerReasonZIndex | LayerReasonTransientOverlay;
                     popup_layer->box = current_box;
                     popup_layer->bounds = popup_bounds;
                     popup_layer->opacity = 1.0F;

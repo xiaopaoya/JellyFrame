@@ -39,6 +39,7 @@ enum LayerReason : std::uint32_t {
     LayerReasonZIndex = 1U << 5,
     LayerReasonShadow = 1U << 6,
     LayerReasonRoundedClip = 1U << 7,
+    LayerReasonTransientOverlay = 1U << 8,
 };
 
 using LayerReasons = std::uint32_t;

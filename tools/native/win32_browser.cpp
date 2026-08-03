@@ -5429,11 +5429,15 @@ private:
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
             if (!animation_only_dirty) {
+                DirtyRegionOptions dirty_options =
+                    dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3);
+                dirty_options.previous_layer_tree = layer_tree_.get();
+                dirty_options.current_layer_tree = next_layer_tree.get();
                 compute_dirty_region_into(
                     *document_,
                     layout_tree_.get(),
                     layout_tree_.get(),
-                    dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
+                    dirty_options,
                     frame_scratch_.dirty_region,
                     &frame_scratch_.dirty_region_scratch);
             }
@@ -5522,11 +5526,15 @@ private:
             auto next_layer_tree = layer_builder.build(*layout_tree_);
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
+            DirtyRegionOptions dirty_options =
+                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3);
+            dirty_options.previous_layer_tree = layer_tree_.get();
+            dirty_options.current_layer_tree = next_layer_tree.get();
             compute_dirty_region_into(
                 *document_,
                 layout_tree_.get(),
                 layout_tree_.get(),
-                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
+                dirty_options,
                 frame_scratch_.dirty_region,
                 &frame_scratch_.dirty_region_scratch);
             if (!previous_repaint_overrides.empty() || !current_repaint_overrides.empty()) {
@@ -5587,11 +5595,14 @@ private:
             repaint_plan.dirty_rect_mode == FrameDirtyRectMode::PreviousAndCurrentLayout &&
             previous_layout != nullptr;
         if (can_repaint_incrementally && rebuild_dirty_flags != DomDirtyNone) {
+            DirtyRegionOptions dirty_options =
+                dirty_region_options_from_budgets(budgets_, Rect{0, 0, viewport_width_, content_height}, 3);
+            dirty_options.previous_layer_tree = layer_tree_.get();
+            dirty_options.current_layer_tree = next_layer_tree.get();
             compute_dirty_region_into(*document_,
                                       previous_layout.get(),
                                       next_layout_tree.get(),
-                                      dirty_region_options_from_budgets(
-                                          budgets_, Rect{0, 0, viewport_width_, content_height}, 3),
+                                      dirty_options,
                                       dirty_region,
                                       &frame_scratch_.dirty_region_scratch);
         }

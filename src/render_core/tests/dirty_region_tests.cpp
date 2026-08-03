@@ -4,6 +4,7 @@
 #include "render_core/form_control.h"
 #include "render_core/frame_update.h"
 #include "render_core/html_parser.h"
+#include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
 
@@ -174,6 +175,71 @@ void paint_dirty_reuses_layout_and_generates_local_rect() {
     check(!rects.empty(), "paint dirty produces rect");
     check(rects.front().width < 240 || rects.front().height < 200, "paint dirty is not full viewport");
 }
+
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+const LayerNode* find_transient_overlay(const LayerNode& root) {
+    std::vector<const LayerNode*> pending{&root};
+    while (!pending.empty()) {
+        const LayerNode* current = pending.back();
+        pending.pop_back();
+        if ((current->reasons & LayerReasonTransientOverlay) != 0U) {
+            return current;
+        }
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
+    }
+    return nullptr;
+}
+
+bool intersects(Rect left, Rect right) {
+    return left.x < safe_edge(right.x, right.width) && right.x < safe_edge(left.x, left.width) &&
+        left.y < safe_edge(right.y, right.height) && right.y < safe_edge(left.y, left.height);
+}
+
+void transient_overlay_dirty_region_includes_old_and_new_popup() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(
+        html_parser.parse("<body><select id='choice'><option>One</option><option>Two</option></select></body>"),
+        "body { margin: 0; height: 120px; } select { display: block; width: 100px; height: 24px; }",
+        160);
+    clear_dirty_flags(*fixture.document);
+    Node* select = first_element(*fixture.document, "select");
+    check(select != nullptr, "overlay select exists");
+    LayerTreeBuilder builder;
+    auto previous_layer = builder.build(*fixture.layout_tree);
+    check(activate_form_control(*select), "overlay select opens");
+    auto current_layer = builder.build(*fixture.layout_tree);
+    const LayerNode* popup = find_transient_overlay(*current_layer);
+    check(popup != nullptr, "open select has transient overlay layer");
+
+    DirtyRegionOptions options{Rect{0, 0, 160, 120}, 8, 2};
+    options.previous_layer_tree = previous_layer.get();
+    options.current_layer_tree = current_layer.get();
+    const DirtyRegionResult opened = compute_dirty_region(
+        *fixture.document, fixture.layout_tree.get(), fixture.layout_tree.get(), options);
+    check(opened.mode == DirtyRegionMode::DirtyRects, "opening popup remains incremental");
+    bool popup_dirty = false;
+    for (Rect rect : opened.rects) {
+        popup_dirty = popup_dirty || intersects(rect, popup->bounds);
+    }
+    check(popup_dirty, "opening popup includes its overlay bounds");
+
+    clear_dirty_flags(*fixture.document);
+    check(set_select_popup_open(*select, false), "overlay select closes");
+    auto closed_layer = builder.build(*fixture.layout_tree);
+    options.previous_layer_tree = current_layer.get();
+    options.current_layer_tree = closed_layer.get();
+    const DirtyRegionResult closed = compute_dirty_region(
+        *fixture.document, fixture.layout_tree.get(), fixture.layout_tree.get(), options);
+    check(closed.mode == DirtyRegionMode::DirtyRects, "closing popup remains incremental");
+    popup_dirty = false;
+    for (Rect rect : closed.rects) {
+        popup_dirty = popup_dirty || intersects(rect, popup->bounds);
+    }
+    check(popup_dirty, "closing popup includes its old overlay bounds");
+}
+#endif
 
 void repeated_paint_dirty_updates_remain_bounded() {
     HtmlParser html_parser;
@@ -552,6 +618,9 @@ int main() {
         text_dirty_generates_local_rect();
         tree_dirty_falls_back_to_full_viewport();
         paint_dirty_reuses_layout_and_generates_local_rect();
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+        transient_overlay_dirty_region_includes_old_and_new_popup();
+#endif
         repeated_paint_dirty_updates_remain_bounded();
         multiple_dirty_nodes_are_coalesced_without_full_frame();
         clean_document_reports_clean_region();

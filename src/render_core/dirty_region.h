@@ -10,6 +10,8 @@
 
 namespace jellyframe {
 
+struct LayerNode;
+
 enum class DirtyRegionMode {
     Clean,
     DirtyRects,
@@ -37,6 +39,10 @@ struct DirtyRegionOptions {
     Rect viewport;
     std::size_t max_rects = 8;
     int expansion_px = 2;
+    // Optional layer snapshots for transient overlays such as a core-rendered
+    // select popup. The caller must keep both trees alive until this pass ends.
+    const LayerNode* previous_layer_tree = nullptr;
+    const LayerNode* current_layer_tree = nullptr;
 };
 
 struct DirtyRegionResult {
@@ -70,13 +76,16 @@ struct DirtyNodeBounds {
 
 struct DirtyRegionScratch {
     std::vector<DirtyNodeBounds> node_bounds;
+    std::vector<Rect> transient_bounds;
 
     void clear() {
         node_bounds.clear();
+        transient_bounds.clear();
     }
 
     void release() {
         std::vector<DirtyNodeBounds>().swap(node_bounds);
+        std::vector<Rect>().swap(transient_bounds);
     }
 };
 

@@ -26,6 +26,8 @@ enum DomDirtyFlag : std::uint32_t {
     DomDirtyStyle = 1U << 3,
     DomDirtyLayout = 1U << 4,
     DomDirtyPaint = 1U << 5,
+    // A transient layer changed without changing DOM structure or layout.
+    DomDirtyOverlay = 1U << 6,
 };
 
 using DomDirtyFlags = std::uint32_t;

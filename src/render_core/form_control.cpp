@@ -633,7 +633,9 @@ bool set_select_popup_open(Node& node, bool open) {
         return false;
     }
     state.select_popup_open = open;
-    mark_dirty(node, DomDirtyPaint);
+    // The popup is a transient layer. Its old and new bounds are merged by the
+    // dirty-region pass; the DOM and layout trees remain reusable.
+    mark_dirty(node, DomDirtyOverlay | DomDirtyPaint);
     return true;
 }
 

@@ -1,5 +1,7 @@
 ﻿#include "render_core/dirty_region.h"
 
+#include "render_core/layer_tree.h"
+
 #include <algorithm>
 
 namespace jellyframe {
@@ -179,6 +181,21 @@ void append_dirty_bounds_from_layout(const LayoutBox& layout, std::vector<DirtyN
             if (current->node->dirty_flags == DomDirtyNone) {
                 continue;
             }
+        }
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
+    }
+}
+
+void append_transient_layer_bounds(const LayerNode& root, std::vector<Rect>& output) {
+    std::vector<const LayerNode*> pending;
+    pending.push_back(&root);
+    while (!pending.empty()) {
+        const LayerNode* current = pending.back();
+        pending.pop_back();
+        if ((current->reasons & LayerReasonTransientOverlay) != 0U) {
+            output.push_back(current->bounds);
         }
         for (const auto& child : current->children) {
             pending.push_back(child.get());
@@ -466,7 +483,13 @@ void compute_dirty_region_into(const Node& document,
     std::vector<DirtyNodeBounds>& dirty_bounds = active_scratch.node_bounds;
     append_dirty_bounds_from_layout(*previous_layout, dirty_bounds);
     append_dirty_bounds_from_layout(*current_layout, dirty_bounds);
-    if (dirty_bounds.empty()) {
+    if (options.previous_layer_tree != nullptr) {
+        append_transient_layer_bounds(*options.previous_layer_tree, active_scratch.transient_bounds);
+    }
+    if (options.current_layer_tree != nullptr) {
+        append_transient_layer_bounds(*options.current_layer_tree, active_scratch.transient_bounds);
+    }
+    if (dirty_bounds.empty() && active_scratch.transient_bounds.empty()) {
         set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::NoDirtyBounds);
         return;
     }
@@ -474,6 +497,9 @@ void compute_dirty_region_into(const Node& document,
     const std::size_t max_rects = std::max<std::size_t>(1, options.max_rects);
     for (const DirtyNodeBounds& bounds : dirty_bounds) {
         append_coalesced(result.rects, expand_rect(bounds.bounds, options.expansion_px), options.viewport, max_rects);
+    }
+    for (Rect bounds : active_scratch.transient_bounds) {
+        append_coalesced(result.rects, expand_rect(bounds, options.expansion_px), options.viewport, max_rects);
     }
     if (result.rects.empty()) {
         set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::EmptyAfterClipping);

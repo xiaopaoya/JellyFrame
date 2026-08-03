@@ -645,6 +645,57 @@ void select_does_not_paint_option_list_inline() {
     check(painted_selected_option, "select paints the selected option text");
 }
 
+void form_paint_only_state_changes_rebuild_visible_commands() {
+    auto range_pipeline = build_pipeline(
+        "<body><input id='volume' type='range' min='0' max='100' value='0'></body>",
+        "input { display: block; width: 120px; height: 24px; }");
+    Node* range = find_node_by_id(*range_pipeline.document, "volume");
+    check(range != nullptr, "range paint fixture exists");
+
+    LayerTreeBuilder builder;
+    const DisplayList before_range = builder.flatten(*range_pipeline.layer_tree);
+    check(set_form_control_value(*range, "100"), "range value becomes paint dirty");
+    check((subtree_dirty_flags(*range_pipeline.document) & DomDirtyPaint) != 0U,
+          "range value marks paint dirty");
+    auto after_range_tree = builder.build(*range_pipeline.layout_tree);
+    const DisplayList after_range = builder.flatten(*after_range_tree);
+
+    auto widest_blue_fill = [](const DisplayList& commands) {
+        int width = 0;
+        for (const DisplayCommand& command : commands) {
+            if (command.type == DisplayCommandType::FillRect &&
+                command.color.r == 37 && command.color.g == 99 && command.color.b == 235) {
+                width = std::max(width, command.rect.width);
+            }
+        }
+        return width;
+    };
+    check(widest_blue_fill(after_range) > widest_blue_fill(before_range),
+          "range paint-only rebuild changes the visible fill command");
+
+    auto select_pipeline = build_pipeline(
+        "<body><select id='choice'><option>Alpha</option><option>Beta</option></select></body>",
+        "select { display: block; width: 120px; height: 24px; }");
+    Node* select = find_node_by_id(*select_pipeline.document, "choice");
+    check(select != nullptr, "select paint fixture exists");
+    const DisplayList before_select = builder.flatten(*select_pipeline.layer_tree);
+    check(set_form_control_selected_index(*select, 1), "select value becomes paint dirty");
+    check((subtree_dirty_flags(*select_pipeline.document) & DomDirtyPaint) != 0U,
+          "select value marks paint dirty");
+    auto after_select_tree = builder.build(*select_pipeline.layout_tree);
+    const DisplayList after_select = builder.flatten(*after_select_tree);
+    auto has_text = [](const DisplayList& commands, const char* text) {
+        for (const DisplayCommand& command : commands) {
+            if (command.type == DisplayCommandType::Text && command.text == text) {
+                return true;
+            }
+        }
+        return false;
+    };
+    check(has_text(before_select, "Alpha") && has_text(after_select, "Beta"),
+          "select paint-only rebuild changes the visible option text");
+}
+
 void select_popup_paints_above_document_and_hit_tests_to_owner() {
 #if !JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
     return;
@@ -656,6 +707,8 @@ void select_popup_paints_above_document_and_hit_tests_to_owner() {
     const LayoutBox* select_box = find_layout_by_id(*pipeline.layout_tree, "choice");
     check(select != nullptr && select_box != nullptr, "popup select fixture exists");
     check(activate_form_control(*select), "popup select opens");
+    check((subtree_dirty_flags(*pipeline.document) & DomDirtyOverlay) != 0U,
+          "popup lifecycle uses transient-overlay invalidation");
 
     LayerTreeBuilder builder;
     auto popup_tree = builder.build(*pipeline.layout_tree);
@@ -1348,6 +1401,7 @@ int main() {
         centered_inline_text_aligns_in_parent();
         button_inline_block_shrink_wraps_text();
         select_does_not_paint_option_list_inline();
+        form_paint_only_state_changes_rebuild_visible_commands();
         select_popup_paints_above_document_and_hit_tests_to_owner();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_auto_fit_gap_span_and_aspect_ratio_layout();
