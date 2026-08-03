@@ -85,6 +85,12 @@ rect/text commands or later map selected layers to hardware surfaces.
   many frames of the same app shape, so display-command vector capacity is kept
   outside the hot loop.
 
+“Retained” here means that the organization structures can be held across frames; it does not
+mean that structural display-list diffing or command caching is implemented. Structural changes
+still rebuild affected render/layout/layer data, after which dirty-region logic chooses a local or
+conservative full-frame repaint. Candidate fingerprints, restricted subtree replay and
+tile/scanline output have separate gates; see `retained_rendering_scope.md`.
+
 ## Deferred
 
 - Full CSS stacking-context algorithm.

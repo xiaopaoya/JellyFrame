@@ -88,6 +88,14 @@ allocate a runtime feature registry or permit an App to re-enable the family.
 Generated profile IDs are deterministic for every Canvas/modern-paint/flex-grid/
 advanced-forms combination and are covered by a configure-only regression test.
 
+Retained rendering boundaries are explicit. The existing layer/display-list trees are retained
+storage and dirty-region inputs, not a complete structural display-list diff. Structural mutation
+still uses the conservative rebuild/full-frame fallback. The default compositor also still owns a
+logical framebuffer; compact dirty-rect/strip output is provided by the embedded adapter. Candidate
+fingerprinting and a no-full-framebuffer tile/scanline target are deferred, opt-in 0.6 work with
+separate memory, pixel and frame-time gates. See `docs/retained_rendering_scope.md` and
+`docs/retained_rendering_scope_zh.md`.
+
 `JELLYFRAME_ENABLE_ADVANCED_FORMS` is ON by default. It owns local constraint
 validation, custom validity, bounded `FormData`, `SubmitEvent`, `requestSubmit`
 and cancellable reset/default actions. When disabled, normal form controls keep

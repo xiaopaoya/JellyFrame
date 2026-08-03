@@ -62,6 +62,11 @@ Layer tree 是一种可保留的绘制组织结构。它不是 GPU API，也不�
 - 该模型为未来 dirty-rectangle repaint 预留空间，可以失效一个 layer subtree，而不是重绘整个文档。
 - 反复 flatten 多帧的验证工具应优先使用 `flatten_into(...)`，让 display-command vector 容量留在热路径外。
 
+当前 layer tree 的“retained”表示跨帧可保留的组织结构，不表示已经完成结构性 display-list diff
+或命令缓存。结构变化仍必须重新建立受影响的 render/layout/layer 数据，并由 dirty-region
+决定局部重绘还是保守 full-frame。候选 fingerprint、受限 subtree replay 和 tile/scanline
+输出分别按独立门槛推进，详见 `retained_rendering_scope_zh.md`。
+
 ## 延后
 
 - 完整 CSS stacking-context 算法。
