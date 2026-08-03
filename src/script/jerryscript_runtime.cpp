@@ -5887,17 +5887,29 @@ jerry_value_t node_click(const jerry_call_info_t* call_info_p,
     if (node == nullptr || node->type != NodeType::Element || is_disabled_form_control(*node)) {
         return jerry_undefined();
     }
+    MouseEvent click("click", 0, 0);
+    dispatch_event(*node, click);
+    if (click.default_prevented()) {
+        return jerry_undefined();
+    }
     if (is_form_control(*node) && form_control_kind(*node) != FormControlKind::Range) {
         if (activate_form_control(*node)) {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+            if (form_control_kind(*node) != FormControlKind::Select) {
+                Event input("input", true, false);
+                dispatch_event(*node, input);
+                Event change("change", true, false);
+                dispatch_event(*node, change);
+            }
+#else
             Event input("input", true, false);
             dispatch_event(*node, input);
             Event change("change", true, false);
             dispatch_event(*node, change);
+#endif
         }
     }
-    MouseEvent click("click", 0, 0);
-    dispatch_event(*node, click);
-    if (!click.default_prevented() && node->tag_name == "summary" &&
+    if (node->tag_name == "summary" &&
         node->parent != nullptr && node->parent->tag_name == "details") {
         Node* details = node->parent;
         if (has_attribute(*details, "open")) {
@@ -5912,12 +5924,10 @@ jerry_value_t node_click(const jerry_call_info_t* call_info_p,
         Event toggle("toggle", false, false);
         dispatch_event(*details, toggle);
     }
-    if (!click.default_prevented()) {
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-        request_form_submit_from_control(*node);
-        reset_form_from_control(*node);
+    request_form_submit_from_control(*node);
+    reset_form_from_control(*node);
 #endif
-    }
     return jerry_undefined();
 }
 

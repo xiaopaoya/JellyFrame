@@ -1014,6 +1014,69 @@ void translate_display_commands(DisplayList& display_list, std::size_t begin, in
     }
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+int select_popup_row_height(const LayoutBox& box) {
+    return std::max(20, box.style.line_height > 0
+        ? box.style.line_height
+        : box.style.font_size + std::max(6, box.style.font_size / 3));
+}
+#endif
+
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+bool paint_select_popup(const LayoutBox& box,
+                        const Rect& viewport,
+                        int scroll_y,
+                        const LayerTreeBuilderOptions& options,
+                        DisplayList& display_list,
+                        Rect& popup_bounds) {
+    if (box.node == nullptr || !select_popup_is_open(*box.node)) {
+        return false;
+    }
+    const int option_count = form_control_option_count(*box.node);
+    const SelectPopupGeometry geometry = select_popup_geometry(
+        box.rect, viewport, option_count, select_popup_row_height(box));
+    if (geometry.visible_option_count <= 0 || geometry.rect.width <= 0 || geometry.rect.height <= 0) {
+        return false;
+    }
+    if (geometry.visible_option_count < option_count) {
+        report_diagnostic(options.diagnostics,
+                          DiagnosticStage::LayerTree,
+                          DiagnosticSeverity::Warning,
+                          "select-popup-option-limit",
+                          "The select popup cannot show every option inside the current viewport",
+                          "Use a shorter option list or a page-level picker until popup scrolling is enabled.");
+    }
+
+    popup_bounds = geometry.rect;
+    popup_bounds.y -= scroll_y;
+    push_fill_rect(display_list, popup_bounds, Color{248, 250, 252, 255}, 2);
+    const EdgeSizes border{1, 1, 1, 1};
+    push_border_rects(display_list, popup_bounds, border, box.style.border_color, 2);
+    const FormControlState& state = ensure_form_control_state(*box.node);
+    for (int visible_index = 0; visible_index < geometry.visible_option_count; ++visible_index) {
+        const int option_index = geometry.first_option_index + visible_index;
+        const Rect row{popup_bounds.x,
+                       popup_bounds.y + visible_index * geometry.row_height,
+                       popup_bounds.width,
+                       geometry.row_height};
+        if (option_index == state.selected_index) {
+            push_fill_rect(display_list, row, Color{219, 234, 254, 255}, 0);
+        }
+        const Color text_color = form_control_option_disabled(*box.node, option_index)
+            ? Color{148, 163, 184, 255}
+            : box.style.color;
+        push_text_with_layout(display_list,
+                              Rect{row.x + 5, row.y, std::max(0, row.width - 10), row.height},
+                              text_color,
+                              form_control_option_text(*box.node, option_index),
+                              box.style,
+                              TextCommandAlign::Start,
+                              options.text_measure);
+    }
+    return true;
+}
+#endif
+
 void paint_box_self(const LayoutBox& box, DisplayList& display_list, const LayerTreeBuilderOptions& options) {
     const Rect paint_rect = paint_rect_for(box);
     const int border_radius = resolved_border_radius(box);
@@ -1336,7 +1399,7 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
         paint_box_self(root, root_layer->display_list, options_);
     }
     trim_display_list(root_layer->display_list, 0, remaining_commands, display_budget_reported);
-    build_children(root, *root_layer, arena, remaining_commands, display_budget_reported);
+    build_children(root, *root_layer, arena, root.rect, remaining_commands, display_budget_reported);
     if (!root.style.visibility_hidden) {
         const std::size_t command_begin = root_layer->display_list.size();
         paint_generated_inline_content(root, root_layer->display_list, CssPseudoElement::After);
@@ -1389,8 +1452,12 @@ void LayerTreeBuilder::trim_display_list(DisplayList& display_list,
 void LayerTreeBuilder::build_children(const LayoutBox& box,
                                       LayerNode& layer,
                                       MonotonicArena* arena,
+                                      const Rect& viewport,
                                       std::size_t& remaining_commands,
                                       bool& display_budget_reported) const {
+#if !JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    (void)viewport;
+#endif
     struct PendingBox {
         const LayoutBox* box = nullptr;
         LayerNode* layer = nullptr;
@@ -1440,6 +1507,38 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
                                   remaining_commands,
                                   display_budget_reported);
             }
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+            if (layer_count < max_layers && current_box->node != nullptr &&
+                form_control_kind(*current_box->node) == FormControlKind::Select &&
+                select_popup_is_open(*current_box->node)) {
+                DisplayList popup_commands;
+                popup_commands.reserve(2 + static_cast<std::size_t>(
+                    std::max(0, form_control_option_count(*current_box->node)) * 2));
+                Rect popup_bounds;
+                if (paint_select_popup(*current_box,
+                                       viewport,
+                                       current.scroll_y,
+                                       options_,
+                                       popup_commands,
+                                       popup_bounds)) {
+                    auto popup_layer = make_layer_node(arena);
+                    popup_layer->type = LayerType::Stacking;
+                    popup_layer->reasons = LayerReasonZIndex;
+                    popup_layer->box = current_box;
+                    popup_layer->bounds = popup_bounds;
+                    popup_layer->opacity = 1.0F;
+                    popup_layer->z_index = current_layer.z_index;
+                    popup_layer->source_order = next_source_order++;
+                    popup_layer->display_list = std::move(popup_commands);
+                    trim_display_list(popup_layer->display_list,
+                                      0,
+                                      remaining_commands,
+                                      display_budget_reported);
+                    current_layer.children.push_back(std::move(popup_layer));
+                    ++layer_count;
+                }
+            }
+#endif
             if (options_.paint_scroll_indicators &&
                 current_layer.box == current_box &&
                 current_layer.max_scroll_y > 0 &&

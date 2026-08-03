@@ -968,6 +968,35 @@ void javascript_document_ready_state_and_element_click_work() {
     check(result.ok && result.value == "true", "preventDefault blocks summary click default toggle");
 }
 
+void javascript_select_click_uses_cancellable_popup_default_action() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><select id='mode'><option>One</option><option>Two</option></select></body>");
+    Node* select = find_by_id(*document, "mode");
+    check(select != nullptr, "script select exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var select = document.getElementById('mode');"
+        "var events = 0;"
+        "select.oninput = function () { ++events; };"
+        "select.onchange = function () { ++events; };"
+        "select.click();"
+        "String(events) + ':' + select.value");
+    check(result.ok, "select click script succeeds");
+
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    check(result.value == "0:One", "select opening does not emit value-change events");
+    check(select_popup_is_open(*select), "select click opens popup after click dispatch");
+    result = runtime.eval("select.onclick = function (event) { event.preventDefault(); }; select.click(); String(events)");
+    check(result.ok && result.value == "0", "preventDefault blocks select popup default action");
+    check(select_popup_is_open(*select), "prevented select click preserves existing popup state");
+#else
+    check(result.value == "2:Two", "basic select click retains cycling behavior");
+#endif
+}
+
 void javascript_small_document_and_text_idl_tail_works() {
     HtmlParser parser;
     auto document = parser.parse("<html><head><title>Demo</title></head><body><p id='label'>Ready</p></body></html>");
@@ -2442,6 +2471,7 @@ int main() {
         javascript_element_style_hidden_and_disabled_properties_work();
         javascript_standard_reflected_attributes_work();
         javascript_document_ready_state_and_element_click_work();
+        javascript_select_click_uses_cancellable_popup_default_action();
         javascript_small_document_and_text_idl_tail_works();
         document_static_collections_work();
         element_specific_reflected_idl_properties_work();

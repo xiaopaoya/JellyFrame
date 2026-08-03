@@ -1,6 +1,6 @@
 # App 作者能力速查表
 
-> 最后更新：2026-08-02；适用版本：0.5.0-dev
+> 最后更新：2026-08-03；适用版本：0.6.0-dev
 
 这份表给 app 作者快速判断“能不能用”。完整边界仍以
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md) 为准。
@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | 普通结构标签 | 可用 | 使用 `div`、`section`、`header`、`main`、`footer`、`ul`、`li`、`p`、`span`。未知标签会当普通元素处理。 |
 | 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont` 补充含。 |
-| 表单控件 | Form V0 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。`required`、文本 `minlength`/`maxlength`、checkbox/radio 必填状态和 required select 可配合本地 `submit` 使用；不提供浏览器校验弹窗或页面导航。 |
+| 表单控件 | Form V0 加 `forms.advanced` popup 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。`required`、文本 `minlength`/`maxlength`、checkbox/radio 必填状态和 required select 可配合本地 `submit` 使用。启用 `forms.advanced` profile 后，单选 `select` 点击会打开由核心渲染的选项浮层；选择选项会派发 `input` 与 `change`。该浮层受当前 viewport 限制，尚无 popup 滚动、`multiple`、原生 picker、浏览器校验气泡或页面导航。 |
 | 确认对话框 | 有界 modal 子集 | 使用一个 `<dialog>` 配合 `showModal()` 和 `close(returnValue)`。Win32 壳会把 Escape 转为可取消的 `cancel`，再触发 `close`；打开期间 focus/hit test 限制在 dialog 内。不支持嵌套 dialog、backdrop/light-dismiss、`show()`、`requestClose()` 或浏览器 top layer。 |
 | 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">` 或一个 CSS `background-image: url("/assets/image.bmp")`。静态图标 SVG 可通过 `package --rasterize-svg` 在打包期编译成 BMP，生成包中的 HTML/CSS 引用会自动改写。`border-radius` 会以抗锯齿角裁切这两类图片。单张 CSS 背景保留 `background-color` fallback，并支持 `background-size: cover`/`contain`/`100% 100%`、简单 `background-position` 与 `background-repeat: no-repeat`；不支持远程/data URL、多图层或平铺。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
 | 浏览器图片/媒体标签 | 延后 | 不依赖 `picture`/`source`/`srcset`、`<video>`、`<track>` 或 `<audio>` markup。由 app state 选择一张包内图片；只有声明对应 capability 时才使用 `Audio()` V0 或 host frame-provider contract。 |

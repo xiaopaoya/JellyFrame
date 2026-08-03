@@ -1,6 +1,6 @@
 # App Author Capability Table
 
-> Last updated: 2026-08-02; Applies to: 0.5.0-dev
+> Last updated: 2026-08-03; Applies to: 0.6.0-dev
 
 This is the quick "can I use it?" table for app authors. The full contract
 remains [developer_capability_matrix.md](developer_capability_matrix.md).
@@ -11,7 +11,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | --- | --- | --- |
 | Basic structure | Available | Use `div`, `section`, `header`, `main`, `footer`, `ul`, `li`, `p` and `span`. Unknown tags become ordinary elements. |
 | Text | Available | UTF-8 text is preserved; real CJK glyph quality depends on system fonts or app `.jffont` supplements. |
-| Form controls | Form V0 subset | Use `button`, `input`, `select`, `textarea`, `progress` and `meter`. `required`, text `minlength`/`maxlength`, checkbox/radio required state and required selects work with local `submit`; browser validation popups and browser navigation do not. |
+| Form controls | Form V0 plus `forms.advanced` popup subset | Use `button`, `input`, `select`, `textarea`, `progress` and `meter`. `required`, text `minlength`/`maxlength`, checkbox/radio required state and required selects work with local `submit`. With the `forms.advanced` profile, a single-select click opens a core-rendered option overlay; selecting an option dispatches `input` and `change`. It is capped by the viewport and has no popup scrolling, `multiple`, native picker, browser validation bubble or browser navigation. |
 | Confirmation dialog | Bounded modal subset | Use one `<dialog>` with `showModal()` and `close(returnValue)`. In the Win32 shell, Escape becomes a cancellable `cancel` and then `close`; focus and hit testing stay inside the dialog while it is open. No nested dialogs, backdrop/light-dismiss, `show()`, `requestClose()` or browser top-layer behavior. |
 | Images | Subset | Use package-local `<img src="/assets/icon.bmp">` or one CSS `background-image: url("/assets/image.bmp")`. A static icon SVG may be compiled to BMP with `package --rasterize-svg`; its HTML/CSS reference is rewritten in the generated package. `border-radius` clips either image form with antialiased corners. One CSS background keeps `background-color` as a fallback and supports `background-size: cover`/`contain`/`100% 100%`, the simple `background-position` subset and `background-repeat: no-repeat`; remote/data URLs, multiple layers and tiling are absent. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
 | Browser image/media markup | Deferred | Do not rely on `picture`/`source`/`srcset`, `<video>`, `<track>` or `<audio>` markup. Select one package-local image in app state; use `Audio()` V0 or the host frame-provider contract only when their capabilities are declared. |

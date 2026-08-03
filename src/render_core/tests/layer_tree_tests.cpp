@@ -1,6 +1,7 @@
 ﻿#include "render_core/css_parser.h"
 #include "render_core/animation_timeline.h"
 #include "render_core/feature_config.h"
+#include "render_core/form_control.h"
 #include "render_core/html_parser.h"
 #include "render_core/hit_test.h"
 #include "render_core/layer_tree.h"
@@ -69,6 +70,18 @@ BuiltPipeline build_pipeline(const char* html, const char* css) {
     auto layer_tree = layer_tree_builder.build(*layout_tree);
     return BuiltPipeline(std::move(document), std::move(stylesheet), std::move(resolver),
                          std::move(render_tree), std::move(layout_tree), std::move(layer_tree));
+}
+
+Node* find_node_by_id(Node& node, const std::string& id) {
+    if (node.attribute("id") == id) {
+        return &node;
+    }
+    for (const auto& child : node.children) {
+        if (Node* found = find_node_by_id(*child, id)) {
+            return found;
+        }
+    }
+    return nullptr;
 }
 
 const LayerNode* find_layer_with_reason(const LayerNode& layer, LayerReason reason) {
@@ -630,6 +643,39 @@ void select_does_not_paint_option_list_inline() {
         }
     }
     check(painted_selected_option, "select paints the selected option text");
+}
+
+void select_popup_paints_above_document_and_hit_tests_to_owner() {
+#if !JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    return;
+#else
+    auto pipeline = build_pipeline(
+        "<body><select id='choice'><option>Alpha</option><option>Beta</option></select><p>Behind</p></body>",
+        "body { height: 120px; } select { display: block; width: 100px; height: 24px; } p { margin: 0; }");
+    Node* select = find_node_by_id(*pipeline.document, "choice");
+    const LayoutBox* select_box = find_layout_by_id(*pipeline.layout_tree, "choice");
+    check(select != nullptr && select_box != nullptr, "popup select fixture exists");
+    check(activate_form_control(*select), "popup select opens");
+
+    LayerTreeBuilder builder;
+    auto popup_tree = builder.build(*pipeline.layout_tree);
+    const DisplayList commands = builder.flatten(*popup_tree);
+    bool painted_beta = false;
+    for (const DisplayCommand& command : commands) {
+        painted_beta = painted_beta || (command.type == DisplayCommandType::Text && command.text == "Beta");
+    }
+    check(painted_beta, "open select paints the option overlay");
+
+    const SelectPopupGeometry geometry = select_popup_geometry(
+        select_box->rect,
+        popup_tree->bounds,
+        form_control_option_count(*select),
+        std::max(20, select_box->style.font_size + 6));
+    const HitTestResult hit = HitTester{}.hit_test(*popup_tree,
+                                                    geometry.rect.x + 2,
+                                                    geometry.rect.y + geometry.row_height + 1);
+    check(hit.node == select && hit.box == select_box, "popup option hit resolves to select owner");
+#endif
 }
 
 void grid_auto_fit_gap_span_and_aspect_ratio_layout() {
@@ -1302,6 +1348,7 @@ int main() {
         centered_inline_text_aligns_in_parent();
         button_inline_block_shrink_wraps_text();
         select_does_not_paint_option_list_inline();
+        select_popup_paints_above_document_and_hit_tests_to_owner();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_auto_fit_gap_span_and_aspect_ratio_layout();
 #endif

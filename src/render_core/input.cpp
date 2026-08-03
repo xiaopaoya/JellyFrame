@@ -81,6 +81,29 @@ bool node_is_descendant_or_self(const Node* node, const Node* ancestor) {
     return false;
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+const Node* find_open_select(const Node& root) {
+    std::vector<const Node*> pending;
+    pending.push_back(&root);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (select_popup_is_open(*current)) {
+            return current;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+    return nullptr;
+}
+
+bool contains_rect(Rect rect, int x, int y) {
+    return x >= rect.x && y >= rect.y &&
+        x < safe_edge(rect.x, rect.width) && y < safe_edge(rect.y, rect.height);
+}
+#endif
+
 bool toggle_details_from_summary(const Node* node) {
     if (node == nullptr || node->type != NodeType::Element || node->tag_name != "summary" ||
         node->parent == nullptr || node->parent->tag_name != "details") {
@@ -243,6 +266,14 @@ const Node* InputController::pointer_move(const PointerInput& input) {
 const Node* InputController::pointer_down(const PointerInput& input) {
     HitTestResult result = hit(input.x, input.y);
     const Node* target = result ? result.node : nullptr;
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    if (layer_tree_.box != nullptr && layer_tree_.box->node != nullptr) {
+        const Node* open_select = find_open_select(*layer_tree_.box->node);
+        if (open_select != nullptr && target != open_select) {
+            set_select_popup_open(*mutable_node(open_select), false);
+        }
+    }
+#endif
     if (disabled_target(target)) {
         set_active_node(nullptr);
         return target;
@@ -283,9 +314,45 @@ const Node* InputController::pointer_up(const PointerInput& input) {
     if (target != nullptr && target == active_node_) {
         if (active_node_ != nullptr && is_form_control(*active_node_) &&
             form_control_kind(*active_node_) != FormControlKind::Range) {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+            if (form_control_kind(*active_node_) == FormControlKind::Select && select_popup_is_open(*active_node_)) {
+                const LayoutBox* select_box = active_box_;
+                const int option_count = form_control_option_count(*active_node_);
+                const int row_height = select_box != nullptr
+                    ? std::max(20, select_box->style.line_height > 0
+                        ? select_box->style.line_height
+                        : select_box->style.font_size + std::max(6, select_box->style.font_size / 3))
+                    : 20;
+                const Rect viewport = layer_tree_.bounds;
+                const SelectPopupGeometry geometry = select_box != nullptr
+                    ? select_popup_geometry(select_box->rect, viewport, option_count, row_height)
+                    : SelectPopupGeometry{};
+                if (contains_rect(geometry.rect, input.x, input.y)) {
+                    const int option_index = geometry.first_option_index +
+                        (input.y - geometry.rect.y) / std::max(1, geometry.row_height);
+                    if (!form_control_option_disabled(*active_node_, option_index) &&
+                        set_form_control_selected_index(*mutable_node(active_node_), option_index)) {
+                        set_select_popup_open(*mutable_node(active_node_), false);
+                        dispatch_simple_event(active_node_, "input");
+                        dispatch_simple_event(active_node_, "change");
+                    } else {
+                        set_select_popup_open(*mutable_node(active_node_), false);
+                    }
+                } else {
+                    set_select_popup_open(*mutable_node(active_node_), false);
+                }
+            } else
+#endif
             if (activate_form_control(*mutable_node(active_node_))) {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+                if (form_control_kind(*active_node_) != FormControlKind::Select) {
+                    dispatch_simple_event(active_node_, "input");
+                    dispatch_simple_event(active_node_, "change");
+                }
+#else
                 dispatch_simple_event(active_node_, "input");
                 dispatch_simple_event(active_node_, "change");
+#endif
             }
         }
         if (active_node_ != nullptr && form_control_kind(*active_node_) == FormControlKind::Range) {
@@ -354,8 +421,15 @@ bool InputController::key_down(const KeyInput& input) {
     if ((input.code == KeyCode::Space || input.code == KeyCode::Enter) &&
         is_form_control(*focused_node_) &&
         activate_form_control(*mutable_node(focused_node_))) {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+        if (form_control_kind(*focused_node_) != FormControlKind::Select) {
+            dispatch_simple_event(focused_node_, "input");
+            dispatch_simple_event(focused_node_, "change");
+        }
+#else
         dispatch_simple_event(focused_node_, "input");
         dispatch_simple_event(focused_node_, "change");
+#endif
         return true;
     }
     return false;
@@ -406,8 +480,15 @@ bool InputController::activate_focused() {
         return false;
     }
     if (is_form_control(*focused_node_) && activate_form_control(*mutable_node(focused_node_))) {
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+        if (form_control_kind(*focused_node_) != FormControlKind::Select) {
+            dispatch_simple_event(focused_node_, "input");
+            dispatch_simple_event(focused_node_, "change");
+        }
+#else
         dispatch_simple_event(focused_node_, "input");
         dispatch_simple_event(focused_node_, "change");
+#endif
     }
     PointerInput synthetic;
     MouseEvent click = make_mouse_event("click", synthetic);

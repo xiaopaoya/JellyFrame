@@ -128,6 +128,7 @@ private:
     void build_children(const LayoutBox& box,
                         LayerNode& layer,
                         MonotonicArena* arena,
+                        const Rect& viewport,
                         std::size_t& remaining_commands,
                         bool& display_budget_reported) const;
     LayerNodePtr make_layer_node(MonotonicArena* arena) const;

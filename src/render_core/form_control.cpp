@@ -480,7 +480,11 @@ bool activate_form_control(Node& node) {
         if (option_count <= 0) {
             return false;
         }
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+        return set_select_popup_open(node, !state.select_popup_open);
+#else
         return set_form_control_selected_index(node, (state.selected_index + 1) % option_count);
+#endif
     }
     return false;
 }
@@ -613,5 +617,80 @@ bool step_select_control(Node& node, int delta) {
     const int next = std::max(0, std::min(option_count - 1, current + delta));
     return set_form_control_selected_index(node, next);
 }
+
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+bool select_popup_is_open(const Node& node) {
+    return form_control_kind(node) == FormControlKind::Select &&
+        node.form_control_state != nullptr && node.form_control_state->select_popup_open;
+}
+
+bool set_select_popup_open(Node& node, bool open) {
+    if (is_disabled_form_control(node) || form_control_kind(node) != FormControlKind::Select) {
+        return false;
+    }
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.select_popup_open == open) {
+        return false;
+    }
+    state.select_popup_open = open;
+    mark_dirty(node, DomDirtyPaint);
+    return true;
+}
+
+int form_control_option_count(const Node& node) {
+    return form_control_kind(node) == FormControlKind::Select ? count_options(node) : 0;
+}
+
+const Node* form_control_option_at(const Node& node, int option_index) {
+    if (option_index < 0 || form_control_kind(node) != FormControlKind::Select) {
+        return nullptr;
+    }
+    int current_index = 0;
+    return option_at(node, option_index, current_index);
+}
+
+std::string form_control_option_text(const Node& node, int option_index) {
+    const Node* option = form_control_option_at(node, option_index);
+    return option == nullptr ? std::string{} : option_text(*option);
+}
+
+bool form_control_option_disabled(const Node& node, int option_index) {
+    const Node* option = form_control_option_at(node, option_index);
+    if (option == nullptr) {
+        return false;
+    }
+    if (has_attribute(*option, "disabled")) {
+        return true;
+    }
+    return option->parent != nullptr && option->parent->tag_name == "optgroup" &&
+        has_attribute(*option->parent, "disabled");
+}
+
+SelectPopupGeometry select_popup_geometry(const Rect& select_rect,
+                                         const Rect& viewport,
+    int option_count,
+    int row_height) {
+    SelectPopupGeometry geometry;
+    geometry.row_height = std::max(1, row_height);
+    if (option_count <= 0 || viewport.width <= 0 || viewport.height <= 0) {
+        return geometry;
+    }
+    const int available_rows = std::max(1, viewport.height / geometry.row_height);
+    geometry.visible_option_count = std::min(option_count, available_rows);
+    const int width = std::max(1, std::min(select_rect.width, viewport.width));
+    const int height = geometry.visible_option_count * geometry.row_height;
+    const int x = std::max(viewport.x, std::min(select_rect.x, safe_edge(viewport.x, viewport.width - width)));
+    const int below = safe_edge(select_rect.y, select_rect.height);
+    const int above = select_rect.y - height;
+    int y = below;
+    if (safe_edge(y, height) > safe_edge(viewport.y, viewport.height) && above >= viewport.y) {
+        y = above;
+    } else if (safe_edge(y, height) > safe_edge(viewport.y, viewport.height)) {
+        y = std::max(viewport.y, safe_edge(viewport.y, viewport.height - height));
+    }
+    geometry.rect = Rect{x, y, width, height};
+    return geometry;
+}
+#endif
 
 } // namespace jellyframe

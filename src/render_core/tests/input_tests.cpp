@@ -99,7 +99,7 @@ Pipeline build_form_pipeline(const char* html, const char* css = "") {
     RenderTreeBuilder render_tree_builder(resolver);
     auto render_tree = render_tree_builder.build(*document);
     LayoutEngine layout_engine(resolver);
-    auto layout_tree = layout_engine.layout(*render_tree, 240);
+    auto layout_tree = layout_engine.layout(*render_tree, 240, 120);
     LayerTreeBuilder layer_tree_builder;
     auto layer_tree = layer_tree_builder.build(*layout_tree);
     return Pipeline(std::move(document), std::move(stylesheet), std::move(resolver),
@@ -547,9 +547,10 @@ void range_drag_updates_value() {
     check(input_events == 1, "range input event dispatched");
 }
 
-void select_click_cycles_selected_option() {
+void select_click_opens_popup_without_committing_value() {
     auto pipeline = build_form_pipeline(
-        "<body><select id='choice'><option>One</option><option>Two</option></select></body>");
+        "<body><select id='choice'><option>One</option><option>Two</option></select></body>",
+        "body { height: 120px; }");
     Node* select = find_by_id(*pipeline.document, "choice");
     const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "choice");
     check(select != nullptr && box != nullptr, "select exists");
@@ -564,7 +565,53 @@ void select_click_cycles_selected_option() {
     pointer.buttons = 0;
     input.pointer_up(pointer);
 
-    check(form_control_display_text(*select) == "Two", "select cycles selected option");
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    check(select_popup_is_open(*select), "select click opens option popup");
+    check(form_control_display_text(*select) == "One", "select opening keeps current option");
+#else
+    check(form_control_display_text(*select) == "Two", "basic select activation cycles the selected option");
+#endif
+}
+
+void select_popup_pointer_commits_option() {
+#if !JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    return;
+#else
+    auto pipeline = build_form_pipeline(
+        "<body><select id='choice'><option>One</option><option>Two</option></select></body>",
+        "body { height: 120px; }");
+    Node* select = find_by_id(*pipeline.document, "choice");
+    const LayoutBox* box = find_box_by_id(*pipeline.layout_tree, "choice");
+    check(select != nullptr && box != nullptr, "popup select exists");
+    int input_events = 0;
+    int change_events = 0;
+    select->add_event_listener("input", [&](Event&) { ++input_events; });
+    select->add_event_listener("change", [&](Event&) { ++change_events; });
+    check(activate_form_control(*select), "select opens before popup rebuild");
+
+    LayerTreeBuilder layer_tree_builder;
+    pipeline.layer_tree = layer_tree_builder.build(*pipeline.layout_tree);
+    InputController input(*pipeline.layer_tree);
+    const SelectPopupGeometry geometry = select_popup_geometry(
+        box->rect,
+        pipeline.layer_tree->bounds,
+        form_control_option_count(*select),
+        std::max(20, box->style.font_size + 6));
+    check(geometry.visible_option_count == 2, "popup geometry exposes both options");
+    check(count_layers(*pipeline.layer_tree) > 1, "open select adds an overlay layer");
+    PointerInput pointer;
+    pointer.x = box->rect.x + 2;
+    pointer.y = geometry.rect.y + geometry.row_height + 2;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+    check(input.pointer_down(pointer) == select, "popup pointer down hits select owner");
+    pointer.buttons = 0;
+    check(input.pointer_up(pointer) == select, "popup pointer up hits select owner");
+
+    check(!select_popup_is_open(*select), "select popup closes after option activation");
+    check(form_control_display_text(*select) == "Two", "popup pointer selects option");
+    check(input_events == 1 && change_events == 1, "popup selection dispatches input and change once");
+#endif
 }
 
 void unchanged_form_activation_stays_clean() {
@@ -581,8 +628,16 @@ void unchanged_form_activation_stays_clean() {
 
     check(form_control_display_text(*select) == "One", "single select starts at only option");
     clear_dirty_flags(*pipeline.document);
-    check(!activate_form_control(*select), "single-option select activation is a no-op");
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    check(activate_form_control(*select), "single-option select opens its popup");
+    check(select_popup_is_open(*select), "single-option select open state is retained");
+    clear_dirty_flags(*pipeline.document);
+    check(activate_form_control(*select), "single-option select closes its popup");
+    check(!select_popup_is_open(*select), "single-option select close state is retained");
+#else
+    check(!activate_form_control(*select), "single-option basic select activation is a no-op");
     check(subtree_dirty_flags(*pipeline.document) == DomDirtyNone, "single-option select no-op stays clean");
+#endif
 }
 
 void select_arrow_keys_work_through_optgroups() {
@@ -607,6 +662,10 @@ void select_arrow_keys_work_through_optgroups() {
     KeyInput key;
     key.code = KeyCode::ArrowDown;
     check(input.key_down(key), "arrow down selects next option");
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    check(form_control_display_text(*select) == "Two", "select arrow down selects the next option");
+    check(input.key_down(key), "second arrow down selects across optgroup");
+#endif
     check(form_control_display_text(*select) == "Three", "select arrow down crosses optgroup");
     key.code = KeyCode::ArrowUp;
     check(input.key_down(key), "arrow up selects previous option");
@@ -673,8 +732,13 @@ void focus_navigation_skips_disabled_and_activates() {
     check(ensure_form_control_state(*checkbox).checked, "focused checkbox toggled");
     check(checkbox_clicks == 1, "focused checkbox receives click");
     check(input.focus_next() == select, "focus advances to select");
-    check(input.activate_focused(), "hardware activate cycles select");
-    check(form_control_display_text(*select) == "Two", "focused select cycles value");
+    check(input.activate_focused(), "hardware activate handles select");
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    check(select_popup_is_open(*select), "focused select popup opens");
+    check(form_control_display_text(*select) == "One", "focused select keeps current value while opening");
+#else
+    check(form_control_display_text(*select) == "Two", "focused basic select cycles value");
+#endif
     check(input.focus_next() == first, "focus wraps forward");
     check(input.focus_previous() == select, "focus wraps backward");
 }
@@ -864,7 +928,8 @@ int main() {
     text_input_backspace_removes_whole_utf8_scalar();
         checkbox_click_toggles_checked_state();
         range_drag_updates_value();
-        select_click_cycles_selected_option();
+        select_click_opens_popup_without_committing_value();
+        select_popup_pointer_commits_option();
         unchanged_form_activation_stays_clean();
         datalist_completion_updates_text_control();
         text_input_respects_readonly_and_maxlength();

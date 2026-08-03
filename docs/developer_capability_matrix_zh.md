@@ -1,6 +1,6 @@
 # 开发者能力矩阵
 
-> 最后更新：2026-08-02；适用版本：0.5.0-dev
+> 最后更新：2026-08-03；适用版本：0.6.0-dev
 
 
 这份文档是 JellyFrame 面向应用开发者的实际能力契约。开发者在使用某个 HTML
@@ -300,7 +300,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `input type=checkbox` | 可用 | checked 状态、点击激活、input/change 事件。 |
 | `input type=radio` | 子集 | checked 状态和绘制；同 name 互斥组仍有限。 |
 | `input type=range` | 可用 | track/thumb 绘制，拖动更新 value，并使用 `min`、`max` 和 `step`。 |
-| `select` / `option` / `optgroup` | 子集 | 绘制当前选中项；验证壳点击会循环选项；Up/Down 可跨 `optgroup` 在 option 间移动。无 popup/分组菜单 UI。 |
+| `select` / `option` / `optgroup` | `forms.advanced` popup 子集 | 基础 profile 绘制当前选中项，并在激活时循环选项。启用 `forms.advanced` 后，单选 `select` 的点击或焦点激活会打开核心渲染的选项浮层；指针选择会提交 value 并派发 `input`/`change`，Up/Down 仍可跨 `optgroup` 在 option 间移动。浮层受 viewport 限制，无法显示全部选项时会告警；尚无 popup 滚动、`multiple`、原生 picker 或浏览器 top-layer/分组菜单行为。 |
 | `progress` / `meter` | 可用 | 根据属性绘制 value bar。 |
 | 日期/颜色/文件控件 | 延后 | 暂用 text/select/range fallback。 |
 | 表单验证 / form submission | 子集 | form 和控件级 `checkValidity()` / `reportValidity()` 及 submit 激活会检查 `required`、text/textarea `minlength`/`maxlength`、required checkbox/radio group 和 required select value。参与校验的控件提供新建的 `validity` 快照（`valueMissing`、`tooShort`、`tooLong`、`customError`、`valid`）、`willValidate`、`validationMessage` 和 `setCustomValidity(message)`。无效控件会收到不冒泡 `invalid`，但不绘制浏览器 popup。`form.requestSubmit([submitter])` 会在校验成功并收集数据后派发可取消、带 `submitter` 的 `SubmitEvent` 形状 `submit`。`form.reset()` 及未取消的 `button/input type=reset` 激活会派发可取消、可冒泡的 `reset`；未取消时从作者 attribute/text 懒恢复控件状态，不保留 snapshot。browser navigation、action/method POST、multipart/file upload、pattern/type/date/range/step 校验、`form.submit()` 和其余 `ValidityState` 标志仍未实现。 |
@@ -356,7 +356,7 @@ JerryScript 源码树时可用。
 | `getBoundingClientRect()` | frame snapshot 子集 | element 请求测量后，返回上一个完成的宿主 layout frame 的新数值对象 `{x,y,width,height,top,right,bottom,left}`。快照相对 client；Win32 壳会应用根页面 scroll，而 nested scroll 与 transform 后的几何仍延后。它绝不保存 `LayoutBox*`、不强制同步 layout，也不是 live DOMRect。runtime 最多保留 32 个已请求 element 的快照；首次或不可用快照返回零矩形。 |
 | `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`visibility`、`whiteSpace`、`textOverflow`、`overflow`、`overflowY` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
 | `hidden` / `disabled` / `open` / `autofocus` / `tabIndex` properties | 子集 | `hidden`、`disabled`、`open`、`autofocus` 为 Boolean reflection，`tabIndex` 为整数 reflection。`hidden` 提供默认的 `display:none` 行为，正常 author CSS 可以覆盖；当它使节点在重建后的 layer tree 中消失时，命中测试以及恢复的 hover/active/focus 状态会一并清除。CSS `visibility:hidden` 保留 layout，但走同一恢复交互状态清理。disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 和非 modal dialog 的可见状态。host 创建 `InputController` 时会消费 `autofocus`，`tabIndex` 只影响有界 hardware focus order。`HTMLElement.focus()` / `blur()` 继续延后：在 port 能跨 layer-tree rebuild 提供生命周期安全 adapter 前，焦点归属始终由 host 持有。 |
-| `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio/select 状态变化会派发 `input`/`change`，未被取消的 `summary.click()` 会切换父 `details`，未取消的 form submit button 会进入有界提交路径。不实现 browser navigation。 |
+| `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio 状态变化会派发 `input`/`change`；`forms.advanced` 中单选 `select` 的 click 只会开关选项浮层，不提交 value；未被取消的 `summary.click()` 会切换父 `details`，未取消的 form submit button 会进入有界提交路径。不实现 browser navigation。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
 | `on*` event handler properties | 子集 | 只为 JellyFrame 实际派发的事件支持函数型 handler property：`onclick`、`oninput`、`onchange`、`ontoggle`、`oncancel`、`onclose`、mouse/wheel handlers、`onfocus`/`onblur`、`document.onvisibilitychange`、`window.ononline`/`window.onoffline`/`window.onhashchange`/`window.onpopstate`，以及可穿戴按下反馈别名 `onpointerdown`/`onpointerup`/`ontouchstart`/`ontouchend`。设置为 `null` 或非函数会清除 handler。它们复用普通 listener 预算和 runtime 清理路径。不实现完整 `GlobalEventHandlers`、HTML inline event handler attribute 或浏览器级 handler 编译语义。 |
 | Event object | 子集 | `type`、`target`、`currentTarget`、phase、取消/停止传播 API、鼠标/滚轮字段。form `submit` event 还会暴露 `submitter` wrapper。 |

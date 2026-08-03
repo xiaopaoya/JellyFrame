@@ -217,6 +217,52 @@ def main() -> int:
         require(before_drag.read_bytes() != after_drag.read_bytes(),
                 "pointer-move between pointer-down/up must update a range control")
 
+    with tempfile.TemporaryDirectory(prefix="jellyframe-select-popup-") as directory:
+        root = Path(directory)
+        app = root / "app"
+        frames = root / "frames"
+        app.mkdir()
+        (app / "index.html").write_text(
+            "<style>html,body{margin:0;width:160px;height:100px;background:#10151b;}"
+            "select{display:block;width:140px;height:24px;margin:10px;color:#10151b;background:#f8fafc;}"
+            "</style><select id='choice'><option>One</option><option>Two</option></select>",
+            encoding="utf-8",
+        )
+        (app / "jellyframe.app.json").write_text(
+            json.dumps({
+                "id": "org.jellyframe.select-popup-probe",
+                "name": "Select Popup Probe",
+                "role": "app",
+                "versionName": "1.0.0",
+                "versionCode": 1,
+                "entry": "/index.html",
+                "minJellyFrame": "0.5.0-dev",
+                "script": "none",
+                "viewport": {"designWidth": 160, "designHeight": 100},
+            }),
+            encoding="utf-8",
+        )
+        popup_result = run_case(
+            exe,
+            [
+                "--app", str(app),
+                "--capture-frames", str(frames),
+                "--frame-count", "4",
+                "--frame-event", "1:click:20:20",
+                "--frame-event", "2:click:20:64",
+            ],
+        )
+        require(popup_result.returncode == 0, "select popup capture must succeed")
+        initial = frames / "frame_000.bmp"
+        opened = frames / "frame_001.bmp"
+        committed = frames / "frame_002.bmp"
+        require(initial.is_file() and opened.is_file() and committed.is_file(),
+                "select popup capture must produce initial, opened and committed frames")
+        require(initial.read_bytes() != opened.read_bytes(),
+                "select click must paint an option popup in forms.advanced builds")
+        require(opened.read_bytes() != committed.read_bytes(),
+                "select popup option click must close the popup and update the control")
+
     numeric_result = run_case(exe, ["--viewport-width", "nope"])
     require(numeric_result.returncode != 0, "invalid numeric option must fail")
     require("--viewport-width requires an integer" in numeric_result.stdout,

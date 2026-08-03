@@ -1,6 +1,10 @@
 ﻿#pragma once
 
 #include "render_core/dom.h"
+#include "render_core/feature_config.h"
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+#include "render_core/geometry.h"
+#endif
 
 #include <string>
 #include <string_view>
@@ -30,6 +34,9 @@ struct FormControlState {
     int min = 0;
     int max = 100;
     int step = 1;
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    bool select_popup_open = false;
+#endif
     std::string custom_validation_message;
     bool dirty = false;
 };
@@ -54,5 +61,26 @@ bool set_form_control_checked(Node& node, bool checked);
 int form_control_selected_index(const Node& node);
 bool set_form_control_selected_index(Node& node, int selected_index);
 bool step_select_control(Node& node, int delta);
+
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+bool select_popup_is_open(const Node& node);
+bool set_select_popup_open(Node& node, bool open);
+int form_control_option_count(const Node& node);
+const Node* form_control_option_at(const Node& node, int option_index);
+std::string form_control_option_text(const Node& node, int option_index);
+bool form_control_option_disabled(const Node& node, int option_index);
+
+struct SelectPopupGeometry {
+    Rect rect;
+    int row_height = 0;
+    int first_option_index = 0;
+    int visible_option_count = 0;
+};
+
+SelectPopupGeometry select_popup_geometry(const Rect& select_rect,
+                                         const Rect& viewport,
+                                         int option_count,
+                                         int row_height);
+#endif
 
 } // namespace jellyframe
