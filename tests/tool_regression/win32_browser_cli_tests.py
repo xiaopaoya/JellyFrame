@@ -153,6 +153,13 @@ def main() -> int:
     scripting_enabled = len(sys.argv) == 3
     require(exe.exists(), f"missing executable: {exe}")
 
+    no_argument_result = run_case(exe, [])
+    require(no_argument_result.returncode == 0, "no arguments must print help and exit successfully")
+    require("No input app or capture options were provided." in no_argument_result.stdout,
+            "no arguments must explain why the tool did not launch a page")
+    require("usage: jellyframe_win32_browser" in no_argument_result.stdout,
+            "no arguments must print the short usage")
+
     help_result = run_case(exe, ["--help"])
     require(help_result.returncode == 0, "--help must exit successfully")
     require("usage: jellyframe_win32_browser" in help_result.stdout, "--help must print usage")
@@ -172,6 +179,20 @@ def main() -> int:
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
+
+    unknown_option_result = run_case(exe, ["--not-a-real-option"])
+    require(unknown_option_result.returncode != 0, "unknown options must fail")
+    require("unknown option: --not-a-real-option" in unknown_option_result.stdout,
+            "unknown options must name the invalid option")
+    require("Use --help for usage." in unknown_option_result.stdout,
+            "unknown options must point to --help")
+
+    too_many_positional_result = run_case(exe, ["a.html", "a.css", "172", "320", "extra"])
+    require(too_many_positional_result.returncode != 0, "too many positional arguments must fail")
+    require("too many positional arguments" in too_many_positional_result.stdout,
+            "too many positional arguments must explain the accepted shape")
+    require("Use --help for usage." in too_many_positional_result.stdout,
+            "positional argument errors must point to --help")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-scripted-pointer-drag-") as directory:
         root = Path(directory)

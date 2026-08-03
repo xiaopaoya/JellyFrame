@@ -10,6 +10,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- The Win32 browser now prints a short usage message and exits successfully
+  when started without arguments. Unknown options and excess positional
+  arguments fail with a concise error and a `--help` hint instead of being
+  misinterpreted as an HTML input path.
+
 - Added the dedicated no-script `jelly_flex_grid_probe` desktop fixture and
   capture regression. Flex/Grid ON now checks real pixel placement; the same
   fixture was manually captured with the OFF profile to verify stable

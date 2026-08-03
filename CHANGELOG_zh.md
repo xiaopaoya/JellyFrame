@@ -10,6 +10,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- Win32 验收程序现在无参数启动时只输出简要用法并正常退出；未知选项和过多位置参数会给出简洁
+  错误并提示使用 `--help`，不再误当作 HTML 输入路径。
+
 - 新增无脚本 `jelly_flex_grid_probe` 桌面 fixture 与 capture 回归。Flex/Grid ON
   现在检查真实像素布局；同一 fixture 也已用 OFF profile 捕获，确认稳定的 block/inline
   fallback 且无重叠。

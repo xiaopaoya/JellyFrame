@@ -6446,6 +6446,12 @@ private:
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 1) {
+        std::cout << "No input app or capture options were provided. Use --help for usage.\n\n";
+        print_win32_browser_usage(std::cout);
+        return 0;
+    }
+
     BrowserOptions options;
     options.html_path = "src/render_core/samples/pages/modern/app_shell.html";
     options.css_path = "src/render_core/samples/pages/modern/app_shell.css";
@@ -6779,7 +6785,18 @@ int main(int argc, char** argv) {
             }
             continue;
         }
+        if (!arg.empty() && arg.front() == '-') {
+            std::cerr << "unknown option: " << arg << "\n"
+                      << "Use --help for usage.\n";
+            return 1;
+        }
         positional.push_back(arg);
+    }
+
+    if (positional.size() > 4) {
+        std::cerr << "too many positional arguments: expected page.html [style.css [width height]]\n"
+                  << "Use --help for usage.\n";
+        return 1;
     }
 
     if (options.registry_store_path.empty() && options.app_path.empty() && positional.empty() &&
