@@ -1,6 +1,6 @@
 # JellyFrame 移植工作指导
 
-> 最后更新：2026-07-23；适用版本：0.5.0-dev
+> 最后更新：2026-08-03；适用版本：0.5.0-dev
 
 
 本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及当前核心已经提供了哪些可直接使用的能力。
@@ -152,6 +152,11 @@ budgets.max_framebuffer_pixels = width * height;
   RGB565 target 放 internal RAM。
 - `flush` 只提交 dirty rectangle，不做整屏无条件刷新。
 - 若屏幕驱动 API 要求紧凑行缓冲，而 dirty rect 不是整行，宿主应在栈或静态 scratch buffer 中逐行打包。
+- 对核心绘制的瞬态弹层，宿主必须保留 dirty-region 计算完成前的旧、新
+  `LayerNode` tree，并分别传入 `DirtyRegionOptions::previous_layer_tree` 和
+  `DirtyRegionOptions::current_layer_tree`。核心会把旧、新
+  `LayerReasonTransientOverlay` bounds 与控件本体 bounds 合并，因此弹层打开和关闭都可局部提交。
+  不得用无条件全屏重绘替代这一契约。
 - `present`/`flush` 必须是帧同步边界：返回后，JellyFrame 才能安全开始下一帧写入同一 framebuffer 或
   target buffer。
 

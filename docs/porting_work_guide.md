@@ -1,6 +1,6 @@
 # JellyFrame Porting Work Guide
 
-> Last updated: 2026-07-23; Applies to: 0.5.0-dev
+> Last updated: 2026-08-03; Applies to: 0.5.0-dev
 
 
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
@@ -193,6 +193,13 @@ Requirements:
 - If the display driver requires tightly packed rows and a dirty rect is not
   full-width, pack rows into a static or stack scratch buffer before calling the
   driver.
+- For a transient core-rendered overlay, retain the previous and current
+  `LayerNode` trees until dirty-region computation completes, then pass both in
+  `DirtyRegionOptions::previous_layer_tree` and
+  `DirtyRegionOptions::current_layer_tree`. The core unions old and new
+  `LayerReasonTransientOverlay` bounds with the control bounds, so opening and
+  closing a popup can be flushed locally. Do not replace this with an
+  unconditional full-frame repaint.
 - `present`/`flush` is a frame synchronization boundary: once it returns,
   JellyFrame must be allowed to safely start the next frame and write the same
   framebuffer or target buffer.

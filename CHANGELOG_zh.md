@@ -10,6 +10,11 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 已在 `f472cbc` 上完成 WS147 `forms.advanced` ON/OFF 验收：两组基础控件均可操作，
+  ON 执行 submit/reset 默认动作，OFF 安全抑制默认动作；select 瞬态弹层使用旧/新 layer
+  bounds 做局部重绘，没有用全屏重绘掩盖问题。本验收不覆盖 Canvas、JerryScript FormData
+  以及视觉签收。
+
 - CTest 现会将生成的 Render Core 测试可执行文件 link map 与当前 profile 对照；CMake
   target metadata 会将生成的 map 路径提供给校验器。
 

@@ -3554,6 +3554,7 @@ public:
                   << " style=" << frame_update_statistics_.dirty_style_frames
                   << " layout=" << frame_update_statistics_.dirty_layout_frames
                   << " paint=" << frame_update_statistics_.dirty_paint_frames
+                  << " overlay=" << frame_update_statistics_.dirty_overlay_frames
                   << " render_or_layout=" << frame_update_statistics_.dirty_render_or_layout_frames
                   << '\n'
                   << "  host_completion_batches=" << host_service_counters_.completion_batches

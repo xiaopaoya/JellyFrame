@@ -10,6 +10,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Completed the WS147 `forms.advanced` ON/OFF acceptance on `f472cbc`: basic
+  controls remain usable in both profiles, ON submit/reset defaults execute,
+  OFF defaults stay suppressed, and transient select overlays repaint locally
+  using previous/current layer bounds without a full-frame workaround. The
+  acceptance does not cover Canvas, JerryScript FormData, or visual sign-off.
+
 - CTest now validates the generated Render Core test-executable link map against
   the active profile. CMake target metadata supplies the generated map path to
   the checker.
