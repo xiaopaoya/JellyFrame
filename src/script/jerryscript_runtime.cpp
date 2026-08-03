@@ -1369,6 +1369,7 @@ bool form_data_set_fits(const ScriptFormData& data,
                                              data.max_entries,
                                              data.max_bytes);
 }
+#endif
 
 ScriptEventBinding* native_event_binding(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
@@ -1412,6 +1413,7 @@ ScriptCanvasGradient* native_canvas_gradient(const jerry_value_t object) {
     return static_cast<ScriptCanvasGradient*>(jerry_object_get_native_ptr(object, &kCanvasGradientNativeInfo));
 }
 
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 ScriptFormData* native_form_data(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
         return nullptr;
