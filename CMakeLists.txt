@@ -194,6 +194,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
             src/app_runtime/script_task_input_dispatch.cpp
             src/app_runtime/script_task_service_request_codec.cpp
             src/app_runtime/script_task_service_bridge.cpp
+            src/app_runtime/script_task_worker_inbox.cpp
         )
         target_link_libraries(jellyframe_script_task_runtime PUBLIC jellyframe_app_runtime)
         target_include_directories(jellyframe_script_task_runtime
@@ -920,6 +921,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 src/app_runtime/tests/script_task_input_dispatch_tests.cpp
                 src/app_runtime/tests/script_task_service_request_codec_tests.cpp
                 src/app_runtime/tests/script_task_service_bridge_tests.cpp
+                src/app_runtime/tests/script_task_worker_inbox_tests.cpp
             )
             foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES)
                 get_filename_component(test_name ${test_source} NAME_WE)

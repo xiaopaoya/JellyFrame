@@ -60,6 +60,8 @@ target keys into a versioned value frame; session and sequence remain in the sur
 `script_task_input_dispatch.*` consumes those values only through the worker-private `InputController`.
 `script_task_service_request_codec.*` encodes a fixed 20-byte typed request;
 the supervisor decodes it before `ScriptTaskServiceBridge::submit_packet()` touches the host.
+`script_task_worker_inbox.*` is the worker-local receiver for input and
+completion values; a private-realm sink never receives a host or UI pointer.
 
 The bridge is the sole `AppRuntimeHost` completion consumer during a script session. Its required
 shutdown order is: `ScriptTaskSupervisor::begin_teardown`, bridge pending-job cancellation, host App

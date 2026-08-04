@@ -46,6 +46,10 @@ worker-to-supervisor request packet. The supervisor alone takes that mailbox
 and calls `ScriptTaskServiceBridge::submit_packet()`; frame consumers never
 compete with service consumers for outbound worker traffic.
 
+`script_task_worker_inbox.*` is the worker-local receiver for normalized input
+and decoded service completions. Its completion sink can bind a private realm,
+but it never receives a host, supervisor, DOM or renderer pointer.
+
 With that target enabled, `script_task_service_bridge.*` is the exclusive completion consumer while that
 script session is active. A port must use its ordered teardown: invalidate the
 supervisor session, cancel bridge requests, terminate the host app, then retire

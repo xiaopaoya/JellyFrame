@@ -31,5 +31,8 @@ and rejects malformed packets or undefined key values without DOM access.
 `script_task_service_request_codec_tests.cpp` verifies fixed-width service
 request values, malformed/budget rejection and isolation from frame traffic.
 
+`script_task_worker_inbox_tests.cpp` verifies that the worker receives only
+decoded input/completion values and rejects malformed completion packets.
+
 CTest target: `jellyframe_app_runtime_tests`; the optional module uses
 `jellyframe_script_task_runtime_tests`.
