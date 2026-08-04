@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-03; Applies to: 0.5.0-dev
+> Last updated: 2026-08-04; Applies to: 0.5.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -9,6 +9,21 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 ## Unreleased
 
 ### Changed
+
+- Added the platform-neutral value-protocol foundation for the optional
+  script-task runtime: session generation/epoch, fixed-slot mailboxes, sealed
+  AppFrame/service-payload leases, a dedicated service-request channel,
+  cancellation tombstones, two-stage teardown, and worker-local
+  input/completion dispatch. The module builds only when both scripting and
+  script-task-runtime gates are enabled; disabled profiles link no VM, RTOS,
+  or renderer state.
+
+- Upgraded script-service completion packets to V2. Workers receive only a
+  session-scoped `payload_lease_id`, never a host handle. The supervisor copies
+  result bytes through a bounded writer and releases source provider records
+  exactly once through an adapter callback; cancellation, backpressure, stale
+  completion and teardown paths are regression-tested. A real JerryScript App
+  service gateway and port acceptance remain future work.
 
 - The Win32 browser now prints a short usage message and exits successfully
   when started without arguments. Unknown options and excess positional
@@ -103,6 +118,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   without suppressing unsupported-target diagnostics.
 
 ### Fixed
+
+- The script-task bridge now releases a cancelled in-flight completion's host
+  source directly instead of needlessly copying payload bytes or allocating a
+  lease.
 
 - Modern-paint OFF builds no longer compile unused gradient/shadow helpers, and
   the core regression suite now tests profile-specific solid/no-command

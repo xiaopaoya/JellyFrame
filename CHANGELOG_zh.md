@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-03；适用版本：0.5.0-dev
+> 最后更新：2026-08-04；适用版本：0.5.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -9,6 +9,16 @@ JellyFrame Engine 的重要变更记录在这里。
 ## Unreleased
 
 ### 变更
+
+- 新增可选 script-task runtime 的平台无关跨任务值协议基础：session generation/epoch、固定槽
+  mailbox、sealed AppFrame/service-payload lease、独立 service request 通道、取消 tombstone、两阶段
+  teardown 与 worker-local input/completion dispatch。该模块只有在 scripting 与 script-task runtime
+  两个构建开关均启用时编译；未启用 profile 不链接 VM、RTOS 或渲染状态。
+
+- script-service completion wire packet 升至 V2：worker 只接收 session-scoped `payload_lease_id`，
+  不再接触 host handle。supervisor 用有界 writer 复制服务结果，并通过 provider-release callback
+  恰好一次回收源记录；取消、背压、陈旧 completion 和 teardown 均有回归覆盖。真实 JerryScript App
+  service gateway 与 port 验收仍属于后续工作。
 
 - Win32 验收程序现在无参数启动时只输出简要用法并正常退出；未知选项和过多位置参数会给出简洁
   错误并提示使用 `--help`，不再误当作 HTML 输入路径。
@@ -74,6 +84,9 @@ JellyFrame Engine 的重要变更记录在这里。
   unsupported-target diagnostic。
 
 ### 修复
+
+- script-task bridge 在已取消的 in-flight completion 返回时直接释放宿主源资源，不再进行无意义的
+  payload 复制或 lease 分配。
 
 - modern-paint OFF 构建不再编译未使用的渐变/阴影辅助函数；核心回归测试按 profile 检查纯色/无 command fallback，
   不再错误断言被关闭的能力必须存在。
