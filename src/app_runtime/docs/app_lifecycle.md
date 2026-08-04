@@ -1,6 +1,6 @@
 # App Lifecycle
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-08-04; Applies to: 0.5.0-dev
 
 This document is the app-author view of JellyFrame lifecycle behavior. It
 summarizes what an app can rely on when it is installed, launched, suspended,
@@ -55,6 +55,13 @@ At launch, the host loads package resources, builds DOM/style/layout/layers, and
 presents the first frame through the same render pipeline used by the Win32
 debug shell. The app can then receive input, timers, animation frames and host
 service completions according to the active frame policy.
+
+This describes a same-thread host. A port that runs JerryScript in a distinct
+RTOS task must not move its DOM, JavaScript wrappers, render objects or native
+service pointers into the UI task. It must use the value-only session, frame,
+input, service and teardown protocol in
+`../../script/docs/cross_task_ownership_contract.md`; that protocol remains a
+prerequisite for a real multi-task script App.
 
 The host should pump each frame in this order:
 

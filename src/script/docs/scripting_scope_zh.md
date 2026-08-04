@@ -1,9 +1,14 @@
 # 脚本能力范围
 
-> 最后更新：2026-07-22；适用版本：0.5.0-dev
+> 最后更新：2026-08-04；适用版本：0.5.0-dev
 
 JellyFrame 的脚本能力保持小型、可选、有界。目标是让嵌入式 app UI 真正可用，而不是一次性继承完整浏览器
 API 表面。
+
+本文件描述同线程宿主和 Win32 验收的 `JerryScriptRuntime` 行为。它直接绑定 `Node`，因此不能
+被 port 拆到独立 RTOS task 后继续传递 DOM、wrapper 或渲染对象。真实脚本 App 的多任务运行必须
+遵守 `cross_task_ownership_contract_zh.md`：worker 私有 DOM/realm，UI task 只消费密封值帧，
+supervisor 持有 session、service、lease 和 fatal recovery。
 
 ## Runtime Shell
 

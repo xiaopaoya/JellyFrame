@@ -1,6 +1,6 @@
 # App 生命周期
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-08-04；适用版本：0.5.0-dev
 
 本文是 app 作者视角的 JellyFrame 生命周期说明，描述一个 app 在安装、启动、挂起、恢复、终止和卸载时
 可以依赖什么行为。宿主和开发板移植实现细节见 `host_optional_services_zh.md`。
@@ -39,6 +39,11 @@ app 列表 markup；其中的 `data-action` 按钮只会在 shell 处于 system-
 
 启动时，宿主加载包内资源，构建 DOM/style/layout/layer，并通过和 Win32 调试壳相同的渲染管线绘制首帧。
 之后 app 会按当前 frame policy 接收输入、timer、animation frame 和宿主 service completion。
+
+这里描述的是同线程宿主。若 port 将 JerryScript 放在独立 RTOS task，绝不能把其 DOM、JS wrapper、
+render object 或 native service pointer 传入 UI task；必须使用
+`../../script/docs/cross_task_ownership_contract_zh.md` 中的值包 session/frame/input/service/
+teardown 协议。该协议仍是实际多任务脚本 App 的前置条件。
 
 宿主每帧推荐顺序：
 

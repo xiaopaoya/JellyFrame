@@ -1,10 +1,16 @@
 # Scripting Scope
 
-> Last updated: 2026-07-22; Applies to: 0.5.0-dev
+> Last updated: 2026-08-04; Applies to: 0.5.0-dev
 
 JellyFrame scripting is intentionally small and optional. The engine should
 become useful for embedded app UI without inheriting the full browser API
 surface.
+
+This document describes same-thread hosts and Win32 validation. `JerryScriptRuntime` directly binds
+`Node` objects, so a port must not place it in a separate RTOS task and pass DOM, wrappers or renderer
+objects across the boundary. A real multi-task script App instead follows
+`cross_task_ownership_contract.md`: the worker owns its DOM/realm, the UI task consumes sealed value
+frames, and the supervisor owns session, service, lease and fatal recovery.
 
 ## Runtime Shell
 
