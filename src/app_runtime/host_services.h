@@ -210,9 +210,9 @@ inline HostServiceCompletion make_cancelled_completion(const HostServiceRequest&
         HostServiceStatus::Cancelled,
         request.app_instance_id,
         0,
+        0,
+        0,
         request.client_token,
-        0,
-        0,
     };
 }
 

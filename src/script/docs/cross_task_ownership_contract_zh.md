@@ -121,8 +121,14 @@ wrapper 或 callback 重新绑定给下一个 app。
 `src/app_runtime/script_task_contract.*` 已实现并单测：session generation/epoch 校验、固定槽
 值 mailbox、session-scoped sealed frame lease、服务取消 tombstone/迟到 completion 分类、去重的
 native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTaskSupervisor` teardown。
-它不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker 或把 AppFrame 绘制到屏幕。
+`script_task_service_bridge.*` 将这些 token 映射到 `AppRuntimeHost` job，并把 completion value
+序列化为固定 24-byte packet。它不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker
+或把 AppFrame 绘制到屏幕。
 
-下一片必须是 `AppRuntimeHost` service bridge：将 request/completion/handle 生命周期映射到
-这些 value token，并为 worker 侧定义可序列化的 AppFrame encoder 与 input target-key resolver。
-在这之前，port 不得自行用裸指针填补协议空缺。
+bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer。规定的关闭顺序是：
+`ScriptTaskSupervisor::begin_teardown`、bridge 取消 pending job、host 终止 App、bridge 回收记录，
+最后 `ScriptTaskSupervisor::complete_teardown`。该顺序既不会把 stale value 投给 worker，也不会
+遗漏 late completion 的 handle release。
+
+下一片是 worker 侧可序列化 AppFrame encoder 与 input target-key resolver。在它们落地前，port
+不得自行用裸指针填补协议空缺。

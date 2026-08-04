@@ -1,0 +1,356 @@
+#include "app_runtime/script_task_service_bridge.h"
+
+#include <algorithm>
+#include <array>
+
+namespace jellyframe {
+
+namespace {
+
+constexpr std::uint8_t kCompletionPacketVersion = 1;
+constexpr std::size_t kCompletionPacketSize = 24;
+
+void write_u32(std::vector<std::uint8_t>& output, std::size_t offset, std::uint32_t value) {
+    output[offset] = static_cast<std::uint8_t>(value & 0xffU);
+    output[offset + 1] = static_cast<std::uint8_t>((value >> 8U) & 0xffU);
+    output[offset + 2] = static_cast<std::uint8_t>((value >> 16U) & 0xffU);
+    output[offset + 3] = static_cast<std::uint8_t>((value >> 24U) & 0xffU);
+}
+
+std::uint32_t read_u32(const std::vector<std::uint8_t>& input, std::size_t offset) {
+    return static_cast<std::uint32_t>(input[offset]) |
+           (static_cast<std::uint32_t>(input[offset + 1]) << 8U) |
+           (static_cast<std::uint32_t>(input[offset + 2]) << 16U) |
+           (static_cast<std::uint32_t>(input[offset + 3]) << 24U);
+}
+
+bool known_kind(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(HostServiceJobKind::Other);
+}
+
+bool known_status(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(HostServiceStatus::Timeout);
+}
+
+} // namespace
+
+bool encode_script_task_service_completion(const ScriptTaskServiceCompletion& completion,
+                                           std::vector<std::uint8_t>& output) {
+    const std::uint8_t kind = static_cast<std::uint8_t>(completion.kind);
+    const std::uint8_t status = static_cast<std::uint8_t>(completion.status);
+    if (!known_kind(kind) || !known_status(status) || completion.request_id == 0 || completion.client_token == 0) {
+        return false;
+    }
+    output.assign(kCompletionPacketSize, 0);
+    output[0] = kCompletionPacketVersion;
+    output[1] = kind;
+    output[2] = status;
+    write_u32(output, 4, completion.request_id);
+    write_u32(output, 8, completion.client_token);
+    write_u32(output, 12, completion.handle);
+    write_u32(output, 16, completion.error_code);
+    write_u32(output, 20, completion.byte_count);
+    return true;
+}
+
+bool decode_script_task_service_completion(const std::vector<std::uint8_t>& input,
+                                           ScriptTaskServiceCompletion& output) {
+    if (input.size() != kCompletionPacketSize || input[0] != kCompletionPacketVersion ||
+        input[3] != 0 || !known_kind(input[1]) || !known_status(input[2])) {
+        return false;
+    }
+    const std::uint32_t request_id = read_u32(input, 4);
+    const std::uint32_t client_token = read_u32(input, 8);
+    if (request_id == 0 || client_token == 0) {
+        return false;
+    }
+    output.kind = static_cast<HostServiceJobKind>(input[1]);
+    output.status = static_cast<HostServiceStatus>(input[2]);
+    output.request_id = request_id;
+    output.client_token = client_token;
+    output.handle = read_u32(input, 12);
+    output.error_code = read_u32(input, 16);
+    output.byte_count = read_u32(input, 20);
+    return true;
+}
+
+ScriptTaskServiceBridge::ScriptTaskServiceBridge(AppRuntimeHost& host,
+                                                 ScriptTaskSupervisor& supervisor,
+                                                 ScriptTaskServiceBridgeOptions options)
+    : host_(host), supervisor_(supervisor), capacity_(options.max_requests) {
+    records_.reserve(capacity_);
+}
+
+bool ScriptTaskServiceBridge::same_token(const ScriptTaskServiceToken& left,
+                                         const ScriptTaskServiceToken& right) {
+    return left.session == right.session && left.request_id == right.request_id &&
+           left.client_token == right.client_token;
+}
+
+bool ScriptTaskServiceBridge::completion_matches(const Record& record,
+                                                 const HostServiceCompletion& completion) {
+    return record.host_job_id == completion.job_id &&
+           record.token.session.app_instance_id == completion.app_instance_id &&
+           record.token.client_token == completion.client_token;
+}
+
+ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSession& session,
+                                                               std::uint32_t request_id,
+                                                               HostServiceJobKind kind,
+                                                               std::uint32_t request_handle,
+                                                               std::uint8_t priority,
+                                                               std::uint32_t timeout_ms,
+                                                               std::uint32_t client_token) {
+    ScriptTaskServiceSubmitResult result;
+    result.token = {session, request_id, client_token};
+    if (!supervisor_.accepts(session) || host_.current_app_instance_id() != session.app_instance_id) {
+        result.status = ScriptTaskServiceSubmitStatus::InvalidSession;
+        return result;
+    }
+    if (!result.token.valid()) {
+        result.status = ScriptTaskServiceSubmitStatus::InvalidToken;
+        return result;
+    }
+    if (supervisor_.worker_mailbox_max_payload_bytes() < kCompletionPacketSize) {
+        result.status = ScriptTaskServiceSubmitStatus::PacketBudgetExceeded;
+        return result;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto duplicate = std::find_if(records_.begin(), records_.end(), [&result](const Record& record) {
+        return same_token(record.token, result.token);
+    });
+    if (duplicate != records_.end()) {
+        result.status = ScriptTaskServiceSubmitStatus::Duplicate;
+        return result;
+    }
+    if (records_.size() >= capacity_) {
+        result.status = ScriptTaskServiceSubmitStatus::CapacityExceeded;
+        return result;
+    }
+    const ScriptTaskServiceTrackStatus tracked = supervisor_.track_service(result.token);
+    if (tracked == ScriptTaskServiceTrackStatus::Duplicate) {
+        result.status = ScriptTaskServiceSubmitStatus::Duplicate;
+        return result;
+    }
+    if (tracked == ScriptTaskServiceTrackStatus::Full) {
+        result.status = ScriptTaskServiceSubmitStatus::CapacityExceeded;
+        return result;
+    }
+    if (tracked != ScriptTaskServiceTrackStatus::Accepted) {
+        result.status = ScriptTaskServiceSubmitStatus::InvalidToken;
+        return result;
+    }
+
+    const HostServiceSubmitResult submitted = host_.submit_current(kind, request_handle, priority, timeout_ms, client_token);
+    result.host_status = submitted.rejected_status;
+    if (!submitted.accepted) {
+        supervisor_.retire_service(result.token);
+        result.status = ScriptTaskServiceSubmitStatus::HostRejected;
+        return result;
+    }
+    records_.push_back({result.token, submitted.job_id, false, {}});
+    result.host_job_id = submitted.job_id;
+    result.host_status = HostServiceStatus::Completed;
+    result.status = ScriptTaskServiceSubmitStatus::Accepted;
+    return result;
+}
+
+void ScriptTaskServiceBridge::erase_record(std::size_t index) {
+    records_[index] = records_.back();
+    records_.pop_back();
+}
+
+bool ScriptTaskServiceBridge::release_completion_handle(const HostServiceCompletion& completion) {
+    if (completion.handle == 0) {
+        return false;
+    }
+    HostHandleInfo info;
+    return host_.handles().lookup_copy(completion.handle, info) &&
+           info.app_instance_id == completion.app_instance_id && host_.handles().release(completion.handle);
+}
+
+bool ScriptTaskServiceBridge::cancel(const ScriptTaskServiceToken& token) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto found = std::find_if(records_.begin(), records_.end(), [&token](const Record& record) {
+        return same_token(record.token, token);
+    });
+    if (found == records_.end()) {
+        return false;
+    }
+    const std::size_t index = static_cast<std::size_t>(found - records_.begin());
+    if (records_[index].completion_ready) {
+        supervisor_.cancel_service(token);
+        const bool released = release_completion_handle(records_[index].completion);
+        (void)released;
+        supervisor_.consume_service_completion(token);
+        erase_record(index);
+        return true;
+    }
+    if (!supervisor_.cancel_service(token)) {
+        return false;
+    }
+    if (host_.requests().cancel_pending(records_[index].host_job_id)) {
+        supervisor_.retire_service(token);
+        erase_record(index);
+    }
+    return true;
+}
+
+bool ScriptTaskServiceBridge::deliver_ready_record(std::size_t index,
+                                                   ScriptTaskServiceBridgePumpResult& result) {
+    Record& record = records_[index];
+    ScriptTaskServiceCompletion packet_completion{
+        record.completion.kind,
+        record.completion.status,
+        record.token.request_id,
+        record.token.client_token,
+        record.completion.handle,
+        record.completion.error_code,
+        record.completion.byte_count,
+    };
+    ScriptTaskPacket packet;
+    packet.kind = ScriptTaskPacketKind::ServiceCompletion;
+    packet.session = record.token.session;
+    packet.sequence = record.token.request_id;
+    if (!encode_script_task_service_completion(packet_completion, packet.payload)) {
+        supervisor_.cancel_service(record.token);
+        supervisor_.consume_service_completion(record.token);
+        if (release_completion_handle(record.completion)) {
+            ++result.released_handles;
+        }
+        ++result.cancelled;
+        erase_record(index);
+        return true;
+    }
+    const ScriptTaskServiceCompletionDisposition disposition =
+        supervisor_.consume_service_completion(record.token);
+    if (disposition == ScriptTaskServiceCompletionDisposition::Cancelled) {
+        if (release_completion_handle(record.completion)) {
+            ++result.released_handles;
+        }
+        ++result.cancelled;
+        erase_record(index);
+        return true;
+    }
+    if (disposition == ScriptTaskServiceCompletionDisposition::Stale) {
+        if (release_completion_handle(record.completion)) {
+            ++result.released_handles;
+        }
+        ++result.stale;
+        erase_record(index);
+        return true;
+    }
+    const ScriptTaskMailboxPostStatus posted = supervisor_.post_service_completion(packet);
+    if (posted == ScriptTaskMailboxPostStatus::Accepted) {
+        ++result.delivered;
+        erase_record(index);
+        return true;
+    }
+    // Keep the record and restore its ledger entry, preserving cancellation
+    // semantics until worker-mailbox capacity becomes available.
+    supervisor_.track_service(record.token);
+    if (posted == ScriptTaskMailboxPostStatus::Full) {
+        result.worker_mailbox_full = true;
+    }
+    return false;
+}
+
+ScriptTaskServiceBridgePumpResult ScriptTaskServiceBridge::pump(AppFrameScratch& scratch) {
+    ScriptTaskServiceBridgePumpResult result;
+    result.host = host_.pump_frame_completions(scratch);
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const HostServiceCompletion& completion : scratch.accepted_completions) {
+        const auto found = std::find_if(records_.begin(), records_.end(), [&completion](const Record& record) {
+            return record.host_job_id == completion.job_id;
+        });
+        if (found == records_.end() || found->completion_ready) {
+            if (release_completion_handle(completion)) {
+                ++result.released_handles;
+            }
+            ++result.discarded_unmapped;
+            continue;
+        }
+        if (!completion_matches(*found, completion)) {
+            supervisor_.cancel_service(found->token);
+            supervisor_.consume_service_completion(found->token);
+            erase_record(static_cast<std::size_t>(found - records_.begin()));
+            if (release_completion_handle(completion)) {
+                ++result.released_handles;
+            }
+            ++result.discarded_unmapped;
+            continue;
+        }
+        found->completion = completion;
+        found->completion_ready = true;
+        ++result.queued_for_delivery;
+    }
+    for (std::size_t index = 0; index < records_.size();) {
+        if (!records_[index].completion_ready || !deliver_ready_record(index, result)) {
+            ++index;
+        }
+    }
+    return result;
+}
+
+ScriptTaskServiceBridgeTeardownResult ScriptTaskServiceBridge::begin_teardown(const ScriptAppSession& session) {
+    ScriptTaskServiceBridgeTeardownResult result;
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (std::size_t index = 0; index < records_.size();) {
+        Record& record = records_[index];
+        if (record.token.session != session) {
+            ++index;
+            continue;
+        }
+        if (record.completion_ready) {
+            supervisor_.cancel_service(record.token);
+            supervisor_.consume_service_completion(record.token);
+            if (release_completion_handle(record.completion)) {
+                ++result.released_ready_handles;
+            }
+            erase_record(index);
+            ++result.retired_records;
+            continue;
+        }
+        supervisor_.cancel_service(record.token);
+        if (host_.requests().cancel_pending(record.host_job_id)) {
+            supervisor_.retire_service(record.token);
+            erase_record(index);
+            ++result.cancelled_pending_host_jobs;
+            ++result.retired_records;
+            continue;
+        }
+        ++result.retained_in_flight_host_jobs;
+        ++index;
+    }
+    return result;
+}
+
+ScriptTaskServiceBridgeTeardownResult ScriptTaskServiceBridge::complete_teardown(
+    const ScriptAppSession& retired_session) {
+    ScriptTaskServiceBridgeTeardownResult result;
+    if (!retired_session.valid() || host_.current_app_instance_id() == retired_session.app_instance_id) {
+        return result;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (std::size_t index = 0; index < records_.size();) {
+        if (records_[index].token.session != retired_session) {
+            ++index;
+            continue;
+        }
+        if (records_[index].completion_ready && release_completion_handle(records_[index].completion)) {
+            ++result.released_ready_handles;
+        }
+        supervisor_.retire_service(records_[index].token);
+        erase_record(index);
+        ++result.retired_records;
+    }
+    return result;
+}
+
+std::size_t ScriptTaskServiceBridge::active_request_count() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return records_.size();
+}
+
+} // namespace jellyframe

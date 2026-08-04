@@ -12,4 +12,8 @@ layout, software rendering, JerryScript or real I/O.
 session generations, mailbox stale rejection, sealed frame leases, service
 cancellation tombstones and idempotent native-release intents.
 
+`script_task_service_bridge_tests.cpp` verifies host-job/token mapping,
+fixed-width completion encoding, pending and late cancellation, opaque handle
+release and worker-mailbox backpressure.
+
 CTest target: `jellyframe_app_runtime_tests`.

@@ -91,6 +91,7 @@ public:
 
     std::size_t size() const;
     std::size_t capacity() const { return slots_.size(); }
+    std::size_t max_payload_bytes() const { return max_payload_bytes_; }
     ScriptTaskMailboxStatistics statistics() const;
 
 private:
@@ -226,6 +227,7 @@ public:
 
     ScriptTaskServiceTrackStatus track(const ScriptTaskServiceToken& token);
     bool cancel(const ScriptTaskServiceToken& token);
+    bool retire(const ScriptTaskServiceToken& token);
     std::size_t cancel_session(const ScriptAppSession& session);
     ScriptTaskServiceCompletionDisposition consume_completion(const ScriptAppSession& active_session,
                                                                const ScriptTaskServiceToken& token);
@@ -323,7 +325,13 @@ public:
     bool take_input(ScriptTaskPacket& output);
     ScriptTaskFramePublishResult publish_frame(const ScriptAppSession& session,
                                                const std::vector<std::uint8_t>& payload);
+    // Supervisor-only completion path. Service bridges may post a bounded
+    // value packet to the worker, but cannot inject arbitrary packet kinds.
+    ScriptTaskMailboxPostStatus post_service_completion(const ScriptTaskPacket& packet);
     bool take_worker_packet(ScriptTaskPacket& output);
+    std::size_t worker_mailbox_max_payload_bytes() const {
+        return worker_mailbox_.max_payload_bytes();
+    }
     ScriptTaskFrameLeaseStatus copy_frame(const ScriptAppSession& session,
                                           std::uint32_t lease_id,
                                           std::vector<std::uint8_t>& output) const;
@@ -331,6 +339,9 @@ public:
 
     ScriptTaskServiceTrackStatus track_service(const ScriptTaskServiceToken& token);
     bool cancel_service(const ScriptTaskServiceToken& token);
+    // Used only when the host atomically cancels a still-pending request, so
+    // no late completion can require its cancellation tombstone.
+    bool retire_service(const ScriptTaskServiceToken& token);
     ScriptTaskServiceCompletionDisposition consume_service_completion(const ScriptTaskServiceToken& token);
 
     ScriptTaskReleaseIntentStatus post_native_release_intent(const ScriptTaskNativeLeaseReleaseIntent& intent);

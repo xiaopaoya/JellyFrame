@@ -13,6 +13,8 @@ It owns contracts and small bounded data structures for:
 - Value-only script-task sessions, bounded mailboxes, sealed frame leases,
   cancellation tombstones, native-release intents and ordered supervisor
   teardown for future RTOS scripting.
+- A supervisor-only `AppRuntimeHost` service bridge that maps script request
+  tokens to host jobs and sends fixed-width, pointer-free completion packets.
 - Host-owned resource handles with generation checks.
 - App lifecycle, package install/update/delete, bounded host compute jobs, network fetch, private storage,
   image/audio host-service mocks and system-event plumbing.
@@ -30,5 +32,12 @@ RTOS APIs or platform drivers.
 the platform-neutral ownership boundary that a port must complete before it can
 run a real script App outside the UI task. See
 `../script/docs/cross_task_ownership_contract.md`.
+
+`script_task_service_bridge.*` is the exclusive completion consumer while that
+script session is active. A port must use its ordered teardown: invalidate the
+supervisor session, cancel bridge requests, terminate the host app, then retire
+bridge records and complete supervisor teardown. In-flight host work is kept
+tracked until either a late completion releases its handle or host teardown
+makes that completion stale.
 
 The target name is `jellyframe_app_runtime`.

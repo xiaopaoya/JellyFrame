@@ -45,9 +45,14 @@ launch/fail/recover cycles without cross-App state, dangling access or system re
 `src/app_runtime/script_task_contract.*` now implements and tests session generation/epoch validation,
 fixed-slot value mailboxes, session-scoped sealed frame leases, cancellation tombstones with late-
 completion classification, deduplicated native-release intents, and a two-stage `ScriptTaskSupervisor`
-teardown that does not create a task or VM. It has no JerryScript, RTOS, DOM or renderer dependency;
-it does not start a worker or paint an `AppFrame`.
+teardown that does not create a task or VM. `script_task_service_bridge.*` maps those tokens to
+`AppRuntimeHost` jobs and serializes completion values into a fixed 24-byte packet. It has no
+JerryScript, RTOS, DOM or renderer dependency; it does not start a worker or paint an `AppFrame`.
 
-The next slice is an `AppRuntimeHost` service bridge mapping request/completion/handle lifetimes to
-these value tokens, plus a worker-side serializable AppFrame encoder and input target-key resolver.
-Ports must not fill that gap with raw pointers.
+The bridge is the sole `AppRuntimeHost` completion consumer during a script session. Its required
+shutdown order is: `ScriptTaskSupervisor::begin_teardown`, bridge pending-job cancellation, host App
+termination, bridge record retirement, then `ScriptTaskSupervisor::complete_teardown`. This preserves
+late-completion handle release without sending stale data to the worker.
+
+The next slice is a worker-side serializable AppFrame encoder and input target-key resolver. Ports must
+not fill that gap with raw pointers.

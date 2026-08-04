@@ -339,13 +339,15 @@ void queue_helpers_use_capability_budgets() {
 }
 
 void cancelled_completion_preserves_request_identity() {
-    HostServiceRequest request{42, HostServiceJobKind::BundleRemove, 77, 5, 1000, 3};
+    HostServiceRequest request{42, HostServiceJobKind::BundleRemove, 77, 5, 1000, 3, 91};
     const HostServiceCompletion completion = make_cancelled_completion(request);
     assert(completion.job_id == 42);
     assert(completion.kind == HostServiceJobKind::BundleRemove);
     assert(completion.status == HostServiceStatus::Cancelled);
     assert(completion.app_instance_id == 77);
     assert(completion.handle == 0);
+    assert(completion.error_code == 0);
+    assert(completion.client_token == 91);
 }
 
 } // namespace

@@ -340,6 +340,18 @@ bool ScriptTaskServiceLedger::cancel(const ScriptTaskServiceToken& token) {
     return true;
 }
 
+bool ScriptTaskServiceLedger::retire(const ScriptTaskServiceToken& token) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto found = std::find_if(records_.begin(), records_.end(), [&token](const Record& record) {
+        return same_service_token(record.token, token);
+    });
+    if (found == records_.end()) {
+        return false;
+    }
+    records_.erase(found);
+    return true;
+}
+
 std::size_t ScriptTaskServiceLedger::cancel_session(const ScriptAppSession& session) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::size_t cancelled = 0;
@@ -511,6 +523,13 @@ ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptApp
     return result;
 }
 
+ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_completion(const ScriptTaskPacket& packet) {
+    if (packet.kind != ScriptTaskPacketKind::ServiceCompletion || !accepts(packet.session)) {
+        return ScriptTaskMailboxPostStatus::InvalidPacket;
+    }
+    return worker_mailbox_.post(packet);
+}
+
 bool ScriptTaskSupervisor::take_worker_packet(ScriptTaskPacket& output) {
     return worker_mailbox_.pop_for(sessions_.current(), output);
 }
@@ -535,6 +554,10 @@ ScriptTaskServiceTrackStatus ScriptTaskSupervisor::track_service(const ScriptTas
 
 bool ScriptTaskSupervisor::cancel_service(const ScriptTaskServiceToken& token) {
     return accepts(token.session) && services_.cancel(token);
+}
+
+bool ScriptTaskSupervisor::retire_service(const ScriptTaskServiceToken& token) {
+    return services_.retire(token);
 }
 
 ScriptTaskServiceCompletionDisposition ScriptTaskSupervisor::consume_service_completion(
