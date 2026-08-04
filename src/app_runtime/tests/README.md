@@ -16,7 +16,8 @@ cancellation tombstones and idempotent native-release intents.
 `script_task_service_bridge_tests.cpp` verifies host-job/token mapping,
 fixed-width completion encoding, pending and late cancellation, opaque handle
 release, worker-inbox backpressure and dedicated worker-to-supervisor service
-request submission and supervisor rejection counters.
+request submission, supervisor rejection counters and terminal host-rejection
+completion delivery.
 
 `script_task_frame_codec_tests.cpp` verifies bounded AppFrame value encoding,
 malformed-packet rejection, sealed frame leases and paint-ordered target-key

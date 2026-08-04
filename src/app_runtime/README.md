@@ -46,6 +46,9 @@ worker-to-supervisor request packet. The supervisor alone takes that mailbox
 through `ScriptTaskServiceBridge::pump_service_requests()`; frame consumers
 never compete with service consumers for outbound worker traffic. The result
 has per-rejection counters suitable for supervisor diagnostics.
+Host rejection is also queued as a terminal value completion, with normal
+worker-inbox backpressure handling, so worker code does not silently wait for
+a request the host refused.
 
 `script_task_worker_inbox.*` is the worker-local receiver for normalized input
 and decoded service completions. Its completion sink can bind a private realm,

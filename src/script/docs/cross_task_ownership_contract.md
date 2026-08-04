@@ -62,6 +62,8 @@ target keys into a versioned value frame; session and sequence remain in the sur
 the supervisor decodes it before `ScriptTaskServiceBridge::submit_packet()` touches the host.
 `ScriptTaskServiceBridge::pump_service_requests()` is the only mailbox drain;
 it reports per-rejection counters without consuming frames or worker inbox data.
+An accepted wire request that the host rejects is returned through the normal
+bounded completion path as a terminal value, rather than silently disappearing.
 `script_task_worker_inbox.*` is the worker-local receiver for input and
 completion values; a private-realm sink never receives a host or UI pointer.
 

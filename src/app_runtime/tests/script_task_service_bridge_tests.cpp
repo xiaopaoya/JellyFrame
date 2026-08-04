@@ -151,7 +151,19 @@ void bridge_request_pump_reports_host_and_wire_rejections() {
     assert(pumped.invalid_packets == 1);
     assert(pumped.accepted == 0);
     assert(host.requests().empty());
+    assert(bridge.active_request_count() == 1);
+
+    AppFrameScratch scratch = make_scratch();
+    const ScriptTaskServiceBridgePumpResult completions = bridge.pump(scratch);
+    assert(completions.delivered == 1);
     assert(bridge.active_request_count() == 0);
+    ScriptTaskPacket completion_packet;
+    assert(supervisor.take_input(completion_packet));
+    ScriptTaskServiceCompletion completion;
+    assert(decode_script_task_service_completion(completion_packet.payload, completion));
+    assert(completion.status == HostServiceStatus::BudgetExceeded);
+    assert(completion.handle == 0);
+    assert(completion.error_code == static_cast<std::uint32_t>(ScriptTaskServiceSubmitStatus::HostRejected));
 }
 
 void bridge_cancels_pending_jobs_without_leaving_tombstones() {

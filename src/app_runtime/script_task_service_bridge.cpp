@@ -145,7 +145,20 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
     const HostServiceSubmitResult submitted = host_.submit_current(kind, request_handle, priority, timeout_ms, client_token);
     result.host_status = submitted.rejected_status;
     if (!submitted.accepted) {
-        supervisor_.retire_service(result.token);
+        // A rejected submit is still a terminal value that the worker must
+        // observe. Keep its ledger record until the normal completion path
+        // delivers it, including when the worker inbox is briefly full.
+        records_.push_back({result.token,
+                            0,
+                            true,
+                            {0,
+                             kind,
+                             submitted.rejected_status,
+                             session.app_instance_id,
+                             0,
+                             static_cast<std::uint32_t>(ScriptTaskServiceSubmitStatus::HostRejected),
+                             0,
+                             client_token}});
         result.status = ScriptTaskServiceSubmitStatus::HostRejected;
         return result;
     }
