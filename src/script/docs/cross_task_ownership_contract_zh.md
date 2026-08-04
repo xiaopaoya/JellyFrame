@@ -130,6 +130,7 @@ native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTask
 排列的不透明 input target key 编码为版本化 value frame；session 和 sequence 保留在外层 frame lease packet 中。
 `make_script_task_app_frame()` 会先在 worker 内部 flatten 私有 `LayerNode`，再复制该 value frame。
 `script_task_input_codec.*` 为 worker inbox 提供版本化 pointer、wheel、key 和受限 text value。
+`script_task_input_dispatch.*` 只通过 worker 私有 `InputController` 消费这些 value。
 
 bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer。规定的关闭顺序是：
 `ScriptTaskSupervisor::begin_teardown`、bridge 取消 pending job、host 终止 App、bridge 回收记录，
