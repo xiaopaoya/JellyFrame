@@ -1,6 +1,6 @@
 # 脚本 App 跨任务所有权契约
 
-> 最后更新：2026-08-04；适用版本：0.5.0-dev；状态：0.6 主线前置契约
+> 最后更新：2026-08-04；适用版本：0.5.0-dev；状态：0.6 主线前置契约与基础设施已落地
 
 本契约定义 RTOS/多任务宿主如何运行一个真实 JerryScript App，而不把 DOM、JerryScript
 资源或渲染对象跨任务传递。它是 P3 后续实现的前置条件；当前桌面同线程
@@ -115,3 +115,14 @@ wrapper 或 callback 重新绑定给下一个 app。
 
 在这些验证前，P3 mailbox preflight 只能证明 worker 隔离与定长值包的基础路径；它不能作为
 真实脚本 App、DOM 重绘、服务或 fatal teardown 已完成的证据。
+
+## 当前平台无关基础设施
+
+`src/app_runtime/script_task_contract.*` 已实现并单测：session generation/epoch 校验、固定槽
+值 mailbox、session-scoped sealed frame lease、服务取消 tombstone/迟到 completion 分类、去重的
+native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTaskSupervisor` teardown。
+它不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker 或把 AppFrame 绘制到屏幕。
+
+下一片必须是 `AppRuntimeHost` service bridge：将 request/completion/handle 生命周期映射到
+这些 value token，并为 worker 侧定义可序列化的 AppFrame encoder 与 input target-key resolver。
+在这之前，port 不得自行用裸指针填补协议空缺。

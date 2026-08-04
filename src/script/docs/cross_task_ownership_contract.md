@@ -1,6 +1,6 @@
 # Script-App Cross-Task Ownership Contract
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev; Status: 0.6 prerequisite
+> Last updated: 2026-08-04; Applies to: 0.5.0-dev; Status: 0.6 prerequisite with foundation landed
 
 This contract defines how an RTOS host runs a real JerryScript App without moving DOM,
 JerryScript or renderer objects across tasks. The direct, same-thread desktop
@@ -39,3 +39,15 @@ has acknowledged release.
 Before a port claims real script-App support, it must prove touch-to-frame redraw, completion/cancel/
 late-completion handling, frame lease replacement, fatal plus native-wrapper teardown, and 30 real
 launch/fail/recover cycles without cross-App state, dangling access or system reset.
+
+## Current platform-neutral foundation
+
+`src/app_runtime/script_task_contract.*` now implements and tests session generation/epoch validation,
+fixed-slot value mailboxes, session-scoped sealed frame leases, cancellation tombstones with late-
+completion classification, deduplicated native-release intents, and a two-stage `ScriptTaskSupervisor`
+teardown that does not create a task or VM. It has no JerryScript, RTOS, DOM or renderer dependency;
+it does not start a worker or paint an `AppFrame`.
+
+The next slice is an `AppRuntimeHost` service bridge mapping request/completion/handle lifetimes to
+these value tokens, plus a worker-side serializable AppFrame encoder and input target-key resolver.
+Ports must not fill that gap with raw pointers.
