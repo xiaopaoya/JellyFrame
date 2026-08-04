@@ -139,8 +139,12 @@ native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTask
 `ScriptTaskServiceBridge::pump_service_requests()` 是唯一的 request mailbox drain；它会给出各类
 拒绝计数，且不会消费 frame 或 worker inbox 数据。
 已进入 wire queue 但被 host 拒绝的 request 会沿正常的有界 completion 路径返回终态 value，绝不静默丢失。
-supervisor 还持有独立、按 session 隔离的 sealed service-payload lease registry。后续 gateway 必须先把
-host 结果字节复制到该 registry 再投给 worker；opaque host handle 永远不是 worker 可读取的数据。
+supervisor 还持有独立、按 session 隔离的 sealed service-payload lease registry。当前
+`ScriptTaskServiceBridge` 已通过有界 `ScriptTaskServicePayloadWriter` 复制 host 结果，发布到该
+registry 后才投递 completion packet version 2 中的 lease ID。port 必须提供仅 supervisor 可调用的
+copy 与 provider-release callback；后者必须恰好一次释放 provider record 和 host-table entry，不能只把
+generic handle-table release 当成资源回收。opaque host handle 永远不是 worker 可读取的数据；worker 用
+`take_script_task_service_payload()` 复制并释放 lease。
 `script_task_worker_inbox.*` 是 worker 内部的 input/completion value 接收器；绑定私有 realm 的
 sink 不会拿到 host 或 UI 指针。
 

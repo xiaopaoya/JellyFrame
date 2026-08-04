@@ -7,7 +7,7 @@ namespace jellyframe {
 
 namespace {
 
-constexpr std::uint8_t kCompletionPacketVersion = 1;
+constexpr std::uint8_t kCompletionPacketVersion = 2;
 constexpr std::size_t kCompletionPacketSize = 24;
 
 void write_u32(std::vector<std::uint8_t>& output, std::size_t offset, std::uint32_t value) {
@@ -34,6 +34,35 @@ bool known_status(std::uint8_t value) {
 
 } // namespace
 
+ScriptTaskServicePayloadWriter::ScriptTaskServicePayloadWriter(std::vector<std::uint8_t>& storage,
+                                                               std::size_t capacity)
+    : storage_(storage), capacity_(capacity) {
+    storage_.clear();
+}
+
+bool ScriptTaskServicePayloadWriter::append(const std::uint8_t* bytes, std::size_t size) {
+    if (size == 0) {
+        return true;
+    }
+    if (bytes == nullptr || size > capacity_ - storage_.size()) {
+        return false;
+    }
+    storage_.insert(storage_.end(), bytes, bytes + size);
+    return true;
+}
+
+bool ScriptTaskServicePayloadWriter::append(const std::vector<std::uint8_t>& bytes) {
+    return append(bytes.data(), bytes.size());
+}
+
+std::size_t ScriptTaskServicePayloadWriter::size() const {
+    return storage_.size();
+}
+
+std::size_t ScriptTaskServicePayloadWriter::capacity() const {
+    return capacity_;
+}
+
 bool encode_script_task_service_completion(const ScriptTaskServiceCompletion& completion,
                                            std::vector<std::uint8_t>& output) {
     const std::uint8_t kind = static_cast<std::uint8_t>(completion.kind);
@@ -47,7 +76,7 @@ bool encode_script_task_service_completion(const ScriptTaskServiceCompletion& co
     output[2] = status;
     write_u32(output, 4, completion.request_id);
     write_u32(output, 8, completion.client_token);
-    write_u32(output, 12, completion.handle);
+    write_u32(output, 12, completion.payload_lease_id);
     write_u32(output, 16, completion.error_code);
     write_u32(output, 20, completion.byte_count);
     return true;
@@ -68,7 +97,7 @@ bool decode_script_task_service_completion(const std::vector<std::uint8_t>& inpu
     output.status = static_cast<HostServiceStatus>(input[2]);
     output.request_id = request_id;
     output.client_token = client_token;
-    output.handle = read_u32(input, 12);
+    output.payload_lease_id = read_u32(input, 12);
     output.error_code = read_u32(input, 16);
     output.byte_count = read_u32(input, 20);
     return true;
@@ -77,8 +106,16 @@ bool decode_script_task_service_completion(const std::vector<std::uint8_t>& inpu
 ScriptTaskServiceBridge::ScriptTaskServiceBridge(AppRuntimeHost& host,
                                                  ScriptTaskSupervisor& supervisor,
                                                  ScriptTaskServiceBridgeOptions options)
-    : host_(host), supervisor_(supervisor), capacity_(options.max_requests) {
+    : host_(host),
+      supervisor_(supervisor),
+      capacity_(options.max_requests),
+      max_service_payload_bytes_(options.max_service_payload_bytes),
+      payload_copy_(options.payload_copy),
+      payload_copy_user_(options.payload_copy_user),
+      payload_release_(options.payload_release),
+      payload_release_user_(options.payload_release_user) {
     records_.reserve(capacity_);
+    payload_scratch_.reserve(max_service_payload_bytes_);
 }
 
 bool ScriptTaskServiceBridge::same_token(const ScriptTaskServiceToken& left,
@@ -151,6 +188,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
         records_.push_back({result.token,
                             0,
                             true,
+                            false,
                             {0,
                              kind,
                              submitted.rejected_status,
@@ -158,11 +196,12 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
                              0,
                              static_cast<std::uint32_t>(ScriptTaskServiceSubmitStatus::HostRejected),
                              0,
-                             client_token}});
+                             client_token},
+                            0});
         result.status = ScriptTaskServiceSubmitStatus::HostRejected;
         return result;
     }
-    records_.push_back({result.token, submitted.job_id, false, {}});
+    records_.push_back({result.token, submitted.job_id, false, false, {}, 0});
     result.host_job_id = submitted.job_id;
     result.host_status = HostServiceStatus::Completed;
     result.status = ScriptTaskServiceSubmitStatus::Accepted;
@@ -233,13 +272,82 @@ void ScriptTaskServiceBridge::erase_record(std::size_t index) {
     records_.pop_back();
 }
 
-bool ScriptTaskServiceBridge::release_completion_handle(const HostServiceCompletion& completion) {
+bool ScriptTaskServiceBridge::release_completion_payload(const HostServiceCompletion& completion) {
     if (completion.handle == 0) {
         return false;
+    }
+    if (payload_release_ != nullptr) {
+        return payload_release_(payload_release_user_, completion);
     }
     HostHandleInfo info;
     return host_.handles().lookup_copy(completion.handle, info) &&
            info.app_instance_id == completion.app_instance_id && host_.handles().release(completion.handle);
+}
+
+bool ScriptTaskServiceBridge::release_record_completion_payload(Record& record) {
+    if (record.completion.handle == 0) {
+        return false;
+    }
+    const HostServiceCompletion completion = record.completion;
+    record.completion.handle = 0;
+    return release_completion_payload(completion);
+}
+
+bool ScriptTaskServiceBridge::release_record_payload(Record& record) {
+    if (record.payload_lease_id == 0) {
+        return false;
+    }
+    const std::uint32_t payload_lease_id = record.payload_lease_id;
+    record.payload_lease_id = 0;
+    return supervisor_.release_service_payload(record.token.session, payload_lease_id) ==
+           ScriptTaskServicePayloadLeaseStatus::Accepted;
+}
+
+void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
+                                                         ScriptTaskServiceBridgePumpResult& result) {
+    if (record.completion.handle == 0) {
+        return;
+    }
+
+    const HostServiceCompletion host_completion = record.completion;
+    ScriptTaskServicePayloadWriter writer(payload_scratch_, max_service_payload_bytes_);
+    bool copied = false;
+    if (payload_copy_ != nullptr && max_service_payload_bytes_ != 0) {
+        copied = payload_copy_(payload_copy_user_, host_completion, writer);
+    }
+    if (!copied) {
+        if (release_record_completion_payload(record)) {
+            ++result.released_source_payloads;
+        }
+        record.completion.status = HostServiceStatus::Failed;
+        record.completion.error_code = static_cast<std::uint32_t>(
+            payload_copy_ == nullptr ? ScriptTaskServicePayloadErrorCode::CopyUnavailable
+                                     : ScriptTaskServicePayloadErrorCode::CopyFailed);
+        record.completion.byte_count = 0;
+        ++result.payload_copy_failures;
+        return;
+    }
+
+    std::uint32_t payload_lease_id = 0;
+    const ScriptTaskServicePayloadLeaseStatus lease_status = supervisor_.publish_service_payload(
+        record.token.session, payload_scratch_, payload_lease_id);
+    if (release_record_completion_payload(record)) {
+        ++result.released_source_payloads;
+    }
+    if (lease_status != ScriptTaskServicePayloadLeaseStatus::Accepted) {
+        record.completion.status = lease_status == ScriptTaskServicePayloadLeaseStatus::PayloadTooLarge ||
+                lease_status == ScriptTaskServicePayloadLeaseStatus::ByteBudgetExceeded ||
+                lease_status == ScriptTaskServicePayloadLeaseStatus::CapacityExceeded
+            ? HostServiceStatus::BudgetExceeded
+            : HostServiceStatus::Failed;
+        record.completion.error_code = static_cast<std::uint32_t>(ScriptTaskServicePayloadErrorCode::LeaseRejected);
+        record.completion.byte_count = 0;
+        ++result.payload_lease_rejections;
+        return;
+    }
+    record.payload_lease_id = payload_lease_id;
+    record.completion.byte_count = static_cast<std::uint32_t>(payload_scratch_.size());
+    ++result.payloads_published;
 }
 
 bool ScriptTaskServiceBridge::cancel(const ScriptTaskServiceToken& token) {
@@ -253,8 +361,10 @@ bool ScriptTaskServiceBridge::cancel(const ScriptTaskServiceToken& token) {
     const std::size_t index = static_cast<std::size_t>(found - records_.begin());
     if (records_[index].completion_ready) {
         supervisor_.cancel_service(token);
-        const bool released = release_completion_handle(records_[index].completion);
-        (void)released;
+        const bool released_payload = release_record_payload(records_[index]);
+        (void)released_payload;
+        const bool released_handle = release_record_completion_payload(records_[index]);
+        (void)released_handle;
         supervisor_.consume_service_completion(token);
         erase_record(index);
         return true;
@@ -265,6 +375,8 @@ bool ScriptTaskServiceBridge::cancel(const ScriptTaskServiceToken& token) {
     if (host_.requests().cancel_pending(records_[index].host_job_id)) {
         supervisor_.retire_service(token);
         erase_record(index);
+    } else {
+        records_[index].cancelled = true;
     }
     return true;
 }
@@ -277,7 +389,7 @@ bool ScriptTaskServiceBridge::deliver_ready_record(std::size_t index,
         record.completion.status,
         record.token.request_id,
         record.token.client_token,
-        record.completion.handle,
+        record.payload_lease_id,
         record.completion.error_code,
         record.completion.byte_count,
     };
@@ -288,8 +400,8 @@ bool ScriptTaskServiceBridge::deliver_ready_record(std::size_t index,
     if (!encode_script_task_service_completion(packet_completion, packet.payload)) {
         supervisor_.cancel_service(record.token);
         supervisor_.consume_service_completion(record.token);
-        if (release_completion_handle(record.completion)) {
-            ++result.released_handles;
+        if (release_record_payload(record)) {
+            ++result.released_payload_leases;
         }
         ++result.cancelled;
         erase_record(index);
@@ -298,16 +410,16 @@ bool ScriptTaskServiceBridge::deliver_ready_record(std::size_t index,
     const ScriptTaskServiceCompletionDisposition disposition =
         supervisor_.consume_service_completion(record.token);
     if (disposition == ScriptTaskServiceCompletionDisposition::Cancelled) {
-        if (release_completion_handle(record.completion)) {
-            ++result.released_handles;
+        if (release_record_payload(record)) {
+            ++result.released_payload_leases;
         }
         ++result.cancelled;
         erase_record(index);
         return true;
     }
     if (disposition == ScriptTaskServiceCompletionDisposition::Stale) {
-        if (release_completion_handle(record.completion)) {
-            ++result.released_handles;
+        if (release_record_payload(record)) {
+            ++result.released_payload_leases;
         }
         ++result.stale;
         erase_record(index);
@@ -337,8 +449,8 @@ ScriptTaskServiceBridgePumpResult ScriptTaskServiceBridge::pump(AppFrameScratch&
             return record.host_job_id == completion.job_id;
         });
         if (found == records_.end() || found->completion_ready) {
-            if (release_completion_handle(completion)) {
-                ++result.released_handles;
+            if (release_completion_payload(completion)) {
+                ++result.released_source_payloads;
             }
             ++result.discarded_unmapped;
             continue;
@@ -347,14 +459,21 @@ ScriptTaskServiceBridgePumpResult ScriptTaskServiceBridge::pump(AppFrameScratch&
             supervisor_.cancel_service(found->token);
             supervisor_.consume_service_completion(found->token);
             erase_record(static_cast<std::size_t>(found - records_.begin()));
-            if (release_completion_handle(completion)) {
-                ++result.released_handles;
+            if (release_completion_payload(completion)) {
+                ++result.released_source_payloads;
             }
             ++result.discarded_unmapped;
             continue;
         }
         found->completion = completion;
         found->completion_ready = true;
+        if (found->cancelled) {
+            if (release_record_completion_payload(*found)) {
+                ++result.released_source_payloads;
+            }
+        } else {
+            prepare_completion_payload(*found, result);
+        }
         ++result.queued_for_delivery;
     }
     for (std::size_t index = 0; index < records_.size();) {
@@ -377,8 +496,8 @@ ScriptTaskServiceBridgeTeardownResult ScriptTaskServiceBridge::begin_teardown(co
         if (record.completion_ready) {
             supervisor_.cancel_service(record.token);
             supervisor_.consume_service_completion(record.token);
-            if (release_completion_handle(record.completion)) {
-                ++result.released_ready_handles;
+            if (release_record_payload(record)) {
+                ++result.released_ready_payload_leases;
             }
             erase_record(index);
             ++result.retired_records;
@@ -392,6 +511,7 @@ ScriptTaskServiceBridgeTeardownResult ScriptTaskServiceBridge::begin_teardown(co
             ++result.retired_records;
             continue;
         }
+        record.cancelled = true;
         ++result.retained_in_flight_host_jobs;
         ++index;
     }
@@ -410,8 +530,11 @@ ScriptTaskServiceBridgeTeardownResult ScriptTaskServiceBridge::complete_teardown
             ++index;
             continue;
         }
-        if (records_[index].completion_ready && release_completion_handle(records_[index].completion)) {
+        if (records_[index].completion_ready && release_record_completion_payload(records_[index])) {
             ++result.released_ready_handles;
+        }
+        if (records_[index].completion_ready && release_record_payload(records_[index])) {
+            ++result.released_ready_payload_leases;
         }
         supervisor_.retire_service(records_[index].token);
         erase_record(index);

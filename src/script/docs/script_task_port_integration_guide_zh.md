@@ -42,6 +42,12 @@ const auto completed = bridge.pump(host_frame_scratch);
 `submitted` 的 rejection counters 必须进入 app telemetry。host 拒绝一个已经接受到 wire mailbox 的请求时，
 bridge 会把终态 `ServiceCompletion` 放入 worker inbox；它不能被静默丢弃。
 
+真实 completion 若带 host handle，构造 bridge 时必须提供 `max_service_payload_bytes`、
+`payload_copy` 与 `payload_release`。copy callback 只能经 `ScriptTaskServicePayloadWriter` 写入上限内的
+字节；release callback 必须在复制成功、复制失败、取消、陈旧 completion 与 teardown 时恰好一次清理服务
+provider record 和 host-table entry。worker completion sink 收到的是 `payload_lease_id`，使用
+`take_script_task_service_payload()` 复制并立即释放；它绝不能解释或保存 host handle。
+
 script worker：
 
 ```cpp

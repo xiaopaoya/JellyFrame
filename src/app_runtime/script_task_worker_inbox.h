@@ -6,7 +6,7 @@
 namespace jellyframe {
 
 // Implemented inside the script worker. The sink receives only decoded
-// service values and opaque handles; it must not retain supervisor or host
+// service values and service-payload lease IDs; it must not retain supervisor or host
 // pointers in a JS wrapper.
 class ScriptTaskServiceCompletionSink {
 public:
@@ -36,5 +36,20 @@ ScriptTaskWorkerInboxDispatchResult take_and_dispatch_script_task_worker_packet(
     InputController& controller,
     ScriptTaskServiceCompletionSink& completion_sink,
     const ScriptTaskInputCodecOptions& input_options);
+
+enum class ScriptTaskServicePayloadTakeStatus {
+    NoPayload,
+    Accepted,
+    LeaseRejected,
+};
+
+// Worker-task-only helper for a completion payload. It always releases a
+// copied lease, including if the caller passes a stale session, and leaves no
+// host handle or shared buffer reachable from the worker.
+ScriptTaskServicePayloadTakeStatus take_script_task_service_payload(
+    ScriptTaskSupervisor& supervisor,
+    const ScriptAppSession& session,
+    const ScriptTaskServiceCompletion& completion,
+    std::vector<std::uint8_t>& output);
 
 } // namespace jellyframe

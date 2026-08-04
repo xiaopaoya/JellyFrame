@@ -34,4 +34,25 @@ ScriptTaskWorkerInboxDispatchResult take_and_dispatch_script_task_worker_packet(
             handled};
 }
 
+ScriptTaskServicePayloadTakeStatus take_script_task_service_payload(
+    ScriptTaskSupervisor& supervisor,
+    const ScriptAppSession& session,
+    const ScriptTaskServiceCompletion& completion,
+    std::vector<std::uint8_t>& output) {
+    if (completion.payload_lease_id == 0) {
+        output.clear();
+        return ScriptTaskServicePayloadTakeStatus::NoPayload;
+    }
+    const ScriptTaskServicePayloadLeaseStatus copied = supervisor.copy_service_payload(
+        session, completion.payload_lease_id, output);
+    if (copied != ScriptTaskServicePayloadLeaseStatus::Accepted) {
+        output.clear();
+        return ScriptTaskServicePayloadTakeStatus::LeaseRejected;
+    }
+    return supervisor.release_service_payload(session, completion.payload_lease_id) ==
+            ScriptTaskServicePayloadLeaseStatus::Accepted
+        ? ScriptTaskServicePayloadTakeStatus::Accepted
+        : ScriptTaskServicePayloadTakeStatus::LeaseRejected;
+}
+
 } // namespace jellyframe
