@@ -11,12 +11,19 @@ option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS "Register sample and external-trial CTest coverage" ON)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
+option(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME
+       "Compile optional cross-task script App runtime contracts" OFF)
 option(JELLYFRAME_ENABLE_IMAGE_FILE_IO "Expose desktop image file writers from render_core" ON)
 option(JELLYFRAME_ENABLE_CANVAS2D "Compile the graphics.canvas2d Render Core family" ON)
 option(JELLYFRAME_ENABLE_MODERN_PAINT "Compile the css.modern-paint Render Core family" ON)
 option(JELLYFRAME_ENABLE_FLEX_GRID "Compile the css.flex-grid Render Core family" ON)
 option(JELLYFRAME_ENABLE_ADVANCED_FORMS "Compile the forms.advanced Render Core family" ON)
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
+
+if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME AND NOT JELLYFRAME_BUILD_SCRIPTING)
+    message(FATAL_ERROR
+        "JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME requires JELLYFRAME_BUILD_SCRIPTING=ON")
+endif()
 
 if(JELLYFRAME_ENABLE_SANITIZERS)
     if(MSVC)
@@ -139,8 +146,6 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
-    src/app_runtime/script_task_contract.cpp
-    src/app_runtime/script_task_service_bridge.cpp
     src/app_runtime/app_video_frames.cpp
     src/app_runtime/app_services.cpp
     src/app_runtime/app_storage_lifecycle_policy.cpp
@@ -181,10 +186,31 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         endif()
     endforeach()
 
+    if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+        add_library(jellyframe_script_task_runtime
+            src/app_runtime/script_task_contract.cpp
+            src/app_runtime/script_task_service_bridge.cpp
+        )
+        target_link_libraries(jellyframe_script_task_runtime PUBLIC jellyframe_app_runtime)
+        target_include_directories(jellyframe_script_task_runtime
+            PUBLIC
+                ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+        target_compile_features(jellyframe_script_task_runtime PUBLIC cxx_std_17)
+        if(MSVC)
+            target_compile_options(jellyframe_script_task_runtime PRIVATE /W4)
+        else()
+            target_compile_options(jellyframe_script_task_runtime PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+    endif()
+
     add_library(jellyframe_script
         src/script/jerryscript_runtime.cpp
     )
     target_link_libraries(jellyframe_script PUBLIC jellyframe_app_runtime ${JERRYSCRIPT_LIBRARIES})
+    if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+        target_link_libraries(jellyframe_script PUBLIC jellyframe_script_task_runtime)
+    endif()
     target_include_directories(jellyframe_script
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -327,8 +353,6 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_service_worker_tests.cpp
         src/app_runtime/tests/app_video_frames_tests.cpp
         src/app_runtime/tests/app_services_tests.cpp
-        src/app_runtime/tests/script_task_contract_tests.cpp
-        src/app_runtime/tests/script_task_service_bridge_tests.cpp
         src/app_runtime/tests/app_storage_lifecycle_policy_tests.cpp
         src/app_runtime/tests/authorized_file_broker_tests.cpp
         src/app_runtime/tests/host_services_tests.cpp
@@ -883,5 +907,25 @@ if(JELLYFRAME_BUILD_TESTS)
         jellyframe_enable_test_asserts(jellyframe_script_tests)
         jellyframe_stage_sanitizer_runtime(jellyframe_script_tests)
         add_test(NAME jellyframe_script_tests COMMAND jellyframe_script_tests)
+
+        if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+            set(JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES
+                src/app_runtime/tests/script_task_contract_tests.cpp
+                src/app_runtime/tests/script_task_service_bridge_tests.cpp
+            )
+            foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES)
+                get_filename_component(test_name ${test_source} NAME_WE)
+                set_source_files_properties(${test_source}
+                    PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
+            endforeach()
+            add_executable(jellyframe_script_task_runtime_tests
+                src/app_runtime/tests/script_task_runtime_tests.cpp
+                ${JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES}
+            )
+            target_link_libraries(jellyframe_script_task_runtime_tests PRIVATE jellyframe_script_task_runtime)
+            jellyframe_enable_test_asserts(jellyframe_script_task_runtime_tests)
+            jellyframe_stage_sanitizer_runtime(jellyframe_script_task_runtime_tests)
+            add_test(NAME jellyframe_script_task_runtime_tests COMMAND jellyframe_script_task_runtime_tests)
+        endif()
     endif()
 endif()

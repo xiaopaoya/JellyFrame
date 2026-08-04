@@ -10,11 +10,6 @@ It owns contracts and small bounded data structures for:
 - A small runtime-host state container that ties lifecycle, request/completion
   queues and host handles together without performing platform I/O.
 - App-instance-scoped async requests and completions.
-- Value-only script-task sessions, bounded mailboxes, sealed frame leases,
-  cancellation tombstones, native-release intents and ordered supervisor
-  teardown for future RTOS scripting.
-- A supervisor-only `AppRuntimeHost` service bridge that maps script request
-  tokens to host jobs and sends fixed-width, pointer-free completion packets.
 - Host-owned resource handles with generation checks.
 - App lifecycle, package install/update/delete, bounded host compute jobs, network fetch, private storage,
   image/audio host-service mocks and system-event plumbing.
@@ -28,12 +23,15 @@ It may depend on `render_core` for shared host capability and budget types.
 It must not depend on JerryScript directly, filesystem/network implementations,
 RTOS APIs or platform drivers.
 
-`script_task_contract.*` does not execute JavaScript or render a frame. It is
-the platform-neutral ownership boundary that a port must complete before it can
-run a real script App outside the UI task. See
-`../script/docs/cross_task_ownership_contract.md`.
+When both `JELLYFRAME_BUILD_SCRIPTING=ON` and
+`JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON`, the separate
+`jellyframe_script_task_runtime` target provides value-only script-task
+sessions, bounded mailboxes, sealed frame leases, cancellation tombstones,
+native-release intents and the `AppRuntimeHost` service bridge. Keeping this
+target off leaves its code and static storage out of an ordinary app-runtime
+build. See `../script/docs/cross_task_ownership_contract.md`.
 
-`script_task_service_bridge.*` is the exclusive completion consumer while that
+With that target enabled, `script_task_service_bridge.*` is the exclusive completion consumer while that
 script session is active. A port must use its ordered teardown: invalidate the
 supervisor session, cancel bridge requests, terminate the host app, then retire
 bridge records and complete supervisor teardown. In-flight host work is kept

@@ -42,11 +42,13 @@ launch/fail/recover cycles without cross-App state, dangling access or system re
 
 ## Current platform-neutral foundation
 
-`src/app_runtime/script_task_contract.*` now implements and tests session generation/epoch validation,
+When both `JELLYFRAME_BUILD_SCRIPTING=ON` and `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON`, the separate
+`jellyframe_script_task_runtime` target compiles `src/app_runtime/script_task_contract.*` and implements
+and tests session generation/epoch validation,
 fixed-slot value mailboxes, session-scoped sealed frame leases, cancellation tombstones with late-
 completion classification, deduplicated native-release intents, and a two-stage `ScriptTaskSupervisor`
 teardown that does not create a task or VM. `script_task_service_bridge.*` maps those tokens to
-`AppRuntimeHost` jobs and serializes completion values into a fixed 24-byte packet. It has no
+`AppRuntimeHost` jobs and serializes completion values into a fixed 24-byte packet. The optional target has no
 JerryScript, RTOS, DOM or renderer dependency; it does not start a worker or paint an `AppFrame`.
 
 The bridge is the sole `AppRuntimeHost` completion consumer during a script session. Its required

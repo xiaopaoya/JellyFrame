@@ -118,11 +118,13 @@ wrapper 或 callback 重新绑定给下一个 app。
 
 ## 当前平台无关基础设施
 
-`src/app_runtime/script_task_contract.*` 已实现并单测：session generation/epoch 校验、固定槽
+当同时启用 `JELLYFRAME_BUILD_SCRIPTING=ON` 与 `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON` 时，独立
+`jellyframe_script_task_runtime` target 会编译 `src/app_runtime/script_task_contract.*`，并实现和单测：
+session generation/epoch 校验、固定槽
 值 mailbox、session-scoped sealed frame lease、服务取消 tombstone/迟到 completion 分类、去重的
 native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTaskSupervisor` teardown。
 `script_task_service_bridge.*` 将这些 token 映射到 `AppRuntimeHost` job，并把 completion value
-序列化为固定 24-byte packet。它不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker
+序列化为固定 24-byte packet。该可选 target 不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker
 或把 AppFrame 绘制到屏幕。
 
 bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer。规定的关闭顺序是：

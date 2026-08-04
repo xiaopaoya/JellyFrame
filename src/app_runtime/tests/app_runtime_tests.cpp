@@ -11,8 +11,6 @@ int host_services_tests_main();
 int app_frame_policy_tests_main();
 int app_host_data_tests_main();
 int app_services_tests_main();
-int script_task_contract_tests_main();
-int script_task_service_bridge_tests_main();
 int app_storage_lifecycle_policy_tests_main();
 int authorized_file_broker_tests_main();
 int app_service_worker_tests_main();
@@ -51,8 +49,6 @@ int main() {
     failed += run_test("app_service_worker", app_service_worker_tests_main);
     failed += run_test("app_video_frames", app_video_frames_tests_main);
     failed += run_test("app_services", app_services_tests_main);
-    failed += run_test("script_task_contract", script_task_contract_tests_main);
-    failed += run_test("script_task_service_bridge", script_task_service_bridge_tests_main);
     failed += run_test("app_storage_lifecycle_policy", app_storage_lifecycle_policy_tests_main);
     failed += run_test("authorized_file_broker", authorized_file_broker_tests_main);
     failed += run_test("host_services", host_services_tests_main);

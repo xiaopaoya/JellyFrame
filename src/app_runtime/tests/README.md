@@ -8,6 +8,7 @@ They cover platform-neutral app-runtime helpers such as bounded async queues,
 completion events and host handle lifetimes. They should not depend on DOM,
 layout, software rendering, JerryScript or real I/O.
 
+When both scripting and the script-task runtime module are enabled,
 `script_task_contract_tests.cpp` covers the value-only RTOS scripting boundary:
 session generations, mailbox stale rejection, sealed frame leases, service
 cancellation tombstones and idempotent native-release intents.
@@ -16,4 +17,5 @@ cancellation tombstones and idempotent native-release intents.
 fixed-width completion encoding, pending and late cancellation, opaque handle
 release and worker-mailbox backpressure.
 
-CTest target: `jellyframe_app_runtime_tests`.
+CTest target: `jellyframe_app_runtime_tests`; the optional module uses
+`jellyframe_script_task_runtime_tests`.
