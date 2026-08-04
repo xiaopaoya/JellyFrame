@@ -150,4 +150,46 @@ std::uint32_t resolve_script_task_input_target(const ScriptTaskAppFrame& frame, 
     }
     return 0;
 }
+
+ScriptTaskAppFramePublisher::ScriptTaskAppFramePublisher(ScriptTaskAppFrameCodecOptions options)
+    : options_(options) {
+    encoded_.reserve(options_.max_payload_bytes);
+}
+
+ScriptTaskAppFramePublishResult ScriptTaskAppFramePublisher::publish(
+    ScriptTaskSupervisor& supervisor,
+    const ScriptAppSession& session,
+    const ScriptTaskAppFrame& frame) {
+    ScriptTaskAppFramePublishResult result;
+    result.codec_status = encode_script_task_app_frame(frame, options_, encoded_);
+    if (result.codec_status != ScriptTaskAppFrameCodecStatus::Accepted) {
+        return result;
+    }
+    result.lease = supervisor.publish_frame(session, encoded_);
+    return result;
+}
+
+ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& supervisor,
+                                                         const ScriptAppSession& session,
+                                                         const ScriptTaskAppFrameCodecOptions& options,
+                                                         ScriptTaskAppFrame& output) {
+    ScriptTaskPacket packet;
+    if (!supervisor.take_worker_packet(packet)) {
+        return ScriptTaskAppFrameTakeStatus::NoFrame;
+    }
+    if (packet.kind != ScriptTaskPacketKind::FrameReady || packet.session != session) {
+        return ScriptTaskAppFrameTakeStatus::UnexpectedPacket;
+    }
+    std::vector<std::uint8_t> copied;
+    if (supervisor.copy_frame(session, packet.lease_id, copied) != ScriptTaskFrameLeaseStatus::Accepted) {
+        return ScriptTaskAppFrameTakeStatus::LeaseRejected;
+    }
+    const ScriptTaskFrameLeaseStatus released = supervisor.release_frame(session, packet.lease_id);
+    if (released != ScriptTaskFrameLeaseStatus::Accepted) {
+        return ScriptTaskAppFrameTakeStatus::LeaseRejected;
+    }
+    return decode_script_task_app_frame(copied, options, output) == ScriptTaskAppFrameCodecStatus::Accepted
+        ? ScriptTaskAppFrameTakeStatus::Accepted
+        : ScriptTaskAppFrameTakeStatus::DecodeRejected;
+}
 } // namespace jellyframe

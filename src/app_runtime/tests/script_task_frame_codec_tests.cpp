@@ -72,22 +72,14 @@ void frame_codec_rejects_budget_and_wire_integrity_failures() {
 
 void sealed_lease_carries_only_serialized_frame_bytes() {
     const ScriptTaskAppFrame frame = fixture();
-    std::vector<std::uint8_t> encoded;
-    assert(encode_script_task_app_frame(frame, limits(), encoded) == ScriptTaskAppFrameCodecStatus::Accepted);
     ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 512, 512}, 0, 0});
     const ScriptAppSession session = supervisor.begin(71);
-    const ScriptTaskFramePublishResult published = supervisor.publish_frame(session, encoded);
-    assert(published.accepted());
-    ScriptTaskPacket packet;
-    assert(supervisor.take_worker_packet(packet));
-    assert(packet.kind == ScriptTaskPacketKind::FrameReady);
-    assert(packet.payload.empty());
-    std::vector<std::uint8_t> copied;
-    assert(supervisor.copy_frame(session, packet.lease_id, copied) == ScriptTaskFrameLeaseStatus::Accepted);
+    ScriptTaskAppFramePublisher publisher(limits());
+    assert(publisher.publish(supervisor, session, frame).accepted());
     ScriptTaskAppFrame decoded;
-    assert(decode_script_task_app_frame(copied, limits(), decoded) == ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(take_script_task_app_frame(supervisor, session, limits(), decoded) == ScriptTaskAppFrameTakeStatus::Accepted);
     assert(decoded.display_list[1].text == frame.display_list[1].text);
-    assert(supervisor.release_frame(session, packet.lease_id) == ScriptTaskFrameLeaseStatus::Accepted);
+    assert(take_script_task_app_frame(supervisor, session, limits(), decoded) == ScriptTaskAppFrameTakeStatus::NoFrame);
 }
 
 } // namespace

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app_runtime/script_task_contract.h"
 #include "render_core/geometry.h"
 
 #include <cstddef>
@@ -51,5 +52,44 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(
 // The frame carries hit regions in paint order. Reverse lookup selects the
 // visually topmost enabled target and returns only its opaque worker key.
 std::uint32_t resolve_script_task_input_target(const ScriptTaskAppFrame& frame, int x, int y);
+
+struct ScriptTaskAppFramePublishResult {
+    ScriptTaskAppFrameCodecStatus codec_status = ScriptTaskAppFrameCodecStatus::InvalidValue;
+    ScriptTaskFramePublishResult lease;
+
+    bool accepted() const {
+        return codec_status == ScriptTaskAppFrameCodecStatus::Accepted && lease.accepted();
+    }
+};
+
+// Worker-owned encoder scratch. Its buffer is pre-reserved from the declared
+// frame budget, so ordinary frame publication does not grow it.
+class ScriptTaskAppFramePublisher {
+public:
+    explicit ScriptTaskAppFramePublisher(ScriptTaskAppFrameCodecOptions options);
+
+    ScriptTaskAppFramePublishResult publish(ScriptTaskSupervisor& supervisor,
+                                            const ScriptAppSession& session,
+                                            const ScriptTaskAppFrame& frame);
+
+private:
+    ScriptTaskAppFrameCodecOptions options_;
+    std::vector<std::uint8_t> encoded_;
+};
+
+enum class ScriptTaskAppFrameTakeStatus {
+    NoFrame,
+    UnexpectedPacket,
+    LeaseRejected,
+    DecodeRejected,
+    Accepted,
+};
+
+// UI-task helper. It copies a sealed lease before decoding and always releases
+// the lease after a successful copy, even when the value frame is malformed.
+ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& supervisor,
+                                                        const ScriptAppSession& session,
+                                                        const ScriptTaskAppFrameCodecOptions& options,
+                                                        ScriptTaskAppFrame& output);
 
 } // namespace jellyframe
