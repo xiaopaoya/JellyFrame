@@ -118,7 +118,7 @@ void native_release_intents_are_value_only_and_deduplicated() {
 }
 
 void supervisor_requires_ordered_value_only_teardown() {
-    ScriptTaskSupervisor supervisor({{2, 8}, {1, 0}, {2, 8, 16}, 2, 2});
+    ScriptTaskSupervisor supervisor({{2, 8}, {1, 0}, {2, 8, 16}, 2, 2, {2, 8}});
     const ScriptAppSession active = supervisor.begin(30);
     assert(active.valid());
     assert(supervisor.post_input({ScriptTaskPacketKind::Input, active, 1, 0, {9}}) ==
@@ -130,12 +130,15 @@ void supervisor_requires_ordered_value_only_teardown() {
     assert(rejected_frame.mailbox_status == ScriptTaskMailboxPostStatus::Full);
     assert(rejected_frame.lease_id == 0);
     assert(supervisor.track_service({active, 5, 6}) == ScriptTaskServiceTrackStatus::Accepted);
+    assert(supervisor.post_service_request({ScriptTaskPacketKind::ServiceRequest, active, 5, 0, {1}}) ==
+           ScriptTaskMailboxPostStatus::Accepted);
     assert(supervisor.post_native_release_intent({active, 44}) == ScriptTaskReleaseIntentStatus::Accepted);
 
     const ScriptTaskTeardownResult first = supervisor.begin_teardown(active);
     assert(first.session == active);
     assert(first.discarded_input_packets == 1);
     assert(first.discarded_worker_packets == 1);
+    assert(first.discarded_service_request_packets == 1);
     assert(first.cancelled_service_requests == 1);
     assert(!supervisor.accepts(active));
     assert(supervisor.post_input({ScriptTaskPacketKind::Input, active, 2, 0, {7}}) ==

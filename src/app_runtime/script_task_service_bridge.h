@@ -2,6 +2,7 @@
 
 #include "app_runtime/app_host.h"
 #include "app_runtime/script_task_contract.h"
+#include "app_runtime/script_task_service_request_codec.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -35,6 +36,7 @@ struct ScriptTaskServiceBridgeOptions {
 
 enum class ScriptTaskServiceSubmitStatus {
     Accepted,
+    InvalidPacket,
     InvalidSession,
     InvalidToken,
     Duplicate,
@@ -87,6 +89,10 @@ public:
                                          std::uint8_t priority = 0,
                                          std::uint32_t timeout_ms = 0,
                                          std::uint32_t client_token = 0);
+    // Supervisor-only entry point for a packet taken from the dedicated
+    // worker-to-supervisor service mailbox. It never accepts frame or input
+    // traffic, and does not expose AppRuntimeHost to the worker.
+    ScriptTaskServiceSubmitResult submit_packet(const ScriptTaskPacket& packet);
     bool cancel(const ScriptTaskServiceToken& token);
 
     // Pumps AppRuntimeHost completions into the worker inbox. Scratch must

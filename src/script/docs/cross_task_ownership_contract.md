@@ -26,7 +26,9 @@ DOM or renderer state. A sealed frame is immutable;
 the supervisor owns its bounded lease lifecycle and records coalescing or queue-full drops.
 
 The supervisor is also the only owner of `AppRuntimeHost`, host queues and handle table. Service
-requests and completions are value packets. Cancellation installs a tombstone before queue cleanup;
+requests use a dedicated worker-to-supervisor mailbox and completions use the worker input mailbox;
+frame traffic never shares either service consumer. Both directions are bounded value packets.
+Cancellation installs a tombstone before queue cleanup;
 late completions only release their handle and update counters. Native wrappers retain session-scoped
 opaque tokens only; their finalizers emit idempotent release intents, never dereference UI or service
 objects.
@@ -56,6 +58,8 @@ target keys into a versioned value frame; session and sequence remain in the sur
 `make_script_task_app_frame()` flattens the worker-private `LayerNode` before copying this value frame.
 `script_task_input_codec.*` provides versioned pointer, wheel, key and bounded text values for the worker inbox.
 `script_task_input_dispatch.*` consumes those values only through the worker-private `InputController`.
+`script_task_service_request_codec.*` encodes a fixed 20-byte typed request;
+the supervisor decodes it before `ScriptTaskServiceBridge::submit_packet()` touches the host.
 
 The bridge is the sole `AppRuntimeHost` completion consumer during a script session. Its required
 shutdown order is: `ScriptTaskSupervisor::begin_teardown`, bridge pending-job cancellation, host App

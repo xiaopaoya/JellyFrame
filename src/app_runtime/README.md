@@ -41,6 +41,11 @@ those values against its own DOM and layer tree.
 `script_task_input_dispatch.*` is the worker-only adapter to its private
 `InputController`; it never exposes the event target outside that task.
 
+`script_task_service_request_codec.*` defines a separate, fixed 20-byte
+worker-to-supervisor request packet. The supervisor alone takes that mailbox
+and calls `ScriptTaskServiceBridge::submit_packet()`; frame consumers never
+compete with service consumers for outbound worker traffic.
+
 With that target enabled, `script_task_service_bridge.*` is the exclusive completion consumer while that
 script session is active. A port must use its ordered teardown: invalidate the
 supervisor session, cancel bridge requests, terminate the host app, then retire

@@ -67,7 +67,8 @@ worker 不触碰 framebuffer 或 panel。
 ## 服务、取消与迟到完成
 
 worker 提交的 service request 只包含 typed request value、`ScriptAppSession`、client token 和
-可取消 request ID。supervisor 是唯一能访问 `AppRuntimeHost`、request/completion queue 与
+可取消 request ID，并只进入独立的 worker-to-supervisor mailbox；completion 只进入 worker input
+mailbox，frame 流量不与任一 service consumer 共用 queue。supervisor 是唯一能访问 `AppRuntimeHost`、request/completion queue 与
 host handle table 的一方：
 
 1. supervisor 在服务提交时绑定 session、request ID 和 native lease；
@@ -131,6 +132,8 @@ native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTask
 `make_script_task_app_frame()` 会先在 worker 内部 flatten 私有 `LayerNode`，再复制该 value frame。
 `script_task_input_codec.*` 为 worker inbox 提供版本化 pointer、wheel、key 和受限 text value。
 `script_task_input_dispatch.*` 只通过 worker 私有 `InputController` 消费这些 value。
+`script_task_service_request_codec.*` 将 typed request 编码为固定 20-byte value，supervisor 在
+`ScriptTaskServiceBridge::submit_packet()` 接触 host 前完成解码和校验。
 
 bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer。规定的关闭顺序是：
 `ScriptTaskSupervisor::begin_teardown`、bridge 取消 pending job、host 终止 App、bridge 回收记录，

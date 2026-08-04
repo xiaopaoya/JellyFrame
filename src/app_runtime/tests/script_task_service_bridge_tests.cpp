@@ -14,7 +14,7 @@ AppRuntimeHost make_host(std::size_t capacity = 4, std::size_t completions = 4) 
 }
 
 ScriptTaskSupervisor make_supervisor(std::size_t worker_slots = 4, std::size_t payload_bytes = 24) {
-    return ScriptTaskSupervisor({{worker_slots, payload_bytes}, {2, 0}, {2, 64, 128}, 4, 2});
+    return ScriptTaskSupervisor({{worker_slots, payload_bytes}, {2, 0}, {2, 64, 128}, 4, 2, {4, 20}});
 }
 
 AppFrameScratch make_scratch() {
@@ -92,6 +92,42 @@ void bridge_delivers_completion_as_bounded_worker_value_packet() {
     assert(decoded.error_code == 19);
     assert(decoded.byte_count == 23);
     assert(host.handles().contains(handle));
+}
+
+void bridge_submits_dedicated_worker_service_packets() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.script.worker-request", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    ScriptTaskServiceBridge bridge(host, supervisor, {4});
+    const ScriptTaskServiceRequest request{HostServiceJobKind::NetworkFetch, 72, 73, 0, 2, 400};
+    assert(post_script_task_service_request(supervisor, session, 9, request, {20}).accepted());
+
+    ScriptTaskPacket packet;
+    assert(supervisor.take_service_request(packet));
+    const ScriptTaskServiceSubmitResult submitted = bridge.submit_packet(packet);
+    assert(submitted.accepted());
+    assert(submitted.token.session == session);
+    assert(submitted.token.request_id == request.request_id);
+    HostServiceRequest host_request;
+    assert(host.pop_worker_request(host_request));
+    assert(host_request.kind == request.kind);
+    assert(host_request.client_token == request.client_token);
+    assert(host_request.timeout_ms == request.timeout_ms);
+    assert(host_request.priority == request.priority);
+}
+
+void bridge_rejects_non_service_or_malformed_packets_without_host_access() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.script.bad-worker-request", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    ScriptTaskServiceBridge bridge(host, supervisor, {4});
+    assert(bridge.submit_packet({ScriptTaskPacketKind::Input, session, 1, 0, {}}).status ==
+           ScriptTaskServiceSubmitStatus::InvalidPacket);
+    assert(bridge.submit_packet({ScriptTaskPacketKind::ServiceRequest, session, 1, 0, {1}}).status ==
+           ScriptTaskServiceSubmitStatus::InvalidPacket);
+    assert(host.requests().empty());
 }
 
 void bridge_cancels_pending_jobs_without_leaving_tombstones() {
@@ -213,6 +249,8 @@ void bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup() {
 int script_task_service_bridge_tests_main() {
     completion_payload_round_trips_without_native_data();
     bridge_delivers_completion_as_bounded_worker_value_packet();
+    bridge_submits_dedicated_worker_service_packets();
+    bridge_rejects_non_service_or_malformed_packets_without_host_access();
     bridge_cancels_pending_jobs_without_leaving_tombstones();
     bridge_releases_cancelled_late_completion_handles();
     bridge_retries_after_worker_mailbox_backpressure();

@@ -156,6 +156,30 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
     return result;
 }
 
+ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit_packet(const ScriptTaskPacket& packet) {
+    if (packet.kind != ScriptTaskPacketKind::ServiceRequest || !supervisor_.accepts(packet.session)) {
+        ScriptTaskServiceSubmitResult result;
+        result.status = ScriptTaskServiceSubmitStatus::InvalidPacket;
+        return result;
+    }
+
+    ScriptTaskServiceRequest request;
+    const ScriptTaskServiceRequestCodecStatus decoded = decode_script_task_service_request(
+        packet.payload, {packet.payload.size()}, request);
+    if (decoded != ScriptTaskServiceRequestCodecStatus::Accepted) {
+        ScriptTaskServiceSubmitResult result;
+        result.status = ScriptTaskServiceSubmitStatus::InvalidPacket;
+        return result;
+    }
+    return submit(packet.session,
+                  request.request_id,
+                  request.kind,
+                  request.request_handle,
+                  request.priority,
+                  request.timeout_ms,
+                  request.client_token);
+}
+
 void ScriptTaskServiceBridge::erase_record(std::size_t index) {
     records_[index] = records_.back();
     records_.pop_back();

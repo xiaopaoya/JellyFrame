@@ -15,7 +15,8 @@ cancellation tombstones and idempotent native-release intents.
 
 `script_task_service_bridge_tests.cpp` verifies host-job/token mapping,
 fixed-width completion encoding, pending and late cancellation, opaque handle
-release and worker-inbox backpressure.
+release, worker-inbox backpressure and dedicated worker-to-supervisor service
+request submission.
 
 `script_task_frame_codec_tests.cpp` verifies bounded AppFrame value encoding,
 malformed-packet rejection, sealed frame leases and paint-ordered target-key
@@ -26,6 +27,9 @@ budget enforcement and worker-inbox delivery.
 
 `script_task_input_dispatch_tests.cpp` verifies worker-local pointer dispatch
 and rejects malformed packets or undefined key values without DOM access.
+
+`script_task_service_request_codec_tests.cpp` verifies fixed-width service
+request values, malformed/budget rejection and isolation from frame traffic.
 
 CTest target: `jellyframe_app_runtime_tests`; the optional module uses
 `jellyframe_script_task_runtime_tests`.

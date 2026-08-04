@@ -468,7 +468,8 @@ ScriptTaskSupervisor::ScriptTaskSupervisor(ScriptTaskSupervisorOptions options)
       worker_mailbox_(options.worker_mailbox),
       frame_leases_(options.frame_leases),
       services_(options.max_service_tombstones),
-      release_intents_(options.max_native_release_intents) {}
+      release_intents_(options.max_native_release_intents),
+      service_request_mailbox_(options.service_request_mailbox) {}
 
 std::uint32_t ScriptTaskSupervisor::next_nonzero(std::uint32_t value) {
     ++value;
@@ -552,6 +553,17 @@ ScriptTaskServiceTrackStatus ScriptTaskSupervisor::track_service(const ScriptTas
     return services_.track(token);
 }
 
+ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_request(const ScriptTaskPacket& packet) {
+    if (packet.kind != ScriptTaskPacketKind::ServiceRequest || !accepts(packet.session)) {
+        return ScriptTaskMailboxPostStatus::InvalidPacket;
+    }
+    return service_request_mailbox_.post(packet);
+}
+
+bool ScriptTaskSupervisor::take_service_request(ScriptTaskPacket& output) {
+    return service_request_mailbox_.pop_for(sessions_.current(), output);
+}
+
 bool ScriptTaskSupervisor::cancel_service(const ScriptTaskServiceToken& token) {
     return accepts(token.session) && services_.cancel(token);
 }
@@ -583,6 +595,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::begin_teardown(const ScriptAppSes
     }
     result.discarded_input_packets = input_mailbox_.discard_all();
     result.discarded_worker_packets = worker_mailbox_.discard_all();
+    result.discarded_service_request_packets = service_request_mailbox_.discard_all();
     result.cancelled_service_requests = services_.cancel_session(session);
     return result;
 }

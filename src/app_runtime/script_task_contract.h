@@ -286,6 +286,7 @@ struct ScriptTaskSupervisorOptions {
     ScriptTaskFrameLeaseOptions frame_leases;
     std::size_t max_service_tombstones = 0;
     std::size_t max_native_release_intents = 0;
+    ScriptTaskMailboxOptions service_request_mailbox;
 };
 
 struct ScriptTaskFramePublishResult {
@@ -303,6 +304,7 @@ struct ScriptTaskTeardownResult {
     ScriptAppSession session;
     std::size_t discarded_input_packets = 0;
     std::size_t discarded_worker_packets = 0;
+    std::size_t discarded_service_request_packets = 0;
     std::size_t cancelled_service_requests = 0;
     std::size_t released_frame_leases = 0;
     std::size_t discarded_release_intents = 0;
@@ -338,6 +340,8 @@ public:
     ScriptTaskFrameLeaseStatus release_frame(const ScriptAppSession& session, std::uint32_t lease_id);
 
     ScriptTaskServiceTrackStatus track_service(const ScriptTaskServiceToken& token);
+    ScriptTaskMailboxPostStatus post_service_request(const ScriptTaskPacket& packet);
+    bool take_service_request(ScriptTaskPacket& output);
     bool cancel_service(const ScriptTaskServiceToken& token);
     // Used only when the host atomically cancels a still-pending request, so
     // no late completion can require its cancellation tombstone.
@@ -356,6 +360,7 @@ private:
     ScriptAppSessionController sessions_;
     ScriptTaskMailbox input_mailbox_;
     ScriptTaskMailbox worker_mailbox_;
+    ScriptTaskMailbox service_request_mailbox_;
     ScriptTaskFrameLeaseRegistry frame_leases_;
     ScriptTaskServiceLedger services_;
     ScriptTaskReleaseIntentMailbox release_intents_;
