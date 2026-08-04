@@ -21,5 +21,8 @@ release and worker-inbox backpressure.
 malformed-packet rejection, sealed frame leases and paint-ordered target-key
 resolution.
 
+`script_task_input_codec_tests.cpp` verifies normalized input encoding, input
+budget enforcement and worker-inbox delivery.
+
 CTest target: `jellyframe_app_runtime_tests`; the optional module uses
 `jellyframe_script_task_runtime_tests`.

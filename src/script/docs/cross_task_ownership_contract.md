@@ -54,6 +54,7 @@ JerryScript, RTOS, DOM or renderer dependency; it does not start a worker or pai
 `script_task_frame_codec.*` now encodes a bounded `DisplayList`, viewport and paint-ordered opaque input
 target keys into a versioned value frame; session and sequence remain in the surrounding frame lease.
 `make_script_task_app_frame()` flattens the worker-private `LayerNode` before copying this value frame.
+`script_task_input_codec.*` provides versioned pointer, wheel, key and bounded text values for the worker inbox.
 
 The bridge is the sole `AppRuntimeHost` completion consumer during a script session. Its required
 shutdown order is: `ScriptTaskSupervisor::begin_teardown`, bridge pending-job cancellation, host App

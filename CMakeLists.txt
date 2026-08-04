@@ -190,6 +190,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         add_library(jellyframe_script_task_runtime
             src/app_runtime/script_task_contract.cpp
             src/app_runtime/script_task_frame_codec.cpp
+            src/app_runtime/script_task_input_codec.cpp
             src/app_runtime/script_task_service_bridge.cpp
         )
         target_link_libraries(jellyframe_script_task_runtime PUBLIC jellyframe_app_runtime)
@@ -913,6 +914,7 @@ if(JELLYFRAME_BUILD_TESTS)
             set(JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES
                 src/app_runtime/tests/script_task_contract_tests.cpp
                 src/app_runtime/tests/script_task_frame_codec_tests.cpp
+                src/app_runtime/tests/script_task_input_codec_tests.cpp
                 src/app_runtime/tests/script_task_service_bridge_tests.cpp
             )
             foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES)

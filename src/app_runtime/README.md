@@ -35,6 +35,10 @@ The same module's `script_task_frame_codec.*` serializes bounded `DisplayList`
 snapshots and paint-ordered opaque input target keys. The session and frame
 sequence remain in the surrounding sealed-frame lease packet.
 
+`script_task_input_codec.*` defines the bounded, versioned worker-inbox values
+for pointer, wheel, key and text input. The worker validates and dispatches
+those values against its own DOM and layer tree.
+
 With that target enabled, `script_task_service_bridge.*` is the exclusive completion consumer while that
 script session is active. A port must use its ordered teardown: invalidate the
 supervisor session, cancel bridge requests, terminate the host app, then retire
