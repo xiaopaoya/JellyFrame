@@ -151,6 +151,17 @@ std::uint32_t resolve_script_task_input_target(const ScriptTaskAppFrame& frame, 
     return 0;
 }
 
+ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
+                                              Rect viewport,
+                                              std::vector<ScriptTaskInputTarget> input_targets) {
+    LayerTreeBuilder flattener;
+    ScriptTaskAppFrame frame;
+    frame.viewport = viewport;
+    frame.display_list = flattener.flatten(layer_tree);
+    frame.input_targets = std::move(input_targets);
+    return frame;
+}
+
 ScriptTaskAppFramePublisher::ScriptTaskAppFramePublisher(ScriptTaskAppFrameCodecOptions options)
     : options_(options) {
     encoded_.reserve(options_.max_payload_bytes);

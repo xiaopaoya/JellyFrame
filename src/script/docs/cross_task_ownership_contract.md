@@ -18,10 +18,11 @@ task-local container/arena addresses. Cross-task data is a bounded value copy or
 opaque lease ID checked against the full session.
 
 A worker publishes a sealed, immutable replacement `AppFrame`: version/session/sequence/viewport,
-POD paint commands, bounded text bytes, validated resource lease IDs and hit regions with numeric
-`target_key` values. The UI task hit-tests the accepted frame and sends normalized input values back;
-the worker resolves `target_key` in its private DOM, dispatches JS, mutates its DOM and publishes a
-new frame. Neither task reaches into the other's DOM or renderer state. A sealed frame is immutable;
+POD paint commands, bounded text bytes, validated resource lease IDs and optional hit regions with numeric
+`target_key` values. Raw normalized input is the authoritative first-version path and is hit-tested by the
+worker against its private DOM/layer tree; a UI task may use accepted target regions only as an optimization.
+The worker dispatches JS, mutates its DOM and publishes a new frame. Neither task reaches into the other's
+DOM or renderer state. A sealed frame is immutable;
 the supervisor owns its bounded lease lifecycle and records coalescing or queue-full drops.
 
 The supervisor is also the only owner of `AppRuntimeHost`, host queues and handle table. Service
@@ -52,6 +53,7 @@ teardown that does not create a task or VM. `script_task_service_bridge.*` maps 
 JerryScript, RTOS, DOM or renderer dependency; it does not start a worker or paint an `AppFrame`.
 `script_task_frame_codec.*` now encodes a bounded `DisplayList`, viewport and paint-ordered opaque input
 target keys into a versioned value frame; session and sequence remain in the surrounding frame lease.
+`make_script_task_app_frame()` flattens the worker-private `LayerNode` before copying this value frame.
 
 The bridge is the sole `AppRuntimeHost` completion consumer during a script session. Its required
 shutdown order is: `ScriptTaskSupervisor::begin_teardown`, bridge pending-job cancellation, host App

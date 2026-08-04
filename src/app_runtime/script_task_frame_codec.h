@@ -2,6 +2,7 @@
 
 #include "app_runtime/script_task_contract.h"
 #include "render_core/geometry.h"
+#include "render_core/layer_tree.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -52,6 +53,14 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(
 // The frame carries hit regions in paint order. Reverse lookup selects the
 // visually topmost enabled target and returns only its opaque worker key.
 std::uint32_t resolve_script_task_input_target(const ScriptTaskAppFrame& frame, int x, int y);
+
+// Runs only in the script worker while its LayerNode and DOM remain private.
+// Flattening applies layer clips, transforms and opacity before the copied
+// DisplayList enters the value frame. Input targets are optional hints; raw
+// input remains authoritative for the worker's private InputController.
+ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
+                                              Rect viewport,
+                                              std::vector<ScriptTaskInputTarget> input_targets = {});
 
 struct ScriptTaskAppFramePublishResult {
     ScriptTaskAppFrameCodecStatus codec_status = ScriptTaskAppFrameCodecStatus::InvalidValue;

@@ -82,12 +82,41 @@ void sealed_lease_carries_only_serialized_frame_bytes() {
     assert(take_script_task_app_frame(supervisor, session, limits(), decoded) == ScriptTaskAppFrameTakeStatus::NoFrame);
 }
 
+void worker_frame_producer_flattens_private_layer_values_before_publish() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    DisplayCommand background;
+    background.type = DisplayCommandType::FillRect;
+    background.rect = {0, 0, 20, 20};
+    background.color = {1, 2, 3, 255};
+    root.display_list.push_back(background);
+    LayerNodePtr child(new LayerNode(), LayerNodeDeleter{});
+    child->type = LayerType::Composited;
+    child->transform.translate_x = 7.0F;
+    child->transform.translate_y = 3.0F;
+    child->opacity = 0.5F;
+    DisplayCommand foreground;
+    foreground.type = DisplayCommandType::FillRect;
+    foreground.rect = {1, 2, 4, 5};
+    foreground.color = {20, 30, 40, 200};
+    child->display_list.push_back(foreground);
+    root.children.push_back(std::move(child));
+
+    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 172, 320}, {{7, {1, 1, 2, 2}, true}});
+    assert(frame.display_list.size() == 2);
+    assert(frame.display_list[1].rect.x == 8);
+    assert(frame.display_list[1].rect.y == 5);
+    assert(frame.display_list[1].color.a == 100);
+    assert(frame.input_targets[0].target_key == 7);
+}
+
 } // namespace
 
 int script_task_frame_codec_tests_main() {
     frame_round_trip_preserves_render_values_and_target_order();
     frame_codec_rejects_budget_and_wire_integrity_failures();
     sealed_lease_carries_only_serialized_frame_bytes();
+    worker_frame_producer_flattens_private_layer_values_before_publish();
     std::cout << "script task frame codec tests passed\n";
     return 0;
 }

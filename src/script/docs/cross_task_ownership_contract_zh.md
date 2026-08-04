@@ -47,8 +47,9 @@ JerryScript wrapper。worker 在处理输入、timer 或 accepted completion 后
 
 - header：协议版本、`ScriptAppSession`、递增 `frame_sequence`、viewport、payload bytes；
 - paint commands：只含 POD geometry/color/opacity/clip/transform、受限文本字节和资源 lease ID；
-- hit regions：`target_key`、bounds、input flags 和 z-order；`target_key` 是 worker 私有 DOM
-  映射的数值键，不是地址；
+- 可选 hit regions：`target_key`、bounds、input flags 和 z-order；`target_key` 是 worker 私有 DOM
+  映射的数值键，不是地址。首版以 raw normalized input 为权威路径，由 worker 用私有 DOM/layer tree
+  命中；UI task 只可将已接受的 target region 用作加速提示；
 - resource refs：只含 supervisor 分配的 app/session-scoped opaque ID，UI task 在接受帧前验证；
 - 完整 replacement 语义：新 frame 取代前一个已接受 frame；第一版不发送 DOM patch、裸
   display-list 指针或跨任务 layer diff。
@@ -127,6 +128,7 @@ native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTask
 序列化为固定 24-byte packet。该可选 target 不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker
 或把 AppFrame 绘制到屏幕。`script_task_frame_codec.*` 现可把受限 `DisplayList`、viewport 与按绘制顺序
 排列的不透明 input target key 编码为版本化 value frame；session 和 sequence 保留在外层 frame lease packet 中。
+`make_script_task_app_frame()` 会先在 worker 内部 flatten 私有 `LayerNode`，再复制该 value frame。
 
 bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer。规定的关闭顺序是：
 `ScriptTaskSupervisor::begin_teardown`、bridge 取消 pending job、host 终止 App、bridge 回收记录，
