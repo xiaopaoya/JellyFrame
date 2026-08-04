@@ -527,7 +527,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_completion(const 
     if (packet.kind != ScriptTaskPacketKind::ServiceCompletion || !accepts(packet.session)) {
         return ScriptTaskMailboxPostStatus::InvalidPacket;
     }
-    return worker_mailbox_.post(packet);
+    return input_mailbox_.post(packet);
 }
 
 bool ScriptTaskSupervisor::take_worker_packet(ScriptTaskPacket& output) {

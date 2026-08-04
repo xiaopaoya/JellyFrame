@@ -31,6 +31,10 @@ native-release intents and the `AppRuntimeHost` service bridge. Keeping this
 target off leaves its code and static storage out of an ordinary app-runtime
 build. See `../script/docs/cross_task_ownership_contract.md`.
 
+The same module's `script_task_frame_codec.*` serializes bounded `DisplayList`
+snapshots and paint-ordered opaque input target keys. The session and frame
+sequence remain in the surrounding sealed-frame lease packet.
+
 With that target enabled, `script_task_service_bridge.*` is the exclusive completion consumer while that
 script session is active. A port must use its ordered teardown: invalidate the
 supervisor session, cancel bridge requests, terminate the host app, then retire

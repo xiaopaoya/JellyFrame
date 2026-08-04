@@ -50,11 +50,13 @@ completion classification, deduplicated native-release intents, and a two-stage 
 teardown that does not create a task or VM. `script_task_service_bridge.*` maps those tokens to
 `AppRuntimeHost` jobs and serializes completion values into a fixed 24-byte packet. The optional target has no
 JerryScript, RTOS, DOM or renderer dependency; it does not start a worker or paint an `AppFrame`.
+`script_task_frame_codec.*` now encodes a bounded `DisplayList`, viewport and paint-ordered opaque input
+target keys into a versioned value frame; session and sequence remain in the surrounding frame lease.
 
 The bridge is the sole `AppRuntimeHost` completion consumer during a script session. Its required
 shutdown order is: `ScriptTaskSupervisor::begin_teardown`, bridge pending-job cancellation, host App
 termination, bridge record retirement, then `ScriptTaskSupervisor::complete_teardown`. This preserves
 late-completion handle release without sending stale data to the worker.
 
-The next slice is a worker-side serializable AppFrame encoder and input target-key resolver. Ports must
-not fill that gap with raw pointers.
+The next slice is a worker-side DOM/display-list producer and a UI-task frame consumer that uses this codec,
+then the port-specific RTOS adapter. Ports must not fill those gaps with raw pointers.

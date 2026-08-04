@@ -14,7 +14,7 @@ AppRuntimeHost make_host(std::size_t capacity = 4, std::size_t completions = 4) 
 }
 
 ScriptTaskSupervisor make_supervisor(std::size_t worker_slots = 4, std::size_t payload_bytes = 24) {
-    return ScriptTaskSupervisor({{2, 8}, {worker_slots, payload_bytes}, {2, 64, 128}, 4, 2});
+    return ScriptTaskSupervisor({{worker_slots, payload_bytes}, {2, 0}, {2, 64, 128}, 4, 2});
 }
 
 AppFrameScratch make_scratch() {
@@ -81,7 +81,7 @@ void bridge_delivers_completion_as_bounded_worker_value_packet() {
     assert(bridge.active_request_count() == 0);
 
     ScriptTaskPacket packet;
-    assert(supervisor.take_worker_packet(packet));
+    assert(supervisor.take_input(packet));
     assert(packet.kind == ScriptTaskPacketKind::ServiceCompletion);
     assert(packet.session == session);
     ScriptTaskServiceCompletion decoded;
@@ -141,7 +141,8 @@ void bridge_retries_after_worker_mailbox_backpressure() {
     ScriptTaskSupervisor supervisor = make_supervisor(1);
     const ScriptAppSession session = supervisor.begin(app.id);
     ScriptTaskServiceBridge bridge(host, supervisor, {4});
-    assert(supervisor.publish_frame(session, {1}).accepted());
+    assert(supervisor.post_input({ScriptTaskPacketKind::Input, session, 1, 0, {1}}) ==
+           ScriptTaskMailboxPostStatus::Accepted);
     const ScriptTaskServiceSubmitResult submitted = bridge.submit(
         session, 17, HostServiceJobKind::SensorSample, 0, 0, 0, 3);
     assert(submitted.accepted());
@@ -154,10 +155,9 @@ void bridge_retries_after_worker_mailbox_backpressure() {
     assert(pumped.worker_mailbox_full);
     assert(pumped.delivered == 0);
     assert(bridge.active_request_count() == 1);
-    ScriptTaskPacket frame;
-    assert(supervisor.take_worker_packet(frame));
-    assert(frame.kind == ScriptTaskPacketKind::FrameReady);
-    assert(supervisor.release_frame(session, frame.lease_id) == ScriptTaskFrameLeaseStatus::Accepted);
+    ScriptTaskPacket input;
+    assert(supervisor.take_input(input));
+    assert(input.kind == ScriptTaskPacketKind::Input);
 
     pumped = bridge.pump(scratch);
     assert(pumped.delivered == 1);

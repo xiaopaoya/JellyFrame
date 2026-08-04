@@ -325,12 +325,12 @@ public:
     bool take_input(ScriptTaskPacket& output);
     ScriptTaskFramePublishResult publish_frame(const ScriptAppSession& session,
                                                const std::vector<std::uint8_t>& payload);
-    // Supervisor-only completion path. Service bridges may post a bounded
-    // value packet to the worker, but cannot inject arbitrary packet kinds.
+    // Supervisor-only worker-inbox path. Service bridges may post a bounded
+    // value packet alongside input, but cannot inject arbitrary packet kinds.
     ScriptTaskMailboxPostStatus post_service_completion(const ScriptTaskPacket& packet);
     bool take_worker_packet(ScriptTaskPacket& output);
-    std::size_t worker_mailbox_max_payload_bytes() const {
-        return worker_mailbox_.max_payload_bytes();
+    std::size_t worker_inbox_max_payload_bytes() const {
+        return input_mailbox_.max_payload_bytes();
     }
     ScriptTaskFrameLeaseStatus copy_frame(const ScriptAppSession& session,
                                           std::uint32_t lease_id,

@@ -125,12 +125,13 @@ session generation/epoch 校验、固定槽
 native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTaskSupervisor` teardown。
 `script_task_service_bridge.*` 将这些 token 映射到 `AppRuntimeHost` job，并把 completion value
 序列化为固定 24-byte packet。该可选 target 不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker
-或把 AppFrame 绘制到屏幕。
+或把 AppFrame 绘制到屏幕。`script_task_frame_codec.*` 现可把受限 `DisplayList`、viewport 与按绘制顺序
+排列的不透明 input target key 编码为版本化 value frame；session 和 sequence 保留在外层 frame lease packet 中。
 
 bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer。规定的关闭顺序是：
 `ScriptTaskSupervisor::begin_teardown`、bridge 取消 pending job、host 终止 App、bridge 回收记录，
 最后 `ScriptTaskSupervisor::complete_teardown`。该顺序既不会把 stale value 投给 worker，也不会
 遗漏 late completion 的 handle release。
 
-下一片是 worker 侧可序列化 AppFrame encoder 与 input target-key resolver。在它们落地前，port
-不得自行用裸指针填补协议空缺。
+下一片是 worker 侧 DOM/display-list producer 和 UI task frame consumer，并在其后接入 port 专属 RTOS
+adapter。在这些部分落地前，port 不得自行用裸指针填补协议空缺。

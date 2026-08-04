@@ -29,7 +29,7 @@ bool decode_script_task_service_completion(const std::vector<std::uint8_t>& inpu
 
 struct ScriptTaskServiceBridgeOptions {
     // Includes requests waiting for a host completion and completions waiting
-    // for worker-mailbox capacity. Must not exceed supervisor tombstone budget.
+    // for worker-inbox capacity. Must not exceed supervisor tombstone budget.
     std::size_t max_requests = 0;
 };
 
@@ -89,7 +89,7 @@ public:
                                          std::uint32_t client_token = 0);
     bool cancel(const ScriptTaskServiceToken& token);
 
-    // Pumps AppRuntimeHost completions into the worker mailbox. Scratch must
+    // Pumps AppRuntimeHost completions into the worker inbox. Scratch must
     // be reserved by the caller for the host capability budget and is reused.
     ScriptTaskServiceBridgePumpResult pump(AppFrameScratch& scratch);
 

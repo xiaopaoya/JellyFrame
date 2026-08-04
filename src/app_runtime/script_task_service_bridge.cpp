@@ -111,7 +111,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
         result.status = ScriptTaskServiceSubmitStatus::InvalidToken;
         return result;
     }
-    if (supervisor_.worker_mailbox_max_payload_bytes() < kCompletionPacketSize) {
+    if (supervisor_.worker_inbox_max_payload_bytes() < kCompletionPacketSize) {
         result.status = ScriptTaskServiceSubmitStatus::PacketBudgetExceeded;
         return result;
     }
@@ -248,7 +248,7 @@ bool ScriptTaskServiceBridge::deliver_ready_record(std::size_t index,
         return true;
     }
     // Keep the record and restore its ledger entry, preserving cancellation
-    // semantics until worker-mailbox capacity becomes available.
+    // semantics until worker-inbox capacity becomes available.
     supervisor_.track_service(record.token);
     if (posted == ScriptTaskMailboxPostStatus::Full) {
         result.worker_mailbox_full = true;
