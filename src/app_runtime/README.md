@@ -43,8 +43,9 @@ those values against its own DOM and layer tree.
 
 `script_task_service_request_codec.*` defines a separate, fixed 20-byte
 worker-to-supervisor request packet. The supervisor alone takes that mailbox
-and calls `ScriptTaskServiceBridge::submit_packet()`; frame consumers never
-compete with service consumers for outbound worker traffic.
+through `ScriptTaskServiceBridge::pump_service_requests()`; frame consumers
+never compete with service consumers for outbound worker traffic. The result
+has per-rejection counters suitable for supervisor diagnostics.
 
 `script_task_worker_inbox.*` is the worker-local receiver for normalized input
 and decoded service completions. Its completion sink can bind a private realm,

@@ -103,18 +103,17 @@ void bridge_submits_dedicated_worker_service_packets() {
     const ScriptTaskServiceRequest request{HostServiceJobKind::NetworkFetch, 72, 73, 0, 2, 400};
     assert(post_script_task_service_request(supervisor, session, 9, request, {20}).accepted());
 
-    ScriptTaskPacket packet;
-    assert(supervisor.take_service_request(packet));
-    const ScriptTaskServiceSubmitResult submitted = bridge.submit_packet(packet);
-    assert(submitted.accepted());
-    assert(submitted.token.session == session);
-    assert(submitted.token.request_id == request.request_id);
+    const ScriptTaskServiceRequestPumpResult pumped = bridge.pump_service_requests();
+    assert(pumped.received == 1);
+    assert(pumped.accepted == 1);
+    assert(pumped.invalid_packets == 0);
     HostServiceRequest host_request;
     assert(host.pop_worker_request(host_request));
     assert(host_request.kind == request.kind);
     assert(host_request.client_token == request.client_token);
     assert(host_request.timeout_ms == request.timeout_ms);
     assert(host_request.priority == request.priority);
+    assert(bridge.active_request_count() == 1);
 }
 
 void bridge_rejects_non_service_or_malformed_packets_without_host_access() {
@@ -128,6 +127,31 @@ void bridge_rejects_non_service_or_malformed_packets_without_host_access() {
     assert(bridge.submit_packet({ScriptTaskPacketKind::ServiceRequest, session, 1, 0, {1}}).status ==
            ScriptTaskServiceSubmitStatus::InvalidPacket);
     assert(host.requests().empty());
+}
+
+void bridge_request_pump_reports_host_and_wire_rejections() {
+    AppRuntimeHost host = make_host(0);
+    const AppInstance app = host.launch("org.example.script.request-rejections", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    ScriptTaskServiceBridge bridge(host, supervisor, {4});
+    assert(post_script_task_service_request(
+               supervisor,
+               session,
+               1,
+               {HostServiceJobKind::ComputeJob, 19, 20, 0, 0, 0},
+               {20})
+               .accepted());
+    assert(supervisor.post_service_request({ScriptTaskPacketKind::ServiceRequest, session, 2, 0, {1}}) ==
+           ScriptTaskMailboxPostStatus::Accepted);
+
+    const ScriptTaskServiceRequestPumpResult pumped = bridge.pump_service_requests();
+    assert(pumped.received == 2);
+    assert(pumped.host_rejected == 1);
+    assert(pumped.invalid_packets == 1);
+    assert(pumped.accepted == 0);
+    assert(host.requests().empty());
+    assert(bridge.active_request_count() == 0);
 }
 
 void bridge_cancels_pending_jobs_without_leaving_tombstones() {
@@ -251,6 +275,7 @@ int script_task_service_bridge_tests_main() {
     bridge_delivers_completion_as_bounded_worker_value_packet();
     bridge_submits_dedicated_worker_service_packets();
     bridge_rejects_non_service_or_malformed_packets_without_host_access();
+    bridge_request_pump_reports_host_and_wire_rejections();
     bridge_cancels_pending_jobs_without_leaving_tombstones();
     bridge_releases_cancelled_late_completion_handles();
     bridge_retries_after_worker_mailbox_backpressure();

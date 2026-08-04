@@ -180,6 +180,41 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit_packet(const Scrip
                   request.client_token);
 }
 
+ScriptTaskServiceRequestPumpResult ScriptTaskServiceBridge::pump_service_requests() {
+    ScriptTaskServiceRequestPumpResult result;
+    ScriptTaskPacket packet;
+    while (supervisor_.take_service_request(packet)) {
+        ++result.received;
+        switch (submit_packet(packet).status) {
+        case ScriptTaskServiceSubmitStatus::Accepted:
+            ++result.accepted;
+            break;
+        case ScriptTaskServiceSubmitStatus::InvalidPacket:
+            ++result.invalid_packets;
+            break;
+        case ScriptTaskServiceSubmitStatus::InvalidSession:
+            ++result.invalid_sessions;
+            break;
+        case ScriptTaskServiceSubmitStatus::InvalidToken:
+            ++result.invalid_tokens;
+            break;
+        case ScriptTaskServiceSubmitStatus::Duplicate:
+            ++result.duplicates;
+            break;
+        case ScriptTaskServiceSubmitStatus::CapacityExceeded:
+            ++result.capacity_exceeded;
+            break;
+        case ScriptTaskServiceSubmitStatus::PacketBudgetExceeded:
+            ++result.packet_budget_exceeded;
+            break;
+        case ScriptTaskServiceSubmitStatus::HostRejected:
+            ++result.host_rejected;
+            break;
+        }
+    }
+    return result;
+}
+
 void ScriptTaskServiceBridge::erase_record(std::size_t index) {
     records_[index] = records_.back();
     records_.pop_back();

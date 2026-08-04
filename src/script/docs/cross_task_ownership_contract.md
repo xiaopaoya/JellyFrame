@@ -60,6 +60,8 @@ target keys into a versioned value frame; session and sequence remain in the sur
 `script_task_input_dispatch.*` consumes those values only through the worker-private `InputController`.
 `script_task_service_request_codec.*` encodes a fixed 20-byte typed request;
 the supervisor decodes it before `ScriptTaskServiceBridge::submit_packet()` touches the host.
+`ScriptTaskServiceBridge::pump_service_requests()` is the only mailbox drain;
+it reports per-rejection counters without consuming frames or worker inbox data.
 `script_task_worker_inbox.*` is the worker-local receiver for input and
 completion values; a private-realm sink never receives a host or UI pointer.
 

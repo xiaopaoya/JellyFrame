@@ -134,6 +134,8 @@ native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTask
 `script_task_input_dispatch.*` 只通过 worker 私有 `InputController` 消费这些 value。
 `script_task_service_request_codec.*` 将 typed request 编码为固定 20-byte value，supervisor 在
 `ScriptTaskServiceBridge::submit_packet()` 接触 host 前完成解码和校验。
+`ScriptTaskServiceBridge::pump_service_requests()` 是唯一的 request mailbox drain；它会给出各类
+拒绝计数，且不会消费 frame 或 worker inbox 数据。
 `script_task_worker_inbox.*` 是 worker 内部的 input/completion value 接收器；绑定私有 realm 的
 sink 不会拿到 host 或 UI 指针。
 
