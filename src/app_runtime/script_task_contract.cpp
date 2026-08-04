@@ -467,6 +467,7 @@ ScriptTaskSupervisor::ScriptTaskSupervisor(ScriptTaskSupervisorOptions options)
     : input_mailbox_(options.input_mailbox),
       worker_mailbox_(options.worker_mailbox),
       frame_leases_(options.frame_leases),
+      service_payload_leases_(options.service_payload_leases),
       services_(options.max_service_tombstones),
       release_intents_(options.max_native_release_intents),
       service_request_mailbox_(options.service_request_mailbox) {}
@@ -546,6 +547,29 @@ ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::release_frame(const ScriptAppSe
     return frame_leases_.release(session, lease_id);
 }
 
+ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::publish_service_payload(
+    const ScriptAppSession& session,
+    const std::vector<std::uint8_t>& payload,
+    std::uint32_t& lease_id) {
+    if (!accepts(session)) {
+        return ScriptTaskServicePayloadLeaseStatus::InvalidSession;
+    }
+    return service_payload_leases_.publish(session, payload, lease_id);
+}
+
+ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::copy_service_payload(
+    const ScriptAppSession& session,
+    std::uint32_t lease_id,
+    std::vector<std::uint8_t>& output) const {
+    return service_payload_leases_.copy_sealed(session, lease_id, output);
+}
+
+ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::release_service_payload(
+    const ScriptAppSession& session,
+    std::uint32_t lease_id) {
+    return service_payload_leases_.release(session, lease_id);
+}
+
 ScriptTaskServiceTrackStatus ScriptTaskSupervisor::track_service(const ScriptTaskServiceToken& token) {
     if (!accepts(token.session)) {
         return ScriptTaskServiceTrackStatus::InvalidToken;
@@ -608,6 +632,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::complete_teardown(const ScriptApp
         return result;
     }
     result.released_frame_leases = frame_leases_.release_session(retired_session);
+    result.released_service_payload_leases = service_payload_leases_.release_session(retired_session);
     result.discarded_release_intents = release_intents_.discard_session(retired_session);
     result.retired_service_tombstones = services_.clear_session(retired_session);
     return result;

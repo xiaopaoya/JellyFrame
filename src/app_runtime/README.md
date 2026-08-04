@@ -50,6 +50,11 @@ Host rejection is also queued as a terminal value completion, with normal
 worker-inbox backpressure handling, so worker code does not silently wait for
 a request the host refused.
 
+The supervisor also owns a separate sealed service-payload lease registry.
+Its session and byte limits are independent from AppFrame leases. It is the
+only allowed destination for a future supervisor-side service gateway to copy
+host result bytes; an opaque host handle is not worker-readable payload data.
+
 `script_task_worker_inbox.*` is the worker-local receiver for normalized input
 and decoded service completions. Its completion sink can bind a private realm,
 but it never receives a host, supervisor, DOM or renderer pointer.

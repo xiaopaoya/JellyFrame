@@ -19,6 +19,10 @@ release, worker-inbox backpressure and dedicated worker-to-supervisor service
 request submission, supervisor rejection counters and terminal host-rejection
 completion delivery.
 
+`script_task_contract_tests.cpp` additionally verifies independent service
+payload lease budgets and teardown release, before a service gateway binds any
+host-specific response adapter.
+
 `script_task_frame_codec_tests.cpp` verifies bounded AppFrame value encoding,
 malformed-packet rejection, sealed frame leases and paint-ordered target-key
 resolution.

@@ -80,6 +80,25 @@ void sealed_frame_leases_are_session_scoped_and_reusable() {
     assert(leases.statistics().released_on_teardown == 1);
 }
 
+void service_payload_leases_have_an_independent_budget_and_teardown() {
+    ScriptTaskSupervisor supervisor({{1, 8}, {1, 0}, {1, 8, 8}, 0, 0, {1, 8}, {2, 6, 8}});
+    const ScriptAppSession active = supervisor.begin(11);
+    std::uint32_t payload_lease = 0;
+    assert(supervisor.publish_service_payload(active, {1, 2, 3, 4}, payload_lease) ==
+           ScriptTaskServicePayloadLeaseStatus::Accepted);
+    std::vector<std::uint8_t> copied;
+    assert(supervisor.copy_service_payload(active, payload_lease, copied) ==
+           ScriptTaskServicePayloadLeaseStatus::Accepted);
+    assert(copied == std::vector<std::uint8_t>({1, 2, 3, 4}));
+    assert(supervisor.publish_frame(active, {1, 2, 3, 4}).accepted());
+    assert(supervisor.publish_service_payload(active, {1, 2, 3, 4, 5}, payload_lease) ==
+           ScriptTaskServicePayloadLeaseStatus::ByteBudgetExceeded);
+    assert(supervisor.begin_teardown(active).session == active);
+    const ScriptTaskTeardownResult completed = supervisor.complete_teardown(active);
+    assert(completed.released_frame_leases == 1);
+    assert(completed.released_service_payload_leases == 1);
+}
+
 void service_tombstones_reject_cancelled_and_stale_completions() {
     ScriptTaskServiceLedger ledger(2);
     const ScriptAppSession active = session(6, 4, 5);
@@ -162,6 +181,7 @@ int script_task_contract_tests_main() {
     session_generation_rejects_stale_packets();
     mailbox_copies_values_and_discards_stale_packets();
     sealed_frame_leases_are_session_scoped_and_reusable();
+    service_payload_leases_have_an_independent_budget_and_teardown();
     service_tombstones_reject_cancelled_and_stale_completions();
     native_release_intents_are_value_only_and_deduplicated();
     supervisor_requires_ordered_value_only_teardown();

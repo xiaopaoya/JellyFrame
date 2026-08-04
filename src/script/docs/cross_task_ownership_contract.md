@@ -64,6 +64,9 @@ the supervisor decodes it before `ScriptTaskServiceBridge::submit_packet()` touc
 it reports per-rejection counters without consuming frames or worker inbox data.
 An accepted wire request that the host rejects is returned through the normal
 bounded completion path as a terminal value, rather than silently disappearing.
+The supervisor has a separate session-scoped sealed service-payload lease
+registry. A future gateway must copy result bytes into that registry before
+worker delivery; opaque host handles are never worker-readable data.
 `script_task_worker_inbox.*` is the worker-local receiver for input and
 completion values; a private-realm sink never receives a host or UI pointer.
 

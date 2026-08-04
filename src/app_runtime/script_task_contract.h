@@ -143,6 +143,14 @@ struct ScriptTaskFrameLeaseStatistics {
     std::size_t rejected_session = 0;
 };
 
+// Service payloads use the same sealed-byte invariants as AppFrames, but a
+// separate registry keeps UI-frame pressure from consuming a service result's
+// byte budget. The aliases make that shared implementation explicit without
+// exposing it as a UI frame in the public service contract.
+using ScriptTaskServicePayloadLeaseOptions = ScriptTaskFrameLeaseOptions;
+using ScriptTaskServicePayloadLeaseStatus = ScriptTaskFrameLeaseStatus;
+using ScriptTaskServicePayloadLeaseStatistics = ScriptTaskFrameLeaseStatistics;
+
 // Supervisor-owned sealed frame storage. Worker and UI tasks exchange only the
 // returned token; payload bytes are copied in/out and never expose a slot pointer.
 class ScriptTaskFrameLeaseRegistry {
@@ -287,6 +295,7 @@ struct ScriptTaskSupervisorOptions {
     std::size_t max_service_tombstones = 0;
     std::size_t max_native_release_intents = 0;
     ScriptTaskMailboxOptions service_request_mailbox;
+    ScriptTaskServicePayloadLeaseOptions service_payload_leases;
 };
 
 struct ScriptTaskFramePublishResult {
@@ -305,6 +314,7 @@ struct ScriptTaskTeardownResult {
     std::size_t discarded_input_packets = 0;
     std::size_t discarded_worker_packets = 0;
     std::size_t discarded_service_request_packets = 0;
+    std::size_t released_service_payload_leases = 0;
     std::size_t cancelled_service_requests = 0;
     std::size_t released_frame_leases = 0;
     std::size_t discarded_release_intents = 0;
@@ -339,6 +349,17 @@ public:
                                           std::vector<std::uint8_t>& output) const;
     ScriptTaskFrameLeaseStatus release_frame(const ScriptAppSession& session, std::uint32_t lease_id);
 
+    // A distinct sealed registry for service-result bytes. Worker code may
+    // copy a matching value and release it, but never maps host storage.
+    ScriptTaskServicePayloadLeaseStatus publish_service_payload(const ScriptAppSession& session,
+                                                                 const std::vector<std::uint8_t>& payload,
+                                                                 std::uint32_t& lease_id);
+    ScriptTaskServicePayloadLeaseStatus copy_service_payload(const ScriptAppSession& session,
+                                                              std::uint32_t lease_id,
+                                                              std::vector<std::uint8_t>& output) const;
+    ScriptTaskServicePayloadLeaseStatus release_service_payload(const ScriptAppSession& session,
+                                                                 std::uint32_t lease_id);
+
     ScriptTaskServiceTrackStatus track_service(const ScriptTaskServiceToken& token);
     ScriptTaskMailboxPostStatus post_service_request(const ScriptTaskPacket& packet);
     bool take_service_request(ScriptTaskPacket& output);
@@ -362,6 +383,7 @@ private:
     ScriptTaskMailbox worker_mailbox_;
     ScriptTaskMailbox service_request_mailbox_;
     ScriptTaskFrameLeaseRegistry frame_leases_;
+    ScriptTaskFrameLeaseRegistry service_payload_leases_;
     ScriptTaskServiceLedger services_;
     ScriptTaskReleaseIntentMailbox release_intents_;
     std::uint32_t next_frame_sequence_ = 1;
