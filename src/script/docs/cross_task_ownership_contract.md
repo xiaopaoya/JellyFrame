@@ -16,6 +16,8 @@ No packet, queue, timer, callback, handle payload or fatal record may carry raw 
 display pointers, JerryScript values or wrappers, framebuffer/panel/DMA/GPIO/NVS/file handles, or
 task-local container/arena addresses. Cross-task data is a bounded value copy or a supervisor-owned
 opaque lease ID checked against the full session.
+The supervisor serializes session transitions with mailbox admission and returns session snapshots by
+value, so teardown cannot race a worker against mutable generation storage.
 
 A worker publishes a sealed, immutable replacement `AppFrame`: version/session/sequence/viewport,
 POD paint commands, bounded text bytes, validated resource lease IDs and optional hit regions with numeric

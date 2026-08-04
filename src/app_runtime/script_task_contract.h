@@ -331,7 +331,7 @@ public:
 
     ScriptAppSession begin(std::uint32_t app_instance_id);
     bool accepts(const ScriptAppSession& session) const;
-    const ScriptAppSession& current() const { return sessions_.current(); }
+    ScriptAppSession current() const;
 
     ScriptTaskMailboxPostStatus post_input(const ScriptTaskPacket& packet);
     bool take_input(ScriptTaskPacket& output);
@@ -378,6 +378,7 @@ public:
 private:
     static std::uint32_t next_nonzero(std::uint32_t value);
 
+    mutable std::mutex state_mutex_;
     ScriptAppSessionController sessions_;
     ScriptTaskMailbox input_mailbox_;
     ScriptTaskMailbox worker_mailbox_;

@@ -478,6 +478,7 @@ std::uint32_t ScriptTaskSupervisor::next_nonzero(std::uint32_t value) {
 }
 
 ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     if (sessions_.current().valid()) {
         return {};
     }
@@ -486,24 +487,33 @@ ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id) {
 }
 
 bool ScriptTaskSupervisor::accepts(const ScriptAppSession& session) const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return sessions_.accepts(session);
 }
 
+ScriptAppSession ScriptTaskSupervisor::current() const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return sessions_.current();
+}
+
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_input(const ScriptTaskPacket& packet) {
-    if (packet.kind != ScriptTaskPacketKind::Input || !accepts(packet.session)) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (packet.kind != ScriptTaskPacketKind::Input || !sessions_.accepts(packet.session)) {
         return ScriptTaskMailboxPostStatus::InvalidPacket;
     }
     return input_mailbox_.post(packet);
 }
 
 bool ScriptTaskSupervisor::take_input(ScriptTaskPacket& output) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return input_mailbox_.pop_for(sessions_.current(), output);
 }
 
 ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptAppSession& session,
-                                                                  const std::vector<std::uint8_t>& payload) {
+    const std::vector<std::uint8_t>& payload) {
     ScriptTaskFramePublishResult result;
-    if (!accepts(session)) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!sessions_.accepts(session)) {
         return result;
     }
     result.lease_status = frame_leases_.publish(session, payload, result.lease_id);
@@ -526,24 +536,31 @@ ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptApp
 }
 
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_completion(const ScriptTaskPacket& packet) {
-    if (packet.kind != ScriptTaskPacketKind::ServiceCompletion || !accepts(packet.session)) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (packet.kind != ScriptTaskPacketKind::ServiceCompletion || !sessions_.accepts(packet.session)) {
         return ScriptTaskMailboxPostStatus::InvalidPacket;
     }
     return input_mailbox_.post(packet);
 }
 
 bool ScriptTaskSupervisor::take_worker_packet(ScriptTaskPacket& output) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return worker_mailbox_.pop_for(sessions_.current(), output);
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::copy_frame(const ScriptAppSession& session,
                                                              std::uint32_t lease_id,
                                                              std::vector<std::uint8_t>& output) const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!sessions_.accepts(session)) {
+        return ScriptTaskFrameLeaseStatus::InvalidSession;
+    }
     return frame_leases_.copy_sealed(session, lease_id, output);
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::release_frame(const ScriptAppSession& session,
                                                                 std::uint32_t lease_id) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return frame_leases_.release(session, lease_id);
 }
 
@@ -551,7 +568,8 @@ ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::publish_service_payloa
     const ScriptAppSession& session,
     const std::vector<std::uint8_t>& payload,
     std::uint32_t& lease_id) {
-    if (!accepts(session)) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!sessions_.accepts(session)) {
         return ScriptTaskServicePayloadLeaseStatus::InvalidSession;
     }
     return service_payload_leases_.publish(session, payload, lease_id);
@@ -561,58 +579,72 @@ ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::copy_service_payload(
     const ScriptAppSession& session,
     std::uint32_t lease_id,
     std::vector<std::uint8_t>& output) const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!sessions_.accepts(session)) {
+        return ScriptTaskServicePayloadLeaseStatus::InvalidSession;
+    }
     return service_payload_leases_.copy_sealed(session, lease_id, output);
 }
 
 ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::release_service_payload(
     const ScriptAppSession& session,
     std::uint32_t lease_id) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return service_payload_leases_.release(session, lease_id);
 }
 
 ScriptTaskServiceTrackStatus ScriptTaskSupervisor::track_service(const ScriptTaskServiceToken& token) {
-    if (!accepts(token.session)) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!sessions_.accepts(token.session)) {
         return ScriptTaskServiceTrackStatus::InvalidToken;
     }
     return services_.track(token);
 }
 
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_request(const ScriptTaskPacket& packet) {
-    if (packet.kind != ScriptTaskPacketKind::ServiceRequest || !accepts(packet.session)) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (packet.kind != ScriptTaskPacketKind::ServiceRequest || !sessions_.accepts(packet.session)) {
         return ScriptTaskMailboxPostStatus::InvalidPacket;
     }
     return service_request_mailbox_.post(packet);
 }
 
 bool ScriptTaskSupervisor::take_service_request(ScriptTaskPacket& output) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return service_request_mailbox_.pop_for(sessions_.current(), output);
 }
 
 bool ScriptTaskSupervisor::cancel_service(const ScriptTaskServiceToken& token) {
-    return accepts(token.session) && services_.cancel(token);
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return sessions_.accepts(token.session) && services_.cancel(token);
 }
 
 bool ScriptTaskSupervisor::retire_service(const ScriptTaskServiceToken& token) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return services_.retire(token);
 }
 
 ScriptTaskServiceCompletionDisposition ScriptTaskSupervisor::consume_service_completion(
     const ScriptTaskServiceToken& token) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return services_.consume_completion(sessions_.current(), token);
 }
 
 ScriptTaskReleaseIntentStatus ScriptTaskSupervisor::post_native_release_intent(
     const ScriptTaskNativeLeaseReleaseIntent& intent) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return release_intents_.post(intent);
 }
 
 bool ScriptTaskSupervisor::take_native_release_intent(ScriptTaskNativeLeaseReleaseIntent& output) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
     return release_intents_.pop(output);
 }
 
 ScriptTaskTeardownResult ScriptTaskSupervisor::begin_teardown(const ScriptAppSession& session) {
     ScriptTaskTeardownResult result;
     result.session = session;
+    std::lock_guard<std::mutex> lock(state_mutex_);
     if (!sessions_.invalidate(session)) {
         result.session = {};
         return result;
@@ -627,6 +659,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::begin_teardown(const ScriptAppSes
 ScriptTaskTeardownResult ScriptTaskSupervisor::complete_teardown(const ScriptAppSession& retired_session) {
     ScriptTaskTeardownResult result;
     result.session = retired_session;
+    std::lock_guard<std::mutex> lock(state_mutex_);
     if (!retired_session.valid() || sessions_.accepts(retired_session)) {
         result.session = {};
         return result;

@@ -38,6 +38,8 @@ app supervisor
 跨任务数据只能是固定宽度 scalar、长度受限的字节副本，或由 supervisor 持有并带 generation
 检查的不透明 lease ID。接收方必须在读取 payload 前验证完整 session；错误、过期或超预算包
 只会被丢弃并计数，绝不尝试解引用发送方状态。
+supervisor 会把 session transition 与 mailbox admission 放在同一短临界区，并按值返回 session snapshot；
+teardown 不会与 worker 并发读写同一份 mutable generation 状态。
 
 ## UI 帧交接
 

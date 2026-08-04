@@ -140,6 +140,8 @@ void supervisor_requires_ordered_value_only_teardown() {
     ScriptTaskSupervisor supervisor({{2, 8}, {1, 0}, {2, 8, 16}, 2, 2, {2, 8}});
     const ScriptAppSession active = supervisor.begin(30);
     assert(active.valid());
+    const ScriptAppSession current_snapshot = supervisor.current();
+    assert(current_snapshot == active);
     assert(supervisor.post_input({ScriptTaskPacketKind::Input, active, 1, 0, {9}}) ==
            ScriptTaskMailboxPostStatus::Accepted);
     const ScriptTaskFramePublishResult frame = supervisor.publish_frame(active, {1, 2, 3});
@@ -160,6 +162,9 @@ void supervisor_requires_ordered_value_only_teardown() {
     assert(first.discarded_service_request_packets == 1);
     assert(first.cancelled_service_requests == 1);
     assert(!supervisor.accepts(active));
+    std::vector<std::uint8_t> copied_frame;
+    assert(supervisor.copy_frame(active, frame.lease_id, copied_frame) ==
+           ScriptTaskFrameLeaseStatus::InvalidSession);
     assert(supervisor.post_input({ScriptTaskPacketKind::Input, active, 2, 0, {7}}) ==
            ScriptTaskMailboxPostStatus::InvalidPacket);
     assert(supervisor.consume_service_completion({active, 5, 6}) ==

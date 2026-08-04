@@ -31,6 +31,11 @@ native-release intents and the `AppRuntimeHost` service bridge. Keeping this
 target off leaves its code and static storage out of an ordinary app-runtime
 build. See `../script/docs/cross_task_ownership_contract.md`.
 
+The optional supervisor serializes session/generation transitions, frame
+sequence assignment and mailbox admission in short critical sections. It
+returns session values by copy so a worker or UI task cannot retain a mutable
+reference across teardown; no such lock exists in ordinary builds.
+
 The same module's `script_task_frame_codec.*` serializes bounded `DisplayList`
 snapshots and paint-ordered opaque input target keys. The session and frame
 sequence remain in the surrounding sealed-frame lease packet.
