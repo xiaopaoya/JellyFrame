@@ -1,0 +1,87 @@
+# 脚本 App 任务隔离接入指南
+
+> 最后更新：2026-08-04；适用版本：0.5.0-dev；状态：0.6 移植前置实现
+
+本指南约束 RTOS port 如何接入可选的 script-task runtime。它只描述平台无关接口的使用顺序；创建
+任务、CPU affinity、DMA、panel、网络 worker 和 watchdog 仍属于 `ports/`。
+
+## 编译门控
+
+仅当以下两个开关同时为 `ON` 时才能创建脚本 worker：
+
+```text
+JELLYFRAME_BUILD_SCRIPTING=ON
+JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON
+```
+
+此时链接 `jellyframe_script_task_runtime`。任一开关关闭时，不得为 script worker 保留 stack、mailbox、
+JerryScript heap 或 service bridge；普通 firmware 的行为与体积不应改变。
+
+## 所有权
+
+| Owner | 可持有 | 不可持有 |
+| --- | --- | --- |
+| supervisor task | `ScriptTaskSupervisor`、`AppRuntimeHost`、`ScriptTaskServiceBridge`、session、host handle table | `Node*`、JerryScript value、layer/display 指针、framebuffer/panel 指针 |
+| script worker | private DOM/realm/timer、`InputController`、`ScriptTaskAppFramePublisher`、`ScriptTaskServiceCompletionSink` | `AppRuntimeHost*`、service record、UI renderer、DMA/panel object |
+| UI task | accepted `ScriptTaskAppFrame` value、presentation renderer、framebuffer/panel、原始输入 | worker DOM/realm/wrapper、host service queue |
+
+所有 mailbox payload 都必须是值副本。frame 只能通过 session-scoped sealed lease ID 传递；service request
+必须走专用 `service_request_mailbox`；service completion 与 input 共用 worker inbox；frame 不得放入这两个
+service 通道。
+
+## 建议循环
+
+supervisor 每一帧或每个 scheduler tick：
+
+```cpp
+const auto submitted = bridge.pump_service_requests();
+// port-owned workers consume AppRuntimeHost request queue and push completions.
+const auto completed = bridge.pump(host_frame_scratch);
+```
+
+`submitted` 的 rejection counters 必须进入 app telemetry。host 拒绝一个已经接受到 wire mailbox 的请求时，
+bridge 会把终态 `ServiceCompletion` 放入 worker inbox；它不能被静默丢弃。
+
+script worker：
+
+```cpp
+take_and_dispatch_script_task_worker_packet(
+    supervisor, private_input_controller, private_completion_sink, input_limits);
+// after input, timer or completion mutates private DOM:
+publisher.publish(supervisor, session, make_script_task_app_frame(private_layers, viewport));
+```
+
+UI task：
+
+```cpp
+ScriptTaskAppFrame frame;
+if (take_script_task_app_frame(supervisor, session, frame_limits, frame) ==
+    ScriptTaskAppFrameTakeStatus::Accepted) {
+    // Render this copied DisplayList only in the UI task.
+}
+```
+
+`take_script_task_app_frame()` 总是在成功复制 sealed lease 后释放它，即使解码失败。UI task 不可缓存 lease
+ID、`DisplayCommand*` 或 worker 侧 target 地址。
+
+## 停止顺序
+
+发生退出、watchdog、脚本 fatal 或预算失败时严格执行：
+
+1. `ScriptTaskSupervisor::begin_teardown(session)`，关闭输入与新服务并丢弃未消费值包；
+2. `ScriptTaskServiceBridge::begin_teardown(session)`，取消仍排队的 host job，保留已 in-flight 的记录；
+3. 要求 script worker 在自己的 C-safe boundary 退出；不得在其他 task 析构 JerryScript 对象；
+4. 终止 host app 并完成 host handle 回收；
+5. `ScriptTaskServiceBridge::complete_teardown(session)`；
+6. `ScriptTaskSupervisor::complete_teardown(session)`，回收 frame lease 与 release intents；
+7. UI task 原子回到 launcher/recovery frame 后，才可复用 app/session 资源。
+
+## 当前证据与未完成项
+
+桌面 `jellyframe_script_task_runtime_tests` 已覆盖值协议、请求/完成/取消/拒绝、worker inbox 与
+`service completion -> worker -> sealed frame -> UI` 闭环。它不证明：真实 RTOS task 启动、JerryScript
+realm 生命周期、触控 ISR 到 UI 输入采样、真实 host service worker、panel present，或 fatal boundary。
+
+port 声称可运行真实脚本 App 前，仍必须按
+`cross_task_ownership_contract_zh.md` 的验收项完成实机 launch/fail/recover、touch-to-frame、completion
+cancel、late completion 和 wrapper teardown 测试。

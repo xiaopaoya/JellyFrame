@@ -35,5 +35,8 @@ request values, malformed/budget rejection and isolation from frame traffic.
 `script_task_worker_inbox_tests.cpp` verifies that the worker receives only
 decoded input/completion values and rejects malformed completion packets.
 
+`script_task_value_flow_tests.cpp` verifies the complete platform-neutral
+service request -> completion -> worker -> sealed frame -> UI value flow.
+
 CTest target: `jellyframe_app_runtime_tests`; the optional module uses
 `jellyframe_script_task_runtime_tests`.

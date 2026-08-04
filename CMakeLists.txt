@@ -922,6 +922,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 src/app_runtime/tests/script_task_service_request_codec_tests.cpp
                 src/app_runtime/tests/script_task_service_bridge_tests.cpp
                 src/app_runtime/tests/script_task_worker_inbox_tests.cpp
+                src/app_runtime/tests/script_task_value_flow_tests.cpp
             )
             foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES)
                 get_filename_component(test_name ${test_source} NAME_WE)
