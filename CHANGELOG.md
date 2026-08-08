@@ -15,6 +15,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   browser-compatibility promise is implied until its capability matrix entry,
   profile gate and regression coverage land together.
 
+### Changed
+
+- Opened the `0.6.0-dev` line with a declarative Render Core feature catalog.
+  CMake profiles and desktop feature checks now derive feature IDs and
+  dependency metadata from the same registry; the mandatory `core.document`
+  and `core.paint` source families remain build-compatible and unchanged at
+  runtime.
+
 ## 0.5.0 - 2026-08-09
 
 ### Changed

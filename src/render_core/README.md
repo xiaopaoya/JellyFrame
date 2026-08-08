@@ -62,6 +62,11 @@ family; the profile regression rejects gaps or overlaps in the mandatory split. 
 manifest contract. Ordinary App packages remain data/code at the declared
 runtime level; they do not load native Render Core modules.
 
+The feature catalog is declared in `cmake/render_core_feature_registry.csv`.
+Build configuration and desktop package/link-map tools consume the same IDs and
+dependency closure; adding a feature requires updating this catalog and its
+regression evidence before a profile can advertise it.
+
 The build-time slices are `JELLYFRAME_ENABLE_CANVAS2D`,
 `JELLYFRAME_ENABLE_MODERN_PAINT`, `JELLYFRAME_ENABLE_FLEX_GRID` and
 `JELLYFRAME_ENABLE_ADVANCED_FORMS`. When Canvas

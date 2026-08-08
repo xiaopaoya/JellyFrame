@@ -12,6 +12,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 - 启动外部开发者试用线：完善构建 profile/模块证据、打包与启动器工作流，并针对能力缺口做有边界的补全。任何新的浏览器兼容承诺都必须同时落入能力矩阵、profile gate 和回归测试。
 
+### 变更
+
+- 开启 `0.6.0-dev` 线并新增声明式 Render Core feature catalog。CMake profile 与桌面 feature 检查现在从同一份 registry 派生 ID 和依赖闭包；必需的 `core.document` 与 `core.paint` 源码族保持构建兼容，运行时路径不变。
+
 ## 0.5.0 - 2026-08-09
 
 ### 变更

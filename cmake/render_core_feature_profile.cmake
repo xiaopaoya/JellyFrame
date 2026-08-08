@@ -5,36 +5,27 @@
 set(JELLYFRAME_RENDER_CORE_ENGINE_ABI 1 CACHE STRING
     "Render Core public engine ABI version")
 
-set(_jellyframe_render_core_features
-    "core.document"
-    "core.paint"
-)
-if(JELLYFRAME_ENABLE_ADVANCED_FORMS)
-    list(APPEND _jellyframe_render_core_features "forms.advanced")
-endif()
-if(JELLYFRAME_ENABLE_FLEX_GRID)
-    list(APPEND _jellyframe_render_core_features "css.flex-grid")
-endif()
-if(JELLYFRAME_ENABLE_MODERN_PAINT)
-    list(APPEND _jellyframe_render_core_features "css.modern-paint")
-endif()
-if(JELLYFRAME_ENABLE_CANVAS2D)
-    list(APPEND _jellyframe_render_core_features "graphics.canvas2d")
-endif()
+include("${JELLYFRAME_SOURCE_ROOT}/cmake/render_core_feature_registry.cmake")
+jellyframe_render_core_enabled_features(_jellyframe_render_core_features)
 
+set(_jellyframe_render_core_disabled_profile_entries)
+foreach(_jellyframe_render_core_feature IN LISTS JELLYFRAME_RENDER_CORE_FEATURE_IDS)
+    jellyframe_render_core_feature_metadata("${_jellyframe_render_core_feature}" OPTION _jellyframe_render_core_option)
+    jellyframe_render_core_feature_metadata("${_jellyframe_render_core_feature}" SUFFIX _jellyframe_render_core_suffix)
+    jellyframe_render_core_feature_metadata("${_jellyframe_render_core_feature}" ORDER _jellyframe_render_core_order)
+    if(NOT _jellyframe_render_core_option STREQUAL "" AND NOT ${_jellyframe_render_core_option})
+        list(APPEND _jellyframe_render_core_disabled_profile_entries
+            "${_jellyframe_render_core_order}|${_jellyframe_render_core_suffix}")
+    endif()
+endforeach()
+list(SORT _jellyframe_render_core_disabled_profile_entries)
 set(_jellyframe_render_core_disabled_profile_families)
-if(NOT JELLYFRAME_ENABLE_FLEX_GRID)
-    list(APPEND _jellyframe_render_core_disabled_profile_families "no-flex-grid")
-endif()
-if(NOT JELLYFRAME_ENABLE_MODERN_PAINT)
-    list(APPEND _jellyframe_render_core_disabled_profile_families "no-modern-paint")
-endif()
-if(NOT JELLYFRAME_ENABLE_CANVAS2D)
-    list(APPEND _jellyframe_render_core_disabled_profile_families "no-canvas")
-endif()
-if(NOT JELLYFRAME_ENABLE_ADVANCED_FORMS)
-    list(APPEND _jellyframe_render_core_disabled_profile_families "no-forms-advanced")
-endif()
+foreach(_jellyframe_render_core_disabled_profile_entry IN LISTS _jellyframe_render_core_disabled_profile_entries)
+    string(REGEX REPLACE "^[0-9]+\\|" "" _jellyframe_render_core_disabled_profile_family
+        "${_jellyframe_render_core_disabled_profile_entry}")
+    list(APPEND _jellyframe_render_core_disabled_profile_families
+        "${_jellyframe_render_core_disabled_profile_family}")
+endforeach()
 if(NOT _jellyframe_render_core_disabled_profile_families)
     set(JELLYFRAME_RENDER_CORE_PROFILE_ID "render-core-default")
 elseif(NOT JELLYFRAME_ENABLE_FLEX_GRID AND NOT JELLYFRAME_ENABLE_MODERN_PAINT AND

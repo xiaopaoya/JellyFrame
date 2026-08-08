@@ -1,0 +1,7 @@
+# id|dependencies|cmake_option|disabled_profile_suffix|profile_order
+core.document|-|-|-|0
+core.paint|core.document|-|-|1
+forms.advanced|core.document|JELLYFRAME_ENABLE_ADVANCED_FORMS|no-forms-advanced|40
+css.flex-grid|core.document|JELLYFRAME_ENABLE_FLEX_GRID|no-flex-grid|10
+css.modern-paint|core.paint|JELLYFRAME_ENABLE_MODERN_PAINT|no-modern-paint|20
+graphics.canvas2d|core.paint|JELLYFRAME_ENABLE_CANVAS2D|no-canvas|30
