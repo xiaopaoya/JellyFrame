@@ -1,6 +1,6 @@
 # 引擎架构
 
-> 最后更新：2026-07-07；适用版本：0.5.0
+> 最后更新：2026-08-09；适用版本：0.6.0-dev
 
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
@@ -97,6 +97,9 @@ Style resolution 时，resolver 只收集相关 buckets，按 source order 排�
 - 不支持的现代 selectors 尽量在插入 CSSOM 前跳过。
 - Render object 保持紧凑的 block/inline/text 形态；layout 为常见 flex row
   和响应式 grid card 模式提供小型专用路径。
+- `css.flex-grid` profile family 现在拥有独立的 flex paint-order helper。
+  其余 flex/grid 布局算法仍留在 `layout.cpp`，因为它们调用共享的递归 layout、
+  geometry 和预算路径；只有在能用窄内部接口保持这些契约且不引入运行时间接层后，才继续拆分。
 - Render tree、layout tree 和 layer tree builder 都同时提供 heap 与 `MonotonicArena`
   分配路径；嵌入式 benchmark 使用 arena 路径以减少小对象堆抖动。
 - Layer tree 支持稀疏裁剪、opacity 边界、positioned stacking hints 和保守 compositing boundaries。
@@ -119,3 +122,5 @@ Style resolution 时，resolver 只收集相关 buckets，按 source order 排�
 - 面向重复 class pattern 的 computed-style sharing。
 - 更完整的 DOM ownership/arena 策略。
 - 面向无法保留所选 framebuffer 表示的目标设备的 tile 或 scanline presentation 路径。
+- 更进一步的 flex/grid 布局算法物理拆分。需要先完成接口和分配审计；当前的 paint-order
+  拆分是已接受的低风险边界。

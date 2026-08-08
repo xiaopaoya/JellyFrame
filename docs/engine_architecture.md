@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -116,6 +116,11 @@ source order, then runs selector matching and cascade comparison.
 - Unsupported modern selectors are skipped before CSSOM insertion when possible.
 - Render objects keep a compact block/inline/text shape; layout adds small
   dedicated paths for common flex rows and responsive grid-card patterns.
+- The `css.flex-grid` profile family now owns the independent flex paint-order
+  helper. The remaining flex/grid layout algorithms stay in `layout.cpp` because
+  they call the shared recursive layout, geometry and budget paths; extracting
+  them is deferred until a narrow internal interface can preserve those contracts
+  without adding runtime indirection.
 - Render, layout and layer tree builders expose heap and `MonotonicArena`
   allocation paths; embedded benchmarks use the arena path to reduce small heap
   churn.
@@ -147,3 +152,6 @@ matrix:
 - A broader DOM ownership/arena policy.
 - Tile or scanline presentation paths for targets that cannot keep the chosen
   framebuffer representation.
+- A further physical split of the flex/grid layout algorithms. It requires an
+  interface and allocation audit first; the current paint-order split is the
+  accepted low-risk boundary.
