@@ -1,6 +1,6 @@
 # Developer Capability Matrix
 
-> Last updated: 2026-08-03; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 
 This document is the practical contract for application authors using JellyFrame.

@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-09; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -19,6 +19,9 @@ for whether a document needs another pass after code changes.
 6. [html_living_standard_support_table.md](html_living_standard_support_table.md) or [csswg_support_table.md](csswg_support_table.md) if you need to search Web syntax support.
 7. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
 8. The module document for the area you want to use, port or inspect.
+
+For the exact external-trial admission gates and evidence rules, read
+[external_developer_trial_readiness.md](external_developer_trial_readiness.md).
 
 ## Technical Documents
 
@@ -98,6 +101,8 @@ for whether a document needs another pass after code changes.
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish
   control and motion design system.
 - [versioning.md](versioning.md): versioning and release discipline.
+- [external_developer_trial_readiness.md](external_developer_trial_readiness.md):
+  clean author workflow, admission gates and evidence rules for the 0.6 trial.
 
 ## File Naming
 

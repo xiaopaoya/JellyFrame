@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-08-09；适用版本：0.5.0
+> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -196,7 +196,8 @@ cmake --build build-script --config Release
 
 ## 版本
 
-- 当前版本：`0.5.0`，见 [VERSION](VERSION)。
+- 当前开发版本：`0.6.0-dev`，见 [VERSION](VERSION)。在后续版本改变公开
+  兼容契约前，app package 的文档化兼容基线仍为 `0.5.0`。
 - 变更记录：[CHANGELOG.md](CHANGELOG.md) 和 [CHANGELOG_zh.md](CHANGELOG_zh.md)。
 - 版本规则：[docs/versioning_zh.md](docs/versioning_zh.md)。
 

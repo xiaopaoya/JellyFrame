@@ -1,6 +1,6 @@
 # 脚本 App 任务隔离接入指南
 
-> 最后更新：2026-08-07；适用版本：0.5.0；状态：0.6 移植前置实现
+> 最后更新：2026-08-09；适用版本：0.6.0-dev；状态：P3-1 至 P3-4 实机验收已关闭
 
 本指南约束 RTOS port 如何接入可选的 script-task runtime。它只描述平台无关接口的使用顺序；创建
 任务、CPU affinity、DMA、panel、网络 worker 和 watchdog 仍属于 `ports/`。
@@ -97,13 +97,15 @@ ID、`DisplayCommand*` 或 worker 侧 target 地址。
 和 bridge teardown。重复调用不得产生多个 fatal packet，也不得把 fatal packet 放入 frame 或 service mailbox。
 初始化在任何 supervisor 入口之外失败时，port 必须显式调用 `publish_fatal()`；随后仍按本节的停止顺序处理。
 
-## 当前证据与未完成项
+## 当前证据与边界
 
-桌面 `jellyframe_script_task_runtime_tests` 已覆盖值协议、请求/完成/取消/拒绝、worker inbox 与
-`service completion -> worker -> sealed frame -> UI` 基础闭环；scripting 桌面测试另覆盖
-`ScriptTaskWorkerRuntime` 的输入、timer、节点销毁安全和 sealed frame 发布。它不证明：真实 RTOS task 启动、JerryScript
-realm 生命周期、触控 ISR 到 UI 输入采样、真实 host service worker、panel present，或 fatal boundary。
+桌面 `jellyframe_script_task_runtime_tests` 覆盖值协议、请求/完成/取消/拒绝、worker inbox 与
+`service completion -> worker -> sealed frame -> UI` 闭环；scripting 桌面测试覆盖
+`ScriptTaskWorkerRuntime` 的输入、timer、节点销毁安全和 sealed frame 发布。WS147 的 P3-1 至 P3-4
+实机报告已补齐 launch/fail/recover、touch-to-frame、completion cancel、late completion、wrapper
+teardown 和 mixed soak 证据，port 可以按本指南接入真实脚本 App。
 
-port 声称可运行真实脚本 App 前，仍必须按
-`cross_task_ownership_contract_zh.md` 的验收项完成实机 launch/fail/recover、touch-to-frame、completion
-cancel、late completion 和 wrapper teardown 测试。
+这些证据只关闭当前 P3 合同，不把同线程 `JerryScriptRuntime` 变成可跨 task 共享的对象，也不证明
+任意其他 SoC、panel、codec 或产品级脚本生态。新 port 仍必须复用 value-only packet、session generation、
+sealed lease 和 C-safe worker boundary；不得把 `Node*`、JerryScript value、layer/display 指针或 host
+handle 通过任务 mailbox 传递。

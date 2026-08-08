@@ -1,6 +1,6 @@
 # App Component Recipes
 
-> Last updated: 2026-07-22; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 These recipes are copyable starting points for small wearable apps. They use the
 documented JellyFrame subset and avoid browser-only behavior.

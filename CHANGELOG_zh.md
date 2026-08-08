@@ -15,6 +15,8 @@ JellyFrame Engine 的重要变更记录在这里。
 ### 变更
 
 - 开启 `0.6.0-dev` 线并新增声明式 Render Core feature catalog。CMake profile 与桌面 feature 检查现在从同一份 registry 派生 ID 和依赖闭包；必需的 `core.document` 与 `core.paint` 源码族保持构建兼容，运行时路径不变。
+- 新增双语《外部开发者试用准入清单》，明确干净环境作者流程、三个 target 的预检、package/registry 恢复门项，以及桌面证据与移植侧硬件证据的边界。
+- 关闭本轮试用审计发现的文档漂移：面向作者的公共入口现在标明 `0.6.0-dev`，同时保留 `0.5.0` 作为 package 兼容基线；P3 移植接入指南已记录 WS147 完成证据和剩余责任边界。
 
 ## 0.5.0 - 2026-08-09
 

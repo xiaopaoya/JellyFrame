@@ -1,6 +1,6 @@
 # App 作者手册
 
-> 最后更新：2026-07-22；适用版本：0.5.0
+> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 这是一份给 JellyFrame app 作者的短契约。JellyFrame 不是迷你浏览器，而是一个 Web 形状的嵌入式
 UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，JavaScript 负责有界本地交互，manifest
@@ -8,6 +8,9 @@ UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，Java
 
 如果按“任意网页”来写，会很快撞到限制。如果按“小型可穿戴 app + 明确 target + 明确预算”来写，
 工具链就能帮你做出可预测的 UI。
+
+干净环境试用门禁、打包、启动器和硬件证据边界见
+[external_developer_trial_readiness_zh.md](external_developer_trial_readiness_zh.md)。
 
 ## 从这里开始
 

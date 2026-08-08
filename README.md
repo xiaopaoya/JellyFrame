@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-08-09; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -220,7 +220,9 @@ Chinese documentation uses the `_zh` suffix, for example
 
 ## Versioning
 
-- Current version: `0.5.0` in [VERSION](VERSION).
+- Current development version: `0.6.0-dev` in [VERSION](VERSION). The
+  documented package compatibility baseline remains `0.5.0` until a later
+  breaking release changes it.
 - Changelog: [CHANGELOG.md](CHANGELOG.md) and
   [CHANGELOG_zh.md](CHANGELOG_zh.md).
 - Version rules: [docs/versioning.md](docs/versioning.md).

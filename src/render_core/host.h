@@ -75,8 +75,8 @@ struct HostBudgets {
     std::size_t max_script_execution_checks = 2048;
     std::size_t script_execution_check_interval = 16;
     std::size_t max_document_scripts = 64;
-    std::size_t max_resource_bytes = 512 * 1024;
-    std::size_t max_framebuffer_pixels = 480 * 480;
+    std::size_t max_resource_bytes = static_cast<std::size_t>(512U) * 1024U;
+    std::size_t max_framebuffer_pixels = static_cast<std::size_t>(480U) * 480U;
 };
 
 enum class HostPixelFormat {

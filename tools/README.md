@@ -1,6 +1,6 @@
 # Tools
 
-> Last updated: 2026-08-02; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Desktop developer tools for packaging, validation and editor integration.
 

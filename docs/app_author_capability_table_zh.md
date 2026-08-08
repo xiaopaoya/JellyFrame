@@ -1,6 +1,6 @@
 # App 作者能力速查表
 
-> 最后更新：2026-08-03；适用版本：0.5.0
+> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 这份表给 app 作者快速判断“能不能用”。完整边界仍以
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md) 为准。

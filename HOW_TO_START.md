@@ -1,6 +1,6 @@
 # How To Start With JellyFrame
 
-> Last updated: 2026-07-22; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This guide is for developers opening the repository for the first time. It
 explains what JellyFrame is, how the project is organized, how to build and run
