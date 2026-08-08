@@ -835,6 +835,18 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGI(tag, "Band System Shell UI task started");
     }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_FLEX_GRID_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_flex_grid_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start Flex/Grid acceptance task");
+    } else {
+        ESP_LOGI(tag, "Flex/Grid acceptance task started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_FORMS_ADVANCED_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_forms_advanced_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start forms.advanced acceptance task");
+    } else {
+        ESP_LOGI(tag, "forms.advanced acceptance task started");
+    }
 #elif CONFIG_JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK
     if (!jellyframe_esp32s3::start_gradient_fastpath_ui_task()) {
         ESP_LOGE(tag, "failed to start opaque linear-gradient fixture");
@@ -876,6 +888,30 @@ extern "C" void app_main(void) {
         ESP_LOGE(tag, "failed to start native AppRuntime recovery preflight");
     } else {
         ESP_LOGI(tag, "native AppRuntime recovery preflight started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_PROTOCOL_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_script_task_value_protocol_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start script-task value protocol preflight");
+    } else {
+        ESP_LOGI(tag, "script-task value protocol preflight started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_script_app_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start real JerryScript App acceptance fixture");
+    } else {
+        ESP_LOGI(tag, "real JerryScript App acceptance fixture started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_script_service_echo_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start real JerryScript service echo acceptance fixture");
+    } else {
+        ESP_LOGI(tag, "real JerryScript service echo acceptance fixture started");
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_script_fault_recovery_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start real JerryScript fault recovery acceptance fixture");
+    } else {
+        ESP_LOGI(tag, "real JerryScript fault recovery acceptance fixture started");
     }
 #else
     run_benchmark();

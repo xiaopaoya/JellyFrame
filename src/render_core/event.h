@@ -39,6 +39,7 @@ public:
     bool bubbles() const;
     bool cancelable() const;
     bool default_prevented() const;
+    bool target_destroyed() const;
     bool propagation_stopped() const;
     bool immediate_propagation_stopped() const;
 
@@ -53,6 +54,7 @@ public:
 private:
     friend class EventTarget;
     friend bool dispatch_event(const Node& target, Event& event);
+    friend void event_dispatch_node_destroyed(const Node& node);
 
     std::string type_;
     bool bubbles_ = true;
@@ -60,6 +62,7 @@ private:
     bool default_prevented_ = false;
     bool propagation_stopped_ = false;
     bool immediate_propagation_stopped_ = false;
+    bool target_destroyed_ = false;
     const Node* target_ = nullptr;
     const Node* current_target_ = nullptr;
     EventPhase event_phase_ = EventPhase::None;

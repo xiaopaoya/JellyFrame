@@ -42,6 +42,7 @@ enum class ScriptTaskPacketKind : std::uint8_t {
     Input,
     FrameReady,
     ServiceRequest,
+    ServiceCancel,
     ServiceCompletion,
     NativeLeaseRelease,
     FatalRecord,
@@ -296,6 +297,10 @@ struct ScriptTaskSupervisorOptions {
     std::size_t max_native_release_intents = 0;
     ScriptTaskMailboxOptions service_request_mailbox;
     ScriptTaskServicePayloadLeaseOptions service_payload_leases;
+    // Dedicated worker-to-supervisor fatal status mailbox. It is separate
+    // from frame, input and service traffic so recovery cannot be blocked by
+    // a full display queue.
+    ScriptTaskMailboxOptions fatal_mailbox;
 };
 
 struct ScriptTaskFramePublishResult {
@@ -318,6 +323,7 @@ struct ScriptTaskTeardownResult {
     std::size_t cancelled_service_requests = 0;
     std::size_t released_frame_leases = 0;
     std::size_t discarded_release_intents = 0;
+    std::size_t discarded_fatal_packets = 0;
     std::size_t retired_service_tombstones = 0;
 };
 
@@ -341,6 +347,8 @@ public:
     // value packet alongside input, but cannot inject arbitrary packet kinds.
     ScriptTaskMailboxPostStatus post_service_completion(const ScriptTaskPacket& packet);
     bool take_worker_packet(ScriptTaskPacket& output);
+    ScriptTaskMailboxPostStatus post_fatal(const ScriptTaskPacket& packet);
+    bool take_fatal(ScriptTaskPacket& output);
     std::size_t worker_inbox_max_payload_bytes() const {
         return input_mailbox_.max_payload_bytes();
     }
@@ -387,6 +395,7 @@ private:
     ScriptTaskFrameLeaseRegistry service_payload_leases_;
     ScriptTaskServiceLedger services_;
     ScriptTaskReleaseIntentMailbox release_intents_;
+    ScriptTaskMailbox fatal_mailbox_;
     std::uint32_t next_frame_sequence_ = 1;
 };
 

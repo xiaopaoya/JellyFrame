@@ -6,6 +6,7 @@
 #include "sdkconfig.h"
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
@@ -722,7 +723,7 @@ void ws147_touch_poll_task(void* arg) {
     if (display != nullptr) {
         display->touch_task = nullptr;
     }
-    vTaskDelete(nullptr);
+    vTaskDeleteWithCaps(nullptr);
 }
 
 void IRAM_ATTR ws147_touch_isr_handler(void* arg) {
@@ -790,12 +791,13 @@ esp_err_t ws147_init_i2c_and_probe_touch(Ws147DisplayContext& display) {
                         "waveshare 1.47 touch device add failed");
 
     display.touch_task_stop = false;
-    BaseType_t task_ok = xTaskCreate(ws147_touch_poll_task,
-                                     "ws147_touch",
-                                     4096,
-                                     &display,
-                                     4,
-                                     &display.touch_task);
+    BaseType_t task_ok = xTaskCreateWithCaps(ws147_touch_poll_task,
+                                              "ws147_touch",
+                                              4096,
+                                              &display,
+                                              4,
+                                              &display.touch_task,
+                                              MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (task_ok != pdPASS) {
         ESP_LOGW(kTag, "waveshare 1.47 touch task creation failed");
         display.touch_task = nullptr;

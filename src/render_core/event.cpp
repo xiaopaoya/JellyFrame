@@ -16,6 +16,8 @@ struct DispatchScope {
     DispatchScope* previous = nullptr;
     const Node* const* path = nullptr;
     std::size_t path_count = 0;
+    const Node* target = nullptr;
+    Event* event = nullptr;
     bool path_node_destroyed = false;
 };
 
@@ -23,10 +25,12 @@ thread_local DispatchScope* g_dispatch_scope = nullptr;
 
 class ScopedDispatch {
 public:
-    ScopedDispatch(const std::vector<const Node*>& path) {
+    ScopedDispatch(const std::vector<const Node*>& path, Event& event) {
         scope_.previous = g_dispatch_scope;
         scope_.path = path.data();
         scope_.path_count = path.size();
+        scope_.target = path.empty() ? nullptr : path.front();
+        scope_.event = &event;
         g_dispatch_scope = &scope_;
     }
 
@@ -63,6 +67,10 @@ bool Event::cancelable() const {
 
 bool Event::default_prevented() const {
     return default_prevented_;
+}
+
+bool Event::target_destroyed() const {
+    return target_destroyed_;
 }
 
 bool Event::propagation_stopped() const {
@@ -107,6 +115,7 @@ void Event::reset_for_dispatch(const Node& target) {
     default_prevented_ = false;
     propagation_stopped_ = false;
     immediate_propagation_stopped_ = false;
+    target_destroyed_ = false;
 }
 
 void Event::set_current_target(const Node& current_target, EventPhase phase) {
@@ -354,7 +363,7 @@ bool dispatch_event(const Node& target, Event& event) {
     for (const Node* node = &target; node != nullptr; node = node->parent) {
         path.push_back(node);
     }
-    ScopedDispatch dispatch_scope(path);
+    ScopedDispatch dispatch_scope(path, event);
 
     event.reset_for_dispatch(target);
 
@@ -413,6 +422,12 @@ void event_dispatch_node_destroyed(const Node& node) {
         for (std::size_t index = 0; index < scope->path_count; ++index) {
             if (scope->path[index] == &node) {
                 scope->path_node_destroyed = true;
+                if (scope->event != nullptr && scope->target == &node) {
+                    scope->event->target_destroyed_ = true;
+                    scope->event->target_ = nullptr;
+                    scope->event->current_target_ = nullptr;
+                    scope->event->event_phase_ = EventPhase::None;
+                }
                 break;
             }
         }

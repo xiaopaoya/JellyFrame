@@ -99,6 +99,7 @@ enum class ScriptTaskAppFrameTakeStatus {
 ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& supervisor,
                                                         const ScriptAppSession& session,
                                                         const ScriptTaskAppFrameCodecOptions& options,
-                                                        ScriptTaskAppFrame& output);
+                                                        ScriptTaskAppFrame& output,
+                                                        std::uint32_t* accepted_packet_sequence = nullptr);
 
 } // namespace jellyframe

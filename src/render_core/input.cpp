@@ -180,6 +180,12 @@ InputController::InputController(const LayerNode& layer_tree,
     }
 }
 
+InputController::~InputController() {
+    for (Node* node : observed_nodes_) {
+        if (node != nullptr) node->remove_destroy_observer(observed_node_destroyed, this);
+    }
+}
+
 const Node* InputController::hovered_node() const {
     return hovered_node_;
 }
@@ -207,6 +213,7 @@ void InputController::set_focused_node(const Node* node) {
     mark_interaction_style_dirty(previous, invalidation_options_.focus_style);
     mark_interaction_style_dirty(node, invalidation_options_.focus_style);
     focused_node_ = node;
+    observe_node(node);
     if (previous != nullptr) {
         Event blur("blur", false, false);
         dispatch_event(*mutable_node(previous), blur);
@@ -224,6 +231,10 @@ void InputController::set_interaction_state(const Node* hovered_node,
     active_node_ = accepts_node(active_node) && visible_node(active_node) ? active_node : nullptr;
     focused_node_ = accepts_node(focused_node) && visible_node(focused_node) ? focused_node : nullptr;
     active_box_ = find_layout_box_for_node(layer_tree_.box, active_node_);
+    observe_node(hovered_node_);
+    observe_node(active_node_);
+    observe_node(focused_node_);
+    unobserve_unused_nodes();
 }
 
 void InputController::set_modal_root(const Node* node) {
@@ -231,6 +242,7 @@ void InputController::set_modal_root(const Node* node) {
         return;
     }
     modal_root_ = visible_node(node) ? node : nullptr;
+    observe_node(modal_root_);
     clear_pointer_state();
     if (modal_root_ == nullptr) {
         return;
@@ -300,24 +312,37 @@ const Node* InputController::pointer_down(const PointerInput& input) {
 
 const Node* InputController::pointer_up(const PointerInput& input) {
     const Node* target = hit_node(input.x, input.y);
-    if (disabled_target(target) || disabled_target(active_node_)) {
+    const Node* activation_target = active_node_;
+    if (disabled_target(target) || disabled_target(activation_target)) {
         set_active_node(nullptr);
         return target;
     }
     update_hover(target, input);
     MouseEvent pointer = make_mouse_event("pointerup", input);
     dispatch_mouse_event(target, pointer);
+    if (pointer.target_destroyed()) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
     MouseEvent touch = make_mouse_event("touchend", input);
     dispatch_mouse_event(target, touch);
+    if (touch.target_destroyed()) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
     MouseEvent event = make_mouse_event("mouseup", input);
     dispatch_mouse_event(target, event);
-    if (target != nullptr && target == active_node_) {
-        if (active_node_ != nullptr && is_form_control(*active_node_) &&
-            form_control_kind(*active_node_) != FormControlKind::Range) {
+    if (event.target_destroyed()) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
+    if (target != nullptr && target == activation_target && active_node_ == activation_target) {
+        if (is_form_control(*activation_target) &&
+            form_control_kind(*activation_target) != FormControlKind::Range) {
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-            if (form_control_kind(*active_node_) == FormControlKind::Select && select_popup_is_open(*active_node_)) {
+            if (form_control_kind(*activation_target) == FormControlKind::Select && select_popup_is_open(*activation_target)) {
                 const LayoutBox* select_box = active_box_;
-                const int option_count = form_control_option_count(*active_node_);
+                const int option_count = form_control_option_count(*activation_target);
                 const int row_height = select_box != nullptr
                     ? std::max(20, select_box->style.line_height > 0
                         ? select_box->style.line_height
@@ -330,42 +355,66 @@ const Node* InputController::pointer_up(const PointerInput& input) {
                 if (contains_rect(geometry.rect, input.x, input.y)) {
                     const int option_index = geometry.first_option_index +
                         (input.y - geometry.rect.y) / std::max(1, geometry.row_height);
-                    if (!form_control_option_disabled(*active_node_, option_index) &&
-                        set_form_control_selected_index(*mutable_node(active_node_), option_index)) {
-                        set_select_popup_open(*mutable_node(active_node_), false);
-                        dispatch_simple_event(active_node_, "input");
-                        dispatch_simple_event(active_node_, "change");
+                    if (!form_control_option_disabled(*activation_target, option_index) &&
+                        set_form_control_selected_index(*mutable_node(activation_target), option_index)) {
+                        set_select_popup_open(*mutable_node(activation_target), false);
+                        dispatch_simple_event(activation_target, "input");
+                        if (active_node_ != activation_target) {
+                            set_active_node(nullptr);
+                            return nullptr;
+                        }
+                        dispatch_simple_event(activation_target, "change");
                     } else {
-                        set_select_popup_open(*mutable_node(active_node_), false);
+                        set_select_popup_open(*mutable_node(activation_target), false);
                     }
                 } else {
-                    set_select_popup_open(*mutable_node(active_node_), false);
+                    set_select_popup_open(*mutable_node(activation_target), false);
                 }
             } else
 #endif
-            if (activate_form_control(*mutable_node(active_node_))) {
+            if (activate_form_control(*mutable_node(activation_target))) {
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-                if (form_control_kind(*active_node_) != FormControlKind::Select) {
-                    dispatch_simple_event(active_node_, "input");
-                    dispatch_simple_event(active_node_, "change");
+                if (form_control_kind(*activation_target) != FormControlKind::Select) {
+                    dispatch_simple_event(activation_target, "input");
+                    if (active_node_ != activation_target) {
+                        set_active_node(nullptr);
+                        return nullptr;
+                    }
+                    dispatch_simple_event(activation_target, "change");
                 }
 #else
-                dispatch_simple_event(active_node_, "input");
-                dispatch_simple_event(active_node_, "change");
+                dispatch_simple_event(activation_target, "input");
+                if (active_node_ != activation_target) {
+                    set_active_node(nullptr);
+                    return nullptr;
+                }
+                dispatch_simple_event(activation_target, "change");
 #endif
             }
         }
-        if (active_node_ != nullptr && form_control_kind(*active_node_) == FormControlKind::Range) {
-            dispatch_simple_event(active_node_, "change");
+        if (active_node_ == activation_target && form_control_kind(*activation_target) == FormControlKind::Range) {
+            dispatch_simple_event(activation_target, "change");
+            if (active_node_ != activation_target) {
+                set_active_node(nullptr);
+                return nullptr;
+            }
         }
         MouseEvent click = make_mouse_event("click", input);
-        dispatch_mouse_event(target, click);
+        dispatch_mouse_event(activation_target, click);
+        if (click.target_destroyed() || active_node_ != activation_target) {
+            set_active_node(nullptr);
+            return nullptr;
+        }
         if (!click.default_prevented()) {
-            toggle_details_from_summary(active_node_);
+            toggle_details_from_summary(activation_target);
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-            if (active_node_ != nullptr) {
-                request_form_submit_from_control(*mutable_node(active_node_));
-                reset_form_from_control(*mutable_node(active_node_));
+            if (active_node_ == activation_target) {
+                request_form_submit_from_control(*mutable_node(activation_target));
+                if (active_node_ != activation_target) {
+                    set_active_node(nullptr);
+                    return nullptr;
+                }
+                reset_form_from_control(*mutable_node(activation_target));
             }
 #endif
         }
@@ -547,6 +596,8 @@ void InputController::set_hovered_node(const Node* node) {
         mark_interaction_style_dirty(node, invalidation_options_.hover_style);
     }
     hovered_node_ = node;
+    observe_node(node);
+    unobserve_unused_nodes();
 }
 
 void InputController::set_active_node(const Node* node, const LayoutBox* box) {
@@ -556,6 +607,43 @@ void InputController::set_active_node(const Node* node, const LayoutBox* box) {
     }
     active_node_ = node;
     active_box_ = box;
+    observe_node(node);
+    unobserve_unused_nodes();
+}
+
+void InputController::observed_node_destroyed(Node& node, void* context) {
+    auto* controller = static_cast<InputController*>(context);
+    if (controller == nullptr) return;
+    if (controller->hovered_node_ == &node) controller->hovered_node_ = nullptr;
+    if (controller->active_node_ == &node) {
+        controller->active_node_ = nullptr;
+        controller->active_box_ = nullptr;
+    }
+    if (controller->focused_node_ == &node) controller->focused_node_ = nullptr;
+    if (controller->modal_root_ == &node) controller->modal_root_ = nullptr;
+    controller->observed_nodes_.erase(
+        std::remove(controller->observed_nodes_.begin(), controller->observed_nodes_.end(), &node),
+        controller->observed_nodes_.end());
+}
+
+void InputController::observe_node(const Node* node) {
+    if (node == nullptr) return;
+    Node* mutable_node_ptr = const_cast<Node*>(node);
+    if (std::find(observed_nodes_.begin(), observed_nodes_.end(), mutable_node_ptr) == observed_nodes_.end()) {
+        mutable_node_ptr->add_destroy_observer(observed_node_destroyed, this);
+        observed_nodes_.push_back(mutable_node_ptr);
+    }
+}
+
+void InputController::unobserve_unused_nodes() {
+    observed_nodes_.erase(
+        std::remove_if(observed_nodes_.begin(), observed_nodes_.end(), [this](Node* node) {
+            const bool used = node != nullptr &&
+                (hovered_node_ == node || active_node_ == node || focused_node_ == node || modal_root_ == node);
+            if (!used && node != nullptr) node->remove_destroy_observer(observed_node_destroyed, this);
+            return !used;
+        }),
+        observed_nodes_.end());
 }
 
 MouseEvent InputController::make_mouse_event(const char* type, const PointerInput& input) const {

@@ -102,10 +102,15 @@ struct Node : public EventTarget {
     bool has_class(const std::string& class_name) const;
     void set_destroy_observer(DestroyObserver observer, void* context);
     void clear_destroy_observer(DestroyObserver observer, void* context);
+    void add_destroy_observer(DestroyObserver observer, void* context);
+    void remove_destroy_observer(DestroyObserver observer, void* context);
 
 private:
-    DestroyObserver destroy_observer_ = nullptr;
-    void* destroy_observer_context_ = nullptr;
+    struct DestroyObserverEntry {
+        DestroyObserver observer = nullptr;
+        void* context = nullptr;
+    };
+    std::vector<DestroyObserverEntry> destroy_observers_;
 };
 
 std::unique_ptr<Node> make_element(std::string tag_name);

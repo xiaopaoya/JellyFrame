@@ -130,12 +130,12 @@ Node::Node(NodeType node_type)
 
 Node::~Node() {
     event_dispatch_node_destroyed(*this);
-    DestroyObserver observer = destroy_observer_;
-    void* context = destroy_observer_context_;
-    destroy_observer_ = nullptr;
-    destroy_observer_context_ = nullptr;
-    if (observer != nullptr) {
-        observer(*this, context);
+    std::vector<DestroyObserverEntry> observers;
+    observers.swap(destroy_observers_);
+    for (const DestroyObserverEntry& entry : observers) {
+        if (entry.observer != nullptr) {
+            entry.observer(*this, entry.context);
+        }
     }
     destroy_node_list_iterative(children);
 }
@@ -298,15 +298,30 @@ bool Node::has_class(const std::string& class_name) const {
 }
 
 void Node::set_destroy_observer(DestroyObserver observer, void* context) {
-    destroy_observer_ = observer;
-    destroy_observer_context_ = context;
+    destroy_observers_.clear();
+    add_destroy_observer(observer, context);
 }
 
 void Node::clear_destroy_observer(DestroyObserver observer, void* context) {
-    if (destroy_observer_ == observer && destroy_observer_context_ == context) {
-        destroy_observer_ = nullptr;
-        destroy_observer_context_ = nullptr;
-    }
+    remove_destroy_observer(observer, context);
+}
+
+void Node::add_destroy_observer(DestroyObserver observer, void* context) {
+    if (observer == nullptr) return;
+    const auto existing = std::find_if(destroy_observers_.begin(), destroy_observers_.end(),
+                                       [observer, context](const DestroyObserverEntry& entry) {
+                                           return entry.observer == observer && entry.context == context;
+                                       });
+    if (existing == destroy_observers_.end()) destroy_observers_.push_back({observer, context});
+}
+
+void Node::remove_destroy_observer(DestroyObserver observer, void* context) {
+    destroy_observers_.erase(
+        std::remove_if(destroy_observers_.begin(), destroy_observers_.end(),
+                       [observer, context](const DestroyObserverEntry& entry) {
+                           return entry.observer == observer && entry.context == context;
+                       }),
+        destroy_observers_.end());
 }
 
 std::unique_ptr<Node> make_element(std::string tag_name) {

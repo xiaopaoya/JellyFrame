@@ -15,6 +15,13 @@ set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H
     "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}/jellyframe_esp32s3_noto_sans_sc_font.h")
 file(MAKE_DIRECTORY "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}")
 
+set(JELLYFRAME_ESP32S3_SCRIPT_REQUIRES)
+if(CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE)
+    list(APPEND JELLYFRAME_ESP32S3_SCRIPT_REQUIRES jellyframe_jerryscript)
+endif()
+
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
@@ -76,6 +83,10 @@ idf_component_register(
         "jellyframe_esp32s3_input.cpp"
         "jellyframe_esp32s3_resources.cpp"
         "jellyframe_esp32s3_soc_power_acceptance.cpp"
+        "jellyframe_esp32s3_script_task_acceptance.cpp"
+        "jellyframe_esp32s3_script_app_acceptance.cpp"
+        "jellyframe_esp32s3_script_service_acceptance.cpp"
+        "jellyframe_esp32s3_script_fault_acceptance.cpp"
         "jellyframe_esp32s3_ui_task.cpp"
         "boards/waveshare_touch_lcd_boards.cpp"
         "boards/waveshare_touch_lcd_169_board.cpp"
@@ -93,4 +104,5 @@ idf_component_register(
         log
         jellyframe_app_runtime
         jellyframe_render_core
+        ${JELLYFRAME_ESP32S3_SCRIPT_REQUIRES}
 )

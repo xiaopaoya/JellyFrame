@@ -1,0 +1,2 @@
+# H4 external-current fixture: screen off, board resources released, deep sleep.
+CONFIG_JELLYFRAME_ESP32S3_SOC_POWER_DEEP_SLEEP_ONLY=y

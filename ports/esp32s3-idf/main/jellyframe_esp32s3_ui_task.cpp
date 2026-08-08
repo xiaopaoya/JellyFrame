@@ -17,6 +17,8 @@
 #include "render_core/embedded_framebuffer.h"
 #include "render_core/frame_loop.h"
 #include "render_core/frame_scratch.h"
+#include "render_core/form_control.h"
+#include "render_core/form_submission.h"
 #include "render_core/host.h"
 #include "render_core/html_parser.h"
 #include "render_core/input.h"
@@ -150,6 +152,8 @@ constexpr std::string_view kTimerUrl = "/timer.html";
 constexpr std::string_view kResourceFailureUrl = "/resource_failure.html";
 constexpr std::string_view kImageAcceptanceUrl = "/image_acceptance.html";
 constexpr std::string_view kBandShellUrl = "/band_shell.html";
+constexpr std::string_view kFlexGridAcceptanceUrl = "/flex_grid_acceptance.html";
+constexpr std::string_view kFormsAdvancedAcceptanceUrl = "/forms_advanced_acceptance.html";
 constexpr std::string_view kGradientFastpathUrl = "/gradient_fastpath.html";
 constexpr std::string_view kScrollDemoUrl = "/scroll_demo.html";
 constexpr std::string_view kScrollBenchFullUrl = "/scroll_bench.html";
@@ -322,6 +326,7 @@ struct TimerUiTaskContext {
     std::unique_ptr<jellyframe::InputController> input_controller;
     std::unique_ptr<jellyframe::FrameBuffer> frame_buffer;
     std::unique_ptr<std::uint16_t[]> packed_rgb565;
+    std::unique_ptr<std::uint16_t[]> packed_rgb565_scratch;
     Rgb565Panel panel;
     PortTelemetry telemetry;
     int width = 0;
@@ -334,6 +339,12 @@ struct TimerUiTaskContext {
     const char* telemetry_app_id = "org.jellyframe.bringup.timer";
     const char* scroll_workload = "none";
     bool band_shell = false;
+    bool forms_advanced_acceptance = false;
+    std::uint32_t forms_replay_cycles = 0;
+    std::uint32_t forms_replay_passes = 0;
+    std::uint32_t forms_submit_actions = 0;
+    std::uint32_t forms_reset_actions = 0;
+    std::uint64_t next_forms_replay_us = 0;
     bool image_acceptance = false;
     bool app_runtime_recovery_acceptance = false;
     bool app_runtime_recovery_complete = false;
@@ -857,6 +868,46 @@ const jellyframe::LayerNode* find_layer_for_node(const jellyframe::LayerNode& la
     return nullptr;
 }
 
+// The active layer tree is arena-owned and is retired before a paint-only
+// rebuild. Keep a short-lived heap-owned copy so dirty-region calculation can
+// compare transient overlay bounds across that rebuild.
+jellyframe::LayerNodePtr clone_layer_tree(const jellyframe::LayerNode& source) {
+    jellyframe::LayerNodePtr copy(new (std::nothrow) jellyframe::LayerNode,
+                                  jellyframe::LayerNodeDeleter{false});
+    if (!copy) {
+        return {};
+    }
+    copy->type = source.type;
+    copy->reasons = source.reasons;
+    copy->box = source.box;
+    copy->bounds = source.bounds;
+    copy->clip_rect = source.clip_rect;
+    copy->has_clip = source.has_clip;
+    copy->opacity = source.opacity;
+    copy->transform = source.transform;
+    copy->transform_origin_x_percent = source.transform_origin_x_percent;
+    copy->transform_origin_y_percent = source.transform_origin_y_percent;
+    copy->has_transform = source.has_transform;
+    copy->scroll_y = source.scroll_y;
+    copy->max_scroll_y = source.max_scroll_y;
+    copy->z_index = source.z_index;
+    copy->source_order = source.source_order;
+    copy->display_list = source.display_list;
+    copy->children.reserve(source.children.size());
+    for (const auto& child : source.children) {
+        if (child == nullptr) {
+            copy->children.emplace_back(nullptr, jellyframe::LayerNodeDeleter{false});
+            continue;
+        }
+        jellyframe::LayerNodePtr child_copy = clone_layer_tree(*child);
+        if (!child_copy) {
+            return {};
+        }
+        copy->children.push_back(std::move(child_copy));
+    }
+    return copy;
+}
+
 bool layer_tree_contains_gradient(const jellyframe::LayerNode& layer) {
     for (const jellyframe::DisplayCommand& command : layer.display_list) {
         if (command.type == jellyframe::DisplayCommandType::LinearGradient ||
@@ -1004,6 +1055,133 @@ bool observe_scroll_input(const BoardInputEvent& event, void* raw_context) {
     return false;
 }
 
+jellyframe::Node* find_node_by_id(jellyframe::Node& node, std::string_view id) {
+    if (node.type == jellyframe::NodeType::Element && node.attribute("id") == id) {
+        return &node;
+    }
+    for (auto& child : node.children) {
+        if (child != nullptr) {
+            if (jellyframe::Node* found = find_node_by_id(*child, id)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+const jellyframe::LayoutBox* find_layout_box_for_node(const jellyframe::LayoutBox& box,
+                                                       const jellyframe::Node* node) {
+    if (box.node == node) {
+        return &box;
+    }
+    for (const auto& child : box.children) {
+        if (child != nullptr) {
+            if (const jellyframe::LayoutBox* found = find_layout_box_for_node(*child, node)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+void enqueue_forms_replay(TimerUiTaskContext& context) {
+    if (!context.forms_advanced_acceptance || context.forms_replay_cycles >= 30) {
+        return;
+    }
+    ++context.forms_replay_cycles;
+    // Exercise the board-independent input path before the direct default-action observation.
+    context.input_queue.enqueue(BoardInputEvent{BoardInputKind::FocusNext});
+    BoardInputEvent text;
+    text.kind = BoardInputKind::Text;
+    std::snprintf(text.text, sizeof(text.text), "%u", static_cast<unsigned>(context.forms_replay_cycles));
+    context.input_queue.enqueue(text);
+    context.input_queue.enqueue(BoardInputEvent{BoardInputKind::Activate});
+    context.input_queue.enqueue(BoardInputEvent{BoardInputKind::FocusNext});
+    context.input_queue.enqueue(BoardInputEvent{BoardInputKind::Activate});
+
+    // Exercise the core-rendered select overlay using the current layout
+    // geometry. The first outside click closes it without changing the value;
+    // the second open followed by the second row selects the alternate value.
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    const jellyframe::Node* select_node = find_node_by_id(*context.document, "select");
+    const jellyframe::LayoutBox* select_box = context.pipeline.layout_tree != nullptr
+        ? find_layout_box_for_node(*context.pipeline.layout_tree, select_node)
+        : nullptr;
+    if (select_box != nullptr && select_node != nullptr) {
+        const jellyframe::Rect select_rect = select_box->rect;
+        const int select_x = select_rect.x + std::max(1, select_rect.width / 2);
+        const int select_y = select_rect.y + std::max(1, select_rect.height / 2);
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerDown, select_x, select_y});
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerUp, select_x, select_y});
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerDown, 2, 2});
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerUp, 2, 2});
+
+        const int row_height = std::max(20, select_box->style.line_height > 0
+            ? select_box->style.line_height
+            : select_box->style.font_size + std::max(6, select_box->style.font_size / 3));
+        const jellyframe::SelectPopupGeometry popup = jellyframe::select_popup_geometry(
+            select_rect,
+            jellyframe::Rect{0, 0, context.width, context.height},
+            jellyframe::form_control_option_count(*select_node),
+            row_height);
+        const int option_x = popup.rect.x + std::max(1, popup.rect.width / 2);
+        const int option_y = popup.rect.y + popup.row_height + std::max(1, popup.row_height / 2);
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerDown, select_x, select_y});
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerUp, select_x, select_y});
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerDown, option_x, option_y});
+        context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerUp, option_x, option_y});
+    }
+#endif
+    context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerDown, 28, 202});
+    context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerMove, 144, 202});
+    context.input_queue.enqueue(BoardInputEvent{BoardInputKind::PointerUp, 144, 202});
+}
+
+void observe_forms_default_actions(TimerUiTaskContext& context) {
+    if (!context.forms_advanced_acceptance || context.document == nullptr ||
+        context.forms_replay_cycles == 0 || context.forms_replay_cycles == context.forms_replay_passes) {
+        return;
+    }
+    jellyframe::Node* form = find_node_by_id(*context.document, "form");
+    jellyframe::Node* name = find_node_by_id(*context.document, "name");
+    jellyframe::Node* check = find_node_by_id(*context.document, "check");
+    jellyframe::Node* submit = find_node_by_id(*context.document, "submit");
+    jellyframe::Node* reset = find_node_by_id(*context.document, "reset");
+    if (form == nullptr || name == nullptr || check == nullptr || submit == nullptr || reset == nullptr) {
+        ESP_LOGE(kTag, "forms_acceptance fixture nodes unavailable");
+        return;
+    }
+    jellyframe::set_form_control_value(*name, "changed");
+    jellyframe::set_form_control_checked(*check, true);
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    if (jellyframe::request_form_submit_from_control(*submit).submitted) {
+        ++context.forms_submit_actions;
+    }
+    if (jellyframe::reset_form_from_control(*reset)) {
+        ++context.forms_reset_actions;
+    }
+    const bool reset_restored = jellyframe::form_control_value(*name) == "seed" &&
+        !jellyframe::form_control_checked(*check);
+#else
+    const bool submit_suppressed = !jellyframe::request_form_submit_from_control(*submit).submitted;
+    const bool reset_suppressed = !jellyframe::reset_form_from_control(*reset);
+    const bool reset_restored = submit_suppressed && reset_suppressed &&
+        jellyframe::form_control_value(*name) == "changed" && jellyframe::form_control_checked(*check);
+#endif
+    ++context.forms_replay_passes;
+    ESP_LOGI(kTag,
+             "forms_acceptance cycle=%u/30 default_actions=%s submit=%u reset=%u state_ok=%d",
+             static_cast<unsigned>(context.forms_replay_cycles),
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+             "enabled",
+#else
+             "suppressed",
+#endif
+             static_cast<unsigned>(context.forms_submit_actions),
+             static_cast<unsigned>(context.forms_reset_actions),
+             reset_restored ? 1 : 0);
+}
+
 bool rebuild_pipeline(TimerUiTaskContext& context) {
     const std::uint64_t rebuild_start = esp_timer_get_time();
     const InputInteractionState input_state = take_input_interaction_state(context);
@@ -1087,7 +1265,10 @@ jellyframe::FramePipelineCacheState cache_state(const TimerUiTaskContext& contex
 
 const jellyframe::Rect* choose_dirty_rects(TimerUiTaskContext& context,
                                            const jellyframe::FrameUpdatePlan& update_plan,
-                                           std::size_t& dirty_count) {
+                                           std::size_t& dirty_count,
+                                           const jellyframe::LayerNode* previous_layer_tree = nullptr,
+                                           const jellyframe::LayerNode* current_layer_tree = nullptr,
+                                           bool layer_snapshot_failed = false) {
     static const jellyframe::Rect full_dirty_placeholder{};
     (void)full_dirty_placeholder;
     dirty_count = 0;
@@ -1100,18 +1281,22 @@ const jellyframe::Rect* choose_dirty_rects(TimerUiTaskContext& context,
         return context.frame_scratch.dirty_region.rects.data();
     }
 
-    if (update_plan.dirty_rect_mode == jellyframe::FrameDirtyRectMode::CurrentLayout ||
-        update_plan.dirty_rect_mode == jellyframe::FrameDirtyRectMode::PreviousAndCurrentLayout) {
+    if (!layer_snapshot_failed &&
+        (update_plan.dirty_rect_mode == jellyframe::FrameDirtyRectMode::CurrentLayout ||
+         update_plan.dirty_rect_mode == jellyframe::FrameDirtyRectMode::PreviousAndCurrentLayout)) {
         const jellyframe::LayoutBox* previous_layout =
             update_plan.dirty_rect_mode == jellyframe::FrameDirtyRectMode::CurrentLayout
                 ? context.pipeline.layout_tree.get()
                 : nullptr;
+        jellyframe::DirtyRegionOptions dirty_options = jellyframe::dirty_region_options_from_budgets(
+            context.budgets,
+            jellyframe::Rect{0, 0, context.width, context.height});
+        dirty_options.previous_layer_tree = previous_layer_tree;
+        dirty_options.current_layer_tree = current_layer_tree;
         jellyframe::compute_dirty_region_into(*context.document,
                                               previous_layout,
                                               context.pipeline.layout_tree.get(),
-                                              jellyframe::dirty_region_options_from_budgets(
-                                                  context.budgets,
-                                                  jellyframe::Rect{0, 0, context.width, context.height}),
+                                              dirty_options,
                                               context.frame_scratch.dirty_region,
                                               &context.frame_scratch.dirty_region_scratch);
         if (context.frame_scratch.dirty_region.mode == jellyframe::DirtyRegionMode::DirtyRects &&
@@ -1131,14 +1316,21 @@ const jellyframe::Rect* choose_dirty_rects(TimerUiTaskContext& context,
 bool render_and_present(TimerUiTaskContext& context,
                         const jellyframe::FrameUpdatePlan& update_plan,
                         std::uint32_t& present_us) {
-    std::size_t dirty_count = 0;
-    const jellyframe::Rect* dirty_rects = choose_dirty_rects(context, update_plan, dirty_count);
-    if (dirty_rects == nullptr || dirty_count == 0) {
-        return true;
+    jellyframe::LayerNodePtr previous_layer_snapshot;
+    bool layer_snapshot_failed = false;
+    if (update_plan.action == jellyframe::FrameUpdateAction::RepaintExisting &&
+        context.pipeline.layer_tree != nullptr) {
+        previous_layer_snapshot = clone_layer_tree(*context.pipeline.layer_tree);
+        layer_snapshot_failed = previous_layer_snapshot == nullptr;
+        if (layer_snapshot_failed) {
+            ESP_LOGW(kTag, "dirty_region layer snapshot allocation failed; using full-frame fallback");
+        }
     }
 
-    if (update_plan.action == jellyframe::FrameUpdateAction::RepaintExisting &&
-        context.pipeline.layout_tree != nullptr) {
+    const bool rebuild_existing_layer =
+        update_plan.action == jellyframe::FrameUpdateAction::RepaintExisting &&
+        context.pipeline.layout_tree != nullptr;
+    if (rebuild_existing_layer) {
         // The controller references the layer tree, so retire it before a paint-only rebuild.
         const InputInteractionState input_state = take_input_interaction_state(context);
         const std::uint64_t layer_build_start = esp_timer_get_time();
@@ -1154,6 +1346,17 @@ bool render_and_present(TimerUiTaskContext& context,
         }
         update_rgb565_gradient_dither_policy(context);
         bind_input_controller(context, input_state);
+    }
+
+    std::size_t dirty_count = 0;
+    const jellyframe::Rect* dirty_rects = choose_dirty_rects(context,
+                                                              update_plan,
+                                                              dirty_count,
+                                                              previous_layer_snapshot.get(),
+                                                              context.pipeline.layer_tree.get(),
+                                                              layer_snapshot_failed);
+    if (dirty_rects == nullptr || dirty_count == 0) {
+        return true;
     }
 
     const jellyframe::Rect full_viewport{0, 0, context.width, context.height};
@@ -1379,9 +1582,11 @@ bool prepare_buffers(TimerUiTaskContext& context) {
     context.frame_buffer = std::make_unique<jellyframe::FrameBuffer>(context.width, context.height, kBackground);
     const std::size_t pixel_count = rgb565_buffer_pixels(context.width, context.height);
     context.packed_rgb565.reset(new (std::nothrow) std::uint16_t[pixel_count]);
-    if (!context.frame_buffer || !context.packed_rgb565) {
-        ESP_LOGE(kTag, "timer ui buffer allocation failed: rgba_pixels=%u packed_rgb565_pixels=%u",
+    context.packed_rgb565_scratch.reset(new (std::nothrow) std::uint16_t[pixel_count]);
+    if (!context.frame_buffer || !context.packed_rgb565 || !context.packed_rgb565_scratch) {
+        ESP_LOGE(kTag, "timer ui buffer allocation failed: rgba_pixels=%u packed_rgb565_pixels=%u scratch_pixels=%u",
                  static_cast<unsigned>(static_cast<std::size_t>(context.width) * context.height),
+                 static_cast<unsigned>(pixel_count),
                  static_cast<unsigned>(pixel_count));
         return false;
     }
@@ -1393,6 +1598,8 @@ bool prepare_buffers(TimerUiTaskContext& context) {
     context.panel.packed_scroll_flush = context.board_runtime.packed_scroll_flush;
     context.panel.reset_scroll = context.board_runtime.reset_scroll;
     context.panel.flush_context = context.board_runtime.flush_context;
+    context.panel.scratch_pixels = context.packed_rgb565_scratch.get();
+    context.panel.scratch_pixel_capacity = pixel_count;
     context.panel.packed_pixels = context.packed_rgb565.get();
     context.panel.packed_pixel_capacity = pixel_count;
     return true;
@@ -1646,7 +1853,7 @@ void run_retained_ui_task(void* raw_context) {
         CONFIG_JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART;
     if (context->band_shell) {
         bind_band_navigation(*context);
-    } else if (!context->scroll_benchmark && !context->gradient_fastpath_benchmark) {
+    } else if (!context->scroll_benchmark && !context->gradient_fastpath_benchmark && !context->forms_advanced_acceptance) {
         bind_timer_events(*context);
     }
 
@@ -1698,6 +1905,11 @@ void run_retained_ui_task(void* raw_context) {
         const std::uint64_t frame_start = esp_timer_get_time();
         const bool first_frame = force_first_frame;
 
+        if (context->forms_advanced_acceptance && context->forms_replay_cycles < 30 &&
+            power_now_us >= context->next_forms_replay_us) {
+            enqueue_forms_replay(*context);
+            context->next_forms_replay_us = power_now_us + 250000ULL;
+        }
         jellyframe::FrameLoopPendingWork pending;
         pending.pending_input_events = context->input_queue.size();
         const bool band_autoroute_due = context->band_shell &&
@@ -1740,6 +1952,7 @@ void run_retained_ui_task(void* raw_context) {
         context->telemetry.input_dispatch_us +=
             static_cast<std::uint64_t>(esp_timer_get_time() - input_dispatch_start);
         context->telemetry.input_events += input_stats.dispatched;
+        observe_forms_default_actions(*context);
 
         bool scroll_changed = false;
         if (context->scroll_benchmark && context->pending_scroll_drag_delta != 0) {
@@ -1768,7 +1981,7 @@ void run_retained_ui_task(void* raw_context) {
                              static_cast<unsigned>(context->image_acceptance_cycles));
                 }
                 next_tick_us = esp_timer_get_time() + 500000ULL;
-            } else if (!context->band_shell && !context->gradient_fastpath_benchmark) {
+            } else if (!context->band_shell && !context->gradient_fastpath_benchmark && !context->forms_advanced_acceptance) {
                 if (!force_first_frame && context->timer_running) {
                     ++context->elapsed_seconds;
                 }
@@ -1896,8 +2109,11 @@ void run_retained_ui_task(void* raw_context) {
             context->telemetry.frames > 1 && input_stats.dispatched == 0 && presented;
         if ((frame_plan.update.action != jellyframe::FrameUpdateAction::None || input_stats.dispatched > 0) &&
             !suppress_periodic_frame_log) {
+            const jellyframe::Rect first_dirty_rect = context->frame_scratch.dirty_region.rects.empty()
+                ? jellyframe::Rect{}
+                : context->frame_scratch.dirty_region.rects.front();
             ESP_LOGI(kTag,
-                     "ui_task_frame kind=%s frame=%u elapsed=%u running=%d clicks=%u scroll_y=%d drag=%d action=%s reason=%s dirty_mode=%s dirty_rects=%u input=%u queue_left=%u present_us=%u ok=%d stack_free=%u",
+                     "ui_task_frame kind=%s frame=%u elapsed=%u running=%d clicks=%u scroll_y=%d drag=%d action=%s reason=%s dirty_flags=0x%08x dirty_mode=%s dirty_rects=%u dirty_rect0=%d,%d,%d,%d input=%u queue_left=%u present_us=%u ok=%d stack_free=%u",
                      ui_task_kind(*context),
                      static_cast<unsigned>(context->telemetry.frames),
                      static_cast<unsigned>(context->elapsed_seconds),
@@ -1907,8 +2123,13 @@ void run_retained_ui_task(void* raw_context) {
                      context->scroll_gesture.dragging() ? 1 : 0,
                      jellyframe::frame_update_action_name(frame_plan.update.action),
                      jellyframe::frame_update_reason_name(frame_plan.update.reason),
+                     static_cast<unsigned>(dirty_flags),
                      jellyframe::dirty_region_mode_name(context->frame_scratch.dirty_region.mode),
                      static_cast<unsigned>(context->frame_scratch.dirty_region.rects.size()),
+                     first_dirty_rect.x,
+                     first_dirty_rect.y,
+                     first_dirty_rect.width,
+                     first_dirty_rect.height,
                      static_cast<unsigned>(input_stats.dispatched),
                      static_cast<unsigned>(context->input_queue.size()),
                      static_cast<unsigned>(present_us),
@@ -1980,6 +2201,31 @@ bool start_band_shell_ui_task() {
     context->telemetry_app_id = "org.jellyframe.system.band_shell";
     context->band_shell = true;
     return start_ui_task(context, "jellyframe_band");
+}
+
+bool start_flex_grid_acceptance_task() {
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (context == nullptr) {
+        ESP_LOGE(kTag, "Flex/Grid acceptance context allocation failed");
+        return false;
+    }
+    context->document_url = kFlexGridAcceptanceUrl;
+    context->telemetry_case = "flex_grid_acceptance_cumulative";
+    context->telemetry_app_id = "org.jellyframe.bringup.flex-grid";
+    return start_ui_task(context, "jellyframe_flex_grid");
+}
+
+bool start_forms_advanced_acceptance_task() {
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (context == nullptr) {
+        ESP_LOGE(kTag, "forms.advanced acceptance context allocation failed");
+        return false;
+    }
+    context->document_url = kFormsAdvancedAcceptanceUrl;
+    context->telemetry_case = "forms_advanced_acceptance_cumulative";
+    context->telemetry_app_id = "org.jellyframe.bringup.forms-advanced";
+    context->forms_advanced_acceptance = true;
+    return start_ui_task(context, "jellyframe_forms");
 }
 
 bool start_gradient_fastpath_ui_task() {

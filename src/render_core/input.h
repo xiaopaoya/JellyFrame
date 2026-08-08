@@ -5,6 +5,7 @@
 #include "render_core/layer_tree.h"
 
 #include <string>
+#include <vector>
 
 namespace jellyframe {
 
@@ -63,6 +64,7 @@ class InputController {
 public:
     explicit InputController(const LayerNode& layer_tree,
                              InteractionInvalidationOptions invalidation_options = {});
+    ~InputController();
 
     const Node* hovered_node() const;
     const Node* active_node() const;
@@ -107,6 +109,10 @@ private:
     void dispatch_mouse_event(const Node* target, MouseEvent& event) const;
     void dispatch_simple_event(const Node* target, const char* type) const;
     void update_hover(const Node* next_hover, const PointerInput& input);
+    static void observed_node_destroyed(Node& node, void* context);
+    void observe_node(const Node* node);
+    void unobserve_unused_nodes();
+    std::vector<Node*> observed_nodes_;
 };
 
 } // namespace jellyframe

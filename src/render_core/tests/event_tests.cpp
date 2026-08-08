@@ -158,6 +158,8 @@ void dispatch_stops_safely_when_a_listener_destroys_its_target() {
 
     MouseEvent event("click", 0, 0);
     check(dispatch_event(child, event), "destroying listener preserves dispatch result");
+    check(event.target_destroyed(), "destroyed target is reported without exposing a dangling target");
+    check(event.target() == nullptr, "destroyed target is cleared from the event snapshot");
     check(child_calls == 1, "destroyed target does not invoke later listeners");
     check(parent_calls == 0, "destroyed path does not bubble");
 }

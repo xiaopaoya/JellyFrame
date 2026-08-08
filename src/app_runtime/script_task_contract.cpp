@@ -466,11 +466,12 @@ std::size_t ScriptTaskReleaseIntentMailbox::discard_session(const ScriptAppSessi
 ScriptTaskSupervisor::ScriptTaskSupervisor(ScriptTaskSupervisorOptions options)
     : input_mailbox_(options.input_mailbox),
       worker_mailbox_(options.worker_mailbox),
+      service_request_mailbox_(options.service_request_mailbox),
       frame_leases_(options.frame_leases),
       service_payload_leases_(options.service_payload_leases),
       services_(options.max_service_tombstones),
       release_intents_(options.max_native_release_intents),
-      service_request_mailbox_(options.service_request_mailbox) {}
+      fatal_mailbox_(options.fatal_mailbox) {}
 
 std::uint32_t ScriptTaskSupervisor::next_nonzero(std::uint32_t value) {
     ++value;
@@ -548,6 +549,19 @@ bool ScriptTaskSupervisor::take_worker_packet(ScriptTaskPacket& output) {
     return worker_mailbox_.pop_for(sessions_.current(), output);
 }
 
+ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_fatal(const ScriptTaskPacket& packet) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (packet.kind != ScriptTaskPacketKind::FatalRecord || !sessions_.accepts(packet.session)) {
+        return ScriptTaskMailboxPostStatus::InvalidPacket;
+    }
+    return fatal_mailbox_.post(packet);
+}
+
+bool ScriptTaskSupervisor::take_fatal(ScriptTaskPacket& output) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return fatal_mailbox_.pop_for(sessions_.current(), output);
+}
+
 ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::copy_frame(const ScriptAppSession& session,
                                                              std::uint32_t lease_id,
                                                              std::vector<std::uint8_t>& output) const {
@@ -603,7 +617,9 @@ ScriptTaskServiceTrackStatus ScriptTaskSupervisor::track_service(const ScriptTas
 
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_request(const ScriptTaskPacket& packet) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (packet.kind != ScriptTaskPacketKind::ServiceRequest || !sessions_.accepts(packet.session)) {
+    if ((packet.kind != ScriptTaskPacketKind::ServiceRequest &&
+         packet.kind != ScriptTaskPacketKind::ServiceCancel) ||
+        !sessions_.accepts(packet.session)) {
         return ScriptTaskMailboxPostStatus::InvalidPacket;
     }
     return service_request_mailbox_.post(packet);
@@ -652,6 +668,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::begin_teardown(const ScriptAppSes
     result.discarded_input_packets = input_mailbox_.discard_all();
     result.discarded_worker_packets = worker_mailbox_.discard_all();
     result.discarded_service_request_packets = service_request_mailbox_.discard_all();
+    result.discarded_fatal_packets = fatal_mailbox_.discard_all();
     result.cancelled_service_requests = services_.cancel_session(session);
     return result;
 }

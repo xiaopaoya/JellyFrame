@@ -1,0 +1,3 @@
+# H4 external-current fixture: stable active display state.
+# CONFIG_JELLYFRAME_ESP32S3_SOC_POWER_DEEP_SLEEP_ONLY is not set
+CONFIG_JELLYFRAME_ESP32S3_SOC_POWER_MEASURE_ACTIVE=y

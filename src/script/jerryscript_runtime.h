@@ -31,6 +31,7 @@ struct ScriptCanvasGradient;
 struct ScriptDialogState;
 struct ScriptNodeBinding;
 struct ScriptLocalStorageBinding;
+struct ScriptServiceCallback;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
 struct LayoutBox;
@@ -48,6 +49,19 @@ struct ScriptEvaluationResult {
     ScriptEvaluationStatus status = ScriptEvaluationStatus::Exception;
 };
 
+enum class ScriptCallbackFailureStatus : std::uint8_t {
+    None,
+    Exception,
+    ExecutionBudgetExceeded,
+};
+
+struct ScriptCallbackFailure {
+    ScriptCallbackFailureStatus status = ScriptCallbackFailureStatus::None;
+    std::string message;
+
+    bool failed() const { return status != ScriptCallbackFailureStatus::None; }
+};
+
 enum class ScriptAudioEventKind {
     Ended,
     Error,
@@ -58,6 +72,20 @@ using ScriptAudioPlayCallback = bool (*)(void* user,
                                          std::string_view src,
                                          double volume,
                                          std::string* error);
+
+// Worker-local service bridge. All arguments are bounded scalar values; the
+// callback runs synchronously on the same worker that owns this runtime.
+using ScriptServiceRequestSubmitCallback = bool (*)(void* user,
+                                                     std::uint8_t kind,
+                                                     std::uint32_t request_id,
+                                                     std::uint32_t client_token,
+                                                     std::uint32_t request_handle,
+                                                     std::uint8_t priority,
+                                                     std::uint32_t timeout_ms);
+
+using ScriptServiceRequestCancelCallback = bool (*)(void* user,
+                                                     std::uint32_t request_id,
+                                                     std::uint32_t client_token);
 
 struct ScriptAudioHost {
     ScriptAudioPlayCallback play = nullptr;
@@ -118,12 +146,23 @@ public:
                                  const AppHostDataAccessPolicy& policy);
     void bind_local_storage(AppLocalStorageShadow& storage);
     void bind_audio_host(ScriptAudioHost host);
+    void bind_script_service_gateway(ScriptServiceRequestSubmitCallback submit,
+                                     void* user,
+                                     ScriptServiceRequestCancelCallback cancel = nullptr);
+    void clear_script_service_gateway();
+    bool dispatch_script_service_completion(std::uint32_t request_id,
+                                            std::uint32_t client_token,
+                                            std::uint8_t status,
+                                            std::uint32_t error_code,
+                                            const std::vector<std::uint8_t>& payload);
     void bind_canvas_2d(Canvas2DRegistry& canvas);
     void clear_app_services();
     void clear_canvas_2d();
     // Records numeric client rects only for elements that requested measurement.
     void capture_layout_snapshot(const LayoutBox& root, int client_offset_x = 0, int client_offset_y = 0);
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
+    ScriptCallbackFailure take_script_callback_failure();
+    bool script_callback_failed() const { return callback_failure_.failed(); }
     bool execution_watchdog_supported() const;
     bool take_execution_watchdog_interrupt();
     void set_host_time_ms(std::uint64_t now_ms);
@@ -160,6 +199,7 @@ private:
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
     std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
+    std::vector<std::unique_ptr<ScriptServiceCallback>> service_callbacks_;
     std::vector<std::unique_ptr<ScriptDialogState>> dialog_states_;
     std::vector<ScriptNodeBinding*> node_bindings_;
     std::vector<ScriptNodeBinding*> layout_snapshot_bindings_;
@@ -174,6 +214,11 @@ private:
     AppLocalStorageShadow* local_storage_ = nullptr;
     Canvas2DRegistry* canvas_2d_ = nullptr;
     ScriptAudioHost audio_host_;
+    ScriptServiceRequestSubmitCallback service_request_submit_ = nullptr;
+    ScriptServiceRequestCancelCallback service_request_cancel_ = nullptr;
+    void* service_request_user_ = nullptr;
+    std::uint32_t next_service_request_id_ = 1;
+    std::uint32_t next_service_client_token_ = 1;
     std::uint32_t service_client_token_ = 0;
     std::uint32_t bound_service_app_instance_id_ = 0;
     AppRuntimeHost* retired_service_host_ = nullptr;
@@ -191,6 +236,7 @@ private:
     std::uint32_t execution_watchdog_remaining_ = 0;
     bool execution_watchdog_interrupted_ = false;
     bool execution_watchdog_interrupt_pending_ = false;
+    ScriptCallbackFailure callback_failure_;
 
     bool can_adopt_detached_node() const;
     bool can_adopt_detached_node(const Node& node) const;
@@ -262,6 +308,15 @@ private:
     AppLocalStorageShadow* resolve_script_local_storage(const ScriptLocalStorageBinding& binding) const;
     void forget_script_local_storage_binding(ScriptLocalStorageBinding& binding);
     void clear_script_local_storage_bindings();
+    void install_script_service_gateway();
+    bool submit_script_service_request(std::uint8_t kind,
+                                       std::uint32_t request_handle,
+                                       std::uint8_t priority,
+                                       std::uint32_t timeout_ms,
+                                       std::uint32_t callback_value,
+                                       std::uint32_t& request_id);
+    bool cancel_script_service_request(std::uint32_t request_id);
+    void record_script_callback_failure(ScriptCallbackFailureStatus status, std::string message);
 };
 
 } // namespace jellyframe

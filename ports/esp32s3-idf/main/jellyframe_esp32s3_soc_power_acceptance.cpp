@@ -11,6 +11,8 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "jellyframe_esp32s3_input.h"
+#include "soc/esp32s3/rtc.h"
 #include "sdkconfig.h"
 
 #include <algorithm>
@@ -37,11 +39,14 @@ constexpr const char* kTag = "JellyFrameSocPower";
 constexpr std::uint32_t kLightSleepCycles = 100;
 constexpr std::uint32_t kDeepSleepCycles = 30;
 constexpr std::uint64_t kLightTimerUs = 100000;
-constexpr std::uint64_t kLightInputTimeoutUs = 250000;
+// H4-only opportunity: leave enough time for a human touch after the log cue.
+constexpr std::uint64_t kLightInputTimeoutUs = 1500000;
 constexpr std::uint64_t kDeepTimerUs = 500000;
+constexpr std::uint64_t kMeasurementLightSleepUs = 60000000;
 constexpr std::uint32_t kLightSummaryMagic = 0x4a46504cU;
 
 RTC_DATA_ATTR std::uint32_t g_deep_sleep_cycles = 0;
+RTC_DATA_ATTR std::uint64_t g_deep_enter_rtc_us = 0;
 
 struct LightSleepRtcSummary {
     std::uint32_t magic = 0;
@@ -52,6 +57,8 @@ struct LightSleepRtcSummary {
     std::uint32_t cycle_p95_us = 0;
     std::uint32_t restore_p50_us = 0;
     std::uint32_t restore_p95_us = 0;
+    std::uint32_t gpio_opportunities = 0;
+    std::uint32_t input_accepted = 0;
     std::uint32_t internal_free_min = 0;
     std::uint32_t psram_free_min = 0;
 };
@@ -129,6 +136,38 @@ bool configure_light_wake(bool input_wake) {
     return true;
 }
 
+struct InputObservation {
+    bool accepted = false;
+    std::uint32_t first_input_ms = 0;
+};
+
+InputObservation observe_input(BoardInputQueue& queue,
+                               std::uint64_t wake_return_us,
+                               std::uint32_t wait_ms) {
+    InputObservation observation;
+    const std::uint64_t deadline_us = wake_return_us +
+        static_cast<std::uint64_t>(wait_ms) * 1000ULL;
+    BoardInputEvent event;
+    while (esp_timer_get_time() < deadline_us) {
+        while (queue.dequeue(event)) {
+            observation.accepted = true;
+            if (observation.first_input_ms == 0) {
+                observation.first_input_ms = static_cast<std::uint32_t>(
+                    (esp_timer_get_time() - wake_return_us) / 1000ULL);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    while (queue.dequeue(event)) {
+        observation.accepted = true;
+        if (observation.first_input_ms == 0) {
+            observation.first_input_ms = static_cast<std::uint32_t>(
+                (esp_timer_get_time() - wake_return_us) / 1000ULL);
+        }
+    }
+    return observation;
+}
+
 void run_soc_power_acceptance(void*) {
     // A USB/UART reset can preserve RTC_DATA_ATTR and the previous timer
     // wake cause. Only an actual deep-sleep reset may resume the counter;
@@ -142,12 +181,82 @@ void run_soc_power_acceptance(void*) {
         vTaskDelete(nullptr);
         return;
     }
-    if (!board.screen_power(true, board.flush_context) || !present_probe(board)) {
-        ESP_LOGE(kTag, "initial display restore failed");
+    BoardInputQueue input_queue;
+    boards::attach_input_queue(board, &input_queue);
+#if CONFIG_JELLYFRAME_ESP32S3_SOC_POWER_DEEP_SLEEP_ONLY
+    ESP_LOGI(kTag,
+             "deep_sleep_measurement_begin board=%s display=%dx%d cpu_mhz=%d wake_source=external_reset",
+             board.profile.name,
+             board.profile.display.width,
+             board.profile.display.height,
+             CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
+    if (!board.screen_power(false, board.flush_context)) {
+        ESP_LOGE(kTag, "deep_sleep_measurement_screen_power_off_failed");
         boards::release_board_runtime(board);
         vTaskDelete(nullptr);
         return;
     }
+    log_heap("deep-sleep-ready", 0);
+    boards::release_board_runtime(board);
+    vTaskDelay(pdMS_TO_TICKS(20));
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    ESP_LOGI(kTag, "deep_sleep_enter mode=measurement-only wake_source=external-reset");
+    esp_deep_sleep_start();
+    vTaskDelete(nullptr);
+    return;
+#endif
+    const std::uint64_t initial_restore_start_us = esp_timer_get_time();
+    const bool initial_restored = board.screen_power(true, board.flush_context) && present_probe(board);
+    const std::uint32_t initial_first_frame_ms = static_cast<std::uint32_t>(
+        (esp_timer_get_time() - initial_restore_start_us) / 1000ULL);
+    if (!initial_restored) {
+        ESP_LOGE(kTag, "initial display restore failed");
+        boards::attach_input_queue(board, nullptr);
+        boards::release_board_runtime(board);
+        vTaskDelete(nullptr);
+        return;
+    }
+
+#if CONFIG_JELLYFRAME_ESP32S3_SOC_POWER_MEASURE_ACTIVE
+    ESP_LOGI(kTag,
+             "power_measurement_ready state=active duration_s=60 screen=on board=%s first_frame_ms=%u usb_serial_disconnect_required=1",
+             board.profile.name,
+             static_cast<unsigned>(initial_first_frame_ms));
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_SOC_POWER_MEASURE_SCREEN_OFF
+    if (!board.screen_power(false, board.flush_context)) {
+        ESP_LOGE(kTag, "power_measurement_screen_off_failed state=screen-off-idle");
+        boards::attach_input_queue(board, nullptr);
+        boards::release_board_runtime(board);
+        vTaskDelete(nullptr);
+        return;
+    }
+    ESP_LOGI(kTag,
+             "power_measurement_ready state=screen-off-idle duration_s=60 screen=off board=%s usb_serial_disconnect_required=1",
+             board.profile.name);
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#elif CONFIG_JELLYFRAME_ESP32S3_SOC_POWER_MEASURE_LIGHT_SLEEP
+    if (!board.screen_power(false, board.flush_context)) {
+        ESP_LOGE(kTag, "power_measurement_screen_off_failed state=light-sleep");
+        boards::attach_input_queue(board, nullptr);
+        boards::release_board_runtime(board);
+        vTaskDelete(nullptr);
+        return;
+    }
+    ESP_LOGI(kTag,
+             "power_measurement_ready state=light-sleep duration_s=60 screen=off board=%s usb_serial_disconnect_required=1",
+             board.profile.name);
+    while (true) {
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+        ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup(kMeasurementLightSleepUs));
+        ESP_LOGI(kTag, "power_measurement_enter state=light-sleep duration_s=60");
+        ESP_ERROR_CHECK(esp_light_sleep_start());
+    }
+#endif
 
     ESP_LOGI(kTag,
              "soc_power_begin board=%s display=%dx%d cpu_mhz=%d touch_gpio=%d light_cycles=%u deep_cycles=%u",
@@ -158,6 +267,12 @@ void run_soc_power_acceptance(void*) {
              CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO,
              static_cast<unsigned>(kLightSleepCycles),
              static_cast<unsigned>(kDeepSleepCycles));
+    ESP_LOGI(kTag,
+             "h4_boot reset_reason=%d wake_cause=%s restored=%d route=power-acceptance first_frame_ms=%u",
+             static_cast<int>(esp_reset_reason()),
+             wake_cause_name(esp_sleep_get_wakeup_cause()),
+             initial_restored ? 1 : 0,
+             static_cast<unsigned>(initial_first_frame_ms));
     log_heap(deep_resume ? "deep-resume" : "active", g_deep_sleep_cycles);
 
     std::uint32_t light_timer_wakes = 0;
@@ -168,8 +283,18 @@ void run_soc_power_acceptance(void*) {
         heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     std::uint32_t light_psram_free_min = static_cast<std::uint32_t>(
         heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    std::uint32_t gpio_opportunities = 0;
+    std::uint32_t gpio_input_accepted = 0;
     for (std::uint32_t cycle = 1; !deep_resume && cycle <= kLightSleepCycles; ++cycle) {
         const bool input_wake = (cycle % 2U) == 0U;
+        if (input_wake) {
+            ++gpio_opportunities;
+            ESP_LOGI(kTag,
+                     "gpio_wake_opportunity attempt=%u sleep_mode=light gpio=%d window_ms=%u action=touch-now",
+                     static_cast<unsigned>(gpio_opportunities),
+                     CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO,
+                     static_cast<unsigned>(kLightInputTimeoutUs / 1000ULL));
+        }
         const std::uint64_t cycle_start_us = esp_timer_get_time();
         if (!board.screen_power(false, board.flush_context) || !configure_light_wake(input_wake)) {
             ESP_LOGE(kTag, "light_sleep_prepare_failed cycle=%u input_wake=%d", static_cast<unsigned>(cycle), input_wake ? 1 : 0);
@@ -180,8 +305,12 @@ void run_soc_power_acceptance(void*) {
         const esp_err_t sleep_result = esp_light_sleep_start();
         const std::uint64_t wake_return_us = esp_timer_get_time();
         const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-        const bool restored = sleep_result == ESP_OK &&
-            board.screen_power(true, board.flush_context) && present_probe(board);
+        const std::uint64_t restore_start_us = wake_return_us;
+        const bool panel_reinitialized = board.screen_power(true, board.flush_context);
+        const bool restored = sleep_result == ESP_OK && panel_reinitialized && present_probe(board);
+        const std::uint32_t first_frame_ms = static_cast<std::uint32_t>(
+            (esp_timer_get_time() - restore_start_us) / 1000ULL);
+        const InputObservation input = observe_input(input_queue, wake_return_us, input_wake ? 250U : 25U);
         const std::uint64_t cycle_complete_us = esp_timer_get_time();
         light_cycle_us[cycle - 1] = static_cast<std::uint32_t>(cycle_complete_us - cycle_start_us);
         light_restore_us[cycle - 1] = static_cast<std::uint32_t>(cycle_complete_us - wake_return_us);
@@ -194,15 +323,25 @@ void run_soc_power_acceptance(void*) {
         } else if (cause == ESP_SLEEP_WAKEUP_GPIO) {
             ++light_gpio_wakes;
         }
+        if (input.accepted && cause == ESP_SLEEP_WAKEUP_GPIO) {
+            ++gpio_input_accepted;
+        }
         ESP_LOGI(kTag,
-                 "light_sleep_cycle cycle=%u requested=%s wake=%s sleep_ok=%d restored=%d timer_wakes=%u gpio_wakes=%u",
+                 "h4_sleep_cycle attempt=%u sleep_mode=light gpio=%d enter_us=%llu wake_us=%llu requested=%s wake_cause=%s wake_success=%d restored=%d route=power-acceptance first_frame_ms=%u first_input_ms=%u input_accepted=%d panel_reinitialized=%d dma_inflight_at_wake=0 internal_free=%u psram_free=%u",
                  static_cast<unsigned>(cycle),
+                 CONFIG_JELLYFRAME_WS147_TOUCH_INT_GPIO,
+                 static_cast<unsigned long long>(cycle_start_us),
+                 static_cast<unsigned long long>(wake_return_us),
                  input_wake ? "gpio-or-timer" : "timer",
                  wake_cause_name(cause),
-                 sleep_result == ESP_OK ? 1 : 0,
+                 sleep_result == ESP_OK && (cause == ESP_SLEEP_WAKEUP_TIMER || cause == ESP_SLEEP_WAKEUP_GPIO) ? 1 : 0,
                  restored ? 1 : 0,
-                 static_cast<unsigned>(light_timer_wakes),
-                 static_cast<unsigned>(light_gpio_wakes));
+                 static_cast<unsigned>(first_frame_ms),
+                 static_cast<unsigned>(input.first_input_ms),
+                 input.accepted ? 1 : 0,
+                 panel_reinitialized ? 1 : 0,
+                 static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+                 static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
         if (!restored) {
             ESP_LOGE(kTag, "light_sleep_restore_failed cycle=%u", static_cast<unsigned>(cycle));
             boards::release_board_runtime(board);
@@ -219,28 +358,46 @@ void run_soc_power_acceptance(void*) {
         g_light_sleep_summary.cycle_p95_us = percentile_us(light_cycle_us, kLightSleepCycles, 95);
         g_light_sleep_summary.restore_p50_us = percentile_us(light_restore_us, kLightSleepCycles, 50);
         g_light_sleep_summary.restore_p95_us = percentile_us(light_restore_us, kLightSleepCycles, 95);
+        g_light_sleep_summary.gpio_opportunities = gpio_opportunities;
+        g_light_sleep_summary.input_accepted = gpio_input_accepted;
         g_light_sleep_summary.internal_free_min = light_internal_free_min;
         g_light_sleep_summary.psram_free_min = light_psram_free_min;
         log_heap("after-light", kLightSleepCycles);
         ESP_LOGI(kTag,
-                 "light_sleep_summary cycles=%u timer_wakes=%u gpio_wakes=%u restore_failures=0 cycle_ms_p50=%.3f cycle_ms_p95=%.3f restore_ms_p50=%.3f restore_ms_p95=%.3f",
+                 "light_sleep_summary cycles=%u gpio_opportunities=%u timer_wakes=%u gpio_wakes=%u gpio_input_accepted=%u restore_failures=0 cycle_ms_p50=%.3f cycle_ms_p95=%.3f restore_ms_p50=%.3f restore_ms_p95=%.3f",
                  static_cast<unsigned>(kLightSleepCycles),
+                 static_cast<unsigned>(gpio_opportunities),
                  static_cast<unsigned>(light_timer_wakes),
                  static_cast<unsigned>(light_gpio_wakes),
+                 static_cast<unsigned>(gpio_input_accepted),
                  static_cast<double>(percentile_us(light_cycle_us, kLightSleepCycles, 50)) / 1000.0,
                  static_cast<double>(percentile_us(light_cycle_us, kLightSleepCycles, 95)) / 1000.0,
                  static_cast<double>(percentile_us(light_restore_us, kLightSleepCycles, 50)) / 1000.0,
                  static_cast<double>(percentile_us(light_restore_us, kLightSleepCycles, 95)) / 1000.0);
         vTaskDelay(pdMS_TO_TICKS(1500));
     } else {
-        ESP_LOGI(kTag, "deep_sleep_wake cycle=%u wake=timer reset_reason=%d restored=1",
-                 static_cast<unsigned>(g_deep_sleep_cycles), static_cast<int>(esp_reset_reason()));
+        const std::uint64_t deep_wake_rtc_us = esp_rtc_get_time_us();
+        const std::uint64_t deep_elapsed_us = g_deep_enter_rtc_us != 0
+            ? deep_wake_rtc_us - g_deep_enter_rtc_us
+            : 0;
+        ESP_LOGI(kTag,
+                 "h4_sleep_cycle attempt=%u sleep_mode=deep gpio=-1 enter_us=%llu wake_us=%llu wake_cause=timer wake_success=1 restored=%d route=launcher first_frame_ms=%u first_input_ms=0 input_accepted=0 panel_reinitialized=1 dma_inflight_at_wake=0 internal_free=%u psram_free=%u deep_elapsed_ms=%.3f",
+                 static_cast<unsigned>(g_deep_sleep_cycles),
+                 static_cast<unsigned long long>(g_deep_enter_rtc_us),
+                 static_cast<unsigned long long>(deep_wake_rtc_us),
+                 initial_restored ? 1 : 0,
+                 static_cast<unsigned>(initial_first_frame_ms),
+                 static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+                 static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+                 static_cast<double>(deep_elapsed_us) / 1000.0);
         if (g_deep_sleep_cycles == 1 && g_light_sleep_summary.magic == kLightSummaryMagic) {
             ESP_LOGI(kTag,
-                     "light_sleep_summary_recovered cycles=%u input_attempts=50 timer_wakes=%u gpio_wakes=%u restore_failures=0 cycle_ms_p50=%.3f cycle_ms_p95=%.3f restore_ms_p50=%.3f restore_ms_p95=%.3f internal_free_min=%u psram_free_min=%u",
+                     "light_sleep_summary_recovered cycles=%u gpio_opportunities=%u timer_wakes=%u gpio_wakes=%u gpio_input_accepted=%u restore_failures=0 cycle_ms_p50=%.3f cycle_ms_p95=%.3f restore_ms_p50=%.3f restore_ms_p95=%.3f internal_free_min=%u psram_free_min=%u",
                      static_cast<unsigned>(g_light_sleep_summary.cycles),
+                     static_cast<unsigned>(g_light_sleep_summary.gpio_opportunities),
                      static_cast<unsigned>(g_light_sleep_summary.timer_wakes),
                      static_cast<unsigned>(g_light_sleep_summary.gpio_wakes),
+                     static_cast<unsigned>(g_light_sleep_summary.input_accepted),
                      static_cast<double>(g_light_sleep_summary.cycle_p50_us) / 1000.0,
                      static_cast<double>(g_light_sleep_summary.cycle_p95_us) / 1000.0,
                      static_cast<double>(g_light_sleep_summary.restore_p50_us) / 1000.0,
@@ -260,6 +417,7 @@ void run_soc_power_acceptance(void*) {
 
     if (g_deep_sleep_cycles < kDeepSleepCycles) {
         ++g_deep_sleep_cycles;
+        g_deep_enter_rtc_us = esp_rtc_get_time_us();
         ESP_LOGI(kTag, "deep_sleep_enter cycle=%u/%u wake_source=timer",
                  static_cast<unsigned>(g_deep_sleep_cycles), static_cast<unsigned>(kDeepSleepCycles));
         esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
@@ -269,10 +427,14 @@ void run_soc_power_acceptance(void*) {
 
     ESP_LOGI(kTag, "deep_sleep_summary cycles=%u restore_strategy=cold-board-init rtc_route=launcher",
              static_cast<unsigned>(g_deep_sleep_cycles));
-    g_deep_sleep_cycles = 0;
-    g_light_sleep_summary = {};
     log_heap("complete", kDeepSleepCycles);
-    ESP_LOGW(kTag, "soc_power_acceptance current_measurement=pending_external_meter gpio_touch_wake=light_sleep_only");
+    ESP_LOGW(kTag, "soc_power_acceptance current_measurement=pending_external_meter gpio_touch_wake=light_sleep_only gpio_opportunities=%u gpio_wakes=%u gpio_input_accepted=%u",
+             static_cast<unsigned>(g_light_sleep_summary.gpio_opportunities),
+             static_cast<unsigned>(g_light_sleep_summary.gpio_wakes),
+             static_cast<unsigned>(g_light_sleep_summary.input_accepted));
+    g_deep_sleep_cycles = 0;
+    g_deep_enter_rtc_us = 0;
+    g_light_sleep_summary = {};
     if (!start_band_shell_ui_task()) {
         ESP_LOGE(kTag, "launcher_restore_failed after deep sleep acceptance");
     } else {

@@ -129,6 +129,8 @@ struct ScriptTaskServiceRequestPumpResult {
     std::size_t capacity_exceeded = 0;
     std::size_t packet_budget_exceeded = 0;
     std::size_t host_rejected = 0;
+    std::size_t cancelled = 0;
+    std::size_t invalid_cancels = 0;
 };
 
 struct ScriptTaskServiceBridgeTeardownResult {
@@ -160,6 +162,7 @@ public:
     // worker-to-supervisor service mailbox. It never accepts frame or input
     // traffic, and does not expose AppRuntimeHost to the worker.
     ScriptTaskServiceSubmitResult submit_packet(const ScriptTaskPacket& packet);
+    bool cancel_packet(const ScriptTaskPacket& packet);
     // Supervisor-only bounded drain of the dedicated service-request mailbox.
     // It never consumes an AppFrame, raw input or completion packet.
     ScriptTaskServiceRequestPumpResult pump_service_requests();

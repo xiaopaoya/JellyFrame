@@ -5,6 +5,7 @@
 #endif
 
 int script_runtime_tests_main();
+int script_task_worker_runtime_tests_main();
 
 namespace {
 
@@ -24,6 +25,7 @@ int run_test(const char* name, int (*test_main)()) {
 int main() {
     int failed = 0;
     failed += run_test("script_runtime", script_runtime_tests_main);
+    failed += run_test("script_task_worker_runtime", script_task_worker_runtime_tests_main);
 
     if (failed != 0) {
         std::cerr << failed << " script test group(s) failed\n";

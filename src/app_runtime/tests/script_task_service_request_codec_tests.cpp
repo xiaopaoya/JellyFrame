@@ -55,12 +55,37 @@ void service_request_post_uses_the_dedicated_supervisor_mailbox() {
     assert(!supervisor.take_worker_packet(output));
 }
 
+void service_cancels_round_trip_as_value_only_packet() {
+    ScriptTaskSupervisor supervisor({{2, 32}, {2, 0}, {2, 64, 128}, 2, 2, {2, 20}});
+    const ScriptAppSession active = supervisor.begin(53);
+    const ScriptTaskServiceCancel expected{17, 19};
+    std::vector<std::uint8_t> encoded;
+    assert(encode_script_task_service_cancel(expected, {12}, encoded) ==
+           ScriptTaskServiceRequestCodecStatus::Accepted);
+    ScriptTaskServiceCancel decoded;
+    assert(decode_script_task_service_cancel(encoded, {12}, decoded) ==
+           ScriptTaskServiceRequestCodecStatus::Accepted);
+    assert(decoded.request_id == expected.request_id);
+    assert(decoded.client_token == expected.client_token);
+    assert(post_script_task_service_cancel(supervisor, active, 4, expected, {12}).accepted());
+
+    ScriptTaskPacket output;
+    assert(supervisor.take_service_request(output));
+    assert(output.kind == ScriptTaskPacketKind::ServiceCancel);
+    assert(output.sequence == 4);
+    assert(output.payload.size() == 12);
+    encoded[1] = 0;
+    assert(decode_script_task_service_cancel(encoded, {12}, decoded) ==
+           ScriptTaskServiceRequestCodecStatus::Malformed);
+}
+
 } // namespace
 
 int script_task_service_request_codec_tests_main() {
     service_requests_round_trip_as_fixed_values();
     service_requests_reject_bad_values_and_wire_data();
     service_request_post_uses_the_dedicated_supervisor_mailbox();
+    service_cancels_round_trip_as_value_only_packet();
     std::cout << "script task service request codec tests passed\n";
     return 0;
 }

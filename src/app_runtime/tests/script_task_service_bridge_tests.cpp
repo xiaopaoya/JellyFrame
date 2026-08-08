@@ -160,6 +160,24 @@ void bridge_submits_dedicated_worker_service_packets() {
     assert(bridge.active_request_count() == 1);
 }
 
+void bridge_cancels_a_queued_worker_request() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.script.worker-cancel", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    ScriptTaskServiceBridge bridge(host, supervisor, {4});
+    const ScriptTaskServiceRequest request{HostServiceJobKind::NetworkFetch, 72, 73, 0, 2, 400};
+    assert(post_script_task_service_request(supervisor, session, 9, request, {20}).accepted());
+    assert(post_script_task_service_cancel(supervisor, session, 10, {72, 73}, {12}).accepted());
+
+    const ScriptTaskServiceRequestPumpResult pumped = bridge.pump_service_requests();
+    assert(pumped.received == 2);
+    assert(pumped.accepted == 1);
+    assert(pumped.cancelled == 1);
+    assert(bridge.active_request_count() == 0);
+    assert(host.requests().empty());
+}
+
 void bridge_rejects_non_service_or_malformed_packets_without_host_access() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.script.bad-worker-request", AppRole::App);
@@ -446,6 +464,7 @@ int script_task_service_bridge_tests_main() {
     completion_payload_round_trips_without_native_data();
     bridge_delivers_completion_as_bounded_worker_value_packet();
     bridge_submits_dedicated_worker_service_packets();
+    bridge_cancels_a_queued_worker_request();
     bridge_rejects_non_service_or_malformed_packets_without_host_access();
     bridge_request_pump_reports_host_and_wire_rejections();
     bridge_cancels_pending_jobs_without_leaving_tombstones();

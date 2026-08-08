@@ -183,7 +183,8 @@ ScriptTaskAppFramePublishResult ScriptTaskAppFramePublisher::publish(
 ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& supervisor,
                                                          const ScriptAppSession& session,
                                                          const ScriptTaskAppFrameCodecOptions& options,
-                                                         ScriptTaskAppFrame& output) {
+                                                         ScriptTaskAppFrame& output,
+                                                         std::uint32_t* accepted_packet_sequence) {
     ScriptTaskPacket packet;
     if (!supervisor.take_worker_packet(packet)) {
         return ScriptTaskAppFrameTakeStatus::NoFrame;
@@ -199,8 +200,12 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& su
     if (released != ScriptTaskFrameLeaseStatus::Accepted) {
         return ScriptTaskAppFrameTakeStatus::LeaseRejected;
     }
-    return decode_script_task_app_frame(copied, options, output) == ScriptTaskAppFrameCodecStatus::Accepted
-        ? ScriptTaskAppFrameTakeStatus::Accepted
-        : ScriptTaskAppFrameTakeStatus::DecodeRejected;
+    if (decode_script_task_app_frame(copied, options, output) != ScriptTaskAppFrameCodecStatus::Accepted) {
+        return ScriptTaskAppFrameTakeStatus::DecodeRejected;
+    }
+    if (accepted_packet_sequence != nullptr) {
+        *accepted_packet_sequence = packet.sequence;
+    }
+    return ScriptTaskAppFrameTakeStatus::Accepted;
 }
 } // namespace jellyframe

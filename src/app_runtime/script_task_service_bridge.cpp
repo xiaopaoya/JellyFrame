@@ -232,11 +232,32 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit_packet(const Scrip
                   request.client_token);
 }
 
+bool ScriptTaskServiceBridge::cancel_packet(const ScriptTaskPacket& packet) {
+    if (packet.kind != ScriptTaskPacketKind::ServiceCancel ||
+        !supervisor_.accepts(packet.session)) {
+        return false;
+    }
+    ScriptTaskServiceCancel decoded;
+    if (decode_script_task_service_cancel(packet.payload, {packet.payload.size()}, decoded) !=
+        ScriptTaskServiceRequestCodecStatus::Accepted) {
+        return false;
+    }
+    return cancel({packet.session, decoded.request_id, decoded.client_token});
+}
+
 ScriptTaskServiceRequestPumpResult ScriptTaskServiceBridge::pump_service_requests() {
     ScriptTaskServiceRequestPumpResult result;
     ScriptTaskPacket packet;
     while (supervisor_.take_service_request(packet)) {
         ++result.received;
+        if (packet.kind == ScriptTaskPacketKind::ServiceCancel) {
+            if (cancel_packet(packet)) {
+                ++result.cancelled;
+            } else {
+                ++result.invalid_cancels;
+            }
+            continue;
+        }
         switch (submit_packet(packet).status) {
         case ScriptTaskServiceSubmitStatus::Accepted:
             ++result.accepted;

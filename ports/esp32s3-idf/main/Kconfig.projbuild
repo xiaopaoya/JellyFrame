@@ -26,6 +26,12 @@ config JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
         enabling JerryScript. It is a visual and input bring-up fixture, not a
         product launcher or permission implementation.
 
+config JELLYFRAME_ESP32S3_RUN_FORMS_ADVANCED_ACCEPTANCE
+    bool "Run forms.advanced acceptance fixture"
+    help
+        Starts the port-owned static forms fixture and bounded native input
+        replay. It does not claim JerryScript or FormData device coverage.
+
 config JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK
     bool "Run opaque linear-gradient presentation fixture"
     help
@@ -59,6 +65,40 @@ config JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE
         RTC-retained state and timer wake for deep-sleep cold-start recovery.
         Current measurement remains an external acceptance step.
 
+config JELLYFRAME_ESP32S3_SOC_POWER_DEEP_SLEEP_ONLY
+    bool "Enter deep sleep immediately for current measurement"
+    depends on JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE
+    default n
+    help
+        Disable the light-sleep and timed deep-sleep recovery loops for a
+        static current measurement. The board is initialized, its display is
+        powered down, peripherals are released, and the SoC remains in deep
+        sleep until an external reset.
+
+config JELLYFRAME_ESP32S3_SOC_POWER_MEASURE_ACTIVE
+    bool "Hold active display state for external current measurement"
+    depends on JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE
+    default n
+    help
+        Port-only measurement fixture. After a first present, leave the
+        display on and keep the board initialized until an external reset.
+
+config JELLYFRAME_ESP32S3_SOC_POWER_MEASURE_SCREEN_OFF
+    bool "Hold screen-off idle state for external current measurement"
+    depends on JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE
+    default n
+    help
+        Port-only measurement fixture. Put the panel and backlight into the
+        board screen-off state while keeping the SoC and board runtime awake.
+
+config JELLYFRAME_ESP32S3_SOC_POWER_MEASURE_LIGHT_SLEEP
+    bool "Hold light-sleep state for external current measurement"
+    depends on JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE
+    default n
+    help
+        Port-only measurement fixture. Turn the screen off and repeatedly
+        enter 60-second timer-woken light-sleep segments until reset.
+
 config JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE
     bool "Run missing-resource fallback fixture"
     depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
@@ -85,11 +125,71 @@ config JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
         app lifecycle cleanup; it does not enable JerryScript and must not be
         recorded as script-watchdog acceptance.
 
+config JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_PROTOCOL_ACCEPTANCE
+    bool "Run script-task value protocol preflight"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    help
+        Starts separate supervisor, script-worker and UI-owner tasks and
+        exercises the mainline value-only script-task protocol. This is a
+        port acceptance fixture, not a real JerryScript App: frame packets
+        are decoded and checked by the UI owner, while JerryScript remains
+        optional and no native pointer crosses a task boundary.
+
+config JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE
+    bool "Run real JerryScript App acceptance fixture"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    help
+        Starts the port-owned real JerryScript script-task fixture. This profile
+        requires JELLYFRAME_BUILD_SCRIPTING=ON and JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON
+        at CMake configure time and is isolated from native preflight profiles.
+
+config JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE
+    bool "Run real JerryScript service echo acceptance fixture"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    help
+        Starts the real worker-local JerryScript service_echo fixture. A
+        port-owned asynchronous provider task receives copied scalar requests
+        and returns copied completion values through the supervisor bridge.
+
+config JELLYFRAME_ESP32S3_SCRIPT_SERVICE_ACCEPTANCE_SCENARIO
+    int "Script service acceptance scenario"
+    depends on JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE
+    default 0
+    range 0 5
+    help
+        0 runs the 100-completion echo baseline. 1 runs queued cancellation,
+        2 runs in-flight cancellation, 3 runs generation-stale teardown, 4
+        runs payload-boundary handling, and 5 runs the 30-minute mixed soak
+        provider. Each scenario is built and archived independently so
+        cancellation evidence cannot be conflated with the successful echo
+        path.
+
+config JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE
+    bool "Run real JerryScript fault and recovery acceptance fixture"
+    depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
+    help
+        Starts the real worker-local fault_lab fixture. Controlled script
+        failures publish value-only fatal records; the supervisor tears down
+        only the target session and launches a normal replacement worker.
+
 endchoice
+
+config JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+    bool "Link script-task value protocol runtime"
+    depends on JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_PROTOCOL_ACCEPTANCE || \
+             JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE || \
+             JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE || \
+             JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE
+    default n
+    help
+        Adds the platform-independent value protocol sources to the ESP-IDF
+        app-runtime component. Keep this disabled for ordinary firmware so no
+        script-task mailbox, lease registry or bridge is linked.
 
 config JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     bool "Enable bounded BMP image adapter"
     default n
+
     help
         Links the port-owned uncompressed 24/32-bit BMP decoder and image
         callbacks. It accepts at most 96x96 pixels, 32 KiB decoded pixels,
@@ -97,9 +197,18 @@ config JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
         that do not render images so they do not link the decoder or retain an
         image cache. This does not enable PNG, JPEG, GIF, WebP, audio or video.
 
+config JELLYFRAME_ESP32S3_RUN_FLEX_GRID_ACCEPTANCE
+    bool "Run Flex/Grid ON/OFF acceptance fixture"
+    default n
+    help
+        Starts the port-owned flex/grid acceptance page. The fixture covers
+        flex order/gap, grid gap/span and @supports. Use separate ON/OFF
+        Render Core CMake profiles for the comparison; this is not a product
+        application.
+
 config JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE
     int "UI task stack size"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_FORMS_ADVANCED_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_PROTOCOL_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE
     default 32768
     range 8192 65536
     help
@@ -108,15 +217,24 @@ config JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE
 
 config JELLYFRAME_ESP32S3_UI_TASK_PRIORITY
     int "UI task priority"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_FORMS_ADVANCED_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE
     default 5
     range 1 24
 
 config JELLYFRAME_ESP32S3_UI_TASK_TICK_MS
     int "UI task idle tick delay in ms"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SOC_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE
     default 20
     range 1 1000
+
+config JELLYFRAME_ESP32S3_SCRIPT_TASK_STACK_SIZE
+    int "JerryScript worker task stack size"
+    depends on JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_PROTOCOL_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE
+    default 24576
+    range 12288 65536
+    help
+        Stack for the isolated script worker acceptance task. The worker
+        owns only value-protocol state and never owns the panel or renderer.
 
 config JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER
     bool "Retain StyleResolver for the loaded UI document"

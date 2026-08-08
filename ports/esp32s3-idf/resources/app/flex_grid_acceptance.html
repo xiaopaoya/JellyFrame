@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 172px; height: 320px; background: #10151b; color: #f2f6fa; font-family: sans-serif; }
+body { padding: 8px; }
+h1 { margin: 0 0 5px; font-size: 13px; }
+.hint { margin-bottom: 7px; color: #9ca9b6; font-size: 7px; }
+.flex-fallback, .grid-fallback { display: block; border: 1px solid #34404d; padding: 4px; margin-bottom: 7px; }
+.flex-case { display: flex; gap: 5px; height: 42px; }
+.flex-case .item { width: 38px; padding: 5px 2px; background: #da6f59; font-size: 7px; text-align: center; }
+.flex-case .first { order: 3; background: #7a68c7; }
+.flex-case .second { order: 1; background: #48a898; }
+.flex-case .third { order: 2; background: #d6a542; }
+.grid-case { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; min-height: 75px; }
+.grid-case .item { min-height: 29px; padding: 5px 2px; background: #334d78; font-size: 7px; text-align: center; }
+.grid-case .wide { grid-column: span 2; background: #b25c73; }
+.supports-marker { display: none; margin-top: 5px; padding: 4px; background: #49a873; font-size: 7px; }
+@supports (display: flex) { .supports-marker { display: block; } }
+@supports (display: grid) { .grid-fallback { border-color: #49a873; } }
+.foot { margin-top: 7px; color: #9ca9b6; font-size: 7px; }
+</style>
+</head>
+<body>
+<h1>FLEX / GRID GATE</h1>
+<div class="hint">ON: ordered row, gaps, span, supports marker</div>
+<section class="flex-fallback">
+  <div class="flex-case"><div class="item first">A order=3</div><div class="item second">B order=1</div><div class="item third">C order=2</div></div>
+  <div class="supports-marker">@supports: ON</div>
+</section>
+<section class="grid-fallback">
+  <div class="grid-case"><div class="item">1 gap</div><div class="item wide">2 span=2</div><div class="item">3</div><div class="item">4</div></div>
+</section>
+<div class="foot">OFF fallback: block / inline flow</div>
+</body>
+</html>

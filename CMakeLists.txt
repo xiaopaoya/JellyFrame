@@ -195,6 +195,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
             src/app_runtime/script_task_service_request_codec.cpp
             src/app_runtime/script_task_service_bridge.cpp
             src/app_runtime/script_task_worker_inbox.cpp
+            src/app_runtime/script_task_fatal_codec.cpp
         )
         target_link_libraries(jellyframe_script_task_runtime PUBLIC jellyframe_app_runtime)
         target_include_directories(jellyframe_script_task_runtime
@@ -211,6 +212,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
 
     add_library(jellyframe_script
         src/script/jerryscript_runtime.cpp
+        src/script/script_task_worker_runtime.cpp
     )
     target_link_libraries(jellyframe_script PUBLIC jellyframe_app_runtime ${JERRYSCRIPT_LIBRARIES})
     if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
@@ -897,6 +899,7 @@ if(JELLYFRAME_BUILD_TESTS)
     if(JELLYFRAME_BUILD_SCRIPTING)
         set(JELLYFRAME_SCRIPT_TEST_SOURCES
             src/script/tests/script_runtime_tests.cpp
+            src/script/tests/script_task_worker_runtime_tests.cpp
         )
         foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TEST_SOURCES)
             get_filename_component(test_name ${test_source} NAME_WE)
@@ -923,6 +926,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 src/app_runtime/tests/script_task_service_bridge_tests.cpp
                 src/app_runtime/tests/script_task_worker_inbox_tests.cpp
                 src/app_runtime/tests/script_task_value_flow_tests.cpp
+                src/app_runtime/tests/script_task_fatal_codec_tests.cpp
             )
             foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES)
                 get_filename_component(test_name ${test_source} NAME_WE)
