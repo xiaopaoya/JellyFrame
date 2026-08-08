@@ -1,6 +1,6 @@
 # App Runtime
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev
+> Last updated: 2026-08-04; Applies to: 0.5.0
 
 `app_runtime` contains hardware-neutral helpers for installable JellyFrame apps.
 

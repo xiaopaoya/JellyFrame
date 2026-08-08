@@ -1,6 +1,6 @@
 # Script-App Cross-Task Ownership Contract
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev; Status: 0.6 prerequisite with foundation landed
+> Last updated: 2026-08-07; Applies to: 0.5.0; Status: 0.6 prerequisite with foundation landed
 
 This contract defines how an RTOS host runs a real JerryScript App without moving DOM,
 JerryScript or renderer objects across tasks. The direct, same-thread desktop
@@ -60,10 +60,12 @@ target keys into a versioned value frame; session and sequence remain in the sur
 `make_script_task_app_frame()` flattens the worker-private `LayerNode` before copying this value frame.
 `script_task_input_codec.*` provides versioned pointer, wheel, key and bounded text values for the worker inbox.
 `script_task_input_dispatch.*` consumes those values only through the worker-private `InputController`.
-`script_task_service_request_codec.*` encodes a fixed 20-byte typed request;
+`script_task_service_request_codec.*` encodes a fixed 20-byte typed request and
+a fixed 12-byte cancellation identity;
 the supervisor decodes it before `ScriptTaskServiceBridge::submit_packet()` touches the host.
 `ScriptTaskServiceBridge::pump_service_requests()` is the only mailbox drain;
-it reports per-rejection counters without consuming frames or worker inbox data.
+it routes cancellation packets through `cancel_packet()` and reports per-rejection
+and cancellation counters without consuming frames or worker inbox data.
 An accepted wire request that the host rejects is returned through the normal
 bounded completion path as a terminal value, rather than silently disappearing.
 The supervisor has a separate session-scoped sealed service-payload lease
@@ -82,5 +84,34 @@ shutdown order is: `ScriptTaskSupervisor::begin_teardown`, bridge pending-job ca
 termination, bridge record retirement, then `ScriptTaskSupervisor::complete_teardown`. This preserves
 late-completion handle release without sending stale data to the worker.
 
-The next slice is a worker-side DOM/display-list producer and a UI-task frame consumer that uses this codec,
-then the port-specific RTOS adapter. Ports must not fill those gaps with raw pointers.
+`src/script/script_task_worker_runtime.*` now provides the first worker-side
+DOM/display-list producer slice. It owns the parsed document, same-thread
+JerryScript binding, render/layout/layer trees and `InputController` inside one
+worker object, and publishes only sealed value frames after value input or a
+worker-local timer/animation callback. Node destruction observers are
+composable, interaction state is rebound to replacement layer trees, and event
+dispatch reports target destruction before default actions can use the old node.
+The first worker-local JS gateway now exposes constrained
+`services.request(kind, callback, options)` and `services.cancel(requestId)`:
+request metadata and cancellation identity are scalar-only, and completion
+payload bytes are copied from a sealed lease before the callback runs. A
+successful cancel removes the worker-local callback only after its cancel packet
+is accepted; the supervisor bridge then cancels queued work or retains an
+in-flight tombstone for late cleanup. Provider policy, real RTOS task adapter
+and fatal worker boundary remain separate follow-up work. Ports must not fill
+those gaps with raw pointers.
+
+`JerryScriptRuntime` also records the first exception or execution-budget
+failure raised by a budgeted callback as a value-only `ScriptCallbackFailure`.
+`ScriptTaskWorkerRuntime` consumes it after input, timer/animation, or service
+completion dispatch and emits a bounded fatal record instead of publishing a
+new frame. This is only the worker-local fatal-detection slice; RTOS task exit,
+supervisor recovery and launcher handoff remain port acceptance work.
+The worker-local object exposes an idempotent `ScriptTaskWorkerRuntime::stop()`
+for its own exit boundary. It cannot invalidate the session or release
+supervisor-owned frame/service leases; those actions remain in the documented
+supervisor teardown order.
+Fatal publication uses a separate fixed 40-byte `FatalRecord` value packet and
+mailbox. It is intentionally independent from frame/input/service queues, and
+the worker may retry `publish_fatal()` after bounded mailbox backpressure; a
+successful publication cannot be duplicated.

@@ -2,7 +2,7 @@
 
 > Generated from: `csswg_support_table.csv`; source SHA-256: `b2d7c72f4cee270492579c133551d37c37a8b38e8ddeda6b494dc49421b8e2a3`.
 > Do not edit this generated table by hand.
-> Source audit: 2026-07-22; Applies to: 0.5.0-dev.
+> Source audit: 2026-07-22; Applies to: 0.5.0.
 
 This is the searchable JellyFrame support table for CSSWG features. Search it before using a property, function, selector, value or at-rule in an app.
 

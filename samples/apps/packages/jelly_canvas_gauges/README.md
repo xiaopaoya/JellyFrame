@@ -1,6 +1,6 @@
 # Jelly Canvas Gauges
 
-> Last updated: 2026-07-22; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0
 
 Canvas 2D V0.4 sample for wearable gauges and compact data graphics. DOM/CSS still
 own layout, text and controls; Canvas is used only for bounded rings and tiny

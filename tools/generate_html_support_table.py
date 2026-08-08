@@ -19,7 +19,7 @@ STATUSES = (
     "out_of_scope",
 )
 SOURCE_AUDIT_DATE = "2026-07-12"
-APPLIES_TO_VERSION = "0.5.0-dev"
+APPLIES_TO_VERSION = "0.5.0"
 REQUIRED_COLUMNS = (
     "feature_id",
     "type",

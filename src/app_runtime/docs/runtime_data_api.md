@@ -1,6 +1,6 @@
 # Runtime Data API Plan
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0
 
 This document defines how optional runtime data services are exposed to
 JavaScript. User-facing syntax should stay a documented subset of Web platform

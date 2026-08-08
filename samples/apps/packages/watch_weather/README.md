@@ -1,6 +1,6 @@
 # Watch Weather Example
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 A compact watch-weather source package used to validate package structure, local
 resources, package BMP images, XHR data updates, system-state JS bindings,

@@ -1,6 +1,6 @@
 # Tests
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Root-level tests are reserved for future cross-subproject and app-lifecycle
 acceptance tests.

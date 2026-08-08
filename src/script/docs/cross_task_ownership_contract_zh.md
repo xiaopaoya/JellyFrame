@@ -1,6 +1,6 @@
 # 脚本 App 跨任务所有权契约
 
-> 最后更新：2026-08-04；适用版本：0.5.0-dev；状态：0.6 主线前置契约与基础设施已落地
+> 最后更新：2026-08-07；适用版本：0.5.0；状态：0.6 主线前置契约与基础设施已落地
 
 本契约定义 RTOS/多任务宿主如何运行一个真实 JerryScript App，而不把 DOM、JerryScript
 资源或渲染对象跨任务传递。它是 P3 后续实现的前置条件；当前桌面同线程
@@ -134,10 +134,11 @@ native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTask
 `make_script_task_app_frame()` 会先在 worker 内部 flatten 私有 `LayerNode`，再复制该 value frame。
 `script_task_input_codec.*` 为 worker inbox 提供版本化 pointer、wheel、key 和受限 text value。
 `script_task_input_dispatch.*` 只通过 worker 私有 `InputController` 消费这些 value。
-`script_task_service_request_codec.*` 将 typed request 编码为固定 20-byte value，supervisor 在
-`ScriptTaskServiceBridge::submit_packet()` 接触 host 前完成解码和校验。
+`script_task_service_request_codec.*` 将 typed request 编码为固定 20-byte value，并将取消身份编码为
+固定 12-byte value；supervisor 在 `ScriptTaskServiceBridge::submit_packet()` 或取消分流接触 host 前完成
+解码和校验。
 `ScriptTaskServiceBridge::pump_service_requests()` 是唯一的 request mailbox drain；它会给出各类
-拒绝计数，且不会消费 frame 或 worker inbox 数据。
+拒绝和取消计数，取消包经 `cancel_packet()` 分流，且不会消费 frame 或 worker inbox 数据。
 已进入 wire queue 但被 host 拒绝的 request 会沿正常的有界 completion 路径返回终态 value，绝不静默丢失。
 supervisor 还持有独立、按 session 隔离的 sealed service-payload lease registry。当前
 `ScriptTaskServiceBridge` 已通过有界 `ScriptTaskServicePayloadWriter` 复制 host 结果，发布到该
@@ -153,5 +154,24 @@ bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer�
 最后 `ScriptTaskSupervisor::complete_teardown`。该顺序既不会把 stale value 投给 worker，也不会
 遗漏 late completion 的 handle release。
 
-下一片是 worker 侧 DOM/display-list producer 和 UI task frame consumer，并在其后接入 port 专属 RTOS
-adapter。在这些部分落地前，port 不得自行用裸指针填补协议空缺。
+`src/script/script_task_worker_runtime.*` 已提供第一片 worker 侧 DOM/display-list producer：它在一个
+worker-owned 对象内持有解析后的 document、同线程 JerryScript binding、render/layout/layer tree 和
+`InputController`，并在 value input 或 worker 内 timer/animation callback 修改 DOM 后只发布 sealed value
+frame。Node 销毁观察器现在可组合注册，重建 layer tree 时会重新绑定交互状态；事件 dispatch 会报告目标已
+销毁，使 pointer-up 不再继续执行依赖旧 Node 的默认动作。真实 RTOS task adapter 和
+worker fatal boundary 仍是后续工作。当前 worker-local JS gateway 已提供受限的
+`services.request(kind, callback, options)` 与 `services.cancel(requestId)`：请求元数据和取消身份只有标量，completion 在 sealed lease 复制并释放后
+才以 `payloadBytes` 副本交给 JS callback。`services.cancel(requestId)` 只在取消 value packet 成功进入
+mailbox 后移除 worker-local callback；supervisor bridge 再区分 queued/in-flight，迟到 completion 由
+tombstone 消费并回收。provider policy、真实 RTOS task adapter 和 fatal boundary 仍是后续工作。port
+不得用裸指针填补这些协议空缺。
+
+`JerryScriptRuntime` 现在会把预算执行 callback 首个异常或 execution-budget failure 记录为纯值
+`ScriptCallbackFailure`。`ScriptTaskWorkerRuntime` 在 input、timer/animation 或 service completion
+dispatch 后消费它，生成有界 fatal record 并停止发布新 frame。这只是 worker-local fatal detection 第一片；
+RTOS task 退出、supervisor recovery 与 launcher handoff 仍属于移植侧验收工作。
+worker-local 对象现在提供幂等的 `ScriptTaskWorkerRuntime::stop()` 作为自身退出边界；它只能销毁
+worker-owned realm、document 与 render state，不能使 session 失效，也不能释放 supervisor-owned
+frame/service lease。后两者仍必须由 supervisor 按既定 teardown 顺序完成。
+fatal 发布使用独立的固定 40-byte `FatalRecord` value packet 和 mailbox，与 frame/input/service 队列
+分离。`publish_fatal()` 遇到有界 mailbox 背压可以重试；成功发布后不会重复投递。

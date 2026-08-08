@@ -1,6 +1,6 @@
 # Route Tabs
 
-> Last updated: 2026-07-12; Applies to: 0.5.0-dev
+> Last updated: 2026-07-12; Applies to: 0.5.0
 
 A single-package tabbed settings/focus flow using the bounded app-local
 `location.hash` subset. It changes only route state inside the running app:

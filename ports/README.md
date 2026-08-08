@@ -1,6 +1,6 @@
 # Ports
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Port-support code and board-facing experiments live here.
 

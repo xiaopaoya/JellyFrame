@@ -1,6 +1,6 @@
 # Software Renderer Scope
 
-> Last updated: 2026-07-22; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0
 
 
 JellyFrame now has a CPU-only validation renderer. It is meant to prove the full

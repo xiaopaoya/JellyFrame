@@ -1,6 +1,6 @@
 # Optional Host Services Contract
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 This document makes image/audio/lightweight-video, network data requests,
 semantic device data and installable app bundles concrete enough for board ports. It complements

@@ -1,6 +1,6 @@
 # Versioning
 
-> Last updated: 2026-07-26; Applies to: 0.5.0-dev
+> Last updated: 2026-07-26; Applies to: 0.5.0
 
 JellyFrame Engine uses a lightweight semantic versioning scheme:
 

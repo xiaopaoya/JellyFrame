@@ -1,6 +1,6 @@
 # App Runtime Benchmarks
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Microbenchmarks in this directory measure app-runtime helpers that affect the
 UI/main task: request queues, completion queues, host handle tables and

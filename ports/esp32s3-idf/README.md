@@ -1,6 +1,6 @@
 # JellyFrame ESP32-S3 ESP-IDF Port
 
-> Last updated: 2026-07-24; Applies to: 0.5.0-dev
+> Last updated: 2026-07-24; Applies to: 0.5.0
 
 This directory is a first hardware bring-up path for ESP32-S3. It keeps the
 engine core platform-neutral and builds a small ESP-IDF app around the HAL

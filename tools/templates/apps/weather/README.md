@@ -1,6 +1,6 @@
 # Weather Template
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Brand-neutral weather app template for local-first data UI, package BMP image
 resources, event delegation and future host network integration.

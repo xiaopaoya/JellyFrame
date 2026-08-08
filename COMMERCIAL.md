@@ -1,6 +1,6 @@
 # Commercial Licensing
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 JellyFrame is source-available under the PolyForm Noncommercial License 1.0.0.
 Personal, educational, research, hobby and other noncommercial uses are allowed

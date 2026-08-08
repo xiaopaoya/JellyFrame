@@ -1,6 +1,6 @@
 # Embedded Framebuffer Backend
 
-> Last updated: 2026-08-02; Applies to: 0.5.0-dev
+> Last updated: 2026-08-02; Applies to: 0.5.0
 
 
 `src/render_core/embedded_framebuffer.h` provides the first deployable presentation

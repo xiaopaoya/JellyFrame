@@ -1,6 +1,6 @@
 # App Lifecycle
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev
+> Last updated: 2026-08-04; Applies to: 0.5.0
 
 This document is the app-author view of JellyFrame lifecycle behavior. It
 summarizes what an app can rely on when it is installed, launched, suspended,

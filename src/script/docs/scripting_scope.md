@@ -1,6 +1,6 @@
 # Scripting Scope
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev
+> Last updated: 2026-08-04; Applies to: 0.5.0
 
 JellyFrame scripting is intentionally small and optional. The engine should
 become useful for embedded app UI without inheriting the full browser API

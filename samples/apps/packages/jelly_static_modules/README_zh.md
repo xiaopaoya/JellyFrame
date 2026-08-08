@@ -1,6 +1,6 @@
 # 静态模块
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0
 
 这个小包证明打包期 ES-module 子集：`index.html` 有一个外部 `type="module"` 入口，
 `scripts/app.js` import 一个 package-local helper。打包会把入口改写成生成的 classic script

@@ -1,6 +1,6 @@
 # Script Samples
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Samples in this directory exercise the optional JerryScript bridge.
 

@@ -1,6 +1,6 @@
 # ESP32-S3 Components
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 ESP-IDF component wrappers used by the ESP32-S3 bring-up project.
 

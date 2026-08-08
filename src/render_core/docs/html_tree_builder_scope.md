@@ -1,6 +1,6 @@
 # HTML Tree Builder Scope
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Last checked against the WHATWG HTML Living Standard on 2026-06-13:
 

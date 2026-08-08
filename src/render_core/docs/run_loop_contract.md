@@ -1,6 +1,6 @@
 # Run Loop And Incremental Update Contract
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 
 This document defines JellyFrame's recommended host run loop. It covers only the

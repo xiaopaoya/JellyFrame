@@ -1,6 +1,6 @@
 # Band System Shell
 
-> Last updated: 2026-07-16; Applies to: 0.5.0-dev
+> Last updated: 2026-07-16; Applies to: 0.5.0
 
 An icon-first, 172x320 wearable system-shell visual acceptance sample. It
 separates host-owned watch face, launcher, quick settings and notifications

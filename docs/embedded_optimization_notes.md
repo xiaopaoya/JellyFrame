@@ -1,6 +1,6 @@
 # Embedded Optimization Notes
 
-> Last updated: 2026-08-02; Applies to: 0.5.0-dev
+> Last updated: 2026-08-02; Applies to: 0.5.0
 
 
 The exact target CPU, memory map, display controller and instruction set are not

@@ -1,6 +1,6 @@
 # Render Tree Scope
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Last checked against implementation sources on 2026-06-13:
 

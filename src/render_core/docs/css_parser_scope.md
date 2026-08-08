@@ -1,6 +1,6 @@
 # CSS Parser Scope
 
-> Last updated: 2026-07-22; Applies to: 0.5.0-dev
+> Last updated: 2026-07-22; Applies to: 0.5.0
 
 Last checked against CSS Syntax Module Level 3, Media Queries and browser
 parser source layout on 2026-06-16:

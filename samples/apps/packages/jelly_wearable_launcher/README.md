@@ -1,6 +1,6 @@
 # Wearable Launcher
 
-> Last updated: 2026-07-14; Applies to: 0.5.0-dev
+> Last updated: 2026-07-14; Applies to: 0.5.0
 
 An icon-first, round-300 wearable launcher visual sample. Compact `max-height`
 and `max-width` rules also keep its app grid usable on the standard 320 x 240

@@ -1,6 +1,6 @@
 # Render Core Benchmarks
 
-> Last updated: 2026-07-16; Applies to: 0.5.0-dev
+> Last updated: 2026-07-16; Applies to: 0.5.0
 
 Microbenchmarks in this directory measure the platform-neutral render pipeline:
 HTML parsing, CSS parsing, style resolution, render tree, layout, layer tree,

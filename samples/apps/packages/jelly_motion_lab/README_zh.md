@@ -1,6 +1,6 @@
 # Jelly Motion Lab
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-07；适用版本：0.5.0
 
 用于验证手表风格 JellyFrame 动效的可安装样例。它只使用标准 CSS
 `@keyframes`、`transform`、`opacity`、transition 和 `requestAnimationFrame`，

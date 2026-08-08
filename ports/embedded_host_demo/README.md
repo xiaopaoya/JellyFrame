@@ -1,6 +1,6 @@
 # Embedded Host Demo
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 This directory contains a platform-neutral host bring-up demo. It is kept under
 `ports/` because it exercises board-facing integration points rather than

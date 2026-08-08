@@ -1,14 +1,18 @@
 # 变更记录
 
-> 最后更新：2026-08-04；适用版本：0.5.0-dev
+> 最后更新：2026-08-09；适用版本：0.5.0
 
 JellyFrame Engine 的重要变更记录在这里。
 
 项目使用轻量语义化版本规则。详见 `docs/versioning_zh.md`。
 
-## Unreleased
+## 0.5.0 - 2026-08-09
 
 ### 变更
+
+- H4 最新 WS147 功耗归档已完成四组独立外部测量：active、screen-off idle、light sleep、deep sleep
+  均超过 60 秒，USB serial/JTAG 断开，仪器全程自动量程，并保留平均/最小/最大/电压/时长/样本数。
+  仪器不导出 p95，因此该字段保持未记录，不从均值或极值推导。
 
 - 新增可选 script-task runtime 的平台无关跨任务值协议基础：session generation/epoch、固定槽
   mailbox、sealed AppFrame/service-payload lease、独立 service request 通道、取消 tombstone、两阶段

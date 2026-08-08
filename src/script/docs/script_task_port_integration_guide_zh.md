@@ -1,6 +1,6 @@
 # 脚本 App 任务隔离接入指南
 
-> 最后更新：2026-08-04；适用版本：0.5.0-dev；状态：0.6 移植前置实现
+> 最后更新：2026-08-07；适用版本：0.5.0；状态：0.6 移植前置实现
 
 本指南约束 RTOS port 如何接入可选的 script-task runtime。它只描述平台无关接口的使用顺序；创建
 任务、CPU affinity、DMA、panel、网络 worker 和 watchdog 仍属于 `ports/`。
@@ -42,6 +42,11 @@ const auto completed = bridge.pump(host_frame_scratch);
 `submitted` 的 rejection counters 必须进入 app telemetry。host 拒绝一个已经接受到 wire mailbox 的请求时，
 bridge 会把终态 `ServiceCompletion` 放入 worker inbox；它不能被静默丢弃。
 
+worker 取消请求只能调用 `services.cancel(requestId)`。该调用产生固定 12-byte 的 `ServiceCancel`
+value packet，port 不得让 worker 直接持有 `ScriptTaskServiceBridge`、host job ID 或 provider 指针。
+supervisor task 必须优先 drain request/cancel mailbox：queued job 应被移除并退休 token，in-flight job
+应保留 cancellation tombstone，迟到 completion 必须释放 provider/host 资源且不得投递给 JS。
+
 真实 completion 若带 host handle，构造 bridge 时必须提供 `max_service_payload_bytes`、
 `payload_copy` 与 `payload_release`。copy callback 只能经 `ScriptTaskServicePayloadWriter` 写入上限内的
 字节；release callback 必须在复制成功、复制失败、取消、陈旧 completion 与 teardown 时恰好一次清理服务
@@ -82,10 +87,21 @@ ID、`DisplayCommand*` 或 worker 侧 target 地址。
 6. `ScriptTaskSupervisor::complete_teardown(session)`，回收 frame lease 与 release intents；
 7. UI task 原子回到 launcher/recovery frame 后，才可复用 app/session 资源。
 
+平台无关 worker runtime 的对应调用是幂等的 `ScriptTaskWorkerRuntime::stop()`。port 必须在 worker
+自己的 task boundary 内调用它；不能从 UI/supervisor task 直接析构 runtime，也不能把它当作
+`begin_teardown`/`complete_teardown` 的替代品。
+
+带 supervisor 的 `eval_with_supervisor()`、`process_one()` 与 `pump_callbacks()` 发现 fatal 后会自动尝试
+`publish_fatal(supervisor)`；mailbox 背压时 worker 后续 tick 必须继续运行这些入口或显式重试，直到发布成功
+或 supervisor 已失效。supervisor 从独立 fatal mailbox 解码 40-byte value packet 后再执行 session invalidation
+和 bridge teardown。重复调用不得产生多个 fatal packet，也不得把 fatal packet 放入 frame 或 service mailbox。
+初始化在任何 supervisor 入口之外失败时，port 必须显式调用 `publish_fatal()`；随后仍按本节的停止顺序处理。
+
 ## 当前证据与未完成项
 
 桌面 `jellyframe_script_task_runtime_tests` 已覆盖值协议、请求/完成/取消/拒绝、worker inbox 与
-`service completion -> worker -> sealed frame -> UI` 闭环。它不证明：真实 RTOS task 启动、JerryScript
+`service completion -> worker -> sealed frame -> UI` 基础闭环；scripting 桌面测试另覆盖
+`ScriptTaskWorkerRuntime` 的输入、timer、节点销毁安全和 sealed frame 发布。它不证明：真实 RTOS task 启动、JerryScript
 realm 生命周期、触控 ISR 到 UI 输入采样、真实 host service worker、panel present，或 fatal boundary。
 
 port 声称可运行真实脚本 App 前，仍必须按

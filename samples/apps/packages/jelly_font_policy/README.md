@@ -1,6 +1,6 @@
 # Jelly Font Policy
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Small package used to validate the app font policy path:
 

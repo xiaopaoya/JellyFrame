@@ -1,6 +1,6 @@
 # Jelly Watch Face
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-07；适用版本：0.5.0
 
 用于验收 `transform: rotate(...)`、`transform-origin`、`border-radius: 50%`
 和 `conic-gradient()` 进度环子集的模拟表盘示例。

@@ -1,6 +1,6 @@
 # ESP32-S3 Main
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Board demo entry points for the ESP32-S3 bring-up project.
 

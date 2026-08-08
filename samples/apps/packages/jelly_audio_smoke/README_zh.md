@@ -1,6 +1,6 @@
 # Audio Smoke
 
-> 最后更新：2026-07-07；适用版本：0.5.0-dev
+> 最后更新：2026-07-07；适用版本：0.5.0
 
 用于验证 Win32 host-owned audio 路径的小型 package。
 

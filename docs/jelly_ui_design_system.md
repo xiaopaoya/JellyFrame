@@ -1,6 +1,6 @@
 # JellyFrame Gel Interface System
 
-> Last updated: 2026-07-14; Applies to: 0.5.0-dev
+> Last updated: 2026-07-14; Applies to: 0.5.0
 
 This document defines JellyFrame's first native visual and motion system. It
 interprets the `Jelly` name through the shared qualities of jellyfish and gel:

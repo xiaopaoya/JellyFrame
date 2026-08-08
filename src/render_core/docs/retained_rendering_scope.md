@@ -1,6 +1,6 @@
 # Retained Rendering and Tile/Scanline Scope
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev
+> Last updated: 2026-08-04; Applies to: 0.5.0
 
 This document defines the boundary for two deferred areas: retained layout/display-list
 diffing for structural changes, and rendering without a full framebuffer. It is a Render Core

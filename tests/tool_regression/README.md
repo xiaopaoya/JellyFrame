@@ -1,6 +1,6 @@
 # Tool Regression Tests
 
-> Last updated: 2026-07-23; Applies to: 0.5.0-dev
+> Last updated: 2026-07-23; Applies to: 0.5.0
 
 This directory contains lightweight regression tests for developer tooling.
 They focus on package/check behavior that should stay stable independently from

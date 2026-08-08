@@ -1,6 +1,6 @@
 # JellyFrame Virtual Board Benchmark
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 This host-side benchmark is a fast stand-in for early ESP32-S3 bring-up when a
 QEMU or physical board is not available. It runs the real JellyFrame core pipeline,

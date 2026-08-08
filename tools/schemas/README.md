@@ -1,6 +1,6 @@
 # Schemas
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0
 
 JSON Schema files for JellyFrame app packages and tool inputs.
 

@@ -1,6 +1,6 @@
 # Script
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev
+> Last updated: 2026-08-07; Applies to: 0.5.0
 
 Optional JerryScript integration.
 
@@ -16,9 +16,35 @@ when script execution budgets are required.
 `JerryScriptRuntime` is a same-thread binding: it directly owns JS wrappers for
 its bound `Node` tree. An RTOS script worker must not pass that DOM, JerryScript
 values, renderer objects or native pointers to the UI task. Real multi-task App
-support requires the value-only session/frame/input/service/fatal protocol in
+support uses the value-only session/frame/input/service/fatal protocol in
 `docs/cross_task_ownership_contract.md` (Chinese:
-`docs/cross_task_ownership_contract_zh.md`).
+`docs/cross_task_ownership_contract_zh.md`). The first platform-neutral worker
+slice is `ScriptTaskWorkerRuntime`: it owns a private parsed document,
+`JerryScriptRuntime`, render/layout/layer data and `InputController`, and
+publishes only sealed `ScriptTaskAppFrame` values. Worker-local timer and
+animation callbacks use the same private realm and publish mutated DOM through
+the same sealed-frame path. The constrained `services.request(kind, callback)`
+ gateway accepts only scalar request metadata; completions are copied into a
+ bounded byte array before the JS callback runs. `services.cancel(requestId)`
+ posts a separate value-only cancellation packet; the supervisor bridge resolves
+ queued versus in-flight cancellation and keeps late completion cleanup outside
+ the worker realm. Provider policy, fatal worker boundaries, and the RTOS task
+adapter remain separate follow-up work.
+
+Worker-local callback exceptions and execution-budget interruptions are now
+captured as bounded value status by `JerryScriptRuntime`; the worker converts
+them to `ScriptTaskWorkerRuntimeFatalRecord` and stops publishing frames.
+This is the platform-neutral fatal-detection slice, not the RTOS task exit or
+launcher recovery boundary.
+
+`ScriptTaskWorkerRuntime::stop()` is the explicit, idempotent worker-local
+boundary. It destroys only the worker-owned realm, document and render state;
+the port must still run supervisor session invalidation and lease/service
+teardown around it.
+
+`ScriptTaskWorkerRuntime::publish_fatal()` serializes the retained fatal record
+into the supervisor's separate fixed-value fatal mailbox. Publication is
+idempotent and can be retried after mailbox backpressure.
 
 Keep this directory separate from `src/render_core` and `src/app_runtime` so
 embedded builds can ship without JavaScript support.

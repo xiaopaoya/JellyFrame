@@ -1,6 +1,6 @@
 # Sample Launcher
 
-> Last updated: 2026-07-14; Applies to: 0.5.0-dev
+> Last updated: 2026-07-14; Applies to: 0.5.0
 
 This is a JellyFrame app-authored launcher used by the Win32 host for bring-up,
 CI and manual app-manager testing. It is a sample privileged system app, not a

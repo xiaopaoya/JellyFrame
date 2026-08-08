@@ -1,14 +1,20 @@
 # Changelog
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev
+> Last updated: 2026-08-09; Applies to: 0.5.0
 
 All notable changes to JellyFrame Engine are tracked here.
 
 The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
-## Unreleased
+## 0.5.0 - 2026-08-09
 
 ### Changed
+
+- The latest WS147 H4 archive completes four independent external power captures:
+  active, screen-off idle, light sleep, and deep sleep, each longer than 60 seconds
+  with USB serial/JTAG disconnected. The meter used automatic range selection and
+  preserved average/minimum/maximum/voltage/duration/sample-count data. The meter
+  does not export p95, so that field remains unrecorded rather than being inferred.
 
 - Added the platform-neutral value-protocol foundation for the optional
   script-task runtime: session generation/epoch, fixed-slot mailboxes, sealed

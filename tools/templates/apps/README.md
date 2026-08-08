@@ -1,6 +1,6 @@
 # App Templates
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Reference app templates for common wearable workflows. These are intentionally
 small, modern and brand-neutral watch-style apps that stay inside the documented

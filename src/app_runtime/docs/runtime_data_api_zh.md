@@ -1,6 +1,6 @@
 # Runtime Data API 规划
 
-> 最后更新：2026-07-10；适用版本：0.5.0-dev
+> 最后更新：2026-07-10；适用版本：0.5.0
 
 本文定义可选 runtime data services 如何暴露给 JavaScript。面向用户的语法应尽量保持为 Web 平台 API
 的文档化子集，避免 app 作者学习 JellyFrame 专用的数据 API。

@@ -1,6 +1,6 @@
 # 嵌入式 Framebuffer 后端
 
-> 最后更新：2026-08-02；适用版本：0.5.0-dev
+> 最后更新：2026-08-02；适用版本：0.5.0
 
 
 `src/render_core/embedded_framebuffer.h` 提供第一版可部署的嵌入式 presentation

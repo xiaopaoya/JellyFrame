@@ -1,6 +1,6 @@
 # Service Status
 
-> Last updated: 2026-07-10; Applies to: 0.5.0-dev
+> Last updated: 2026-07-10; Applies to: 0.5.0
 
 Small runtime-service sample for optional data, media and location service
 boundaries.

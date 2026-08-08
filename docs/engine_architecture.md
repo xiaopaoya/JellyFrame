@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but

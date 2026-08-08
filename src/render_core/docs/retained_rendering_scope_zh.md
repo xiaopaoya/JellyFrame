@@ -1,6 +1,6 @@
 # Retained Rendering 与 Tile/Scanline 范围
 
-> 最后更新：2026-08-04；适用版本：0.5.0-dev
+> 最后更新：2026-08-04；适用版本：0.5.0
 
 本文定义两个历史遗留问题的工程边界：结构变化时的 retained layout/display-list diff，
 以及不持有完整 framebuffer 的 tile/scanline renderer。它是 Render Core 的设计契约，

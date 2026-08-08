@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-04; Applies to: 0.5.0-dev
+> Last updated: 2026-08-09; Applies to: 0.5.0
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.

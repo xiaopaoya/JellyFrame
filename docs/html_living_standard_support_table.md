@@ -2,7 +2,7 @@
 
 > Generated from: `html_living_standard_support_table.csv`; source SHA-256: `9facef629b0146a836a0c16165ca3757d3af817b5675d7302bc9ec761156f034`.
 > Do not edit this generated table by hand.
-> Source audit: 2026-07-12; Applies to: 0.5.0-dev.
+> Source audit: 2026-07-12; Applies to: 0.5.0.
 
 This is the searchable JellyFrame support table for HTML Living Standard features. Use it before choosing a tag, DOM API or browser-facing behavior in an app.
 

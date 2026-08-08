@@ -2,7 +2,7 @@
 
 > 生成来源：`html_living_standard_support_table.csv`；源 SHA-256：`9facef629b0146a836a0c16165ca3757d3af817b5675d7302bc9ec761156f034`。
 > 本表由生成器生成，请勿手工编辑。
-> 审计快照：2026-07-12；适用版本：0.5.0-dev。
+> 审计快照：2026-07-12；适用版本：0.5.0。
 
 这是 JellyFrame 面向 App 作者的 HTML Living Standard 特性支持表。使用某个 HTML 标签、DOM API 或浏览器行为前，可以先在本文中 Ctrl+F 搜索。
 

@@ -1,6 +1,6 @@
 # Templates
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Starter app templates for JellyFrame packages.
 

@@ -1,6 +1,6 @@
 # Text Backend
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 
 JellyFrame keeps font loading and platform text APIs outside `jellyframe_render_core`.

@@ -1,6 +1,6 @@
 # Benchmarks
 
-> Last updated: 2026-07-07; Applies to: 0.5.0-dev
+> Last updated: 2026-07-07; Applies to: 0.5.0
 
 Root-level benchmarks are reserved for future cross-subproject and app-lifecycle
 benchmarks.
