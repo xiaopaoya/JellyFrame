@@ -210,10 +210,15 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         endif()
     endif()
 
-    add_library(jellyframe_script
+    set(JELLYFRAME_SCRIPT_SOURCES
         src/script/jerryscript_runtime.cpp
-        src/script/script_task_worker_runtime.cpp
     )
+    if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+        list(APPEND JELLYFRAME_SCRIPT_SOURCES
+            src/script/script_task_worker_runtime.cpp
+        )
+    endif()
+    add_library(jellyframe_script ${JELLYFRAME_SCRIPT_SOURCES})
     target_link_libraries(jellyframe_script PUBLIC jellyframe_app_runtime ${JERRYSCRIPT_LIBRARIES})
     if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
         target_link_libraries(jellyframe_script PUBLIC jellyframe_script_task_runtime)
@@ -899,8 +904,12 @@ if(JELLYFRAME_BUILD_TESTS)
     if(JELLYFRAME_BUILD_SCRIPTING)
         set(JELLYFRAME_SCRIPT_TEST_SOURCES
             src/script/tests/script_runtime_tests.cpp
-            src/script/tests/script_task_worker_runtime_tests.cpp
         )
+        if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+            list(APPEND JELLYFRAME_SCRIPT_TEST_SOURCES
+                src/script/tests/script_task_worker_runtime_tests.cpp
+            )
+        endif()
         foreach(test_source IN LISTS JELLYFRAME_SCRIPT_TEST_SOURCES)
             get_filename_component(test_name ${test_source} NAME_WE)
             set_source_files_properties(${test_source}
