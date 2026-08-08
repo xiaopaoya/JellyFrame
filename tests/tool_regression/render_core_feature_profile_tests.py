@@ -167,6 +167,10 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                          ["src/render_core/form_submission_disabled.cpp"]),
                     )
                     self.assertEqual(
+                        source_families["css.flex-grid"],
+                        (["src/render_core/flex_grid_paint.cpp"] if flex_grid else []),
+                    )
+                    self.assertEqual(
                         profile["notes"],
                         {
                             "canvas2d": "1" if canvas else "0",

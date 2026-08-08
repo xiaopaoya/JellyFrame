@@ -15,6 +15,9 @@
     "css.modern-paint": [
       @JELLYFRAME_RENDER_CORE_MODERN_PAINT_SOURCES_JSON@
     ],
+    "css.flex-grid": [
+      @JELLYFRAME_RENDER_CORE_FLEX_GRID_SOURCES_JSON@
+    ],
     "graphics.canvas2d": [
       @JELLYFRAME_RENDER_CORE_CANVAS2D_SOURCES_JSON@
     ],
