@@ -56,10 +56,14 @@ string(REPLACE ";" "\",\n    \"" _jellyframe_render_core_features_json
 set(JELLYFRAME_RENDER_CORE_FEATURES_JSON
     "\"${_jellyframe_render_core_features_json}\"")
 
-string(REPLACE ";" "\",\n      \"" _jellyframe_render_core_base_sources_json
-    "${JELLYFRAME_RENDER_CORE_BASE_SOURCES}")
-set(JELLYFRAME_RENDER_CORE_BASE_SOURCES_JSON
-    "\"${_jellyframe_render_core_base_sources_json}\"")
+string(REPLACE ";" "\",\n      \"" _jellyframe_render_core_document_sources_json
+    "${JELLYFRAME_RENDER_CORE_CORE_DOCUMENT_SOURCES}")
+set(JELLYFRAME_RENDER_CORE_DOCUMENT_SOURCES_JSON
+    "\"${_jellyframe_render_core_document_sources_json}\"")
+string(REPLACE ";" "\",\n      \"" _jellyframe_render_core_paint_sources_json
+    "${JELLYFRAME_RENDER_CORE_CORE_PAINT_SOURCES}")
+set(JELLYFRAME_RENDER_CORE_PAINT_SOURCES_JSON
+    "\"${_jellyframe_render_core_paint_sources_json}\"")
 string(REPLACE ";" "\",\n      \"" _jellyframe_render_core_modern_paint_sources_json
     "${JELLYFRAME_RENDER_CORE_MODERN_PAINT_SOURCES}")
 if(JELLYFRAME_ENABLE_MODERN_PAINT)
@@ -99,7 +103,8 @@ unset(_jellyframe_render_core_features)
 unset(_jellyframe_render_core_features_json)
 unset(_jellyframe_render_core_disabled_profile_families)
 unset(_jellyframe_render_core_profile_suffix)
-unset(_jellyframe_render_core_base_sources_json)
+unset(_jellyframe_render_core_document_sources_json)
+unset(_jellyframe_render_core_paint_sources_json)
 unset(_jellyframe_render_core_modern_paint_sources_json)
 unset(_jellyframe_render_core_canvas2d_sources_json)
 unset(_jellyframe_render_core_advanced_forms_sources_json)

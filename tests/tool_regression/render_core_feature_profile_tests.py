@@ -113,8 +113,56 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                     self.assertEqual(profile["schemaVersion"], 1)
                     self.assertEqual(profile["profileId"], profile_id)
                     self.assertEqual(profile["features"], expected_features)
+                    source_families = profile["sourceFamilies"]
                     self.assertEqual(
-                        profile["sourceFamilies"]["forms.advanced"],
+                        set(source_families["core.document"])
+                        | set(source_families["core.paint"]),
+                        {
+                            "src/render_core/animation_invalidation.cpp",
+                            "src/render_core/animation_timeline.cpp",
+                            "src/render_core/arena.cpp",
+                            "src/render_core/bitmap_font.cpp",
+                            "src/render_core/bitmap_font_resource.cpp",
+                            "src/render_core/css_parser.cpp",
+                            "src/render_core/display_invalidation.cpp",
+                            "src/render_core/dirty_region.cpp",
+                            "src/render_core/document_script.cpp",
+                            "src/render_core/document_style.cpp",
+                            "src/render_core/dom.cpp",
+                            "src/render_core/dom_owner.cpp",
+                            "src/render_core/embedded_framebuffer.cpp",
+                            "src/render_core/event.cpp",
+                            "src/render_core/form_control.cpp",
+                            "src/render_core/frame_loop.cpp",
+                            "src/render_core/frame_update.cpp",
+                            "src/render_core/hit_test.cpp",
+                            "src/render_core/html_parser.cpp",
+                            "src/render_core/html_tokenizer.cpp",
+                            "src/render_core/html_tree_builder.cpp",
+                            "src/render_core/input.cpp",
+                            "src/render_core/layer_tree.cpp",
+                            "src/render_core/layout.cpp",
+                            "src/render_core/pipeline_statistics.cpp",
+                            "src/render_core/render_tree.cpp",
+                            "src/render_core/scroll_blit.cpp",
+                            "src/render_core/software_renderer.cpp",
+                            "src/render_core/style.cpp",
+                            "src/render_core/style_repaint.cpp",
+                            "src/render_core/text_adapter.cpp",
+                            "src/render_core/text_backend.cpp",
+                            "src/render_core/text_layout_reuse.cpp",
+                            "src/render_core/text_normalization.cpp",
+                            "src/render_core/text_repaint.cpp",
+                            "src/render_core/text_scan.cpp",
+                        },
+                    )
+                    self.assertFalse(
+                        set(source_families["core.document"])
+                        & set(source_families["core.paint"]),
+                        "mandatory source families must not overlap",
+                    )
+                    self.assertEqual(
+                        source_families["forms.advanced"],
                         (["src/render_core/form_submission.cpp"] if advanced_forms else
                          ["src/render_core/form_submission_disabled.cpp"]),
                     )

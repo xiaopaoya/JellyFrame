@@ -6,8 +6,11 @@
     @JELLYFRAME_RENDER_CORE_FEATURES_JSON@
   ],
   "sourceFamilies": {
-    "core": [
-      @JELLYFRAME_RENDER_CORE_BASE_SOURCES_JSON@
+    "core.document": [
+      @JELLYFRAME_RENDER_CORE_DOCUMENT_SOURCES_JSON@
+    ],
+    "core.paint": [
+      @JELLYFRAME_RENDER_CORE_PAINT_SOURCES_JSON@
     ],
     "css.modern-paint": [
       @JELLYFRAME_RENDER_CORE_MODERN_PAINT_SOURCES_JSON@

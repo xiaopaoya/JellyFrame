@@ -1,6 +1,6 @@
 # Render Core
 
-> Last updated: 2026-08-03; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev
 
 `render_core` is JellyFrame's platform-neutral Living Standard/CSS subset and
 software rendering pipeline.
@@ -51,10 +51,13 @@ are currently large cross-cutting units; moving them into arbitrary folders
 would not by itself reduce firmware size or runtime cost.
 
 The 0.6 modularization introduces feature-family boundaries above this file
-layout. The first slices are `graphics.canvas2d`, `css.modern-paint`,
+layout. `core.document` and `core.paint` are mandatory source families, and
+the first optional slices are `graphics.canvas2d`, `css.modern-paint`,
 `css.flex-grid` and `forms.advanced`. A family may span parser, computed style,
 layout, paint and input files, but it must have an explicit registration point,
-dependency list, budget and profile gate. See
+dependency list, budget and profile gate. The generated profile records source
+ownership for both mandatory families and every separately compiled optional
+family; the profile regression rejects gaps or overlaps in the mandatory split. See
 `project_docs/render_pipeline_modularity_plan_zh.md` for the build-profile and
 manifest contract. Ordinary App packages remain data/code at the declared
 runtime level; they do not load native Render Core modules.

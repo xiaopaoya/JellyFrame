@@ -13,7 +13,7 @@ from pathlib import Path
 
 STATUSES = ("supported", "partial", "host_dependent", "unsupported", "out_of_scope")
 SOURCE_AUDIT_DATE = "2026-07-22"
-APPLIES_TO_VERSION = "0.5.0"
+APPLIES_TO_VERSION = "0.6.0-dev"
 REQUIRED_COLUMNS = (
     "feature_id", "kind", "area", "name", "context", "status", "app_author_note", "spec_url",
 )

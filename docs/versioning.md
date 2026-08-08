@@ -1,6 +1,6 @@
 # Versioning
 
-> Last updated: 2026-07-26; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev
 
 JellyFrame Engine uses a lightweight semantic versioning scheme:
 
@@ -33,11 +33,11 @@ MAJOR.MINOR.PATCH[-stage]
   `_zh` suffix.
 - Public Markdown documents carry a short freshness line near the top:
   `Last updated: YYYY-MM-DD; Applies to: VERSION`. Update it whenever the
-  document's contract, examples or instructions change. Documentation may lag a
-  code patch briefly during active development, but stale files should be easy
-  to spot from this line. Generated support tables instead carry a `Source
-  audit` line with the same version. CTest rejects first-party Markdown that
-  omits one of these current-version markers.
+  document's contract, examples or instructions change. During a new `-dev`
+  cycle, unchanged documents may retain the last released version until their
+  next substantive review; the date and version make that state visible.
+  Generated support tables instead carry a `Source audit` line. CTest rejects
+  first-party Markdown that omits a well-formed freshness/version marker.
 - Licensing terms are described by `LICENSE`, `COMMERCIAL.md` and the README
   licensing section.
 - Early releases are expected to stay small and milestone-based.

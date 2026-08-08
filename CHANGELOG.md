@@ -1,10 +1,19 @@
 # Changelog
 
-> Last updated: 2026-08-09; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
 The project uses lightweight semantic versioning. See `docs/versioning.md`.
+
+## 0.6.0-dev - In progress
+
+### Planned
+
+- Start the external-developer trial line with build-profile/module evidence,
+  package and launcher workflows, and targeted capability-gap work. No new
+  browser-compatibility promise is implied until its capability matrix entry,
+  profile gate and regression coverage land together.
 
 ## 0.5.0 - 2026-08-09
 

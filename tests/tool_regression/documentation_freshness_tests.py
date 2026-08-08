@@ -14,8 +14,25 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VERSION = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+CURRENT_VERSION = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
 EXCLUDED_PREFIXES = ("third_party/",)
+
+
+def accepted_document_versions(version: str) -> tuple[str, ...]:
+    """Return the current version and, for a dev cycle, its released base."""
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(-.+)?", version)
+    if match is None:
+        raise RuntimeError(f"VERSION is not a semantic version: {version!r}")
+    major, minor, patch = (int(match.group(index)) for index in range(1, 4))
+    if match.group(4) is None:
+        return (version,)
+    if patch > 0:
+        previous_release = f"{major}.{minor}.{patch - 1}"
+    elif minor > 0:
+        previous_release = f"{major}.{minor - 1}.0"
+    else:
+        previous_release = None
+    return (version,) if previous_release is None else (version, previous_release)
 
 
 class DocumentationFreshnessTests(unittest.TestCase):
@@ -27,14 +44,15 @@ class DocumentationFreshnessTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        expected_version = re.escape(VERSION)
+        version_pattern = "|".join(
+            re.escape(version) for version in accepted_document_versions(CURRENT_VERSION))
         metadata_patterns = (
-            re.compile(rf"Last updated: \d{{4}}-\d{{2}}-\d{{2}}; Applies to: {expected_version}"),
-            re.compile(rf"最后更新：\d{{4}}-\d{{2}}-\d{{2}}；适用版本：{expected_version}"),
+            re.compile(rf"Last updated: \d{{4}}-\d{{2}}-\d{{2}}; Applies to: (?:{version_pattern})(?=$|[\s.,;:。；，])"),
+            re.compile(rf"最后更新：\d{{4}}-\d{{2}}-\d{{2}}；适用版本：(?:{version_pattern})(?=$|[\s.,;:。；，])"),
             # Generated support tables expose the source audit date instead of
             # a hand-maintained edit timestamp, but carry the same version.
-            re.compile(rf"Source audit: \d{{4}}-\d{{2}}-\d{{2}}; Applies to: {expected_version}"),
-            re.compile(rf"审计快照：\d{{4}}-\d{{2}}-\d{{2}}；适用版本：{expected_version}"),
+            re.compile(rf"Source audit: \d{{4}}-\d{{2}}-\d{{2}}; Applies to: (?:{version_pattern})(?=$|[\s.,;:。；，])"),
+            re.compile(rf"审计快照：\d{{4}}-\d{{2}}-\d{{2}}；适用版本：(?:{version_pattern})(?=$|[\s.,;:。；，])"),
         )
         missing = []
         for relative in completed.stdout.splitlines():
@@ -47,7 +65,7 @@ class DocumentationFreshnessTests(unittest.TestCase):
         self.assertEqual(
             missing,
             [],
-            "first-party Markdown must declare a current date and applies-to version: "
+            "first-party Markdown must declare a current or immediately previous release version: "
             + ", ".join(missing),
         )
 
