@@ -1,8 +1,20 @@
 # App Runtime
 
-> Last updated: 2026-08-04; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 `app_runtime` contains hardware-neutral helpers for installable JellyFrame apps.
+
+## Read By Task
+
+- App lifecycle and install/update/delete behavior: `docs/app_lifecycle.md` and
+  `docs/app_packaging.md`.
+- Host service policy and data boundaries: `docs/host_optional_services.md` and
+  `docs/runtime_data_api.md`.
+- Authorized file access: `docs/authorized_file_broker.md`.
+- Script-task sessions, leases and teardown: `../script/docs/cross_task_ownership_contract.md`.
+
+This module defines contracts and bounded state. Real filesystem, network,
+panel and RTOS work belongs to a host or port adapter.
 
 It owns contracts and small bounded data structures for:
 

@@ -1,8 +1,16 @@
 # Script
 
-> Last updated: 2026-08-07; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Optional JerryScript integration.
+
+## Read By Task
+
+- App-author JavaScript subset: `docs/scripting_scope.md`.
+- Cross-task ownership and teardown: `docs/cross_task_ownership_contract.md`.
+- Port integration sequence: `docs/script_task_port_integration_guide_zh.md`.
+- Worker-local runtime tests and protocol codecs: `tests/README.md` and the
+  sibling `tests/` directory.
 
 This layer binds the documented JellyFrame DOM/event/timer/form subset to
 JerryScript, including bounded inline style mutation, frame-snapshot geometry

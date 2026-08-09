@@ -1,6 +1,6 @@
 # JellyFrame Virtual Board Benchmark
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This host-side benchmark is a fast stand-in for early ESP32-S3 bring-up when a
 QEMU or physical board is not available. It runs the real JellyFrame core pipeline,
@@ -63,3 +63,7 @@ Interpretation:
 
 Use the estimates for trend comparison and display bandwidth planning, not as a
 cycle-accurate ESP32-S3 replacement.
+
+Audience: port developers deciding whether a workload is worth taking to a
+board. This tool is a cheap preflight for CPU and transfer trends; it cannot
+prove panel controller behavior, DMA overlap, power or visual quality.

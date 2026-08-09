@@ -1,9 +1,15 @@
 # ESP32-S3 App Resource
 
-> Last updated: 2026-07-24; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Local app resource bundle used by the ESP32-S3 smoke demo and board bring-up
 profiles.
+
+Use this directory by fixture purpose: `p2_smoke` and `timer` are bring-up
+smokes, `band_shell` is a static shell fixture, `gradient_fastpath` and
+`scroll_bench_*` are performance workloads, and `resource_failure`/
+`image_acceptance` are negative-path checks. They are not public app-author
+templates; use `tools/templates/apps/` for those.
 
 This mirrors the package shape used by JellyFrame apps while avoiding filesystem
 or network dependencies on the board.

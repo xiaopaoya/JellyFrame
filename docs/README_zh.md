@@ -7,6 +7,17 @@
 每份公开 Markdown 文档顶部都有一行轻量新鲜度信息：
 `最后更新：YYYY-MM-DD；适用版本：VERSION`。代码变化后，可以先看这行判断文档是否需要复审。
 
+## 按角色查找
+
+| 角色 | 先读 | 接着使用 |
+| --- | --- | --- |
+| App 作者 | `../HOW_TO_START_zh.md`、`app_author_guide_zh.md` | 能力速查表、recipes、target preset 和 `../tools/README.md` |
+| Render Core 贡献者 | `engine_architecture_zh.md`、`../src/render_core/README.md` | 修改模块旁的 scope 文档和能力矩阵 |
+| 移植维护者 | `porting_work_guide_zh.md`、`embedded_hal_api_zh.md` | `../ports/<port>/README.md`、framebuffer/text 文档和移植侧报告 |
+| Runtime/host 维护者 | `../src/app_runtime/README.md` | lifecycle、packaging、services 和授权边界文档 |
+| Script/runtime 维护者 | `../src/script/README.md` | scripting scope 和跨任务所有权契约 |
+| 兼容性或工具维护者 | 能力矩阵和可搜索 HTML/CSS 全表 | `../tools/README.md`、schemas 和工具回归测试 |
+
 ## 第一次阅读顺序
 
 1. [../HOW_TO_START_zh.md](../HOW_TO_START_zh.md)

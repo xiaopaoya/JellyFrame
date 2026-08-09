@@ -1,8 +1,20 @@
 # Target Presets
 
-> 最后更新：2026-07-07；适用版本：0.5.0
+> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 这些文件是 packaging 和 validation tools 使用的设备能力 preset。
+
+## Preset 速查
+
+| Preset | 用途 |
+| --- | --- |
+| `round-300.json` | 300x300 圆形桌面和通用可穿戴形态 |
+| `rect-320x240.json` | 横向矩形屏 |
+| `rect-172x320.json` | 172x320 纵向可穿戴屏 |
+| `esp32s3-round-300.json` | ESP32-S3 方向的 RGB565/host profile |
+
+这些 JSON 是数据而不是 board driver，也不等同于实机验收。使用 `--targets` 做多形态检查；
+只有产品 port 能证明额外 service 或 codec 时，才应增加独立 profile。
 
 请保持 preset 保守。一个 preset 应描述 app 可以稳定依赖的能力，而不是某块开发板暴露的全部
 可选硬件特性。

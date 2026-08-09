@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This is a thin developer extension for JellyFrame app packages. It does not
 implement its own parser or packer; every command delegates to
@@ -32,3 +32,7 @@ Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 Use `JellyFrame: Open In Win32 Browser` for interactive app debugging. Use
 `JellyFrame: Preview Package` for deterministic pseudo-browser capture; preview
 also writes a JSON report and updates the report panel.
+
+Audience: app authors who want editor entry points, not extension developers
+reimplementing the runtime. All capability and packaging behavior remains
+owned by `tools/jellyframe_cli.py`.

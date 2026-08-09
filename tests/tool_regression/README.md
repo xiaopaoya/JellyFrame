@@ -1,10 +1,25 @@
 # Tool Regression Tests
 
-> Last updated: 2026-07-23; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory contains lightweight regression tests for developer tooling.
 They focus on package/check behavior that should stay stable independently from
 the render-core and app-runtime C++ unit suites.
+
+## Choose By Goal
+
+| Goal | Tests |
+| --- | --- |
+| Manifest, resource and package safety | `package_preflight_tests.py`, `package_image_fixture_tests.py` |
+| App install/update/delete/rollback | `app_registry_tests.py`, `win32_browser_cli_tests.py` |
+| HTML/CSS audit and profile declarations | `html_support_table_tests.py`, `css_support_table_tests.py`, `render_core_feature_profile_tests.py`, `render_core_feature_registry_tests.py` |
+| Visual diagnostics and layout captures | `pipeline_visual_diagnostics_tests.py`, `flex_grid_capture_tests.py` |
+| Template and external-author workflow | `template_trial_tests.py` |
+| Font/resource policy | `font_policy_report_tests.py` |
+| Link-map and build slicing | `render_core_link_map_tests.py` |
+
+Run one file directly only when narrowing a failure; prefer the named CTest
+test because it supplies the correct build executable and working directory.
 
 `package_image_fixture_tests.py` is a cross-tool acceptance check: it runs the
 CLI package preflight over the weather sample, verifies `imageDiagnostics`, then

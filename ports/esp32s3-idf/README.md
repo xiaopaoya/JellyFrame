@@ -1,10 +1,24 @@
 # JellyFrame ESP32-S3 ESP-IDF Port
 
-> Last updated: 2026-07-24; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory is a first hardware bring-up path for ESP32-S3. It keeps the
 engine core platform-neutral and builds a small ESP-IDF app around the HAL
 shape described in `docs/embedded_hal_api.md`.
+
+## Find Your Work Area
+
+| Goal | Start here | Owns |
+| --- | --- | --- |
+| Choose a board/profile and build | `sdkconfig*.defaults`, `CMakeLists.txt` | ESP-IDF configuration and target selection |
+| Board display/touch integration | `main/boards/`, `main/jellyframe_esp32s3_hal.*`, `main/jellyframe_esp32s3_input.*` | Panel, DMA, touch and board lifecycle |
+| Port entry point and acceptance modes | `main/main.cpp`, `main/jellyframe_esp32s3_*acceptance.cpp` | Startup modes and port-owned evidence |
+| Static app/resource input | `resources/app/`, `resources/README.md` | Source resources before generated bundling |
+| Core/runtime ESP-IDF wrappers | `components/`, `components/README.md` | Component boundaries; engine logic stays in `src/` |
+| Resource/font generation and report collection | `tools/`, `tools/README.md` | Host-side generation and evidence collection |
+
+Build directories, generated resource tables, serial logs and hardware reports
+are local artifacts, not part of the portable source contract.
 
 ## What Runs Now
 

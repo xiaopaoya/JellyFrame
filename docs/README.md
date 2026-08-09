@@ -9,6 +9,17 @@ Each public Markdown document starts with a short freshness line:
 `Last updated: YYYY-MM-DD; Applies to: VERSION`. Treat it as the quick signal
 for whether a document needs another pass after code changes.
 
+## Choose By Role
+
+| You are | Read first | Then use |
+| --- | --- | --- |
+| App author | `../HOW_TO_START.md`, `app_author_guide.md` | capability table, recipes, target presets and `../tools/README.md` |
+| Render Core contributor | `engine_architecture.md`, `../src/render_core/README.md` | scope docs beside the affected module and the feature matrix |
+| Port maintainer | `porting_work_guide.md`, `embedded_hal_api.md` | `../ports/<port>/README.md`, framebuffer/text docs and port-owned reports |
+| Runtime/host maintainer | `../src/app_runtime/README.md` | lifecycle, packaging, services and authorization contracts |
+| Script/runtime maintainer | `../src/script/README.md` | scripting scope and cross-task ownership contract |
+| Compatibility or tooling maintainer | capability matrix and searchable HTML/CSS tables | `../tools/README.md`, schemas and tool regression tests |
+
 ## First-Time Reading Order
 
 1. [../HOW_TO_START.md](../HOW_TO_START.md)

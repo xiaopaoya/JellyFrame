@@ -1,6 +1,6 @@
 # ESP32-S3 Board Adapters
 
-> Last updated: 2026-07-14; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Board-local display and touch adapters live here. They are optional ESP-IDF
 bring-up code and must stay outside the platform-neutral engine.
@@ -10,6 +10,10 @@ hardware initialization behind Kconfig gates, and provide only framebuffer flush
 or input hooks needed by the validation app.
 
 Current adapters:
+
+Choose the board adapter first, then use the parent port README for the
+matching isolated `sdkconfig` and acceptance fixture. This directory owns
+panel/touch/controller details only; it does not change Render Core behavior.
 
 - `waveshare_touch_lcd_boards.*`: bring-up profile for the Waveshare
   ESP32-S3-Touch-LCD-1.47 board. It initializes the JD9853 SPI LCD, probes the

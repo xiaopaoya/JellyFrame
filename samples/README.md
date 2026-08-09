@@ -1,9 +1,24 @@
 # Samples
 
-> Last updated: 2026-07-14; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Root samples are for JellyFrame apps and app-package lifecycle validation.
 Native desktop tools live in `../tools/native`.
+
+## Choose The Right Sample
+
+| Need | Directory |
+| --- | --- |
+| Copy a new app author starting point | `../tools/templates/apps/` |
+| Readable installable app and UI examples | `apps/packages/` |
+| Privileged launcher/system-shell examples | `apps/system/` |
+| Small loose-file visual or scripting probe | `apps/loose/` |
+| Render Core-only HTML/CSS page | `../src/render_core/samples/pages/` |
+| Reproduce a narrow contract or failure | `../tests/fixtures/apps/` |
+
+Samples under this directory are validation and showcase inputs. They are not
+the full browser compatibility contract; use `../docs/developer_capability_matrix.md`
+and the searchable support tables before relying on a syntax feature.
 
 - `apps/packages/`: complete JellyFrame source packages with
   `jellyframe.app.json`.

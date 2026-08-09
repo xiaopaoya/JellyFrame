@@ -5,6 +5,19 @@
 这里保存用于检查 JellyFrame 输出的 C++ 桌面工具。示例页面和 app package 位于
 `../../samples`。
 
+## 按问题选择工具
+
+| 需要检查 | 源文件/程序 | 输出 |
+| --- | --- | --- |
+| 单页或 package 的结构化 diagnostics | `pseudo_browser.cpp` | BMP/PPM 与 DOM/layout/paint 摘要 |
+| 交互、事件注入和逐帧捕获 | `win32_browser.cpp` | Win32 壳输出、frame script 和 runtime telemetry |
+| 某一层管线 | `dom_dump.cpp`、`cssom_dump.cpp`、`render_tree_dump.cpp`、`layer_tree_dump.cpp`、`pipeline_dump.cpp` | 聚焦文本 dump |
+| style 匹配和计算值 | `style_dump.cpp` | style 解析详情 |
+| bitmap 字体资源 | `font_pack_gen.cpp`、`font_resource_check.cpp` | 固件 header、`.jffont` 和策略报告 |
+
+这些 `.cpp` 是构建输入，只有 CMake 生成对应 executable 后才是可运行命令。
+完整参数以 `jellyframe_win32_browser --help` 为准。
+
 - `*_dump.cpp` 工具用于输出 parser、DOM、CSSOM、render tree、layer tree 或完整管线结果。
 - `pseudo_browser.cpp` 运行平台无关渲染管线，并可通过 `--diagnostics-json` 输出结构化 diagnostics，
   包括横向溢出、需要滚动、display command 密度过高等开发期视觉提示。

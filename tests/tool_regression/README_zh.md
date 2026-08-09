@@ -1,9 +1,23 @@
 # 工具回归测试
 
-> 最后更新：2026-07-23；适用版本：0.5.0
+> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 这里保存开发工具层的轻量回归测试，主要锁住 package/check 这类不属于
 render-core 或 app-runtime C++ 单元测试的行为。
+
+## 按目标查找
+
+| 目标 | 测试 |
+| --- | --- |
+| manifest、资源和 package 安全 | `package_preflight_tests.py`、`package_image_fixture_tests.py` |
+| app 安装/更新/删除/回滚 | `app_registry_tests.py`、`win32_browser_cli_tests.py` |
+| HTML/CSS 表和 profile | `html_support_table_tests.py`、`css_support_table_tests.py`、`render_core_feature_*_tests.py` |
+| 视觉 diagnostics 和布局捕获 | `pipeline_visual_diagnostics_tests.py`、`flex_grid_capture_tests.py` |
+| 模板和外部作者流程 | `template_trial_tests.py` |
+| 字体、链接图和构建切片 | `font_policy_report_tests.py`、`render_core_link_map_tests.py` |
+
+缩小问题时可以直接运行单个 Python 文件；确认修复时优先运行对应 CTest，
+因为 CTest 会提供正确的构建 executable 和工作目录。
 
 `package_image_fixture_tests.py` 是一个跨工具验收检查：先对天气样例运行 CLI package
 预检并验证 `imageDiagnostics`，再通过 Win32 壳捕获同一个 package，读取 BMP 像素，确保

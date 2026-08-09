@@ -1,8 +1,21 @@
 # Target Presets
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Device capability presets consumed by packaging and validation tools.
+
+## Preset Map
+
+| Preset | Use |
+| --- | --- |
+| `round-300.json` | Round 300x300 desktop and generic wearable shape |
+| `rect-320x240.json` | Landscape rectangular display |
+| `rect-172x320.json` | Portrait 172x320 wearable display |
+| `esp32s3-round-300.json` | ESP32-S3-oriented RGB565/host profile |
+
+Use `--targets` when checking an app across shapes. Keep this directory
+conservative: product ports may add a separate profile when they can prove a
+service or codec, but a preset must not claim a driver or measured panel path.
 
 Keep these files conservative. A preset should describe what an app can rely on,
 not every optional feature a particular board might expose.

@@ -4,19 +4,57 @@
 
 Desktop developer tools for packaging, validation and editor integration.
 
-- `jellyframe_cli.py`: command-line helper for app/package workflows.
-- `package_app.py`: package builder and validator.
-- `benchmark_guard.py`: runs selected desktop microbenchmarks and checks broad
-  CI regression thresholds. It catches catastrophic slowdowns; it is not a
-  release performance baseline.
-- `check_render_core_link_map.py`: compares feature-family markers in a desktop
-  linker map with the generated Render Core profile. It proves build selection,
-  not embedded flash/RAM or panel performance.
-- `native/`: C++ inspection tools, pseudo browser, Win32 shell and font-pack
-  generator.
-- `schemas/`: JSON Schemas for app manifests and desktop/system-shell tool
-  inputs such as the installed-app registry mock.
-- `vscode-jellyframe/`: VS Code extension helper.
+Choose by task before opening the directory:
+
+| Goal | Start here | Audience |
+| --- | --- | --- |
+| Create, check, preview or package an app | `jellyframe_cli.py`, `package_app.py`, `templates/` | App author |
+| Inspect pixels, layout, events or a frame script | `native/README.md` | App author, UI reviewer |
+| Validate installed apps and launcher recovery | `jellyframe_cli.py`, `app_registry.py`, `schemas/` | Host/runtime developer |
+| Check build slicing, link ownership or desktop speed | `render_core_feature_registry.py`, `check_render_core_link_map.py`, `benchmark_guard.py` | Render Core maintainer |
+| Refresh HTML/CSS audit tables | `generate_html_support_table.py`, `generate_css_support_table.py`, `import_css_support_crosswork.py` | Compatibility maintainer |
+| Work in VS Code | `vscode-jellyframe/README.md` | App author, extension maintainer |
+| Validate a board | `ports/<port>/README.md` and `docs/porting_work_guide.md` | Port maintainer |
+
+## Tool Groups
+
+### App Author Workflow
+
+- `jellyframe_cli.py`: `new`, `check`, `preview`, `package`, `doctor`, `trial`
+  and registry operations. This is the normal public entry point.
+- `package_app.py`: lower-level package builder/validator used by the CLI and
+  CI. Use it directly when diagnosing manifest or resource projection.
+- `templates/`: small app-author starting points; see its README before copying
+  a template.
+- `presets/targets/`: conservative target shape, budget and host-service
+  profiles consumed by `check`, `preview` and `package`.
+- `schemas/`: machine-readable manifest and registry contracts; these are input
+  validation assets, not runtime code.
+
+### Desktop Inspection And Acceptance
+
+The C++ programs under `native/` are built as desktop executables. Use its
+README's tool table to choose between the pseudo browser, Win32 shell and
+individual dumpers. They provide desktop evidence only; panel, DMA, MCU timing
+and real font-backend claims remain port-owned.
+
+### Core Build And Audit
+
+- `render_core_feature_registry.py`: shared feature-family catalog used by CMake
+  and package/profile checks.
+- `check_render_core_link_map.py`: verifies that a generated profile matches
+  link-map-visible family ownership; it does not measure firmware performance.
+- `benchmark_guard.py`: broad desktop regression guard for catastrophic changes,
+  not an MCU release baseline.
+
+### Compatibility And Editor Data
+
+- `generate_html_support_table.py` and `generate_css_support_table.py` generate
+  searchable standards snapshots.
+- `import_css_support_crosswork.py` imports the CSS audit input; review the
+  capability matrix before changing a status.
+- `vscode-jellyframe/` delegates to the CLI and does not implement a second
+  parser or packer.
 
 Tools may use Python, Node.js or desktop file I/O. The embedded runtime must not
 depend on them.

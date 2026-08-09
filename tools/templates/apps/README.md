@@ -1,6 +1,6 @@
 # App Templates
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Reference app templates for common wearable workflows. These are intentionally
 small, modern and brand-neutral watch-style apps that stay inside the documented
@@ -11,6 +11,19 @@ layout behavior or copying commercial watch interfaces.
 - `clock/`: timer-driven dayline display updates and compact health metrics.
 - `timer/`: control buttons, state changes and time formatting.
 - `weather/`: data-shaped UI intended for future host network APIs.
+
+## Choose A Template
+
+| Template | Best first use | Main ideas |
+| --- | --- | --- |
+| `weather/` | Data cards and status panels | Local images and state-shaped content |
+| `clock/` | Time/status dashboard | Compact typography and host-time updates |
+| `timer/` | Interactive control loop | Buttons, local state and deterministic time |
+| `calculator/` | Dense keypad layout | Grid-like rows, event delegation and bounded state |
+
+Copy one with `python tools/jellyframe_cli.py new --template NAME`, then run
+`check` before adding features. These are starter apps, not exhaustive feature
+fixtures or proof of target-panel performance.
 
 These directories are app-author starting points. They intentionally mirror the
 source-package structure but should not accumulate every edge case; targeted
