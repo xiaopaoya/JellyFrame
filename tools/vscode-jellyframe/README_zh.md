@@ -2,8 +2,9 @@
 
 > 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
-这是 JellyFrame app package 的薄开发扩展。它不会实现第二套 parser 或 packer；
-所有命令都委托给 `tools/jellyframe_cli.py`。
+JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
+打包 JellyFrame App。安装后可以从顶部的 JellyFrame 菜单、资源管理器/编辑器右键菜单
+或命令面板开始工作。
 
 ## 功能
 
@@ -20,11 +21,26 @@
 - 在 VS Code 顶部提供 `JellyFrame` 菜单；对 `jellyframe.app.json` 以及 HTML/CSS
   文件提供针对性的右键菜单。
 
-## 开发使用
+## 使用扩展
 
-可以用 VS Code extension development mode 打开本目录；如果从其他位置运行，
-将 `jellyframe.repoRoot` 指向 JellyFrame 仓库。扩展优先使用 `build/Release`，
-其次使用 `build/Debug`，也可以在设置中覆盖。
+仓库当前提供的是源码版扩展，尚未发布到 VS Code Marketplace。最简单的试用方式是：
+
+1. 先在 JellyFrame 仓库根目录完成一次 Release 构建，生成 `build/Release`。
+2. 用 VS Code 打开 `tools/vscode-jellyframe` 文件夹。
+3. 按 `F5`，在新打开的 Extension Development Host 窗口中打开一个 JellyFrame 仓库，
+   或将 `jellyframe.repoRoot` 设置为仓库根目录。
+4. 打开 `jellyframe.app.json`、App 的 HTML/CSS 文件，或直接点击顶部的 `JellyFrame`
+   菜单开始操作。
+
+如果希望像普通扩展一样安装，可以在扩展目录执行：
+
+```powershell
+npx @vscode/vsce package
+```
+
+然后在 VS Code 的扩展视图中打开“更多操作”菜单，选择“从 VSIX 安装”，选中生成的
+`.vsix` 文件。安装到仓库之外时，在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
+可选，用于指定桌面构建目录。扩展优先使用 `build/Release`，其次使用 `build/Debug`。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 
@@ -32,11 +48,6 @@
 右键 `jellyframe.app.json`，或在 App 的 HTML/CSS/manifest 文件编辑器中右键，可以
 直接使用常用操作。这些入口与命令面板调用同一组命令，输出和诊断行为一致。
 
-命令标题会跟随 VS Code 显示语言。中文界面下会显示例如
-`JellyFrame：验证 App 包`、`JellyFrame：在桌面壳中调试 App`；英文界面使用英文
-标题。标题映射位于扩展目录的 `package.nls.json` 和 `package.nls.zh-cn.json`。
-
-使用 `JellyFrame: Debug App In Desktop Shell` 进行交互式 app 调试，使用
-`JellyFrame: Run Frame Script` 进行确定性回放，使用 `JellyFrame: Open Capture`
-打开最近或指定的 BMP/PPM 截图。`JellyFrame: Preview Package` 仍用于 package
+使用“在桌面壳中调试 App”进行交互式 App 调试，使用“运行帧脚本”进行确定性回放，使用“打开截图”
+打开最近或指定的 BMP/PPM 截图。`JellyFrame：预览 App 包` 仍用于 package
 预检和伪浏览器截图，并将 JSON 报告关联到诊断。

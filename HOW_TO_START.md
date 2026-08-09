@@ -189,6 +189,34 @@ cmake -S . -B build-core `
 cmake --build build-core --config Release
 ```
 
+### Try The JellyFrame Extension In VS Code
+
+If you are used to installing extensions from the Marketplace, note that the
+JellyFrame extension currently ships with this repository and is not listed on
+the VS Code Marketplace yet. To try the source version:
+
+1. Finish the Release build above so `build/Release` exists.
+2. Open `tools/vscode-jellyframe` in VS Code.
+3. Press `F5` to launch an Extension Development Host.
+4. Open the JellyFrame repository in the new window, then open
+   `jellyframe.app.json` or an app HTML/CSS file.
+5. Use the `JellyFrame` menubar menu, a file context menu or the Command Palette
+   for validation, preview and debugging.
+
+The command titles follow the VS Code display language. The extension first
+looks for the desktop build in `build/Release`, then `build/Debug`. When the
+extension is launched from another location, set `jellyframe.repoRoot` to the
+JellyFrame repository root and optionally set `jellyframe.buildDir`.
+
+To create a locally installable VSIX, run this in the extension directory:
+
+```powershell
+npx @vscode/vsce package
+```
+
+Then open the VS Code Extensions view, choose `...`, select `Install from VSIX...`
+and choose the generated `.vsix` file.
+
 ## 8. Run Tests And Benchmarks
 
 Run the regression suite:
@@ -575,11 +603,9 @@ python tools\jellyframe_cli.py new `
   --target round-300
 ```
 
-The optional VS Code helper lives in `tools/vscode-jellyframe`. It adds schema
-association for `jellyframe.app.json` and command-palette wrappers around the
-same CLI commands, an interactive Win32 browser launcher, a report panel and
-inline diagnostics for actionable package and pipeline issues; it does not
-replace the CLI or duplicate the packer.
+When you write apps in VS Code, `tools/vscode-jellyframe` provides the common
+check, preview and desktop-debugging workflow. See “Try The JellyFrame Extension
+In VS Code” earlier in this guide for first-use and installation steps.
 
 When an example renders badly, inspect in this order:
 

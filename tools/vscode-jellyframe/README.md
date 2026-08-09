@@ -2,9 +2,9 @@
 
 > Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
-This is a thin developer extension for JellyFrame app packages. It does not
-implement its own parser or packer; every command delegates to
-`tools/jellyframe_cli.py`.
+JellyFrame Tools is a VS Code extension for app authors. It brings package
+checks, previews, desktop debugging and packaging into the editor, with a
+JellyFrame menu, focused context menus and the Command Palette as entry points.
 
 ## Features
 
@@ -26,12 +26,29 @@ implement its own parser or packer; every command delegates to
 - A `JellyFrame` menu in the VS Code menubar, plus focused context-menu
   actions for `jellyframe.app.json` and HTML/CSS files.
 
-## Development Use
+## Using The Extension
 
-Open this folder in VS Code extension development mode, or point
-`jellyframe.repoRoot` at the JellyFrame repository when running from another
-location. The extension prefers `build/Release`, then `build/Debug`; both can
-be overridden in settings.
+The repository currently provides the extension as source; it is not yet listed
+on the VS Code Marketplace. To try it with the least setup:
+
+1. Build a Release configuration from the JellyFrame repository root so that
+   `build/Release` exists.
+2. Open `tools/vscode-jellyframe` in VS Code.
+3. Press `F5` to launch an Extension Development Host. Open a JellyFrame
+   repository there, or set `jellyframe.repoRoot` to the repository root.
+4. Open `jellyframe.app.json` or an app HTML/CSS file, then use the `JellyFrame`
+   menubar menu or the context menu.
+
+To install it like a regular local extension, run this in the extension folder:
+
+```powershell
+npx @vscode/vsce package
+```
+
+Then open the Extensions view, choose `...` and `Install from VSIX...`, and
+select the generated `.vsix`. When the extension is installed outside the
+repository, set `jellyframe.repoRoot`; `jellyframe.buildDir` is optional. The
+extension prefers `build/Release`, then `build/Debug`.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 
@@ -41,16 +58,8 @@ context menu is available while editing an app HTML, CSS or manifest file.
 These entries use the same commands as the Command Palette, so either entry
 point produces the same report and output-channel behavior.
 
-Command titles are localized by VS Code. The extension ships English defaults
-and Simplified Chinese titles in `package.nls.zh-cn.json`; switching VS Code's
-display language to Chinese shows titles such as `JellyFrame：验证 App 包`.
-
 Use `JellyFrame: Debug App In Desktop Shell` for interactive app debugging and
 `JellyFrame: Run Frame Script` for deterministic playback. `JellyFrame: Open
 Capture` opens the last or a selected BMP/PPM capture. `JellyFrame: Preview
 Package` remains the package preflight/pseudo-browser path and writes a JSON
 report linked to diagnostics.
-
-Audience: app authors who want editor entry points, not extension developers
-reimplementing the runtime. All capability and packaging behavior remains
-owned by `tools/jellyframe_cli.py`.

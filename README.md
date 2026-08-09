@@ -41,7 +41,7 @@ targets and documentation use `JellyFrame`.
   for RGBA/BGRA, RGB565/BGR565, RGB332, Gray8 and monochrome output.
 - Desktop inspection tools, pseudo browser, Win32 validation shell, pipeline
   diagnostics, app packer, font-resource checker, font-pack generator and a
-  thin VS Code helper.
+  VS Code extension for app authors.
 
 For the exact supported/degraded/deferred feature set, read
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
@@ -51,9 +51,8 @@ If you are writing an app rather than porting the engine, start with
 ## App Gallery
 
 These 300x300 screenshots are rendered through the Win32 capture shell from
-brand-neutral source packages in `tools/templates/apps`. They are intentionally
-JellyFrame-specific wearable UI examples, not replicas of any commercial watch
-interface.
+Jelly-style wearable UI examples in `tools/templates/apps`. They show
+JellyFrame's own light, lively visual language.
 
 **Render pipeline:** JellyFrame Render Core `0.6.0-dev`; Win32 capture shell;
 viewport `300x300`; generated `2026-08-09`; source revision `9ca8b61`.
@@ -166,6 +165,8 @@ python tools\jellyframe_cli.py check `
 ```
 
 For a full first-time walkthrough, read [HOW_TO_START.md](HOW_TO_START.md).
+If you mainly write apps in VS Code, see the
+[`tools/vscode-jellyframe`](tools/vscode-jellyframe/README.md) extension guide.
 
 ## Optional Scripting Build
 

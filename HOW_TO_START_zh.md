@@ -172,6 +172,34 @@ cmake -S . -B build-core `
 cmake --build build-core --config Release
 ```
 
+### 在 VS Code 中试用 JellyFrame 扩展
+
+如果你习惯从扩展商店安装插件，需要先知道：JellyFrame 扩展目前随仓库提供，尚未发布到
+VS Code Marketplace。源码试用流程如下：
+
+1. 在仓库根目录完成上面的 Release 构建，确保存在 `build/Release`。
+2. 用 VS Code 打开 `tools/vscode-jellyframe` 文件夹。
+3. 按 `F5` 启动 Extension Development Host。
+4. 在新窗口中打开 JellyFrame 仓库，打开一个 `jellyframe.app.json` 或 App 的 HTML/CSS
+   文件。
+5. 使用顶部的 `JellyFrame` 菜单、文件右键菜单或命令面板执行验证、预览和调试。
+
+在中文 VS Code 中，命令会显示中文标题。扩展默认从仓库的 `build/Release` 查找桌面构建，
+也会回退到 `build/Debug`；如果从其他目录启动扩展，请在设置中填写：
+
+```text
+jellyframe.repoRoot = JellyFrame 仓库根目录
+jellyframe.buildDir = 可选的桌面构建目录
+```
+
+如果希望生成可从 VS Code 本地安装的文件，在扩展目录运行：
+
+```powershell
+npx @vscode/vsce package
+```
+
+随后打开 VS Code 扩展视图的“更多操作”菜单，选择“从 VSIX 安装”，并选中生成的 `.vsix` 文件。
+
 ## 8. 运行测试和基准
 
 运行回归测试：
@@ -530,10 +558,8 @@ python tools\jellyframe_cli.py new `
   --target round-300
 ```
 
-可选 VS Code 辅助扩展位于 `tools/vscode-jellyframe`。它会为 `jellyframe.app.json`
-关联 schema，在命令面板中包装同一套 CLI 命令，提供交互式 Win32 browser 启动入口、
-报告面板，以及针对可处理 package 和管线问题的 inline diagnostics；它不会替代 CLI，
-也不会复制 packer。
+如果你在 VS Code 中编写 App，可以使用 `tools/vscode-jellyframe` 扩展完成常用的检查、
+预览和桌面调试；首次试用与安装步骤见本指南前面的“在 VS Code 中试用 JellyFrame 扩展”。
 
 如果页面渲染不对，建议按这个顺序排查：
 

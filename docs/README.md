@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -76,7 +76,7 @@ for whether a document needs another pass after code changes.
   contract for images, audio, lightweight video, network data and installable
   bundles.
 - [../tools/vscode-jellyframe/README.md](../tools/vscode-jellyframe/README.md):
-  optional VS Code helper that delegates to the developer CLI.
+  JellyFrame's VS Code extension for app authors.
 - [../tools/schemas/jellyframe.app.schema.json](../tools/schemas/jellyframe.app.schema.json):
   JSON Schema for `jellyframe.app.json`.
 - [embedded_hal_api.md](embedded_hal_api.md): board-side API checklist.

@@ -32,7 +32,7 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 - Layer tree、display list、CPU rasterizer/compositor，以及 RGBA/BGRA、RGB565/BGR565、
   RGB332、Gray8、单色输出的 framebuffer adapter。
 - 桌面检查工具、伪浏览器、Win32 验证壳、管线 diagnostics、app packer、字体资源检查、
-  字体包生成器和薄 VS Code helper。
+  字体包生成器，以及面向 App 作者的 VS Code 扩展。
 
 精确的支持/降级/延后功能见
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
@@ -42,8 +42,7 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 ## 应用截图
 
 下面这些 300x300 截图通过 Win32 capture shell 从 `tools/templates/apps`
-中的品牌中性 source package 实际渲染生成。它们是 JellyFrame 自己的可穿戴 UI
-示例，不是一比一复刻任何商业手表界面。
+中的 Jelly 风可穿戴 UI 例程实际渲染生成，展示的是 JellyFrame 自己轻盈、明快的界面表达。
 
 **渲染管线：** JellyFrame Render Core `0.6.0-dev`；Win32 capture shell；
 视口 `300x300`；生成日期 `2026-08-09`；源码修订 `9ca8b61`。
@@ -146,6 +145,8 @@ python tools\jellyframe_cli.py check `
 ```
 
 第一次接触项目时，建议继续阅读 [HOW_TO_START_zh.md](HOW_TO_START_zh.md)。
+如果你主要在 VS Code 中编写 App，也可以直接试用
+[`tools/vscode-jellyframe`](tools/vscode-jellyframe/README_zh.md) 扩展。
 
 ## 可选脚本构建
 

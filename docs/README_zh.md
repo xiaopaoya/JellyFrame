@@ -1,6 +1,6 @@
 # JellyFrame 文档索引
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
@@ -58,7 +58,7 @@
 - [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。
 - [host_optional_services_zh.md](../src/app_runtime/docs/host_optional_services_zh.md)：图片/音频/轻量视频、网络数据和安装式 bundle 的可选宿主服务契约。
 - [../tools/vscode-jellyframe/README_zh.md](../tools/vscode-jellyframe/README_zh.md)：
-  调用 developer CLI 的可选 VS Code 辅助扩展。
+  面向 App 作者的 JellyFrame VS Code 扩展。
 - [../tools/schemas/jellyframe.app.schema.json](../tools/schemas/jellyframe.app.schema.json)：
   `jellyframe.app.json` 的 JSON Schema。
 - [embedded_hal_api_zh.md](embedded_hal_api_zh.md)：开发板侧 API checklist。
