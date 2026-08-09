@@ -9,9 +9,6 @@ UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，Java
 如果按“任意网页”来写，会很快撞到限制。如果按“小型可穿戴 app + 明确 target + 明确预算”来写，
 工具链就能帮你做出可预测的 UI。
 
-干净环境试用门禁、打包、启动器和硬件证据边界见
-[external_developer_trial_readiness_zh.md](external_developer_trial_readiness_zh.md)。
-
 ## 从这里开始
 
 每个 app 都建议使用这个循环：

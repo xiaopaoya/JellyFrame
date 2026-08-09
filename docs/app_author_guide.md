@@ -12,10 +12,6 @@ If you write it like an arbitrary web page, you will hit limits. If you write it
 like a small wearable app with explicit targets and budgets, the toolchain can
 help you ship predictable UI.
 
-For the clean-room trial gate, including packaging, launcher and hardware
-evidence boundaries, see
-[external_developer_trial_readiness.md](external_developer_trial_readiness.md).
-
 ## Start Here
 
 Use this loop for every app:

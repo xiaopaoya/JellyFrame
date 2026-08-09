@@ -22,10 +22,6 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   dependency metadata from the same registry; the mandatory `core.document`
   and `core.paint` source families remain build-compatible and unchanged at
   runtime.
-- Added the bilingual external-developer trial readiness checklist. It defines
-  the clean author workflow, three-target preflight, package/registry recovery
-  gates and the boundary between desktop evidence and port-owned hardware
-  evidence.
 - Closed the documentation drift found during the trial audit: public author
   entry points now identify `0.6.0-dev` while preserving `0.5.0` as the package
   compatibility baseline. The P3 port integration guide now records its

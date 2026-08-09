@@ -55,7 +55,10 @@ brand-neutral source packages in `tools/templates/apps`. They are intentionally
 JellyFrame-specific wearable UI examples, not replicas of any commercial watch
 interface.
 
-| Weather | Dayline |
+**Render pipeline:** JellyFrame Render Core `0.6.0-dev`; Win32 capture shell;
+viewport `300x300`; generated `2026-08-09`; source revision `9ca8b61`.
+
+| Weather | Clock |
 | --- | --- |
 | ![Weather app rendered by JellyFrame](docs/assets/screenshots/weather.png) | ![Clock app rendered by JellyFrame](docs/assets/screenshots/clock.png) |
 

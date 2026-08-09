@@ -45,7 +45,10 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 中的品牌中性 source package 实际渲染生成。它们是 JellyFrame 自己的可穿戴 UI
 示例，不是一比一复刻任何商业手表界面。
 
-| Weather | Dayline |
+**渲染管线：** JellyFrame Render Core `0.6.0-dev`；Win32 capture shell；
+视口 `300x300`；生成日期 `2026-08-09`；源码修订 `9ca8b61`。
+
+| Weather | Clock |
 | --- | --- |
 | ![JellyFrame 渲染的 Weather app](docs/assets/screenshots/weather.png) | ![JellyFrame 渲染的 Clock app](docs/assets/screenshots/clock.png) |
 

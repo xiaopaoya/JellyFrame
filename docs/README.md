@@ -20,9 +20,6 @@ for whether a document needs another pass after code changes.
 7. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
 8. The module document for the area you want to use, port or inspect.
 
-For the exact external-trial admission gates and evidence rules, read
-[external_developer_trial_readiness.md](external_developer_trial_readiness.md).
-
 ## Technical Documents
 
 ### Core Pipeline
@@ -101,9 +98,6 @@ For the exact external-trial admission gates and evidence rules, read
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish
   control and motion design system.
 - [versioning.md](versioning.md): versioning and release discipline.
-- [external_developer_trial_readiness.md](external_developer_trial_readiness.md):
-  clean author workflow, admission gates and evidence rules for the 0.6 trial.
-
 ## File Naming
 
 English docs use the base filename. Chinese docs use `_zh`, for example
