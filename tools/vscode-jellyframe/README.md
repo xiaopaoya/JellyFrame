@@ -39,14 +39,28 @@ on the VS Code Marketplace. To try it with the least setup:
 4. Open `jellyframe.app.json` or an app HTML/CSS file, then use the `JellyFrame`
    menubar menu or the context menu.
 
-To install it like a regular local extension, run this in the extension folder:
+To package, install or update it like a regular local extension, run the helper
+script in the extension folder:
 
 ```powershell
-npx @vscode/vsce package
+.\manage-extension.ps1
 ```
 
-Then open the Extensions view, choose `...` and `Install from VSIX...`, and
-select the generated `.vsix`. When the extension is installed outside the
+The default action repackages the current source and force-updates the installed
+extension. The individual actions are also available:
+
+```powershell
+.\manage-extension.ps1 -Action Package
+.\manage-extension.ps1 -Action Install
+.\manage-extension.ps1 -Action Update
+```
+
+The script requires Node.js `npx` (or an available `pnpm` fallback) and the VS
+Code `code` command on `PATH`; pass `-NpxCommand` or `-CodeCommand` to provide
+an explicit executable path. If PowerShell blocks local scripts, run
+`Set-ExecutionPolicy -Scope Process Bypass` in the current window. You can still
+use the Extensions view's `Install from VSIX...` action and select the generated
+`.vsix`. When the extension is installed outside the
 repository, set `jellyframe.repoRoot`; `jellyframe.buildDir` is optional. The
 extension prefers `build/Release`, then `build/Debug`.
 

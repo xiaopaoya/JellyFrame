@@ -32,14 +32,24 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 4. 打开 `jellyframe.app.json`、App 的 HTML/CSS 文件，或直接点击顶部的 `JellyFrame`
    菜单开始操作。
 
-如果希望像普通扩展一样安装，可以在扩展目录执行：
+如果希望像普通扩展一样安装或更新，可以直接在扩展目录运行统一脚本：
 
 ```powershell
-npx @vscode/vsce package
+.\manage-extension.ps1
 ```
 
-然后在 VS Code 的扩展视图中打开“更多操作”菜单，选择“从 VSIX 安装”，选中生成的
-`.vsix` 文件。安装到仓库之外时，在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
+默认动作是重新打包并强制更新当前安装的扩展。也可以只打包，或执行普通安装：
+
+```powershell
+.\manage-extension.ps1 -Action Package
+.\manage-extension.ps1 -Action Install
+.\manage-extension.ps1 -Action Update
+```
+
+脚本需要 Node.js 的 `npx`（或可用的 `pnpm`）和 VS Code 的 `code` 命令在 PATH 中；也可以通过
+`-NpxCommand` 或 `-CodeCommand` 传入完整路径。若 PowerShell 阻止本地脚本，可在当前窗口执行
+`Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
+安装到仓库之外时，在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
 可选，用于指定桌面构建目录。扩展优先使用 `build/Release`，其次使用 `build/Debug`。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
