@@ -820,7 +820,7 @@ if(JELLYFRAME_BUILD_TESTS)
                         --capture ${CMAKE_BINARY_DIR}/test_outputs/wearable_launcher.bmp
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_wearable_launcher_capture PROPERTIES
-                PASS_REGULAR_EXPRESSION "JellyFrame Win32 browser capture"
+                PASS_REGULAR_EXPRESSION "JellyFrame Desktop Shell capture"
                 FAIL_REGULAR_EXPRESSION "\\[warning\\]|\\[error\\]")
 
             add_test(
@@ -830,7 +830,7 @@ if(JELLYFRAME_BUILD_TESTS)
                         --capture ${CMAKE_BINARY_DIR}/test_outputs/band_system_shell.bmp
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_band_system_shell_capture PROPERTIES
-                PASS_REGULAR_EXPRESSION "JellyFrame Win32 browser capture"
+                PASS_REGULAR_EXPRESSION "JellyFrame Desktop Shell capture"
                 FAIL_REGULAR_EXPRESSION "\\[warning\\]|\\[error\\]")
 
             add_test(
