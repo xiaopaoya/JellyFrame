@@ -279,7 +279,7 @@ async function previewPackage(context, resourceUri) {
   }
   ensureBuildDir(context);
   const base = outputBase(root);
-  const output = path.join(buildDir(context), `vscode-${base}.ppm`);
+  const output = path.join(buildDir(context), `vscode-${base}.bmp`);
   const report = path.join(buildDir(context), `vscode-${base}-preview-report.json`);
   runCliWithOptions(
     context,
