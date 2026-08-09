@@ -23,6 +23,8 @@ implement its own parser or packer; every command delegates to
   with a setting for an explicit build directory.
 - Configurable repository root, Python executable, default target and font
   budget.
+- A `JellyFrame` menu in the VS Code menubar, plus focused context-menu
+  actions for `jellyframe.app.json` and HTML/CSS files.
 
 ## Development Use
 
@@ -32,6 +34,16 @@ location. The extension prefers `build/Release`, then `build/Debug`; both can
 be overridden in settings.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
+
+The top-level `JellyFrame` menu groups package, debugging and report actions.
+The Explorer context menu is available for `jellyframe.app.json`; the editor
+context menu is available while editing an app HTML, CSS or manifest file.
+These entries use the same commands as the Command Palette, so either entry
+point produces the same report and output-channel behavior.
+
+Command titles are localized by VS Code. The extension ships English defaults
+and Simplified Chinese titles in `package.nls.zh-cn.json`; switching VS Code's
+display language to Chinese shows titles such as `JellyFrame：验证 App 包`.
 
 Use `JellyFrame: Debug App In Desktop Shell` for interactive app debugging and
 `JellyFrame: Run Frame Script` for deterministic playback. `JellyFrame: Open

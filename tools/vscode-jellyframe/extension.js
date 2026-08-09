@@ -179,7 +179,15 @@ function findPackageRootFrom(startPath) {
   }
 }
 
-async function packageRoot() {
+async function packageRoot(resourceUri) {
+  const selectedResource = resourceUri && resourceUri.fsPath;
+  if (selectedResource) {
+    const found = findPackageRootFrom(selectedResource);
+    if (found) {
+      lastPackageRoot = found;
+      return found;
+    }
+  }
   const active = vscode.window.activeTextEditor?.document.uri.fsPath;
   if (active) {
     const found = findPackageRootFrom(active);
@@ -217,8 +225,8 @@ async function target() {
   });
 }
 
-async function runPackageCommand(context, commandName) {
-  const root = await packageRoot();
+async function runPackageCommand(context, commandName, resourceUri) {
+  const root = await packageRoot(resourceUri);
   if (!root) {
     return;
   }
@@ -248,8 +256,8 @@ async function runPackageCommand(context, commandName) {
   });
 }
 
-async function previewPackage(context) {
-  const root = await packageRoot();
+async function previewPackage(context, resourceUri) {
+  const root = await packageRoot(resourceUri);
   if (!root) {
     return;
   }
@@ -272,12 +280,12 @@ async function previewPackage(context) {
   );
 }
 
-async function debugApp(context) {
+async function debugApp(context, resourceUri) {
   if (process.platform !== "win32") {
     vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
     return;
   }
-  const root = await packageRoot();
+  const root = await packageRoot(resourceUri);
   if (!root) {
     return;
   }
@@ -289,12 +297,12 @@ async function debugApp(context) {
   runDetachedPython(context, launcher, ["--build-dir", nativeBuildDir(context), "--app", root]);
 }
 
-async function runFrameScript(context) {
+async function runFrameScript(context, resourceUri) {
   if (process.platform !== "win32") {
     vscode.window.showErrorMessage("JellyFrame frame-script playback currently requires the desktop shell on Windows.");
     return;
   }
-  const root = await packageRoot();
+  const root = await packageRoot(resourceUri);
   if (!root) {
     return;
   }
@@ -635,14 +643,14 @@ function activate(context) {
     capabilityDiagnostics,
     statusProvider.changed,
     vscode.window.registerTreeDataProvider("jellyframe.status", statusProvider),
-    vscode.commands.registerCommand("jellyframe.validate", () => runPackageCommand(context, "validate")),
-    vscode.commands.registerCommand("jellyframe.check", () => runPackageCommand(context, "check")),
-    vscode.commands.registerCommand("jellyframe.preview", () => previewPackage(context)),
-    vscode.commands.registerCommand("jellyframe.debug", () => debugApp(context)),
-    vscode.commands.registerCommand("jellyframe.runFrameScript", () => runFrameScript(context)),
+    vscode.commands.registerCommand("jellyframe.validate", (resourceUri) => runPackageCommand(context, "validate", resourceUri)),
+    vscode.commands.registerCommand("jellyframe.check", (resourceUri) => runPackageCommand(context, "check", resourceUri)),
+    vscode.commands.registerCommand("jellyframe.preview", (resourceUri) => previewPackage(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.debug", (resourceUri) => debugApp(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
-    vscode.commands.registerCommand("jellyframe.package", () => runPackageCommand(context, "package")),
+    vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context))
   );

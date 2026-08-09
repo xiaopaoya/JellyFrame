@@ -1,8 +1,8 @@
 {
   "name": "jellyframe-tools",
-  "displayName": "JellyFrame Tools",
-  "description": "VS Code helpers for JellyFrame app packages.",
-  "version": "0.2.0",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.3.0",
   "publisher": "jellyframe",
   "engines": {
     "vscode": "^1.85.0"
@@ -27,55 +27,196 @@
     "commands": [
       {
         "command": "jellyframe.validate",
-        "title": "JellyFrame: Validate Package"
+        "title": "%command.validate%",
+        "icon": "$(check)"
       },
       {
         "command": "jellyframe.check",
-        "title": "JellyFrame: Check Package"
+        "title": "%command.check%",
+        "icon": "$(check-all)"
       },
       {
         "command": "jellyframe.preview",
-        "title": "JellyFrame: Preview Package"
+        "title": "%command.preview%",
+        "icon": "$(preview)"
       },
       {
         "command": "jellyframe.debug",
-        "title": "JellyFrame: Debug App In Desktop Shell"
+        "title": "%command.debug%",
+        "icon": "$(play)"
       },
       {
         "command": "jellyframe.runFrameScript",
-        "title": "JellyFrame: Run Frame Script"
+        "title": "%command.runFrameScript%",
+        "icon": "$(debug-alt)"
       },
       {
         "command": "jellyframe.openCapture",
-        "title": "JellyFrame: Open Capture"
+        "title": "%command.openCapture%",
+        "icon": "$(open-preview)"
       },
       {
         "command": "jellyframe.listBuilds",
-        "title": "JellyFrame: List Desktop Builds"
+        "title": "%command.listBuilds%",
+        "icon": "$(list-tree)"
       },
       {
         "command": "jellyframe.package",
-        "title": "JellyFrame: Generate Resource Package"
+        "title": "%command.package%",
+        "icon": "$(package)"
       },
       {
         "command": "jellyframe.newFromTemplate",
-        "title": "JellyFrame: New App From Template"
+        "title": "%command.newFromTemplate%",
+        "icon": "$(new-file)"
       },
       {
         "command": "jellyframe.showReport",
-        "title": "JellyFrame: Show Last Report"
+        "title": "%command.showReport%",
+        "icon": "$(output)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "jellyframe.actions",
+        "label": "%menu.label%",
+        "icon": "$(beaker)"
+      },
+      {
+        "id": "jellyframe.packageActions",
+        "label": "%menu.packageLabel%",
+        "icon": "$(package)"
+      },
+      {
+        "id": "jellyframe.editorActions",
+        "label": "%menu.editorLabel%",
+        "icon": "$(tools)"
       }
     ],
     "views": {
       "explorer": [
         {
           "id": "jellyframe.status",
-          "name": "JellyFrame",
+          "name": "%view.status%",
           "when": "workspaceFolderCount > 0"
         }
       ]
     },
     "menus": {
+      "menubar": [
+        {
+          "submenu": "jellyframe.actions",
+          "group": "navigation@5"
+        }
+      ],
+      "jellyframe.actions": [
+        {
+          "command": "jellyframe.validate",
+          "group": "package@1"
+        },
+        {
+          "command": "jellyframe.check",
+          "group": "package@2"
+        },
+        {
+          "command": "jellyframe.preview",
+          "group": "package@3"
+        },
+        {
+          "command": "jellyframe.package",
+          "group": "package@4"
+        },
+        {
+          "command": "jellyframe.newFromTemplate",
+          "group": "package@5"
+        },
+        {
+          "command": "jellyframe.debug",
+          "group": "debug@1"
+        },
+        {
+          "command": "jellyframe.runFrameScript",
+          "group": "debug@2"
+        },
+        {
+          "command": "jellyframe.openCapture",
+          "group": "debug@3"
+        },
+        {
+          "command": "jellyframe.listBuilds",
+          "group": "debug@4"
+        },
+        {
+          "command": "jellyframe.showReport",
+          "group": "report@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "jellyframe.packageActions",
+          "when": "resourceFilename == jellyframe.app.json",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "jellyframe.editorActions",
+          "when": "resourceExtname == .html || resourceExtname == .css || resourceFilename == jellyframe.app.json",
+          "group": "navigation"
+        }
+      ],
+      "jellyframe.packageActions": [
+        {
+          "command": "jellyframe.validate",
+          "group": "package@1"
+        },
+        {
+          "command": "jellyframe.check",
+          "group": "package@2"
+        },
+        {
+          "command": "jellyframe.preview",
+          "group": "package@3"
+        },
+        {
+          "command": "jellyframe.package",
+          "group": "package@4"
+        },
+        {
+          "command": "jellyframe.debug",
+          "group": "debug@1"
+        },
+        {
+          "command": "jellyframe.showReport",
+          "group": "report@1"
+        }
+      ],
+      "jellyframe.editorActions": [
+        {
+          "command": "jellyframe.validate",
+          "group": "package@1"
+        },
+        {
+          "command": "jellyframe.check",
+          "group": "package@2"
+        },
+        {
+          "command": "jellyframe.preview",
+          "group": "package@3"
+        },
+        {
+          "command": "jellyframe.debug",
+          "group": "debug@1"
+        },
+        {
+          "command": "jellyframe.runFrameScript",
+          "group": "debug@2"
+        },
+        {
+          "command": "jellyframe.showReport",
+          "group": "report@1"
+        }
+      ],
       "view/title": [
         {
           "command": "jellyframe.debug",
@@ -95,37 +236,37 @@
       ]
     },
     "configuration": {
-      "title": "JellyFrame",
+      "title": "%configuration.title%",
       "properties": {
         "jellyframe.repoRoot": {
           "type": "string",
           "default": "",
-          "description": "Optional JellyFrame repository root. Leave empty when running the extension from this repository."
+          "description": "%configuration.repoRoot%"
         },
         "jellyframe.buildDir": {
           "type": "string",
           "default": "",
-          "description": "Optional desktop build directory. Leave empty to prefer build/Release, then build/Debug."
+          "description": "%configuration.buildDir%"
         },
         "jellyframe.openCaptureAfterRun": {
           "type": "boolean",
           "default": true,
-          "description": "Open the generated capture after a frame-script run when a capture is produced."
+          "description": "%configuration.openCaptureAfterRun%"
         },
         "jellyframe.pythonPath": {
           "type": "string",
           "default": "python",
-          "description": "Python executable used to run tools/jellyframe_cli.py."
+          "description": "%configuration.pythonPath%"
         },
         "jellyframe.defaultTarget": {
           "type": "string",
           "default": "round-300",
-          "description": "Default target preset passed to JellyFrame CLI commands."
+          "description": "%configuration.defaultTarget%"
         },
         "jellyframe.fontBudget": {
           "type": "string",
           "default": "16x16",
-          "description": "Default glyph budget passed to font resource checks."
+          "description": "%configuration.fontBudget%"
         }
       }
     },
