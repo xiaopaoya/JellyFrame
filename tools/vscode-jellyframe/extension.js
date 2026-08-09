@@ -7,6 +7,7 @@ let outputChannel;
 let reportPanel;
 let capabilityDiagnostics;
 let lastReport;
+let lastReportCommand;
 let lastPackageRoot;
 let lastCapturePath;
 let statusProvider;
@@ -95,7 +96,7 @@ function runCliWithOptions(context, args, options) {
       return;
     }
     if (code === 0 && options.reportPath) {
-      loadReport(options.reportPath);
+      loadReport(options.reportPath, options.commandName);
     }
     if (code === 0 && options.packageRoot && options.reportPath) {
       updateReportDiagnostics(options.packageRoot);
@@ -110,10 +111,11 @@ function runCliWithOptions(context, args, options) {
   });
 }
 
-function loadReport(reportPath) {
+function loadReport(reportPath, commandName) {
   try {
     if (fs.existsSync(reportPath)) {
       lastReport = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+      lastReportCommand = commandName || undefined;
     }
   } catch (error) {
     ensureOutputChannel().appendLine(`failed to read report ${reportPath}: ${error.message}`);
@@ -452,6 +454,8 @@ class JellyFrameStatusProvider {
     const report = lastReport ? "Loaded report" : "No report loaded";
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
     const performance = lastReport?.performanceSummary;
+    const isPackageValidation = lastReportCommand === "validate"
+      || lastReport?.reportScope === "package-validation";
     const hasRenderData = Boolean(lastReport?.pipelineDiagnostics?.format)
       || (Array.isArray(lastReport?.responsiveProfiles) && lastReport.responsiveProfiles.length > 0)
       || Boolean(lastReport?.runtimeMetrics)
@@ -459,7 +463,9 @@ class JellyFrameStatusProvider {
     const diagnostics = pipeline
       ? `Diagnostics: ${pipeline.error || 0} errors, ${pipeline.warning || 0} warnings`
       : "Diagnostics: run Check or Preview";
-    const perf = hasRenderData && performance?.rating
+    const perf = isPackageValidation
+      ? "Performance: not part of package validation"
+      : hasRenderData && performance?.rating
       ? `Performance: ${performance.rating} (${performance.score || 0})`
       : performance?.source === "package-preflight-estimate"
         ? "Performance: static estimate only"
@@ -504,6 +510,8 @@ function renderList(items, renderItem) {
 
 function reportHtml() {
   const report = lastReport;
+  const isPackageValidation = lastReportCommand === "validate"
+    || report?.reportScope === "package-validation";
   const app = report?.app || {};
   const targetConfig = report?.target || {};
   const warnings = report?.warnings || [];
@@ -545,12 +553,14 @@ function reportHtml() {
 <body>
   <h1>JellyFrame Report</h1>
   ${report ? `
+    <p><strong>${escapeHtml(isPackageValidation ? "JellyFrame Package Validation" : "JellyFrame Report")}</strong></p>
     <p><strong>${escapeHtml(app.name || app.id || "App")}</strong> <span class="muted">${escapeHtml(app.id || "")}</span></p>
     <p>Target: <code>${escapeHtml(targetConfig.id || "default")}</code> · Resources: ${resources.length} · Bytes: ${escapeHtml(report.totalResourceBytes || 0)}</p>
+    ${isPackageValidation ? `<p class="info"><strong>Package structure: valid</strong> · This report covers package metadata, local resources, references and declared limits. It does not run Render Core or measure runtime performance.</p>` : ""}
     ${developerAdvice.length ? `<h2>App Author Advice</h2>
     ${renderList(developerAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Review item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.recipe ? ` <span class="muted">Recipe: <code>${escapeHtml(advice.recipe)}</code></span>` : ""}${advice.text ? ` <span class="muted">Text: <code>${escapeHtml(advice.text)}</code></span>` : ""}${advice.path ? ` <span class="muted">Path: <code>${escapeHtml(advice.path)}</code></span>` : ""}${advice.node ? ` <span class="muted">Node: <code>${escapeHtml(advice.node)}</code></span>` : ""}${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
     ` : ""}
-    ${hasRenderData && performanceSummary.model ? `<h2>Rendering Preflight</h2>
+    ${!isPackageValidation && hasRenderData && performanceSummary.model ? `<h2>Rendering Preflight</h2>
       <p>
         Rating: <strong>${escapeHtml(performanceSummary.rating || "unknown")}</strong>
         · Score: ${escapeHtml(performanceSummary.score || 0)}
@@ -562,7 +572,7 @@ function reportHtml() {
       </p>
       ${renderList(performanceBottlenecks, (item) => `<li class="advice"><strong>${escapeHtml(item.title || item.code || "Performance bottleneck")}${item.target ? ` <span class="muted">[${escapeHtml(item.target)}]</span>` : ""}</strong>${item.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(item.metrics))}</code></span>` : ""}</li>`)}
       ${renderList(performanceAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Performance item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
-    ` : performanceSummary.source === "package-preflight-estimate" ? `<h2>Static Resource Estimate</h2>
+    ` : !isPackageValidation && performanceSummary.source === "package-preflight-estimate" ? `<h2>Static Resource Estimate</h2>
       <p class="muted">This validation only checked package structure and resource budgets. Render Core layout, frame timing, and runtime performance were not executed.</p>
       <p>Resource budget: ${escapeHtml(performanceSummary.resourceBudgetPercent || 0)}% · Measured frame time: not available</p>` : ""}
     ${hasPipelineDiagnostics ? `<h2>Pipeline Diagnostics</h2>

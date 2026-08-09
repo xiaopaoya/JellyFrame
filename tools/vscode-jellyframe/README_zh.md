@@ -9,7 +9,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 ## 功能
 
 - 为 `jellyframe.app.json` 关联 JSON schema。
-- 命令面板提供 validate、check、preview、桌面壳调试、frame script 回放、打开截图和生成 package。
+- 命令面板提供“验证 App 包结构”“检查 App 包渲染”“预览”、桌面壳调试、frame script 回放、打开截图和生成 package。
 - 可从内置 weather、clock、timer 和 calculator 模板创建 app。
 - 在专用 `JellyFrame` output channel 中显示 CLI 输出。
 - `JellyFrame Report` webview 会优先展示 CLI 的 `developerAdvice[]`，再汇总
@@ -43,6 +43,11 @@ npx @vscode/vsce package
 可选，用于指定桌面构建目录。扩展优先使用 `build/Release`，其次使用 `build/Debug`。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
+
+“验证 App 包结构”是快速的包门禁：检查 manifest、入口、资源、引用和声明预算，适合频繁运行，
+不会启动 Render Core，也不会测量布局、帧时间或真实设备性能。它使用简洁的包结构报告。
+“检查 App 包渲染”会先做同样的结构验证，再运行目标 viewport 的 Render Core 预检、响应式布局和字体检查，
+报告中才会出现管线 diagnostics 和渲染预检性能摘要。需要查看实际画面或交互时，请使用“预览”或桌面调试。
 
 顶部的 `JellyFrame` 菜单按“包检查、调试、报告”分组提供完整工作流。资源管理器中
 右键 `jellyframe.app.json`，或在 App 的 HTML/CSS/manifest 文件编辑器中右键，可以

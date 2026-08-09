@@ -1,8 +1,8 @@
 {
   "extension.displayName": "JellyFrame Tools",
   "extension.description": "VS Code helpers for JellyFrame app packages.",
-  "command.validate": "JellyFrame: Validate Package",
-  "command.check": "JellyFrame: Check Package",
+  "command.validate": "JellyFrame: Validate App Package Structure",
+  "command.check": "JellyFrame: Check App Rendering",
   "command.preview": "JellyFrame: Preview Package",
   "command.debug": "JellyFrame: Debug App In Desktop Shell",
   "command.runFrameScript": "JellyFrame: Run Frame Script",

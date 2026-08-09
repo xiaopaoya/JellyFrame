@@ -1,8 +1,8 @@
 {
   "extension.displayName": "JellyFrame 工具",
   "extension.description": "JellyFrame App package 的 VS Code 开发辅助工具。",
-  "command.validate": "JellyFrame：验证 App 包",
-  "command.check": "JellyFrame：检查 App 包",
+  "command.validate": "JellyFrame：验证 App 包结构",
+  "command.check": "JellyFrame：检查 App 包渲染",
   "command.preview": "JellyFrame：预览 App 包",
   "command.debug": "JellyFrame：在桌面壳中调试 App",
   "command.runFrameScript": "JellyFrame：运行帧脚本",

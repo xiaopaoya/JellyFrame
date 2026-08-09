@@ -207,7 +207,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if result == 0:
         report = load_json_if_exists(args.report)
         if report:
-            write_json_report(args.report, report)
+            report["reportScope"] = "package-validation"
+            report["validation"] = {
+                "status": "passed",
+                "scope": "manifest-resources-references-budgets",
+            }
+            write_json_report(args.report, report, enrich=False)
     return result
 
 
@@ -2187,9 +2192,10 @@ def enrich_report(report: dict) -> dict:
     return report
 
 
-def write_json_report(path: Path, report: dict) -> None:
+def write_json_report(path: Path, report: dict, *, enrich: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    enrich_report(report)
+    if enrich:
+        enrich_report(report)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -2735,6 +2741,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     validate_result = cmd_validate(args)
     if validate_result != 0:
         return validate_result
+    report = load_json_if_exists(args.report)
+    if report:
+        report["reportScope"] = "render-preflight" if not getattr(args, "skip_check", False) else "package-validation"
+        write_json_report(args.report, report, enrich=False)
     if not getattr(args, "skip_check", False):
         pipeline_result = run_responsive_profile_checks(args)
         if pipeline_result != 0:

@@ -9,7 +9,7 @@ JellyFrame menu, focused context menus and the Command Palette as entry points.
 ## Features
 
 - JSON schema association for `jellyframe.app.json`.
-- Command palette actions for validate, check, preview, desktop-shell debugging,
+- Command palette actions for package-structure validation, render preflight, preview, desktop-shell debugging,
   frame-script playback, capture opening and package generation.
 - App creation from the built-in weather, clock, timer and calculator templates.
 - CLI output in a dedicated `JellyFrame` output channel.
@@ -51,6 +51,15 @@ repository, set `jellyframe.repoRoot`; `jellyframe.buildDir` is optional. The
 extension prefers `build/Release`, then `build/Debug`.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
+
+`JellyFrame: Validate App Package Structure` is the fast package gate. It checks
+the manifest, entry point, local resources, references and declared budgets without
+starting Render Core or measuring layout, frame time or device performance. Its
+report is intentionally limited to package structure. `JellyFrame: Check App
+Rendering` runs that gate first, then adds target-viewport Render Core preflight,
+responsive layout and font checks; only that report contains pipeline diagnostics
+and rendering-preflight performance data. Use Preview or desktop debugging for
+the actual image and interactive behavior.
 
 The top-level `JellyFrame` menu groups package, debugging and report actions.
 The Explorer context menu is available for `jellyframe.app.json`; the editor
