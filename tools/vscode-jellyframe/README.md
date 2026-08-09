@@ -66,7 +66,7 @@ extension prefers `build/Release`, then `build/Debug`.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 
-`JellyFrame: Validate App Package Structure` is the fast package gate. It checks
+`JellyFrame: Validate App Package` is the fast package gate. It checks
 the manifest, entry point, local resources, references and declared budgets without
 starting Render Core or measuring layout, frame time or device performance. Its
 report is intentionally limited to package structure. `JellyFrame: Check App

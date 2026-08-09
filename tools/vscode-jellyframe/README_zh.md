@@ -54,7 +54,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 
-“验证 App 包结构”是快速的包门禁：检查 manifest、入口、资源、引用和声明预算，适合频繁运行，
+“验证 App 包”是快速的包门禁：检查 manifest、入口、资源、引用和声明预算，适合频繁运行，
 不会启动 Render Core，也不会测量布局、帧时间或真实设备性能。它使用简洁的包结构报告。
 “检查 App 包渲染”会先做同样的结构验证，再运行目标 viewport 的 Render Core 预检、响应式布局和字体检查，
 报告中才会出现管线 diagnostics 和渲染预检性能摘要。需要查看实际画面或交互时，请使用“预览”或桌面调试。

@@ -501,15 +501,107 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function renderList(items, renderItem) {
+function renderList(items, renderItem, emptyText = "None") {
   if (!items || items.length === 0) {
-    return "<p class=\"muted\">None</p>";
+    return `<p class="muted">${escapeHtml(emptyText)}</p>`;
   }
   return `<ul>${items.map(renderItem).join("")}</ul>`;
 }
 
+function reportLabels() {
+  const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  return chinese ? {
+    panelTitle: "JellyFrame 报告",
+    reportTitle: "JellyFrame 报告",
+    packageValidationTitle: "JellyFrame 包结构验证",
+    target: "目标",
+    resources: "资源",
+    bytes: "字节",
+    packageValid: "包结构有效",
+    packageValidationNote: "本报告覆盖包元数据、本地资源、引用和声明的限制；未运行 Render Core，也未测量运行时性能。",
+    authorAdvice: "作者建议",
+    renderingPreflight: "渲染预检",
+    rating: "评级",
+    score: "评分",
+    maxToolTime: "工具耗时上限",
+    slowestStage: "最慢阶段",
+    maxHeap: "最大堆内存",
+    maxFramebuffer: "最大帧缓冲",
+    maxDisplayCommands: "最大显示命令数",
+    staticEstimate: "静态资源估算",
+    staticEstimateNote: "本次操作只检查了包结构和资源预算，未执行 Render Core 布局、帧时序或运行时性能测试。",
+    resourceBudget: "资源预算",
+    measuredFrameTime: "实测帧时间",
+    notAvailable: "不可用",
+    pipelineDiagnostics: "管线诊断",
+    total: "总数",
+    errors: "错误",
+    warnings: "警告",
+    info: "信息",
+    dom: "DOM",
+    nodes: "节点",
+    layout: "布局",
+    boxes: "盒子",
+    layers: "层",
+    displayCommands: "显示命令",
+    estimatedHeap: "估算堆内存",
+    warningsSection: "警告",
+    resourcesSection: "资源",
+    references: "引用",
+    path: "路径",
+    kind: "类型",
+    none: "无",
+    missing: "缺失",
+    noReport: "请先运行“验证 App 包”“检查 App 渲染”或其他会生成报告的操作。"
+  } : {
+    panelTitle: "JellyFrame Report",
+    reportTitle: "JellyFrame Report",
+    packageValidationTitle: "JellyFrame Package Validation",
+    target: "Target",
+    resources: "Resources",
+    bytes: "Bytes",
+    packageValid: "Package structure: valid",
+    packageValidationNote: "This report covers package metadata, local resources, references and declared limits. It does not run Render Core or measure runtime performance.",
+    authorAdvice: "App Author Advice",
+    renderingPreflight: "Rendering Preflight",
+    rating: "Rating",
+    score: "Score",
+    maxToolTime: "Max tool time",
+    slowestStage: "Slowest stage",
+    maxHeap: "Max heap",
+    maxFramebuffer: "Max framebuffer",
+    maxDisplayCommands: "Max display commands",
+    staticEstimate: "Static Resource Estimate",
+    staticEstimateNote: "This operation only checked package structure and resource budgets. Render Core layout, frame timing, and runtime performance were not executed.",
+    resourceBudget: "Resource budget",
+    measuredFrameTime: "Measured frame time",
+    notAvailable: "not available",
+    pipelineDiagnostics: "Pipeline Diagnostics",
+    total: "Total",
+    errors: "Errors",
+    warnings: "Warnings",
+    info: "Info",
+    dom: "DOM",
+    nodes: "nodes",
+    layout: "Layout",
+    boxes: "boxes",
+    layers: "Layers",
+    displayCommands: "Display commands",
+    estimatedHeap: "Estimated heap",
+    warningsSection: "Warnings",
+    resourcesSection: "Resources",
+    references: "References",
+    path: "Path",
+    kind: "Kind",
+    none: "None",
+    missing: "missing",
+    noReport: "Run Validate App Package, Check App Rendering, or another operation that generates a report first."
+  };
+}
+
 function reportHtml() {
   const report = lastReport;
+  const labels = reportLabels();
   const isPackageValidation = lastReportCommand === "validate"
     || report?.reportScope === "package-validation";
   const app = report?.app || {};
@@ -551,55 +643,55 @@ function reportHtml() {
   </style>
 </head>
 <body>
-  <h1>JellyFrame Report</h1>
+  <h1>${labels.reportTitle}</h1>
   ${report ? `
-    <p><strong>${escapeHtml(isPackageValidation ? "JellyFrame Package Validation" : "JellyFrame Report")}</strong></p>
+    <p><strong>${escapeHtml(isPackageValidation ? labels.packageValidationTitle : labels.reportTitle)}</strong></p>
     <p><strong>${escapeHtml(app.name || app.id || "App")}</strong> <span class="muted">${escapeHtml(app.id || "")}</span></p>
-    <p>Target: <code>${escapeHtml(targetConfig.id || "default")}</code> · Resources: ${resources.length} · Bytes: ${escapeHtml(report.totalResourceBytes || 0)}</p>
-    ${isPackageValidation ? `<p class="info"><strong>Package structure: valid</strong> · This report covers package metadata, local resources, references and declared limits. It does not run Render Core or measure runtime performance.</p>` : ""}
-    ${developerAdvice.length ? `<h2>App Author Advice</h2>
-    ${renderList(developerAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Review item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.recipe ? ` <span class="muted">Recipe: <code>${escapeHtml(advice.recipe)}</code></span>` : ""}${advice.text ? ` <span class="muted">Text: <code>${escapeHtml(advice.text)}</code></span>` : ""}${advice.path ? ` <span class="muted">Path: <code>${escapeHtml(advice.path)}</code></span>` : ""}${advice.node ? ` <span class="muted">Node: <code>${escapeHtml(advice.node)}</code></span>` : ""}${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
+    <p>${escapeHtml(labels.target)}: <code>${escapeHtml(targetConfig.id || "default")}</code> · ${escapeHtml(labels.resources)}: ${resources.length} · ${escapeHtml(labels.bytes)}: ${escapeHtml(report.totalResourceBytes || 0)}</p>
+    ${isPackageValidation ? `<p class="info"><strong>${escapeHtml(labels.packageValid)}</strong> · ${escapeHtml(labels.packageValidationNote)}</p>` : ""}
+    ${developerAdvice.length ? `<h2>${escapeHtml(labels.authorAdvice)}</h2>
+    ${renderList(developerAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Review item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.recipe ? ` <span class="muted">Recipe: <code>${escapeHtml(advice.recipe)}</code></span>` : ""}${advice.text ? ` <span class="muted">Text: <code>${escapeHtml(advice.text)}</code></span>` : ""}${advice.path ? ` <span class="muted">Path: <code>${escapeHtml(advice.path)}</code></span>` : ""}${advice.node ? ` <span class="muted">Node: <code>${escapeHtml(advice.node)}</code></span>` : ""}${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`, labels.none)}
     ` : ""}
-    ${!isPackageValidation && hasRenderData && performanceSummary.model ? `<h2>Rendering Preflight</h2>
+    ${!isPackageValidation && hasRenderData && performanceSummary.model ? `<h2>${escapeHtml(labels.renderingPreflight)}</h2>
       <p>
-        Rating: <strong>${escapeHtml(performanceSummary.rating || "unknown")}</strong>
-        · Score: ${escapeHtml(performanceSummary.score || 0)}
-        · Max tool time: ${escapeHtml(performanceSummary.maxTotalPipelineUs || 0)} us
-        · Slowest stage: ${escapeHtml((performanceSummary.slowestMeasuredStage || {}).stage || "n/a")}
-        · Max heap: ${escapeHtml(performanceSummary.maxEstimatedHeapBytes || 0)} bytes
-        · Max framebuffer: ${escapeHtml(performanceSummary.maxFramebufferBytes || 0)} bytes
-        · Max display commands: ${escapeHtml(performanceSummary.maxDisplayCommands || 0)}
+        ${escapeHtml(labels.rating)}: <strong>${escapeHtml(performanceSummary.rating || "unknown")}</strong>
+        · ${escapeHtml(labels.score)}: ${escapeHtml(performanceSummary.score || 0)}
+        · ${escapeHtml(labels.maxToolTime)}: ${escapeHtml(performanceSummary.maxTotalPipelineUs || 0)} us
+        · ${escapeHtml(labels.slowestStage)}: ${escapeHtml((performanceSummary.slowestMeasuredStage || {}).stage || "n/a")}
+        · ${escapeHtml(labels.maxHeap)}: ${escapeHtml(performanceSummary.maxEstimatedHeapBytes || 0)} bytes
+        · ${escapeHtml(labels.maxFramebuffer)}: ${escapeHtml(performanceSummary.maxFramebufferBytes || 0)} bytes
+        · ${escapeHtml(labels.maxDisplayCommands)}: ${escapeHtml(performanceSummary.maxDisplayCommands || 0)}
       </p>
-      ${renderList(performanceBottlenecks, (item) => `<li class="advice"><strong>${escapeHtml(item.title || item.code || "Performance bottleneck")}${item.target ? ` <span class="muted">[${escapeHtml(item.target)}]</span>` : ""}</strong>${item.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(item.metrics))}</code></span>` : ""}</li>`)}
-      ${renderList(performanceAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Performance item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
-    ` : !isPackageValidation && performanceSummary.source === "package-preflight-estimate" ? `<h2>Static Resource Estimate</h2>
-      <p class="muted">This validation only checked package structure and resource budgets. Render Core layout, frame timing, and runtime performance were not executed.</p>
-      <p>Resource budget: ${escapeHtml(performanceSummary.resourceBudgetPercent || 0)}% · Measured frame time: not available</p>` : ""}
-    ${hasPipelineDiagnostics ? `<h2>Pipeline Diagnostics</h2>
+      ${renderList(performanceBottlenecks, (item) => `<li class="advice"><strong>${escapeHtml(item.title || item.code || "Performance bottleneck")}${item.target ? ` <span class="muted">[${escapeHtml(item.target)}]</span>` : ""}</strong>${item.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(item.metrics))}</code></span>` : ""}</li>`, labels.none)}
+      ${renderList(performanceAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Performance item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`, labels.none)}
+    ` : !isPackageValidation && performanceSummary.source === "package-preflight-estimate" ? `<h2>${escapeHtml(labels.staticEstimate)}</h2>
+      <p class="muted">${escapeHtml(labels.staticEstimateNote)}</p>
+      <p>${escapeHtml(labels.resourceBudget)}: ${escapeHtml(performanceSummary.resourceBudgetPercent || 0)}% · ${escapeHtml(labels.measuredFrameTime)}: ${escapeHtml(labels.notAvailable)}</p>` : ""}
+    ${hasPipelineDiagnostics ? `<h2>${escapeHtml(labels.pipelineDiagnostics)}</h2>
       <p>
-        Total: ${escapeHtml(summary.total || 0)}
-        · <span class="error">Errors: ${escapeHtml(summary.error || 0)}</span>
-        · <span class="warning">Warnings: ${escapeHtml(summary.warning || 0)}</span>
-        · <span class="info">Info: ${escapeHtml(summary.info || 0)}</span>
+        ${escapeHtml(labels.total)}: ${escapeHtml(summary.total || 0)}
+        · <span class="error">${escapeHtml(labels.errors)}: ${escapeHtml(summary.error || 0)}</span>
+        · <span class="warning">${escapeHtml(labels.warnings)}: ${escapeHtml(summary.warning || 0)}</span>
+        · <span class="info">${escapeHtml(labels.info)}: ${escapeHtml(summary.info || 0)}</span>
       </p>
       <p class="muted">
-        DOM: ${escapeHtml(pipelineStats.domNodes || 0)} nodes ·
-        Layout: ${escapeHtml(pipelineStats.layoutBoxes || 0)} boxes ·
-        Layers: ${escapeHtml(pipelineStats.layers || 0)} ·
-        Display commands: ${escapeHtml(pipelineStats.displayCommands || 0)} ·
-        Estimated heap: ${escapeHtml(pipelineStats.estimatedHeapBytes || 0)} bytes
+        ${escapeHtml(labels.dom)}: ${escapeHtml(pipelineStats.domNodes || 0)} ${escapeHtml(labels.nodes)} ·
+        ${escapeHtml(labels.layout)}: ${escapeHtml(pipelineStats.layoutBoxes || 0)} ${escapeHtml(labels.boxes)} ·
+        ${escapeHtml(labels.layers)}: ${escapeHtml(pipelineStats.layers || 0)} ·
+        ${escapeHtml(labels.displayCommands)}: ${escapeHtml(pipelineStats.displayCommands || 0)} ·
+        ${escapeHtml(labels.estimatedHeap)}: ${escapeHtml(pipelineStats.estimatedHeapBytes || 0)} bytes
       </p>
-      ${renderList(pipelineDiagnostics, (diagnostic) => `<li><span class="pill ${escapeHtml(diagnostic.severity || "")}">${escapeHtml(diagnostic.severity || "diagnostic")}</span> <code>${escapeHtml(diagnostic.stage || "pipeline")}::${escapeHtml(diagnostic.code || "diagnostic")}</code> · ${escapeHtml(diagnostic.message || "")}${diagnostic.detail ? ` <span class="muted">(${escapeHtml(diagnostic.detail)})</span>` : ""}</li>`)}
+      ${renderList(pipelineDiagnostics, (diagnostic) => `<li><span class="pill ${escapeHtml(diagnostic.severity || "")}">${escapeHtml(diagnostic.severity || "diagnostic")}</span> <code>${escapeHtml(diagnostic.stage || "pipeline")}::${escapeHtml(diagnostic.code || "diagnostic")}</code> · ${escapeHtml(diagnostic.message || "")}${diagnostic.detail ? ` <span class="muted">(${escapeHtml(diagnostic.detail)})</span>` : ""}</li>`, labels.none)}
     ` : ""}
-    <h2>Warnings</h2>
-    ${renderList(warnings, (warning) => `<li>${escapeHtml(warning.message || warning.reason || JSON.stringify(warning))}</li>`)}
-    <h2>Resources</h2>
-    <table><tr><th>Path</th><th>Kind</th><th>Bytes</th></tr>
+    <h2>${escapeHtml(labels.warningsSection)}</h2>
+    ${renderList(warnings, (warning) => `<li>${escapeHtml(warning.message || warning.reason || JSON.stringify(warning))}</li>`, labels.none)}
+    <h2>${escapeHtml(labels.resourcesSection)}</h2>
+    <table><tr><th>${escapeHtml(labels.path)}</th><th>${escapeHtml(labels.kind)}</th><th>${escapeHtml(labels.bytes)}</th></tr>
     ${resources.map((resource) => `<tr><td><code>${escapeHtml(resource.path)}</code></td><td>${escapeHtml(resource.kind)}</td><td>${escapeHtml(resource.size)}</td></tr>`).join("")}
     </table>
-    <h2>References</h2>
-    ${renderList(references, (reference) => `<li><code>${escapeHtml(reference.from)}</code> -> <code>${escapeHtml(reference.value)}</code> <span class="muted">${escapeHtml(reference.kind)} ${reference.packaged === false ? "missing" : ""}</span></li>`)}
-  ` : "<p class=\"muted\">Run JellyFrame: Validate Package or JellyFrame: Check Package Capabilities first.</p>"}
+    <h2>${escapeHtml(labels.references)}</h2>
+    ${renderList(references, (reference) => `<li><code>${escapeHtml(reference.from)}</code> -> <code>${escapeHtml(reference.value)}</code> <span class="muted">${escapeHtml(reference.kind)} ${reference.packaged === false ? escapeHtml(labels.missing) : ""}</span></li>`, labels.none)}
+  ` : `<p class="muted">${escapeHtml(labels.noReport)}</p>`}
 </body>
 </html>`;
 }
@@ -608,7 +700,7 @@ function showReportPanel(context) {
   if (!reportPanel) {
     reportPanel = vscode.window.createWebviewPanel(
       "jellyframeReport",
-      "JellyFrame Report",
+      reportLabels().panelTitle,
       vscode.ViewColumn.Beside,
       { enableScripts: false }
     );
