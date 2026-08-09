@@ -452,11 +452,17 @@ class JellyFrameStatusProvider {
     const report = lastReport ? "Loaded report" : "No report loaded";
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
     const performance = lastReport?.performanceSummary;
+    const hasRenderData = Boolean(lastReport?.pipelineDiagnostics?.format)
+      || (Array.isArray(lastReport?.responsiveProfiles) && lastReport.responsiveProfiles.length > 0)
+      || Boolean(lastReport?.runtimeMetrics)
+      || Boolean(lastReport?.portTelemetry);
     const diagnostics = pipeline
       ? `Diagnostics: ${pipeline.error || 0} errors, ${pipeline.warning || 0} warnings`
       : "Diagnostics: run Check or Preview";
-    const perf = performance?.rating
+    const perf = hasRenderData && performance?.rating
       ? `Performance: ${performance.rating} (${performance.score || 0})`
+      : performance?.source === "package-preflight-estimate"
+        ? "Performance: static estimate only"
       : "Performance: not measured";
     return [
       this.item(`App: ${path.basename(root)}`, root, "jellyframe.debug"),
@@ -511,6 +517,11 @@ function reportHtml() {
   const summary = pipeline.summary || {};
   const pipelineStats = pipeline.pipeline || {};
   const pipelineDiagnostics = pipeline.diagnostics || [];
+  const hasPipelineDiagnostics = Boolean(pipeline.format);
+  const hasRenderData = hasPipelineDiagnostics
+    || (Array.isArray(report?.responsiveProfiles) && report.responsiveProfiles.length > 0)
+    || Boolean(report?.runtimeMetrics)
+    || Boolean(report?.portTelemetry);
   return `<!doctype html>
 <html>
 <head>
@@ -536,10 +547,10 @@ function reportHtml() {
   ${report ? `
     <p><strong>${escapeHtml(app.name || app.id || "App")}</strong> <span class="muted">${escapeHtml(app.id || "")}</span></p>
     <p>Target: <code>${escapeHtml(targetConfig.id || "default")}</code> · Resources: ${resources.length} · Bytes: ${escapeHtml(report.totalResourceBytes || 0)}</p>
-    <h2>App Author Advice</h2>
+    ${developerAdvice.length ? `<h2>App Author Advice</h2>
     ${renderList(developerAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Review item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.recipe ? ` <span class="muted">Recipe: <code>${escapeHtml(advice.recipe)}</code></span>` : ""}${advice.text ? ` <span class="muted">Text: <code>${escapeHtml(advice.text)}</code></span>` : ""}${advice.path ? ` <span class="muted">Path: <code>${escapeHtml(advice.path)}</code></span>` : ""}${advice.node ? ` <span class="muted">Node: <code>${escapeHtml(advice.node)}</code></span>` : ""}${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
-    <h2>Performance</h2>
-    ${performanceSummary.model ? `
+    ` : ""}
+    ${hasRenderData && performanceSummary.model ? `<h2>Rendering Preflight</h2>
       <p>
         Rating: <strong>${escapeHtml(performanceSummary.rating || "unknown")}</strong>
         · Score: ${escapeHtml(performanceSummary.score || 0)}
@@ -551,9 +562,10 @@ function reportHtml() {
       </p>
       ${renderList(performanceBottlenecks, (item) => `<li class="advice"><strong>${escapeHtml(item.title || item.code || "Performance bottleneck")}${item.target ? ` <span class="muted">[${escapeHtml(item.target)}]</span>` : ""}</strong>${item.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(item.metrics))}</code></span>` : ""}</li>`)}
       ${renderList(performanceAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Performance item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`)}
-    ` : "<p class=\"muted\">No performance summary in the latest report.</p>"}
-    <h2>Pipeline Diagnostics</h2>
-    ${pipeline.format ? `
+    ` : performanceSummary.source === "package-preflight-estimate" ? `<h2>Static Resource Estimate</h2>
+      <p class="muted">This validation only checked package structure and resource budgets. Render Core layout, frame timing, and runtime performance were not executed.</p>
+      <p>Resource budget: ${escapeHtml(performanceSummary.resourceBudgetPercent || 0)}% · Measured frame time: not available</p>` : ""}
+    ${hasPipelineDiagnostics ? `<h2>Pipeline Diagnostics</h2>
       <p>
         Total: ${escapeHtml(summary.total || 0)}
         · <span class="error">Errors: ${escapeHtml(summary.error || 0)}</span>
@@ -568,7 +580,7 @@ function reportHtml() {
         Estimated heap: ${escapeHtml(pipelineStats.estimatedHeapBytes || 0)} bytes
       </p>
       ${renderList(pipelineDiagnostics, (diagnostic) => `<li><span class="pill ${escapeHtml(diagnostic.severity || "")}">${escapeHtml(diagnostic.severity || "diagnostic")}</span> <code>${escapeHtml(diagnostic.stage || "pipeline")}::${escapeHtml(diagnostic.code || "diagnostic")}</code> · ${escapeHtml(diagnostic.message || "")}${diagnostic.detail ? ` <span class="muted">(${escapeHtml(diagnostic.detail)})</span>` : ""}</li>`)}
-    ` : "<p class=\"muted\">No pipeline diagnostics in the latest report.</p>"}
+    ` : ""}
     <h2>Warnings</h2>
     ${renderList(warnings, (warning) => `<li>${escapeHtml(warning.message || warning.reason || JSON.stringify(warning))}</li>`)}
     <h2>Resources</h2>
