@@ -1,6 +1,6 @@
 # JellyFrame deterministic scroll probe.
 # Run with:
-#   jellyframe_win32_browser.exe --app tests/fixtures/apps/jelly_scroll_probe --frame-script tests/fixtures/apps/jelly_scroll_probe/capture_wheel_scroll.jfcapture
+#   jellyframe_desktop_shell.exe --app tests/fixtures/apps/jelly_scroll_probe --frame-script tests/fixtures/apps/jelly_scroll_probe/capture_wheel_scroll.jfcapture
 
 output-dir out/scroll_probe_frames
 montage out/scroll_probe_montage.bmp

@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -106,8 +106,7 @@ python tools\jellyframe_cli.py doctor --build-dir build\Release
 ```
 
 面向 IDE 的调试建议使用 `python tools\debug\jellyframe_debug.py`；它会自动发现桌面
-构建，并统一支持打开 package、运行 frame script 和截图。历史名称
-`jellyframe_win32_browser.exe` 仍作为现有脚本的兼容副本保留。
+构建，并统一支持打开 package、运行 frame script 和截图。
 
 创建 app package，并运行 package validation 与管线 diagnostics：
 

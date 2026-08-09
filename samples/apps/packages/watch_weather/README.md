@@ -16,5 +16,5 @@ Use the JerryScript-enabled Win32 shell frame script to validate button events,
 the XHR mock, image completions and frame-update counters:
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe --app samples\apps\packages\watch_weather --frame-script samples\apps\packages\watch_weather\capture_weather_interaction.jfcapture
+.\build-script\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather --frame-script samples\apps\packages\watch_weather\capture_weather_interaction.jfcapture
 ```

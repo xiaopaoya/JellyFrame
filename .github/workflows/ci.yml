@@ -107,7 +107,7 @@ jobs:
 
       - name: Check Python tools
         shell: pwsh
-        run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py tools\app_registry.py tools\benchmark_guard.py
+        run: python -m py_compile tools\jellyframe_cli.py tools\package_app.py tools\app_registry.py project_tools\benchmark_guard.py
 
       - name: Check VS Code helper
         shell: pwsh
@@ -142,18 +142,18 @@ jobs:
             --target round-300 `
             --report build\ci\watch_weather.install.report.json `
             --build-dir build\Release
-          build\Release\jellyframe_win32_browser.exe `
+          build\Release\jellyframe_desktop_shell.exe `
             --capture build\ci\app_manager.ppm `
             --registry-store build\ci\installed_apps `
             --viewport-width 390 `
             --viewport-height 640
-          build\Release\jellyframe_win32_browser.exe `
+          build\Release\jellyframe_desktop_shell.exe `
             --capture build\ci\installed_launch.ppm `
             --registry-store build\ci\installed_apps `
             --launch-app org.jellyframe.examples.weather `
             --viewport-width 300 `
             --viewport-height 300
-          build\Release\jellyframe_win32_browser.exe `
+          build\Release\jellyframe_desktop_shell.exe `
             --capture build\ci\app_manager_removed.ppm `
             --registry-store build\ci\installed_apps `
             --remove-app org.jellyframe.examples.weather `
@@ -177,7 +177,7 @@ jobs:
       - name: Run benchmark regression guard
         shell: pwsh
         run: >
-          python tools\benchmark_guard.py
+          python project_tools\benchmark_guard.py
           --build-dir build\Release
           --suite all
           --report build\ci\benchmark_guard.report.json

@@ -1,6 +1,6 @@
 # JellyFrame deterministic service-state script.
 # Run with:
-#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_service_status --frame-script samples/apps/packages/jelly_service_status/capture_system_events.jfcapture
+#   jellyframe_desktop_shell.exe --app samples/apps/packages/jelly_service_status --frame-script samples/apps/packages/jelly_service_status/capture_system_events.jfcapture
 
 output-dir out/service_status_frames
 montage out/service_status_montage.bmp

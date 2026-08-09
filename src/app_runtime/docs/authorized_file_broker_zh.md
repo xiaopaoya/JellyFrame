@@ -77,7 +77,7 @@ host 或 port 层必须实现：
 Win32 壳提供确定性的 broker smoke test：
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe --authorized-file-smoke out\file_broker
+.\build-script\Release\jellyframe_desktop_shell.exe --authorized-file-smoke out\file_broker
 ```
 
 它会验证：未批准写入不会改变另一个逻辑 app 路径；路径穿越会被拒绝；staged write 只在校验后提交；

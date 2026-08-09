@@ -459,7 +459,7 @@ states.
 2. Build Button, Panel, Input, Switch and Progress first.
 3. Provide 300x300 round target sample pages for each component.
 4. Render through `jellyframe_pseudo_browser` and inspect BMP/PPM output.
-5. Use `jellyframe_win32_browser` to validate hover, active, focus and
+5. Use `jellyframe_desktop_shell` to validate hover, active, focus and
    transition behavior.
 6. Teach diagnostics to catch forbidden Jelly UI properties and animation
    budget risks.

@@ -1,6 +1,6 @@
 # App Lifecycle
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This document is the app-author view of JellyFrame lifecycle behavior. It
 summarizes what an app can rely on when it is installed, launched, suspended,
@@ -167,7 +167,7 @@ For app authors, the Win32 shell is the preferred interactive debug host:
 
 ```powershell
 python tools\jellyframe_cli.py doctor --build-dir build\Release
-.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\watch_weather
+.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
 ```
 
 Useful lifecycle checks:

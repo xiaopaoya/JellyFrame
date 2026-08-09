@@ -1,6 +1,6 @@
 # Native Tools
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 这里保存 JellyFrame 桌面检查工具的 C++ 实现。App 作者应先阅读
 `../debug/README_zh.md`；示例页面和 app package 位于 `../../samples`。
@@ -16,8 +16,7 @@
 | bitmap 字体资源 | `font_pack_gen.cpp`、`font_resource_check.cpp` | 固件 header、`.jffont` 和策略报告 |
 
 这些 `.cpp` 是构建输入，只有 CMake 生成对应 executable 后才是可运行命令。
-完整参数以 `jellyframe_desktop_shell --help` 为准；`jellyframe_win32_browser`
-仍作为旧脚本和旧构建的兼容名称保留。
+完整参数以 `jellyframe_desktop_shell --help` 为准。
 
 - `*_dump.cpp` 工具用于输出 parser、DOM、CSSOM、render tree、layer tree 或完整管线结果。
 - `pseudo_browser.cpp` 运行平台无关渲染管线，并可通过 `--diagnostics-json` 输出结构化 diagnostics，
@@ -28,7 +27,7 @@
   `--frame-script PATH`。脚本可以统一指定 deterministic time、逐帧 BMP 输出目录、拼图输出和事件注入。
   底层的 `--capture-frames DIR --frame-count 30 --frame-step-ms 33` 与多个
   `--frame-event FRAME:kind[:x:y[:delta]]` 仍可用于快速 smoke test。完整参数以
-  `jellyframe_win32_browser --help` 输出为准。
+  `jellyframe_desktop_shell --help` 输出为准。
   帧脚本中的 `pointer-down` 到 `pointer-up` 会保持 primary button 状态；期间的
   `pointer-move` 可用于确定性滑块拖动。`click` 仍表示一次完整按下/抬起。
 - `win32_browser.cpp` 还提供 Win32-only host audio smoke 路径：
@@ -81,9 +80,9 @@ JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来�
 Drop，也不是完整 Pointer Events 一致性验收。
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
-.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
-.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
 ```
 
 脚本会在 `out/` 写入逐帧 BMP 和拼图。慢拖必须报告 `inertia=0`；快速甩动必须报告正的 inertia

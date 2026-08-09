@@ -1,6 +1,6 @@
 # How To Start With JellyFrame
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This guide is for developers opening the repository for the first time. It
 explains what JellyFrame is, how the project is organized, how to build and run
@@ -223,7 +223,7 @@ Run the core microbenchmark:
 Run the broad CI performance regression guard:
 
 ```powershell
-python tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
+python project_tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
 ```
 
 The guard checks only a small set of catastrophic-regression thresholds. Use it
@@ -281,7 +281,7 @@ Render a page to BMP or PPM without opening a window:
 Open a Windows interactive shell:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe `
+.\build\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
 
@@ -293,7 +293,7 @@ do not apply package manifest settings.
 Capture through the default Win32/GDI text path:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --capture `
+.\build\Release\jellyframe_desktop_shell.exe --capture `
   calculator.ppm `
   --app tools\templates\apps\calculator
 ```
@@ -302,7 +302,7 @@ If the package manifest declares a `.jffont` supplement, explicitly validate
 that the in-bundle bitmap font participates in layout and paint:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --capture `
+.\build\Release\jellyframe_desktop_shell.exe --capture `
   calculator_font.ppm `
   --app tools\templates\apps\calculator `
   --use-app-fonts
@@ -373,14 +373,14 @@ output. Set `JERRYSCRIPT_LIBRARIES` only for a nonstandard install layout.
 Run a scripted page in the interactive Win32 shell:
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe `
+.\build-script\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\watch_weather
 ```
 
 Run a timer-driven page:
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe `
+.\build-script\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\clock
 ```
 
@@ -421,8 +421,7 @@ Notes:
 - `jellyframe_desktop_shell.exe` supports interactive package preview with
   `--app package_dir` and package capture with `--capture output.ppm --app
   package_dir`.
-- `jellyframe_desktop_shell.exe` is only built on Windows. The historical
-  `jellyframe_win32_browser.exe` file remains as a compatibility copy.
+- `jellyframe_desktop_shell.exe` is only built on Windows.
 - In scripting builds, `jellyframe_desktop_shell.exe` and
   `jellyframe_script_tests.exe` link the optional scripting target.
 - Inspection tools and the Win32 shell merge CSS from explicit CSS files,
@@ -479,8 +478,8 @@ You can also open the generated `.jfapp` directly to verify that the installable
 bundle behaves like the source directory:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --app build\watch_weather.jfapp
-.\build\Release\jellyframe_win32_browser.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
+.\build\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
+.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
 ```
 
 Install the source package into the desktop app registry. This path runs
@@ -497,16 +496,16 @@ python tools\jellyframe_cli.py install `
 Open the Win32 system shell/app manager:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps
-.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
-.\build\Release\jellyframe_win32_browser.exe --capture build\app_manager.bmp --registry-store build\installed_apps
+.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps
+.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
+.\build\Release\jellyframe_desktop_shell.exe --capture build\app_manager.bmp --registry-store build\installed_apps
 ```
 
 The app manager loads `samples/apps/system/sample_launcher` by default. A host
 can explicitly point to another trusted launcher app:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe `
+.\build\Release\jellyframe_desktop_shell.exe `
   --registry-store build\installed_apps `
   --launcher-app samples\apps\system\sample_launcher
 ```
@@ -584,8 +583,8 @@ replace the CLI or duplicate the packer.
 
 When an example renders badly, inspect in this order:
 
-1. `jellyframe_win32_browser --app package_dir` for interactive behavior and text.
-2. `jellyframe_win32_browser --capture output.ppm --app package_dir` for package capture.
+1. `jellyframe_desktop_shell --app package_dir` for interactive behavior and text.
+2. `jellyframe_desktop_shell --capture output.ppm --app package_dir` for package capture.
 3. `jellyframe_pipeline_dump`
 4. `jellyframe_dom_dump`
 5. `jellyframe_cssom_dump`
@@ -594,8 +593,8 @@ When an example renders badly, inspect in this order:
 8. `jellyframe_layer_tree_dump`
 9. `jellyframe_font_resource_check` only for font resource and glyph coverage questions.
 
-For package apps, prefer `jellyframe_win32_browser --app package_dir` or
-`jellyframe_win32_browser --capture output.ppm --app package_dir` so the Win32
+For package apps, prefer `jellyframe_desktop_shell --app package_dir` or
+`jellyframe_desktop_shell --capture output.ppm --app package_dir` so the Win32
 shell uses the app package loader, manifest viewport and resource resolution
 path.
 
@@ -632,7 +631,7 @@ When checking whether an app package is portable:
 2. Add `--targets round-300,rect-320x240` when responsive behavior matters.
 3. Inspect `pipelineDiagnostics`, `fontDiagnostics`, `serviceIntent` and
    `responsiveProfiles` in the report.
-4. Open the same package in `jellyframe_win32_browser --app package_dir` for
+4. Open the same package in `jellyframe_desktop_shell --app package_dir` for
    interaction and text validation.
 
 When a page renders differently from expectation:

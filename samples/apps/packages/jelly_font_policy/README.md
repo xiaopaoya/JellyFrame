@@ -16,7 +16,7 @@ Small package used to validate the app font policy path:
 - Win32 can validate the runtime text path with `--use-app-fonts`:
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_font_policy --use-app-fonts
+.\build-script\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_font_policy --use-app-fonts
 ```
 
 The font is deliberately tiny and only exists for deterministic package/tool

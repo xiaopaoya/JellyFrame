@@ -3,8 +3,7 @@
 > Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This is the app-author-facing entry point for desktop inspection. It discovers
-`jellyframe_desktop_shell` and accepts the historical
-`jellyframe_win32_browser` executable while older builds are still around.
+the single supported desktop executable, `jellyframe_desktop_shell`.
 
 ```powershell
 python tools\debug\jellyframe_debug.py --list-builds

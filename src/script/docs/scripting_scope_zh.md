@@ -21,7 +21,7 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 - `eval(source, source_name)` 执行 classic JavaScript 源码。
 - 返回字符串化后的成功结果，或字符串化后的异常结果。
 - 同一进程内可重复初始化/清理；当前实现同一时间只允许一个 runtime 存活。
-- `jellyframe_win32_browser --script file.js` 用于桌面验收。
+- `jellyframe_desktop_shell --script file.js` 用于桌面验收。
 - 可选执行 watchdog：当 `JerryScriptRuntimeOptions` 或 `HostBudgets` 将
   `max_execution_check_count` 设为大于 0，且链接的 JerryScript 使用
   `JERRY_VM_HALT=ON` 构建时，失控的 eval 和 JS callback 会被中断，并抛出稳定的
@@ -48,7 +48,7 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 - `document.title` 读取/写入第一个 `title` 元素文本。
 - `document.dir` 反射 `html` 上的文档方向属性；简化文档中会 fallback 到 body/document。
 - element 字符串反射属性：`title`、`lang` 和 `dir`。
-- `jellyframe_win32_browser --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
+- `jellyframe_desktop_shell --script file.js` 会在执行脚本前绑定解析后的页面 DOM，
   因此脚本 mutation 会影响最终渲染输出。
 
 ## Events
@@ -122,7 +122,7 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 - 本地外部 classic script（`<script src="...">`）通过壳层提供的 callback 加载。
   核心仍不执行文件或网络 I/O。
 - `type="module"` 和其他非 classic script 类型会跳过。
-- `jellyframe_win32_browser` 会自动执行文档脚本；命令行 `--script file.js`
+- `jellyframe_desktop_shell` 会自动执行文档脚本；命令行 `--script file.js`
   仍作为额外桌面验收脚本保留。
 - 网络加载、ES modules、dynamic import 和完整 HTML loading algorithm 继续排除。
 

@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "tools"))
+sys.path.insert(0, str(REPO_ROOT))
 
-from render_core_feature_registry import (  # noqa: E402
+from project_tools.render_core_feature_registry import (  # noqa: E402
     KNOWN_RENDER_CORE_FEATURES,
     RENDER_CORE_FEATURE_DEPENDENCIES,
     RENDER_CORE_FEATURE_METADATA,

@@ -1,6 +1,6 @@
 # JellyFrame deterministic Win32 animation soak script.
 # Run with:
-#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_motion_lab --frame-script samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+#   jellyframe_desktop_shell.exe --app samples/apps/packages/jelly_motion_lab --frame-script samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
 
 output-dir out/motion_lab_soak_frames
 montage out/motion_lab_soak_montage.bmp

@@ -19,7 +19,7 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_componen
 Run the deterministic scroll capture when validating present/dirty-rect behavior:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_component_recipes --frame-script samples\apps\packages\jelly_component_recipes\capture_scroll_recipes.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_component_recipes --frame-script samples\apps\packages\jelly_component_recipes\capture_scroll_recipes.jfcapture
 ```
 
 The summary should report internal scrolls with dirty repaint and no non-initial

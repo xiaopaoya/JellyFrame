@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CHECKER = REPO_ROOT / "tools" / "check_render_core_link_map.py"
+CHECKER = REPO_ROOT / "project_tools" / "check_render_core_link_map.py"
 
 
 def run_checker(

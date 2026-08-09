@@ -15,7 +15,6 @@
     "onCommand:jellyframe.check",
     "onCommand:jellyframe.preview",
     "onCommand:jellyframe.debug",
-    "onCommand:jellyframe.openWin32Browser",
     "onCommand:jellyframe.runFrameScript",
     "onCommand:jellyframe.openCapture",
     "onCommand:jellyframe.listBuilds",
@@ -41,10 +40,6 @@
       {
         "command": "jellyframe.debug",
         "title": "JellyFrame: Debug App In Desktop Shell"
-      },
-      {
-        "command": "jellyframe.openWin32Browser",
-        "title": "JellyFrame: Open Desktop Shell (Legacy)"
       },
       {
         "command": "jellyframe.runFrameScript",
@@ -111,11 +106,6 @@
           "type": "string",
           "default": "",
           "description": "Optional desktop build directory. Leave empty to prefer build/Release, then build/Debug."
-        },
-        "jellyframe.shellPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional explicit desktop shell executable. Leave empty for automatic discovery."
         },
         "jellyframe.openCaptureAfterRun": {
           "type": "boolean",

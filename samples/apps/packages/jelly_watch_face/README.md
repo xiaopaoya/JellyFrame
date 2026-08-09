@@ -17,5 +17,5 @@ With the JerryScript-enabled Win32 shell, generate a 30fps contact sheet to
 inspect hand rotation, the `conic-gradient()` ring and rounded antialiasing:
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
+.\build-script\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
 ```

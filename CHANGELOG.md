@@ -21,8 +21,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   stable launch/frame-script/capture facade, `project_tools` owns maintainer
   audits, and the VS Code extension gained automatic app/build discovery,
   diagnostics status view and capture/frame-script commands. The interactive
-  native shell is now built as `jellyframe_desktop_shell`; the historical
-  `jellyframe_win32_browser` executable and target remain compatibility aliases.
+  native shell is now built only as `jellyframe_desktop_shell`; the old
+  `jellyframe_win32_browser` entry points were intentionally removed while the
+  project is still pre-1.0.
 - Opened the `0.6.0-dev` line with a declarative Render Core feature catalog.
   CMake profiles and desktop feature checks now derive feature IDs and
   dependency metadata from the same registry; the mandatory `core.document`

@@ -526,7 +526,7 @@ tools/templates/themes/jelly/
 2. 先实现 Button、Panel、Input、Switch、Progress。
 3. 为每个组件提供 300x300 round target 的 sample page。
 4. 通过 `jellyframe_pseudo_browser` 生成 BMP/PPM，确认无空白、无重叠、无文字溢出。
-5. 通过 `jellyframe_win32_browser` 验证 hover、active、focus 和 transition。
+5. 通过 `jellyframe_desktop_shell` 验证 hover、active、focus 和 transition。
 6. 更新能力校验器，让它识别 Jelly UI 禁用属性和动画预算。
 7. 再考虑 rAF loading/pulse 模板。
 

@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SHELL_NAMES = ("jellyframe_desktop_shell", "jellyframe_win32_browser")
+SHELL_NAMES = ("jellyframe_desktop_shell",)
 
 
 def executable_name(name: str) -> str:

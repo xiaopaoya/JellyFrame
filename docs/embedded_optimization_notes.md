@@ -194,7 +194,7 @@ Interpretation:
 CI also runs:
 
 ```powershell
-python tools\benchmark_guard.py --build-dir build\Release
+python project_tools\benchmark_guard.py --build-dir build\Release
 ```
 
 This guard checks a small set of render-core and app-runtime microbenchmarks:

@@ -1,6 +1,6 @@
 # Developer Capability Matrix
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 
 This document is the practical contract for application authors using JellyFrame.
@@ -83,8 +83,7 @@ JellyFrame works best for:
   drawing.
 - Desktop validation through `jellyframe_pseudo_browser` for the
   platform-neutral pipeline or `jellyframe_desktop_shell` for interactive app
-  behavior. The historical `jellyframe_win32_browser` executable remains a
-  compatibility name.
+  behavior.
 
 JellyFrame is not ready for:
 

@@ -1,6 +1,6 @@
 # JellyFrame deterministic Canvas 2D gauges capture script.
 # Run with:
-#   jellyframe_win32_browser.exe --app samples/apps/packages/jelly_canvas_gauges --frame-script samples/apps/packages/jelly_canvas_gauges/capture_canvas_gauges.jfcapture
+#   jellyframe_desktop_shell.exe --app samples/apps/packages/jelly_canvas_gauges --frame-script samples/apps/packages/jelly_canvas_gauges/capture_canvas_gauges.jfcapture
 
 output-dir out/canvas_gauges_frames
 montage out/canvas_gauges_montage.bmp

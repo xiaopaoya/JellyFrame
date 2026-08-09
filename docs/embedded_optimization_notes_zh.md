@@ -144,7 +144,7 @@ full_pipeline avg_us=2228.91
 CI 还会运行：
 
 ```powershell
-python tools\benchmark_guard.py --build-dir build\Release
+python project_tools\benchmark_guard.py --build-dir build\Release
 ```
 
 这个 guard 检查少量 render-core 和 app-runtime 微基准：style/custom-property resolution、

@@ -16,5 +16,5 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_watch_fa
 `conic-gradient()` 圆环和圆角抗锯齿是否稳定：
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
+.\build-script\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
 ```

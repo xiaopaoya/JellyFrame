@@ -49,28 +49,6 @@ function nativeBuildDir(context) {
   return path.join(repoRoot(context), "build", "Release");
 }
 
-function exeName(name) {
-  return process.platform === "win32" ? `${name}.exe` : name;
-}
-
-function nativeToolPath(context, name) {
-  return path.join(nativeBuildDir(context), exeName(name));
-}
-
-function desktopShellPath(context) {
-  const configured = config().get("shellPath", "").trim();
-  if (configured) {
-    return path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured);
-  }
-  for (const name of ["jellyframe_desktop_shell", "jellyframe_win32_browser"]) {
-    const candidate = nativeToolPath(context, name);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return nativeToolPath(context, "jellyframe_desktop_shell");
-}
-
 function debugLauncherPath(context) {
   return path.join(repoRoot(context), "tools", "debug", "jellyframe_debug.py");
 }
@@ -132,22 +110,6 @@ function loadReport(reportPath) {
   } catch (error) {
     ensureOutputChannel().appendLine(`failed to read report ${reportPath}: ${error.message}`);
   }
-}
-
-function runDetachedTool(context, executable, args) {
-  const channel = ensureOutputChannel();
-  channel.appendLine(`+ ${[executable, ...args].join(" ")}`);
-  const child = childProcess.spawn(executable, args, {
-    cwd: repoRoot(context),
-    detached: true,
-    stdio: "ignore",
-    windowsHide: false
-  });
-  child.on("error", (error) => {
-    channel.appendLine(`JellyFrame tool failed to start: ${error.message}`);
-    vscode.window.showErrorMessage(`JellyFrame tool failed to start: ${error.message}`);
-  });
-  child.unref();
 }
 
 function runDetachedPython(context, script, args, options = {}) {
@@ -308,23 +270,6 @@ async function previewPackage(context) {
       reportPath: report
     }
   );
-}
-
-async function openWin32Browser(context) {
-  if (process.platform !== "win32") {
-    vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
-    return;
-  }
-  const root = await packageRoot();
-  if (!root) {
-    return;
-  }
-  const executable = desktopShellPath(context);
-  if (!fs.existsSync(executable)) {
-    vscode.window.showErrorMessage(`Missing desktop shell: ${executable}`);
-    return;
-  }
-  runDetachedTool(context, executable, ["--app", root]);
 }
 
 async function debugApp(context) {
@@ -697,7 +642,6 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.runFrameScript", () => runFrameScript(context)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
-    vscode.commands.registerCommand("jellyframe.openWin32Browser", () => openWin32Browser(context)),
     vscode.commands.registerCommand("jellyframe.package", () => runPackageCommand(context, "package")),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context))

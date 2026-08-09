@@ -11,5 +11,5 @@ python tools\jellyframe_cli.py preview --root samples\apps\packages\jelly_route_
 可用以下命令进行确定性的 Win32 交互 capture：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_route_tabs --frame-script samples\apps\packages\jelly_route_tabs\capture_route_tabs.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_route_tabs --frame-script samples\apps\packages\jelly_route_tabs\capture_route_tabs.jfcapture
 ```

@@ -19,8 +19,8 @@ implement its own parser or packer; every command delegates to
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and
   measured performance summary.
-- Automatic discovery of `build/Release`, `build/Debug` and the renamed desktop
-  shell, with settings for explicit build and executable paths.
+- Automatic discovery of `build/Release`, `build/Debug` and the desktop shell,
+  with a setting for an explicit build directory.
 - Configurable repository root, Python executable, default target and font
   budget.
 

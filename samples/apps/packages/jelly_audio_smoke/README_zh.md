@@ -13,7 +13,7 @@ API。
 如果只想验证 host handoff，不打开交互窗口，仍可用命令行 smoke 路径：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe `
+.\build\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\jelly_audio_smoke `
   --audio-smoke /audio/tone.wav `
   --audio-smoke-ms 1000

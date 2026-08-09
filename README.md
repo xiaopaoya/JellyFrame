@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -125,8 +125,7 @@ Open an interactive Windows validation shell:
 
 For IDE-friendly debugging, use `python tools\debug\jellyframe_debug.py`; it
 discovers the desktop build and supports package launch, frame scripts and
-captures. The historical `jellyframe_win32_browser.exe` name remains a
-compatibility copy for existing scripts.
+captures.
 
 Create an app package and run package validation plus pipeline diagnostics:
 

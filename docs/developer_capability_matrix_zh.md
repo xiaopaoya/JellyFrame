@@ -1,6 +1,6 @@
 # 开发者能力矩阵
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 
 这份文档是 JellyFrame 面向应用开发者的实际能力契约。开发者在使用某个 HTML
@@ -70,8 +70,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 - 卡片式小仪表盘、本地配置界面、表单型设备 UI。
 - 想用 HTML/CSS/JS 编写嵌入式应用，而不是用 canvas 手绘全部 UI 的项目。
 - 使用 `jellyframe_pseudo_browser` 验证平台无关管线，使用
-  `jellyframe_desktop_shell` 验证交互式 app 行为。历史名称
-  `jellyframe_win32_browser` 仍作为兼容名称保留。
+  `jellyframe_desktop_shell` 验证交互式 app 行为。
 
 暂不适合：
 

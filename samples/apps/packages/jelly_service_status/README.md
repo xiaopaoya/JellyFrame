@@ -27,7 +27,7 @@ background service alive for snapshot data.
 Deterministic Win32 validation:
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe `
+.\build-script\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\jelly_service_status `
   --frame-script samples\apps\packages\jelly_service_status\capture_system_events.jfcapture
 ```

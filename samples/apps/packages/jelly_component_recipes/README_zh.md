@@ -18,7 +18,7 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_componen
 验证 present / dirty-rect 行为时，可运行确定性滚动 capture：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\jelly_component_recipes --frame-script samples\apps\packages\jelly_component_recipes\capture_scroll_recipes.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_component_recipes --frame-script samples\apps\packages\jelly_component_recipes\capture_scroll_recipes.jfcapture
 ```
 
 摘要中应看到内部滚动走 dirty repaint，且没有非首帧 full repaint。

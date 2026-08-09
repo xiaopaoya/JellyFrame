@@ -10,8 +10,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GENERATOR = REPO_ROOT / "tools" / "generate_css_support_table.py"
-IMPORTER = REPO_ROOT / "tools" / "import_css_support_crosswork.py"
+GENERATOR = REPO_ROOT / "project_tools" / "generate_css_support_table.py"
+IMPORTER = REPO_ROOT / "project_tools" / "import_css_support_crosswork.py"
 
 _generator_spec = importlib.util.spec_from_file_location("generate_css_support_table", GENERATOR)
 assert _generator_spec is not None and _generator_spec.loader is not None

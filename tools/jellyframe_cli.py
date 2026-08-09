@@ -37,8 +37,8 @@ def tool_path(build_dir: Path, name: str) -> Path:
 
 
 def desktop_shell_path(build_dir: Path) -> Path:
-    """Find the current desktop shell while accepting 0.5-era builds."""
-    for name in ("jellyframe_desktop_shell", "jellyframe_win32_browser"):
+    """Find the desktop shell in the selected build directory."""
+    for name in ("jellyframe_desktop_shell",):
         candidate = tool_path(build_dir, name)
         if candidate.is_file():
             return candidate

@@ -2,9 +2,8 @@
 
 > 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
-这里是 App 作者使用桌面验收工具的统一入口。它优先发现
-`jellyframe_desktop_shell`，也兼容仍在使用旧名称
-`jellyframe_win32_browser` 的构建目录。
+这里是 App 作者使用桌面验收工具的统一入口。当前唯一支持的桌面可执行文件是
+`jellyframe_desktop_shell`。
 
 ```powershell
 python tools\debug\jellyframe_debug.py --list-builds

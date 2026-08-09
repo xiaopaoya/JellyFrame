@@ -23,7 +23,7 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
 - `eval(source, source_name)` for classic JavaScript source text.
 - Stringified success result and stringified exception result.
 - Repeated initialize/shutdown in one process, one active runtime at a time.
-- `jellyframe_win32_browser --script file.js` for desktop acceptance.
+- `jellyframe_desktop_shell --script file.js` for desktop acceptance.
 - Optional execution watchdog: when `JerryScriptRuntimeOptions` or
   `HostBudgets` set `max_execution_check_count` above zero and the linked
   JerryScript library was built with `JERRY_VM_HALT=ON`, runaway evals and JS
@@ -54,7 +54,7 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
 - `document.dir` reflects the document direction attribute on `html`, with a
   body/document fallback for simplified documents.
 - Element string reflection for `title`, `lang` and `dir`.
-- `jellyframe_win32_browser --script file.js` binds the parsed page DOM before
+- `jellyframe_desktop_shell --script file.js` binds the parsed page DOM before
   script execution, so script mutations affect the rendered output.
 
 ## Events
@@ -146,7 +146,7 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
 - Local external classic scripts (`<script src="...">`) are loaded through a
   shell-provided callback. Core code still performs no file or network I/O.
 - `type="module"` and other non-classic script types are skipped.
-- `jellyframe_win32_browser` executes document scripts automatically;
+- `jellyframe_desktop_shell` executes document scripts automatically;
   command-line `--script file.js` remains available as an extra desktop
   validation script.
 - Network loading, ES modules, dynamic import and the full HTML loading

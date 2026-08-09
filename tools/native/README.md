@@ -1,6 +1,6 @@
 # Native Tools
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory contains the native C++ implementation of JellyFrame's desktop
 inspection tools. App authors should start with `../debug/README.md`; sample
@@ -18,9 +18,7 @@ pages and app packages live in `../../samples`.
 
 The source files are build inputs, not separate user-facing commands until
 CMake emits the corresponding executable. Use
-`jellyframe_desktop_shell --help` for the current shell contract;
-`jellyframe_win32_browser` remains a compatibility executable name for older
-scripts and builds.
+`jellyframe_desktop_shell --help` for the shell contract.
 
 - `*_dump.cpp` tools print parser, DOM, CSSOM, render tree, layer tree or full
   pipeline output.
@@ -91,9 +89,9 @@ behavior. These are scroll gestures, not HTML Drag and Drop or complete Pointer
 Events conformance.
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
-.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
-.\build\Release\jellyframe_win32_browser.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
+.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
 ```
 
 The scripts write per-frame BMPs and a montage under `out/`. The slow drag must

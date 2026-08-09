@@ -1,6 +1,6 @@
 # App 生命周期
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 本文是 app 作者视角的 JellyFrame 生命周期说明，描述一个 app 在安装、启动、挂起、恢复、终止和卸载时
 可以依赖什么行为。宿主和开发板移植实现细节见 `host_optional_services_zh.md`。
@@ -134,7 +134,7 @@ launcher/system shell。app 可以失败；runtime、launcher 和其他 app 必�
 
 ```powershell
 python tools\jellyframe_cli.py doctor --build-dir build\Release
-.\build\Release\jellyframe_win32_browser.exe --app samples\apps\packages\watch_weather
+.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
 ```
 
 常用生命周期检查：

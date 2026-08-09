@@ -1,6 +1,6 @@
 # Render Core
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev
 
 `render_core` is JellyFrame's platform-neutral Living Standard/CSS subset and
 software rendering pipeline.
@@ -125,7 +125,7 @@ Desktop validation builds also emit `jellyframe_render_core_microbench.map` and
 with:
 
 ```powershell
-python tools\check_render_core_link_map.py `
+python project_tools\check_render_core_link_map.py `
   --profile build\module-on\generated\jellyframe_render_core_profile.json `
   --map build\module-on\jellyframe_render_core_microbench.map
 ```

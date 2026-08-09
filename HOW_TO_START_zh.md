@@ -1,6 +1,6 @@
 # JellyFrame 上手指南
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 本文面向第一次打开这个仓库的开发者，说明 JellyFrame 是什么、仓库如何组织、如何编译运行、
 Release 目录里每个 exe 是做什么的，以及应该按什么顺序阅读项目。
@@ -250,7 +250,7 @@ CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary`
 打开 Windows 交互 shell：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe `
+.\build\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
 
@@ -261,7 +261,7 @@ CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary`
 通过 Win32 默认 GDI 文本路径截图：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --capture `
+.\build\Release\jellyframe_desktop_shell.exe --capture `
   calculator.ppm `
   --app tools\templates\apps\calculator
 ```
@@ -270,7 +270,7 @@ CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary`
 layout 和 paint：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --capture `
+.\build\Release\jellyframe_desktop_shell.exe --capture `
   calculator_font.ppm `
   --app tools\templates\apps\calculator `
   --use-app-fonts
@@ -339,14 +339,14 @@ cmake --build build-script --config Release
 在交互式 Win32 壳中运行带脚本页面：
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe `
+.\build-script\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\watch_weather
 ```
 
 运行 timer 驱动页面：
 
 ```powershell
-.\build-script\Release\jellyframe_win32_browser.exe `
+.\build-script\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\clock
 ```
 
@@ -385,8 +385,7 @@ Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 c
   它只验证 render-core 行为。
 - `jellyframe_desktop_shell.exe` 支持 `--app package_dir` 交互预览，也支持
   `--capture output.ppm --app package_dir` 对 package 截图。
-- `jellyframe_desktop_shell.exe` 只在 Windows 上构建；历史名称
-  `jellyframe_win32_browser.exe` 作为兼容副本保留。
+- `jellyframe_desktop_shell.exe` 只在 Windows 上构建。
 - scripting 构建中，`jellyframe_desktop_shell.exe` 和 `jellyframe_script_tests.exe`
   会链接可选脚本 target。
 - 检查工具和 Win32 shell 会合并显式 CSS 文件、内嵌 `<style>` 和宿主可加载的本地
@@ -436,8 +435,8 @@ python tools\jellyframe_cli.py preview `
 也可以直接用原生壳打开生成的 `.jfapp`，验证安装包和源目录行为一致：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --app build\watch_weather.jfapp
-.\build\Release\jellyframe_win32_browser.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
+.\build\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
+.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
 ```
 
 把源码包安装到桌面 app registry。这个路径会先运行 validation、pipeline diagnostics 和 bundle
@@ -454,16 +453,16 @@ python tools\jellyframe_cli.py install `
 打开 Win32 system shell / app manager：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps
-.\build\Release\jellyframe_win32_browser.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
-.\build\Release\jellyframe_win32_browser.exe --capture build\app_manager.bmp --registry-store build\installed_apps
+.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps
+.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
+.\build\Release\jellyframe_desktop_shell.exe --capture build\app_manager.bmp --registry-store build\installed_apps
 ```
 
 默认 app manager 会加载 `samples/apps/system/sample_launcher`。也可以显式指定另一个受信
 launcher app：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe `
+.\build\Release\jellyframe_desktop_shell.exe `
   --registry-store build\installed_apps `
   --launcher-app samples\apps\system\sample_launcher
 ```
@@ -538,8 +537,8 @@ python tools\jellyframe_cli.py new `
 
 如果页面渲染不对，建议按这个顺序排查：
 
-1. `jellyframe_win32_browser --app package_dir`，用于交互行为和文本验收。
-2. `jellyframe_win32_browser --capture output.ppm --app package_dir`，用于 package 截图。
+1. `jellyframe_desktop_shell --app package_dir`，用于交互行为和文本验收。
+2. `jellyframe_desktop_shell --capture output.ppm --app package_dir`，用于 package 截图。
 3. `jellyframe_pipeline_dump`
 4. `jellyframe_dom_dump`
 5. `jellyframe_cssom_dump`
@@ -548,8 +547,8 @@ python tools\jellyframe_cli.py new `
 8. `jellyframe_layer_tree_dump`
 9. `jellyframe_font_resource_check` 只用于字体资源和 glyph 覆盖问题。
 
-对于 package app，优先使用 `jellyframe_win32_browser --app package_dir` 或
-`jellyframe_win32_browser --capture output.ppm --app package_dir`，这样 Win32 壳会使用
+对于 package app，优先使用 `jellyframe_desktop_shell --app package_dir` 或
+`jellyframe_desktop_shell --capture output.ppm --app package_dir`，这样 Win32 壳会使用
 app package loader、manifest viewport 与资源解析路径。
 
 ## 13. 文档地图
@@ -585,7 +584,7 @@ app package loader、manifest viewport 与资源解析路径。
 2. 需要检查自适应时，加入 `--targets round-300,rect-320x240`。
 3. 在 report 中查看 `pipelineDiagnostics`、`fontDiagnostics`、`serviceIntent` 和
    `responsiveProfiles`。
-4. 用 `jellyframe_win32_browser --app package_dir` 打开同一个 package，验证交互和文本。
+4. 用 `jellyframe_desktop_shell --app package_dir` 打开同一个 package，验证交互和文本。
 
 页面渲染与预期不一致时：
 

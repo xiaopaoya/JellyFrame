@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GENERATOR = REPO_ROOT / "tools" / "generate_html_support_table.py"
+GENERATOR = REPO_ROOT / "project_tools" / "generate_html_support_table.py"
 
 
 class HtmlSupportTableTests(unittest.TestCase):
