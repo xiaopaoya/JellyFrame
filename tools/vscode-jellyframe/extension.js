@@ -7,6 +7,9 @@ let outputChannel;
 let reportPanel;
 let capabilityDiagnostics;
 let lastReport;
+let lastPackageRoot;
+let lastCapturePath;
+let statusProvider;
 
 function config() {
   return vscode.workspace.getConfiguration("jellyframe");
@@ -30,6 +33,19 @@ function ensureBuildDir(context) {
 }
 
 function nativeBuildDir(context) {
+  const configured = config().get("buildDir", "").trim();
+  if (configured) {
+    return path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured);
+  }
+  for (const candidate of [
+    path.join(repoRoot(context), "build", "Release"),
+    path.join(repoRoot(context), "build", "Debug"),
+    path.join(repoRoot(context), "build-script", "Release")
+  ]) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
   return path.join(repoRoot(context), "build", "Release");
 }
 
@@ -39,6 +55,24 @@ function exeName(name) {
 
 function nativeToolPath(context, name) {
   return path.join(nativeBuildDir(context), exeName(name));
+}
+
+function desktopShellPath(context) {
+  const configured = config().get("shellPath", "").trim();
+  if (configured) {
+    return path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured);
+  }
+  for (const name of ["jellyframe_desktop_shell", "jellyframe_win32_browser"]) {
+    const candidate = nativeToolPath(context, name);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return nativeToolPath(context, "jellyframe_desktop_shell");
+}
+
+function debugLauncherPath(context) {
+  return path.join(repoRoot(context), "tools", "debug", "jellyframe_debug.py");
 }
 
 function ensureOutputChannel() {
@@ -116,6 +150,48 @@ function runDetachedTool(context, executable, args) {
   child.unref();
 }
 
+function runDetachedPython(context, script, args, options = {}) {
+  const python = config().get("pythonPath", "python");
+  const channel = ensureOutputChannel();
+  const commandArgs = [script, ...args];
+  channel.appendLine(`+ ${[python, ...commandArgs].join(" ")}`);
+  const child = childProcess.spawn(python, commandArgs, {
+    cwd: repoRoot(context),
+    detached: !options.wait,
+    stdio: options.wait ? "pipe" : "ignore",
+    windowsHide: false
+  });
+  if (options.wait) {
+    child.stdout.on("data", (chunk) => channel.append(chunk.toString()));
+    child.stderr.on("data", (chunk) => channel.append(chunk.toString()));
+  }
+  child.on("error", (error) => {
+    channel.appendLine(`JellyFrame debug command failed to start: ${error.message}`);
+    vscode.window.showErrorMessage(`JellyFrame debug command failed to start: ${error.message}`);
+  });
+  child.on("close", (code) => {
+    channel.appendLine(`JellyFrame debug command exited with code ${code}`);
+    if (code !== 0) {
+      vscode.window.showErrorMessage(`JellyFrame debug command failed with code ${code}`);
+    }
+    if (options.capture && code === 0 && config().get("openCaptureAfterRun", true)) {
+      openCaptureFile(options.capture);
+    }
+  });
+  if (!options.wait) {
+    child.unref();
+  }
+}
+
+function openCaptureFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    vscode.window.showWarningMessage(`Capture not found: ${filePath || "none"}`);
+    return;
+  }
+  lastCapturePath = filePath;
+  vscode.commands.executeCommand("vscode.open", vscode.Uri.file(filePath));
+}
+
 function workspaceFolderPath() {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
@@ -146,6 +222,7 @@ async function packageRoot() {
   if (active) {
     const found = findPackageRootFrom(active);
     if (found) {
+      lastPackageRoot = found;
       return found;
     }
   }
@@ -153,6 +230,7 @@ async function packageRoot() {
   if (workspace) {
     const found = findPackageRootFrom(workspace);
     if (found) {
+      lastPackageRoot = found;
       return found;
     }
   }
@@ -162,7 +240,8 @@ async function packageRoot() {
     canSelectMany: false,
     openLabel: "Select JellyFrame package root"
   });
-  return selected && selected[0] ? selected[0].fsPath : undefined;
+  lastPackageRoot = selected && selected[0] ? selected[0].fsPath : undefined;
+  return lastPackageRoot;
 }
 
 function outputBase(root) {
@@ -233,19 +312,91 @@ async function previewPackage(context) {
 
 async function openWin32Browser(context) {
   if (process.platform !== "win32") {
-    vscode.window.showErrorMessage("JellyFrame Win32 browser is only available on Windows.");
+    vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
     return;
   }
   const root = await packageRoot();
   if (!root) {
     return;
   }
-  const executable = nativeToolPath(context, "jellyframe_win32_browser");
+  const executable = desktopShellPath(context);
   if (!fs.existsSync(executable)) {
-    vscode.window.showErrorMessage(`Missing Win32 browser: ${executable}`);
+    vscode.window.showErrorMessage(`Missing desktop shell: ${executable}`);
     return;
   }
   runDetachedTool(context, executable, ["--app", root]);
+}
+
+async function debugApp(context) {
+  if (process.platform !== "win32") {
+    vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
+    return;
+  }
+  const root = await packageRoot();
+  if (!root) {
+    return;
+  }
+  const launcher = debugLauncherPath(context);
+  if (!fs.existsSync(launcher)) {
+    vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
+    return;
+  }
+  runDetachedPython(context, launcher, ["--build-dir", nativeBuildDir(context), "--app", root]);
+}
+
+async function runFrameScript(context) {
+  if (process.platform !== "win32") {
+    vscode.window.showErrorMessage("JellyFrame frame-script playback currently requires the desktop shell on Windows.");
+    return;
+  }
+  const root = await packageRoot();
+  if (!root) {
+    return;
+  }
+  const selected = await vscode.window.showOpenDialog({
+    defaultUri: vscode.Uri.file(root),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters: { "JellyFrame frame scripts": ["jfcapture"] },
+    openLabel: "Run Frame Script"
+  });
+  if (!selected || !selected[0]) {
+    return;
+  }
+  ensureBuildDir(context);
+  const output = path.join(buildDir(context), "debug", `${outputBase(root)}-frames`);
+  fs.mkdirSync(output, { recursive: true });
+  const capture = path.join(output, "montage.bmp");
+  const launcher = debugLauncherPath(context);
+  runDetachedPython(context, launcher, [
+    "--build-dir", nativeBuildDir(context),
+    "--app", root,
+    "--frame-script", selected[0].fsPath,
+    "--", "--capture-frames", output, "--capture-montage", capture
+  ], { capture });
+}
+
+async function openCapture(context) {
+  if (lastCapturePath && fs.existsSync(lastCapturePath)) {
+    openCaptureFile(lastCapturePath);
+    return;
+  }
+  const selected = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters: { "JellyFrame captures": ["bmp", "ppm", "png"] },
+    openLabel: "Open Capture"
+  });
+  if (selected && selected[0]) {
+    openCaptureFile(selected[0].fsPath);
+  }
+}
+
+function listBuilds(context) {
+  const launcher = debugLauncherPath(context);
+  runDetachedPython(context, launcher, ["--list-builds"], { wait: true });
 }
 
 function diagnosticSeverity(severity) {
@@ -305,6 +456,57 @@ function updateReportDiagnostics(root) {
   capabilityDiagnostics.clear();
   for (const [filePath, items] of diagnostics.entries()) {
     capabilityDiagnostics.set(vscode.Uri.file(filePath), items);
+  }
+  statusProvider?.refresh();
+}
+
+class JellyFrameStatusProvider {
+  constructor(context) {
+    this.context = context;
+    this.changed = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this.changed.event;
+  }
+
+  refresh() {
+    this.changed.fire();
+  }
+
+  getTreeItem(element) {
+    return element;
+  }
+
+  getChildren() {
+    const root = lastPackageRoot || "No package selected";
+    const build = nativeBuildDir(this.context);
+    const report = lastReport ? "Loaded report" : "No report loaded";
+    const pipeline = lastReport?.pipelineDiagnostics?.summary;
+    const performance = lastReport?.performanceSummary;
+    const diagnostics = pipeline
+      ? `Diagnostics: ${pipeline.error || 0} errors, ${pipeline.warning || 0} warnings`
+      : "Diagnostics: run Check or Preview";
+    const perf = performance?.rating
+      ? `Performance: ${performance.rating} (${performance.score || 0})`
+      : "Performance: not measured";
+    return [
+      this.item(`App: ${path.basename(root)}`, root, "jellyframe.debug"),
+      this.item(`Build: ${build}`, build, "jellyframe.listBuilds"),
+      this.item(report, undefined, "jellyframe.showReport"),
+      this.item(diagnostics),
+      this.item(perf),
+      this.item(lastCapturePath ? `Capture: ${path.basename(lastCapturePath)}` : "Capture: open or run a frame script", lastCapturePath, "jellyframe.openCapture")
+    ];
+  }
+
+  item(label, resource, command) {
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    item.tooltip = resource || label;
+    if (resource && fs.existsSync(resource)) {
+      item.resourceUri = vscode.Uri.file(resource);
+    }
+    if (command) {
+      item.command = { command, title: label };
+    }
+    return item;
   }
 }
 
@@ -483,11 +685,18 @@ async function newFromTemplate(context) {
 
 function activate(context) {
   capabilityDiagnostics = vscode.languages.createDiagnosticCollection("jellyframe");
+  statusProvider = new JellyFrameStatusProvider(context);
   context.subscriptions.push(
     capabilityDiagnostics,
+    statusProvider.changed,
+    vscode.window.registerTreeDataProvider("jellyframe.status", statusProvider),
     vscode.commands.registerCommand("jellyframe.validate", () => runPackageCommand(context, "validate")),
     vscode.commands.registerCommand("jellyframe.check", () => runPackageCommand(context, "check")),
     vscode.commands.registerCommand("jellyframe.preview", () => previewPackage(context)),
+    vscode.commands.registerCommand("jellyframe.debug", () => debugApp(context)),
+    vscode.commands.registerCommand("jellyframe.runFrameScript", () => runFrameScript(context)),
+    vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
+    vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
     vscode.commands.registerCommand("jellyframe.openWin32Browser", () => openWin32Browser(context)),
     vscode.commands.registerCommand("jellyframe.package", () => runPackageCommand(context, "package")),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
@@ -503,6 +712,10 @@ function deactivate() {
   if (capabilityDiagnostics) {
     capabilityDiagnostics.dispose();
     capabilityDiagnostics = undefined;
+  }
+  if (statusProvider) {
+    statusProvider.changed.dispose();
+    statusProvider = undefined;
   }
 }
 

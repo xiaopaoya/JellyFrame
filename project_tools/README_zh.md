@@ -1,0 +1,17 @@
+# 项目维护工具
+
+> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
+
+这里放 CI、Render Core 裁剪、性能守卫和 HTML/CSS 兼容性表维护工具。
+App 作者通常从 `tools/jellyframe_cli.py` 或 VS Code 扩展开始。
+
+| 目标 | 入口 |
+| --- | --- |
+| 检查桌面性能回归 | `benchmark_guard.py` |
+| 检查 Render Core profile 和 link map | `check_render_core_link_map.py` |
+| 查看或维护 Render Core 能力目录 | `render_core_feature_registry.py` |
+| 生成 HTML/CSS 支持表 | `generate_html_support_table.py`、`generate_css_support_table.py` |
+| 导入 CSS crosswork 快照 | `import_css_support_crosswork.py` |
+
+这些工具不是运行时依赖。报告默认写入被忽略的 build 或审查产物目录，只有明确
+提升为项目文档的报告才应进入版本控制。

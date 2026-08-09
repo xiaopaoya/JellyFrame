@@ -69,7 +69,9 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 - 天气、时钟、计时器、计算器、设置页。
 - 卡片式小仪表盘、本地配置界面、表单型设备 UI。
 - 想用 HTML/CSS/JS 编写嵌入式应用，而不是用 canvas 手绘全部 UI 的项目。
-- 使用 `jellyframe_pseudo_browser` 或 `jellyframe_win32_browser` 做桌面验收。
+- 使用 `jellyframe_pseudo_browser` 验证平台无关管线，使用
+  `jellyframe_desktop_shell` 验证交互式 app 行为。历史名称
+  `jellyframe_win32_browser` 仍作为兼容名称保留。
 
 暂不适合：
 

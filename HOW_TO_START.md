@@ -103,7 +103,10 @@ For embedded porting:
   used by the Win32 App Manager path.
 - `src/render_core/samples/fonts/bitmap`: font-pack sample input.
 - `tools/templates/apps`: starter app packages copied by developer tools.
-- `tools/native`: C++ inspection tools, pseudo browser and Win32 shell sources.
+- `tools/debug`: stable app-author desktop debugging facade, frame-script playback and capture entry point.
+- `tools/vscode-jellyframe`: VS Code commands, diagnostics and JellyFrame status view.
+- `tools/native`: C++ inspection tools, pseudo browser and desktop shell implementation.
+- `project_tools`: project-maintainer scripts for audits, feature slicing and support tables.
 - `tests`: cross-subproject acceptance test placeholder; subproject tests live beside code.
 - `benchmarks`: cross-subproject benchmark placeholder; subproject benchmarks live beside code.
 - `ports/embedded_host_demo`: platform-neutral board bring-up shape with static
@@ -400,7 +403,7 @@ CMake options are enabled.
 | `jellyframe_layer_tree_dump.exe` | Prints layer boundaries, layer reasons, clips and flattened display-list counts. |
 | `jellyframe_pipeline_dump.exe` | Prints end-to-end DOM/render/layout/layer/display-list counts and a display-list preview. |
 | `jellyframe_pseudo_browser.exe` | Runs the render-core pipeline from standalone HTML/CSS and writes a BMP/PPM image. It is the non-interactive render acceptance shell. |
-| `jellyframe_win32_browser.exe` | Windows-only interactive system-shell mock for app packages, input, scripting and Win32/GDI text measurement/painting. |
+| `jellyframe_desktop_shell.exe` | Windows-only interactive desktop app-debugging shell for packages, input, scripting, registry flows and Win32/GDI text measurement/painting. |
 | `jellyframe_font_resource_check.exe` | Retained only for font/resource preparation: emits non-ASCII used characters, estimates bitmap font budget and verifies font coverage. Text-search compatibility scanning is retired. |
 | `jellyframe_font_pack_gen.exe` | Converts a BDF bitmap font and used-character list into a C++ `BitmapFont` header or a `.jffont` V0 binary font supplement. |
 | `jellyframe_embedded_host_demo.exe` | Platform-neutral port bring-up demo from `ports/embedded_host_demo`, using static resources, bitmap text and RGB565 framebuffer output. |
@@ -415,11 +418,12 @@ Notes:
 
 - `jellyframe_pseudo_browser.exe` intentionally does not load `.jfapp` bundles
   or execute JavaScript; it validates render-core behavior only.
-- `jellyframe_win32_browser.exe` supports interactive package preview with
+- `jellyframe_desktop_shell.exe` supports interactive package preview with
   `--app package_dir` and package capture with `--capture output.ppm --app
   package_dir`.
-- `jellyframe_win32_browser.exe` is only built on Windows.
-- In scripting builds, `jellyframe_win32_browser.exe` and
+- `jellyframe_desktop_shell.exe` is only built on Windows. The historical
+  `jellyframe_win32_browser.exe` file remains as a compatibility copy.
+- In scripting builds, `jellyframe_desktop_shell.exe` and
   `jellyframe_script_tests.exe` link the optional scripting target.
 - Inspection tools and the Win32 shell merge CSS from explicit CSS files,
   embedded `<style>` and host-loadable local `<link rel="stylesheet">` files.

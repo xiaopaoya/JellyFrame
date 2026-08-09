@@ -94,7 +94,10 @@ manifest 能力声明使用。
 - `samples/apps/system`：带系统权限的 app 样例，例如 Win32 App Manager 使用的 sample launcher。
 - `src/render_core/samples/fonts/bitmap`：字体包样例输入。
 - `tools/templates/apps`：供开发工具复制的 app package 起始模板。
-- `tools/native`：C++ 检查工具、伪浏览器和 Win32 壳源码。
+- `tools/debug`：面向 App 作者的桌面调试 facade、frame script 回放和截图入口。
+- `tools/vscode-jellyframe`：VS Code 命令、诊断和 JellyFrame 状态视图。
+- `tools/native`：C++ 检查工具、伪浏览器和桌面壳实现。
+- `project_tools`：面向项目维护者的审计、能力裁剪和支持表脚本。
 - `tests`：跨子项目验收测试占位；子项目测试贴近源码维护。
 - `benchmarks`：跨子项目 benchmark 占位；子项目 benchmark 贴近源码维护。
 - `ports/embedded_host_demo`：平台无关开发板 bring-up 形态，包含静态资源、
@@ -365,7 +368,7 @@ Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 c
 | `jellyframe_layer_tree_dump.exe` | 输出 layer 边界、成层原因、裁剪和 flatten 后 display-list 数量。 |
 | `jellyframe_pipeline_dump.exe` | 输出端到端 DOM/render/layout/layer/display-list 计数和 display-list 预览。 |
 | `jellyframe_pseudo_browser.exe` | 从独立 HTML/CSS 跑 render-core 管线并写出 BMP/PPM 图片。用于无交互渲染验收。 |
-| `jellyframe_win32_browser.exe` | Windows-only 交互式系统壳 mock，用于 app package、输入、脚本和 Win32/GDI 文本测量/绘制。 |
+| `jellyframe_desktop_shell.exe` | Windows-only 交互式桌面 app 调试壳，用于 package、输入、脚本、registry 流程和 Win32/GDI 文本测量/绘制。 |
 | `jellyframe_font_resource_check.exe` | 仅保留用于字体/资源准备：输出非 ASCII 使用字符、估算 bitmap font 预算并验证字体覆盖。文本检索式兼容性扫描已弃用。 |
 | `jellyframe_font_pack_gen.exe` | 把 BDF bitmap font 和 used-character list 转成 C++ `BitmapFont` header，或 `.jffont` V0 二进制字体补充包。 |
 | `jellyframe_embedded_host_demo.exe` | 来自 `ports/embedded_host_demo` 的平台无关 port bring-up demo，使用静态资源、bitmap text 和 RGB565 framebuffer。 |
@@ -380,10 +383,11 @@ Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 c
 
 - `jellyframe_pseudo_browser.exe` 故意不加载 `.jfapp` bundle，也不执行 JavaScript；
   它只验证 render-core 行为。
-- `jellyframe_win32_browser.exe` 支持 `--app package_dir` 交互预览，也支持
+- `jellyframe_desktop_shell.exe` 支持 `--app package_dir` 交互预览，也支持
   `--capture output.ppm --app package_dir` 对 package 截图。
-- `jellyframe_win32_browser.exe` 只在 Windows 上构建。
-- scripting 构建中，`jellyframe_win32_browser.exe` 和 `jellyframe_script_tests.exe`
+- `jellyframe_desktop_shell.exe` 只在 Windows 上构建；历史名称
+  `jellyframe_win32_browser.exe` 作为兼容副本保留。
+- scripting 构建中，`jellyframe_desktop_shell.exe` 和 `jellyframe_script_tests.exe`
   会链接可选脚本 target。
 - 检查工具和 Win32 shell 会合并显式 CSS 文件、内嵌 `<style>` 和宿主可加载的本地
   `<link rel="stylesheet">`。核心本身不做文件 I/O。

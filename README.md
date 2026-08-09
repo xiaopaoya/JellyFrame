@@ -119,9 +119,14 @@ Render a static page to an image:
 Open an interactive Windows validation shell:
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe `
+.\build\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
+
+For IDE-friendly debugging, use `python tools\debug\jellyframe_debug.py`; it
+discovers the desktop build and supports package launch, frame scripts and
+captures. The historical `jellyframe_win32_browser.exe` name remains a
+compatibility copy for existing scripts.
 
 Create an app package and run package validation plus pipeline diagnostics:
 

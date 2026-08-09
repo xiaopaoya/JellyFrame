@@ -81,8 +81,10 @@ JellyFrame works best for:
 - Small dashboards with cards, text, form controls and host-provided data.
 - Local embedded applications that want HTML/CSS/JS authoring instead of canvas
   drawing.
-- Desktop validation through `jellyframe_pseudo_browser` or
-  `jellyframe_win32_browser`.
+- Desktop validation through `jellyframe_pseudo_browser` for the
+  platform-neutral pipeline or `jellyframe_desktop_shell` for interactive app
+  behavior. The historical `jellyframe_win32_browser` executable remains a
+  compatibility name.
 
 JellyFrame is not ready for:
 

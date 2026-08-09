@@ -36,6 +36,15 @@ def tool_path(build_dir: Path, name: str) -> Path:
     return build_dir / exe_name(name)
 
 
+def desktop_shell_path(build_dir: Path) -> Path:
+    """Find the current desktop shell while accepting 0.5-era builds."""
+    for name in ("jellyframe_desktop_shell", "jellyframe_win32_browser"):
+        candidate = tool_path(build_dir, name)
+        if candidate.is_file():
+            return candidate
+    return tool_path(build_dir, "jellyframe_desktop_shell")
+
+
 def run_command(command: list[str]) -> int:
     print("+ " + " ".join(command), flush=True)
     return subprocess.call(command)
@@ -2564,7 +2573,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
     preflight_result = run_package_preflight(args, include_pipeline=True)
     if preflight_result != 0:
         return preflight_result
-    win32_browser = tool_path(args.build_dir, "jellyframe_win32_browser")
+    win32_browser = desktop_shell_path(args.build_dir)
     ensure_tool(win32_browser)
     target_config = effective_target_config(args.root, args.target) if args.target else {}
     viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
@@ -3142,9 +3151,9 @@ def cmd_trial(args: argparse.Namespace) -> int:
     if not targets:
         raise SystemExit("trial requires at least one target preset")
     if not sys.platform.startswith("win"):
-        raise SystemExit("trial requires a Windows build with jellyframe_win32_browser")
+        raise SystemExit("trial requires a Windows build with jellyframe_desktop_shell")
     ensure_tool(tool_path(args.build_dir, "jellyframe_pseudo_browser"))
-    ensure_tool(tool_path(args.build_dir, "jellyframe_win32_browser"))
+    ensure_tool(desktop_shell_path(args.build_dir))
     prepare_trial_output(args.output_dir, args.clean, trial_build_root(args.build_dir))
 
     cli = Path(__file__).resolve()
@@ -3338,7 +3347,7 @@ def cmd_trial(args: argparse.Namespace) -> int:
     if not run_step(
             "recovery-launch",
             [
-                str(tool_path(args.build_dir, "jellyframe_win32_browser")), "--capture", str(output_dir / "recovery-launch.ppm"),
+                str(desktop_shell_path(args.build_dir)), "--capture", str(output_dir / "recovery-launch.ppm"),
                 "--registry-store", str(registry_store), "--launch-app", recovery_id,
             ],
             True):

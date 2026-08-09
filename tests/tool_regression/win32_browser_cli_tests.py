@@ -157,12 +157,15 @@ def main() -> int:
     require(no_argument_result.returncode == 0, "no arguments must print help and exit successfully")
     require("No input app or capture options were provided." in no_argument_result.stdout,
             "no arguments must explain why the tool did not launch a page")
-    require("usage: jellyframe_win32_browser" in no_argument_result.stdout,
+    require(any(f"usage: {name}" in no_argument_result.stdout
+                for name in ("jellyframe_desktop_shell", "jellyframe_win32_browser")),
             "no arguments must print the short usage")
 
     help_result = run_case(exe, ["--help"])
     require(help_result.returncode == 0, "--help must exit successfully")
-    require("usage: jellyframe_win32_browser" in help_result.stdout, "--help must print usage")
+    require(any(f"usage: {name}" in help_result.stdout
+                for name in ("jellyframe_desktop_shell", "jellyframe_win32_browser")),
+            "--help must print usage")
     require("Frame script commands:" in help_result.stdout, "--help must document frame scripts")
     require("event FRAME:kind[:x:y[:delta]]" in help_result.stdout, "--help must document wheel delta")
     require("pointer-up, wheel, escape" in help_result.stdout, "--help must document deterministic Escape")

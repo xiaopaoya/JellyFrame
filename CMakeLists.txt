@@ -269,11 +269,18 @@ if(JELLYFRAME_BUILD_EXAMPLES)
         target_link_libraries(jellyframe_pseudo_browser PRIVATE jellyframe_script)
     endif()
     if(WIN32)
-        add_jellyframe_tool(jellyframe_win32_browser tools/native/win32_browser.cpp)
-        target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_app_runtime gdi32 user32 winmm)
+        add_jellyframe_tool(jellyframe_desktop_shell tools/native/win32_browser.cpp)
+        target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_app_runtime gdi32 user32 winmm)
         if(JELLYFRAME_BUILD_SCRIPTING)
-            target_link_libraries(jellyframe_win32_browser PRIVATE jellyframe_script)
+            target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_script)
         endif()
+        # Keep the historical target name as a CMake alias while new builds
+        # expose the tool by its broader app-debugging responsibility.
+        add_executable(jellyframe_win32_browser ALIAS jellyframe_desktop_shell)
+        add_custom_command(TARGET jellyframe_desktop_shell POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:jellyframe_desktop_shell>"
+                    "$<TARGET_FILE_DIR:jellyframe_desktop_shell>/jellyframe_win32_browser${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
 endif()
 
@@ -405,7 +412,7 @@ if(JELLYFRAME_BUILD_TESTS)
         add_test(
             NAME jellyframe_render_core_generated_link_map
             COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_render_core_link_map.py
+                    ${CMAKE_CURRENT_SOURCE_DIR}/project_tools/check_render_core_link_map.py
                     --profile ${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json
                     --map ${_jellyframe_render_core_tests_map})
         set_tests_properties(jellyframe_render_core_generated_link_map PROPERTIES

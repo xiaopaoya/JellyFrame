@@ -2,22 +2,25 @@
 
 > Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
-This directory contains native C++ desktop tools used to inspect JellyFrame
-output. Sample pages and app packages live in `../../samples`.
+This directory contains the native C++ implementation of JellyFrame's desktop
+inspection tools. App authors should start with `../debug/README.md`; sample
+pages and app packages live in `../../samples`.
 
 ## Choose A Tool
 
 | Need | Source / executable | Output |
 | --- | --- | --- |
 | Render one page or package with structured diagnostics | `pseudo_browser.cpp` | BMP/PPM plus DOM/layout/paint diagnostics |
-| Interact with an app, inject events or capture frames | `win32_browser.cpp` | Win32 shell output, frame scripts and runtime telemetry |
+| Interact with an app, inject events or capture frames | `win32_browser.cpp` -> `jellyframe_desktop_shell` | Desktop shell output, frame scripts and runtime telemetry |
 | Inspect one pipeline layer | `dom_dump.cpp`, `cssom_dump.cpp`, `render_tree_dump.cpp`, `layer_tree_dump.cpp`, `pipeline_dump.cpp` | Focused text dumps |
 | Inspect style resolution | `style_dump.cpp` | Matched/computed style details |
 | Generate or inspect bitmap font resources | `font_pack_gen.cpp`, `font_resource_check.cpp` | Firmware header or `.jffont` and policy report |
 
 The source files are build inputs, not separate user-facing commands until
-CMake emits the corresponding executable. Use `jellyframe_win32_browser
---help` for the shell contract.
+CMake emits the corresponding executable. Use
+`jellyframe_desktop_shell --help` for the current shell contract;
+`jellyframe_win32_browser` remains a compatibility executable name for older
+scripts and builds.
 
 - `*_dump.cpp` tools print parser, DOM, CSSOM, render tree, layer tree or full
   pipeline output.

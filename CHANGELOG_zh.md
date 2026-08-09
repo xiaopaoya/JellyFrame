@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev
+> 最后更新：2026-08-10；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -14,6 +14,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 新增面向 App 作者的桌面工具布局：`tools/debug` 提供统一的启动、frame script
+  回放和截图入口，`project_tools` 负责项目维护审计，VS Code 扩展新增 app/构建自动发现、
+  diagnostics 状态视图以及截图/frame script 命令。交互式原生壳现在构建为
+  `jellyframe_desktop_shell`；历史名称 `jellyframe_win32_browser` 和 target 仍作为兼容别名保留。
 - 开启 `0.6.0-dev` 线并新增声明式 Render Core feature catalog。CMake profile 与桌面 feature 检查现在从同一份 registry 派生 ID 和依赖闭包；必需的 `core.document` 与 `core.paint` 源码族保持构建兼容，运行时路径不变。
 - 关闭本轮试用审计发现的文档漂移：面向作者的公共入口现在标明 `0.6.0-dev`，同时保留 `0.5.0` 作为 package 兼容基线；P3 移植接入指南已记录 WS147 完成证据和剩余责任边界。
 

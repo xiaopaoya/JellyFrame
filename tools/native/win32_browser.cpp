@@ -2692,9 +2692,9 @@ bool apply_frame_script(BrowserOptions& options, const std::string& path, std::s
     return true;
 }
 
-void print_win32_browser_usage(std::ostream& output) {
+void print_win32_browser_usage(std::ostream& output, const std::string& program_name) {
     output
-        << "usage: jellyframe_win32_browser [options] [page.html style.css [width height]]\n"
+        << "usage: " << program_name << " [options] [page.html style.css [width height]]\n"
         << "\n"
         << "Options:\n"
         << "  --help                         Show this help and exit.\n"
@@ -3347,7 +3347,7 @@ public:
         AdjustWindowRectEx(&window_rect, WS_OVERLAPPEDWINDOW, FALSE, 0);
         hwnd_ = CreateWindowExW(0,
                                 kWindowClassName,
-                                L"JellyFrame Win32 Browser",
+                                L"JellyFrame Desktop Shell",
                                 WS_OVERLAPPEDWINDOW,
                                 CW_USEDEFAULT,
                                 CW_USEDEFAULT,
@@ -3464,7 +3464,7 @@ public:
             }
             write_image(montage, options_.frame_montage_path);
         }
-        std::cout << "JellyFrame Win32 browser frame capture\n"
+        std::cout << "JellyFrame Desktop Shell frame capture\n"
                   << "  output_dir=" << options_.frame_output_dir << '\n'
                   << "  montage=" << options_.frame_montage_path << '\n'
                   << "  frames=" << options_.frame_count << '\n'
@@ -6439,16 +6439,17 @@ private:
     }
 
     void set_title(const std::string& status) {
-        SetWindowTextW(hwnd_, utf8_to_wide("JellyFrame Win32 Browser - " + status).c_str());
+        SetWindowTextW(hwnd_, utf8_to_wide("JellyFrame Desktop Shell - " + status).c_str());
     }
 };
 
 } // namespace
 
 int main(int argc, char** argv) {
+    const std::string program_name = std::filesystem::path(argv[0]).stem().string();
     if (argc == 1) {
         std::cout << "No input app or capture options were provided. Use --help for usage.\n\n";
-        print_win32_browser_usage(std::cout);
+        print_win32_browser_usage(std::cout, program_name);
         return 0;
     }
 
@@ -6459,7 +6460,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
-            print_win32_browser_usage(std::cout);
+            print_win32_browser_usage(std::cout, program_name);
             return 0;
         }
         if (arg == "--capture") {
@@ -6942,7 +6943,7 @@ int main(int argc, char** argv) {
                 options.css_path.clear();
                 FrameBuffer frame_buffer = render_page_with_browser_text(options);
                 write_image(frame_buffer, options.output_path);
-                std::cout << "JellyFrame Win32 browser capture\n"
+                std::cout << "JellyFrame Desktop Shell capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
                           << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
@@ -6967,7 +6968,7 @@ int main(int argc, char** argv) {
             try {
                 FrameBuffer frame_buffer = render_page_with_browser_text(options);
                 write_image(frame_buffer, options.output_path);
-                std::cout << "JellyFrame Win32 browser capture\n"
+                std::cout << "JellyFrame Desktop Shell capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
                           << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
@@ -7002,7 +7003,7 @@ int main(int argc, char** argv) {
                                                                       options.viewport_width,
                                                                       options.viewport_height);
             write_image(frame_buffer, options.output_path);
-            std::cout << "JellyFrame Win32 browser capture\n"
+            std::cout << "JellyFrame Desktop Shell capture\n"
                       << "  output=" << options.output_path << '\n'
                       << "  viewport_width=" << options.viewport_width << '\n'
                       << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
@@ -7047,7 +7048,7 @@ int main(int argc, char** argv) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
     const int show_command = capture_frames_mode ? SW_HIDE : SW_SHOWNORMAL;
     if (!app.initialize(instance, show_command)) {
-        std::cerr << "failed to create Win32 browser window\n";
+        std::cerr << "failed to create desktop shell window\n";
         return 1;
     }
     if (capture_frames_mode) {

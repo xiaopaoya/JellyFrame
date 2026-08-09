@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "JellyFrame Tools",
   "description": "VS Code helpers for JellyFrame app packages.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "jellyframe",
   "engines": {
     "vscode": "^1.85.0"
@@ -14,7 +14,11 @@
     "onCommand:jellyframe.validate",
     "onCommand:jellyframe.check",
     "onCommand:jellyframe.preview",
+    "onCommand:jellyframe.debug",
     "onCommand:jellyframe.openWin32Browser",
+    "onCommand:jellyframe.runFrameScript",
+    "onCommand:jellyframe.openCapture",
+    "onCommand:jellyframe.listBuilds",
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.showReport"
@@ -35,8 +39,24 @@
         "title": "JellyFrame: Preview Package"
       },
       {
+        "command": "jellyframe.debug",
+        "title": "JellyFrame: Debug App In Desktop Shell"
+      },
+      {
         "command": "jellyframe.openWin32Browser",
-        "title": "JellyFrame: Open In Win32 Browser"
+        "title": "JellyFrame: Open Desktop Shell (Legacy)"
+      },
+      {
+        "command": "jellyframe.runFrameScript",
+        "title": "JellyFrame: Run Frame Script"
+      },
+      {
+        "command": "jellyframe.openCapture",
+        "title": "JellyFrame: Open Capture"
+      },
+      {
+        "command": "jellyframe.listBuilds",
+        "title": "JellyFrame: List Desktop Builds"
       },
       {
         "command": "jellyframe.package",
@@ -51,6 +71,34 @@
         "title": "JellyFrame: Show Last Report"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "jellyframe.status",
+          "name": "JellyFrame",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "jellyframe.debug",
+          "when": "view == jellyframe.status",
+          "group": "navigation@1"
+        },
+        {
+          "command": "jellyframe.showReport",
+          "when": "view == jellyframe.status",
+          "group": "navigation@2"
+        },
+        {
+          "command": "jellyframe.listBuilds",
+          "when": "view == jellyframe.status",
+          "group": "navigation@3"
+        }
+      ]
+    },
     "configuration": {
       "title": "JellyFrame",
       "properties": {
@@ -58,6 +106,21 @@
           "type": "string",
           "default": "",
           "description": "Optional JellyFrame repository root. Leave empty when running the extension from this repository."
+        },
+        "jellyframe.buildDir": {
+          "type": "string",
+          "default": "",
+          "description": "Optional desktop build directory. Leave empty to prefer build/Release, then build/Debug."
+        },
+        "jellyframe.shellPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional explicit desktop shell executable. Leave empty for automatic discovery."
+        },
+        "jellyframe.openCaptureAfterRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the generated capture after a frame-script run when a capture is produced."
         },
         "jellyframe.pythonPath": {
           "type": "string",

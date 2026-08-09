@@ -28,8 +28,11 @@ python tools\jellyframe_cli.py check `
   --report build\my_weather.report.json `
   --build-dir build\Release
 
-.\build\Release\jellyframe_win32_browser.exe --app build\my_weather
+.\build\Release\jellyframe_desktop_shell.exe --app build\my_weather
 ```
+
+在 IDE 中可使用 `python tools/debug/jellyframe_debug.py --app build/my_weather`，
+它会自动发现桌面壳，也可以运行确定性的 frame script。
 
 然后优先读 JSON report 末尾的 `developerAdvice[]`。它是低层 diagnostics 面向 app 作者的解释和修复建议。
 Package report 还会包含 `animationDiagnostics`，在 runtime parser 实际处理样式表前提前识别常见的高成本或不支持 CSS 动画写法。

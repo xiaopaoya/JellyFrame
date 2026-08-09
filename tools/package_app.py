@@ -5,12 +5,15 @@ import json
 import shutil
 import re
 import struct
+import sys
 import tempfile
 import zlib
 from pathlib import Path, PurePosixPath
 
 from svg_rasterize import SvgRasterError, rasterize_svg
-from render_core_feature_registry import (
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from project_tools.render_core_feature_registry import (
     KNOWN_RENDER_CORE_FEATURES,
     missing_feature_dependencies,
 )

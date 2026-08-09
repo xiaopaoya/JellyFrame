@@ -31,8 +31,11 @@ python tools\jellyframe_cli.py check `
   --report build\my_weather.report.json `
   --build-dir build\Release
 
-.\build\Release\jellyframe_win32_browser.exe --app build\my_weather
+.\build\Release\jellyframe_desktop_shell.exe --app build\my_weather
 ```
+
+For IDE use, `python tools/debug/jellyframe_debug.py --app build/my_weather`
+discovers the desktop shell and can also run deterministic frame scripts.
 
 Then read the final `developerAdvice[]` section in the JSON report. It is the
 app-author view of the lower-level diagnostics. Package reports also include

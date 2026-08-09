@@ -101,9 +101,13 @@ python tools\jellyframe_cli.py doctor --build-dir build\Release
 打开 Windows 交互验证壳：
 
 ```powershell
-.\build\Release\jellyframe_win32_browser.exe `
+.\build\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
+
+面向 IDE 的调试建议使用 `python tools\debug\jellyframe_debug.py`；它会自动发现桌面
+构建，并统一支持打开 package、运行 frame script 和截图。历史名称
+`jellyframe_win32_browser.exe` 仍作为现有脚本的兼容副本保留。
 
 创建 app package，并运行 package validation 与管线 diagnostics：
 

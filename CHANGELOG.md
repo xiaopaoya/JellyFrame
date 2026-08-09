@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev
+> Last updated: 2026-08-10; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -17,6 +17,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Added the app-author desktop tooling layout: `tools/debug` now provides a
+  stable launch/frame-script/capture facade, `project_tools` owns maintainer
+  audits, and the VS Code extension gained automatic app/build discovery,
+  diagnostics status view and capture/frame-script commands. The interactive
+  native shell is now built as `jellyframe_desktop_shell`; the historical
+  `jellyframe_win32_browser` executable and target remain compatibility aliases.
 - Opened the `0.6.0-dev` line with a declarative Render Core feature catalog.
   CMake profiles and desktop feature checks now derive feature IDs and
   dependency metadata from the same registry; the mandatory `core.document`

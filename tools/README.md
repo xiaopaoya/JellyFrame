@@ -9,10 +9,10 @@ Choose by task before opening the directory:
 | Goal | Start here | Audience |
 | --- | --- | --- |
 | Create, check, preview or package an app | `jellyframe_cli.py`, `package_app.py`, `templates/` | App author |
-| Inspect pixels, layout, events or a frame script | `native/README.md` | App author, UI reviewer |
+| Inspect pixels, layout, events or a frame script | `debug/README.md` then `native/README.md` | App author, UI reviewer |
 | Validate installed apps and launcher recovery | `jellyframe_cli.py`, `app_registry.py`, `schemas/` | Host/runtime developer |
-| Check build slicing, link ownership or desktop speed | `render_core_feature_registry.py`, `check_render_core_link_map.py`, `benchmark_guard.py` | Render Core maintainer |
-| Refresh HTML/CSS audit tables | `generate_html_support_table.py`, `generate_css_support_table.py`, `import_css_support_crosswork.py` | Compatibility maintainer |
+| Check build slicing, link ownership or desktop speed | `../project_tools/render_core_feature_registry.py`, `../project_tools/check_render_core_link_map.py`, `../project_tools/benchmark_guard.py` | Render Core maintainer |
+| Refresh HTML/CSS audit tables | `../project_tools/generate_html_support_table.py`, `../project_tools/generate_css_support_table.py`, `../project_tools/import_css_support_crosswork.py` | Compatibility maintainer |
 | Work in VS Code | `vscode-jellyframe/README.md` | App author, extension maintainer |
 | Validate a board | `ports/<port>/README.md` and `docs/porting_work_guide.md` | Port maintainer |
 
@@ -33,6 +33,12 @@ Choose by task before opening the directory:
 
 ### Desktop Inspection And Acceptance
 
+Start with `debug/jellyframe_debug.py` when working from an IDE or terminal.
+It discovers the desktop shell and provides one stable place for package
+launch, frame-script playback and capture. The native source directory remains
+an implementation/developer reference, not the first directory an app author
+should browse.
+
 The C++ programs under `native/` are built as desktop executables. Use its
 README's tool table to choose between the pseudo browser, Win32 shell and
 individual dumpers. They provide desktop evidence only; panel, DMA, MCU timing
@@ -40,11 +46,11 @@ and real font-backend claims remain port-owned.
 
 ### Core Build And Audit
 
-- `render_core_feature_registry.py`: shared feature-family catalog used by CMake
+- `../project_tools/render_core_feature_registry.py`: shared feature-family catalog used by CMake
   and package/profile checks.
-- `check_render_core_link_map.py`: verifies that a generated profile matches
+- `../project_tools/check_render_core_link_map.py`: verifies that a generated profile matches
   link-map-visible family ownership; it does not measure firmware performance.
-- `benchmark_guard.py`: broad desktop regression guard for catastrophic changes,
+- `../project_tools/benchmark_guard.py`: broad desktop regression guard for catastrophic changes,
   not an MCU release baseline.
 
 ### Compatibility And Editor Data
@@ -67,8 +73,8 @@ python tools\jellyframe_cli.py trial --build-dir build\Release --output-dir buil
 python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --report build\watch_weather.report.json --build-dir build\Release
 python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_canvas_smoke --target round-300 --report build\canvas.report.json --build-dir build\Release --render-core-profile build\Release\generated\jellyframe_render_core_profile.json
 python tools\jellyframe_cli.py preview --root samples\apps\packages\watch_weather --target round-300 --output build\watch_weather.bmp --build-dir build\Release
-python tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
-python tools\check_render_core_link_map.py --profile build\Release\generated\jellyframe_render_core_profile.json --map build\Release\jellyframe_render_core_microbench.map
+python project_tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
+python project_tools\check_render_core_link_map.py --profile build\Release\generated\jellyframe_render_core_profile.json --map build\Release\jellyframe_render_core_microbench.map
 ```
 
 For an embedded benchmark that does not call every enabled family, add one or
