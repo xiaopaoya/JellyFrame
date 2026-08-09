@@ -203,7 +203,12 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    return run_command(package_command(args, True))
+    result = run_command(package_command(args, True))
+    if result == 0:
+        report = load_json_if_exists(args.report)
+        if report:
+            write_json_report(args.report, report)
+    return result
 
 
 def should_run_font_resource_check(args: argparse.Namespace) -> bool:

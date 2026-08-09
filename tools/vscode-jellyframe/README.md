@@ -61,5 +61,6 @@ point produces the same report and output-channel behavior.
 Use `JellyFrame: Debug App In Desktop Shell` for interactive app debugging and
 `JellyFrame: Run Frame Script` for deterministic playback. `JellyFrame: Open
 Capture` opens the last or a selected BMP/PPM capture. `JellyFrame: Preview
-Package` remains the package preflight/pseudo-browser path and writes a JSON
-report linked to diagnostics.
+Package` runs package preflight, writes a separate JSON report and automatically
+opens the generated capture. Validation, checking and preview reports are kept
+separate so one command does not overwrite another command's result.

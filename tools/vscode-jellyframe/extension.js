@@ -75,6 +75,7 @@ function runCliWithOptions(context, args, options) {
     cwd: repoRoot(context),
     shell: false
   });
+  let failedToStart = false;
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString();
     channel.append(text);
@@ -84,17 +85,24 @@ function runCliWithOptions(context, args, options) {
     channel.append(text);
   });
   child.on("error", (error) => {
+    failedToStart = true;
     channel.appendLine(`JellyFrame command failed to start: ${error.message}`);
     vscode.window.showErrorMessage(`JellyFrame command failed to start: ${error.message}`);
   });
   child.on("close", (code) => {
     channel.appendLine(`JellyFrame command exited with code ${code}`);
-    if (options.reportPath) {
+    if (failedToStart) {
+      return;
+    }
+    if (code === 0 && options.reportPath) {
       loadReport(options.reportPath);
     }
-    if (options.packageRoot && options.reportPath) {
+    if (code === 0 && options.packageRoot && options.reportPath) {
       updateReportDiagnostics(options.packageRoot);
       showReportPanel(context);
+    }
+    if (code === 0 && options.capture && config().get("openCaptureAfterRun", true)) {
+      openCaptureFile(options.capture);
     }
     if (code !== 0) {
       vscode.window.showErrorMessage(`JellyFrame command failed with code ${code}`);
@@ -113,6 +121,10 @@ function loadReport(reportPath) {
 }
 
 function runDetachedPython(context, script, args, options = {}) {
+  if (!fs.existsSync(script)) {
+    vscode.window.showErrorMessage(`Missing JellyFrame debug tool: ${script}`);
+    return;
+  }
   const python = config().get("pythonPath", "python");
   const channel = ensureOutputChannel();
   const commandArgs = [script, ...args];
@@ -236,7 +248,7 @@ async function runPackageCommand(context, commandName, resourceUri) {
   }
   ensureBuildDir(context);
   const base = outputBase(root);
-  const report = path.join(buildDir(context), `vscode-${base}-report.json`);
+  const report = path.join(buildDir(context), `vscode-${base}-${commandName}-report.json`);
   const args = [commandName, "--root", root, "--target", selectedTarget, "--report", report];
   if (commandName === "check") {
     args.push("--font-budget", config().get("fontBudget", "16x16"));
@@ -275,7 +287,8 @@ async function previewPackage(context, resourceUri) {
     {
       commandName: "preview",
       packageRoot: root,
-      reportPath: report
+      reportPath: report,
+      capture: output
     }
   );
 }
@@ -294,7 +307,11 @@ async function debugApp(context, resourceUri) {
     vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
     return;
   }
-  runDetachedPython(context, launcher, ["--build-dir", nativeBuildDir(context), "--app", root]);
+  runDetachedPython(context, launcher, [
+    "--build-dir", nativeBuildDir(context),
+    "--app", root,
+    "--wait"
+  ], { wait: true });
 }
 
 async function runFrameScript(context, resourceUri) {
@@ -326,8 +343,9 @@ async function runFrameScript(context, resourceUri) {
     "--build-dir", nativeBuildDir(context),
     "--app", root,
     "--frame-script", selected[0].fsPath,
+    "--wait",
     "--", "--capture-frames", output, "--capture-montage", capture
-  ], { capture });
+  ], { wait: true, capture });
 }
 
 async function openCapture(context) {
