@@ -94,6 +94,25 @@ grace period if needed. It does not share a framebuffer, capture path or process
 with external-window debugging. Use `JellyFrame: Debug App In External Window`
 when native-window behavior itself is relevant.
 
+The embedded debugger also includes a Record button for building a semantic
+<code>.jfcapture</code>. Start recording, interact with the app, then stop
+recording and choose a save location. During recording, Live log switches to
+Events and records stable control actions rather than pixel coordinates:
+
+~~~text
+event 3 click-id notifications
+event 3 set-checked notifications 1
+event 7 click-id brightness
+event 7 set-value brightness 72
+~~~
+
+Give every button, input and select intended for recording a unique ASCII
+<code>id</code>. This keeps a capture valid when spacing, scale or layout
+changes. The wizard intentionally leaves scrolling, freeform canvas gestures
+and controls without a stable id to hand-authored pointer/wheel events. Open
+the saved file with Run Frame Script, or select it for programmed playback in
+Check App Rendering.
+
 Use `JellyFrame: Run Frame Script` for deterministic playback. `JellyFrame: Open
 Capture` opens the last or a selected BMP/PPM capture. `JellyFrame: Preview
 Package` runs package preflight, writes a separate JSON report and automatically

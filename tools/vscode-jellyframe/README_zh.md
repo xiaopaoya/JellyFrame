@@ -71,6 +71,22 @@ viewport 帧快照送入标签页，并把点击、拖动、滚轮和常用按�
 都会请求壳退出；若壳未在短暂宽限期内退出，扩展会终止该调试进程树。它不复用外部窗口、截图或其他会话的
 framebuffer。需要检查原生窗口行为时，使用“在外部窗口调试 App”。
 
+内嵌调试器还提供 Record 按钮，用于创建语义化 <code>.jfcapture</code>：开始录制，
+操作 App，停止录制后选择保存位置。录制期间 Live log 自动切到“事件”，记录稳定的控件操作，
+而不是像素坐标：
+
+~~~text
+event 3 click-id notifications
+event 3 set-checked notifications 1
+event 7 click-id brightness
+event 7 set-value brightness 72
+~~~
+
+请为需要录制的 button、input、select 提供唯一的 ASCII <code>id</code>。这样即使间距、缩放或
+布局发生变化，capture 仍可回放。向导有意不录制滚动、自由 Canvas 手势和没有稳定 id 的控件；
+这些场景仍应手写 pointer/wheel 事件。保存后可通过“运行帧脚本”执行，也可以在“检查 App 渲染”
+中选择程控回放。
+
 使用“运行帧脚本”进行确定性回放，使用“打开截图”打开最近或指定的 BMP/PPM 截图。
 `JellyFrame：预览 App 包` 会执行 package 预检、生成独立
 JSON 报告并自动打开截图。验证、检查和预览分别保留自己的报告，不会互相覆盖。

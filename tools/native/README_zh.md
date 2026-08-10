@@ -61,6 +61,10 @@ event 12 time-ms 1700000000123
 event 14 battery 88 1
 event 16 weather 213 rain
 event 18 activity 6400 32
+event 20 click-id theme-toggle
+event 20 set-checked theme-toggle 1
+event 22 set-value display-name Focus%20mode
+event 24 select-index accent 2
 animation-fps 30
 animation-callbacks 4
 script-watchdog-checks 2048
@@ -73,6 +77,25 @@ JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来�
 在帧脚本中使用 `animation-fps 0` 和 `animation-callbacks 0`，或命令行传入
 `--animation-fps 0 --animation-callbacks 0`，可以验证低功耗 profile：宿主应停止非必要动效，
 但不需要修改 app 源码。
+
+## 语义交互录制
+
+稳定的控件回归优先使用 <code>click-id</code>、<code>set-value</code>、
+<code>set-checked</code>、<code>select-index</code>。它们通过稳定 HTML
+<code>id</code> 解析可见表单控件，再走正常的 input/controller 事件链。
+<code>set-value</code> 使用百分号编码，因此空格和标点可以安全写入：
+
+~~~text
+event 4 click-id notification-toggle
+event 4 set-checked notification-toggle 1
+event 8 click-id brightness
+event 8 set-value brightness 72
+event 12 select-index color-scheme 1
+~~~
+
+VS Code 内嵌调试器可以自动录制这类语义事件。请为需要录制的 button、input、select 提供唯一的
+ASCII <code>id</code>。录制器不会为普通控件激活或 range 调整生成坐标事件；自由 Canvas 操作、
+滚动、拖动手势和没有稳定 id 的控件仍应保留 pointer/wheel 事件。
 
 ## 列表拖动验收
 

@@ -25,6 +25,7 @@
 #include "render_core/embedded_framebuffer.h"
 #include "render_core/frame_scratch.h"
 #include "render_core/frame_update.h"
+#include "render_core/form_control.h"
 #include "render_core/html_parser.h"
 #include "render_core/input.h"
 #include "render_core/layer_tree.h"
@@ -471,6 +472,10 @@ enum class ScriptedFrameEventKind {
     PointerDown,
     PointerUp,
     Click,
+    ClickId,
+    SetValue,
+    SetChecked,
+    SelectIndex,
     Wheel,
     Escape,
 };
@@ -494,6 +499,9 @@ struct ScriptedFrameEvent {
     float scalar = 0.0f;
     float sensor_y = 0.0f;
     float sensor_z = 0.0f;
+    std::string target_id;
+    std::string text_value;
+    bool boolean_value = false;
     AppWeatherCondition weather_condition = AppWeatherCondition::Unknown;
     ScriptedHostSensorKind sensor_kind = ScriptedHostSensorKind::Accelerometer;
 };
@@ -1499,6 +1507,24 @@ std::string describe_node(const Node* node) {
     return label;
 }
 
+const char* form_control_kind_name(FormControlKind kind) {
+    switch (kind) {
+    case FormControlKind::Button: return "button";
+    case FormControlKind::Text: return "text";
+    case FormControlKind::TextArea: return "textarea";
+    case FormControlKind::Checkbox: return "checkbox";
+    case FormControlKind::Radio: return "radio";
+    case FormControlKind::Range: return "range";
+    case FormControlKind::Select: return "select";
+    case FormControlKind::Date: return "date";
+    case FormControlKind::Time: return "time";
+    case FormControlKind::Color: return "color";
+    case FormControlKind::File: return "file";
+    case FormControlKind::None: break;
+    }
+    return "none";
+}
+
 std::uint8_t clamp_u8(int value) {
     return static_cast<std::uint8_t>(std::max(0, std::min(255, value)));
 }
@@ -2224,6 +2250,66 @@ bool parse_u64_option(const char* option,
     return true;
 }
 
+bool valid_control_id_token(const std::string& value) {
+    if (value.empty() || value.size() > 128) {
+        return false;
+    }
+    return std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+        return std::isalnum(ch) != 0 || ch == '_' || ch == '-';
+    });
+}
+
+int hex_digit_value(char value) {
+    if (value >= '0' && value <= '9') {
+        return value - '0';
+    }
+    if (value >= 'a' && value <= 'f') {
+        return value - 'a' + 10;
+    }
+    if (value >= 'A' && value <= 'F') {
+        return value - 'A' + 10;
+    }
+    return -1;
+}
+
+bool decode_control_value_token(const std::string& encoded, std::string& decoded) {
+    decoded.clear();
+    decoded.reserve(encoded.size());
+    for (std::size_t index = 0; index < encoded.size(); ++index) {
+        if (encoded[index] != '%') {
+            decoded.push_back(encoded[index]);
+            continue;
+        }
+        if (index + 2 >= encoded.size()) {
+            return false;
+        }
+        const int high = hex_digit_value(encoded[index + 1]);
+        const int low = hex_digit_value(encoded[index + 2]);
+        if (high < 0 || low < 0) {
+            return false;
+        }
+        decoded.push_back(static_cast<char>((high << 4) | low));
+        index += 2;
+    }
+    return decoded.size() <= 512;
+}
+
+std::string encode_control_value_token(std::string_view value) {
+    static constexpr char kHex[] = "0123456789ABCDEF";
+    std::string encoded;
+    encoded.reserve(value.size());
+    for (unsigned char ch : value) {
+        if (std::isalnum(ch) != 0 || ch == '-' || ch == '_' || ch == '.' || ch == '~') {
+            encoded.push_back(static_cast<char>(ch));
+            continue;
+        }
+        encoded.push_back('%');
+        encoded.push_back(kHex[(ch >> 4) & 0x0F]);
+        encoded.push_back(kHex[ch & 0x0F]);
+    }
+    return encoded;
+}
+
 std::vector<std::string> split_colon_fields(const std::string& text) {
     std::vector<std::string> fields;
     std::size_t begin = 0;
@@ -2452,6 +2538,38 @@ ParsedFrameEvent parse_frame_event(const std::string& spec) {
         } else {
             parsed.event.kind = ScriptedFrameEventKind::Click;
         }
+    } else if (kind == "click-id") {
+        if (fields.size() != 3 || !valid_control_id_token(fields[2])) {
+            parsed.error = "click-id events require FRAME:click-id:CONTROL_ID with a valid element id";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::ClickId;
+        parsed.event.target_id = fields[2];
+    } else if (kind == "set-value") {
+        if (fields.size() != 4 || !valid_control_id_token(fields[2]) ||
+            !decode_control_value_token(fields[3], parsed.event.text_value)) {
+            parsed.error = "set-value events require FRAME:set-value:CONTROL_ID:URL_ENCODED_VALUE";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::SetValue;
+        parsed.event.target_id = fields[2];
+    } else if (kind == "set-checked") {
+        if (fields.size() != 4 || !valid_control_id_token(fields[2]) ||
+            (fields[3] != "0" && fields[3] != "1")) {
+            parsed.error = "set-checked events require FRAME:set-checked:CONTROL_ID:0|1";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::SetChecked;
+        parsed.event.target_id = fields[2];
+        parsed.event.boolean_value = fields[3] == "1";
+    } else if (kind == "select-index") {
+        if (fields.size() != 4 || !valid_control_id_token(fields[2]) ||
+            !parse_int_token(fields[3], parsed.event.x) || parsed.event.x < 0) {
+            parsed.error = "select-index events require FRAME:select-index:CONTROL_ID:NON_NEGATIVE_INDEX";
+            return parsed;
+        }
+        parsed.event.kind = ScriptedFrameEventKind::SelectIndex;
+        parsed.event.target_id = fields[2];
     } else if (kind == "escape") {
         if (fields.size() != 2) {
             parsed.error = "escape events require FRAME:escape";
@@ -2723,7 +2841,8 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "                                 pointer-up, wheel, escape, network-online/offline,\n"
         << "                                 screen-visible/hidden, low-power-on/off,\n"
         << "                                 time-ms, battery, weather, activity,\n"
-        << "                                 location, sensor.\n"
+        << "                                 location, sensor, click-id, set-value,\n"
+        << "                                 set-checked, select-index.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
         << "  --use-app-fonts                Use package .jffont resources when available.\n"
@@ -2754,7 +2873,10 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "  event FRAME weather TEMP_C_X10 CONDITION\n"
         << "  event FRAME activity STEPS ACTIVE_MINUTES\n"
         << "  event FRAME location LATITUDE LONGITUDE ACCURACY_M\n"
-        << "  event FRAME sensor KIND VALUE [Y Z]\n";
+        << "  event FRAME sensor KIND VALUE [Y Z]\n"
+        << "  event FRAME click-id CONTROL_ID\n"
+        << "  event FRAME set-value CONTROL_ID URL_ENCODED_VALUE\n"
+        << "  event FRAME set-checked CONTROL_ID 0|1 | select-index CONTROL_ID INDEX\n";
 }
 
 const Node* find_first_element(const Node& node, const char* tag_name) {
@@ -3935,6 +4057,61 @@ private:
                 handle_pointer_up(MK_LBUTTON, pointer_lparam(event.x, event.y));
                 scripted_pointer_down_ = false;
                 break;
+            case ScriptedFrameEventKind::ClickId:
+            {
+                if (document_ == nullptr || layout_tree_ == nullptr || input_ == nullptr) {
+                    std::cerr << "semantic event failed: runtime is not ready id=" << event.target_id << '\n';
+                    break;
+                }
+                Node* target = find_node_by_id(*document_, event.target_id);
+                const LayoutBox* box = find_layout_by_id(*layout_tree_, event.target_id);
+                if (target == nullptr || box == nullptr || !is_form_control(*target) ||
+                    box->rect.width <= 0 || box->rect.height <= 0) {
+                    std::cerr << "semantic event failed: control id not found or not visible id=" << event.target_id << '\n';
+                    break;
+                }
+                const int x = box->rect.x + std::max(0, box->rect.width / 2);
+                const int y = box->rect.y - scroll_y_ + std::max(0, box->rect.height / 2);
+                handle_pointer_move(0, pointer_lparam(x, y));
+                handle_pointer_down(0, pointer_lparam(x, y));
+                scripted_pointer_down_ = true;
+                handle_pointer_up(MK_LBUTTON, pointer_lparam(x, y));
+                scripted_pointer_down_ = false;
+                break;
+            }
+            case ScriptedFrameEventKind::SetValue:
+            case ScriptedFrameEventKind::SetChecked:
+            case ScriptedFrameEventKind::SelectIndex:
+            {
+                if (document_ == nullptr || input_ == nullptr) {
+                    std::cerr << "semantic event failed: runtime is not ready id=" << event.target_id << '\n';
+                    break;
+                }
+                Node* target = find_node_by_id(*document_, event.target_id);
+                bool changed = false;
+                bool satisfied = false;
+                if (target != nullptr) {
+                    if (event.kind == ScriptedFrameEventKind::SetValue) {
+                        changed = input_->set_control_value(*target, event.text_value);
+                        satisfied = form_control_value(*target) == event.text_value;
+                    } else if (event.kind == ScriptedFrameEventKind::SetChecked) {
+                        changed = input_->set_control_checked(*target, event.boolean_value);
+                        satisfied = form_control_checked(*target) == event.boolean_value;
+                    } else {
+                        changed = input_->set_control_selected_index(*target, event.x);
+                        satisfied = form_control_selected_index(*target) == event.x;
+                    }
+                }
+                if (!changed && !satisfied) {
+                    std::cerr << "semantic event failed: control state could not be applied id=" << event.target_id << '\n';
+                    break;
+                }
+                if (changed) {
+                    rerender_if_dirty(input_->focused_node());
+                }
+                log_control_state(target);
+                break;
+            }
             case ScriptedFrameEventKind::Wheel:
             {
                 POINT screen_point{event.x, event.y};
@@ -4893,8 +5070,17 @@ private:
                 });
             } else {
                 document_->add_event_listener("click", [this](Event& event) {
-                    std::cout << "click target=" << describe_node(event.target()) << '\n';
-                    set_title("clicked " + describe_node(event.target()));
+                    const Node* control = semantic_control_for_node(event.target());
+                    const Node* logged_target = control != nullptr ? control : event.target();
+                    std::cout << "click target=" << describe_node(logged_target) << '\n';
+                    log_control_state(event.target());
+                    set_title("clicked " + describe_node(logged_target));
+                });
+                document_->add_event_listener("input", [this](Event& event) {
+                    log_control_state(event.target());
+                });
+                document_->add_event_listener("change", [this](Event& event) {
+                    log_control_state(event.target());
                 });
             }
 
@@ -5877,6 +6063,39 @@ private:
         publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
+    }
+
+    Node* find_node_by_id(Node& node, const std::string& id) const {
+        if (node.type == NodeType::Element && node.attribute("id") == id) {
+            return &node;
+        }
+        for (const auto& child : node.children) {
+            if (Node* found = find_node_by_id(*child, id)) {
+                return found;
+            }
+        }
+        return nullptr;
+    }
+
+    const Node* semantic_control_for_node(const Node* node) const {
+        for (const Node* current = node; current != nullptr; current = current->parent) {
+            if (current->type == NodeType::Element && is_form_control(*current)) {
+                return current;
+            }
+        }
+        return nullptr;
+    }
+
+    void log_control_state(const Node* node) const {
+        const Node* control = semantic_control_for_node(node);
+        if (control == nullptr || control->attribute("id").empty()) {
+            return;
+        }
+        std::cout << "control state id=" << control->attribute("id")
+                  << " kind=" << form_control_kind_name(form_control_kind(*control))
+                  << " value=" << encode_control_value_token(form_control_value(*control))
+                  << " checked=" << (form_control_checked(*control) ? 1 : 0)
+                  << " selected=" << form_control_selected_index(*control) << '\n';
     }
 
     const LayoutBox* find_layout_by_id(const LayoutBox& box, const std::string& id) const {

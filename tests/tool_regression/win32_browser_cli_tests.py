@@ -230,6 +230,10 @@ def main() -> int:
     require("event FRAME:kind[:x:y[:delta]]" in help_result.stdout, "--help must document wheel delta")
     require("pointer-up, wheel, escape" in help_result.stdout, "--help must document deterministic Escape")
     require("event FRAME:time-ms:VALUE" in help_result.stdout, "--help must document host time injection")
+    require("event FRAME click-id CONTROL_ID" in help_result.stdout,
+            "--help must document semantic control activation")
+    require("set-value CONTROL_ID URL_ENCODED_VALUE" in help_result.stdout,
+            "--help must document semantic control values")
     require("event FRAME battery PERCENT CHARGING" in help_result.stdout,
             "--help must document host battery injection")
     require("--keep-data" in help_result.stdout, "--help must document app data retention")
@@ -302,6 +306,28 @@ def main() -> int:
                 "scripted pointer drag must produce before/after frames")
         require(before_drag.read_bytes() != after_drag.read_bytes(),
                 "pointer-move between pointer-down/up must update a range control")
+
+        semantic_frames = root / "semantic-frames"
+        semantic_result = run_case(
+            exe,
+            [
+                "--app", str(app),
+                "--capture-frames", str(semantic_frames),
+                "--frame-count", "4",
+                "--frame-event", "1:set-value:drag:80",
+                "--frame-event", "2:set-value:drag:80",
+                "--frame-event", "3:click-id:drag",
+            ],
+        )
+        require(semantic_result.returncode == 0, "semantic control capture must pass")
+        require("semantic event failed" not in semantic_result.stdout,
+                "semantic control capture must resolve the stable control id")
+        before_semantic = semantic_frames / "frame_000.bmp"
+        after_semantic = semantic_frames / "frame_001.bmp"
+        require(before_semantic.is_file() and after_semantic.is_file(),
+                "semantic control capture must produce before/after frames")
+        require(before_semantic.read_bytes() != after_semantic.read_bytes(),
+                "semantic set-value must repaint the control")
 
         vscode_frames = root / "vscode-frames"
         vscode_exit, vscode_stream = run_vscode_debug_case(exe, app, vscode_frames)

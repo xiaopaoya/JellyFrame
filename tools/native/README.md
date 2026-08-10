@@ -68,6 +68,10 @@ event 12 time-ms 1700000000123
 event 14 battery 88 1
 event 16 weather 213 rain
 event 18 activity 6400 32
+event 20 click-id theme-toggle
+event 20 set-checked theme-toggle 1
+event 22 set-value display-name Focus%20mode
+event 24 select-index accent 2
 animation-fps 30
 animation-callbacks 4
 script-watchdog-checks 2048
@@ -81,6 +85,28 @@ builds.
 Use `animation-fps 0` and `animation-callbacks 0` in a frame script, or pass
 `--animation-fps 0 --animation-callbacks 0`, to validate low-power profiles
 where the host must stop nonessential motion without changing app source.
+
+## Semantic Interaction Capture
+
+For stable control regression, prefer the semantic events <code>click-id</code>,
+<code>set-value</code>, <code>set-checked</code> and <code>select-index</code>.
+They resolve a visible form control by its stable HTML <code>id</code>, then use
+the normal input/controller event path. <code>set-value</code> uses percent
+encoding so spaces and punctuation are safe:
+
+~~~text
+event 4 click-id notification-toggle
+event 4 set-checked notification-toggle 1
+event 8 click-id brightness
+event 8 set-value brightness 72
+event 12 select-index color-scheme 1
+~~~
+
+The VS Code embedded debugger can record this form automatically. Give each
+recorded button, input and select a unique ASCII <code>id</code>. The recorder
+deliberately does not generate coordinate events for ordinary control activation
+or range updates. Keep pointer/wheel events for freeform canvas interaction,
+scrolling, drag gestures, or controls without a stable id.
 
 ## List Drag Acceptance
 

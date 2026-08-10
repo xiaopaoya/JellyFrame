@@ -484,6 +484,33 @@ bool InputController::key_down(const KeyInput& input) {
     return false;
 }
 
+bool InputController::set_control_value(Node& node, std::string value) {
+    if (!is_form_control(node) || !set_form_control_value(node, std::move(value))) {
+        return false;
+    }
+    dispatch_simple_event(&node, "input");
+    dispatch_simple_event(&node, "change");
+    return true;
+}
+
+bool InputController::set_control_checked(Node& node, bool checked) {
+    if (!is_form_control(node) || !set_form_control_checked(node, checked)) {
+        return false;
+    }
+    dispatch_simple_event(&node, "input");
+    dispatch_simple_event(&node, "change");
+    return true;
+}
+
+bool InputController::set_control_selected_index(Node& node, int selected_index) {
+    if (!is_form_control(node) || !set_form_control_selected_index(node, selected_index)) {
+        return false;
+    }
+    dispatch_simple_event(&node, "input");
+    dispatch_simple_event(&node, "change");
+    return true;
+}
+
 const Node* InputController::focus_next() {
     const LayoutBox* root = focus_root_box();
     if (root == nullptr) {

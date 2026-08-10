@@ -81,6 +81,11 @@ public:
     const Node* wheel(const WheelInput& input);
     bool text_input(const std::string& utf8_text);
     bool key_down(const KeyInput& input);
+    // Apply a deterministic semantic form action while preserving the same
+    // input/change listener ordering as a user interaction.
+    bool set_control_value(Node& node, std::string value);
+    bool set_control_checked(Node& node, bool checked);
+    bool set_control_selected_index(Node& node, int selected_index);
     const Node* focus_next();
     const Node* focus_previous();
     bool activate_focused();

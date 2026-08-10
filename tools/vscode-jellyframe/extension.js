@@ -432,6 +432,9 @@ async function debugExternalApp(context, resourceUri) {
 
 function embeddedDebugHtml(webview) {
   const nonce = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const chinese = /^zh(?:-|$)/i.test(vscode.env.language || '');
+  const recordIdle = chinese ? '录制' : 'Record';
+  const recordActive = chinese ? '停止录制' : 'Stop recording';
   return `<!doctype html>
 <html>
 <head>
@@ -455,6 +458,7 @@ function embeddedDebugHtml(webview) {
     .workspace-tab.active { color: var(--vscode-foreground); border-bottom: 2px solid var(--vscode-focusBorder); }
     #stage-controls { display: flex; align-items: center; gap: 5px; margin-left: auto; }
     #stage-controls button { min-width: 30px; padding: 0 8px; }
+    #record.recording { color: var(--vscode-button-foreground); background: var(--vscode-testing-iconFailed, #c74e39); }
     #stage-content { flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
     #frame { display: block; flex: none; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
@@ -490,16 +494,19 @@ function embeddedDebugHtml(webview) {
 </head>
 <body>
   <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
-  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
+  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
   <div id="bottom-resizer" class="resizer" role="separator" aria-label="Resize session diagnostics"></div>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const recordIdle = '${recordIdle}';
+    const recordActive = '${recordActive}';
     const frame = document.getElementById('frame');
     const empty = document.getElementById('empty');
     const stage = document.getElementById('stage-content');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
+    const record = document.getElementById('record');
     const clearLog = document.getElementById('clear-log');
     const log = document.getElementById('log');
     const diagnostics = document.getElementById('diagnostics-text');
@@ -518,6 +525,7 @@ function embeddedDebugHtml(webview) {
     let pendingMove = null;
     let logLines = [];
     let logFilter = 'all';
+    let recording = false;
     let fitMode = viewState.fitMode !== false;
     let manualZoom = Math.max(0.25, Math.min(4, Number(viewState.manualZoom) || 1));
     function persistViewState() {
@@ -627,6 +635,17 @@ function embeddedDebugHtml(webview) {
       renderLog();
       vscode.postMessage({ type: 'clear-log' });
     });
+    record.addEventListener('click', () => {
+      recording = !recording;
+      record.textContent = recording ? recordActive : recordIdle;
+      record.classList.toggle('recording', recording);
+      if (recording) {
+        logFilter = 'event';
+        document.querySelectorAll('.log-filter').forEach((item) => item.classList.toggle('active', item.dataset.filter === 'event'));
+        renderLog();
+      }
+      vscode.postMessage({ type: recording ? 'record-start' : 'record-stop' });
+    });
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
     zoomOut.addEventListener('click', () => setManualZoom(currentScale() / 1.2));
     zoomIn.addEventListener('click', () => setManualZoom(currentScale() * 1.2));
@@ -702,6 +721,10 @@ function embeddedDebugHtml(webview) {
         renderLog();
       } else if (message.type === 'diagnostics') {
         diagnostics.textContent = message.text || '';
+      } else if (message.type === 'record-state') {
+        recording = Boolean(message.recording);
+        record.textContent = recording ? recordActive : recordIdle;
+        record.classList.toggle('recording', recording);
       }
     });
   </script>
@@ -772,6 +795,7 @@ function embeddedDiagnosticsText(session) {
     `Frames: ${session.deliveredFrames} displayed / ${session.announcedFrames} announced · ${session.droppedFrames} superseded · ${session.decodeErrors} read failures`,
     `Latest frame: ${session.lastDeliveredSequence} · ${session.viewport.width}x${session.viewport.height}`,
     `Input: ${session.inputSent} sent · Shell output: ${session.stdoutLines} standard, ${session.stderrLines} error lines`,
+    `Semantic capture: ${session.recording ? 'Recording' : 'Idle'} · ${session.recordingActions.length} actions`,
     `Stop reason: ${session.stopReason || 'None'}`
   ].join('\n');
 }
@@ -804,6 +828,15 @@ function simplifyEmbeddedLogLine(stream, line) {
   if (clickMatch) {
     return { category: 'event', label: 'Event', text: `Click: ${clickMatch[1]}` };
   }
+  const controlStateMatch = text.match(/^control state id=([^ ]+) kind=([^ ]+) value=(.*?) checked=(0|1) selected=(-?\d+)$/i);
+  if (controlStateMatch) {
+    const value = decodeCaptureValue(controlStateMatch[3]) || '(empty)';
+    return {
+      category: 'event',
+      label: 'Control',
+      text: controlStateMatch[2] + '#' + controlStateMatch[1] + ' = ' + value
+    };
+  }
   if (stream === 'lifecycle') {
     return { category: 'system', label: 'System', text };
   }
@@ -816,6 +849,128 @@ function simplifyEmbeddedLogLine(stream, line) {
   return { category: 'info', label: 'Info', text: text.replace(/^\[info\]\s*/i, '') };
 }
 
+function captureFrameFor(session) {
+  const sequence = session.latestAnnouncedSequence || session.announcedFrames || 1;
+  const start = session.recordingStartSequence || sequence;
+  return Math.max(1, sequence - start + 1);
+}
+
+function addRecordingAction(session, action) {
+  const last = session.recordingActions[session.recordingActions.length - 1];
+  const same = last && last.frame === action.frame && last.kind === action.kind &&
+    last.id === action.id && last.value === action.value;
+  if (!same) {
+    session.recordingActions.push(action);
+  }
+}
+
+function replacePendingControlAction(session, pending, action) {
+  for (let index = session.recordingActions.length - 1; index >= 0; index -= 1) {
+    const current = session.recordingActions[index];
+    if (current.kind === 'click-id' && current.id === pending.id && current.frame === pending.frame) {
+      break;
+    }
+    if (current.kind === action.kind && current.id === action.id) {
+      session.recordingActions[index] = action;
+      return;
+    }
+  }
+  addRecordingAction(session, action);
+}
+
+function recordSemanticLog(session, text) {
+  if (!session.recording) {
+    return;
+  }
+  const click = String(text).match(/^click target=[^#\s]+#([A-Za-z0-9_-]+)(?:\.|$)/i);
+  if (click) {
+    const frame = captureFrameFor(session);
+    session.recordingPendingClick = { id: click[1], frame };
+    addRecordingAction(session, { frame, kind: 'click-id', id: click[1], value: undefined });
+    return;
+  }
+  if (/^click target=/i.test(String(text))) {
+    session.recordingSkipped += 1;
+    return;
+  }
+  const state = String(text).match(/^control state id=([A-Za-z0-9_-]+) kind=([^ ]+) value=(.*?) checked=(0|1) selected=(-?\d+)$/i);
+  if (!state || !session.recordingPendingClick || state[1] !== session.recordingPendingClick.id) {
+    return;
+  }
+  const pending = session.recordingPendingClick;
+  const kind = state[2].toLowerCase();
+  if (kind === 'checkbox' || kind === 'radio') {
+    replacePendingControlAction(session, pending, { frame: pending.frame, kind: 'set-checked', id: pending.id, value: state[4] });
+  } else if (kind === 'select' && Number(state[5]) >= 0) {
+    replacePendingControlAction(session, pending, { frame: pending.frame, kind: 'select-index', id: pending.id, value: state[5] });
+  } else if (kind !== 'button') {
+    replacePendingControlAction(session, pending, { frame: pending.frame, kind: 'set-value', id: pending.id, value: decodeCaptureValue(state[3]) });
+  }
+}
+
+function encodeCaptureValue(value) {
+  return encodeURIComponent(String(value ?? ''));
+}
+
+function decodeCaptureValue(value) {
+  try {
+    return decodeURIComponent(String(value ?? ''));
+  } catch (_) {
+    return String(value ?? '');
+  }
+}
+
+async function saveEmbeddedRecording(context, session) {
+  if (!session.recordingActions.length) {
+    vscode.window.showInformationMessage('No semantic control actions were recorded.');
+    return;
+  }
+  const chinese = /^zh(?:-|$)/i.test(vscode.env.language || '');
+  const base = outputBase(session.appRoot);
+  const selected = await vscode.window.showSaveDialog({
+    defaultUri: vscode.Uri.file(path.join(session.appRoot, base + '.jfcapture')),
+    filters: { 'JellyFrame captures': ['jfcapture'] },
+    saveLabel: chinese ? '保存录制' : 'Save capture'
+  });
+  if (!selected) {
+    return;
+  }
+  const maxFrame = Math.max(...session.recordingActions.map((action) => action.frame));
+  const frames = Math.max(12, maxFrame + 8);
+  const viewport = session.viewport.width > 1 && session.viewport.height > 1
+    ? session.viewport
+    : { width: 300, height: 300 };
+  const outputBaseName = path.basename(selected.fsPath, path.extname(selected.fsPath)).replace(/[^a-zA-Z0-9_.-]/g, '_') || base;
+  const lines = [
+    '# JellyFrame semantic interaction capture',
+    'output-dir out/' + outputBaseName + '_frames',
+    'montage out/' + outputBaseName + '_montage.bmp',
+    'frames ' + frames,
+    'step-ms 33',
+    'start-ms 1000',
+    'viewport ' + viewport.width + ' ' + viewport.height,
+    'columns 4',
+    'gap 6',
+    '',
+    ...session.recordingActions.map((action) => {
+      const suffix = action.kind === 'set-value' ? ' ' + encodeCaptureValue(action.value) :
+        action.value === undefined ? '' : ' ' + action.value;
+      return 'event ' + action.frame + ' ' + action.kind + ' ' + action.id + suffix;
+    })
+  ];
+  try {
+    await fs.promises.writeFile(selected.fsPath, lines.join('\n') + '\n', 'utf8');
+    vscode.window.showInformationMessage((chinese ? '已保存语义录制: ' : 'Semantic capture saved: ') + selected.fsPath);
+    if (session.recordingSkipped > 0) {
+      vscode.window.showWarningMessage(chinese
+        ? '有 ' + session.recordingSkipped + ' 次点击缺少稳定控件 id，未写入 capture。'
+        : String(session.recordingSkipped) + ' clicks had no stable control id and were not recorded.');
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage((chinese ? '保存录制失败: ' : 'Failed to save capture: ') + error.message);
+  }
+}
+
 function appendEmbeddedLog(session, stream, text) {
   const lines = String(text).split(/\r?\n/).filter((line) => line.length > 0);
   if (lines.length === 0) {
@@ -824,6 +979,7 @@ function appendEmbeddedLog(session, stream, text) {
   session.stdoutLines += stream === 'stdout' ? lines.length : 0;
   session.stderrLines += stream === 'stderr' ? lines.length : 0;
   for (const line of lines) {
+    recordSemanticLog(session, line);
     const entry = simplifyEmbeddedLogLine(stream, line);
     if (entry) {
       session.logLines.push(entry);
@@ -948,6 +1104,11 @@ async function debugApp(context, resourceUri) {
     exitCode: undefined,
     latestAnnouncedSequence: 0,
     lastDeliveredSequence: 0,
+    recording: false,
+    recordingStartSequence: 0,
+    recordingActions: [],
+    recordingPendingClick: undefined,
+    recordingSkipped: 0,
     outputBuffer: '',
     forceStopTimer: undefined
   };
@@ -1006,6 +1167,20 @@ async function debugApp(context, resourceUri) {
     } else if (message?.type === 'clear-log') {
       session.logLines = [];
       postEmbeddedMessage(session, { type: 'clear-log' });
+    } else if (message?.type === 'record-start') {
+      session.recording = true;
+      session.recordingStartSequence = session.latestAnnouncedSequence || session.announcedFrames || 0;
+      session.recordingActions = [];
+      session.recordingPendingClick = undefined;
+      session.recordingSkipped = 0;
+      postEmbeddedMessage(session, { type: 'record-state', recording: true });
+      appendEmbeddedLog(session, 'lifecycle', 'semantic recording started');
+    } else if (message?.type === 'record-stop') {
+      session.recording = false;
+      session.recordingPendingClick = undefined;
+      postEmbeddedMessage(session, { type: 'record-state', recording: false });
+      appendEmbeddedLog(session, 'lifecycle', 'semantic recording stopped');
+      void saveEmbeddedRecording(context, session);
     } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
       if (session.active && !session.stopping && child.stdin?.writable) {
         child.stdin.write(`${message.line}\n`);
