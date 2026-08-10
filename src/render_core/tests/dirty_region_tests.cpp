@@ -187,9 +187,14 @@ void paint_dirty_includes_previous_and_current_shadow_bounds() {
     Node* tile = first_element(*fixture.document, "button");
     check(tile != nullptr, "shadow tile exists");
 
+    clear_dirty_flags(*fixture.document);
     LayerTreeBuilder layer_builder;
     auto previous_layer = layer_builder.build(*fixture.layout_tree);
     tile->set_attribute("class", "tile");
+    check(fixture.document->local_dirty_flags == DomDirtyNone,
+          "descendant change does not directly dirty the document");
+    check(fixture.document->dirty_flags != DomDirtyNone,
+          "descendant change propagates dirty state to the document");
     RenderTreeBuilder render_tree_builder(fixture.resolver);
     auto next_render = render_tree_builder.build(*fixture.document);
     check(apply_render_styles_to_layout(*next_render, *fixture.layout_tree),
