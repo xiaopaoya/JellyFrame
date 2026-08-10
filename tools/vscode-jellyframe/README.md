@@ -80,6 +80,9 @@ pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
 
 The top-level `JellyFrame` menu groups package, debugging and report actions.
+It is contributed to VS Code's main menu bar and does not depend on an open
+editor or workspace file. After installing an updated VSIX, run
+`Developer: Reload Window` once if the old extension instance is still loaded.
 The Explorer context menu is available for `jellyframe.app.json`; the editor
 context menu is available while editing an app HTML, CSS or manifest file.
 These entries use the same commands as the Command Palette, so either entry
