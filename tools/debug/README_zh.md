@@ -10,8 +10,13 @@ python tools\debug\jellyframe_debug.py --list-builds
 python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather
 python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather --capture build\watch_weather.bmp --wait
 python tools\debug\jellyframe_debug.py --app tests\fixtures\apps\jelly_scroll_probe --frame-script tests\fixtures\apps\jelly_scroll_probe\capture_wheel_scroll.jfcapture --wait
+python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather --runtime-log build\watch_weather.debug.log --wait
 python tools\debug\jellyframe_debug.py --build-dir build\Debug -- --help
 ```
 
 该入口只负责启动桌面壳，不实现第二套渲染器，也不代表 MCU 帧率、面板/DMA
 行为或实机字体效果。相关结论必须使用移植侧验收流程。
+
+VS Code 扩展启动桌面调试时会把壳的实时输出显示在 JellyFrame 输出面板，并在壳退出后
+自动生成 debug report。原生壳当前仍是独立窗口；要将它真正嵌入 VS Code，需要后续增加
+Windows parent-HWND/IPC 宿主协议，不能由扩展的 Webview 单独完成。

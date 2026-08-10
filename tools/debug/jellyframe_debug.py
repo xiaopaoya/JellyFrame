@@ -62,6 +62,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--app", type=Path, help="Source package or .jfapp to open.")
     parser.add_argument("--capture", type=Path, help="Capture one frame to BMP/PPM.")
     parser.add_argument("--frame-script", type=Path, help="Run a deterministic frame script.")
+    parser.add_argument("--runtime-log", type=Path,
+                        help="Tee the desktop shell output to this runtime log while --wait is active.")
     parser.add_argument("--list-builds", action="store_true", help="List discovered desktop builds and exit.")
     parser.add_argument("--wait", action="store_true", help="Wait for the shell and return its exit code.")
     parser.add_argument("shell_args", nargs=argparse.REMAINDER,
@@ -94,6 +96,22 @@ def main() -> int:
         extra = extra[1:]
     command.extend(extra)
     print("+ " + " ".join(command), flush=True)
+    if args.runtime_log:
+        args.runtime_log.parent.mkdir(parents=True, exist_ok=True)
+        process = subprocess.Popen(
+            command,
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        with args.runtime_log.open("w", encoding="utf-8") as log:
+            if process.stdout is not None:
+                for line in process.stdout:
+                    print(line, end="", flush=True)
+                    log.write(line)
+        return process.wait()
     if args.wait or not sys.platform.startswith("win"):
         return subprocess.call(command, cwd=REPO_ROOT)
     process = subprocess.Popen(command, cwd=REPO_ROOT)

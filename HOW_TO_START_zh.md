@@ -192,13 +192,14 @@ jellyframe.repoRoot = JellyFrame 仓库根目录
 jellyframe.buildDir = 可选的桌面构建目录
 ```
 
-如果希望生成可从 VS Code 本地安装的文件，在扩展目录运行：
+如果希望打包、安装或更新扩展，在扩展目录运行统一脚本：
 
 ```powershell
-npx @vscode/vsce package
+.\manage-extension.ps1
 ```
 
-随后打开 VS Code 扩展视图的“更多操作”菜单，选择“从 VSIX 安装”，并选中生成的 `.vsix` 文件。
+默认会重新打包并强制更新已安装扩展；也可以使用 `-Action Package`、`-Action Install` 或
+`-Action Update`。手动安装时再打开 VS Code 扩展视图的“更多操作”菜单，选择“从 VSIX 安装”。
 
 ## 8. 运行测试和基准
 
@@ -522,6 +523,24 @@ python tools\jellyframe_cli.py check `
 `check`、`preview` 和 `package` 会把真实管线 diagnostics 写入 JSON report 的
 `pipelineDiagnostics` 字段。severity 为 `error` 的诊断默认失败；希望 warning 在 CI 或发布打包时
 也失败，可以加 `--strict`。
+
+静态检查只处理当前入口页面。需要覆盖复杂 App 的交互路径时，复用桌面验收工具的 `.jfcapture`
+程控脚本：
+
+```powershell
+python tools\jellyframe_cli.py validate `
+  --root samples\apps\packages\watch_weather `
+  --target round-300 `
+  --build-dir build\Release `
+  --report build\watch_weather.scripted-validation.report.json `
+  --frame-script tests\fixtures\apps\jelly_scroll_probe\capture_wheel_scroll.jfcapture `
+  --frame-output-dir build\watch_weather-validation-frames `
+  --frame-montage build\watch_weather-validation-montage.bmp
+```
+
+`preview` 支持同样的 `--frame-script`，输出文件会成为程控回放的蒙太奇；`check` 则会把
+Render Core 静态诊断与程控回放的 runtime metrics 合并到同一份 report。报告中的
+`programmaticValidation` 会列出脚本、运行日志、帧目录和蒙太奇路径。
 
 收集 package 的非 ASCII 字符，供嵌入式 bitmap font pack 使用：
 

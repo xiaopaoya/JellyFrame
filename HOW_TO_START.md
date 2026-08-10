@@ -208,14 +208,16 @@ looks for the desktop build in `build/Release`, then `build/Debug`. When the
 extension is launched from another location, set `jellyframe.repoRoot` to the
 JellyFrame repository root and optionally set `jellyframe.buildDir`.
 
-To create a locally installable VSIX, run this in the extension directory:
+To package, install or update the extension, run the helper script in its directory:
 
 ```powershell
-npx @vscode/vsce package
+.\manage-extension.ps1
 ```
 
-Then open the VS Code Extensions view, choose `...`, select `Install from VSIX...`
-and choose the generated `.vsix` file.
+The default action repackages and force-updates the installed extension. Use
+`-Action Package`, `-Action Install` or `-Action Update` for an explicit action.
+You can still use the VS Code Extensions view, choose `...`, select `Install
+from VSIX...` and choose the generated `.vsix` file.
 
 ## 8. Run Tests And Benchmarks
 
@@ -567,6 +569,25 @@ python tools\jellyframe_cli.py check `
 `check`, `preview` and `package` write real pipeline diagnostics into the JSON
 report as `pipelineDiagnostics`. Diagnostics with severity `error` fail by
 default. Add `--strict` when warnings should fail CI or release packaging too.
+
+Static checks cover the current entry page. For complex apps, reuse the existing
+`.jfcapture` language to drive a deterministic interaction path:
+
+```powershell
+python tools\jellyframe_cli.py validate `
+  --root samples\apps\packages\watch_weather `
+  --target round-300 `
+  --build-dir build\Release `
+  --report build\watch_weather.scripted-validation.report.json `
+  --frame-script tests\fixtures\apps\jelly_scroll_probe\capture_wheel_scroll.jfcapture `
+  --frame-output-dir build\watch_weather-validation-frames `
+  --frame-montage build\watch_weather-validation-montage.bmp
+```
+
+`preview` accepts the same `--frame-script` and uses the montage as its output;
+`check` merges Render Core static diagnostics and scripted runtime metrics into
+one report. The `programmaticValidation` section records the script, runtime log,
+frame directory and montage paths.
 
 Collect the package's non-ASCII characters for an embedded bitmap font pack:
 

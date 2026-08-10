@@ -50,6 +50,17 @@ def run_command(command: list[str]) -> int:
     return subprocess.call(command)
 
 
+def run_command_to_log(command: list[str], log_path: Path) -> int:
+    """Run a desktop command once while preserving its complete diagnostic stream."""
+    print("+ " + " ".join(command), flush=True)
+    completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(completed.stdout or "", encoding="utf-8")
+    if completed.stdout:
+        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
+    return completed.returncode
+
+
 def ensure_tool(path: Path) -> None:
     if not path.is_file():
         raise SystemExit(f"missing tool: {path}")
@@ -202,7 +213,7 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
     return command
 
 
-def cmd_validate(args: argparse.Namespace) -> int:
+def cmd_validate(args: argparse.Namespace, *, run_programmatic: bool = True) -> int:
     result = run_command(package_command(args, True))
     if result == 0:
         report = load_json_if_exists(args.report)
@@ -213,6 +224,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 "scope": "manifest-resources-references-budgets",
             }
             write_json_report(args.report, report, enrich=False)
+    if result == 0 and run_programmatic and getattr(args, "frame_script", None):
+        return run_programmatic_validation(args, args.root, args.report)
     return result
 
 
@@ -2548,7 +2561,7 @@ def run_responsive_profile_checks(args: argparse.Namespace) -> int:
 
 
 def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> int:
-    validate_result = cmd_validate(args)
+    validate_result = cmd_validate(args, run_programmatic=False)
     if validate_result != 0 or getattr(args, "skip_check", False):
         return validate_result
     if include_pipeline:
@@ -2599,24 +2612,106 @@ def cmd_preview(args: argparse.Namespace) -> int:
             return package_result
         merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
         merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
-        command = [
-            str(win32_browser),
-            "--capture",
-            str(args.output),
-            "--app",
-            str(Path(directory) / "package"),
-        ]
-        if width:
-            command.extend(["--viewport-width", str(width)])
-        if height:
-            command.extend(["--viewport-height", str(height)])
-        result = run_command(command)
+        if getattr(args, "frame_script", None):
+            result = run_programmatic_validation(
+                args,
+                Path(directory) / "package",
+                args.report,
+                montage_path=args.output,
+            )
+        else:
+            command = [
+                str(win32_browser),
+                "--capture",
+                str(args.output),
+                "--app",
+                str(Path(directory) / "package"),
+            ]
+            if width:
+                command.extend(["--viewport-width", str(width)])
+            if height:
+                command.extend(["--viewport-height", str(height)])
+            result = run_command(command)
     if result == 0:
-        if getattr(args, "runtime_log", None):
+        if getattr(args, "runtime_log", None) and not getattr(args, "frame_script", None):
             merge_runtime_capture_report(args.report, args.runtime_log)
         if getattr(args, "port_telemetry", None):
             merge_port_telemetry_report(args.report, args.port_telemetry)
         return enforce_diagnostics_policy(args)
+    return result
+
+
+def default_frame_output_dir(report_path: Path) -> Path:
+    return report_path.parent / f"{report_path.stem}-frames"
+
+
+def frame_script_viewport(args: argparse.Namespace) -> tuple[int, int]:
+    target = getattr(args, "target", None)
+    if not target:
+        return 0, 0
+    target_config = effective_target_config(args.root, target)
+    viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
+    return int(viewport.get("width", 0) or 0), int(viewport.get("height", 0) or 0)
+
+
+def merge_programmatic_validation_report(report_path: Path,
+                                         frame_script: Path,
+                                         runtime_log: Path,
+                                         frame_output_dir: Path,
+                                         montage_path: Path,
+                                         status: str) -> None:
+    report = load_json_if_exists(report_path)
+    if not report:
+        report = {"format": "jellyframe.package.report"}
+    report["reportScope"] = "scripted-validation"
+    report["programmaticValidation"] = {
+        "format": "jellyframe.frame-script.validation.v0",
+        "status": status,
+        "frameScript": str(frame_script),
+        "runtimeLog": str(runtime_log),
+        "frameOutputDir": str(frame_output_dir),
+        "montage": str(montage_path),
+    }
+    write_json_report(report_path, report)
+
+
+def run_programmatic_validation(args: argparse.Namespace,
+                                app_root: Path,
+                                report_path: Path,
+                                *,
+                                montage_path: Path | None = None) -> int:
+    frame_script = Path(args.frame_script).resolve()
+    if not frame_script.is_file():
+        raise SystemExit(f"frame script does not exist: {frame_script}")
+    desktop_shell = desktop_shell_path(args.build_dir)
+    ensure_tool(desktop_shell)
+
+    frame_output_dir = getattr(args, "frame_output_dir", None) or default_frame_output_dir(report_path)
+    frame_output_dir = Path(frame_output_dir)
+    montage = montage_path or getattr(args, "frame_montage", None) or frame_output_dir / "montage.bmp"
+    montage = Path(montage)
+    runtime_log = getattr(args, "runtime_log", None) or report_path.with_suffix(".runtime.log")
+    runtime_log = Path(runtime_log)
+    width, height = frame_script_viewport(args)
+    command = [
+        str(desktop_shell),
+        "--app", str(app_root),
+        "--frame-script", str(frame_script),
+        "--capture-frames", str(frame_output_dir),
+        "--capture-montage", str(montage),
+    ]
+    if width:
+        command.extend(["--viewport-width", str(width)])
+    if height:
+        command.extend(["--viewport-height", str(height)])
+    result = run_command_to_log(command, runtime_log)
+    if result == 0:
+        merge_runtime_capture_report(report_path, runtime_log)
+        merge_programmatic_validation_report(
+            report_path, frame_script, runtime_log, frame_output_dir, montage, "passed")
+    else:
+        merge_programmatic_validation_report(
+            report_path, frame_script, runtime_log, frame_output_dir, montage, "failed")
     return result
 
 
@@ -2738,7 +2833,7 @@ def run_font_resource_check(args: argparse.Namespace) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    validate_result = cmd_validate(args)
+    validate_result = cmd_validate(args, run_programmatic=False)
     if validate_result != 0:
         return validate_result
     report = load_json_if_exists(args.report)
@@ -2753,6 +2848,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         font_result = run_font_resource_check(args)
         if font_result != 0:
             return font_result
+    if getattr(args, "frame_script", None):
+        scripted_result = run_programmatic_validation(args, args.root, args.report)
+        if scripted_result != 0:
+            return scripted_result
     if getattr(args, "runtime_log", None):
         merge_runtime_capture_report(args.report, args.runtime_log)
     if getattr(args, "port_telemetry", None):
@@ -3540,6 +3639,16 @@ def add_static_svg_args(parser: argparse.ArgumentParser) -> None:
                         help="Maximum generated SVG BMP dimension in pixels (1..256, default: 32).")
 
 
+def add_frame_script_args(parser: argparse.ArgumentParser, *, include_montage: bool = False) -> None:
+    parser.add_argument("--frame-script", type=Path,
+                        help="Run a deterministic .jfcapture script after static validation.")
+    parser.add_argument("--frame-output-dir", type=Path,
+                        help="Directory for captured frames during --frame-script playback.")
+    if include_montage:
+        parser.add_argument("--frame-montage", type=Path,
+                            help="Optional BMP/PPM montage path for --frame-script playback.")
+
+
 def add_manifest_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, type=Path, help="App package source directory.")
     parser.add_argument("--report", required=True, type=Path, help="Output JSON report path.")
@@ -3598,6 +3707,11 @@ def main() -> int:
 
     validate = subparsers.add_parser("validate", help="Validate a JellyFrame app package.")
     add_manifest_package_args(validate)
+    validate.add_argument("--build-dir", default=default_build_dir(), type=Path,
+                          help="Directory containing the desktop shell for --frame-script.")
+    validate.add_argument("--runtime-log", type=Path,
+                          help="Runtime log path written by --frame-script playback.")
+    add_frame_script_args(validate, include_montage=True)
     validate.set_defaults(func=cmd_validate)
 
     package = subparsers.add_parser("package", help="Generate a resource table and report.")
@@ -3621,6 +3735,7 @@ def main() -> int:
                          help="Optional Win32 frame-script or runtime capture log to merge into the report.")
     preview.add_argument("--port-telemetry", type=Path,
                          help="Optional real-device port telemetry JSON or 'port_telemetry key=value' log.")
+    add_frame_script_args(preview)
     add_static_svg_args(preview)
     add_font_preflight_args(preview)
     add_responsive_args(preview)
@@ -3632,6 +3747,7 @@ def main() -> int:
 
     check = subparsers.add_parser("check", help="Validate package and run pipeline/font preflight.")
     add_common_package_args(check)
+    add_frame_script_args(check, include_montage=True)
     add_font_preflight_args(check)
     add_responsive_args(check)
     check.set_defaults(func=cmd_check)

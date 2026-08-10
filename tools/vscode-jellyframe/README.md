@@ -66,14 +66,15 @@ extension prefers `build/Release`, then `build/Debug`.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 
-`JellyFrame: Validate App Package` is the fast package gate. It checks
+`JellyFrame: Validate App Package` is the fast package gate by default. It checks
 the manifest, entry point, local resources, references and declared budgets without
 starting Render Core or measuring layout, frame time or device performance. Its
-report is intentionally limited to package structure. `JellyFrame: Check App
-Rendering` runs that gate first, then adds target-viewport Render Core preflight,
-responsive layout and font checks; only that report contains pipeline diagnostics
-and rendering-preflight performance data. Use Preview or desktop debugging for
-the actual image and interactive behavior.
+report is intentionally limited to package structure. Choosing programmed playback
+also reuses an existing `.jfcapture` script and records the script, runtime log,
+captured frames and montage. `JellyFrame: Check App Rendering` runs the package
+gate first, then adds target-viewport Render Core preflight, responsive layout and
+font checks; it can also merge a programmed playback into the same report. Use
+Preview or desktop debugging for the actual image and interactive behavior.
 
 The top-level `JellyFrame` menu groups package, debugging and report actions.
 The Explorer context menu is available for `jellyframe.app.json`; the editor

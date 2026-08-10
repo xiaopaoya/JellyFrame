@@ -71,6 +71,9 @@ function runCliWithOptions(context, args, options) {
   const cli = cliPath(context);
   const channel = ensureOutputChannel();
   const commandArgs = [cli, ...args];
+  if (options.reportPath && fs.existsSync(options.reportPath)) {
+    fs.rmSync(options.reportPath, { force: true });
+  }
   channel.appendLine(`+ ${[python, ...commandArgs].join(" ")}`);
   const child = childProcess.spawn(python, commandArgs, {
     cwd: repoRoot(context),
@@ -95,10 +98,10 @@ function runCliWithOptions(context, args, options) {
     if (failedToStart) {
       return;
     }
-    if (code === 0 && options.reportPath) {
+    if (options.reportPath && fs.existsSync(options.reportPath)) {
       loadReport(options.reportPath, options.commandName);
     }
-    if (code === 0 && options.packageRoot && options.reportPath) {
+    if (options.packageRoot && options.reportPath && fs.existsSync(options.reportPath)) {
       updateReportDiagnostics(options.packageRoot);
       showReportPanel(context);
     }
@@ -107,6 +110,9 @@ function runCliWithOptions(context, args, options) {
     }
     if (code !== 0) {
       vscode.window.showErrorMessage(`JellyFrame command failed with code ${code}`);
+    }
+    if (options.onClose) {
+      options.onClose(code);
     }
   });
 }
@@ -152,6 +158,9 @@ function runDetachedPython(context, script, args, options = {}) {
     }
     if (options.capture && code === 0 && config().get("openCaptureAfterRun", true)) {
       openCaptureFile(options.capture);
+    }
+    if (options.onClose) {
+      options.onClose(code);
     }
   });
   if (!options.wait) {
@@ -239,6 +248,37 @@ async function target() {
   });
 }
 
+async function selectFrameScript(root, purpose) {
+  const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  const choice = await vscode.window.showQuickPick([
+    {
+      label: chinese ? "静态" : "Static",
+      description: chinese ? "只检查当前入口页面" : "Inspect the current entry page only",
+      value: "static"
+    },
+    {
+      label: chinese ? "程控回放" : "Programmed playback",
+      description: chinese ? "使用 .jfcapture 驱动交互并生成报告" : "Drive interaction with a .jfcapture script and generate a report",
+      value: "scripted"
+    }
+  ], {
+    placeHolder: purpose,
+    ignoreFocusOut: true
+  });
+  if (!choice || choice.value === "static") {
+    return undefined;
+  }
+  const selected = await vscode.window.showOpenDialog({
+    defaultUri: vscode.Uri.file(root),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters: { "JellyFrame frame scripts": ["jfcapture"] },
+    openLabel: chinese ? "选择程控脚本" : "Select playback script"
+  });
+  return selected && selected[0] ? selected[0].fsPath : undefined;
+}
+
 async function runPackageCommand(context, commandName, resourceUri) {
   const root = await packageRoot(resourceUri);
   if (!root) {
@@ -252,6 +292,27 @@ async function runPackageCommand(context, commandName, resourceUri) {
   const base = outputBase(root);
   const report = path.join(buildDir(context), `vscode-${base}-${commandName}-report.json`);
   const args = [commandName, "--root", root, "--target", selectedTarget, "--report", report];
+  const options = {
+    commandName,
+    packageRoot: root,
+    reportPath: report
+  };
+  if (commandName === "validate") {
+    const frameScript = await selectFrameScript(root, /^zh(?:-|$)/i.test(vscode.env.language || "")
+      ? "选择验证方式"
+      : "Choose validation mode");
+    if (frameScript) {
+      const frameOutputDir = path.join(buildDir(context), "debug", `${base}-validate-frames`);
+      const montage = path.join(buildDir(context), "debug", `${base}-validate-montage.bmp`);
+      args.push(
+        "--build-dir", nativeBuildDir(context),
+        "--frame-script", frameScript,
+        "--frame-output-dir", frameOutputDir,
+        "--frame-montage", montage
+      );
+      options.capture = montage;
+    }
+  }
   if (commandName === "check") {
     args.push("--font-budget", config().get("fontBudget", "16x16"));
   }
@@ -263,11 +324,7 @@ async function runPackageCommand(context, commandName, resourceUri) {
       path.join(buildDir(context), `vscode-${base}.jfdir`)
     );
   }
-  runCliWithOptions(context, args, {
-    commandName,
-    packageRoot: root,
-    reportPath: report
-  });
+  runCliWithOptions(context, args, options);
 }
 
 async function previewPackage(context, resourceUri) {
@@ -279,20 +336,26 @@ async function previewPackage(context, resourceUri) {
   if (!selectedTarget) {
     return;
   }
+  const frameScript = await selectFrameScript(root, /^zh(?:-|$)/i.test(vscode.env.language || "")
+    ? "选择预览方式"
+    : "Choose preview mode");
   ensureBuildDir(context);
   const base = outputBase(root);
   const output = path.join(buildDir(context), `vscode-${base}.bmp`);
   const report = path.join(buildDir(context), `vscode-${base}-preview-report.json`);
-  runCliWithOptions(
-    context,
-    ["preview", "--root", root, "--target", selectedTarget, "--output", output, "--report", report],
-    {
-      commandName: "preview",
-      packageRoot: root,
-      reportPath: report,
-      capture: output
-    }
-  );
+  const args = ["preview", "--root", root, "--target", selectedTarget, "--output", output, "--report", report];
+  if (frameScript) {
+    args.push(
+      "--frame-script", frameScript,
+      "--frame-output-dir", path.join(buildDir(context), "debug", `${outputBase(root)}-preview-frames`)
+    );
+  }
+  runCliWithOptions(context, args, {
+    commandName: "preview",
+    packageRoot: root,
+    reportPath: report,
+    capture: output
+  });
 }
 
 async function debugApp(context, resourceUri) {
@@ -304,16 +367,45 @@ async function debugApp(context, resourceUri) {
   if (!root) {
     return;
   }
+  const selectedTarget = await target();
+  if (!selectedTarget) {
+    return;
+  }
   const launcher = debugLauncherPath(context);
   if (!fs.existsSync(launcher)) {
     vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
     return;
   }
+  ensureBuildDir(context);
+  const base = outputBase(root);
+  const runtimeLog = path.join(buildDir(context), `vscode-${base}-debug-runtime.log`);
+  const report = path.join(buildDir(context), `vscode-${base}-debug-report.json`);
   runDetachedPython(context, launcher, [
     "--build-dir", nativeBuildDir(context),
     "--app", root,
+    "--runtime-log", runtimeLog,
     "--wait"
-  ], { wait: true });
+  ], {
+    wait: true,
+    onClose: (code) => {
+      if (code !== 0) {
+        return;
+      }
+      runCliWithOptions(context, [
+        "check",
+        "--root", root,
+        "--target", selectedTarget,
+        "--build-dir", nativeBuildDir(context),
+        "--report", report,
+        "--runtime-log", runtimeLog,
+        "--font-budget", config().get("fontBudget", "16x16")
+      ], {
+        commandName: "debug",
+        packageRoot: root,
+        reportPath: report
+      });
+    }
+  });
 }
 
 async function runFrameScript(context, resourceUri) {
@@ -336,18 +428,31 @@ async function runFrameScript(context, resourceUri) {
   if (!selected || !selected[0]) {
     return;
   }
+  const selectedTarget = await target();
+  if (!selectedTarget) {
+    return;
+  }
   ensureBuildDir(context);
   const output = path.join(buildDir(context), "debug", `${outputBase(root)}-frames`);
   fs.mkdirSync(output, { recursive: true });
   const capture = path.join(output, "montage.bmp");
-  const launcher = debugLauncherPath(context);
-  runDetachedPython(context, launcher, [
+  const report = path.join(buildDir(context), "debug", `${outputBase(root)}-frame-script-report.json`);
+  runCliWithOptions(context, [
+    "preview",
+    "--root", root,
+    "--target", selectedTarget,
     "--build-dir", nativeBuildDir(context),
-    "--app", root,
+    "--output", capture,
+    "--report", report,
     "--frame-script", selected[0].fsPath,
-    "--wait",
-    "--", "--capture-frames", output, "--capture-montage", capture
-  ], { wait: true, capture });
+    "--frame-output-dir", output,
+    "--font-budget", config().get("fontBudget", "16x16")
+  ], {
+    commandName: "frame-script",
+    packageRoot: root,
+    reportPath: report,
+    capture
+  });
 }
 
 async function openCapture(context) {
@@ -519,6 +624,12 @@ function reportLabels() {
     bytes: "字节",
     packageValid: "包结构有效",
     packageValidationNote: "本报告覆盖包元数据、本地资源、引用和声明的限制；未运行 Render Core，也未测量运行时性能。",
+    programmaticValidation: "程控验证",
+    script: "脚本",
+    status: "状态",
+    runtimeLog: "运行日志",
+    frameOutputDir: "帧目录",
+    montage: "蒙太奇",
     authorAdvice: "作者建议",
     renderingPreflight: "渲染预检",
     rating: "评级",
@@ -562,6 +673,12 @@ function reportLabels() {
     bytes: "Bytes",
     packageValid: "Package structure: valid",
     packageValidationNote: "This report covers package metadata, local resources, references and declared limits. It does not run Render Core or measure runtime performance.",
+    programmaticValidation: "Programmed Validation",
+    script: "Script",
+    status: "Status",
+    runtimeLog: "Runtime log",
+    frameOutputDir: "Frame directory",
+    montage: "Montage",
     authorAdvice: "App Author Advice",
     renderingPreflight: "Rendering Preflight",
     rating: "Rating",
@@ -613,6 +730,7 @@ function reportHtml() {
   const performanceSummary = report?.performanceSummary || {};
   const performanceBottlenecks = performanceSummary?.bottlenecks || [];
   const performanceAdvice = report?.performanceAdvice || [];
+  const programmaticValidation = report?.programmaticValidation;
   const pipeline = report?.pipelineDiagnostics || {};
   const summary = pipeline.summary || {};
   const pipelineStats = pipeline.pipeline || {};
@@ -649,6 +767,9 @@ function reportHtml() {
     <p><strong>${escapeHtml(app.name || app.id || "App")}</strong> <span class="muted">${escapeHtml(app.id || "")}</span></p>
     <p>${escapeHtml(labels.target)}: <code>${escapeHtml(targetConfig.id || "default")}</code> · ${escapeHtml(labels.resources)}: ${resources.length} · ${escapeHtml(labels.bytes)}: ${escapeHtml(report.totalResourceBytes || 0)}</p>
     ${isPackageValidation ? `<p class="info"><strong>${escapeHtml(labels.packageValid)}</strong> · ${escapeHtml(labels.packageValidationNote)}</p>` : ""}
+    ${programmaticValidation ? `<h2>${escapeHtml(labels.programmaticValidation)}</h2>
+      <p>${escapeHtml(labels.status)}: <strong>${escapeHtml(programmaticValidation.status || "unknown")}</strong> · ${escapeHtml(labels.script)}: <code>${escapeHtml(programmaticValidation.frameScript || "")}</code></p>
+      <p class="muted">${escapeHtml(labels.runtimeLog)}: <code>${escapeHtml(programmaticValidation.runtimeLog || "")}</code> · ${escapeHtml(labels.frameOutputDir)}: <code>${escapeHtml(programmaticValidation.frameOutputDir || "")}</code> · ${escapeHtml(labels.montage)}: <code>${escapeHtml(programmaticValidation.montage || "")}</code></p>` : ""}
     ${developerAdvice.length ? `<h2>${escapeHtml(labels.authorAdvice)}</h2>
     ${renderList(developerAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Review item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.recipe ? ` <span class="muted">Recipe: <code>${escapeHtml(advice.recipe)}</code></span>` : ""}${advice.text ? ` <span class="muted">Text: <code>${escapeHtml(advice.text)}</code></span>` : ""}${advice.path ? ` <span class="muted">Path: <code>${escapeHtml(advice.path)}</code></span>` : ""}${advice.node ? ` <span class="muted">Node: <code>${escapeHtml(advice.node)}</code></span>` : ""}${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`, labels.none)}
     ` : ""}
