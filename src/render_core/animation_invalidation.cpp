@@ -50,6 +50,8 @@ int round_transform_offset(float value) {
     return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
 }
 
+constexpr int kMaxAnimatedEffectExtent = 128;
+
 Rect rotated_scaled_bounds(Rect bounds, const Transform2D& transform, int origin_x_percent, int origin_y_percent) {
     const float scaled_width = std::max(1.0F, static_cast<float>(bounds.width) * transform.scale_x);
     const float scaled_height = std::max(1.0F, static_cast<float>(bounds.height) * transform.scale_y);
@@ -125,13 +127,18 @@ const StyleOverride* find_override(const std::vector<StyleOverride>& overrides, 
     return nullptr;
 }
 
-Rect transformed_bounds(Rect bounds, const Style& base_style, const StyleOverride* override) {
+Transform2D resolved_transform(const Style& base_style, const StyleOverride* override) {
     const std::string& transform_source =
         override != nullptr && override->has_transform ? override->transform : base_style.transform;
     Transform2D transform;
     if (!transform_source.empty() && !parse_css_transform_2d(transform_source, transform)) {
         transform = Transform2D{};
     }
+    return transform;
+}
+
+Rect transformed_bounds(Rect bounds, const Style& base_style, const StyleOverride* override) {
+    const Transform2D transform = resolved_transform(base_style, override);
     bounds.x += round_transform_offset(transform.translate_x);
     bounds.y += round_transform_offset(transform.translate_y);
     if (std::abs(transform.scale_x - 1.0F) >= 0.001F ||
@@ -143,6 +150,60 @@ Rect transformed_bounds(Rect bounds, const Style& base_style, const StyleOverrid
                                      base_style.transform_origin_y_percent);
     }
     return bounds;
+}
+
+Rect expand_for_paint_effects(Rect bounds, const Style& style, const Transform2D& transform) {
+    const auto bounded_extent = [](int value) {
+        return std::clamp(value, 0, kMaxAnimatedEffectExtent);
+    };
+    const auto bounded_offset = [](int value) {
+        return std::clamp(value, -kMaxAnimatedEffectExtent, kMaxAnimatedEffectExtent);
+    };
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+    const int scale_extent_x = static_cast<int>(std::ceil(std::clamp(
+        std::abs(transform.scale_x), 1.0F, static_cast<float>(kMaxAnimatedEffectExtent))));
+    const int scale_extent_y = static_cast<int>(std::ceil(std::clamp(
+        std::abs(transform.scale_y), 1.0F, static_cast<float>(kMaxAnimatedEffectExtent))));
+
+    if (style.box_shadow.enabled) {
+        const BoxShadowStyle& shadow = style.box_shadow;
+        const int extent = std::max(1, bounded_extent(static_cast<int>(shadow.blur) +
+            std::max(0, static_cast<int>(shadow.spread))));
+        const int offset_x = bounded_offset(static_cast<int>(shadow.offset_x));
+        const int offset_y = bounded_offset(static_cast<int>(shadow.offset_y));
+        const int shadow_left = (std::min(0, offset_x) - extent) * scale_extent_x;
+        const int shadow_top = (std::min(0, offset_y) - extent) * scale_extent_y;
+        const int shadow_right = (std::max(0, offset_x) + extent) * scale_extent_x;
+        const int shadow_bottom = (std::max(0, offset_y) + extent) * scale_extent_y;
+        left = std::min(left, shadow_left);
+        top = std::min(top, shadow_top);
+        right = std::max(right, shadow_right);
+        bottom = std::max(bottom, shadow_bottom);
+    }
+    if (style.text_shadow.enabled) {
+        const TextShadowStyle& shadow = style.text_shadow;
+        const int extent = std::max(1, bounded_extent(static_cast<int>(shadow.blur)));
+        const int offset_x = bounded_offset(static_cast<int>(shadow.offset_x));
+        const int offset_y = bounded_offset(static_cast<int>(shadow.offset_y));
+        left = std::min(left, (std::min(0, offset_x) - extent) * scale_extent_x);
+        top = std::min(top, (std::min(0, offset_y) - extent) * scale_extent_y);
+        right = std::max(right, (std::max(0, offset_x) + extent) * scale_extent_x);
+        bottom = std::max(bottom, (std::max(0, offset_y) + extent) * scale_extent_y);
+    }
+    const int outline_extent = std::min(kMaxAnimatedEffectExtent,
+                                        bounded_extent(style.outline_width) +
+                                            bounded_extent(std::abs(style.outline_offset)));
+    left = std::min(left, -outline_extent);
+    top = std::min(top, -outline_extent);
+    right = std::max(right, outline_extent);
+    bottom = std::max(bottom, outline_extent);
+    return Rect{safe_edge(bounds.x, left),
+                safe_edge(bounds.y, top),
+                safe_add(bounds.width, safe_add(-left, right)),
+                safe_add(bounds.height, safe_add(-top, bottom))};
 }
 
 bool override_affects_paint(const StyleOverride& override) {
@@ -178,8 +239,14 @@ void collect_animation_rects_iterative(const LayoutBox& box,
             if ((previous != nullptr && override_affects_paint(*previous)) ||
                 (current != nullptr && override_affects_paint(*current))) {
                 const Rect base_bounds = subtree_bounds(current_box, pending_boxes);
-                Rect dirty = transformed_bounds(base_bounds, current_box.style, previous);
-                dirty = union_rect(dirty, transformed_bounds(base_bounds, current_box.style, current));
+                const Transform2D previous_transform = resolved_transform(current_box.style, previous);
+                const Transform2D current_transform = resolved_transform(current_box.style, current);
+                Rect dirty = expand_for_paint_effects(
+                    transformed_bounds(base_bounds, current_box.style, previous), current_box.style, previous_transform);
+                dirty = union_rect(
+                    dirty,
+                    expand_for_paint_effects(
+                        transformed_bounds(base_bounds, current_box.style, current), current_box.style, current_transform));
                 append_coalesced(result.rects,
                                  expand_rect(dirty, options.expansion_px),
                                  options.viewport,

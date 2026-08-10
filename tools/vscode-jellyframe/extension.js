@@ -443,13 +443,13 @@ function embeddedDebugHtml(webview) {
     button { appearance: none; min-width: 28px; min-height: 26px; border: 1px solid var(--vscode-button-border, transparent); color: var(--vscode-button-foreground); background: var(--vscode-button-background); cursor: pointer; }
     button:hover { background: var(--vscode-button-hoverBackground); }
     #stage { min-height: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; }
-    #frame { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; outline: none; background: #111; }
+    #frame { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
   </style>
 </head>
 <body>
   <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span><button id="stop" title="Stop desktop shell">Stop</button></header>
-  <main id="stage"><span id="empty">Waiting for the first frame...</span><img id="frame" tabindex="0" hidden alt="JellyFrame app frame"></main>
+  <main id="stage"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></main>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const frame = document.getElementById('frame');
@@ -458,6 +458,8 @@ function embeddedDebugHtml(webview) {
     const stop = document.getElementById('stop');
     let viewport = { width: 1, height: 1 };
     let latestSequence = 0;
+    let renderedSequence = 0;
+    let renderToken = 0;
     let moveQueued = false;
     let pendingMove = null;
     function point(event) {
@@ -497,10 +499,24 @@ function embeddedDebugHtml(webview) {
       if (message.type === 'frame' && message.sequence > latestSequence) {
         latestSequence = message.sequence;
         viewport = { width: message.width, height: message.height };
-        frame.src = message.dataUri;
-        frame.hidden = false;
-        empty.hidden = true;
-        status.textContent = 'Frame ' + message.sequence + ' · ' + message.width + 'x' + message.height;
+        const token = ++renderToken;
+        const image = new Image();
+        image.onload = () => {
+          if (token !== renderToken || message.sequence <= renderedSequence) return;
+          frame.width = message.width;
+          frame.height = message.height;
+          const context = frame.getContext('2d', { alpha: false });
+          context.clearRect(0, 0, message.width, message.height);
+          context.drawImage(image, 0, 0, message.width, message.height);
+          renderedSequence = message.sequence;
+          frame.hidden = false;
+          empty.hidden = true;
+          status.textContent = 'Frame ' + message.sequence + ' · ' + message.width + 'x' + message.height;
+        };
+        image.onerror = () => {
+          if (token === renderToken) status.textContent = 'Frame ' + message.sequence + ' failed to decode';
+        };
+        image.src = message.dataUri;
       } else if (message.type === 'status') {
         status.textContent = message.text;
       }

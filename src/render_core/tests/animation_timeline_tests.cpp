@@ -369,6 +369,39 @@ void animation_invalidation_covers_previous_and_current_transform_bounds() {
     check(region.rects.front().height == 20, "dirty rect keeps box height");
 }
 
+void animation_invalidation_covers_transient_paint_effects() {
+    HtmlParser html;
+    CssParser css;
+    auto document = html.parse("<body><div class='box'></div></body>");
+    Node* box_node = find_first_by_class(*document, "box");
+    check(box_node != nullptr, "effect animated node exists");
+    StyleResolver resolver(css.parse(
+        "body { margin: 0; }"
+        ".box { margin-left: 40px; width: 20px; height: 20px; background: #ff0000; "
+        "box-shadow: 0 0 18px rgba(0,0,0,.5); outline: 2px solid #ffffff; }"));
+    RenderTreeBuilder render_builder(resolver);
+    auto render_tree = render_builder.build(*document);
+    LayoutEngine layout(resolver);
+    auto layout_tree = layout.layout(*render_tree, 120);
+
+    StyleOverride previous;
+    previous.node = box_node;
+    previous.has_transform = true;
+    previous.transform = "translate(0px,0px)";
+    StyleOverride current = previous;
+    current.transform = "translate(30px,0px)";
+    const DirtyRegionResult region = compute_animation_dirty_region(
+        *layout_tree,
+        std::vector<StyleOverride>{previous},
+        std::vector<StyleOverride>{current},
+        AnimationInvalidationOptions{Rect{0, 0, 120, 80}, 4, 0});
+
+    check(region.mode == DirtyRegionMode::DirtyRects, "effect animation invalidation produces dirty rects");
+    check(region.rects.size() == 1, "effect animated box stays one dirty rect");
+    check(region.rects.front().x <= 25 && region.rects.front().width >= 80,
+          "dirty rect covers old and new shadow and outline extents");
+}
+
 } // namespace
 
 int main() {
@@ -385,6 +418,7 @@ int main() {
         software_compositor_applies_translate_transform();
         software_compositor_applies_rotate_transform_origin();
         animation_invalidation_covers_previous_and_current_transform_bounds();
+        animation_invalidation_covers_transient_paint_effects();
     } catch (const std::exception& error) {
         std::cerr << "animation timeline test failed: " << error.what() << '\n';
         return 1;
