@@ -639,7 +639,7 @@ async function debugApp(context, resourceUri) {
     }
     setTimeout(() => fs.rm(frameDir, { recursive: true, force: true }, () => {}), 250);
   });
-  panel.onDidReceiveMessage((message) => {
+  panel.webview.onDidReceiveMessage((message) => {
     if (message?.type === 'stop') {
       stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
     } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
