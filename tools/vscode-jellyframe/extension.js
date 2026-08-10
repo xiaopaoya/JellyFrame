@@ -438,42 +438,71 @@ function embeddedDebugHtml(webview) {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <style>
     html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { box-sizing: border-box; margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: 38px minmax(0, 1fr) minmax(170px, 25vh); }
+    body { --sidebar-width: 340px; --diagnostics-height: 290px; box-sizing: border-box; margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-rows: 42px minmax(0, 1fr) 6px var(--diagnostics-height); }
     header { display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; }
     #status { color: var(--vscode-descriptionForeground); flex: 1; }
     button { appearance: none; min-width: 28px; min-height: 26px; border: 1px solid var(--vscode-button-border, transparent); color: var(--vscode-button-foreground); background: var(--vscode-button-background); cursor: pointer; }
     button:hover { background: var(--vscode-button-hoverBackground); }
-    header, #diagnostics { grid-column: 1 / -1; }
-    #stage { min-width: 0; min-height: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; }
-    #frame { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; outline: none; background: #111; image-rendering: auto; }
+    #view-controls { display: flex; align-items: center; gap: 5px; }
+    #view-controls button { min-width: 30px; padding: 0 8px; }
+    #zoom-fit { min-width: 44px !important; }
+    #zoom-label { min-width: 54px; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; text-align: right; }
+    #workspace { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 6px var(--sidebar-width); }
+    #stage { min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
+    #frame { display: block; flex: none; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
+    .resizer { position: relative; z-index: 2; background: transparent; }
+    .resizer:hover, .resizer:active { background: var(--vscode-focusBorder); }
+    #side-resizer { cursor: col-resize; }
+    #bottom-resizer { cursor: row-resize; }
     #log-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--vscode-panel-border); }
     #log-bar, #diagnostics-title { display: flex; align-items: center; gap: 6px; min-height: 34px; box-sizing: border-box; padding: 0 10px; color: var(--vscode-descriptionForeground); font-size: 12px; border-bottom: 1px solid var(--vscode-panel-border); }
     #log-title { flex: 1; }
     #log-bar button { min-width: 42px; min-height: 24px; padding: 0 7px; font-size: 11px; }
-    #log { flex: 1; min-height: 0; margin: 0; padding: 9px 10px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 var(--vscode-editor-font-family, monospace); background: transparent; }
-    #diagnostics { min-height: 0; border-top: 1px solid var(--vscode-panel-border); }
-    #diagnostics-text { height: calc(100% - 34px); box-sizing: border-box; margin: 0; padding: 9px 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 var(--vscode-editor-font-family, monospace); }
+    #log-filters { display: flex; gap: 0; padding: 5px 8px; border-bottom: 1px solid var(--vscode-panel-border); overflow-x: auto; }
+    .log-filter { min-width: auto; min-height: 25px; padding: 0 7px; border-color: transparent; color: var(--vscode-descriptionForeground); background: transparent; font-size: 11px; }
+    .log-filter.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
+    #log { flex: 1; min-height: 0; padding: 8px 10px; overflow: auto; font: 13px/1.45 var(--vscode-editor-font-family, monospace); background: transparent; }
+    .log-entry { display: flex; align-items: flex-start; gap: 7px; padding: 3px 0; word-break: break-word; }
+    .log-kind { flex: 0 0 auto; min-width: 42px; box-sizing: border-box; padding: 1px 4px; border-radius: 2px; color: var(--vscode-descriptionForeground); background: var(--vscode-textBlockQuote-background); font: 10px/1.35 var(--vscode-font-family); text-align: center; text-transform: uppercase; }
+    .log-entry.info .log-kind { color: var(--vscode-terminal-ansiCyan, #75beff); }
+    .log-entry.event .log-kind { color: var(--vscode-terminal-ansiBlue, #75beff); }
+    .log-entry.warning .log-kind { color: var(--vscode-terminal-ansiYellow, #cca700); }
+    .log-entry.error .log-kind { color: var(--vscode-terminal-ansiRed, #f48771); }
+    .log-entry.system .log-kind { color: var(--vscode-terminal-ansiGreen, #89d185); }
+    .log-text { min-width: 0; }
+    #diagnostics { min-height: 0; border-top: 1px solid var(--vscode-panel-border); color: var(--vscode-terminal-ansiGreen, #89d185); }
+    #diagnostics-title { min-height: 38px; color: inherit; font-size: 13px; border-bottom-color: var(--vscode-panel-border); }
+    #diagnostics-text { height: calc(100% - 38px); box-sizing: border-box; margin: 0; padding: 11px 14px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 13px/1.55 var(--vscode-editor-font-family, monospace); }
     @media (max-width: 700px) {
-      body { grid-template-columns: minmax(0, 1fr); grid-template-rows: 38px minmax(200px, 1fr) 190px 170px; }
-      #log-panel { border-left: 0; border-top: 1px solid var(--vscode-panel-border); }
+      body { --sidebar-width: 260px; --diagnostics-height: 250px; }
+      #workspace { grid-template-columns: minmax(0, 1fr) 4px var(--sidebar-width); }
+      #stage { padding: 10px; }
     }
   </style>
 </head>
 <body>
-  <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
-  <main id="stage"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></main>
-  <aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><pre id="log">Waiting for shell output...</pre></aside>
+  <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span><div id="view-controls"><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></header>
+  <section id="workspace"><main id="stage"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
+  <div id="bottom-resizer" class="resizer" role="separator" aria-label="Resize session diagnostics"></div>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const frame = document.getElementById('frame');
     const empty = document.getElementById('empty');
+    const stage = document.getElementById('stage');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
     const clearLog = document.getElementById('clear-log');
     const log = document.getElementById('log');
     const diagnostics = document.getElementById('diagnostics-text');
+    const zoomOut = document.getElementById('zoom-out');
+    const zoomFit = document.getElementById('zoom-fit');
+    const zoomIn = document.getElementById('zoom-in');
+    const zoomLabel = document.getElementById('zoom-label');
+    const sideResizer = document.getElementById('side-resizer');
+    const bottomResizer = document.getElementById('bottom-resizer');
+    const viewState = vscode.getState ? (vscode.getState() || {}) : {};
     let viewport = { width: 1, height: 1 };
     let latestSequence = 0;
     let renderedSequence = 0;
@@ -481,11 +510,73 @@ function embeddedDebugHtml(webview) {
     let moveQueued = false;
     let pendingMove = null;
     let logLines = [];
-    function appendLog(stream, text) {
-      logLines.push('[' + stream + '] ' + text);
+    let logFilter = 'all';
+    let fitMode = viewState.fitMode !== false;
+    let manualZoom = Math.max(0.25, Math.min(4, Number(viewState.manualZoom) || 1));
+    function persistViewState() {
+      vscode.setState?.({
+        sidebarWidth: parseFloat(document.body.style.getPropertyValue('--sidebar-width')) || 340,
+        diagnosticsHeight: parseFloat(document.body.style.getPropertyValue('--diagnostics-height')) || 290,
+        fitMode,
+        manualZoom
+      });
+    }
+    function restoreDimension(variable, value, minimum, maximum) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) document.body.style.setProperty(variable, Math.max(minimum, Math.min(maximum, numeric)) + 'px');
+    }
+    restoreDimension('--sidebar-width', viewState.sidebarWidth, 240, Math.max(260, window.innerWidth * 0.7));
+    restoreDimension('--diagnostics-height', viewState.diagnosticsHeight, 190, Math.max(220, window.innerHeight - 160));
+    function fittedScale() {
+      const availableWidth = Math.max(1, stage.clientWidth - 36);
+      const availableHeight = Math.max(1, stage.clientHeight - 36);
+      return Math.max(0.25, Math.min(4, Math.min(availableWidth / viewport.width, availableHeight / viewport.height)));
+    }
+    function currentScale() {
+      return fitMode ? fittedScale() : manualZoom;
+    }
+    function updateFrameSize() {
+      if (frame.hidden) return;
+      const scale = currentScale();
+      frame.style.width = Math.max(1, Math.round(viewport.width * scale)) + 'px';
+      frame.style.height = Math.max(1, Math.round(viewport.height * scale)) + 'px';
+      zoomLabel.textContent = (fitMode ? 'Fit ' : '') + Math.round(scale * 100) + '%';
+    }
+    function setManualZoom(nextZoom) {
+      fitMode = false;
+      manualZoom = Math.max(0.25, Math.min(4, nextZoom));
+      updateFrameSize();
+      persistViewState();
+    }
+    function renderLog() {
+      const keepPinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12;
+      log.replaceChildren();
+      const visible = logLines.filter((entry) => logFilter === 'all' || entry.category === logFilter);
+      if (visible.length === 0) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'log-entry';
+        placeholder.textContent = logLines.length === 0 ? 'Waiting for shell output...' : 'No matching entries.';
+        log.appendChild(placeholder);
+      } else {
+        for (const entry of visible) {
+          const row = document.createElement('div');
+          row.className = 'log-entry ' + entry.category;
+          const kind = document.createElement('span');
+          kind.className = 'log-kind';
+          kind.textContent = entry.label;
+          const text = document.createElement('span');
+          text.className = 'log-text';
+          text.textContent = entry.text;
+          row.append(kind, text);
+          log.appendChild(row);
+        }
+      }
+      if (keepPinned) log.scrollTop = log.scrollHeight;
+    }
+    function appendLog(entry) {
+      logLines.push(entry);
       if (logLines.length > 200) logLines = logLines.slice(-200);
-      log.textContent = logLines.join('\\n');
-      log.scrollTop = log.scrollHeight;
+      renderLog();
     }
     function point(event) {
       const rect = frame.getBoundingClientRect();
@@ -509,6 +600,12 @@ function embeddedDebugHtml(webview) {
       }
     });
     frame.addEventListener('wheel', (event) => {
+      if (event.ctrlKey) {
+        const step = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+        setManualZoom(currentScale() * step);
+        event.preventDefault();
+        return;
+      }
       const p = point(event);
       const delta = Math.max(-120, Math.min(120, Math.round(-event.deltaY)));
       vscode.postMessage({ type: 'input', line: 'wheel ' + p.x + ' ' + p.y + ' ' + delta });
@@ -520,10 +617,46 @@ function embeddedDebugHtml(webview) {
     });
     clearLog.addEventListener('click', () => {
       logLines = [];
-      log.textContent = '';
+      renderLog();
       vscode.postMessage({ type: 'clear-log' });
     });
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+    zoomOut.addEventListener('click', () => setManualZoom(currentScale() / 1.2));
+    zoomIn.addEventListener('click', () => setManualZoom(currentScale() * 1.2));
+    zoomFit.addEventListener('click', () => { fitMode = true; updateFrameSize(); persistViewState(); });
+    document.querySelectorAll('.log-filter').forEach((button) => button.addEventListener('click', () => {
+      logFilter = button.dataset.filter || 'all';
+      document.querySelectorAll('.log-filter').forEach((item) => item.classList.toggle('active', item === button));
+      renderLog();
+    }));
+    function installResizer(element, variable, minimum, maximum) {
+      element.addEventListener('pointerdown', (startEvent) => {
+        const startValue = parseFloat(getComputedStyle(document.body).getPropertyValue(variable));
+        const startPoint = variable === '--sidebar-width' ? startEvent.clientX : startEvent.clientY;
+        const pointerId = startEvent.pointerId;
+        element.setPointerCapture?.(pointerId);
+        const move = (event) => {
+          const point = variable === '--sidebar-width' ? event.clientX : event.clientY;
+          const value = startValue - (point - startPoint);
+          document.body.style.setProperty(variable, Math.max(minimum, Math.min(maximum(), value)) + 'px');
+          updateFrameSize();
+        };
+        const finish = () => {
+          element.removeEventListener('pointermove', move);
+          element.removeEventListener('pointerup', finish);
+          element.removeEventListener('pointercancel', finish);
+          persistViewState();
+        };
+        element.addEventListener('pointermove', move);
+        element.addEventListener('pointerup', finish);
+        element.addEventListener('pointercancel', finish);
+        startEvent.preventDefault();
+      });
+    }
+    installResizer(sideResizer, '--sidebar-width', 240, () => Math.max(260, window.innerWidth * 0.7));
+    installResizer(bottomResizer, '--diagnostics-height', 190, () => Math.max(220, window.innerHeight - 160));
+    new ResizeObserver(() => updateFrameSize()).observe(stage);
+    renderLog();
     vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', (event) => {
       const message = event.data;
@@ -542,6 +675,7 @@ function embeddedDebugHtml(webview) {
           renderedSequence = message.sequence;
           frame.hidden = false;
           empty.hidden = true;
+          updateFrameSize();
           status.textContent = 'Frame ' + message.sequence + ' · ' + message.width + 'x' + message.height;
         };
         image.onerror = () => {
@@ -551,10 +685,14 @@ function embeddedDebugHtml(webview) {
       } else if (message.type === 'status') {
         status.textContent = message.text;
       } else if (message.type === 'log') {
-        appendLog(message.stream || 'shell', message.text || '');
+        appendLog({
+          category: message.category || 'info',
+          label: message.label || 'Info',
+          text: message.text || ''
+        });
       } else if (message.type === 'clear-log') {
         logLines = [];
-        log.textContent = '';
+        renderLog();
       } else if (message.type === 'diagnostics') {
         diagnostics.textContent = message.text || '';
       }
@@ -642,6 +780,35 @@ function scheduleEmbeddedDiagnostics(session) {
   }, 80);
 }
 
+function simplifyEmbeddedLogLine(stream, line) {
+  const text = String(line).trim();
+  if (!text || text.startsWith('+ ')) {
+    return undefined;
+  }
+  const mediaMatch = text.match(/css::css-media-query-not-matched.*?\((@media .+)\)$/);
+  if (mediaMatch) {
+    return { category: 'info', label: 'CSS', text: `Media query not matched: ${mediaMatch[1]}` };
+  }
+  const diagnosticsMatch = text.match(/^diagnostics:\s*(\d+)/i);
+  if (diagnosticsMatch) {
+    return { category: 'info', label: 'Runtime', text: `Runtime diagnostics: ${diagnosticsMatch[1]}` };
+  }
+  const clickMatch = text.match(/^click target=(.+)$/i);
+  if (clickMatch) {
+    return { category: 'event', label: 'Event', text: `Click: ${clickMatch[1]}` };
+  }
+  if (stream === 'lifecycle') {
+    return { category: 'system', label: 'System', text };
+  }
+  if (stream === 'error' || /\[(?:error|fatal)\]/i.test(text)) {
+    return { category: 'error', label: 'Error', text: text.replace(/^\[(?:error|fatal)\]\s*/i, '') };
+  }
+  if (/\[warning\]/i.test(text)) {
+    return { category: 'warning', label: 'Warning', text: text.replace(/^\[warning\]\s*/i, '') };
+  }
+  return { category: 'info', label: 'Info', text: text.replace(/^\[info\]\s*/i, '') };
+}
+
 function appendEmbeddedLog(session, stream, text) {
   const lines = String(text).split(/\r?\n/).filter((line) => line.length > 0);
   if (lines.length === 0) {
@@ -650,8 +817,13 @@ function appendEmbeddedLog(session, stream, text) {
   session.stdoutLines += stream === 'stdout' ? lines.length : 0;
   session.stderrLines += stream === 'stderr' ? lines.length : 0;
   for (const line of lines) {
-    session.logLines.push({ stream, text: line });
-    postEmbeddedMessage(session, { type: 'log', stream, text: line });
+    const entry = simplifyEmbeddedLogLine(stream, line);
+    if (entry) {
+      session.logLines.push(entry);
+      if (session.webviewReady) {
+        postEmbeddedMessage(session, { type: 'log', ...entry });
+      }
+    }
     ensureOutputChannel().appendLine(`[embedded][${stream}] ${line}`);
   }
   if (session.logLines.length > 200) {
@@ -763,6 +935,7 @@ async function debugApp(context, resourceUri) {
     stdoutLines: 0,
     stderrLines: 0,
     logLines: [],
+    webviewReady: false,
     diagnosticsScheduled: false,
     stopReason: undefined,
     exitCode: undefined,
@@ -816,9 +989,10 @@ async function debugApp(context, resourceUri) {
   });
   panel.webview.onDidReceiveMessage((message) => {
     if (message?.type === 'ready') {
+      session.webviewReady = true;
       postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
       for (const entry of session.logLines) {
-        postEmbeddedMessage(session, { type: 'log', stream: entry.stream, text: entry.text });
+        postEmbeddedMessage(session, { type: 'log', ...entry });
       }
     } else if (message?.type === 'stop') {
       stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
