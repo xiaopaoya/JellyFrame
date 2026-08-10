@@ -7,6 +7,7 @@
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
+#include "render_core/style_repaint.h"
 
 #include <iostream>
 #include <limits>
@@ -174,6 +175,36 @@ void paint_dirty_reuses_layout_and_generates_local_rect() {
 
     check(!rects.empty(), "paint dirty produces rect");
     check(rects.front().width < 240 || rects.front().height < 200, "paint dirty is not full viewport");
+}
+
+void paint_dirty_includes_previous_and_current_shadow_bounds() {
+    auto fixture = build_layout(
+        HtmlParser().parse("<body><button id='tile' class='tile selected'>Daily</button></body>"),
+        ".tile { display: block; width: 90px; height: 35px; margin: 0; "
+        "border: 1px solid #579fa7; border-radius: 17px; background: #123d4c; }"
+        ".tile.selected { box-shadow: 0 2px 6px 0 #04141c; }",
+        240);
+    Node* tile = first_element(*fixture.document, "button");
+    check(tile != nullptr, "shadow tile exists");
+
+    LayerTreeBuilder layer_builder;
+    auto previous_layer = layer_builder.build(*fixture.layout_tree);
+    tile->set_attribute("class", "tile");
+    RenderTreeBuilder render_tree_builder(fixture.resolver);
+    auto next_render = render_tree_builder.build(*fixture.document);
+    check(apply_render_styles_to_layout(*next_render, *fixture.layout_tree),
+          "paint-only shadow change applies to retained layout");
+    auto current_layer = layer_builder.build(*fixture.layout_tree);
+
+    const DirtyRegionOptions options{Rect{0, 0, 240, 120}, 8, 0, previous_layer.get(), current_layer.get()};
+    const DirtyRegionResult region = compute_dirty_region(*fixture.document,
+                                                          fixture.layout_tree.get(),
+                                                          fixture.layout_tree.get(),
+                                                          options);
+    check(region.mode == DirtyRegionMode::DirtyRects && !region.rects.empty(),
+          "shadow change produces local dirty region");
+    check(region.rects.front().height > 35,
+          "shadow dirty region includes the old visual effect outside the border box");
 }
 
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
@@ -640,6 +671,7 @@ int main() {
         text_dirty_generates_local_rect();
         tree_dirty_falls_back_to_full_viewport();
         paint_dirty_reuses_layout_and_generates_local_rect();
+        paint_dirty_includes_previous_and_current_shadow_bounds();
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         transient_overlay_dirty_region_includes_old_and_new_popup();
 #endif

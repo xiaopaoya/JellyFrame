@@ -110,6 +110,21 @@ std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects,
             normalized.end());
         normalized.push_back(dirty);
     }
+    bool merged = true;
+    while (merged) {
+        merged = false;
+        for (std::size_t left = 0; left + 1 < normalized.size() && !merged; ++left) {
+            for (std::size_t right = left + 1; right < normalized.size(); ++right) {
+                if (empty_rect(intersect_rect(normalized[left], normalized[right]))) {
+                    continue;
+                }
+                normalized[left] = union_rect(normalized[left], normalized[right]);
+                normalized.erase(normalized.begin() + static_cast<std::ptrdiff_t>(right));
+                merged = true;
+                break;
+            }
+        }
+    }
     return normalized;
 }
 
@@ -834,12 +849,76 @@ bool root_opaque_fill_covers(const LayerNode& root, Rect clip) {
     return opaque_fill_prefix(root.display_list, clip, 0, 0).covers_clip;
 }
 
-Rect layer_source_bounds(const LayerNode& layer) {
+Rect direct_layer_source_bounds(const LayerNode& layer) {
     Rect bounds = layer.bounds;
     for (const DisplayCommand& command : layer.display_list) {
         bounds = union_rect(bounds, command.rect);
     }
     return bounds;
+}
+
+std::size_t reserve_composite_bounds_entry(SoftwareCompositor::Scratch& scratch) {
+    const std::size_t index = scratch.active_composite_bounds++;
+    if (index == scratch.composite_bounds.size()) {
+        scratch.composite_bounds.push_back({});
+    }
+    SoftwareCompositor::Scratch::CompositeBoundsEntry& entry = scratch.composite_bounds[index];
+    entry.source_bounds = Rect{};
+    entry.visual_bounds = Rect{};
+    entry.children.clear();
+    return index;
+}
+
+void prepare_composite_bounds(const LayerNode& root, SoftwareCompositor::Scratch& scratch) {
+    struct PendingLayer {
+        const LayerNode* layer = nullptr;
+        std::size_t bounds_index = 0;
+        std::size_t next_child = 0;
+    };
+
+    scratch.active_composite_bounds = 0;
+    const std::size_t root_index = reserve_composite_bounds_entry(scratch);
+    std::vector<PendingLayer> pending;
+    pending.push_back(PendingLayer{&root, root_index, 0});
+    while (!pending.empty()) {
+        PendingLayer& current = pending.back();
+        if (current.next_child < current.layer->children.size()) {
+            const LayerNode& child = *current.layer->children[current.next_child++];
+            const std::size_t child_index = reserve_composite_bounds_entry(scratch);
+            scratch.composite_bounds[current.bounds_index].children.push_back(child_index);
+            pending.push_back(PendingLayer{&child, child_index, 0});
+            continue;
+        }
+
+        SoftwareCompositor::Scratch::CompositeBoundsEntry& entry =
+            scratch.composite_bounds[current.bounds_index];
+        Rect source_bounds = direct_layer_source_bounds(*current.layer);
+        for (const std::size_t child_index : entry.children) {
+            source_bounds = union_rect(source_bounds, scratch.composite_bounds[child_index].visual_bounds);
+        }
+        entry.source_bounds = source_bounds;
+
+        Rect transformed_source = source_bounds;
+        transformed_source.x += round_transform_offset(current.layer->transform.translate_x);
+        transformed_source.y += round_transform_offset(current.layer->transform.translate_y);
+        const bool has_scale_or_rotate =
+            std::abs(current.layer->transform.scale_x - 1.0F) >= 0.001F ||
+            std::abs(current.layer->transform.scale_y - 1.0F) >= 0.001F ||
+            std::abs(current.layer->transform.rotate_degrees) >= 0.001F;
+        if (!has_scale_or_rotate) {
+            entry.visual_bounds = transformed_source;
+        } else {
+            Rect transform_reference_bounds = current.layer->bounds;
+            transform_reference_bounds.x += round_transform_offset(current.layer->transform.translate_x);
+            transform_reference_bounds.y += round_transform_offset(current.layer->transform.translate_y);
+            entry.visual_bounds = transformed_destination_rect(transformed_source,
+                                                                transform_reference_bounds,
+                                                                current.layer->transform,
+                                                                current.layer->transform_origin_x_percent,
+                                                                current.layer->transform_origin_y_percent);
+        }
+        pending.pop_back();
+    }
 }
 
 void rasterize_with_opacity(const SoftwareRasterizer& rasterizer,
@@ -1273,6 +1352,8 @@ void SoftwareCompositor::render_into(const LayerNode& root, FrameBuffer& target,
 
 void SoftwareCompositor::Scratch::release() {
     rasterizer.release();
+    std::vector<CompositeBoundsEntry>().swap(composite_bounds);
+    active_composite_bounds = 0;
 }
 
 void SoftwareCompositor::render_into(const LayerNode& root,
@@ -1284,12 +1365,17 @@ void SoftwareCompositor::render_into(const LayerNode& root,
     if (target.width <= 0 || target.height <= 0) {
         return;
     }
+    Scratch local_scratch;
+    Scratch& active_scratch = scratch != nullptr ? *scratch : local_scratch;
+    prepare_composite_bounds(root, active_scratch);
+    const Scratch::CompositeBoundsEntry& root_bounds = active_scratch.composite_bounds.front();
+    SoftwareRasterizerScratch* rasterizer_scratch = &active_scratch.rasterizer;
     if (dirty_rects == nullptr || dirty_rect_count == 0) {
         const Rect full_target = target_rect(target);
         if (!root_opaque_fill_covers(root, full_target)) {
             target.clear(background);
         }
-        composite_layer(root, target, full_target, 0, 0, 1.0F, 0, scratch != nullptr ? &scratch->rasterizer : nullptr);
+        composite_layer(root, root_bounds, target, full_target, 0, 0, 1.0F, 0, rasterizer_scratch, &active_scratch);
         return;
     }
     if (dirty_rect_count == 1) {
@@ -1298,7 +1384,7 @@ void SoftwareCompositor::render_into(const LayerNode& root,
             if (!root_opaque_fill_covers(root, dirty)) {
                 fill_rect(target, dirty, background);
             }
-            composite_layer(root, target, dirty, 0, 0, 1.0F, 0, scratch != nullptr ? &scratch->rasterizer : nullptr);
+            composite_layer(root, root_bounds, target, dirty, 0, 0, 1.0F, 0, rasterizer_scratch, &active_scratch);
         }
         return;
     }
@@ -1308,18 +1394,20 @@ void SoftwareCompositor::render_into(const LayerNode& root,
         if (!root_opaque_fill_covers(root, dirty)) {
             fill_rect(target, dirty, background);
         }
-        composite_layer(root, target, dirty, 0, 0, 1.0F, 0, scratch != nullptr ? &scratch->rasterizer : nullptr);
+        composite_layer(root, root_bounds, target, dirty, 0, 0, 1.0F, 0, rasterizer_scratch, &active_scratch);
     }
 }
 
 void SoftwareCompositor::composite_layer(const LayerNode& layer,
+                                         const Scratch::CompositeBoundsEntry& bounds,
                                          FrameBuffer& target,
                                          Rect clip,
                                          int offset_x,
                                          int offset_y,
                                          float inherited_opacity,
                                          std::size_t active_offscreen_pixels,
-                                         SoftwareRasterizerScratch* scratch) const {
+                                         SoftwareRasterizerScratch* scratch,
+                                         const Scratch* compositor_scratch) const {
     const int transform_x = round_transform_offset(layer.transform.translate_x);
     const int transform_y = round_transform_offset(layer.transform.translate_y);
     const int layer_offset_x = offset_x + transform_x;
@@ -1338,7 +1426,7 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
     const float layer_opacity = inherited_opacity * layer.opacity;
     const bool needs_offscreen = layer.type == LayerType::Composited || layer.opacity < 0.999F;
     if (needs_offscreen) {
-        Rect source_bounds = layer_source_bounds(layer);
+        Rect source_bounds = bounds.source_bounds;
         source_bounds.x += layer_offset_x;
         source_bounds.y += layer_offset_y;
         Rect transform_reference_bounds = layer.bounds;
@@ -1388,9 +1476,11 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                    layer_opacity,
                                    0,
                                    scratch);
-            for (const auto& child : layer.children) {
-                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
-                                active_offscreen_pixels, scratch);
+            for (std::size_t index = 0; index < layer.children.size(); ++index) {
+                composite_layer(*layer.children[index],
+                                compositor_scratch->composite_bounds[bounds.children[index]],
+                                target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
+                                active_offscreen_pixels, scratch, compositor_scratch);
             }
             return;
         }
@@ -1407,9 +1497,11 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                               std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
             rasterize_with_opacity(rasterizer_, layer.display_list, target, layer_clip,
                                    layer_offset_x, layer_offset_y, layer_opacity, 0, scratch);
-            for (const auto& child : layer.children) {
-                composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
-                                active_offscreen_pixels, scratch);
+            for (std::size_t index = 0; index < layer.children.size(); ++index) {
+                composite_layer(*layer.children[index],
+                                compositor_scratch->composite_bounds[bounds.children[index]],
+                                target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
+                                active_offscreen_pixels, scratch, compositor_scratch);
             }
             return;
         }
@@ -1417,9 +1509,11 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         const int child_offset_y = layer_offset_y - offscreen_bounds.y;
         const Rect offscreen_clip{0, 0, offscreen_bounds.width, offscreen_bounds.height};
         rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y, scratch);
-        for (const auto& child : layer.children) {
-            composite_layer(*child, offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F,
-                            active_offscreen_pixels + offscreen_pixels, scratch);
+        for (std::size_t index = 0; index < layer.children.size(); ++index) {
+            composite_layer(*layer.children[index],
+                            compositor_scratch->composite_bounds[bounds.children[index]],
+                            offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F,
+                            active_offscreen_pixels + offscreen_pixels, scratch, compositor_scratch);
         }
         if (has_scale_or_rotate) {
             composite_transformed_buffer(target,
@@ -1451,9 +1545,11 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                            layer_opacity,
                            prefix.first_command,
                            scratch);
-    for (const auto& child : layer.children) {
-        composite_layer(*child, target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
-                        active_offscreen_pixels, scratch);
+    for (std::size_t index = 0; index < layer.children.size(); ++index) {
+        composite_layer(*layer.children[index],
+                        compositor_scratch->composite_bounds[bounds.children[index]],
+                        target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
+                        active_offscreen_pixels, scratch, compositor_scratch);
     }
 }
 

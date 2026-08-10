@@ -206,6 +206,34 @@ void append_dirty_bounds_from_layout(const LayoutBox& layout, std::vector<DirtyN
     }
 }
 
+Rect layer_display_bounds(const LayerNode& layer) {
+    Rect bounds = layer.bounds;
+    for (const DisplayCommand& command : layer.display_list) {
+        bounds = union_rect(bounds, command.rect);
+    }
+    return bounds;
+}
+
+void append_dirty_paint_bounds_from_layer(const LayerNode& root,
+                                          std::vector<DirtyNodeBounds>& output) {
+    std::vector<const LayerNode*> pending;
+    pending.push_back(&root);
+    while (!pending.empty()) {
+        const LayerNode* current = pending.back();
+        pending.pop_back();
+        if (current->box != nullptr && current->box->node != nullptr &&
+            current->box->node->dirty_flags != DomDirtyNone) {
+            // Layout invalidation starts from border-box geometry. Display
+            // commands also carry shadows, outlines and translated generated
+            // content, so retain both old and new command bounds.
+            merge_dirty_bounds(output, current->box->node, layer_display_bounds(*current));
+        }
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
+    }
+}
+
 void append_transient_layer_bounds(const LayerNode& root, std::vector<Rect>& output) {
     std::vector<const LayerNode*> pending;
     pending.push_back(&root);
@@ -529,6 +557,12 @@ void compute_dirty_region_into(const Node& document,
     std::vector<DirtyNodeBounds>& dirty_bounds = active_scratch.node_bounds;
     append_dirty_bounds_from_layout(*previous_layout, dirty_bounds);
     append_dirty_bounds_from_layout(*current_layout, dirty_bounds);
+    if (options.previous_layer_tree != nullptr) {
+        append_dirty_paint_bounds_from_layer(*options.previous_layer_tree, dirty_bounds);
+    }
+    if (options.current_layer_tree != nullptr) {
+        append_dirty_paint_bounds_from_layer(*options.current_layer_tree, dirty_bounds);
+    }
     if (options.previous_layer_tree != nullptr) {
         append_transient_layer_bounds(*options.previous_layer_tree, active_scratch.transient_bounds);
     }

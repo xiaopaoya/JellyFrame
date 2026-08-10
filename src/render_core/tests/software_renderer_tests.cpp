@@ -675,11 +675,12 @@ void dirty_render_skips_contained_dirty_rects() {
     const Rect dirty_rects[] = {
         Rect{0, 0, 50, 30},
         Rect{12, 12, 4, 4},
+        Rect{45, 0, 20, 30},
         Rect{0, 0, 50, 30},
     };
     compositor.render_into(root, frame_buffer, Color{255, 255, 255, 255}, dirty_rects, 3);
 
-    check(counter.calls == 1, "contained and duplicate dirty rects are rendered once");
+    check(counter.calls == 1, "contained, duplicate, and overlapping dirty rects are rendered once");
     check(frame_buffer.pixel(10, 10).r == 0, "normalized dirty rect still paints content");
 }
 
@@ -825,6 +826,35 @@ void compositor_keeps_composited_paint_outside_layout_bounds() {
     check(output.pixel(3, 3).r < 255,
           "composited paint outside the layout box is not clipped by the offscreen surface");
     check(output.pixel(1, 1).r == 255, "expanded offscreen surface remains bounded to painted content");
+}
+
+void compositor_keeps_nested_composited_paint_outside_parent_layout_bounds() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 64, 64};
+
+    auto parent = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    parent->type = LayerType::Composited;
+    parent->opacity = 0.8F;
+    parent->bounds = Rect{30, 30, 10, 10};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->bounds = Rect{34, 34, 6, 6};
+    child->transform.scale_x = 0.75F;
+    child->transform.scale_y = 0.75F;
+    DisplayCommand red = black_fill(Rect{22, 33, 18, 6});
+    red.color = Color{220, 38, 38, 255};
+    child->display_list.push_back(red);
+    parent->children.push_back(std::move(child));
+    root.children.push_back(std::move(parent));
+
+    const FrameBuffer output =
+        SoftwareCompositor().render(root, 64, 64, Color{255, 255, 255, 255});
+    check(output.pixel(27, 35).r < 250 && output.pixel(27, 35).g < 250,
+          "parent compositing bounds include transformed child paint outside the parent layout box");
+    check(output.pixel(20, 35).r == 255,
+          "nested visual bounds remain limited to the transformed child paint");
 }
 
 void compositor_expanded_visual_bounds_keep_border_box_transform_origin() {
@@ -1406,6 +1436,7 @@ int main() {
         compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
         compositor_keeps_composited_paint_outside_layout_bounds();
+        compositor_keeps_nested_composited_paint_outside_parent_layout_bounds();
         compositor_expanded_visual_bounds_keep_border_box_transform_origin();
         compositor_bounds_nested_live_offscreen_pixels();
         compositor_skips_oversized_transformed_layers_instead_of_painting_them_untransformed();

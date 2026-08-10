@@ -124,6 +124,17 @@ public:
     struct Scratch {
         SoftwareRasterizerScratch rasterizer;
 
+        // Retained across frames so nested compositing bounds do not allocate
+        // on every repaint. Entries are addressed by index during recursion.
+        struct CompositeBoundsEntry {
+            Rect source_bounds;
+            Rect visual_bounds;
+            std::vector<std::size_t> children;
+        };
+
+        std::vector<CompositeBoundsEntry> composite_bounds;
+        std::size_t active_composite_bounds = 0;
+
         void release();
     };
 
@@ -147,13 +158,15 @@ private:
     Options options_;
 
     void composite_layer(const LayerNode& layer,
+                         const Scratch::CompositeBoundsEntry& bounds,
                          FrameBuffer& target,
                          Rect clip,
                          int offset_x,
                          int offset_y,
                          float inherited_opacity = 1.0F,
                          std::size_t active_offscreen_pixels = 0,
-                         SoftwareRasterizerScratch* scratch = nullptr) const;
+                         SoftwareRasterizerScratch* scratch = nullptr,
+                         const Scratch* compositor_scratch = nullptr) const;
 };
 
 #ifdef JELLYFRAME_ENABLE_IMAGE_FILE_IO
