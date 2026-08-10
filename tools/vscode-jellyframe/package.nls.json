@@ -12,6 +12,7 @@
   "command.package": "JellyFrame: Generate Resource Package",
   "command.newFromTemplate": "JellyFrame: New App From Template",
   "command.showReport": "JellyFrame: Show Last Report",
+  "command.showOutput": "JellyFrame: View Run Log",
   "menu.label": "JellyFrame",
   "menu.packageLabel": "JellyFrame Package",
   "menu.editorLabel": "JellyFrame App",

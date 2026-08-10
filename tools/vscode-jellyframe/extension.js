@@ -36,7 +36,11 @@ function ensureBuildDir(context) {
 
 function appRequiresScripting(root) {
   try {
-    const manifest = JSON.parse(fs.readFileSync(path.join(root, "jellyframe.app.json"), "utf8"));
+    const manifestPath = packageManifestPath(root);
+    if (!manifestPath) {
+      return false;
+    }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     const mode = manifest?.runtime?.script ?? manifest?.script;
     return typeof mode === "string" && mode !== "" && mode !== "none";
   } catch (_) {
@@ -75,12 +79,18 @@ function debugLauncherPath(context) {
   return path.join(repoRoot(context), "tools", "debug", "jellyframe_debug.py");
 }
 
-function ensureOutputChannel() {
+function ensureOutputChannel(reveal = false) {
   if (!outputChannel) {
     outputChannel = vscode.window.createOutputChannel("JellyFrame");
   }
-  outputChannel.show(true);
+  if (reveal) {
+    outputChannel.show(true);
+  }
   return outputChannel;
+}
+
+function showOutputChannel() {
+  ensureOutputChannel(true);
 }
 
 function runCli(context, args) {
@@ -210,9 +220,14 @@ function findPackageRootFrom(startPath) {
   if (!startPath || !fs.existsSync(startPath)) {
     return undefined;
   }
-  let current = fs.statSync(startPath).isDirectory() ? startPath : path.dirname(startPath);
+  let current;
+  try {
+    current = fs.statSync(startPath).isDirectory() ? startPath : path.dirname(startPath);
+  } catch (_) {
+    return undefined;
+  }
   while (true) {
-    if (fs.existsSync(path.join(current, "jellyframe.app.json"))) {
+    if (isPackageRoot(current)) {
       return current;
     }
     const parent = path.dirname(current);
@@ -221,6 +236,23 @@ function findPackageRootFrom(startPath) {
     }
     current = parent;
   }
+}
+
+function isPackageRoot(root) {
+  return Boolean(packageManifestPath(root));
+}
+
+function packageManifestPath(root) {
+  if (!root) {
+    return undefined;
+  }
+  for (const name of ["jellyframe.app.json", "app.json"]) {
+    const candidate = path.join(root, name);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 function currentPackageRoot() {
@@ -232,9 +264,10 @@ function currentPackageRoot() {
   }
   const workspaceRoot = findPackageRootFrom(workspaceFolderPath());
   if (workspaceRoot) {
+    lastPackageRoot = workspaceRoot;
     return workspaceRoot;
   }
-  return lastPackageRoot && fs.existsSync(path.join(lastPackageRoot, "jellyframe.app.json"))
+  return lastPackageRoot && isPackageRoot(lastPackageRoot)
     ? lastPackageRoot
     : undefined;
 }
@@ -1353,47 +1386,136 @@ class JellyFrameStatusProvider {
     return element;
   }
 
-  getChildren() {
+  getChildren(element) {
+    if (element?.children) {
+      return element.children;
+    }
+
     const root = currentPackageRoot();
-    const app = root ? path.basename(root) : "No package selected";
+    const hasPackage = Boolean(root);
+    const app = hasPackage ? path.basename(root) : "No package selected";
     const build = nativeBuildDir(this.context);
-    const report = lastReport ? "Loaded report" : "No report loaded";
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
     const performance = lastReport?.performanceSummary;
-    const isPackageValidation = lastReportCommand === "validate"
-      || lastReport?.reportScope === "package-validation";
     const hasRenderData = Boolean(lastReport?.pipelineDiagnostics?.format)
       || (Array.isArray(lastReport?.responsiveProfiles) && lastReport.responsiveProfiles.length > 0)
       || Boolean(lastReport?.runtimeMetrics)
       || Boolean(lastReport?.portTelemetry);
-    const diagnostics = pipeline
-      ? `Diagnostics: ${pipeline.error || 0} errors, ${pipeline.warning || 0} warnings`
-      : "Diagnostics: run Check or Preview";
-    const perf = isPackageValidation
-      ? "Performance: not part of package validation"
-      : hasRenderData && performance?.rating
-      ? `Performance: ${performance.rating} (${performance.score || 0})`
-      : performance?.source === "package-preflight-estimate"
-        ? "Performance: static estimate only"
-      : "Performance: not measured";
+    const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+    const labels = chinese ? {
+      currentApp: "当前 App",
+      workflow: "工作流",
+      reports: "报告与日志",
+      environment: "环境",
+      package: "App 包",
+      noPackage: "未识别 App",
+      build: "桌面构建",
+      validate: "验证 App 包结构",
+      check: "检查 App 渲染",
+      preview: "预览 App",
+      debug: "在 VS Code 中调试",
+      debugExternal: "在外部窗口调试",
+      playback: "运行程控回放",
+      create: "从模板新建 App",
+      packageResources: "生成资源包",
+      openReport: "打开最近报告",
+      openCapture: "打开截图或回放文件",
+      showOutput: "查看运行日志",
+      reportReady: "报告已生成",
+      noReport: "尚未生成报告",
+      diagnostics: pipeline
+        ? `${pipeline.error || 0} 个错误，${pipeline.warning || 0} 个警告`
+        : "运行渲染检查后显示",
+      performance: "性能摘要",
+      measured: "已测量",
+      notMeasured: "尚未测量",
+      buildValue: path.basename(build)
+    } : {
+      currentApp: "Current App",
+      workflow: "Workflow",
+      reports: "Reports & Logs",
+      environment: "Environment",
+      package: "App package",
+      noPackage: "No App detected",
+      build: "Desktop build",
+      validate: "Validate App package",
+      check: "Check App rendering",
+      preview: "Preview App",
+      debug: "Debug in VS Code",
+      debugExternal: "Debug in external window",
+      playback: "Run programmed playback",
+      create: "Create App from template",
+      packageResources: "Generate resource package",
+      openReport: "Open latest report",
+      openCapture: "Open capture or playback file",
+      showOutput: "View run log",
+      reportReady: "Report ready",
+      noReport: "No report yet",
+      diagnostics: pipeline
+        ? `${pipeline.error || 0} errors, ${pipeline.warning || 0} warnings`
+        : "Run a render check to populate",
+      performance: "Performance summary",
+      measured: "Measured",
+      notMeasured: "Not measured",
+      buildValue: path.basename(build)
+    };
     return [
-      this.item(`App: ${app}`, root, "jellyframe.debug"),
-      this.item(`Build: ${build}`, build, "jellyframe.listBuilds"),
-      this.item(report, undefined, "jellyframe.showReport"),
-      this.item(diagnostics),
-      this.item(perf),
-      this.item(lastCapturePath ? `Capture: ${path.basename(lastCapturePath)}` : "Capture: open or run a frame script", lastCapturePath, "jellyframe.openCapture")
+      this.group(labels.currentApp, "package", [
+        this.item(hasPackage ? app : labels.noPackage,
+          hasPackage ? labels.package : labels.noPackage, root, "jellyframe.debug", "folder-opened"),
+      ]),
+      this.group(labels.workflow, "rocket", [
+        this.item(labels.validate, "", root, "jellyframe.validate", "check"),
+        this.item(labels.check, "", root, "jellyframe.check", "check-all"),
+        this.item(labels.preview, "", root, "jellyframe.preview", "preview"),
+        this.item(labels.debug, "", root, "jellyframe.debug", "debug-alt"),
+        this.item(labels.debugExternal, "", root, "jellyframe.debugExternal", "external-link"),
+        this.item(labels.playback, "", root, "jellyframe.runFrameScript", "debug-alt"),
+        this.item(labels.create, "", undefined, "jellyframe.newFromTemplate", "new-file"),
+        this.item(labels.packageResources, "", root, "jellyframe.package", "package"),
+      ]),
+      this.group(labels.reports, "report", [
+        this.item(labels.openReport, lastReport ? labels.reportReady : labels.noReport,
+          undefined, "jellyframe.showReport", "output"),
+        this.item(labels.openCapture,
+          lastCapturePath ? path.basename(lastCapturePath) : labels.noReport,
+          lastCapturePath, "jellyframe.openCapture", "open-preview"),
+        this.item(labels.showOutput, "", undefined, "jellyframe.showOutput", "output"),
+        this.item(chinese ? "管线诊断" : "Pipeline diagnostics", labels.diagnostics),
+        this.item(labels.performance, hasRenderData && performance?.rating ? `${labels.measured}: ${performance.rating}` : labels.notMeasured,
+          undefined, undefined, "dashboard"),
+      ]),
+      this.group(labels.environment, "settings-gear", [
+        this.item(labels.build, labels.buildValue, build, "jellyframe.listBuilds", "server-environment"),
+        this.item(chinese ? "脚本运行时" : "Script runtime",
+          appRequiresScripting(root || "") ? (chinese ? "已启用" : "Enabled") : (chinese ? "未启用" : "Not enabled"),
+          undefined, undefined, "symbol-event"),
+      ]),
     ];
   }
 
-  item(label, resource, command) {
+  group(label, icon, children) {
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
+    item.iconPath = new vscode.ThemeIcon(icon);
+    item.children = children;
+    item.contextValue = "jellyframe.group";
+    return item;
+  }
+
+  item(label, description, resource, command, icon) {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-    item.tooltip = resource || label;
+    item.description = description || undefined;
+    item.tooltip = resource || description || label;
+    item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
     if (resource && fs.existsSync(resource)) {
       item.resourceUri = vscode.Uri.file(resource);
     }
     if (command) {
-      item.command = { command, title: label };
+      item.command = {
+        command,
+        title: label,
+        arguments: resource ? [vscode.Uri.file(resource)] : []
+      };
     }
     return item;
   }
@@ -1710,7 +1832,8 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
-    vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context))
+    vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
+    vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel())
   );
 }
 

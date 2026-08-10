@@ -12,6 +12,7 @@
   "command.package": "JellyFrame：生成资源包",
   "command.newFromTemplate": "JellyFrame：从模板新建 App",
   "command.showReport": "JellyFrame：显示最近报告",
+  "command.showOutput": "JellyFrame：查看运行日志",
   "menu.label": "JellyFrame",
   "menu.packageLabel": "JellyFrame 包操作",
   "menu.editorLabel": "JellyFrame App",

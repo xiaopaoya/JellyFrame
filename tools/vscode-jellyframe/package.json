@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -26,7 +26,8 @@
     "onCommand:jellyframe.listBuilds",
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
-    "onCommand:jellyframe.showReport"
+    "onCommand:jellyframe.showReport",
+    "onCommand:jellyframe.showOutput"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -85,6 +86,11 @@
         "command": "jellyframe.showReport",
         "title": "%command.showReport%",
         "icon": "$(output)"
+      },
+      {
+        "command": "jellyframe.showOutput",
+        "title": "%command.showOutput%",
+        "icon": "$(terminal)"
       }
     ],
     "submenus": [
@@ -166,19 +172,23 @@
         {
           "command": "jellyframe.showReport",
           "group": "report@1"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "group": "report@2"
         }
       ],
       "explorer/context": [
         {
           "submenu": "jellyframe.packageActions",
-          "when": "resourceFilename == jellyframe.app.json",
+          "when": "resourceFilename == jellyframe.app.json || resourceFilename == app.json",
           "group": "navigation"
         }
       ],
       "editor/context": [
         {
           "submenu": "jellyframe.editorActions",
-          "when": "resourceExtname == .html || resourceExtname == .css || resourceFilename == jellyframe.app.json",
+          "when": "resourceExtname == .html || resourceExtname == .css || resourceFilename == jellyframe.app.json || resourceFilename == app.json",
           "group": "navigation"
         }
       ],
@@ -210,6 +220,10 @@
         {
           "command": "jellyframe.showReport",
           "group": "report@1"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "group": "report@2"
         }
       ],
       "jellyframe.editorActions": [
@@ -240,6 +254,10 @@
         {
           "command": "jellyframe.showReport",
           "group": "report@1"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "group": "report@2"
         }
       ],
       "view/title": [
@@ -262,6 +280,11 @@
           "command": "jellyframe.listBuilds",
           "when": "view == jellyframe.status",
           "group": "navigation@3"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "when": "view == jellyframe.status",
+          "group": "navigation@4"
         }
       ]
     },
