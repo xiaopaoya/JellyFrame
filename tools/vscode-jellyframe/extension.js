@@ -437,31 +437,53 @@ function embeddedDebugHtml(webview) {
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <style>
-    body { margin: 0; min-height: 100vh; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-rows: auto minmax(0, 1fr); }
+    body { margin: 0; min-height: 100vh; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr) 150px; }
     header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; }
     #status { color: var(--vscode-descriptionForeground); flex: 1; }
     button { appearance: none; min-width: 28px; min-height: 26px; border: 1px solid var(--vscode-button-border, transparent); color: var(--vscode-button-foreground); background: var(--vscode-button-background); cursor: pointer; }
     button:hover { background: var(--vscode-button-hoverBackground); }
-    #stage { min-height: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; }
+    header, #diagnostics { grid-column: 1 / -1; }
+    #stage { min-width: 0; min-height: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; }
     #frame { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
+    #log-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--vscode-panel-border); background: var(--vscode-textCodeBlock-background, #181818); }
+    #log-title, #diagnostics-title { padding: 7px 10px; color: var(--vscode-descriptionForeground); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--vscode-panel-border); }
+    #log { flex: 1; min-height: 0; margin: 0; padding: 8px 10px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 11px/1.4 var(--vscode-editor-font-family, monospace); }
+    #diagnostics { min-height: 0; color: #73d13d; background: color-mix(in srgb, #1e3a1e 24%, var(--vscode-editor-background)); border-top: 1px solid #4e9f38; }
+    #diagnostics-title { color: #73d13d; border-bottom-color: #376d2c; }
+    #diagnostics-text { height: calc(100% - 30px); margin: 0; padding: 7px 10px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 11px/1.35 var(--vscode-editor-font-family, monospace); }
+    @media (max-width: 700px) {
+      body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(240px, 1fr) 180px 150px; }
+      #log-panel { border-left: 0; border-top: 1px solid var(--vscode-panel-border); }
+    }
   </style>
 </head>
 <body>
   <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span><button id="stop" title="Stop desktop shell">Stop</button></header>
   <main id="stage"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></main>
+  <aside id="log-panel"><div id="log-title">Live log</div><pre id="log">Waiting for shell output...</pre></aside>
+  <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const frame = document.getElementById('frame');
     const empty = document.getElementById('empty');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
+    const log = document.getElementById('log');
+    const diagnostics = document.getElementById('diagnostics-text');
     let viewport = { width: 1, height: 1 };
     let latestSequence = 0;
     let renderedSequence = 0;
     let renderToken = 0;
     let moveQueued = false;
     let pendingMove = null;
+    let logLines = [];
+    function appendLog(stream, text) {
+      logLines.push('[' + stream + '] ' + text);
+      if (logLines.length > 200) logLines = logLines.slice(-200);
+      log.textContent = logLines.join('\\n');
+      log.scrollTop = log.scrollHeight;
+    }
     function point(event) {
       const rect = frame.getBoundingClientRect();
       return {
@@ -494,6 +516,7 @@ function embeddedDebugHtml(webview) {
       if (keys[event.key]) { vscode.postMessage({ type: 'input', line: 'key ' + keys[event.key] }); event.preventDefault(); }
     });
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+    vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', (event) => {
       const message = event.data;
       if (message.type === 'frame' && message.sequence > latestSequence) {
@@ -519,6 +542,10 @@ function embeddedDebugHtml(webview) {
         image.src = message.dataUri;
       } else if (message.type === 'status') {
         status.textContent = message.text;
+      } else if (message.type === 'log') {
+        appendLog(message.stream || 'shell', message.text || '');
+      } else if (message.type === 'diagnostics') {
+        diagnostics.textContent = message.text || '';
       }
     });
   </script>
@@ -532,19 +559,23 @@ function stopEmbeddedDebugSession(session, reason) {
   }
   session.exitPromise = new Promise((resolve) => { session.resolveExit = resolve; });
   session.stopping = true;
+  session.stopReason = reason || 'user request';
+  appendEmbeddedLog(session, 'lifecycle', `stop requested: ${session.stopReason}`);
+  scheduleEmbeddedDiagnostics(session);
   try {
-    session.panel.webview.postMessage({ type: 'status', text: reason || 'Stopping desktop shell...' });
+    postEmbeddedMessage(session, { type: 'status', text: session.stopReason });
   } catch (_) {
     // The panel may already be disposing; the process still needs to be stopped.
   }
-  ensureOutputChannel().appendLine(`[embedded] stop requested: ${reason || 'user request'}`);
   if (session.child.stdin?.writable) {
     session.child.stdin.write('quit\n');
     session.child.stdin.end();
   }
   session.forceStopTimer = setTimeout(() => {
     if (!session.exited) {
-      ensureOutputChannel().appendLine(`[embedded] shell did not exit in time; terminating process tree pid=${session.child.pid}`);
+      session.stopReason = `${session.stopReason || 'stop'} · force-terminated after timeout`;
+      appendEmbeddedLog(session, 'lifecycle', `shell did not exit in time; terminating process tree pid=${session.child.pid}`);
+      scheduleEmbeddedDiagnostics(session);
       childProcess.spawn('taskkill', ['/pid', String(session.child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
     }
   }, 2500);
@@ -565,8 +596,65 @@ function parseEmbeddedFrameLine(line) {
   return { sequence, width, height, path: fields[4] };
 }
 
+function postEmbeddedMessage(session, message) {
+  try {
+    session.panel.webview.postMessage(message);
+  } catch (_) {
+    // The panel can be disposing while the child is still draining output.
+  }
+}
+
+function embeddedDiagnosticsText(session) {
+  const elapsed = Math.max(0, Date.now() - session.startedAt);
+  return [
+    `app=${session.appRoot}`,
+    `runtime.script=${session.scriptMode} · profile=${session.buildProfile}`,
+    `python=${session.python}`,
+    `launcher=${session.launcher}`,
+    `build_dir=${session.buildDir}`,
+    `shell=${session.shellPath} · pid=${session.child.pid}`,
+    `frame_dir=${session.frameDir}`,
+    `elapsed_ms=${elapsed} · state=${session.exited ? 'exited' : session.stopping ? 'stopping' : 'running'}`,
+    `frames announced=${session.announcedFrames} delivered=${session.deliveredFrames} dropped=${session.droppedFrames} decode_errors=${session.decodeErrors}`,
+    `last_sequence=${session.lastDeliveredSequence} · last_size=${session.viewport.width}x${session.viewport.height}`,
+    `input_sent=${session.inputSent} · stdout_lines=${session.stdoutLines} · stderr_lines=${session.stderrLines}`,
+    `stop_reason=${session.stopReason || 'none'} · exit_code=${session.exitCode ?? 'pending'}`
+  ].join('\n');
+}
+
+function scheduleEmbeddedDiagnostics(session) {
+  if (session.diagnosticsScheduled) {
+    return;
+  }
+  session.diagnosticsScheduled = true;
+  setTimeout(() => {
+    session.diagnosticsScheduled = false;
+    postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
+  }, 80);
+}
+
+function appendEmbeddedLog(session, stream, text) {
+  const lines = String(text).split(/\r?\n/).filter((line) => line.length > 0);
+  if (lines.length === 0) {
+    return;
+  }
+  session.stdoutLines += stream === 'stdout' ? lines.length : 0;
+  session.stderrLines += stream === 'stderr' ? lines.length : 0;
+  for (const line of lines) {
+    session.logLines.push({ stream, text: line });
+    postEmbeddedMessage(session, { type: 'log', stream, text: line });
+    ensureOutputChannel().appendLine(`[embedded][${stream}] ${line}`);
+  }
+  if (session.logLines.length > 200) {
+    session.logLines = session.logLines.slice(-200);
+  }
+  scheduleEmbeddedDiagnostics(session);
+}
+
 async function deliverEmbeddedFrame(session, frame) {
   if (!session.active || frame.sequence < session.latestAnnouncedSequence) {
+    session.droppedFrames += 1;
+    scheduleEmbeddedDiagnostics(session);
     return;
   }
   try {
@@ -575,15 +663,19 @@ async function deliverEmbeddedFrame(session, frame) {
       return;
     }
     session.lastDeliveredSequence = frame.sequence;
-    session.panel.webview.postMessage({
+    session.deliveredFrames += 1;
+    session.viewport = { width: frame.width, height: frame.height };
+    postEmbeddedMessage(session, {
       type: 'frame',
       sequence: frame.sequence,
       width: frame.width,
       height: frame.height,
       dataUri: `data:image/bmp;base64,${bytes.toString('base64')}`
     });
+    scheduleEmbeddedDiagnostics(session);
   } catch (error) {
-    ensureOutputChannel().appendLine(`[embedded] failed to read frame ${frame.sequence}: ${error.message}`);
+    session.decodeErrors += 1;
+    appendEmbeddedLog(session, 'error', `failed to read frame ${frame.sequence}: ${error.message}`);
   } finally {
     fs.rm(frame.path, { force: true }, () => {});
   }
@@ -619,7 +711,10 @@ async function debugApp(context, resourceUri) {
   );
   panel.webview.html = embeddedDebugHtml(panel.webview);
   const python = config().get('pythonPath', 'python');
-  const args = [launcher, '--build-dir', nativeBuildDir(context, appRequiresScripting(root)), '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  const scriptMode = appRequiresScripting(root) ? 'classic' : 'none';
+  const buildDir = nativeBuildDir(context, scriptMode !== 'none');
+  const shellPath = path.join(buildDir, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell');
+  const args = [launcher, '--build-dir', buildDir, '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
   const channel = ensureOutputChannel();
   channel.appendLine(`+ ${[python, ...args].join(' ')}`);
   const child = childProcess.spawn(python, args, {
@@ -634,13 +729,35 @@ async function debugApp(context, resourceUri) {
     exited: false,
     child,
     panel,
+    appRoot: root,
+    scriptMode,
+    buildProfile: path.basename(path.dirname(buildDir)),
+    python,
+    launcher,
+    buildDir,
+    shellPath,
     frameDir,
+    startedAt: Date.now(),
+    viewport: { width: 1, height: 1 },
+    announcedFrames: 0,
+    deliveredFrames: 0,
+    droppedFrames: 0,
+    decodeErrors: 0,
+    inputSent: 0,
+    stdoutLines: 0,
+    stderrLines: 0,
+    logLines: [],
+    diagnosticsScheduled: false,
+    stopReason: undefined,
+    exitCode: undefined,
     latestAnnouncedSequence: 0,
     lastDeliveredSequence: 0,
     outputBuffer: '',
     forceStopTimer: undefined
   };
   embeddedDebugSession = session;
+  appendEmbeddedLog(session, 'lifecycle', `spawn pid=${child.pid} profile=${session.buildProfile} script=${session.scriptMode}`);
+  postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
   child.stdout.on('data', (chunk) => {
     session.outputBuffer += chunk.toString();
     let newline = 0;
@@ -649,38 +766,51 @@ async function debugApp(context, resourceUri) {
       session.outputBuffer = session.outputBuffer.slice(newline + 1);
       const frame = parseEmbeddedFrameLine(line);
       if (frame) {
+        session.announcedFrames += 1;
+        if (session.latestAnnouncedSequence > 0 && frame.sequence > session.latestAnnouncedSequence + 1) {
+          session.droppedFrames += frame.sequence - session.latestAnnouncedSequence - 1;
+        }
         session.latestAnnouncedSequence = Math.max(session.latestAnnouncedSequence, frame.sequence);
         void deliverEmbeddedFrame(session, frame);
       } else if (line) {
-        channel.appendLine(`[embedded] ${line}`);
+        appendEmbeddedLog(session, 'stdout', line);
       }
     }
   });
-  child.stderr.on('data', (chunk) => channel.append(`[embedded] ${chunk.toString()}`));
+  child.stderr.on('data', (chunk) => appendEmbeddedLog(session, 'stderr', chunk.toString()));
   child.on('error', (error) => {
-    channel.appendLine(`[embedded] failed to start: ${error.message}`);
-    panel.webview.postMessage({ type: 'status', text: `Failed to start: ${error.message}` });
+    appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
+    postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
   });
   child.on('close', (code) => {
     session.exited = true;
     session.active = false;
+    session.exitCode = code;
     if (session.forceStopTimer) {
       clearTimeout(session.forceStopTimer);
     }
     session.resolveExit?.();
-    channel.appendLine(`[embedded] shell exited with code ${code}`);
-    panel.webview.postMessage({ type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
+    appendEmbeddedLog(session, 'lifecycle', `shell exited with code ${code ?? 'unknown'}`);
+    postEmbeddedMessage(session, { type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
+    scheduleEmbeddedDiagnostics(session);
     if (embeddedDebugSession === session) {
       embeddedDebugSession = undefined;
     }
     setTimeout(() => fs.rm(frameDir, { recursive: true, force: true }, () => {}), 250);
   });
   panel.webview.onDidReceiveMessage((message) => {
-    if (message?.type === 'stop') {
+    if (message?.type === 'ready') {
+      postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
+      for (const entry of session.logLines) {
+        postEmbeddedMessage(session, { type: 'log', stream: entry.stream, text: entry.text });
+      }
+    } else if (message?.type === 'stop') {
       stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
     } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
-      if (session.active && !session.stopping && child.stdin.writable) {
+      if (session.active && !session.stopping && child.stdin?.writable) {
         child.stdin.write(`${message.line}\n`);
+        session.inputSent += 1;
+        scheduleEmbeddedDiagnostics(session);
       }
     }
   }, undefined, context.subscriptions);
