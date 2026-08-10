@@ -699,6 +699,7 @@ async function debugApp(context, resourceUri) {
     const previous = embeddedDebugSession;
     await stopEmbeddedDebugSession(previous, 'Replacing the previous debug session...');
   }
+  const nativeBuildDirectory = nativeBuildDir(context, appRequiresScripting(root));
   ensureBuildDir(context);
   const sessionRoot = path.join(buildDir(context), 'debug', 'vscode-sessions');
   fs.mkdirSync(sessionRoot, { recursive: true });
@@ -712,9 +713,8 @@ async function debugApp(context, resourceUri) {
   panel.webview.html = embeddedDebugHtml(panel.webview);
   const python = config().get('pythonPath', 'python');
   const scriptMode = appRequiresScripting(root) ? 'classic' : 'none';
-  const buildDir = nativeBuildDir(context, scriptMode !== 'none');
-  const shellPath = path.join(buildDir, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell');
-  const args = [launcher, '--build-dir', buildDir, '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  const shellPath = path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell');
+  const args = [launcher, '--build-dir', nativeBuildDirectory, '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
   const channel = ensureOutputChannel();
   channel.appendLine(`+ ${[python, ...args].join(' ')}`);
   const child = childProcess.spawn(python, args, {
@@ -731,10 +731,10 @@ async function debugApp(context, resourceUri) {
     panel,
     appRoot: root,
     scriptMode,
-    buildProfile: path.basename(path.dirname(buildDir)),
+    buildProfile: path.basename(path.dirname(nativeBuildDirectory)),
     python,
     launcher,
-    buildDir,
+    buildDir: nativeBuildDirectory,
     shellPath,
     frameDir,
     startedAt: Date.now(),
