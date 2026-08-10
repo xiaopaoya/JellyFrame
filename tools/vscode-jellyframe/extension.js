@@ -438,7 +438,7 @@ function embeddedDebugHtml(webview) {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <style>
     html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { --sidebar-width: 340px; --diagnostics-height: 290px; box-sizing: border-box; margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-rows: 42px minmax(0, 1fr) 6px var(--diagnostics-height); }
+    body { --sidebar-width: 340px; --diagnostics-height: 290px; --diagnostics-green: #8fd694; box-sizing: border-box; margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-rows: 42px minmax(0, 1fr) 6px var(--diagnostics-height); }
     header { display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; }
     #status { color: var(--vscode-descriptionForeground); flex: 1; }
     button { appearance: none; min-width: 28px; min-height: 26px; border: 1px solid var(--vscode-button-border, transparent); color: var(--vscode-button-foreground); background: var(--vscode-button-background); cursor: pointer; }
@@ -448,7 +448,13 @@ function embeddedDebugHtml(webview) {
     #zoom-fit { min-width: 44px !important; }
     #zoom-label { min-width: 54px; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; text-align: right; }
     #workspace { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 6px var(--sidebar-width); }
-    #stage { min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
+    #stage { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    #stage-bar { display: flex; align-items: center; gap: 8px; min-height: 34px; box-sizing: border-box; padding: 0 10px; border-bottom: 1px solid var(--vscode-panel-border); }
+    .workspace-tab { min-height: 26px; padding: 0 9px; border-color: transparent; color: var(--vscode-descriptionForeground); background: transparent; font-size: 12px; }
+    .workspace-tab.active { color: var(--vscode-foreground); border-bottom: 2px solid var(--vscode-focusBorder); }
+    #stage-controls { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+    #stage-controls button { min-width: 30px; padding: 0 8px; }
+    #stage-content { flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
     #frame { display: block; flex: none; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
     .resizer { position: relative; z-index: 2; background: transparent; }
@@ -471,26 +477,26 @@ function embeddedDebugHtml(webview) {
     .log-entry.error .log-kind { color: var(--vscode-terminal-ansiRed, #f48771); }
     .log-entry.system .log-kind { color: var(--vscode-terminal-ansiGreen, #89d185); }
     .log-text { min-width: 0; }
-    #diagnostics { min-height: 0; border-top: 1px solid var(--vscode-panel-border); color: var(--vscode-terminal-ansiGreen, #89d185); }
-    #diagnostics-title { min-height: 38px; color: inherit; font-size: 13px; border-bottom-color: var(--vscode-panel-border); }
+    #diagnostics { min-height: 0; border-top: 1px solid var(--vscode-panel-border); color: var(--diagnostics-green); }
+    #diagnostics-title { min-height: 38px; color: var(--diagnostics-green); font-size: 13px; border-bottom-color: var(--vscode-panel-border); }
     #diagnostics-text { height: calc(100% - 38px); box-sizing: border-box; margin: 0; padding: 11px 14px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 13px/1.55 var(--vscode-editor-font-family, monospace); }
     @media (max-width: 700px) {
       body { --sidebar-width: 260px; --diagnostics-height: 250px; }
       #workspace { grid-template-columns: minmax(0, 1fr) 4px var(--sidebar-width); }
-      #stage { padding: 10px; }
+      #stage-content { padding: 10px; }
     }
   </style>
 </head>
 <body>
-  <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span><div id="view-controls"><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></header>
-  <section id="workspace"><main id="stage"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
+  <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
+  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
   <div id="bottom-resizer" class="resizer" role="separator" aria-label="Resize session diagnostics"></div>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const frame = document.getElementById('frame');
     const empty = document.getElementById('empty');
-    const stage = document.getElementById('stage');
+    const stage = document.getElementById('stage-content');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
     const clearLog = document.getElementById('clear-log');
