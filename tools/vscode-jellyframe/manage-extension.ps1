@@ -43,7 +43,7 @@ function Resolve-Vsce {
     if (Test-Path -LiteralPath $localVsce -PathType Leaf) {
         return [pscustomobject]@{
             File = $localVsce
-            Arguments = @("package", "--out", $vsixPath)
+            Arguments = @("package", "--no-dependencies", "--out", $vsixPath)
         }
     }
 
@@ -51,14 +51,14 @@ function Resolve-Vsce {
         if (Get-Command $PnpmCommand -ErrorAction SilentlyContinue) {
             return [pscustomobject]@{
                 File = $PnpmCommand
-                Arguments = @("dlx", "--package", "@vscode/vsce", "vsce", "package", "--out", $vsixPath)
+                Arguments = @("dlx", "--package", "@vscode/vsce", "vsce", "package", "--no-dependencies", "--out", $vsixPath)
             }
         }
         throw "Neither a local vsce, '$NpxCommand' or '$PnpmCommand' was found. Install Node.js/npm or run: npm install --save-dev @vscode/vsce"
     }
     return [pscustomobject]@{
         File = $NpxCommand
-        Arguments = @("--yes", "@vscode/vsce", "package", "--out", $vsixPath)
+        Arguments = @("--yes", "@vscode/vsce", "package", "--no-dependencies", "--out", $vsixPath)
     }
 }
 

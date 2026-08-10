@@ -6,6 +6,7 @@ out/
 *.suo
 *.pdb
 *.ilk
+*.vsix
 __pycache__/
 *.pyc
 jerryscript-master.zip
