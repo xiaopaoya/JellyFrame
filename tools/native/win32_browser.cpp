@@ -5621,6 +5621,17 @@ private:
                                       dirty_region,
                                       &frame_scratch_.dirty_region_scratch);
         }
+        if (can_repaint_incrementally &&
+            (!previous_style_overrides_.empty() || !style_overrides_.empty())) {
+            DirtyRegionResult animation_dirty_region;
+            compute_animation_dirty_region_into(
+                *next_layout_tree,
+                previous_style_overrides_,
+                style_overrides_,
+                AnimationInvalidationOptions{Rect{0, 0, viewport_width_, content_height}, budgets_.max_dirty_rects, 3},
+                animation_dirty_region);
+            merge_dirty_region(dirty_region, animation_dirty_region, budgets_.max_dirty_rects);
+        }
         const std::vector<Rect>& dirty_rects = dirty_region.rects;
 
         render_tree_ = std::move(next_render_tree);
