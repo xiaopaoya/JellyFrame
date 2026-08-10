@@ -9,8 +9,8 @@ JellyFrame menu, focused context menus and the Command Palette as entry points.
 ## Features
 
 - JSON schema association for `jellyframe.app.json`.
-- Command palette actions for package-structure validation, render preflight, preview, desktop-shell debugging,
-  frame-script playback, capture opening and package generation.
+- Command palette actions for package-structure validation, render preflight, preview, embedded VS Code debugging,
+  external-window debugging, frame-script playback, capture opening and package generation.
 - App creation from the built-in weather, clock, timer and calculator templates.
 - CLI output in a dedicated `JellyFrame` output channel.
 - A `JellyFrame Report` webview that puts CLI `developerAdvice[]` first, then
@@ -82,8 +82,16 @@ context menu is available while editing an app HTML, CSS or manifest file.
 These entries use the same commands as the Command Palette, so either entry
 point produces the same report and output-channel behavior.
 
-Use `JellyFrame: Debug App In Desktop Shell` for interactive app debugging and
-`JellyFrame: Run Frame Script` for deterministic playback. `JellyFrame: Open
+`JellyFrame: Debug App In VS Code` opens an editor tab backed by an isolated,
+hidden desktop-shell session. It delivers complete viewport snapshots with
+strictly increasing sequence numbers and forwards pointer, drag, wheel and
+common-key input only to that session. Both Stop and closing the tab request a
+clean shell exit; the extension terminates the debug process tree after a short
+grace period if needed. It does not share a framebuffer, capture path or process
+with external-window debugging. Use `JellyFrame: Debug App In External Window`
+when native-window behavior itself is relevant.
+
+Use `JellyFrame: Run Frame Script` for deterministic playback. `JellyFrame: Open
 Capture` opens the last or a selected BMP/PPM capture. `JellyFrame: Preview
 Package` runs package preflight, writes a separate JSON report and automatically
 opens the generated capture. Validation, checking and preview reports are kept

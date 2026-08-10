@@ -17,6 +17,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Reintroduced VS Code embedded debugging through an isolated desktop-shell
+  frame-stream session. Each published viewport snapshot has a strictly
+  increasing sequence number and a complete per-session file, while pointer,
+  wheel and key input are value-only messages back to that session. The tab's
+  Stop action and disposal request a clean exit, then terminate only its process
+  tree after a grace period. External-window debugging remains a separate path.
 - Added the app-author desktop tooling layout: `tools/debug` now provides a
   stable launch/frame-script/capture facade, `project_tools` owns maintainer
   audits, and the VS Code extension gained automatic app/build discovery,

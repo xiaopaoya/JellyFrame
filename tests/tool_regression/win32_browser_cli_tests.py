@@ -4,6 +4,9 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
+from queue import Empty, Queue
+from threading import Thread
 import shutil
 import zlib
 from pathlib import Path
@@ -23,6 +26,65 @@ def run_case(exe: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+
+
+def run_vscode_debug_case(exe: Path, app: Path, frame_dir: Path) -> tuple[int, list[tuple[int, Path]]]:
+    process = subprocess.Popen(
+        [str(exe), "--app", str(app), "--vscode-debug", "--vscode-frame-dir", str(frame_dir)],
+        text=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+    )
+    frames: list[tuple[int, Path]] = []
+    input_sent = False
+    output_lines: Queue[str | None] = Queue()
+
+    def read_output() -> None:
+        for line in process.stdout:
+            output_lines.put(line)
+        output_lines.put(None)
+
+    Thread(target=read_output, daemon=True).start()
+    deadline = time.monotonic() + 10.0
+    try:
+        while process.poll() is None and time.monotonic() < deadline:
+            try:
+                line = output_lines.get(timeout=0.1)
+            except Empty:
+                continue
+            if line is None:
+                break
+            fields = line.rstrip("\r\n").split("\t")
+            if len(fields) != 5 or fields[0] != "JF_FRAME":
+                continue
+            sequence = int(fields[1])
+            width = int(fields[2])
+            height = int(fields[3])
+            require(width > 0 and height > 0, "VS Code debug frames must declare a positive viewport")
+            frames.append((sequence, Path(fields[4])))
+            if not input_sent:
+                process.stdin.write("pointer down 20 20\n")
+                process.stdin.write("pointer move 130 20 1\n")
+                process.stdin.write("pointer up 130 20\n")
+                process.stdin.flush()
+                input_sent = True
+            if len(frames) >= 3:
+                process.stdin.write("quit\n")
+                process.stdin.flush()
+        if process.poll() is None:
+            process.stdin.close()
+            process.wait(timeout=3.0)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=3.0)
+        raise AssertionError("VS Code debug shell did not stop after quit")
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=3.0)
+    return process.returncode, frames
 
 
 def require(condition: bool, message: str) -> None:
@@ -180,6 +242,8 @@ def main() -> int:
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
+    require("--vscode-debug" in help_result.stdout, "--help must document isolated VS Code debug mode")
+    require("--vscode-frame-dir" in help_result.stdout, "--help must document VS Code frame output")
 
     unknown_option_result = run_case(exe, ["--not-a-real-option"])
     require(unknown_option_result.returncode != 0, "unknown options must fail")
@@ -238,6 +302,19 @@ def main() -> int:
                 "scripted pointer drag must produce before/after frames")
         require(before_drag.read_bytes() != after_drag.read_bytes(),
                 "pointer-move between pointer-down/up must update a range control")
+
+        vscode_frames = root / "vscode-frames"
+        vscode_exit, vscode_stream = run_vscode_debug_case(exe, app, vscode_frames)
+        require(vscode_exit == 0, "VS Code debug shell must stop cleanly after quit")
+        require(len(vscode_stream) >= 3, "VS Code debug shell must publish interactive frames")
+        sequences = [sequence for sequence, _ in vscode_stream]
+        require(sequences == sorted(set(sequences)),
+                "VS Code debug frame sequence must be strictly increasing without duplicates")
+        stream_paths = [path for _, path in vscode_stream]
+        require(all(path.is_file() for path in stream_paths),
+                "VS Code debug must publish complete frame files before announcing them")
+        require(stream_paths[0].read_bytes() != stream_paths[-1].read_bytes(),
+                "VS Code pointer drag must change the published viewport frame")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-select-popup-") as directory:
         root = Path(directory)

@@ -11,6 +11,7 @@ let lastReportCommand;
 let lastPackageRoot;
 let lastCapturePath;
 let statusProvider;
+let embeddedDebugSession;
 
 function config() {
   return vscode.workspace.getConfiguration("jellyframe");
@@ -358,7 +359,7 @@ async function previewPackage(context, resourceUri) {
   });
 }
 
-async function debugApp(context, resourceUri) {
+async function debugExternalApp(context, resourceUri) {
   if (process.platform !== "win32") {
     vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
     return;
@@ -406,6 +407,248 @@ async function debugApp(context, resourceUri) {
       });
     }
   });
+}
+
+function embeddedDebugHtml(webview) {
+  const nonce = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  <style>
+    body { margin: 0; min-height: 100vh; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-rows: auto minmax(0, 1fr); }
+    header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; }
+    #status { color: var(--vscode-descriptionForeground); flex: 1; }
+    button { appearance: none; min-width: 28px; min-height: 26px; border: 1px solid var(--vscode-button-border, transparent); color: var(--vscode-button-foreground); background: var(--vscode-button-background); cursor: pointer; }
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    #stage { min-height: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; }
+    #frame { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; outline: none; background: #111; }
+    #empty { color: var(--vscode-descriptionForeground); }
+  </style>
+</head>
+<body>
+  <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span><button id="stop" title="Stop desktop shell">Stop</button></header>
+  <main id="stage"><span id="empty">Waiting for the first frame...</span><img id="frame" tabindex="0" hidden alt="JellyFrame app frame"></main>
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    const frame = document.getElementById('frame');
+    const empty = document.getElementById('empty');
+    const status = document.getElementById('status');
+    const stop = document.getElementById('stop');
+    let viewport = { width: 1, height: 1 };
+    let latestSequence = 0;
+    let moveQueued = false;
+    let pendingMove = null;
+    function point(event) {
+      const rect = frame.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(viewport.width - 1, Math.round((event.clientX - rect.left) * viewport.width / Math.max(1, rect.width)))),
+        y: Math.max(0, Math.min(viewport.height - 1, Math.round((event.clientY - rect.top) * viewport.height / Math.max(1, rect.height))))
+      };
+    }
+    function sendPointer(action, event) {
+      if (frame.hidden) return;
+      const p = point(event);
+      vscode.postMessage({ type: 'input', line: 'pointer ' + action + ' ' + p.x + ' ' + p.y + (event.buttons ? ' 1' : ' 0') });
+    }
+    frame.addEventListener('pointerdown', (event) => { frame.focus(); frame.setPointerCapture?.(event.pointerId); sendPointer('down', event); event.preventDefault(); });
+    frame.addEventListener('pointerup', (event) => { frame.releasePointerCapture?.(event.pointerId); sendPointer('up', event); event.preventDefault(); });
+    frame.addEventListener('pointermove', (event) => {
+      pendingMove = event;
+      if (!moveQueued) {
+        moveQueued = true;
+        requestAnimationFrame(() => { moveQueued = false; if (pendingMove) sendPointer('move', pendingMove); pendingMove = null; });
+      }
+    });
+    frame.addEventListener('wheel', (event) => {
+      const p = point(event);
+      const delta = Math.max(-120, Math.min(120, Math.round(-event.deltaY)));
+      vscode.postMessage({ type: 'input', line: 'wheel ' + p.x + ' ' + p.y + ' ' + delta });
+      event.preventDefault();
+    }, { passive: false });
+    frame.addEventListener('keydown', (event) => {
+      const keys = { Escape: 'escape', Enter: 'enter', ' ': 'space', Tab: 'tab', ArrowUp: 'up', ArrowDown: 'down', Backspace: 'backspace' };
+      if (keys[event.key]) { vscode.postMessage({ type: 'input', line: 'key ' + keys[event.key] }); event.preventDefault(); }
+    });
+    stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+      if (message.type === 'frame' && message.sequence > latestSequence) {
+        latestSequence = message.sequence;
+        viewport = { width: message.width, height: message.height };
+        frame.src = message.dataUri;
+        frame.hidden = false;
+        empty.hidden = true;
+        status.textContent = 'Frame ' + message.sequence + ' · ' + message.width + 'x' + message.height;
+      } else if (message.type === 'status') {
+        status.textContent = message.text;
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function stopEmbeddedDebugSession(session, reason) {
+  if (!session || session.stopping) {
+    return session?.exitPromise || Promise.resolve();
+  }
+  session.exitPromise = new Promise((resolve) => { session.resolveExit = resolve; });
+  session.stopping = true;
+  try {
+    session.panel.webview.postMessage({ type: 'status', text: reason || 'Stopping desktop shell...' });
+  } catch (_) {
+    // The panel may already be disposing; the process still needs to be stopped.
+  }
+  ensureOutputChannel().appendLine(`[embedded] stop requested: ${reason || 'user request'}`);
+  if (session.child.stdin?.writable) {
+    session.child.stdin.write('quit\n');
+    session.child.stdin.end();
+  }
+  session.forceStopTimer = setTimeout(() => {
+    if (!session.exited) {
+      ensureOutputChannel().appendLine(`[embedded] shell did not exit in time; terminating process tree pid=${session.child.pid}`);
+      childProcess.spawn('taskkill', ['/pid', String(session.child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+    }
+  }, 2500);
+  return session.exitPromise;
+}
+
+function parseEmbeddedFrameLine(line) {
+  const fields = line.split('\t');
+  if (fields.length !== 5 || fields[0] !== 'JF_FRAME') {
+    return undefined;
+  }
+  const sequence = Number(fields[1]);
+  const width = Number(fields[2]);
+  const height = Number(fields[3]);
+  if (!Number.isSafeInteger(sequence) || !Number.isInteger(width) || !Number.isInteger(height) || sequence < 1 || width < 1 || height < 1) {
+    return undefined;
+  }
+  return { sequence, width, height, path: fields[4] };
+}
+
+async function deliverEmbeddedFrame(session, frame) {
+  if (!session.active || frame.sequence < session.latestAnnouncedSequence) {
+    return;
+  }
+  try {
+    const bytes = await fs.promises.readFile(frame.path);
+    if (!session.active || frame.sequence !== session.latestAnnouncedSequence || frame.sequence <= session.lastDeliveredSequence) {
+      return;
+    }
+    session.lastDeliveredSequence = frame.sequence;
+    session.panel.webview.postMessage({
+      type: 'frame',
+      sequence: frame.sequence,
+      width: frame.width,
+      height: frame.height,
+      dataUri: `data:image/bmp;base64,${bytes.toString('base64')}`
+    });
+  } catch (error) {
+    ensureOutputChannel().appendLine(`[embedded] failed to read frame ${frame.sequence}: ${error.message}`);
+  } finally {
+    fs.rm(frame.path, { force: true }, () => {});
+  }
+}
+
+async function debugApp(context, resourceUri) {
+  if (process.platform !== 'win32') {
+    vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
+    return;
+  }
+  const root = await packageRoot(resourceUri);
+  if (!root) {
+    return;
+  }
+  const launcher = debugLauncherPath(context);
+  if (!fs.existsSync(launcher)) {
+    vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
+    return;
+  }
+  if (embeddedDebugSession) {
+    const previous = embeddedDebugSession;
+    await stopEmbeddedDebugSession(previous, 'Replacing the previous debug session...');
+  }
+  ensureBuildDir(context);
+  const sessionRoot = path.join(buildDir(context), 'debug', 'vscode-sessions');
+  fs.mkdirSync(sessionRoot, { recursive: true });
+  const frameDir = fs.mkdtempSync(path.join(sessionRoot, `${outputBase(root)}-`));
+  const panel = vscode.window.createWebviewPanel(
+    'jellyframeEmbeddedDebug',
+    `JellyFrame: ${path.basename(root)}`,
+    vscode.ViewColumn.Beside,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  panel.webview.html = embeddedDebugHtml(panel.webview);
+  const python = config().get('pythonPath', 'python');
+  const args = [launcher, '--build-dir', nativeBuildDir(context), '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  const channel = ensureOutputChannel();
+  channel.appendLine(`+ ${[python, ...args].join(' ')}`);
+  const child = childProcess.spawn(python, args, {
+    cwd: repoRoot(context),
+    shell: false,
+    windowsHide: true,
+    stdio: ['pipe', 'pipe', 'pipe']
+  });
+  const session = {
+    active: true,
+    stopping: false,
+    exited: false,
+    child,
+    panel,
+    frameDir,
+    latestAnnouncedSequence: 0,
+    lastDeliveredSequence: 0,
+    outputBuffer: '',
+    forceStopTimer: undefined
+  };
+  embeddedDebugSession = session;
+  child.stdout.on('data', (chunk) => {
+    session.outputBuffer += chunk.toString();
+    let newline = 0;
+    while ((newline = session.outputBuffer.indexOf('\n')) >= 0) {
+      const line = session.outputBuffer.slice(0, newline).replace(/\r$/, '');
+      session.outputBuffer = session.outputBuffer.slice(newline + 1);
+      const frame = parseEmbeddedFrameLine(line);
+      if (frame) {
+        session.latestAnnouncedSequence = Math.max(session.latestAnnouncedSequence, frame.sequence);
+        void deliverEmbeddedFrame(session, frame);
+      } else if (line) {
+        channel.appendLine(`[embedded] ${line}`);
+      }
+    }
+  });
+  child.stderr.on('data', (chunk) => channel.append(`[embedded] ${chunk.toString()}`));
+  child.on('error', (error) => {
+    channel.appendLine(`[embedded] failed to start: ${error.message}`);
+    panel.webview.postMessage({ type: 'status', text: `Failed to start: ${error.message}` });
+  });
+  child.on('close', (code) => {
+    session.exited = true;
+    session.active = false;
+    if (session.forceStopTimer) {
+      clearTimeout(session.forceStopTimer);
+    }
+    session.resolveExit?.();
+    channel.appendLine(`[embedded] shell exited with code ${code}`);
+    panel.webview.postMessage({ type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
+    if (embeddedDebugSession === session) {
+      embeddedDebugSession = undefined;
+    }
+    setTimeout(() => fs.rm(frameDir, { recursive: true, force: true }, () => {}), 250);
+  });
+  panel.onDidReceiveMessage((message) => {
+    if (message?.type === 'stop') {
+      stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
+    } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
+      if (session.active && !session.stopping && child.stdin.writable) {
+        child.stdin.write(`${message.line}\n`);
+      }
+    }
+  }, undefined, context.subscriptions);
+  panel.onDidDispose(() => stopEmbeddedDebugSession(session, 'Debug tab closed.'), undefined, context.subscriptions);
 }
 
 async function runFrameScript(context, resourceUri) {
@@ -900,6 +1143,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.check", (resourceUri) => runPackageCommand(context, "check", resourceUri)),
     vscode.commands.registerCommand("jellyframe.preview", (resourceUri) => previewPackage(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.debug", (resourceUri) => debugApp(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.debugExternal", (resourceUri) => debugExternalApp(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),

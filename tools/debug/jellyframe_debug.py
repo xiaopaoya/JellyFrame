@@ -64,6 +64,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frame-script", type=Path, help="Run a deterministic frame script.")
     parser.add_argument("--runtime-log", type=Path,
                         help="Tee the desktop shell output to this runtime log while --wait is active.")
+    parser.add_argument("--vscode-debug", action="store_true",
+                        help="Run the isolated VS Code frame-stream mode.")
+    parser.add_argument("--vscode-frame-dir", type=Path,
+                        help="Directory for complete VS Code frame snapshots (requires --vscode-debug).")
     parser.add_argument("--list-builds", action="store_true", help="List discovered desktop builds and exit.")
     parser.add_argument("--wait", action="store_true", help="Wait for the shell and return its exit code.")
     parser.add_argument("shell_args", nargs=argparse.REMAINDER,
@@ -91,6 +95,11 @@ def main() -> int:
         command.extend(["--app", str(args.app)])
     if args.frame_script:
         command.extend(["--frame-script", str(args.frame_script)])
+    if args.vscode_debug:
+        if not args.vscode_frame_dir:
+            print("--vscode-debug requires --vscode-frame-dir", file=sys.stderr)
+            return 2
+        command.extend(["--vscode-debug", "--vscode-frame-dir", str(args.vscode_frame_dir)])
     extra = args.shell_args
     if extra and extra[0] == "--":
         extra = extra[1:]

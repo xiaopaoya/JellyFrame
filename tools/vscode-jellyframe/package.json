@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "jellyframe",
   "engines": {
     "vscode": "^1.85.0"
@@ -16,6 +16,7 @@
     "onCommand:jellyframe.check",
     "onCommand:jellyframe.preview",
     "onCommand:jellyframe.debug",
+    "onCommand:jellyframe.debugExternal",
     "onCommand:jellyframe.runFrameScript",
     "onCommand:jellyframe.openCapture",
     "onCommand:jellyframe.listBuilds",
@@ -45,6 +46,11 @@
         "command": "jellyframe.debug",
         "title": "%command.debug%",
         "icon": "$(play)"
+      },
+      {
+        "command": "jellyframe.debugExternal",
+        "title": "%command.debugExternal%",
+        "icon": "$(external-link)"
       },
       {
         "command": "jellyframe.runFrameScript",
@@ -136,16 +142,20 @@
           "group": "debug@1"
         },
         {
-          "command": "jellyframe.runFrameScript",
+          "command": "jellyframe.debugExternal",
           "group": "debug@2"
         },
         {
-          "command": "jellyframe.openCapture",
+          "command": "jellyframe.runFrameScript",
           "group": "debug@3"
         },
         {
-          "command": "jellyframe.listBuilds",
+          "command": "jellyframe.openCapture",
           "group": "debug@4"
+        },
+        {
+          "command": "jellyframe.listBuilds",
+          "group": "debug@5"
         },
         {
           "command": "jellyframe.showReport",
@@ -188,6 +198,10 @@
           "group": "debug@1"
         },
         {
+          "command": "jellyframe.debugExternal",
+          "group": "debug@2"
+        },
+        {
           "command": "jellyframe.showReport",
           "group": "report@1"
         }
@@ -210,8 +224,12 @@
           "group": "debug@1"
         },
         {
-          "command": "jellyframe.runFrameScript",
+          "command": "jellyframe.debugExternal",
           "group": "debug@2"
+        },
+        {
+          "command": "jellyframe.runFrameScript",
+          "group": "debug@3"
         },
         {
           "command": "jellyframe.showReport",

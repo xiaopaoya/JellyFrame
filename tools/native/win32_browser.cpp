@@ -507,8 +507,10 @@ struct ParsedFrameEvent {
 struct BrowserOptions {
     bool capture = false;
     bool capture_frames = false;
+    bool vscode_debug = false;
     std::string output_path;
     std::string frame_output_dir;
+    std::string vscode_frame_dir;
     std::string html_path = "src/render_core/samples/pages/modern/app_shell.html";
     std::string css_path = "src/render_core/samples/pages/modern/app_shell.css";
     std::string inline_html;
@@ -2702,6 +2704,8 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "  --script PATH                  Load an extra classic script file.\n"
         << "  --capture PATH                 Render one frame to BMP/PPM by extension.\n"
         << "  --capture-frames DIR           Hidden deterministic frame capture directory.\n"
+        << "  --vscode-debug                Run the isolated VS Code frame-stream session.\n"
+        << "  --vscode-frame-dir DIR        Directory for complete VS Code frame snapshots.\n"
         << "  --frame-script PATH            Apply deterministic capture/script commands.\n"
         << "  --capture-montage PATH         Write a BMP/PPM contact sheet for captured frames.\n"
         << "  --montage-columns N            Contact sheet columns, default auto.\n"
@@ -3668,6 +3672,9 @@ public:
 private:
     HWND hwnd_ = nullptr;
     BrowserOptions options_;
+    std::uint64_t vscode_frame_sequence_ = 0;
+    std::vector<std::filesystem::path> vscode_frame_paths_;
+    std::string vscode_input_buffer_;
     int viewport_width_ = 1;
     int viewport_height_ = 1;
     int scroll_y_ = 0;
@@ -3991,6 +3998,9 @@ private:
             return 0;
         case WM_TIMER:
             handle_timer(wparam);
+            return 0;
+        case WM_CLOSE:
+            DestroyWindow(hwnd_);
             return 0;
         case WM_DESTROY:
             KillTimer(hwnd_, kScriptTimerId);
@@ -5180,6 +5190,7 @@ private:
             record_present_estimate_for_content_rects(dirty_rects, dirty_count);
             rebuild_input_controller(hovered_node, active_node, focused_node);
             update_blit_pixels_for_content_rect(strip_visible_rect);
+            publish_vscode_frame();
             InvalidateRect(hwnd_, nullptr, FALSE);
             return true;
         }
@@ -5211,6 +5222,7 @@ private:
         } else {
             update_blit_pixels();
         }
+        publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     }
@@ -5469,6 +5481,7 @@ private:
             rebuild_input_controller(hovered_node, active_node, focused_node);
             capture_script_layout_snapshot();
             update_blit_pixels();
+            publish_vscode_frame();
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
             record_load_telemetry_sample(update_plan, nullptr);
@@ -5574,6 +5587,7 @@ private:
             rebuild_input_controller(hovered_node, active_node, focused_node);
             capture_script_layout_snapshot();
             update_blit_pixels();
+            publish_vscode_frame();
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
             record_load_telemetry_sample(update_plan, nullptr);
@@ -5635,6 +5649,7 @@ private:
         }
         rebuild_input_controller(hovered_node, active_node, focused_node);
         update_blit_pixels();
+        publish_vscode_frame();
         clear_dirty_flags(*document_);
         clear_finished_animation_overrides();
         record_load_telemetry_sample(update_plan, nullptr);
@@ -5848,6 +5863,7 @@ private:
             return false;
         }
         update_blit_pixels_after_scroll(previous);
+        publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     }
@@ -5872,6 +5888,7 @@ private:
             return false;
         }
         update_blit_pixels_after_scroll(previous);
+        publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     }
@@ -5986,6 +6003,144 @@ private:
                               static_cast<std::ptrdiff_t>(src_y * frame_buffer_.width + source.x + source.width),
                           frame_buffer_.pixels.begin() +
                               static_cast<std::ptrdiff_t>(dst_y * frame_buffer_.width + destination.x));
+            }
+        }
+    }
+
+    void publish_vscode_frame() {
+        if (!options_.vscode_debug || options_.vscode_frame_dir.empty() ||
+            viewport_width_ <= 0 || viewport_height_ <= 0 ||
+            blit_pixels_.size() != static_cast<std::size_t>(viewport_width_) *
+                static_cast<std::size_t>(viewport_height_)) {
+            return;
+        }
+
+        FrameBuffer snapshot(viewport_width_, viewport_height_, page_background_);
+        for (int y = 0; y < viewport_height_; ++y) {
+            for (int x = 0; x < viewport_width_; ++x) {
+                const std::uint32_t pixel = blit_pixels_[
+                    static_cast<std::size_t>(y) * static_cast<std::size_t>(viewport_width_) +
+                    static_cast<std::size_t>(x)];
+                snapshot.pixel(x, y) = Color{
+                    static_cast<std::uint8_t>((pixel >> 16U) & 0xffU),
+                    static_cast<std::uint8_t>((pixel >> 8U) & 0xffU),
+                    static_cast<std::uint8_t>(pixel & 0xffU),
+                    255,
+                };
+            }
+        }
+
+        try {
+            const std::filesystem::path frame_dir(options_.vscode_frame_dir);
+            std::filesystem::create_directories(frame_dir);
+            const std::uint64_t sequence = ++vscode_frame_sequence_;
+            std::ostringstream name;
+            name << "frame_" << std::setw(12) << std::setfill('0') << sequence << ".bmp";
+            const std::filesystem::path frame_path = frame_dir / name.str();
+            write_image(snapshot, frame_path.string());
+            if (!std::filesystem::is_regular_file(frame_path)) {
+                std::cerr << "JF_FRAME_ERROR failed to create " << frame_path.string() << '\n';
+                return;
+            }
+            vscode_frame_paths_.push_back(frame_path);
+            while (vscode_frame_paths_.size() > 8) {
+                std::error_code error;
+                std::filesystem::remove(vscode_frame_paths_.front(), error);
+                vscode_frame_paths_.erase(vscode_frame_paths_.begin());
+            }
+            std::cout << "JF_FRAME\t" << sequence << "\t" << snapshot.width << "\t" << snapshot.height
+                      << "\t" << frame_path.string() << std::endl;
+        } catch (const std::exception& error) {
+            std::cerr << "JF_FRAME_ERROR " << error.what() << '\n';
+        }
+    }
+
+    void poll_vscode_input() {
+        if (!options_.vscode_debug) {
+            return;
+        }
+        HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+        if (input == nullptr || input == INVALID_HANDLE_VALUE) {
+            return;
+        }
+        DWORD available = 0;
+        if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr)) {
+            return;
+        }
+        while (available != 0) {
+            char bytes[1024];
+            const DWORD requested = std::min<DWORD>(available, sizeof(bytes));
+            DWORD read = 0;
+            if (!ReadFile(input, bytes, requested, &read, nullptr) || read == 0) {
+                break;
+            }
+            vscode_input_buffer_.append(bytes, read);
+            std::size_t newline = 0;
+            while ((newline = vscode_input_buffer_.find('\n')) != std::string::npos) {
+                std::string line = vscode_input_buffer_.substr(0, newline);
+                vscode_input_buffer_.erase(0, newline + 1);
+                if (!line.empty() && line.back() == '\r') {
+                    line.pop_back();
+                }
+                apply_vscode_input(line);
+            }
+            available = 0;
+            if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr)) {
+                break;
+            }
+        }
+    }
+
+    void apply_vscode_input(const std::string& line) {
+        std::istringstream input(line);
+        std::string kind;
+        input >> kind;
+        if (kind == "quit") {
+            PostMessageW(hwnd_, WM_CLOSE, 0, 0);
+            return;
+        }
+
+        std::string action;
+        int x = 0;
+        int y = 0;
+        if (kind == "pointer" && input >> action >> x >> y) {
+            if (action == "move") {
+                int buttons = 0;
+                input >> buttons;
+                handle_pointer_move(buttons != 0 ? MK_LBUTTON : 0, pointer_lparam(x, y));
+            } else if (action == "down") {
+                handle_pointer_down(0, pointer_lparam(x, y));
+            } else if (action == "up") {
+                handle_pointer_up(MK_LBUTTON, pointer_lparam(x, y));
+            }
+            return;
+        }
+        if (kind == "wheel" && input >> x >> y) {
+            int delta = 0;
+            if (!(input >> delta)) {
+                return;
+            }
+            POINT point{x, y};
+            ClientToScreen(hwnd_, &point);
+            handle_wheel(static_cast<WPARAM>(static_cast<WORD>(delta)) << 16U,
+                         pointer_lparam(point.x, point.y));
+            return;
+        }
+        if (kind == "key" && input >> action) {
+            if (action == "escape") {
+                handle_key_down(VK_ESCAPE);
+            } else if (action == "enter") {
+                handle_key_down(VK_RETURN);
+            } else if (action == "space") {
+                handle_key_down(VK_SPACE);
+            } else if (action == "tab") {
+                handle_key_down(VK_TAB);
+            } else if (action == "up") {
+                handle_key_down(VK_UP);
+            } else if (action == "down") {
+                handle_key_down(VK_DOWN);
+            } else if (action == "backspace") {
+                handle_key_down(VK_BACK);
             }
         }
     }
@@ -6235,6 +6390,7 @@ private:
         if (timer_id != kScriptTimerId) {
             return;
         }
+        poll_vscode_input();
         const AppFramePolicy frame_policy = current_frame_policy();
         const FrameLoopOptions frame_options = current_frame_loop_options();
         ImageDecodeMockWorker image_worker(app_runtime_, debug_images_);
@@ -6479,6 +6635,18 @@ int main(int argc, char** argv) {
                 return 1;
             }
             options.frame_output_dir = argv[++i];
+            continue;
+        }
+        if (arg == "--vscode-debug") {
+            options.vscode_debug = true;
+            continue;
+        }
+        if (arg == "--vscode-frame-dir") {
+            if (i + 1 >= argc) {
+                std::cerr << "--vscode-frame-dir requires an output directory\n";
+                return 1;
+            }
+            options.vscode_frame_dir = argv[++i];
             continue;
         }
         if (arg == "--frame-script") {
@@ -6810,6 +6978,14 @@ int main(int argc, char** argv) {
         std::cerr << "--capture and --capture-frames are mutually exclusive\n";
         return 1;
     }
+    if (options.vscode_debug && options.vscode_frame_dir.empty()) {
+        std::cerr << "--vscode-debug requires --vscode-frame-dir\n";
+        return 1;
+    }
+    if (options.vscode_debug && (options.capture || options.capture_frames)) {
+        std::cerr << "--vscode-debug cannot be combined with capture modes\n";
+        return 1;
+    }
     if (options.capture_frames && options.frame_output_dir.empty() && options.frame_montage_path.empty()) {
         std::cerr << "--capture-frames/--frame-script requires an output directory or --capture-montage\n";
         return 1;
@@ -7044,9 +7220,10 @@ int main(int argc, char** argv) {
     }
 
     const bool capture_frames_mode = options.capture_frames;
+    const bool vscode_debug_mode = options.vscode_debug;
     BrowserApp app(std::move(options));
     HINSTANCE instance = GetModuleHandleW(nullptr);
-    const int show_command = capture_frames_mode ? SW_HIDE : SW_SHOWNORMAL;
+    const int show_command = (capture_frames_mode || vscode_debug_mode) ? SW_HIDE : SW_SHOWNORMAL;
     if (!app.initialize(instance, show_command)) {
         std::cerr << "failed to create desktop shell window\n";
         return 1;

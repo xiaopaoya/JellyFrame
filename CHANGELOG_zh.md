@@ -14,6 +14,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 重新提供 VS Code 内嵌调试，但采用隔离的 desktop-shell 帧流会话：每个 viewport 快照都带严格递增的
+  sequence，先完整写入会话专属文件再通知编辑器；pointer、wheel 与按键只以值消息回传该会话。标签页的
+  Stop 与关闭都会请求正常退出，宽限期后也只终止本会话进程树；外部窗口调试保持独立路径。
 - 新增面向 App 作者的桌面工具布局：`tools/debug` 提供统一的启动、frame script
   回放和截图入口，`project_tools` 负责项目维护审计，VS Code 扩展新增 app/构建自动发现、
   diagnostics 状态视图以及截图/frame script 命令。交互式原生壳现在构建为

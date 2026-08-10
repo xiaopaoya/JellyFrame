@@ -9,7 +9,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 ## 功能
 
 - 为 `jellyframe.app.json` 关联 JSON schema。
-- 命令面板提供“验证 App 包结构”“检查 App 包渲染”“预览”、桌面壳调试、frame script 回放、打开截图和生成 package。
+- 命令面板提供“验证 App 包结构”“检查 App 包渲染”“预览”、VS Code 内嵌调试、外部窗口调试、frame script 回放、打开截图和生成 package。
 - 可从内置 weather、clock、timer 和 calculator 模板创建 app。
 - 在专用 `JellyFrame` output channel 中显示 CLI 输出。
 - `JellyFrame Report` webview 会优先展示 CLI 的 `developerAdvice[]`，再汇总
@@ -64,6 +64,11 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 右键 `jellyframe.app.json`，或在 App 的 HTML/CSS/manifest 文件编辑器中右键，可以
 直接使用常用操作。这些入口与命令面板调用同一组命令，输出和诊断行为一致。
 
-使用“在桌面壳中调试 App”进行交互式 App 调试，使用“运行帧脚本”进行确定性回放，使用“打开截图”
-打开最近或指定的 BMP/PPM 截图。`JellyFrame：预览 App 包` 会执行 package 预检、生成独立
+使用“在 VS Code 中调试 App”会打开一个编辑器标签页：它启动独立的隐藏桌面壳会话，将完整的、单序号
+viewport 帧快照送入标签页，并把点击、拖动、滚轮和常用按键转回该会话。标签页的 Stop 按钮或关闭标签页
+都会请求壳退出；若壳未在短暂宽限期内退出，扩展会终止该调试进程树。它不复用外部窗口、截图或其他会话的
+framebuffer。需要检查原生窗口行为时，使用“在外部窗口调试 App”。
+
+使用“运行帧脚本”进行确定性回放，使用“打开截图”打开最近或指定的 BMP/PPM 截图。
+`JellyFrame：预览 App 包` 会执行 package 预检、生成独立
 JSON 报告并自动打开截图。验证、检查和预览分别保留自己的报告，不会互相覆盖。
