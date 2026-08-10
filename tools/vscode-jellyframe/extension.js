@@ -437,8 +437,9 @@ function embeddedDebugHtml(webview) {
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <style>
-    body { margin: 0; min-height: 100vh; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr) 150px; }
-    header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { box-sizing: border-box; margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: 38px minmax(0, 1fr) minmax(170px, 25vh); }
+    header { display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; }
     #status { color: var(--vscode-descriptionForeground); flex: 1; }
     button { appearance: none; min-width: 28px; min-height: 26px; border: 1px solid var(--vscode-button-border, transparent); color: var(--vscode-button-foreground); background: var(--vscode-button-background); cursor: pointer; }
     button:hover { background: var(--vscode-button-hoverBackground); }
@@ -446,22 +447,23 @@ function embeddedDebugHtml(webview) {
     #stage { min-width: 0; min-height: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; }
     #frame { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
-    #log-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--vscode-panel-border); background: var(--vscode-textCodeBlock-background, #181818); }
-    #log-title, #diagnostics-title { padding: 7px 10px; color: var(--vscode-descriptionForeground); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--vscode-panel-border); }
-    #log { flex: 1; min-height: 0; margin: 0; padding: 8px 10px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 11px/1.4 var(--vscode-editor-font-family, monospace); }
-    #diagnostics { min-height: 0; color: #73d13d; background: color-mix(in srgb, #1e3a1e 24%, var(--vscode-editor-background)); border-top: 1px solid #4e9f38; }
-    #diagnostics-title { color: #73d13d; border-bottom-color: #376d2c; }
-    #diagnostics-text { height: calc(100% - 30px); margin: 0; padding: 7px 10px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 11px/1.35 var(--vscode-editor-font-family, monospace); }
+    #log-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--vscode-panel-border); }
+    #log-bar, #diagnostics-title { display: flex; align-items: center; gap: 6px; min-height: 34px; box-sizing: border-box; padding: 0 10px; color: var(--vscode-descriptionForeground); font-size: 12px; border-bottom: 1px solid var(--vscode-panel-border); }
+    #log-title { flex: 1; }
+    #log-bar button { min-width: 42px; min-height: 24px; padding: 0 7px; font-size: 11px; }
+    #log { flex: 1; min-height: 0; margin: 0; padding: 9px 10px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 var(--vscode-editor-font-family, monospace); background: transparent; }
+    #diagnostics { min-height: 0; border-top: 1px solid var(--vscode-panel-border); }
+    #diagnostics-text { height: calc(100% - 34px); box-sizing: border-box; margin: 0; padding: 9px 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 var(--vscode-editor-font-family, monospace); }
     @media (max-width: 700px) {
-      body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(240px, 1fr) 180px 150px; }
+      body { grid-template-columns: minmax(0, 1fr); grid-template-rows: 38px minmax(200px, 1fr) 190px 170px; }
       #log-panel { border-left: 0; border-top: 1px solid var(--vscode-panel-border); }
     }
   </style>
 </head>
 <body>
-  <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span><button id="stop" title="Stop desktop shell">Stop</button></header>
+  <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
   <main id="stage"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></main>
-  <aside id="log-panel"><div id="log-title">Live log</div><pre id="log">Waiting for shell output...</pre></aside>
+  <aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><pre id="log">Waiting for shell output...</pre></aside>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -469,6 +471,7 @@ function embeddedDebugHtml(webview) {
     const empty = document.getElementById('empty');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
+    const clearLog = document.getElementById('clear-log');
     const log = document.getElementById('log');
     const diagnostics = document.getElementById('diagnostics-text');
     let viewport = { width: 1, height: 1 };
@@ -515,6 +518,11 @@ function embeddedDebugHtml(webview) {
       const keys = { Escape: 'escape', Enter: 'enter', ' ': 'space', Tab: 'tab', ArrowUp: 'up', ArrowDown: 'down', Backspace: 'backspace' };
       if (keys[event.key]) { vscode.postMessage({ type: 'input', line: 'key ' + keys[event.key] }); event.preventDefault(); }
     });
+    clearLog.addEventListener('click', () => {
+      logLines = [];
+      log.textContent = '';
+      vscode.postMessage({ type: 'clear-log' });
+    });
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
     vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', (event) => {
@@ -544,6 +552,9 @@ function embeddedDebugHtml(webview) {
         status.textContent = message.text;
       } else if (message.type === 'log') {
         appendLog(message.stream || 'shell', message.text || '');
+      } else if (message.type === 'clear-log') {
+        logLines = [];
+        log.textContent = '';
       } else if (message.type === 'diagnostics') {
         diagnostics.textContent = message.text || '';
       }
@@ -607,18 +618,16 @@ function postEmbeddedMessage(session, message) {
 function embeddedDiagnosticsText(session) {
   const elapsed = Math.max(0, Date.now() - session.startedAt);
   return [
-    `app=${session.appRoot}`,
-    `runtime.script=${session.scriptMode} · profile=${session.buildProfile}`,
-    `python=${session.python}`,
-    `launcher=${session.launcher}`,
-    `build_dir=${session.buildDir}`,
-    `shell=${session.shellPath} · pid=${session.child.pid}`,
-    `frame_dir=${session.frameDir}`,
-    `elapsed_ms=${elapsed} · state=${session.exited ? 'exited' : session.stopping ? 'stopping' : 'running'}`,
-    `frames announced=${session.announcedFrames} delivered=${session.deliveredFrames} dropped=${session.droppedFrames} decode_errors=${session.decodeErrors}`,
-    `last_sequence=${session.lastDeliveredSequence} · last_size=${session.viewport.width}x${session.viewport.height}`,
-    `input_sent=${session.inputSent} · stdout_lines=${session.stdoutLines} · stderr_lines=${session.stderrLines}`,
-    `stop_reason=${session.stopReason || 'none'} · exit_code=${session.exitCode ?? 'pending'}`
+    `App: ${session.appRoot}`,
+    `Runtime: ${session.scriptMode === 'classic' ? 'Classic scripting' : 'No script runtime'} · Build: ${session.buildProfile}`,
+    `Desktop shell: ${session.shellPath} (PID ${session.child.pid})`,
+    `Launcher: ${session.launcher}`,
+    `Frame cache: ${session.frameDir}`,
+    `Session: ${session.exited ? 'Stopped' : session.stopping ? 'Stopping' : 'Running'} · ${elapsed} ms · exit ${session.exitCode ?? 'pending'}`,
+    `Frames: ${session.deliveredFrames} displayed / ${session.announcedFrames} announced · ${session.droppedFrames} superseded · ${session.decodeErrors} read failures`,
+    `Latest frame: ${session.lastDeliveredSequence} · ${session.viewport.width}x${session.viewport.height}`,
+    `Input: ${session.inputSent} sent · Shell output: ${session.stdoutLines} standard, ${session.stderrLines} error lines`,
+    `Stop reason: ${session.stopReason || 'None'}`
   ].join('\n');
 }
 
@@ -674,8 +683,15 @@ async function deliverEmbeddedFrame(session, frame) {
     });
     scheduleEmbeddedDiagnostics(session);
   } catch (error) {
-    session.decodeErrors += 1;
-    appendEmbeddedLog(session, 'error', `failed to read frame ${frame.sequence}: ${error.message}`);
+    if (error?.code === 'ENOENT') {
+      // The native shell retains only a bounded latest-frame cache. A newer
+      // frame can supersede this snapshot before VS Code starts the read.
+      session.droppedFrames += 1;
+    } else {
+      session.decodeErrors += 1;
+      appendEmbeddedLog(session, 'error', `failed to read frame ${frame.sequence}: ${error.message}`);
+    }
+    scheduleEmbeddedDiagnostics(session);
   } finally {
     fs.rm(frame.path, { force: true }, () => {});
   }
@@ -806,6 +822,9 @@ async function debugApp(context, resourceUri) {
       }
     } else if (message?.type === 'stop') {
       stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
+    } else if (message?.type === 'clear-log') {
+      session.logLines = [];
+      postEmbeddedMessage(session, { type: 'clear-log' });
     } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
       if (session.active && !session.stopping && child.stdin?.writable) {
         child.stdin.write(`${message.line}\n`);
