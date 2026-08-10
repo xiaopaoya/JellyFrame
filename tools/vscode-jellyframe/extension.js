@@ -223,6 +223,22 @@ function findPackageRootFrom(startPath) {
   }
 }
 
+function currentPackageRoot() {
+  const active = vscode.window.activeTextEditor?.document.uri.fsPath;
+  const activeRoot = findPackageRootFrom(active);
+  if (activeRoot) {
+    lastPackageRoot = activeRoot;
+    return activeRoot;
+  }
+  const workspaceRoot = findPackageRootFrom(workspaceFolderPath());
+  if (workspaceRoot) {
+    return workspaceRoot;
+  }
+  return lastPackageRoot && fs.existsSync(path.join(lastPackageRoot, "jellyframe.app.json"))
+    ? lastPackageRoot
+    : undefined;
+}
+
 async function packageRoot(resourceUri) {
   const selectedResource = resourceUri && resourceUri.fsPath;
   if (selectedResource) {
@@ -1338,7 +1354,8 @@ class JellyFrameStatusProvider {
   }
 
   getChildren() {
-    const root = lastPackageRoot || "No package selected";
+    const root = currentPackageRoot();
+    const app = root ? path.basename(root) : "No package selected";
     const build = nativeBuildDir(this.context);
     const report = lastReport ? "Loaded report" : "No report loaded";
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
@@ -1360,7 +1377,7 @@ class JellyFrameStatusProvider {
         ? "Performance: static estimate only"
       : "Performance: not measured";
     return [
-      this.item(`App: ${path.basename(root)}`, root, "jellyframe.debug"),
+      this.item(`App: ${app}`, root, "jellyframe.debug"),
       this.item(`Build: ${build}`, build, "jellyframe.listBuilds"),
       this.item(report, undefined, "jellyframe.showReport"),
       this.item(diagnostics),
@@ -1680,6 +1697,9 @@ function activate(context) {
     capabilityDiagnostics,
     statusProvider.changed,
     vscode.window.registerTreeDataProvider("jellyframe.status", statusProvider),
+    vscode.window.onDidChangeActiveTextEditor(() => statusProvider?.refresh()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => statusProvider?.refresh()),
+    vscode.workspace.onDidSaveTextDocument(() => statusProvider?.refresh()),
     vscode.commands.registerCommand("jellyframe.validate", (resourceUri) => runPackageCommand(context, "validate", resourceUri)),
     vscode.commands.registerCommand("jellyframe.check", (resourceUri) => runPackageCommand(context, "check", resourceUri)),
     vscode.commands.registerCommand("jellyframe.preview", (resourceUri) => previewPackage(context, resourceUri)),

@@ -113,7 +113,7 @@ jobs:
         shell: pwsh
         run: |
           node --check tools\vscode-jellyframe\extension.js
-          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('tools/vscode-jellyframe/package.json','utf8')); if(!p.contributes?.viewsContainers?.activitybar?.some(v=>v.id==='jellyframe'&&v.icon==='media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar container is missing'); if(!p.contributes?.views?.jellyframe?.some(v=>v.id==='jellyframe.status')) throw new Error('JellyFrame status view is missing'); if(p.contributes?.menus?.['menubar/main']) throw new Error('unsupported custom menubar contribution remains'); if(!fs.existsSync('tools/vscode-jellyframe/media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar icon is missing');"
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('tools/vscode-jellyframe/package.json','utf8')); const s=fs.readFileSync('tools/vscode-jellyframe/extension.js','utf8'); if(!p.contributes?.viewsContainers?.activitybar?.some(v=>v.id==='jellyframe'&&v.icon==='media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar container is missing'); if(!p.contributes?.views?.jellyframe?.some(v=>v.id==='jellyframe.status')) throw new Error('JellyFrame status view is missing'); if(p.contributes?.menus?.['menubar/main']) throw new Error('unsupported custom menubar contribution remains'); if(!fs.existsSync('tools/vscode-jellyframe/media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar icon is missing'); if(!s.includes('function currentPackageRoot()') || !s.includes('onDidChangeActiveTextEditor')) throw new Error('JellyFrame status view does not follow the active package');"
 
       - name: Run package diagnostics smoke tests
         shell: pwsh
