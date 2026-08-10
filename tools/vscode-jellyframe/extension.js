@@ -305,26 +305,30 @@ async function runPackageCommand(context, commandName, resourceUri) {
   if (!root) {
     return;
   }
-  const selectedTarget = await target();
-  if (!selectedTarget) {
+  const selectedTarget = commandName === "validate" ? undefined : await target();
+  if (commandName !== "validate" && !selectedTarget) {
     return;
   }
   ensureBuildDir(context);
   const base = outputBase(root);
   const report = path.join(buildDir(context), `vscode-${base}-${commandName}-report.json`);
-  const args = [commandName, "--root", root, "--target", selectedTarget, "--report", report];
+  const args = [commandName, "--root", root, "--report", report];
+  if (selectedTarget) {
+    args.push("--target", selectedTarget);
+  }
   const options = {
     commandName,
     packageRoot: root,
     reportPath: report
   };
-  if (commandName === "validate") {
+  if (commandName === "check") {
+    args.push("--font-budget", config().get("fontBudget", "16x16"));
     const frameScript = await selectFrameScript(root, /^zh(?:-|$)/i.test(vscode.env.language || "")
-      ? "选择验证方式"
-      : "Choose validation mode");
+      ? "选择渲染验证方式"
+      : "Choose render verification mode");
     if (frameScript) {
-      const frameOutputDir = path.join(buildDir(context), "debug", `${base}-validate-frames`);
-      const montage = path.join(buildDir(context), "debug", `${base}-validate-montage.bmp`);
+      const frameOutputDir = path.join(buildDir(context), "debug", `${base}-check-frames`);
+      const montage = path.join(buildDir(context), "debug", `${base}-check-montage.bmp`);
       args.push(
         "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
         "--frame-script", frameScript,
@@ -333,9 +337,6 @@ async function runPackageCommand(context, commandName, resourceUri) {
       );
       options.capture = montage;
     }
-  }
-  if (commandName === "check") {
-    args.push("--font-budget", config().get("fontBudget", "16x16"));
   }
   if (commandName === "package") {
     args.push(
