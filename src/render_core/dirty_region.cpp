@@ -36,6 +36,24 @@ Rect union_rect(Rect left, Rect right) {
     return Rect{x1, y1, x2 - x1, y2 - y1};
 }
 
+void merge_overlapping_rects(std::vector<Rect>& rects) {
+    bool merged = true;
+    while (merged) {
+        merged = false;
+        for (std::size_t left = 0; left + 1 < rects.size() && !merged; ++left) {
+            for (std::size_t right = left + 1; right < rects.size(); ++right) {
+                if (empty_rect(intersect_rect(rects[left], rects[right]))) {
+                    continue;
+                }
+                rects[left] = union_rect(rects[left], rects[right]);
+                rects.erase(rects.begin() + static_cast<std::ptrdiff_t>(right));
+                merged = true;
+                break;
+            }
+        }
+    }
+}
+
 std::size_t rect_area(Rect rect) {
     if (empty_rect(rect)) {
         return 0;
@@ -355,6 +373,34 @@ bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
     }
     const std::size_t dirty_area = dirty_region_area(result);
     return dirty_area <= area_for_percent(viewport_area, max_area_percent);
+}
+
+void merge_dirty_region_into(DirtyRegionResult& target,
+                             const DirtyRegionResult& source,
+                             std::size_t max_rects) {
+    if (source.rects.empty()) {
+        return;
+    }
+    if (source.mode == DirtyRegionMode::FullFrame) {
+        target = source;
+        return;
+    }
+    if (target.mode == DirtyRegionMode::FullFrame) {
+        return;
+    }
+
+    target.mode = DirtyRegionMode::DirtyRects;
+    target.fallback_reason = DirtyRegionFallbackReason::None;
+    target.rects.insert(target.rects.end(), source.rects.begin(), source.rects.end());
+
+    merge_overlapping_rects(target.rects);
+
+    const std::size_t rect_limit = std::max<std::size_t>(1, max_rects);
+    while (target.rects.size() > rect_limit) {
+        target.rects.front() = union_rect(target.rects.front(), target.rects.back());
+        target.rects.pop_back();
+        merge_overlapping_rects(target.rects);
+    }
 }
 
 void coalesce_dirty_rects_into(const Rect* input,

@@ -1,6 +1,6 @@
 # Native Tools
 
-> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-11；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 这里保存 JellyFrame 桌面检查工具的 C++ 实现。App 作者应先阅读
 `../debug/README_zh.md`；示例页面和 app package 位于 `../../samples`。
@@ -73,6 +73,10 @@ script-watchdog-interval 16
 
 JavaScript/rAF 播放需要使用 `JELLYFRAME_BUILD_SCRIPTING=ON` 配置出来的构建；
 非 scripting 构建仍可验证 CSS animation。
+
+`--force-full-repaint` 只作为桌面正确性基准使用。同一份确定性帧脚本分别按普通模式和该模式
+运行时，逐帧 BMP 应当完全一致；若不一致，说明 retained invalidation 或增量合成发生漂移，
+不能将其视为可接受的视觉降级。
 
 在帧脚本中使用 `animation-fps 0` 和 `animation-callbacks 0`，或命令行传入
 `--animation-fps 0 --animation-callbacks 0`，可以验证低功耗 profile：宿主应停止非必要动效，

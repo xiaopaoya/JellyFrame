@@ -41,6 +41,20 @@ bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
 }
 
+Rect union_rect(Rect left, Rect right) {
+    if (empty_rect(left)) {
+        return right;
+    }
+    if (empty_rect(right)) {
+        return left;
+    }
+    const int x1 = std::min(left.x, right.x);
+    const int y1 = std::min(left.y, right.y);
+    const int x2 = std::max(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::max(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
+}
+
 bool contains_rect(Rect outer, Rect inner) {
     return !empty_rect(inner) &&
         inner.x >= outer.x &&
@@ -637,37 +651,33 @@ Color lerp_color_fixed(Color left, Color right, int t256) {
 }
 
 Rect transformed_destination_rect(Rect source_rect,
+                                  Rect transform_reference_rect,
                                   const Transform2D& transform,
                                   int origin_x_percent,
                                   int origin_y_percent) {
-    const float scaled_width = std::max(1.0F, static_cast<float>(source_rect.width) * transform.scale_x);
-    const float scaled_height = std::max(1.0F, static_cast<float>(source_rect.height) * transform.scale_y);
-    const float origin_x = static_cast<float>(source_rect.x) +
-        static_cast<float>(source_rect.width) * static_cast<float>(origin_x_percent) / 100.0F;
-    const float origin_y = static_cast<float>(source_rect.y) +
-        static_cast<float>(source_rect.height) * static_cast<float>(origin_y_percent) / 100.0F;
-    const float left = origin_x -
-        scaled_width * static_cast<float>(origin_x_percent) / 100.0F;
-    const float top = origin_y -
-        scaled_height * static_cast<float>(origin_y_percent) / 100.0F;
+    const float origin_x = static_cast<float>(transform_reference_rect.x) +
+        static_cast<float>(transform_reference_rect.width) * static_cast<float>(origin_x_percent) / 100.0F;
+    const float origin_y = static_cast<float>(transform_reference_rect.y) +
+        static_cast<float>(transform_reference_rect.height) * static_cast<float>(origin_y_percent) / 100.0F;
 
     constexpr float kPi = 3.14159265358979323846F;
     const float radians = transform.rotate_degrees * kPi / 180.0F;
     const float c = std::cos(radians);
     const float s = std::sin(radians);
     const float corners[4][2] = {
-        {left, top},
-        {left + scaled_width, top},
-        {left, top + scaled_height},
-        {left + scaled_width, top + scaled_height},
+        {static_cast<float>(source_rect.x), static_cast<float>(source_rect.y)},
+        {static_cast<float>(safe_edge(source_rect.x, source_rect.width)), static_cast<float>(source_rect.y)},
+        {static_cast<float>(source_rect.x), static_cast<float>(safe_edge(source_rect.y, source_rect.height))},
+        {static_cast<float>(safe_edge(source_rect.x, source_rect.width)),
+         static_cast<float>(safe_edge(source_rect.y, source_rect.height))},
     };
     float min_x = 0.0F;
     float min_y = 0.0F;
     float max_x = 0.0F;
     float max_y = 0.0F;
     for (int index = 0; index < 4; ++index) {
-        const float dx = corners[index][0] - origin_x;
-        const float dy = corners[index][1] - origin_y;
+        const float dx = (corners[index][0] - origin_x) * transform.scale_x;
+        const float dy = (corners[index][1] - origin_y) * transform.scale_y;
         const float x = origin_x + dx * c - dy * s;
         const float y = origin_y + dx * s + dy * c;
         if (index == 0) {
@@ -690,6 +700,7 @@ Rect transformed_destination_rect(Rect source_rect,
 void composite_transformed_buffer(FrameBuffer& target,
                                   const FrameBuffer& source,
                                   Rect source_rect,
+                                  Rect transform_reference_rect,
                                   Rect destination,
                                   const Transform2D& transform,
                                   int origin_x_percent,
@@ -703,10 +714,10 @@ void composite_transformed_buffer(FrameBuffer& target,
         return;
     }
 
-    const float origin_x = static_cast<float>(source_rect.x) +
-        static_cast<float>(source_rect.width) * static_cast<float>(origin_x_percent) / 100.0F;
-    const float origin_y = static_cast<float>(source_rect.y) +
-        static_cast<float>(source_rect.height) * static_cast<float>(origin_y_percent) / 100.0F;
+    const float origin_x = static_cast<float>(transform_reference_rect.x) +
+        static_cast<float>(transform_reference_rect.width) * static_cast<float>(origin_x_percent) / 100.0F;
+    const float origin_y = static_cast<float>(transform_reference_rect.y) +
+        static_cast<float>(transform_reference_rect.height) * static_cast<float>(origin_y_percent) / 100.0F;
     constexpr float kPi = 3.14159265358979323846F;
     const float radians = transform.rotate_degrees * kPi / 180.0F;
     const float c = std::cos(radians);
@@ -821,6 +832,14 @@ bool root_opaque_fill_covers(const LayerNode& root, Rect clip) {
         return false;
     }
     return opaque_fill_prefix(root.display_list, clip, 0, 0).covers_clip;
+}
+
+Rect layer_source_bounds(const LayerNode& layer) {
+    Rect bounds = layer.bounds;
+    for (const DisplayCommand& command : layer.display_list) {
+        bounds = union_rect(bounds, command.rect);
+    }
+    return bounds;
 }
 
 void rasterize_with_opacity(const SoftwareRasterizer& rasterizer,
@@ -1319,15 +1338,19 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
     const float layer_opacity = inherited_opacity * layer.opacity;
     const bool needs_offscreen = layer.type == LayerType::Composited || layer.opacity < 0.999F;
     if (needs_offscreen) {
-        Rect source_bounds = layer.bounds;
+        Rect source_bounds = layer_source_bounds(layer);
         source_bounds.x += layer_offset_x;
         source_bounds.y += layer_offset_y;
+        Rect transform_reference_bounds = layer.bounds;
+        transform_reference_bounds.x += layer_offset_x;
+        transform_reference_bounds.y += layer_offset_y;
         const bool has_scale_or_rotate =
             std::abs(layer.transform.scale_x - 1.0F) >= 0.001F ||
             std::abs(layer.transform.scale_y - 1.0F) >= 0.001F ||
             std::abs(layer.transform.rotate_degrees) >= 0.001F;
         const Rect destination = has_scale_or_rotate
             ? transformed_destination_rect(source_bounds,
+                                           transform_reference_bounds,
                                            layer.transform,
                                            layer.transform_origin_x_percent,
                                            layer.transform_origin_y_percent)
@@ -1402,6 +1425,7 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
             composite_transformed_buffer(target,
                                          offscreen,
                                          offscreen_bounds,
+                                         transform_reference_bounds,
                                          destination,
                                          layer.transform,
                                          layer.transform_origin_x_percent,

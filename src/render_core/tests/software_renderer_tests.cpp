@@ -808,6 +808,48 @@ void compositor_degrades_oversized_offscreen_layers_without_crashing() {
     check(has_diagnostic_code(diagnostics, "paint-offscreen-budget"), "offscreen fallback is reported");
 }
 
+void compositor_keeps_composited_paint_outside_layout_bounds() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 20, 20};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->opacity = 0.8F;
+    child->bounds = Rect{6, 6, 8, 8};
+    child->display_list.push_back(black_fill(Rect{2, 2, 16, 16}));
+    root.children.push_back(std::move(child));
+
+    const FrameBuffer output =
+        SoftwareCompositor().render(root, 20, 20, Color{255, 255, 255, 255});
+    check(output.pixel(3, 3).r < 255,
+          "composited paint outside the layout box is not clipped by the offscreen surface");
+    check(output.pixel(1, 1).r == 255, "expanded offscreen surface remains bounded to painted content");
+}
+
+void compositor_expanded_visual_bounds_keep_border_box_transform_origin() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 20, 20};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->bounds = Rect{8, 8, 4, 4};
+    child->transform.scale_x = 0.5F;
+    child->transform.scale_y = 0.5F;
+    child->display_list.push_back(black_fill(Rect{4, 8, 8, 4}));
+    root.children.push_back(std::move(child));
+
+    SoftwareCompositor::Options options;
+    options.smooth_scaled_layers = false;
+    const FrameBuffer output =
+        SoftwareCompositor({}, options).render(root, 20, 20, Color{255, 255, 255, 255});
+    check(output.pixel(10, 9).r == 0,
+          "expanded visual bounds scale around the border-box transform origin");
+    check(output.pixel(6, 9).r == 255,
+          "expanded visual bounds do not move the transform origin to the paint bounds");
+}
+
 void compositor_bounds_nested_live_offscreen_pixels() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1363,6 +1405,8 @@ int main() {
         rasterizer_scratch_reuses_clipped_image_storage();
         compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
+        compositor_keeps_composited_paint_outside_layout_bounds();
+        compositor_expanded_visual_bounds_keep_border_box_transform_origin();
         compositor_bounds_nested_live_offscreen_pixels();
         compositor_skips_oversized_transformed_layers_instead_of_painting_them_untransformed();
         compositor_rejects_oversized_framebuffer_before_allocation();

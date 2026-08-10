@@ -1,6 +1,6 @@
 # Native Tools
 
-> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-11; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory contains the native C++ implementation of JellyFrame's desktop
 inspection tools. App authors should start with `../debug/README.md`; sample
@@ -81,6 +81,11 @@ script-watchdog-interval 16
 JavaScript/rAF playback requires a build configured with
 `JELLYFRAME_BUILD_SCRIPTING=ON`; CSS animation capture works in non-scripting
 builds.
+
+Use `--force-full-repaint` only as a desktop correctness oracle. Running the
+same deterministic frame script once normally and once with this flag should
+produce byte-identical BMP frames. A mismatch indicates retained invalidation
+or incremental compositing drift; it is not an acceptable rendering downgrade.
 
 Use `animation-fps 0` and `animation-callbacks 0` in a frame script, or pass
 `--animation-fps 0 --animation-callbacks 0`, to validate low-power profiles

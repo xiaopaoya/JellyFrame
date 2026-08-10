@@ -27,4 +27,11 @@ void compute_animation_dirty_region_into(const LayoutBox& layout,
                                          const AnimationInvalidationOptions& options,
                                          DirtyRegionResult& result);
 
+void merge_animation_dirty_region_into(const LayoutBox& layout,
+                                       const std::vector<StyleOverride>& previous_overrides,
+                                       const std::vector<StyleOverride>& current_overrides,
+                                       const AnimationInvalidationOptions& options,
+                                       DirtyRegionResult& target,
+                                       DirtyRegionResult& scratch);
+
 } // namespace jellyframe

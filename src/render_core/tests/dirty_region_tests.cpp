@@ -611,6 +611,28 @@ void dirty_region_area_handles_extreme_rects_safely() {
           "extreme dirty region keeps percent bounded by its actual area");
 }
 
+void merged_dirty_regions_remove_overlap_and_preserve_full_fallback() {
+    DirtyRegionResult target;
+    target.mode = DirtyRegionMode::DirtyRects;
+    target.rects.push_back(Rect{0, 0, 10, 10});
+    DirtyRegionResult source;
+    source.mode = DirtyRegionMode::DirtyRects;
+    source.rects.push_back(Rect{5, 0, 10, 10});
+    merge_dirty_region_into(target, source, 4);
+    check(target.rects.size() == 1 && target.rects.front().width == 15,
+          "dirty region merge removes overlap");
+    check(dirty_region_area(target) == 150,
+          "merged dirty region does not double-count translucent repaint area");
+
+    DirtyRegionResult full;
+    full.mode = DirtyRegionMode::FullFrame;
+    full.fallback_reason = DirtyRegionFallbackReason::DirtyAreaTooLarge;
+    full.rects.push_back(Rect{0, 0, 100, 100});
+    merge_dirty_region_into(target, full, 4);
+    check(target.mode == DirtyRegionMode::FullFrame && target.rects.front().width == 100,
+          "full-frame invalidation dominates a retained dirty region");
+}
+
 } // namespace
 
 int main() {
@@ -637,6 +659,7 @@ int main() {
         dirty_rect_coalescing_forces_deterministic_low_extra_merge();
         dirty_rect_coalescing_clips_and_handles_large_areas();
         dirty_region_area_handles_extreme_rects_safely();
+        merged_dirty_regions_remove_overlap_and_preserve_full_fallback();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
         return 1;

@@ -292,4 +292,18 @@ void compute_animation_dirty_region_into(const LayoutBox& layout,
     }
 }
 
+void merge_animation_dirty_region_into(const LayoutBox& layout,
+                                       const std::vector<StyleOverride>& previous_overrides,
+                                       const std::vector<StyleOverride>& current_overrides,
+                                       const AnimationInvalidationOptions& options,
+                                       DirtyRegionResult& target,
+                                       DirtyRegionResult& scratch) {
+    if (previous_overrides.empty() && current_overrides.empty()) {
+        return;
+    }
+    compute_animation_dirty_region_into(
+        layout, previous_overrides, current_overrides, options, scratch);
+    merge_dirty_region_into(target, scratch, options.max_rects);
+}
+
 } // namespace jellyframe

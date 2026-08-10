@@ -128,31 +128,6 @@ Rect intersect_rect(Rect left, Rect right) {
     return Rect{x1, y1, std::max(0, x2 - x1), std::max(0, y2 - y1)};
 }
 
-void merge_dirty_region(DirtyRegionResult& target,
-                        const DirtyRegionResult& source,
-                        std::size_t max_rects) {
-    if (source.rects.empty()) {
-        return;
-    }
-    if (source.mode == DirtyRegionMode::FullFrame) {
-        target = source;
-        return;
-    }
-    if (target.mode == DirtyRegionMode::FullFrame) {
-        return;
-    }
-    target.mode = DirtyRegionMode::DirtyRects;
-    target.fallback_reason = DirtyRegionFallbackReason::None;
-    const std::size_t rect_limit = std::max<std::size_t>(1, max_rects);
-    for (Rect rect : source.rects) {
-        if (target.rects.size() >= rect_limit && !target.rects.empty()) {
-            target.rects.front() = union_rect(target.rects.front(), rect);
-        } else {
-            target.rects.push_back(rect);
-        }
-    }
-}
-
 std::uint16_t pack_rgb565(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     return static_cast<std::uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
 }
@@ -516,6 +491,7 @@ struct BrowserOptions {
     bool capture = false;
     bool capture_frames = false;
     bool vscode_debug = false;
+    bool force_full_repaint = false;
     std::string output_path;
     std::string frame_output_dir;
     std::string vscode_frame_dir;
@@ -2824,6 +2800,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "  --capture-frames DIR           Hidden deterministic frame capture directory.\n"
         << "  --vscode-debug                Run the isolated VS Code frame-stream session.\n"
         << "  --vscode-frame-dir DIR        Directory for complete VS Code frame snapshots.\n"
+        << "  --force-full-repaint          Disable incremental frame repaint for diagnostics.\n"
         << "  --frame-script PATH            Apply deterministic capture/script commands.\n"
         << "  --capture-montage PATH         Write a BMP/PPM contact sheet for captured frames.\n"
         << "  --montage-columns N            Contact sheet columns, default auto.\n"
@@ -5308,7 +5285,7 @@ private:
         if (layout_tree_ == nullptr) {
             return false;
         }
-        const bool can_strip_blit = scroll_match != nullptr &&
+        const bool can_strip_blit = !options_.force_full_repaint && scroll_match != nullptr &&
             can_strip_blit_scroll_layer(*scroll_match);
         const Rect strip_visible_rect = can_strip_blit ? scroll_match->visible_rect : Rect{};
         const int strip_max_scroll_y =
@@ -5384,7 +5361,8 @@ private:
         DirtyRegionResult scroll_dirty_region;
         scroll_dirty_region.mode = DirtyRegionMode::DirtyRects;
         scroll_dirty_region.rects.push_back(dirty_content_rect);
-        const bool can_repaint_dirty = frame_buffer_.width == viewport_width_ &&
+        const bool can_repaint_dirty = !options_.force_full_repaint &&
+            frame_buffer_.width == viewport_width_ &&
             frame_buffer_.height == content_height &&
             !empty_rect(dirty_content_rect) &&
             dirty_region_should_repaint_incrementally(scroll_dirty_region,
@@ -5591,6 +5569,21 @@ private:
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
+        const auto merge_override_invalidation =
+            [this](const LayoutBox& layout,
+                   const std::vector<StyleOverride>& previous_overrides,
+                   const std::vector<StyleOverride>& current_overrides,
+                   int content_height,
+                   DirtyRegionResult& target) {
+                merge_animation_dirty_region_into(
+                    layout,
+                    previous_overrides,
+                    current_overrides,
+                    AnimationInvalidationOptions{
+                        Rect{0, 0, viewport_width_, content_height}, budgets_.max_dirty_rects, 3},
+                    target,
+                    frame_scratch_.animation_dirty_region);
+            };
         if (update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             layout_tree_ != nullptr &&
@@ -5610,14 +5603,6 @@ private:
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
             const bool animation_only_dirty =
                 !style_overrides_.empty() && dirty_flags == DomDirtyPaint;
-            if (animation_only_dirty) {
-                compute_animation_dirty_region_into(
-                    *layout_tree_,
-                    previous_style_overrides_,
-                    style_overrides_,
-                    AnimationInvalidationOptions{Rect{0, 0, viewport_width_, content_height}, budgets_.max_dirty_rects, 3},
-                    frame_scratch_.dirty_region);
-            }
             apply_animation_overrides_to_cached_trees();
             const bool reused_opacity_layers = animation_only_dirty && layer_tree_ != nullptr &&
                 apply_opacity_overrides_to_layer_tree(*layer_tree_, style_overrides_, layer_override_scratch_);
@@ -5640,13 +5625,18 @@ private:
                     frame_scratch_.dirty_region,
                     &frame_scratch_.dirty_region_scratch);
             }
+            merge_override_invalidation(*layout_tree_,
+                                        previous_style_overrides_,
+                                        style_overrides_,
+                                        content_height,
+                                        frame_scratch_.dirty_region);
             const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             if (next_layer_tree != nullptr) {
                 layer_tree_ = std::move(next_layer_tree);
             }
             evict_unused_image_surfaces();
-            if (!dirty_rects.empty() &&
+            if (!options_.force_full_repaint && !dirty_rects.empty() &&
                 dirty_region_should_repaint_incrementally(dirty_region,
                                                           Rect{0, 0, viewport_width_, content_height},
                                                           kIncrementalDirtyAreaLimitPercent)) {
@@ -5737,22 +5727,22 @@ private:
                 dirty_options,
                 frame_scratch_.dirty_region,
                 &frame_scratch_.dirty_region_scratch);
-            if (!previous_repaint_overrides.empty() || !current_repaint_overrides.empty()) {
-                DirtyRegionResult style_dirty_region;
-                compute_animation_dirty_region_into(
-                    *layout_tree_,
-                    previous_repaint_overrides,
-                    current_repaint_overrides,
-                    AnimationInvalidationOptions{Rect{0, 0, viewport_width_, content_height}, budgets_.max_dirty_rects, 3},
-                    style_dirty_region);
-                merge_dirty_region(frame_scratch_.dirty_region, style_dirty_region, budgets_.max_dirty_rects);
-            }
+            merge_override_invalidation(*layout_tree_,
+                                        previous_repaint_overrides,
+                                        current_repaint_overrides,
+                                        content_height,
+                                        frame_scratch_.dirty_region);
+            merge_override_invalidation(*layout_tree_,
+                                        previous_style_overrides_,
+                                        style_overrides_,
+                                        content_height,
+                                        frame_scratch_.dirty_region);
             const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             render_tree_ = std::move(next_render_tree);
             layer_tree_ = std::move(next_layer_tree);
             evict_unused_image_surfaces();
-            if (!dirty_rects.empty() &&
+            if (!options_.force_full_repaint && !dirty_rects.empty() &&
                 dirty_region_should_repaint_incrementally(dirty_region,
                                                           Rect{0, 0, viewport_width_, content_height},
                                                           kIncrementalDirtyAreaLimitPercent)) {
@@ -5807,16 +5797,12 @@ private:
                                       dirty_region,
                                       &frame_scratch_.dirty_region_scratch);
         }
-        if (can_repaint_incrementally &&
-            (!previous_style_overrides_.empty() || !style_overrides_.empty())) {
-            DirtyRegionResult animation_dirty_region;
-            compute_animation_dirty_region_into(
-                *next_layout_tree,
-                previous_style_overrides_,
-                style_overrides_,
-                AnimationInvalidationOptions{Rect{0, 0, viewport_width_, content_height}, budgets_.max_dirty_rects, 3},
-                animation_dirty_region);
-            merge_dirty_region(dirty_region, animation_dirty_region, budgets_.max_dirty_rects);
+        if (can_repaint_incrementally) {
+            merge_override_invalidation(*next_layout_tree,
+                                        previous_style_overrides_,
+                                        style_overrides_,
+                                        content_height,
+                                        dirty_region);
         }
         const std::vector<Rect>& dirty_rects = dirty_region.rects;
 
@@ -5826,7 +5812,7 @@ private:
         capture_script_layout_snapshot();
         evict_unused_image_surfaces();
 
-        if (can_repaint_incrementally && !dirty_rects.empty() &&
+        if (!options_.force_full_repaint && can_repaint_incrementally && !dirty_rects.empty() &&
             dirty_region_should_repaint_incrementally(dirty_region,
                                                       Rect{0, 0, viewport_width_, content_height},
                                                       kIncrementalDirtyAreaLimitPercent)) {
@@ -6869,6 +6855,10 @@ int main(int argc, char** argv) {
         }
         if (arg == "--vscode-debug") {
             options.vscode_debug = true;
+            continue;
+        }
+        if (arg == "--force-full-repaint") {
+            options.force_full_repaint = true;
             continue;
         }
         if (arg == "--vscode-frame-dir") {

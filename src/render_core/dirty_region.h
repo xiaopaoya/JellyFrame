@@ -108,6 +108,12 @@ bool dirty_region_should_repaint_incrementally(const DirtyRegionResult& result,
                                                Rect viewport,
                                                int max_area_percent);
 
+// Adds source invalidation to target, merging overlaps so translucent content
+// is never repainted twice and area accounting remains conservative.
+void merge_dirty_region_into(DirtyRegionResult& target,
+                             const DirtyRegionResult& source,
+                             std::size_t max_rects);
+
 // Clips input to viewport and optionally merges rectangles when doing so lowers
 // the caller-defined present cost. This utility never changes frame planning;
 // ports opt in and retain ownership of the resulting presentation policy.

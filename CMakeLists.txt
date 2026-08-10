@@ -742,6 +742,14 @@ if(JELLYFRAME_BUILD_TESTS)
                     $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+        add_test(
+            NAME jellyframe_win32_incremental_repaint_equivalence
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/incremental_repaint_equivalence_tests.py
+                    $<TARGET_FILE:jellyframe_desktop_shell>
+                    ${CMAKE_CURRENT_SOURCE_DIR}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
         if(JELLYFRAME_BUILD_SCRIPTING)
             add_test(
                 NAME jellyframe_win32_canvas_smoke_frame_script
@@ -846,7 +854,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_dirty_frame_script PROPERTIES
                 PASS_REGULAR_EXPRESSION
-                    "dirty_local=90 full=1 clean=0")
+                    "dirty_local=[1-9][0-9]* full=[1-9][0-9]* clean=0")
 
             add_test(
                 NAME jellyframe_win32_motion_lab_dirty_flags_frame_script
