@@ -3,6 +3,7 @@
 #include "render_core/layer_tree.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace jellyframe {
 namespace {
@@ -151,6 +152,55 @@ Rect subtree_bounds(const LayoutBox& box) {
     return bounds;
 }
 
+constexpr int kMaxDirtyPaintEffectExtent = 128;
+
+Rect expand_for_dirty_paint_effects(Rect bounds, const Style& style) {
+    const auto bounded_extent = [](int value) {
+        return std::clamp(value, 0, kMaxDirtyPaintEffectExtent);
+    };
+    const auto bounded_offset = [](int value) {
+        return std::clamp(value, -kMaxDirtyPaintEffectExtent, kMaxDirtyPaintEffectExtent);
+    };
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    if (style.box_shadow.enabled) {
+        const BoxShadowStyle& shadow = style.box_shadow;
+        const int extent = std::max(1, bounded_extent(static_cast<int>(shadow.blur)) +
+            bounded_extent(std::abs(static_cast<int>(shadow.spread))));
+        const int offset_x = bounded_offset(static_cast<int>(shadow.offset_x));
+        const int offset_y = bounded_offset(static_cast<int>(shadow.offset_y));
+        left = std::min(left, offset_x - extent);
+        top = std::min(top, offset_y - extent);
+        right = std::max(right, offset_x + extent);
+        bottom = std::max(bottom, offset_y + extent);
+    }
+    if (style.text_shadow.enabled) {
+        const TextShadowStyle& shadow = style.text_shadow;
+        const int extent = std::max(1, bounded_extent(static_cast<int>(shadow.blur)));
+        const int offset_x = bounded_offset(static_cast<int>(shadow.offset_x));
+        const int offset_y = bounded_offset(static_cast<int>(shadow.offset_y));
+        left = std::min(left, offset_x - extent);
+        top = std::min(top, offset_y - extent);
+        right = std::max(right, offset_x + extent);
+        bottom = std::max(bottom, offset_y + extent);
+    }
+#endif
+    const int outline_extent = std::min(kMaxDirtyPaintEffectExtent,
+                                        bounded_extent(style.outline_width) +
+                                            bounded_extent(std::abs(style.outline_offset)));
+    left = std::min(left, -outline_extent);
+    top = std::min(top, -outline_extent);
+    right = std::max(right, outline_extent);
+    bottom = std::max(bottom, outline_extent);
+    return Rect{safe_edge(bounds.x, left),
+                safe_edge(bounds.y, top),
+                safe_add(bounds.width, safe_add(-left, right)),
+                safe_add(bounds.height, safe_add(-top, bottom))};
+}
+
 bool has_local_tree_dirty(const Node& node) {
     if ((node.dirty_flags & DomDirtyTree) == 0U) {
         return false;
@@ -199,6 +249,24 @@ void append_dirty_bounds_from_layout(const LayoutBox& layout, std::vector<DirtyN
             if (current->node->dirty_flags == DomDirtyNone) {
                 continue;
             }
+        }
+        for (const auto& child : current->children) {
+            pending.push_back(child.get());
+        }
+    }
+}
+
+void append_dirty_paint_effect_bounds_from_layout(const LayoutBox& layout,
+                                                  std::vector<DirtyNodeBounds>& output) {
+    std::vector<const LayoutBox*> pending;
+    pending.push_back(&layout);
+    while (!pending.empty()) {
+        const LayoutBox* current = pending.back();
+        pending.pop_back();
+        if (current->node != nullptr && current->node->local_dirty_flags != DomDirtyNone) {
+            merge_dirty_bounds(output,
+                               current->node,
+                               expand_for_dirty_paint_effects(current->rect, current->style));
         }
         for (const auto& child : current->children) {
             pending.push_back(child.get());
@@ -557,6 +625,8 @@ void compute_dirty_region_into(const Node& document,
     std::vector<DirtyNodeBounds>& dirty_bounds = active_scratch.node_bounds;
     append_dirty_bounds_from_layout(*previous_layout, dirty_bounds);
     append_dirty_bounds_from_layout(*current_layout, dirty_bounds);
+    append_dirty_paint_effect_bounds_from_layout(*previous_layout, dirty_bounds);
+    append_dirty_paint_effect_bounds_from_layout(*current_layout, dirty_bounds);
     if (options.previous_layer_tree != nullptr) {
         append_dirty_paint_bounds_from_layer(*options.previous_layer_tree, dirty_bounds);
     }
