@@ -34,16 +34,36 @@ function ensureBuildDir(context) {
   fs.mkdirSync(buildDir(context), { recursive: true });
 }
 
-function nativeBuildDir(context) {
+function appRequiresScripting(root) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, "jellyframe.app.json"), "utf8"));
+    const mode = manifest?.runtime?.script ?? manifest?.script;
+    return typeof mode === "string" && mode !== "" && mode !== "none";
+  } catch (_) {
+    return false;
+  }
+}
+
+function nativeBuildDir(context, preferScripting = false) {
   const configured = config().get("buildDir", "").trim();
   if (configured) {
     return path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured);
   }
-  for (const candidate of [
+  const ordinaryCandidates = [
     path.join(repoRoot(context), "build", "Release"),
     path.join(repoRoot(context), "build", "Debug"),
     path.join(repoRoot(context), "build-script", "Release")
-  ]) {
+  ];
+  const scriptingCandidates = [
+    path.join(repoRoot(context), "build", "scripting-ci-local", "Release"),
+    path.join(repoRoot(context), "build", "scripting-ci-local", "Debug"),
+    path.join(repoRoot(context), "build", "scripting-on-local", "Release"),
+    path.join(repoRoot(context), "build-script", "Release")
+  ];
+  const candidates = preferScripting
+    ? [...scriptingCandidates, ...ordinaryCandidates]
+    : ordinaryCandidates;
+  for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -306,7 +326,7 @@ async function runPackageCommand(context, commandName, resourceUri) {
       const frameOutputDir = path.join(buildDir(context), "debug", `${base}-validate-frames`);
       const montage = path.join(buildDir(context), "debug", `${base}-validate-montage.bmp`);
       args.push(
-        "--build-dir", nativeBuildDir(context),
+        "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
         "--frame-script", frameScript,
         "--frame-output-dir", frameOutputDir,
         "--frame-montage", montage
@@ -382,7 +402,7 @@ async function debugExternalApp(context, resourceUri) {
   const runtimeLog = path.join(buildDir(context), `vscode-${base}-debug-runtime.log`);
   const report = path.join(buildDir(context), `vscode-${base}-debug-report.json`);
   runDetachedPython(context, launcher, [
-    "--build-dir", nativeBuildDir(context),
+    "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
     "--app", root,
     "--runtime-log", runtimeLog,
     "--wait"
@@ -396,7 +416,7 @@ async function debugExternalApp(context, resourceUri) {
         "check",
         "--root", root,
         "--target", selectedTarget,
-        "--build-dir", nativeBuildDir(context),
+        "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
         "--report", report,
         "--runtime-log", runtimeLog,
         "--font-budget", config().get("fontBudget", "16x16")
@@ -583,7 +603,7 @@ async function debugApp(context, resourceUri) {
   );
   panel.webview.html = embeddedDebugHtml(panel.webview);
   const python = config().get('pythonPath', 'python');
-  const args = [launcher, '--build-dir', nativeBuildDir(context), '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  const args = [launcher, '--build-dir', nativeBuildDir(context, appRequiresScripting(root)), '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
   const channel = ensureOutputChannel();
   channel.appendLine(`+ ${[python, ...args].join(' ')}`);
   const child = childProcess.spawn(python, args, {
@@ -684,7 +704,7 @@ async function runFrameScript(context, resourceUri) {
     "preview",
     "--root", root,
     "--target", selectedTarget,
-    "--build-dir", nativeBuildDir(context),
+    "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
     "--output", capture,
     "--report", report,
     "--frame-script", selected[0].fsPath,

@@ -51,6 +51,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
 安装到仓库之外时，在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
 可选，用于指定桌面构建目录。扩展优先使用 `build/Release`，其次使用 `build/Debug`。
+如果 App manifest 声明了 `runtime.script`，未显式设置 `jellyframe.buildDir` 时会优先寻找
+`build/scripting-ci-local` 或其他脚本构建。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 

@@ -63,6 +63,9 @@ use the Extensions view's `Install from VSIX...` action and select the generated
 `.vsix`. When the extension is installed outside the
 repository, set `jellyframe.repoRoot`; `jellyframe.buildDir` is optional. The
 extension prefers `build/Release`, then `build/Debug`.
+For an app whose manifest declares `runtime.script`, the extension prefers an
+existing `build/scripting-ci-local` or other scripting build unless
+`jellyframe.buildDir` is explicitly set.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 
