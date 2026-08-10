@@ -15,6 +15,7 @@
   "menu.label": "JellyFrame",
   "menu.packageLabel": "JellyFrame Package",
   "menu.editorLabel": "JellyFrame App",
+  "viewContainer.title": "JellyFrame",
   "view.status": "JellyFrame",
   "configuration.title": "JellyFrame",
   "configuration.repoRoot": "Optional JellyFrame repository root. Leave empty when running the extension from this repository.",

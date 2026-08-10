@@ -4,7 +4,8 @@
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
-JellyFrame menu, focused context menus and the Command Palette as entry points.
+dedicated JellyFrame Activity Bar view, focused context menus and the Command
+Palette as entry points.
 
 ## Features
 
@@ -23,8 +24,9 @@ JellyFrame menu, focused context menus and the Command Palette as entry points.
   with a setting for an explicit build directory.
 - Configurable repository root, Python executable, default target and font
   budget.
-- A `JellyFrame` menu in the VS Code menubar, plus focused context-menu
-  actions for `jellyframe.app.json` and HTML/CSS files.
+- A dedicated `JellyFrame` Activity Bar view with app, build, report and
+  diagnostic actions, plus focused context-menu actions for
+  `jellyframe.app.json` and HTML/CSS files.
 
 ## Using The Extension
 
@@ -36,8 +38,8 @@ on the VS Code Marketplace. To try it with the least setup:
 2. Open `tools/vscode-jellyframe` in VS Code.
 3. Press `F5` to launch an Extension Development Host. Open a JellyFrame
    repository there, or set `jellyframe.repoRoot` to the repository root.
-4. Open `jellyframe.app.json` or an app HTML/CSS file, then use the `JellyFrame`
-   menubar menu or the context menu.
+4. Click the JellyFrame icon in the Activity Bar, or open
+   `jellyframe.app.json` or an app HTML/CSS file and use the context menu.
 
 To package, install or update it like a regular local extension, run the helper
 script in the extension folder:
@@ -79,10 +81,10 @@ also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
 
-The top-level `JellyFrame` menu groups package, debugging and report actions.
-It is contributed to VS Code's main menu bar and does not depend on an open
-editor or workspace file. After installing an updated VSIX, run
-`Developer: Reload Window` once if the old extension instance is still loaded.
+The `JellyFrame` Activity Bar view groups package, debugging and report actions.
+It is always contributed, including when no workspace file is open. After
+installing an updated VSIX, run `Developer: Reload Window` once if the old
+extension instance is still loaded.
 The Explorer context menu is available for `jellyframe.app.json`; the editor
 context menu is available while editing an app HTML, CSS or manifest file.
 These entries use the same commands as the Command Palette, so either entry

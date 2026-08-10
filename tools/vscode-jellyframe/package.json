@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publisher": "jellyframe",
   "engines": {
     "vscode": "^1.85.0"
@@ -100,22 +100,24 @@
         "icon": "$(tools)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jellyframe",
+          "title": "%viewContainer.title%",
+          "icon": "media/jellyframe.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "jellyframe": [
         {
           "id": "jellyframe.status",
-          "name": "%view.status%",
-          "when": "workspaceFolderCount > 0"
+          "name": "%view.status%"
         }
       ]
     },
     "menus": {
-      "menubar/main": [
-        {
-          "submenu": "jellyframe.actions",
-          "group": "navigation"
-        }
-      ],
       "jellyframe.actions": [
         {
           "command": "jellyframe.validate",
@@ -237,6 +239,11 @@
         }
       ],
       "view/title": [
+        {
+          "submenu": "jellyframe.actions",
+          "when": "view == jellyframe.status",
+          "group": "navigation@0"
+        },
         {
           "command": "jellyframe.debug",
           "when": "view == jellyframe.status",

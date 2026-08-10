@@ -15,6 +15,7 @@
   "menu.label": "JellyFrame",
   "menu.packageLabel": "JellyFrame 包操作",
   "menu.editorLabel": "JellyFrame App",
+  "viewContainer.title": "JellyFrame",
   "view.status": "JellyFrame",
   "configuration.title": "JellyFrame",
   "configuration.repoRoot": "可选的 JellyFrame 仓库根目录；从本仓库运行扩展时留空。",

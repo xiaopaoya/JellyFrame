@@ -3,7 +3,7 @@
 > 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
-打包 JellyFrame App。安装后可以从顶部的 JellyFrame 菜单、资源管理器/编辑器右键菜单
+打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
 或命令面板开始工作。
 
 ## 功能
@@ -18,8 +18,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 自动发现 `build/Release`、`build/Debug` 以及重命名后的桌面壳，也可在设置中指定路径。
 - 可配置仓库根目录、Python 可执行文件、默认 target 和字体预算。
-- 在 VS Code 顶部提供 `JellyFrame` 菜单；对 `jellyframe.app.json` 以及 HTML/CSS
-  文件提供针对性的右键菜单。
+- 在 VS Code 左侧提供始终可见的 `JellyFrame` 活动栏视图，集中显示 App、构建、报告、
+  诊断和性能操作；对 `jellyframe.app.json` 以及 HTML/CSS 文件提供针对性的右键菜单。
 
 ## 使用扩展
 
@@ -29,8 +29,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 2. 用 VS Code 打开 `tools/vscode-jellyframe` 文件夹。
 3. 按 `F5`，在新打开的 Extension Development Host 窗口中打开一个 JellyFrame 仓库，
    或将 `jellyframe.repoRoot` 设置为仓库根目录。
-4. 打开 `jellyframe.app.json`、App 的 HTML/CSS 文件，或直接点击顶部的 `JellyFrame`
-   菜单开始操作。
+4. 点击左侧活动栏中的 JellyFrame 图标开始操作；也可以打开 `jellyframe.app.json`、App
+   的 HTML/CSS 文件后使用右键菜单。
 
 如果希望像普通扩展一样安装或更新，可以直接在扩展目录运行统一脚本：
 
@@ -62,9 +62,9 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 该入口还可以附加 `.jfcapture` 程控回放，把静态管线诊断和多页面交互路径合并到一份报告。
 需要查看实际画面或手动交互时，请使用“预览”或桌面调试。
 
-顶部的 `JellyFrame` 菜单按“包检查、调试、报告”分组提供完整工作流。该菜单直接挂在
-VS Code 主菜单栏上，不依赖当前是否打开编辑器或工作区文件。安装新版 VSIX 后，如果旧扩展
-实例仍在运行，请执行一次“Developer: Reload Window”（开发人员：重新加载窗口）。资源管理器中
+`JellyFrame` 活动栏视图按“包检查、调试、报告”提供完整工作流，不依赖当前是否打开编辑器
+或工作区文件。安装新版 VSIX 后，如果旧扩展实例仍在运行，请执行一次“Developer: Reload Window”
+（开发人员：重新加载窗口）。资源管理器中
 右键 `jellyframe.app.json`，或在 App 的 HTML/CSS/manifest 文件编辑器中右键，可以
 直接使用常用操作。这些入口与命令面板调用同一组命令，输出和诊断行为一致。
 
