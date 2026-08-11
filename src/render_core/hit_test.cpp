@@ -1,6 +1,7 @@
 #include "render_core/hit_test.h"
 
 #include "render_core/dom.h"
+#include "render_core/raster_primitives.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -109,6 +110,10 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer,
         Rect translated_clip = layer.clip_rect;
         translated_clip.x += layer_offset_x;
         translated_clip.y += layer_offset_y;
+        if (has_corner_radius(layer.clip_border_radius) &&
+            rounded_rect_coverage(translated_clip, layer.clip_border_radius, x, y) == 0) {
+            return {};
+        }
         clip = has_clip ? intersect_rect(clip, translated_clip) : translated_clip;
         has_clip = true;
         if (empty_rect(clip) || !contains(clip, x, y)) {
@@ -123,6 +128,30 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer,
         if (child_result) {
             return child_result;
         }
+    }
+
+    // A clipped layer can reject a point before the fallback DOM walk below.
+    // Keep that layer's DOM subtree from becoming hittable through the parent
+    // fallback, especially at rounded corners.
+    bool blocked_by_rounded_child = false;
+    for (const auto& child : layer.children) {
+        if (child == nullptr || !child->has_clip) {
+            continue;
+        }
+        Rect translated_clip = child->clip_rect;
+        translated_clip.x += layer_offset_x;
+        translated_clip.y += layer_offset_y;
+        if (contains(translated_clip, x, y) &&
+            has_corner_radius(child->clip_border_radius) &&
+            rounded_rect_coverage(translated_clip, child->clip_border_radius, x, y) == 0) {
+            blocked_by_rounded_child = true;
+            break;
+        }
+    }
+    if (blocked_by_rounded_child && layer.box != nullptr && !layer.box->style.visibility_hidden) {
+        const int document_x = x - layer_offset_x;
+        const int document_y = y - layer_offset_y + layer.scroll_y;
+        return make_result(*layer.box, document_x, document_y - layer.scroll_y);
     }
 
     Rect visual_bounds = layer.bounds;

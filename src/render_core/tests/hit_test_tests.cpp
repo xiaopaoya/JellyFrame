@@ -111,6 +111,22 @@ void overflow_clip_blocks_outside_hits() {
     check(!clipped || clipped.node->attribute("id") != "inside", "outside clip does not hit button");
 }
 
+void rounded_overflow_clip_blocks_corner_hits() {
+    auto pipeline = build_pipeline(
+        "<body><section class='clip'><button id='inside'>Inside</button></section></body>",
+        "body { margin: 0; } .clip { width: 40px; height: 40px; overflow: hidden; border-radius: 12px; }"
+        "button { display: block; width: 40px; height: 40px; }");
+
+    HitTester hit_tester;
+    HitTestResult center = hit_tester.hit_test(*pipeline.layer_tree, 20, 20);
+    HitTestResult corner = hit_tester.hit_test(*pipeline.layer_tree, 0, 0);
+
+    check(center.node != nullptr && center.node->attribute("id") == "inside",
+          "rounded clip center hit targets the child");
+    check(!corner || corner.node->attribute("id") != "inside",
+          "rounded clip corner does not hit the child");
+}
+
 void scroll_container_hit_test_uses_scrolled_content_coordinates() {
     LayerTreeBuilderOptions options;
     options.scroll_resolver = ScrollOffsetResolver{fixed_scroll_offset, nullptr};
@@ -137,6 +153,7 @@ int main() {
         basic_hit_test_returns_deepest_element();
         layer_order_prefers_higher_z_index();
         overflow_clip_blocks_outside_hits();
+        rounded_overflow_clip_blocks_corner_hits();
         scroll_container_hit_test_uses_scrolled_content_coordinates();
     } catch (const std::exception& error) {
         std::cerr << "hit test failed: " << error.what() << '\n';
