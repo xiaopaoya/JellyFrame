@@ -1530,11 +1530,14 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                             active_offscreen_pixels + offscreen_pixels, scratch, compositor_scratch);
         }
         if (has_corner_radius(layer.clip_border_radius)) {
+            Rect rounded_clip = layer.clip_rect;
+            rounded_clip.x += layer_offset_x;
+            rounded_clip.y += layer_offset_y;
             apply_rounded_clip(offscreen,
-                               Rect{layer.clip_rect.x - offscreen_bounds.x,
-                                    layer.clip_rect.y - offscreen_bounds.y,
-                                    layer.clip_rect.width,
-                                    layer.clip_rect.height},
+                               Rect{rounded_clip.x - offscreen_bounds.x,
+                                    rounded_clip.y - offscreen_bounds.y,
+                                    rounded_clip.width,
+                                    rounded_clip.height},
                                layer.clip_border_radius);
         }
         if (has_scale_or_rotate) {
