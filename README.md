@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-11; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -42,6 +42,9 @@ targets and documentation use `JellyFrame`.
 - Desktop inspection tools, pseudo browser, Win32 validation shell, pipeline
   diagnostics, app packer, font-resource checker, font-pack generator and a
   VS Code extension for app authors.
+- Device Runtime is being assembled: the platform-neutral install transaction
+  and `JFDP/1` framing now live in App Runtime, with a desktop reference endpoint
+  for lifecycle tooling. Physical-board transport remains port-owned.
 
 For the exact supported/degraded/deferred feature set, read
 [docs/developer_capability_matrix.md](docs/developer_capability_matrix.md).
@@ -168,6 +171,15 @@ For a full first-time walkthrough, read [HOW_TO_START.md](HOW_TO_START.md).
 If you mainly write apps in VS Code, see the
 [`tools/vscode-jellyframe`](tools/vscode-jellyframe/README.md) extension guide.
 
+Without ESP-IDF or a board, start with the desktop reference endpoint to learn
+the install, list, rollback and remove flow. It deliberately does not simulate
+real display or touch:
+
+```powershell
+python tools\jellyframe_cli.py device --transport reference --store build\device-reference info
+python tools\jellyframe_cli.py device --transport reference --store build\device-reference list
+```
+
 ## Optional Scripting Build
 
 Scripting is optional. `jellyframe_render_core` builds without JerryScript
@@ -199,6 +211,8 @@ with the runtime execution budget.
 
 - `src/render_core`: platform-neutral HTML/CSS/DOM/rendering core.
 - `src/app_runtime`: app lifecycle and optional host-service helpers.
+- `docs/device_runtime.md`: official board images, device lifecycle and future
+  transport integration plan.
 - `src/script`: optional JerryScript binding layer.
 - `samples`: app packages and app lifecycle samples.
 - `tests`: platform-neutral regression tests.

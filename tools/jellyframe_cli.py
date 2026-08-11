@@ -3000,6 +3000,52 @@ def cmd_registry(args: argparse.Namespace) -> int:
     return app_registry.main(registry_args)
 
 
+def cmd_device(args: argparse.Namespace) -> int:
+    """Run the explicit desktop reference endpoint, never a physical device."""
+    if args.transport != "reference":
+        print(
+            "device transport is not configured; use --transport reference for the desktop registry reference endpoint",
+            file=sys.stderr,
+        )
+        return 2
+
+    store = str(args.store)
+    command = args.device_command
+    if command == "info":
+        result = {
+            "endpoint": "desktop-reference",
+            "transport": "reference",
+            "deviceAvailable": False,
+            "runtime": "desktop-registry-reference",
+            "note": "This endpoint exercises lifecycle and registry tooling; it is not a physical board.",
+        }
+        print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else
+              "desktop reference endpoint (no physical device)\ntransport=reference\ndevice_available=no")
+        return 0
+
+    delegated = [command, "--store", store]
+    if command in {"list", "state"}:
+        if args.json:
+            delegated.append("--json")
+        if command == "state" and args.output:
+            delegated.extend(["--output", str(args.output)])
+    elif command == "install":
+        delegated.extend(["--bundle", str(args.bundle)])
+        if args.allow_downgrade:
+            delegated.append("--allow-downgrade")
+        if args.json:
+            delegated.append("--json")
+    elif command in {"remove", "rollback"}:
+        delegated.extend(["--id", args.app_id])
+        if command == "remove" and args.keep_data:
+            delegated.append("--keep-data")
+        if args.json:
+            delegated.append("--json")
+    else:
+        raise SystemExit(f"unsupported reference device command: {command}")
+    return app_registry.main(delegated)
+
+
 def write_install_transaction_report(report_path: Path, transaction: dict, merge: bool) -> None:
     if merge and report_path.is_file():
         report = json.loads(report_path.read_text(encoding="utf-8-sig"))
@@ -3821,6 +3867,42 @@ def main() -> int:
     registry.add_argument("registry_args", nargs=argparse.REMAINDER,
                           help="Arguments passed to tools/app_registry.py.")
     registry.set_defaults(func=cmd_registry)
+
+    device = subparsers.add_parser(
+        "device",
+        help="Use a physical device transport or the explicitly named desktop reference endpoint.",
+    )
+    device.add_argument(
+        "--transport",
+        choices=["reference"],
+        help="Transport adapter. Physical transports are added by ports; none is implied by default.",
+    )
+    device.add_argument("--store", required=True, type=Path,
+                        help="Reference endpoint registry directory.")
+    device_subparsers = device.add_subparsers(dest="device_command", required=True)
+    info = device_subparsers.add_parser("info", help="Show endpoint identity and availability.")
+    info.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    info.set_defaults(func=cmd_device)
+    list_device = device_subparsers.add_parser("list", help="List apps in the reference registry.")
+    list_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    list_device.set_defaults(func=cmd_device)
+    state_device = device_subparsers.add_parser("state", help="Print launcher state from the reference registry.")
+    state_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    state_device.add_argument("--output", type=Path, help="Write state JSON to a file.")
+    state_device.set_defaults(func=cmd_device)
+    install_device = device_subparsers.add_parser("install", help="Install a bundle into the reference registry.")
+    install_device.add_argument("--bundle", required=True, type=Path, help="Input .jfapp bundle.")
+    install_device.add_argument("--allow-downgrade", action="store_true", help="Allow a lower versionCode.")
+    install_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    install_device.set_defaults(func=cmd_device)
+    for name, description in (("remove", "Remove an app from the reference registry."),
+                              ("rollback", "Rollback an app in the reference registry.")):
+        command_parser = device_subparsers.add_parser(name, help=description)
+        command_parser.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+        command_parser.add_argument("--keep-data", action="store_true",
+                                    help="Keep private data when removing an app.")
+        command_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+        command_parser.set_defaults(func=cmd_device)
 
     doctor = subparsers.add_parser("doctor", help="Run repository self-checks for trial-ready sample packages.")
     doctor.add_argument("--build-dir", default=default_build_dir(), type=Path,

@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-11; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -17,6 +17,7 @@ for whether a document needs another pass after code changes.
 | Render Core contributor | `engine_architecture.md`, `../src/render_core/README.md` | scope docs beside the affected module and the feature matrix |
 | Port maintainer | `porting_work_guide.md`, `embedded_hal_api.md` | `../ports/<port>/README.md`, framebuffer/text docs and port-owned reports |
 | Runtime/host maintainer | `../src/app_runtime/README.md` | lifecycle, packaging, services and authorization contracts |
+| Device-runtime maintainer | `device_runtime.md` | official board profiles, device protocol and port integration |
 | Script/runtime maintainer | `../src/script/README.md` | scripting scope and cross-task ownership contract |
 | Compatibility or tooling maintainer | capability matrix and searchable HTML/CSS tables | `../tools/README.md`, schemas and tool regression tests |
 
@@ -70,6 +71,8 @@ for whether a document needs another pass after code changes.
   resource-bundle workflow.
 - [app_lifecycle.md](../src/app_runtime/docs/app_lifecycle.md): app-author lifecycle behavior
   for install, launch, suspend, resume, service completion and recovery.
+- [device_runtime.md](device_runtime.md): product boundary and delivery plan for
+  official developer images, device deployment and tooling.
 - [authorized_file_broker.md](../src/app_runtime/docs/authorized_file_broker.md): host-owned
   authorized file access boundary for file-manager and system-component flows.
 - [host_optional_services.md](../src/app_runtime/docs/host_optional_services.md): optional host-service

@@ -143,6 +143,8 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_frame_policy.cpp
     src/app_runtime/app_host.cpp
     src/app_runtime/app_host_data.cpp
+    src/app_runtime/device_install_transaction.cpp
+    src/app_runtime/device_runtime_protocol.cpp
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
@@ -357,6 +359,8 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_capability_broker_tests.cpp
         src/app_runtime/tests/app_compute_jobs_tests.cpp
         src/app_runtime/tests/app_device_services_tests.cpp
+        src/app_runtime/tests/device_install_transaction_tests.cpp
+        src/app_runtime/tests/device_runtime_protocol_tests.cpp
         src/app_runtime/tests/app_frame_policy_tests.cpp
         src/app_runtime/tests/app_host_data_tests.cpp
         src/app_runtime/tests/app_host_tests.cpp

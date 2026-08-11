@@ -1,6 +1,6 @@
 # JellyFrame 文档索引
 
-> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-11；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
@@ -15,6 +15,7 @@
 | Render Core 贡献者 | `engine_architecture_zh.md`、`../src/render_core/README.md` | 修改模块旁的 scope 文档和能力矩阵 |
 | 移植维护者 | `porting_work_guide_zh.md`、`embedded_hal_api_zh.md` | `../ports/<port>/README.md`、framebuffer/text 文档和移植侧报告 |
 | Runtime/host 维护者 | `../src/app_runtime/README.md` | lifecycle、packaging、services 和授权边界文档 |
+| Device Runtime 维护者 | `device_runtime_zh.md` | 官方板卡 profile、设备协议和 port 接入 |
 | Script/runtime 维护者 | `../src/script/README.md` | scripting scope 和跨任务所有权契约 |
 | 兼容性或工具维护者 | 能力矩阵和可搜索 HTML/CSS 全表 | `../tools/README.md`、schemas 和工具回归测试 |
 
@@ -55,6 +56,7 @@
 - [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)：app 包格式、manifest 和资源包工作流。
 - [app_lifecycle_zh.md](../src/app_runtime/docs/app_lifecycle_zh.md)：面向 app 作者的安装、启动、挂起、恢复、
   service completion 和 recovery 生命周期行为。
+- [device_runtime_zh.md](device_runtime_zh.md)：官方 developer image、设备部署和工具链的产品边界与交付计划。
 - [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。
 - [host_optional_services_zh.md](../src/app_runtime/docs/host_optional_services_zh.md)：图片/音频/轻量视频、网络数据和安装式 bundle 的可选宿主服务契约。
 - [../tools/vscode-jellyframe/README_zh.md](../tools/vscode-jellyframe/README_zh.md)：

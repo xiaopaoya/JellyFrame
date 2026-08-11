@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-11；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -33,6 +33,8 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
   RGB332、Gray8、单色输出的 framebuffer adapter。
 - 桌面检查工具、伪浏览器、Win32 验证壳、管线 diagnostics、app packer、字体资源检查、
   字体包生成器，以及面向 App 作者的 VS Code 扩展。
+- Device Runtime 正在形成：平台无关的安装事务和 `JFDP/1` framing 已进入 App Runtime，
+  桌面 reference endpoint 可先验证生命周期工具链；真实开发板传输仍由 port 提供。
 
 精确的支持/降级/延后功能见
 [docs/developer_capability_matrix_zh.md](docs/developer_capability_matrix_zh.md)。
@@ -148,6 +150,14 @@ python tools\jellyframe_cli.py check `
 如果你主要在 VS Code 中编写 App，也可以直接试用
 [`tools/vscode-jellyframe`](tools/vscode-jellyframe/README_zh.md) 扩展。
 
+如果你没有 ESP-IDF 或开发板环境，先使用桌面 reference endpoint 熟悉安装、列表、回滚和删除流程；
+它明确不模拟真实显示和触控：
+
+```powershell
+python tools\jellyframe_cli.py device --transport reference --store build\device-reference info
+python tools\jellyframe_cli.py device --transport reference --store build\device-reference list
+```
+
 ## 可选脚本构建
 
 脚本能力是可选的。除非显式设置 `JELLYFRAME_BUILD_SCRIPTING=ON`，否则
@@ -177,6 +187,7 @@ cmake --build build/desktop-scripting-release --config Release
 
 - `src/render_core`：平台无关 HTML/CSS/DOM/rendering 核心。
 - `src/app_runtime`：app 生命周期与可选 host-service helper。
+- `docs/device_runtime_zh.md`：官方开发板镜像、设备生命周期和未来传输接入规划。
 - `src/script`：可选 JerryScript 绑定层。
 - `samples`：app packages 和 app 生命周期样例。
 - `tests`：平台无关回归测试。
