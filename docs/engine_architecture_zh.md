@@ -62,8 +62,9 @@ provider 指向另一个 Render Core checkout。这只是本地开发覆盖项�
 `src/app_runtime/device_runtime_protocol.*` 是明确的 D0 例外。它们虽然是平台无关
 契约，但表达的是设备安装和 JFDP，而不是 App Runtime 行为。它们不能进入 Render Core
 package，最终应迁移到 `jellyframe-device-os` 或小型 `device_runtime_contracts`
-package。在独立 target 能够接管之前，Runtime 暂时保留这些过渡文件和测试，避免移植侧
-静默复制一套协议实现。
+package。D0 已将其编译为独立的 `jellyframe_device_runtime_contracts` target，并在不链接
+App Runtime 或 Render Core 实现对象的情况下运行测试。当前源码路径仍是过渡位置，直到完整
+reference-host loop 完成；这能避免移植侧静默复制一套协议实现。
 
 物理拆分需要同时满足三个条件：独立可构建的 Core package、锁定 Core 版本/ABI 的
 Runtime consumer，以及不导入 Core 实现细节而消费同一 Runtime 契约的 Device OS

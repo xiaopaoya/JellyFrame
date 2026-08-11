@@ -114,11 +114,14 @@ cancellation failures discard staging; a new version becomes visible only after
 atomic commit.
 
 These two `device_*` modules are not part of the App Runtime's final ownership
-model. They remain here only because D0 currently has no separate
-`device_runtime_contracts` target. A port must consume the existing contract;
-it must not fork the framing, result codes or staging state machine. Extraction
-is complete only when the new owner has its own target, tests, versioned headers
-and a Runtime/Device OS compatibility entry.
+model. D0 now compiles them as the independent
+`jellyframe_device_runtime_contracts` target, with tests that link that target
+without App Runtime or Render Core. Their source path remains transitional until
+the full JFDP reference-host transaction loop is complete. A port must consume
+the existing contract; it must not fork the framing, result codes or staging
+state machine. Physical extraction is complete only when the new owner also has
+versioned headers, a Runtime/Device OS compatibility entry and its own
+repository release policy.
 
 The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:

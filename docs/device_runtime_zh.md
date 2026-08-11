@@ -89,10 +89,11 @@ D0 的 C++ 回归包含内存内 discovery request/capability response 回环，
 Render Core。写入失败、校验失败、提交失败和主动取消都会清理 staging；只有原子提交成功后新版本
 才可见。
 
-这两个 `device_*` 模块不属于 App Runtime 的最终所有权模型。它们暂时位于这里，是因为 D0
-尚未拥有独立的 `device_runtime_contracts` target。port 必须消费现有契约，不能复制 framing、
-result code 或 staging 状态机。只有新 owner 拥有独立 target、测试、版本化头文件，并在
-Runtime/Device OS 兼容矩阵中登记后，迁移才算完成。
+这两个 `device_*` 模块不属于 App Runtime 的最终所有权模型。D0 现在将它们编译为独立的
+`jellyframe_device_runtime_contracts` target，并由不链接 App Runtime 或 Render Core 的测试覆盖。
+在完整 JFDP reference-host transaction loop 完成前，源码路径仍是过渡位置。port 必须消费现有契约，
+不能复制 framing、result code 或 staging 状态机。物理迁移只有在新 owner 还具备版本化头文件、
+Runtime/Device OS 兼容矩阵登记和独立仓库发布策略后才算完成。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 

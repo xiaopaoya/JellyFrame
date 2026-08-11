@@ -76,9 +76,11 @@ ownership model:
 are hardware-neutral contracts, but their meaning is device installation and
 JFDP rather than App Runtime behavior. They must not enter the Render Core
 package and must eventually move to `jellyframe-device-os` or a small
-`device_runtime_contracts` package. Until a separate target owns them, the
-Runtime keeps the transitional files and tests so the protocol is not silently
-duplicated by a port.
+`device_runtime_contracts` package. D0 already builds them as the independent
+`jellyframe_device_runtime_contracts` target and runs its tests without App
+Runtime or Render Core implementation objects. The current source path remains
+transitional so the protocol is not silently duplicated by a port while the
+full reference-host loop is completed.
 
 The physical split is gated by three conditions: an independently buildable
 Core package, a Runtime consumer with a locked Core version/ABI, and a Device OS

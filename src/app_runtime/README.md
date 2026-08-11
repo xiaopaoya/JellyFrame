@@ -1,6 +1,6 @@
 # App Runtime
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-12; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 `app_runtime` contains hardware-neutral helpers for installable JellyFrame apps.
 
@@ -30,14 +30,16 @@ It owns contracts and small bounded data structures for:
   surface.
 - Advisory app-load telemetry for host DVFS, shallow sleep, service backlog and
   animation frame-drop decisions.
-- Hardware-neutral `device_install_transaction.*` and `device_runtime_protocol.*`
-  contracts for bounded app staging and `JFDP/1` framing. These do not perform
-  flash, transport, signature or registry I/O; ports and desktop hosts inject
-  those adapters.
+- The `jellyframe_device_runtime_contracts` dependency for bounded app staging
+  and `JFDP/1` framing. Its source files temporarily remain in this directory
+  while the future Device OS ownership boundary is prepared. The target does
+  not perform flash, transport, signature or registry I/O; ports and desktop
+  hosts inject those adapters.
 
-It may depend on `render_core` for shared host capability and budget types.
-It must not depend on JerryScript directly, filesystem/network implementations,
-RTOS APIs or platform drivers.
+It may depend on `render_core` for shared host capability and budget types and
+on `jellyframe_device_runtime_contracts` for D0 device contracts. It must not
+depend on JerryScript directly, filesystem/network implementations, RTOS APIs
+or platform drivers.
 
 When both `JELLYFRAME_BUILD_SCRIPTING=ON` and
 `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON`, the separate

@@ -280,6 +280,22 @@ configure_file(
     @ONLY)
 
 if(JELLYFRAME_BUILD_APP_RUNTIME)
+add_library(jellyframe_device_runtime_contracts
+    src/app_runtime/device_install_transaction.cpp
+    src/app_runtime/device_runtime_protocol.cpp
+)
+add_library(JellyFrame::device_runtime_contracts ALIAS jellyframe_device_runtime_contracts)
+target_include_directories(jellyframe_device_runtime_contracts
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_compile_features(jellyframe_device_runtime_contracts PUBLIC cxx_std_17)
+if(MSVC)
+    target_compile_options(jellyframe_device_runtime_contracts PRIVATE /W4)
+else()
+    target_compile_options(jellyframe_device_runtime_contracts PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_library(jellyframe_app_runtime
     src/app_runtime/app_budget.cpp
     src/app_runtime/app_capability_broker.cpp
@@ -289,8 +305,6 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_frame_policy.cpp
     src/app_runtime/app_host.cpp
     src/app_runtime/app_host_data.cpp
-    src/app_runtime/device_install_transaction.cpp
-    src/app_runtime/device_runtime_protocol.cpp
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
@@ -303,7 +317,9 @@ add_library(jellyframe_app_runtime
     src/app_runtime/xml_http_request.cpp
 )
 
-target_link_libraries(jellyframe_app_runtime PUBLIC jellyframe_render_core)
+target_link_libraries(jellyframe_app_runtime
+    PUBLIC jellyframe_render_core
+    PRIVATE jellyframe_device_runtime_contracts)
 target_include_directories(jellyframe_app_runtime
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -515,8 +531,6 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_capability_broker_tests.cpp
         src/app_runtime/tests/app_compute_jobs_tests.cpp
         src/app_runtime/tests/app_device_services_tests.cpp
-        src/app_runtime/tests/device_install_transaction_tests.cpp
-        src/app_runtime/tests/device_runtime_protocol_tests.cpp
         src/app_runtime/tests/app_frame_policy_tests.cpp
         src/app_runtime/tests/app_host_data_tests.cpp
         src/app_runtime/tests/app_host_tests.cpp
@@ -545,6 +559,26 @@ if(JELLYFRAME_BUILD_TESTS)
     jellyframe_enable_test_asserts(jellyframe_app_runtime_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_app_runtime_tests)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
+
+    set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
+        src/app_runtime/tests/device_install_transaction_tests.cpp
+        src/app_runtime/tests/device_runtime_protocol_tests.cpp
+    )
+    foreach(test_source IN LISTS JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES)
+        get_filename_component(test_name ${test_source} NAME_WE)
+        set_source_files_properties(${test_source}
+            PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
+    endforeach()
+    add_executable(jellyframe_device_runtime_contracts_tests
+        src/app_runtime/tests/device_runtime_contracts_tests.cpp
+        ${JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES}
+    )
+    target_link_libraries(jellyframe_device_runtime_contracts_tests
+        PRIVATE jellyframe_device_runtime_contracts)
+    jellyframe_enable_test_asserts(jellyframe_device_runtime_contracts_tests)
+    jellyframe_stage_sanitizer_runtime(jellyframe_device_runtime_contracts_tests)
+    add_test(NAME jellyframe_device_runtime_contracts_tests
+        COMMAND jellyframe_device_runtime_contracts_tests)
     endif()
 
     if(Python3_Interpreter_FOUND)
