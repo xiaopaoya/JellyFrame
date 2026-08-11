@@ -644,18 +644,11 @@ void apply_rounded_clip(FrameBuffer& surface, Rect clip, int border_radius) {
     }
     const Rect visible = intersect_rect(clip, target_rect(surface));
     if (empty_rect(visible)) {
-        surface.clear(Color{0, 0, 0, 0});
         return;
     }
     const RasterRoundedRect rounded = prepare_rounded_rect(clip, border_radius);
-    for (int y = 0; y < surface.height; ++y) {
-        for (int x = 0; x < surface.width; ++x) {
-            if (x < visible.x || y < visible.y ||
-                x >= safe_edge(visible.x, visible.width) ||
-                y >= safe_edge(visible.y, visible.height)) {
-                surface.pixel(x, y) = Color{0, 0, 0, 0};
-                continue;
-            }
+    for (int y = visible.y; y < safe_edge(visible.y, visible.height); ++y) {
+        for (int x = visible.x; x < safe_edge(visible.x, visible.width); ++x) {
             surface.pixel(x, y) = with_coverage(surface.pixel(x, y), rounded_rect_coverage(rounded, x, y));
         }
     }
