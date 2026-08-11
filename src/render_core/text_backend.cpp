@@ -231,4 +231,79 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
     return lines;
 }
 
+std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& provider,
+                                                    std::string_view text,
+                                                    int font_size,
+                                                    int font_weight,
+                                                    std::uint32_t font_family_hash,
+                                                    int letter_spacing,
+                                                    int available_width) {
+    std::vector<std::string> lines;
+    if (text.empty()) {
+        return lines;
+    }
+
+    const int width_limit = std::max(1, available_width);
+    std::string line;
+    std::string token;
+    bool pending_space = false;
+
+    const auto append_token = [&]() {
+        if (token.empty()) {
+            return;
+        }
+        std::string candidate = line;
+        if (!candidate.empty() && pending_space) {
+            candidate.push_back(' ');
+        }
+        candidate += token;
+        if (!line.empty() && measure_text_with_letter_spacing(provider,
+                                                              candidate,
+                                                              font_size,
+                                                              font_weight,
+                                                              font_family_hash,
+                                                              letter_spacing).width > width_limit) {
+            lines.push_back(std::move(line));
+            line = std::move(token);
+        } else {
+            line = std::move(candidate);
+        }
+        token.clear();
+        pending_space = false;
+    };
+
+    for (std::size_t begin = 0; begin < text.size();) {
+        std::size_t end = begin;
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, end);
+        const std::string_view scalar = text.substr(begin, end - begin);
+        if (codepoint == '\n') {
+            append_token();
+            lines.push_back(std::move(line));
+            line.clear();
+            pending_space = false;
+            begin = end;
+            continue;
+        }
+        if (codepoint == ' ' || codepoint == '\t' || codepoint == '\r') {
+            append_token();
+            pending_space = !line.empty();
+            begin = end;
+            continue;
+        }
+
+        token.append(scalar.data(), scalar.size());
+        const bool break_after = is_cjk_codepoint(codepoint) ||
+            codepoint == '-' || codepoint == '/' || codepoint == 0x3001U || codepoint == 0x3002U;
+        if (break_after) {
+            append_token();
+        }
+        begin = end;
+    }
+    append_token();
+    if (!line.empty() || lines.empty()) {
+        lines.push_back(std::move(line));
+    }
+    return lines;
+}
+
 } // namespace jellyframe

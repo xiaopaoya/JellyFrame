@@ -242,6 +242,27 @@ void text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands() {
     check(wrapped_text_count > 1, "declared overflow-wrap emits individual wrapped line commands");
 }
 
+void normal_text_wrap_matches_layout_line_breaks() {
+    auto pipeline = build_pipeline(
+        "<body><p id='label'>Alpha beta gamma</p></body>",
+        "p { width: 40px; margin: 0; font-size: 10px; line-height: 12px; }");
+    const LayoutBox* label = find_layout_by_id(*pipeline.layout_tree, "label");
+    check(label != nullptr && label->rect.height >= 24,
+          "ordinary breakable text reserves multiple layout lines");
+
+    LayerTreeBuilder builder;
+    const DisplayList commands = builder.flatten(*pipeline.layer_tree);
+    std::vector<Rect> text_rects;
+    for (const DisplayCommand& command : commands) {
+        if (command.type == DisplayCommandType::Text && command.text != "") {
+            text_rects.push_back(command.rect);
+        }
+    }
+    check(text_rects.size() >= 2, "ordinary breakable text emits multiple paint commands");
+    check(text_rects[0].y != text_rects[1].y,
+          "ordinary breakable text paint lines follow the layout line height");
+}
+
 void scroll_container_offsets_descendant_paint() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -1417,6 +1438,7 @@ int main() {
         overflow_y_auto_creates_vertical_scroll_clip_layer();
         visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing();
         text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands();
+        normal_text_wrap_matches_layout_line_breaks();
         scroll_container_offsets_descendant_paint();
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();

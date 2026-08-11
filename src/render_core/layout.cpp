@@ -925,15 +925,21 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                                text_indent));
     }
     const int line_count = can_wrap && usable_text_width > 0
-        ? (box.style.overflow_wrap_anywhere
-               ? std::max(1, static_cast<int>(wrap_text_anywhere(text_measure_,
-                                                                  text,
-                                                                  box.style.font_size,
-                                                                  box.style.font_weight,
-                                                                  box.style.font_family_hash,
-                                                                  box.style.letter_spacing,
-                                                                  usable_text_width).size()))
-               : std::max(1, (raw_text_width + usable_text_width - 1) / usable_text_width))
+        ? std::max(1, static_cast<int>((box.style.overflow_wrap_anywhere
+                ? wrap_text_anywhere(text_measure_,
+                                     text,
+                                     box.style.font_size,
+                                     box.style.font_weight,
+                                     box.style.font_family_hash,
+                                     box.style.letter_spacing,
+                                     usable_text_width)
+                : wrap_text_at_opportunities(text_measure_,
+                                             text,
+                                             box.style.font_size,
+                                             box.style.font_weight,
+                                             box.style.font_family_hash,
+                                             box.style.letter_spacing,
+                                             usable_text_width)).size()))
         : 1;
     const int fixed_text_height = specified_content_height(box.style, height);
     int text_height = std::max(specified_content_min_height(box.style, height),
