@@ -281,3 +281,22 @@ jobs:
 
       - name: Install Render Core package
         run: cmake --install build/render-core-standalone --prefix build/render-core-install
+
+      - name: Configure Runtime against installed Render Core
+        run: >
+          cmake -S . -B build/framework-external-core -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DJELLYFRAME_RENDER_CORE_PROVIDER=package
+          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install
+          -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
+          -DJELLYFRAME_BUILD_SCRIPTING=OFF
+          -DJELLYFRAME_BUILD_EXAMPLES=OFF
+          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF
+          -DJELLYFRAME_BUILD_TESTS=ON
+
+      - name: Build Runtime package consumer tests
+        run: cmake --build build/framework-external-core --target jellyframe_app_runtime_tests --parallel
+
+      - name: Run Runtime package consumer CTest
+        run: ctest --test-dir build/framework-external-core --output-on-failure
