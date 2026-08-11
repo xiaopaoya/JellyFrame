@@ -1,6 +1,6 @@
 # 引擎架构
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev
+> 最后更新：2026-08-11；适用版本：0.6.0-dev
 
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
@@ -12,6 +12,13 @@ JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目�
 - `src/app_runtime` / `jellyframe_app_runtime`：安装式 app 生命周期和可选 host-service
   队列；可依赖 `render_core` 的宿主能力与预算类型。
 - `src/script` / `jellyframe_script`：可选 JerryScript 桥接层；嵌入式构建可以完全关闭。
+
+当前仓库仍是源码 monorepo，但 Render Core 已具备独立导出边界。将
+`JELLYFRAME_BUILD_APP_RUNTIME=OFF`、`JELLYFRAME_BUILD_SCRIPTING=OFF` 并关闭上层示例后，
+即可只配置和构建 Render Core。设置 `JELLYFRAME_INSTALL_RENDER_CORE=ON` 并执行
+`cmake --install`，会导出版本化的 `JellyFrame::jellyframe_render_core`、公共头文件和能力 profile，
+供未来独立的 `jellyframe-render-core` 仓库消费。这个阶段不引入 Git submodule，也不把 App Runtime、
+JerryScript、ports 或设备协议混入 Render Core 包。
 
 ```text
 HTML bytes/string

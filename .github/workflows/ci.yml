@@ -247,3 +247,37 @@ jobs:
       - name: Run scripting forms-off CTest
         shell: pwsh
         run: ctest --test-dir build/desktop-scripting-forms-off -C Release -R "^jellyframe_script_tests$" --output-on-failure
+
+  render-core-standalone:
+    name: Standalone Render Core
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Configure Render Core only
+        run: >
+          cmake -S . -B build/render-core-standalone -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DJELLYFRAME_BUILD_APP_RUNTIME=OFF
+          -DJELLYFRAME_BUILD_SCRIPTING=OFF
+          -DJELLYFRAME_BUILD_EXAMPLES=OFF
+          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_INSTALL_RENDER_CORE=ON
+
+      - name: Build Render Core tests
+        run: cmake --build build/render-core-standalone --parallel
+
+      - name: Run standalone CTest
+        run: ctest --test-dir build/render-core-standalone --output-on-failure
+
+      - name: Install Render Core package
+        run: cmake --install build/render-core-standalone --prefix build/render-core-install

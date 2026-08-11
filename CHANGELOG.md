@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-10; Applies to: 0.6.0-dev
+> Last updated: 2026-08-11; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -16,6 +16,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   profile gate and regression coverage land together.
 
 ### Changed
+
+- Added a standalone Render Core build boundary: App Runtime and JerryScript
+  can be disabled independently, and `JELLYFRAME_INSTALL_RENDER_CORE=ON`
+  exports a versioned `JellyFrame::jellyframe_render_core` CMake package with
+  public headers and the selected capability profile.
 
 - Reintroduced VS Code embedded debugging through an isolated desktop-shell
   frame-stream session. Each published viewport snapshot has a strictly

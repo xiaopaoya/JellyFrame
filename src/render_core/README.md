@@ -1,6 +1,6 @@
 # Render Core
 
-> Last updated: 2026-08-10; Applies to: 0.6.0-dev
+> Last updated: 2026-08-11; Applies to: 0.6.0-dev
 
 `render_core` is JellyFrame's platform-neutral Living Standard/CSS subset and
 software rendering pipeline.
@@ -25,7 +25,25 @@ It owns:
 It must not depend on JerryScript, app installation, registries, networking,
 filesystems, OS APIs, RTOS APIs or vendor display/input libraries.
 
-The target name is `jellyframe_render_core`.
+The target name is `jellyframe_render_core`. The top-level build can configure
+this target without the upper layers:
+
+```powershell
+cmake -S . -B build\render-core-standalone `
+  -DJELLYFRAME_BUILD_APP_RUNTIME=OFF `
+  -DJELLYFRAME_BUILD_SCRIPTING=OFF `
+  -DJELLYFRAME_BUILD_EXAMPLES=OFF `
+  -DJELLYFRAME_BUILD_BENCHMARKS=OFF `
+  -DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF
+cmake --build build\render-core-standalone --config Release --target jellyframe_render_core_tests
+ctest --test-dir build\render-core-standalone -C Release --output-on-failure
+```
+
+For a downstream CMake consumer, set `JELLYFRAME_INSTALL_RENDER_CORE=ON` and
+run `cmake --install`. The install exports `JellyFrame::jellyframe_render_core`,
+the public headers and the generated capability profile. The package is a
+build artifact boundary; it does not include App Runtime, JerryScript, ports or
+device protocols.
 
 ## Source layout
 

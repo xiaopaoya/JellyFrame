@@ -10,6 +10,8 @@ option(JELLYFRAME_BUILD_EXAMPLES "Build JellyFrame native validation and dump to
 option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS "Register sample and external-trial CTest coverage" ON)
+option(JELLYFRAME_BUILD_APP_RUNTIME "Build the JellyFrame App Runtime layer" ON)
+option(JELLYFRAME_INSTALL_RENDER_CORE "Install the standalone Render Core CMake package" OFF)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
 option(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME
        "Compile optional cross-task script App runtime contracts" OFF)
@@ -19,6 +21,15 @@ option(JELLYFRAME_ENABLE_MODERN_PAINT "Compile the css.modern-paint Render Core 
 option(JELLYFRAME_ENABLE_FLEX_GRID "Compile the css.flex-grid Render Core family" ON)
 option(JELLYFRAME_ENABLE_ADVANCED_FORMS "Compile the forms.advanced Render Core family" ON)
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
+
+if(JELLYFRAME_INSTALL_RENDER_CORE)
+    include(GNUInstallDirs)
+endif()
+
+if(JELLYFRAME_BUILD_SCRIPTING AND NOT JELLYFRAME_BUILD_APP_RUNTIME)
+    message(FATAL_ERROR
+        "JELLYFRAME_BUILD_SCRIPTING requires JELLYFRAME_BUILD_APP_RUNTIME=ON")
+endif()
 
 if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME AND NOT JELLYFRAME_BUILD_SCRIPTING)
     message(FATAL_ERROR
@@ -114,7 +125,8 @@ add_library(jellyframe_render_core
 
 target_include_directories(jellyframe_render_core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
@@ -131,9 +143,49 @@ endif()
 if(MSVC)
     target_compile_options(jellyframe_render_core PRIVATE /W4)
 else()
-    target_compile_options(jellyframe_render_core PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(jellyframe_render_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(JELLYFRAME_INSTALL_RENDER_CORE)
+    include(CMakePackageConfigHelpers)
+    set(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION "0.6.0" CACHE STRING
+        "Standalone Render Core package version")
+    set(JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR
+        "${CMAKE_INSTALL_LIBDIR}/cmake/JellyFrameRenderCore")
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/JellyFrameRenderCoreConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
+        INSTALL_DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
+        VERSION "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+        COMPATIBILITY SameMajorVersion)
+    install(TARGETS jellyframe_render_core
+        EXPORT JellyFrameRenderCoreTargets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/render_core/"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/render_core"
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+        PATTERN "benchmarks" EXCLUDE
+        PATTERN "docs" EXCLUDE
+        PATTERN "samples" EXCLUDE
+        PATTERN "tests" EXCLUDE)
+    install(EXPORT JellyFrameRenderCoreTargets
+        FILE JellyFrameRenderCoreTargets.cmake
+        NAMESPACE JellyFrame::
+        DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
+        DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
+    install(FILES
+        "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/jellyframe-render-core")
+endif()
+
+if(JELLYFRAME_BUILD_APP_RUNTIME)
 add_library(jellyframe_app_runtime
     src/app_runtime/app_budget.cpp
     src/app_runtime/app_capability_broker.cpp
@@ -168,6 +220,7 @@ if(MSVC)
     target_compile_options(jellyframe_app_runtime PRIVATE /W4)
 else()
     target_compile_options(jellyframe_app_runtime PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 endif()
 
 if(JELLYFRAME_BUILD_SCRIPTING)
@@ -271,10 +324,14 @@ if(JELLYFRAME_BUILD_EXAMPLES)
         target_link_libraries(jellyframe_pseudo_browser PRIVATE jellyframe_script)
     endif()
     if(WIN32)
-        add_jellyframe_tool(jellyframe_desktop_shell tools/native/win32_browser.cpp)
+        if(JELLYFRAME_BUILD_APP_RUNTIME)
+            add_jellyframe_tool(jellyframe_desktop_shell tools/native/win32_browser.cpp)
+        endif()
+        if(JELLYFRAME_BUILD_APP_RUNTIME)
         target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_app_runtime gdi32 user32 winmm)
         if(JELLYFRAME_BUILD_SCRIPTING)
             target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_script)
+        endif()
         endif()
     endif()
 endif()
@@ -282,8 +339,10 @@ endif()
 if(JELLYFRAME_BUILD_BENCHMARKS)
     add_jellyframe_tool(jellyframe_render_core_microbench src/render_core/benchmarks/microbench.cpp)
     jellyframe_enable_render_core_link_map(jellyframe_render_core_microbench)
-    add_executable(jellyframe_app_runtime_microbench src/app_runtime/benchmarks/app_runtime_bench.cpp)
-    target_link_libraries(jellyframe_app_runtime_microbench PRIVATE jellyframe_app_runtime)
+    if(JELLYFRAME_BUILD_APP_RUNTIME)
+        add_executable(jellyframe_app_runtime_microbench src/app_runtime/benchmarks/app_runtime_bench.cpp)
+        target_link_libraries(jellyframe_app_runtime_microbench PRIVATE jellyframe_app_runtime)
+    endif()
     add_jellyframe_tool(jellyframe_virtual_bench ports/virtual_board/virtual_bench.cpp)
     if(JELLYFRAME_BUILD_SCRIPTING)
         add_executable(jellyframe_script_microbench src/script/benchmarks/script_microbench.cpp)
@@ -355,6 +414,7 @@ if(JELLYFRAME_BUILD_TESTS)
         COMMAND jellyframe_render_core_tests
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+    if(JELLYFRAME_BUILD_APP_RUNTIME)
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
         src/app_runtime/tests/app_capability_broker_tests.cpp
         src/app_runtime/tests/app_compute_jobs_tests.cpp
@@ -389,6 +449,7 @@ if(JELLYFRAME_BUILD_TESTS)
     jellyframe_enable_test_asserts(jellyframe_app_runtime_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_app_runtime_tests)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
+    endif()
 
     if(Python3_Interpreter_FOUND)
         add_test(
@@ -615,7 +676,7 @@ if(JELLYFRAME_BUILD_TESTS)
         endif()
     endif()
 
-    if(WIN32 AND JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
+    if(WIN32 AND JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
         set(JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py

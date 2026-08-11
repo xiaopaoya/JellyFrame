@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev
+> Last updated: 2026-08-11; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -16,6 +16,15 @@ The source tree is split into three hardware-neutral subprojects:
   capability and budget types.
 - `src/script` / `jellyframe_script`: optional JerryScript bridge. It can be
   left out of embedded builds.
+
+The repository is currently still a source monorepo, but the Render Core target
+already has an extraction boundary. Configure with
+`JELLYFRAME_BUILD_APP_RUNTIME=OFF`, `JELLYFRAME_BUILD_SCRIPTING=OFF` and the
+upper-layer examples disabled to build only Render Core. With
+`JELLYFRAME_INSTALL_RENDER_CORE=ON`, CMake exports a versioned
+`JellyFrame::jellyframe_render_core` package for the future standalone
+`jellyframe-render-core` repository. This staged approach keeps local cross-layer
+development cheap without making a Git submodule part of the public workflow.
 
 ```text
 HTML bytes/string

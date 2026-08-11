@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-10；适用版本：0.6.0-dev
+> 最后更新：2026-08-11；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -13,6 +13,10 @@ JellyFrame Engine 的重要变更记录在这里。
 - 启动外部开发者试用线：完善构建 profile/模块证据、打包与启动器工作流，并针对能力缺口做有边界的补全。任何新的浏览器兼容承诺都必须同时落入能力矩阵、profile gate 和回归测试。
 
 ### 变更
+
+- 增加 Render Core standalone 构建边界：App Runtime 和 JerryScript 可以独立关闭；开启
+  `JELLYFRAME_INSTALL_RENDER_CORE=ON` 后会导出版本化的
+  `JellyFrame::jellyframe_render_core` CMake 包、公共头文件和当前能力 profile。
 
 - 重新提供 VS Code 内嵌调试，但采用隔离的 desktop-shell 帧流会话：每个 viewport 快照都带严格递增的
   sequence，先完整写入会话专属文件再通知编辑器；pointer、wheel 与按键只以值消息回传该会话。标签页的
