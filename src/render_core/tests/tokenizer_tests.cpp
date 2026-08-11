@@ -40,6 +40,14 @@ void check(bool condition, const char* message) {
     }
 }
 
+std::size_t count_nodes(const Node& node) {
+    std::size_t total = 1;
+    for (const auto& child : node.children) {
+        total += count_nodes(*child);
+    }
+    return total;
+}
+
 bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
     for (const Diagnostic& diagnostic : sink.diagnostics()) {
         if (diagnostic.code == code) {
@@ -256,6 +264,17 @@ void parser_reports_resource_limit_diagnostics() {
     check((result.diagnostics & HtmlParserDiagnosticAttributeLimit) != 0U, "attribute limit diagnostic");
 }
 
+void parser_node_budget_caps_synthetic_and_authored_nodes_together() {
+    HtmlParser parser;
+    HtmlParserOptions options;
+    options.max_nodes = 3;
+
+    auto document = parser.parse("<div><span><em>x</em></span></div>", options);
+    check(count_nodes(*document) == 3, "synthetic shell and authored nodes share one node budget");
+    check(document->children.size() == 1, "document still contains the synthetic html root");
+    check(document->children[0]->tag_name == "html", "synthetic html is retained first");
+}
+
 void parser_reports_tokenizer_and_tree_recovery_diagnostics() {
     HtmlParser parser;
     HtmlParserOptions options;
@@ -311,6 +330,7 @@ int main() {
         parser_applies_common_implied_end_tags();
         parser_respects_resource_limits();
         parser_reports_resource_limit_diagnostics();
+        parser_node_budget_caps_synthetic_and_authored_nodes_together();
         parser_reports_tokenizer_and_tree_recovery_diagnostics();
         streaming_tokenizer_matches_vector_tokenizer();
     } catch (const std::exception& error) {

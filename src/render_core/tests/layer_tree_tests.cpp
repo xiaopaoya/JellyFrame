@@ -1150,7 +1150,7 @@ void utf8_text_overflow_ellipsis_keeps_scalar_boundaries() {
     const std::string html = std::string("<body><p>") + source + "</p></body>";
     auto pipeline = build_pipeline(
         html.c_str(),
-        "p { width: 42px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }");
+        "p { width: 72px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }");
 
     std::vector<std::size_t> scalar_boundaries;
     for (std::size_t index = 0; index < source.size();) {
