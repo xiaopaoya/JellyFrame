@@ -34,6 +34,31 @@ void renderer_applies_nested_value_clips() {
     assert(output.pixel(20, 20).b > 200);
 }
 
+void renderer_consumes_codec_round_tripped_v2_frame() {
+    ScriptTaskAppFrameCodecOptions options;
+    options.version = 2;
+    options.max_commands = 4;
+    options.max_text_bytes = 128;
+    options.max_input_targets = 4;
+    options.max_payload_bytes = 4096;
+    options.max_clips = 4;
+    options.max_clip_depth = 4;
+
+    std::vector<std::uint8_t> encoded;
+    assert(encode_script_task_app_frame(rounded_frame(), options, encoded) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(encoded, options, decoded) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+
+    ScriptTaskFrameRenderer renderer;
+    ScriptTaskFrameRenderStatus status = ScriptTaskFrameRenderStatus::InvalidFrame;
+    const FrameBuffer output = renderer.render(decoded, {255, 255, 255, 255}, &status);
+    assert(status == ScriptTaskFrameRenderStatus::Accepted);
+    assert(output.pixel(8, 8).r == 255 && output.pixel(8, 8).g == 255);
+    assert(output.pixel(20, 20).b > 200);
+}
+
 void renderer_keeps_non_dirty_pixels_and_rejects_bad_chain() {
     ScriptTaskFrameRenderer renderer;
     ScriptTaskAppFrame frame = rounded_frame();
@@ -53,6 +78,7 @@ void renderer_keeps_non_dirty_pixels_and_rejects_bad_chain() {
 
 int script_task_frame_renderer_tests_main() {
     renderer_applies_nested_value_clips();
+    renderer_consumes_codec_round_tripped_v2_frame();
     renderer_keeps_non_dirty_pixels_and_rejects_bad_chain();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
