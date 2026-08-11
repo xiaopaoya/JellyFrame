@@ -333,9 +333,51 @@ void javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_clea
         "app.textContent = 'replacement';"
         "'done'");
     check(result.ok, "listener subtree destruction script succeeds");
+    check(runtime.statistics().event_listener_count == 0,
+          "destroyed node listener is removed from active runtime statistics");
 
     runtime.bind_document(*second_document);
     check(runtime.statistics().event_listener_count == 0, "destroyed node listener is cleared on rebind");
+}
+
+void javascript_runtime_drops_destroyed_bound_document() {
+    auto document = make_element("document");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+
+    document.reset();
+
+    check(!runtime.dispatch_visibility_change(),
+          "visibility dispatch is ignored after the bound document is destroyed");
+
+    auto replacement = make_element("document");
+    runtime.bind_document(*replacement);
+    check(runtime.dispatch_visibility_change(),
+          "runtime can bind a replacement document after external destruction");
+}
+
+void javascript_listener_can_destroy_its_target_during_dispatch() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><main id='app'><button id='gone'>Tap</button></main></body>");
+    Node* gone = find_first_by_tag(*document, "button");
+    check(gone != nullptr, "self-destroying listener target exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var app = document.getElementById('app');"
+        "var gone = document.getElementById('gone');"
+        "gone.addEventListener('click', function () { app.textContent = 'replacement'; });"
+        "'ready';");
+    check(result.ok, "self-destroying listener registration succeeds");
+
+    MouseEvent click("click", 0, 0);
+    check(dispatch_event(*gone, click),
+          "listener may destroy its target without corrupting event dispatch");
+    check(click.target_destroyed(), "destroyed listener target is reported");
+    check(runtime.statistics().event_listener_count == 0,
+          "self-destroyed listener is released after callback return");
 }
 
 void javascript_cached_destroyed_node_wrappers_are_invalidated() {
@@ -2449,6 +2491,8 @@ int main() {
         javascript_append_and_prepend_mix_text_and_nodes();
         remove_child_keeps_wrapper_usable();
         javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_cleanup();
+        javascript_runtime_drops_destroyed_bound_document();
+        javascript_listener_can_destroy_its_target_during_dispatch();
         javascript_cached_destroyed_node_wrappers_are_invalidated();
         javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
