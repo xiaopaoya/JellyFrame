@@ -1374,6 +1374,7 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->bounds = root.rect;
     root_layer->clip_rect = root.rect;
     root_layer->has_clip = has_overflow_clip(root.style);
+    root_layer->clip_border_radius = root_layer->has_clip ? resolved_border_radius(root) : 0;
     root_layer->opacity = root.style.opacity;
     root_layer->transform = parsed_transform_or_identity(root.style, options_.diagnostics);
     root_layer->transform_origin_x_percent = root.style.transform_origin_x_percent;
@@ -1569,6 +1570,9 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
             child_layer->bounds = current_box->rect;
             child_layer->clip_rect = current_box->rect;
             child_layer->has_clip = (reasons & LayerReasonOverflowClip) != 0U;
+            child_layer->clip_border_radius = (reasons & LayerReasonRoundedClip) != 0U
+                ? resolved_border_radius(*current_box)
+                : 0;
             child_layer->opacity = current_box->style.opacity;
             child_layer->transform = parsed_transform_or_identity(current_box->style, options_.diagnostics);
             child_layer->transform.translate_y -= static_cast<float>(current.scroll_y);

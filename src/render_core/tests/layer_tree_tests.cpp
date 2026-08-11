@@ -162,6 +162,17 @@ void overflow_y_auto_creates_vertical_scroll_clip_layer() {
     check(layer->has_clip, "overflow-y auto layer has clip");
 }
 
+void rounded_overflow_clip_keeps_geometry_on_clip_layer() {
+    auto pipeline = build_pipeline(
+        "<body><section class='clip'><p>Visible</p></section></body>",
+        ".clip { overflow: hidden; width: 80px; height: 40px; border-radius: 12px; }");
+
+    const LayerNode* layer = find_layer_with_reason(*pipeline.layer_tree, LayerReasonRoundedClip);
+    check(layer != nullptr, "rounded overflow layer exists");
+    check(layer->has_clip, "rounded overflow layer keeps rectangular clip bounds");
+    check(has_corner_radius(layer->clip_border_radius), "rounded overflow layer keeps corner radii");
+}
+
 void visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing() {
     auto pipeline = build_pipeline(
         "<body><section id='hidden'><span id='visible-child'></span></section><div id='after'></div></body>",
@@ -1436,6 +1447,7 @@ int main() {
     try {
         overflow_hidden_creates_clip_layer();
         overflow_y_auto_creates_vertical_scroll_clip_layer();
+        rounded_overflow_clip_keeps_geometry_on_clip_layer();
         visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing();
         text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands();
         normal_text_wrap_matches_layout_line_breaks();

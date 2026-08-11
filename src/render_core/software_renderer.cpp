@@ -619,24 +619,6 @@ void draw_text(FrameBuffer& target,
     }
 }
 
-void composite_buffer(FrameBuffer& target, const FrameBuffer& source, int dst_x, int dst_y, float opacity) {
-    const Rect target_bounds = target_rect(target);
-    Rect copy_rect = intersect_rect(Rect{dst_x, dst_y, source.width, source.height}, target_bounds);
-    if (empty_rect(copy_rect)) {
-        return;
-    }
-    const int src_x = copy_rect.x - dst_x;
-    const int src_y = copy_rect.y - dst_y;
-    for (int y = 0; y < copy_rect.height; ++y) {
-        for (int x = 0; x < copy_rect.width; ++x) {
-            blend_pixel(target,
-                        copy_rect.x + x,
-                        copy_rect.y + y,
-                        with_opacity(source.pixel(src_x + x, src_y + y), opacity));
-        }
-    }
-}
-
 void composite_buffer_clipped(FrameBuffer& target, const FrameBuffer& source, int dst_x, int dst_y, Rect clip, float opacity) {
     const Rect target_bounds = target_rect(target);
     Rect copy_rect = intersect_rect(Rect{dst_x, dst_y, source.width, source.height}, target_bounds);
@@ -652,6 +634,29 @@ void composite_buffer_clipped(FrameBuffer& target, const FrameBuffer& source, in
                         copy_rect.x + x,
                         copy_rect.y + y,
                         with_opacity(source.pixel(src_x + x, src_y + y), opacity));
+        }
+    }
+}
+
+void apply_rounded_clip(FrameBuffer& surface, Rect clip, int border_radius) {
+    if (!has_corner_radius(border_radius)) {
+        return;
+    }
+    const Rect visible = intersect_rect(clip, target_rect(surface));
+    if (empty_rect(visible)) {
+        surface.clear(Color{0, 0, 0, 0});
+        return;
+    }
+    const RasterRoundedRect rounded = prepare_rounded_rect(clip, border_radius);
+    for (int y = 0; y < surface.height; ++y) {
+        for (int x = 0; x < surface.width; ++x) {
+            if (x < visible.x || y < visible.y ||
+                x >= safe_edge(visible.x, visible.width) ||
+                y >= safe_edge(visible.y, visible.height)) {
+                surface.pixel(x, y) = Color{0, 0, 0, 0};
+                continue;
+            }
+            surface.pixel(x, y) = with_coverage(surface.pixel(x, y), rounded_rect_coverage(rounded, x, y));
         }
     }
 }
@@ -1424,7 +1429,8 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
     }
 
     const float layer_opacity = inherited_opacity * layer.opacity;
-    const bool needs_offscreen = layer.type == LayerType::Composited || layer.opacity < 0.999F;
+    const bool needs_offscreen = layer.type == LayerType::Composited ||
+        layer.opacity < 0.999F || has_corner_radius(layer.clip_border_radius);
     if (needs_offscreen) {
         Rect source_bounds = bounds.source_bounds;
         source_bounds.x += layer_offset_x;
@@ -1508,12 +1514,35 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         const int child_offset_x = layer_offset_x - offscreen_bounds.x;
         const int child_offset_y = layer_offset_y - offscreen_bounds.y;
         const Rect offscreen_clip{0, 0, offscreen_bounds.width, offscreen_bounds.height};
-        rasterizer_.rasterize(layer.display_list, offscreen, offscreen_clip, child_offset_x, child_offset_y, scratch);
+        Rect local_layer_clip = offscreen_clip;
+        if (layer.has_clip) {
+            local_layer_clip = intersect_rect(
+                local_layer_clip,
+                Rect{layer_clip.x - offscreen_bounds.x,
+                     layer_clip.y - offscreen_bounds.y,
+                     layer_clip.width,
+                     layer_clip.height});
+        }
+        rasterizer_.rasterize(layer.display_list,
+                              offscreen,
+                              local_layer_clip,
+                              child_offset_x,
+                              child_offset_y,
+                              scratch);
+        const Rect child_clip = local_layer_clip;
         for (std::size_t index = 0; index < layer.children.size(); ++index) {
             composite_layer(*layer.children[index],
                             compositor_scratch->composite_bounds[bounds.children[index]],
-                            offscreen, offscreen_clip, child_offset_x, child_offset_y, 1.0F,
+                            offscreen, child_clip, child_offset_x, child_offset_y, 1.0F,
                             active_offscreen_pixels + offscreen_pixels, scratch, compositor_scratch);
+        }
+        if (has_corner_radius(layer.clip_border_radius)) {
+            apply_rounded_clip(offscreen,
+                               Rect{layer.clip_rect.x - offscreen_bounds.x,
+                                    layer.clip_rect.y - offscreen_bounds.y,
+                                    layer.clip_rect.width,
+                                    layer.clip_rect.height},
+                               layer.clip_border_radius);
         }
         if (has_scale_or_rotate) {
             composite_transformed_buffer(target,
@@ -1528,7 +1557,12 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                          layer_opacity,
                                          options_.smooth_scaled_layers);
         } else {
-            composite_buffer(target, offscreen, offscreen_bounds.x, offscreen_bounds.y, layer_opacity);
+            composite_buffer_clipped(target,
+                                     offscreen,
+                                     offscreen_bounds.x,
+                                     offscreen_bounds.y,
+                                     layer_clip,
+                                     layer_opacity);
         }
         return;
     }

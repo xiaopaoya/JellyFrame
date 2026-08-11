@@ -73,6 +73,7 @@ struct LayerNode {
     const LayoutBox* box = nullptr;
     Rect bounds;
     Rect clip_rect;
+    int clip_border_radius = 0;
     bool has_clip = false;
     float opacity = 1.0F;
     Transform2D transform;

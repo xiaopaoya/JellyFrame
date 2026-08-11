@@ -673,6 +673,38 @@ void dirty_render_preserves_original_rounded_geometry() {
     check(frame_buffer.pixel(20, 5).r == 255, "outside dirty clip remains untouched");
 }
 
+void compositor_clips_children_to_rounded_overflow() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 40, 40};
+    DisplayCommand background = black_fill(Rect{0, 0, 40, 40});
+    background.color = Color{255, 255, 255, 255};
+    root.display_list.push_back(background);
+
+    auto clip = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    clip->type = LayerType::Clip;
+    clip->bounds = Rect{8, 8, 24, 24};
+    clip->clip_rect = clip->bounds;
+    clip->has_clip = true;
+    clip->clip_border_radius = 8;
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Paint;
+    child->bounds = Rect{0, 0, 40, 40};
+    DisplayCommand fill = black_fill(Rect{0, 0, 40, 40});
+    fill.color = Color{20, 120, 240, 255};
+    child->display_list.push_back(fill);
+    clip->children.push_back(std::move(child));
+    root.children.push_back(std::move(clip));
+
+    const FrameBuffer frame = SoftwareCompositor().render(root, 40, 40, Color{255, 255, 255, 255});
+    check(frame.pixel(8, 8).r == 255 && frame.pixel(8, 8).g == 255,
+          "rounded overflow clip excludes the top-left corner");
+    check(frame.pixel(20, 8).b > 200,
+          "rounded overflow clip keeps the top edge away from the corner");
+    check(frame.pixel(20, 20).b > 200,
+          "rounded overflow clip keeps child content in the center");
+}
+
 void dirty_render_skips_contained_dirty_rects() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1441,6 +1473,7 @@ int main() {
         layout_uses_injected_text_measurement();
         dirty_render_only_updates_requested_clip();
         dirty_render_preserves_original_rounded_geometry();
+        compositor_clips_children_to_rounded_overflow();
         dirty_render_skips_contained_dirty_rects();
         compositor_skips_covered_opaque_fill_prefix();
         compositor_keeps_non_fill_prefix_side_effects();
