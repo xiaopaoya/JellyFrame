@@ -74,6 +74,10 @@ adapter 的端口必须在传输 App 前告知工具。
 小端整数、严格 payload 上限 4096 字节、消息类型校验和 CRC32。解码得到的 payload 只是输入缓冲区的
 只读视图；跨任务或异步队列前必须复制，协议层不会转移指针所有权。
 
+同一模块还提供固定边界的 `DeviceCapabilitySnapshot` 编解码和稳定的请求结果码，包含 board/profile
+标识、runtime 版本、屏幕尺寸、启用的能力位、最大 App 包大小和可用存储。字符串有明确长度上限，
+不依赖 JSON、堆分配或端口私有结构。
+
 `src/app_runtime/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入
 Render Core。写入失败、校验失败、提交失败和主动取消都会清理 staging；只有原子提交成功后新版本
@@ -112,8 +116,8 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 定义 `JFDP/1` framing、request/result code 和 capability handshake。
 - 增加有注入式 storage callback 的平台无关 staged-install controller，并为 offset、重放、取消、断连和
   atomic commit failure 编写 focused test。
-- 已有平台无关 framing、staged-install controller 和桌面 reference endpoint；仍需补齐 capability
-  payload、请求/结果码和真正的 loopback session 测试，再进入 port 接入。
+- 已有平台无关 framing、capability payload、请求结果码、staged-install controller 和桌面 reference
+  endpoint；仍需补真正的 loopback session 测试，再进入 port 接入。
 
 ### D1：首个官方 Developer Image
 

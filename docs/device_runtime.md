@@ -91,6 +91,12 @@ a read-only view into the input buffer; it must be copied before crossing a task
 or asynchronous queue boundary. The protocol layer never transfers pointer
 ownership.
 
+The same module provides bounded `DeviceCapabilitySnapshot` encoding and stable
+request result codes for board/profile identity, runtime version, display size,
+enabled capability bits, maximum bundle size and available storage. Strings have
+explicit limits and the payload codec does not depend on JSON, heap allocation or
+port-private structures.
+
 `src/app_runtime/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.
 Flash, filesystem, signature and registry policy remain in the adapter and are
@@ -139,9 +145,9 @@ firmware image and cannot replace the launcher, recovery UI or port code.
 - Add a hardware-neutral staged-install controller with injected storage
   callbacks and focused tests for offsets, replay, abort, disconnect and
   atomic commit failure.
-- Platform-independent framing, staged-install control and the desktop reference
-  endpoint now exist. Capability payloads, request/result codes and a real
-  loopback session test remain before port integration.
+- Platform-independent framing, capability payloads, request result codes,
+  staged-install control and the desktop reference endpoint now exist. A real
+  loopback session test remains before port integration.
 
 ### D1: First official developer image
 

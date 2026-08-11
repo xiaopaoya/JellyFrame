@@ -1,8 +1,10 @@
 #include "app_runtime/device_runtime_protocol.h"
 
 #include <array>
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 
 using namespace jellyframe;
 
@@ -76,11 +78,51 @@ void enforces_bounded_payload_and_exact_frame_size() {
     assert(payload == nullptr);
 }
 
+void capabilities_round_trip_without_dynamic_storage() {
+    DeviceCapabilitySnapshot input;
+    input.display_width = 172;
+    input.display_height = 320;
+    input.capability_bits = DeviceCapabilityScripting | DeviceCapabilityTouch | DeviceCapabilityDeviceLogs;
+    input.max_bundle_bytes = 256 * 1024;
+    input.available_storage_bytes = 1024 * 1024;
+    std::strcpy(input.board_id, "ws147");
+    std::strcpy(input.runtime_version, "0.6.0-dev");
+
+    std::array<std::uint8_t, 128> encoded{};
+    std::size_t encoded_size = 0;
+    assert(encode_device_capabilities(input, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::Ok);
+    DeviceCapabilitySnapshot output;
+    assert(decode_device_capabilities(encoded.data(), encoded_size, output) == DeviceProtocolStatus::Ok);
+    assert(output.display_width == 172);
+    assert(output.display_height == 320);
+    assert(output.capability_bits == input.capability_bits);
+    assert(output.max_bundle_bytes == input.max_bundle_bytes);
+    assert(output.available_storage_bytes == input.available_storage_bytes);
+    assert(std::strcmp(output.board_id, input.board_id) == 0);
+    assert(std::strcmp(output.runtime_version, input.runtime_version) == 0);
+}
+
+void capabilities_reject_unterminated_or_truncated_values() {
+    DeviceCapabilitySnapshot input;
+    std::fill(std::begin(input.board_id), std::end(input.board_id), 'x');
+    std::array<std::uint8_t, 128> encoded{};
+    std::size_t encoded_size = 0;
+    assert(encode_device_capabilities(input, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::InvalidArgument);
+
+    input.board_id[0] = 'w';
+    input.board_id[1] = '\0';
+    assert(encode_device_capabilities(input, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::Ok);
+    DeviceCapabilitySnapshot output;
+    assert(decode_device_capabilities(encoded.data(), encoded_size - 1, output) == DeviceProtocolStatus::Truncated);
+}
+
 } // namespace
 
 int main() {
     round_trip_preserves_value_header_and_payload();
     rejects_malformed_frames_without_exposing_payload();
     enforces_bounded_payload_and_exact_frame_size();
+    capabilities_round_trip_without_dynamic_storage();
+    capabilities_reject_unterminated_or_truncated_values();
     return 0;
 }
