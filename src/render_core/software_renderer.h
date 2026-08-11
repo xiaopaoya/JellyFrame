@@ -34,6 +34,14 @@ struct SoftwareRasterizerScratch {
     void release();
 };
 
+// A value-only clip record consumed by the rasterizer. The caller supplies
+// records from outermost to innermost order; rectangular clips stay on the
+// direct fast path and rounded clips use a bounded temporary surface.
+struct RasterClip {
+    Rect rect;
+    int border_radius = 0;
+};
+
 using TextPaintCallback = bool (*)(FrameBuffer& target,
                                    Rect rect,
                                    Color color,
@@ -102,6 +110,14 @@ public:
                    int offset_x = 0,
                    int offset_y = 0,
                    SoftwareRasterizerScratch* scratch = nullptr) const;
+    void rasterize_clipped(const DisplayCommand& command,
+                           FrameBuffer& target,
+                           Rect clip,
+                           int offset_x,
+                           int offset_y,
+                           const RasterClip* clips,
+                           std::size_t clip_count,
+                           SoftwareRasterizerScratch* scratch = nullptr) const;
 
 private:
     TextPainter text_painter_;

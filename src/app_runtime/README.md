@@ -55,8 +55,17 @@ returns session values by copy so a worker or UI task cannot retain a mutable
 reference across teardown; no such lock exists in ordinary builds.
 
 The same module's `script_task_frame_codec.*` serializes bounded `DisplayList`
-snapshots and paint-ordered opaque input target keys. The session and frame
-sequence remain in the surrounding sealed-frame lease packet.
+snapshots and paint-ordered opaque input target keys. v1 remains the compact
+legacy format; v2 additionally carries bounded hierarchical clip records and
+parallel command clip indices. The session and frame sequence remain in the
+surrounding sealed-frame lease packet.
+
+`script_task_frame_renderer.*` is the host-side value-frame consumer. It maps
+decoded v1/v2 values to the platform-neutral `SoftwareRasterizer`, preserving
+rounded clip chains and dirty-region boundaries while rejecting malformed
+indices or parent cycles. It does not rebuild DOM or `LayerNode` state and can
+therefore be reused by the desktop shell and a port adapter independently of
+the worker's private runtime.
 
 `script_task_input_codec.*` defines the bounded, versioned worker-inbox values
 for pointer, wheel, key and text input. The worker validates and dispatches

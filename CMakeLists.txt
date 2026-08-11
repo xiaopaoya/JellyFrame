@@ -355,6 +355,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         add_library(jellyframe_script_task_runtime
             src/app_runtime/script_task_contract.cpp
             src/app_runtime/script_task_frame_codec.cpp
+            src/app_runtime/script_task_frame_renderer.cpp
             src/app_runtime/script_task_input_codec.cpp
             src/app_runtime/script_task_input_dispatch.cpp
             src/app_runtime/script_task_service_request_codec.cpp
@@ -1153,6 +1154,7 @@ if(JELLYFRAME_BUILD_TESTS)
             set(JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES
                 src/app_runtime/tests/script_task_contract_tests.cpp
                 src/app_runtime/tests/script_task_frame_codec_tests.cpp
+                src/app_runtime/tests/script_task_frame_renderer_tests.cpp
                 src/app_runtime/tests/script_task_input_codec_tests.cpp
                 src/app_runtime/tests/script_task_input_dispatch_tests.cpp
                 src/app_runtime/tests/script_task_service_request_codec_tests.cpp

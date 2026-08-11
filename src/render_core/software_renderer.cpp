@@ -1307,6 +1307,98 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
     }
 }
 
+void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
+                                           FrameBuffer& target,
+                                           Rect clip,
+                                           int offset_x,
+                                           int offset_y,
+                                           const RasterClip* clips,
+                                           std::size_t clip_count,
+                                           SoftwareRasterizerScratch* scratch) const {
+    if (clips == nullptr || clip_count == 0) {
+        rasterize(command, target, clip, offset_x, offset_y, scratch);
+        return;
+    }
+
+    Rect effective_clip = clip;
+    std::vector<RasterRoundedRect> rounded_clips;
+    rounded_clips.reserve(clip_count);
+    for (std::size_t index = 0; index < clip_count; ++index) {
+        effective_clip = intersect_rect(effective_clip, clips[index].rect);
+        if (empty_rect(effective_clip)) {
+            return;
+        }
+        if (has_corner_radius(clips[index].border_radius)) {
+            rounded_clips.push_back(prepare_rounded_rect(clips[index].rect,
+                                                         clips[index].border_radius));
+        }
+    }
+    if (rounded_clips.empty()) {
+        rasterize(command, target, effective_clip, offset_x, offset_y, scratch);
+        return;
+    }
+
+    Rect command_rect = command.rect;
+    command_rect.x = safe_add(command_rect.x, offset_x);
+    command_rect.y = safe_add(command_rect.y, offset_y);
+    const Rect visible = intersect_rect(command_rect, effective_clip);
+    if (empty_rect(visible)) {
+        return;
+    }
+    std::size_t temporary_pixels = 0;
+    if (!checked_pixel_count(visible.width, visible.height, temporary_pixels) ||
+        (options_.max_temporary_pixels != 0 &&
+         temporary_pixels > options_.max_temporary_pixels)) {
+        report_diagnostic(diagnostics_,
+                          DiagnosticStage::Paint,
+                          DiagnosticSeverity::Warning,
+                          "paint-clip-chain-budget",
+                          "Rounded clip-chain temporary surface exceeded budget; command was skipped",
+                          std::to_string(visible.width) + "x" + std::to_string(visible.height));
+        return;
+    }
+
+    FrameBuffer local_surface;
+    FrameBuffer& surface = scratch != nullptr ? scratch->temporary_surface : local_surface;
+    surface.resize(visible.width, visible.height, Color{0, 0, 0, 0});
+    if (surface.width != visible.width || surface.height != visible.height ||
+        surface.pixels.size() != temporary_pixels) {
+        report_diagnostic(diagnostics_,
+                          DiagnosticStage::Paint,
+                          DiagnosticSeverity::Warning,
+                          "paint-clip-chain-allocation",
+                          "Rounded clip-chain temporary surface allocation failed; command was skipped",
+                          std::to_string(visible.width) + "x" + std::to_string(visible.height));
+        return;
+    }
+    rasterize(command,
+              surface,
+              Rect{0, 0, visible.width, visible.height},
+              safe_add(offset_x, safe_negate(visible.x)),
+              safe_add(offset_y, safe_negate(visible.y)),
+              nullptr);
+
+    const int y_end = safe_edge(visible.y, visible.height);
+    const int x_end = safe_edge(visible.x, visible.width);
+    for (int y = visible.y; y < y_end; ++y) {
+        for (int x = visible.x; x < x_end; ++x) {
+            int coverage = 255;
+            for (const RasterRoundedRect& rounded : rounded_clips) {
+                coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
+                if (coverage == 0) {
+                    break;
+                }
+            }
+            if (coverage != 0) {
+                blend_pixel(target,
+                            x,
+                            y,
+                            with_coverage(surface.pixel(x - visible.x, y - visible.y), coverage));
+            }
+        }
+    }
+}
+
 SoftwareCompositor::SoftwareCompositor()
     : SoftwareCompositor(TextPainter{}) {}
 

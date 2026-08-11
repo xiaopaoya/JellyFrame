@@ -705,6 +705,31 @@ void compositor_clips_children_to_rounded_overflow() {
           "rounded overflow clip keeps child content in the center");
 }
 
+void rasterizer_applies_value_rounded_clip_chain() {
+    DisplayCommand fill = black_fill(Rect{0, 0, 40, 40});
+    fill.color = Color{20, 120, 240, 255};
+    FrameBuffer frame(40, 40, Color{255, 255, 255, 255});
+    const RasterClip clips[] = {
+        {{8, 8, 24, 24}, 8},
+        {{12, 12, 16, 16}, 5},
+    };
+
+    SoftwareRasterizer().rasterize_clipped(fill,
+                                           frame,
+                                           Rect{0, 0, 40, 40},
+                                           0,
+                                           0,
+                                           clips,
+                                           2);
+
+    check(frame.pixel(8, 8).r == 255 && frame.pixel(8, 8).g == 255,
+          "value clip chain excludes the outer rounded corner");
+    check(frame.pixel(12, 12).r == 255 && frame.pixel(12, 12).g == 255,
+          "value clip chain excludes the inner rounded corner");
+    check(frame.pixel(20, 20).b > 200,
+          "value clip chain preserves the center of the command");
+}
+
 void compositor_offsets_rounded_overflow_clip_with_layer_transform() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1502,6 +1527,7 @@ int main() {
         dirty_render_only_updates_requested_clip();
         dirty_render_preserves_original_rounded_geometry();
         compositor_clips_children_to_rounded_overflow();
+        rasterizer_applies_value_rounded_clip_chain();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();
         dirty_render_skips_contained_dirty_rects();
         compositor_skips_covered_opaque_fill_prefix();
