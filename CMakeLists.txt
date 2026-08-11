@@ -392,6 +392,11 @@ if(JELLYFRAME_BUILD_TESTS)
 
     if(Python3_Interpreter_FOUND)
         add_test(
+            NAME jellyframe_device_reference_cli_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_reference_cli_tests.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        add_test(
             NAME jellyframe_tool_package_preflight_tests
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
