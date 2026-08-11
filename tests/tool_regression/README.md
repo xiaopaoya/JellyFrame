@@ -12,6 +12,7 @@ the render-core and app-runtime C++ unit suites.
 | --- | --- |
 | Manifest, resource and package safety | `package_preflight_tests.py`, `package_image_fixture_tests.py` |
 | App install/update/delete/rollback | `app_registry_tests.py`, `win32_browser_cli_tests.py` |
+| Desktop app-shell workflow evidence | `desktop_app_shell_workflow_tests.py` |
 | HTML/CSS audit and profile declarations | `html_support_table_tests.py`, `css_support_table_tests.py`, `render_core_feature_profile_tests.py`, `render_core_feature_registry_tests.py` |
 | Visual diagnostics and layout captures | `pipeline_visual_diagnostics_tests.py`, `flex_grid_capture_tests.py` |
 | Template and external-author workflow | `template_trial_tests.py` |
@@ -39,6 +40,12 @@ authorized file-broker smoke command and the bad-app system survival smoke.
 clean-directory `jellyframe_cli.py trial` flow. It keeps the official trial
 package diagnostics, expected capability rejection, package previews and
 install/update/rollback recovery in one reproducible evidence directory.
+
+`desktop_app_shell_workflow_tests.py` is the next-layer Windows workflow check.
+It packages a real sample app, installs it into the desktop registry, verifies
+candidate update, downgrade rejection, disable/enable, rollback, launcher-based
+remove-with-keep-data and remove-with-data-deletion, then writes a machine-readable
+workflow report under `build*/test_outputs/desktop_app_shell_workflow/`.
 
 Generated reports and screenshots must stay under `build*/test_outputs` or
 `out/`; do not commit those outputs.

@@ -11,6 +11,7 @@ render-core 或 app-runtime C++ 单元测试的行为。
 | --- | --- |
 | manifest、资源和 package 安全 | `package_preflight_tests.py`、`package_image_fixture_tests.py` |
 | app 安装/更新/删除/回滚 | `app_registry_tests.py`、`win32_browser_cli_tests.py` |
+| 桌面 App 壳工作流证据 | `desktop_app_shell_workflow_tests.py` |
 | HTML/CSS 表和 profile | `html_support_table_tests.py`、`css_support_table_tests.py`、`render_core_feature_*_tests.py` |
 | 视觉 diagnostics 和布局捕获 | `pipeline_visual_diagnostics_tests.py`、`flex_grid_capture_tests.py` |
 | 模板和外部作者流程 | `template_trial_tests.py` |
@@ -32,5 +33,10 @@ runtime family，保持故意缺字 warning 稳定，并用 Win32 `--use-app-fon
 `jellyframe_cli_external_trial_evidence` 是仅限 Windows 的 CTest。它运行干净目录中的
 `jellyframe_cli.py trial` 流程，将官方试用包诊断、预期 capability 拒绝、package 预览与
 安装/更新/回滚恢复汇总为可重复的证据目录。
+
+`desktop_app_shell_workflow_tests.py` 是再上一层的 Windows 工作流检查：它会打包一个真实
+sample app，安装到桌面 registry，验证 candidate 更新、降级拒绝、停用/启用、回滚、
+通过 launcher 的“移除并保留数据”以及“移除并删除数据”，并把机器可读报告写入
+`build*/test_outputs/desktop_app_shell_workflow/`。
 
 生成的报告和截图应保留在 `build*/test_outputs` 或 `out/`，不要提交这些输出。

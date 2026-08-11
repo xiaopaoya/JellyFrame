@@ -795,9 +795,9 @@ if(JELLYFRAME_BUILD_TESTS)
                 PASS_REGULAR_EXPRESSION
                     "JellyFrame doctor: mode=external-trial samples=4")
 
-            if(TARGET jellyframe_virtual_bench)
-                add_test(
-                    NAME jellyframe_virtual_board_bench_smoke
+        if(TARGET jellyframe_virtual_bench)
+            add_test(
+                NAME jellyframe_virtual_board_bench_smoke
                     COMMAND $<TARGET_FILE:jellyframe_virtual_bench>
                             300 300 8 3 40 0.85 40
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -819,6 +819,14 @@ if(JELLYFRAME_BUILD_TESTS)
         add_test(
             NAME jellyframe_desktop_shell_cli_contract
             COMMAND ${JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_test(
+            NAME jellyframe_desktop_app_shell_workflow
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/desktop_app_shell_workflow_tests.py
+                    $<TARGET_FILE:jellyframe_desktop_shell>
+                    --output-dir ${CMAKE_BINARY_DIR}/test_outputs/desktop_app_shell_workflow
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         add_test(
