@@ -430,6 +430,23 @@ void rounded_stroke_keeps_corner_pixels_clear() {
     check(frame_buffer.pixel(6, 2).r == 0, "rounded stroke paints top edge");
 }
 
+void square_stroke_paints_all_four_edges() {
+    FrameBuffer frame_buffer(14, 14, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    DisplayCommand command;
+    command.type = DisplayCommandType::StrokeRect;
+    command.rect = Rect{2, 2, 10, 10};
+    command.color = Color{0, 0, 0, 255};
+    command.stroke_width = 2;
+    rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 14, 14});
+
+    check(frame_buffer.pixel(6, 2).r == 0, "square stroke paints the top edge");
+    check(frame_buffer.pixel(6, 11).r == 0, "square stroke paints the bottom edge");
+    check(frame_buffer.pixel(2, 6).r == 0, "square stroke paints the left edge");
+    check(frame_buffer.pixel(11, 6).r == 0, "square stroke paints the right edge");
+    check(frame_buffer.pixel(6, 6).r == 255, "square stroke keeps the center hollow");
+}
+
 void rounded_stroke_keeps_straight_edges_visible() {
     FrameBuffer frame_buffer(24, 16, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -1411,6 +1428,7 @@ int main() {
         soft_box_shadow_fades_outside_rounded_card();
         circular_box_shadow_keeps_diagonal_falloff_close_to_axis();
         rounded_stroke_keeps_corner_pixels_clear();
+        square_stroke_paints_all_four_edges();
         rounded_stroke_keeps_straight_edges_visible();
         rounded_fill_antialiases_edge_pixels();
         per_corner_rounded_rect_keeps_square_bottom_left();

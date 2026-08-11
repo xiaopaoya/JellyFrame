@@ -7,6 +7,7 @@
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
+#include "render_core/text_scan.h"
 
 #include <iostream>
 #include <cstdint>
@@ -1144,6 +1145,38 @@ void text_overflow_ellipsis_truncates_painted_text() {
     check(false, "ellipsis fixture emits a text command");
 }
 
+void utf8_text_overflow_ellipsis_keeps_scalar_boundaries() {
+    const std::string source = "å¤©æ°é¢æ¥çé¢";
+    const std::string html = std::string("<body><p>") + source + "</p></body>";
+    auto pipeline = build_pipeline(
+        html.c_str(),
+        "p { width: 42px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }");
+
+    std::vector<std::size_t> scalar_boundaries;
+    for (std::size_t index = 0; index < source.size();) {
+        consume_utf8_codepoint(source, index);
+        scalar_boundaries.push_back(index);
+    }
+
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::Text) {
+            continue;
+        }
+        check(command.text.size() >= 3 && command.text.compare(command.text.size() - 3, 3, "...") == 0,
+              "utf8 ellipsis paints an ASCII fallback marker");
+        const std::string prefix = command.text.substr(0, command.text.size() - 3);
+        check(source.compare(0, prefix.size(), prefix) == 0,
+              "utf8 ellipsis keeps the original byte prefix");
+        check(std::find(scalar_boundaries.begin(), scalar_boundaries.end(), prefix.size()) != scalar_boundaries.end(),
+              "utf8 ellipsis truncates only at scalar boundaries");
+        check(command.text != source, "utf8 ellipsis truncates long text");
+        return;
+    }
+    check(false, "utf8 ellipsis fixture emits a text command");
+}
+
 void text_transform_paints_transformed_text() {
     auto pipeline = build_pipeline("<body><p>hello ui</p><p class='cap'>jelly-frame kit</p></body>",
                                    "p { text-transform: uppercase; }"
@@ -1423,6 +1456,7 @@ int main() {
 #endif
         unbreakable_symbol_stays_single_line();
         text_overflow_ellipsis_truncates_painted_text();
+        utf8_text_overflow_ellipsis_keeps_scalar_boundaries();
         text_transform_paints_transformed_text();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_item_auto_width_reflows_centered_text();
