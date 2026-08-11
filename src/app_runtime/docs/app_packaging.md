@@ -781,15 +781,15 @@ decoder; the selected target still decides whether the image codec is usable.
 For human app authoring on Windows, prefer the interactive Win32 browser shell:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
 ```
 
 You can also open `.jfapp` directly to verify that the installable bundle
 renders like the source directory:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
-.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather.bmp --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather.bmp --app build\watch_weather.jfapp
 ```
 
 To validate that a `.jffont` declared in manifest `fonts` is usable by the
@@ -797,7 +797,7 @@ current package, add `--use-app-fonts` to the Win32 shell. The default path
 still uses GDI text for comfortable desktop debugging and screenshot review.
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_font.bmp --app build\watch_weather.jfapp --use-app-fonts
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_font.bmp --app build\watch_weather.jfapp --use-app-fonts
 ```
 
 For the recommended source-package install path, let the CLI run validation,
@@ -841,9 +841,9 @@ The Win32 shell can then display the installed-app registry, launch apps through
 the rendered system-shell UI and delete inactive apps:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps --launch-app org.jellyframe.examples.weather
-.\build\Release\jellyframe_desktop_shell.exe --capture build/app_manager.bmp --registry-store build/installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps --launch-app org.jellyframe.examples.weather
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build/app_manager.bmp --registry-store build/installed_apps
 ```
 
 The lower-level registry helper remains available for installing an existing
@@ -870,7 +870,7 @@ $bundle = python tools/jellyframe_cli.py registry path `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
-.\build\Release\jellyframe_desktop_shell.exe --app $bundle
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app $bundle
 
 python tools/jellyframe_cli.py registry remove `
   --store build/installed_apps `
@@ -897,7 +897,7 @@ python tools/jellyframe_cli.py registry enable `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --registry-store build/installed_apps `
   --delete-app-data org.jellyframe.examples.weather
 ```

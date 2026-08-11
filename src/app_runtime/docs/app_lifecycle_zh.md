@@ -133,8 +133,8 @@ launcher/system shell。app 可以失败；runtime、launcher 和其他 app 必�
 对 app 作者而言，Win32 壳是首选交互式调试宿主：
 
 ```powershell
-python tools\jellyframe_cli.py doctor --build-dir build\Release
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
+python tools\jellyframe_cli.py doctor --build-dir build\desktop-release\Release
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
 ```
 
 常用生命周期检查：

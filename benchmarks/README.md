@@ -15,8 +15,8 @@ Current microbenchmarks live next to their owning subprojects:
 Build them with:
 
 ```powershell
-cmake -S . -B build -DJELLYFRAME_BUILD_BENCHMARKS=ON
-cmake --build build --config Release
+cmake -S . -B build/desktop-release -DJELLYFRAME_BUILD_BENCHMARKS=ON
+cmake --build build/desktop-release --config Release
 ```
 
 The generated executables are `jellyframe_render_core_microbench` and

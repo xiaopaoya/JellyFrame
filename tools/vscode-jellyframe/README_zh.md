@@ -16,7 +16,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
   resources、references、warnings 和管线 diagnostics。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
-- 自动发现 `build/Release`、`build/Debug` 以及重命名后的桌面壳，也可在设置中指定路径。
+- 自动发现 `build/desktop-release/Release`、`build/desktop-debug/Debug` 以及桌面壳，
+  也可在设置中指定路径。
 - 可配置仓库根目录、Python 可执行文件、默认 target 和字体预算。
 - 在 VS Code 左侧提供始终可见的 `JellyFrame` 活动栏视图，集中显示 App、构建、报告、
   诊断和性能操作；对 `jellyframe.app.json` 以及 HTML/CSS 文件提供针对性的右键菜单。
@@ -25,7 +26,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 
 仓库当前提供的是源码版扩展，尚未发布到 VS Code Marketplace。最简单的试用方式是：
 
-1. 先在 JellyFrame 仓库根目录完成一次 Release 构建，生成 `build/Release`。
+1. 先在 JellyFrame 仓库根目录完成一次桌面 Release 构建，生成
+   `build/desktop-release/Release`。
 2. 用 VS Code 打开 `tools/vscode-jellyframe` 文件夹。
 3. 按 `F5`，在新打开的 Extension Development Host 窗口中打开一个 JellyFrame 仓库，
    或将 `jellyframe.repoRoot` 设置为仓库根目录。
@@ -50,9 +52,10 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 `-NpxCommand` 或 `-CodeCommand` 传入完整路径。若 PowerShell 阻止本地脚本，可在当前窗口执行
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
 安装到仓库之外时，在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
-可选，用于指定桌面构建目录。扩展优先使用 `build/Release`，其次使用 `build/Debug`。
+可选，用于指定桌面运行目录。扩展优先使用 `build/desktop-release/Release`，其次使用
+`build/desktop-debug/Debug`。
 如果 App manifest 声明了 `runtime.script`，未显式设置 `jellyframe.buildDir` 时会优先寻找
-`build/scripting-ci-local` 或其他脚本构建。
+`build/desktop-scripting-release/Release` 或其他脚本构建。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 

@@ -46,10 +46,15 @@ def candidate_builds() -> list[Path]:
 
 
 def default_build_dir() -> Path:
-    for candidate in (REPO_ROOT / "build" / "Release", REPO_ROOT / "build" / "Debug"):
+    for candidate in (
+        REPO_ROOT / "build" / "desktop-release" / "Release",
+        REPO_ROOT / "build" / "desktop-debug" / "Debug",
+        REPO_ROOT / "build" / "Release",
+        REPO_ROOT / "build" / "Debug",
+    ):
         if candidate.is_dir():
             return candidate
-    return REPO_ROOT / "build" / "Release"
+    return REPO_ROOT / "build" / "desktop-release" / "Release"
 
 
 def parse_args() -> argparse.Namespace:

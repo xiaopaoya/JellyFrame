@@ -20,7 +20,7 @@
   "view.status": "JellyFrame",
   "configuration.title": "JellyFrame",
   "configuration.repoRoot": "可选的 JellyFrame 仓库根目录；从本仓库运行扩展时留空。",
-  "configuration.buildDir": "可选的桌面构建目录；留空时优先使用 build/Release，其次使用 build/Debug。",
+  "configuration.buildDir": "可选的桌面运行目录；留空时优先使用 build/desktop-release/Release，其次使用 build/desktop-debug/Debug。",
   "configuration.openCaptureAfterRun": "预览或运行帧脚本生成截图后，自动打开截图。",
   "configuration.pythonPath": "运行 tools/jellyframe_cli.py 使用的 Python 可执行文件。",
   "configuration.defaultTarget": "传递给 JellyFrame CLI 命令的默认 target preset。",

@@ -13,5 +13,5 @@ renderer 仍不加载远程页面。
 Win32 scripting 壳可用 frame script 验证按钮事件、XHR mock、图片 completion 和帧更新统计：
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather --frame-script samples\apps\packages\watch_weather\capture_weather_interaction.jfcapture
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather --frame-script samples\apps\packages\watch_weather\capture_weather_interaction.jfcapture
 ```

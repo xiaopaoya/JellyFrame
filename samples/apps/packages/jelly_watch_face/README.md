@@ -10,12 +10,12 @@ and MCU hosts can inject deterministic wall-clock time through the standard
 `Date.now()` subset.
 
 ```powershell
-python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_watch_face --report out\jelly_watch_face_check.json --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
+python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_watch_face --report out\jelly_watch_face_check.json --targets round-300,rect-320x240,rect-172x320 --build-dir build\desktop-release\Release
 ```
 
 With the JerryScript-enabled Win32 shell, generate a 30fps contact sheet to
 inspect hand rotation, the `conic-gradient()` ring and rounded antialiasing:
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
 ```

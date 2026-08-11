@@ -82,9 +82,9 @@ than browser-compatible Canvas.
 ## Quick Start
 
 ```powershell
-cmake -S . -B build
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
+cmake -S . -B build/desktop-release
+cmake --build build/desktop-release --config Release
+ctest --test-dir build/desktop-release -C Release --output-on-failure
 ```
 
 Release test binaries explicitly keep `assert(...)` enabled, so this command is
@@ -98,7 +98,7 @@ reports in `build/doctor_reports` and prints a compact per-sample summary at
 the end:
 
 ```powershell
-python tools\jellyframe_cli.py doctor --build-dir build\Release
+python tools\jellyframe_cli.py doctor --build-dir build\desktop-release\Release
 ```
 
 For a focused external-trial pass, run `doctor --trial`. It strictly checks four
@@ -109,7 +109,7 @@ status and optional Canvas graphics. Use `--sample NAME` for one package or
 Render a static page to an image:
 
 ```powershell
-.\build\Release\jellyframe_pseudo_browser.exe `
+.\build\desktop-release\Release\jellyframe_pseudo_browser.exe `
   src\render_core\samples\pages\modern\article_cards.html `
   src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
@@ -118,7 +118,7 @@ Render a static page to an image:
 Open an interactive Windows validation shell:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
 
@@ -178,10 +178,10 @@ git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third
 python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
 
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
-cmake -S . -B build-script `
+cmake -S . -B build/desktop-scripting-release `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
   -DJERRYSCRIPT_ROOT="$jerryRoot"
-cmake --build build-script --config Release
+cmake --build build/desktop-scripting-release --config Release
 ```
 
 When `JERRYSCRIPT_ROOT` points to a normal JerryScript build tree, CMake finds

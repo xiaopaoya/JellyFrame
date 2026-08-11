@@ -25,7 +25,14 @@ def repo_root() -> Path:
 
 
 def default_build_dir() -> Path:
-    return repo_root() / "build" / "Release"
+    root = repo_root()
+    for candidate in (
+        root / "build" / "desktop-release" / "Release",
+        root / "build" / "Release",
+    ):
+        if candidate.is_dir():
+            return candidate
+    return root / "build" / "desktop-release" / "Release"
 
 
 def exe_name(name: str) -> str:

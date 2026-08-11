@@ -151,7 +151,7 @@ small wearable devices.
 Command:
 
 ```powershell
-.\build\Release\jellyframe_render_core_microbench.exe 80 1000
+.\build\desktop-release\Release\jellyframe_render_core_microbench.exe 80 1000
 ```
 
 Result on this Windows build machine after the responsive grid/aspect-ratio
@@ -194,7 +194,7 @@ Interpretation:
 CI also runs:
 
 ```powershell
-python project_tools\benchmark_guard.py --build-dir build\Release
+python project_tools\benchmark_guard.py --build-dir build\desktop-release\Release
 ```
 
 This guard checks a small set of render-core and app-runtime microbenchmarks:

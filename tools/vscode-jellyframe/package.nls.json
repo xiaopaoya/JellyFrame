@@ -20,7 +20,7 @@
   "view.status": "JellyFrame",
   "configuration.title": "JellyFrame",
   "configuration.repoRoot": "Optional JellyFrame repository root. Leave empty when running the extension from this repository.",
-  "configuration.buildDir": "Optional desktop build directory. Leave empty to prefer build/Release, then build/Debug.",
+  "configuration.buildDir": "Optional desktop runtime directory. Leave empty to prefer build/desktop-release/Release, then build/desktop-debug/Debug.",
   "configuration.openCaptureAfterRun": "Open a generated capture after preview or frame-script execution.",
   "configuration.pythonPath": "Python executable used to run tools/jellyframe_cli.py.",
   "configuration.defaultTarget": "Default target preset passed to JellyFrame CLI commands.",

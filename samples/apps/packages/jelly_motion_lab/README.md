@@ -9,25 +9,25 @@ uses standard CSS `@keyframes`, `transform`, `opacity`, transitions and
 Useful Win32 capture:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --capture-frames out\motion_lab_frames --frame-count 30 --frame-step-ms 33 --viewport-width 300 --viewport-height 300
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --capture-frames out\motion_lab_frames --frame-count 30 --frame-step-ms 33 --viewport-width 300 --viewport-height 300
 ```
 
 Preferred deterministic scripted capture:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_30fps.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_30fps.jfcapture
 ```
 
 Longer 30fps soak capture for regression review:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_soak_30fps.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_soak_30fps.jfcapture
 ```
 
 Low-power budget smoke test:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_low_power_static.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_low_power_static.jfcapture
 ```
 
 The frame scripts can also set `animation-fps` and `animation-callbacks` to

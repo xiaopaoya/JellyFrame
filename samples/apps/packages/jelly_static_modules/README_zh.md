@@ -7,5 +7,5 @@
 bundle，因此设备 runtime 无需 module loader。
 
 ```powershell
-python tools\jellyframe_cli.py preview --root samples\apps\packages\jelly_static_modules --output build\static_modules.bmp --build-dir build\Release
+python tools\jellyframe_cli.py preview --root samples\apps\packages\jelly_static_modules --output build\static_modules.bmp --build-dir build\desktop-release\Release
 ```

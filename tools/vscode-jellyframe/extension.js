@@ -54,11 +54,16 @@ function nativeBuildDir(context, preferScripting = false) {
     return path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured);
   }
   const ordinaryCandidates = [
+    path.join(repoRoot(context), "build", "desktop-release", "Release"),
+    path.join(repoRoot(context), "build", "desktop-debug", "Debug"),
+    // Compatibility for worktrees created before the named build layout.
     path.join(repoRoot(context), "build", "Release"),
     path.join(repoRoot(context), "build", "Debug"),
     path.join(repoRoot(context), "build-script", "Release")
   ];
   const scriptingCandidates = [
+    path.join(repoRoot(context), "build", "desktop-scripting-release", "Release"),
+    path.join(repoRoot(context), "build", "desktop-scripting-debug", "Debug"),
     path.join(repoRoot(context), "build", "scripting-ci-local", "Release"),
     path.join(repoRoot(context), "build", "scripting-ci-local", "Debug"),
     path.join(repoRoot(context), "build", "scripting-on-local", "Release"),
@@ -72,7 +77,7 @@ function nativeBuildDir(context, preferScripting = false) {
       return candidate;
     }
   }
-  return path.join(repoRoot(context), "build", "Release");
+  return path.join(repoRoot(context), "build", "desktop-release", "Release");
 }
 
 function debugLauncherPath(context) {

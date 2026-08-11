@@ -11,7 +11,7 @@ python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather
 python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather --capture build\watch_weather.bmp --wait
 python tools\debug\jellyframe_debug.py --app tests\fixtures\apps\jelly_scroll_probe --frame-script tests\fixtures\apps\jelly_scroll_probe\capture_wheel_scroll.jfcapture --wait
 python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather --runtime-log build\watch_weather.debug.log --wait
-python tools\debug\jellyframe_debug.py --build-dir build\Debug -- --help
+python tools\debug\jellyframe_debug.py --build-dir build\desktop-debug\Debug -- --help
 ```
 
 The facade only launches the native shell. It does not claim MCU timing,

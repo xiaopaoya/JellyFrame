@@ -151,9 +151,14 @@ render core 模块大致对应这些文件：
 配置并构建：
 
 ```powershell
-cmake -S . -B build
-cmake --build build --config Release
+cmake -S . -B build/desktop-release
+cmake --build build/desktop-release --config Release
 ```
+
+构建目录按用途命名：`desktop-release` 和 `desktop-debug` 是普通桌面配置；
+`desktop-scripting-release` 和 `desktop-scripting-debug` 启用 JerryScript 桥接。
+使用 Visual Studio 生成器时，末级的 `Release` 或 `Debug` 是 CMake 自动生成的配置输出目录，
+因此最终可执行文件目录会明确写成完整路径，不再使用含义模糊的 `build/Release`。
 
 默认选项：
 
@@ -165,11 +170,11 @@ cmake --build build --config Release
 只构建核心库或面向嵌入式的构建：
 
 ```powershell
-cmake -S . -B build-core `
+cmake -S . -B build/render-core-release `
   -DJELLYFRAME_BUILD_EXAMPLES=OFF `
   -DJELLYFRAME_BUILD_TESTS=OFF `
   -DJELLYFRAME_BUILD_BENCHMARKS=OFF
-cmake --build build-core --config Release
+cmake --build build/render-core-release --config Release
 ```
 
 ### 在 VS Code 中试用 JellyFrame 扩展
@@ -177,15 +182,15 @@ cmake --build build-core --config Release
 如果你习惯从扩展商店安装插件，需要先知道：JellyFrame 扩展目前随仓库提供，尚未发布到
 VS Code Marketplace。源码试用流程如下：
 
-1. 在仓库根目录完成上面的 Release 构建，确保存在 `build/Release`。
+1. 在仓库根目录完成上面的 Release 构建，确保存在 `build/desktop-release/Release`。
 2. 用 VS Code 打开 `tools/vscode-jellyframe` 文件夹。
 3. 按 `F5` 启动 Extension Development Host。
 4. 在新窗口中打开 JellyFrame 仓库，打开一个 `jellyframe.app.json` 或 App 的 HTML/CSS
    文件。
 5. 使用顶部的 `JellyFrame` 菜单、文件右键菜单或命令面板执行验证、预览和调试。
 
-在中文 VS Code 中，命令会显示中文标题。扩展默认从仓库的 `build/Release` 查找桌面构建，
-也会回退到 `build/Debug`；如果从其他目录启动扩展，请在设置中填写：
+在中文 VS Code 中，命令会显示中文标题。扩展默认从仓库的 `build/desktop-release/Release` 查找桌面构建，
+也会回退到 `build/desktop-debug/Debug`；如果从其他目录启动扩展，请在设置中填写：
 
 ```text
 jellyframe.repoRoot = JellyFrame 仓库根目录
@@ -206,7 +211,7 @@ jellyframe.buildDir = 可选的桌面构建目录
 运行回归测试：
 
 ```powershell
-ctest --test-dir build -C Release --output-on-failure
+ctest --test-dir build/desktop-release -C Release --output-on-failure
 ```
 
 运行面向试用者的仓库自检。它会扫描 `samples/apps/packages` 中的完整 app package，
@@ -214,7 +219,7 @@ ctest --test-dir build -C Release --output-on-failure
 JSON 报告写入 `build/doctor_reports`：
 
 ```powershell
-python tools\jellyframe_cli.py doctor --build-dir build\Release
+python tools\jellyframe_cli.py doctor --build-dir build\desktop-release\Release
 ```
 
 `doctor` 默认使用 `round-300,rect-320x240,rect-172x320` 三类可穿戴目标。它允许 warning，
@@ -225,13 +230,13 @@ package 错误、管线错误或阻塞字体问题都会使命令失败。外部
 运行核心微基准：
 
 ```powershell
-.\build\Release\jellyframe_render_core_microbench.exe
+.\build\desktop-release\Release\jellyframe_render_core_microbench.exe
 ```
 
 运行 virtual board 基准：
 
 ```powershell
-.\build\Release\jellyframe_virtual_bench.exe 300 300 60 200 80 0.85 40
+.\build\desktop-release\Release\jellyframe_virtual_bench.exe 300 300 60 200 80 0.85 40
 ```
 
 有效性能数据应使用 Release build。
@@ -245,14 +250,14 @@ python tools\jellyframe_cli.py check `
   --root build\my_weather `
   --target round-300 `
   --report build\my_weather.report.json `
-  --build-dir build\Release `
+  --build-dir build\desktop-release\Release `
   --runtime-log build\capture.log
 
 python tools\jellyframe_cli.py check `
   --root build\my_weather `
   --target round-300 `
   --report build\my_weather.port.report.json `
-  --build-dir build\Release `
+  --build-dir build\desktop-release\Release `
   --port-telemetry build\port.log
 ```
 
@@ -270,7 +275,7 @@ CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary`
 不打开窗口，把页面渲染成 BMP 或 PPM：
 
 ```powershell
-.\build\Release\jellyframe_pseudo_browser.exe `
+.\build\desktop-release\Release\jellyframe_pseudo_browser.exe `
   src\render_core\samples\pages\modern\article_cards.html `
   src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
@@ -279,7 +284,7 @@ CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary`
 打开 Windows 交互 shell：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
 
@@ -290,7 +295,7 @@ CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary`
 通过 Win32 默认 GDI 文本路径截图：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --capture `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture `
   calculator.ppm `
   --app tools\templates\apps\calculator
 ```
@@ -299,7 +304,7 @@ CLI 会把结果写入 `runtimeMetrics` / `portTelemetry`、`performanceSummary`
 layout 和 paint：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --capture `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture `
   calculator_font.ppm `
   --app tools\templates\apps\calculator `
   --use-app-fonts
@@ -308,18 +313,18 @@ layout 和 paint：
 检查中间结构：
 
 ```powershell
-.\build\Release\jellyframe_dom_dump.exe src\render_core\samples\pages\modern\search_home.html
-.\build\Release\jellyframe_cssom_dump.exe src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_style_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_render_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_layer_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_pipeline_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_dom_dump.exe src\render_core\samples\pages\modern\search_home.html
+.\build\desktop-release\Release\jellyframe_cssom_dump.exe src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_style_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_render_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_layer_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_pipeline_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
 ```
 
 嵌入字体包前收集文本资源信息：
 
 ```powershell
-.\build\Release\jellyframe_font_resource_check.exe `
+.\build\desktop-release\Release\jellyframe_font_resource_check.exe `
   --font-budget 16x16 `
   samples\apps\packages\watch_weather\index.html `
   samples\apps\packages\watch_weather\styles\app.css `
@@ -336,7 +341,7 @@ python tools\jellyframe_cli.py check `
   --target round-300 `
   --targets round-300,rect-320x240 `
   --report build\watch_weather.responsive.report.json `
-  --build-dir build\Release
+  --build-dir build\desktop-release\Release
 ```
 
 普通单 target 检查仍保持原行为；只有显式传 `--targets` 或 `--all-targets` 时才生成
@@ -355,10 +360,10 @@ python third_party\jerryscript\tools\build.py --clean
 
 ```powershell
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
-cmake -S . -B build-script `
+cmake -S . -B build/desktop-scripting-release `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
   -DJERRYSCRIPT_ROOT="$jerryRoot"
-cmake --build build-script --config Release
+cmake --build build/desktop-scripting-release --config Release
 ```
 
 标准 JerryScript build tree 只需传入 `JERRYSCRIPT_ROOT`：CMake 会从 build output
@@ -368,14 +373,14 @@ cmake --build build-script --config Release
 在交互式 Win32 壳中运行带脚本页面：
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\watch_weather
 ```
 
 运行 timer 驱动页面：
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\clock
 ```
 
@@ -385,7 +390,7 @@ Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 c
 
 ## 11. Release EXE 都是干什么的
 
-下表中的 exe 在相关 CMake 选项启用时生成到 `build\Release`。
+下表中的 exe 在相关 CMake 选项启用时生成到 `build\desktop-release\Release`。
 
 | 程序 | 用途 |
 | --- | --- |
@@ -464,8 +469,8 @@ python tools\jellyframe_cli.py preview `
 也可以直接用原生壳打开生成的 `.jfapp`，验证安装包和源目录行为一致：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
-.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
 ```
 
 把源码包安装到桌面 app registry。这个路径会先运行 validation、pipeline diagnostics 和 bundle
@@ -482,16 +487,16 @@ python tools\jellyframe_cli.py install `
 打开 Win32 system shell / app manager：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
-.\build\Release\jellyframe_desktop_shell.exe --capture build\app_manager.bmp --registry-store build\installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\app_manager.bmp --registry-store build\installed_apps
 ```
 
 默认 app manager 会加载 `samples/apps/system/sample_launcher`。也可以显式指定另一个受信
 launcher app：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --registry-store build\installed_apps `
   --launcher-app samples\apps\system\sample_launcher
 ```
@@ -531,7 +536,7 @@ python tools\jellyframe_cli.py check `
 python tools\jellyframe_cli.py validate `
   --root samples\apps\packages\watch_weather `
   --target round-300 `
-  --build-dir build\Release `
+  --build-dir build\desktop-release\Release `
   --report build\watch_weather.scripted-validation.report.json `
   --frame-script tests\fixtures\apps\jelly_scroll_probe\capture_wheel_scroll.jfcapture `
   --frame-output-dir build\watch_weather-validation-frames `

@@ -13,7 +13,7 @@
 - Win32 可用 `--use-app-fonts` 验证 runtime 文本路径：
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_font_policy --use-app-fonts
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_font_policy --use-app-fonts
 ```
 
 这里的字体故意很小，只用于确定性的 package/tool 测试。产品 app 应从有授权的 bitmap font 生成自己的

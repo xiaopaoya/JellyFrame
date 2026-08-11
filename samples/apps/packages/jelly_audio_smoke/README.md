@@ -15,7 +15,7 @@ The command-line smoke path is still available when you want to test only the
 host handoff without opening the interactive shell:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\jelly_audio_smoke `
   --audio-smoke /audio/tone.wav `
   --audio-smoke-ms 1000

@@ -69,9 +69,9 @@ Canvas 2D V0.4，用于图表、圆环、标签、渐变、canvas-to-canvas 绘�
 ## 快速开始
 
 ```powershell
-cmake -S . -B build
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
+cmake -S . -B build/desktop-release
+cmake --build build/desktop-release --config Release
+ctest --test-dir build/desktop-release -C Release --output-on-failure
 ```
 
 Release 测试二进制会显式保持 `assert(...)` 生效，因此这条命令用于捕获真实正确性问题，
@@ -81,7 +81,7 @@ Release 测试二进制会显式保持 `assert(...)` 生效，因此这条命令
 并在三类常见可穿戴 target 上输出响应式和字体诊断报告：
 
 ```powershell
-python tools\jellyframe_cli.py doctor --build-dir build\Release
+python tools\jellyframe_cli.py doctor --build-dir build\desktop-release\Release
 ```
 
 做一次聚焦的外部试用时，执行 `doctor --trial`。它会严格检查四个 package，分别覆盖可穿戴主屏、
@@ -91,7 +91,7 @@ python tools\jellyframe_cli.py doctor --build-dir build\Release
 把静态页面渲染成图片：
 
 ```powershell
-.\build\Release\jellyframe_pseudo_browser.exe `
+.\build\desktop-release\Release\jellyframe_pseudo_browser.exe `
   src\render_core\samples\pages\modern\article_cards.html `
   src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
@@ -100,7 +100,7 @@ python tools\jellyframe_cli.py doctor --build-dir build\Release
 打开 Windows 交互验证壳：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
 
@@ -158,10 +158,10 @@ git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third
 python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
 
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
-cmake -S . -B build-script `
+cmake -S . -B build/desktop-scripting-release `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
   -DJERRYSCRIPT_ROOT="$jerryRoot"
-cmake --build build-script --config Release
+cmake --build build/desktop-scripting-release --config Release
 ```
 
 `JERRYSCRIPT_ROOT` 指向标准 JerryScript build tree 时，CMake 会自动发现

@@ -80,7 +80,7 @@ python tools\jellyframe_cli.py check `
   --target round-300 `
   --targets round-300,rect-320x240,rect-172x320 `
   --report build\your_app.report.json `
-  --build-dir build\Release
+  --build-dir build\desktop-release\Release
 ```
 
 优先看 report 中的 `developerAdvice[]`。它会告诉你哪些能力没声明、哪个 target 溢出、哪些字体或资源需要处理。

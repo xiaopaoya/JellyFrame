@@ -649,21 +649,21 @@ Package report 还包含 `imageDiagnostics`。这是打包期 target profile 检
 Windows 上做人类 app 开发时，应优先使用交互式 Win32 browser 壳：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
 ```
 
 也可以直接打开 `.jfapp`，用于验证安装包与源目录渲染是否一致：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
-.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather.bmp --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather.bmp --app build\watch_weather.jfapp
 ```
 
 如果需要验收 manifest `fonts` 中声明的 `.jffont` 是否真的可被当前包使用，给 Win32 壳加上
 `--use-app-fonts`。默认路径仍使用 GDI 文本，方便桌面调试和截图审查。
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_font.bmp --app build\watch_weather.jfapp --use-app-fonts
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_font.bmp --app build\watch_weather.jfapp --use-app-fonts
 ```
 
 推荐的源码包安装路径是让 CLI 一次完成 validation、pipeline diagnostics、bundle 生成和 registry
@@ -704,9 +704,9 @@ launcher 重复实现 registry 规则。
 app：
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps --launch-app org.jellyframe.examples.weather
-.\build\Release\jellyframe_desktop_shell.exe --capture build/app_manager.bmp --registry-store build/installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build/installed_apps --launch-app org.jellyframe.examples.weather
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build/app_manager.bmp --registry-store build/installed_apps
 ```
 
 低层 registry helper 仍可用于安装已有 `.jfapp` bundle，或编写 registry 测试脚本：
@@ -732,7 +732,7 @@ $bundle = python tools/jellyframe_cli.py registry path `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
-.\build\Release\jellyframe_desktop_shell.exe --app $bundle
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app $bundle
 
 python tools/jellyframe_cli.py registry remove `
   --store build/installed_apps `
@@ -759,7 +759,7 @@ python tools/jellyframe_cli.py registry enable `
   --store build/installed_apps `
   --id org.jellyframe.examples.weather
 
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --registry-store build/installed_apps `
   --delete-app-data org.jellyframe.examples.weather
 ```

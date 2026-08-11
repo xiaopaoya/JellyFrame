@@ -99,7 +99,7 @@ after the broker lifecycle and permission UX are proven in the Win32 shell.
 The Win32 shell includes a deterministic broker smoke test:
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe --authorized-file-smoke out\file_broker
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --authorized-file-smoke out\file_broker
 ```
 
 It verifies that unapproved writes do not alter another logical app path,

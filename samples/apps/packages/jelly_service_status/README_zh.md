@@ -20,7 +20,7 @@ app 在 suspended 或 screen-off 状态下希望继续哪些后台活动。manif
 确定性 Win32 验收命令：
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\jelly_service_status `
   --frame-script samples\apps\packages\jelly_service_status\capture_system_events.jfcapture
 ```

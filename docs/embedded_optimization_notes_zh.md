@@ -108,7 +108,7 @@
 命令：
 
 ```powershell
-.\build\Release\jellyframe_render_core_microbench.exe 80 1000
+.\build\desktop-release\Release\jellyframe_render_core_microbench.exe 80 1000
 ```
 
 加入响应式 grid/aspect-ratio layout 子集后，本 Windows 构建机结果：
@@ -144,7 +144,7 @@ full_pipeline avg_us=2228.91
 CI 还会运行：
 
 ```powershell
-python project_tools\benchmark_guard.py --build-dir build\Release
+python project_tools\benchmark_guard.py --build-dir build\desktop-release\Release
 ```
 
 这个 guard 检查少量 render-core 和 app-runtime 微基准：style/custom-property resolution、

@@ -11,7 +11,7 @@ python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather
 python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather --capture build\watch_weather.bmp --wait
 python tools\debug\jellyframe_debug.py --app tests\fixtures\apps\jelly_scroll_probe --frame-script tests\fixtures\apps\jelly_scroll_probe\capture_wheel_scroll.jfcapture --wait
 python tools\debug\jellyframe_debug.py --app samples\apps\packages\watch_weather --runtime-log build\watch_weather.debug.log --wait
-python tools\debug\jellyframe_debug.py --build-dir build\Debug -- --help
+python tools\debug\jellyframe_debug.py --build-dir build\desktop-debug\Debug -- --help
 ```
 
 该入口只负责启动桌面壳，不实现第二套渲染器，也不代表 MCU 帧率、面板/DMA

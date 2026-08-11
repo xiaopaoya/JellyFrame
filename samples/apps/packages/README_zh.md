@@ -12,7 +12,7 @@
 可穿戴屏幕形态上是否仍然可用：
 
 ```powershell
-python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
+python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\desktop-release\Release
 ```
 
 `watch_weather`、`jelly_controls`、`jelly_component_recipes` 和

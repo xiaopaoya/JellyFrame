@@ -68,13 +68,13 @@ depend on them.
 Useful developer entry points:
 
 ```powershell
-python tools\jellyframe_cli.py doctor --build-dir build\Release
-python tools\jellyframe_cli.py trial --build-dir build\Release --output-dir build\external_trial --clean
-python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --report build\watch_weather.report.json --build-dir build\Release
-python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_canvas_smoke --target round-300 --report build\canvas.report.json --build-dir build\Release --render-core-profile build\Release\generated\jellyframe_render_core_profile.json
-python tools\jellyframe_cli.py preview --root samples\apps\packages\watch_weather --target round-300 --output build\watch_weather.bmp --build-dir build\Release
-python project_tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
-python project_tools\check_render_core_link_map.py --profile build\Release\generated\jellyframe_render_core_profile.json --map build\Release\jellyframe_render_core_microbench.map
+python tools\jellyframe_cli.py doctor --build-dir build\desktop-release\Release
+python tools\jellyframe_cli.py trial --build-dir build\desktop-release\Release --output-dir build\external_trial --clean
+python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --report build\watch_weather.report.json --build-dir build\desktop-release\Release
+python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_canvas_smoke --target round-300 --report build\canvas.report.json --build-dir build\desktop-release\Release --render-core-profile build\desktop-release\Release\generated\jellyframe_render_core_profile.json
+python tools\jellyframe_cli.py preview --root samples\apps\packages\watch_weather --target round-300 --output build\watch_weather.bmp --build-dir build\desktop-release\Release
+python project_tools\benchmark_guard.py --build-dir build\desktop-release\Release --report build\benchmark_guard.report.json
+python project_tools\check_render_core_link_map.py --profile build\desktop-release\Release\generated\jellyframe_render_core_profile.json --map build\desktop-release\Release\jellyframe_render_core_microbench.map
 ```
 
 For an embedded benchmark that does not call every enabled family, add one or

@@ -27,7 +27,7 @@ jobs:
 
       - name: Configure sanitizer build
         run: >
-          cmake -S . -B build-sanitizers -G Ninja
+          cmake -S . -B build/sanitizers-debug -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
@@ -36,13 +36,13 @@ jobs:
           -DJELLYFRAME_ENABLE_SANITIZERS=ON
 
       - name: Build sanitizer targets
-        run: cmake --build build-sanitizers --parallel
+        run: cmake --build build/sanitizers-debug --parallel
 
       - name: Run sanitizer CTest
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build-sanitizers --output-on-failure
+        run: ctest --test-dir build/sanitizers-debug --output-on-failure
 
   windows:
     name: Windows build and smoke tests
@@ -66,7 +66,7 @@ jobs:
       - name: Configure
         shell: pwsh
         run: >
-          cmake -S . -B build
+          cmake -S . -B build/desktop-release
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=ON
@@ -74,11 +74,11 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build/desktop-release --config Release --parallel
 
       - name: Run CTest
         shell: pwsh
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build/desktop-release -C Release --output-on-failure
 
       - name: Upload external trial evidence
         if: always()
@@ -91,7 +91,7 @@ jobs:
       - name: Configure Debug
         shell: pwsh
         run: >
-          cmake -S . -B build-debug
+          cmake -S . -B build/desktop-debug
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=ON
@@ -99,11 +99,11 @@ jobs:
 
       - name: Build Debug
         shell: pwsh
-        run: cmake --build build-debug --config Debug --parallel
+        run: cmake --build build/desktop-debug --config Debug --parallel
 
       - name: Run Debug CTest
         shell: pwsh
-        run: ctest --test-dir build-debug -C Debug --output-on-failure
+        run: ctest --test-dir build/desktop-debug -C Debug --output-on-failure
 
       - name: Check Python tools
         shell: pwsh
@@ -123,37 +123,37 @@ jobs:
             --root samples\apps\packages\watch_weather `
             --target round-300 `
             --report build\ci\watch_weather.check.report.json `
-            --build-dir build\Release
+            --build-dir build\desktop-release\Release
           python tools\jellyframe_cli.py preview `
             --root samples\apps\packages\watch_weather `
             --target round-300 `
             --output build\ci\watch_weather.ppm `
             --report build\ci\watch_weather.preview.report.json `
-            --build-dir build\Release
+            --build-dir build\desktop-release\Release
           python tools\jellyframe_cli.py package `
             --root samples\apps\packages\watch_weather `
             --target round-300 `
             --output-cpp build\ci\watch_weather_resources.cpp `
             --report build\ci\watch_weather.package.report.json `
-            --build-dir build\Release
+            --build-dir build\desktop-release\Release
           python tools\jellyframe_cli.py install `
             --store build\ci\installed_apps `
             --root samples\apps\packages\watch_weather `
             --target round-300 `
             --report build\ci\watch_weather.install.report.json `
-            --build-dir build\Release
-          build\Release\jellyframe_desktop_shell.exe `
+            --build-dir build\desktop-release\Release
+          build\desktop-release\Release\jellyframe_desktop_shell.exe `
             --capture build\ci\app_manager.ppm `
             --registry-store build\ci\installed_apps `
             --viewport-width 390 `
             --viewport-height 640
-          build\Release\jellyframe_desktop_shell.exe `
+          build\desktop-release\Release\jellyframe_desktop_shell.exe `
             --capture build\ci\installed_launch.ppm `
             --registry-store build\ci\installed_apps `
             --launch-app org.jellyframe.examples.weather `
             --viewport-width 300 `
             --viewport-height 300
-          build\Release\jellyframe_desktop_shell.exe `
+          build\desktop-release\Release\jellyframe_desktop_shell.exe `
             --capture build\ci\app_manager_removed.ppm `
             --registry-store build\ci\installed_apps `
             --remove-app org.jellyframe.examples.weather `
@@ -178,7 +178,7 @@ jobs:
         shell: pwsh
         run: >
           python project_tools\benchmark_guard.py
-          --build-dir build\Release
+          --build-dir build\desktop-release\Release
           --suite all
           --report build\ci\benchmark_guard.report.json
 
@@ -213,7 +213,7 @@ jobs:
       - name: Configure scripting build
         shell: pwsh
         run: >
-          cmake -S . -B build-scripting
+          cmake -S . -B build/desktop-scripting-release
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=ON
@@ -223,16 +223,16 @@ jobs:
 
       - name: Build scripting tests
         shell: pwsh
-        run: cmake --build build-scripting --config Release --parallel
+        run: cmake --build build/desktop-scripting-release --config Release --parallel
 
       - name: Run scripting CTest
         shell: pwsh
-        run: ctest --test-dir build-scripting -C Release --output-on-failure
+        run: ctest --test-dir build/desktop-scripting-release -C Release --output-on-failure
 
       - name: Configure scripting forms-off build
         shell: pwsh
         run: >
-          cmake -S . -B build-scripting-forms-off
+          cmake -S . -B build/desktop-scripting-forms-off
           -DJELLYFRAME_BUILD_EXAMPLES=OFF
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=OFF
@@ -242,8 +242,8 @@ jobs:
 
       - name: Build scripting forms-off test target
         shell: pwsh
-        run: cmake --build build-scripting-forms-off --config Release --target jellyframe_script_tests --parallel
+        run: cmake --build build/desktop-scripting-forms-off --config Release --target jellyframe_script_tests --parallel
 
       - name: Run scripting forms-off CTest
         shell: pwsh
-        run: ctest --test-dir build-scripting-forms-off -C Release -R "^jellyframe_script_tests$" --output-on-failure
+        run: ctest --test-dir build/desktop-scripting-forms-off -C Release -R "^jellyframe_script_tests$" --output-on-failure

@@ -107,9 +107,9 @@ ASCII <code>id</code>。录制器不会为普通控件激活或 range 调整生�
 Drop，也不是完整 Pointer Events 一致性验收。
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
-.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
-.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
 ```
 
 脚本会在 `out/` 写入逐帧 BMP 和拼图。慢拖必须报告 `inertia=0`；快速甩动必须报告正的 inertia

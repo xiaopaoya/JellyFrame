@@ -168,9 +168,16 @@ The commands below use PowerShell because the current workspace is Windows.
 Configure and build:
 
 ```powershell
-cmake -S . -B build
-cmake --build build --config Release
+cmake -S . -B build/desktop-release
+cmake --build build/desktop-release --config Release
 ```
+
+Build directories are named by purpose. `desktop-release` and `desktop-debug`
+are the ordinary desktop configurations; `desktop-scripting-release` and
+`desktop-scripting-debug` enable the JerryScript bridge. With the Visual Studio
+generator, the final `Release` or `Debug` directory is CMake's configuration
+output directory, so the executable directory is explicit rather than a
+generic `build/Release`.
 
 Default options:
 
@@ -182,11 +189,11 @@ Default options:
 Library-only or embedded-oriented build:
 
 ```powershell
-cmake -S . -B build-core `
+cmake -S . -B build/render-core-release `
   -DJELLYFRAME_BUILD_EXAMPLES=OFF `
   -DJELLYFRAME_BUILD_TESTS=OFF `
   -DJELLYFRAME_BUILD_BENCHMARKS=OFF
-cmake --build build-core --config Release
+cmake --build build/render-core-release --config Release
 ```
 
 ### Try The JellyFrame Extension In VS Code
@@ -195,7 +202,7 @@ If you are used to installing extensions from the Marketplace, note that the
 JellyFrame extension currently ships with this repository and is not listed on
 the VS Code Marketplace yet. To try the source version:
 
-1. Finish the Release build above so `build/Release` exists.
+1. Finish the Release build above so `build/desktop-release/Release` exists.
 2. Open `tools/vscode-jellyframe` in VS Code.
 3. Press `F5` to launch an Extension Development Host.
 4. Open the JellyFrame repository in the new window, then open
@@ -204,7 +211,7 @@ the VS Code Marketplace yet. To try the source version:
    for validation, preview and debugging.
 
 The command titles follow the VS Code display language. The extension first
-looks for the desktop build in `build/Release`, then `build/Debug`. When the
+looks for the desktop build in `build/desktop-release/Release`, then `build/desktop-debug/Debug`. When the
 extension is launched from another location, set `jellyframe.repoRoot` to the
 JellyFrame repository root and optionally set `jellyframe.buildDir`.
 
@@ -224,7 +231,7 @@ from VSIX...` and choose the generated `.vsix` file.
 Run the regression suite:
 
 ```powershell
-ctest --test-dir build -C Release --output-on-failure
+ctest --test-dir build/desktop-release -C Release --output-on-failure
 ```
 
 Run the trial-oriented repository self-check. It scans complete app packages in
@@ -233,7 +240,7 @@ diagnostics, responsive profiles and font preflight, then writes per-sample JSON
 reports to `build/doctor_reports`:
 
 ```powershell
-python tools\jellyframe_cli.py doctor --build-dir build\Release
+python tools\jellyframe_cli.py doctor --build-dir build\desktop-release\Release
 ```
 
 `doctor` uses `round-300,rect-320x240,rect-172x320` wearable targets by default.
@@ -247,13 +254,13 @@ should run this command before opening the Win32 shell for app-level debugging.
 Run the core microbenchmark:
 
 ```powershell
-.\build\Release\jellyframe_render_core_microbench.exe
+.\build\desktop-release\Release\jellyframe_render_core_microbench.exe
 ```
 
 Run the broad CI performance regression guard:
 
 ```powershell
-python project_tools\benchmark_guard.py --build-dir build\Release --report build\benchmark_guard.report.json
+python project_tools\benchmark_guard.py --build-dir build\desktop-release\Release --report build\benchmark_guard.report.json
 ```
 
 The guard checks only a small set of catastrophic-regression thresholds. Use it
@@ -263,7 +270,7 @@ benchmark for product decisions.
 Run the virtual board benchmark:
 
 ```powershell
-.\build\Release\jellyframe_virtual_bench.exe 300 300 60 200 80 0.85 40
+.\build\desktop-release\Release\jellyframe_virtual_bench.exe 300 300 60 200 80 0.85 40
 ```
 
 Use Release builds for meaningful performance numbers.
@@ -277,14 +284,14 @@ python tools\jellyframe_cli.py check `
   --root build\my_weather `
   --target round-300 `
   --report build\my_weather.report.json `
-  --build-dir build\Release `
+  --build-dir build\desktop-release\Release `
   --runtime-log build\capture.log
 
 python tools\jellyframe_cli.py check `
   --root build\my_weather `
   --target round-300 `
   --report build\my_weather.port.report.json `
-  --build-dir build\Release `
+  --build-dir build\desktop-release\Release `
   --port-telemetry build\port.log
 ```
 
@@ -302,7 +309,7 @@ The CLI writes the merged data to `runtimeMetrics` / `portTelemetry`,
 Render a page to BMP or PPM without opening a window:
 
 ```powershell
-.\build\Release\jellyframe_pseudo_browser.exe `
+.\build\desktop-release\Release\jellyframe_pseudo_browser.exe `
   src\render_core\samples\pages\modern\article_cards.html `
   src\render_core\samples\pages\modern\article_cards.css `
   article_cards.bmp 390 640
@@ -311,7 +318,7 @@ Render a page to BMP or PPM without opening a window:
 Open a Windows interactive shell:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\calculator
 ```
 
@@ -323,7 +330,7 @@ do not apply package manifest settings.
 Capture through the default Win32/GDI text path:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --capture `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture `
   calculator.ppm `
   --app tools\templates\apps\calculator
 ```
@@ -332,7 +339,7 @@ If the package manifest declares a `.jffont` supplement, explicitly validate
 that the in-bundle bitmap font participates in layout and paint:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --capture `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture `
   calculator_font.ppm `
   --app tools\templates\apps\calculator `
   --use-app-fonts
@@ -341,18 +348,18 @@ that the in-bundle bitmap font participates in layout and paint:
 Inspect intermediate structures:
 
 ```powershell
-.\build\Release\jellyframe_dom_dump.exe src\render_core\samples\pages\modern\search_home.html
-.\build\Release\jellyframe_cssom_dump.exe src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_style_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_render_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_layer_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
-.\build\Release\jellyframe_pipeline_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_dom_dump.exe src\render_core\samples\pages\modern\search_home.html
+.\build\desktop-release\Release\jellyframe_cssom_dump.exe src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_style_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_render_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_layer_tree_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
+.\build\desktop-release\Release\jellyframe_pipeline_dump.exe src\render_core\samples\pages\modern\search_home.html src\render_core\samples\pages\modern\search_home.css
 ```
 
 Collect text resources before embedding a font pack:
 
 ```powershell
-.\build\Release\jellyframe_font_resource_check.exe `
+.\build\desktop-release\Release\jellyframe_font_resource_check.exe `
   --font-budget 16x16 `
   samples\apps\packages\watch_weather\index.html `
   samples\apps\packages\watch_weather\styles\app.css `
@@ -371,7 +378,7 @@ python tools\jellyframe_cli.py check `
   --target round-300 `
   --targets round-300,rect-320x240 `
   --report build\watch_weather.responsive.report.json `
-  --build-dir build\Release
+  --build-dir build\desktop-release\Release
 ```
 
 Single-target checks keep the previous behavior. `responsiveProfiles[]` is only
@@ -390,10 +397,10 @@ Configure JellyFrame with scripting:
 
 ```powershell
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
-cmake -S . -B build-script `
+cmake -S . -B build/desktop-scripting-release `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
   -DJERRYSCRIPT_ROOT="$jerryRoot"
-cmake --build build-script --config Release
+cmake --build build/desktop-scripting-release --config Release
 ```
 
 With a standard JerryScript build tree, `JERRYSCRIPT_ROOT` is sufficient:
@@ -403,14 +410,14 @@ output. Set `JERRYSCRIPT_LIBRARIES` only for a nonstandard install layout.
 Run a scripted page in the interactive Win32 shell:
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe `
   --app samples\apps\packages\watch_weather
 ```
 
 Run a timer-driven page:
 
 ```powershell
-.\build-script\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe `
   --app tools\templates\apps\clock
 ```
 
@@ -420,7 +427,7 @@ examples that keep JavaScript beside the page instead of linking it from HTML.
 
 ## 11. What The Release EXEs Do
 
-All executable names below are produced under `build\Release` when the relevant
+All executable names below are produced under `build\desktop-release\Release` when the relevant
 CMake options are enabled.
 
 | Executable | Purpose |
@@ -508,8 +515,8 @@ You can also open the generated `.jfapp` directly to verify that the installable
 bundle behaves like the source directory:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
-.\build\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app build\watch_weather.jfapp
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather_bundle.bmp --app build\watch_weather.jfapp
 ```
 
 Install the source package into the desktop app registry. This path runs
@@ -526,16 +533,16 @@ python tools\jellyframe_cli.py install `
 Open the Win32 system shell/app manager:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps
-.\build\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
-.\build\Release\jellyframe_desktop_shell.exe --capture build\app_manager.bmp --registry-store build\installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --registry-store build\installed_apps --launch-app org.jellyframe.examples.weather
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\app_manager.bmp --registry-store build\installed_apps
 ```
 
 The app manager loads `samples/apps/system/sample_launcher` by default. A host
 can explicitly point to another trusted launcher app:
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe `
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe `
   --registry-store build\installed_apps `
   --launcher-app samples\apps\system\sample_launcher
 ```
@@ -577,7 +584,7 @@ Static checks cover the current entry page. For complex apps, reuse the existing
 python tools\jellyframe_cli.py validate `
   --root samples\apps\packages\watch_weather `
   --target round-300 `
-  --build-dir build\Release `
+  --build-dir build\desktop-release\Release `
   --report build\watch_weather.scripted-validation.report.json `
   --frame-script tests\fixtures\apps\jelly_scroll_probe\capture_wheel_scroll.jfcapture `
   --frame-output-dir build\watch_weather-validation-frames `

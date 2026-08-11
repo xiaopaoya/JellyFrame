@@ -13,7 +13,7 @@ Several packages declare multiple target profiles. Use the CLI responsive pass
 to check whether a package remains usable on the common wearable shapes:
 
 ```powershell
-python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\Release
+python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather --targets round-300,rect-320x240,rect-172x320 --build-dir build\desktop-release\Release
 ```
 
 `watch_weather`, `jelly_controls`, `jelly_component_recipes`, `jelly_watch_face`

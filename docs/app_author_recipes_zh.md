@@ -380,7 +380,7 @@ python tools\jellyframe_cli.py check `
   --target round-300 `
   --targets round-300,rect-320x240,rect-172x320 `
   --report build\your_app.report.json `
-  --build-dir build\Release
+  --build-dir build\desktop-release\Release
 ```
 
 然后检查 `developerAdvice[]` 和每个 target gate 的 decision。

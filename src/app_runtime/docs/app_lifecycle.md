@@ -166,8 +166,8 @@ require reflashing the device.
 For app authors, the Win32 shell is the preferred interactive debug host:
 
 ```powershell
-python tools\jellyframe_cli.py doctor --build-dir build\Release
-.\build\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
+python tools\jellyframe_cli.py doctor --build-dir build\desktop-release\Release
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather
 ```
 
 Useful lifecycle checks:

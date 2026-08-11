@@ -20,7 +20,8 @@ Palette as entry points.
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and
   measured performance summary.
-- Automatic discovery of `build/Release`, `build/Debug` and the desktop shell,
+- Automatic discovery of `build/desktop-release/Release`, `build/desktop-debug/Debug`
+  and the desktop shell,
   with a setting for an explicit build directory.
 - Configurable repository root, Python executable, default target and font
   budget.
@@ -34,7 +35,7 @@ The repository currently provides the extension as source; it is not yet listed
 on the VS Code Marketplace. To try it with the least setup:
 
 1. Build a Release configuration from the JellyFrame repository root so that
-   `build/Release` exists.
+   `build/desktop-release/Release` exists.
 2. Open `tools/vscode-jellyframe` in VS Code.
 3. Press `F5` to launch an Extension Development Host. Open a JellyFrame
    repository there, or set `jellyframe.repoRoot` to the repository root.
@@ -64,9 +65,10 @@ an explicit executable path. If PowerShell blocks local scripts, run
 use the Extensions view's `Install from VSIX...` action and select the generated
 `.vsix`. When the extension is installed outside the
 repository, set `jellyframe.repoRoot`; `jellyframe.buildDir` is optional. The
-extension prefers `build/Release`, then `build/Debug`.
+extension prefers `build/desktop-release/Release`, then
+`build/desktop-debug/Debug`.
 For an app whose manifest declares `runtime.script`, the extension prefers an
-existing `build/scripting-ci-local` or other scripting build unless
+existing `build/desktop-scripting-release/Release` or other scripting build unless
 `jellyframe.buildDir` is explicitly set.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.

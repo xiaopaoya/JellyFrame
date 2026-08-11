@@ -120,9 +120,9 @@ behavior. These are scroll gestures, not HTML Drag and Drop or complete Pointer
 Events conformance.
 
 ```powershell
-.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
-.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
-.\build\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_no_inertia.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_inertia.jfcapture
+.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app tests\fixtures\apps\jelly_scroll_container_probe --frame-script tests\fixtures\apps\jelly_scroll_container_probe\capture_touch_drag_edge_stop.jfcapture
 ```
 
 The scripts write per-frame BMPs and a montage under `out/`. The slow drag must
