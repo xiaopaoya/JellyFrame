@@ -1,6 +1,6 @@
 # JellyFrame Device Runtime
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-12; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 ## Purpose
 
@@ -82,6 +82,15 @@ the new bundle is never partially visible.
 The protocol does not define remote download, account login, marketplace
 payments or package signing authority. Those remain product-host concerns.
 
+In `JFDP/1`, bit `0` of `DeviceFrameHeader.flags` is
+`kDeviceFrameFlagResponse`. A response retains its request's message type,
+session id and request id. Other flag bits are reserved: receivers preserve the
+frame value but must not assign them meaning until a later protocol revision.
+The D0 C++ regression includes an in-memory discovery request/capability
+response loopback. It proves this framing contract only; it is not a physical
+transport or a claim that the desktop registry reference endpoint is already a
+JFDP device.
+
 ### Current Reference Implementation (D0 Transition)
 
 The platform-independent `src/app_runtime/device_runtime_protocol.*` implements
@@ -153,9 +162,10 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   callbacks and focused tests for offsets, replay, abort, disconnect and
   atomic commit failure.
 - Platform-independent framing, capability payloads, request result codes,
-  staged-install control and the desktop reference endpoint now exist. A real
-  loopback session test and the separate-owner extraction remain before port
-  integration.
+  staged-install control and the desktop reference endpoint now exist. An
+  in-memory discovery loopback verifies request/response correlation and the
+  capability payload. A full JFDP reference-host transaction loop and the
+  separate-owner extraction remain before port integration.
 
 ### D1: First official developer image
 

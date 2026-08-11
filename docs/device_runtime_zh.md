@@ -1,6 +1,6 @@
 # JellyFrame Device Runtime
 
-> 最后更新：2026-08-11；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-12；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 ## 目的
 
@@ -68,6 +68,12 @@ adapter 的端口必须在传输 App 前告知工具。
 
 该协议不定义远程下载、账号登录、市场支付或签名权威，它们仍属于产品 host。
 
+`JFDP/1` 中 `DeviceFrameHeader.flags` 的 bit `0` 是
+`kDeviceFrameFlagResponse`。response 保留其 request 的 message type、session id 和
+request id。其余 flag bit 预留：接收方保留帧内数值，但在后续协议版本定义前不得赋予含义。
+D0 的 C++ 回归包含内存内 discovery request/capability response 回环，它只证明这条 framing
+契约；不代表已存在物理 transport，也不表示桌面 registry reference endpoint 已经是 JFDP 设备。
+
 ### 当前可用的参考实现（D0 过渡）
 
 平台无关的 `src/app_runtime/device_runtime_protocol.*` 已提供 `JFDP/1` framing：固定 24 字节头、
@@ -122,7 +128,8 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 增加有注入式 storage callback 的平台无关 staged-install controller，并为 offset、重放、取消、断连和
   atomic commit failure 编写 focused test。
 - 已有平台无关 framing、capability payload、请求结果码、staged-install controller 和桌面 reference
-  endpoint；真正的 loopback session 测试和独立 owner 迁移仍需完成后，才能进入 port 接入。
+  endpoint；内存内 discovery 回环已验证 request/response 关联和 capability payload；完整 JFDP
+  reference-host transaction loop 与独立 owner 迁移仍需完成后，才能进入 port 接入。
 
 ### D1：首个官方 Developer Image
 

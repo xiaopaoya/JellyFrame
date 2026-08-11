@@ -10,6 +10,7 @@ constexpr std::size_t kDeviceProtocolHeaderBytes = 24;
 constexpr std::size_t kDeviceProtocolMaxPayloadBytes = 4096;
 constexpr std::size_t kDeviceCapabilityMaxBoardIdBytes = 63;
 constexpr std::size_t kDeviceCapabilityMaxRuntimeVersionBytes = 31;
+constexpr std::uint16_t kDeviceFrameFlagResponse = 1u << 0;
 
 enum class DeviceMessageType : std::uint8_t {
     Discovery = 1,

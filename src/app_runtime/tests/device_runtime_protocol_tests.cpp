@@ -116,6 +116,75 @@ void capabilities_reject_unterminated_or_truncated_values() {
     assert(decode_device_capabilities(encoded.data(), encoded_size - 1, output) == DeviceProtocolStatus::Truncated);
 }
 
+void discovery_request_response_loopback_preserves_session_and_capabilities() {
+    std::array<std::uint8_t, kDeviceProtocolHeaderBytes> request_bytes{};
+    DeviceFrameHeader request;
+    request.type = DeviceMessageType::Discovery;
+    request.session_id = 0x1001u;
+    request.request_id = 0x2002u;
+    std::size_t request_size = 0;
+    assert(encode_device_frame(request, nullptr, 0, request_bytes.data(), request_bytes.size(), request_size) ==
+           DeviceProtocolStatus::Ok);
+
+    DeviceFrameHeader endpoint_request;
+    const std::uint8_t* request_payload = nullptr;
+    assert(decode_device_frame(request_bytes.data(), request_size, endpoint_request, request_payload) ==
+           DeviceProtocolStatus::Ok);
+    assert(endpoint_request.type == DeviceMessageType::Discovery);
+    assert((endpoint_request.flags & kDeviceFrameFlagResponse) == 0);
+    assert(endpoint_request.payload_length == 0);
+
+    DeviceCapabilitySnapshot advertised;
+    advertised.display_width = 172;
+    advertised.display_height = 320;
+    advertised.capability_bits = DeviceCapabilityTouch | DeviceCapabilityDeviceLogs;
+    advertised.max_bundle_bytes = 192 * 1024;
+    advertised.available_storage_bytes = 384 * 1024;
+    std::strcpy(advertised.board_id, "loopback-172x320");
+    std::strcpy(advertised.runtime_version, "0.6.0-dev");
+
+    std::array<std::uint8_t, 128> capability_bytes{};
+    std::size_t capability_size = 0;
+    assert(encode_device_capabilities(advertised,
+                                      capability_bytes.data(),
+                                      capability_bytes.size(),
+                                      capability_size) == DeviceProtocolStatus::Ok);
+
+    std::array<std::uint8_t, kDeviceProtocolHeaderBytes + 128> response_bytes{};
+    DeviceFrameHeader response;
+    response.type = endpoint_request.type;
+    response.flags = kDeviceFrameFlagResponse;
+    response.session_id = endpoint_request.session_id;
+    response.request_id = endpoint_request.request_id;
+    std::size_t response_size = 0;
+    assert(encode_device_frame(response,
+                               capability_bytes.data(),
+                               capability_size,
+                               response_bytes.data(),
+                               response_bytes.size(),
+                               response_size) == DeviceProtocolStatus::Ok);
+
+    DeviceFrameHeader client_response;
+    const std::uint8_t* response_payload = nullptr;
+    assert(decode_device_frame(response_bytes.data(), response_size, client_response, response_payload) ==
+           DeviceProtocolStatus::Ok);
+    assert(client_response.type == DeviceMessageType::Discovery);
+    assert((client_response.flags & kDeviceFrameFlagResponse) != 0);
+    assert(client_response.session_id == request.session_id);
+    assert(client_response.request_id == request.request_id);
+
+    DeviceCapabilitySnapshot observed;
+    assert(decode_device_capabilities(response_payload, client_response.payload_length, observed) ==
+           DeviceProtocolStatus::Ok);
+    assert(observed.display_width == advertised.display_width);
+    assert(observed.display_height == advertised.display_height);
+    assert(observed.capability_bits == advertised.capability_bits);
+    assert(observed.max_bundle_bytes == advertised.max_bundle_bytes);
+    assert(observed.available_storage_bytes == advertised.available_storage_bytes);
+    assert(std::strcmp(observed.board_id, advertised.board_id) == 0);
+    assert(std::strcmp(observed.runtime_version, advertised.runtime_version) == 0);
+}
+
 } // namespace
 
 int main() {
@@ -124,5 +193,6 @@ int main() {
     enforces_bounded_payload_and_exact_frame_size();
     capabilities_round_trip_without_dynamic_storage();
     capabilities_reject_unterminated_or_truncated_values();
+    discovery_request_response_loopback_preserves_session_and_capabilities();
     return 0;
 }
