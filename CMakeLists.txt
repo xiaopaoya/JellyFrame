@@ -17,6 +17,8 @@ set(JELLYFRAME_RENDER_CORE_PROVIDER "in-tree" CACHE STRING
 set_property(CACHE JELLYFRAME_RENDER_CORE_PROVIDER PROPERTY STRINGS in-tree package)
 set(JELLYFRAME_RENDER_CORE_PACKAGE_DIR "" CACHE PATH
     "Prefix containing the locked JellyFrameRenderCore CMake package")
+set(JELLYFRAME_RENDER_CORE_SOURCE_DIR "" CACHE PATH
+    "Optional Render Core source checkout used by the in-tree provider")
 if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package")
     set(_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS OFF)
 else()
@@ -51,6 +53,10 @@ endif()
 if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package" AND JELLYFRAME_INSTALL_RENDER_CORE)
     message(FATAL_ERROR
         "JELLYFRAME_INSTALL_RENDER_CORE is only valid with the in-tree Render Core provider")
+endif()
+if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package" AND JELLYFRAME_RENDER_CORE_SOURCE_DIR)
+    message(FATAL_ERROR
+        "JELLYFRAME_RENDER_CORE_SOURCE_DIR is only valid with the in-tree Render Core provider")
 endif()
 
 if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME AND NOT JELLYFRAME_BUILD_SCRIPTING)
@@ -137,19 +143,30 @@ if(JERRYSCRIPT_ROOT)
 endif()
 
 set(JELLYFRAME_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
+    get_filename_component(JELLYFRAME_RENDER_CORE_SOURCE_ROOT
+        "${JELLYFRAME_RENDER_CORE_SOURCE_DIR}" ABSOLUTE)
+else()
+    set(JELLYFRAME_RENDER_CORE_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_dependency_lock.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_link_map.cmake")
 
 if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_sources.cmake")
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_feature_profile.cmake")
+    if(NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_sources.cmake" OR
+       NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake")
+        message(FATAL_ERROR
+            "Render Core source checkout is missing its CMake boundary: ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
+    endif()
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_sources.cmake")
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake")
     add_library(jellyframe_render_core
         ${JELLYFRAME_RENDER_CORE_SOURCES_ABSOLUTE}
     )
 
     target_include_directories(jellyframe_render_core
         PUBLIC
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+            $<BUILD_INTERFACE:${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     )
 
@@ -177,7 +194,7 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
         set(JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR
             "${CMAKE_INSTALL_LIBDIR}/cmake/JellyFrameRenderCore")
         configure_package_config_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/JellyFrameRenderCoreConfig.cmake.in"
+            "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/JellyFrameRenderCoreConfig.cmake.in"
             "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
             INSTALL_DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
         write_basic_package_version_file(
@@ -189,7 +206,7 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
             ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
             LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
             RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/render_core/"
+        install(DIRECTORY "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src/render_core/"
             DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/render_core"
             FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
             PATTERN "benchmarks" EXCLUDE

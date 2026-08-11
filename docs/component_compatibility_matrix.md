@@ -12,6 +12,7 @@ build artifact may consume which other artifact.
 | Consumer | Provider | Version / ABI | Status | Evidence and limitation |
 | --- | --- | --- | --- | --- |
 | JellyFrame App Runtime | in-tree `jellyframe_render_core` | same checkout | `verified` | Default desktop Release/Debug and non-scripting CI CTest. Use for synchronized Core/Runtime changes. |
+| JellyFrame App Runtime | Core source override | local checkout / source profile | `verified locally` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` selects another Core checkout for cross-repository development; package mode remains mutually exclusive. |
 | Render Core standalone tests | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Standalone configure, build, CTest and install path. The package contains the Core target, headers and capability profile only. |
 | JellyFrame App Runtime | installed Render Core package | `0.6.0` / ABI `1` | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; local consumer CTest is `7/7`, and the package-consumer CI job passed on `a934846`. |
 | JellyFrame App Runtime | installed Render Core package | wrong version or ABI | `rejected` | Configure-time exact version and engine-ABI checks. No fallback to source Core is allowed in package mode. |

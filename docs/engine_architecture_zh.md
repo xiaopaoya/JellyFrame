@@ -38,6 +38,33 @@ cmake --build build\framework-external-core --config Release --target jellyframe
 Core 独立发布后的消费边界。Device Runtime、JFDP 协议、launcher 和硬件
 port 不属于这个 package 边界。
 
+跨仓库开发时，可以用 `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 让 `in-tree`
+provider 指向另一个 Render Core checkout。这只是本地开发覆盖项，不是第二套
+公开依赖机制；package 模式和源码覆盖不能同时使用。覆盖目录必须提供 Render Core
+的 `cmake/` 边界和 `src/render_core/`，原有 feature profile 与源码归属检查仍然生效。
+
+## 计划中的仓库边界
+
+当前源码 monorepo 是开发便利，不是最终所有权模型：
+
+| 未来仓库 | 负责内容 | 迭代规律 | 当前状态 |
+| --- | --- | --- | --- |
+| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 本仓库已验证安装/导出边界和 package consumer |
+| `jellyframe` | App Runtime、Japp 格式、JerryScript binding、桌面壳和开发工具 | 慢速迭代，维护 App 兼容契约 | 当前 Runtime 源码边界；可消费锁定 Core package 或 in-tree Core |
+| `jellyframe-device-os` | launcher、registry、Device Runtime、JFDP、板卡 port 和官方镜像 | 强硬件依赖的实验性迭代 | 尚未物理迁出；D0 契约仍位于过渡位置 |
+| JerryScript | 第三方脚本引擎 | 跟随上游 commit/tag | 可选依赖，由 Runtime/port 构建锁定 |
+
+`src/app_runtime/device_install_transaction.*` 和
+`src/app_runtime/device_runtime_protocol.*` 是明确的 D0 例外。它们虽然是平台无关
+契约，但表达的是设备安装和 JFDP，而不是 App Runtime 行为。它们不能进入 Render Core
+package，最终应迁移到 `jellyframe-device-os` 或小型 `device_runtime_contracts`
+package。在独立 target 能够接管之前，Runtime 暂时保留这些过渡文件和测试，避免移植侧
+静默复制一套协议实现。
+
+物理拆分需要同时满足三个条件：独立可构建的 Core package、锁定 Core 版本/ABI 的
+Runtime consumer，以及不导入 Core 实现细节而消费同一 Runtime 契约的 Device OS
+reference host。以上门槛都不要求 Git submodule。
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer

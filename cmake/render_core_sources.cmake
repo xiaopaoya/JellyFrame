@@ -1,11 +1,11 @@
 # Shared Render Core source manifest.
 #
-# Consumers set JELLYFRAME_SOURCE_ROOT to the repository root before including
-# this file. Keep feature-family boundaries here; do not duplicate this list in
-# a port or tool-specific build script.
+# Consumers set JELLYFRAME_RENDER_CORE_SOURCE_ROOT to the Render Core checkout
+# before including this file. Keep feature-family boundaries here; do not
+# duplicate this list in a port or tool-specific build script.
 
-if(NOT DEFINED JELLYFRAME_SOURCE_ROOT)
-    get_filename_component(JELLYFRAME_SOURCE_ROOT
+if(NOT DEFINED JELLYFRAME_RENDER_CORE_SOURCE_ROOT)
+    get_filename_component(JELLYFRAME_RENDER_CORE_SOURCE_ROOT
         "${CMAKE_CURRENT_LIST_DIR}/.."
         ABSOLUTE)
 endif()
@@ -147,12 +147,12 @@ foreach(_jellyframe_source IN LISTS JELLYFRAME_RENDER_CORE_SOURCES)
         message(FATAL_ERROR
             "Render Core source is listed more than once: ${_jellyframe_source}")
     endif()
-    if(NOT EXISTS "${JELLYFRAME_SOURCE_ROOT}/${_jellyframe_source}")
+    if(NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/${_jellyframe_source}")
         message(FATAL_ERROR
-            "Render Core source does not exist: ${JELLYFRAME_SOURCE_ROOT}/${_jellyframe_source}")
+            "Render Core source does not exist: ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/${_jellyframe_source}")
     endif()
     list(APPEND JELLYFRAME_RENDER_CORE_SOURCES_ABSOLUTE
-        "${JELLYFRAME_SOURCE_ROOT}/${_jellyframe_source}")
+        "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/${_jellyframe_source}")
     list(APPEND _jellyframe_seen_render_core_sources "${_jellyframe_source}")
 endforeach()
 

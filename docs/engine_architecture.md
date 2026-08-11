@@ -45,6 +45,40 @@ together; package mode is the boundary test for an independently released Core.
 The Device Runtime, JFDP protocol, launcher and hardware ports are not part of
 this package boundary.
 
+For cross-repository development, `JELLYFRAME_RENDER_CORE_SOURCE_DIR` can point
+the in-tree provider at a checked-out Render Core source tree. It is a local
+development override, not a second public dependency mechanism; package mode
+and source override are mutually exclusive. The override must provide the
+Render Core `cmake/` boundary and `src/render_core/` tree, and the normal Core
+feature profile and source-ownership checks still apply.
+
+## Planned Repository Boundaries
+
+The current source monorepo is a development convenience, not the final
+ownership model:
+
+| Future repository | Owns | Release rhythm | Current state |
+| --- | --- | --- | --- |
+| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Install/export boundary and package consumer are verified in this repository |
+| `jellyframe` | App Runtime, Japp format, JerryScript binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
+| `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
+| JerryScript | Third-party scripting engine | Upstream commit/tag cadence | Optional dependency, locked by the Runtime build/port owner |
+
+`src/app_runtime/device_install_transaction.*` and
+`src/app_runtime/device_runtime_protocol.*` are a deliberate D0 exception. They
+are hardware-neutral contracts, but their meaning is device installation and
+JFDP rather than App Runtime behavior. They must not enter the Render Core
+package and must eventually move to `jellyframe-device-os` or a small
+`device_runtime_contracts` package. Until a separate target owns them, the
+Runtime keeps the transitional files and tests so the protocol is not silently
+duplicated by a port.
+
+The physical split is gated by three conditions: an independently buildable
+Core package, a Runtime consumer with a locked Core version/ABI, and a Device OS
+reference host that consumes the same Runtime contracts without importing Core
+implementation details. Git submodules are not required for any of these
+gates.
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer

@@ -11,6 +11,7 @@
 | 消费者 | 提供者 | 版本 / ABI | 状态 | 证据与限制 |
 | --- | --- | --- | --- | --- |
 | JellyFrame App Runtime | 源码内 `jellyframe_render_core` | 同一 checkout | `verified` | 默认桌面 Release/Debug 和非 scripting CI CTest。适合同步修改 Core 与 Runtime。 |
+| JellyFrame App Runtime | Core 源码覆盖 | 本地 checkout / source profile | `本地已验证` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 可选用另一个 Core checkout 进行跨仓库开发；仍与 package 模式互斥。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；本地 consumer CTest 为 `7/7`，`a934846` 上的 package-consumer CI 已通过。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本或 ABI | `rejected` | 配置阶段执行精确版本和 engine ABI 检查；package 模式不允许偷偷回退到源码 Core。 |

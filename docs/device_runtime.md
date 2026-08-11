@@ -25,7 +25,7 @@ firmware rebuild for that workflow.
 | Layer | Owns | Must not own |
 | --- | --- | --- |
 | Render Core | DOM, layout, paint, input semantics and capability profiles | Board drivers, storage, transport, package installation policy |
-| App Runtime | lifecycle, recovery, bounded host services and hardware-neutral install transaction contracts | Serial/USB/Wi-Fi drivers, flash APIs, signing authority |
+| App Runtime | lifecycle, recovery and bounded host services; D0 temporarily hosts hardware-neutral install transaction contracts | Serial/USB/Wi-Fi drivers, flash APIs, signing authority and final Device OS policy |
 | Device Runtime | launcher policy, installed-app registry, rollback policy, developer session and device diagnostics | Rendering implementation or SoC-specific fast paths |
 | Port | board image, boot, display/touch, persistent storage adapter, developer transport and firmware update | New core APIs without a platform-neutral need |
 | CLI and VS Code | package, preflight, connection UX, deployment progress, logs and interactive debug | Direct GPIO, flash or arbitrary shell access |
@@ -82,7 +82,7 @@ the new bundle is never partially visible.
 The protocol does not define remote download, account login, marketplace
 payments or package signing authority. Those remain product-host concerns.
 
-### Current Reference Implementation
+### Current Reference Implementation (D0 Transition)
 
 The platform-independent `src/app_runtime/device_runtime_protocol.*` implements
 `JFDP/1` framing with a fixed 24-byte header, little-endian integers, a strict
@@ -103,6 +103,13 @@ Flash, filesystem, signature and registry policy remain in the adapter and are
 not pulled into Render Core. Write, verification, commit and explicit
 cancellation failures discard staging; a new version becomes visible only after
 atomic commit.
+
+These two `device_*` modules are not part of the App Runtime's final ownership
+model. They remain here only because D0 currently has no separate
+`device_runtime_contracts` target. A port must consume the existing contract;
+it must not fork the framing, result codes or staging state machine. Extraction
+is complete only when the new owner has its own target, tests, versioned headers
+and a Runtime/Device OS compatibility entry.
 
 The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:
@@ -139,7 +146,7 @@ firmware image and cannot replace the launcher, recovery UI or port code.
 
 ## Delivery Plan
 
-### D0: Contract and reference host (in progress)
+### D0: Contract and reference host (contract baseline; extraction pending)
 
 - Define `JFDP/1` framing, request/result codes and a capability handshake.
 - Add a hardware-neutral staged-install controller with injected storage
@@ -147,7 +154,8 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   atomic commit failure.
 - Platform-independent framing, capability payloads, request result codes,
   staged-install control and the desktop reference endpoint now exist. A real
-  loopback session test remains before port integration.
+  loopback session test and the separate-owner extraction remain before port
+  integration.
 
 ### D1: First official developer image
 
@@ -170,6 +178,16 @@ firmware image and cannot replace the launcher, recovery UI or port code.
 - Require installation, update, rollback, bad-app recovery and reconnection to
   work repeatedly without reflashing.
 - Add a second official board only after D1's lifecycle path is stable.
+
+### D4: Physical repository split
+
+- Extract Render Core only after the package consumer matrix and provenance
+  records remain green across a release cycle.
+- Move the D0 `device_*` contracts into Device OS or
+  `device_runtime_contracts`; keep JFDP/1 compatibility tests at the new owner.
+- Migrate launcher, registry, official images and ports together as a Device OS
+  product boundary. Do not move them piecemeal into the Render Core or Runtime
+  repositories.
 
 ## Acceptance
 

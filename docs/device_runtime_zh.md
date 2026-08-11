@@ -21,7 +21,7 @@ renderer，不是通用操作系统，也不是应被塞进 Render Core 的开�
 | 层 | 负责 | 不负责 |
 | --- | --- | --- |
 | Render Core | DOM、layout、paint、输入语义和能力 profile | 板卡驱动、存储、传输、安装策略 |
-| App Runtime | 生命周期、恢复、有界 host service、平台无关安装事务契约 | serial/USB/Wi-Fi 驱动、flash API、签名权威 |
+| App Runtime | 生命周期、恢复和有界 host service；D0 暂时承载平台无关安装事务契约 | serial/USB/Wi-Fi 驱动、flash API、签名权威和最终 Device OS 策略 |
 | Device Runtime | 启动器策略、已安装 App registry、回滚策略、开发者会话和设备诊断 | 渲染实现或 SoC 专属 fast path |
 | Port | 板卡镜像、启动、显示/触控、持久存储 adapter、开发者传输和固件升级 | 没有平台无关需求的新 core API |
 | CLI 与 VS Code | 打包、预检、连接体验、部署进度、日志和交互调试 | 直接 GPIO、flash 或任意 shell 访问 |
@@ -68,7 +68,7 @@ adapter 的端口必须在传输 App 前告知工具。
 
 该协议不定义远程下载、账号登录、市场支付或签名权威，它们仍属于产品 host。
 
-### 当前可用的参考实现
+### 当前可用的参考实现（D0 过渡）
 
 平台无关的 `src/app_runtime/device_runtime_protocol.*` 已提供 `JFDP/1` framing：固定 24 字节头、
 小端整数、严格 payload 上限 4096 字节、消息类型校验和 CRC32。解码得到的 payload 只是输入缓冲区的
@@ -82,6 +82,11 @@ adapter 的端口必须在传输 App 前告知工具。
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入
 Render Core。写入失败、校验失败、提交失败和主动取消都会清理 staging；只有原子提交成功后新版本
 才可见。
+
+这两个 `device_*` 模块不属于 App Runtime 的最终所有权模型。它们暂时位于这里，是因为 D0
+尚未拥有独立的 `device_runtime_contracts` target。port 必须消费现有契约，不能复制 framing、
+result code 或 staging 状态机。只有新 owner 拥有独立 target、测试、版本化头文件，并在
+Runtime/Device OS 兼容矩阵中登记后，迁移才算完成。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 
@@ -111,13 +116,13 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 
 ## 交付阶段
 
-### D0：契约与参考 Host（进行中）
+### D0：契约与参考 Host（契约基线；等待物理迁移）
 
 - 定义 `JFDP/1` framing、request/result code 和 capability handshake。
 - 增加有注入式 storage callback 的平台无关 staged-install controller，并为 offset、重放、取消、断连和
   atomic commit failure 编写 focused test。
 - 已有平台无关 framing、capability payload、请求结果码、staged-install controller 和桌面 reference
-  endpoint；仍需补真正的 loopback session 测试，再进入 port 接入。
+  endpoint；真正的 loopback session 测试和独立 owner 迁移仍需完成后，才能进入 port 接入。
 
 ### D1：首个官方 Developer Image
 
@@ -136,6 +141,12 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 用没有 ESP-IDF 环境的用户验证。
 - 安装、更新、回滚、坏 App 恢复和断线重连必须重复成功，无需重新烧录。
 - D1 生命周期路径稳定后再增加第二款官方板卡。
+
+### D4：物理仓库拆分
+
+- 只有 package consumer 矩阵和 provenance 记录跨过一个发布周期仍保持绿色后，才迁出 Render Core。
+- 将 D0 的 `device_*` 契约迁移到 Device OS 或 `device_runtime_contracts`；在新 owner 保留 JFDP/1 兼容性测试。
+- launcher、registry、官方镜像和 port 应作为 Device OS 产品边界一起迁移，不要零散塞入 Render Core 或 Runtime 仓库。
 
 ## 验收
 

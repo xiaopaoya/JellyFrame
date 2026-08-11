@@ -28,6 +28,23 @@ repository version rule:
 - Device OS, device protocol and port versions are separate contracts. They are
   not inferred from a Render Core package version.
 
+## Product Version Streams
+
+The planned repositories do not share one release number:
+
+| Stream | Example | Contract owner |
+| --- | --- | --- |
+| Render Core | `0.6.x-dev` | Core API/ABI, feature profile schema and renderer behavior |
+| JellyFrame Runtime | `0.6.x-dev` | Japp format, App Runtime and JerryScript binding |
+| JellyFrame Device OS | `0.1.x-dev` | launcher, registry, device lifecycle, images and ports |
+| JFDP | `JFDP/1` | device control framing and result-code compatibility |
+
+The current manifest schema requires `runtime.minJellyFrame`. A separate
+`runtime.minRenderCore` requirement is a planned contract for the first
+independently released Core package; it must not be hand-added to current apps
+until the schema, packer, registry summary and runtime gate are implemented
+together.
+
 ## Release Expectations
 
 - The current source version is recorded in `VERSION`.

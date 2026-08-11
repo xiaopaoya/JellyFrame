@@ -5,7 +5,7 @@
 set(JELLYFRAME_RENDER_CORE_ENGINE_ABI 1 CACHE STRING
     "Render Core public engine ABI version")
 
-include("${JELLYFRAME_SOURCE_ROOT}/cmake/render_core_feature_registry.cmake")
+include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_registry.cmake")
 jellyframe_render_core_enabled_features(_jellyframe_render_core_features)
 
 set(_jellyframe_render_core_disabled_profile_entries)
@@ -94,7 +94,7 @@ set(JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}")
 configure_file(
-    "${JELLYFRAME_SOURCE_ROOT}/cmake/render_core_feature_profile.json.in"
+    "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.json.in"
     "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
     @ONLY)
 

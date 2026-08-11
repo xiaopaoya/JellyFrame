@@ -24,6 +24,21 @@ Render Core package 在仓库版本之外增加一个兼容性维度，但不改
 - Device OS、设备协议和 port 版本属于独立契约，不能从 Render Core package
   版本推断。
 
+## 产品版本流
+
+计划中的仓库不共用一个版本号：
+
+| 版本流 | 示例 | 契约 owner |
+| --- | --- | --- |
+| Render Core | `0.6.x-dev` | Core API/ABI、feature profile schema 和渲染行为 |
+| JellyFrame Runtime | `0.6.x-dev` | Japp 格式、App Runtime 和 JerryScript binding |
+| JellyFrame Device OS | `0.1.x-dev` | launcher、registry、设备生命周期、镜像和 port |
+| JFDP | `JFDP/1` | 设备控制 framing 和 result-code 兼容性 |
+
+当前 manifest schema 只要求 `runtime.minJellyFrame`。独立发布 Core 后，计划增加独立的
+`runtime.minRenderCore` 契约；在 schema、packer、registry summary 和 runtime gate 一起实现
+之前，不能自行把它写入当前 app。
+
 ## 发布期望
 
 - 当前源码版本记录在 `VERSION`。
