@@ -118,6 +118,10 @@ TextMetrics fallback_text_metrics(const std::string& text, int font_size, int fo
     };
 }
 
+int bounded_letter_spacing(int font_size, int letter_spacing) {
+    return std::max(-std::max(1, font_size / 2), std::min(std::max(1, font_size) * 2, letter_spacing));
+}
+
 TextMetrics measure_text(const TextMeasureProvider& provider,
                          const std::string& text,
                          int font_size,
@@ -155,7 +159,7 @@ TextMetrics measure_text_with_letter_spacing(const TextMeasureProvider& provider
         return measure_text(provider, std::string(text), font_size, font_weight, font_family_hash);
     }
 
-    const int bounded_spacing = std::max(-std::max(1, font_size / 2), std::min(font_size * 2, letter_spacing));
+    const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
     TextMetrics metrics;
     std::size_t codepoint_count = 0;
     for (std::size_t begin = 0; begin < text.size();) {
@@ -196,7 +200,7 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
         return lines;
     }
     const int width_limit = std::max(1, available_width);
-    const int bounded_spacing = std::max(-std::max(1, font_size / 2), std::min(font_size * 2, letter_spacing));
+    const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
     std::string line;
     line.reserve(std::min<std::size_t>(text.size(), 64));
     int line_width = 0;

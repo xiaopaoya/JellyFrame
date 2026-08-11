@@ -96,6 +96,15 @@ void letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries() {
           "anywhere wrap never splits the bytes of a utf-8 scalar");
 }
 
+void extreme_letter_spacing_uses_one_bounded_value() {
+    ProbeTextBackend probe;
+    const TextMeasureProvider measure{probe_measure, &probe};
+    check(bounded_letter_spacing(10, 1000) == 20, "positive letter spacing is bounded");
+    check(bounded_letter_spacing(10, -1000) == -5, "negative letter spacing is bounded");
+    check(measure_text_with_letter_spacing(measure, "AB", 10, 400, 0, 1000).width == 40,
+          "measurement uses the bounded positive letter spacing");
+}
+
 } // namespace
 
 int main() {
@@ -103,6 +112,7 @@ int main() {
         adapter_wraps_measure_and_paint_callbacks();
         incomplete_adapter_degrades_to_core_fallbacks();
         letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries();
+        extreme_letter_spacing_uses_one_bounded_value();
     } catch (const std::exception& error) {
         std::cerr << "text adapter test failed: " << error.what() << '\n';
         return 1;

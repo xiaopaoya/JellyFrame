@@ -34,6 +34,7 @@ struct TextMeasureProvider {
 std::uint32_t normalized_font_family_hash(std::string_view family);
 bool is_generic_font_family(std::string_view family);
 TextMetrics fallback_text_metrics(const std::string& text, int font_size, int font_weight);
+int bounded_letter_spacing(int font_size, int letter_spacing);
 TextMetrics measure_text(const TextMeasureProvider& provider,
                          const std::string& text,
                          int font_size,

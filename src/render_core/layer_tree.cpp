@@ -411,6 +411,7 @@ void push_text_with_layout(DisplayList& display_list,
                                      style.letter_spacing,
                                      rect.width)
         : std::vector<std::string>{rendered_text};
+    const int bounded_spacing = bounded_letter_spacing(style.font_size, style.letter_spacing);
     for (std::size_t line_index = 0; line_index < lines.size(); ++line_index) {
         const std::string& line = lines[line_index];
         const int y = rect.y + static_cast<int>(line_index) * line_height;
@@ -456,7 +457,7 @@ void push_text_with_layout(DisplayList& display_list,
                       true);
             cursor_x += scalar_width;
             if (scalar_index < line.size()) {
-                cursor_x += style.letter_spacing;
+                cursor_x += bounded_spacing;
             }
         }
     }
