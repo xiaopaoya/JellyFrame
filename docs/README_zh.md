@@ -26,9 +26,10 @@
 3. 如果要写 app，读 [app_author_guide_zh.md](app_author_guide_zh.md)。
 4. [app_author_recipes_zh.md](app_author_recipes_zh.md)：可复制的小屏 UI 写法。
 5. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
-6. 如果要搜索 HTML 或 CSS 特性支持性，读 [html_living_standard_support_table_zh.md](html_living_standard_support_table_zh.md) 或 [csswg_support_table_zh.md](csswg_support_table_zh.md)。
-7. 如果要构建本地 app package，读 [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)。
-8. 根据要使用、移植或检查的模块，继续阅读对应模块文档。
+6. 如果要拆分或消费构建边界，读 [component_compatibility_matrix_zh.md](component_compatibility_matrix_zh.md)。
+7. 如果要搜索 HTML 或 CSS 特性支持性，读 [html_living_standard_support_table_zh.md](html_living_standard_support_table_zh.md) 或 [csswg_support_table_zh.md](csswg_support_table_zh.md)。
+8. 如果要构建本地 app package，读 [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)。
+9. 根据要使用、移植或检查的模块，继续阅读对应模块文档。
 
 ## 技术文档
 
@@ -75,6 +76,7 @@
 - [app_author_capability_table_zh.md](app_author_capability_table_zh.md)：app 作者快速判断 HTML/CSS/JS/资源能力能不能用。
 - [app_author_recipes_zh.md](app_author_recipes_zh.md)：按钮、卡片、滚动列表和固定底部导航等可复制小屏组件写法。
 - [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)：最主要的 can-do/cannot-do 契约。
+- [component_compatibility_matrix_zh.md](component_compatibility_matrix_zh.md)：Core、Runtime、Device OS 和 package consumer 的兼容性证据。
 - [html_living_standard_support_table_zh.md](html_living_standard_support_table_zh.md)：可检索的 HTML Living Standard 全量支持表。
 - [html_living_standard_support_table.csv](html_living_standard_support_table.csv)：同一张表的机器可读版本，供编辑器/工具集成。
 - [csswg_support_table_zh.md](csswg_support_table_zh.md)：可检索的 CSSWG 全量支持表。
