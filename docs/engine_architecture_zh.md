@@ -20,6 +20,24 @@ JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目�
 供未来独立的 `jellyframe-render-core` 仓库消费。这个阶段不引入 Git submodule，也不把 App Runtime、
 JerryScript、ports 或设备协议混入 Render Core 包。
 
+App Runtime 可以消费已经安装的 Render Core 包，而不编译当前 checkout 中的
+Render Core 源码：
+
+```powershell
+cmake -S . -B build\framework-external-core `
+  -DJELLYFRAME_RENDER_CORE_PROVIDER=package `
+  -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=C:\path\to\render-core-install `
+  -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
+cmake --build build\framework-external-core --config Release --target jellyframe_app_runtime_tests
+```
+
+接受的 package 版本和 engine ABI 固定在
+`cmake/jellyframe_dependency_lock.cmake`。package 模式会校验这两个值，
+并把 package 自带的能力 profile 复制到 Runtime 构建目录。默认的
+`in-tree` 模式仍适用于 Core 与 Runtime 同步开发；package 模式用于验证
+Core 独立发布后的消费边界。Device Runtime、JFDP 协议、launcher 和硬件
+port 不属于这个 package 边界。
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer

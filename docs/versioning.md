@@ -16,6 +16,18 @@ MAJOR.MINOR.PATCH[-stage]
   maintenance.
 - `-dev`: active development before a stable tagged release.
 
+Render Core packages add one compatibility dimension without changing the
+repository version rule:
+
+- The package version follows the Render Core release version.
+- The engine ABI is a separate integer and changes only when the exported Core
+  target contract is incompatible.
+- JellyFrame Runtime pins both values in
+  `cmake/jellyframe_dependency_lock.cmake`; a package with the wrong version or
+  ABI is rejected at configure time.
+- Device OS, device protocol and port versions are separate contracts. They are
+  not inferred from a Render Core package version.
+
 ## Release Expectations
 
 - The current source version is recorded in `VERSION`.

@@ -26,6 +26,25 @@ upper-layer examples disabled to build only Render Core. With
 `jellyframe-render-core` repository. This staged approach keeps local cross-layer
 development cheap without making a Git submodule part of the public workflow.
 
+The App Runtime can consume that installed package without compiling the Render
+Core sources from this checkout:
+
+```powershell
+cmake -S . -B build\framework-external-core `
+  -DJELLYFRAME_RENDER_CORE_PROVIDER=package `
+  -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=C:\path\to\render-core-install `
+  -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
+cmake --build build\framework-external-core --config Release --target jellyframe_app_runtime_tests
+```
+
+The accepted package version and engine ABI are pinned in
+`cmake/jellyframe_dependency_lock.cmake`. Package mode verifies both values and
+copies the package capability profile into the Runtime build tree. The default
+`in-tree` mode remains the correct choice when changing Core and Runtime
+together; package mode is the boundary test for an independently released Core.
+The Device Runtime, JFDP protocol, launcher and hardware ports are not part of
+this package boundary.
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer

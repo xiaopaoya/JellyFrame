@@ -15,6 +15,15 @@ MAJOR.MINOR.PATCH[-stage]
 - `PATCH`：bug 修复、parser/layout 正确性修复，以及纯文档维护。
 - `-dev`：稳定 tag 发布前的活跃开发阶段。
 
+Render Core package 在仓库版本之外增加一个兼容性维度，但不改变仓库的版本规则：
+
+- package 版本跟随 Render Core 的发布版本。
+- engine ABI 使用独立整数表示；只有导出的 Core target 契约不兼容时才递增。
+- JellyFrame Runtime 在 `cmake/jellyframe_dependency_lock.cmake` 中同时锁定
+  package 版本和 ABI；配置阶段会拒绝不匹配的 package。
+- Device OS、设备协议和 port 版本属于独立契约，不能从 Render Core package
+  版本推断。
+
 ## 发布期望
 
 - 当前源码版本记录在 `VERSION`。

@@ -12,6 +12,20 @@ option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS "Register sample and external-trial CTest coverage" ON)
 option(JELLYFRAME_BUILD_APP_RUNTIME "Build the JellyFrame App Runtime layer" ON)
 option(JELLYFRAME_INSTALL_RENDER_CORE "Install the standalone Render Core CMake package" OFF)
+set(JELLYFRAME_RENDER_CORE_PROVIDER "in-tree" CACHE STRING
+    "Render Core provider: in-tree or package")
+set_property(CACHE JELLYFRAME_RENDER_CORE_PROVIDER PROPERTY STRINGS in-tree package)
+set(JELLYFRAME_RENDER_CORE_PACKAGE_DIR "" CACHE PATH
+    "Prefix containing the locked JellyFrameRenderCore CMake package")
+if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package")
+    set(_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS OFF)
+else()
+    set(_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS ON)
+endif()
+option(JELLYFRAME_BUILD_RENDER_CORE_TESTS
+       "Build Render Core source regression tests from this checkout"
+       ${_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS})
+unset(_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
 option(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME
        "Compile optional cross-task script App runtime contracts" OFF)
@@ -22,13 +36,21 @@ option(JELLYFRAME_ENABLE_FLEX_GRID "Compile the css.flex-grid Render Core family
 option(JELLYFRAME_ENABLE_ADVANCED_FORMS "Compile the forms.advanced Render Core family" ON)
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
 
-if(JELLYFRAME_INSTALL_RENDER_CORE)
-    include(GNUInstallDirs)
-endif()
+include(GNUInstallDirs)
 
 if(JELLYFRAME_BUILD_SCRIPTING AND NOT JELLYFRAME_BUILD_APP_RUNTIME)
     message(FATAL_ERROR
         "JELLYFRAME_BUILD_SCRIPTING requires JELLYFRAME_BUILD_APP_RUNTIME=ON")
+endif()
+
+if(NOT JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree" AND
+   NOT JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package")
+    message(FATAL_ERROR
+        "JELLYFRAME_RENDER_CORE_PROVIDER must be in-tree or package")
+endif()
+if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package" AND JELLYFRAME_INSTALL_RENDER_CORE)
+    message(FATAL_ERROR
+        "JELLYFRAME_INSTALL_RENDER_CORE is only valid with the in-tree Render Core provider")
 endif()
 
 if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME AND NOT JELLYFRAME_BUILD_SCRIPTING)
@@ -115,74 +137,101 @@ if(JERRYSCRIPT_ROOT)
 endif()
 
 set(JELLYFRAME_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_sources.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_feature_profile.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_dependency_lock.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_link_map.cmake")
 
-add_library(jellyframe_render_core
-    ${JELLYFRAME_RENDER_CORE_SOURCES_ABSOLUTE}
-)
+if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_sources.cmake")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_feature_profile.cmake")
+    add_library(jellyframe_render_core
+        ${JELLYFRAME_RENDER_CORE_SOURCES_ABSOLUTE}
+    )
 
-target_include_directories(jellyframe_render_core
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-)
+    target_include_directories(jellyframe_render_core
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
 
-target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
-target_compile_definitions(jellyframe_render_core PUBLIC
-    JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED=${JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED}
-    JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED=${JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED}
-    JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED=${JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED}
-    JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED=${JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED}
-)
-if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
-    target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)
-endif()
+    target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
+    target_compile_definitions(jellyframe_render_core PUBLIC
+        JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED=${JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED}
+        JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED=${JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED}
+        JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED=${JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED}
+        JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED=${JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED}
+    )
+    if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
+        target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)
+    endif()
 
-if(MSVC)
-    target_compile_options(jellyframe_render_core PRIVATE /W4)
+    if(MSVC)
+        target_compile_options(jellyframe_render_core PRIVATE /W4)
+    else()
+        target_compile_options(jellyframe_render_core PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    if(JELLYFRAME_INSTALL_RENDER_CORE)
+        include(CMakePackageConfigHelpers)
+        set(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION "${JELLYFRAME_RENDER_CORE_LOCKED_VERSION}" CACHE STRING
+            "Standalone Render Core package version")
+        set(JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR
+            "${CMAKE_INSTALL_LIBDIR}/cmake/JellyFrameRenderCore")
+        configure_package_config_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/JellyFrameRenderCoreConfig.cmake.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
+            INSTALL_DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
+        write_basic_package_version_file(
+            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
+            VERSION "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+            COMPATIBILITY SameMajorVersion)
+        install(TARGETS jellyframe_render_core
+            EXPORT JellyFrameRenderCoreTargets
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/render_core/"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/render_core"
+            FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+            PATTERN "benchmarks" EXCLUDE
+            PATTERN "docs" EXCLUDE
+            PATTERN "samples" EXCLUDE
+            PATTERN "tests" EXCLUDE)
+        install(EXPORT JellyFrameRenderCoreTargets
+            FILE JellyFrameRenderCoreTargets.cmake
+            NAMESPACE JellyFrame::
+            DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
+        install(FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
+            DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
+        install(FILES
+            "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/jellyframe-render-core")
+    endif()
 else()
-target_compile_options(jellyframe_render_core PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-
-if(JELLYFRAME_INSTALL_RENDER_CORE)
-    include(CMakePackageConfigHelpers)
-    set(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION "0.6.0" CACHE STRING
-        "Standalone Render Core package version")
-    set(JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR
-        "${CMAKE_INSTALL_LIBDIR}/cmake/JellyFrameRenderCore")
-    configure_package_config_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/JellyFrameRenderCoreConfig.cmake.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
-        INSTALL_DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
-    write_basic_package_version_file(
-        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
-        VERSION "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
-        COMPATIBILITY SameMajorVersion)
-    install(TARGETS jellyframe_render_core
-        EXPORT JellyFrameRenderCoreTargets
-        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/render_core/"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/render_core"
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-        PATTERN "benchmarks" EXCLUDE
-        PATTERN "docs" EXCLUDE
-        PATTERN "samples" EXCLUDE
-        PATTERN "tests" EXCLUDE)
-    install(EXPORT JellyFrameRenderCoreTargets
-        FILE JellyFrameRenderCoreTargets.cmake
-        NAMESPACE JellyFrame::
-        DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
-    install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
-        DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
-    install(FILES
+    if(JELLYFRAME_RENDER_CORE_PACKAGE_DIR)
+        find_package(JellyFrameRenderCore ${JELLYFRAME_RENDER_CORE_LOCKED_VERSION} EXACT CONFIG REQUIRED
+            PATHS "${JELLYFRAME_RENDER_CORE_PACKAGE_DIR}" NO_DEFAULT_PATH)
+    else()
+        find_package(JellyFrameRenderCore ${JELLYFRAME_RENDER_CORE_LOCKED_VERSION} EXACT CONFIG REQUIRED)
+    endif()
+    if(NOT TARGET JellyFrame::jellyframe_render_core)
+        message(FATAL_ERROR "JellyFrameRenderCore package did not export JellyFrame::jellyframe_render_core")
+    endif()
+    if(NOT JellyFrameRenderCore_ENGINE_ABI STREQUAL JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI)
+        message(FATAL_ERROR
+            "JellyFrameRenderCore ABI ${JellyFrameRenderCore_ENGINE_ABI} does not match locked ABI "
+            "${JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI}")
+    endif()
+    if(NOT EXISTS "${JellyFrameRenderCore_PROFILE_FILE}")
+        message(FATAL_ERROR "JellyFrameRenderCore profile is missing: ${JellyFrameRenderCore_PROFILE_FILE}")
+    endif()
+    add_library(jellyframe_render_core ALIAS JellyFrame::jellyframe_render_core)
+    set(JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    file(MAKE_DIRECTORY "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}")
+    configure_file("${JellyFrameRenderCore_PROFILE_FILE}"
         "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/jellyframe-render-core")
+        COPYONLY)
 endif()
 
 if(JELLYFRAME_BUILD_APP_RUNTIME)
@@ -353,6 +402,7 @@ endif()
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
     find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)
     set(JELLYFRAME_RENDER_CORE_TEST_SOURCES
         src/render_core/tests/tokenizer_tests.cpp
         src/render_core/tests/arena_tests.cpp
@@ -413,6 +463,7 @@ if(JELLYFRAME_BUILD_TESTS)
         NAME jellyframe_render_core_tests
         COMMAND jellyframe_render_core_tests
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    endif()
 
     if(JELLYFRAME_BUILD_APP_RUNTIME)
     set(JELLYFRAME_APP_RUNTIME_TEST_SOURCES
@@ -463,11 +514,12 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-        add_test(
-            NAME jellyframe_render_core_link_map_tests
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_link_map_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)
+            add_test(
+                NAME jellyframe_render_core_link_map_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_link_map_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         get_property(_jellyframe_render_core_tests_map
             TARGET jellyframe_render_core_tests
@@ -491,11 +543,12 @@ if(JELLYFRAME_BUILD_TESTS)
                     --generator ${CMAKE_GENERATOR}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-        add_test(
-            NAME jellyframe_render_core_feature_registry_tests
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_feature_registry_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_render_core_feature_registry_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_feature_registry_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        endif()
 
         add_test(
             NAME jellyframe_html_support_table_consistency
