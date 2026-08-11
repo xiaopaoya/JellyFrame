@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev
+> Last updated: 2026-08-12; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -43,6 +43,12 @@ copies the package capability profile, including its Core package version, into
 the Runtime build tree. The default
 `in-tree` mode remains the correct choice when changing Core and Runtime
 together; package mode is the boundary test for an independently released Core.
+Every configuration also writes
+`generated/jellyframe_render_core_provenance.json`. It identifies the selected
+provider, Core package version, ABI, profile filename and the Runtime lock
+values without embedding workstation paths. Archive this file with a Runtime
+or port build report. A source hash remains release-package provenance and is
+intentionally not invented by the Runtime build.
 The Device Runtime, JFDP protocol, launcher and hardware ports are not part of
 this package boundary.
 

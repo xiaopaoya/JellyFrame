@@ -92,8 +92,10 @@ is enabled, the full Canvas 2D implementation is linked. When disabled, the stab
 `Canvas2DRegistry` API is backed by `canvas2d_disabled.cpp`; calls fail safely,
 allocate no Canvas surface state and keep existing host consumers linkable. The
 generated `jellyframe_render_core_profile.json` in the build directory records
-the selected feature set and engine ABI for package/check integration. The
-profile must also contain the dependency closure: `core.paint` and
+the selected feature set, package version and engine ABI for package/check
+integration. Its sibling `jellyframe_render_core_provenance.json` records the
+selected provider and consumer lock values for build-report archival without
+capturing machine-specific source paths. The profile must also contain the dependency closure: `core.paint` and
 `css.flex-grid` and `forms.advanced` depend on `core.document`, while
 `css.modern-paint` and `graphics.canvas2d` depend on `core.paint`. The packager
 rejects a profile that advertises a family without these prerequisites, rather

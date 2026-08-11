@@ -1,6 +1,6 @@
 # 组件兼容性矩阵
 
-> 最后更新：2026-08-11；适用版本：0.6.0-dev
+> 最后更新：2026-08-12；适用版本：0.6.0-dev
 
 这份矩阵记录三个计划中的产品边界之间的兼容性证据。它不同于 HTML/CSS
 能力全表：能力全表描述 app 可见行为，本文件描述哪个构建产物可以消费哪个
@@ -33,6 +33,11 @@ JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 1
 Core 可以独立演进，但 Runtime 接受新版本前，必须更新锁、运行 package-consumer
 构建，并审阅能力 profile。
 
+每次配置都会在复制或生成的 profile 旁写出
+`generated/jellyframe_render_core_provenance.json`。它是 Runtime 或 port 构建证据
+应归档的可移植记录：provider、实际 package 版本/ABI、profile 文件名和消费者锁定值。
+其中刻意不写猜测出来的 Git hash；只有独立 Core 发布包正式提供时，该字段才有意义。
+
 ## 证据规则
 
 - `verified` 表示对应构建边界已有可复现的自动化测试。
@@ -44,6 +49,7 @@ Core 可以独立演进，但 Runtime 接受新版本前，必须更新锁、运
 ## 拆分顺序
 
 1. 保留 `in-tree` provider，用于 Core 与 Runtime 同步开发。
-2. 在 CI 保留安装包 consumer，并在 Runtime 和 port 构建报告中记录 package 来源。
+2. 在 CI 保留安装包 consumer，并在 Runtime 和 port 构建报告中归档生成的 provenance
+   记录。
 3. 第一个独立 Core 仓库发布前，维护完整兼容性矩阵。
 4. 只有 Device Runtime 的宿主/移植所有权契约稳定后，才将其迁入未来的 JellyFrameOS 边界。

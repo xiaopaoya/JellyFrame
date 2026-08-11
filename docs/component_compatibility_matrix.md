@@ -1,6 +1,6 @@
 # Component Compatibility Matrix
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev
+> Last updated: 2026-08-12; Applies to: 0.6.0-dev
 
 This matrix records compatibility evidence across the three planned product
 boundaries. It is intentionally narrower than the HTML/CSS capability tables:
@@ -36,6 +36,13 @@ must use the same version. A Core release may advance independently, but the
 Runtime must update the lock, run the package-consumer build, and review the
 capability profile before accepting it.
 
+Each configure writes `generated/jellyframe_render_core_provenance.json` next
+to the copied or generated profile. It is the portable record to archive with
+Runtime or port build evidence: provider, actual package version/ABI, profile
+filename and the consumer lock values. It deliberately excludes a guessed Git
+hash; that field becomes valid only when an independently released Core archive
+provides it.
+
 ## Evidence Rules
 
 - `verified` means the named build boundary has a reproducible automated test.
@@ -49,8 +56,8 @@ capability profile before accepting it.
 ## Planned Extraction Sequence
 
 1. Keep the in-tree provider for synchronized Core/Runtime development.
-2. Keep the installed-package consumer in CI and record package provenance in
-   Runtime and port build reports.
+2. Keep the installed-package consumer in CI and archive its generated
+   provenance record with Runtime and port build reports.
 3. Publish a compatibility matrix for the first extracted Core repository.
 4. Move Device Runtime contracts and official board delivery into the future
    JellyFrameOS boundary only after their host/port ownership contracts are

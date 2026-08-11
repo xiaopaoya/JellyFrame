@@ -84,8 +84,13 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
             command.extend(["-G", self.generator])
         result = subprocess.run(command, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        profile_path = output_dir / "generated" / "jellyframe_render_core_profile.json"
-        return json.loads(profile_path.read_text(encoding="utf-8"))
+        generated_dir = output_dir / "generated"
+        profile_path = generated_dir / "jellyframe_render_core_profile.json"
+        provenance_path = generated_dir / "jellyframe_render_core_provenance.json"
+        return (
+            json.loads(profile_path.read_text(encoding="utf-8")),
+            json.loads(provenance_path.read_text(encoding="utf-8")),
+        )
 
     def test_all_optional_family_combinations_have_consistent_profiles(self) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-profile-") as directory:
@@ -93,7 +98,7 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
             build_dir = root / "build"
             for canvas, modern_paint, flex_grid, advanced_forms, profile_id in PROFILE_CASES:
                 with self.subTest(profile_id=profile_id):
-                    profile = self.configure_profile(
+                    profile, provenance = self.configure_profile(
                         build_dir,
                         canvas=canvas,
                         modern_paint=modern_paint,
@@ -114,6 +119,20 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                     self.assertEqual(profile["packageVersion"], "0.6.0")
                     self.assertEqual(profile["profileId"], profile_id)
                     self.assertEqual(profile["features"], expected_features)
+                    self.assertEqual(
+                        provenance,
+                        {
+                            "schemaVersion": 1,
+                            "consumer": "jellyframe-runtime",
+                            "provider": "in-tree",
+                            "packageVersion": "0.6.0",
+                            "engineAbi": 1,
+                            "profileFile": "jellyframe_render_core_profile.json",
+                            "lockedVersion": "0.6.0",
+                            "lockedEngineAbi": 1,
+                            "lockEnforced": False,
+                        },
+                    )
                     source_families = profile["sourceFamilies"]
                     self.assertEqual(
                         set(source_families["core.document"])

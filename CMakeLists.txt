@@ -155,6 +155,12 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
             "Render Core source checkout is missing cmake/render_core_version.cmake: ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
     endif()
     include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_version.cmake")
+    if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
+        set(JELLYFRAME_RENDER_CORE_PROVENANCE_PROVIDER "source-override")
+    else()
+        set(JELLYFRAME_RENDER_CORE_PROVENANCE_PROVIDER "in-tree")
+    endif()
+    set(JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_ENFORCED false)
 endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_dependency_lock.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_link_map.cmake")
@@ -240,6 +246,12 @@ else()
     if(NOT TARGET JellyFrame::jellyframe_render_core)
         message(FATAL_ERROR "JellyFrameRenderCore package did not export JellyFrame::jellyframe_render_core")
     endif()
+    if(NOT DEFINED JellyFrameRenderCore_PACKAGE_VERSION OR
+       NOT JellyFrameRenderCore_PACKAGE_VERSION STREQUAL JELLYFRAME_RENDER_CORE_LOCKED_VERSION)
+        message(FATAL_ERROR
+            "JellyFrameRenderCore package declares version '${JellyFrameRenderCore_PACKAGE_VERSION}', expected locked version "
+            "${JELLYFRAME_RENDER_CORE_LOCKED_VERSION}")
+    endif()
     if(NOT JellyFrameRenderCore_ENGINE_ABI STREQUAL JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI)
         message(FATAL_ERROR
             "JellyFrameRenderCore ABI ${JellyFrameRenderCore_ENGINE_ABI} does not match locked ABI "
@@ -254,7 +266,18 @@ else()
     configure_file("${JellyFrameRenderCore_PROFILE_FILE}"
         "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
         COPYONLY)
+    set(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION "${JellyFrameRenderCore_PACKAGE_VERSION}")
+    set(JELLYFRAME_RENDER_CORE_ENGINE_ABI "${JellyFrameRenderCore_ENGINE_ABI}")
+    set(JELLYFRAME_RENDER_CORE_PROVENANCE_PROVIDER "package")
+    set(JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_ENFORCED true)
 endif()
+
+set(JELLYFRAME_RENDER_CORE_PROVENANCE_FILE
+    "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_provenance.json")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_provenance.json.in"
+    "${JELLYFRAME_RENDER_CORE_PROVENANCE_FILE}"
+    @ONLY)
 
 if(JELLYFRAME_BUILD_APP_RUNTIME)
 add_library(jellyframe_app_runtime
