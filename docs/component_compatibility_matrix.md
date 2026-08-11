@@ -13,7 +13,7 @@ build artifact may consume which other artifact.
 | --- | --- | --- | --- | --- |
 | JellyFrame App Runtime | in-tree `jellyframe_render_core` | same checkout | `verified` | Default desktop Release/Debug and non-scripting CI CTest. Use for synchronized Core/Runtime changes. |
 | Render Core standalone tests | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Standalone configure, build, CTest and install path. The package contains the Core target, headers and capability profile only. |
-| JellyFrame App Runtime | installed Render Core package | `0.6.0` / ABI `1` | `verified locally; CI gated` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; local consumer CTest is `7/7`. The same consumer job is now part of CI. |
+| JellyFrame App Runtime | installed Render Core package | `0.6.0` / ABI `1` | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; local consumer CTest is `7/7`, and the package-consumer CI job passed on `a934846`. |
 | JellyFrame App Runtime | installed Render Core package | wrong version or ABI | `rejected` | Configure-time exact version and engine-ABI checks. No fallback to source Core is allowed in package mode. |
 | JellyFrame Script bridge | in-tree Render Core | `0.6.0-dev` source line | `verified separately` | JerryScript is optional and remains an App Runtime dependency. This does not prove a package-mode scripting build. |
 | Device Runtime / launcher | Render Core package | port-selected | `port-owned` | Requires a port-owned toolchain, memory profile, panel path and hardware report. Desktop package evidence is not a device claim. |
@@ -37,8 +37,8 @@ capability profile before accepting it.
 ## Evidence Rules
 
 - `verified` means the named build boundary has a reproducible automated test.
-- `verified locally; CI gated` means the local evidence exists but the first
-  remote CI run after the gate was added is still required before release use.
+- A package-consumer result is release evidence only when both the local CTest
+  and the remote CI job pass for the same commit.
 - `port-owned` means the core contract is available, but the result depends on
   board, panel, toolchain or RTOS behavior and must be reported by the port.
 - `not-tested` must remain visible when no valid evidence exists; it must not be

@@ -12,7 +12,7 @@
 | --- | --- | --- | --- | --- |
 | JellyFrame App Runtime | 源码内 `jellyframe_render_core` | 同一 checkout | `verified` | 默认桌面 Release/Debug 和非 scripting CI CTest。适合同步修改 Core 与 Runtime。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
-| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` | `本地已验证；CI 门禁中` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；本地 consumer CTest 为 `7/7`，同一 consumer job 已加入 CI。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；本地 consumer CTest 为 `7/7`，`a934846` 上的 package-consumer CI 已通过。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本或 ABI | `rejected` | 配置阶段执行精确版本和 engine ABI 检查；package 模式不允许偷偷回退到源码 Core。 |
 | JellyFrame Script bridge | 源码内 Render Core | `0.6.0-dev` 源码线 | `独立验证` | JerryScript 仍是可选的 App Runtime 依赖；这不等于 package-mode scripting 已验证。 |
 | Device Runtime / launcher | Render Core package | 由 port 选择 | `移植侧负责` | 需要 port 自己的工具链、内存 profile、panel path 和实机报告；桌面 package 证据不构成实机结论。 |
@@ -34,8 +34,7 @@ Core 可以独立演进，但 Runtime 接受新版本前，必须更新锁、运
 ## 证据规则
 
 - `verified` 表示对应构建边界已有可复现的自动化测试。
-- `本地已验证；CI 门禁中` 表示本地证据已经存在，但加入门禁后的第一次远端 CI
-  仍需完成，才能用于发布签收。
+- package-consumer 只有在同一 commit 的本地 CTest 和远端 CI 都通过时，才能作为发布证据。
 - `移植侧负责` 表示核心契约已提供，但结果依赖开发板、面板、工具链或 RTOS，
   必须由移植侧报告。
 - 没有有效证据时必须保留 `not-tested`，不能根据桌面构建改写为 `supported`。
