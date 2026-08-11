@@ -69,6 +69,31 @@ void append_and_remove_mark_tree_dirty() {
     check((subtree_dirty_flags(*document) & DomDirtyTree) != 0U, "remove marks tree dirty");
 }
 
+void insert_rejects_null_and_cycle_forming_nodes() {
+    auto document = make_element("document");
+    bool null_rejected = false;
+    try {
+        document->append_child(nullptr);
+    } catch (const std::invalid_argument&) {
+        null_rejected = true;
+    }
+    check(null_rejected, "null child insertion is rejected");
+
+    Node& branch = document->append_child(make_element("branch"));
+    Node& leaf = branch.append_child(make_element("leaf"));
+    auto detached_branch = document->detach_child(branch);
+    check(detached_branch != nullptr && detached_branch->parent == nullptr,
+          "ancestor can be detached before cycle test");
+
+    bool cycle_rejected = false;
+    try {
+        leaf.append_child(std::move(detached_branch));
+    } catch (const std::invalid_argument&) {
+        cycle_rejected = true;
+    }
+    check(cycle_rejected, "ancestor insertion into descendant is rejected");
+}
+
 void attributes_and_text_mark_specific_dirty_bits() {
     HtmlParser parser;
     auto document = parser.parse("<body><p id='note'>Old</p></body>");
@@ -173,6 +198,7 @@ int main() {
         parser_returns_clean_document();
         compact_attribute_list_behaves_like_small_map();
         append_and_remove_mark_tree_dirty();
+        insert_rejects_null_and_cycle_forming_nodes();
         attributes_and_text_mark_specific_dirty_bits();
         unchanged_text_content_stays_clean();
         deep_subtree_replacement_and_teardown_are_iterative();

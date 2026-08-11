@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <stdexcept>
 #include <utility>
 
 namespace jellyframe {
@@ -23,6 +24,7 @@ void destroy_node_list_iterative(std::vector<std::unique_ptr<Node>>& nodes) {
         std::unique_ptr<Node> node = std::move(pending.back());
         pending.pop_back();
         for (auto& child : node->children) {
+            child->parent = nullptr;
             pending.push_back(std::move(child));
         }
         node->children.clear();
@@ -145,6 +147,17 @@ Node& Node::append_child(std::unique_ptr<Node> child) {
 }
 
 Node& Node::insert_child(std::unique_ptr<Node> child, std::size_t index) {
+    if (!child) {
+        throw std::invalid_argument("cannot insert a null DOM node");
+    }
+    for (const Node* current = this; current != nullptr; current = current->parent) {
+        if (current == child.get()) {
+            throw std::invalid_argument("DOM insertion would create a cycle");
+        }
+    }
+    if (child->parent != nullptr) {
+        throw std::invalid_argument("only detached DOM nodes can be inserted");
+    }
     index = std::min(index, children.size());
     child->parent = this;
     auto inserted = children.insert(children.begin() + static_cast<std::ptrdiff_t>(index), std::move(child));
