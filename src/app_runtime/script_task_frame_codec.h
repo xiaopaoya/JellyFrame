@@ -10,15 +10,29 @@
 
 namespace jellyframe {
 
+constexpr std::uint16_t kScriptTaskNoClip = 0xffffU;
+constexpr std::uint32_t kScriptTaskNoParentClip = 0xffffffffU;
+
 struct ScriptTaskInputTarget {
     std::uint32_t target_key = 0;
     Rect rect;
     bool enabled = true;
+    std::uint16_t clip_index = kScriptTaskNoClip;
+};
+
+struct ScriptTaskFrameClip {
+    Rect rect;
+    int border_radius = 0;
+    std::uint32_t parent_clip = kScriptTaskNoParentClip;
 };
 
 struct ScriptTaskAppFrame {
     Rect viewport;
+    std::vector<ScriptTaskFrameClip> clips;
     DisplayList display_list;
+    // Empty means that every display command has no frame clip. Otherwise this
+    // vector is parallel to display_list and contains bounded clip indices.
+    std::vector<std::uint16_t> display_clip_indices;
     std::vector<ScriptTaskInputTarget> input_targets;
 };
 
@@ -27,6 +41,9 @@ struct ScriptTaskAppFrameCodecOptions {
     std::size_t max_text_bytes = 0;
     std::size_t max_input_targets = 0;
     std::size_t max_payload_bytes = 0;
+    std::uint8_t version = 1;
+    std::size_t max_clips = 0;
+    std::size_t max_clip_depth = 8;
 };
 
 enum class ScriptTaskAppFrameCodecStatus {
@@ -34,13 +51,20 @@ enum class ScriptTaskAppFrameCodecStatus {
     TooManyCommands,
     TooManyTextBytes,
     TooManyInputTargets,
+    TooManyClips,
     PayloadTooLarge,
     InvalidValue,
+    UnsupportedVersion,
+    UnsupportedClipFeature,
+    TooDeepClipChain,
+    InvalidClip,
     Malformed,
 };
 
-// Versioned, value-only wire format. Image handles and font-family hashes are
-// opaque integers; no DisplayCommand storage or text pointer crosses tasks.
+// Versioned, value-only wire format. v1 carries only the legacy display list;
+// v2 additionally carries bounded clip records and references. Image handles
+// and font-family hashes are opaque integers; no DisplayCommand storage or text
+// pointer crosses tasks.
 ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(
     const ScriptTaskAppFrame& frame,
     const ScriptTaskAppFrameCodecOptions& options,

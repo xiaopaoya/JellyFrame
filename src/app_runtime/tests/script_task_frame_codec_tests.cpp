@@ -10,6 +10,14 @@ namespace {
 
 ScriptTaskAppFrameCodecOptions limits() { return {4, 32, 3, 512}; }
 
+ScriptTaskAppFrameCodecOptions v2_limits() {
+    ScriptTaskAppFrameCodecOptions result = limits();
+    result.version = 2;
+    result.max_clips = 4;
+    result.max_clip_depth = 4;
+    return result;
+}
+
 ScriptTaskAppFrame fixture() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 172, 320};
@@ -70,6 +78,55 @@ void frame_codec_rejects_budget_and_wire_integrity_failures() {
     assert(decode_script_task_app_frame(bytes, limits(), decoded) == ScriptTaskAppFrameCodecStatus::Malformed);
 }
 
+void v2_frame_round_trip_preserves_nested_clips_and_target_references() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 64, 64};
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = {0, 0, 64, 64};
+    fill.color = {20, 120, 240, 255};
+    frame.display_list.push_back(fill);
+    frame.clips = {
+        {{4, 4, 56, 56}, 12, kScriptTaskNoParentClip},
+        {{12, 12, 40, 40}, 8, 0},
+    };
+    frame.display_clip_indices = {1};
+    frame.input_targets = {{7, {0, 0, 64, 64}, true, 1}};
+
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, v2_limits(), bytes) == ScriptTaskAppFrameCodecStatus::Accepted);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(bytes, v2_limits(), decoded) == ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(decoded.clips.size() == 2);
+    assert(decoded.clips[0].border_radius == 12);
+    assert(decoded.clips[1].parent_clip == 0);
+    assert(decoded.display_clip_indices.size() == 1 && decoded.display_clip_indices[0] == 1);
+    assert(decoded.input_targets[0].clip_index == 1);
+    assert(resolve_script_task_input_target(decoded, 32, 32) == 7);
+    assert(resolve_script_task_input_target(decoded, 4, 4) == 0);
+}
+
+void v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 32, 32};
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = {0, 0, 32, 32};
+    fill.color = {1, 2, 3, 255};
+    frame.display_list.push_back(fill);
+    frame.clips = {{{0, 0, 32, 32}, 8, kScriptTaskNoParentClip}};
+    frame.display_clip_indices = {0};
+
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, limits(), bytes) == ScriptTaskAppFrameCodecStatus::UnsupportedClipFeature);
+    assert(encode_script_task_app_frame(frame, v2_limits(), bytes) == ScriptTaskAppFrameCodecStatus::Accepted);
+    bytes[36 + 20] = 0;
+    bytes[36 + 21] = 0;
+    bytes[36 + 22] = 0;
+    bytes[36 + 23] = 0;
+    assert(decode_script_task_app_frame(bytes, v2_limits(), frame) == ScriptTaskAppFrameCodecStatus::Malformed);
+}
+
 void sealed_lease_carries_only_serialized_frame_bytes() {
     const ScriptTaskAppFrame frame = fixture();
     ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 512, 512}, 0, 0});
@@ -115,6 +172,8 @@ void worker_frame_producer_flattens_private_layer_values_before_publish() {
 int script_task_frame_codec_tests_main() {
     frame_round_trip_preserves_render_values_and_target_order();
     frame_codec_rejects_budget_and_wire_integrity_failures();
+    v2_frame_round_trip_preserves_nested_clips_and_target_references();
+    v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
     sealed_lease_carries_only_serialized_frame_bytes();
     worker_frame_producer_flattens_private_layer_values_before_publish();
     std::cout << "script task frame codec tests passed\n";
