@@ -88,6 +88,20 @@ struct LayerNode {
     std::vector<LayerNodePtr> children;
 };
 
+constexpr std::uint32_t kNoFlattenedClip = 0xffffffffU;
+
+struct FlattenedClip {
+    Rect rect;
+    int border_radius = 0;
+    std::uint32_t parent_clip = kNoFlattenedClip;
+};
+
+struct FlattenedLayerTree {
+    DisplayList display_list;
+    std::vector<std::uint32_t> display_clip_indices;
+    std::vector<FlattenedClip> clips;
+};
+
 struct LayerTreeOverrideScratch {
     std::vector<LayerNode*> pending;
 
@@ -118,6 +132,7 @@ public:
     LayerNodePtr build(const LayoutBox& root, MonotonicArena& arena) const;
     DisplayList flatten(const LayerNode& root) const;
     void flatten_into(const LayerNode& root, DisplayList& output) const;
+    FlattenedLayerTree flatten_with_clip_metadata(const LayerNode& root) const;
 
 private:
     LayerTreeBuilderOptions options_;

@@ -1224,7 +1224,9 @@ void append_flattened_command(DisplayList& output,
                               float opacity,
                               int translate_x,
                               int translate_y,
-                              std::size_t max_display_commands) {
+                              std::size_t max_display_commands,
+                              std::vector<std::uint32_t>* display_clip_indices = nullptr,
+                              std::uint32_t clip_index = kNoFlattenedClip) {
     if (output.size() >= max_display_commands) {
         return;
     }
@@ -1246,6 +1248,9 @@ void append_flattened_command(DisplayList& output,
         return;
     }
     output.push_back(std::move(flattened));
+    if (display_clip_indices != nullptr) {
+        display_clip_indices->push_back(clip_index);
+    }
 }
 
 void flatten_layer(const LayerNode& layer,
@@ -1257,7 +1262,8 @@ void flatten_layer(const LayerNode& layer,
                    int translate_y,
                    std::size_t max_display_commands,
                    DiagnosticSink* diagnostics,
-                   bool& display_budget_reported) {
+                   bool& display_budget_reported,
+                   FlattenedLayerTree* metadata = nullptr) {
     struct PendingLayer {
         const LayerNode* layer = nullptr;
         Rect clip;
@@ -1265,10 +1271,11 @@ void flatten_layer(const LayerNode& layer,
         float opacity = 1.0F;
         int translate_x = 0;
         int translate_y = 0;
+        std::uint32_t clip_index = kNoFlattenedClip;
     };
 
     std::vector<PendingLayer> pending;
-    pending.push_back(PendingLayer{&layer, clip, has_clip, opacity, translate_x, translate_y});
+    pending.push_back(PendingLayer{&layer, clip, has_clip, opacity, translate_x, translate_y, kNoFlattenedClip});
     while (!pending.empty()) {
         const PendingLayer current = pending.back();
         pending.pop_back();
@@ -1285,16 +1292,6 @@ void flatten_layer(const LayerNode& layer,
             return;
         }
         const LayerNode& current_layer = *current.layer;
-        Rect current_clip = current.clip;
-        bool current_has_clip = current.has_clip;
-        if (current_layer.has_clip) {
-            current_clip = current_has_clip ? intersect_rect(current_clip, current_layer.clip_rect) : current_layer.clip_rect;
-            current_has_clip = true;
-            if (empty_rect(current_clip)) {
-                continue;
-            }
-        }
-
         const float layer_opacity = current.opacity * current_layer.opacity;
         const int layer_translate_x = current.translate_x + static_cast<int>(current_layer.transform.translate_x >= 0.0F
             ? current_layer.transform.translate_x + 0.5F
@@ -1302,6 +1299,26 @@ void flatten_layer(const LayerNode& layer,
         const int layer_translate_y = current.translate_y + static_cast<int>(current_layer.transform.translate_y >= 0.0F
             ? current_layer.transform.translate_y + 0.5F
             : current_layer.transform.translate_y - 0.5F);
+        Rect current_clip = current.clip;
+        bool current_has_clip = current.has_clip;
+        std::uint32_t current_clip_index = current.clip_index;
+        if (current_layer.has_clip) {
+            current_clip = current_has_clip ? intersect_rect(current_clip, current_layer.clip_rect) : current_layer.clip_rect;
+            current_has_clip = true;
+            if (empty_rect(current_clip)) {
+                continue;
+            }
+            if (metadata != nullptr) {
+                current_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
+                metadata->clips.push_back(FlattenedClip{
+                    Rect{safe_add(current_layer.clip_rect.x, layer_translate_x),
+                         safe_add(current_layer.clip_rect.y, layer_translate_y),
+                         current_layer.clip_rect.width,
+                         current_layer.clip_rect.height},
+                    current_layer.clip_border_radius,
+                    current.clip_index});
+            }
+        }
         for (const DisplayCommand& command : current_layer.display_list) {
             append_flattened_command(output,
                                      command,
@@ -1310,7 +1327,9 @@ void flatten_layer(const LayerNode& layer,
                                      layer_opacity,
                                      layer_translate_x,
                                      layer_translate_y,
-                                     max_display_commands);
+                                     max_display_commands,
+                                     metadata != nullptr ? &metadata->display_clip_indices : nullptr,
+                                     current_clip_index);
             if (output.size() >= max_display_commands) {
                 break;
             }
@@ -1321,7 +1340,8 @@ void flatten_layer(const LayerNode& layer,
                                            current_has_clip,
                                            layer_opacity,
                                            layer_translate_x,
-                                           layer_translate_y});
+                                           layer_translate_y,
+                                           current_clip_index});
         }
     }
 }
@@ -1415,6 +1435,28 @@ void LayerTreeBuilder::flatten_into(const LayerNode& root, DisplayList& output) 
     bool display_budget_reported = false;
     flatten_layer(root, output, Rect{}, false, 1.0F, 0, 0, max_display_commands,
                   options_.diagnostics, display_budget_reported);
+}
+
+FlattenedLayerTree LayerTreeBuilder::flatten_with_clip_metadata(const LayerNode& root) const {
+    FlattenedLayerTree output;
+    const std::size_t max_display_commands = std::max<std::size_t>(1, options_.max_display_commands);
+    const std::size_t required_capacity = std::min(count_layer_display_commands(root), max_display_commands);
+    output.display_list.reserve(required_capacity);
+    output.display_clip_indices.reserve(required_capacity);
+    output.clips.reserve(count_layers(root));
+    bool display_budget_reported = false;
+    flatten_layer(root,
+                  output.display_list,
+                  Rect{},
+                  false,
+                  1.0F,
+                  0,
+                  0,
+                  max_display_commands,
+                  options_.diagnostics,
+                  display_budget_reported,
+                  &output);
+    return output;
 }
 
 void LayerTreeBuilder::trim_display_list(DisplayList& display_list,

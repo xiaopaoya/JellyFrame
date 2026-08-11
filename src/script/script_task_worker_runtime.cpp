@@ -199,7 +199,8 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTas
         ++telemetry_.frame_publish_rejections;
         return result;
     }
-    ScriptTaskAppFrame frame = make_script_task_app_frame(*layer_tree_, options_.viewport);
+    ScriptTaskAppFrame frame = make_script_task_app_frame(
+        *layer_tree_, options_.viewport, {}, options_.frame_codec.version >= 2);
     result = frame_publisher_.publish(supervisor, session_, frame);
     if (result.accepted()) {
         ++telemetry_.published_frame_seq;

@@ -329,11 +329,27 @@ std::uint32_t resolve_script_task_input_target(const ScriptTaskAppFrame& frame, 
 
 ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
                                               Rect viewport,
-                                              std::vector<ScriptTaskInputTarget> input_targets) {
+                                              std::vector<ScriptTaskInputTarget> input_targets,
+                                              bool include_clip_metadata) {
     LayerTreeBuilder flattener;
     ScriptTaskAppFrame frame;
     frame.viewport = viewport;
-    frame.display_list = flattener.flatten(layer_tree);
+    if (include_clip_metadata) {
+        FlattenedLayerTree flattened = flattener.flatten_with_clip_metadata(layer_tree);
+        frame.display_list = std::move(flattened.display_list);
+        frame.display_clip_indices.reserve(flattened.display_clip_indices.size());
+        for (const std::uint32_t clip_index : flattened.display_clip_indices) {
+            frame.display_clip_indices.push_back(clip_index > std::numeric_limits<std::uint16_t>::max()
+                                                     ? kScriptTaskNoClip
+                                                     : static_cast<std::uint16_t>(clip_index));
+        }
+        frame.clips.reserve(flattened.clips.size());
+        for (const FlattenedClip& clip : flattened.clips) {
+            frame.clips.push_back({clip.rect, clip.border_radius, clip.parent_clip});
+        }
+    } else {
+        frame.display_list = flattener.flatten(layer_tree);
+    }
     frame.input_targets = std::move(input_targets);
     return frame;
 }

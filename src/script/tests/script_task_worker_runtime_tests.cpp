@@ -53,6 +53,14 @@ ScriptTaskWorkerRuntimeOptions runtime_options() {
     return options;
 }
 
+ScriptTaskWorkerRuntimeOptions runtime_options_v2() {
+    ScriptTaskWorkerRuntimeOptions options = runtime_options();
+    options.frame_codec.version = 2;
+    options.frame_codec.max_clips = 16;
+    options.frame_codec.max_clip_depth = 4;
+    return options;
+}
+
 void worker_input_publishes_value_frame() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(7);
@@ -102,6 +110,28 @@ void worker_input_publishes_value_frame() {
     check(saw_clicked, "replacement frame contains JS DOM mutation");
     check(runtime.telemetry().input_packet_seq == 2 && runtime.telemetry().js_mutation_seq > 0,
           "worker exposes monotonic value sequence telemetry");
+}
+
+void worker_v2_publishes_clip_metadata_without_cross_task_objects() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(70);
+    const ScriptTaskWorkerRuntimeOptions options = runtime_options_v2();
+    ScriptTaskWorkerRuntime runtime(session, options);
+    check(runtime.initialize(
+              "<body><section id='clip'><p>Visible</p></section></body>",
+              "body { margin: 0; } #clip { overflow: hidden; width: 80px; height: 40px; "
+              "border-radius: 10px; background: #ffffff; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "v2 worker fixture initializes");
+    check(runtime.publish_frame(supervisor).accepted(), "v2 worker frame publishes");
+
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "v2 UI accepts the copied frame");
+    check(!frame.clips.empty(), "v2 worker frame contains clip metadata");
+    check(frame.display_clip_indices.size() == frame.display_list.size(),
+          "v2 clip references remain parallel to display commands");
 }
 
 void worker_eval_failure_becomes_value_fatal() {
@@ -548,6 +578,7 @@ void worker_input_node_destruction_clears_interaction_state() {
 int script_task_worker_runtime_tests_main() {
     try {
         worker_input_publishes_value_frame();
+        worker_v2_publishes_clip_metadata_without_cross_task_objects();
         worker_eval_failure_becomes_value_fatal();
         worker_timer_publishes_value_frame();
         worker_service_completion_reaches_js_as_copied_value();

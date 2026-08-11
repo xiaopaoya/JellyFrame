@@ -173,6 +173,98 @@ void rounded_overflow_clip_keeps_geometry_on_clip_layer() {
     check(has_corner_radius(layer->clip_border_radius), "rounded overflow layer keeps corner radii");
 }
 
+void flatten_clip_metadata_preserves_unclipped_commands() {
+    auto pipeline = build_pipeline("<body><p>Plain</p></body>", "body { margin: 0; }");
+    LayerTreeBuilder builder;
+    const FlattenedLayerTree flattened = builder.flatten_with_clip_metadata(*pipeline.layer_tree);
+
+    check(flattened.display_clip_indices.size() == flattened.display_list.size(),
+          "clip metadata stays parallel to the display list");
+    check(flattened.clips.empty(), "ordinary pages do not allocate clip records");
+    for (const std::uint32_t clip_index : flattened.display_clip_indices) {
+        check(clip_index == kNoFlattenedClip, "unclipped commands use the clip sentinel");
+    }
+}
+
+void flatten_clip_metadata_exports_rounded_clip_geometry() {
+    auto pipeline = build_pipeline(
+        "<body><section class='clip'><p>Visible</p></section></body>",
+        "body { margin: 0; } .clip { overflow: hidden; width: 80px; height: 40px; "
+        "border-radius: 12px; background: #ffffff; }");
+    LayerTreeBuilder builder;
+    const FlattenedLayerTree flattened = builder.flatten_with_clip_metadata(*pipeline.layer_tree);
+
+    check(flattened.clips.size() == 1, "one overflow layer exports one clip record");
+    check(flattened.clips[0].rect.width == 80 && flattened.clips[0].rect.height == 40,
+          "clip record preserves rectangular bounds");
+    check(has_corner_radius(flattened.clips[0].border_radius),
+          "clip record preserves rounded geometry");
+    bool saw_clipped_command = false;
+    for (const std::uint32_t clip_index : flattened.display_clip_indices) {
+        if (clip_index != kNoFlattenedClip) {
+            check(clip_index == 0, "commands reference the exported clip record");
+            saw_clipped_command = true;
+        }
+    }
+    check(saw_clipped_command, "paint inside the overflow layer carries clip metadata");
+}
+
+void flatten_clip_metadata_preserves_nested_parent_and_translation() {
+    LayerNode root;
+    root.type = LayerType::Root;
+
+    LayerNodePtr outer(new LayerNode(), LayerNodeDeleter{});
+    outer->type = LayerType::Clip;
+    outer->has_clip = true;
+    outer->clip_rect = {10, 12, 100, 80};
+    outer->clip_border_radius = 10;
+
+    LayerNodePtr inner(new LayerNode(), LayerNodeDeleter{});
+    inner->type = LayerType::Clip;
+    inner->has_clip = true;
+    inner->clip_rect = {20, 24, 50, 40};
+    inner->clip_border_radius = 6;
+    inner->transform.translate_x = 7.0F;
+    inner->transform.translate_y = -3.0F;
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = {20, 24, 8, 8};
+    fill.color = {20, 40, 60, 255};
+    inner->display_list.push_back(fill);
+    outer->children.push_back(std::move(inner));
+    root.children.push_back(std::move(outer));
+
+    LayerTreeBuilder builder;
+    const FlattenedLayerTree flattened = builder.flatten_with_clip_metadata(root);
+    check(flattened.clips.size() == 2, "nested layers export both clip records");
+    check(flattened.clips[0].parent_clip == kNoFlattenedClip,
+          "outer clip has no parent");
+    check(flattened.clips[1].parent_clip == 0, "inner clip points to the outer clip");
+    check(flattened.clips[1].rect.x == 27 && flattened.clips[1].rect.y == 21,
+          "clip geometry follows the layer translation");
+    check(flattened.display_clip_indices.size() == 1 && flattened.display_clip_indices[0] == 1,
+          "paint references the innermost clip");
+}
+
+void flatten_clip_metadata_skips_empty_clips() {
+    LayerNode root;
+    LayerNodePtr empty(new LayerNode(), LayerNodeDeleter{});
+    empty->has_clip = true;
+    empty->clip_rect = {0, 0, 0, 10};
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = {0, 0, 10, 10};
+    fill.color = {255, 0, 0, 255};
+    empty->display_list.push_back(fill);
+    root.children.push_back(std::move(empty));
+
+    LayerTreeBuilder builder;
+    const FlattenedLayerTree flattened = builder.flatten_with_clip_metadata(root);
+    check(flattened.clips.empty(), "empty clips do not create metadata records");
+    check(flattened.display_list.empty(), "empty clips suppress their paint");
+    check(flattened.display_clip_indices.empty(), "empty clips keep metadata vectors aligned");
+}
+
 void visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing() {
     auto pipeline = build_pipeline(
         "<body><section id='hidden'><span id='visible-child'></span></section><div id='after'></div></body>",
@@ -1448,6 +1540,10 @@ int main() {
         overflow_hidden_creates_clip_layer();
         overflow_y_auto_creates_vertical_scroll_clip_layer();
         rounded_overflow_clip_keeps_geometry_on_clip_layer();
+        flatten_clip_metadata_preserves_unclipped_commands();
+        flatten_clip_metadata_exports_rounded_clip_geometry();
+        flatten_clip_metadata_preserves_nested_parent_and_translation();
+        flatten_clip_metadata_skips_empty_clips();
         visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing();
         text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands();
         normal_text_wrap_matches_layout_line_breaks();

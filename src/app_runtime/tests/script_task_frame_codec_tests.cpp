@@ -167,6 +167,31 @@ void worker_frame_producer_flattens_private_layer_values_before_publish() {
     assert(frame.input_targets[0].target_key == 7);
 }
 
+void worker_frame_producer_exports_clips_only_for_v2() {
+    LayerNode root;
+    LayerNodePtr clipped(new LayerNode(), LayerNodeDeleter{});
+    clipped->type = LayerType::Clip;
+    clipped->has_clip = true;
+    clipped->clip_rect = {4, 6, 40, 24};
+    clipped->clip_border_radius = 8;
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = {4, 6, 12, 12};
+    fill.color = {10, 20, 30, 255};
+    clipped->display_list.push_back(fill);
+    root.children.push_back(std::move(clipped));
+
+    const ScriptTaskAppFrame v1 = make_script_task_app_frame(root, {0, 0, 64, 64});
+    assert(v1.clips.empty() && v1.display_clip_indices.empty());
+
+    const ScriptTaskAppFrame v2 = make_script_task_app_frame(root, {0, 0, 64, 64}, {}, true);
+    assert(v2.clips.size() == 1);
+    assert(v2.clips[0].rect.x == 4 && v2.clips[0].rect.y == 6);
+    assert(v2.clips[0].border_radius == 8);
+    assert(v2.display_clip_indices.size() == v2.display_list.size());
+    assert(v2.display_clip_indices.size() == 1 && v2.display_clip_indices[0] == 0);
+}
+
 } // namespace
 
 int script_task_frame_codec_tests_main() {
@@ -176,6 +201,7 @@ int script_task_frame_codec_tests_main() {
     v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
     sealed_lease_carries_only_serialized_frame_bytes();
     worker_frame_producer_flattens_private_layer_values_before_publish();
+    worker_frame_producer_exports_clips_only_for_v2();
     std::cout << "script task frame codec tests passed\n";
     return 0;
 }

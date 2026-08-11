@@ -84,7 +84,8 @@ std::uint32_t resolve_script_task_input_target(const ScriptTaskAppFrame& frame, 
 // input remains authoritative for the worker's private InputController.
 ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
                                               Rect viewport,
-                                              std::vector<ScriptTaskInputTarget> input_targets = {});
+                                              std::vector<ScriptTaskInputTarget> input_targets = {},
+                                              bool include_clip_metadata = false);
 
 struct ScriptTaskAppFramePublishResult {
     ScriptTaskAppFrameCodecStatus codec_status = ScriptTaskAppFrameCodecStatus::InvalidValue;
