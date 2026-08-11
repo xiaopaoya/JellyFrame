@@ -170,6 +170,36 @@ def main() -> int:
     require("visual-horizontal-overflow" not in timer_template_codes,
             "timer template should fit its default round-300 width")
 
+    responsive_html = (
+        "<body><main class='shell'><header><h1>Activity overview</h1>"
+        "<span class='status'>Today</span></header><section class='metrics'>"
+        "<article><strong>Steps</strong><b>8,420</b></article>"
+        "<article><strong>Sleep</strong><b>7h 42m</b></article>"
+        "<article class='optional'><strong>Recovery</strong><b>92%</b></article>"
+        "</section><p class='summary'>A longer status message should wrap inside the available card width.</p>"
+        "</main></body>"
+    )
+    responsive_css = (
+        "body { margin: 0; } .shell { box-sizing: border-box; width: 100%; max-width: 100%; "
+        "padding: 12px; } header { display: flex; width: 100%; justify-content: space-between; "
+        "align-items: center; } h1, .status, .summary { overflow-wrap: anywhere; } h1 { margin: 0; "
+        "font-size: 20px; } .metrics { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; } "
+        "article { box-sizing: border-box; flex: 1 1 72px; min-width: 0; padding: 8px; } "
+        "article strong, article b { display: block; overflow-wrap: anywhere; } @media (max-width: 200px) { "
+        ".optional { display: none; } }"
+    )
+    for width in (172, 240, 300):
+        responsive_report = run_pseudo_browser(exe, responsive_html, responsive_css, width, 320)
+        responsive_codes = diagnostic_codes(responsive_report)
+        require("visual-horizontal-overflow" not in responsive_codes,
+                f"responsive fixture must fit width {width}")
+        require("layout-text-overflow" not in responsive_codes,
+                f"responsive fixture text must fit width {width}")
+        require(responsive_report.get("viewport", {}).get("width") == width,
+                f"responsive fixture report must preserve viewport width {width}")
+        require(responsive_report.get("pipeline", {}).get("displayCommands", 0) > 0,
+                f"responsive fixture must produce paint commands at width {width}")
+
     print("pipeline visual diagnostics tests passed")
     return 0
 
