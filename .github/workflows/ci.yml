@@ -296,7 +296,10 @@ jobs:
           -DJELLYFRAME_BUILD_TESTS=ON
 
       - name: Build Runtime package consumer tests
-        run: cmake --build build/framework-external-core --target jellyframe_app_runtime_tests --parallel
+        run: >
+          cmake --build build/framework-external-core
+          --target jellyframe_app_runtime_tests jellyframe_device_runtime_contracts_tests
+          --parallel
 
       - name: Run Runtime package consumer CTest
         run: ctest --test-dir build/framework-external-core --output-on-failure

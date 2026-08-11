@@ -34,7 +34,8 @@ cmake -S . -B build\framework-external-core `
   -DJELLYFRAME_RENDER_CORE_PROVIDER=package `
   -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=C:\path\to\render-core-install `
   -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
-cmake --build build\framework-external-core --config Release --target jellyframe_app_runtime_tests
+cmake --build build\framework-external-core --config Release `
+  --target jellyframe_app_runtime_tests jellyframe_device_runtime_contracts_tests
 ```
 
 The accepted package version and engine ABI are pinned in
