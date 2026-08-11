@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "packageVersion": "@JELLYFRAME_RENDER_CORE_PACKAGE_VERSION@",
   "engineAbi": @JELLYFRAME_RENDER_CORE_ENGINE_ABI@,
   "profileId": "@JELLYFRAME_RENDER_CORE_PROFILE_ID@",
   "features": [

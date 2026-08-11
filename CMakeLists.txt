@@ -149,6 +149,13 @@ if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
 else()
     set(JELLYFRAME_RENDER_CORE_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
+if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
+    if(NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_version.cmake")
+        message(FATAL_ERROR
+            "Render Core source checkout is missing cmake/render_core_version.cmake: ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
+    endif()
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_version.cmake")
+endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_dependency_lock.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_link_map.cmake")
 
@@ -189,8 +196,6 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
 
     if(JELLYFRAME_INSTALL_RENDER_CORE)
         include(CMakePackageConfigHelpers)
-        set(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION "${JELLYFRAME_RENDER_CORE_LOCKED_VERSION}" CACHE STRING
-            "Standalone Render Core package version")
         set(JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR
             "${CMAKE_INSTALL_LIBDIR}/cmake/JellyFrameRenderCore")
         configure_package_config_file(

@@ -39,7 +39,8 @@ cmake --build build\framework-external-core --config Release --target jellyframe
 
 The accepted package version and engine ABI are pinned in
 `cmake/jellyframe_dependency_lock.cmake`. Package mode verifies both values and
-copies the package capability profile into the Runtime build tree. The default
+copies the package capability profile, including its Core package version, into
+the Runtime build tree. The default
 `in-tree` mode remains the correct choice when changing Core and Runtime
 together; package mode is the boundary test for an independently released Core.
 The Device Runtime, JFDP protocol, launcher and hardware ports are not part of

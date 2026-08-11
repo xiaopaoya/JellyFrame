@@ -33,7 +33,7 @@ cmake --build build\framework-external-core --config Release --target jellyframe
 
 接受的 package 版本和 engine ABI 固定在
 `cmake/jellyframe_dependency_lock.cmake`。package 模式会校验这两个值，
-并把 package 自带的能力 profile 复制到 Runtime 构建目录。默认的
+并把包含 Core package 版本的能力 profile 复制到 Runtime 构建目录。默认的
 `in-tree` 模式仍适用于 Core 与 Runtime 同步开发；package 模式用于验证
 Core 独立发布后的消费边界。Device Runtime、JFDP 协议、launcher 和硬件
 port 不属于这个 package 边界。

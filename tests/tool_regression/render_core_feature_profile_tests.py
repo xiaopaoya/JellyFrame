@@ -111,6 +111,7 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                         expected_features.append("graphics.canvas2d")
 
                     self.assertEqual(profile["schemaVersion"], 1)
+                    self.assertEqual(profile["packageVersion"], "0.6.0")
                     self.assertEqual(profile["profileId"], profile_id)
                     self.assertEqual(profile["features"], expected_features)
                     source_families = profile["sourceFamilies"]

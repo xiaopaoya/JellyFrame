@@ -392,10 +392,16 @@ def load_render_core_profile(path: Path | None) -> dict | None:
     if profile.get("schemaVersion") != 1:
         fail("only Render Core profile schemaVersion 1 is supported")
     engine_abi = profile.get("engineAbi")
+    package_version = profile.get("packageVersion")
     profile_id = profile.get("profileId")
     features = profile.get("features")
     if not isinstance(engine_abi, int) or isinstance(engine_abi, bool) or engine_abi < 1:
         fail("Render Core profile engineAbi must be a positive integer")
+    if package_version is not None and (
+        not isinstance(package_version, str)
+        or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", package_version)
+    ):
+        fail("Render Core profile packageVersion must be a semantic version")
     if not isinstance(profile_id, str) or not profile_id:
         fail("Render Core profile profileId must be a non-empty string")
     if not isinstance(features, list) or any(not isinstance(feature, str) or not feature for feature in features):
@@ -413,6 +419,7 @@ def load_render_core_profile(path: Path | None) -> dict | None:
         )
     return {
         "schemaVersion": 1,
+        "packageVersion": package_version,
         "engineAbi": engine_abi,
         "profileId": profile_id,
         "features": list(features),
@@ -457,6 +464,7 @@ def render_core_feature_diagnostics(manifest: dict, profile: dict | None) -> tup
         "model": "render-core-feature-profile-preflight",
         "available": True,
         "schemaVersion": profile["schemaVersion"],
+        "packageVersion": profile.get("packageVersion"),
         "engineAbi": profile["engineAbi"],
         "profileId": profile["profileId"],
         "features": profile["features"],

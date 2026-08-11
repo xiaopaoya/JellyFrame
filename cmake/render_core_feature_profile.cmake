@@ -2,8 +2,10 @@
 # This is metadata for package/check and host integration; it is not an App
 # resource and is not loaded by the renderer at runtime.
 
-set(JELLYFRAME_RENDER_CORE_ENGINE_ABI 1 CACHE STRING
-    "Render Core public engine ABI version")
+if(NOT DEFINED JELLYFRAME_RENDER_CORE_ENGINE_ABI)
+    set(JELLYFRAME_RENDER_CORE_ENGINE_ABI "1" CACHE STRING
+        "Render Core public engine ABI version")
+endif()
 
 include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_registry.cmake")
 jellyframe_render_core_enabled_features(_jellyframe_render_core_features)

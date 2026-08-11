@@ -4,5 +4,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/JellyFrameRenderCoreTargets.cmake")
 
 set(JellyFrameRenderCore_PROFILE_FILE
     "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_DATADIR@/jellyframe-render-core/jellyframe_render_core_profile.json")
+set(JellyFrameRenderCore_PACKAGE_VERSION "@JELLYFRAME_RENDER_CORE_PACKAGE_VERSION@")
 set(JellyFrameRenderCore_ENGINE_ABI "@JELLYFRAME_RENDER_CORE_ENGINE_ABI@")
 check_required_components(JellyFrameRenderCore)
