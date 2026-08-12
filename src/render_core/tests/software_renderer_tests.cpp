@@ -755,6 +755,35 @@ void rasterizer_batches_consecutive_value_clip_commands() {
     }
 }
 
+void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() {
+    DisplayCommand opaque = black_fill(Rect{0, 0, 40, 40});
+    opaque.color = Color{20, 120, 240, 255};
+    DisplayCommand translucent = black_fill(Rect{16, 16, 8, 8});
+    translucent.color = Color{240, 80, 70, 128};
+    const DisplayCommand commands[] = {opaque, translucent};
+    const RasterClip clips[] = {{{8, 8, 24, 24}, 8}};
+    FrameBuffer batched(40, 40, Color{255, 255, 255, 255});
+    FrameBuffer sequential(40, 40, Color{255, 255, 255, 255});
+    SoftwareRasterizerStatistics statistics;
+    SoftwareRasterizer accelerated({}, nullptr, {0, &statistics});
+    SoftwareRasterizer reference;
+
+    accelerated.rasterize_clipped(commands, 2, batched, {0, 0, 40, 40}, 0, 0, clips, 1);
+    reference.rasterize_clipped(commands[0], sequential, {0, 0, 40, 40}, 0, 0, clips, 1);
+    reference.rasterize_clipped(commands[1], sequential, {0, 0, 40, 40}, 0, 0, clips, 1);
+
+    for (std::size_t index = 0; index < batched.pixels.size(); ++index) {
+        const Color left = batched.pixels[index];
+        const Color right = sequential.pixels[index];
+        check(left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a,
+              "opaque rounded composite fast path preserves translucent paint order");
+    }
+    check(statistics.rounded_clip_opaque_direct_pixels > 0,
+          "opaque rounded clip composite records direct inner pixels");
+    check(statistics.rounded_clip_blended_pixels > 0,
+          "rounded clip composite retains blended edge or translucent pixels");
+}
+
 void rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners() {
     DisplayCommand fill = black_fill(Rect{0, 0, 40, 40});
     fill.color = Color{20, 120, 240, 255};
@@ -1576,6 +1605,7 @@ int main() {
         compositor_clips_children_to_rounded_overflow();
         rasterizer_applies_value_rounded_clip_chain();
         rasterizer_batches_consecutive_value_clip_commands();
+        rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha();
         rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();
         dirty_render_skips_contained_dirty_rects();

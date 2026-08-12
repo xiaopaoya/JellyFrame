@@ -69,9 +69,10 @@ the worker's private runtime.
 
 For bounded v2 profiling, a host may supply `SoftwareRasterizerStatistics`
 through `ScriptTaskFrameRendererOptions`. It records rounded clip-run command
-counts, masked temporary-surface pixels, rectangular dirty fast paths and
-explicit budget/allocation rejections without introducing a platform timer or
-allocator dependency.
+counts, masked temporary-surface pixels, rectangular dirty fast paths, opaque
+inner pixels copied directly from the temporary surface, source-over blended
+pixels, and explicit budget/allocation rejections without introducing a
+platform timer or allocator dependency.
 
 `script_task_input_codec.*` defines the bounded, versioned worker-inbox values
 for pointer, wheel, key and text input. The worker validates and dispatches

@@ -57,6 +57,47 @@ bool rounded_clip_affects_rect(const RasterRoundedRect& rounded, Rect rect) {
         overlaps_corner(rounded.left, rounded.bottom - radii.bottom_left, radii.bottom_left);
 }
 
+void composite_rounded_clip_surface(FrameBuffer& target,
+                                    const FrameBuffer& surface,
+                                    Rect surface_rect,
+                                    const std::vector<RasterRoundedRect>& rounded_clips,
+                                    SoftwareRasterizerStatistics* statistics) {
+    const Rect visible = intersect_rect(surface_rect, Rect{0, 0, target.width, target.height});
+    const int y_end = safe_edge(visible.y, visible.height);
+    const int x_end = safe_edge(visible.x, visible.width);
+    for (int y = visible.y; y < y_end; ++y) {
+        Color* destination = target.pixels.data() + static_cast<std::size_t>(y) *
+            static_cast<std::size_t>(target.width) + static_cast<std::size_t>(visible.x);
+        const Color* source = surface.pixels.data() +
+            static_cast<std::size_t>(y - surface_rect.y) * static_cast<std::size_t>(surface.width) +
+            static_cast<std::size_t>(visible.x - surface_rect.x);
+        for (int x = visible.x; x < x_end; ++x) {
+            int coverage = 255;
+            for (const RasterRoundedRect& rounded : rounded_clips) {
+                coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
+                if (coverage == 0) {
+                    break;
+                }
+            }
+            if (coverage == 0) {
+                continue;
+            }
+            const Color color = source[x - visible.x];
+            if (coverage == 255 && color.a == 255) {
+                destination[x - visible.x] = color;
+                if (statistics != nullptr) {
+                    ++statistics->rounded_clip_opaque_direct_pixels;
+                }
+                continue;
+            }
+            blend_pixel(target, x, y, with_coverage(color, coverage));
+            if (statistics != nullptr) {
+                ++statistics->rounded_clip_blended_pixels;
+            }
+        }
+    }
+}
+
 Rect union_rect(Rect left, Rect right) {
     if (empty_rect(left)) {
         return right;
@@ -1422,25 +1463,7 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
               safe_add(offset_y, safe_negate(visible.y)),
               nullptr);
 
-    const int y_end = safe_edge(visible.y, visible.height);
-    const int x_end = safe_edge(visible.x, visible.width);
-    for (int y = visible.y; y < y_end; ++y) {
-        for (int x = visible.x; x < x_end; ++x) {
-            int coverage = 255;
-            for (const RasterRoundedRect& rounded : rounded_clips) {
-                coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
-                if (coverage == 0) {
-                    break;
-                }
-            }
-            if (coverage != 0) {
-                blend_pixel(target,
-                            x,
-                            y,
-                            with_coverage(surface.pixel(x - visible.x, y - visible.y), coverage));
-            }
-        }
-    }
+    composite_rounded_clip_surface(target, surface, visible, rounded_clips, options_.statistics);
 }
 
 void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
@@ -1542,25 +1565,7 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
         rasterize(commands[index], surface, local_clip, local_offset_x, local_offset_y, nullptr);
     }
 
-    const int y_end = safe_edge(effective_clip.y, effective_clip.height);
-    const int x_end = safe_edge(effective_clip.x, effective_clip.width);
-    for (int y = effective_clip.y; y < y_end; ++y) {
-        for (int x = effective_clip.x; x < x_end; ++x) {
-            int coverage = 255;
-            for (const RasterRoundedRect& rounded : rounded_clips) {
-                coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
-                if (coverage == 0) {
-                    break;
-                }
-            }
-            if (coverage != 0) {
-                blend_pixel(target,
-                            x,
-                            y,
-                            with_coverage(surface.pixel(x - effective_clip.x, y - effective_clip.y), coverage));
-            }
-        }
-    }
+    composite_rounded_clip_surface(target, surface, effective_clip, rounded_clips, options_.statistics);
 }
 
 SoftwareCompositor::SoftwareCompositor()
