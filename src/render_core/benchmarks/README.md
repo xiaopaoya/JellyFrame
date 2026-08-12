@@ -41,6 +41,11 @@ Retained repaint probes:
   coverage and quadratic falloff while avoiding repeated invariant math. It
   adds no shadow cache or surface allocation; the exact circular path remains
   separate and is measured by the probe below.
+- The provably zero-distance core of a non-circular shadow uses a bounded
+  source-over span with the same blend primitive. Rounded corner quadrants and
+  circular shadows retain their original per-pixel distance paths. Compare
+  this path on a device with the full frame fixture; desktop microbench output
+  cannot establish an MCU frame-rate gain.
 - On the WS147 full-frame rounded value-frame fixture, the corresponding
   platform-neutral path reduced measured box-shadow replay per frame by 34.46%
   and render p95 by 11.43% without a RAM-watermark regression. That hardware

@@ -246,6 +246,10 @@ void modern_paint_fill_soft_box_shadow(FrameBuffer& target,
     const std::int64_t dimension_delta = static_cast<std::int64_t>(core.width) - core.height;
     const bool circular = std::abs(dimension_delta) <= 1 &&
         resolved_radius == std::min(core.width, core.height) / 2;
+    const int core_left = core.x;
+    const int core_right = safe_edge(core.x, core.width);
+    const int core_top = core.y;
+    const int core_bottom = safe_edge(core.y, core.height);
     for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
         const std::int64_t sample_y2 = static_cast<std::int64_t>(y) * 2 + 1;
         const std::int64_t center_y2 = std::max(top2 + radius2,
@@ -258,7 +262,21 @@ void modern_paint_fill_soft_box_shadow(FrameBuffer& target,
                 continue;
             }
         }
-        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+        const int row_end = safe_edge(clipped.x, clipped.width);
+        const bool core_row = !circular && y >= core_top && y < core_bottom;
+        const bool middle_core_row = core_row &&
+            y >= safe_add(core_top, resolved_radius) &&
+            y < safe_add(core_bottom, safe_negate(resolved_radius));
+        // In corner rows only the horizontal center rectangle is provably at
+        // zero rounded-rect distance. The corner quadrants still use the
+        // existing distance calculation so their shadow falloff is unchanged.
+        const int zero_distance_left = middle_core_row ? core_left :
+            safe_add(core_left, resolved_radius);
+        const int zero_distance_right = middle_core_row ? core_right :
+            safe_add(core_right, safe_negate(resolved_radius));
+        const int core_span_begin = core_row ? std::max(clipped.x, zero_distance_left) : row_end;
+        const int core_span_end = core_row ? std::min(row_end, zero_distance_right) : row_end;
+        const auto paint_shadow_pixel = [&](int x) {
             int distance = 0;
             if (circular) {
                 distance = modern_paint_rounded_rect_outside_distance_half_px_resolved(
@@ -272,13 +290,27 @@ void modern_paint_fill_soft_box_shadow(FrameBuffer& target,
                     0, modern_paint_euclidean_distance_half_px(dx, dy) - static_cast<int>(radius2));
             }
             if (distance >= fade_distance2) {
-                continue;
+                return;
             }
             const int remaining = fade_distance2 - distance;
             const int coverage = static_cast<int>(
                 (static_cast<std::int64_t>(remaining) * remaining * 255) /
                 std::max<std::int64_t>(1, fade_squared));
             blend_pixel(target, x, y, with_coverage(color, coverage));
+        };
+        for (int x = clipped.x; x < core_span_begin; ++x) {
+            paint_shadow_pixel(x);
+        }
+        if (core_span_begin < core_span_end) {
+            Color* destination = target.pixels.data() +
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(target.width) +
+                static_cast<std::size_t>(core_span_begin);
+            for (int x = core_span_begin; x < core_span_end; ++x) {
+                blend_color(destination[x - core_span_begin], color);
+            }
+        }
+        for (int x = core_span_end; x < row_end; ++x) {
+            paint_shadow_pixel(x);
         }
     }
 }

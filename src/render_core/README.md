@@ -147,6 +147,12 @@ retain their exact-distance path to avoid reintroducing polygonal rings. The
 path owns no cache or extra surface and applies only when `box-shadow` is
 already being rasterized.
 
+For non-circular shadows, pixels in the mathematically zero-distance core are
+also written as a bounded source-over span. This avoids repeated distance and
+coverage calculations while retaining the same `Color` blend operation. Rounded
+corner quadrants and all circular shadows continue through their existing
+pixel-precise paths.
+
 For opt-in diagnosis of value-frame v2 rounded clips, a host can provide both
 `SoftwareRasterizerStatistics` and a monotonic
 `SoftwareRasterizerTiming::now_microseconds` callback. The Core then records

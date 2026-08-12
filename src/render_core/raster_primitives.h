@@ -42,11 +42,10 @@ inline Color with_coverage(Color color, int coverage) {
     return color;
 }
 
-inline void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
-    if (!target.contains(x, y) || source.a == 0) {
+inline void blend_color(Color& destination, Color source) {
+    if (source.a == 0) {
         return;
     }
-    Color& destination = target.pixel(x, y);
     if (source.a == 255) {
         destination = source;
         return;
@@ -72,6 +71,13 @@ inline void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
         blend_channel(source.b, destination.b),
         raster_clamp_u8(out_a),
     };
+}
+
+inline void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
+    if (!target.contains(x, y)) {
+        return;
+    }
+    blend_color(target.pixel(x, y), source);
 }
 
 // Decode and clamp once per paint command. Rounded coverage is queried per
