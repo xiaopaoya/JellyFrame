@@ -36,6 +36,11 @@ Retained repaint probes:
   is the intentional exception for box-shadow: it uses exact distance so a
   visible circular glow does not degrade into an octagon. This work is paid
   only by that circular-shadow command.
+- Ordinary non-circular rounded shadows resolve their geometry and y distance
+  once per scanline before evaluating x distance. This preserves the same
+  coverage and quadratic falloff while avoiding repeated invariant math. It
+  adds no shadow cache or surface allocation; the exact circular path remains
+  separate and is measured by the probe below.
 - `circular_box_shadow_exact_raster` measures the exact-distance 120px circular
   glow used by the 172x320 wearable Activity-ring fixture. Compare it with
   `soft_box_shadow_raster`; do not use it to estimate ordinary rounded-card

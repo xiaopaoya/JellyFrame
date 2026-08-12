@@ -231,10 +231,46 @@ void modern_paint_fill_soft_box_shadow(FrameBuffer& target,
         static_cast<std::int64_t>(2),
         static_cast<std::int64_t>(std::numeric_limits<int>::max())));
     const std::int64_t fade_squared = static_cast<std::int64_t>(fade_distance2) * fade_distance2;
+
+    // The non-circular distance model is separable by row: resolving the
+    // rounded-rect geometry and y-axis clamp once avoids repeating invariant
+    // work for every shadow pixel. Circular shadows retain the exact path in
+    // modern_paint_rounded_rect_outside_distance_half_px_resolved().
+    const int resolved_radius = std::max(
+        0, std::min(core_radius, std::max(0, std::min(core.width, core.height) / 2)));
+    const std::int64_t left2 = static_cast<std::int64_t>(core.x) * 2;
+    const std::int64_t top2 = static_cast<std::int64_t>(core.y) * 2;
+    const std::int64_t right2 = static_cast<std::int64_t>(safe_edge(core.x, core.width)) * 2;
+    const std::int64_t bottom2 = static_cast<std::int64_t>(safe_edge(core.y, core.height)) * 2;
+    const std::int64_t radius2 = static_cast<std::int64_t>(resolved_radius) * 2;
+    const std::int64_t dimension_delta = static_cast<std::int64_t>(core.width) - core.height;
+    const bool circular = std::abs(dimension_delta) <= 1 &&
+        resolved_radius == std::min(core.width, core.height) / 2;
     for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        const std::int64_t sample_y2 = static_cast<std::int64_t>(y) * 2 + 1;
+        const std::int64_t center_y2 = std::max(top2 + radius2,
+                                                std::min(bottom2 - radius2, sample_y2));
+        const std::int64_t dy = sample_y2 - center_y2;
+        if (!circular) {
+            const int row_minimum_distance = std::max(
+                0, modern_paint_euclidean_distance_half_px(0, dy) - static_cast<int>(radius2));
+            if (row_minimum_distance >= fade_distance2) {
+                continue;
+            }
+        }
         for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
-            const int distance = modern_paint_rounded_rect_outside_distance_half_px_resolved(
-                core, core_radius, x, y);
+            int distance = 0;
+            if (circular) {
+                distance = modern_paint_rounded_rect_outside_distance_half_px_resolved(
+                    core, resolved_radius, x, y);
+            } else {
+                const std::int64_t sample_x2 = static_cast<std::int64_t>(x) * 2 + 1;
+                const std::int64_t center_x2 = std::max(left2 + radius2,
+                                                        std::min(right2 - radius2, sample_x2));
+                const std::int64_t dx = sample_x2 - center_x2;
+                distance = std::max(
+                    0, modern_paint_euclidean_distance_half_px(dx, dy) - static_cast<int>(radius2));
+            }
             if (distance >= fade_distance2) {
                 continue;
             }

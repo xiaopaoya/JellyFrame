@@ -140,6 +140,13 @@ without adding work to square, unrounded paint paths. The same code is used by
 the basic renderer and the optional modern-paint family, so this optimization
 does not depend on a panel, DMA engine or MCU instruction set.
 
+The bounded soft-shadow path additionally resolves non-circular rounded-rect
+geometry and the y-axis distance once per scanline. It preserves the existing
+quadratic falloff, alpha composition and clip behavior; true circular shadows
+retain their exact-distance path to avoid reintroducing polygonal rings. The
+path owns no cache or extra surface and applies only when `box-shadow` is
+already being rasterized.
+
 Desktop validation builds also emit `jellyframe_render_core_microbench.map` and
 `jellyframe_render_core_tests.map`. Check a map against its generated profile
 with:

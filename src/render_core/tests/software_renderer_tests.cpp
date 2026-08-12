@@ -5,11 +5,15 @@
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
+#include "render_core/modern_paint.h"
+#include "render_core/raster_primitives.h"
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -40,6 +44,70 @@ bool has_diagnostic_message_fragment(const VectorDiagnosticSink& sink, const std
     }
     return false;
 }
+
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+void reference_fill_soft_box_shadow(FrameBuffer& target,
+                                    Rect rect,
+                                    Rect clip,
+                                    Color color,
+                                    int outer_radius,
+                                    int extent,
+                                    int blur) {
+    const Rect clipped = raster_clip_rect(target, rect, clip);
+    if (raster_empty_rect(clipped) || color.a == 0 || extent <= 0) {
+        return;
+    }
+    const std::int64_t twice_extent64 = static_cast<std::int64_t>(extent) * 2;
+    const int twice_extent = static_cast<int>(std::clamp(
+        twice_extent64,
+        static_cast<std::int64_t>(std::numeric_limits<int>::min()),
+        static_cast<std::int64_t>(std::numeric_limits<int>::max())));
+    const std::int64_t core_x64 = static_cast<std::int64_t>(rect.x) + extent;
+    const std::int64_t core_y64 = static_cast<std::int64_t>(rect.y) + extent;
+    const Rect core{
+        static_cast<int>(std::clamp(core_x64,
+                                    static_cast<std::int64_t>(std::numeric_limits<int>::min()),
+                                    static_cast<std::int64_t>(std::numeric_limits<int>::max()))),
+        static_cast<int>(std::clamp(core_y64,
+                                    static_cast<std::int64_t>(std::numeric_limits<int>::min()),
+                                    static_cast<std::int64_t>(std::numeric_limits<int>::max()))),
+        std::max(0, safe_add(rect.width, safe_negate(twice_extent))),
+        std::max(0, safe_add(rect.height, safe_negate(twice_extent))),
+    };
+    const int core_radius = std::max(0, safe_add(outer_radius, safe_negate(extent)));
+    const std::int64_t fade_distance64 = static_cast<std::int64_t>(std::max(1, blur)) * 2;
+    const int fade_distance2 = static_cast<int>(std::clamp(
+        fade_distance64,
+        static_cast<std::int64_t>(2),
+        static_cast<std::int64_t>(std::numeric_limits<int>::max())));
+    const std::int64_t fade_squared = static_cast<std::int64_t>(fade_distance2) * fade_distance2;
+    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+            const int distance = modern_paint_rounded_rect_outside_distance_half_px_resolved(
+                core, core_radius, x, y);
+            if (distance >= fade_distance2) {
+                continue;
+            }
+            const int remaining = fade_distance2 - distance;
+            const int coverage = static_cast<int>(
+                (static_cast<std::int64_t>(remaining) * remaining * 255) /
+                std::max<std::int64_t>(1, fade_squared));
+            blend_pixel(target, x, y, with_coverage(color, coverage));
+        }
+    }
+}
+
+void check_equal_pixels(const FrameBuffer& actual, const FrameBuffer& expected, const char* message) {
+    check(actual.width == expected.width && actual.height == expected.height &&
+              actual.pixels.size() == expected.pixels.size(),
+          message);
+    for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
+        const Color left = actual.pixels[index];
+        const Color right = expected.pixels[index];
+        check(left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a, message);
+    }
+}
+#endif
 
 bool rejecting_text_painter(FrameBuffer&,
                             Rect,
@@ -429,6 +497,46 @@ void circular_box_shadow_keeps_diagonal_falloff_close_to_axis() {
     check(axis > 0 && diagonal > 0, "circular box shadow reaches equal-distance axis and diagonal samples");
     check(std::abs(axis - diagonal) <= 6,
           "circular box shadow keeps the diagonal falloff close to the axis without an octagonal halo");
+}
+
+void soft_box_shadow_row_path_matches_reference_pixels() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
+    struct ShadowCase {
+        Rect rect;
+        Rect clip;
+        Color color;
+        int radius = 0;
+        int extent = 0;
+        int blur = 0;
+    };
+    const ShadowCase cases[] = {
+        {{3, 4, 48, 38}, {0, 0, 64, 56}, {18, 52, 86, 96}, 13, 5, 6},
+        {{3, 4, 48, 38}, {11, 7, 39, 31}, {210, 42, 85, 135}, 13, 5, 6},
+        {{0, 0, 52, 52}, {4, 5, 44, 41}, {255, 255, 255, 128}, 26, 6, 8},
+        {{8, 6, 28, 46}, {0, 0, 64, 56}, {44, 120, 215, 255}, 12, 4, 1},
+    };
+    for (const ShadowCase& test : cases) {
+        FrameBuffer actual(64, 56, {37, 53, 71, 173});
+        FrameBuffer expected(64, 56, {37, 53, 71, 173});
+        modern_paint_fill_soft_box_shadow(actual,
+                                          test.rect,
+                                          test.clip,
+                                          test.color,
+                                          test.radius,
+                                          test.extent,
+                                          test.blur);
+        reference_fill_soft_box_shadow(expected,
+                                       test.rect,
+                                       test.clip,
+                                       test.color,
+                                       test.radius,
+                                       test.extent,
+                                       test.blur);
+        check_equal_pixels(actual, expected,
+                           "row-wise soft shadow path preserves reference pixels for all geometry classes");
+    }
 }
 
 void rounded_stroke_keeps_corner_pixels_clear() {
@@ -1667,6 +1775,7 @@ int main() {
         positioned_radial_gradient_moves_highlight_center();
         soft_box_shadow_fades_outside_rounded_card();
         circular_box_shadow_keeps_diagonal_falloff_close_to_axis();
+        soft_box_shadow_row_path_matches_reference_pixels();
         rounded_stroke_keeps_corner_pixels_clear();
         square_stroke_paints_all_four_edges();
         rounded_stroke_keeps_straight_edges_visible();
