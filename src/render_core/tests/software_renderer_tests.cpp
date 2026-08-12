@@ -109,6 +109,50 @@ void check_equal_pixels(const FrameBuffer& actual, const FrameBuffer& expected, 
 }
 #endif
 
+bool reference_rounded_clip_affects_row(const RasterRoundedRect& rounded, int y) {
+    if (!rounded.rounded) {
+        return false;
+    }
+    const CornerRadii& radii = rounded.radii;
+    return (radii.top_left > 0 && y >= rounded.top && y < rounded.top + radii.top_left) ||
+        (radii.top_right > 0 && y >= rounded.top && y < rounded.top + radii.top_right) ||
+        (radii.bottom_left > 0 && y >= rounded.bottom - radii.bottom_left && y < rounded.bottom) ||
+        (radii.bottom_right > 0 && y >= rounded.bottom - radii.bottom_right && y < rounded.bottom);
+}
+
+void reference_composite_rounded_clip_surface(FrameBuffer& target,
+                                              const FrameBuffer& surface,
+                                              Rect surface_rect,
+                                              const std::vector<RasterRoundedRect>& rounded_clips) {
+    const Rect visible = raster_intersect_rect(surface_rect, {0, 0, target.width, target.height});
+    const int y_end = safe_edge(visible.y, visible.height);
+    const int x_end = safe_edge(visible.x, visible.width);
+    for (int y = visible.y; y < y_end; ++y) {
+        const Color* source = surface.pixels.data() +
+            static_cast<std::size_t>(y - surface_rect.y) * static_cast<std::size_t>(surface.width) +
+            static_cast<std::size_t>(visible.x - surface_rect.x);
+        const bool row_needs_coverage = std::any_of(
+            rounded_clips.begin(), rounded_clips.end(), [y](const RasterRoundedRect& rounded) {
+                return reference_rounded_clip_affects_row(rounded, y);
+            });
+        for (int x = visible.x; x < x_end; ++x) {
+            const Color color = source[x - visible.x];
+            if (!row_needs_coverage) {
+                blend_pixel(target, x, y, color);
+                continue;
+            }
+            int coverage = 255;
+            for (const RasterRoundedRect& rounded : rounded_clips) {
+                coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
+                if (coverage == 0) {
+                    break;
+                }
+            }
+            blend_pixel(target, x, y, with_coverage(color, coverage));
+        }
+    }
+}
+
 bool rejecting_text_painter(FrameBuffer&,
                             Rect,
                             Color,
@@ -930,6 +974,36 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
               statistics.rounded_clip_replay_candidate_pixels_by_type[
                   static_cast<std::size_t>(DisplayCommandType::LinearGradient)] == 64,
           "rounded clip composite attributes overlapping candidate replay areas by command type");
+}
+
+void rasterizer_rounded_composite_span_matches_pixel_reference() {
+    DisplayCommand opaque = black_fill(Rect{0, 0, 40, 40});
+    opaque.color = Color{20, 120, 240, 255};
+    DisplayCommand translucent = black_fill(Rect{12, 15, 16, 10});
+    translucent.type = DisplayCommandType::LinearGradient;
+    translucent.color = Color{240, 80, 70, 128};
+    translucent.color2 = Color{220, 60, 120, 128};
+    const DisplayCommand commands[] = {opaque, translucent};
+    const RasterClip clips[] = {{{8, 8, 24, 24}, 8}};
+    FrameBuffer actual(40, 40, Color{37, 53, 71, 173});
+    FrameBuffer expected(40, 40, Color{37, 53, 71, 173});
+    SoftwareRasterizer rasterizer;
+
+    rasterizer.rasterize_clipped(commands, 2, actual, {0, 0, 40, 40}, 0, 0, clips, 1);
+
+    FrameBuffer temporary(24, 24, Color{0, 0, 0, 0});
+    for (const DisplayCommand& command : commands) {
+        rasterizer.rasterize(command, temporary, {0, 0, 24, 24}, -8, -8);
+    }
+    reference_composite_rounded_clip_surface(
+        expected, temporary, {8, 8, 24, 24}, {prepare_rounded_rect(clips[0].rect, clips[0].border_radius)});
+
+    for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
+        const Color left = actual.pixels[index];
+        const Color right = expected.pixels[index];
+        check(left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a,
+              "rounded composite opaque spans preserve the original pixel-by-pixel result");
+    }
 }
 
 void rasterizer_records_opt_in_rounded_clip_replay_timing() {
@@ -1799,6 +1873,7 @@ int main() {
         rasterizer_applies_value_rounded_clip_chain();
         rasterizer_batches_consecutive_value_clip_commands();
         rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha();
+        rasterizer_rounded_composite_span_matches_pixel_reference();
         rasterizer_records_opt_in_rounded_clip_replay_timing();
         rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();

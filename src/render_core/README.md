@@ -161,6 +161,12 @@ per-command replay, and rounded-coverage composition back into the target.
 Without that callback it performs no clock reads or timing bookkeeping. These
 figures attribute one bounded workload; they are not device-FPS claims.
 
+For rows outside rounded corners, temporary-surface output has full coverage.
+The rounded compositor copies contiguous opaque source spans directly to the
+target and preserves source-over blending for transparent or translucent pixels.
+Corner rows retain per-pixel coverage sampling. A test-side reference compositor
+checks the span path against the prior pixel-by-pixel result.
+
 Desktop validation builds also emit `jellyframe_render_core_microbench.map` and
 `jellyframe_render_core_tests.map`. Check a map against its generated profile
 with:

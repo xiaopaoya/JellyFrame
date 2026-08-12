@@ -50,6 +50,10 @@ Retained repaint probes:
   platform-neutral path reduced measured box-shadow replay per frame by 34.46%
   and render p95 by 11.43% without a RAM-watermark regression. That hardware
   A/B is evidence for this command family only, not a general FPS guarantee.
+- Full-coverage rows in a rounded temporary-surface composite copy contiguous
+  opaque spans directly while preserving source-over blending for translucent
+  spans. This targets rounded composite time and must be judged by its separate
+  device phase telemetry, not by replay-command timing.
 - `circular_box_shadow_exact_raster` measures the exact-distance 120px circular
   glow used by the 172x320 wearable Activity-ring fixture. Compare it with
   `soft_box_shadow_raster`; do not use it to estimate ordinary rounded-card

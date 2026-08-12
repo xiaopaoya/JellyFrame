@@ -168,25 +168,41 @@ void composite_rounded_clip_surface(FrameBuffer& target,
             rounded_clips.begin(), rounded_clips.end(), [y](const RasterRoundedRect& rounded) {
                 return rounded_clip_affects_row(rounded, y);
             });
+        const std::size_t row_pixels = static_cast<std::size_t>(x_end - visible.x);
+        if (!row_needs_coverage) {
+            if (statistics != nullptr) {
+                add_saturating(statistics->rounded_clip_full_coverage_pixels, row_pixels);
+            }
+            // Most interior rounded-clip rows are fully opaque after replay.
+            // Copy opaque runs in one contiguous operation, but retain the
+            // existing source-over path for any translucent source pixels.
+            std::size_t column = 0;
+            while (column < row_pixels) {
+                const Color color = source[column];
+                if (color.a != 255) {
+                    if (color.a != 0) {
+                        blend_color(destination[column], color);
+                        if (statistics != nullptr) {
+                            ++statistics->rounded_clip_blended_pixels;
+                        }
+                    }
+                    ++column;
+                    continue;
+                }
+                const std::size_t opaque_begin = column;
+                do {
+                    ++column;
+                } while (column < row_pixels && source[column].a == 255);
+                const std::size_t opaque_count = column - opaque_begin;
+                std::copy_n(source + opaque_begin, opaque_count, destination + opaque_begin);
+                if (statistics != nullptr) {
+                    add_saturating(statistics->rounded_clip_opaque_direct_pixels, opaque_count);
+                }
+            }
+            continue;
+        }
         for (int x = visible.x; x < x_end; ++x) {
             const Color color = source[x - visible.x];
-            if (!row_needs_coverage) {
-                if (statistics != nullptr) {
-                    ++statistics->rounded_clip_full_coverage_pixels;
-                }
-                if (color.a == 255) {
-                    destination[x - visible.x] = color;
-                    if (statistics != nullptr) {
-                        ++statistics->rounded_clip_opaque_direct_pixels;
-                    }
-                } else if (color.a != 0) {
-                    blend_pixel(target, x, y, color);
-                    if (statistics != nullptr) {
-                        ++statistics->rounded_clip_blended_pixels;
-                    }
-                }
-                continue;
-            }
             int coverage = 255;
             for (const RasterRoundedRect& rounded : rounded_clips) {
                 coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
