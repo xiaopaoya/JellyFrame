@@ -206,15 +206,23 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
     std::vector<RasterClip> clip_chain;
     for (const Rect dirty : repaint) {
         clear_rect(target, dirty, background);
-        for (std::size_t index = 0; index < frame.display_list.size(); ++index) {
+        std::size_t command_begin = 0;
+        while (command_begin < frame.display_list.size()) {
             const std::uint32_t clip_index = frame.display_clip_indices.empty()
                 ? kScriptTaskNoClip
-                : frame.display_clip_indices[index];
+                : frame.display_clip_indices[command_begin];
+            std::size_t command_end = command_begin + 1;
+            while (command_end < frame.display_list.size() &&
+                   (frame.display_clip_indices.empty() ||
+                    frame.display_clip_indices[command_end] == clip_index)) {
+                ++command_end;
+            }
             if (!collect_clip_chain(frame, clip_index, clip_chain)) {
                 if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidClipChain;
                 return false;
             }
-            rasterizer_.rasterize_clipped(frame.display_list[index],
+            rasterizer_.rasterize_clipped(frame.display_list.data() + command_begin,
+                                          command_end - command_begin,
                                           target,
                                           dirty,
                                           0,
@@ -222,6 +230,7 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                           clip_chain.empty() ? nullptr : clip_chain.data(),
                                           clip_chain.size(),
                                           scratch);
+            command_begin = command_end;
         }
     }
     return true;

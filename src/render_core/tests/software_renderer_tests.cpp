@@ -730,6 +730,31 @@ void rasterizer_applies_value_rounded_clip_chain() {
           "value clip chain preserves the center of the command");
 }
 
+void rasterizer_batches_consecutive_value_clip_commands() {
+    DisplayCommand commands[2] = {
+        black_fill(Rect{0, 0, 40, 40}),
+        black_fill(Rect{16, 16, 8, 8}),
+    };
+    commands[0].color = Color{20, 120, 240, 255};
+    commands[1].color = Color{15, 23, 42, 255};
+    const RasterClip clips[] = {{{8, 8, 24, 24}, 8}};
+
+    FrameBuffer batched(40, 40, Color{255, 255, 255, 255});
+    FrameBuffer sequential(40, 40, Color{255, 255, 255, 255});
+    SoftwareRasterizer rasterizer;
+    rasterizer.rasterize_clipped(commands, 2, batched, {0, 0, 40, 40}, 0, 0, clips, 1);
+    rasterizer.rasterize_clipped(commands[0], sequential, {0, 0, 40, 40}, 0, 0, clips, 1);
+    rasterizer.rasterize_clipped(commands[1], sequential, {0, 0, 40, 40}, 0, 0, clips, 1);
+
+    check(batched.pixels.size() == sequential.pixels.size(), "batched frame size matches sequential frame");
+    for (std::size_t index = 0; index < batched.pixels.size(); ++index) {
+        const Color left = batched.pixels[index];
+        const Color right = sequential.pixels[index];
+        check(left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a,
+              "batched rounded clip commands preserve opaque paint order and coverage");
+    }
+}
+
 void compositor_offsets_rounded_overflow_clip_with_layer_transform() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1528,6 +1553,7 @@ int main() {
         dirty_render_preserves_original_rounded_geometry();
         compositor_clips_children_to_rounded_overflow();
         rasterizer_applies_value_rounded_clip_chain();
+        rasterizer_batches_consecutive_value_clip_commands();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();
         dirty_render_skips_contained_dirty_rects();
         compositor_skips_covered_opaque_fill_prefix();

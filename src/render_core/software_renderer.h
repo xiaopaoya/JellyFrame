@@ -118,6 +118,18 @@ public:
                            const RasterClip* clips,
                            std::size_t clip_count,
                            SoftwareRasterizerScratch* scratch = nullptr) const;
+    // Consecutive commands with one common clip chain can share a temporary
+    // surface. This preserves paint order while avoiding one rounded-mask pass
+    // per command on embedded software renderers.
+    void rasterize_clipped(const DisplayCommand* commands,
+                           std::size_t command_count,
+                           FrameBuffer& target,
+                           Rect clip,
+                           int offset_x,
+                           int offset_y,
+                           const RasterClip* clips,
+                           std::size_t clip_count,
+                           SoftwareRasterizerScratch* scratch = nullptr) const;
 
 private:
     TextPainter text_painter_;
