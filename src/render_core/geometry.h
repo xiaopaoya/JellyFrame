@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -137,6 +138,9 @@ enum class DisplayCommandType : std::uint8_t {
     Text,
     Image,
 };
+
+constexpr std::size_t kDisplayCommandTypeCount =
+    static_cast<std::size_t>(DisplayCommandType::Image) + 1U;
 
 enum class GradientAxis : std::uint8_t {
     Vertical,

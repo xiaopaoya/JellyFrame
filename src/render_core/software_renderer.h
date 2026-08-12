@@ -5,6 +5,7 @@
 #include "render_core/host.h"
 #include "render_core/layer_tree.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -39,6 +40,9 @@ struct SoftwareRasterizerScratch {
 struct SoftwareRasterizerStatistics {
     std::size_t rounded_clip_runs = 0;
     std::size_t rounded_clip_commands = 0;
+    // Indexed by DisplayCommandType. Counts commands replayed into a rounded
+    // temporary surface, excluding rectangular and non-clipped draws.
+    std::array<std::size_t, kDisplayCommandTypeCount> rounded_clip_replayed_commands_by_type{};
     std::size_t rounded_clip_mask_pixels = 0;
     std::size_t rounded_clip_temporary_pixels = 0;
     std::size_t rounded_clip_rectangular_fast_paths = 0;

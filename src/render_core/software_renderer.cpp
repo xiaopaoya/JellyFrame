@@ -68,6 +68,18 @@ bool rounded_clip_affects_row(const RasterRoundedRect& rounded, int y) {
         (radii.bottom_right > 0 && y >= rounded.bottom - radii.bottom_right && y < rounded.bottom);
 }
 
+void record_rounded_clip_replayed_command(SoftwareRasterizerStatistics* statistics,
+                                          DisplayCommandType type) {
+    if (statistics == nullptr) {
+        return;
+    }
+    const std::size_t index = static_cast<std::size_t>(type);
+    assert(index < statistics->rounded_clip_replayed_commands_by_type.size());
+    if (index < statistics->rounded_clip_replayed_commands_by_type.size()) {
+        ++statistics->rounded_clip_replayed_commands_by_type[index];
+    }
+}
+
 void composite_rounded_clip_surface(FrameBuffer& target,
                                     const FrameBuffer& surface,
                                     Rect surface_rect,
@@ -1491,6 +1503,7 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
         options_.statistics->rounded_clip_mask_pixels += temporary_pixels;
         options_.statistics->rounded_clip_temporary_pixels += temporary_pixels;
     }
+    record_rounded_clip_replayed_command(options_.statistics, command.type);
     rasterize(command,
               surface,
               Rect{0, 0, visible.width, visible.height},
@@ -1597,6 +1610,7 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
     const int local_offset_y = safe_add(offset_y, safe_negate(effective_clip.y));
     for (std::size_t index = 0; index < command_count; ++index) {
         // Do not reuse the group surface for nested text/image clipping.
+        record_rounded_clip_replayed_command(options_.statistics, commands[index].type);
         rasterize(commands[index], surface, local_clip, local_offset_x, local_offset_y, nullptr);
     }
 

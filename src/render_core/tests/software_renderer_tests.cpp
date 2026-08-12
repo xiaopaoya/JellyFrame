@@ -714,13 +714,15 @@ void rasterizer_applies_value_rounded_clip_chain() {
         {{12, 12, 16, 16}, 5},
     };
 
-    SoftwareRasterizer().rasterize_clipped(fill,
-                                           frame,
-                                           Rect{0, 0, 40, 40},
-                                           0,
-                                           0,
-                                           clips,
-                                           2);
+    SoftwareRasterizerStatistics statistics;
+    SoftwareRasterizer rasterizer({}, nullptr, {0, &statistics});
+    rasterizer.rasterize_clipped(fill,
+                                 frame,
+                                 Rect{0, 0, 40, 40},
+                                 0,
+                                 0,
+                                 clips,
+                                 2);
 
     check(frame.pixel(8, 8).r == 255 && frame.pixel(8, 8).g == 255,
           "value clip chain excludes the outer rounded corner");
@@ -728,6 +730,9 @@ void rasterizer_applies_value_rounded_clip_chain() {
           "value clip chain excludes the inner rounded corner");
     check(frame.pixel(20, 20).b > 200,
           "value clip chain preserves the center of the command");
+    check(statistics.rounded_clip_replayed_commands_by_type[
+              static_cast<std::size_t>(DisplayCommandType::FillRect)] == 1,
+          "single rounded clip command is attributed after temporary-surface replay");
 }
 
 void rasterizer_batches_consecutive_value_clip_commands() {
@@ -759,7 +764,9 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
     DisplayCommand opaque = black_fill(Rect{0, 0, 40, 40});
     opaque.color = Color{20, 120, 240, 255};
     DisplayCommand translucent = black_fill(Rect{16, 16, 8, 8});
+    translucent.type = DisplayCommandType::LinearGradient;
     translucent.color = Color{240, 80, 70, 128};
+    translucent.color2 = Color{220, 60, 120, 128};
     const DisplayCommand commands[] = {opaque, translucent};
     const RasterClip clips[] = {{{8, 8, 24, 24}, 8}};
     FrameBuffer batched(40, 40, Color{255, 255, 255, 255});
@@ -785,6 +792,11 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
     check(statistics.rounded_clip_full_coverage_pixels > 0 &&
               statistics.rounded_clip_coverage_sampled_pixels > 0,
           "rounded clip composite distinguishes center rows from antialiased corner rows");
+    check(statistics.rounded_clip_replayed_commands_by_type[
+              static_cast<std::size_t>(DisplayCommandType::FillRect)] == 1 &&
+              statistics.rounded_clip_replayed_commands_by_type[
+                  static_cast<std::size_t>(DisplayCommandType::LinearGradient)] == 1,
+          "rounded clip composite attributes command types replayed into its temporary surface");
 }
 
 void rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners() {
