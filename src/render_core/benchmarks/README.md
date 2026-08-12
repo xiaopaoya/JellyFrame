@@ -1,6 +1,6 @@
 # Render Core Benchmarks
 
-> Last updated: 2026-07-16; Applies to: 0.5.0
+> Last updated: 2026-08-13; Applies to: 0.6.0-dev
 
 Microbenchmarks in this directory measure the platform-neutral render pipeline:
 HTML parsing, CSS parsing, style resolution, render tree, layout, layer tree,
@@ -41,6 +41,10 @@ Retained repaint probes:
   coverage and quadratic falloff while avoiding repeated invariant math. It
   adds no shadow cache or surface allocation; the exact circular path remains
   separate and is measured by the probe below.
+- On the WS147 full-frame rounded value-frame fixture, the corresponding
+  platform-neutral path reduced measured box-shadow replay per frame by 34.46%
+  and render p95 by 11.43% without a RAM-watermark regression. That hardware
+  A/B is evidence for this command family only, not a general FPS guarantee.
 - `circular_box_shadow_exact_raster` measures the exact-distance 120px circular
   glow used by the 172x320 wearable Activity-ring fixture. Compare it with
   `soft_box_shadow_raster`; do not use it to estimate ordinary rounded-card

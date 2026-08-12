@@ -53,6 +53,11 @@ struct SoftwareRasterizerStatistics {
     // populated only when SoftwareRasterizerOptions::timing is supplied.
     std::array<std::uint64_t, kDisplayCommandTypeCount> rounded_clip_replay_microseconds_by_type{};
     std::uint64_t rounded_clip_replay_microseconds = 0;
+    // Optional caller-clock time spent preparing (including clearing) the
+    // rounded temporary surface and compositing it back to the target. These
+    // exclude command replay, which remains attributed by command type above.
+    std::uint64_t rounded_clip_surface_prepare_microseconds = 0;
+    std::uint64_t rounded_clip_composite_microseconds = 0;
     std::size_t rounded_clip_replay_timing_invalid_samples = 0;
     std::size_t rounded_clip_mask_pixels = 0;
     std::size_t rounded_clip_temporary_pixels = 0;
@@ -129,7 +134,8 @@ struct SoftwareRasterizerOptions {
     std::size_t max_temporary_pixels = 0;
     // When supplied, records bounded rounded-clip work without allocating.
     SoftwareRasterizerStatistics* statistics = nullptr;
-    // Optional timing for rounded temporary-surface command replay only.
+    // Optional timing for rounded temporary-surface preparation, command
+    // replay, and rounded coverage composition. No clock is read by default.
     SoftwareRasterizerTiming timing;
 };
 

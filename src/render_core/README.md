@@ -147,6 +147,14 @@ retain their exact-distance path to avoid reintroducing polygonal rings. The
 path owns no cache or extra surface and applies only when `box-shadow` is
 already being rasterized.
 
+For opt-in diagnosis of value-frame v2 rounded clips, a host can provide both
+`SoftwareRasterizerStatistics` and a monotonic
+`SoftwareRasterizerTiming::now_microseconds` callback. The Core then records
+three disjoint phases: temporary-surface preparation (including clear),
+per-command replay, and rounded-coverage composition back into the target.
+Without that callback it performs no clock reads or timing bookkeeping. These
+figures attribute one bounded workload; they are not device-FPS claims.
+
 Desktop validation builds also emit `jellyframe_render_core_microbench.map` and
 `jellyframe_render_core_tests.map`. Check a map against its generated profile
 with:

@@ -76,7 +76,8 @@ inner pixels copied directly from the temporary surface, source-over blended
 pixels, full-coverage versus antialiased-corner pixel counts, and explicit
 budget/allocation rejections without introducing a platform timer or allocator
 dependency. A host may separately provide a monotonic microsecond callback in
-`SoftwareRasterizerOptions::timing`; only then are per-command replay duration
+`SoftwareRasterizerOptions::timing`; only then are temporary-surface
+prepare/clear, per-command replay and rounded-coverage composition duration
 counters populated. Ordinary builds neither call a clock nor retain timer state.
 `ScriptTaskFrameRendererOptions::rasterizer_timing` forwards that value-only
 callback to the renderer, so a port need not duplicate the v2 command loop.

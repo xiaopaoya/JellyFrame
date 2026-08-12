@@ -136,6 +136,20 @@ void record_rounded_clip_replay_duration(SoftwareRasterizerStatistics* statistic
     add_saturating(statistics->rounded_clip_replay_microseconds, elapsed);
 }
 
+void record_rounded_clip_phase_duration(SoftwareRasterizerStatistics* statistics,
+                                        std::uint64_t& destination,
+                                        std::uint64_t begin_microseconds,
+                                        std::uint64_t end_microseconds) {
+    if (statistics == nullptr) {
+        return;
+    }
+    if (end_microseconds < begin_microseconds) {
+        ++statistics->rounded_clip_replay_timing_invalid_samples;
+        return;
+    }
+    add_saturating(destination, end_microseconds - begin_microseconds);
+}
+
 void composite_rounded_clip_surface(FrameBuffer& target,
                                     const FrameBuffer& surface,
                                     Rect surface_rect,
@@ -1539,7 +1553,19 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
 
     FrameBuffer local_surface;
     FrameBuffer& surface = scratch != nullptr ? scratch->temporary_surface : local_surface;
+    const bool time_rounded_run = options_.statistics != nullptr &&
+        options_.timing.now_microseconds != nullptr;
+    const std::uint64_t prepare_begin_microseconds = time_rounded_run
+        ? options_.timing.now_microseconds(options_.timing.context)
+        : 0;
     surface.resize(visible.width, visible.height, Color{0, 0, 0, 0});
+    if (time_rounded_run) {
+        record_rounded_clip_phase_duration(
+            options_.statistics,
+            options_.statistics->rounded_clip_surface_prepare_microseconds,
+            prepare_begin_microseconds,
+            options_.timing.now_microseconds(options_.timing.context));
+    }
     if (surface.width != visible.width || surface.height != visible.height ||
         surface.pixels.size() != temporary_pixels) {
         if (options_.statistics != nullptr) {
@@ -1564,8 +1590,7 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
                                                 command.type,
                                                 command_rect,
                                                 visible);
-    const bool time_replay = options_.statistics != nullptr &&
-        options_.timing.now_microseconds != nullptr;
+    const bool time_replay = time_rounded_run;
     const std::uint64_t begin_microseconds = time_replay
         ? options_.timing.now_microseconds(options_.timing.context)
         : 0;
@@ -1582,7 +1607,17 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
                                             options_.timing.now_microseconds(options_.timing.context));
     }
 
+    const std::uint64_t composite_begin_microseconds = time_rounded_run
+        ? options_.timing.now_microseconds(options_.timing.context)
+        : 0;
     composite_rounded_clip_surface(target, surface, visible, rounded_clips, options_.statistics);
+    if (time_rounded_run) {
+        record_rounded_clip_phase_duration(
+            options_.statistics,
+            options_.statistics->rounded_clip_composite_microseconds,
+            composite_begin_microseconds,
+            options_.timing.now_microseconds(options_.timing.context));
+    }
 }
 
 void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
@@ -1656,7 +1691,19 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
 
     FrameBuffer local_surface;
     FrameBuffer& surface = scratch != nullptr ? scratch->temporary_surface : local_surface;
+    const bool time_rounded_run = options_.statistics != nullptr &&
+        options_.timing.now_microseconds != nullptr;
+    const std::uint64_t prepare_begin_microseconds = time_rounded_run
+        ? options_.timing.now_microseconds(options_.timing.context)
+        : 0;
     surface.resize(effective_clip.width, effective_clip.height, Color{0, 0, 0, 0});
+    if (time_rounded_run) {
+        record_rounded_clip_phase_duration(
+            options_.statistics,
+            options_.statistics->rounded_clip_surface_prepare_microseconds,
+            prepare_begin_microseconds,
+            options_.timing.now_microseconds(options_.timing.context));
+    }
     if (surface.width != effective_clip.width || surface.height != effective_clip.height ||
         surface.pixels.size() != temporary_pixels) {
         if (options_.statistics != nullptr) {
@@ -1689,8 +1736,7 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
                                                     commands[index].type,
                                                     command_rect,
                                                     effective_clip);
-        const bool time_replay = options_.statistics != nullptr &&
-            options_.timing.now_microseconds != nullptr;
+        const bool time_replay = time_rounded_run;
         const std::uint64_t begin_microseconds = time_replay
             ? options_.timing.now_microseconds(options_.timing.context)
             : 0;
@@ -1703,7 +1749,17 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
         }
     }
 
+    const std::uint64_t composite_begin_microseconds = time_rounded_run
+        ? options_.timing.now_microseconds(options_.timing.context)
+        : 0;
     composite_rounded_clip_surface(target, surface, effective_clip, rounded_clips, options_.statistics);
+    if (time_rounded_run) {
+        record_rounded_clip_phase_duration(
+            options_.statistics,
+            options_.statistics->rounded_clip_composite_microseconds,
+            composite_begin_microseconds,
+            options_.timing.now_microseconds(options_.timing.context));
+    }
 }
 
 SoftwareCompositor::SoftwareCompositor()
