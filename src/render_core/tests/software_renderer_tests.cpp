@@ -782,6 +782,9 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
           "opaque rounded clip composite records direct inner pixels");
     check(statistics.rounded_clip_blended_pixels > 0,
           "rounded clip composite retains blended edge or translucent pixels");
+    check(statistics.rounded_clip_full_coverage_pixels > 0 &&
+              statistics.rounded_clip_coverage_sampled_pixels > 0,
+          "rounded clip composite distinguishes center rows from antialiased corner rows");
 }
 
 void rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners() {

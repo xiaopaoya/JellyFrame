@@ -57,6 +57,17 @@ bool rounded_clip_affects_rect(const RasterRoundedRect& rounded, Rect rect) {
         overlaps_corner(rounded.left, rounded.bottom - radii.bottom_left, radii.bottom_left);
 }
 
+bool rounded_clip_affects_row(const RasterRoundedRect& rounded, int y) {
+    if (!rounded.rounded) {
+        return false;
+    }
+    const CornerRadii& radii = rounded.radii;
+    return (radii.top_left > 0 && y >= rounded.top && y < rounded.top + radii.top_left) ||
+        (radii.top_right > 0 && y >= rounded.top && y < rounded.top + radii.top_right) ||
+        (radii.bottom_left > 0 && y >= rounded.bottom - radii.bottom_left && y < rounded.bottom) ||
+        (radii.bottom_right > 0 && y >= rounded.bottom - radii.bottom_right && y < rounded.bottom);
+}
+
 void composite_rounded_clip_surface(FrameBuffer& target,
                                     const FrameBuffer& surface,
                                     Rect surface_rect,
@@ -71,7 +82,29 @@ void composite_rounded_clip_surface(FrameBuffer& target,
         const Color* source = surface.pixels.data() +
             static_cast<std::size_t>(y - surface_rect.y) * static_cast<std::size_t>(surface.width) +
             static_cast<std::size_t>(visible.x - surface_rect.x);
+        const bool row_needs_coverage = std::any_of(
+            rounded_clips.begin(), rounded_clips.end(), [y](const RasterRoundedRect& rounded) {
+                return rounded_clip_affects_row(rounded, y);
+            });
         for (int x = visible.x; x < x_end; ++x) {
+            const Color color = source[x - visible.x];
+            if (!row_needs_coverage) {
+                if (statistics != nullptr) {
+                    ++statistics->rounded_clip_full_coverage_pixels;
+                }
+                if (color.a == 255) {
+                    destination[x - visible.x] = color;
+                    if (statistics != nullptr) {
+                        ++statistics->rounded_clip_opaque_direct_pixels;
+                    }
+                } else if (color.a != 0) {
+                    blend_pixel(target, x, y, color);
+                    if (statistics != nullptr) {
+                        ++statistics->rounded_clip_blended_pixels;
+                    }
+                }
+                continue;
+            }
             int coverage = 255;
             for (const RasterRoundedRect& rounded : rounded_clips) {
                 coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
@@ -79,10 +112,12 @@ void composite_rounded_clip_surface(FrameBuffer& target,
                     break;
                 }
             }
+            if (statistics != nullptr) {
+                ++statistics->rounded_clip_coverage_sampled_pixels;
+            }
             if (coverage == 0) {
                 continue;
             }
-            const Color color = source[x - visible.x];
             if (coverage == 255 && color.a == 255) {
                 destination[x - visible.x] = color;
                 if (statistics != nullptr) {

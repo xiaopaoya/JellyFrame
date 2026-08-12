@@ -44,6 +44,8 @@ struct SoftwareRasterizerStatistics {
     std::size_t rounded_clip_rectangular_fast_paths = 0;
     std::size_t rounded_clip_opaque_direct_pixels = 0;
     std::size_t rounded_clip_blended_pixels = 0;
+    std::size_t rounded_clip_full_coverage_pixels = 0;
+    std::size_t rounded_clip_coverage_sampled_pixels = 0;
     std::size_t rounded_clip_budget_rejections = 0;
     std::size_t rounded_clip_allocation_rejections = 0;
 
