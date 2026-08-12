@@ -41,6 +41,22 @@ bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
 }
 
+bool rounded_clip_affects_rect(const RasterRoundedRect& rounded, Rect rect) {
+    if (!rounded.rounded) {
+        return false;
+    }
+    const auto overlaps_corner = [rect](int x, int y, int radius) {
+        return radius > 0 && !empty_rect(intersect_rect(rect, Rect{x, y, radius, radius}));
+    };
+    const CornerRadii& radii = rounded.radii;
+    return overlaps_corner(rounded.left, rounded.top, radii.top_left) ||
+        overlaps_corner(rounded.right - radii.top_right, rounded.top, radii.top_right) ||
+        overlaps_corner(rounded.right - radii.bottom_right,
+                        rounded.bottom - radii.bottom_right,
+                        radii.bottom_right) ||
+        overlaps_corner(rounded.left, rounded.bottom - radii.bottom_left, radii.bottom_left);
+}
+
 Rect union_rect(Rect left, Rect right) {
     if (empty_rect(left)) {
         return right;
@@ -985,6 +1001,10 @@ void SoftwareRasterizerScratch::release() {
     temporary_surface.height = 0;
 }
 
+void SoftwareRasterizerStatistics::reset() {
+    *this = {};
+}
+
 bool FrameBuffer::contains(int x, int y) const {
     return x >= 0 && y >= 0 && x < width && y < height;
 }
@@ -1338,6 +1358,18 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
         return;
     }
 
+    const bool rounded_coverage_needed = std::any_of(
+        rounded_clips.begin(), rounded_clips.end(), [effective_clip](const RasterRoundedRect& rounded) {
+            return rounded_clip_affects_rect(rounded, effective_clip);
+        });
+    if (!rounded_coverage_needed) {
+        if (options_.statistics != nullptr) {
+            ++options_.statistics->rounded_clip_rectangular_fast_paths;
+        }
+        rasterize(command, target, effective_clip, offset_x, offset_y, scratch);
+        return;
+    }
+
     Rect command_rect = command.rect;
     command_rect.x = safe_add(command_rect.x, offset_x);
     command_rect.y = safe_add(command_rect.y, offset_y);
@@ -1349,6 +1381,9 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
     if (!checked_pixel_count(visible.width, visible.height, temporary_pixels) ||
         (options_.max_temporary_pixels != 0 &&
          temporary_pixels > options_.max_temporary_pixels)) {
+        if (options_.statistics != nullptr) {
+            ++options_.statistics->rounded_clip_budget_rejections;
+        }
         report_diagnostic(diagnostics_,
                           DiagnosticStage::Paint,
                           DiagnosticSeverity::Warning,
@@ -1363,6 +1398,9 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
     surface.resize(visible.width, visible.height, Color{0, 0, 0, 0});
     if (surface.width != visible.width || surface.height != visible.height ||
         surface.pixels.size() != temporary_pixels) {
+        if (options_.statistics != nullptr) {
+            ++options_.statistics->rounded_clip_allocation_rejections;
+        }
         report_diagnostic(diagnostics_,
                           DiagnosticStage::Paint,
                           DiagnosticSeverity::Warning,
@@ -1370,6 +1408,12 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
                           "Rounded clip-chain temporary surface allocation failed; command was skipped",
                           std::to_string(visible.width) + "x" + std::to_string(visible.height));
         return;
+    }
+    if (options_.statistics != nullptr) {
+        ++options_.statistics->rounded_clip_runs;
+        ++options_.statistics->rounded_clip_commands;
+        options_.statistics->rounded_clip_mask_pixels += temporary_pixels;
+        options_.statistics->rounded_clip_temporary_pixels += temporary_pixels;
     }
     rasterize(command,
               surface,
@@ -1438,10 +1482,27 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
         return;
     }
 
+    const bool rounded_coverage_needed = std::any_of(
+        rounded_clips.begin(), rounded_clips.end(), [effective_clip](const RasterRoundedRect& rounded) {
+            return rounded_clip_affects_rect(rounded, effective_clip);
+        });
+    if (!rounded_coverage_needed) {
+        if (options_.statistics != nullptr) {
+            ++options_.statistics->rounded_clip_rectangular_fast_paths;
+        }
+        for (std::size_t index = 0; index < command_count; ++index) {
+            rasterize(commands[index], target, effective_clip, offset_x, offset_y, scratch);
+        }
+        return;
+    }
+
     std::size_t temporary_pixels = 0;
     if (!checked_pixel_count(effective_clip.width, effective_clip.height, temporary_pixels) ||
         (options_.max_temporary_pixels != 0 &&
          temporary_pixels > options_.max_temporary_pixels)) {
+        if (options_.statistics != nullptr) {
+            ++options_.statistics->rounded_clip_budget_rejections;
+        }
         report_diagnostic(diagnostics_,
                           DiagnosticStage::Paint,
                           DiagnosticSeverity::Warning,
@@ -1456,6 +1517,9 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
     surface.resize(effective_clip.width, effective_clip.height, Color{0, 0, 0, 0});
     if (surface.width != effective_clip.width || surface.height != effective_clip.height ||
         surface.pixels.size() != temporary_pixels) {
+        if (options_.statistics != nullptr) {
+            ++options_.statistics->rounded_clip_allocation_rejections;
+        }
         report_diagnostic(diagnostics_,
                           DiagnosticStage::Paint,
                           DiagnosticSeverity::Warning,
@@ -1463,6 +1527,12 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
                           "Rounded clip-chain temporary surface allocation failed; commands were skipped",
                           std::to_string(effective_clip.width) + "x" + std::to_string(effective_clip.height));
         return;
+    }
+    if (options_.statistics != nullptr) {
+        ++options_.statistics->rounded_clip_runs;
+        options_.statistics->rounded_clip_commands += command_count;
+        options_.statistics->rounded_clip_mask_pixels += temporary_pixels;
+        options_.statistics->rounded_clip_temporary_pixels += temporary_pixels;
     }
     const Rect local_clip{0, 0, effective_clip.width, effective_clip.height};
     const int local_offset_x = safe_add(offset_x, safe_negate(effective_clip.x));

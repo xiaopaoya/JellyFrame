@@ -67,6 +67,12 @@ indices or parent cycles. It does not rebuild DOM or `LayerNode` state and can
 therefore be reused by the desktop shell and a port adapter independently of
 the worker's private runtime.
 
+For bounded v2 profiling, a host may supply `SoftwareRasterizerStatistics`
+through `ScriptTaskFrameRendererOptions`. It records rounded clip-run command
+counts, masked temporary-surface pixels, rectangular dirty fast paths and
+explicit budget/allocation rejections without introducing a platform timer or
+allocator dependency.
+
 `script_task_input_codec.*` defines the bounded, versioned worker-inbox values
 for pointer, wheel, key and text input. The worker validates and dispatches
 those values against its own DOM and layer tree.

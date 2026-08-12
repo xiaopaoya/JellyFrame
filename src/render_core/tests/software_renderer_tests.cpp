@@ -755,6 +755,28 @@ void rasterizer_batches_consecutive_value_clip_commands() {
     }
 }
 
+void rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners() {
+    DisplayCommand fill = black_fill(Rect{0, 0, 40, 40});
+    fill.color = Color{20, 120, 240, 255};
+    const RasterClip clips[] = {{{0, 0, 40, 40}, 12}};
+    FrameBuffer frame(40, 40, Color{255, 255, 255, 255});
+    SoftwareRasterizerScratch scratch;
+    scratch.temporary_surface = FrameBuffer(1, 1, Color{1, 2, 3, 255});
+    SoftwareRasterizerStatistics statistics;
+    SoftwareRasterizer rasterizer({}, nullptr, {0, &statistics});
+
+    rasterizer.rasterize_clipped(&fill, 1, frame, {12, 16, 16, 8}, 0, 0, clips, 1, &scratch);
+
+    check(frame.pixel(12, 16).b > 200 && frame.pixel(27, 23).b > 200,
+          "centered dirty clip paints without changing rounded coverage");
+    check(frame.pixel(11, 16).r == 255 && frame.pixel(28, 23).r == 255,
+          "rounded dirty fast path preserves pixels outside the dirty rect");
+    check(scratch.temporary_surface.width == 1 && scratch.temporary_surface.height == 1,
+          "centered dirty clip does not allocate a rounded temporary surface");
+    check(statistics.rounded_clip_rectangular_fast_paths == 1 && statistics.rounded_clip_runs == 0,
+          "centered dirty clip records the rectangular rounded-clip fast path");
+}
+
 void compositor_offsets_rounded_overflow_clip_with_layer_transform() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1554,6 +1576,7 @@ int main() {
         compositor_clips_children_to_rounded_overflow();
         rasterizer_applies_value_rounded_clip_chain();
         rasterizer_batches_consecutive_value_clip_commands();
+        rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();
         dirty_render_skips_contained_dirty_rects();
         compositor_skips_covered_opaque_fill_prefix();

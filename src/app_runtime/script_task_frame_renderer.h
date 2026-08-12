@@ -20,6 +20,7 @@ struct ScriptTaskFrameRendererOptions {
     std::size_t max_clip_depth = 8;
     std::size_t max_temporary_pixels = 0;
     DiagnosticSink* diagnostics = nullptr;
+    SoftwareRasterizerStatistics* rasterizer_statistics = nullptr;
 };
 
 // Desktop/host-side consumer for the value-only frame contract. It never

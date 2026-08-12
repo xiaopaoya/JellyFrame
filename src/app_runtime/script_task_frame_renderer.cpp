@@ -89,7 +89,7 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                                                  ScriptTaskFrameRendererOptions options)
     : rasterizer_(text_painter,
                   options.diagnostics,
-                  SoftwareRasterizerOptions{options.max_temporary_pixels}),
+                  SoftwareRasterizerOptions{options.max_temporary_pixels, options.rasterizer_statistics}),
       options_(options) {}
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
@@ -98,7 +98,7 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
     : rasterizer_(text_painter,
                   image_painter,
                   options.diagnostics,
-                  SoftwareRasterizerOptions{options.max_temporary_pixels}),
+                  SoftwareRasterizerOptions{options.max_temporary_pixels, options.rasterizer_statistics}),
       options_(options) {}
 
 FrameBuffer ScriptTaskFrameRenderer::render(const ScriptTaskAppFrame& frame,

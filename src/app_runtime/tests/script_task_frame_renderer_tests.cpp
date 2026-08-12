@@ -107,6 +107,22 @@ void renderer_keeps_non_dirty_pixels_and_rejects_bad_chain() {
     assert(status == ScriptTaskFrameRenderStatus::InvalidClipChain);
 }
 
+void renderer_exposes_rounded_dirty_fast_path_statistics() {
+    ScriptTaskAppFrame frame = rounded_frame();
+    FrameBuffer output(40, 40, {255, 255, 255, 255});
+    SoftwareRasterizerStatistics statistics;
+    ScriptTaskFrameRendererOptions options;
+    options.rasterizer_statistics = &statistics;
+    ScriptTaskFrameRenderer renderer({}, options);
+    const Rect dirty{16, 18, 8, 4};
+    ScriptTaskFrameRenderStatus status = ScriptTaskFrameRenderStatus::InvalidFrame;
+
+    assert(renderer.render_into(frame, output, {255, 255, 255, 255}, &dirty, 1, nullptr, &status));
+    assert(status == ScriptTaskFrameRenderStatus::Accepted);
+    assert(statistics.rounded_clip_rectangular_fast_paths == 1);
+    assert(statistics.rounded_clip_runs == 0);
+}
+
 } // namespace
 
 int script_task_frame_renderer_tests_main() {
@@ -114,6 +130,7 @@ int script_task_frame_renderer_tests_main() {
     renderer_consumes_codec_round_tripped_v2_frame();
     renderer_matches_layer_compositor_for_translucent_clip_run();
     renderer_keeps_non_dirty_pixels_and_rejects_bad_chain();
+    renderer_exposes_rounded_dirty_fast_path_statistics();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
 }

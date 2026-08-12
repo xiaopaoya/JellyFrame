@@ -34,6 +34,20 @@ struct SoftwareRasterizerScratch {
     void release();
 };
 
+// Optional caller-owned counters for diagnosing rounded value-frame clips.
+// They are intentionally plain counters: rasterizer instances are task-local.
+struct SoftwareRasterizerStatistics {
+    std::size_t rounded_clip_runs = 0;
+    std::size_t rounded_clip_commands = 0;
+    std::size_t rounded_clip_mask_pixels = 0;
+    std::size_t rounded_clip_temporary_pixels = 0;
+    std::size_t rounded_clip_rectangular_fast_paths = 0;
+    std::size_t rounded_clip_budget_rejections = 0;
+    std::size_t rounded_clip_allocation_rejections = 0;
+
+    void reset();
+};
+
 // A value-only clip record consumed by the rasterizer. The caller supplies
 // records from outermost to innermost order; rectangular clips stay on the
 // direct fast path and rounded clips use a bounded temporary surface.
@@ -85,6 +99,8 @@ struct ImagePainter {
 struct SoftwareRasterizerOptions {
     // Applies only to clipped text/image temporary surfaces. Zero is unlimited.
     std::size_t max_temporary_pixels = 0;
+    // When supplied, records bounded rounded-clip work without allocating.
+    SoftwareRasterizerStatistics* statistics = nullptr;
 };
 
 class SoftwareRasterizer {
