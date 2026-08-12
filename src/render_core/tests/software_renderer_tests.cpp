@@ -969,6 +969,17 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
               statistics.rounded_clip_full_coverage_opaque_runs > 0 &&
               statistics.rounded_clip_coverage_sampled_rows > 0,
           "rounded clip composite records opaque-span and antialiased row shapes");
+    check(statistics.rounded_clip_coverage_clip_evaluations ==
+                  statistics.rounded_clip_coverage_sampled_pixels &&
+              statistics.rounded_clip_coverage_math_evaluations > 0 &&
+              statistics.rounded_clip_coverage_zero_pixels > 0 &&
+              statistics.rounded_clip_coverage_partial_pixels > 0 &&
+              statistics.rounded_clip_coverage_full_pixels > 0 &&
+              statistics.rounded_clip_coverage_zero_pixels +
+                      statistics.rounded_clip_coverage_partial_pixels +
+                      statistics.rounded_clip_coverage_full_pixels ==
+                  statistics.rounded_clip_coverage_sampled_pixels,
+          "rounded clip composite distinguishes clip visits, subpixel math, and final coverage");
     check(statistics.rounded_clip_replayed_commands_by_type[
               static_cast<std::size_t>(DisplayCommandType::FillRect)] == 1 &&
               statistics.rounded_clip_replayed_commands_by_type[
@@ -979,6 +990,34 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
               statistics.rounded_clip_replay_candidate_pixels_by_type[
                   static_cast<std::size_t>(DisplayCommandType::LinearGradient)] == 64,
           "rounded clip composite attributes overlapping candidate replay areas by command type");
+}
+
+void rasterizer_tracks_nested_rounded_clip_coverage_work() {
+    DisplayCommand opaque = black_fill(Rect{0, 0, 40, 40});
+    opaque.color = Color{20, 120, 240, 255};
+    const RasterClip clips[] = {
+        {{8, 8, 24, 24}, 8},
+        {{12, 12, 16, 16}, 5},
+    };
+    FrameBuffer frame(40, 40, Color{255, 255, 255, 255});
+    SoftwareRasterizerStatistics statistics;
+    SoftwareRasterizer rasterizer({}, nullptr, {0, &statistics});
+
+    rasterizer.rasterize_clipped(&opaque, 1, frame, {0, 0, 40, 40}, 0, 0, clips, 2);
+
+    check(statistics.rounded_clip_coverage_sampled_pixels > 0 &&
+              statistics.rounded_clip_coverage_clip_evaluations >
+                  statistics.rounded_clip_coverage_sampled_pixels &&
+              statistics.rounded_clip_coverage_clip_evaluations <=
+                  statistics.rounded_clip_coverage_sampled_pixels * 2 &&
+              statistics.rounded_clip_coverage_math_evaluations > 0 &&
+              statistics.rounded_clip_coverage_math_evaluations <=
+                  statistics.rounded_clip_coverage_clip_evaluations &&
+              statistics.rounded_clip_coverage_zero_pixels +
+                      statistics.rounded_clip_coverage_partial_pixels +
+                      statistics.rounded_clip_coverage_full_pixels ==
+                  statistics.rounded_clip_coverage_sampled_pixels,
+          "nested rounded clip coverage records actual short-circuited clip-chain work");
 }
 
 void rasterizer_rounded_composite_span_matches_pixel_reference() {
@@ -1883,6 +1922,7 @@ int main() {
         rasterizer_applies_value_rounded_clip_chain();
         rasterizer_batches_consecutive_value_clip_commands();
         rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha();
+        rasterizer_tracks_nested_rounded_clip_coverage_work();
         rasterizer_rounded_composite_span_matches_pixel_reference();
         rasterizer_records_opt_in_rounded_clip_replay_timing();
         rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners();

@@ -108,13 +108,21 @@ inline RasterRoundedRect prepare_rounded_rect(Rect rect, int encoded_radius) {
     };
 }
 
-inline int rounded_rect_coverage(const RasterRoundedRect& geometry, int x, int y) {
+struct RoundedRectCoverage {
+    int value = 0;
+    // True only when the 4x4 subpixel circle test was evaluated. Callers can
+    // profile rounded-clip work without treating an interior 255 result as a
+    // free rectangular result.
+    bool sampled = false;
+};
+
+inline RoundedRectCoverage rounded_rect_coverage_detail(const RasterRoundedRect& geometry, int x, int y) {
     if (!geometry.rounded) {
-        return 255;
+        return {255, false};
     }
     const CornerRadii& radii = geometry.radii;
     if (radii.top_left <= 0 && radii.top_right <= 0 && radii.bottom_right <= 0 && radii.bottom_left <= 0) {
-        return 255;
+        return {255, false};
     }
 
     const std::int64_t left = geometry.left;
@@ -123,7 +131,7 @@ inline int rounded_rect_coverage(const RasterRoundedRect& geometry, int x, int y
     const std::int64_t bottom = geometry.bottom;
     if (static_cast<std::int64_t>(x) < left || static_cast<std::int64_t>(x) >= right ||
         static_cast<std::int64_t>(y) < top || static_cast<std::int64_t>(y) >= bottom) {
-        return 0;
+        return {0, false};
     }
     std::int64_t cx = 0;
     std::int64_t cy = 0;
@@ -149,7 +157,7 @@ inline int rounded_rect_coverage(const RasterRoundedRect& geometry, int x, int y
         cx = right - radius;
         cy = bottom - radius;
     } else {
-        return 255;
+        return {255, false};
     }
 
     constexpr int kSubpixel = 4;
@@ -169,7 +177,11 @@ inline int rounded_rect_coverage(const RasterRoundedRect& geometry, int x, int y
             }
         }
     }
-    return (covered * 255 + 8) / 16;
+    return {(covered * 255 + 8) / 16, true};
+}
+
+inline int rounded_rect_coverage(const RasterRoundedRect& geometry, int x, int y) {
+    return rounded_rect_coverage_detail(geometry, x, y).value;
 }
 
 inline int rounded_rect_coverage(Rect rect, int encoded_radius, int x, int y) {

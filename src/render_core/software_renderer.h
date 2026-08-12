@@ -77,6 +77,16 @@ struct SoftwareRasterizerStatistics {
     std::size_t rounded_clip_full_coverage_opaque_rows = 0;
     std::size_t rounded_clip_full_coverage_opaque_runs = 0;
     std::size_t rounded_clip_coverage_sampled_rows = 0;
+    // Work-shape counters for pixels in rounded-corner rows. A clip
+    // evaluation is one clip-chain visit; a math evaluation is a visit that
+    // enters the 4x4 subpixel circle test rather than returning rectangular
+    // coverage immediately. The output counters classify final chain
+    // coverage, after every applicable clip has been combined.
+    std::size_t rounded_clip_coverage_clip_evaluations = 0;
+    std::size_t rounded_clip_coverage_math_evaluations = 0;
+    std::size_t rounded_clip_coverage_zero_pixels = 0;
+    std::size_t rounded_clip_coverage_partial_pixels = 0;
+    std::size_t rounded_clip_coverage_full_pixels = 0;
     std::size_t rounded_clip_budget_rejections = 0;
     std::size_t rounded_clip_allocation_rejections = 0;
 

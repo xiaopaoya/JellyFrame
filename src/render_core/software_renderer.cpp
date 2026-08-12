@@ -239,7 +239,16 @@ void composite_rounded_clip_surface(FrameBuffer& target,
             const Color color = source[x - visible.x];
             int coverage = 255;
             for (const RasterRoundedRect& rounded : rounded_clips) {
-                coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
+                if (statistics != nullptr) {
+                    const RoundedRectCoverage clip_coverage = rounded_rect_coverage_detail(rounded, x, y);
+                    ++statistics->rounded_clip_coverage_clip_evaluations;
+                    if (clip_coverage.sampled) {
+                        ++statistics->rounded_clip_coverage_math_evaluations;
+                    }
+                    coverage = (coverage * clip_coverage.value + 127) / 255;
+                } else {
+                    coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
+                }
                 if (coverage == 0) {
                     break;
                 }
@@ -248,7 +257,17 @@ void composite_rounded_clip_surface(FrameBuffer& target,
                 ++statistics->rounded_clip_coverage_sampled_pixels;
             }
             if (coverage == 0) {
+                if (statistics != nullptr) {
+                    ++statistics->rounded_clip_coverage_zero_pixels;
+                }
                 continue;
+            }
+            if (statistics != nullptr) {
+                if (coverage == 255) {
+                    ++statistics->rounded_clip_coverage_full_pixels;
+                } else {
+                    ++statistics->rounded_clip_coverage_partial_pixels;
+                }
             }
             if (coverage == 255 && color.a == 255) {
                 destination[x - visible.x] = color;
