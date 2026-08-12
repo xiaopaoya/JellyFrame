@@ -167,6 +167,11 @@ target and preserves source-over blending for transparent or translucent pixels.
 Corner rows retain per-pixel coverage sampling. A test-side reference compositor
 checks the span path against the prior pixel-by-pixel result.
 
+When statistics are enabled, the Core also records full-coverage row count,
+fully opaque row count, opaque-span count and coverage-sampled row count. These
+plain counters do not read a clock and distinguish copy-friendly output from
+alpha-fragmented or corner-coverage work before further composite tuning.
+
 Desktop validation builds also emit `jellyframe_render_core_microbench.map` and
 `jellyframe_render_core_tests.map`. Check a map against its generated profile
 with:

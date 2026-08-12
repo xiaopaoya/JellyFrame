@@ -964,6 +964,11 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
     check(statistics.rounded_clip_full_coverage_pixels > 0 &&
               statistics.rounded_clip_coverage_sampled_pixels > 0,
           "rounded clip composite distinguishes center rows from antialiased corner rows");
+    check(statistics.rounded_clip_full_coverage_rows > 0 &&
+              statistics.rounded_clip_full_coverage_opaque_rows > 0 &&
+              statistics.rounded_clip_full_coverage_opaque_runs > 0 &&
+              statistics.rounded_clip_coverage_sampled_rows > 0,
+          "rounded clip composite records opaque-span and antialiased row shapes");
     check(statistics.rounded_clip_replayed_commands_by_type[
               static_cast<std::size_t>(DisplayCommandType::FillRect)] == 1 &&
               statistics.rounded_clip_replayed_commands_by_type[

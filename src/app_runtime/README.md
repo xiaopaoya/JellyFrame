@@ -81,6 +81,10 @@ prepare/clear, per-command replay and rounded-coverage composition duration
 counters populated. Ordinary builds neither call a clock nor retain timer state.
 `ScriptTaskFrameRendererOptions::rasterizer_timing` forwards that value-only
 callback to the renderer, so a port need not duplicate the v2 command loop.
+The same statistics also distinguish full-coverage output rows, rows that are
+wholly opaque, opaque span count, and antialiased-coverage rows. Those counters
+need no timing callback and help a host attribute rounded composite work before
+adding another paint fast path.
 
 `script_task_input_codec.*` defines the bounded, versioned worker-inbox values
 for pointer, wheel, key and text input. The worker validates and dispatches

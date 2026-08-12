@@ -66,6 +66,12 @@ struct SoftwareRasterizerStatistics {
     std::size_t rounded_clip_blended_pixels = 0;
     std::size_t rounded_clip_full_coverage_pixels = 0;
     std::size_t rounded_clip_coverage_sampled_pixels = 0;
+    // Rounded composite row-shape counters. They explain whether a
+    // full-coverage output is one opaque span or fragmented by alpha.
+    std::size_t rounded_clip_full_coverage_rows = 0;
+    std::size_t rounded_clip_full_coverage_opaque_rows = 0;
+    std::size_t rounded_clip_full_coverage_opaque_runs = 0;
+    std::size_t rounded_clip_coverage_sampled_rows = 0;
     std::size_t rounded_clip_budget_rejections = 0;
     std::size_t rounded_clip_allocation_rejections = 0;
 

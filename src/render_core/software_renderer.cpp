@@ -172,14 +172,17 @@ void composite_rounded_clip_surface(FrameBuffer& target,
         if (!row_needs_coverage) {
             if (statistics != nullptr) {
                 add_saturating(statistics->rounded_clip_full_coverage_pixels, row_pixels);
+                ++statistics->rounded_clip_full_coverage_rows;
             }
             // Most interior rounded-clip rows are fully opaque after replay.
             // Copy opaque runs in one contiguous operation, but retain the
             // existing source-over path for any translucent source pixels.
             std::size_t column = 0;
+            bool all_opaque = true;
             while (column < row_pixels) {
                 const Color color = source[column];
                 if (color.a != 255) {
+                    all_opaque = false;
                     if (color.a != 0) {
                         blend_color(destination[column], color);
                         if (statistics != nullptr) {
@@ -197,9 +200,16 @@ void composite_rounded_clip_surface(FrameBuffer& target,
                 std::copy_n(source + opaque_begin, opaque_count, destination + opaque_begin);
                 if (statistics != nullptr) {
                     add_saturating(statistics->rounded_clip_opaque_direct_pixels, opaque_count);
+                    ++statistics->rounded_clip_full_coverage_opaque_runs;
                 }
             }
+            if (statistics != nullptr && all_opaque) {
+                ++statistics->rounded_clip_full_coverage_opaque_rows;
+            }
             continue;
+        }
+        if (statistics != nullptr) {
+            ++statistics->rounded_clip_coverage_sampled_rows;
         }
         for (int x = visible.x; x < x_end; ++x) {
             const Color color = source[x - visible.x];
