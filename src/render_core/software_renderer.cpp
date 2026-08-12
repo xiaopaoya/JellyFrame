@@ -154,10 +154,20 @@ void composite_rounded_clip_surface(FrameBuffer& target,
                                     const FrameBuffer& surface,
                                     Rect surface_rect,
                                     const std::vector<RasterRoundedRect>& rounded_clips,
-                                    SoftwareRasterizerStatistics* statistics) {
+                                    SoftwareRasterizerStatistics* statistics,
+                                    SoftwareRasterizerTiming timing) {
     const Rect visible = intersect_rect(surface_rect, Rect{0, 0, target.width, target.height});
     const int y_end = safe_edge(visible.y, visible.height);
     const int x_end = safe_edge(visible.x, visible.width);
+    const bool time_composite = statistics != nullptr && timing.now_microseconds != nullptr &&
+        visible.height > 0;
+    std::uint64_t composite_begin_microseconds = 0;
+    std::uint64_t row_group_begin_microseconds = 0;
+    bool row_group_needs_coverage = false;
+    if (time_composite) {
+        composite_begin_microseconds = timing.now_microseconds(timing.context);
+        row_group_begin_microseconds = composite_begin_microseconds;
+    }
     for (int y = visible.y; y < y_end; ++y) {
         Color* destination = target.pixels.data() + static_cast<std::size_t>(y) *
             static_cast<std::size_t>(target.width) + static_cast<std::size_t>(visible.x);
@@ -168,6 +178,20 @@ void composite_rounded_clip_surface(FrameBuffer& target,
             rounded_clips.begin(), rounded_clips.end(), [y](const RasterRoundedRect& rounded) {
                 return rounded_clip_affects_row(rounded, y);
             });
+        if (time_composite && y != visible.y && row_needs_coverage != row_group_needs_coverage) {
+            const std::uint64_t row_group_end_microseconds = timing.now_microseconds(timing.context);
+            record_rounded_clip_phase_duration(
+                statistics,
+                row_group_needs_coverage
+                    ? statistics->rounded_clip_coverage_sampled_composite_microseconds
+                    : statistics->rounded_clip_full_coverage_composite_microseconds,
+                row_group_begin_microseconds,
+                row_group_end_microseconds);
+            row_group_begin_microseconds = row_group_end_microseconds;
+        }
+        if (time_composite) {
+            row_group_needs_coverage = row_needs_coverage;
+        }
         const std::size_t row_pixels = static_cast<std::size_t>(x_end - visible.x);
         if (!row_needs_coverage) {
             if (statistics != nullptr) {
@@ -238,6 +262,20 @@ void composite_rounded_clip_surface(FrameBuffer& target,
                 ++statistics->rounded_clip_blended_pixels;
             }
         }
+    }
+    if (time_composite) {
+        const std::uint64_t composite_end_microseconds = timing.now_microseconds(timing.context);
+        record_rounded_clip_phase_duration(
+            statistics,
+            row_group_needs_coverage
+                ? statistics->rounded_clip_coverage_sampled_composite_microseconds
+                : statistics->rounded_clip_full_coverage_composite_microseconds,
+            row_group_begin_microseconds,
+            composite_end_microseconds);
+        record_rounded_clip_phase_duration(statistics,
+                                           statistics->rounded_clip_composite_microseconds,
+                                           composite_begin_microseconds,
+                                           composite_end_microseconds);
     }
 }
 
@@ -1633,17 +1671,8 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
                                             options_.timing.now_microseconds(options_.timing.context));
     }
 
-    const std::uint64_t composite_begin_microseconds = time_rounded_run
-        ? options_.timing.now_microseconds(options_.timing.context)
-        : 0;
-    composite_rounded_clip_surface(target, surface, visible, rounded_clips, options_.statistics);
-    if (time_rounded_run) {
-        record_rounded_clip_phase_duration(
-            options_.statistics,
-            options_.statistics->rounded_clip_composite_microseconds,
-            composite_begin_microseconds,
-            options_.timing.now_microseconds(options_.timing.context));
-    }
+    composite_rounded_clip_surface(
+        target, surface, visible, rounded_clips, options_.statistics, options_.timing);
 }
 
 void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
@@ -1775,17 +1804,8 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
         }
     }
 
-    const std::uint64_t composite_begin_microseconds = time_rounded_run
-        ? options_.timing.now_microseconds(options_.timing.context)
-        : 0;
-    composite_rounded_clip_surface(target, surface, effective_clip, rounded_clips, options_.statistics);
-    if (time_rounded_run) {
-        record_rounded_clip_phase_duration(
-            options_.statistics,
-            options_.statistics->rounded_clip_composite_microseconds,
-            composite_begin_microseconds,
-            options_.timing.now_microseconds(options_.timing.context));
-    }
+    composite_rounded_clip_surface(
+        target, surface, effective_clip, rounded_clips, options_.statistics, options_.timing);
 }
 
 SoftwareCompositor::SoftwareCompositor()

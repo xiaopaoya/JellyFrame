@@ -58,6 +58,11 @@ struct SoftwareRasterizerStatistics {
     // exclude command replay, which remains attributed by command type above.
     std::uint64_t rounded_clip_surface_prepare_microseconds = 0;
     std::uint64_t rounded_clip_composite_microseconds = 0;
+    // Optional caller-clock attribution for the two rounded-composite row
+    // shapes. When timing is enabled their sum equals the composite total,
+    // except for invalid clock samples or counter saturation.
+    std::uint64_t rounded_clip_full_coverage_composite_microseconds = 0;
+    std::uint64_t rounded_clip_coverage_sampled_composite_microseconds = 0;
     std::size_t rounded_clip_replay_timing_invalid_samples = 0;
     std::size_t rounded_clip_mask_pixels = 0;
     std::size_t rounded_clip_temporary_pixels = 0;

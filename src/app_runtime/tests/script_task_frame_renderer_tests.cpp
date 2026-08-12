@@ -143,8 +143,8 @@ void renderer_exposes_rounded_dirty_fast_path_statistics() {
 }
 
 void renderer_forwards_opt_in_rounded_replay_timing() {
-    const std::uint64_t samples[] = {40, 42, 49, 58, 58, 62};
-    ReplayTimingClock clock{samples, 6, 0};
+    const std::uint64_t samples[] = {40, 42, 49, 58, 58, 60, 61, 62};
+    ReplayTimingClock clock{samples, 8, 0};
     SoftwareRasterizerStatistics statistics;
     ScriptTaskFrameRendererOptions options;
     options.rasterizer_statistics = &statistics;
@@ -156,12 +156,17 @@ void renderer_forwards_opt_in_rounded_replay_timing() {
 
     assert(status == ScriptTaskFrameRenderStatus::Accepted);
     assert(!output.pixels.empty());
-    assert(clock.calls == 6);
+    assert(clock.calls == 8);
     assert(statistics.rounded_clip_replay_microseconds_by_type[
                static_cast<std::size_t>(DisplayCommandType::FillRect)] == 9);
     assert(statistics.rounded_clip_replay_microseconds == 9);
     assert(statistics.rounded_clip_surface_prepare_microseconds == 2);
     assert(statistics.rounded_clip_composite_microseconds == 4);
+    assert(statistics.rounded_clip_coverage_sampled_composite_microseconds == 3);
+    assert(statistics.rounded_clip_full_coverage_composite_microseconds == 1);
+    assert(statistics.rounded_clip_coverage_sampled_composite_microseconds +
+               statistics.rounded_clip_full_coverage_composite_microseconds ==
+           statistics.rounded_clip_composite_microseconds);
 }
 
 } // namespace

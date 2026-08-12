@@ -1019,8 +1019,8 @@ void rasterizer_records_opt_in_rounded_clip_replay_timing() {
     gradient.color2 = Color{70, 180, 255, 255};
     const DisplayCommand commands[] = {fill, gradient};
     const RasterClip clips[] = {{{8, 8, 24, 24}, 8}};
-    const std::uint64_t samples[] = {100, 103, 107, 114, 117, 128, 130, 137};
-    ReplayTimingClock clock{samples, 8, 0};
+    const std::uint64_t samples[] = {100, 103, 107, 114, 117, 128, 130, 132, 135, 137};
+    ReplayTimingClock clock{samples, 10, 0};
     SoftwareRasterizerStatistics statistics;
     SoftwareRasterizer rasterizer({},
                                   nullptr,
@@ -1029,8 +1029,8 @@ void rasterizer_records_opt_in_rounded_clip_replay_timing() {
 
     rasterizer.rasterize_clipped(commands, 2, frame, {0, 0, 40, 40}, 0, 0, clips, 1);
 
-    check(clock.calls == 8,
-          "opt-in timing reads a clock around rounded surface preparation, replay, and composition");
+    check(clock.calls == 10,
+          "opt-in timing reads a clock around rounded preparation, replay, and row-shape groups");
     check(statistics.rounded_clip_replay_microseconds_by_type[
               static_cast<std::size_t>(DisplayCommandType::FillRect)] == 7 &&
               statistics.rounded_clip_replay_microseconds_by_type[
@@ -1038,8 +1038,13 @@ void rasterizer_records_opt_in_rounded_clip_replay_timing() {
               statistics.rounded_clip_replay_microseconds == 18,
           "opt-in timing attributes rounded command replay duration by type");
     check(statistics.rounded_clip_surface_prepare_microseconds == 3 &&
-              statistics.rounded_clip_composite_microseconds == 7,
-          "opt-in timing separates rounded temporary-surface preparation and composition");
+              statistics.rounded_clip_composite_microseconds == 7 &&
+              statistics.rounded_clip_coverage_sampled_composite_microseconds == 4 &&
+              statistics.rounded_clip_full_coverage_composite_microseconds == 3 &&
+              statistics.rounded_clip_coverage_sampled_composite_microseconds +
+                      statistics.rounded_clip_full_coverage_composite_microseconds ==
+                  statistics.rounded_clip_composite_microseconds,
+          "opt-in timing attributes rounded composite time by row shape");
     check(statistics.rounded_clip_replay_timing_invalid_samples == 0,
           "monotonic replay timing does not produce invalid samples");
 
