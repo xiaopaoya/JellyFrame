@@ -80,6 +80,39 @@ void record_rounded_clip_replayed_command(SoftwareRasterizerStatistics* statisti
     }
 }
 
+void add_saturating(std::size_t& target, std::size_t value) {
+    if (value > std::numeric_limits<std::size_t>::max() - target) {
+        target = std::numeric_limits<std::size_t>::max();
+        return;
+    }
+    target += value;
+}
+
+void record_rounded_clip_replay_candidate_pixels(SoftwareRasterizerStatistics* statistics,
+                                                  DisplayCommandType type,
+                                                  Rect command_rect,
+                                                  Rect temporary_surface_rect) {
+    if (statistics == nullptr) {
+        return;
+    }
+    const std::size_t index = static_cast<std::size_t>(type);
+    assert(index < statistics->rounded_clip_replay_candidate_pixels_by_type.size());
+    if (index >= statistics->rounded_clip_replay_candidate_pixels_by_type.size()) {
+        return;
+    }
+    const Rect candidate = intersect_rect(command_rect, temporary_surface_rect);
+    if (candidate.width > 0 && candidate.height > 0) {
+        const std::size_t width = static_cast<std::size_t>(candidate.width);
+        const std::size_t height = static_cast<std::size_t>(candidate.height);
+        if (width <= std::numeric_limits<std::size_t>::max() / height) {
+            add_saturating(statistics->rounded_clip_replay_candidate_pixels_by_type[index], width * height);
+        } else {
+            statistics->rounded_clip_replay_candidate_pixels_by_type[index] =
+                std::numeric_limits<std::size_t>::max();
+        }
+    }
+}
+
 void composite_rounded_clip_surface(FrameBuffer& target,
                                     const FrameBuffer& surface,
                                     Rect surface_rect,
@@ -1504,6 +1537,10 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
         options_.statistics->rounded_clip_temporary_pixels += temporary_pixels;
     }
     record_rounded_clip_replayed_command(options_.statistics, command.type);
+    record_rounded_clip_replay_candidate_pixels(options_.statistics,
+                                                command.type,
+                                                command_rect,
+                                                visible);
     rasterize(command,
               surface,
               Rect{0, 0, visible.width, visible.height},
@@ -1611,6 +1648,13 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
     for (std::size_t index = 0; index < command_count; ++index) {
         // Do not reuse the group surface for nested text/image clipping.
         record_rounded_clip_replayed_command(options_.statistics, commands[index].type);
+        Rect command_rect = commands[index].rect;
+        command_rect.x = safe_add(command_rect.x, offset_x);
+        command_rect.y = safe_add(command_rect.y, offset_y);
+        record_rounded_clip_replay_candidate_pixels(options_.statistics,
+                                                    commands[index].type,
+                                                    command_rect,
+                                                    effective_clip);
         rasterize(commands[index], surface, local_clip, local_offset_x, local_offset_y, nullptr);
     }
 

@@ -733,6 +733,9 @@ void rasterizer_applies_value_rounded_clip_chain() {
     check(statistics.rounded_clip_replayed_commands_by_type[
               static_cast<std::size_t>(DisplayCommandType::FillRect)] == 1,
           "single rounded clip command is attributed after temporary-surface replay");
+    check(statistics.rounded_clip_replay_candidate_pixels_by_type[
+              static_cast<std::size_t>(DisplayCommandType::FillRect)] == 256,
+          "single rounded clip command attributes its clipped temporary-surface area");
 }
 
 void rasterizer_batches_consecutive_value_clip_commands() {
@@ -797,6 +800,11 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
               statistics.rounded_clip_replayed_commands_by_type[
                   static_cast<std::size_t>(DisplayCommandType::LinearGradient)] == 1,
           "rounded clip composite attributes command types replayed into its temporary surface");
+    check(statistics.rounded_clip_replay_candidate_pixels_by_type[
+              static_cast<std::size_t>(DisplayCommandType::FillRect)] == 576 &&
+              statistics.rounded_clip_replay_candidate_pixels_by_type[
+                  static_cast<std::size_t>(DisplayCommandType::LinearGradient)] == 64,
+          "rounded clip composite attributes overlapping candidate replay areas by command type");
 }
 
 void rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners() {

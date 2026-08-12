@@ -43,6 +43,11 @@ struct SoftwareRasterizerStatistics {
     // Indexed by DisplayCommandType. Counts commands replayed into a rounded
     // temporary surface, excluding rectangular and non-clipped draws.
     std::array<std::size_t, kDisplayCommandTypeCount> rounded_clip_replayed_commands_by_type{};
+    // Indexed by DisplayCommandType. Each value is the sum of command-rect
+    // intersections with the rounded temporary surface. Values may overlap
+    // across commands and therefore are candidate raster areas, not visible
+    // or opaque pixel counts.
+    std::array<std::size_t, kDisplayCommandTypeCount> rounded_clip_replay_candidate_pixels_by_type{};
     std::size_t rounded_clip_mask_pixels = 0;
     std::size_t rounded_clip_temporary_pixels = 0;
     std::size_t rounded_clip_rectangular_fast_paths = 0;
