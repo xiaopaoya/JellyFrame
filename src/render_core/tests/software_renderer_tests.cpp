@@ -74,6 +74,22 @@ struct TextPaintCounter {
     int calls = 0;
 };
 
+struct ReplayTimingClock {
+    const std::uint64_t* samples = nullptr;
+    std::size_t sample_count = 0;
+    std::size_t calls = 0;
+};
+
+std::uint64_t replay_timing_clock(void* raw_context) {
+    auto* clock = static_cast<ReplayTimingClock*>(raw_context);
+    if (clock == nullptr || clock->samples == nullptr || clock->sample_count == 0) {
+        return 0;
+    }
+    const std::size_t index = std::min(clock->calls, clock->sample_count - 1);
+    ++clock->calls;
+    return clock->samples[index];
+}
+
 bool counting_text_painter(FrameBuffer& target,
                            Rect rect,
                            Color color,
@@ -805,6 +821,46 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
               statistics.rounded_clip_replay_candidate_pixels_by_type[
                   static_cast<std::size_t>(DisplayCommandType::LinearGradient)] == 64,
           "rounded clip composite attributes overlapping candidate replay areas by command type");
+}
+
+void rasterizer_records_opt_in_rounded_clip_replay_timing() {
+    DisplayCommand fill = black_fill(Rect{0, 0, 40, 40});
+    fill.color = Color{20, 120, 240, 255};
+    DisplayCommand gradient = fill;
+    gradient.type = DisplayCommandType::LinearGradient;
+    gradient.color2 = Color{70, 180, 255, 255};
+    const DisplayCommand commands[] = {fill, gradient};
+    const RasterClip clips[] = {{{8, 8, 24, 24}, 8}};
+    const std::uint64_t samples[] = {100, 107, 110, 121};
+    ReplayTimingClock clock{samples, 4, 0};
+    SoftwareRasterizerStatistics statistics;
+    SoftwareRasterizer rasterizer({},
+                                  nullptr,
+                                  {0, &statistics, {replay_timing_clock, &clock}});
+    FrameBuffer frame(40, 40, Color{255, 255, 255, 255});
+
+    rasterizer.rasterize_clipped(commands, 2, frame, {0, 0, 40, 40}, 0, 0, clips, 1);
+
+    check(clock.calls == 4, "opt-in timing reads a clock only around rounded command replay");
+    check(statistics.rounded_clip_replay_microseconds_by_type[
+              static_cast<std::size_t>(DisplayCommandType::FillRect)] == 7 &&
+              statistics.rounded_clip_replay_microseconds_by_type[
+                  static_cast<std::size_t>(DisplayCommandType::LinearGradient)] == 11 &&
+              statistics.rounded_clip_replay_microseconds == 18,
+          "opt-in timing attributes rounded command replay duration by type");
+    check(statistics.rounded_clip_replay_timing_invalid_samples == 0,
+          "monotonic replay timing does not produce invalid samples");
+
+    const std::uint64_t invalid_samples[] = {50, 49};
+    ReplayTimingClock invalid_clock{invalid_samples, 2, 0};
+    SoftwareRasterizerStatistics invalid_statistics;
+    SoftwareRasterizer invalid_rasterizer({},
+                                          nullptr,
+                                          {0, &invalid_statistics, {replay_timing_clock, &invalid_clock}});
+    invalid_rasterizer.rasterize_clipped(fill, frame, {0, 0, 40, 40}, 0, 0, clips, 1);
+    check(invalid_statistics.rounded_clip_replay_microseconds == 0 &&
+              invalid_statistics.rounded_clip_replay_timing_invalid_samples == 1,
+          "non-monotonic replay timing samples are rejected without underflow");
 }
 
 void rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners() {
@@ -1629,6 +1685,7 @@ int main() {
         rasterizer_applies_value_rounded_clip_chain();
         rasterizer_batches_consecutive_value_clip_commands();
         rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha();
+        rasterizer_records_opt_in_rounded_clip_replay_timing();
         rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();
         dirty_render_skips_contained_dirty_rects();

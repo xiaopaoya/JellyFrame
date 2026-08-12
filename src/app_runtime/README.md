@@ -75,7 +75,11 @@ pixels, rectangular dirty fast paths, opaque
 inner pixels copied directly from the temporary surface, source-over blended
 pixels, full-coverage versus antialiased-corner pixel counts, and explicit
 budget/allocation rejections without introducing a platform timer or allocator
-dependency.
+dependency. A host may separately provide a monotonic microsecond callback in
+`SoftwareRasterizerOptions::timing`; only then are per-command replay duration
+counters populated. Ordinary builds neither call a clock nor retain timer state.
+`ScriptTaskFrameRendererOptions::rasterizer_timing` forwards that value-only
+callback to the renderer, so a port need not duplicate the v2 command loop.
 
 `script_task_input_codec.*` defines the bounded, versioned worker-inbox values
 for pointer, wheel, key and text input. The worker validates and dispatches

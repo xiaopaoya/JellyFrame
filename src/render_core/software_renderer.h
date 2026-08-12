@@ -48,6 +48,12 @@ struct SoftwareRasterizerStatistics {
     // across commands and therefore are candidate raster areas, not visible
     // or opaque pixel counts.
     std::array<std::size_t, kDisplayCommandTypeCount> rounded_clip_replay_candidate_pixels_by_type{};
+    // Indexed by DisplayCommandType. Accumulates caller-clock microseconds
+    // spent replaying commands into rounded temporary surfaces. The value is
+    // populated only when SoftwareRasterizerOptions::timing is supplied.
+    std::array<std::uint64_t, kDisplayCommandTypeCount> rounded_clip_replay_microseconds_by_type{};
+    std::uint64_t rounded_clip_replay_microseconds = 0;
+    std::size_t rounded_clip_replay_timing_invalid_samples = 0;
     std::size_t rounded_clip_mask_pixels = 0;
     std::size_t rounded_clip_temporary_pixels = 0;
     std::size_t rounded_clip_rectangular_fast_paths = 0;
@@ -109,11 +115,22 @@ struct ImagePainter {
     void* context = nullptr;
 };
 
+// A port supplies a monotonic microsecond clock only for profiling. The
+// rasterizer has no platform clock dependency and never calls it by default.
+using SoftwareRasterizerNowMicrosecondsCallback = std::uint64_t (*)(void* context);
+
+struct SoftwareRasterizerTiming {
+    SoftwareRasterizerNowMicrosecondsCallback now_microseconds = nullptr;
+    void* context = nullptr;
+};
+
 struct SoftwareRasterizerOptions {
     // Applies only to clipped text/image temporary surfaces. Zero is unlimited.
     std::size_t max_temporary_pixels = 0;
     // When supplied, records bounded rounded-clip work without allocating.
     SoftwareRasterizerStatistics* statistics = nullptr;
+    // Optional timing for rounded temporary-surface command replay only.
+    SoftwareRasterizerTiming timing;
 };
 
 class SoftwareRasterizer {

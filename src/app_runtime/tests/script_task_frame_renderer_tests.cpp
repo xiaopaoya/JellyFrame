@@ -1,11 +1,30 @@
 #include "app_runtime/script_task_frame_renderer.h"
 
 #include <cassert>
+#include <cstdint>
 #include <iostream>
 
 using namespace jellyframe;
 
 namespace {
+
+struct ReplayTimingClock {
+    const std::uint64_t* samples = nullptr;
+    std::size_t sample_count = 0;
+    std::size_t calls = 0;
+};
+
+std::uint64_t replay_timing_clock(void* raw_context) {
+    auto* clock = static_cast<ReplayTimingClock*>(raw_context);
+    if (clock == nullptr || clock->samples == nullptr || clock->sample_count == 0) {
+        return 0;
+    }
+    const std::size_t index = clock->calls < clock->sample_count
+        ? clock->calls
+        : clock->sample_count - 1;
+    ++clock->calls;
+    return clock->samples[index];
+}
 
 ScriptTaskAppFrame rounded_frame() {
     ScriptTaskAppFrame frame;
@@ -123,6 +142,26 @@ void renderer_exposes_rounded_dirty_fast_path_statistics() {
     assert(statistics.rounded_clip_runs == 0);
 }
 
+void renderer_forwards_opt_in_rounded_replay_timing() {
+    const std::uint64_t samples[] = {40, 49};
+    ReplayTimingClock clock{samples, 2, 0};
+    SoftwareRasterizerStatistics statistics;
+    ScriptTaskFrameRendererOptions options;
+    options.rasterizer_statistics = &statistics;
+    options.rasterizer_timing = {replay_timing_clock, &clock};
+    ScriptTaskFrameRenderer renderer({}, options);
+
+    ScriptTaskFrameRenderStatus status = ScriptTaskFrameRenderStatus::InvalidFrame;
+    const FrameBuffer output = renderer.render(rounded_frame(), {255, 255, 255, 255}, &status);
+
+    assert(status == ScriptTaskFrameRenderStatus::Accepted);
+    assert(!output.pixels.empty());
+    assert(clock.calls == 2);
+    assert(statistics.rounded_clip_replay_microseconds_by_type[
+               static_cast<std::size_t>(DisplayCommandType::FillRect)] == 9);
+    assert(statistics.rounded_clip_replay_microseconds == 9);
+}
+
 } // namespace
 
 int script_task_frame_renderer_tests_main() {
@@ -131,6 +170,7 @@ int script_task_frame_renderer_tests_main() {
     renderer_matches_layer_compositor_for_translucent_clip_run();
     renderer_keeps_non_dirty_pixels_and_rejects_bad_chain();
     renderer_exposes_rounded_dirty_fast_path_statistics();
+    renderer_forwards_opt_in_rounded_replay_timing();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
 }

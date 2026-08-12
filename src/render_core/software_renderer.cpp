@@ -80,9 +80,10 @@ void record_rounded_clip_replayed_command(SoftwareRasterizerStatistics* statisti
     }
 }
 
-void add_saturating(std::size_t& target, std::size_t value) {
-    if (value > std::numeric_limits<std::size_t>::max() - target) {
-        target = std::numeric_limits<std::size_t>::max();
+template <typename Value>
+void add_saturating(Value& target, Value value) {
+    if (value > std::numeric_limits<Value>::max() - target) {
+        target = std::numeric_limits<Value>::max();
         return;
     }
     target += value;
@@ -111,6 +112,28 @@ void record_rounded_clip_replay_candidate_pixels(SoftwareRasterizerStatistics* s
                 std::numeric_limits<std::size_t>::max();
         }
     }
+}
+
+void record_rounded_clip_replay_duration(SoftwareRasterizerStatistics* statistics,
+                                         DisplayCommandType type,
+                                         std::uint64_t begin_microseconds,
+                                         std::uint64_t end_microseconds) {
+    if (statistics == nullptr) {
+        return;
+    }
+    if (end_microseconds < begin_microseconds) {
+        ++statistics->rounded_clip_replay_timing_invalid_samples;
+        return;
+    }
+    const std::size_t index = static_cast<std::size_t>(type);
+    assert(index < statistics->rounded_clip_replay_microseconds_by_type.size());
+    if (index >= statistics->rounded_clip_replay_microseconds_by_type.size()) {
+        ++statistics->rounded_clip_replay_timing_invalid_samples;
+        return;
+    }
+    const std::uint64_t elapsed = end_microseconds - begin_microseconds;
+    add_saturating(statistics->rounded_clip_replay_microseconds_by_type[index], elapsed);
+    add_saturating(statistics->rounded_clip_replay_microseconds, elapsed);
 }
 
 void composite_rounded_clip_surface(FrameBuffer& target,
@@ -1541,12 +1564,23 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand& command,
                                                 command.type,
                                                 command_rect,
                                                 visible);
+    const bool time_replay = options_.statistics != nullptr &&
+        options_.timing.now_microseconds != nullptr;
+    const std::uint64_t begin_microseconds = time_replay
+        ? options_.timing.now_microseconds(options_.timing.context)
+        : 0;
     rasterize(command,
               surface,
               Rect{0, 0, visible.width, visible.height},
               safe_add(offset_x, safe_negate(visible.x)),
               safe_add(offset_y, safe_negate(visible.y)),
               nullptr);
+    if (time_replay) {
+        record_rounded_clip_replay_duration(options_.statistics,
+                                            command.type,
+                                            begin_microseconds,
+                                            options_.timing.now_microseconds(options_.timing.context));
+    }
 
     composite_rounded_clip_surface(target, surface, visible, rounded_clips, options_.statistics);
 }
@@ -1655,7 +1689,18 @@ void SoftwareRasterizer::rasterize_clipped(const DisplayCommand* commands,
                                                     commands[index].type,
                                                     command_rect,
                                                     effective_clip);
+        const bool time_replay = options_.statistics != nullptr &&
+            options_.timing.now_microseconds != nullptr;
+        const std::uint64_t begin_microseconds = time_replay
+            ? options_.timing.now_microseconds(options_.timing.context)
+            : 0;
         rasterize(commands[index], surface, local_clip, local_offset_x, local_offset_y, nullptr);
+        if (time_replay) {
+            record_rounded_clip_replay_duration(options_.statistics,
+                                                commands[index].type,
+                                                begin_microseconds,
+                                                options_.timing.now_microseconds(options_.timing.context));
+        }
     }
 
     composite_rounded_clip_surface(target, surface, effective_clip, rounded_clips, options_.statistics);
