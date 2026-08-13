@@ -14,6 +14,11 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 新增只读的相邻 value-frame diff 报告，用于 retained-rendering 测量。它输出 frame 结构兼容性、
+  command churn、稳定前缀/后缀和候选 changed bounds，但绝不改变 repaint 或授予 framebuffer reuse
+  权限。首个 WS147 transform fixture 测得 `0%` structure-equal pair、候选 changed area 为 `70.16%`，
+  因此 retained replay 保持未实现，等待固定几何、局部 mutation workload 的新证据。
+
 - rounded value-frame 合成现在会在每行可保守证明所有圆角 clip 均为 full coverage 的 span 中跳过
   clip-chain 查询；所有 corner bounding box 仍走原有精确抗锯齿 coverage 路径。WS147 实机 A/B 显示
   sampled-coverage composite 降低 31.14%、render p95 降低 3.64%，internal RAM low-water 不变、

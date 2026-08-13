@@ -17,6 +17,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Added a read-only adjacent value-frame diff report for retained-rendering
+  measurement. It reports frame structure compatibility, command churn,
+  stable prefix/suffix counts and candidate changed bounds, but never changes
+  repaint or grants framebuffer-reuse permission. The first WS147 transform
+  fixture recorded 0% structure-equal pairs and a 70.16% candidate changed
+  area, so retained replay remains unimplemented pending a fixed-geometry,
+  local-mutation workload.
+
 - Rounded value-frame compositing now conservatively skips rounded clip-chain
   queries in per-row spans that are provably full coverage. Corner bounding
   boxes retain the exact existing antialiased coverage path. A WS147 hardware
