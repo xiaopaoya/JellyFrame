@@ -73,7 +73,13 @@ void adapter_wraps_measure_and_paint_callbacks() {
           "adapter forwards paint");
     check(probe.paint_calls == 1 && probe.last_font_weight == 600, "paint uses host context");
     check(target.pixel(1, 1).r == 1 && target.pixel(1, 1).g == 2, "paint touched framebuffer");
+    check(!painter.writes_only_within_rect, "adapter keeps the default bounded-write contract disabled");
     check(host_text_adapter_ready(adapter), "complete adapter is ready");
+
+    adapter.paint_writes_only_within_rect = true;
+    const TextPainter bounded_painter = text_painter_from_adapter(adapter);
+    check(bounded_painter.writes_only_within_rect,
+          "adapter forwards an explicitly verified bounded-write contract");
 }
 
 void incomplete_adapter_degrades_to_core_fallbacks() {

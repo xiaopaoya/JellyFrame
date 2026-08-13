@@ -112,6 +112,10 @@ public:
                      SoftwareRasterizerScratch* scratch = nullptr,
                      ScriptTaskFrameRenderStatus* status = nullptr) const;
 
+    // Applies this renderer's host painter contracts to conservative command
+    // bounds. Retained experiments must call this instead of assuming rect.
+    bool command_visual_bounds(const DisplayCommand& command, Rect& output) const;
+
 private:
     bool collect_clip_chain(const ScriptTaskAppFrame& frame,
                             std::uint32_t clip_index,
@@ -120,6 +124,8 @@ private:
 
     SoftwareRasterizer rasterizer_;
     ScriptTaskFrameRendererOptions options_;
+    TextPainter text_painter_;
+    ImagePainter image_painter_;
 };
 
 // Explicit, desktop-oriented retained-diff correctness probe. It copies the
@@ -153,10 +159,19 @@ struct ScriptTaskFrameRetainedReplayStatistics {
     std::uint64_t candidates = 0;
     std::uint64_t replays = 0;
     std::uint64_t pixel_mismatch_fallbacks = 0;
+    std::uint64_t pixel_mismatch_pixels = 0;
     std::uint64_t candidate_region_pixels = 0;
     std::uint64_t replayed_command_groups = 0;
+    // Commands dispatched to the rasterizer. A clip group is dispatched as a
+    // unit, so this can exceed the count whose bounds intersect the region.
+    std::uint64_t replayed_commands = 0;
     std::uint64_t retained_image_pixels = 0;
     std::uint64_t candidate_image_pixels = 0;
+    // First exact-RGBA mismatch observed since construction/reset. These are
+    // diagnostic-only; the full-frame result is always returned on mismatch.
+    bool has_first_pixel_mismatch = false;
+    int first_pixel_mismatch_x = -1;
+    int first_pixel_mismatch_y = -1;
 };
 
 class ScriptTaskFrameRetainedReplay final {
@@ -185,11 +200,13 @@ public:
 
 private:
     bool within_retained_budget(const ScriptTaskAppFrame& frame) const;
-    bool eligible(const ScriptTaskAppFrame& frame,
+    bool eligible(const ScriptTaskFrameRenderer& renderer,
+                  const ScriptTaskAppFrame& frame,
                   Color background,
                   std::uint64_t resource_generation,
                   Rect& changed_region,
-                  std::size_t& replayed_command_groups) const;
+                  std::size_t& replayed_command_groups,
+                  std::size_t& replayed_commands) const;
 
     ScriptTaskFrameRetainedReplayOptions options_;
     mutable ScriptTaskFrameRetainedReplayStatistics statistics_;

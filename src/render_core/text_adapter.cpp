@@ -40,7 +40,9 @@ TextMeasureProvider text_measure_provider_from_adapter(const HostTextAdapter& ad
 
 TextPainter text_painter_from_adapter(const HostTextAdapter& adapter) {
     return TextPainter{adapter.paint != nullptr ? paint_bridge : nullptr,
-                       adapter.paint != nullptr ? const_cast<HostTextAdapter*>(&adapter) : nullptr};
+                       adapter.paint != nullptr ? const_cast<HostTextAdapter*>(&adapter) : nullptr,
+                       nullptr,
+                       adapter.paint_writes_only_within_rect};
 }
 
 bool host_text_adapter_ready(const HostTextAdapter& adapter) {

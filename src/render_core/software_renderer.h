@@ -131,6 +131,10 @@ struct TextPainter {
     TextPaintCallback paint = nullptr;
     void* context = nullptr;
     TextPaintFamilyCallback paint_family = nullptr;
+    // True only when every successful callback invocation writes within the
+    // supplied rect. Normal paint does not require this; retained/diff
+    // consumers use it as an explicit visual-bounds contract.
+    bool writes_only_within_rect = false;
 };
 
 using ImagePaintCallback = bool (*)(FrameBuffer& target,
@@ -144,6 +148,9 @@ using ImagePaintCallback = bool (*)(FrameBuffer& target,
 struct ImagePainter {
     ImagePaintCallback paint = nullptr;
     void* context = nullptr;
+    // Same opt-in contract as TextPainter. Samplers that can bleed beyond the
+    // supplied rect must leave this false.
+    bool writes_only_within_rect = false;
 };
 
 // A port supplies a monotonic microsecond clock only for profiling. The

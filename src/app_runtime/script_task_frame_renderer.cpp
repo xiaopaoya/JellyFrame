@@ -59,13 +59,31 @@ bool equal_color(Color left, Color right) {
     return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
 }
 
-bool equal_framebuffer(const FrameBuffer& left, const FrameBuffer& right) {
+struct FrameBufferComparison {
+    bool equal = false;
+    std::uint64_t mismatch_pixels = 0;
+    int first_mismatch_x = -1;
+    int first_mismatch_y = -1;
+};
+
+FrameBufferComparison compare_framebuffer(const FrameBuffer& left, const FrameBuffer& right) {
+    FrameBufferComparison comparison;
     if (left.width != right.width || left.height != right.height || left.pixels.size() != right.pixels.size()) {
-        return false;
+        comparison.mismatch_pixels = std::numeric_limits<std::uint64_t>::max();
+        return comparison;
     }
-    return std::equal(left.pixels.begin(), left.pixels.end(), right.pixels.begin(), [](Color lhs, Color rhs) {
-        return equal_color(lhs, rhs);
-    });
+    for (std::size_t index = 0; index < left.pixels.size(); ++index) {
+        if (equal_color(left.pixels[index], right.pixels[index])) {
+            continue;
+        }
+        add_saturating(comparison.mismatch_pixels, std::uint64_t{1});
+        if (comparison.first_mismatch_x < 0) {
+            comparison.first_mismatch_x = static_cast<int>(index % static_cast<std::size_t>(left.width));
+            comparison.first_mismatch_y = static_cast<int>(index / static_cast<std::size_t>(left.width));
+        }
+    }
+    comparison.equal = comparison.mismatch_pixels == 0;
+    return comparison;
 }
 
 bool equal_display_command(const DisplayCommand& left, const DisplayCommand& right) {
@@ -320,7 +338,8 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                       options.max_temporary_pixels,
                       options.rasterizer_statistics,
                       options.rasterizer_timing}),
-      options_(options) {}
+      options_(options),
+      text_painter_(text_painter) {}
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                                                  ImagePainter image_painter,
@@ -332,7 +351,29 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                       options.max_temporary_pixels,
                       options.rasterizer_statistics,
                       options.rasterizer_timing}),
-      options_(options) {}
+      options_(options),
+      text_painter_(text_painter),
+      image_painter_(image_painter) {}
+
+bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& command, Rect& output) const {
+    if (command.type == DisplayCommandType::Text) {
+        if (!text_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {
+            output = {};
+            return false;
+        }
+        output = command.rect;
+        return true;
+    }
+    if (command.type == DisplayCommandType::Image) {
+        if (!image_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {
+            output = {};
+            return false;
+        }
+        output = command.rect;
+        return true;
+    }
+    return script_task_frame_command_visual_bounds(command, output);
+}
 
 FrameBuffer ScriptTaskFrameRenderer::render(const ScriptTaskAppFrame& frame,
                                             Color background,
@@ -481,13 +522,16 @@ bool ScriptTaskFrameRetainedReplay::within_retained_budget(const ScriptTaskAppFr
         pixels <= options_.max_retained_pixels;
 }
 
-bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskAppFrame& frame,
+bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& renderer,
+                                             const ScriptTaskAppFrame& frame,
                                              Color background,
                                              std::uint64_t resource_generation,
                                              Rect& changed_region,
-                                             std::size_t& replayed_command_groups) const {
+                                             std::size_t& replayed_command_groups,
+                                             std::size_t& replayed_commands) const {
     changed_region = {};
     replayed_command_groups = 0;
+    replayed_commands = 0;
     if (!previous_frame_.has_value() || !within_retained_budget(frame) ||
         previous_resource_generation_ != resource_generation || !equal_color(previous_background_, background) ||
         previous_image_.width != frame.viewport.width || previous_image_.height != frame.viewport.height ||
@@ -506,8 +550,8 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskAppFrame& frame,
         }
         Rect old_bounds;
         Rect new_bounds;
-        if (!script_task_frame_command_visual_bounds(previous_frame_->display_list[index], old_bounds) ||
-            !script_task_frame_command_visual_bounds(frame.display_list[index], new_bounds)) {
+        if (!renderer.command_visual_bounds(previous_frame_->display_list[index], old_bounds) ||
+            !renderer.command_visual_bounds(frame.display_list[index], new_bounds)) {
             return false;
         }
         changed_region = empty_rect(changed_region) ? union_rect(old_bounds, new_bounds)
@@ -528,7 +572,7 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskAppFrame& frame,
         }
         for (std::size_t index = begin; index < end; ++index) {
             Rect bounds;
-            if (!script_task_frame_command_visual_bounds(frame.display_list[index], bounds)) {
+            if (!renderer.command_visual_bounds(frame.display_list[index], bounds)) {
                 return false;
             }
             if (!empty_rect(intersect_rect(bounds, changed_region))) {
@@ -537,6 +581,9 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskAppFrame& frame,
         }
         if (intersects) {
             ++replayed_command_groups;
+            // render_into() dispatches whole adjacent clip groups to preserve
+            // their paint ordering, even when only some members intersect.
+            replayed_commands += end - begin;
         }
         begin = end;
     }
@@ -550,6 +597,12 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
                                                 std::uint64_t resource_generation,
                                                 ScriptTaskFrameRetainedReplayStatus* status) const {
     const auto full_frame = [&](ScriptTaskFrameRetainedReplayStatus result) {
+        if (frame.viewport.width <= 0 || frame.viewport.height <= 0) {
+            add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
+            if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::RenderRejected;
+            return false;
+        }
+        target = FrameBuffer(frame.viewport.width, frame.viewport.height, background);
         const bool rendered = renderer.render_into(frame, target, background);
         if (!rendered) {
             add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
@@ -576,7 +629,14 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
 
     Rect changed_region;
     std::size_t replayed_groups = 0;
-    if (!eligible(frame, background, resource_generation, changed_region, replayed_groups)) {
+    std::size_t replayed_commands = 0;
+    if (!eligible(renderer,
+                  frame,
+                  background,
+                  resource_generation,
+                  changed_region,
+                  replayed_groups,
+                  replayed_commands)) {
         return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
     }
 
@@ -589,15 +649,23 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
     add_saturating(statistics_.candidate_region_pixels,
                    clipped_rect_pixels(changed_region, Rect{0, 0, frame.viewport.width, frame.viewport.height}));
     add_saturating(statistics_.replayed_command_groups, static_cast<std::uint64_t>(replayed_groups));
+    add_saturating(statistics_.replayed_commands, static_cast<std::uint64_t>(replayed_commands));
 
+    target = FrameBuffer(frame.viewport.width, frame.viewport.height, background);
     ScriptTaskFrameRenderStatus full_status = ScriptTaskFrameRenderStatus::InvalidFrame;
-    FrameBuffer reference = renderer.render(frame, background, &full_status);
-    if (full_status != ScriptTaskFrameRenderStatus::Accepted) {
+    if (!renderer.render_into(frame, target, background, nullptr, 0, nullptr, &full_status) ||
+        full_status != ScriptTaskFrameRenderStatus::Accepted) {
         return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
     }
-    if (!equal_framebuffer(candidate_image_, reference)) {
-        target = std::move(reference);
+    const FrameBufferComparison comparison = compare_framebuffer(candidate_image_, target);
+    if (!comparison.equal) {
         add_saturating(statistics_.pixel_mismatch_fallbacks, std::uint64_t{1});
+        add_saturating(statistics_.pixel_mismatch_pixels, comparison.mismatch_pixels);
+        if (!statistics_.has_first_pixel_mismatch) {
+            statistics_.has_first_pixel_mismatch = true;
+            statistics_.first_pixel_mismatch_x = comparison.first_mismatch_x;
+            statistics_.first_pixel_mismatch_y = comparison.first_mismatch_y;
+        }
         if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::PixelMismatchFallback;
         return true;
     }

@@ -26,6 +26,8 @@ struct HostTextAdapter {
     HostTextPaintCallback paint = nullptr;
     // The host owns this context and must keep it alive while layout/rendering uses the adapter.
     void* context = nullptr;
+    // Opt in only after verifying that paint never writes outside its rect.
+    bool paint_writes_only_within_rect = false;
 };
 
 TextMeasureProvider text_measure_provider_from_adapter(const HostTextAdapter& adapter);

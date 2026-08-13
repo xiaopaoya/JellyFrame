@@ -303,6 +303,7 @@ void retained_replay_rebuilds_stable_underlap_and_verifies_pixels() {
     const ScriptTaskFrameRetainedReplayStatistics& statistics = replay.statistics();
     assert(statistics.candidates == 1 && statistics.replays == 1 &&
            statistics.pixel_mismatch_fallbacks == 0 && statistics.replayed_command_groups == 2 &&
+           statistics.replayed_commands == 3 &&
            statistics.retained_image_pixels == 40 * 24 && statistics.candidate_image_pixels == 40 * 24);
 }
 
@@ -358,6 +359,285 @@ void retained_replay_rejects_unbounded_host_painters() {
     assert(bounds.x == 1 && bounds.y == 2 && bounds.width == 12 && bounds.height == 8);
 }
 
+bool bounded_marker_text_painter(FrameBuffer& target,
+                                 Rect rect,
+                                 Color color,
+                                 const std::string& text,
+                                 int,
+                                 int,
+                                 TextCommandAlign,
+                                 bool,
+                                 void*) {
+    if (rect.width <= 0 || rect.height <= 0 || text.empty() || !target.contains(rect.x, rect.y)) {
+        return false;
+    }
+    target.pixel(rect.x, rect.y) = color;
+    return true;
+}
+
+ScriptTaskAppFrame text_replay_frame() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 24, 12};
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = {0, 0, 24, 12};
+    fill.color = {20, 30, 40, 255};
+    frame.display_list.push_back(fill);
+    DisplayCommand text;
+    text.type = DisplayCommandType::Text;
+    text.rect = {7, 4, 8, 4};
+    text.color = {80, 220, 130, 255};
+    text.text = "1";
+    frame.display_list.push_back(text);
+    return frame;
+}
+
+void retained_replay_accepts_explicitly_bounded_text_painter() {
+    TextPainter bounded{bounded_marker_text_painter, nullptr, nullptr, true};
+    ScriptTaskFrameRenderer renderer(bounded);
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = 24 * 12;
+    options.max_replay_pixels = 24 * 12;
+    ScriptTaskFrameRetainedReplay replay(options);
+    const Color background{255, 255, 255, 255};
+    ScriptTaskAppFrame previous = text_replay_frame();
+    const FrameBuffer previous_image = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, previous_image, background, 2));
+
+    ScriptTaskAppFrame current = previous;
+    current.display_list[1].text = "2";
+    FrameBuffer actual;
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+    assert(replay.render_into(renderer, current, actual, background, 2, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+
+    ScriptTaskFrameRenderer unbounded_renderer(TextPainter{bounded_marker_text_painter, nullptr});
+    ScriptTaskFrameRetainedReplay unbounded_replay(options);
+    const FrameBuffer unbounded_previous = unbounded_renderer.render(previous, background);
+    assert(unbounded_replay.observe_presented(previous, unbounded_previous, background, 2));
+    assert(unbounded_replay.render_into(unbounded_renderer, current, actual, background, 2, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+}
+
+bool bounded_marker_image_painter(FrameBuffer& target,
+                                  Rect rect,
+                                  std::uint32_t image_handle,
+                                  ObjectFit,
+                                  ObjectPosition,
+                                  ImageRendering,
+                                  void*) {
+    if (image_handle == 0 || rect.width <= 0 || rect.height <= 0 || !target.contains(rect.x, rect.y)) {
+        return false;
+    }
+    target.pixel(rect.x, rect.y) = {220, 110, 70, 255};
+    return true;
+}
+
+void retained_replay_accepts_explicitly_bounded_image_painter() {
+    ImagePainter bounded{bounded_marker_image_painter, nullptr, true};
+    ScriptTaskFrameRenderer renderer({}, bounded);
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = 24 * 12;
+    options.max_replay_pixels = 24 * 12;
+    ScriptTaskFrameRetainedReplay replay(options);
+    const Color background{255, 255, 255, 255};
+    ScriptTaskAppFrame previous = text_replay_frame();
+    previous.display_list[1].type = DisplayCommandType::Image;
+    previous.display_list[1].image_handle = 7;
+    previous.display_list[1].text.clear();
+    const FrameBuffer previous_image = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, previous_image, background, 3));
+
+    ScriptTaskAppFrame current = previous;
+    current.display_list[1].object_position.x_percent = 75;
+    FrameBuffer actual;
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+    assert(replay.render_into(renderer, current, actual, background, 3, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+}
+
+bool lying_text_painter(FrameBuffer& target,
+                         Rect rect,
+                         Color color,
+                         const std::string& text,
+                         int,
+                         int,
+                         TextCommandAlign,
+                         bool,
+                         void*) {
+    if (text.empty()) {
+        return true;
+    }
+    const int x = rect.x - 1;
+    if (!target.contains(x, rect.y)) {
+        return false;
+    }
+    target.pixel(x, rect.y) = color;
+    return true;
+}
+
+void retained_replay_recovers_from_false_bounded_painter_claim() {
+    TextPainter lying{lying_text_painter, nullptr, nullptr, true};
+    ScriptTaskFrameRenderer renderer(lying);
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = 24 * 12;
+    options.max_replay_pixels = 24 * 12;
+    ScriptTaskFrameRetainedReplay replay(options);
+    const Color background{255, 255, 255, 255};
+    ScriptTaskAppFrame previous = text_replay_frame();
+    const FrameBuffer previous_image = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, previous_image, background, 4));
+
+    ScriptTaskAppFrame current = previous;
+    current.display_list[1].text.clear();
+    FrameBuffer actual;
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::Replayed;
+    assert(replay.render_into(renderer, current, actual, background, 4, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::PixelMismatchFallback);
+    assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+    assert(replay.statistics().candidates == 1 && replay.statistics().replays == 0 &&
+           replay.statistics().pixel_mismatch_fallbacks == 1 &&
+           replay.statistics().pixel_mismatch_pixels == 1 &&
+           replay.statistics().has_first_pixel_mismatch &&
+           replay.statistics().first_pixel_mismatch_x == 6 &&
+           replay.statistics().first_pixel_mismatch_y == 4);
+}
+
+ScriptTaskAppFrame retained_replay_stress_frame() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 64, 48};
+
+    DisplayCommand background;
+    background.type = DisplayCommandType::FillRect;
+    background.rect = {0, 0, 64, 48};
+    background.color = {16, 24, 38, 255};
+    frame.display_list.push_back(background);
+
+    DisplayCommand shadow;
+    shadow.type = DisplayCommandType::BoxShadow;
+    shadow.rect = {6, 5, 52, 38};
+    shadow.color = {0, 0, 0, 92};
+    shadow.border_radius = 10;
+    shadow.stroke_width = 5;
+    frame.display_list.push_back(shadow);
+
+    DisplayCommand surface;
+    surface.type = DisplayCommandType::LinearGradient;
+    surface.rect = {10, 8, 44, 30};
+    surface.color = {58, 184, 214, 255};
+    surface.color2 = {52, 84, 182, 255};
+    surface.gradient_axis = GradientAxis::DiagonalDownRight;
+    surface.gradient_stop_percent = 72;
+    surface.border_radius = 8;
+    frame.display_list.push_back(surface);
+
+    DisplayCommand accent;
+    accent.type = DisplayCommandType::FillRect;
+    accent.rect = {18, 19, 10, 7};
+    accent.color = {247, 105, 81, 144};
+    accent.border_radius = 3;
+    frame.display_list.push_back(accent);
+
+    frame.clips = {{{10, 8, 44, 30}, 8, kScriptTaskNoParentClip}};
+    frame.display_clip_indices = {kScriptTaskNoClip, kScriptTaskNoClip, 0, 0};
+    return frame;
+}
+
+ScriptTaskFrameRetainedReplayOptions retained_replay_options_for(Rect viewport) {
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = static_cast<std::size_t>(viewport.width) *
+        static_cast<std::size_t>(viewport.height);
+    options.max_replay_pixels = options.max_retained_pixels;
+    return options;
+}
+
+void retained_replay_matches_canonical_output_across_local_mutations() {
+    ScriptTaskFrameRenderer renderer;
+    ScriptTaskAppFrame previous = retained_replay_stress_frame();
+    const Color background{239, 244, 250, 255};
+    ScriptTaskFrameRetainedReplay replay(retained_replay_options_for(previous.viewport));
+    FrameBuffer presented = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, presented, background, 11));
+
+    constexpr int kIterations = 96;
+    for (int iteration = 0; iteration < kIterations; ++iteration) {
+        ScriptTaskAppFrame current = previous;
+        DisplayCommand& accent = current.display_list[3];
+        accent.rect.x = 14 + (iteration % 18);
+        accent.rect.y = 14 + ((iteration * 3) % 12);
+        accent.color = {static_cast<std::uint8_t>(70 + (iteration * 17) % 150),
+                        static_cast<std::uint8_t>(90 + (iteration * 11) % 140),
+                        static_cast<std::uint8_t>(100 + (iteration * 7) % 130),
+                        static_cast<std::uint8_t>(80 + (iteration % 6) * 25)};
+
+        FrameBuffer actual;
+        ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+        assert(replay.render_into(renderer, current, actual, background, 11, &status));
+        assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+        assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+        assert(replay.observe_presented(current, actual, background, 11));
+        previous = std::move(current);
+    }
+
+    const ScriptTaskFrameRetainedReplayStatistics& statistics = replay.statistics();
+    assert(statistics.candidates == kIterations && statistics.replays == kIterations &&
+           statistics.pixel_mismatch_fallbacks == 0 && statistics.pixel_mismatch_pixels == 0 &&
+           !statistics.has_first_pixel_mismatch && statistics.replayed_command_groups >= kIterations &&
+           statistics.replayed_commands >= static_cast<std::uint64_t>(kIterations) * 2);
+}
+
+void retained_replay_falls_back_for_contract_boundary_changes() {
+    ScriptTaskFrameRenderer renderer;
+    const Color background{239, 244, 250, 255};
+    const ScriptTaskAppFrame base = retained_replay_stress_frame();
+    const auto verify_fallback = [&](const ScriptTaskAppFrame& current,
+                                     Color current_background,
+                                     std::uint64_t current_generation,
+                                     std::size_t max_replay_pixels) {
+        ScriptTaskFrameRetainedReplayOptions options = retained_replay_options_for(base.viewport);
+        options.max_replay_pixels = max_replay_pixels;
+        ScriptTaskFrameRetainedReplay replay(options);
+        const FrameBuffer previous_image = renderer.render(base, background);
+        assert(replay.observe_presented(base, previous_image, background, 11));
+
+        FrameBuffer expected(current.viewport.width, current.viewport.height, current_background);
+        ScriptTaskFrameRenderStatus expected_status = ScriptTaskFrameRenderStatus::InvalidFrame;
+        assert(renderer.render_into(current, expected, current_background, nullptr, 0, nullptr, &expected_status));
+        assert(expected_status == ScriptTaskFrameRenderStatus::Accepted);
+        FrameBuffer actual;
+        ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::Replayed;
+        assert(replay.render_into(renderer, current, actual, current_background, current_generation, &status));
+        assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+        assert(equal_framebuffer_pixels(actual, expected));
+        assert(replay.statistics().candidates == 0 && replay.statistics().replays == 0);
+    };
+
+    ScriptTaskAppFrame locally_changed = base;
+    locally_changed.display_list[3].rect = {30, 18, 10, 7};
+    verify_fallback(locally_changed, background, 12, 64 * 48);
+    verify_fallback(locally_changed, {250, 250, 250, 255}, 11, 64 * 48);
+    verify_fallback(locally_changed, background, 11, 1);
+
+    ScriptTaskAppFrame changed_clip = base;
+    changed_clip.clips[0].border_radius = 4;
+    verify_fallback(changed_clip, background, 11, 64 * 48);
+
+    ScriptTaskAppFrame changed_type = base;
+    changed_type.display_list[3].type = DisplayCommandType::StrokeRect;
+    verify_fallback(changed_type, background, 11, 64 * 48);
+
+    ScriptTaskAppFrame appended = base;
+    appended.display_list.push_back(base.display_list[3]);
+    appended.display_clip_indices.push_back(0);
+    verify_fallback(appended, background, 11, 64 * 48);
+}
+
 } // namespace
 
 int script_task_frame_renderer_tests_main() {
@@ -372,6 +652,11 @@ int script_task_frame_renderer_tests_main() {
     retained_replay_rebuilds_stable_underlap_and_verifies_pixels();
     retained_replay_uses_conservative_fallbacks_and_commit_boundary();
     retained_replay_rejects_unbounded_host_painters();
+    retained_replay_accepts_explicitly_bounded_text_painter();
+    retained_replay_accepts_explicitly_bounded_image_painter();
+    retained_replay_recovers_from_false_bounded_painter_claim();
+    retained_replay_matches_canonical_output_across_local_mutations();
+    retained_replay_falls_back_for_contract_boundary_changes();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
 }

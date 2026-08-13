@@ -90,12 +90,12 @@ adding another paint fast path.
 correctness probe for fixed-geometry value frames. It retains only value-owned
 frame data plus two caller-budgeted RGBA images, clears the conservative old/new
 visual-bounds union, redraws all current commands intersecting that region in
-paint order, and compares the result to a canonical full-frame render exactly.
-Its owner calls `observe_presented()` only after normal present succeeds. It is
+paint order, and compares the result to a canonical full-frame render in the
+caller's normal output framebuffer. Its owner calls `observe_presented()` only after normal present succeeds. It is
 not enabled by the Runtime, the desktop shell or any port, and is deliberately
 unsuitable as a performance path while the reference render remains mandatory.
-Text and image commands currently force its conservative full-frame fallback:
-their host callbacks do not yet publish a bounded glyph/sampling-write contract.
+Text and image commands require an explicit, host-verified
+`writes_only_within_rect` painter contract; the default is full-frame fallback.
 See `project_docs/value_only_frame_retained_diff_replay_rfc.md`.
 
 `script_task_input_codec.*` defines the bounded, versioned worker-inbox values
