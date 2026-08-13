@@ -821,6 +821,20 @@ ScriptNodeBinding* native_node_binding(const jerry_value_t object) {
     return binding != nullptr && binding->runtime != nullptr && binding->active ? binding : nullptr;
 }
 
+bool node_belongs_to_runtime(const jerry_value_t object, const JerryScriptRuntime& runtime) {
+    if (!jerry_value_is_object(object)) {
+        return false;
+    }
+    const auto* binding = static_cast<const ScriptNodeBinding*>(
+        jerry_object_get_native_ptr(object, &kNodeNativeInfo));
+    return binding != nullptr && binding->runtime == &runtime && binding->active && binding->node != nullptr;
+}
+
+bool is_node_object(const jerry_value_t object) {
+    return jerry_value_is_object(object) &&
+        jerry_object_get_native_ptr(object, &kNodeNativeInfo) != nullptr;
+}
+
 JerryScriptRuntime* native_runtime(const jerry_value_t object) {
     if (!jerry_value_is_object(object)) {
         return nullptr;
@@ -5409,6 +5423,9 @@ jerry_value_t node_append_child(const jerry_call_info_t* call_info_p,
     if (parent == nullptr || runtime == nullptr || child == nullptr) {
         return throw_type_error("appendChild requires a node child");
     }
+    if (!node_belongs_to_runtime(args_p[0], *runtime)) {
+        return throw_type_error("appendChild requires a node from this runtime");
+    }
     if (!ScriptRuntimeAccess::can_insert_dom_node(*runtime, *parent, *child)) {
         return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM depth budget exceeded");
     }
@@ -5433,7 +5450,11 @@ jerry_value_t node_append(const jerry_call_info_t* call_info_p,
         std::vector<std::string> text_values;
         text_values.reserve(args_count);
         for (jerry_length_t index = 0; index < args_count; ++index) {
-            if (Node* child = native_node(args_p[index])) {
+            if (is_node_object(args_p[index])) {
+                Node* child = native_node(args_p[index]);
+                if (!node_belongs_to_runtime(args_p[index], *runtime)) {
+                    return throw_type_error("append requires nodes from this runtime");
+                }
                 if (!ScriptRuntimeAccess::can_insert_dom_node(*runtime, *parent, *child)) {
                     return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM depth budget exceeded");
                 }
@@ -5470,7 +5491,11 @@ jerry_value_t node_prepend(const jerry_call_info_t* call_info_p,
         std::vector<std::string> text_values;
         text_values.reserve(args_count);
         for (jerry_length_t index = 0; index < args_count; ++index) {
-            if (Node* child = native_node(args_p[index])) {
+            if (is_node_object(args_p[index])) {
+                Node* child = native_node(args_p[index]);
+                if (!node_belongs_to_runtime(args_p[index], *runtime)) {
+                    return throw_type_error("prepend requires nodes from this runtime");
+                }
                 if (!ScriptRuntimeAccess::can_insert_dom_node(*runtime, *parent, *child)) {
                     return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM depth budget exceeded");
                 }

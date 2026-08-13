@@ -296,6 +296,33 @@ void javascript_append_and_prepend_mix_text_and_nodes() {
           "append and prepend attach created nodes without retaining detached roots");
 }
 
+void javascript_rejects_stale_node_insertion_after_rebind() {
+    HtmlParser parser;
+    auto first_document = parser.parse("<body><main id='old'></main></body>");
+    auto second_document = parser.parse("<body><main id='new'></main></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*first_document);
+    const ScriptEvaluationResult setup = runtime.eval(
+        "var stale = document.createElement('p'); stale.textContent = 'stale';");
+    check(setup.ok, "stale insertion fixture creates a node");
+
+    runtime.bind_document(*second_document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var target = document.getElementById('new');"
+        "var appendChildRejected = false;"
+        "var appendRejected = false;"
+        "var prependRejected = false;"
+        "try { target.appendChild(stale); } catch (e) { appendChildRejected = true; }"
+        "try { target.append(stale); } catch (e) { appendRejected = true; }"
+        "try { target.prepend(stale); } catch (e) { prependRejected = true; }"
+        "String(appendChildRejected) + ':' + String(appendRejected) + ':' + String(prependRejected) + ':' + "
+        "String(target.children.length);");
+
+    check(result.ok && result.value == "true:true:true:0",
+          "rebound runtime rejects stale node insertion without mutating the new document");
+}
+
 void remove_child_keeps_wrapper_usable() {
     HtmlParser parser;
     auto document = parser.parse("<body><main id='app'><p id='note'>Keep me</p></main></body>");
@@ -2489,6 +2516,7 @@ int main() {
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();
         javascript_append_and_prepend_mix_text_and_nodes();
+        javascript_rejects_stale_node_insertion_after_rebind();
         remove_child_keeps_wrapper_usable();
         javascript_listener_on_destroyed_subtree_is_invalidated_before_runtime_cleanup();
         javascript_runtime_drops_destroyed_bound_document();
