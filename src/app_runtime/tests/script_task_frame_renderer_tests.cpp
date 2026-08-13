@@ -604,6 +604,57 @@ ScriptTaskAppFrame retained_replay_stress_frame() {
     return frame;
 }
 
+ScriptTaskAppFrame retained_replay_nested_clip_frame() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 64, 48};
+
+    DisplayCommand background;
+    background.type = DisplayCommandType::FillRect;
+    background.rect = {0, 0, 64, 48};
+    background.color = {17, 25, 40, 255};
+    frame.display_list.push_back(background);
+
+    DisplayCommand shadow;
+    shadow.type = DisplayCommandType::BoxShadow;
+    shadow.rect = {5, 4, 54, 40};
+    shadow.color = {0, 0, 0, 96};
+    shadow.border_radius = 10;
+    shadow.stroke_width = 5;
+    frame.display_list.push_back(shadow);
+
+    DisplayCommand panel;
+    panel.type = DisplayCommandType::LinearGradient;
+    panel.rect = {8, 7, 48, 34};
+    panel.color = {57, 193, 209, 255};
+    panel.color2 = {65, 87, 184, 255};
+    panel.gradient_axis = GradientAxis::DiagonalDownRight;
+    panel.gradient_stop_percent = 68;
+    panel.border_radius = 9;
+    frame.display_list.push_back(panel);
+
+    DisplayCommand accent;
+    accent.type = DisplayCommandType::FillRect;
+    accent.rect = {19, 17, 12, 8};
+    accent.color = {250, 124, 89, 172};
+    accent.border_radius = 4;
+    frame.display_list.push_back(accent);
+
+    DisplayCommand highlight;
+    highlight.type = DisplayCommandType::StrokeRect;
+    highlight.rect = {16, 14, 30, 21};
+    highlight.color = {238, 249, 255, 144};
+    highlight.border_radius = 7;
+    highlight.stroke_width = 2;
+    frame.display_list.push_back(highlight);
+
+    frame.clips = {
+        {{8, 7, 48, 34}, 9, kScriptTaskNoParentClip},
+        {{14, 12, 36, 25}, 7, 0},
+    };
+    frame.display_clip_indices = {kScriptTaskNoClip, kScriptTaskNoClip, 0, 1, 1};
+    return frame;
+}
+
 ScriptTaskFrameRetainedReplayOptions retained_replay_options_for(Rect viewport) {
     ScriptTaskFrameRetainedReplayOptions options;
     options.enabled = true;
@@ -645,6 +696,40 @@ void retained_replay_matches_canonical_output_across_local_mutations() {
     assert(statistics.candidates == kIterations && statistics.replays == kIterations &&
            statistics.pixel_mismatch_fallbacks == 0 && statistics.pixel_mismatch_pixels == 0 &&
            !statistics.has_first_pixel_mismatch && statistics.replayed_command_groups >= kIterations &&
+           statistics.replayed_commands >= static_cast<std::uint64_t>(kIterations) * 2);
+}
+
+void retained_replay_matches_canonical_output_across_nested_clip_mutations() {
+    ScriptTaskFrameRenderer renderer;
+    ScriptTaskAppFrame previous = retained_replay_nested_clip_frame();
+    const Color background{239, 244, 250, 255};
+    ScriptTaskFrameRetainedReplay replay(retained_replay_options_for(previous.viewport));
+    const FrameBuffer presented = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, presented, background, 11));
+
+    constexpr int kIterations = 96;
+    for (int iteration = 0; iteration < kIterations; ++iteration) {
+        ScriptTaskAppFrame current = previous;
+        DisplayCommand& accent = current.display_list[3];
+        accent.rect.x = 15 + (iteration % 18);
+        accent.rect.y = 14 + ((iteration * 5) % 14);
+        accent.color = {static_cast<std::uint8_t>(84 + (iteration * 13) % 140),
+                        static_cast<std::uint8_t>(99 + (iteration * 17) % 130),
+                        static_cast<std::uint8_t>(110 + (iteration * 7) % 120),
+                        static_cast<std::uint8_t>(84 + (iteration % 6) * 28)};
+
+        FrameBuffer actual;
+        ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+        assert(replay.render_into(renderer, current, actual, background, 11, &status));
+        assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+        assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+        assert(replay.observe_presented(current, actual, background, 11));
+        previous = std::move(current);
+    }
+
+    const ScriptTaskFrameRetainedReplayStatistics& statistics = replay.statistics();
+    assert(statistics.candidates == kIterations && statistics.replays == kIterations &&
+           statistics.pixel_mismatch_fallbacks == 0 && statistics.replayed_command_groups >= kIterations &&
            statistics.replayed_commands >= static_cast<std::uint64_t>(kIterations) * 2);
 }
 
@@ -720,6 +805,23 @@ void retained_replay_falls_back_for_contract_boundary_changes() {
                     11,
                     64 * 48,
                     ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton);
+
+    ScriptTaskAppFrame removed = base;
+    removed.display_list.pop_back();
+    removed.display_clip_indices.pop_back();
+    verify_fallback(removed,
+                    background,
+                    11,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton);
+
+    ScriptTaskAppFrame reshaped_viewport = base;
+    reshaped_viewport.viewport = {0, 0, 48, 64};
+    verify_fallback(reshaped_viewport,
+                    background,
+                    11,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::PreviousImageDimensions);
 
     verify_fallback(base,
                     background,
@@ -839,6 +941,7 @@ int script_task_frame_renderer_tests_main() {
     retained_replay_accepts_explicitly_bounded_image_painter();
     retained_replay_recovers_from_false_bounded_painter_claim();
     retained_replay_matches_canonical_output_across_local_mutations();
+    retained_replay_matches_canonical_output_across_nested_clip_mutations();
     retained_replay_falls_back_for_contract_boundary_changes();
     retained_replay_matches_canonical_output_across_pseudorandom_mutations();
     retained_replay_preserves_last_presented_state_across_rejections();
