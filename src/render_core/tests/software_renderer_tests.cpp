@@ -969,8 +969,10 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
               statistics.rounded_clip_full_coverage_opaque_runs > 0 &&
               statistics.rounded_clip_coverage_sampled_rows > 0,
           "rounded clip composite records opaque-span and antialiased row shapes");
-    check(statistics.rounded_clip_coverage_clip_evaluations ==
+    check(statistics.rounded_clip_coverage_clip_evaluations +
+                      statistics.rounded_clip_coverage_known_full_clip_bypasses ==
                   statistics.rounded_clip_coverage_sampled_pixels &&
+              statistics.rounded_clip_coverage_known_full_pixels > 0 &&
               statistics.rounded_clip_coverage_math_evaluations > 0 &&
               statistics.rounded_clip_coverage_zero_pixels > 0 &&
               statistics.rounded_clip_coverage_partial_pixels > 0 &&
@@ -995,20 +997,46 @@ void rasterizer_tracks_opaque_rounded_clip_compositing_without_changing_alpha() 
 void rasterizer_tracks_nested_rounded_clip_coverage_work() {
     DisplayCommand opaque = black_fill(Rect{0, 0, 40, 40});
     opaque.color = Color{20, 120, 240, 255};
+    DisplayCommand translucent = black_fill(Rect{15, 13, 12, 14});
+    translucent.type = DisplayCommandType::LinearGradient;
+    translucent.color = Color{240, 80, 70, 128};
+    translucent.color2 = Color{220, 60, 120, 128};
+    const DisplayCommand commands[] = {opaque, translucent};
     const RasterClip clips[] = {
-        {{8, 8, 24, 24}, 8},
-        {{12, 12, 16, 16}, 5},
+        {{8, 8, 24, 24}, encode_corner_radii({8, 5, 7, 4})},
+        {{12, 12, 16, 16}, encode_corner_radii({5, 3, 4, 2})},
     };
     FrameBuffer frame(40, 40, Color{255, 255, 255, 255});
+    FrameBuffer expected(40, 40, Color{255, 255, 255, 255});
     SoftwareRasterizerStatistics statistics;
     SoftwareRasterizer rasterizer({}, nullptr, {0, &statistics});
 
-    rasterizer.rasterize_clipped(&opaque, 1, frame, {0, 0, 40, 40}, 0, 0, clips, 2);
+    rasterizer.rasterize_clipped(commands, 2, frame, {0, 0, 40, 40}, 0, 0, clips, 2);
+
+    FrameBuffer temporary(16, 16, Color{0, 0, 0, 0});
+    for (const DisplayCommand& command : commands) {
+        rasterizer.rasterize(command, temporary, {0, 0, 16, 16}, -12, -12);
+    }
+    reference_composite_rounded_clip_surface(
+        expected,
+        temporary,
+        {12, 12, 16, 16},
+        {prepare_rounded_rect(clips[0].rect, clips[0].border_radius),
+         prepare_rounded_rect(clips[1].rect, clips[1].border_radius)});
+    for (std::size_t index = 0; index < frame.pixels.size(); ++index) {
+        const Color actual = frame.pixels[index];
+        const Color reference = expected.pixels[index];
+        check(actual.r == reference.r && actual.g == reference.g && actual.b == reference.b &&
+                  actual.a == reference.a,
+              "known-full rounded clip spans preserve nested asymmetric clip pixels");
+    }
 
     check(statistics.rounded_clip_coverage_sampled_pixels > 0 &&
-              statistics.rounded_clip_coverage_clip_evaluations >
+              statistics.rounded_clip_coverage_clip_evaluations +
+                      statistics.rounded_clip_coverage_known_full_clip_bypasses >
                   statistics.rounded_clip_coverage_sampled_pixels &&
-              statistics.rounded_clip_coverage_clip_evaluations <=
+              statistics.rounded_clip_coverage_clip_evaluations +
+                      statistics.rounded_clip_coverage_known_full_clip_bypasses <=
                   statistics.rounded_clip_coverage_sampled_pixels * 2 &&
               statistics.rounded_clip_coverage_math_evaluations > 0 &&
               statistics.rounded_clip_coverage_math_evaluations <=

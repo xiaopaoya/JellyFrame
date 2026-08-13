@@ -84,6 +84,11 @@ struct SoftwareRasterizerStatistics {
     // coverage, after every applicable clip has been combined.
     std::size_t rounded_clip_coverage_clip_evaluations = 0;
     std::size_t rounded_clip_coverage_math_evaluations = 0;
+    // Pixels inside a conservative row span where every clip is known to
+    // return 255 without a coverage query. The companion counter is the
+    // number of clip visits avoided by that span, not a paint-pixel count.
+    std::size_t rounded_clip_coverage_known_full_pixels = 0;
+    std::size_t rounded_clip_coverage_known_full_clip_bypasses = 0;
     std::size_t rounded_clip_coverage_zero_pixels = 0;
     std::size_t rounded_clip_coverage_partial_pixels = 0;
     std::size_t rounded_clip_coverage_full_pixels = 0;

@@ -68,6 +68,30 @@ bool rounded_clip_affects_row(const RasterRoundedRect& rounded, int y) {
         (radii.bottom_right > 0 && y >= rounded.bottom - radii.bottom_right && y < rounded.bottom);
 }
 
+// Returns the conservative horizontal span for which one rounded clip is
+// certainly fully covered on this row. Corner bounding boxes are excluded
+// even when some pixels inside them would also resolve to 255, so the
+// remaining coverage path stays byte-for-byte identical.
+Rect rounded_clip_known_full_row_span(const RasterRoundedRect& rounded, int y) {
+    int left = rounded.left;
+    int right = rounded.right;
+    const CornerRadii& radii = rounded.radii;
+    if (radii.top_left > 0 && y >= rounded.top && y < safe_add(rounded.top, radii.top_left)) {
+        left = safe_add(rounded.left, radii.top_left);
+    } else if (radii.bottom_left > 0 &&
+               y >= safe_add(rounded.bottom, -radii.bottom_left) && y < rounded.bottom) {
+        left = safe_add(rounded.left, radii.bottom_left);
+    }
+    if (radii.top_right > 0 &&
+        y >= rounded.top && y < safe_add(rounded.top, radii.top_right)) {
+        right = safe_add(rounded.right, -radii.top_right);
+    } else if (radii.bottom_right > 0 &&
+               y >= safe_add(rounded.bottom, -radii.bottom_right) && y < rounded.bottom) {
+        right = safe_add(rounded.right, -radii.bottom_right);
+    }
+    return {left, y, safe_span(left, right), 1};
+}
+
 void record_rounded_clip_replayed_command(SoftwareRasterizerStatistics* statistics,
                                           DisplayCommandType type) {
     if (statistics == nullptr) {
@@ -235,22 +259,37 @@ void composite_rounded_clip_surface(FrameBuffer& target,
         if (statistics != nullptr) {
             ++statistics->rounded_clip_coverage_sampled_rows;
         }
+        int known_full_left = visible.x;
+        int known_full_right = x_end;
+        for (const RasterRoundedRect& rounded : rounded_clips) {
+            const Rect clip_known_full = rounded_clip_known_full_row_span(rounded, y);
+            known_full_left = std::max(known_full_left, clip_known_full.x);
+            known_full_right = std::min(known_full_right, safe_edge(clip_known_full.x, clip_known_full.width));
+        }
         for (int x = visible.x; x < x_end; ++x) {
             const Color color = source[x - visible.x];
             int coverage = 255;
-            for (const RasterRoundedRect& rounded : rounded_clips) {
+            if (x >= known_full_left && x < known_full_right) {
                 if (statistics != nullptr) {
-                    const RoundedRectCoverage clip_coverage = rounded_rect_coverage_detail(rounded, x, y);
-                    ++statistics->rounded_clip_coverage_clip_evaluations;
-                    if (clip_coverage.sampled) {
-                        ++statistics->rounded_clip_coverage_math_evaluations;
-                    }
-                    coverage = (coverage * clip_coverage.value + 127) / 255;
-                } else {
-                    coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
+                    ++statistics->rounded_clip_coverage_known_full_pixels;
+                    add_saturating(statistics->rounded_clip_coverage_known_full_clip_bypasses,
+                                   rounded_clips.size());
                 }
-                if (coverage == 0) {
-                    break;
+            } else {
+                for (const RasterRoundedRect& rounded : rounded_clips) {
+                    if (statistics != nullptr) {
+                        const RoundedRectCoverage clip_coverage = rounded_rect_coverage_detail(rounded, x, y);
+                        ++statistics->rounded_clip_coverage_clip_evaluations;
+                        if (clip_coverage.sampled) {
+                            ++statistics->rounded_clip_coverage_math_evaluations;
+                        }
+                        coverage = (coverage * clip_coverage.value + 127) / 255;
+                    } else {
+                        coverage = (coverage * rounded_rect_coverage(rounded, x, y) + 127) / 255;
+                    }
+                    if (coverage == 0) {
+                        break;
+                    }
                 }
             }
             if (statistics != nullptr) {
