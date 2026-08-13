@@ -203,6 +203,13 @@ void frame_diff_reports_value_churn_without_granting_reuse() {
     assert(appended_report.has_changed_command_bounds && appended_report.changed_command_bounds.x == 4 &&
            appended_report.changed_command_bounds.y == 4 && appended_report.changed_command_bounds.width == 6 &&
            appended_report.changed_command_bounds.height == 6);
+
+    current = previous;
+    current.display_clip_indices.clear();
+    current.display_clip_indices.push_back(0);
+    const ScriptTaskFrameDiff malformed_report = diff_script_task_app_frames(previous, current);
+    assert(!malformed_report.display_clip_indices_equal && !malformed_report.paint_structure_equal);
+    assert(malformed_report.unchanged_command_count == 0 && malformed_report.changed_command_count == 1);
 }
 
 void frame_diff_accumulator_owns_only_accepted_value_frames() {
@@ -638,6 +645,94 @@ void retained_replay_falls_back_for_contract_boundary_changes() {
     verify_fallback(appended, background, 11, 64 * 48);
 }
 
+std::uint32_t next_replay_test_random(std::uint32_t& state) {
+    state = state * 1664525U + 1013904223U;
+    return state;
+}
+
+void retained_replay_matches_canonical_output_across_pseudorandom_mutations() {
+    ScriptTaskFrameRenderer renderer;
+    const Color background{239, 244, 250, 255};
+    ScriptTaskAppFrame previous = retained_replay_stress_frame();
+    ScriptTaskFrameRetainedReplay replay(retained_replay_options_for(previous.viewport));
+    const FrameBuffer initial = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, initial, background, 11));
+
+    std::uint32_t random = 0x5EED1234U;
+    constexpr int kIterations = 192;
+    for (int iteration = 0; iteration < kIterations; ++iteration) {
+        ScriptTaskAppFrame current = previous;
+        const std::uint32_t value = next_replay_test_random(random);
+        DisplayCommand& command = current.display_list[value % current.display_list.size()];
+        switch (value % 4U) {
+        case 0:
+            command.color = {static_cast<std::uint8_t>(value),
+                             static_cast<std::uint8_t>(value >> 8U),
+                             static_cast<std::uint8_t>(value >> 16U), 255};
+            break;
+        case 1:
+            command.color = {static_cast<std::uint8_t>(value >> 3U),
+                             static_cast<std::uint8_t>(value >> 11U),
+                             static_cast<std::uint8_t>(value >> 19U),
+                             static_cast<std::uint8_t>(48U + (value % 160U))};
+            break;
+        case 2:
+            command.color2 = {static_cast<std::uint8_t>(value >> 2U),
+                              static_cast<std::uint8_t>(value >> 10U),
+                              static_cast<std::uint8_t>(value >> 18U), 255};
+            command.gradient_stop_percent = 20 + static_cast<int>(value % 81U);
+            break;
+        default:
+            command.rect.x = 10 + static_cast<int>(value % 36U);
+            command.rect.y = 8 + static_cast<int>((value >> 8U) % 28U);
+            break;
+        }
+
+        FrameBuffer actual;
+        ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+        assert(replay.render_into(renderer, current, actual, background, 11, &status));
+        assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+        assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+        assert(replay.observe_presented(current, actual, background, 11));
+        previous = std::move(current);
+    }
+    assert(replay.statistics().candidates == kIterations && replay.statistics().replays == kIterations &&
+           replay.statistics().pixel_mismatch_fallbacks == 0);
+}
+
+void retained_replay_preserves_last_presented_state_across_rejections() {
+    ScriptTaskFrameRenderer renderer;
+    const Color background{239, 244, 250, 255};
+    const ScriptTaskAppFrame base = retained_replay_stress_frame();
+    ScriptTaskFrameRetainedReplay replay(retained_replay_options_for(base.viewport));
+    const FrameBuffer initial = renderer.render(base, background);
+    assert(replay.observe_presented(base, initial, background, 11));
+
+    ScriptTaskAppFrame malformed = base;
+    malformed.display_clip_indices.pop_back();
+    FrameBuffer rejected;
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::Replayed;
+    assert(!replay.render_into(renderer, malformed, rejected, background, 11, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::RenderRejected);
+    assert(!replay.observe_presented(malformed, rejected, background, 11));
+
+    ScriptTaskAppFrame uncommitted = base;
+    uncommitted.display_list[3].color = {210, 80, 100, 144};
+    FrameBuffer uncommitted_image;
+    assert(replay.render_into(renderer, uncommitted, uncommitted_image, background, 11, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    // Simulate a failed present: no observe_presented() call is allowed here.
+
+    ScriptTaskAppFrame current = base;
+    current.display_list[3].color = {90, 218, 148, 144};
+    FrameBuffer actual;
+    assert(replay.render_into(renderer, current, actual, background, 11, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+    assert(replay.statistics().full_frame_rejected == 1 && replay.statistics().replays == 2 &&
+           replay.statistics().pixel_mismatch_fallbacks == 0);
+}
+
 } // namespace
 
 int script_task_frame_renderer_tests_main() {
@@ -657,6 +752,8 @@ int script_task_frame_renderer_tests_main() {
     retained_replay_recovers_from_false_bounded_painter_claim();
     retained_replay_matches_canonical_output_across_local_mutations();
     retained_replay_falls_back_for_contract_boundary_changes();
+    retained_replay_matches_canonical_output_across_pseudorandom_mutations();
+    retained_replay_preserves_last_presented_state_across_rejections();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
 }

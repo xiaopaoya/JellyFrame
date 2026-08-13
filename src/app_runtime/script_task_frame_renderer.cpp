@@ -119,6 +119,10 @@ bool has_valid_clip_parallelism(const ScriptTaskAppFrame& frame) {
     return frame.display_clip_indices.empty() || frame.display_clip_indices.size() == frame.display_list.size();
 }
 
+bool has_valid_value_frame_shape(const ScriptTaskAppFrame& frame) {
+    return frame.viewport.width > 0 && frame.viewport.height > 0 && has_valid_clip_parallelism(frame);
+}
+
 std::uint16_t display_clip_index_at(const ScriptTaskAppFrame& frame, std::size_t index) {
     return frame.display_clip_indices.empty() ? kScriptTaskNoClip : frame.display_clip_indices[index];
 }
@@ -247,7 +251,9 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
     report.paint_structure_equal = report.viewport_equal && report.clip_chains_equal &&
         report.display_clip_indices_equal;
 
-    const std::size_t comparable_count = std::min(report.previous_command_count, report.current_command_count);
+    const std::size_t comparable_count = valid_parallelism
+        ? std::min(report.previous_command_count, report.current_command_count)
+        : 0;
     for (std::size_t index = 0; index < comparable_count; ++index) {
         if (equal_command_at(previous, index, current, index)) {
             ++report.unchanged_command_count;
@@ -274,7 +280,7 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
     for (std::size_t index = 0; index < maximum_count; ++index) {
         const bool has_previous = index < report.previous_command_count;
         const bool has_current = index < report.current_command_count;
-        if (has_previous && has_current && equal_command_at(previous, index, current, index)) {
+        if (valid_parallelism && has_previous && has_current && equal_command_at(previous, index, current, index)) {
             continue;
         }
         if (has_previous) {
@@ -597,7 +603,7 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
                                                 std::uint64_t resource_generation,
                                                 ScriptTaskFrameRetainedReplayStatus* status) const {
     const auto full_frame = [&](ScriptTaskFrameRetainedReplayStatus result) {
-        if (frame.viewport.width <= 0 || frame.viewport.height <= 0) {
+        if (!has_valid_value_frame_shape(frame)) {
             add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
             if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::RenderRejected;
             return false;
@@ -619,6 +625,12 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
         if (status != nullptr) *status = result;
         return true;
     };
+
+    // Do not let a malformed current frame enter the diff/replay analysis.
+    // The canonical renderer then remains the only validator of clip records.
+    if (!has_valid_value_frame_shape(frame)) {
+        return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+    }
 
     if (!options_.enabled) {
         return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled);
@@ -680,7 +692,8 @@ bool ScriptTaskFrameRetainedReplay::observe_presented(const ScriptTaskAppFrame& 
                                                       Color background,
                                                       std::uint64_t resource_generation) {
     std::size_t pixels = 0;
-    if (!options_.enabled || !within_retained_budget(frame) || image.width != frame.viewport.width ||
+    if (!options_.enabled || !has_valid_value_frame_shape(frame) || !within_retained_budget(frame) ||
+        image.width != frame.viewport.width ||
         image.height != frame.viewport.height ||
         !checked_multiply(static_cast<std::size_t>(frame.viewport.width),
                           static_cast<std::size_t>(frame.viewport.height),
