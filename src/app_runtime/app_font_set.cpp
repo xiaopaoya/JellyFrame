@@ -193,7 +193,9 @@ TextMeasureProvider AppFontSet::measure_provider() {
 
 TextPainter AppFontSet::painter() {
     refresh_context();
-    return TextPainter{app_font_set_paint_callback, this, app_font_set_paint_family_callback};
+    // AppFontSet delegates to the Core bitmap backend, which clips glyphs,
+    // fallback boxes and synthetic bold strokes to the supplied text rect.
+    return TextPainter{app_font_set_paint_callback, this, app_font_set_paint_family_callback, true};
 }
 
 bool AppFontSet::has_family(std::uint32_t font_family_hash) const {

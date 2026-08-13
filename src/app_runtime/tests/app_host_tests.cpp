@@ -114,6 +114,7 @@ void app_fonts_follow_active_instance_lifecycle() {
 
     FrameBuffer frame(32, 16, Color{255, 255, 255, 255});
     TextPainter painter = host.fonts().painter();
+    assert(painter.writes_only_within_rect);
     assert(painter.paint(frame,
                          Rect{0, 0, 32, 16},
                          Color{0, 0, 0, 255},
@@ -150,6 +151,7 @@ void app_font_set_uses_system_font_before_app_supplement() {
 
     FrameBuffer frame(24, 16, Color{255, 255, 255, 255});
     TextPainter painter = host.fonts().painter();
+    assert(painter.writes_only_within_rect);
     assert(painter.paint(frame,
                          Rect{0, 0, 24, 16},
                          Color{0, 0, 0, 255},

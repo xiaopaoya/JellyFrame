@@ -1821,6 +1821,69 @@ void bitmap_font_bold_metrics_include_extra_stroke() {
           "bold synthetic stroke paints inside measured text rect");
 }
 
+void bitmap_font_callback_never_writes_outside_text_rect() {
+    static constexpr std::uint8_t rows[] = {
+        0b11100000,
+        0b11100000,
+        0b11100000,
+    };
+    static constexpr BitmapFontGlyph glyphs[] = {
+        BitmapFontGlyph{0x41, 3, 3, 3, 1, rows},
+    };
+    static constexpr BitmapFont font{glyphs, 1, 3, 3};
+    BitmapFontContext context{&font, 1};
+    const Color sentinel{231, 236, 244, 255};
+    const Rect text_rect{2, 2, 3, 2};
+
+    FrameBuffer glyph_frame(8, 7, sentinel);
+    check(bitmap_font_paint_callback(glyph_frame,
+                                     text_rect,
+                                     Color{20, 30, 40, 255},
+                                     "A",
+                                     8,
+                                     700,
+                                     TextCommandAlign::Start,
+                                     true,
+                                     &context),
+          "bold bitmap painter accepts bounded rect");
+    check(count_non_background_pixels(glyph_frame, sentinel) > 0,
+          "bold bitmap painter writes inside text rect");
+    for (int y = 0; y < glyph_frame.height; ++y) {
+        for (int x = 0; x < glyph_frame.width; ++x) {
+            if (x >= text_rect.x && x < safe_edge(text_rect.x, text_rect.width) &&
+                y >= text_rect.y && y < safe_edge(text_rect.y, text_rect.height)) {
+                continue;
+            }
+            const Color pixel = glyph_frame.pixel(x, y);
+            check(pixel.r == sentinel.r && pixel.g == sentinel.g && pixel.b == sentinel.b,
+                  "bold bitmap painter clips synthetic stroke to text rect");
+        }
+    }
+
+    FrameBuffer missing_frame(8, 7, sentinel);
+    check(bitmap_font_paint_callback(missing_frame,
+                                     text_rect,
+                                     Color{20, 30, 40, 255},
+                                     "?",
+                                     8,
+                                     700,
+                                     TextCommandAlign::Start,
+                                     true,
+                                     &context),
+          "missing bitmap glyph accepts bounded rect");
+    for (int y = 0; y < missing_frame.height; ++y) {
+        for (int x = 0; x < missing_frame.width; ++x) {
+            if (x >= text_rect.x && x < safe_edge(text_rect.x, text_rect.width) &&
+                y >= text_rect.y && y < safe_edge(text_rect.y, text_rect.height)) {
+                continue;
+            }
+            const Color pixel = missing_frame.pixel(x, y);
+            check(pixel.r == sentinel.r && pixel.g == sentinel.g && pixel.b == sentinel.b,
+                  "missing bitmap glyph clips fallback box to text rect");
+        }
+    }
+}
+
 void jffont_resource_loads_bitmap_font_view() {
     const std::vector<std::uint8_t> bytes = {
         'J', 'F', 'F', 'O', 'N', 'T', '0', 0,
@@ -1978,6 +2041,7 @@ int main() {
         bitmap_font_lookup_uses_sorted_codepoints();
         bitmap_font_scaling_bold_and_missing_glyphs_are_stable();
         bitmap_font_bold_metrics_include_extra_stroke();
+        bitmap_font_callback_never_writes_outside_text_rect();
         jffont_resource_loads_bitmap_font_view();
         jffont_v1_coverage_glyphs_antialias_text_edges();
     } catch (const std::exception& error) {

@@ -45,6 +45,17 @@ void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
     };
 }
 
+bool contains_pixel(Rect rect, int x, int y) {
+    return rect.width > 0 && rect.height > 0 && x >= rect.x && y >= rect.y &&
+        x < safe_edge(rect.x, rect.width) && y < safe_edge(rect.y, rect.height);
+}
+
+void blend_pixel_clipped(FrameBuffer& target, Rect clip, int x, int y, Color source) {
+    if (contains_pixel(clip, x, y)) {
+        blend_pixel(target, x, y, source);
+    }
+}
+
 int context_scale(const BitmapFontContext& context) {
     return std::max(1, context.scale);
 }
@@ -144,6 +155,7 @@ Color with_alpha_coverage(Color color, int coverage) {
 }
 
 void draw_glyph(FrameBuffer& target,
+                Rect clip,
                 int x,
                 int y,
                 Color color,
@@ -165,7 +177,11 @@ void draw_glyph(FrameBuffer& target,
                 for (int pass = 0; pass < stroke_passes; ++pass) {
                     for (int py = 0; py < scale; ++py) {
                         for (int px = 0; px < scale; ++px) {
-                            blend_pixel(target, x + col * scale + px + pass, y + row * scale + py, color);
+                            blend_pixel_clipped(target,
+                                                clip,
+                                                x + col * scale + px + pass,
+                                                y + row * scale + py,
+                                                color);
                         }
                     }
                 }
@@ -183,7 +199,11 @@ void draw_glyph(FrameBuffer& target,
             for (int pass = 0; pass < stroke_passes; ++pass) {
                 for (int py = 0; py < scale; ++py) {
                     for (int px = 0; px < scale; ++px) {
-                        blend_pixel(target, x + col * scale + px + pass, y + row * scale + py, covered);
+                        blend_pixel_clipped(target,
+                                            clip,
+                                            x + col * scale + px + pass,
+                                            y + row * scale + py,
+                                            covered);
                     }
                 }
             }
@@ -192,6 +212,7 @@ void draw_glyph(FrameBuffer& target,
 }
 
 void draw_missing_glyph(FrameBuffer& target,
+                        Rect clip,
                         int x,
                         int y,
                         Color color,
@@ -202,22 +223,22 @@ void draw_missing_glyph(FrameBuffer& target,
     const int width = std::max(1, advance) * scale;
     const int height = std::max(1, line_height) * scale;
     if (width <= 1 || height <= 1) {
-        blend_pixel(target, x, y, color);
+        blend_pixel_clipped(target, clip, x, y, color);
         return;
     }
 
     for (int pass = 0; pass < stroke_passes; ++pass) {
         const int offset = pass;
         for (int px = 0; px < width; ++px) {
-            blend_pixel(target, x + px, y + offset, color);
-            blend_pixel(target, x + px, y + height - 1 - offset, color);
+            blend_pixel_clipped(target, clip, x + px, y + offset, color);
+            blend_pixel_clipped(target, clip, x + px, y + height - 1 - offset, color);
         }
         for (int py = 0; py < height; ++py) {
-            blend_pixel(target, x + offset, y + py, color);
-            blend_pixel(target, x + width - 1 - offset, y + py, color);
+            blend_pixel_clipped(target, clip, x + offset, y + py, color);
+            blend_pixel_clipped(target, clip, x + width - 1 - offset, y + py, color);
         }
         for (int delta = 0; delta < std::min(width, height); ++delta) {
-            blend_pixel(target, x + delta, y + delta, color);
+            blend_pixel_clipped(target, clip, x + delta, y + delta, color);
         }
     }
 }
@@ -356,9 +377,10 @@ bool bitmap_font_paint_callback(FrameBuffer& target,
         const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
         const BitmapFontGlyph* glyph = find_bitmap_glyph(font, codepoint);
         if (glyph != nullptr) {
-            draw_glyph(target, cursor_x, cursor_y, color, *glyph, scale, stroke_passes);
+            draw_glyph(target, rect, cursor_x, cursor_y, color, *glyph, scale, stroke_passes);
         } else {
             draw_missing_glyph(target,
+                               rect,
                                cursor_x,
                                cursor_y,
                                color,
@@ -411,10 +433,11 @@ bool bitmap_font_fallback_paint_callback(FrameBuffer& target,
         const BitmapFont* owner = nullptr;
         const BitmapFontGlyph* glyph = find_fallback_glyph(fallback_context, codepoint, &owner);
         if (glyph != nullptr && owner != nullptr) {
-            draw_glyph(target, cursor_x, cursor_y, color, *glyph, scale, stroke_passes);
+            draw_glyph(target, rect, cursor_x, cursor_y, color, *glyph, scale, stroke_passes);
             cursor_x += glyph_advance(*owner, glyph) * scale;
         } else {
             draw_missing_glyph(target,
+                               rect,
                                cursor_x,
                                cursor_y,
                                color,

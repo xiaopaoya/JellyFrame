@@ -1,4 +1,5 @@
 #include "app_runtime/script_task_frame_renderer.h"
+#include "app_runtime/app_font_set.h"
 
 #include <cassert>
 #include <cstdint>
@@ -430,6 +431,49 @@ void retained_replay_accepts_explicitly_bounded_text_painter() {
                static_cast<std::size_t>(ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds)] == 1);
 }
 
+const BitmapFont& retained_replay_test_font() {
+    static constexpr std::uint8_t rows[] = {
+        0b01000000,
+        0b10100000,
+        0b11100000,
+        0b10100000,
+        0b10100000,
+    };
+    static constexpr BitmapFontGlyph glyphs[] = {
+        BitmapFontGlyph{0x41, 3, 5, 4, 1, rows},
+    };
+    static constexpr BitmapFont font{glyphs, 1, 5, 4};
+    return font;
+}
+
+void retained_replay_accepts_verified_app_font_set_painter() {
+    AppFontSet fonts;
+    fonts.set_system_font(&retained_replay_test_font());
+    const TextPainter painter = fonts.painter();
+    assert(painter.writes_only_within_rect);
+    ScriptTaskFrameRenderer renderer(painter);
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = 24 * 12;
+    options.max_replay_pixels = 24 * 12;
+    ScriptTaskFrameRetainedReplay replay(options);
+    const Color background{255, 255, 255, 255};
+    ScriptTaskAppFrame previous = text_replay_frame();
+    previous.display_list[1].text = "A";
+    previous.display_list[1].font_weight = 700;
+    const FrameBuffer previous_image = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, previous_image, background, 5));
+
+    ScriptTaskAppFrame current = previous;
+    current.display_list[1].color = {240, 100, 70, 255};
+    FrameBuffer actual;
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+    assert(replay.render_into(renderer, current, actual, background, 5, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+    assert(replay.statistics().replays == 1 && replay.statistics().pixel_mismatch_fallbacks == 0);
+}
+
 bool bounded_marker_image_painter(FrameBuffer& target,
                                   Rect rect,
                                   std::uint32_t image_handle,
@@ -788,6 +832,7 @@ int script_task_frame_renderer_tests_main() {
     retained_replay_uses_conservative_fallbacks_and_commit_boundary();
     retained_replay_rejects_unbounded_host_painters();
     retained_replay_accepts_explicitly_bounded_text_painter();
+    retained_replay_accepts_verified_app_font_set_painter();
     retained_replay_accepts_explicitly_bounded_image_painter();
     retained_replay_recovers_from_false_bounded_painter_claim();
     retained_replay_matches_canonical_output_across_local_mutations();
