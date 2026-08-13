@@ -312,7 +312,10 @@ void retained_replay_rebuilds_stable_underlap_and_verifies_pixels() {
     assert(statistics.candidates == 1 && statistics.replays == 1 &&
            statistics.pixel_mismatch_fallbacks == 0 && statistics.replayed_command_groups == 2 &&
            statistics.replayed_commands == 3 &&
-           statistics.retained_image_pixels == 40 * 24 && statistics.candidate_image_pixels == 40 * 24);
+           statistics.retained_image_pixels == 40 * 24 && statistics.candidate_image_pixels == 40 * 24 &&
+           statistics.retained_image_bytes == 40 * 24 * sizeof(Color) &&
+           statistics.candidate_image_bytes == 40 * 24 * sizeof(Color) &&
+           statistics.canonical_output_bytes == 40 * 24 * sizeof(Color));
 }
 
 void retained_replay_uses_conservative_fallbacks_and_commit_boundary() {

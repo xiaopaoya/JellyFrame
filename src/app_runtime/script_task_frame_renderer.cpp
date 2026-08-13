@@ -158,6 +158,14 @@ std::uint64_t clipped_rect_pixels(Rect rect, Rect viewport) {
     return width * height;
 }
 
+std::uint64_t framebuffer_bytes(const FrameBuffer& framebuffer) {
+    const std::size_t pixel_count = framebuffer.pixels.size();
+    if (pixel_count > std::numeric_limits<std::uint64_t>::max() / sizeof(Color)) {
+        return std::numeric_limits<std::uint64_t>::max();
+    }
+    return static_cast<std::uint64_t>(pixel_count) * sizeof(Color);
+}
+
 std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects,
                                         std::size_t dirty_rect_count,
                                         Rect target) {
@@ -648,6 +656,7 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
             return false;
         }
         target = FrameBuffer(frame.viewport.width, frame.viewport.height, background);
+        statistics_.canonical_output_bytes = framebuffer_bytes(target);
         const bool rendered = renderer.render_into(frame, target, background);
         if (!rendered) {
             add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
@@ -702,6 +711,7 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
 
     candidate_image_ = previous_image_;
     statistics_.candidate_image_pixels = candidate_image_.pixels.size();
+    statistics_.candidate_image_bytes = framebuffer_bytes(candidate_image_);
     if (!renderer.render_into(frame, candidate_image_, background, &changed_region, 1)) {
         add_replay_fallback_reason(statistics_, ScriptTaskFrameRetainedReplayFallbackReason::CandidateRenderRejected);
         if (fallback_reason != nullptr) {
@@ -716,6 +726,7 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
     add_saturating(statistics_.replayed_commands, static_cast<std::uint64_t>(replayed_commands));
 
     target = FrameBuffer(frame.viewport.width, frame.viewport.height, background);
+    statistics_.canonical_output_bytes = framebuffer_bytes(target);
     ScriptTaskFrameRenderStatus full_status = ScriptTaskFrameRenderStatus::InvalidFrame;
     if (!renderer.render_into(frame, target, background, nullptr, 0, nullptr, &full_status) ||
         full_status != ScriptTaskFrameRenderStatus::Accepted) {
@@ -763,6 +774,7 @@ bool ScriptTaskFrameRetainedReplay::observe_presented(const ScriptTaskAppFrame& 
     previous_background_ = background;
     previous_resource_generation_ = resource_generation;
     statistics_.retained_image_pixels = pixels;
+    statistics_.retained_image_bytes = framebuffer_bytes(previous_image_);
     return true;
 }
 

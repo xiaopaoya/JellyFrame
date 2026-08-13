@@ -195,6 +195,11 @@ struct ScriptTaskFrameRetainedReplayStatistics {
     std::uint64_t replayed_commands = 0;
     std::uint64_t retained_image_pixels = 0;
     std::uint64_t candidate_image_pixels = 0;
+    // Current storage footprints, not cumulative allocation totals. The probe
+    // owns retained/candidate images; the canonical output belongs to caller.
+    std::uint64_t retained_image_bytes = 0;
+    std::uint64_t candidate_image_bytes = 0;
+    std::uint64_t canonical_output_bytes = 0;
     // First exact-RGBA mismatch observed since construction/reset. These are
     // diagnostic-only; the full-frame result is always returned on mismatch.
     bool has_first_pixel_mismatch = false;
