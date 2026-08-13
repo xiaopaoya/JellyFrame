@@ -643,38 +643,59 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
                                                      : union_rect(changed_region, union_rect(old_bounds, new_bounds));
     }
 
+    struct ReplayGroupBounds {
+        std::uint16_t clip_index = kScriptTaskNoClip;
+        Rect command_bounds{};
+        Rect rounded_clip_bounds{};
+        bool has_rounded_clip = false;
+        std::size_t command_count = 0;
+    };
+    std::vector<ReplayGroupBounds> groups;
+    groups.reserve(frame.display_list.size());
+    std::size_t group_begin = 0;
+    while (group_begin < frame.display_list.size()) {
+        ReplayGroupBounds group;
+        group.clip_index = display_clip_index_at(frame, group_begin);
+        std::size_t group_end = group_begin + 1;
+        while (group_end < frame.display_list.size() &&
+               display_clip_index_at(frame, group_end) == group.clip_index) {
+            ++group_end;
+        }
+        group.command_count = group_end - group_begin;
+        for (std::size_t index = group_begin; index < group_end; ++index) {
+            Rect bounds;
+            if (!renderer.command_visual_bounds(frame.display_list[index], bounds)) {
+                fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds;
+                return false;
+            }
+            group.command_bounds = empty_rect(group.command_bounds)
+                ? bounds
+                : union_rect(group.command_bounds, bounds);
+        }
+        group.has_rounded_clip = rounded_clip_chain_bounds(frame,
+                                                           group.clip_index,
+                                                           viewport,
+                                                           group.rounded_clip_bounds);
+        groups.push_back(group);
+        group_begin = group_end;
+    }
+
     // A rounded group that overlaps a changed underlay must also be replayed
     // as a whole. It is not enough to inspect only changed commands: a local
     // un-clipped command beneath a rounded translucent group has the same
     // partial-composite hazard. The union can expose another rounded group, so
-    // converge across the finite display-list group set before budgeting.
-    for (std::size_t pass = 0; pass < frame.display_list.size(); ++pass) {
+    // converge across the finite group set before budgeting.
+    for (std::size_t pass = 0; pass < groups.size(); ++pass) {
         bool expanded = false;
-        std::size_t begin = 0;
-        while (begin < frame.display_list.size()) {
-            const std::uint16_t clip_index = display_clip_index_at(frame, begin);
-            std::size_t end = begin + 1;
-            bool intersects = false;
-            while (end < frame.display_list.size() && display_clip_index_at(frame, end) == clip_index) {
-                ++end;
+        for (const ReplayGroupBounds& group : groups) {
+            if (!group.has_rounded_clip || empty_rect(intersect_rect(group.command_bounds, changed_region))) {
+                continue;
             }
-            for (std::size_t index = begin; index < end; ++index) {
-                Rect bounds;
-                if (!renderer.command_visual_bounds(frame.display_list[index], bounds)) {
-                    fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds;
-                    return false;
-                }
-                if (!empty_rect(intersect_rect(bounds, changed_region))) {
-                    intersects = true;
-                }
-            }
-            Rect rounded_clip_bounds;
-            if (intersects && rounded_clip_chain_bounds(frame, clip_index, viewport, rounded_clip_bounds)) {
-                const Rect expanded_region = union_rect(changed_region, rounded_clip_bounds);
+            const Rect expanded_region = union_rect(changed_region, group.rounded_clip_bounds);
+            if (!equal_rect(expanded_region, changed_region)) {
                 expanded = expanded || !equal_rect(expanded_region, changed_region);
                 changed_region = expanded_region;
             }
-            begin = end;
         }
         if (!expanded) break;
     }
@@ -687,31 +708,13 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
         fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::ReplayRegionBudget;
         return false;
     }
-    std::size_t begin = 0;
-    while (begin < frame.display_list.size()) {
-        const std::uint16_t clip_index = display_clip_index_at(frame, begin);
-        std::size_t end = begin + 1;
-        bool intersects = false;
-        while (end < frame.display_list.size() && display_clip_index_at(frame, end) == clip_index) {
-            ++end;
-        }
-        for (std::size_t index = begin; index < end; ++index) {
-            Rect bounds;
-            if (!renderer.command_visual_bounds(frame.display_list[index], bounds)) {
-                fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds;
-                return false;
-            }
-            if (!empty_rect(intersect_rect(bounds, changed_region))) {
-                intersects = true;
-            }
-        }
-        if (intersects) {
+    for (const ReplayGroupBounds& group : groups) {
+        if (!empty_rect(intersect_rect(group.command_bounds, changed_region))) {
             ++replayed_command_groups;
             // render_into() dispatches whole adjacent clip groups to preserve
             // their paint ordering, even when only some members intersect.
-            replayed_commands += end - begin;
+            replayed_commands += group.command_count;
         }
-        begin = end;
     }
     if (replayed_command_groups == 0) {
         fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::NoIntersectingCommandGroups;
