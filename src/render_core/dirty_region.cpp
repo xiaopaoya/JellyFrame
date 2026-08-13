@@ -290,7 +290,7 @@ void append_dirty_paint_bounds_from_layer(const LayerNode& root,
         const LayerNode* current = pending.back();
         pending.pop_back();
         if (current->box != nullptr && current->box->node != nullptr &&
-            current->box->node->local_dirty_flags != DomDirtyNone) {
+            current->box->node->dirty_flags != DomDirtyNone) {
             // Layout invalidation starts from border-box geometry. Display
             // commands also carry shadows, outlines and translated generated
             // content, so retain both old and new command bounds.
