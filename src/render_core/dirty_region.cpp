@@ -283,18 +283,29 @@ Rect layer_display_bounds(const LayerNode& layer) {
 }
 
 void append_dirty_paint_bounds_from_layer(const LayerNode& root,
-                                          std::vector<DirtyNodeBounds>& output) {
+                                          std::vector<DirtyNodeBounds>& output,
+                                          int match_expansion) {
     std::vector<const LayerNode*> pending;
     pending.push_back(&root);
     while (!pending.empty()) {
         const LayerNode* current = pending.back();
         pending.pop_back();
-        if (current->box != nullptr && current->box->node != nullptr &&
-            current->box->node->dirty_flags != DomDirtyNone) {
-            // Layout invalidation starts from border-box geometry. Display
-            // commands also carry shadows, outlines and translated generated
-            // content, so retain both old and new command bounds.
-            merge_dirty_bounds(output, current->box->node, layer_display_bounds(*current));
+        for (const DisplayCommand& command : current->display_list) {
+            if (command.type != DisplayCommandType::BoxShadow) {
+                continue;
+            }
+            const std::size_t dirty_count = output.size();
+            for (std::size_t index = 0; index < dirty_count; ++index) {
+                const DirtyNodeBounds& dirty = output[index];
+                if (!empty_rect(intersect_rect(command.rect,
+                                               expand_rect(dirty.bounds, match_expansion)))) {
+                    // Keep the invalidated node identity while extending its
+                    // region to a nearby old/new shadow effect. Matching is
+                    // deliberately local so large ancestor shadows do not
+                    // turn a small scripted update into a full repaint.
+                    merge_dirty_bounds(output, dirty.node, command.rect);
+                }
+            }
         }
         for (const auto& child : current->children) {
             pending.push_back(child.get());
@@ -628,10 +639,14 @@ void compute_dirty_region_into(const Node& document,
     append_dirty_paint_effect_bounds_from_layout(*previous_layout, dirty_bounds);
     append_dirty_paint_effect_bounds_from_layout(*current_layout, dirty_bounds);
     if (options.previous_layer_tree != nullptr) {
-        append_dirty_paint_bounds_from_layer(*options.previous_layer_tree, dirty_bounds);
+        append_dirty_paint_bounds_from_layer(*options.previous_layer_tree,
+                                              dirty_bounds,
+                                              options.expansion_px);
     }
     if (options.current_layer_tree != nullptr) {
-        append_dirty_paint_bounds_from_layer(*options.current_layer_tree, dirty_bounds);
+        append_dirty_paint_bounds_from_layer(*options.current_layer_tree,
+                                              dirty_bounds,
+                                              options.expansion_px);
     }
     if (options.previous_layer_tree != nullptr) {
         append_transient_layer_bounds(*options.previous_layer_tree, active_scratch.transient_bounds);
