@@ -17,6 +17,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Added a disabled, desktop-only retained-diff replay correctness probe for
+  value-frame v2. It owns bounded previous/candidate RGBA images only after a
+  successful present, clears conservative old/new visual bounds, repaints all
+  current intersecting commands in paint order, and requires exact canonical
+  full-frame RGBA comparison. It is not wired into the Runtime or ports and
+  makes no performance, dirty-rendering or framebuffer-reuse claim. The
+  accompanying bilingual RFC records the eligibility, ownership and fallback
+  contract before any hardware A/B is considered.
+
 - Added a read-only adjacent value-frame diff report for retained-rendering
   measurement. It reports frame structure compatibility, command churn,
   stable prefix/suffix counts and candidate changed bounds, but never changes

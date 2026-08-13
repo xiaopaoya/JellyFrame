@@ -59,6 +59,15 @@ bool equal_color(Color left, Color right) {
     return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
 }
 
+bool equal_framebuffer(const FrameBuffer& left, const FrameBuffer& right) {
+    if (left.width != right.width || left.height != right.height || left.pixels.size() != right.pixels.size()) {
+        return false;
+    }
+    return std::equal(left.pixels.begin(), left.pixels.end(), right.pixels.begin(), [](Color lhs, Color rhs) {
+        return equal_color(lhs, rhs);
+    });
+}
+
 bool equal_display_command(const DisplayCommand& left, const DisplayCommand& right) {
     return left.type == right.type && equal_rect(left.rect, right.rect) && equal_color(left.color, right.color) &&
         equal_color(left.color2, right.color2) && left.text == right.text &&
@@ -160,7 +169,43 @@ void clear_rect(FrameBuffer& target, Rect rect, Color color) {
     }
 }
 
+bool valid_display_command_type(DisplayCommandType type) {
+    return static_cast<std::size_t>(type) < kDisplayCommandTypeCount;
+}
+
+bool equal_paint_skeleton(const ScriptTaskAppFrame& previous, const ScriptTaskAppFrame& current) {
+    const ScriptTaskFrameDiff report = diff_script_task_app_frames(previous, current);
+    if (!report.paint_structure_equal || previous.display_list.size() != current.display_list.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < previous.display_list.size(); ++index) {
+        if (previous.display_list[index].type != current.display_list[index].type) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
+
+bool script_task_frame_command_visual_bounds(const DisplayCommand& command, Rect& output) {
+    if (!valid_display_command_type(command.type) || command.rect.width <= 0 || command.rect.height <= 0) {
+        output = {};
+        return false;
+    }
+    // Text and image painters are host callbacks without a published bounded
+    // write contract. Their glyph/sampling footprint therefore cannot yet be
+    // used to shrink a replay region. The first probe falls back instead of
+    // relying on rect, even though the built-in fallback happens to stay in it.
+    if (command.type == DisplayCommandType::Text || command.type == DisplayCommandType::Image) {
+        output = {};
+        return false;
+    }
+    // Every remaining current SoftwareRasterizer command is clipped to rect
+    // before it can write. LayerTree expands BoxShadow rects before publication.
+    output = command.rect;
+    return true;
+}
 
 ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previous,
                                                 const ScriptTaskAppFrame& current) {
@@ -422,6 +467,177 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
         }
     }
     return true;
+}
+
+ScriptTaskFrameRetainedReplay::ScriptTaskFrameRetainedReplay(ScriptTaskFrameRetainedReplayOptions options)
+    : options_(options) {}
+
+bool ScriptTaskFrameRetainedReplay::within_retained_budget(const ScriptTaskAppFrame& frame) const {
+    std::size_t pixels = 0;
+    return options_.max_retained_pixels != 0 && frame.viewport.width > 0 && frame.viewport.height > 0 &&
+        checked_multiply(static_cast<std::size_t>(frame.viewport.width),
+                         static_cast<std::size_t>(frame.viewport.height),
+                         pixels) &&
+        pixels <= options_.max_retained_pixels;
+}
+
+bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskAppFrame& frame,
+                                             Color background,
+                                             std::uint64_t resource_generation,
+                                             Rect& changed_region,
+                                             std::size_t& replayed_command_groups) const {
+    changed_region = {};
+    replayed_command_groups = 0;
+    if (!previous_frame_.has_value() || !within_retained_budget(frame) ||
+        previous_resource_generation_ != resource_generation || !equal_color(previous_background_, background) ||
+        previous_image_.width != frame.viewport.width || previous_image_.height != frame.viewport.height ||
+        !equal_paint_skeleton(*previous_frame_, frame)) {
+        return false;
+    }
+
+    const ScriptTaskFrameDiff report = diff_script_task_app_frames(*previous_frame_, frame);
+    if (report.changed_command_count == 0 || !report.has_changed_command_bounds) {
+        return false;
+    }
+    const Rect viewport{0, 0, frame.viewport.width, frame.viewport.height};
+    for (std::size_t index = 0; index < frame.display_list.size(); ++index) {
+        if (equal_command_at(*previous_frame_, index, frame, index)) {
+            continue;
+        }
+        Rect old_bounds;
+        Rect new_bounds;
+        if (!script_task_frame_command_visual_bounds(previous_frame_->display_list[index], old_bounds) ||
+            !script_task_frame_command_visual_bounds(frame.display_list[index], new_bounds)) {
+            return false;
+        }
+        changed_region = empty_rect(changed_region) ? union_rect(old_bounds, new_bounds)
+                                                     : union_rect(changed_region, union_rect(old_bounds, new_bounds));
+    }
+    changed_region = intersect_rect(changed_region, viewport);
+    const std::uint64_t pixels = clipped_rect_pixels(changed_region, viewport);
+    if (pixels == 0 || options_.max_replay_pixels == 0 || pixels > options_.max_replay_pixels) {
+        return false;
+    }
+    std::size_t begin = 0;
+    while (begin < frame.display_list.size()) {
+        const std::uint16_t clip_index = display_clip_index_at(frame, begin);
+        std::size_t end = begin + 1;
+        bool intersects = false;
+        while (end < frame.display_list.size() && display_clip_index_at(frame, end) == clip_index) {
+            ++end;
+        }
+        for (std::size_t index = begin; index < end; ++index) {
+            Rect bounds;
+            if (!script_task_frame_command_visual_bounds(frame.display_list[index], bounds)) {
+                return false;
+            }
+            if (!empty_rect(intersect_rect(bounds, changed_region))) {
+                intersects = true;
+            }
+        }
+        if (intersects) {
+            ++replayed_command_groups;
+        }
+        begin = end;
+    }
+    return replayed_command_groups != 0;
+}
+
+bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& renderer,
+                                                const ScriptTaskAppFrame& frame,
+                                                FrameBuffer& target,
+                                                Color background,
+                                                std::uint64_t resource_generation,
+                                                ScriptTaskFrameRetainedReplayStatus* status) const {
+    const auto full_frame = [&](ScriptTaskFrameRetainedReplayStatus result) {
+        const bool rendered = renderer.render_into(frame, target, background);
+        if (!rendered) {
+            add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
+            if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::RenderRejected;
+            return false;
+        }
+        if (result == ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled) {
+            add_saturating(statistics_.full_frame_disabled, std::uint64_t{1});
+        } else if (result == ScriptTaskFrameRetainedReplayStatus::FullFrameNoPrevious) {
+            add_saturating(statistics_.full_frame_no_previous, std::uint64_t{1});
+        } else {
+            add_saturating(statistics_.full_frame_ineligible, std::uint64_t{1});
+        }
+        if (status != nullptr) *status = result;
+        return true;
+    };
+
+    if (!options_.enabled) {
+        return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled);
+    }
+    if (!previous_frame_.has_value()) {
+        return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameNoPrevious);
+    }
+
+    Rect changed_region;
+    std::size_t replayed_groups = 0;
+    if (!eligible(frame, background, resource_generation, changed_region, replayed_groups)) {
+        return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+    }
+
+    candidate_image_ = previous_image_;
+    statistics_.candidate_image_pixels = candidate_image_.pixels.size();
+    if (!renderer.render_into(frame, candidate_image_, background, &changed_region, 1)) {
+        return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+    }
+    add_saturating(statistics_.candidates, std::uint64_t{1});
+    add_saturating(statistics_.candidate_region_pixels,
+                   clipped_rect_pixels(changed_region, Rect{0, 0, frame.viewport.width, frame.viewport.height}));
+    add_saturating(statistics_.replayed_command_groups, static_cast<std::uint64_t>(replayed_groups));
+
+    ScriptTaskFrameRenderStatus full_status = ScriptTaskFrameRenderStatus::InvalidFrame;
+    FrameBuffer reference = renderer.render(frame, background, &full_status);
+    if (full_status != ScriptTaskFrameRenderStatus::Accepted) {
+        return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+    }
+    if (!equal_framebuffer(candidate_image_, reference)) {
+        target = std::move(reference);
+        add_saturating(statistics_.pixel_mismatch_fallbacks, std::uint64_t{1});
+        if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::PixelMismatchFallback;
+        return true;
+    }
+    target = candidate_image_;
+    add_saturating(statistics_.replays, std::uint64_t{1});
+    if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::Replayed;
+    return true;
+}
+
+bool ScriptTaskFrameRetainedReplay::observe_presented(const ScriptTaskAppFrame& frame,
+                                                      const FrameBuffer& image,
+                                                      Color background,
+                                                      std::uint64_t resource_generation) {
+    std::size_t pixels = 0;
+    if (!options_.enabled || !within_retained_budget(frame) || image.width != frame.viewport.width ||
+        image.height != frame.viewport.height ||
+        !checked_multiply(static_cast<std::size_t>(frame.viewport.width),
+                          static_cast<std::size_t>(frame.viewport.height),
+                          pixels) || image.pixels.size() != pixels) {
+        return false;
+    }
+    previous_frame_ = frame;
+    previous_image_ = image;
+    previous_background_ = background;
+    previous_resource_generation_ = resource_generation;
+    statistics_.retained_image_pixels = pixels;
+    return true;
+}
+
+const ScriptTaskFrameRetainedReplayStatistics& ScriptTaskFrameRetainedReplay::statistics() const {
+    return statistics_;
+}
+
+void ScriptTaskFrameRetainedReplay::reset() {
+    previous_frame_.reset();
+    previous_image_ = {};
+    candidate_image_ = {};
+    previous_background_ = {};
+    previous_resource_generation_ = 0;
+    statistics_ = {};
 }
 
 } // namespace jellyframe

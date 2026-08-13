@@ -1,6 +1,6 @@
 # Retained Rendering 与 Tile/Scanline 范围
 
-> 最后更新：2026-08-04；适用版本：0.5.0
+> 最后更新：2026-08-14；适用版本：0.6.0-dev
 
 本文定义两个历史遗留问题的工程边界：结构变化时的 retained layout/display-list diff，
 以及不持有完整 framebuffer 的 tile/scanline renderer。它是 Render Core 的设计契约，
@@ -12,7 +12,8 @@
 - `FrameUpdatePlan` 对 paint-only、稳定布局和旧/新 layout dirty bounds 有增量路径。
 - `DirtyRegionOptions` 可以比较旧/新 layer tree，并能合并 transient overlay 的旧/新边界。
 - DOM 结构变化仍保守回退 full-frame。当前没有完整的 retained layout diff 或 display-list
-  diff，也没有声明已经支持子树 display command 重用。
+  diff，也没有声明已经支持子树 display command 重用。value-only v2 local-mutation probe 已测得
+  值得继续研究的 workload，但它仍只是只读 telemetry，不是渲染优化。
 - 默认软件 compositor 以完整逻辑 RGBA framebuffer 为输出目标；嵌入式 adapter 可以把
   dirty rect 转换为小 strip，但这不等于 renderer 已经支持无 framebuffer 的 tile/scanline。
 
@@ -46,7 +47,9 @@ diff。只有候选匹配稳定且可证明不改变像素，才进入第二阶�
 
 缓存命中失败必须与未启用缓存完全相同地走现有 pipeline。默认 profile 先保持关闭；开启后
 必须有像素 capture、随机 mutation 和长帧回归，且证明默认 app 的内存与 clean frame 成本
-没有回退。
+没有回退。对 value-only frame，`project_docs/value_only_frame_retained_diff_replay_rfc_zh.md`
+规定更严格的 clear-and-replay：清空 old/new visual bounds 的保守 union，再以原 paint order
+重绘每一条与其相交的 current command。command value 相等不构成跳过绘制的许可。
 
 ## Tile/scanline 评估门槛
 

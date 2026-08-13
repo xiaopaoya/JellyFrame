@@ -14,6 +14,12 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 新增默认关闭、仅供桌面正确性验证的 value-frame v2 retained-diff replay probe。它只在成功
+  present 后保留有界的 previous/candidate RGBA image，清空 old/new visual bounds 的保守 union，
+  按 paint order 重绘所有与 region 相交的 current command，并要求与 canonical full-frame RGBA
+  完全一致。它未接入 Runtime 或 port，不产生性能、dirty rendering 或 framebuffer reuse 结论；配套
+  双语 RFC 已在任何硬件 A/B 前冻结 eligibility、所有权与 fallback 契约。
+
 - 新增只读的相邻 value-frame diff 报告，用于 retained-rendering 测量。它输出 frame 结构兼容性、
   command churn、稳定前缀/后缀和候选 changed bounds，但绝不改变 repaint 或授予 framebuffer reuse
   权限。首个 WS147 transform fixture 测得 `0%` structure-equal pair、候选 changed area 为 `70.16%`，

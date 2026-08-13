@@ -235,6 +235,129 @@ void frame_diff_accumulator_owns_only_accepted_value_frames() {
     assert(!accumulator.observe_presented(ScriptTaskAppFrame(base)));
 }
 
+bool equal_framebuffer_pixels(const FrameBuffer& left, const FrameBuffer& right) {
+    if (left.width != right.width || left.height != right.height || left.pixels.size() != right.pixels.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.pixels.size(); ++index) {
+        const Color lhs = left.pixels[index];
+        const Color rhs = right.pixels[index];
+        if (lhs.r != rhs.r || lhs.g != rhs.g || lhs.b != rhs.b || lhs.a != rhs.a) {
+            return false;
+        }
+    }
+    return true;
+}
+
+ScriptTaskAppFrame replay_candidate_frame() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 40, 24};
+    DisplayCommand background;
+    background.type = DisplayCommandType::FillRect;
+    background.rect = {0, 0, 40, 24};
+    background.color = {24, 40, 68, 255};
+    frame.display_list.push_back(background);
+    DisplayCommand card;
+    card.type = DisplayCommandType::LinearGradient;
+    card.rect = {4, 3, 32, 18};
+    card.color = {60, 180, 220, 255};
+    card.color2 = {40, 100, 180, 255};
+    card.border_radius = 6;
+    frame.display_list.push_back(card);
+    DisplayCommand overlay;
+    overlay.type = DisplayCommandType::FillRect;
+    overlay.rect = {12, 8, 12, 8};
+    overlay.color = {250, 90, 70, 128};
+    overlay.border_radius = 3;
+    frame.display_list.push_back(overlay);
+    frame.clips = {{{4, 3, 32, 18}, 6, kScriptTaskNoParentClip}};
+    frame.display_clip_indices = {kScriptTaskNoClip, 0, 0};
+    return frame;
+}
+
+void retained_replay_rebuilds_stable_underlap_and_verifies_pixels() {
+    ScriptTaskFrameRenderer renderer;
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = 40 * 24;
+    options.max_replay_pixels = 40 * 24;
+    ScriptTaskFrameRetainedReplay replay(options);
+    const Color background{255, 255, 255, 255};
+
+    ScriptTaskAppFrame previous = replay_candidate_frame();
+    const FrameBuffer previous_image = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, previous_image, background, 9));
+
+    ScriptTaskAppFrame current = previous;
+    current.display_list[2].color = {80, 240, 110, 128};
+    FrameBuffer actual;
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+    assert(replay.render_into(renderer, current, actual, background, 9, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    const FrameBuffer expected = renderer.render(current, background);
+    assert(equal_framebuffer_pixels(actual, expected));
+    // The translucent overlay must be composited over the stable gradient,
+    // proving that replay repaints the unchanged underlap after clearing.
+    assert(actual.pixel(15, 10).g > actual.pixel(15, 10).r);
+
+    const ScriptTaskFrameRetainedReplayStatistics& statistics = replay.statistics();
+    assert(statistics.candidates == 1 && statistics.replays == 1 &&
+           statistics.pixel_mismatch_fallbacks == 0 && statistics.replayed_command_groups == 2 &&
+           statistics.retained_image_pixels == 40 * 24 && statistics.candidate_image_pixels == 40 * 24);
+}
+
+void retained_replay_uses_conservative_fallbacks_and_commit_boundary() {
+    ScriptTaskFrameRenderer renderer;
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = 40 * 24;
+    options.max_replay_pixels = 40 * 24;
+    ScriptTaskFrameRetainedReplay replay(options);
+    const Color background{255, 255, 255, 255};
+    ScriptTaskAppFrame previous = replay_candidate_frame();
+    ScriptTaskAppFrame current = previous;
+    current.display_list[2].color = {30, 220, 80, 128};
+
+    FrameBuffer output(40, 24, background);
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::Replayed;
+    assert(replay.render_into(renderer, current, output, background, 7, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameNoPrevious);
+
+    const FrameBuffer previous_image = renderer.render(previous, background);
+    assert(replay.observe_presented(previous, previous_image, background, 7));
+    assert(replay.render_into(renderer, current, output, background, 8, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+    assert(replay.statistics().full_frame_no_previous == 1 &&
+           replay.statistics().full_frame_ineligible == 1 && replay.statistics().candidates == 0);
+
+    replay.reset();
+    options.enabled = false;
+    ScriptTaskFrameRetainedReplay disabled(options);
+    assert(disabled.render_into(renderer, current, output, background, 7, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled);
+    assert(disabled.statistics().full_frame_disabled == 1);
+}
+
+void retained_replay_rejects_unbounded_host_painters() {
+    DisplayCommand text;
+    text.type = DisplayCommandType::Text;
+    text.rect = {1, 2, 12, 8};
+    Rect bounds;
+    assert(!script_task_frame_command_visual_bounds(text, bounds));
+    assert(bounds.width == 0 && bounds.height == 0);
+
+    DisplayCommand image;
+    image.type = DisplayCommandType::Image;
+    image.rect = {1, 2, 12, 8};
+    assert(!script_task_frame_command_visual_bounds(image, bounds));
+
+    DisplayCommand shadow;
+    shadow.type = DisplayCommandType::BoxShadow;
+    shadow.rect = {1, 2, 12, 8};
+    assert(script_task_frame_command_visual_bounds(shadow, bounds));
+    assert(bounds.x == 1 && bounds.y == 2 && bounds.width == 12 && bounds.height == 8);
+}
+
 } // namespace
 
 int script_task_frame_renderer_tests_main() {
@@ -246,6 +369,9 @@ int script_task_frame_renderer_tests_main() {
     renderer_forwards_opt_in_rounded_replay_timing();
     frame_diff_reports_value_churn_without_granting_reuse();
     frame_diff_accumulator_owns_only_accepted_value_frames();
+    retained_replay_rebuilds_stable_underlap_and_verifies_pixels();
+    retained_replay_uses_conservative_fallbacks_and_commit_boundary();
+    retained_replay_rejects_unbounded_host_painters();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
 }

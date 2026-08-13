@@ -86,6 +86,18 @@ wholly opaque, opaque span count, and antialiased-coverage rows. Those counters
 need no timing callback and help a host attribute rounded composite work before
 adding another paint fast path.
 
+`ScriptTaskFrameRetainedReplay` is a separate, disabled-by-default desktop
+correctness probe for fixed-geometry value frames. It retains only value-owned
+frame data plus two caller-budgeted RGBA images, clears the conservative old/new
+visual-bounds union, redraws all current commands intersecting that region in
+paint order, and compares the result to a canonical full-frame render exactly.
+Its owner calls `observe_presented()` only after normal present succeeds. It is
+not enabled by the Runtime, the desktop shell or any port, and is deliberately
+unsuitable as a performance path while the reference render remains mandatory.
+Text and image commands currently force its conservative full-frame fallback:
+their host callbacks do not yet publish a bounded glyph/sampling-write contract.
+See `project_docs/value_only_frame_retained_diff_replay_rfc.md`.
+
 `script_task_input_codec.*` defines the bounded, versioned worker-inbox values
 for pointer, wheel, key and text input. The worker validates and dispatches
 those values against its own DOM and layer tree.

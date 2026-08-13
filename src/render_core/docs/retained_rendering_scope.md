@@ -1,6 +1,6 @@
 # Retained Rendering and Tile/Scanline Scope
 
-> Last updated: 2026-08-04; Applies to: 0.5.0
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
 
 This document defines the boundary for two deferred areas: retained layout/display-list
 diffing for structural changes, and rendering without a full framebuffer. It is a Render Core
@@ -12,7 +12,8 @@ contract, not a port acceptance report.
 - `FrameUpdatePlan` supports paint-only updates, stable-layout updates and old/new layout dirty
   bounds. `DirtyRegionOptions` can compare old/new layer trees and transient overlay bounds.
 - Structural DOM changes conservatively fall back to a full frame. Complete retained layout or
-  display-list diffing is not implemented.
+  display-list diffing is not implemented. The value-only v2 local-mutation probe measured a
+  promising workload, but remains read-only telemetry rather than a rendering optimization.
 - The default software compositor renders into a logical RGBA framebuffer. An embedded adapter
   can convert dirty rectangles into compact strips, but that is not a no-framebuffer renderer.
 
@@ -27,7 +28,10 @@ pointers as persistent identity, and disabled profiles must allocate no cache.
 Only a later, opt-in subtree replay slice may reuse commands. It must require unique stable keys,
 unchanged bounds/clip/transform/opacity/scroll state, safe occlusion rules, resource generations,
 and independent byte/command budgets. Any uncertainty must use the existing rebuild and dirty/full
-repaint path.
+repaint path. For value-only frames, `project_docs/value_only_frame_retained_diff_replay_rfc.md`
+adds the stricter clear-and-replay contract: clear the conservative union of old/new visual bounds,
+then redraw every current command intersecting it in paint order. Equal commands are not permission
+to skip paint.
 
 Tile/scanline rendering is a separate output-model change. It needs real device evidence that a
 full framebuffer cannot fit the target budget or causes a measured failure after dirty/strip
