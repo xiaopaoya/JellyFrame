@@ -426,6 +426,8 @@ void retained_replay_accepts_explicitly_bounded_text_painter() {
     assert(unbounded_replay.observe_presented(previous, unbounded_previous, background, 2));
     assert(unbounded_replay.render_into(unbounded_renderer, current, actual, background, 2, &status));
     assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+    assert(unbounded_replay.statistics().ineligible_by_reason[
+               static_cast<std::size_t>(ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds)] == 1);
 }
 
 bool bounded_marker_image_painter(FrameBuffer& target,
@@ -606,7 +608,8 @@ void retained_replay_falls_back_for_contract_boundary_changes() {
     const auto verify_fallback = [&](const ScriptTaskAppFrame& current,
                                      Color current_background,
                                      std::uint64_t current_generation,
-                                     std::size_t max_replay_pixels) {
+                                     std::size_t max_replay_pixels,
+                                     ScriptTaskFrameRetainedReplayFallbackReason expected_reason) {
         ScriptTaskFrameRetainedReplayOptions options = retained_replay_options_for(base.viewport);
         options.max_replay_pixels = max_replay_pixels;
         ScriptTaskFrameRetainedReplay replay(options);
@@ -619,30 +622,63 @@ void retained_replay_falls_back_for_contract_boundary_changes() {
         assert(expected_status == ScriptTaskFrameRenderStatus::Accepted);
         FrameBuffer actual;
         ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::Replayed;
-        assert(replay.render_into(renderer, current, actual, current_background, current_generation, &status));
+        ScriptTaskFrameRetainedReplayFallbackReason reason = ScriptTaskFrameRetainedReplayFallbackReason::None;
+        assert(replay.render_into(renderer, current, actual, current_background, current_generation, &status, &reason));
         assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+        assert(reason == expected_reason);
         assert(equal_framebuffer_pixels(actual, expected));
         assert(replay.statistics().candidates == 0 && replay.statistics().replays == 0);
+        assert(replay.statistics().ineligible_by_reason[static_cast<std::size_t>(expected_reason)] == 1);
     };
 
     ScriptTaskAppFrame locally_changed = base;
     locally_changed.display_list[3].rect = {30, 18, 10, 7};
-    verify_fallback(locally_changed, background, 12, 64 * 48);
-    verify_fallback(locally_changed, {250, 250, 250, 255}, 11, 64 * 48);
-    verify_fallback(locally_changed, background, 11, 1);
+    verify_fallback(locally_changed,
+                    background,
+                    12,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::ResourceGeneration);
+    verify_fallback(locally_changed,
+                    {250, 250, 250, 255},
+                    11,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::Background);
+    verify_fallback(locally_changed,
+                    background,
+                    11,
+                    1,
+                    ScriptTaskFrameRetainedReplayFallbackReason::ReplayRegionBudget);
 
     ScriptTaskAppFrame changed_clip = base;
     changed_clip.clips[0].border_radius = 4;
-    verify_fallback(changed_clip, background, 11, 64 * 48);
+    verify_fallback(changed_clip,
+                    background,
+                    11,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton);
 
     ScriptTaskAppFrame changed_type = base;
     changed_type.display_list[3].type = DisplayCommandType::StrokeRect;
-    verify_fallback(changed_type, background, 11, 64 * 48);
+    verify_fallback(changed_type,
+                    background,
+                    11,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton);
 
     ScriptTaskAppFrame appended = base;
     appended.display_list.push_back(base.display_list[3]);
     appended.display_clip_indices.push_back(0);
-    verify_fallback(appended, background, 11, 64 * 48);
+    verify_fallback(appended,
+                    background,
+                    11,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton);
+
+    verify_fallback(base,
+                    background,
+                    11,
+                    64 * 48,
+                    ScriptTaskFrameRetainedReplayFallbackReason::NoChangedCommands);
 }
 
 std::uint32_t next_replay_test_random(std::uint32_t& state) {
@@ -712,8 +748,10 @@ void retained_replay_preserves_last_presented_state_across_rejections() {
     malformed.display_clip_indices.pop_back();
     FrameBuffer rejected;
     ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::Replayed;
-    assert(!replay.render_into(renderer, malformed, rejected, background, 11, &status));
+    ScriptTaskFrameRetainedReplayFallbackReason reason = ScriptTaskFrameRetainedReplayFallbackReason::None;
+    assert(!replay.render_into(renderer, malformed, rejected, background, 11, &status, &reason));
     assert(status == ScriptTaskFrameRetainedReplayStatus::RenderRejected);
+    assert(reason == ScriptTaskFrameRetainedReplayFallbackReason::InvalidFrame);
     assert(!replay.observe_presented(malformed, rejected, background, 11));
 
     ScriptTaskAppFrame uncommitted = base;
@@ -731,6 +769,8 @@ void retained_replay_preserves_last_presented_state_across_rejections() {
     assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
     assert(replay.statistics().full_frame_rejected == 1 && replay.statistics().replays == 2 &&
            replay.statistics().pixel_mismatch_fallbacks == 0);
+    assert(replay.statistics().ineligible_by_reason[
+               static_cast<std::size_t>(ScriptTaskFrameRetainedReplayFallbackReason::InvalidFrame)] == 1);
 }
 
 } // namespace

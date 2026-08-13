@@ -23,6 +23,16 @@ void add_saturating(Value& target, Value value) {
     target += value;
 }
 
+void add_replay_fallback_reason(ScriptTaskFrameRetainedReplayStatistics& statistics,
+                                ScriptTaskFrameRetainedReplayFallbackReason reason) {
+    const std::size_t index = static_cast<std::size_t>(reason);
+    if (reason == ScriptTaskFrameRetainedReplayFallbackReason::None ||
+        index >= statistics.ineligible_by_reason.size()) {
+        return;
+    }
+    add_saturating(statistics.ineligible_by_reason[index], std::uint64_t{1});
+}
+
 Rect intersect_rect(Rect left, Rect right) {
     const int x1 = std::max(left.x, right.x);
     const int y1 = std::max(left.y, right.y);
@@ -534,19 +544,39 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
                                              std::uint64_t resource_generation,
                                              Rect& changed_region,
                                              std::size_t& replayed_command_groups,
-                                             std::size_t& replayed_commands) const {
+                                             std::size_t& replayed_commands,
+                                             ScriptTaskFrameRetainedReplayFallbackReason& fallback_reason) const {
     changed_region = {};
     replayed_command_groups = 0;
     replayed_commands = 0;
-    if (!previous_frame_.has_value() || !within_retained_budget(frame) ||
-        previous_resource_generation_ != resource_generation || !equal_color(previous_background_, background) ||
-        previous_image_.width != frame.viewport.width || previous_image_.height != frame.viewport.height ||
-        !equal_paint_skeleton(*previous_frame_, frame)) {
+    fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::None;
+    if (!previous_frame_.has_value()) {
+        return false;
+    }
+    if (!within_retained_budget(frame)) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::RetainedBudget;
+        return false;
+    }
+    if (previous_resource_generation_ != resource_generation) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::ResourceGeneration;
+        return false;
+    }
+    if (!equal_color(previous_background_, background)) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::Background;
+        return false;
+    }
+    if (previous_image_.width != frame.viewport.width || previous_image_.height != frame.viewport.height) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::PreviousImageDimensions;
+        return false;
+    }
+    if (!equal_paint_skeleton(*previous_frame_, frame)) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton;
         return false;
     }
 
     const ScriptTaskFrameDiff report = diff_script_task_app_frames(*previous_frame_, frame);
     if (report.changed_command_count == 0 || !report.has_changed_command_bounds) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::NoChangedCommands;
         return false;
     }
     const Rect viewport{0, 0, frame.viewport.width, frame.viewport.height};
@@ -558,6 +588,7 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
         Rect new_bounds;
         if (!renderer.command_visual_bounds(previous_frame_->display_list[index], old_bounds) ||
             !renderer.command_visual_bounds(frame.display_list[index], new_bounds)) {
+            fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds;
             return false;
         }
         changed_region = empty_rect(changed_region) ? union_rect(old_bounds, new_bounds)
@@ -566,6 +597,7 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
     changed_region = intersect_rect(changed_region, viewport);
     const std::uint64_t pixels = clipped_rect_pixels(changed_region, viewport);
     if (pixels == 0 || options_.max_replay_pixels == 0 || pixels > options_.max_replay_pixels) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::ReplayRegionBudget;
         return false;
     }
     std::size_t begin = 0;
@@ -579,6 +611,7 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
         for (std::size_t index = begin; index < end; ++index) {
             Rect bounds;
             if (!renderer.command_visual_bounds(frame.display_list[index], bounds)) {
+                fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds;
                 return false;
             }
             if (!empty_rect(intersect_rect(bounds, changed_region))) {
@@ -593,7 +626,11 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
         }
         begin = end;
     }
-    return replayed_command_groups != 0;
+    if (replayed_command_groups == 0) {
+        fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::NoIntersectingCommandGroups;
+        return false;
+    }
+    return true;
 }
 
 bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& renderer,
@@ -601,7 +638,9 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
                                                 FrameBuffer& target,
                                                 Color background,
                                                 std::uint64_t resource_generation,
-                                                ScriptTaskFrameRetainedReplayStatus* status) const {
+                                                ScriptTaskFrameRetainedReplayStatus* status,
+                                                ScriptTaskFrameRetainedReplayFallbackReason* fallback_reason) const {
+    if (fallback_reason != nullptr) *fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::None;
     const auto full_frame = [&](ScriptTaskFrameRetainedReplayStatus result) {
         if (!has_valid_value_frame_shape(frame)) {
             add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
@@ -629,6 +668,10 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
     // Do not let a malformed current frame enter the diff/replay analysis.
     // The canonical renderer then remains the only validator of clip records.
     if (!has_valid_value_frame_shape(frame)) {
+        add_replay_fallback_reason(statistics_, ScriptTaskFrameRetainedReplayFallbackReason::InvalidFrame);
+        if (fallback_reason != nullptr) {
+            *fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::InvalidFrame;
+        }
         return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
     }
 
@@ -642,19 +685,28 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
     Rect changed_region;
     std::size_t replayed_groups = 0;
     std::size_t replayed_commands = 0;
+    ScriptTaskFrameRetainedReplayFallbackReason eligibility_reason =
+        ScriptTaskFrameRetainedReplayFallbackReason::None;
     if (!eligible(renderer,
                   frame,
                   background,
                   resource_generation,
                   changed_region,
                   replayed_groups,
-                  replayed_commands)) {
+                  replayed_commands,
+                  eligibility_reason)) {
+        add_replay_fallback_reason(statistics_, eligibility_reason);
+        if (fallback_reason != nullptr) *fallback_reason = eligibility_reason;
         return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
     }
 
     candidate_image_ = previous_image_;
     statistics_.candidate_image_pixels = candidate_image_.pixels.size();
     if (!renderer.render_into(frame, candidate_image_, background, &changed_region, 1)) {
+        add_replay_fallback_reason(statistics_, ScriptTaskFrameRetainedReplayFallbackReason::CandidateRenderRejected);
+        if (fallback_reason != nullptr) {
+            *fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::CandidateRenderRejected;
+        }
         return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
     }
     add_saturating(statistics_.candidates, std::uint64_t{1});
@@ -667,7 +719,13 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
     ScriptTaskFrameRenderStatus full_status = ScriptTaskFrameRenderStatus::InvalidFrame;
     if (!renderer.render_into(frame, target, background, nullptr, 0, nullptr, &full_status) ||
         full_status != ScriptTaskFrameRenderStatus::Accepted) {
-        return full_frame(ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
+        add_replay_fallback_reason(statistics_, ScriptTaskFrameRetainedReplayFallbackReason::CanonicalRenderRejected);
+        if (fallback_reason != nullptr) {
+            *fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::CanonicalRenderRejected;
+        }
+        add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
+        if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::RenderRejected;
+        return false;
     }
     const FrameBufferComparison comparison = compare_framebuffer(candidate_image_, target);
     if (!comparison.equal) {

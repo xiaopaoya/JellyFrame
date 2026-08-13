@@ -3,6 +3,7 @@
 #include "app_runtime/script_task_frame_codec.h"
 #include "render_core/software_renderer.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -142,6 +143,29 @@ enum class ScriptTaskFrameRetainedReplayStatus : std::uint8_t {
     RenderRejected,
 };
 
+// Why an enabled probe returned the canonical full-frame path instead of a
+// candidate. `None` is also used for disabled/no-prior-frame paths, which have
+// their own counters and are not replay-eligibility failures.
+enum class ScriptTaskFrameRetainedReplayFallbackReason : std::uint8_t {
+    None,
+    InvalidFrame,
+    RetainedBudget,
+    ResourceGeneration,
+    Background,
+    PreviousImageDimensions,
+    PaintSkeleton,
+    NoChangedCommands,
+    UnsupportedVisualBounds,
+    ReplayRegionBudget,
+    NoIntersectingCommandGroups,
+    CandidateRenderRejected,
+    CanonicalRenderRejected,
+    Count,
+};
+
+constexpr std::size_t kScriptTaskFrameRetainedReplayFallbackReasonCount =
+    static_cast<std::size_t>(ScriptTaskFrameRetainedReplayFallbackReason::Count);
+
 struct ScriptTaskFrameRetainedReplayOptions {
     bool enabled = false;
     // Zero means that retention/replay is not budgeted and therefore falls
@@ -160,6 +184,10 @@ struct ScriptTaskFrameRetainedReplayStatistics {
     std::uint64_t replays = 0;
     std::uint64_t pixel_mismatch_fallbacks = 0;
     std::uint64_t pixel_mismatch_pixels = 0;
+    // Indexed by ScriptTaskFrameRetainedReplayFallbackReason. `None` is
+    // intentionally zero because disabled/no-prior cases have dedicated
+    // counters above.
+    std::array<std::uint64_t, kScriptTaskFrameRetainedReplayFallbackReasonCount> ineligible_by_reason{};
     std::uint64_t candidate_region_pixels = 0;
     std::uint64_t replayed_command_groups = 0;
     // Commands dispatched to the rasterizer. A clip group is dispatched as a
@@ -187,7 +215,8 @@ public:
                      FrameBuffer& target,
                      Color background,
                      std::uint64_t resource_generation,
-                     ScriptTaskFrameRetainedReplayStatus* status = nullptr) const;
+                     ScriptTaskFrameRetainedReplayStatus* status = nullptr,
+                     ScriptTaskFrameRetainedReplayFallbackReason* fallback_reason = nullptr) const;
 
     // Transfers only value-owned state after a successful present. The image
     // is copied into bounded probe storage so the caller may reuse target.
@@ -206,7 +235,8 @@ private:
                   std::uint64_t resource_generation,
                   Rect& changed_region,
                   std::size_t& replayed_command_groups,
-                  std::size_t& replayed_commands) const;
+                  std::size_t& replayed_commands,
+                  ScriptTaskFrameRetainedReplayFallbackReason& fallback_reason) const;
 
     ScriptTaskFrameRetainedReplayOptions options_;
     mutable ScriptTaskFrameRetainedReplayStatistics statistics_;
