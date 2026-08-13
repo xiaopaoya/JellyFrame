@@ -205,6 +205,36 @@ void frame_diff_reports_value_churn_without_granting_reuse() {
            appended_report.changed_command_bounds.height == 6);
 }
 
+void frame_diff_accumulator_owns_only_accepted_value_frames() {
+    ScriptTaskAppFrame base = rounded_frame();
+    DisplayCommand badge;
+    badge.type = DisplayCommandType::FillRect;
+    badge.rect = {4, 4, 8, 8};
+    badge.color = {20, 30, 40, 255};
+    base.display_list.push_back(badge);
+    base.display_clip_indices.push_back(0);
+    ScriptTaskFrameDiffAccumulator accumulator;
+
+    assert(!accumulator.observe_presented(ScriptTaskAppFrame(base)));
+    ScriptTaskAppFrame first_mutation = base;
+    first_mutation.display_list[1].color = {50, 60, 70, 255};
+    assert(accumulator.observe_presented(std::move(first_mutation)));
+    ScriptTaskAppFrame second_mutation = base;
+    second_mutation.display_list[1].color = {80, 90, 100, 255};
+    assert(accumulator.observe_presented(std::move(second_mutation)));
+
+    const ScriptTaskFrameDiffStatistics& statistics = accumulator.statistics();
+    assert(statistics.pairs == 2 && statistics.paint_structure_equal_pairs == 2 &&
+           statistics.input_targets_equal_pairs == 2);
+    assert(statistics.unchanged_commands == 2 && statistics.changed_commands == 2 &&
+           statistics.unchanged_prefix_commands == 2 && statistics.unchanged_suffix_commands == 0);
+    assert(statistics.changed_bounds_pairs == 2 && statistics.changed_bounds_pixels == 128);
+
+    accumulator.reset();
+    assert(accumulator.statistics().pairs == 0 && accumulator.statistics().changed_bounds_pixels == 0);
+    assert(!accumulator.observe_presented(ScriptTaskAppFrame(base)));
+}
+
 } // namespace
 
 int script_task_frame_renderer_tests_main() {
@@ -215,6 +245,7 @@ int script_task_frame_renderer_tests_main() {
     renderer_exposes_rounded_dirty_fast_path_statistics();
     renderer_forwards_opt_in_rounded_replay_timing();
     frame_diff_reports_value_churn_without_granting_reuse();
+    frame_diff_accumulator_owns_only_accepted_value_frames();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
 }

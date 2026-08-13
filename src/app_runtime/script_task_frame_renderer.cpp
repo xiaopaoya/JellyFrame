@@ -3,6 +3,8 @@
 #include "render_core/raster_primitives.h"
 
 #include <algorithm>
+#include <limits>
+#include <utility>
 #include <vector>
 
 namespace jellyframe {
@@ -10,6 +12,15 @@ namespace {
 
 bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
+}
+
+template <typename Value>
+void add_saturating(Value& target, Value value) {
+    if (value > std::numeric_limits<Value>::max() - target) {
+        target = std::numeric_limits<Value>::max();
+        return;
+    }
+    target += value;
 }
 
 Rect intersect_rect(Rect left, Rect right) {
@@ -91,6 +102,19 @@ bool equal_command_at(const ScriptTaskAppFrame& previous,
                       std::size_t current_index) {
     return equal_display_command(previous.display_list[previous_index], current.display_list[current_index]) &&
         display_clip_index_at(previous, previous_index) == display_clip_index_at(current, current_index);
+}
+
+std::uint64_t clipped_rect_pixels(Rect rect, Rect viewport) {
+    const Rect visible = intersect_rect(rect, viewport);
+    if (empty_rect(visible)) {
+        return 0;
+    }
+    const std::uint64_t width = static_cast<std::uint64_t>(visible.width);
+    const std::uint64_t height = static_cast<std::uint64_t>(visible.height);
+    if (width > std::numeric_limits<std::uint64_t>::max() / height) {
+        return std::numeric_limits<std::uint64_t>::max();
+    }
+    return width * height;
 }
 
 std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects,
@@ -204,6 +228,43 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
         }
     }
     return report;
+}
+
+bool ScriptTaskFrameDiffAccumulator::observe_presented(ScriptTaskAppFrame&& frame) {
+    if (!previous_.has_value()) {
+        previous_.emplace(std::move(frame));
+        return false;
+    }
+    const ScriptTaskFrameDiff report = diff_script_task_app_frames(*previous_, frame);
+    add_saturating(statistics_.pairs, std::uint64_t{1});
+    if (report.paint_structure_equal) {
+        add_saturating(statistics_.paint_structure_equal_pairs, std::uint64_t{1});
+    }
+    if (report.input_targets_equal) {
+        add_saturating(statistics_.input_targets_equal_pairs, std::uint64_t{1});
+    }
+    add_saturating(statistics_.unchanged_commands, static_cast<std::uint64_t>(report.unchanged_command_count));
+    add_saturating(statistics_.changed_commands, static_cast<std::uint64_t>(report.changed_command_count));
+    add_saturating(statistics_.unchanged_prefix_commands,
+                   static_cast<std::uint64_t>(report.unchanged_prefix_command_count));
+    add_saturating(statistics_.unchanged_suffix_commands,
+                   static_cast<std::uint64_t>(report.unchanged_suffix_command_count));
+    if (report.has_changed_command_bounds) {
+        add_saturating(statistics_.changed_bounds_pairs, std::uint64_t{1});
+        add_saturating(statistics_.changed_bounds_pixels,
+                       clipped_rect_pixels(report.changed_command_bounds, frame.viewport));
+    }
+    *previous_ = std::move(frame);
+    return true;
+}
+
+const ScriptTaskFrameDiffStatistics& ScriptTaskFrameDiffAccumulator::statistics() const {
+    return statistics_;
+}
+
+void ScriptTaskFrameDiffAccumulator::reset() {
+    previous_.reset();
+    statistics_ = {};
 }
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
