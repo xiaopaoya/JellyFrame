@@ -54,6 +54,15 @@ Rect union_rect(Rect left, Rect right) {
     return {x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
+Rect expand_rect(Rect rect, int amount) {
+    if (empty_rect(rect) || amount <= 0) return rect;
+    const int x1 = safe_edge(rect.x, -amount);
+    const int y1 = safe_edge(rect.y, -amount);
+    const int x2 = safe_edge(safe_edge(rect.x, rect.width), amount);
+    const int y2 = safe_edge(safe_edge(rect.y, rect.height), amount);
+    return {x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
+}
+
 bool contains_rect(Rect outer, Rect inner) {
     return !empty_rect(inner) &&
         inner.x >= outer.x && inner.y >= outer.y &&
@@ -135,6 +144,37 @@ bool has_valid_value_frame_shape(const ScriptTaskAppFrame& frame) {
 
 std::uint16_t display_clip_index_at(const ScriptTaskAppFrame& frame, std::size_t index) {
     return frame.display_clip_indices.empty() ? kScriptTaskNoClip : frame.display_clip_indices[index];
+}
+
+// A partial replay of a rounded clip group may otherwise re-composite a
+// translucent edge against a locally rebuilt underlay. Treat the effective
+// rounded clip as an atomic invalidation unit for the desktop correctness
+// probe. This deliberately does not alter the public dirty-render contract.
+bool rounded_clip_chain_bounds(const ScriptTaskAppFrame& frame,
+                               std::uint16_t clip_index,
+                               Rect viewport,
+                               Rect& bounds) {
+    bounds = viewport;
+    if (clip_index == kScriptTaskNoClip) {
+        return false;
+    }
+
+    bool has_rounded_clip = false;
+    std::uint32_t current = clip_index;
+    std::size_t depth = 0;
+    while (current != kScriptTaskNoParentClip) {
+        if (current >= frame.clips.size() || depth++ >= frame.clips.size()) {
+            return false;
+        }
+        const ScriptTaskFrameClip& clip = frame.clips[current];
+        bounds = intersect_rect(bounds, clip.rect);
+        if (empty_rect(bounds)) {
+            return false;
+        }
+        has_rounded_clip = has_rounded_clip || has_corner_radius(clip.border_radius);
+        current = clip.parent_clip;
+    }
+    return has_rounded_clip;
 }
 
 bool equal_command_at(const ScriptTaskAppFrame& previous,
@@ -602,7 +642,46 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
         changed_region = empty_rect(changed_region) ? union_rect(old_bounds, new_bounds)
                                                      : union_rect(changed_region, union_rect(old_bounds, new_bounds));
     }
-    changed_region = intersect_rect(changed_region, viewport);
+
+    // A rounded group that overlaps a changed underlay must also be replayed
+    // as a whole. It is not enough to inspect only changed commands: a local
+    // un-clipped command beneath a rounded translucent group has the same
+    // partial-composite hazard. The union can expose another rounded group, so
+    // converge across the finite display-list group set before budgeting.
+    for (std::size_t pass = 0; pass < frame.display_list.size(); ++pass) {
+        bool expanded = false;
+        std::size_t begin = 0;
+        while (begin < frame.display_list.size()) {
+            const std::uint16_t clip_index = display_clip_index_at(frame, begin);
+            std::size_t end = begin + 1;
+            bool intersects = false;
+            while (end < frame.display_list.size() && display_clip_index_at(frame, end) == clip_index) {
+                ++end;
+            }
+            for (std::size_t index = begin; index < end; ++index) {
+                Rect bounds;
+                if (!renderer.command_visual_bounds(frame.display_list[index], bounds)) {
+                    fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds;
+                    return false;
+                }
+                if (!empty_rect(intersect_rect(bounds, changed_region))) {
+                    intersects = true;
+                }
+            }
+            Rect rounded_clip_bounds;
+            if (intersects && rounded_clip_chain_bounds(frame, clip_index, viewport, rounded_clip_bounds)) {
+                const Rect expanded_region = union_rect(changed_region, rounded_clip_bounds);
+                expanded = expanded || !equal_rect(expanded_region, changed_region);
+                changed_region = expanded_region;
+            }
+            begin = end;
+        }
+        if (!expanded) break;
+    }
+    // SoftwareRasterizer's rounded coverage may sample immediately outside a
+    // command's integer rect. Replay must repaint that one-pixel fringe too,
+    // otherwise a nested rounded clip can retain stale edge coverage.
+    changed_region = intersect_rect(expand_rect(changed_region, 1), viewport);
     const std::uint64_t pixels = clipped_rect_pixels(changed_region, viewport);
     if (pixels == 0 || options_.max_replay_pixels == 0 || pixels > options_.max_replay_pixels) {
         fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::ReplayRegionBudget;

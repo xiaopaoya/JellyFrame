@@ -528,7 +528,9 @@ bool lying_text_painter(FrameBuffer& target,
     if (text.empty()) {
         return true;
     }
-    const int x = rect.x - 1;
+    // One-pixel replay-region expansion protects legitimate antialiasing
+    // fringes. Write beyond that allowance to exercise the canonical guard.
+    const int x = rect.x - 2;
     if (!target.contains(x, rect.y)) {
         return false;
     }
@@ -560,7 +562,7 @@ void retained_replay_recovers_from_false_bounded_painter_claim() {
            replay.statistics().pixel_mismatch_fallbacks == 1 &&
            replay.statistics().pixel_mismatch_pixels == 1 &&
            replay.statistics().has_first_pixel_mismatch &&
-           replay.statistics().first_pixel_mismatch_x == 6 &&
+           replay.statistics().first_pixel_mismatch_x == 5 &&
            replay.statistics().first_pixel_mismatch_y == 4);
 }
 
@@ -622,6 +624,13 @@ ScriptTaskAppFrame retained_replay_nested_clip_frame() {
     shadow.stroke_width = 5;
     frame.display_list.push_back(shadow);
 
+    DisplayCommand underlay;
+    underlay.type = DisplayCommandType::FillRect;
+    underlay.rect = {19, 16, 15, 11};
+    underlay.color = {93, 116, 180, 196};
+    underlay.border_radius = 3;
+    frame.display_list.push_back(underlay);
+
     DisplayCommand panel;
     panel.type = DisplayCommandType::LinearGradient;
     panel.rect = {8, 7, 48, 34};
@@ -651,7 +660,7 @@ ScriptTaskAppFrame retained_replay_nested_clip_frame() {
         {{8, 7, 48, 34}, 9, kScriptTaskNoParentClip},
         {{14, 12, 36, 25}, 7, 0},
     };
-    frame.display_clip_indices = {kScriptTaskNoClip, kScriptTaskNoClip, 0, 1, 1};
+    frame.display_clip_indices = {kScriptTaskNoClip, kScriptTaskNoClip, kScriptTaskNoClip, 0, 1, 1};
     return frame;
 }
 
@@ -710,13 +719,16 @@ void retained_replay_matches_canonical_output_across_nested_clip_mutations() {
     constexpr int kIterations = 96;
     for (int iteration = 0; iteration < kIterations; ++iteration) {
         ScriptTaskAppFrame current = previous;
-        DisplayCommand& accent = current.display_list[3];
-        accent.rect.x = 15 + (iteration % 18);
-        accent.rect.y = 14 + ((iteration * 5) % 14);
-        accent.color = {static_cast<std::uint8_t>(84 + (iteration * 13) % 140),
-                        static_cast<std::uint8_t>(99 + (iteration * 17) % 130),
-                        static_cast<std::uint8_t>(110 + (iteration * 7) % 120),
-                        static_cast<std::uint8_t>(84 + (iteration % 6) * 28)};
+        // This command is intentionally beneath both rounded clip groups.
+        // Its local change must still expand replay through each overlapping
+        // rounded group before their translucent edges are re-composited.
+        DisplayCommand& underlay = current.display_list[2];
+        underlay.rect.x = 15 + (iteration % 18);
+        underlay.rect.y = 14 + ((iteration * 5) % 14);
+        underlay.color = {static_cast<std::uint8_t>(84 + (iteration * 13) % 140),
+                          static_cast<std::uint8_t>(99 + (iteration * 17) % 130),
+                          static_cast<std::uint8_t>(110 + (iteration * 7) % 120),
+                          static_cast<std::uint8_t>(84 + (iteration % 6) * 28)};
 
         FrameBuffer actual;
         ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
