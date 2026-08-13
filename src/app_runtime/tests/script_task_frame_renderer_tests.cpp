@@ -169,6 +169,42 @@ void renderer_forwards_opt_in_rounded_replay_timing() {
            statistics.rounded_clip_composite_microseconds);
 }
 
+void frame_diff_reports_value_churn_without_granting_reuse() {
+    ScriptTaskAppFrame previous = rounded_frame();
+    previous.input_targets.push_back({7, {14, 14, 10, 10}, true, 1});
+    ScriptTaskAppFrame current = previous;
+    current.display_list[0].color = {40, 140, 220, 255};
+    current.input_targets[0].enabled = false;
+
+    const ScriptTaskFrameDiff report = diff_script_task_app_frames(previous, current);
+    assert(report.viewport_equal && report.clip_chains_equal && report.display_clip_indices_equal);
+    assert(report.paint_structure_equal);
+    assert(!report.input_targets_equal);
+    assert(report.previous_command_count == 1 && report.current_command_count == 1);
+    assert(report.unchanged_command_count == 0 && report.changed_command_count == 1);
+    assert(report.unchanged_prefix_command_count == 0 && report.unchanged_suffix_command_count == 0);
+    assert(report.has_changed_command_bounds && report.changed_command_bounds.x == 0 &&
+           report.changed_command_bounds.y == 0 && report.changed_command_bounds.width == 40 &&
+           report.changed_command_bounds.height == 40);
+
+    current.clips[1].border_radius = 4;
+    const ScriptTaskFrameDiff changed_clip_report = diff_script_task_app_frames(previous, current);
+    assert(!changed_clip_report.clip_chains_equal && !changed_clip_report.paint_structure_equal);
+
+    current = previous;
+    DisplayCommand appended = previous.display_list[0];
+    appended.rect = {4, 4, 6, 6};
+    current.display_list.push_back(appended);
+    current.display_clip_indices.push_back(1);
+    const ScriptTaskFrameDiff appended_report = diff_script_task_app_frames(previous, current);
+    assert(!appended_report.display_clip_indices_equal && !appended_report.paint_structure_equal);
+    assert(appended_report.unchanged_command_count == 1 && appended_report.changed_command_count == 1);
+    assert(appended_report.unchanged_prefix_command_count == 1 && appended_report.unchanged_suffix_command_count == 0);
+    assert(appended_report.has_changed_command_bounds && appended_report.changed_command_bounds.x == 4 &&
+           appended_report.changed_command_bounds.y == 4 && appended_report.changed_command_bounds.width == 6 &&
+           appended_report.changed_command_bounds.height == 6);
+}
+
 } // namespace
 
 int script_task_frame_renderer_tests_main() {
@@ -178,6 +214,7 @@ int script_task_frame_renderer_tests_main() {
     renderer_keeps_non_dirty_pixels_and_rejects_bad_chain();
     renderer_exposes_rounded_dirty_fast_path_statistics();
     renderer_forwards_opt_in_rounded_replay_timing();
+    frame_diff_reports_value_churn_without_granting_reuse();
     std::cout << "script task frame renderer tests passed\n";
     return 0;
 }

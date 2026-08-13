@@ -40,6 +40,59 @@ bool contains_rect(Rect outer, Rect inner) {
         safe_edge(inner.y, inner.height) <= safe_edge(outer.y, outer.height);
 }
 
+bool equal_rect(Rect left, Rect right) {
+    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
+}
+
+bool equal_color(Color left, Color right) {
+    return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
+}
+
+bool equal_display_command(const DisplayCommand& left, const DisplayCommand& right) {
+    return left.type == right.type && equal_rect(left.rect, right.rect) && equal_color(left.color, right.color) &&
+        equal_color(left.color2, right.color2) && left.text == right.text &&
+        left.border_radius == right.border_radius && left.stroke_width == right.stroke_width &&
+        left.font_size == right.font_size && left.font_weight == right.font_weight &&
+        left.font_family_hash == right.font_family_hash && left.text_align == right.text_align &&
+        left.text_single_line == right.text_single_line && left.gradient_axis == right.gradient_axis &&
+        left.gradient_stop_percent == right.gradient_stop_percent && left.image_handle == right.image_handle &&
+        left.object_fit == right.object_fit && left.object_position.x_percent == right.object_position.x_percent &&
+        left.object_position.y_percent == right.object_position.y_percent &&
+        left.image_rendering == right.image_rendering;
+}
+
+bool equal_clip(const ScriptTaskFrameClip& left, const ScriptTaskFrameClip& right) {
+    return equal_rect(left.rect, right.rect) && left.border_radius == right.border_radius &&
+        left.parent_clip == right.parent_clip;
+}
+
+bool equal_input_target(const ScriptTaskInputTarget& left, const ScriptTaskInputTarget& right) {
+    return left.target_key == right.target_key && equal_rect(left.rect, right.rect) && left.enabled == right.enabled &&
+        left.clip_index == right.clip_index;
+}
+
+template <typename Value, typename Equal>
+bool equal_vector(const std::vector<Value>& left, const std::vector<Value>& right, Equal equal) {
+    return left.size() == right.size() &&
+        std::equal(left.begin(), left.end(), right.begin(), right.end(), equal);
+}
+
+bool has_valid_clip_parallelism(const ScriptTaskAppFrame& frame) {
+    return frame.display_clip_indices.empty() || frame.display_clip_indices.size() == frame.display_list.size();
+}
+
+std::uint16_t display_clip_index_at(const ScriptTaskAppFrame& frame, std::size_t index) {
+    return frame.display_clip_indices.empty() ? kScriptTaskNoClip : frame.display_clip_indices[index];
+}
+
+bool equal_command_at(const ScriptTaskAppFrame& previous,
+                      std::size_t previous_index,
+                      const ScriptTaskAppFrame& current,
+                      std::size_t current_index) {
+    return equal_display_command(previous.display_list[previous_index], current.display_list[current_index]) &&
+        display_clip_index_at(previous, previous_index) == display_clip_index_at(current, current_index);
+}
+
 std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects,
                                         std::size_t dirty_rect_count,
                                         Rect target) {
@@ -84,6 +137,74 @@ void clear_rect(FrameBuffer& target, Rect rect, Color color) {
 }
 
 } // namespace
+
+ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previous,
+                                                const ScriptTaskAppFrame& current) {
+    ScriptTaskFrameDiff report;
+    report.viewport_equal = equal_rect(previous.viewport, current.viewport);
+    report.previous_command_count = previous.display_list.size();
+    report.current_command_count = current.display_list.size();
+    report.clip_chains_equal = equal_vector(previous.clips, current.clips, equal_clip);
+    report.input_targets_equal = equal_vector(previous.input_targets, current.input_targets, equal_input_target);
+    const bool valid_parallelism = has_valid_clip_parallelism(previous) && has_valid_clip_parallelism(current);
+    report.display_clip_indices_equal = valid_parallelism &&
+        report.previous_command_count == report.current_command_count;
+    if (report.display_clip_indices_equal) {
+        for (std::size_t index = 0; index < report.previous_command_count; ++index) {
+            if (display_clip_index_at(previous, index) != display_clip_index_at(current, index)) {
+                report.display_clip_indices_equal = false;
+                break;
+            }
+        }
+    }
+    report.paint_structure_equal = report.viewport_equal && report.clip_chains_equal &&
+        report.display_clip_indices_equal;
+
+    const std::size_t comparable_count = std::min(report.previous_command_count, report.current_command_count);
+    for (std::size_t index = 0; index < comparable_count; ++index) {
+        if (equal_command_at(previous, index, current, index)) {
+            ++report.unchanged_command_count;
+        }
+    }
+    report.changed_command_count = std::max(report.previous_command_count, report.current_command_count) -
+        report.unchanged_command_count;
+    while (report.unchanged_prefix_command_count < comparable_count &&
+           equal_command_at(previous,
+                            report.unchanged_prefix_command_count,
+                            current,
+                            report.unchanged_prefix_command_count)) {
+        ++report.unchanged_prefix_command_count;
+    }
+    while (report.unchanged_suffix_command_count + report.unchanged_prefix_command_count < comparable_count) {
+        const std::size_t previous_index = report.previous_command_count - 1 - report.unchanged_suffix_command_count;
+        const std::size_t current_index = report.current_command_count - 1 - report.unchanged_suffix_command_count;
+        if (!equal_command_at(previous, previous_index, current, current_index)) {
+            break;
+        }
+        ++report.unchanged_suffix_command_count;
+    }
+    const std::size_t maximum_count = std::max(report.previous_command_count, report.current_command_count);
+    for (std::size_t index = 0; index < maximum_count; ++index) {
+        const bool has_previous = index < report.previous_command_count;
+        const bool has_current = index < report.current_command_count;
+        if (has_previous && has_current && equal_command_at(previous, index, current, index)) {
+            continue;
+        }
+        if (has_previous) {
+            report.changed_command_bounds = report.has_changed_command_bounds
+                ? union_rect(report.changed_command_bounds, previous.display_list[index].rect)
+                : previous.display_list[index].rect;
+            report.has_changed_command_bounds = true;
+        }
+        if (has_current) {
+            report.changed_command_bounds = report.has_changed_command_bounds
+                ? union_rect(report.changed_command_bounds, current.display_list[index].rect)
+                : current.display_list[index].rect;
+            report.has_changed_command_bounds = true;
+        }
+    }
+    return report;
+}
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                                                  ScriptTaskFrameRendererOptions options)

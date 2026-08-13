@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-11；适用版本：0.6.0-dev
+> 最后更新：2026-08-14；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -13,6 +13,11 @@ JellyFrame Engine 的重要变更记录在这里。
 - 启动外部开发者试用线：完善构建 profile/模块证据、打包与启动器工作流，并针对能力缺口做有边界的补全。任何新的浏览器兼容承诺都必须同时落入能力矩阵、profile gate 和回归测试。
 
 ### 变更
+
+- rounded value-frame 合成现在会在每行可保守证明所有圆角 clip 均为 full coverage 的 span 中跳过
+  clip-chain 查询；所有 corner bounding box 仍走原有精确抗锯齿 coverage 路径。WS147 实机 A/B 显示
+  sampled-coverage composite 降低 31.14%、render p95 降低 3.64%，internal RAM low-water 不变、
+  传输/运行时错误为零且目检通过。实验性 full-frame fixture 仍远未达到 realtime，不能视为默认路径结论。
 
 - 增加 Render Core standalone 构建边界：App Runtime 和 JerryScript 可以独立关闭；开启
   `JELLYFRAME_INSTALL_RENDER_CORE=ON` 后会导出版本化的

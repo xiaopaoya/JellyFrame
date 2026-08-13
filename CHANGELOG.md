@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -16,6 +16,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   profile gate and regression coverage land together.
 
 ### Changed
+
+- Rounded value-frame compositing now conservatively skips rounded clip-chain
+  queries in per-row spans that are provably full coverage. Corner bounding
+  boxes retain the exact existing antialiased coverage path. A WS147 hardware
+  A/B measured a 31.14% reduction in sampled-coverage composite time and a
+  3.64% render-p95 reduction with unchanged internal-RAM low water, zero
+  transport/runtime errors and visual checks passing. The experimental
+  full-frame fixture remains far from realtime and is not a default-path claim.
 
 - Added a standalone Render Core build boundary: App Runtime and JerryScript
   can be disabled independently, and `JELLYFRAME_INSTALL_RENDER_CORE=ON`
