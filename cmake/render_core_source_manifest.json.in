@@ -2,5 +2,8 @@
   "schemaVersion": 1,
   "hashAlgorithm": "sha256",
   "sourceHash": "@JELLYFRAME_RENDER_CORE_SOURCE_HASH@",
-  "sourceFileCount": @JELLYFRAME_RENDER_CORE_SOURCE_FILE_COUNT@
+  "sourceFileCount": @JELLYFRAME_RENDER_CORE_SOURCE_FILE_COUNT@,
+  "files": [
+@JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_ENTRIES_JSON@
+  ]
 }

@@ -137,6 +137,12 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                     self.assertEqual(source_manifest["hashAlgorithm"], "sha256")
                     self.assertGreater(source_manifest["sourceFileCount"], 0)
                     self.assertRegex(source_manifest["sourceHash"], r"^[0-9a-f]{64}$")
+                    self.assertEqual(len(source_manifest["files"]), source_manifest["sourceFileCount"])
+                    self.assertEqual([entry["path"] for entry in source_manifest["files"]],
+                                     sorted(entry["path"] for entry in source_manifest["files"]))
+                    for entry in source_manifest["files"]:
+                        self.assertRegex(entry["path"], r"^(cmake|src/render_core)/")
+                        self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
                     self.assertEqual(provenance["sourceHash"], source_manifest["sourceHash"])
                     self.assertEqual(provenance["sourceFileCount"], source_manifest["sourceFileCount"])
                     if expected_source_hash is None:

@@ -31,15 +31,26 @@ function(jellyframe_compute_render_core_source_hash source_root)
     endif()
 
     set(_jellyframe_render_core_hash_manifest "")
+    set(_jellyframe_render_core_hash_manifest_entries)
     foreach(_jellyframe_render_core_hash_relative IN LISTS _jellyframe_render_core_hash_sources)
         file(SHA256 "${_jellyframe_render_core_hash_root}/${_jellyframe_render_core_hash_relative}"
             _jellyframe_render_core_hash_file)
         string(APPEND _jellyframe_render_core_hash_manifest
             "${_jellyframe_render_core_hash_relative}\t${_jellyframe_render_core_hash_file}\n")
+        string(REPLACE "\\" "\\\\" _jellyframe_render_core_hash_json_path
+            "${_jellyframe_render_core_hash_relative}")
+        string(REPLACE "\"" "\\\"" _jellyframe_render_core_hash_json_path
+            "${_jellyframe_render_core_hash_json_path}")
+        list(APPEND _jellyframe_render_core_hash_manifest_entries
+            "    {\"path\": \"${_jellyframe_render_core_hash_json_path}\", \"sha256\": \"${_jellyframe_render_core_hash_file}\"}")
     endforeach()
     string(SHA256 _jellyframe_render_core_hash_value "${_jellyframe_render_core_hash_manifest}")
     list(LENGTH _jellyframe_render_core_hash_sources _jellyframe_render_core_hash_count)
 
     set(JELLYFRAME_RENDER_CORE_SOURCE_HASH "${_jellyframe_render_core_hash_value}" PARENT_SCOPE)
     set(JELLYFRAME_RENDER_CORE_SOURCE_FILE_COUNT "${_jellyframe_render_core_hash_count}" PARENT_SCOPE)
+    string(JOIN ",\n" _jellyframe_render_core_hash_manifest_entries_json
+        ${_jellyframe_render_core_hash_manifest_entries})
+    set(JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_ENTRIES_JSON
+        "${_jellyframe_render_core_hash_manifest_entries_json}" PARENT_SCOPE)
 endfunction()
