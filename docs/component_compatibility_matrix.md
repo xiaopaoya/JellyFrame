@@ -1,6 +1,6 @@
 # Component Compatibility Matrix
 
-> Last updated: 2026-08-12; Applies to: 0.6.0-dev
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
 
 This matrix records compatibility evidence across the three planned product
 boundaries. It is intentionally narrower than the HTML/CSS capability tables:
@@ -14,7 +14,7 @@ build artifact may consume which other artifact.
 | JellyFrame App Runtime | in-tree `jellyframe_render_core` | same checkout | `verified` | Default desktop Release/Debug and non-scripting CI CTest. Use for synchronized Core/Runtime changes. |
 | JellyFrame App Runtime | Core source override | local checkout / source profile | `verified locally` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` selects another Core checkout for cross-repository development; package mode remains mutually exclusive. |
 | Render Core standalone tests | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Standalone configure, build, CTest and install path. The package contains the Core target, headers and capability profile only. |
-| JellyFrame App Runtime | installed Render Core package | `0.6.0` / ABI `1` | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; local consumer CTest is `8/8`, and the package-consumer CI job passed on `a934846`. |
+| JellyFrame App Runtime | installed Render Core package | `0.6.0` / ABI `1` / source manifest schema `1` | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; it validates and copies the package SHA-256 source manifest into build provenance. |
 | JellyFrame App Runtime | installed Render Core package | wrong version or ABI | `rejected` | Configure-time exact version and engine-ABI checks. No fallback to source Core is allowed in package mode. |
 | App package preflight | generated Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` validates profile schema, known feature IDs and dependency closure before resources are read; missing required families reject the package. |
 | JellyFrame Script bridge | in-tree Render Core | `0.6.0-dev` source line | `verified separately` | JerryScript is optional and remains an App Runtime dependency. This does not prove a package-mode scripting build. |
@@ -40,9 +40,10 @@ capability profile before accepting it.
 Each configure writes `generated/jellyframe_render_core_provenance.json` next
 to the copied or generated profile. It is the portable record to archive with
 Runtime or port build evidence: provider, actual package version/ABI, profile
-filename and the consumer lock values. It deliberately excludes a guessed Git
-hash; that field becomes valid only when an independently released Core archive
-provides it.
+filename, consumer lock values and deterministic source hash/file count. An
+installed package must also supply a matching source manifest, which package
+mode validates and copies next to the provenance record. The hash is a content
+identity, not a substitute for a signed release or reviewed lock.
 
 ## Evidence Rules
 

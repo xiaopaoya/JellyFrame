@@ -1,6 +1,6 @@
 # 组件兼容性矩阵
 
-> 最后更新：2026-08-12；适用版本：0.6.0-dev
+> 最后更新：2026-08-14；适用版本：0.6.0-dev
 
 这份矩阵记录三个计划中的产品边界之间的兼容性证据。它不同于 HTML/CSS
 能力全表：能力全表描述 app 可见行为，本文件描述哪个构建产物可以消费哪个
@@ -13,7 +13,7 @@
 | JellyFrame App Runtime | 源码内 `jellyframe_render_core` | 同一 checkout | `verified` | 默认桌面 Release/Debug 和非 scripting CI CTest。适合同步修改 Core 与 Runtime。 |
 | JellyFrame App Runtime | Core 源码覆盖 | 本地 checkout / source profile | `本地已验证` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 可选用另一个 Core checkout 进行跨仓库开发；仍与 package 模式互斥。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
-| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；本地 consumer CTest 为 `8/8`，`a934846` 上的 package-consumer CI 已通过。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` / source manifest schema `1` | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会校验 package 的 SHA-256 source manifest 并复制到构建 provenance。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本或 ABI | `rejected` | 配置阶段执行精确版本和 engine ABI 检查；package 模式不允许偷偷回退到源码 Core。 |
 | App package 预检 | 生成的 Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` 会在读取资源前校验 profile schema、已知 feature ID 和依赖闭包；缺失必需能力族会拒绝 package。 |
 | JellyFrame Script bridge | 源码内 Render Core | `0.6.0-dev` 源码线 | `独立验证` | JerryScript 仍是可选的 App Runtime 依赖；这不等于 package-mode scripting 已验证。 |
@@ -36,8 +36,9 @@ Core 可以独立演进，但 Runtime 接受新版本前，必须更新锁、运
 
 每次配置都会在复制或生成的 profile 旁写出
 `generated/jellyframe_render_core_provenance.json`。它是 Runtime 或 port 构建证据
-应归档的可移植记录：provider、实际 package 版本/ABI、profile 文件名和消费者锁定值。
-其中刻意不写猜测出来的 Git hash；只有独立 Core 发布包正式提供时，该字段才有意义。
+应归档的可移植记录：provider、实际 package 版本/ABI、profile 文件名、消费者锁定值和确定性
+source hash/file count。已安装 package 还必须提供匹配的 source manifest；package 模式会校验并复制它。
+该 hash 是内容身份，不替代已签名 release 或经审查的 lock。
 
 ## 证据规则
 

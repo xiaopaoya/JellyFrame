@@ -1,6 +1,6 @@
 # 引擎架构
 
-> 最后更新：2026-08-12；适用版本：0.6.0-dev
+> 最后更新：2026-08-14；适用版本：0.6.0-dev
 
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
@@ -38,10 +38,11 @@ cmake --build build\framework-external-core --config Release `
 `in-tree` 模式仍适用于 Core 与 Runtime 同步开发；package 模式用于验证
 Core 独立发布后的消费边界。每次配置还会生成
 `generated/jellyframe_render_core_provenance.json`，其中记录选中的 provider、
-Core package 版本、ABI、profile 文件名和 Runtime 锁定值，且不写入工作站路径。
-Runtime 或 port 构建报告应归档此文件。源码 hash 属于独立发布包的溯源信息，不能由
-Runtime 构建猜测或伪造。Device Runtime、JFDP 协议、launcher 和硬件 port 不属于
-这个 package 边界。
+Core package 版本、ABI、profile 文件名、Runtime 锁定值和确定性的 SHA-256 source identity，
+且不写入工作站路径。已安装的 Core package 会导出匹配的 source manifest；package consumer 会校验并复制
+该 manifest 到生成目录。Runtime 或 port 构建报告应同时归档二者。内容 hash 用于识别确切消费的
+Core source 集合，包括 source archive 或本地 override；它不替代 release signature、经审查的版本 lock
+或发布权威。Device Runtime、JFDP 协议、launcher 和硬件 port 不属于这个 package 边界。
 
 跨仓库开发时，可以用 `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 让 `in-tree`
 provider 指向另一个 Render Core checkout。这只是本地开发覆盖项，不是第二套
