@@ -1,6 +1,6 @@
 # App Author Guide
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 This is the short contract for people writing JellyFrame apps. JellyFrame is
 not a mini browser. It is a Web-shaped embedded UI runtime: HTML gives

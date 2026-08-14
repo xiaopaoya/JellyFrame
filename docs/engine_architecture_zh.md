@@ -61,6 +61,11 @@ Core package 版本、ABI、profile 文件名、Runtime 锁定值和确定性的
 Core source 集合，包括 source archive 或本地 override；它不替代 release signature、经审查的版本 lock
 或发布权威。Device Runtime、JFDP 协议、launcher 和硬件 port 不属于这个 package 边界。
 
+Runtime 侧的 provider 选择、package lock 校验和 provenance 输出位于
+`cmake/jellyframe_render_core_provider.cmake`。它有意不属于
+`render_core_*.cmake` 的归档边界：独立 Core 拥有源码与 package export，Runtime 则拥有接受哪一份
+Core 的策略。
+
 跨仓库开发时，可以用 `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 让 `in-tree`
 provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只是本地开发覆盖项，
 不是第二套公开依赖机制；package 模式和源码覆盖不能同时使用。CI 会以解压归档作为

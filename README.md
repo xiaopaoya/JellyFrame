@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -18,10 +18,12 @@ The project was developed under the early codename `WearWeb`; current code,
 targets and documentation use `JellyFrame`.
 
 > **Pre-1.0 API stability:** JellyFrame has not reached its first stable
-> release yet. App authors should rely only on the documented Web-compatible
-> subset and documented manifest/tool/host interfaces. Undocumented private
-> HTML/CSS/JS shortcuts are not part of the app contract and may change before
-> 1.0.
+> release yet. Its current development contract may intentionally change or
+> remove an earlier pre-release interface when that improves ownership,
+> performance or maintainability. App authors should use the current documented
+> Web-compatible subset and manifest/tool/host interfaces; there is no support
+> promise for historical development artifacts. See
+> [docs/pre_1_0_evolution_policy.md](docs/pre_1_0_evolution_policy.md).
 
 ## Highlights
 
@@ -242,9 +244,9 @@ Chinese documentation uses the `_zh` suffix, for example
 
 ## Versioning
 
-- Current development version: `0.6.0-dev` in [VERSION](VERSION). The
-  documented package compatibility baseline remains `0.5.0` until a later
-  breaking release changes it.
+- Current development version: `0.6.0-dev` in [VERSION](VERSION). Before
+  `1.0`, packages must target the active development line (`0.6.0`); historical
+  development artifacts are intentionally not a compatibility baseline.
 - Changelog: [CHANGELOG.md](CHANGELOG.md) and
   [CHANGELOG_zh.md](CHANGELOG_zh.md).
 - Version rules: [docs/versioning.md](docs/versioning.md).

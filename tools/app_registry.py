@@ -10,6 +10,8 @@ import struct
 import zlib
 from pathlib import Path
 
+from jellyframe_versions import active_runtime_release_version
+
 
 JFAPP_MAGIC = b"JFAPPV0\0"
 JFAPP_HEADER_FORMAT = "<8sHHIIIIIIIIIII"
@@ -210,6 +212,15 @@ def validate_bundle_summary(summary: object) -> dict:
     for key in required_strings:
         if not isinstance(summary.get(key), str) or not summary[key]:
             fail(f".jfapp summary {key} must be a non-empty string")
+    try:
+        active_runtime_version = active_runtime_release_version()
+    except (OSError, RuntimeError) as error:
+        fail(str(error))
+    if summary["minJellyFrame"] != active_runtime_version:
+        fail(
+            ".jfapp summary minJellyFrame must target the active pre-1.0 runtime line "
+            f"{active_runtime_version}; got {summary['minJellyFrame']!r}"
+        )
     if summary["role"] not in {"app", "launcher", "watchface", "settings"}:
         fail(".jfapp summary role is invalid")
     if summary["script"] not in {"none", "classic"}:

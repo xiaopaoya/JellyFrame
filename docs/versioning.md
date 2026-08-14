@@ -1,6 +1,6 @@
 # Versioning
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
 
 JellyFrame Engine uses a lightweight semantic versioning scheme:
 
@@ -10,11 +10,18 @@ MAJOR.MINOR.PATCH[-stage]
 
 ## Rules
 
-- `MAJOR`: incompatible runtime or public API changes.
-- `MINOR`: new engine capabilities that remain compatible with existing apps.
-- `PATCH`: bug fixes, parser/layout correctness fixes and documentation-only
-  maintenance.
-- `-dev`: active development before a stable tagged release.
+- Before `1.0`, `0.y.0` is a new active contract line and may intentionally
+  contain incompatible runtime or public API changes.
+- Before `1.0`, `0.y.z` is normally a focused fix, but may remove an incorrect
+  or harmful pre-release contract when that reduces duplicate ownership or
+  maintenance cost.
+- `-dev`: mutable active development, not a compatibility target.
+- Starting at `1.0`, `MAJOR.MINOR.PATCH` follows the stable public-contract
+  policy: incompatible changes require a major version and an explicit
+  migration decision where users need one.
+
+See `pre_1_0_evolution_policy.md` for the current rule that architecture
+clarity takes precedence over compatibility with pre-release artifacts.
 
 Render Core packages add one compatibility dimension without changing the
 repository version rule:
@@ -87,6 +94,10 @@ together.
   device-usability, diagnostic and host-contract gates; its focus is trial
   feedback, distribution semantics and target-device evidence, not broad
   browser compatibility.
-- `0.7.x` through `1.0`: public-contract freeze. Manifest, capability, target
-  gate, diagnostic-code and host-service error semantics may change only with
-  compatibility or an explicit migration path.
+- `0.7.x` through `0.9.x`: converge independent Core/Runtime/Device OS
+  boundaries, remove remaining transitional ownership and prepare the public
+  contract. Breaking cleanup remains allowed when it is documented and fully
+  tested.
+- `1.0`: first stable public-contract release. Manifest, capability, target
+  gate, diagnostic-code and host-service error semantics gain compatibility and
+  deliberate migration requirements.

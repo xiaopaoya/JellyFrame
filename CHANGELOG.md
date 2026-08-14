@@ -17,6 +17,18 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Pre-1.0 package handling now has one active development line rather than a
+  historical compatibility baseline. First-party manifests target `0.6.0`;
+  the packer and registry reject any other `minJellyFrame` value, including
+  hand-authored bundles. This is intentionally breaking while the project is
+  pre-1.0 and prevents old experimental artifacts from bypassing the current
+  package/runtime contract.
+
+- Moved Runtime-side Render Core provider selection, package-lock validation,
+  provenance generation and source-override handling into a dedicated CMake
+  module. Standalone Render Core build modules remain owned by the Core source
+  distribution, keeping the consumer policy separate from the exported engine.
+
 - Added a disabled, desktop-only retained-diff replay correctness probe for
   value-frame v2. It owns bounded previous/candidate RGBA images only after a
   successful present, clears conservative old/new visual bounds, repaints all
@@ -65,10 +77,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   dependency metadata from the same registry; the mandatory `core.document`
   and `core.paint` source families remain build-compatible and unchanged at
   runtime.
-- Closed the documentation drift found during the trial audit: public author
-  entry points now identify `0.6.0-dev` while preserving `0.5.0` as the package
-  compatibility baseline. The P3 port integration guide now records its
-  completed WS147 evidence and remaining ownership boundaries.
+- The P3 port integration guide now records its completed WS147 evidence and
+  remaining ownership boundaries.
 
 ## 0.5.0 - 2026-08-09
 

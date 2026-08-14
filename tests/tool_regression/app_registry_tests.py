@@ -25,6 +25,7 @@ def write_jfapp(
     version_name: str = "1.0.0",
     entry: str = "/index.html",
     script: str = "classic",
+    min_jellyframe: str = "0.6.0",
     capabilities: list[str] | None = None,
     network_allowed: bool = False,
     summary_text: str | None = None,
@@ -37,7 +38,7 @@ def write_jfapp(
         "versionName": version_name,
         "versionCode": version_code,
         "entry": entry,
-        "minJellyFrame": "0.5.0-dev",
+        "minJellyFrame": min_jellyframe,
         "script": script,
         "viewport": {"designWidth": 172, "designHeight": 320},
         "budgets": {"maxResourceBytes": 65536},
@@ -97,7 +98,7 @@ def write_jfapp_with_invalid_resource_entry(path: Path) -> None:
         "versionName": "1.0.0",
         "versionCode": 1,
         "entry": "/index.html",
-        "minJellyFrame": "0.5.0-dev",
+        "minJellyFrame": "0.6.0",
         "script": "classic",
         "viewport": {"designWidth": 172, "designHeight": 320},
         "budgets": {"maxResourceBytes": 65536},
@@ -204,6 +205,24 @@ def write_registry(store: Path, app_id: str = "org.example.weather") -> None:
 
 
 class AppRegistryTests(unittest.TestCase):
+    def test_install_rejects_historical_pre_release_runtime_line_before_registry_mutation(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-historical-runtime-") as directory:
+            root = Path(directory)
+            bundle = root / "historical-runtime.jfapp"
+            write_jfapp(bundle, min_jellyframe="0.5.0")
+
+            with self.assertRaisesRegex(
+                SystemExit,
+                "must target the active pre-1.0 runtime line 0.6.0",
+            ):
+                app_registry.install_bundle(
+                    root / "store",
+                    bundle,
+                    app_registry.DEFAULT_MAX_APPS,
+                    app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+                )
+            self.assertFalse((root / "store" / "registry.json").exists())
+
     def test_install_rejects_duplicate_summary_member_before_registry_mutation(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-duplicate-summary-") as directory:
             root = Path(directory)

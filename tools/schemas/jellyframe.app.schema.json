@@ -64,7 +64,8 @@
       "properties": {
         "minJellyFrame": {
           "type": "string",
-          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Must match the active JellyFrame pre-1.0 runtime line; the packer rejects historical development-line values."
         },
         "script": {
           "enum": ["none", "classic"]

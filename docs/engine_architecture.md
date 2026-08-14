@@ -76,6 +76,11 @@ authority.
 The Device Runtime, JFDP protocol, launcher and hardware ports are not part of
 this package boundary.
 
+Runtime-side provider selection, package lock validation and provenance output
+live in `cmake/jellyframe_render_core_provider.cmake`. It is deliberately not
+part of the `render_core_*.cmake` archive boundary: an extracted Core owns its
+sources and package export, while the Runtime owns which Core it accepts.
+
 For cross-repository development, `JELLYFRAME_RENDER_CORE_SOURCE_DIR` can point
 the in-tree provider at a checked-out or unpacked Render Core source tree. It
 is a local development override, not a second public dependency mechanism;

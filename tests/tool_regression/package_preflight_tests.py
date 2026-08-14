@@ -92,6 +92,9 @@ class PackagePreflightTests(unittest.TestCase):
 
     def test_esp32s3_render_core_sources_match_desktop_target(self):
         desktop_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        provider_cmake = (REPO_ROOT / "cmake" / "jellyframe_render_core_provider.cmake").read_text(
+            encoding="utf-8"
+        )
         esp_cmake = (REPO_ROOT / "ports" / "esp32s3-idf" / "components" /
                      "jellyframe_render_core" / "CMakeLists.txt").read_text(encoding="utf-8")
         source_manifest_path = REPO_ROOT / "cmake" / "render_core_sources.cmake"
@@ -99,7 +102,8 @@ class PackagePreflightTests(unittest.TestCase):
         pattern = r"src/render_core/([A-Za-z0-9_]+\.cpp)"
         manifest_sources = set(re.findall(pattern, source_manifest))
 
-        self.assertIn("cmake/render_core_sources.cmake", desktop_cmake.replace("\\", "/"))
+        self.assertIn("cmake/jellyframe_render_core_provider.cmake", desktop_cmake.replace("\\", "/"))
+        self.assertIn("cmake/render_core_sources.cmake", provider_cmake.replace("\\", "/"))
         self.assertIn("cmake/render_core_sources.cmake", esp_cmake.replace("\\", "/"))
         self.assertGreater(len(manifest_sources), 30)
         for source in manifest_sources:
@@ -112,7 +116,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.5.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -126,6 +130,20 @@ class PackagePreflightTests(unittest.TestCase):
                 "features": ["core.document", "core.paint"],
             })
 
+    def test_manifest_rejects_a_historical_pre_release_runtime_line(self):
+        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 runtime line 0.6.0"):
+            package_app.validate_manifest({
+                "format": "jellyframe.app",
+                "formatVersion": 0,
+                "id": "org.test.historical-runtime",
+                "entry": "/index.html",
+                "version": {"name": "0.1.0", "code": 1},
+                "runtime": {"minJellyFrame": "0.5.0", "script": "none"},
+                "viewport": {"designWidth": 10, "designHeight": 10},
+                "budgets": {"maxResourceBytes": 1024},
+                "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
+            })
+
     def test_render_core_profile_preflight_accepts_declared_feature(self):
         manifest = package_app.validate_manifest({
             "format": "jellyframe.app",
@@ -133,7 +151,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.5.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -155,7 +173,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.modern-paint",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.5.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["css.modern-paint"],
@@ -908,7 +926,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.services",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.4.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "permissions": ["network"],
@@ -1047,7 +1065,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.file.manager",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.5.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "capabilities": ["file.read", "file.write", "file.manage"],
@@ -1067,7 +1085,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.5.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -1083,7 +1101,7 @@ class PackagePreflightTests(unittest.TestCase):
             {"version": {"code": 1}},
             {"version": {"name": "1.0.0"}},
             {"runtime": {"script": "classic"}},
-            {"runtime": {"minJellyFrame": "0.5.0"}},
+            {"runtime": {"minJellyFrame": "0.6.0"}},
             {"budgets": {}},
             {"targets": {}},
             {"targets": {"round-300": {"output": "jfapp"}}},
@@ -1095,7 +1113,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.5.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -1917,7 +1935,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.fonts",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.4.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "script": "none"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "fonts": [

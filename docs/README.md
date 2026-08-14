@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -29,9 +29,10 @@ for whether a document needs another pass after code changes.
 4. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
 5. [developer_capability_matrix.md](developer_capability_matrix.md)
 6. [component_compatibility_matrix.md](component_compatibility_matrix.md) if you are splitting or consuming a build boundary.
-7. [html_living_standard_support_table.md](html_living_standard_support_table.md) or [csswg_support_table.md](csswg_support_table.md) if you need to search Web syntax support.
-8. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
-9. The module document for the area you want to use, port or inspect.
+7. [pre_1_0_evolution_policy.md](pre_1_0_evolution_policy.md) before changing a public or module boundary.
+8. [html_living_standard_support_table.md](html_living_standard_support_table.md) or [csswg_support_table.md](csswg_support_table.md) if you need to search Web syntax support.
+9. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
+10. The module document for the area you want to use, port or inspect.
 
 ## Technical Documents
 
@@ -115,6 +116,8 @@ for whether a document needs another pass after code changes.
 - [jelly_ui_design_system.md](jelly_ui_design_system.md): the gel/jellyfish
   control and motion design system.
 - [versioning.md](versioning.md): versioning and release discipline.
+- [pre_1_0_evolution_policy.md](pre_1_0_evolution_policy.md): breaking-change
+  policy before the first stable release.
 ## File Naming
 
 English docs use the base filename. Chinese docs use `_zh`, for example

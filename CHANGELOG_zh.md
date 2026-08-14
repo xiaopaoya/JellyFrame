@@ -14,6 +14,14 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- 1.0 前的包处理现在只接受一个当前开发线，不再维持历史兼容基线。第一方 manifest 统一声明
+  `0.6.0`；packer 与 registry 会拒绝其他 `minJellyFrame` 值，包括手工构造的包。
+  这是 1.0 前有意的破坏性调整，用于避免旧实验产物绕过当前包/运行时契约。
+
+- 将 Runtime 侧的 Render Core provider 选择、package lock 校验、provenance 生成与
+  source override 处理收敛到专用 CMake 模块。standalone Render Core 构建模块仍由 Core
+  源码分发包所有，从而明确区分消费者策略与导出的引擎边界。
+
 - 新增默认关闭、仅供桌面正确性验证的 value-frame v2 retained-diff replay probe。它只在成功
   present 后保留有界的 previous/candidate RGBA image，清空 old/new visual bounds 的保守 union，
   按 paint order 重绘所有与 region 相交的 current command，并要求与 canonical full-frame RGBA
@@ -43,7 +51,7 @@ JellyFrame Engine 的重要变更记录在这里。
   `jellyframe_desktop_shell`；在项目仍处于 1.0 之前阶段，旧的
   `jellyframe_win32_browser` 入口已明确移除。
 - 开启 `0.6.0-dev` 线并新增声明式 Render Core feature catalog。CMake profile 与桌面 feature 检查现在从同一份 registry 派生 ID 和依赖闭包；必需的 `core.document` 与 `core.paint` 源码族保持构建兼容，运行时路径不变。
-- 关闭本轮试用审计发现的文档漂移：面向作者的公共入口现在标明 `0.6.0-dev`，同时保留 `0.5.0` 作为 package 兼容基线；P3 移植接入指南已记录 WS147 完成证据和剩余责任边界。
+- P3 移植接入指南已记录 WS147 完成证据和剩余责任边界。
 
 ## 0.5.0 - 2026-08-09
 

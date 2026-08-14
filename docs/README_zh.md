@@ -1,6 +1,6 @@
 # JellyFrame 文档索引
 
-> 最后更新：2026-08-11；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-14；适用版本：0.6.0-dev
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
@@ -27,9 +27,10 @@
 4. [app_author_recipes_zh.md](app_author_recipes_zh.md)：可复制的小屏 UI 写法。
 5. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
 6. 如果要拆分或消费构建边界，读 [component_compatibility_matrix_zh.md](component_compatibility_matrix_zh.md)。
-7. 如果要搜索 HTML 或 CSS 特性支持性，读 [html_living_standard_support_table_zh.md](html_living_standard_support_table_zh.md) 或 [csswg_support_table_zh.md](csswg_support_table_zh.md)。
-8. 如果要构建本地 app package，读 [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)。
-9. 根据要使用、移植或检查的模块，继续阅读对应模块文档。
+7. 修改公开或模块边界前，读 [pre_1_0_evolution_policy_zh.md](pre_1_0_evolution_policy_zh.md)。
+8. 如果要搜索 HTML 或 CSS 特性支持性，读 [html_living_standard_support_table_zh.md](html_living_standard_support_table_zh.md) 或 [csswg_support_table_zh.md](csswg_support_table_zh.md)。
+9. 如果要构建本地 app package，读 [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)。
+10. 根据要使用、移植或检查的模块，继续阅读对应模块文档。
 
 ## 技术文档
 
@@ -83,6 +84,7 @@
 - [csswg_support_table.csv](csswg_support_table.csv)：CSS 表的机器可读版本，供编辑器/工具集成。
 - [jelly_ui_design_system_zh.md](jelly_ui_design_system_zh.md)：胶体/水母质感的控件与动效设计体系。
 - [versioning_zh.md](versioning_zh.md)：版本和发布纪律。
+- [pre_1_0_evolution_policy_zh.md](pre_1_0_evolution_policy_zh.md)：首个稳定版本前的破坏性变更政策。
 ## 文件命名
 
 英文文档使用原文件名，中文文档使用 `_zh` 后缀，例如 `engine_architecture.md` 和

@@ -6,7 +6,7 @@
   "name": "Static Modules",
   "version": {"name": "0.1.0", "code": 1},
   "entry": "/index.html",
-  "runtime": {"minJellyFrame": "0.5.0", "script": "classic"},
+  "runtime": {"minJellyFrame": "0.6.0", "script": "classic"},
   "viewport": {"designWidth": 300, "designHeight": 300, "shape": "round"},
   "budgets": {
     "maxResourceBytes": 32768,

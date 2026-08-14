@@ -1,6 +1,6 @@
 # JellyFrame Device Runtime
 
-> Last updated: 2026-08-12; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 ## Purpose
 

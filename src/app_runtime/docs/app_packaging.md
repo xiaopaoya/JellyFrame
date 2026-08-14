@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store
@@ -173,6 +173,11 @@ reports.
 The first manifest should stay small and JSON-based because it is consumed by
 desktop tools, not by the MCU runtime:
 
+Before `1.0`, `runtime.minJellyFrame` must equal the active release line derived
+from `VERSION` (`0.6.0` for the current `0.6.0-dev` checkout). It identifies
+the current app contract; it is not a promise that historical pre-release apps
+remain supported.
+
 ```json
 {
   "$schema": "../../../tools/schemas/jellyframe.app.schema.json",
@@ -187,7 +192,7 @@ desktop tools, not by the MCU runtime:
   },
   "entry": "/index.html",
   "runtime": {
-    "minJellyFrame": "0.4.0",
+    "minJellyFrame": "0.6.0",
     "script": "classic"
   },
   "viewport": {

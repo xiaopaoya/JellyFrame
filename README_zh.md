@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-08-11；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-14；适用版本：0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -13,9 +13,10 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 
 项目早期代号是 `WearWeb`；当前代码、target 和文档均使用 `JellyFrame`。
 
-> **1.0 前 API 稳定性：** JellyFrame 尚未到达第一个稳定版。App 作者应只依赖文档化的
-> Web 兼容子集，以及文档化的 manifest、工具和宿主接口。未文档化的私有 HTML/CSS/JS
-> 捷径不属于 app 契约，可能在 1.0 前变化。
+> **1.0 前 API 稳定性：** JellyFrame 尚未到达第一个稳定版。当前开发契约可以在提升
+> 所有权清晰度、性能或可维护性时有意变更或移除旧预发布接口。App 作者应使用当前文档化的
+> Web 兼容子集以及 manifest、工具和宿主接口；历史开发产物不享有支持承诺。详见
+> [docs/pre_1_0_evolution_policy_zh.md](docs/pre_1_0_evolution_policy_zh.md)。
 
 ## 亮点
 
@@ -214,8 +215,8 @@ cmake --build build/desktop-scripting-release --config Release
 
 ## 版本
 
-- 当前开发版本：`0.6.0-dev`，见 [VERSION](VERSION)。在后续版本改变公开
-  兼容契约前，app package 的文档化兼容基线仍为 `0.5.0`。
+- 当前开发版本：`0.6.0-dev`，见 [VERSION](VERSION)。在 `1.0` 前，包必须声明
+  当前开发线（`0.6.0`）；历史开发产物不构成兼容基线。
 - 变更记录：[CHANGELOG.md](CHANGELOG.md) 和 [CHANGELOG_zh.md](CHANGELOG_zh.md)。
 - 版本规则：[docs/versioning_zh.md](docs/versioning_zh.md)。
 
