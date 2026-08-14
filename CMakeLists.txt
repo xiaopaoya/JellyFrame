@@ -155,6 +155,8 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
             "Render Core source checkout is missing cmake/render_core_version.cmake: ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
     endif()
     include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_version.cmake")
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_source_hash.cmake")
+    jellyframe_compute_render_core_source_hash("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
     if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
         set(JELLYFRAME_RENDER_CORE_PROVENANCE_PROVIDER "source-override")
     else()
@@ -193,6 +195,13 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
     if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
         target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)
     endif()
+
+    set(JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE
+        "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_source_manifest.json")
+    configure_file(
+        "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_source_manifest.json.in"
+        "${JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE}"
+        @ONLY)
 
     if(MSVC)
         target_compile_options(jellyframe_render_core PRIVATE /W4)
@@ -234,6 +243,7 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
             DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
         install(FILES
             "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
+            "${JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE}"
             DESTINATION "${CMAKE_INSTALL_DATADIR}/jellyframe-render-core")
     endif()
 else()
@@ -257,8 +267,37 @@ else()
             "JellyFrameRenderCore ABI ${JellyFrameRenderCore_ENGINE_ABI} does not match locked ABI "
             "${JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI}")
     endif()
+    set(_jellyframe_render_core_package_source_hash "${JellyFrameRenderCore_SOURCE_HASH}")
+    string(LENGTH "${_jellyframe_render_core_package_source_hash}"
+        _jellyframe_render_core_package_source_hash_length)
+    if(NOT DEFINED JellyFrameRenderCore_SOURCE_HASH OR
+       NOT _jellyframe_render_core_package_source_hash_length EQUAL 64 OR
+       NOT JellyFrameRenderCore_SOURCE_HASH MATCHES "^[0-9a-fA-F]+$")
+        message(FATAL_ERROR "JellyFrameRenderCore package has no valid source hash")
+    endif()
+    if(NOT DEFINED JellyFrameRenderCore_SOURCE_FILE_COUNT OR
+       NOT JellyFrameRenderCore_SOURCE_FILE_COUNT MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "JellyFrameRenderCore package has no valid source file count")
+    endif()
     if(NOT EXISTS "${JellyFrameRenderCore_PROFILE_FILE}")
         message(FATAL_ERROR "JellyFrameRenderCore profile is missing: ${JellyFrameRenderCore_PROFILE_FILE}")
+    endif()
+    if(NOT EXISTS "${JellyFrameRenderCore_SOURCE_MANIFEST_FILE}")
+        message(FATAL_ERROR
+            "JellyFrameRenderCore source manifest is missing: ${JellyFrameRenderCore_SOURCE_MANIFEST_FILE}")
+    endif()
+    file(READ "${JellyFrameRenderCore_SOURCE_MANIFEST_FILE}"
+        _jellyframe_render_core_package_source_manifest)
+    string(FIND "${_jellyframe_render_core_package_source_manifest}"
+        "\"sourceHash\": \"${JellyFrameRenderCore_SOURCE_HASH}\""
+        _jellyframe_render_core_package_source_hash_position)
+    string(FIND "${_jellyframe_render_core_package_source_manifest}"
+        "\"sourceFileCount\": ${JellyFrameRenderCore_SOURCE_FILE_COUNT}"
+        _jellyframe_render_core_package_source_count_position)
+    if(_jellyframe_render_core_package_source_hash_position EQUAL -1 OR
+       _jellyframe_render_core_package_source_count_position EQUAL -1)
+        message(FATAL_ERROR
+            "JellyFrameRenderCore source manifest does not match its exported source identity")
     endif()
     add_library(jellyframe_render_core ALIAS JellyFrame::jellyframe_render_core)
     set(JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -266,10 +305,20 @@ else()
     configure_file("${JellyFrameRenderCore_PROFILE_FILE}"
         "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
         COPYONLY)
+    configure_file("${JellyFrameRenderCore_SOURCE_MANIFEST_FILE}"
+        "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_source_manifest.json"
+        COPYONLY)
     set(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION "${JellyFrameRenderCore_PACKAGE_VERSION}")
     set(JELLYFRAME_RENDER_CORE_ENGINE_ABI "${JellyFrameRenderCore_ENGINE_ABI}")
+    set(JELLYFRAME_RENDER_CORE_SOURCE_HASH "${JellyFrameRenderCore_SOURCE_HASH}")
+    set(JELLYFRAME_RENDER_CORE_SOURCE_FILE_COUNT "${JellyFrameRenderCore_SOURCE_FILE_COUNT}")
     set(JELLYFRAME_RENDER_CORE_PROVENANCE_PROVIDER "package")
     set(JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_ENFORCED true)
+    unset(_jellyframe_render_core_package_source_hash)
+    unset(_jellyframe_render_core_package_source_hash_length)
+    unset(_jellyframe_render_core_package_source_manifest)
+    unset(_jellyframe_render_core_package_source_hash_position)
+    unset(_jellyframe_render_core_package_source_count_position)
 endif()
 
 set(JELLYFRAME_RENDER_CORE_PROVENANCE_FILE

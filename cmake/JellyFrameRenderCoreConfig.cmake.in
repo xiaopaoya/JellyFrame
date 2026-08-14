@@ -6,4 +6,8 @@ set(JellyFrameRenderCore_PROFILE_FILE
     "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_DATADIR@/jellyframe-render-core/jellyframe_render_core_profile.json")
 set(JellyFrameRenderCore_PACKAGE_VERSION "@JELLYFRAME_RENDER_CORE_PACKAGE_VERSION@")
 set(JellyFrameRenderCore_ENGINE_ABI "@JELLYFRAME_RENDER_CORE_ENGINE_ABI@")
+set(JellyFrameRenderCore_SOURCE_HASH "@JELLYFRAME_RENDER_CORE_SOURCE_HASH@")
+set(JellyFrameRenderCore_SOURCE_FILE_COUNT "@JELLYFRAME_RENDER_CORE_SOURCE_FILE_COUNT@")
+set(JellyFrameRenderCore_SOURCE_MANIFEST_FILE
+    "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_DATADIR@/jellyframe-render-core/jellyframe_render_core_source_manifest.json")
 check_required_components(JellyFrameRenderCore)

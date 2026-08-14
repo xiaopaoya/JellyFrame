@@ -274,14 +274,6 @@ void append_dirty_paint_effect_bounds_from_layout(const LayoutBox& layout,
     }
 }
 
-Rect layer_display_bounds(const LayerNode& layer) {
-    Rect bounds = layer.bounds;
-    for (const DisplayCommand& command : layer.display_list) {
-        bounds = union_rect(bounds, command.rect);
-    }
-    return bounds;
-}
-
 void append_dirty_paint_bounds_from_layer(const LayerNode& root,
                                           std::vector<DirtyNodeBounds>& output,
                                           int match_expansion) {

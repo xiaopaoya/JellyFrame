@@ -87,18 +87,21 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
         generated_dir = output_dir / "generated"
         profile_path = generated_dir / "jellyframe_render_core_profile.json"
         provenance_path = generated_dir / "jellyframe_render_core_provenance.json"
+        source_manifest_path = generated_dir / "jellyframe_render_core_source_manifest.json"
         return (
             json.loads(profile_path.read_text(encoding="utf-8")),
             json.loads(provenance_path.read_text(encoding="utf-8")),
+            json.loads(source_manifest_path.read_text(encoding="utf-8")),
         )
 
     def test_all_optional_family_combinations_have_consistent_profiles(self) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-profile-") as directory:
             root = Path(directory)
             build_dir = root / "build"
+            expected_source_hash: str | None = None
             for canvas, modern_paint, flex_grid, advanced_forms, profile_id in PROFILE_CASES:
                 with self.subTest(profile_id=profile_id):
-                    profile, provenance = self.configure_profile(
+                    profile, provenance, source_manifest = self.configure_profile(
                         build_dir,
                         canvas=canvas,
                         modern_paint=modern_paint,
@@ -119,20 +122,26 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                     self.assertEqual(profile["packageVersion"], "0.6.0")
                     self.assertEqual(profile["profileId"], profile_id)
                     self.assertEqual(profile["features"], expected_features)
-                    self.assertEqual(
-                        provenance,
-                        {
-                            "schemaVersion": 1,
-                            "consumer": "jellyframe-runtime",
-                            "provider": "in-tree",
-                            "packageVersion": "0.6.0",
-                            "engineAbi": 1,
-                            "profileFile": "jellyframe_render_core_profile.json",
-                            "lockedVersion": "0.6.0",
-                            "lockedEngineAbi": 1,
-                            "lockEnforced": False,
-                        },
-                    )
+                    self.assertEqual(provenance["schemaVersion"], 1)
+                    self.assertEqual(provenance["consumer"], "jellyframe-runtime")
+                    self.assertEqual(provenance["provider"], "in-tree")
+                    self.assertEqual(provenance["packageVersion"], "0.6.0")
+                    self.assertEqual(provenance["engineAbi"], 1)
+                    self.assertEqual(provenance["profileFile"], "jellyframe_render_core_profile.json")
+                    self.assertEqual(provenance["lockedVersion"], "0.6.0")
+                    self.assertEqual(provenance["lockedEngineAbi"], 1)
+                    self.assertFalse(provenance["lockEnforced"])
+                    self.assertEqual(provenance["sourceManifestFile"],
+                                     "jellyframe_render_core_source_manifest.json")
+                    self.assertEqual(source_manifest["schemaVersion"], 1)
+                    self.assertEqual(source_manifest["hashAlgorithm"], "sha256")
+                    self.assertGreater(source_manifest["sourceFileCount"], 0)
+                    self.assertRegex(source_manifest["sourceHash"], r"^[0-9a-f]{64}$")
+                    self.assertEqual(provenance["sourceHash"], source_manifest["sourceHash"])
+                    self.assertEqual(provenance["sourceFileCount"], source_manifest["sourceFileCount"])
+                    if expected_source_hash is None:
+                        expected_source_hash = source_manifest["sourceHash"]
+                    self.assertEqual(source_manifest["sourceHash"], expected_source_hash)
                     source_families = profile["sourceFamilies"]
                     self.assertEqual(
                         set(source_families["core.document"])

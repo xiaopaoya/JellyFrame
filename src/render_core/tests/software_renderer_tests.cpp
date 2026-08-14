@@ -1550,7 +1550,7 @@ void rasterizer_bounds_clipped_temporary_surfaces() {
     VectorDiagnosticSink diagnostics;
     SoftwareRasterizer rasterizer(TextPainter{center_pixel_text_painter, nullptr},
                                   &diagnostics,
-                                  SoftwareRasterizerOptions{16});
+                                  SoftwareRasterizerOptions{16, nullptr, {}});
     DisplayCommand command;
     command.type = DisplayCommandType::Text;
     command.rect = Rect{0, 0, 40, 10};

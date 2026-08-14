@@ -1882,7 +1882,7 @@ SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter im
     : rasterizer_(text_painter,
                   image_painter,
                   options.diagnostics,
-                  SoftwareRasterizerOptions{options.max_offscreen_pixels}),
+                  SoftwareRasterizerOptions{options.max_offscreen_pixels, nullptr, {}}),
       options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,

@@ -5,6 +5,9 @@
   "packageVersion": "@JELLYFRAME_RENDER_CORE_PACKAGE_VERSION@",
   "engineAbi": @JELLYFRAME_RENDER_CORE_ENGINE_ABI@,
   "profileFile": "jellyframe_render_core_profile.json",
+  "sourceHash": "@JELLYFRAME_RENDER_CORE_SOURCE_HASH@",
+  "sourceFileCount": @JELLYFRAME_RENDER_CORE_SOURCE_FILE_COUNT@,
+  "sourceManifestFile": "jellyframe_render_core_source_manifest.json",
   "lockedVersion": "@JELLYFRAME_RENDER_CORE_LOCKED_VERSION@",
   "lockedEngineAbi": @JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI@,
   "lockEnforced": @JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_ENFORCED@
