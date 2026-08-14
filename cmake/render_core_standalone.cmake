@@ -13,7 +13,6 @@ option(JELLYFRAME_ENABLE_ADVANCED_FORMS "Compile the forms.advanced Render Core 
 include(GNUInstallDirs)
 
 set(JELLYFRAME_RENDER_CORE_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
-include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_version.cmake")
 include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_source_hash.cmake")
 jellyframe_compute_render_core_source_hash("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
 include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_build.cmake")
