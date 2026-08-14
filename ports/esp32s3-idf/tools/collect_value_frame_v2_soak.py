@@ -15,6 +15,7 @@ from serial import SerialException
 
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 START_MARKER = "script_value_frame_v2_start"
+RUNNING_MARKER = "script_value_frame_v2_telemetry status=running"
 PASS_MARKER = "script_value_frame_v2_telemetry status=pass"
 
 
@@ -70,7 +71,10 @@ def main() -> int:
             raw.flush()
             line_count += 1
             line = ANSI_RE.sub("", data.decode("utf-8", errors="replace").replace("\r", ""))
-            saw_start |= START_MARKER in line
+            # The board can emit its startup line before a host opens COM19
+            # after flashing. A periodic running telemetry line proves the
+            # fixture was already started and is the reliable fallback.
+            saw_start |= START_MARKER in line or RUNNING_MARKER in line
             saw_pass |= PASS_MARKER in line
 
     if device is not None:
