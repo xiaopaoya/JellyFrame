@@ -1,5 +1,7 @@
 # JellyFrame Render Core
 
+> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+
 JellyFrame Render Core is a platform-neutral, modular HTML/CSS subset,
 document/layout pipeline and CPU software renderer for bounded embedded and
 desktop hosts. It does not include the JellyFrame App Runtime, JerryScript,

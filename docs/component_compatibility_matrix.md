@@ -12,7 +12,7 @@ build artifact may consume which other artifact.
 | Consumer | Provider | Version / ABI | Status | Evidence and limitation |
 | --- | --- | --- | --- | --- |
 | JellyFrame App Runtime | in-tree `jellyframe_render_core` | same checkout | `verified` | Default desktop Release/Debug and non-scripting CI CTest. Use for synchronized Core/Runtime changes. |
-| JellyFrame App Runtime | Core source override | local checkout / source profile | `verified locally` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` selects another Core checkout for cross-repository development; package mode remains mutually exclusive. |
+| JellyFrame App Runtime | unpacked Core source archive | `0.6.0` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` selects the unpacked archive for a separate Runtime build and App Runtime CTest; package mode remains mutually exclusive. |
 | Render Core standalone tests | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Standalone configure, build, CTest and install path. The package contains the Core target, headers and capability profile only. |
 | Render Core source archive | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Deterministic `.tar.gz` plus SHA-256 sidecar; CI packs twice, compares bytes, extracts, builds, runs CTest, installs and configures the Runtime package consumer. It is not a signed release artifact. |
 | JellyFrame App Runtime | installed Render Core package | `0.6.0` / ABI `1` / source manifest schema `1` | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; it validates and copies the package SHA-256 source manifest into build provenance. |

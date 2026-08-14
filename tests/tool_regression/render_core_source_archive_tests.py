@@ -160,6 +160,38 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 cwd=self.source_root,
             )
 
+            source_override_build = root / "runtime-source-override"
+            self.cmake_configure(
+                self.source_root,
+                source_override_build,
+                [
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DJELLYFRAME_RENDER_CORE_PROVIDER=in-tree",
+                    f"-DJELLYFRAME_RENDER_CORE_SOURCE_DIR={archive_source}",
+                    "-DJELLYFRAME_BUILD_SCRIPTING=OFF",
+                    "-DJELLYFRAME_BUILD_EXAMPLES=OFF",
+                    "-DJELLYFRAME_BUILD_BENCHMARKS=OFF",
+                    "-DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF",
+                    "-DJELLYFRAME_BUILD_TESTS=ON",
+                ],
+            )
+            override_provenance = json.loads(
+                (source_override_build / "generated" /
+                 "jellyframe_render_core_provenance.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(override_provenance["provider"], "source-override")
+            self.assertEqual(override_provenance["sourceHash"], source_manifest["sourceHash"])
+            run(
+                [str(self.cmake), "--build", str(source_override_build), "--config", "Release",
+                 "--target", "jellyframe_app_runtime_tests", "--parallel"],
+                cwd=self.source_root,
+            )
+            run(
+                ["ctest", "--test-dir", str(source_override_build), "-C", "Release",
+                 "-R", "^jellyframe_app_runtime_tests$", "--output-on-failure"],
+                cwd=self.source_root,
+            )
+
 
 if __name__ == "__main__":
     TEST_ARGS = parse_args()

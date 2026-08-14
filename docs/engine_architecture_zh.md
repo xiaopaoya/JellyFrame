@@ -61,9 +61,10 @@ Core source 集合，包括 source archive 或本地 override；它不替代 rel
 或发布权威。Device Runtime、JFDP 协议、launcher 和硬件 port 不属于这个 package 边界。
 
 跨仓库开发时，可以用 `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 让 `in-tree`
-provider 指向另一个 Render Core checkout。这只是本地开发覆盖项，不是第二套
-公开依赖机制；package 模式和源码覆盖不能同时使用。覆盖目录必须提供 Render Core
-的 `cmake/` 边界和 `src/render_core/`，原有 feature profile 与源码归属检查仍然生效。
+provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只是本地开发覆盖项，
+不是第二套公开依赖机制；package 模式和源码覆盖不能同时使用。CI 会以解压归档作为
+覆盖源构建并运行 App Runtime 测试。覆盖目录必须提供 Render Core 的 `cmake/` 边界和
+`src/render_core/`，原有 feature profile 与源码归属检查仍然生效。
 
 ## 计划中的仓库边界
 

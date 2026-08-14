@@ -76,11 +76,13 @@ The Device Runtime, JFDP protocol, launcher and hardware ports are not part of
 this package boundary.
 
 For cross-repository development, `JELLYFRAME_RENDER_CORE_SOURCE_DIR` can point
-the in-tree provider at a checked-out Render Core source tree. It is a local
-development override, not a second public dependency mechanism; package mode
-and source override are mutually exclusive. The override must provide the
-Render Core `cmake/` boundary and `src/render_core/` tree, and the normal Core
-feature profile and source-ownership checks still apply.
+the in-tree provider at a checked-out or unpacked Render Core source tree. It
+is a local development override, not a second public dependency mechanism;
+package mode and source override are mutually exclusive. CI validates the
+unpacked-archive form by building and running the App Runtime tests against it.
+The override must provide the Render Core `cmake/` boundary and
+`src/render_core/` tree, and the normal Core feature profile and source-
+ownership checks still apply.
 
 ## Planned Repository Boundaries
 
