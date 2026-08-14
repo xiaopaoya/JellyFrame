@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store
@@ -174,9 +174,10 @@ The first manifest should stay small and JSON-based because it is consumed by
 desktop tools, not by the MCU runtime:
 
 Before `1.0`, `runtime.minJellyFrame` must equal the active release line derived
-from `VERSION` (`0.6.0` for the current `0.6.0-dev` checkout). It identifies
-the current app contract; it is not a promise that historical pre-release apps
-remain supported.
+from `VERSION`, and `runtime.minRenderCore` must equal the Render Core version
+locked by this Runtime (`0.6.0` for the current checkout). Together they
+identify the current app contract; they are not a promise that historical
+pre-release apps remain supported.
 
 ```json
 {
@@ -193,6 +194,7 @@ remain supported.
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
+    "minRenderCore": "0.6.0",
     "script": "classic"
   },
   "viewport": {
@@ -435,7 +437,7 @@ runtime feature flag.
 
 Fields that affect runtime compatibility must be required by the packer:
 
-- `id`, `version.code`, `entry`, `runtime.minJellyFrame`;
+- `id`, `version.code`, `entry`, `runtime.minJellyFrame`, `runtime.minRenderCore`;
 - `viewport` or target-specific viewport;
 - `budgets.maxResourceBytes`;
 - target name and output kind.

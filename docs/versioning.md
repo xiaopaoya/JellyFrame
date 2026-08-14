@@ -1,6 +1,6 @@
 # Versioning
 
-> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev
 
 JellyFrame Engine uses a lightweight semantic versioning scheme:
 
@@ -46,11 +46,11 @@ The planned repositories do not share one release number:
 | JellyFrame Device OS | `0.1.x-dev` | launcher, registry, device lifecycle, images and ports |
 | JFDP | `JFDP/1` | device control framing and result-code compatibility |
 
-The current manifest schema requires `runtime.minJellyFrame`. A separate
-`runtime.minRenderCore` requirement is a planned contract for the first
-independently released Core package; it must not be hand-added to current apps
-until the schema, packer, registry summary and runtime gate are implemented
-together.
+The current manifest schema requires both `runtime.minJellyFrame` and
+`runtime.minRenderCore`. Before `1.0`, both are exact active-line gates: the
+former is derived from `VERSION`; the latter is derived from the Runtime's
+locked Render Core package. The schema, packer, registry summary and native
+Runtime parser enforce the pair together.
 
 ## Release Expectations
 

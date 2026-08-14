@@ -26,6 +26,7 @@ def write_jfapp(
     entry: str = "/index.html",
     script: str = "classic",
     min_jellyframe: str = "0.6.0",
+    min_render_core: str = "0.6.0",
     capabilities: list[str] | None = None,
     network_allowed: bool = False,
     summary_text: str | None = None,
@@ -39,6 +40,7 @@ def write_jfapp(
         "versionCode": version_code,
         "entry": entry,
         "minJellyFrame": min_jellyframe,
+        "minRenderCore": min_render_core,
         "script": script,
         "viewport": {"designWidth": 172, "designHeight": 320},
         "budgets": {"maxResourceBytes": 65536},
@@ -99,6 +101,7 @@ def write_jfapp_with_invalid_resource_entry(path: Path) -> None:
         "versionCode": 1,
         "entry": "/index.html",
         "minJellyFrame": "0.6.0",
+        "minRenderCore": "0.6.0",
         "script": "classic",
         "viewport": {"designWidth": 172, "designHeight": 320},
         "budgets": {"maxResourceBytes": 65536},
@@ -214,6 +217,24 @@ class AppRegistryTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 SystemExit,
                 "must target the active pre-1.0 runtime line 0.6.0",
+            ):
+                app_registry.install_bundle(
+                    root / "store",
+                    bundle,
+                    app_registry.DEFAULT_MAX_APPS,
+                    app_registry.DEFAULT_MAX_BUNDLE_BYTES,
+                )
+            self.assertFalse((root / "store" / "registry.json").exists())
+
+    def test_install_rejects_historical_pre_release_render_core_line_before_registry_mutation(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-historical-core-") as directory:
+            root = Path(directory)
+            bundle = root / "historical-core.jfapp"
+            write_jfapp(bundle, min_render_core="0.5.0")
+
+            with self.assertRaisesRegex(
+                SystemExit,
+                "must target the active pre-1.0 Render Core line 0.6.0",
             ):
                 app_registry.install_bundle(
                     root / "store",

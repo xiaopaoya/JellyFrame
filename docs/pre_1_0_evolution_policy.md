@@ -1,6 +1,6 @@
 # Pre-1.0 Evolution Policy
 
-> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev
 
 JellyFrame has no production compatibility obligation before `1.0`. The
 project's active users are development and evaluation users working from the
@@ -36,6 +36,6 @@ old pre-release behavior.
 - `1.0` is the first point at which supported public contracts require a
   compatibility policy and, where necessary, a deliberate migration plan.
 
-The current official samples and templates target the active `0.6.0` runtime
-line. Older `minJellyFrame` values are historical metadata, not supported
-production targets.
+The current official samples and templates target the active `0.6.0` Runtime
+and Render Core lines. Older `minJellyFrame` or `minRenderCore` values are
+historical metadata, not supported production targets.

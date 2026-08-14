@@ -129,6 +129,7 @@ def write_jfapp(
             "versionCode": version_code,
             "entry": entry,
             "minJellyFrame": "0.6.0",
+            "minRenderCore": "0.6.0",
             "script": "classic",
             "viewport": {"designWidth": 172, "designHeight": 320},
             "budgets": {"maxResourceBytes": 65536},
@@ -282,8 +283,9 @@ def main() -> int:
                 "versionName": "1.0.0",
                 "versionCode": 1,
                 "entry": "/index.html",
-                "minJellyFrame": "0.6.0",
-                "script": "none",
+                "runtime": {
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "none"
+                },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
             encoding="utf-8",
@@ -299,7 +301,8 @@ def main() -> int:
                 "--frame-event", "3:pointer-up:130:20",
             ],
         )
-        require(drag_result.returncode == 0, "scripted pointer drag must capture")
+        require(drag_result.returncode == 0,
+                f"scripted pointer drag must capture: {drag_result.stdout}")
         before_drag = frames / "frame_001.bmp"
         after_drag = frames / "frame_003.bmp"
         require(before_drag.is_file() and after_drag.is_file(),
@@ -361,8 +364,9 @@ def main() -> int:
                 "versionName": "1.0.0",
                 "versionCode": 1,
                 "entry": "/index.html",
-                "minJellyFrame": "0.6.0",
-                "script": "none",
+                "runtime": {
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "none"
+                },
                 "viewport": {"designWidth": 160, "designHeight": 100},
             }),
             encoding="utf-8",
@@ -433,8 +437,9 @@ def main() -> int:
                     "versionName": "1.0.0",
                     "versionCode": 1,
                     "entry": "/index.html",
-                    "minJellyFrame": "0.6.0",
-                    "script": "none",
+                    "runtime": {
+                        "minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "none"
+                    },
                     "viewport": {"designWidth": 172, "designHeight": 320},
                 }
             ),
@@ -447,6 +452,33 @@ def main() -> int:
                 "package manifest designWidth must select the default viewport")
         require("image=172x320" in viewport_result.stdout,
                 "package manifest design dimensions must select the capture size")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-historical-render-core-") as directory:
+        app = Path(directory)
+        (app / "index.html").write_text("<main>Core version gate</main>", encoding="utf-8")
+        (app / "jellyframe.app.json").write_text(
+            json.dumps(
+                {
+                    "id": "org.jellyframe.historical-render-core",
+                    "name": "Historical Render Core",
+                    "role": "app",
+                    "versionName": "1.0.0",
+                    "versionCode": 1,
+                    "entry": "/index.html",
+                    "runtime": {
+                        "minJellyFrame": "0.6.0", "minRenderCore": "0.5.0", "script": "none"
+                    },
+                    "viewport": {"designWidth": 172, "designHeight": 320},
+                }
+            ),
+            encoding="utf-8",
+        )
+        historical_core_result = run_case(exe, ["--app", str(app)])
+        require(historical_core_result.returncode != 0,
+                "native app loading must reject a historical Render Core contract")
+        require("minRenderCore must target the configured pre-1.0 Render Core line 0.6.0"
+                in historical_core_result.stdout,
+                "native app loading must report the configured Render Core requirement")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-package-resource-link-") as directory:
         root = Path(directory)

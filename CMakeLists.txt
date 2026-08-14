@@ -142,6 +142,7 @@ if(JERRYSCRIPT_ROOT)
     endif()
 endif()
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_runtime_version.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_render_core_provider.cmake")
 
 if(JELLYFRAME_BUILD_APP_RUNTIME)
@@ -188,6 +189,11 @@ target_link_libraries(jellyframe_app_runtime
 target_include_directories(jellyframe_app_runtime
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_compile_definitions(jellyframe_app_runtime
+    PUBLIC
+        JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
+        JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
 )
 target_compile_features(jellyframe_app_runtime PUBLIC cxx_std_17)
 

@@ -1,6 +1,6 @@
 # App Packaging
 
-> 最后更新：2026-08-14；适用版本：0.6.0-dev
+> 最后更新：2026-08-15；适用版本：0.6.0-dev
 
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
@@ -121,9 +121,9 @@ my_app/
 
 第一版 manifest 应保持很小，并使用 JSON。它由桌面工具消费，而不是由 MCU runtime 解析：
 
-`1.0` 前，`runtime.minJellyFrame` 必须等于由 `VERSION` 推导出的活跃 release line
-（当前 `0.6.0-dev` checkout 为 `0.6.0`）。它标识当前 app 契约，不承诺继续支持历史
-预发布 app。
+`1.0` 前，`runtime.minJellyFrame` 必须等于由 `VERSION` 推导出的活跃 release line，
+`runtime.minRenderCore` 必须等于此 Runtime 锁定的 Render Core 版本（当前 checkout 均为
+`0.6.0`）。两者共同标识当前 app 契约，不承诺继续支持历史预发布 app。
 
 ```json
 {
@@ -140,6 +140,7 @@ my_app/
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
+    "minRenderCore": "0.6.0",
     "script": "classic"
   },
   "viewport": {
@@ -346,7 +347,7 @@ Responsive profile 还会携带小型 `diagnosticSamples[]` 列表。它只保�
 
 影响运行兼容性的字段应由 packer 强制要求：
 
-- `id`、`version.code`、`entry`、`runtime.minJellyFrame`；
+- `id`、`version.code`、`entry`、`runtime.minJellyFrame`、`runtime.minRenderCore`；
 - 全局或 target-specific viewport；
 - `budgets.maxResourceBytes`；
 - target 名称和输出类型。

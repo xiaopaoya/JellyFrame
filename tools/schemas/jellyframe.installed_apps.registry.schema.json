@@ -101,6 +101,9 @@
         "minJellyFrame": {
           "type": "string"
         },
+        "minRenderCore": {
+          "type": "string"
+        },
         "script": {
           "$ref": "#/$defs/scriptMode"
         },
@@ -185,6 +188,9 @@
           "$ref": "#/$defs/appPath"
         },
         "minJellyFrame": {
+          "type": "string"
+        },
+        "minRenderCore": {
           "type": "string"
         },
         "script": {

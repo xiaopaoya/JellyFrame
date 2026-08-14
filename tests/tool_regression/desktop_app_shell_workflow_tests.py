@@ -40,7 +40,7 @@ def write_source_package(root: Path, version_code: int, version_name: str, body_
         "name": APP_NAME,
         "version": {"name": version_name, "code": version_code},
         "entry": "/index.html",
-        "runtime": {"minJellyFrame": "0.6.0", "script": "classic"},
+        "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "classic"},
         "viewport": {"designWidth": 300, "designHeight": 300, "shape": "round"},
         "budgets": {
             "maxResourceBytes": 65536,

@@ -17,6 +17,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- App manifests now declare the Runtime/Core pair explicitly with
+  `runtime.minJellyFrame` and `runtime.minRenderCore`. Both must exactly match
+  the active pre-1.0 Runtime line and its locked Render Core package; the
+  schema, packer, `.jfapp` registry and native desktop source-package parser
+  reject a mismatch. This replaces the old unvalidated native source-manifest
+  metadata path.
+
 - Pre-1.0 package handling now has one active development line rather than a
   historical compatibility baseline. First-party manifests target `0.6.0`;
   the packer and registry reject any other `minJellyFrame` value, including

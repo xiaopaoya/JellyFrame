@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -80,6 +80,11 @@ Runtime-side provider selection, package lock validation and provenance output
 live in `cmake/jellyframe_render_core_provider.cmake`. It is deliberately not
 part of the `render_core_*.cmake` archive boundary: an extracted Core owns its
 sources and package export, while the Runtime owns which Core it accepts.
+
+App manifests declare that same boundary explicitly. Before `1.0`, both
+`runtime.minJellyFrame` and `runtime.minRenderCore` must exactly match the
+Runtime's active line and locked Core package. The packer, installed-bundle
+registry and native desktop package parser reject a mismatch.
 
 For cross-repository development, `JELLYFRAME_RENDER_CORE_SOURCE_DIR` can point
 the in-tree provider at a checked-out or unpacked Render Core source tree. It

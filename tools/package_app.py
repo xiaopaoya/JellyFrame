@@ -11,7 +11,7 @@ import zlib
 from pathlib import Path, PurePosixPath
 
 from svg_rasterize import SvgRasterError, rasterize_svg
-from jellyframe_versions import active_runtime_release_version
+from jellyframe_versions import active_render_core_release_version, active_runtime_release_version
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from project_tools.render_core_feature_registry import (
@@ -494,14 +494,21 @@ def validate_manifest(manifest: dict) -> dict:
     version_code = required_int(version, "code", "manifest version", 0)
     runtime = required_object(manifest, "runtime")
     min_jellyframe = required_string(runtime, "minJellyFrame", "manifest runtime")
+    min_render_core = required_string(runtime, "minRenderCore", "manifest runtime")
     try:
         active_runtime_version = active_runtime_release_version()
+        active_render_core_version = active_render_core_release_version()
     except (OSError, RuntimeError) as error:
         fail(str(error))
     if min_jellyframe != active_runtime_version:
         fail(
             "manifest runtime.minJellyFrame must target the active pre-1.0 runtime line "
             f"{active_runtime_version}; got {min_jellyframe!r}"
+        )
+    if min_render_core != active_render_core_version:
+        fail(
+            "manifest runtime.minRenderCore must target the active pre-1.0 Render Core line "
+            f"{active_render_core_version}; got {min_render_core!r}"
         )
     script_mode = required_string(runtime, "script", "manifest runtime")
     if script_mode not in {"none", "classic"}:
@@ -592,6 +599,7 @@ def validate_manifest(manifest: dict) -> dict:
         "versionCode": version_code,
         "entry": entry,
         "minJellyFrame": min_jellyframe,
+        "minRenderCore": min_render_core,
         "script": script_mode,
         "viewport": viewport,
         "budgets": budgets,
@@ -797,7 +805,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
                 })
     nested_allowed = {
         "version": {"name", "code"},
-        "runtime": {"minJellyFrame", "script"},
+        "runtime": {"minJellyFrame", "minRenderCore", "script"},
         "viewport": {"designWidth", "designHeight", "shape"},
         "budgets": {
             "maxResourceBytes",

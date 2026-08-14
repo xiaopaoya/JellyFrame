@@ -17,6 +17,14 @@
 #include <utility>
 #include <vector>
 
+#ifndef JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION
+#error "app package loading requires the configured JellyFrame Runtime release version"
+#endif
+
+#ifndef JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION
+#error "app package loading requires the configured Render Core package version"
+#endif
+
 namespace jellyframe_example {
 
 constexpr std::uint32_t kJfappFnvOffset = 0x811c9dc5U;
@@ -24,6 +32,10 @@ constexpr std::uint32_t kJfappFnvPrime = 0x01000193U;
 constexpr std::size_t kJfappHeaderSize = 56;
 constexpr std::size_t kJfappResourceEntrySize = 28;
 constexpr std::size_t kJfappMaxResourceEntries = 16384;
+constexpr std::string_view kActiveJellyFrameRuntimeVersion =
+    JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION;
+constexpr std::string_view kActiveRenderCoreVersion =
+    JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION;
 
 inline bool jfapp_resource_index_size_fits(std::uint32_t resource_count) {
     if constexpr (sizeof(std::size_t) < sizeof(std::uint64_t)) {
@@ -39,6 +51,7 @@ struct AppPackageManifest {
     std::string role = "app";
     std::string version_name;
     std::string min_jellyframe;
+    std::string min_render_core;
     int version_code = 0;
     std::string entry = "/index.html";
     std::string script_mode = "classic";
@@ -1028,6 +1041,19 @@ inline bool json_find_object_int(std::string_view json,
     return json_find_int(json.substr(object_open, object_close - object_open), field_key, value);
 }
 
+inline bool json_find_object_string(std::string_view json,
+                                    std::string_view object_key,
+                                    std::string_view field_key,
+                                    std::string& value) {
+    std::size_t object_open = 0;
+    std::size_t object_close = 0;
+    if (!json_find_object_range(json, object_key, object_open, object_close)) {
+        return false;
+    }
+    return json_find_string(
+        std::string(json.substr(object_open, object_close - object_open)), field_key, value);
+}
+
 inline bool json_find_nested_bool(const std::string& json,
                                   std::string_view object_key,
                                   std::string_view child_key,
@@ -1172,7 +1198,8 @@ inline void validate_normalized_bundle_summary(const std::string& json, const Ap
             throw std::runtime_error(".jfapp summary " + std::string(key) + " must be a non-empty string");
         }
     };
-    for (const std::string_view key : {"id", "name", "role", "versionName", "entry", "minJellyFrame", "script"}) {
+    for (const std::string_view key : {
+             "id", "name", "role", "versionName", "entry", "minJellyFrame", "minRenderCore", "script"}) {
         require_non_empty_string(key);
     }
     int version_code = 0;
@@ -1255,8 +1282,15 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json, bool 
     json_find_string(json, "role", manifest.role);
     json_find_string(json, "versionName", manifest.version_name);
     json_find_string(json, "entry", manifest.entry);
-    json_find_string(json, "script", manifest.script_mode);
-    json_find_string(json, "minJellyFrame", manifest.min_jellyframe);
+    if (require_normalized_summary) {
+        json_find_string(json, "script", manifest.script_mode);
+        json_find_string(json, "minJellyFrame", manifest.min_jellyframe);
+        json_find_string(json, "minRenderCore", manifest.min_render_core);
+    } else {
+        json_find_object_string(json, "runtime", "script", manifest.script_mode);
+        json_find_object_string(json, "runtime", "minJellyFrame", manifest.min_jellyframe);
+        json_find_object_string(json, "runtime", "minRenderCore", manifest.min_render_core);
+    }
     if (!json_find_int(json, "versionCode", manifest.version_code)) {
         json_find_int(json, "code", manifest.version_code);
     }
@@ -1354,6 +1388,16 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json, bool 
     manifest.entry = normalized_entry;
     if (manifest.id.empty()) {
         throw std::runtime_error("manifest id is required");
+    }
+    if (manifest.min_jellyframe != kActiveJellyFrameRuntimeVersion) {
+        throw std::runtime_error(
+            "manifest minJellyFrame must target the configured pre-1.0 runtime line " +
+            std::string(kActiveJellyFrameRuntimeVersion));
+    }
+    if (manifest.min_render_core != kActiveRenderCoreVersion) {
+        throw std::runtime_error(
+            "manifest minRenderCore must target the configured pre-1.0 Render Core line " +
+            std::string(kActiveRenderCoreVersion));
     }
     if (require_normalized_summary) {
         validate_normalized_bundle_summary(json, manifest);

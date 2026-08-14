@@ -1,6 +1,6 @@
 # 版本规则
 
-> 最后更新：2026-08-14；适用版本：0.6.0-dev
+> 最后更新：2026-08-15；适用版本：0.6.0-dev
 
 JellyFrame Engine 使用轻量语义化版本规则：
 
@@ -41,9 +41,10 @@ Render Core package 在仓库版本之外增加一个兼容性维度，但不改
 | JellyFrame Device OS | `0.1.x-dev` | launcher、registry、设备生命周期、镜像和 port |
 | JFDP | `JFDP/1` | 设备控制 framing 和 result-code 兼容性 |
 
-当前 manifest schema 只要求 `runtime.minJellyFrame`。独立发布 Core 后，计划增加独立的
-`runtime.minRenderCore` 契约；在 schema、packer、registry summary 和 runtime gate 一起实现
-之前，不能自行把它写入当前 app。
+当前 manifest schema 同时要求 `runtime.minJellyFrame` 和
+`runtime.minRenderCore`。`1.0` 前它们都是精确的活跃开发线 gate：前者由 `VERSION`
+推导，后者由 Runtime 锁定的 Render Core package 推导。schema、packer、registry
+summary 与原生 Runtime parser 会同步执行这对校验。
 
 ## 发布期望
 

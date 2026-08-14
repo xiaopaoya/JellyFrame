@@ -14,6 +14,11 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- App manifest 现在通过 `runtime.minJellyFrame` 与 `runtime.minRenderCore`
+  显式声明 Runtime/Core 配对。两者必须精确匹配活跃的 1.0 前 Runtime line 及其锁定的
+  Render Core package；schema、packer、`.jfapp` registry 和原生桌面 source-package
+  parser 都会拒绝不匹配项。这取代了旧的、未校验的原生 source-manifest metadata 路径。
+
 - 1.0 前的包处理现在只接受一个当前开发线，不再维持历史兼容基线。第一方 manifest 统一声明
   `0.6.0`；packer 与 registry 会拒绝其他 `minJellyFrame` 值，包括手工构造的包。
   这是 1.0 前有意的破坏性调整，用于避免旧实验产物绕过当前包/运行时契约。

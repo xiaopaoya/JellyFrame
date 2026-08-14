@@ -1,6 +1,6 @@
 # 引擎架构
 
-> 最后更新：2026-08-14；适用版本：0.6.0-dev
+> 最后更新：2026-08-15；适用版本：0.6.0-dev
 
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
@@ -65,6 +65,10 @@ Runtime 侧的 provider 选择、package lock 校验和 provenance 输出位于
 `cmake/jellyframe_render_core_provider.cmake`。它有意不属于
 `render_core_*.cmake` 的归档边界：独立 Core 拥有源码与 package export，Runtime 则拥有接受哪一份
 Core 的策略。
+
+App manifest 也会显式声明这一边界。`1.0` 前，`runtime.minJellyFrame` 与
+`runtime.minRenderCore` 都必须精确匹配 Runtime 的活跃 line 和锁定的 Core package；
+packer、已安装 bundle registry 与原生桌面 package parser 都会拒绝不匹配项。
 
 跨仓库开发时，可以用 `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 让 `in-tree`
 provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只是本地开发覆盖项，
