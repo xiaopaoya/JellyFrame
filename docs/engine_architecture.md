@@ -41,7 +41,8 @@ tests, standalone README and license. It contains neither Runtime nor
 JerryScript, ports, device contracts, examples or app resources. The packer
 normalizes member order and archive metadata, writes a SHA-256 sidecar, and CI
 extracts, builds, tests, installs and consumes the resulting package through
-the Runtime package-provider configuration. This is the current extraction
+the Runtime package-provider configuration. The Standalone Core CI job retains
+that archive and sidecar as a workflow artifact. This is the current extraction
 gate; it is not yet a separately governed Git repository or signed release.
 
 The App Runtime can consume that installed package without compiling the Render

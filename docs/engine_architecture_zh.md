@@ -33,8 +33,9 @@ ctest --test-dir build\core-from-archive -C Release --output-on-failure
 归档只包含 Render Core 源码、共享 CMake 边界、测试、独立 README 和许可证；不包含
 Runtime、JerryScript、ports、设备契约、示例或 app 资源。打包器会规范化成员顺序与
 归档元数据，并写出 SHA-256 sidecar；CI 会解压、构建、测试、安装，并由 Runtime 的
-package-provider 配置消费生成的 package。这是当前的迁出门槛，不表示它已成为独立治理的
-Git 仓库或已签名发布版本。
+package-provider 配置消费生成的 package。Standalone Core CI job 会将该归档和 sidecar
+保留为 workflow artifact。这是当前的迁出门槛，不表示它已成为独立治理的 Git 仓库或已签名
+发布版本。
 
 App Runtime 可以消费已经安装的 Render Core 包，而不编译当前 checkout 中的
 Render Core 源码：

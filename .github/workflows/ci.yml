@@ -279,12 +279,24 @@ jobs:
       - name: Run standalone CTest
         run: ctest --test-dir build/render-core-standalone --output-on-failure
 
+      - name: Create Render Core source distribution
+        run: >
+          python project_tools/package_render_core_source.py
+          --output-dir build/render-core-source-dist
+
       - name: Verify standalone Render Core source archive
         run: >
           python tests/tool_regression/render_core_source_archive_tests.py
           --cmake cmake
           --source-root .
           --generator Ninja
+
+      - name: Archive Render Core source distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: jellyframe-render-core-source
+          path: build/render-core-source-dist/
+          if-no-files-found: error
 
       - name: Install Render Core package
         run: cmake --install build/render-core-standalone --prefix build/render-core-install
