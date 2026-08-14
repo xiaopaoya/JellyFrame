@@ -20,6 +20,22 @@ JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目�
 供未来独立的 `jellyframe-render-core` 仓库消费。这个阶段不引入 Git submodule，也不把 App Runtime、
 JerryScript、ports 或设备协议混入 Render Core 包。
 
+同一 checkout 还可以生成可独立使用、可复现的源码归档：
+
+```powershell
+python project_tools\package_render_core_source.py --output-dir build\dist
+tar -xzf build\dist\jellyframe-render-core-0.6.0.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.6.0 -B build\core-from-archive
+cmake --build build\core-from-archive --config Release --parallel
+ctest --test-dir build\core-from-archive -C Release --output-on-failure
+```
+
+归档只包含 Render Core 源码、共享 CMake 边界、测试、独立 README 和许可证；不包含
+Runtime、JerryScript、ports、设备契约、示例或 app 资源。打包器会规范化成员顺序与
+归档元数据，并写出 SHA-256 sidecar；CI 会解压、构建、测试、安装，并由 Runtime 的
+package-provider 配置消费生成的 package。这是当前的迁出门槛，不表示它已成为独立治理的
+Git 仓库或已签名发布版本。
+
 App Runtime 可以消费已经安装的 Render Core 包，而不编译当前 checkout 中的
 Render Core 源码：
 
@@ -55,7 +71,7 @@ provider 指向另一个 Render Core checkout。这只是本地开发覆盖项�
 
 | 未来仓库 | 负责内容 | 迭代规律 | 当前状态 |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 本仓库已验证安装/导出边界和 package consumer |
+| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 本仓库已验证安装/导出、确定性源码归档和 package consumer |
 | `jellyframe` | App Runtime、Japp 格式、JerryScript binding、桌面壳和开发工具 | 慢速迭代，维护 App 兼容契约 | 当前 Runtime 源码边界；可消费锁定 Core package 或 in-tree Core |
 | `jellyframe-device-os` | launcher、registry、Device Runtime、JFDP、板卡 port 和官方镜像 | 强硬件依赖的实验性迭代 | 尚未物理迁出；D0 契约仍位于过渡位置 |
 | JerryScript | 第三方脚本引擎 | 跟随上游 commit/tag | 可选依赖，由 Runtime/port 构建锁定 |
@@ -68,9 +84,9 @@ package。D0 已将其编译为独立的 `jellyframe_device_runtime_contracts` t
 App Runtime 或 Render Core 实现对象的情况下运行测试。当前源码路径仍是过渡位置，直到完整
 reference-host loop 完成；这能避免移植侧静默复制一套协议实现。
 
-物理拆分需要同时满足三个条件：独立可构建的 Core package、锁定 Core 版本/ABI 的
-Runtime consumer，以及不导入 Core 实现细节而消费同一 Runtime 契约的 Device OS
-reference host。以上门槛都不要求 Git submodule。
+物理拆分需要同时满足三个条件：独立可构建的 Core source archive/package、锁定 Core
+版本/ABI 的 Runtime consumer，以及不导入 Core 实现细节而消费同一 Runtime 契约的
+Device OS reference host。以上门槛都不要求 Git submodule。
 
 ```text
 HTML bytes/string

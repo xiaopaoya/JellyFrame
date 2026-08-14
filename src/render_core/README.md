@@ -45,6 +45,22 @@ the public headers and the generated capability profile. The package is a
 build artifact boundary; it does not include App Runtime, JerryScript, ports or
 device protocols.
 
+To validate the actual extraction boundary rather than the monorepo-only
+configuration, maintainers can create a standalone source archive:
+
+```powershell
+python project_tools\package_render_core_source.py --output-dir build\dist
+tar -xzf build\dist\jellyframe-render-core-0.6.0.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.6.0 -B build\core-from-archive
+cmake --build build\core-from-archive --config Release --parallel
+ctest --test-dir build\core-from-archive -C Release --output-on-failure
+```
+
+The archive has a deterministic member order and metadata, plus a SHA-256
+sidecar. CI independently unpacks, builds, tests and installs it before the
+Runtime package-provider check. It is a source-distribution gate, not a signed
+release or a promise that ordinary `.jfapp` packages can load native modules.
+
 ## Source layout
 
 The directory is intentionally a flat C++ module today. The files are split by

@@ -11,6 +11,7 @@ HTML/CSS compatibility tables. App authors normally start with
 | Check desktop benchmark regressions | `benchmark_guard.py` |
 | Verify a generated Render Core profile and link map | `check_render_core_link_map.py` |
 | Inspect or regenerate the Render Core feature catalog | `render_core_feature_registry.py` |
+| Create a standalone Render Core source archive | `package_render_core_source.py` |
 | Generate the HTML/CSS support tables | `generate_html_support_table.py`, `generate_css_support_table.py` |
 | Import a CSS crosswork snapshot | `import_css_support_crosswork.py` |
 

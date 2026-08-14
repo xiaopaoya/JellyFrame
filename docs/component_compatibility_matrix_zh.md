@@ -13,6 +13,7 @@
 | JellyFrame App Runtime | 源码内 `jellyframe_render_core` | 同一 checkout | `verified` | 默认桌面 Release/Debug 和非 scripting CI CTest。适合同步修改 Core 与 Runtime。 |
 | JellyFrame App Runtime | Core 源码覆盖 | 本地 checkout / source profile | `本地已验证` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 可选用另一个 Core checkout 进行跨仓库开发；仍与 package 模式互斥。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
+| Render Core 源码归档 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 确定性的 `.tar.gz` 与 SHA-256 sidecar；CI 会连续打包两次并比对字节、解压、构建、运行 CTest、安装，再配置 Runtime package consumer。这不是已签名的发布产物。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` / source manifest schema `1` | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会校验 package 的 SHA-256 source manifest 并复制到构建 provenance。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本或 ABI | `rejected` | 配置阶段执行精确版本和 engine ABI 检查；package 模式不允许偷偷回退到源码 Core。 |
 | App package 预检 | 生成的 Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` 会在读取资源前校验 profile schema、已知 feature ID 和依赖闭包；缺失必需能力族会拒绝 package。 |
@@ -51,7 +52,7 @@ source hash/file count。已安装 package 还必须提供匹配的 source manif
 ## 拆分顺序
 
 1. 保留 `in-tree` provider，用于 Core 与 Runtime 同步开发。
-2. 在 CI 保留安装包 consumer，并在 Runtime 和 port 构建报告中归档生成的 provenance
-   记录。
+2. 在 CI 保留确定性 source archive 和安装包 consumer，并在 Runtime 和 port 构建报告中归档
+   生成的 provenance 记录。
 3. 第一个独立 Core 仓库发布前，维护完整兼容性矩阵。
 4. 只有 Device Runtime 的宿主/移植所有权契约稳定后，才将其迁入未来的 JellyFrameOS 边界。

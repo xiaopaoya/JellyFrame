@@ -279,6 +279,13 @@ jobs:
       - name: Run standalone CTest
         run: ctest --test-dir build/render-core-standalone --output-on-failure
 
+      - name: Verify standalone Render Core source archive
+        run: >
+          python tests/tool_regression/render_core_source_archive_tests.py
+          --cmake cmake
+          --source-root .
+          --generator Ninja
+
       - name: Install Render Core package
         run: cmake --install build/render-core-standalone --prefix build/render-core-install
 

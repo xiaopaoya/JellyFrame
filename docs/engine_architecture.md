@@ -26,6 +26,24 @@ upper-layer examples disabled to build only Render Core. With
 `jellyframe-render-core` repository. This staged approach keeps local cross-layer
 development cheap without making a Git submodule part of the public workflow.
 
+The same checkout can create a self-contained, reproducible source archive:
+
+```powershell
+python project_tools\package_render_core_source.py --output-dir build\dist
+tar -xzf build\dist\jellyframe-render-core-0.6.0.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.6.0 -B build\core-from-archive
+cmake --build build\core-from-archive --config Release --parallel
+ctest --test-dir build\core-from-archive -C Release --output-on-failure
+```
+
+The archive contains only Render Core sources, its shared CMake boundary,
+tests, standalone README and license. It contains neither Runtime nor
+JerryScript, ports, device contracts, examples or app resources. The packer
+normalizes member order and archive metadata, writes a SHA-256 sidecar, and CI
+extracts, builds, tests, installs and consumes the resulting package through
+the Runtime package-provider configuration. This is the current extraction
+gate; it is not yet a separately governed Git repository or signed release.
+
 The App Runtime can consume that installed package without compiling the Render
 Core sources from this checkout:
 
@@ -71,7 +89,7 @@ ownership model:
 
 | Future repository | Owns | Release rhythm | Current state |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Install/export boundary and package consumer are verified in this repository |
+| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Install/export, deterministic source archive and package consumer are verified in this repository |
 | `jellyframe` | App Runtime, Japp format, JerryScript binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
 | `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
 | JerryScript | Third-party scripting engine | Upstream commit/tag cadence | Optional dependency, locked by the Runtime build/port owner |
@@ -88,10 +106,10 @@ transitional so the protocol is not silently duplicated by a port while the
 full reference-host loop is completed.
 
 The physical split is gated by three conditions: an independently buildable
-Core package, a Runtime consumer with a locked Core version/ABI, and a Device OS
-reference host that consumes the same Runtime contracts without importing Core
-implementation details. Git submodules are not required for any of these
-gates.
+Core source archive/package, a Runtime consumer with a locked Core version/ABI,
+and a Device OS reference host that consumes the same Runtime contracts without
+importing Core implementation details. Git submodules are not required for any
+of these gates.
 
 ```text
 HTML bytes/string

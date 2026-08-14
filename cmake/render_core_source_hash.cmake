@@ -22,6 +22,7 @@ function(jellyframe_compute_render_core_source_hash source_root)
         RELATIVE "${_jellyframe_render_core_hash_root}"
         "${_jellyframe_render_core_hash_root}/cmake/render_core_*.cmake"
         "${_jellyframe_render_core_hash_root}/cmake/render_core_*.json.in"
+        "${_jellyframe_render_core_hash_root}/cmake/render_core_*.csv"
         "${_jellyframe_render_core_hash_root}/cmake/JellyFrameRenderCoreConfig.cmake.in")
     list(APPEND _jellyframe_render_core_hash_sources ${_jellyframe_render_core_hash_cmake})
     list(REMOVE_DUPLICATES _jellyframe_render_core_hash_sources)

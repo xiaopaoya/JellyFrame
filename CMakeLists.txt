@@ -169,83 +169,12 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/render_core_link_map.cmake")
 
 if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
     if(NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_sources.cmake" OR
-       NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake")
+       NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake" OR
+       NOT EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_build.cmake")
         message(FATAL_ERROR
             "Render Core source checkout is missing its CMake boundary: ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
     endif()
-    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_sources.cmake")
-    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake")
-    add_library(jellyframe_render_core
-        ${JELLYFRAME_RENDER_CORE_SOURCES_ABSOLUTE}
-    )
-
-    target_include_directories(jellyframe_render_core
-        PUBLIC
-            $<BUILD_INTERFACE:${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src>
-            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-    )
-
-    target_compile_features(jellyframe_render_core PUBLIC cxx_std_17)
-    target_compile_definitions(jellyframe_render_core PUBLIC
-        JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED=${JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED}
-        JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED=${JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED}
-        JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED=${JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED}
-        JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED=${JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED}
-    )
-    if(JELLYFRAME_ENABLE_IMAGE_FILE_IO)
-        target_compile_definitions(jellyframe_render_core PUBLIC JELLYFRAME_ENABLE_IMAGE_FILE_IO=1)
-    endif()
-
-    set(JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE
-        "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_source_manifest.json")
-    configure_file(
-        "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_source_manifest.json.in"
-        "${JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE}"
-        @ONLY)
-
-    if(MSVC)
-        target_compile_options(jellyframe_render_core PRIVATE /W4)
-    else()
-        target_compile_options(jellyframe_render_core PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-
-    if(JELLYFRAME_INSTALL_RENDER_CORE)
-        include(CMakePackageConfigHelpers)
-        set(JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR
-            "${CMAKE_INSTALL_LIBDIR}/cmake/JellyFrameRenderCore")
-        configure_package_config_file(
-            "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/JellyFrameRenderCoreConfig.cmake.in"
-            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
-            INSTALL_DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
-        write_basic_package_version_file(
-            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
-            VERSION "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
-            COMPATIBILITY SameMajorVersion)
-        install(TARGETS jellyframe_render_core
-            EXPORT JellyFrameRenderCoreTargets
-            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-        install(DIRECTORY "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src/render_core/"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/render_core"
-            FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-            PATTERN "benchmarks" EXCLUDE
-            PATTERN "docs" EXCLUDE
-            PATTERN "samples" EXCLUDE
-            PATTERN "tests" EXCLUDE)
-        install(EXPORT JellyFrameRenderCoreTargets
-            FILE JellyFrameRenderCoreTargets.cmake
-            NAMESPACE JellyFrame::
-            DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
-        install(FILES
-            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfig.cmake"
-            "${CMAKE_CURRENT_BINARY_DIR}/JellyFrameRenderCoreConfigVersion.cmake"
-            DESTINATION "${JELLYFRAME_RENDER_CORE_INSTALL_CMAKE_DIR}")
-        install(FILES
-            "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json"
-            "${JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE}"
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/jellyframe-render-core")
-    endif()
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_build.cmake")
 else()
     if(JELLYFRAME_RENDER_CORE_PACKAGE_DIR)
         find_package(JellyFrameRenderCore ${JELLYFRAME_RENDER_CORE_LOCKED_VERSION} EXACT CONFIG REQUIRED
@@ -514,66 +443,7 @@ if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)
-    set(JELLYFRAME_RENDER_CORE_TEST_SOURCES
-        src/render_core/tests/tokenizer_tests.cpp
-        src/render_core/tests/arena_tests.cpp
-        src/render_core/tests/animation_timeline_tests.cpp
-        src/render_core/tests/budget_stress_tests.cpp
-        src/render_core/tests/dom_mutation_tests.cpp
-        src/render_core/tests/dom_owner_tests.cpp
-        src/render_core/tests/document_script_tests.cpp
-        src/render_core/tests/display_invalidation_tests.cpp
-        src/render_core/tests/dirty_region_tests.cpp
-        src/render_core/tests/embedded_framebuffer_tests.cpp
-        src/render_core/tests/css_parser_tests.cpp
-        src/render_core/tests/event_tests.cpp
-        src/render_core/tests/form_submission_tests.cpp
-        src/render_core/tests/frame_loop_tests.cpp
-        src/render_core/tests/frame_update_tests.cpp
-        src/render_core/tests/hit_test_tests.cpp
-        src/render_core/tests/host_tests.cpp
-        src/render_core/tests/input_tests.cpp
-        src/render_core/tests/layout_tests.cpp
-        src/render_core/tests/pipeline_statistics_tests.cpp
-        src/render_core/tests/render_tree_tests.cpp
-        src/render_core/tests/layer_tree_tests.cpp
-        src/render_core/tests/scroll_blit_tests.cpp
-        src/render_core/tests/scroll_gesture_tests.cpp
-        src/render_core/tests/software_renderer_tests.cpp
-        src/render_core/tests/style_repaint_tests.cpp
-        src/render_core/tests/text_adapter_tests.cpp
-        src/render_core/tests/text_repaint_tests.cpp
-        src/render_core/tests/text_scan_tests.cpp
-    )
-    if(JELLYFRAME_ENABLE_CANVAS2D)
-        list(APPEND JELLYFRAME_RENDER_CORE_TEST_SOURCES
-            src/render_core/tests/canvas2d_tests.cpp)
-    else()
-        list(APPEND JELLYFRAME_RENDER_CORE_TEST_SOURCES
-            src/render_core/tests/canvas2d_disabled_tests.cpp)
-    endif()
-    if(JELLYFRAME_ENABLE_MODERN_PAINT)
-        list(APPEND JELLYFRAME_RENDER_CORE_TEST_SOURCES
-            src/render_core/tests/modern_paint_tests.cpp)
-    endif()
-
-    foreach(test_source IN LISTS JELLYFRAME_RENDER_CORE_TEST_SOURCES)
-        get_filename_component(test_name ${test_source} NAME_WE)
-        set_source_files_properties(${test_source}
-            PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
-    endforeach()
-
-    add_jellyframe_tool(jellyframe_render_core_tests
-        src/render_core/tests/render_core_tests.cpp
-        ${JELLYFRAME_RENDER_CORE_TEST_SOURCES}
-    )
-    jellyframe_enable_test_asserts(jellyframe_render_core_tests)
-    jellyframe_enable_render_core_link_map(jellyframe_render_core_tests)
-    jellyframe_stage_sanitizer_runtime(jellyframe_render_core_tests)
-    add_test(
-        NAME jellyframe_render_core_tests
-        COMMAND jellyframe_render_core_tests
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_tests.cmake")
     endif()
 
     if(JELLYFRAME_BUILD_APP_RUNTIME)
