@@ -14,3 +14,15 @@ third_party/jerryscript/
 project_docs/
 release_review/
 jellyframe_*_review_*/
+
+# ESP32-S3 hardware builds and collected evidence are local review material.
+ports/esp32s3-idf/test_artifacts/
+ports/esp32s3-idf/generated/
+ports/esp32s3-idf/b-script*/
+ports/esp32s3-idf/b-script*.log
+ports/esp32s3-idf/p3-*/
+ports/esp32s3-idf/p3-*.log
+ports/esp32s3-idf/h4-*/
+ports/esp32s3-idf/sdkconfig.p3-*
+ports/esp32s3-idf/jerryscript-config.h
+test_artifacts/

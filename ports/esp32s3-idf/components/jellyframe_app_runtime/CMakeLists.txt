@@ -15,6 +15,7 @@ if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
     list(APPEND JELLYFRAME_SCRIPT_TASK_SOURCES
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_contract.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_frame_codec.cpp"
+        "${JELLYFRAME_ROOT}/src/app_runtime/script_task_frame_renderer.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_input_codec.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_input_dispatch.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_service_request_codec.cpp"
@@ -23,6 +24,7 @@ if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_worker_inbox.cpp"
     )
     if(CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE OR
+       CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE OR
        CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE OR
        CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE)
         if(NOT JELLYFRAME_BUILD_SCRIPTING)

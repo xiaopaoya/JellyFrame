@@ -17,6 +17,7 @@ file(MAKE_DIRECTORY "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}")
 
 set(JELLYFRAME_ESP32S3_SCRIPT_REQUIRES)
 if(CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE OR
    CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE OR
    CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE)
     list(APPEND JELLYFRAME_ESP32S3_SCRIPT_REQUIRES jellyframe_jerryscript)
@@ -85,6 +86,7 @@ idf_component_register(
         "jellyframe_esp32s3_soc_power_acceptance.cpp"
         "jellyframe_esp32s3_script_task_acceptance.cpp"
         "jellyframe_esp32s3_script_app_acceptance.cpp"
+        "jellyframe_esp32s3_script_value_frame_v2_acceptance.cpp"
         "jellyframe_esp32s3_script_service_acceptance.cpp"
         "jellyframe_esp32s3_script_fault_acceptance.cpp"
         "jellyframe_esp32s3_ui_task.cpp"

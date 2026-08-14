@@ -901,6 +901,12 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGI(tag, "real JerryScript App acceptance fixture started");
     }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_script_task_value_frame_v2_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start script-task value-frame v2 acceptance fixture");
+    } else {
+        ESP_LOGI(tag, "script-task value-frame v2 acceptance fixture started");
+    }
 #elif CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE
     if (!jellyframe_esp32s3::start_script_service_echo_acceptance_task()) {
         ESP_LOGE(tag, "failed to start real JerryScript service echo acceptance fixture");
