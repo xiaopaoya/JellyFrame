@@ -117,6 +117,33 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             self.assertTrue(source_manifest["files"])
             for entry in source_manifest["files"]:
                 self.assertIn(f"{root_name}/{entry['path']}", members)
+
+            minimal_build = root / "core-minimal-build"
+            self.cmake_configure(
+                archive_source,
+                minimal_build,
+                [
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DJELLYFRAME_BUILD_TESTS=OFF",
+                    "-DJELLYFRAME_ENABLE_CANVAS2D=OFF",
+                    "-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF",
+                    "-DJELLYFRAME_ENABLE_FLEX_GRID=OFF",
+                    "-DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF",
+                ],
+            )
+            minimal_profile = json.loads(
+                (minimal_build / "generated" / "jellyframe_render_core_profile.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(minimal_profile["profileId"],
+                             "render-core-minimal-no-forms-advanced")
+            self.assertEqual(minimal_profile["features"], ["core.document", "core.paint"])
+            minimal_manifest = json.loads(
+                (minimal_build / "generated" /
+                 "jellyframe_render_core_source_manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(minimal_manifest["sourceHash"], source_manifest["sourceHash"])
             run([str(self.cmake), "--build", str(core_build), "--config", "Release", "--parallel"],
                 cwd=self.source_root)
             run(["ctest", "--test-dir", str(core_build), "-C", "Release", "--output-on-failure"],
