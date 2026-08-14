@@ -91,6 +91,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 self.assertEqual(members, sorted(members))
                 root_name = archive.name.removesuffix(".tar.gz")
                 self.assertIn(f"{root_name}/CMakeLists.txt", members)
+                self.assertIn(f"{root_name}/CMakePresets.json", members)
                 self.assertIn(f"{root_name}/README.md", members)
                 self.assertIn(f"{root_name}/cmake/render_core_build.cmake", members)
                 self.assertIn(f"{root_name}/cmake/render_core_feature_registry.csv", members)
@@ -98,17 +99,9 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 bundle.extractall(root / "extract")
 
             archive_source = root / "extract" / root_name
-            core_build = root / "core-build"
             install_dir = root / "install"
-            self.cmake_configure(
-                archive_source,
-                core_build,
-                [
-                    "-DCMAKE_BUILD_TYPE=Release",
-                    "-DJELLYFRAME_BUILD_TESTS=ON",
-                    "-DJELLYFRAME_INSTALL_RENDER_CORE=ON",
-                ],
-            )
+            run([str(self.cmake), "--preset", "default"], cwd=archive_source)
+            core_build = archive_source / "build" / "default"
             source_manifest = json.loads(
                 (core_build / "generated" / "jellyframe_render_core_source_manifest.json").read_text(
                     encoding="utf-8"
@@ -118,19 +111,8 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             for entry in source_manifest["files"]:
                 self.assertIn(f"{root_name}/{entry['path']}", members)
 
-            minimal_build = root / "core-minimal-build"
-            self.cmake_configure(
-                archive_source,
-                minimal_build,
-                [
-                    "-DCMAKE_BUILD_TYPE=Release",
-                    "-DJELLYFRAME_BUILD_TESTS=OFF",
-                    "-DJELLYFRAME_ENABLE_CANVAS2D=OFF",
-                    "-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF",
-                    "-DJELLYFRAME_ENABLE_FLEX_GRID=OFF",
-                    "-DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF",
-                ],
-            )
+            run([str(self.cmake), "--preset", "minimal"], cwd=archive_source)
+            minimal_build = archive_source / "build" / "minimal"
             minimal_profile = json.loads(
                 (minimal_build / "generated" / "jellyframe_render_core_profile.json").read_text(
                     encoding="utf-8"
@@ -144,8 +126,8 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                  "jellyframe_render_core_source_manifest.json").read_text(encoding="utf-8")
             )
             self.assertEqual(minimal_manifest["sourceHash"], source_manifest["sourceHash"])
-            run([str(self.cmake), "--build", str(core_build), "--config", "Release", "--parallel"],
-                cwd=self.source_root)
+            run([str(self.cmake), "--build", "--preset", "default", "--parallel"],
+                cwd=archive_source)
             run(["ctest", "--test-dir", str(core_build), "-C", "Release", "--output-on-failure"],
                 cwd=self.source_root)
             run([str(self.cmake), "--install", str(core_build), "--config", "Release",

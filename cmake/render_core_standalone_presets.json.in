@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 16,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default Render Core",
+      "description": "Release build with all documented optional feature families and tests.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "JELLYFRAME_BUILD_TESTS": "ON",
+        "JELLYFRAME_INSTALL_RENDER_CORE": "ON"
+      }
+    },
+    {
+      "name": "minimal",
+      "displayName": "Minimal Render Core",
+      "description": "Release configuration without optional Canvas, modern-paint, flex/grid or advanced forms families.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/minimal",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "JELLYFRAME_BUILD_TESTS": "OFF",
+        "JELLYFRAME_ENABLE_CANVAS2D": "OFF",
+        "JELLYFRAME_ENABLE_MODERN_PAINT": "OFF",
+        "JELLYFRAME_ENABLE_FLEX_GRID": "OFF",
+        "JELLYFRAME_ENABLE_ADVANCED_FORMS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "configuration": "Release"
+    },
+    {
+      "name": "minimal",
+      "configurePreset": "minimal",
+      "configuration": "Release"
+    }
+  ]
+}

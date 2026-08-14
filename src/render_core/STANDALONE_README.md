@@ -9,6 +9,20 @@ ports, launchers, device protocols or vendor SDKs.
 
 ## Build
 
+With CMake 3.20+ and Ninja available, presets make the default or smallest
+supported profile one command away:
+
+```sh
+cmake --preset default
+cmake --build --preset default
+
+cmake --preset minimal
+cmake --build --preset minimal
+```
+
+The following explicit commands remain compatible with the minimum required
+CMake version and are useful when a host selects its own generator:
+
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel

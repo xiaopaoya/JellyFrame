@@ -92,10 +92,12 @@ def create_archive(source_root: Path, output_dir: Path) -> tuple[Path, Path]:
     archive_path = output_dir / f"{root_name}.tar.gz"
     checksum_path = archive_path.with_suffix(archive_path.suffix + ".sha256")
     root_cmake = require_file(source_root / "cmake" / "render_core_standalone_root.cmake")
+    presets = require_file(source_root / "cmake" / "render_core_standalone_presets.json.in")
     standalone_readme = require_file(source_root / "src" / "render_core" / "STANDALONE_README.md")
 
     archive_entries = {
         f"{root_name}/CMakeLists.txt": root_cmake.read_bytes(),
+        f"{root_name}/CMakePresets.json": presets.read_bytes(),
         f"{root_name}/README.md": standalone_readme.read_bytes(),
     }
     for path in source_files(source_root):
