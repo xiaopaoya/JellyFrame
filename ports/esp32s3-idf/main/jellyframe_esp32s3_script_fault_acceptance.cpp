@@ -300,14 +300,19 @@ bool retire_session(FaultState& state, ScriptTaskSupervisor& protocol,
                     ScriptTaskServiceBridge& bridge, AppRuntimeHost& host,
                     const ScriptAppSession& session) {
     state.accept_frames.store(false);
+    const auto protocol_begin = protocol.begin_teardown(session);
     const auto bridge_begin = bridge.begin_teardown(session);
+    const auto blocked_restart = protocol.begin(session.app_instance_id + 1);
+    ScriptAppSession unrelated = session;
+    ++unrelated.worker_epoch;
+    const auto wrong_complete = protocol.complete_teardown(unrelated);
     const auto host_end = host.terminate_current(AppTeardownReason::RuntimeError);
     const auto bridge_end = bridge.complete_teardown(session);
-    const auto protocol_begin = protocol.begin_teardown(session);
     const auto protocol_end = protocol.complete_teardown(session);
     const bool ok = bridge_begin.awaiting_in_flight_host_completions == 0 &&
         bridge_end.retired_records == 0 && host_end.app_instance_id == session.app_instance_id &&
-        protocol_begin.session == session && protocol_end.session == session;
+        protocol_begin.session == session && !blocked_restart.valid() &&
+        !wrong_complete.session.valid() && protocol_end.session == session;
     if (!ok) state.teardown_failures.fetch_add(1);
     return ok;
 }

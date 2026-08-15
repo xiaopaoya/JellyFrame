@@ -55,6 +55,7 @@ struct FixtureState {
     SemaphoreHandle_t stale_ui_gate = nullptr;
     SemaphoreHandle_t worker_exit_ack = nullptr;
     SemaphoreHandle_t worker_control_gate = nullptr;
+    SemaphoreHandle_t worker_finalizer_gate = nullptr;
     SemaphoreHandle_t worker_ui_gate = nullptr;
     SemaphoreHandle_t supervisor_control_gate = nullptr;
     SemaphoreHandle_t supervisor_ui_gate = nullptr;
@@ -77,6 +78,12 @@ struct FixtureState {
     std::atomic<std::uint32_t> late_completions_stale{0};
     std::atomic<std::uint32_t> teardown_frame_discards{0};
     std::atomic<std::uint32_t> replacement_frames{0};
+    std::atomic<std::uint32_t> teardown_restart_rejections{0};
+    std::atomic<std::uint32_t> teardown_wrong_identity_rejections{0};
+    std::atomic<std::uint32_t> teardown_finalizer_release_posts{0};
+    std::atomic<std::uint32_t> teardown_finalizer_release_drains{0};
+    std::atomic<std::uint32_t> teardown_completed_restart_successes{0};
+    std::atomic<std::uint32_t> teardown_completed_release_rejections{0};
     std::atomic<std::uint32_t> failures{0};
     std::atomic<std::uint32_t> worker_create_failures{0};
     std::atomic<std::uint32_t> worker_exit_acks{0};
@@ -234,6 +241,18 @@ void worker_entry(void* argument) {
             log_teardown_failure(*state, state->teardown_cycles.load(), "worker-wait-supervisor");
         }
         signal_gate(state->supervisor_control_gate);
+        if (!wait_gate(state->worker_finalizer_gate)) {
+            log_teardown_failure(*state, state->teardown_cycles.load(), "worker-wait-finalizer");
+        } else {
+            const auto released = state->protocol->post_native_release_intent(
+                {session, 0x90000000U | state->teardown_cycles.load()});
+            if (released != jellyframe::ScriptTaskReleaseIntentStatus::Accepted) {
+                log_teardown_failure(*state, state->teardown_cycles.load(), "worker-finalizer-release");
+            } else {
+                state->teardown_finalizer_release_posts.fetch_add(1);
+            }
+            signal_gate(state->supervisor_control_gate);
+        }
         if (state->worker_exit_ack != nullptr) {
             signal_gate(state->worker_exit_ack);
             state->worker_exit_acks.fetch_add(1);
@@ -403,11 +422,13 @@ void supervisor_entry(void* argument) {
     state->ui_task = nullptr;
     state->worker_exit_ack = xSemaphoreCreateBinary();
     state->worker_control_gate = xSemaphoreCreateBinary();
+    state->worker_finalizer_gate = xSemaphoreCreateBinary();
     state->worker_ui_gate = xSemaphoreCreateBinary();
     state->supervisor_control_gate = xSemaphoreCreateBinary();
     state->supervisor_ui_gate = xSemaphoreCreateBinary();
     state->ui_work_gate = xSemaphoreCreateBinary();
     if (state->worker_exit_ack == nullptr || state->worker_control_gate == nullptr ||
+        state->worker_finalizer_gate == nullptr ||
         state->worker_ui_gate == nullptr || state->supervisor_control_gate == nullptr ||
         state->supervisor_ui_gate == nullptr || state->ui_work_gate == nullptr) {
         state->failures.fetch_add(1);
@@ -472,6 +493,23 @@ void supervisor_entry(void* argument) {
     // invalid value and the following worker cannot post or publish.
     const auto normal_begin = protocol.begin_teardown(first_session);
     const auto normal_bridge_begin = bridge.begin_teardown(first_session);
+    if (!protocol.begin(first.id + 1).valid()) {
+        state->teardown_restart_rejections.fetch_add(1);
+    } else {
+        state->failures.fetch_add(1);
+    }
+    jellyframe::ScriptAppSession unrelated = first_session;
+    ++unrelated.worker_epoch;
+    if (!protocol.complete_teardown(unrelated).session.valid()) {
+        state->teardown_wrong_identity_rejections.fetch_add(1);
+    } else {
+        state->failures.fetch_add(1);
+    }
+    if (!protocol.begin(first.id + 2).valid()) {
+        state->teardown_restart_rejections.fetch_add(1);
+    } else {
+        state->failures.fetch_add(1);
+    }
     const auto normal_host_end = host.terminate_current(jellyframe::AppTeardownReason::NormalExit);
     const auto normal_bridge_end = bridge.complete_teardown(first_session);
     const auto normal_end = protocol.complete_teardown(first_session);
@@ -546,8 +584,45 @@ void supervisor_entry(void* argument) {
         const jellyframe::ScriptAppSession retired = state->session;
         const auto supervisor_begin = protocol.begin_teardown(retired);
         const auto bridge_begin = bridge.begin_teardown(retired);
-        (void)supervisor_begin;
-        (void)bridge_begin;
+        if (supervisor_begin.session != retired ||
+            bridge_begin.awaiting_in_flight_host_completions != 1) {
+            log_teardown_failure(*state, cycle + 1, "supervisor-begin");
+        }
+        if (!protocol.begin(app.id + 1).valid()) {
+            state->teardown_restart_rejections.fetch_add(1);
+        } else {
+            log_teardown_failure(*state, cycle + 1, "restart-before-complete");
+        }
+        jellyframe::ScriptAppSession unrelated = retired;
+        ++unrelated.worker_epoch;
+        if (!protocol.complete_teardown(unrelated).session.valid()) {
+            state->teardown_wrong_identity_rejections.fetch_add(1);
+        } else {
+            log_teardown_failure(*state, cycle + 1, "wrong-complete");
+        }
+        if (!protocol.begin(app.id + 2).valid()) {
+            state->teardown_restart_rejections.fetch_add(1);
+        } else {
+            log_teardown_failure(*state, cycle + 1, "restart-after-wrong-complete");
+        }
+        signal_gate(state->worker_finalizer_gate);
+        if (!wait_gate(state->supervisor_control_gate)) {
+            log_teardown_failure(*state, cycle + 1, "supervisor-wait-finalizer");
+        }
+        jellyframe::ScriptTaskNativeLeaseReleaseIntent finalizer_intent;
+        if (!protocol.take_native_release_intent(finalizer_intent) ||
+            finalizer_intent.session != retired ||
+            finalizer_intent.native_lease_id != (0x90000000U | (cycle + 1))) {
+            log_teardown_failure(*state, cycle + 1, "supervisor-drain-finalizer");
+        } else {
+            state->teardown_finalizer_release_drains.fetch_add(1);
+        }
+        if (xSemaphoreTake(state->worker_exit_ack, kWait) != pdTRUE) {
+            log_teardown_failure(*state, cycle + 1, "supervisor-wait-worker-exit");
+            ESP_LOGE(kTag, "teardown worker exit ack timed out cycle=%u",
+                     static_cast<unsigned>(cycle + 1));
+            break;
+        }
         host.terminate_current(jellyframe::AppTeardownReason::RuntimeError);
         host.push_completion({late_request.job_id,
                               late_request.kind,
@@ -557,22 +632,25 @@ void supervisor_entry(void* argument) {
                               0,
                               4,
                               late_request.client_token});
-        bridge.complete_teardown(retired);
+        const auto bridge_end = bridge.complete_teardown(retired);
         const auto late_pump = host.pump_frame_completions(scratch);
         state->late_completions_stale.fetch_add(static_cast<std::uint32_t>(late_pump.stale));
         const auto supervisor_end = protocol.complete_teardown(retired);
         state->teardown_frame_discards.fetch_add(
             static_cast<std::uint32_t>(supervisor_begin.discarded_frame_packets +
                                        supervisor_end.released_frame_leases));
+        if (bridge_end.retired_records != 1 || supervisor_end.session != retired) {
+            log_teardown_failure(*state, cycle + 1, "complete-teardown");
+        }
+        if (protocol.post_native_release_intent({retired, 0x91000000U | (cycle + 1)}) ==
+            jellyframe::ScriptTaskReleaseIntentStatus::Invalid) {
+            state->teardown_completed_release_rejections.fetch_add(1);
+        } else {
+            log_teardown_failure(*state, cycle + 1, "completed-release");
+        }
         signal_gate(state->stale_ui_gate);
         if (!wait_gate(state->supervisor_ui_gate)) {
             log_teardown_failure(*state, cycle + 1, "supervisor-wait-ui-stale");
-        }
-        if (xSemaphoreTake(state->worker_exit_ack, kWait) != pdTRUE) {
-            log_teardown_failure(*state, cycle + 1, "supervisor-wait-worker-exit");
-            ESP_LOGE(kTag, "teardown worker exit ack timed out cycle=%u",
-                     static_cast<unsigned>(cycle + 1));
-            break;
         }
         vTaskDelay(pdMS_TO_TICKS(20));
         state->teardown_worker.store(false);
@@ -583,6 +661,7 @@ void supervisor_entry(void* argument) {
             log_teardown_failure(*state, cycle + 1, "replacement-begin");
             break;
         }
+        state->teardown_completed_restart_successes.fetch_add(1);
         state->replacement_worker.store(true);
         const BaseType_t replacement_created = xTaskCreatePinnedToCore(
             worker_entry, "script_task_next", CONFIG_JELLYFRAME_ESP32S3_SCRIPT_TASK_STACK_SIZE,
@@ -610,7 +689,13 @@ void supervisor_entry(void* argument) {
 
     if (state->replacement_frames.load() != kTeardownCycles ||
         state->ui_frames.load() != state->normal_frames.load() + 1 + kTeardownCycles ||
-        state->teardown_frame_discards.load() != kTeardownCycles * 2) {
+        state->teardown_frame_discards.load() != kTeardownCycles * 2 ||
+        state->teardown_restart_rejections.load() != 2 + kTeardownCycles * 2 ||
+        state->teardown_wrong_identity_rejections.load() != 1 + kTeardownCycles ||
+        state->teardown_finalizer_release_posts.load() != kTeardownCycles ||
+        state->teardown_finalizer_release_drains.load() != kTeardownCycles ||
+        state->teardown_completed_restart_successes.load() != kTeardownCycles ||
+        state->teardown_completed_release_rejections.load() != kTeardownCycles) {
         state->failures.fetch_add(1);
         ESP_LOGE(kTag, "teardown replacement accounting mismatch replacements=%u ui_frames=%u discarded=%u",
                  static_cast<unsigned>(state->replacement_frames.load()),
@@ -625,7 +710,7 @@ void supervisor_entry(void* argument) {
     update_watermarks(*state);
     const auto input_stats = protocol.current();
     ESP_LOGI(kTag,
-             "script_task_value_protocol_summary scripting=1 script_task_runtime=1 normal_cycles=%u normal_completions=%u normal_frames=%u host_rejected=%u rejected_completions=%u ui_frames=%u ui_frame_rejects=%u ui_stale_frames=%u channel_isolation_failures=%u teardown_cycles=%u replacement_frames=%u late_completions_stale=%u teardown_frame_discards=%u failures=%u worker_create_failures=%u worker_exit_acks=%u worker_stack_low_water_words=%u ui_stack_low_water_words=%u supervisor_stack_low_water_words=%u internal_free_min=%u psram_free_min=%u final_session_valid=%d status=%s",
+             "script_task_value_protocol_summary scripting=1 script_task_runtime=1 normal_cycles=%u normal_completions=%u normal_frames=%u host_rejected=%u rejected_completions=%u ui_frames=%u ui_frame_rejects=%u ui_stale_frames=%u channel_isolation_failures=%u teardown_cycles=%u replacement_frames=%u late_completions_stale=%u teardown_frame_discards=%u teardown_restart_rejections=%u teardown_wrong_identity_rejections=%u teardown_finalizer_release_posts=%u teardown_finalizer_release_drains=%u teardown_completed_restart_successes=%u teardown_completed_release_rejections=%u failures=%u worker_create_failures=%u worker_exit_acks=%u worker_stack_low_water_words=%u ui_stack_low_water_words=%u supervisor_stack_low_water_words=%u internal_free_min=%u psram_free_min=%u final_session_valid=%d status=%s",
              static_cast<unsigned>(state->normal_cycles.load()),
              static_cast<unsigned>(state->normal_completions.load()),
              static_cast<unsigned>(state->normal_frames.load()),
@@ -639,6 +724,12 @@ void supervisor_entry(void* argument) {
              static_cast<unsigned>(state->replacement_frames.load()),
              static_cast<unsigned>(state->late_completions_stale.load()),
              static_cast<unsigned>(state->teardown_frame_discards.load()),
+             static_cast<unsigned>(state->teardown_restart_rejections.load()),
+             static_cast<unsigned>(state->teardown_wrong_identity_rejections.load()),
+             static_cast<unsigned>(state->teardown_finalizer_release_posts.load()),
+             static_cast<unsigned>(state->teardown_finalizer_release_drains.load()),
+             static_cast<unsigned>(state->teardown_completed_restart_successes.load()),
+             static_cast<unsigned>(state->teardown_completed_release_rejections.load()),
              static_cast<unsigned>(state->failures.load()),
              static_cast<unsigned>(state->worker_create_failures.load()),
              static_cast<unsigned>(state->worker_exit_acks.load()),
@@ -657,10 +748,14 @@ void supervisor_entry(void* argument) {
          vSemaphoreDelete(state->worker_exit_ack);
          state->worker_exit_ack = nullptr;
      }
-     if (state->worker_control_gate != nullptr) {
-         vSemaphoreDelete(state->worker_control_gate);
-         state->worker_control_gate = nullptr;
-     }
+    if (state->worker_control_gate != nullptr) {
+        vSemaphoreDelete(state->worker_control_gate);
+        state->worker_control_gate = nullptr;
+    }
+    if (state->worker_finalizer_gate != nullptr) {
+        vSemaphoreDelete(state->worker_finalizer_gate);
+        state->worker_finalizer_gate = nullptr;
+    }
      if (state->worker_ui_gate != nullptr) {
          vSemaphoreDelete(state->worker_ui_gate);
          state->worker_ui_gate = nullptr;
