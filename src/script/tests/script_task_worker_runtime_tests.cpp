@@ -74,6 +74,12 @@ ScriptTaskWorkerRuntimeOptions runtime_options_v2() {
     return options;
 }
 
+ScriptTaskWorkerRuntimeOptions runtime_options_with_service_callback_limit(std::size_t limit) {
+    ScriptTaskWorkerRuntimeOptions options = runtime_options();
+    options.script.max_service_callbacks = limit;
+    return options;
+}
+
 void worker_input_publishes_value_frame() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(7);
@@ -350,6 +356,26 @@ void worker_service_payload_lease_failure_completes_callback_as_error() {
     check(saw_failure, "lease failure callback observes the normalized error value");
 }
 
+void worker_service_callback_budget_rejects_before_queueing() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(22);
+    ScriptTaskWorkerRuntime runtime(session, runtime_options_with_service_callback_limit(1));
+    check(runtime.initialize("<body><p>ready</p></body>", "p { display: block; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "service callback budget fixture initializes");
+    const ScriptEvaluationResult evaluated = runtime.eval_with_supervisor(
+        supervisor,
+        "var first = services.request(3, function () {});"
+        "var rejected = false;"
+        "try { services.request(3, function () {}); } catch (error) { rejected = true; }"
+        "rejected ? 'ok' : 'bad';");
+    check(evaluated.ok && evaluated.value == "ok", "service callback budget rejects the second request");
+
+    ScriptTaskPacket packet;
+    check(supervisor.take_service_request(packet), "first callback budget request reaches the service mailbox");
+    check(!supervisor.take_service_request(packet), "rejected callback budget request is never queued");
+}
+
 void worker_service_cancel_posts_only_value_identity() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(12);
@@ -391,7 +417,7 @@ void worker_service_cancel_posts_only_value_identity() {
 void worker_service_completion_replay_handles_one_hundred_callbacks() {
     ScriptTaskSupervisor supervisor = make_service_stress_supervisor();
     const ScriptAppSession session = supervisor.begin(13);
-    ScriptTaskWorkerRuntime runtime(session, runtime_options());
+    ScriptTaskWorkerRuntime runtime(session, runtime_options_with_service_callback_limit(128));
     check(runtime.initialize(
               "<body><p id='status'>idle</p></body>",
               "p { display: block; width: 120px; height: 24px; margin: 0; }") ==
@@ -692,6 +718,7 @@ int script_task_worker_runtime_tests_main() {
         worker_timer_publishes_value_frame();
         worker_service_completion_reaches_js_as_copied_value();
         worker_service_payload_lease_failure_completes_callback_as_error();
+        worker_service_callback_budget_rejects_before_queueing();
         worker_service_cancel_posts_only_value_identity();
         worker_service_completion_replay_handles_one_hundred_callbacks();
         worker_timer_exception_becomes_fatal_value();

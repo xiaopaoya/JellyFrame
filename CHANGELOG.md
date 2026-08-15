@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Worker-local script service callbacks now have an explicit
+  `max_service_callbacks` budget and are included in script runtime statistics;
+  rejected registrations never create an outbound service request.
+
 - Script-worker service completion handling now converts a rejected sealed
   payload lease into one terminal failed callback instead of silently
   abandoning the worker-local callback registration.

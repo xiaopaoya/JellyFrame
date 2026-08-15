@@ -111,6 +111,7 @@ struct JerryScriptRuntimeOptions {
     std::size_t max_dom_depth = 64;
     std::size_t max_attributes_per_element = 64;
     std::size_t max_dom_string_bytes = 512 * 1024;
+    std::size_t max_service_callbacks = 16;
 };
 
 JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const HostBudgets& budgets);
@@ -122,6 +123,7 @@ struct ScriptRuntimeStatistics {
     std::size_t xml_http_request_count = 0;
     std::size_t audio_element_count = 0;
     std::size_t geolocation_request_count = 0;
+    std::size_t service_callback_count = 0;
     DetachedDomStatistics detached_nodes;
 };
 

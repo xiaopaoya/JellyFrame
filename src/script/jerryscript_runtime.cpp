@@ -6647,7 +6647,8 @@ bool JerryScriptRuntime::submit_script_service_request(std::uint8_t kind,
                                                        std::uint32_t callback_value,
                                                        std::uint32_t& request_id) {
     request_id = 0;
-    if (service_request_submit_ == nullptr || !jerry_value_is_function(callback_value)) {
+    if (service_request_submit_ == nullptr || !jerry_value_is_function(callback_value) ||
+        service_callbacks_.size() >= options_.max_service_callbacks) {
         return false;
     }
 
@@ -7270,6 +7271,7 @@ ScriptRuntimeStatistics JerryScriptRuntime::statistics() const {
                                                    return audio->active;
                                                }));
     output.geolocation_request_count = geolocation_requests_.size();
+    output.service_callback_count = service_callbacks_.size();
     output.detached_nodes = detached_nodes_.detached_statistics();
     return output;
 }

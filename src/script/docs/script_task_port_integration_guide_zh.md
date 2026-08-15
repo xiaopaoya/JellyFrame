@@ -1,6 +1,6 @@
 # 脚本 App 任务隔离接入指南
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；状态：P3-1 至 P3-4 实机验收已关闭
+> 最后更新：2026-08-15；适用版本：0.6.0-dev；状态：P3-1 至 P3-4 实机验收已关闭
 
 本指南约束 RTOS port 如何接入可选的 script-task runtime。它只描述平台无关接口的使用顺序；创建
 任务、CPU affinity、DMA、panel、网络 worker 和 watchdog 仍属于 `ports/`。
@@ -52,6 +52,13 @@ supervisor task 必须优先 drain request/cancel mailbox：queued job 应被移
 字节；release callback 必须在复制成功、复制失败、取消、陈旧 completion 与 teardown 时恰好一次清理服务
 provider record 和 host-table entry。worker completion sink 收到的是 `payload_lease_id`，使用
 `take_script_task_service_payload()` 复制并立即释放；它绝不能解释或保存 host handle。
+若该 sealed lease 已失效，worker runtime 仍必须以空 payload 向已登记的 JS callback 交付一次
+`Failed` completion（`errorCode=LeaseRejected`），不能遗留一个永久等待的 callback。
+
+`JerryScriptRuntimeOptions::max_service_callbacks` 是 worker-local callback 的独立上限，默认 16。
+port 应将其设为不大于 `service_request_mailbox.max_packets` 与 bridge/service tombstone 容量中的最小值；
+超限请求在 worker 内被拒绝，不得产生 outbound request packet。运行时统计的
+`service_callback_count` 可用于确认 callback 在 completion、cancel 或 worker stop 后归零。
 
 script worker：
 
