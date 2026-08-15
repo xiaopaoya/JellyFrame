@@ -188,6 +188,7 @@ private:
     struct Record {
         ScriptTaskServiceToken token;
         std::uint32_t host_job_id = 0;
+        HostServiceJobKind kind = HostServiceJobKind::Other;
         bool completion_ready = false;
         bool cancelled = false;
         HostServiceCompletion completion;

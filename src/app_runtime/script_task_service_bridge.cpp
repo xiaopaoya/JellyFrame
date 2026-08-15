@@ -127,6 +127,7 @@ bool ScriptTaskServiceBridge::same_token(const ScriptTaskServiceToken& left,
 bool ScriptTaskServiceBridge::completion_matches(const Record& record,
                                                  const HostServiceCompletion& completion) {
     return record.host_job_id == completion.job_id &&
+           record.kind == completion.kind &&
            record.token.session.app_instance_id == completion.app_instance_id &&
            record.token.client_token == completion.client_token;
 }
@@ -187,6 +188,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
         // delivers it, including when the worker inbox is briefly full.
         records_.push_back({result.token,
                             0,
+                            kind,
                             true,
                             false,
                             {0,
@@ -201,7 +203,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
         result.status = ScriptTaskServiceSubmitStatus::HostRejected;
         return result;
     }
-    records_.push_back({result.token, submitted.job_id, false, false, {}, 0});
+    records_.push_back({result.token, submitted.job_id, kind, false, false, {}, 0});
     result.host_job_id = submitted.job_id;
     result.host_status = HostServiceStatus::Completed;
     result.status = ScriptTaskServiceSubmitStatus::Accepted;
@@ -477,9 +479,6 @@ ScriptTaskServiceBridgePumpResult ScriptTaskServiceBridge::pump(AppFrameScratch&
             continue;
         }
         if (!completion_matches(*found, completion)) {
-            supervisor_.cancel_service(found->token);
-            supervisor_.consume_service_completion(found->token);
-            erase_record(static_cast<std::size_t>(found - records_.begin()));
             if (release_completion_payload(completion)) {
                 ++result.released_completion_sources;
             }

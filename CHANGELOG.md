@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script-task service bridging now rejects malformed completion identity without
+  retiring the matching in-flight request. Completion matching includes service
+  kind as well as job, app-instance and client-token identity.
+
 - Script workers now retry an already rebuilt dirty value frame when the UI
   mailbox regains capacity, so a transient frame-mailbox rejection cannot
   permanently strand an interaction update.

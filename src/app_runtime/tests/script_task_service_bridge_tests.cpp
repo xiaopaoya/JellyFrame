@@ -414,6 +414,46 @@ void bridge_retries_after_worker_inbox_backpressure() {
     assert(bridge.active_request_count() == 0);
 }
 
+void bridge_discards_malformed_completion_without_retiring_inflight_request() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.script.bad-completion", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    ScriptTaskServiceBridge bridge(host, supervisor, {4});
+    const ScriptTaskServiceSubmitResult submitted = bridge.submit(
+        session, 18, HostServiceJobKind::NetworkFetch, 0, 0, 0, 19);
+    assert(submitted.accepted());
+    HostServiceRequest request;
+    assert(host.pop_worker_request(request));
+
+    const std::uint32_t malformed_handle = host.handles().allocate(
+        HostServiceHandleKind::StorageValue, app.id, 8, nullptr, request.client_token);
+    assert(malformed_handle != 0);
+    HostServiceCompletion malformed = complete(request, malformed_handle);
+    malformed.kind = HostServiceJobKind::StorageKv;
+    // Bypass the host's worker-facing validator to verify the bridge remains
+    // safe if a corrupt or incorrectly routed event reaches its queue.
+    assert(host.completions().push(malformed));
+
+    AppFrameScratch scratch = make_scratch();
+    ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
+    assert(pumped.discarded_unmatched_completions == 1);
+    assert(pumped.released_completion_sources == 1);
+    assert(pumped.delivered == 0);
+    assert(bridge.active_request_count() == 1);
+    assert(!host.handles().contains(malformed_handle));
+
+    assert(host.push_completion(complete(request)));
+    pumped = bridge.pump(scratch);
+    assert(pumped.delivered == 1);
+    assert(bridge.active_request_count() == 0);
+    ScriptTaskPacket packet;
+    assert(supervisor.take_input(packet));
+    ScriptTaskServiceCompletion completion;
+    assert(decode_script_task_service_completion(packet.payload, completion));
+    assert(completion.kind == HostServiceJobKind::NetworkFetch);
+}
+
 void bridge_rejects_mailboxes_that_cannot_hold_completion_payloads() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.script.packet-budget", AppRole::App);
@@ -471,6 +511,7 @@ int script_task_service_bridge_tests_main() {
     bridge_releases_cancelled_late_completion_handles();
     bridge_does_not_copy_payload_for_cancelled_inflight_completion();
     bridge_retries_after_worker_inbox_backpressure();
+    bridge_discards_malformed_completion_without_retiring_inflight_request();
     bridge_rejects_mailboxes_that_cannot_hold_completion_payloads();
     bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup();
     bridge_reports_payload_copy_and_lease_failures_as_terminal_values();
