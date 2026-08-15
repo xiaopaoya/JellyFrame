@@ -71,7 +71,8 @@ void service_completion_to_worker_frame_to_ui_stays_value_only() {
     private_root.type = LayerType::Root;
     InputController private_input(private_root);
     CompletionSink completion_sink;
-    assert(take_and_dispatch_script_task_worker_packet(supervisor, private_input, completion_sink, {0, 32}).handled);
+    assert(take_and_dispatch_script_task_worker_packet(
+        supervisor, session, private_input, completion_sink, {0, 32}).handled);
     assert(completion_sink.calls == 1);
     assert(completion_sink.received.request_id == request.request_id);
 

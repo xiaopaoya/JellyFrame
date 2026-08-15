@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-14；适用版本：0.6.0-dev
+> 最后更新：2026-08-15；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -13,6 +13,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - 启动外部开发者试用线：完善构建 profile/模块证据、打包与启动器工作流，并针对能力缺口做有边界的补全。任何新的浏览器兼容承诺都必须同时落入能力矩阵、profile gate 和回归测试。
 
 ### 变更
+
+- Script-task worker inbox 的接收现在一律要求显式传入 `ScriptAppSession`，包括 dispatch helper。
+  已移除读取 current session 的便利接收路径，防止延迟退出的 worker 消费新生命周期的 input。
 
 - App Runtime 现在会拒绝不属于 completion 所属 app instance 的非零 `result_handle`，包括
   unsolicited event 携带的句柄；显式绑定非零 client token 的 handle 还必须匹配该 consumer。

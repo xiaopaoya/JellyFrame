@@ -1,6 +1,6 @@
 # Script-App Cross-Task Ownership Contract
 
-> Last updated: 2026-08-07; Applies to: 0.5.0; Status: 0.6 prerequisite with foundation landed
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev; Status: 0.6 foundation landed
 
 This contract defines how an RTOS host runs a real JerryScript App without moving DOM,
 JerryScript or renderer objects across tasks. The direct, same-thread desktop
@@ -18,6 +18,9 @@ task-local container/arena addresses. Cross-task data is a bounded value copy or
 opaque lease ID checked against the full session.
 The supervisor serializes session transitions with mailbox admission and returns session snapshots by
 value, so teardown cannot race a worker against mutable generation storage.
+Every worker-side receive operation must pass its own `ScriptAppSession`; there
+is deliberately no "take the current worker input" convenience API. This keeps
+a delayed worker from consuming a newer lifetime's packet.
 
 A worker publishes a sealed, immutable replacement `AppFrame`: version/session/sequence/viewport,
 POD paint commands, bounded text bytes, validated resource lease IDs and optional hit regions with numeric

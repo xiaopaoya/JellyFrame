@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -16,6 +16,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   profile gate and regression coverage land together.
 
 ### Changed
+
+- Script-task worker-inbox reception now always requires an explicit
+  `ScriptAppSession`, including the dispatch helper. The old current-session
+  convenience receive path has been removed so a delayed worker cannot consume
+  a newer worker lifetime's input.
 
 - App Runtime now rejects a nonzero `result_handle`, including one on an
   unsolicited event, unless it belongs to the completion's app instance;

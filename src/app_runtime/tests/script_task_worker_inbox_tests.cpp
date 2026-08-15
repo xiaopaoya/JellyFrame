@@ -50,7 +50,7 @@ void worker_inbox_dispatches_only_input_and_completion_values() {
     assert(supervisor.post_service_completion(packet) == ScriptTaskMailboxPostStatus::Accepted);
 
     const ScriptTaskWorkerInboxDispatchResult result = take_and_dispatch_script_task_worker_packet(
-        supervisor, controller, sink, {0, 32});
+        supervisor, session, controller, sink, {0, 32});
     assert(result.status == ScriptTaskWorkerInboxDispatchStatus::CompletionAccepted);
     assert(result.handled);
     assert(sink.calls == 1);
@@ -68,7 +68,7 @@ void worker_inbox_rejects_malformed_completion_values() {
     assert(supervisor.post_service_completion({ScriptTaskPacketKind::ServiceCompletion, session, 1, 0, {1}}) ==
            ScriptTaskMailboxPostStatus::Accepted);
     const ScriptTaskWorkerInboxDispatchResult result = take_and_dispatch_script_task_worker_packet(
-        supervisor, controller, sink, {0, 32});
+        supervisor, session, controller, sink, {0, 32});
     assert(result.status == ScriptTaskWorkerInboxDispatchStatus::PacketRejected);
     assert(!result.handled);
     assert(sink.calls == 0);
@@ -110,6 +110,39 @@ void worker_releases_payload_when_copy_is_rejected_after_teardown() {
     assert(supervisor.complete_teardown(session).released_service_payload_leases == 0);
 }
 
+void stale_worker_dispatch_cannot_consume_new_session_packet() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession retired = supervisor.begin(35);
+    assert(supervisor.begin_teardown(retired).session == retired);
+    assert(supervisor.complete_teardown(retired).session == retired);
+    const ScriptAppSession active = supervisor.begin(36);
+
+    LayerNode root;
+    root.type = LayerType::Root;
+    InputController controller(root);
+    CompletionSink sink;
+    ScriptTaskServiceCompletion completion{
+        HostServiceJobKind::StorageKv, HostServiceStatus::Completed, 4, 5, 0, 0, 0};
+    ScriptTaskPacket packet;
+    packet.kind = ScriptTaskPacketKind::ServiceCompletion;
+    packet.session = active;
+    packet.sequence = 1;
+    assert(encode_script_task_service_completion(completion, packet.payload));
+    assert(supervisor.post_service_completion(packet) == ScriptTaskMailboxPostStatus::Accepted);
+
+    const ScriptTaskWorkerInboxDispatchResult stale = take_and_dispatch_script_task_worker_packet(
+        supervisor, retired, controller, sink, {0, 32});
+    assert(stale.status == ScriptTaskWorkerInboxDispatchStatus::NoPacket);
+    assert(!stale.handled);
+    assert(sink.calls == 0);
+
+    const ScriptTaskWorkerInboxDispatchResult delivered = take_and_dispatch_script_task_worker_packet(
+        supervisor, active, controller, sink, {0, 32});
+    assert(delivered.status == ScriptTaskWorkerInboxDispatchStatus::CompletionAccepted);
+    assert(delivered.handled);
+    assert(sink.calls == 1);
+}
+
 } // namespace
 
 int script_task_worker_inbox_tests_main() {
@@ -117,6 +150,7 @@ int script_task_worker_inbox_tests_main() {
     worker_inbox_rejects_malformed_completion_values();
     worker_copies_and_releases_completion_payload_values();
     worker_releases_payload_when_copy_is_rejected_after_teardown();
+    stale_worker_dispatch_cannot_consume_new_session_packet();
     std::cout << "script task worker inbox tests passed\n";
     return 0;
 }

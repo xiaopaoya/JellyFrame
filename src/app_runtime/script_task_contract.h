@@ -340,9 +340,8 @@ public:
     ScriptAppSession current() const;
 
     ScriptTaskMailboxPostStatus post_input(const ScriptTaskPacket& packet);
-    bool take_input(ScriptTaskPacket& output);
-    // Worker-facing receive path. A stale worker must name its own session so
-    // it cannot consume input belonging to a newer worker lifetime.
+    // Worker-facing receive path. A worker must name its own session so it
+    // cannot consume input belonging to a newer worker lifetime.
     bool take_input(const ScriptAppSession& session, ScriptTaskPacket& output);
     ScriptTaskFramePublishResult publish_frame(const ScriptAppSession& session,
                                                const std::vector<std::uint8_t>& payload);

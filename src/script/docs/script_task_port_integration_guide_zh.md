@@ -64,7 +64,7 @@ script worker：
 
 ```cpp
 take_and_dispatch_script_task_worker_packet(
-    supervisor, private_input_controller, private_completion_sink, input_limits);
+    supervisor, session, private_input_controller, private_completion_sink, input_limits);
 // after input, timer or completion mutates private DOM:
 publisher.publish(supervisor, session, make_script_task_app_frame(private_layers, viewport));
 ```

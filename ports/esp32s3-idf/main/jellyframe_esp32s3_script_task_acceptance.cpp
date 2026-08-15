@@ -198,7 +198,7 @@ bool consume_completion(FixtureState& state,
     jellyframe::InputController input(private_root);
     const jellyframe::ScriptTaskWorkerInboxDispatchResult result =
         jellyframe::take_and_dispatch_script_task_worker_packet(
-            *state.protocol, input, sink, {0, 128});
+            *state.protocol, state.session, input, sink, {0, 128});
     if (!result.handled || sink.calls == 0 || sink.last.request_id != expected_request_id) {
         state.failures.fetch_add(1);
         return false;

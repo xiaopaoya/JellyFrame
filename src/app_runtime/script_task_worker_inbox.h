@@ -28,11 +28,13 @@ struct ScriptTaskWorkerInboxDispatchResult {
     bool handled = false;
 };
 
-// Worker-task-only dispatch loop primitive. The supervisor validates session
-// generation before exposing the packet. This function never receives a
+// Worker-task-only dispatch loop primitive. The worker provides its own
+// session, and the supervisor validates its generation before exposing a
+// packet. This function never receives a
 // worker-to-supervisor service request or a UI frame packet.
 ScriptTaskWorkerInboxDispatchResult take_and_dispatch_script_task_worker_packet(
     ScriptTaskSupervisor& supervisor,
+    const ScriptAppSession& session,
     InputController& controller,
     ScriptTaskServiceCompletionSink& completion_sink,
     const ScriptTaskInputCodecOptions& input_options);

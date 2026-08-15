@@ -4,11 +4,12 @@ namespace jellyframe {
 
 ScriptTaskWorkerInboxDispatchResult take_and_dispatch_script_task_worker_packet(
     ScriptTaskSupervisor& supervisor,
+    const ScriptAppSession& session,
     InputController& controller,
     ScriptTaskServiceCompletionSink& completion_sink,
     const ScriptTaskInputCodecOptions& input_options) {
     ScriptTaskPacket packet;
-    if (!supervisor.take_input(packet)) {
+    if (!supervisor.take_input(session, packet)) {
         return {};
     }
 
