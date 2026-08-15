@@ -160,6 +160,7 @@ struct EventTarget::ListenerStore {
         ListenerCallback callback;
         EventListenerOptions options;
         bool removed = false;
+        bool once_callback_active = false;
     };
 
     struct ListenerGroup {
@@ -318,14 +319,19 @@ void EventTarget::invoke_event_listeners(Event& event, bool capture_phase) const
 
     const auto invoke_snapshot_listener = [&listener_store, &event, capture_phase](ListenerId listener_id) {
         ListenerStore::Listener* listener = listener_store->find_listener(listener_id);
-        if (listener == nullptr || listener->removed || listener->options.capture != capture_phase) {
+        if (listener == nullptr || listener->removed || listener->options.capture != capture_phase ||
+            (listener->options.once && listener->once_callback_active)) {
             return true;
         }
         ListenerCallback callback = listener->callback;
         const bool once = listener->options.once;
+        if (once) {
+            listener->once_callback_active = true;
+        }
         callback(event);
         if (once) {
             if (ListenerStore::Listener* once_listener = listener_store->find_listener(listener_id)) {
+                once_listener->once_callback_active = false;
                 ListenerStore::mark_removed(*once_listener);
             }
         }

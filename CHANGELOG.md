@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- One-shot event listeners now suppress recursive dispatch while their first
+  callback is still active, then remove themselves when that outer callback
+  returns.
+
 - Input dispatch now treats each pointer-event alias and hover transition as a
   DOM-mutation boundary. If a listener destroys the active or newly hovered
   node, later alias events are suppressed and interaction state is cleared

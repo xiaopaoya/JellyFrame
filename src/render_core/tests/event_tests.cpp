@@ -88,6 +88,22 @@ void prevent_default_stop_and_once_work() {
     check(body_bubble_count == 1, "stop propagation only affected first dispatch");
 }
 
+void once_listener_is_not_reentrant() {
+    auto button = make_element("button");
+    int calls = 0;
+    button->add_event_listener("click", [&](Event&) {
+        ++calls;
+        MouseEvent nested("click", 0, 0);
+        dispatch_event(*button, nested);
+    }, EventListenerOptions{false, true});
+
+    MouseEvent outer("click", 0, 0);
+    dispatch_event(*button, outer);
+
+    check(calls == 1, "once listener does not reenter before removal");
+    check(button->event_listener_count() == 0, "once listener is removed after its outer callback");
+}
+
 void listener_mutation_during_dispatch_is_stable() {
     auto document = make_element("document");
     Node& button = append_element(*document, "button");
@@ -190,6 +206,7 @@ int main() {
     try {
         dispatch_runs_capture_target_and_bubble();
         prevent_default_stop_and_once_work();
+        once_listener_is_not_reentrant();
         listener_mutation_during_dispatch_is_stable();
         bounded_cpp_listener_registration_respects_limit();
         dispatch_stops_safely_when_a_listener_destroys_its_target();
