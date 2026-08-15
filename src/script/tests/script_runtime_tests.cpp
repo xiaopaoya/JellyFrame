@@ -13,9 +13,11 @@
 #include "render_core/layout.h"
 
 #include <cstdint>
+#include <atomic>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace jellyframe;
@@ -69,6 +71,42 @@ void exception_returns_error_text() {
     check(!result.ok, "exception is reported as failure");
     check(result.status == ScriptEvaluationStatus::Exception, "exception status is exception");
     check(!result.error.empty(), "exception has error text");
+}
+
+void runtime_global_gate_is_serialized_across_threads() {
+    std::atomic<bool> start{false};
+    std::atomic<bool> release{false};
+    std::atomic<std::size_t> attempts{0};
+    std::atomic<std::size_t> constructed{0};
+    std::atomic<std::size_t> rejected{0};
+    const auto run = [&] {
+        while (!start.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        try {
+            JerryScriptRuntime runtime;
+            ++constructed;
+            ++attempts;
+            while (!release.load(std::memory_order_acquire)) {
+                std::this_thread::yield();
+            }
+        } catch (const std::runtime_error&) {
+            ++rejected;
+            ++attempts;
+        }
+    };
+
+    std::thread first(run);
+    std::thread second(run);
+    start.store(true, std::memory_order_release);
+    while (attempts.load(std::memory_order_acquire) != 2) {
+        std::this_thread::yield();
+    }
+    release.store(true, std::memory_order_release);
+    first.join();
+    second.join();
+    check(constructed == 1 && rejected == 1,
+          "the global JerryScript runtime gate serializes concurrent construction");
 }
 
 void execution_watchdog_allows_normal_scripts() {
@@ -2565,6 +2603,7 @@ int main() {
     try {
         expression_returns_value();
         exception_returns_error_text();
+        runtime_global_gate_is_serialized_across_threads();
         execution_watchdog_allows_normal_scripts();
         execution_watchdog_interrupts_infinite_eval_when_supported();
         execution_watchdog_interrupts_timer_callback_when_supported();

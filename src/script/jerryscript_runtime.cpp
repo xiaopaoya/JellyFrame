@@ -25,6 +25,7 @@
 #include <cmath>
 #include <sstream>
 #include <limits>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -527,6 +528,7 @@ struct ScriptRuntimeAccess {
 namespace {
 
 bool g_runtime_active = false;
+std::mutex g_runtime_mutex;
 
 void free_script_event_binding(void* native_p, jerry_object_native_info_t*) {
     delete static_cast<ScriptEventBinding*>(native_p);
@@ -6420,6 +6422,7 @@ void JerryScriptRuntime::clear_script_local_storage_bindings() {
 
 JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
     : options_(options) {
+    std::lock_guard<std::mutex> lock(g_runtime_mutex);
     if (g_runtime_active) {
         throw std::runtime_error("only one JerryScriptRuntime can be active in this build");
     }
@@ -6511,6 +6514,7 @@ JerryScriptRuntime::~JerryScriptRuntime() {
         if (canvas_2d_ != nullptr) {
             canvas_2d_->clear();
         }
+        std::lock_guard<std::mutex> lock(g_runtime_mutex);
         jerry_cleanup();
         initialized_ = false;
         g_runtime_active = false;

@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- JerryScript runtime initialization and cleanup now serialize the process-wide
+  single-runtime gate, preventing concurrent worker startup from racing into
+  multiple VM initializations.
+
 - Script workers now receive inbox packets through their own session identity,
   so a stale worker cannot consume a new worker lifetime's input even if a
   port delays its shutdown incorrectly.
