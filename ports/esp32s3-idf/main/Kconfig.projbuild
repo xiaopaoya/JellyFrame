@@ -140,7 +140,7 @@ config JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE
     depends on JELLYFRAME_ESP32S3_BOARD_ENABLE_HARDWARE
     help
         Starts the port-owned real JerryScript script-task fixture. This profile
-        requires JELLYFRAME_BUILD_SCRIPTING=ON and JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON
+        requires JELLYFRAME_BUILD_SCRIPTING=ON and JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON
         at CMake configure time and is isolated from native preflight profiles.
 
 config JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE

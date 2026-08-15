@@ -29,8 +29,13 @@ option(JELLYFRAME_BUILD_RENDER_CORE_TESTS
        ${_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS})
 unset(_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS)
 option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
-option(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME
+option(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME
        "Compile optional cross-task script App runtime contracts" OFF)
+if(DEFINED JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+    message(FATAL_ERROR
+        "JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME was replaced by "
+        "JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME; remove the stale CMake cache entry and reconfigure.")
+endif()
 option(JELLYFRAME_ENABLE_IMAGE_FILE_IO "Expose desktop image file writers from render_core" ON)
 option(JELLYFRAME_ENABLE_CANVAS2D "Compile the graphics.canvas2d Render Core family" ON)
 option(JELLYFRAME_ENABLE_MODERN_PAINT "Compile the css.modern-paint Render Core family" ON)
@@ -59,9 +64,9 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package" AND JELLYFRAME_RENDER_CORE
         "JELLYFRAME_RENDER_CORE_SOURCE_DIR is only valid with the in-tree Render Core provider")
 endif()
 
-if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME AND NOT JELLYFRAME_BUILD_SCRIPTING)
+if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME AND NOT JELLYFRAME_BUILD_SCRIPTING)
     message(FATAL_ERROR
-        "JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME requires JELLYFRAME_BUILD_SCRIPTING=ON")
+        "JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME requires JELLYFRAME_BUILD_SCRIPTING=ON")
 endif()
 
 if(JELLYFRAME_ENABLE_SANITIZERS)
@@ -222,7 +227,7 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         endif()
     endforeach()
 
-    if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         add_library(jellyframe_script_task_runtime
             src/app_runtime/script_task_contract.cpp
             src/app_runtime/script_task_frame_codec.cpp
@@ -250,14 +255,14 @@ if(JELLYFRAME_BUILD_SCRIPTING)
     set(JELLYFRAME_SCRIPT_SOURCES
         src/script/jerryscript_runtime.cpp
     )
-    if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         list(APPEND JELLYFRAME_SCRIPT_SOURCES
             src/script/script_task_worker_runtime.cpp
         )
     endif()
     add_library(jellyframe_script ${JELLYFRAME_SCRIPT_SOURCES})
     target_link_libraries(jellyframe_script PUBLIC jellyframe_app_runtime ${JERRYSCRIPT_LIBRARIES})
-    if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         target_link_libraries(jellyframe_script PUBLIC jellyframe_script_task_runtime)
     endif()
     target_include_directories(jellyframe_script
@@ -942,7 +947,7 @@ if(JELLYFRAME_BUILD_TESTS)
         set(JELLYFRAME_SCRIPT_TEST_SOURCES
             src/script/tests/script_runtime_tests.cpp
         )
-        if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+        if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
             list(APPEND JELLYFRAME_SCRIPT_TEST_SOURCES
                 src/script/tests/script_task_worker_runtime_tests.cpp
             )
@@ -962,7 +967,7 @@ if(JELLYFRAME_BUILD_TESTS)
         jellyframe_stage_sanitizer_runtime(jellyframe_script_tests)
         add_test(NAME jellyframe_script_tests COMMAND jellyframe_script_tests)
 
-        if(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+        if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
             set(JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES
                 src/app_runtime/tests/script_task_contract_tests.cpp
                 src/app_runtime/tests/script_task_frame_codec_tests.cpp

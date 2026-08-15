@@ -27,6 +27,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   vector is now `drained_completions`, distinct from lifecycle-filtered
   `accepted_completions`.
 
+- Unified the build-gate vocabulary for the optional script-task runtime:
+  `JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME` replaces
+  `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME`. A stale old CMake cache variable is
+  a configure error rather than a silent fallback during this pre-1.0 line.
+
 - App manifests now declare the Runtime/Core pair explicitly with
   `runtime.minJellyFrame` and `runtime.minRenderCore`. Both must exactly match
   the active pre-1.0 Runtime line and its locked Render Core package; the
