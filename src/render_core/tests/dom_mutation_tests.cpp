@@ -14,6 +14,17 @@ void check(bool condition, const char* message) {
     }
 }
 
+struct DestroyObservation {
+    bool called = false;
+    Node* parent = nullptr;
+};
+
+void observe_destroyed_node_parent(Node& node, void* context) {
+    auto& observation = *static_cast<DestroyObservation*>(context);
+    observation.called = true;
+    observation.parent = node.parent;
+}
+
 Node* find_first_by_tag(Node& node, const std::string& tag_name) {
     if (node.type == NodeType::Element && node.tag_name == tag_name) {
         return &node;
@@ -129,6 +140,20 @@ void unchanged_text_content_stays_clean() {
     check(subtree_dirty_flags(*document) == DomDirtyNone, "same textContent does not dirty document");
 }
 
+void text_content_replacement_detaches_nodes_before_destroy_observers() {
+    auto document = make_element("document");
+    Node& body = document->append_child(make_element("body"));
+    Node& old_child = body.append_child(make_element("section"));
+    DestroyObservation observation;
+    old_child.add_destroy_observer(observe_destroyed_node_parent, &observation);
+
+    body.set_text_content("replacement");
+
+    check(observation.called, "replaced child destroy observer runs");
+    check(observation.parent == nullptr, "replaced child is detached before its destroy observer runs");
+    check(body.text_content() == "replacement", "replacement text remains attached");
+}
+
 void deep_subtree_replacement_and_teardown_are_iterative() {
     auto document = make_element("document");
     Node* current = document.get();
@@ -201,6 +226,7 @@ int main() {
         insert_rejects_null_and_cycle_forming_nodes();
         attributes_and_text_mark_specific_dirty_bits();
         unchanged_text_content_stays_clean();
+        text_content_replacement_detaches_nodes_before_destroy_observers();
         deep_subtree_replacement_and_teardown_are_iterative();
         deep_text_content_is_iterative_and_ordered();
         deep_dirty_flags_clear_iteratively();

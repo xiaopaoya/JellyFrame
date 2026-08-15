@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- DOM subtree replacement now detaches removed nodes before their destruction
+  observers run. Child-parent links are established only after insertion or
+  replacement ownership succeeds, so observer callbacks cannot observe a
+  transiently attached node after a failed mutation.
+
 - Host-service completions with a nonzero `job_id` now stage only after an
   exact in-flight `job_id`, kind, app-instance and client-token match. This
   prevents malformed completions from freeing an unrelated request; zero-ID

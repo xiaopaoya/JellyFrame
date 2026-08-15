@@ -23,6 +23,7 @@ void destroy_node_list_iterative(std::vector<std::unique_ptr<Node>>& nodes) {
     while (!pending.empty()) {
         std::unique_ptr<Node> node = std::move(pending.back());
         pending.pop_back();
+        node->parent = nullptr;
         for (auto& child : node->children) {
             child->parent = nullptr;
             pending.push_back(std::move(child));
@@ -159,8 +160,8 @@ Node& Node::insert_child(std::unique_ptr<Node> child, std::size_t index) {
         throw std::invalid_argument("only detached DOM nodes can be inserted");
     }
     index = std::min(index, children.size());
-    child->parent = this;
     auto inserted = children.insert(children.begin() + static_cast<std::ptrdiff_t>(index), std::move(child));
+    (*inserted)->parent = this;
     mark_dirty(*this, DomDirtyTree | DomDirtyLayout);
     return **inserted;
 }
@@ -237,11 +238,16 @@ void Node::set_text_content(std::string value) {
         children.front()->set_text(std::move(value));
         return;
     }
-    destroy_node_list_iterative(children);
+    std::vector<std::unique_ptr<Node>> replacement_children;
     if (!value.empty()) {
+        replacement_children.reserve(1);
         auto child = make_text(std::move(value));
-        child->parent = this;
-        children.push_back(std::move(child));
+        replacement_children.push_back(std::move(child));
+    }
+    destroy_node_list_iterative(children);
+    children.swap(replacement_children);
+    if (!children.empty()) {
+        children.front()->parent = this;
     }
     form_control_state.reset();
     mark_dirty(*this, DomDirtyTree | DomDirtyText | DomDirtyLayout);
