@@ -1,6 +1,6 @@
 # Optional Host Services Contract
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-08-15; Applies to: 0.6.0-dev
 
 This document makes image/audio/lightweight-video, network data requests,
 semantic device data and installable app bundles concrete enough for board ports. It complements
@@ -173,21 +173,31 @@ struct HostServiceCompletion {
     HostServiceJobKind kind;
     HostServiceStatus status;
     uint32_t app_instance_id;
-    uint32_t handle;
+    uint32_t result_handle;
     uint32_t error_code;
     uint32_t byte_count;
+    uint32_t client_token;
 };
 ```
 
 `app_instance_id` isolates old jobs after app switches, document teardown or
 sleep. If a completion belongs to an inactive app instance, release the host
-handle and skip DOM/JS callbacks.
+handle and skip DOM/JS callbacks. For a nonzero `job_id`,
+`AppRuntimeHost::push_completion(...)` also requires an exact in-flight match
+for job, kind, app instance and `client_token` when `job_id` is nonzero. Any
+nonzero `result_handle`, including one on an unsolicited event, must belong to
+that app; if the handle is explicitly scoped to a nonzero client token, that
+token must match too. Native providers may use app-scoped handles
+with token zero, while multi-consumer providers should use token-scoped ones.
+The sole teardown exception is a stale completion whose app-owned handle was
+already released while terminating that app; it is accepted only to retire its
+old in-flight request and remains unable to reference an active app's handle.
 `AppLifecycleController::pump_completions()` is the reference filtering policy:
 current-instance completions enter the business handling list; stale completions
-are consumed and their handles released so old network responses, image surfaces
+are consumed and their `result_handle` released so old network responses, image surfaces
 or audio states cannot call into the new app.
 
-`handle` is a small host-resource handle, not a raw pointer. It may identify a
+`result_handle` is a small host-resource handle, not a raw pointer. It may identify a
 decoded surface, audio stream, network response buffer or bundle staging record.
 
 The Win32 reference shell follows the A4 rule set:
@@ -256,6 +266,10 @@ Rules:
 - If the UI completion queue is full, the helper returns
   `completion_queue_full` before popping a request. The host should retry later
   instead of spinning.
+- If a worker returns a completion rejected by the host contract, the helper
+  reports `completion_rejected` and `completions_rejected`; this is a provider
+  defect, not backpressure. It leaves the in-flight request owned by the host
+  so the provider can submit a corrected completion or teardown can retire it.
 - The worker implementation must not call DOM, JS, style, layout, render or
   framebuffer APIs. It returns a small completion and host-owned handles only.
 

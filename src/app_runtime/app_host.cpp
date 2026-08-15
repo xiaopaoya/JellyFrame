@@ -4,6 +4,34 @@
 
 namespace jellyframe {
 
+namespace {
+
+bool completion_result_handle_matches_owner(const HostHandleTable& handles,
+                                            std::uint32_t current_app_instance_id,
+                                            const HostServiceCompletion& completion) {
+    if (completion.result_handle == 0) {
+        return true;
+    }
+
+    HostHandleInfo result;
+    if (!handles.lookup_copy(completion.result_handle, result)) {
+        // Teardown releases a stale app's handles before its in-flight worker
+        // can report completion. Keep that stale completion deliverable so the
+        // request slot can retire, but never accept a missing active-app handle.
+        return completion.app_instance_id != current_app_instance_id;
+    }
+    if (result.app_instance_id != completion.app_instance_id) {
+        return false;
+    }
+
+    // Most native services scope returned handles to the app instance only.
+    // When a provider declared a more specific consumer token, do not allow a
+    // completion for a different consumer to acquire that handle.
+    return result.client_token == 0 || result.client_token == completion.client_token;
+}
+
+} // namespace
+
 AppRuntimeHost::AppRuntimeHost(const AppRuntimeHostOptions& options)
     : requests_(options.max_in_flight_jobs),
       completions_(std::max(options.max_in_flight_jobs, options.max_completion_events_per_frame)),
@@ -100,6 +128,9 @@ std::size_t AppRuntimeHost::clear_current_fonts() {
 }
 
 bool AppRuntimeHost::push_completion(const HostServiceCompletion& completion) {
+    if (!completion_result_handle_matches_owner(handles_, current_app_instance_id(), completion)) {
+        return false;
+    }
     if (completion.job_id == 0) {
         return completions_.push(completion);
     }

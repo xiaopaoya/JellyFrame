@@ -14,6 +14,13 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- App Runtime 现在会拒绝不属于 completion 所属 app instance 的非零 `result_handle`，包括
+  unsolicited event 携带的句柄；显式绑定非零 client token 的 handle 还必须匹配该 consumer。
+  拒绝错误 request-bound completion 不会消耗 in-flight request，正确的 provider result 仍可后续
+  交付。已在 teardown 中释放 handle 的 stale completion 仅为回收旧 request 而允许进入队列；
+  Audio close 不再返回已经释放的 handle。worker pump 也会将被拒绝的 completion 与
+  `completion_queue_full` 分开报告。
+
 - App manifest 现在通过 `runtime.minJellyFrame` 与 `runtime.minRenderCore`
   显式声明 Runtime/Core 配对。两者必须精确匹配活跃的 1.0 前 Runtime line 及其锁定的
   Render Core package；schema、packer、`.jfapp` registry 和原生桌面 source-package

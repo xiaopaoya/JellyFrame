@@ -164,7 +164,8 @@ void worker_pump_processes_only_selected_service_kind() {
     assert(host.submit_current(HostServiceJobKind::StorageKv).accepted);
 
     EchoWorker worker;
-    worker.handle = 42;
+    worker.handle = host.allocate_current_handle(HostServiceHandleKind::Other);
+    assert(worker.handle != 0);
     AppHostServiceWorkerPumpResult result = pump_app_host_service_worker(
         host,
         AppHostServiceWorkerPumpOptions{HostServiceJobKind::StorageKv, 1},
@@ -183,7 +184,7 @@ void worker_pump_processes_only_selected_service_kind() {
     host.pump_frame_completions(accepted);
     assert(accepted.size() == 1);
     assert(accepted.front().kind == HostServiceJobKind::StorageKv);
-    assert(accepted.front().result_handle == 42);
+    assert(accepted.front().result_handle == worker.handle);
 }
 
 void worker_pump_normalizes_completion_identity() {
@@ -207,6 +208,26 @@ void worker_pump_normalizes_completion_identity() {
     assert(accepted.front().kind == HostServiceJobKind::NetworkFetch);
     assert(accepted.front().app_instance_id == app.id);
     assert(accepted.front().error_code == 404);
+}
+
+void worker_pump_reports_rejected_completion_without_claiming_backpressure() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.rejected-completion", AppRole::App);
+    assert(host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
+
+    EchoWorker worker;
+    worker.handle = 99;
+    const AppHostServiceWorkerPumpResult result = pump_app_host_service_worker(
+        host,
+        AppHostServiceWorkerPumpOptions{HostServiceJobKind::NetworkFetch, 1},
+        worker);
+    assert(result.requests_processed == 1);
+    assert(result.completions_posted == 0);
+    assert(result.completions_rejected == 1);
+    assert(result.completion_rejected);
+    assert(!result.completion_queue_full);
+    assert(host.requests().in_flight_size() == 1);
+    assert(host.completions().empty());
 }
 
 void worker_pump_does_not_pop_when_completion_queue_is_full() {
@@ -662,6 +683,7 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
 int main() {
     worker_pump_processes_only_selected_service_kind();
     worker_pump_normalizes_completion_identity();
+    worker_pump_reports_rejected_completion_without_claiming_backpressure();
     worker_pump_does_not_pop_when_completion_queue_is_full();
     worker_completion_is_retained_when_queue_fills_after_worker_pop();
     worker_pump_respects_per_tick_request_budget();

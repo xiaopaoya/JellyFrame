@@ -1326,12 +1326,14 @@ HostServiceCompletion AudioCommandMock::complete_request(AppRuntimeHost& host,
                 state = AudioStreamState::Stopped;
                 release_stream(host, handle);
                 pending_.erase(pending);
+                // Closing consumes the request's existing stream handle; it
+                // does not produce a releasable completion resource.
                 return HostServiceCompletion{
                     request.job_id,
                     HostServiceJobKind::AudioCommand,
                     HostServiceStatus::Completed,
                     request.app_instance_id,
-                    handle,
+                    0,
                     0,
                     static_cast<std::uint32_t>(state),
                 };

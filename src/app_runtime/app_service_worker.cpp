@@ -37,7 +37,8 @@ AppHostServiceWorkerPumpResult pump_app_host_service_worker(
         ++result.requests_processed;
         const HostServiceCompletion completion = normalize_completion(request, worker.process(request));
         if (!host.push_completion(completion)) {
-            result.completion_queue_full = true;
+            ++result.completions_rejected;
+            result.completion_rejected = true;
             break;
         }
         ++result.completions_posted;
@@ -77,8 +78,13 @@ AppHostServiceWorkerGroupPumpResult pump_app_host_service_workers(
         }
         result.requests_processed += pumped.requests_processed;
         result.completions_posted += pumped.completions_posted;
+        result.completions_rejected += pumped.completions_rejected;
         if (pumped.completion_queue_full) {
             result.completion_queue_full = true;
+            break;
+        }
+        if (pumped.completion_rejected) {
+            result.completion_rejected = true;
             break;
         }
     }

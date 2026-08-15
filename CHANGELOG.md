@@ -17,6 +17,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- App Runtime now rejects a nonzero `result_handle`, including one on an
+  unsolicited event, unless it belongs to the completion's app instance;
+  handles explicitly scoped to a nonzero client token must also match that
+  consumer. A rejected request-bound completion leaves its in-flight request
+  intact for the correct provider result. Stale completions whose handle was
+  already released by teardown remain accepted solely to retire their old
+  request. Audio close now returns no released handle. Worker pump reports a
+  rejected completion separately from `completion_queue_full`.
+
 - JerryScript runtime initialization and cleanup now serialize the process-wide
   single-runtime gate, preventing concurrent worker startup from racing into
   multiple VM initializations.

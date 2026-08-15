@@ -1,6 +1,6 @@
 # 可选宿主服务接口契约
 
-> 最后更新：2026-07-07；适用版本：0.5.0
+> 最后更新：2026-08-15；适用版本：0.6.0-dev
 
 本文把图片/音频/轻量视频、网络数据请求、语义设备数据和安装式 app bundle 的实现边界具体化。它是
 `host_abstraction_zh.md` 和 `embedded_hal_api_zh.md` 的补充：前者说明职责边界，后者列出
@@ -139,19 +139,27 @@ struct HostServiceCompletion {
     HostServiceJobKind kind;
     HostServiceStatus status;
     uint32_t app_instance_id;
-    uint32_t handle;
+    uint32_t result_handle;
     uint32_t error_code;
     uint32_t byte_count;
+    uint32_t client_token;
 };
 ```
 
 `app_instance_id` 用于 app 切换、页面销毁或系统休眠时隔离旧 job。UI 收到 completion 时，如果
-`app_instance_id` 已不是当前实例，应释放相关 host handle，并忽略 DOM/JS 回调。
+`app_instance_id` 已不是当前实例，应释放相关 host handle，并忽略 DOM/JS 回调。对于非零
+`job_id`，`AppRuntimeHost::push_completion(...)` 还要求 `job_id`、kind、app instance 和
+`client_token` 与 in-flight request 精确一致；任何非零 `result_handle`，包括 unsolicited event
+携带的句柄，都必须属于同一 app。如果该 handle 声明了非零 `client_token`，它也必须与 completion
+一致。原生 provider 可以使用
+app-scoped handle（token 为零）；脚本或其他多 consumer provider 应使用 token-scoped handle。
+唯一的 teardown 例外是：旧 app 的 handle 已在终止时释放的 stale completion 仍可进入队列，以便
+回收原 in-flight request；它不能引用 active app 的 handle。
 `AppLifecycleController::pump_completions()` 提供这个过滤策略的参考实现：当前实例的 completion
-进入业务处理列表；旧实例 completion 会被消费并释放其 handle，避免旧网络响应、旧图片 surface 或旧音频状态
+进入业务处理列表；旧实例 completion 会被消费并释放其 `result_handle`，避免旧网络响应、旧图片 surface 或旧音频状态
 回调到新 app。
 
-`handle` 是宿主资源层的短句柄，不是裸指针。句柄可以指向 decoded surface、audio stream、
+`result_handle` 是宿主资源层的短句柄，不是裸指针。句柄可以指向 decoded surface、audio stream、
 network response buffer 或 bundle staging record。句柄生命周期由宿主控制。
 
 Win32 参考壳的 A4 行为：
@@ -209,6 +217,9 @@ AppHostServiceWorkerPumpResult result =
   stale-instance 保护仍由 UI completion pump 负责。
 - 如果 UI completion queue 已满，helper 会在弹出 request 前返回 `completion_queue_full`。
   宿主应稍后重试，而不是忙等。
+- 如果 worker 返回的 completion 被宿主合同拒绝，helper 会报告 `completion_rejected` 与
+  `completions_rejected`；这是 provider 缺陷，不是背压。in-flight request 仍由 host 保留，
+  provider 可以提交已修正的 completion，或由 teardown 回收。
 - worker 实现不得调用 DOM、JS、style、layout、render 或 framebuffer API。它只返回小型 completion
   和宿主持有的 handle。
 

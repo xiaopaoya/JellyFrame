@@ -20,8 +20,10 @@ struct AppHostServiceWorkerPumpOptions {
 struct AppHostServiceWorkerPumpResult {
     std::size_t requests_processed = 0;
     std::size_t completions_posted = 0;
+    std::size_t completions_rejected = 0;
     bool request_queue_empty = false;
     bool completion_queue_full = false;
+    bool completion_rejected = false;
 };
 
 AppHostServiceWorkerPumpResult pump_app_host_service_worker(
@@ -41,7 +43,9 @@ struct AppHostServiceWorkerGroupPumpResult {
     std::size_t empty_workers = 0;
     std::size_t requests_processed = 0;
     std::size_t completions_posted = 0;
+    std::size_t completions_rejected = 0;
     bool completion_queue_full = false;
+    bool completion_rejected = false;
 };
 
 AppHostServiceWorkerGroupPumpResult pump_app_host_service_workers(

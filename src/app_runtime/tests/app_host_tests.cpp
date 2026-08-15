@@ -531,6 +531,103 @@ void budget_recovery_distinguishes_frame_throttle_from_app_termination() {
     assert(report.diagnostic_count == 2);
 }
 
+void completion_rejects_result_handles_owned_by_another_app_or_client() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.completion-owner", AppRole::App);
+
+    const auto app_request = host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, 0, 71);
+    assert(app_request.accepted);
+    HostServiceRequest worker_request;
+    assert(host.pop_worker_request(worker_request));
+
+    const std::uint32_t foreign_app_handle = host.handles().allocate(HostServiceHandleKind::FetchResponse,
+                                                                      app.id + 100,
+                                                                      64,
+                                                                      nullptr,
+                                                                      71);
+    assert(foreign_app_handle != 0);
+    assert(!host.push_completion(HostServiceCompletion{0,
+                                                        HostServiceJobKind::Other,
+                                                        HostServiceStatus::Completed,
+                                                        app.id,
+                                                        foreign_app_handle,
+                                                        0,
+                                                        64,
+                                                        71}));
+    assert(host.completions().empty());
+    assert(!host.push_completion(HostServiceCompletion{app_request.job_id,
+                                                        HostServiceJobKind::NetworkFetch,
+                                                        HostServiceStatus::Completed,
+                                                        app.id,
+                                                        foreign_app_handle,
+                                                        0,
+                                                        64,
+                                                        71}));
+    assert(host.requests().in_flight_size() == 1);
+    assert(host.completions().empty());
+    assert(host.handles().release(foreign_app_handle));
+
+    const std::uint32_t app_handle = host.handles().allocate(HostServiceHandleKind::FetchResponse,
+                                                             app.id,
+                                                             64,
+                                                             nullptr,
+                                                             71);
+    assert(app_handle != 0);
+    assert(host.push_completion(HostServiceCompletion{app_request.job_id,
+                                                       HostServiceJobKind::NetworkFetch,
+                                                       HostServiceStatus::Completed,
+                                                       app.id,
+                                                       app_handle,
+                                                       0,
+                                                       64,
+                                                       71}));
+
+    const auto first = host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, 0, 81);
+    const auto second = host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, 0, 82);
+    assert(first.accepted && second.accepted);
+    assert(host.pop_worker_request(worker_request));
+    assert(host.pop_worker_request(worker_request));
+
+    const std::uint32_t first_handle = host.handles().allocate(HostServiceHandleKind::FetchResponse,
+                                                               app.id,
+                                                               64,
+                                                               nullptr,
+                                                               81);
+    assert(first_handle != 0);
+    assert(!host.push_completion(HostServiceCompletion{second.job_id,
+                                                        HostServiceJobKind::NetworkFetch,
+                                                        HostServiceStatus::Completed,
+                                                        app.id,
+                                                        first_handle,
+                                                        0,
+                                                        64,
+                                                        82}));
+    assert(host.requests().in_flight_size() == 2);
+
+    assert(host.push_completion(HostServiceCompletion{first.job_id,
+                                                       HostServiceJobKind::NetworkFetch,
+                                                       HostServiceStatus::Completed,
+                                                       app.id,
+                                                       first_handle,
+                                                       0,
+                                                       64,
+                                                       81}));
+    const std::uint32_t second_handle = host.handles().allocate(HostServiceHandleKind::FetchResponse,
+                                                                app.id,
+                                                                64,
+                                                                nullptr,
+                                                                82);
+    assert(second_handle != 0);
+    assert(host.push_completion(HostServiceCompletion{second.job_id,
+                                                       HostServiceJobKind::NetworkFetch,
+                                                       HostServiceStatus::Completed,
+                                                       app.id,
+                                                       second_handle,
+                                                       0,
+                                                       64,
+                                                       82}));
+}
+
 void bad_app_teardown_leaves_next_app_clean_and_discards_stale_work() {
     AppRuntimeHost host(AppRuntimeHostOptions{8, 4, 4, 512, 1});
     AppSystemEventQueue system_events(8, 4);
@@ -607,6 +704,7 @@ int main() {
     budget_snapshot_reports_runtime_usage_and_caps();
     budget_snapshot_detects_exhausted_runtime_budget();
     budget_recovery_distinguishes_frame_throttle_from_app_termination();
+    completion_rejects_result_handles_owned_by_another_app_or_client();
     bad_app_teardown_leaves_next_app_clean_and_discards_stale_work();
     return 0;
 }

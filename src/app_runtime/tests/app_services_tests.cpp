@@ -782,7 +782,7 @@ void audio_command_mock_opens_controls_and_closes_streams() {
     check(audio.complete_next(host), "audio close completed");
     accepted = pump(host);
     check(accepted.size() == 1, "audio close completion accepted");
-    check(accepted.front().result_handle == handle, "audio close completion reports closed handle");
+    check(accepted.front().result_handle == 0, "audio close completion does not return released handle");
     check(audio.stream(handle) == nullptr, "audio close drops stream record");
     check(!host.handles().contains(handle), "audio close releases handle");
 }
