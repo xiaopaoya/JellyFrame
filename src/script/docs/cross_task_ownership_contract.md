@@ -40,6 +40,9 @@ watchdog, budget failure or exit, the supervisor first closes input/services, in
 cancels requests and freezes leases, then waits for worker exit, releases queued frames/handles and
 returns the UI to the trusted launcher. No heap, slot or session identity is reused before every owner
 has acknowledged release.
+While a session is retiring, the supervisor rejects a new session. Only after
+`complete_teardown()` has released the retiring session's leases, tombstones
+and queued release intents may `begin()` admit another worker.
 
 Before a port claims real script-App support, it must prove touch-to-frame redraw, completion/cancel/
 late-completion handling, frame lease replacement, fatal plus native-wrapper teardown, and 30 real

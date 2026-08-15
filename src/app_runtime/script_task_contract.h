@@ -396,6 +396,9 @@ private:
     ScriptTaskServiceLedger services_;
     ScriptTaskReleaseIntentMailbox release_intents_;
     ScriptTaskMailbox fatal_mailbox_;
+    // Keeps the retiring identity alive until every supervisor-owned resource
+    // has been released in complete_teardown().
+    ScriptAppSession retiring_session_;
     std::uint32_t next_frame_sequence_ = 1;
 };
 

@@ -87,6 +87,10 @@ ID、`DisplayCommand*` 或 worker 侧 target 地址。
 6. `ScriptTaskSupervisor::complete_teardown(session)`，回收 frame lease 与 release intents；
 7. UI task 原子回到 launcher/recovery frame 后，才可复用 app/session 资源。
 
+第 1 步成功后、到第 6 步成功前，`ScriptTaskSupervisor::begin()` 必须返回无效 session；port 不得
+尝试绕过该门闩重启 worker。worker finalizer 在此期间仍可为 retiring session 投递 release intent，
+但必须在第 6 步前由 supervisor drain 或由该步明确丢弃并计数。
+
 平台无关 worker runtime 的对应调用是幂等的 `ScriptTaskWorkerRuntime::stop()`。port 必须在 worker
 自己的 task boundary 内调用它；不能从 UI/supervisor task 直接析构 runtime，也不能把它当作
 `begin_teardown`/`complete_teardown` 的替代品。

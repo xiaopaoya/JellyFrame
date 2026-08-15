@@ -480,7 +480,7 @@ std::uint32_t ScriptTaskSupervisor::next_nonzero(std::uint32_t value) {
 
 ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (sessions_.current_snapshot().valid()) {
+    if (sessions_.current_snapshot().valid() || retiring_session_.valid()) {
         return {};
     }
     next_frame_sequence_ = 1;
@@ -637,7 +637,8 @@ bool ScriptTaskSupervisor::cancel_service(const ScriptTaskServiceToken& token) {
 
 bool ScriptTaskSupervisor::retire_service(const ScriptTaskServiceToken& token) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return services_.retire(token);
+    return (sessions_.accepts(token.session) || token.session == retiring_session_) &&
+           services_.retire(token);
 }
 
 ScriptTaskServiceCompletionDisposition ScriptTaskSupervisor::consume_service_completion(
@@ -649,6 +650,9 @@ ScriptTaskServiceCompletionDisposition ScriptTaskSupervisor::consume_service_com
 ScriptTaskReleaseIntentStatus ScriptTaskSupervisor::post_native_release_intent(
     const ScriptTaskNativeLeaseReleaseIntent& intent) {
     std::lock_guard<std::mutex> lock(state_mutex_);
+    if (intent.session != retiring_session_ && !sessions_.accepts(intent.session)) {
+        return ScriptTaskReleaseIntentStatus::Invalid;
+    }
     return release_intents_.post(intent);
 }
 
@@ -665,6 +669,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::begin_teardown(const ScriptAppSes
         result.session = {};
         return result;
     }
+    retiring_session_ = session;
     result.discarded_input_packets = input_mailbox_.discard_all();
     result.discarded_frame_packets = frame_mailbox_.discard_all();
     result.discarded_service_request_packets = service_request_mailbox_.discard_all();
@@ -677,7 +682,8 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::complete_teardown(const ScriptApp
     ScriptTaskTeardownResult result;
     result.session = retired_session;
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (!retired_session.valid() || sessions_.accepts(retired_session)) {
+    if (!retired_session.valid() || retired_session != retiring_session_ ||
+        sessions_.current_snapshot().valid()) {
         result.session = {};
         return result;
     }
@@ -685,6 +691,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::complete_teardown(const ScriptApp
     result.released_service_payload_leases = service_payload_leases_.release_session(retired_session);
     result.discarded_release_intents = release_intents_.discard_session(retired_session);
     result.retired_service_tombstones = services_.clear_session(retired_session);
+    retiring_session_ = {};
     return result;
 }
 

@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script-task supervisor teardown now holds an explicit retiring-session gate:
+  it rejects new workers until `complete_teardown()` releases all session-owned
+  leases, tombstones and queued release intents.
+
 - `ScriptAppSessionController::current_snapshot()` now returns a value rather
   than exposing its internal session object by reference, matching the
   supervisor's value-only session-boundary contract.

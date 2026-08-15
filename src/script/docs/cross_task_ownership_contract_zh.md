@@ -103,6 +103,9 @@ supervisor 收到 fatal、watchdog、budget、worker exit 或主动终止后必�
 
 任何一步超时都只能终止该 app 并保持 launcher 可操作。不能将未确认的 worker 内存、native
 wrapper 或 callback 重新绑定给下一个 app。
+session 处于 retiring 状态时，supervisor 必须拒绝新 session；只有
+`complete_teardown()` 已回收 retiring session 的 lease、tombstone 和排队 release intent 后，
+`begin()` 才能接纳新的 worker。
 
 ## 预算与验收
 

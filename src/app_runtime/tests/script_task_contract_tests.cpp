@@ -162,6 +162,7 @@ void supervisor_requires_ordered_value_only_teardown() {
     assert(first.discarded_service_request_packets == 1);
     assert(first.cancelled_service_requests == 1);
     assert(!supervisor.accepts(active));
+    assert(!supervisor.begin(31).valid());
     std::vector<std::uint8_t> copied_frame;
     assert(supervisor.copy_frame(active, frame.frame_lease_id, copied_frame) ==
            ScriptTaskFrameLeaseStatus::InvalidSession);
@@ -173,11 +174,17 @@ void supervisor_requires_ordered_value_only_teardown() {
     ScriptTaskNativeLeaseReleaseIntent intent;
     assert(supervisor.take_native_release_intent(intent));
     assert(intent.native_lease_id == 44);
+    assert(supervisor.post_native_release_intent({active, 45}) == ScriptTaskReleaseIntentStatus::Accepted);
+    const ScriptAppSession unrelated = session(30, 9, 9);
+    assert(!supervisor.complete_teardown(unrelated).session.valid());
+    assert(!supervisor.begin(31).valid());
     const ScriptTaskTeardownResult second = supervisor.complete_teardown(active);
     assert(second.session == active);
     assert(second.released_frame_leases == 1);
+    assert(second.discarded_release_intents == 1);
     assert(second.retired_service_tombstones == 0);
     assert(supervisor.begin(31).valid());
+    assert(supervisor.post_native_release_intent({active, 46}) == ScriptTaskReleaseIntentStatus::Invalid);
 }
 
 } // namespace
